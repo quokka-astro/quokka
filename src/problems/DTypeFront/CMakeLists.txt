@@ -106,4 +106,5 @@ if(AMReX_SPACEDIM EQUAL 3)
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
   add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME}RadPres COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}RadPres.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
