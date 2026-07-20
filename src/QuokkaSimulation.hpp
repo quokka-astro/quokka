@@ -1161,7 +1161,6 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 					amrex::MultiFab::Copy(recal_fluxes[idim], heat_flux[idim], 0, HydroSystem<problem_t>::internalEnergy_index, 1, 0);
 				}
 				incrementFluxRegisters(fr_as_crse, fr_as_fine, recal_fluxes, lev, dt);
-				// incrementFluxRegisters(fr_as_crse, fr_as_fine, heat_flux, lev, dt);
 			}
 		}
 	};
@@ -1331,6 +1330,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 	amrex::MultiFab residual(state_ref_level0.boxArray(), state_ref_level0.DistributionMap(), ncomp, 0);
 	amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, 0);
 	amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, 0);
+	amrex::WriteSingleLevelPlotfile("point_wise_error", residual, componentNames_cc_, geom[0], /*time=*/0.0, /*level_step=*/0);
 
 	const auto n_cells = static_cast<amrex::Real>(residual.boxArray().numPts());
 
