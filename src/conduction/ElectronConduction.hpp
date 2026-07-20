@@ -98,9 +98,6 @@ template <typename problem_t> class ElectronConduction
 			// Temperature always from EOS
 			const int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {};
-			if constexpr (nmscalars_ > 0) {
-				massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-			}
 			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 
 			// Sound speed always from EOS (see comment on ComputeExplicit above)
