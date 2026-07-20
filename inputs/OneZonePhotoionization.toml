@@ -51,3 +51,4 @@ integrator.rosenbrock_tableau = 3
 network.energy_switch = 0
 network.collisional_ionization_switch = 0
 network.recombination_temperature_dependent = 0
+network.small_x = 1e-10

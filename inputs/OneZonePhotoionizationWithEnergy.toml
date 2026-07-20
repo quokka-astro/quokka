@@ -53,3 +53,4 @@ network.KI_heating_switch = 0
 network.KI_cooling_switch = 0
 network.ion_ff_cooling_switch = 0
 network.collisional_ionization_switch = 0
+network.small_x = 1e-10

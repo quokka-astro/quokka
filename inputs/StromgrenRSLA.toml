@@ -21,9 +21,9 @@ do_subcycle = 0
 suppress_output = 0
 
 stromgen.tend = 1.6e16
-stromgen.primary_species_1 = 1.0e-30
+stromgen.primary_species_1 = 1.0e-10
 stromgen.primary_species_2 = 1.0e-3
-stromgen.primary_species_3 = 1.0e-30
+stromgen.primary_species_3 = 1.0e-10
 stromgen.Q = 5e48
 
 photochemistry.enabled = 1
@@ -35,6 +35,16 @@ integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 integrator.rosenbrock_tableau = 3
 
+integrator.atol_spec = 1e-11
+integrator.atol_rad_num = 1e-11
+integrator.atol_rad_flux = 1e-8
+integrator.atol_enuc = 1e4
+
+integrator.rtol_spec = 1e-2
+integrator.rtol_rad_num = 1e-2
+integrator.rtol_rad_flux = 1e-2
+integrator.rtol_enuc = 1e-2
+
 plotfile_interval = 500
 plotfile_prefix = "StrmConstRecRSLA"
 
@@ -42,3 +52,4 @@ network.recombination_switch = 1
 network.recombination_temperature_dependent = 0
 network.energy_switch = 0
 network.collisional_ionization_switch = 0
+network.small_x = 1e-10

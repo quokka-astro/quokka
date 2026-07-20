@@ -3166,6 +3166,14 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 										       p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 				}
 			}
+#ifdef PHOTOCHEMISTRY
+#ifdef IMEX_PHOTOCHEMISTRY
+			if (enablePhotoChemistry_ == 1) {
+				quokka::photochemistry::computePhotoChemistry<problem_t>(state_tmp1_cc, dt_stage2_implicit, 1, max_density_allowed,
+											 min_density_allowed);
+			}
+#endif
+#endif
 		}
 
 		// === Stage 3: explicit RK2 + gas LinComb + implicit source terms on state_new ===
@@ -3222,6 +3230,15 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					const double Emag = HydroSystem<problem_t>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc);
 					stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
 					    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, Emag);
+#ifdef PHOTOCHEMISTRY
+#ifdef IMEX_PHOTOCHEMISTRY
+					for (int nn = 0; nn < Physics_Traits<problem_t>::numPassiveScalars; ++nn) {
+						stateNew(i, j, k, RadSystem<problem_t>::scalar0_index + nn) =
+						    (1.0 - IMEX_alpha) * stateNew(i, j, k, RadSystem<problem_t>::scalar0_index + nn) +
+						    IMEX_alpha * stateTmp(i, j, k, RadSystem<problem_t>::scalar0_index + nn);
+					}
+#endif
+#endif
 				});
 			}
 		}
@@ -3266,6 +3283,13 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			}
 		}
 #ifdef PHOTOCHEMISTRY
+#ifdef IMEX_PHOTOCHEMISTRY
+		if (enablePhotoChemistry_ == 1) {
+			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], dt_stage3_implicit, 1, max_density_allowed,
+										 min_density_allowed);
+		}
+#endif
+#if not defined(IMEX_PHOTOCHEMISTRY)
 		if (enablePhotoChemistry_ == 1) {
 			std::array<amrex::MultiFab const *, AMREX_SPACEDIM> fc_ptrs{};
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -3280,6 +3304,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, 1, max_density_allowed,
 										 min_density_allowed);
 		}
+#endif
 #endif
 
 		if (print_rad_counter_) {

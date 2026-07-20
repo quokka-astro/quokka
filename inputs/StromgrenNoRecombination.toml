@@ -21,9 +21,9 @@ do_subcycle = 0
 suppress_output = 0
 
 stromgen.tend = 1200
-stromgen.primary_species_1 = 1.0e-30
+stromgen.primary_species_1 = 1.0e-10
 stromgen.primary_species_2 = 1.0e3
-stromgen.primary_species_3 = 1.0e-30
+stromgen.primary_species_3 = 1.0e-10
 stromgen.Q = 1e48
 
 photochemistry.enabled = 1
@@ -51,3 +51,4 @@ plotfile_prefix = "StrmNoRec"
 network.recombination_switch = 0
 network.energy_switch = 0
 network.collisional_ionization_switch = 0
+network.small_x = 1e-10
