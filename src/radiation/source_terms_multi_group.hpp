@@ -15,6 +15,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP
 
 	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
 
+	if constexpr (nChemBands_ > 0) {
+		// Defensive check on the DefineOpacityExponentsAndLowerValues contract: trailing chem bands must
+		// have exactly zero opacity, or NaN/wrong opacity would silently propagate into the transport step.
+		for (int g = nThermalGroups_; g < nGroups_; ++g) {
+			AMREX_ASSERT(kappa_expo_and_lower_value[1][g] == 0.0);
+		}
+	}
+
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 		for (int g = 0; g < nGroups_; ++g) {
 			result.kappaP[g] = kappa_expo_and_lower_value[1][g];

@@ -60,13 +60,21 @@ template <> struct Physics_Traits<DTypeFrontVC> : DefaultPhysicsTraits {
 	static constexpr int numMassScalars = NumSpec;
 	static constexpr int numPassiveScalars = numMassScalars;
 	static constexpr bool is_radiation_enabled = true;
+	static constexpr int nGroups = NumThermalBands + NumChemBands;
 };
+
+// Chem (ionizing) band edges (Hz), converted to eV (energy_unit's default) via E = h*nu.
+constexpr double eV_per_Hz = C::hplanck / C::ev2erg;
+constexpr double nu_ion_lo = 3.29e15; // Lyman limit (13.6 eV)
+constexpr double nu_ion_hi = 1.50e16;
 
 template <> struct RadSystem_Traits<DTypeFrontVC> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	static constexpr int beta_order = 1;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr int NumThermalBands = ::NumThermalBands;
+	static constexpr int NumChemBands = ::NumChemBands;
+	static constexpr amrex::GpuArray<double, NumChemBands + 1> chemRadBoundaries{nu_ion_lo * eV_per_Hz, nu_ion_hi * eV_per_Hz};
 };
 
 template <> struct SimulationData<DTypeFrontVC> {

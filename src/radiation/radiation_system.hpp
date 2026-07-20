@@ -13,6 +13,7 @@
 
 #include <array>
 #include <cmath>
+#include <utility>
 
 // library headers
 #include "AMReX.H" // IWYU pragma: keep
@@ -67,7 +68,8 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double c_hat_over_c = 1.0;
 	static constexpr double Erad_floor = 0.;
 	static constexpr double energy_unit = C::ev2erg;
-	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
+	static constexpr int NumThermalBands = 1;
+	static constexpr amrex::GpuArray<double, NumThermalBands + 1> thermalRadBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 };
@@ -86,26 +88,66 @@ struct RadPressureResult {
 	double S;		       // maximum wavespeed for the radiation system
 };
 
+template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {
+};
+
+template <typename problem_t> struct RadSystem_Has_ChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::NumChemBands)>> : std::true_type {
+};
+
+template <typename problem_t, typename = void> struct RadSystem_NChemBands {
+	static constexpr int value = 0;
+};
+
+template <typename problem_t> struct RadSystem_NChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::NumChemBands)>> {
+	static constexpr int value = RadSystem_Traits<problem_t>::NumChemBands;
+};
+
+template <typename problem_t, typename = void> struct RadSystem_Has_ThermalRadBoundaries : std::false_type {
+};
+
+template <typename problem_t>
+struct RadSystem_Has_ThermalRadBoundaries<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::thermalRadBoundaries)>> : std::true_type {
+};
+
+template <typename problem_t, typename = void> struct RadSystem_Has_ChemRadBoundaries : std::false_type {
+};
+
+template <typename problem_t>
+struct RadSystem_Has_ChemRadBoundaries<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::chemRadBoundaries)>> : std::true_type {
+};
+
+template <typename problem_t, typename = void> struct RadSystem_NThermalBands {
+	static constexpr int value = 1;
+};
+
+template <typename problem_t> struct RadSystem_NThermalBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::NumThermalBands)>> {
+	static constexpr int value = RadSystem_Traits<problem_t>::NumThermalBands;
+};
+
+template <typename problem_t> struct RadSystem_NGroups {
+	static constexpr int value = RadSystem_NThermalBands<problem_t>::value + RadSystem_NChemBands<problem_t>::value;
+};
+
 // A struct to hold the opacity terms for the radiation-matter energy exchange, containing the following elements:
 // kappaE, kappaP, kappaF, kappaPoverE, delta_nu_kappa_B_at_edge, alpha_P, alpha_E
 template <typename problem_t> struct OpacityTerms {
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaE;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaP;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaF;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPoverE;
-	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa * B)
-	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_P;
-	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_E;
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> kappaE;
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> kappaP;
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> kappaF;
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> kappaPoverE;
+	amrex::GpuArray<double, RadSystem_NGroups<problem_t>::value> delta_nu_kappa_B_at_edge; // Delta (nu * kappa * B)
+	amrex::GpuArray<double, RadSystem_NGroups<problem_t>::value> alpha_P;
+	amrex::GpuArray<double, RadSystem_NGroups<problem_t>::value> alpha_E;
 };
 
 // A struct to hold the results of the Newton-Raphson iteration for energy update, containing the following elements:
 // Egas, T_gas, T_d, EradVec, work, opacity_terms
 template <typename problem_t> struct NewtonIterationResult {
-	double Egas;							      // gas internal energy
-	double T_gas;							      // gas temperature
-	double T_d;							      // dust temperature
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;    // work term
+	double Egas;							       // gas internal energy
+	double T_gas;							       // gas temperature
+	double T_d;							       // dust temperature
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> EradVec; // radiation energy density
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> work;    // work term
 	OpacityTerms<problem_t> opacity_terms;
 };
 
@@ -115,19 +157,19 @@ template <typename problem_t> struct JacobianResult {
 	double J00;	   // (0, 0) component of the Jacobian matrix
 	double F0;	   // (0) component of the residual
 	double Fg_abs_sum; // sum of the absolute values of the (g) components of the residual, g = 1, 2, ..., nGroups, and tau(g) > 0
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> J0g; // (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jg0; // (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jgg; // (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jg1; // (g, 1) components of the Jacobian matrix, g = 1, 2, ..., nGroups
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;  // (g) components of the residual, g = 1, 2, ..., nGroups
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> J0g; // (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> Jg0; // (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> Jgg; // (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> Jg1; // (g, 1) components of the Jacobian matrix, g = 1, 2, ..., nGroups
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> Fg;  // (g) components of the residual, g = 1, 2, ..., nGroups
 };
 
 // A struct to hold the results of UpdateFlux(), containing the following elements:
 // Erad, gasMomentum, Frad
 template <typename problem_t> struct FluxUpdateResult {
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Erad;			   // radiation energy density
-	amrex::GpuArray<double, 3> gasMomentum;							   // gas momentum
-	amrex::GpuArray<amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nGroups>, 3> Frad; // radiation flux
+	quokka::valarray<double, RadSystem_NGroups<problem_t>::value> Erad;			    // radiation energy density
+	amrex::GpuArray<double, 3> gasMomentum;							    // gas momentum
+	amrex::GpuArray<amrex::GpuArray<amrex::Real, RadSystem_NGroups<problem_t>::value>, 3> Frad; // radiation flux
 };
 
 [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double
@@ -143,21 +185,12 @@ template <typename problem_t>
 struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {
 };
 
-// Use SFINAE to check if ChemBands() is defined in RadSystem_Traits<problem_t> (indicates photoionization group)
-template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {
+template <typename problem_t, typename = void> struct RadSystem_EnergyUnit {
+	static constexpr double value = C::ev2erg;
 };
 
-template <typename problem_t> struct RadSystem_Has_ChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> : std::true_type {
-};
-
-// Get NChemBands (number of chemistry frequency bands) from RadSystem_Traits<problem_t>.
-// Returns 0 if ChemBands() is not defined (no photoionization groups).
-template <typename problem_t, typename = void> struct RadSystem_NChemBands {
-	static constexpr int value = 0;
-};
-
-template <typename problem_t> struct RadSystem_NChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> {
-	static constexpr int value = static_cast<int>(decltype(RadSystem_Traits<problem_t>::ChemBands())::size()) - 1;
+template <typename problem_t> struct RadSystem_EnergyUnit<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::energy_unit)>> {
+	static constexpr double value = RadSystem_Traits<problem_t>::energy_unit;
 };
 
 /// Class for the radiation moment equations
@@ -229,13 +262,65 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool enable_dust_gas_thermal_coupling_model_ = ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 
-	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
-	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
-		if constexpr (nGroups_ > 1) {
-			return RadSystem_Traits<problem_t>::radBoundaries;
+	static constexpr int nThermalGroups_ = RadSystem_NThermalBands<problem_t>::value;
+	static constexpr int nChemBands_ = RadSystem_NChemBands<problem_t>::value;
+	static constexpr int nGroups_ = nThermalGroups_ + nChemBands_;
+
+#ifdef PHOTOCHEMISTRY
+	static_assert(nGroups_ == NumRadGroups, "RadSystem_Traits::NumThermalBands + NumChemBands must equal NumRadGroups (set via "
+						"CMakeLists.txt): the solver's per-group state and the photochemistry burner's rn[] array "
+						"must agree on the total number of radiation groups.");
+#endif
+
+	static_assert(nGroups_ == Physics_Traits<problem_t>::nGroups,
+		      "Physics_Traits::nGroups must equal RadSystem_Traits::NumThermalBands + NumChemBands. Set "
+		      "nGroups = NumThermalBands (+ NumChemBands, for photochemistry problems) in your "
+		      "Physics_Traits<problem_t> specialization.");
+
+	static constexpr bool thermalRadBoundariesSizeOk = []() constexpr {
+		if constexpr (RadSystem_Has_ThermalRadBoundaries<problem_t>::value) {
+			return decltype(RadSystem_Traits<problem_t>::thermalRadBoundaries)::size() == static_cast<std::size_t>(nThermalGroups_ + 1);
 		} else {
+			return nThermalGroups_ <= 1; // relying on the {0, inf}/primary-template default
+		}
+	}();
+	static_assert(thermalRadBoundariesSizeOk, "RadSystem_Traits::thermalRadBoundaries must have exactly NumThermalBands + 1 entries.");
+
+	static constexpr bool chemRadBoundariesSizeOk = []() constexpr {
+		if constexpr (RadSystem_Has_ChemRadBoundaries<problem_t>::value) {
+			return decltype(RadSystem_Traits<problem_t>::chemRadBoundaries)::size() == static_cast<std::size_t>(nChemBands_ + 1);
+		} else {
+			return nChemBands_ == 0;
+		}
+	}();
+	static_assert(chemRadBoundariesSizeOk, "RadSystem_Traits::chemRadBoundaries must have exactly NumChemBands + 1 entries.");
+
+	static constexpr bool seamMatches = []() constexpr {
+		if constexpr (nThermalGroups_ > 0 && nChemBands_ > 0 && RadSystem_Has_ThermalRadBoundaries<problem_t>::value &&
+			      RadSystem_Has_ChemRadBoundaries<problem_t>::value) {
+			return RadSystem_Traits<problem_t>::thermalRadBoundaries.arr[nThermalGroups_] == RadSystem_Traits<problem_t>::chemRadBoundaries.arr[0];
+		} else {
+			return true;
+		}
+	}();
+	static_assert(seamMatches, "RadSystem_Traits::thermalRadBoundaries' last entry must equal chemRadBoundaries' first entry "
+				   "(the thermal/chem seam boundary).");
+
+	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
+		if constexpr (nGroups_ == 1) {
 			amrex::GpuArray<double, 2> boundaries{0., inf};
 			return boundaries;
+		} else if constexpr (nChemBands_ == 0) {
+			return RadSystem_Traits<problem_t>::thermalRadBoundaries;
+		} else if constexpr (nThermalGroups_ == 0) {
+			return RadSystem_Traits<problem_t>::chemRadBoundaries;
+		} else {
+			amrex::GpuArray<double, nThermalGroups_ + 1> const &thermal = RadSystem_Traits<problem_t>::thermalRadBoundaries;
+			amrex::GpuArray<double, nChemBands_ + 1> const &chem = RadSystem_Traits<problem_t>::chemRadBoundaries;
+			return [&thermal, &chem]<std::size_t... IThermal, std::size_t... IChem>(std::index_sequence<IThermal...> /*unused*/,
+												std::index_sequence<IChem...> /*unused*/) constexpr {
+				return amrex::GpuArray<double, nGroups_ + 1>{thermal.arr[IThermal]..., chem.arr[IChem + 1]...};
+			}(std::make_index_sequence<nThermalGroups_ + 1>{}, std::make_index_sequence<nChemBands_>{});
 		}
 	}();
 
@@ -257,9 +342,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum), // NOLINT
 		      "PPL_opacity_full_spectrum requires at least 3 photon groups.");
 
-	// Assertion: mixed thermal+chemical band configurations are untested
-	static_assert(RadSystem_NChemBands<problem_t>::value == 0 || RadSystem_NChemBands<problem_t>::value == nGroups_,
-		      "Mixed thermal and chemical radiation bands are not supported.");
+	// Assertion: photoelectric heating assumes the last group is the FUV band, which conflicts with
+	// trailing chem bands (also placed in the last groups) until the PE band index is reconciled with
+	// nThermalGroups_ - 1.
+	static_assert(!(ISM_Traits<problem_t>::enable_photoelectric_heating && nChemBands_ > 0),
+		      "Photoelectric heating (assumes the last group is the FUV band) is not yet supported together "
+		      "with chem bands (also placed in the trailing groups).");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -498,10 +586,10 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 		radEnergyFractions[0] = 1.0;
 		return radEnergyFractions;
 	} else {
-		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
+		amrex::Real const energy_unit_over_kT = RadSystem_EnergyUnit<problem_t>::value / (boltzmann_constant_ * temperature);
 		amrex::Real y = NAN;
 		amrex::Real previous = 0.0;
-		for (int g = 0; g < nGroups_ - 1; ++g) {
+		for (int g = 0; g < nThermalGroups_ - 1; ++g) {
 			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
 			if (x >= 100.) { // 100. is the upper limit of x in the table
 				y = 1.0;
@@ -511,9 +599,21 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
-		// last group, enforcing the total fraction to be 1.0
-		y = 1.0;
-		radEnergyFractions[nGroups_ - 1] = y - previous;
+		// last thermal group
+		if constexpr (nChemBands_ == 0) {
+			// no chem bands: the last group absorbs everything out to infinity, enforcing the total
+			// fraction to be 1.0 (bit-identical to this function's pre-existing behavior)
+			y = 1.0;
+		} else {
+			// chem bands follow: the last thermal group's own upper boundary is finite
+			const amrex::Real x = boundaries[nThermalGroups_] * energy_unit_over_kT;
+			y = (x >= 100.) ? 1.0 : integrate_planck_from_0_to_x(x);
+		}
+		radEnergyFractions[nThermalGroups_ - 1] = y - previous;
+		// trailing chem bands are not thermally emitting/absorbing groups
+		for (int g = nThermalGroups_; g < nGroups_; ++g) {
+			radEnergyFractions[g] = 0.0;
+		}
 		AMREX_ASSERT(std::abs(sum(radEnergyFractions) - 1.0) < 1.0e-10);
 
 		return radEnergyFractions;
@@ -677,10 +777,12 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 #ifdef PHOTOCHEMISTRY
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
 {
-	auto const freq_bounds = RadSystem_Traits<problem_t>::ChemBands();
-	amrex::Real freq_low = freq_bounds[group_index];
-	amrex::Real freq_high = freq_bounds[group_index + 1];
-	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
+	// chemRadBoundaries is given in units of RadSystem_Traits::energy_unit (erg per unit); multiply by
+	// energy_unit to get the mean photon energy in erg.
+	auto const &bounds = RadSystem_Traits<problem_t>::chemRadBoundaries;
+	amrex::Real e_low = bounds.arr[group_index];
+	amrex::Real e_high = bounds.arr[group_index + 1];
+	return 0.5_rt * (e_high + e_low) * RadSystem_EnergyUnit<problem_t>::value;
 }
 #endif
 
@@ -1389,7 +1491,7 @@ RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<do
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::PlanckFunction(const double nu, const double T) -> double
 {
 	// returns 4 pi B(nu) / c
-	double const coeff = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * T);
+	double const coeff = RadSystem_EnergyUnit<problem_t>::value / (boltzmann_constant_ * T);
 	double const x = coeff * nu;
 	if (x > 100.) {
 		return 0.0;
@@ -1447,7 +1549,7 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(const amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, const double T,
 									     const double vel) -> amrex::GpuArray<double, nGroups_>
 {
-	double const coeff = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * T);
+	double const coeff = RadSystem_EnergyUnit<problem_t>::value / (boltzmann_constant_ * T);
 	amrex::GpuArray<double, nGroups_ + 1> edge_values{};
 	amrex::GpuArray<double, nGroups_> flux{};
 	for (int g = 0; g < nGroups_ + 1; ++g) {

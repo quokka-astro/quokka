@@ -35,6 +35,11 @@ constexpr double c_hat = C::c_light / 1.0;
 constexpr double sigma_star_coeff = 1.5 / 16.0;
 constexpr double r_trunc_coeff = 2.5;
 
+// Chem (ionizing) band edges (Hz), converted to eV (energy_unit's default) via E = h*nu.
+constexpr double eV_per_Hz = C::hplanck / C::ev2erg;
+constexpr double nu_ion_lo = 3.29e15; // Lyman limit (13.6 eV)
+constexpr double nu_ion_hi = 1.50e16;
+
 template <> struct quokka::EOS_Traits<StromgrenSphere> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
@@ -46,7 +51,7 @@ template <> struct Physics_Traits<StromgrenSphere> : DefaultPhysicsTraits {
 	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	// face-centred
+	static constexpr int nGroups = NumThermalBands + NumChemBands;
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gravitational_constant = C::Gconst;
 	static constexpr double c_light = C::c_light;
@@ -57,7 +62,9 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr int NumThermalBands = ::NumThermalBands;
+	static constexpr int NumChemBands = ::NumChemBands;
+	static constexpr amrex::GpuArray<double, NumChemBands + 1> chemRadBoundaries{nu_ion_lo * eV_per_Hz, nu_ion_hi * eV_per_Hz};
 };
 
 template <>

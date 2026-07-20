@@ -63,8 +63,9 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double c_hat_over_c = 10.0 * a0 / C::c_light;
 	static constexpr double Erad_floor = 0.;
 	static constexpr double energy_unit = C::k_B;
-	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T_lo, 3.3 * T_lo, 1000. * T_lo}; // Kelvin
-	// static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T_lo, 1000. * T_lo}; // Kelvin
+	static constexpr int NumThermalBands = Physics_Traits<TubeProblem>::nGroups;
+	static constexpr amrex::GpuArray<double, NumThermalBands + 1> thermalRadBoundaries{0.01 * T_lo, 3.3 * T_lo, 1000. * T_lo}; // Kelvin
+	// static constexpr amrex::GpuArray<double, NumThermalBands + 1> thermalRadBoundaries{0.01 * T_lo, 1000. * T_lo}; // Kelvin
 	static constexpr int beta_order = 1;
 	// static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
@@ -149,7 +150,7 @@ template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokk
 	auto const &Erad_ptr = userData_.Erad_arr_g.dataPtr();
 	int const x_size = static_cast<int>(userData_.x_arr_g.size());
 
-	const auto radBoundaries_g = RadSystem_Traits<TubeProblem>::radBoundaries;
+	const auto radBoundaries_g = RadSystem_Traits<TubeProblem>::thermalRadBoundaries;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {

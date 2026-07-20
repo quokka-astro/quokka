@@ -69,7 +69,8 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = 1.0;
-	static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries = radBoundaries_;
+	static constexpr int NumThermalBands = n_group_;
+	static constexpr amrex::GpuArray<double, NumThermalBands + 1> thermalRadBoundaries = radBoundaries_;
 	static constexpr OpacityModel opacity_model = opacity_model_;
 };
 

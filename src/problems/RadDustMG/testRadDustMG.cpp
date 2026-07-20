@@ -69,7 +69,8 @@ template <> struct RadSystem_Traits<DustProblem> {
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = beta_order_;
 	static constexpr double energy_unit = 1.;
-	static constexpr amrex::GpuArray<double, Physics_Traits<DustProblem>::nGroups + 1> radBoundaries{1.0e-3, 0.1, 1.0, 10.0, 1.0e3};
+	static constexpr int NumThermalBands = Physics_Traits<DustProblem>::nGroups;
+	static constexpr amrex::GpuArray<double, NumThermalBands + 1> thermalRadBoundaries{1.0e-3, 0.1, 1.0, 10.0, 1.0e3};
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
 };

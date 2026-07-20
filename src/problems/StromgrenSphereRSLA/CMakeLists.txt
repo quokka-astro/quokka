@@ -76,8 +76,8 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
   set(PROPERTIES "")
 
   # Set photoionisation properties
+  set(NUM_THERMAL_BANDS 0)
   set(NUM_CHEM_BANDS 1)
-  set(CHEM_BANDS "3.29e15, 1.50e16") # Hz
 
   # Configure the header
   configure_file(

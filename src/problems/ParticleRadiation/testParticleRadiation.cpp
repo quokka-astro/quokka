@@ -64,7 +64,8 @@ template <> struct RadSystem_Traits<ParticleRadiationProblem> {
 	static constexpr double energy_unit = C::ev2erg; // set boundary unit to eV
 	// Define radiation group boundaries for 2-group radiation
 	// Group 0: 1 eV to 100 eV, Group 1: 100 eV to 10000 eV
-	static constexpr amrex::GpuArray<double, Physics_Traits<ParticleRadiationProblem>::nGroups + 1> radBoundaries{1.0, 100.0, 10000.0};
+	static constexpr int NumThermalBands = Physics_Traits<ParticleRadiationProblem>::nGroups;
+	static constexpr amrex::GpuArray<double, NumThermalBands + 1> thermalRadBoundaries{1.0, 100.0, 10000.0};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 };
 

@@ -165,7 +165,8 @@ template <> struct RadSystem_Traits<MGproblem> {
 	static constexpr double c_hat_over_c = 1.0;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr double energy_unit = h_planck;
-	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+	static constexpr int NumThermalBands = n_groups_;
+	static constexpr amrex::GpuArray<double, NumThermalBands + 1> thermalRadBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
@@ -198,7 +199,7 @@ template <> void QuokkaSimulation<MGproblem>::setInitialConditionsOnGrid(quokka:
 
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
-	const auto radBoundaries_g = RadSystem_Traits<MGproblem>::radBoundaries;
+	const auto radBoundaries_g = RadSystem_Traits<MGproblem>::thermalRadBoundaries;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -248,7 +249,8 @@ template <> struct RadSystem_Traits<MGproblemMHD> {
 	static constexpr double c_hat_over_c = 1.0;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr double energy_unit = h_planck;
-	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+	static constexpr int NumThermalBands = n_groups_;
+	static constexpr amrex::GpuArray<double, NumThermalBands + 1> thermalRadBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
 };
@@ -278,7 +280,7 @@ template <> void QuokkaSimulation<MGproblemMHD>::setInitialConditionsOnGrid(quok
 
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
-	const auto radBoundaries_g = RadSystem_Traits<MGproblemMHD>::radBoundaries;
+	const auto radBoundaries_g = RadSystem_Traits<MGproblemMHD>::thermalRadBoundaries;
 	constexpr double Emag0 = 0.5 * B0 * B0;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {

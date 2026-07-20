@@ -65,8 +65,9 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
-	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{1.00000000e+15, 1.00000000e+16, 1.00000000e+17,
-													  1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
+	static constexpr int NumThermalBands = Physics_Traits<ShockProblem>::nGroups;
+	static constexpr amrex::GpuArray<double, NumThermalBands + 1> thermalRadBoundaries{1.00000000e+15, 1.00000000e+16, 1.00000000e+17,
+											   1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
 	static constexpr int beta_order = 1;
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
@@ -168,7 +169,7 @@ template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto radBoundaries_g = RadSystem_Traits<ShockProblem>::radBoundaries;
+	const auto radBoundaries_g = RadSystem_Traits<ShockProblem>::thermalRadBoundaries;
 
 	// loop over the cell-centered quantities and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {

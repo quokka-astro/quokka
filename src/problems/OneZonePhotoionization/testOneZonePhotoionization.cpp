@@ -38,6 +38,11 @@ constexpr double c = C::c_light;    // speed of light
 constexpr double chat = C::c_light; // reduced speed of light
 constexpr double kappa0 = 0;	    // opacity
 
+// Chem (ionizing) band edges (Hz), converted to eV (energy_unit's default) via E = h*nu.
+constexpr double eV_per_Hz = C::hplanck / C::ev2erg;
+constexpr double nu_ion_lo = 3.29e15; // Lyman limit (13.6 eV)
+constexpr double nu_ion_hi = 1.50e16;
+
 template <> struct quokka::EOS_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
@@ -49,13 +54,16 @@ template <> struct Physics_Traits<PhotoionizationStreamingProblem> : DefaultPhys
 	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
+	static constexpr int nGroups = NumThermalBands + NumChemBands;
 };
 
 template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBands() -> amrex::GpuArray<double, NumChemBands + 1> { return ChemBandsHeader_; }
+	static constexpr int NumThermalBands = ::NumThermalBands;
+	static constexpr int NumChemBands = ::NumChemBands;
+	static constexpr amrex::GpuArray<double, NumChemBands + 1> chemRadBoundaries{nu_ion_lo * eV_per_Hz, nu_ion_hi * eV_per_Hz};
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {
