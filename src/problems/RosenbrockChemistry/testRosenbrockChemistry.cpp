@@ -172,6 +172,111 @@ struct RetryAccountingNetwork {
 	}
 };
 
+struct TemperatureGateNetwork {
+	static constexpr int variable_count = 1;
+	mutable int rhs_calls = 0;
+	mutable int jacobian_calls = 0;
+
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static constexpr auto variable_role(int /*variable*/) noexcept -> quokka::chemistry::VariableRole
+	{
+		return quokka::chemistry::VariableRole::species;
+	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static constexpr auto controls_error(int /*variable*/) noexcept -> bool { return true; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static constexpr auto temperature(quokka::chemistry::IntegratorState<variable_count> const &state) noexcept
+	    -> amrex::Real
+	{
+		return state.temperature;
+	}
+
+	AMREX_GPU_HOST_DEVICE void rhs(quokka::chemistry::IntegratorState<variable_count> const &state, amrex::Real /*time*/,
+				       amrex::GpuArray<amrex::Real, variable_count> &derivative) const noexcept
+	{
+		++rhs_calls;
+		derivative[0] = -state.values[0];
+	}
+
+	AMREX_GPU_HOST_DEVICE void jacobian(quokka::chemistry::IntegratorState<variable_count> const & /*state*/, amrex::Real /*time*/,
+					    quokka::chemistry::DenseMatrix<variable_count> &matrix) const noexcept
+	{
+		++jacobian_calls;
+		matrix.zero();
+		matrix(0, 0) = -1.0;
+	}
+
+	AMREX_GPU_HOST_DEVICE static void clean(quokka::chemistry::IntegratorState<variable_count> & /*state*/,
+						quokka::chemistry::IntegratorOptions const & /*options*/) noexcept
+	{
+	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto valid(quokka::chemistry::IntegratorState<variable_count> const &state,
+							      quokka::chemistry::IntegratorOptions const & /*options*/) noexcept -> bool
+	{
+		return std::isfinite(state.values[0]);
+	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static constexpr auto valid_update(quokka::chemistry::IntegratorState<variable_count> const & /*old_state*/,
+									       quokka::chemistry::IntegratorState<variable_count> const & /*new_state*/,
+									       quokka::chemistry::IntegratorOptions const & /*options*/) noexcept -> bool
+	{
+		return true;
+	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto valid_final(quokka::chemistry::IntegratorState<variable_count> const &state,
+								    quokka::chemistry::IntegratorOptions const &options) noexcept -> bool
+	{
+		return valid(state, options);
+	}
+};
+
+struct AcceptedStateCleaningNetwork {
+	static constexpr int variable_count = 1;
+	mutable bool evaluated_negative_state = false;
+
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static constexpr auto variable_role(int /*variable*/) noexcept -> quokka::chemistry::VariableRole
+	{
+		return quokka::chemistry::VariableRole::species;
+	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static constexpr auto controls_error(int /*variable*/) noexcept -> bool { return true; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static constexpr auto temperature(quokka::chemistry::IntegratorState<variable_count> const & /*state*/) noexcept
+	    -> amrex::Real
+	{
+		return 1.0;
+	}
+
+	AMREX_GPU_HOST_DEVICE void rhs(quokka::chemistry::IntegratorState<variable_count> const &state, amrex::Real /*time*/,
+				       amrex::GpuArray<amrex::Real, variable_count> &derivative) const noexcept
+	{
+		evaluated_negative_state = evaluated_negative_state || state.values[0] < 0.0;
+		derivative[0] = -0.51;
+	}
+
+	AMREX_GPU_HOST_DEVICE void jacobian(quokka::chemistry::IntegratorState<variable_count> const &state, amrex::Real /*time*/,
+					    quokka::chemistry::DenseMatrix<variable_count> &matrix) const noexcept
+	{
+		evaluated_negative_state = evaluated_negative_state || state.values[0] < 0.0;
+		matrix.zero();
+	}
+
+	AMREX_GPU_HOST_DEVICE static void clean(quokka::chemistry::IntegratorState<variable_count> &state,
+						quokka::chemistry::IntegratorOptions const &options) noexcept
+	{
+		state.values[0] = amrex::max(state.values[0], options.small_state);
+	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto valid(quokka::chemistry::IntegratorState<variable_count> const &state,
+							      quokka::chemistry::IntegratorOptions const &options) noexcept -> bool
+	{
+		return std::isfinite(state.values[0]) && state.values[0] >= -options.atol_species;
+	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static constexpr auto valid_update(quokka::chemistry::IntegratorState<variable_count> const & /*old_state*/,
+									       quokka::chemistry::IntegratorState<variable_count> const & /*new_state*/,
+									       quokka::chemistry::IntegratorOptions const & /*options*/) noexcept -> bool
+	{
+		return true;
+	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto valid_final(quokka::chemistry::IntegratorState<variable_count> const &state,
+								    quokka::chemistry::IntegratorOptions const &options) noexcept -> bool
+	{
+		return valid(state, options);
+	}
+};
+
 template <int N> [[nodiscard]] auto same_values(quokka::chemistry::IntegratorState<N> const &left, quokka::chemistry::IntegratorState<N> const &right) -> bool
 {
 	for (int variable = 0; variable < N; ++variable) {
@@ -203,6 +308,21 @@ auto problem_main() -> int
 	for (int species = 0; species < quokka::chemistry::PrimordialChemNetwork::species_count; ++species) {
 		primordialState.values[species] = primordialNumberDensities[species];
 	}
+	primordialState.values[quokka::chemistry::PrimordialChemNetwork::energy] =
+	    quokka::chemistry::PrimordialChemNetwork::specific_energy_from_temperature(primordialNumberDensities, 1000.0);
+	const amrex::Real primordialSpeciesDensity = quokka::chemistry::PrimordialChemNetwork::mass_density(primordialState);
+	primordialState.density = 2.0 * primordialSpeciesDensity;
+	quokka::chemistry::PrimordialChemNetwork::update_thermodynamics(primordialState);
+	if (primordialState.density != 2.0 * primordialSpeciesDensity || std::abs(primordialState.temperature - 1000.0) > 1.0e-12) {
+		return 16;
+	}
+	primordialState.density = primordialSpeciesDensity;
+	primordialState.values[2] *= 2.0;
+	quokka::chemistry::PrimordialChemNetwork::set_specific_energy_from_temperature(primordialState, 750.0);
+	if (primordialState.density != primordialSpeciesDensity || std::abs(primordialState.temperature - 750.0) > 1.0e-12) {
+		return 17;
+	}
+	primordialState.values[2] = primordialNumberDensities[2];
 	primordialState.values[quokka::chemistry::PrimordialChemNetwork::energy] =
 	    quokka::chemistry::PrimordialChemNetwork::specific_energy_from_temperature(primordialNumberDensities, 1000.0);
 	amrex::GpuArray<amrex::Real, quokka::chemistry::PrimordialChemNetwork::variable_count> primordialDerivative{};
@@ -264,6 +384,46 @@ auto problem_main() -> int
 	    quokka::chemistry::rosenbrock::integrate(retryAccountingNetwork, retryAccountingState, 1.0, retryAccountingOptions);
 	if (!retryAccountingDiagnostics.succeeded() || retryAccountingNetwork.jacobian_calls <= 5) {
 		return 13;
+	}
+	quokka::chemistry::IntegratorOptions lowerTemperatureOptions{};
+	lowerTemperatureOptions.minimum_temperature = 10.0;
+	lowerTemperatureOptions.maximum_temperature = 100.0;
+	lowerTemperatureOptions.maximum_timestep = 0.5;
+	lowerTemperatureOptions.rtol_species = 1.0e-6;
+	lowerTemperatureOptions.atol_species = 1.0e-8;
+	TemperatureGateNetwork const analyticTemperatureGate{};
+	quokka::chemistry::IntegratorState<TemperatureGateNetwork::variable_count> analyticTemperatureState{};
+	analyticTemperatureState.values[0] = 1.0;
+	analyticTemperatureState.temperature = 1.0;
+	const auto analyticTemperatureDiagnostics =
+	    quokka::chemistry::rosenbrock::integrate(analyticTemperatureGate, analyticTemperatureState, 1.0, lowerTemperatureOptions);
+	lowerTemperatureOptions.analytic_jacobian = false;
+	TemperatureGateNetwork const numericalTemperatureGate{};
+	quokka::chemistry::IntegratorState<TemperatureGateNetwork::variable_count> numericalTemperatureState{};
+	numericalTemperatureState.values[0] = 1.0;
+	numericalTemperatureState.temperature = 1.0;
+	const auto numericalTemperatureDiagnostics =
+	    quokka::chemistry::rosenbrock::integrate(numericalTemperatureGate, numericalTemperatureState, 1.0, lowerTemperatureOptions);
+	if (!analyticTemperatureDiagnostics.succeeded() || !numericalTemperatureDiagnostics.succeeded() || analyticTemperatureState.values[0] != 1.0 ||
+	    numericalTemperatureState.values[0] != 1.0 || analyticTemperatureGate.rhs_calls != 0 || analyticTemperatureGate.jacobian_calls != 0 ||
+	    numericalTemperatureGate.rhs_calls != 0 || numericalTemperatureGate.jacobian_calls != 0) {
+		return 14;
+	}
+	AcceptedStateCleaningNetwork const acceptedStateCleaningNetwork{};
+	quokka::chemistry::IntegratorState<AcceptedStateCleaningNetwork::variable_count> acceptedStateCleaningState{};
+	acceptedStateCleaningState.values[0] = 0.05;
+	auto acceptedStateCleaningOptions = lowerTemperatureOptions;
+	acceptedStateCleaningOptions.minimum_temperature = 0.0;
+	acceptedStateCleaningOptions.maximum_timestep = 0.1;
+	acceptedStateCleaningOptions.atol_species = 1.0;
+	acceptedStateCleaningOptions.rtol_species = 1.0;
+	acceptedStateCleaningOptions.small_state = 0.0;
+	acceptedStateCleaningOptions.tableau = 3;
+	acceptedStateCleaningOptions.analytic_jacobian = true;
+	const auto acceptedStateCleaningDiagnostics =
+	    quokka::chemistry::rosenbrock::integrate(acceptedStateCleaningNetwork, acceptedStateCleaningState, 0.2, acceptedStateCleaningOptions);
+	if (!acceptedStateCleaningDiagnostics.succeeded() || acceptedStateCleaningNetwork.evaluated_negative_state) {
+		return 15;
 	}
 	DecayNetwork const network{};
 	quokka::chemistry::IntegratorState<DecayNetwork::variable_count> state{};

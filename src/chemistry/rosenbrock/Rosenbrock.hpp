@@ -39,10 +39,11 @@ AMREX_GPU_HOST_DEVICE auto tolerance(Network const &network, IntegratorOptions c
 }
 
 template <typename Network>
-AMREX_GPU_HOST_DEVICE auto exceeds_maximum_temperature(Network const &network, IntegratorState<Network::variable_count> const &state,
-						       IntegratorOptions const &options) noexcept -> bool
+AMREX_GPU_HOST_DEVICE auto outside_temperature_range(Network const &network, IntegratorState<Network::variable_count> const &state,
+						     IntegratorOptions const &options) noexcept -> bool
 {
-	return network.temperature(state) >= options.maximum_temperature;
+	const amrex::Real temperature = network.temperature(state);
+	return temperature < options.minimum_temperature || temperature >= options.maximum_temperature;
 }
 
 template <typename Network>
@@ -50,7 +51,7 @@ AMREX_GPU_HOST_DEVICE void evaluate_rhs(Network const &network, IntegratorState<
 					IntegratorOptions const &options, amrex::GpuArray<amrex::Real, Network::variable_count> &derivative) noexcept
 {
 	derivative.fill(0.0);
-	if (!exceeds_maximum_temperature(network, state, options)) {
+	if (!outside_temperature_range(network, state, options)) {
 		network.rhs(state, time, derivative);
 	}
 }
@@ -78,7 +79,7 @@ template <typename Network>
 AMREX_GPU_HOST_DEVICE void numerical_jacobian(Network const &network, IntegratorOptions const &options, Workspace<Network> &workspace, amrex::Real time,
 					      IntegratorDiagnostics &diagnostics) noexcept
 {
-	if (exceeds_maximum_temperature(network, workspace.state, options)) {
+	if (outside_temperature_range(network, workspace.state, options)) {
 		workspace.jacobian.zero();
 		++diagnostics.jacobian_evaluations;
 		return;
@@ -109,8 +110,9 @@ AMREX_GPU_HOST_DEVICE auto integrate_with_tableau(Network const &network, Integr
 						  IntegratorOptions const &options) noexcept -> IntegratorDiagnostics
 {
 	IntegratorDiagnostics diagnostics{};
-	if (!(timestep >= 0.0) || !(options.maximum_timestep > 0.0) || !(options.maximum_temperature > 0.0) || options.maximum_steps <= 0 ||
-	    !(options.controller_b > 0.0) || !(options.controller_k > 0.0)) {
+	if (!(timestep >= 0.0) || !(options.maximum_timestep > 0.0) || !(options.minimum_temperature >= 0.0) ||
+	    !(options.maximum_temperature > options.minimum_temperature) || options.maximum_steps <= 0 || !(options.controller_b > 0.0) ||
+	    !(options.controller_k > 0.0)) {
 		diagnostics.status = IntegratorStatus::bad_inputs;
 		return diagnostics;
 	}
@@ -149,7 +151,7 @@ AMREX_GPU_HOST_DEVICE auto integrate_with_tableau(Network const &network, Integr
 		}
 
 		if (options.analytic_jacobian) {
-			if (exceeds_maximum_temperature(network, workspace.state, options)) {
+			if (outside_temperature_range(network, workspace.state, options)) {
 				workspace.jacobian.zero();
 			} else {
 				network.jacobian(workspace.state, time, workspace.jacobian);
@@ -233,6 +235,7 @@ AMREX_GPU_HOST_DEVICE auto integrate_with_tableau(Network const &network, Integr
 		amrex::Real next_step = step * controller;
 		if (error <= 1.0 && valid) {
 			workspace.state = candidate_state;
+			network.clean(workspace.state, options);
 			time += step;
 			if (reachesEndpoint) {
 				time = timestep;

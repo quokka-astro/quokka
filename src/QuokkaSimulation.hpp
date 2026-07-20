@@ -1112,7 +1112,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 #ifdef CHEMISTRY
 		if (enableChemistry_ == 1) {
 			// compute chemistry
-			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+			burn_success =
+			    quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed, userData_.small_temp);
 		}
 #endif
 	};
@@ -3264,7 +3265,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 #endif
 			}
 			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, 1, max_density_allowed,
-										 min_density_allowed);
+										 min_density_allowed, userData_.small_temp);
 		}
 #endif
 

@@ -7,9 +7,10 @@
 namespace quokka::chemistry
 {
 
-[[nodiscard]] inline auto readIntegratorOptions() -> IntegratorOptions
+[[nodiscard]] inline auto readIntegratorOptions(amrex::Real minimum_temperature = 0.0) -> IntegratorOptions
 {
 	IntegratorOptions options{};
+	options.minimum_temperature = minimum_temperature;
 	amrex::ParmParse const parameters("integrator");
 	parameters.query("rtol_spec", options.rtol_species);
 	parameters.query("atol_spec", options.atol_species);
@@ -21,6 +22,7 @@ namespace quokka::chemistry
 	parameters.query("radiation_failure_tolerance", options.radiation_failure_tolerance);
 	parameters.query("SMALL_X_SAFE", options.small_state);
 	parameters.query("ode_max_dt", options.maximum_timestep);
+	parameters.query("MIN_TEMP", options.minimum_temperature);
 	parameters.query("MAX_TEMP", options.maximum_temperature);
 	parameters.query("X_reject_buffer", options.rejection_buffer);
 	parameters.query("h211b_fac_min", options.controller_minimum);

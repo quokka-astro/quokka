@@ -14,6 +14,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
+#include "chemistry/RuntimeParameters.hpp"
 #include "fundamental_constants.H"
 #include "networks/photoionization/PhotoionizationNetwork.hpp"
 #include "physics_info.hpp"
@@ -193,7 +194,27 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 	return 0.5 * (T_lo + T_hi);
 }
 
-void print_microphysics_integrator() { amrex::Print() << "DTypeFront chemistry integrator: Quokka Rosenbrock (ROS2S)\n"; }
+auto rosenbrock_tableau_name(int tableau) -> char const *
+{
+	switch (tableau) {
+		case 0:
+			return "Rodas5P";
+		case 1:
+			return "Rodas4P";
+		case 2:
+			return "Rodas3P";
+		case 3:
+			return "ROS2S";
+		default:
+			return "unknown";
+	}
+}
+
+void print_microphysics_integrator()
+{
+	const int tableau = quokka::chemistry::readIntegratorOptions().tableau;
+	amrex::Print() << "DTypeFront microphysics integrator: Rosenbrock (Rosenbrock tableau " << tableau << ": " << rosenbrock_tableau_name(tableau) << ")\n";
+}
 
 } // namespace
 

@@ -38,7 +38,7 @@ AMREX_GPU_DEVICE auto photochem_burner(quokka::chemistry::IntegratorState<quokka
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt, const int stage,
-			   const Real max_density_allowed, const Real min_density_allowed) -> bool
+			   const Real max_density_allowed, const Real min_density_allowed, const Real minimum_temperature) -> bool
 {
 	AMREX_ASSERT(stage == 1 || stage == 2);
 	// Start off by assuming a successful burn.
@@ -67,7 +67,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		chemBandQuanta[nn] = RadSystem<problem_t>::GetChemBandQuanta(nn);
 		invChemBandQuanta[nn] = 1.0_rt / chemBandQuanta[nn];
 	}
-	const auto integratorOptions = quokka::chemistry::readIntegratorOptions();
+	const auto integratorOptions = quokka::chemistry::readIntegratorOptions(minimum_temperature);
 	const quokka::chemistry::PhotoionizationNetwork chemistryNetwork{quokka::chemistry::readPhotoionizationParameters()};
 
 	const BL_PROFILE("PhotoChemistry::computePhotoChemistry()");

@@ -27,10 +27,12 @@ namespace quokka::chemistry
 AMREX_GPU_DEVICE auto chemburner(IntegratorState<PrimordialChemNetwork::variable_count> &state, Real dt, PrimordialChemNetwork const &network,
 				 IntegratorOptions const &options) -> bool;
 
-template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed) -> bool
+template <typename problem_t>
+auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed, const Real minimum_temperature)
+    -> bool
 {
 	constexpr int NumSpec = PrimordialChemNetwork::species_count;
-	const auto integratorOptions = readIntegratorOptions();
+	const auto integratorOptions = readIntegratorOptions(minimum_temperature);
 	const PrimordialChemNetwork chemistryNetwork{readPrimordialChemParameters()};
 
 	// Start off by assuming a successful burn.
@@ -101,6 +103,8 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			if (burn_failed) {
 				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
 			}
+			PrimordialChemNetwork::update_thermodynamics(chemstate);
+			const Real finalTemperature = chemstate.temperature;
 
 			// ensure positivity and normalize
 			for (int nn = 0; nn < NumSpec; ++nn) {
@@ -132,6 +136,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 				// update the number densities with conserved mass fractions
 				chemstate.values[nn] = inmfracs[nn] * chemstate.density / PrimordialChemNetwork::species_masses[nn];
 			}
+			PrimordialChemNetwork::set_specific_energy_from_temperature(chemstate, finalTemperature);
 
 			// get dEint
 			// Quokka uses rho*eint

@@ -83,11 +83,10 @@ struct PrimordialChemNetwork {
 
 	AMREX_GPU_HOST_DEVICE static void update_thermodynamics(IntegratorState<variable_count> &state) noexcept
 	{
-		const amrex::Real density = mass_density(state);
+		const amrex::Real species_density = mass_density(state);
 		const amrex::Real capacity = heat_capacity(state);
-		if (density > 0.0 && capacity > 0.0) {
-			state.density = density;
-			state.temperature = state.values[energy] * density / (capacity * boltzmann_constant);
+		if (species_density > 0.0 && capacity > 0.0) {
+			state.temperature = state.values[energy] * species_density / (capacity * boltzmann_constant);
 		}
 	}
 
@@ -107,6 +106,16 @@ struct PrimordialChemNetwork {
 			capacity += number_density[species] / (species_gammas[species] - 1.0);
 		}
 		return capacity * boltzmann_constant * temperature / density;
+	}
+
+	AMREX_GPU_HOST_DEVICE static void set_specific_energy_from_temperature(IntegratorState<variable_count> &state, amrex::Real temperature) noexcept
+	{
+		amrex::GpuArray<amrex::Real, species_count> number_density{};
+		for (int species = 0; species < species_count; ++species) {
+			number_density[species] = state.values[species];
+		}
+		state.values[energy] = specific_energy_from_temperature(number_density, temperature);
+		update_thermodynamics(state);
 	}
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto generated_state(IntegratorState<variable_count> state) noexcept -> primordial_detail::PrimordialRhsState

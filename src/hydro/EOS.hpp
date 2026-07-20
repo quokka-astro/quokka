@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <optional>
+#include <tuple>
 #include <type_traits>
 
 #include "util/Optional.hpp"
@@ -120,6 +121,7 @@ template <typename problem_t> struct EOSIdeal {
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real P, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
+	    -> std::tuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real>
 	{
 		amrex::ignore_unused(massScalars);
 		if constexpr (gamma_ == 1.0) {

@@ -33,6 +33,7 @@ struct IntegratorOptions {
 	amrex::Real radiation_failure_tolerance = 1.0e-2;
 	amrex::Real small_state = 1.0e-30;
 	amrex::Real maximum_timestep = 1.0e30;
+	amrex::Real minimum_temperature = 0.0;
 	amrex::Real maximum_temperature = 1.0e11;
 	amrex::Real rejection_buffer = 1.0;
 	amrex::Real controller_minimum = 0.2;
