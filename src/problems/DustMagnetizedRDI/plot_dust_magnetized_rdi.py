@@ -86,6 +86,7 @@ COMPONENT_COLORS = {"x": "#D55E00", "y": "#009E73", "z": "#0072B2"}
 DENSITY_COLORS = {"gas": "#984EA3", "dust": "#A65628"}
 STAGE_FILL_COLORS = {"linear": "#F2C94C", "nonlinear": "#9B51E0", "saturation": "#F299C2"}
 STAGE_TEXT_COLORS = {"linear": "#9A7200", "nonlinear": "#7132A8", "saturation": "#B44E80"}
+REGIME_BOUNDARIES_OVER_TS0 = (5.8, 11.3)
 
 PROJ_X = np.array([1.0, -0.36])
 PROJ_Y = np.array([0.72, 0.42])
@@ -148,7 +149,6 @@ def make_sigma_evolution(
     data_dir: Path,
     output_dir: Path,
     summary: dict[str, str],
-    stages: dict[str, dict[str, float | str]],
 ) -> Path:
     history = read_table(data_dir / "dust_magnetized_rdi_growth.csv")
     ts0 = summary_float(summary, "equilibrium_stop_time")
@@ -212,11 +212,9 @@ def make_sigma_evolution(
             label=rf"$B_{component}/B_0$",
         )
 
-    stage_times = [float(stages[stage]["time_over_ts0"]) for stage in STAGES]
     boundaries = (
         0.0,
-        0.5 * (stage_times[0] + stage_times[1]),
-        0.5 * (stage_times[1] + stage_times[2]),
+        *REGIME_BOUNDARIES_OVER_TS0,
         float(np.max(x_time)),
     )
     for index, stage in enumerate(STAGES):
@@ -234,15 +232,14 @@ def make_sigma_evolution(
         )
 
     all_series = tuple(series.values())
-    linear_mask = (x_time >= boundaries[0]) & (x_time < boundaries[1])
-    nonlinear_mask = (x_time >= boundaries[1]) & (x_time < boundaries[2])
     # The t in these reference growth laws is code time, in units of L_box / c_s.
-    for phase_mask, rate, label in (
-        (linear_mask, 1.0, r"$e^t$"),
-        (nonlinear_mask, 0.1, r"$e^{0.1t}$"),
+    for fit_limits, draw_limits, rate, label in (
+        ((2.0, boundaries[1]), (3.4, 5.4), 1.0, r"$e^t$"),
+        ((boundaries[1], boundaries[2]), (6.5, 9.5), 0.1, r"$e^{0.1t}$"),
     ):
-        guide = growth_guide(code_time, all_series, phase_mask, rate)
-        indices = np.flatnonzero(phase_mask)
+        fit_mask = (x_time >= fit_limits[0]) & (x_time < fit_limits[1])
+        guide = 1.0e-2 * growth_guide(code_time, all_series, fit_mask, rate)
+        indices = np.flatnonzero((x_time >= draw_limits[0]) & (x_time <= draw_limits[1]))
         ax.semilogy(x_time[indices], guide[indices], color="black", linestyle="-", linewidth=1.0)
         label_index = indices[len(indices) // 2]
         ax.annotate(
@@ -267,7 +264,7 @@ def make_sigma_evolution(
         "by",
         "bz",
     )
-    ax.legend(handles=[handles[key] for key in legend_order], loc="upper left", ncol=3, fontsize=7.2)
+    ax.legend(handles=[handles[key] for key in legend_order], loc="lower right", ncol=3, fontsize=7.2)
     ax.set_xlabel(r"$t/t_s^0$")
     ax.set_ylabel("standard deviation")
     ax.set_xlim(boundaries[0], boundaries[-1])
@@ -318,7 +315,7 @@ def normalize_coordinate(values: np.ndarray, lo: float, hi: float) -> np.ndarray
     return (values - lo) / (hi - lo)
 
 
-def projected_slice_grid(slice_tag: str, uvals: np.ndarray, vvals: np.ndarray, summary: dict[str, str]) -> tuple[np.ndarray, np.ndarray]:
+def slice_coordinate_grid(slice_tag: str, uvals: np.ndarray, vvals: np.ndarray, summary: dict[str, str]) -> tuple[np.ndarray, np.ndarray]:
     u, v = np.meshgrid(cell_edges(uvals), cell_edges(vvals), indexing="xy")
     xlo, xhi = summary_float(summary, "box_xlo"), summary_float(summary, "box_xhi")
     ylo, yhi = summary_float(summary, "box_ylo"), summary_float(summary, "box_yhi")
@@ -404,7 +401,7 @@ def draw_cube(
     mesh = None
     for slice_tag in VISIBLE_SLICE_ORDER:
         uvals, vvals, _, _ = slices[(stage, slice_tag)]
-        xgrid, ygrid = projected_slice_grid(slice_tag, uvals, vvals, summary)
+        xgrid, ygrid = slice_coordinate_grid(slice_tag, uvals, vvals, summary)
         mesh = ax.pcolormesh(
             xgrid,
             ygrid,
@@ -432,13 +429,13 @@ def make_stage_cubes(
     grid = fig.add_gridspec(
         2,
         6,
-        width_ratios=(1.0, 0.03, 1.0, 0.03, 1.0, 0.03),
+        width_ratios=(1.0, 0.018, 1.0, 0.018, 1.0, 0.018),
         left=0.01,
         right=0.90,
         bottom=0.04,
         top=0.88,
         hspace=0.08,
-        wspace=0.08,
+        wspace=0.20,
     )
 
     for column, stage in enumerate(STAGES):
@@ -448,7 +445,7 @@ def make_stage_cubes(
         bottom_cax = fig.add_subplot(grid[1, 2 * column + 1])
         for cax in (top_cax, bottom_cax):
             box = cax.get_position()
-            cax.set_position([box.x0, box.y0 + 0.12 * box.height, box.width, 0.76 * box.height])
+            cax.set_position([box.x0, box.y0 + 0.18 * box.height, box.width, 0.64 * box.height])
 
         magnetic_mesh = draw_cube(top_ax, summary, stage, slices, 2, "viridis", magnetic_norms[stage])
         top_ax.set_title(
@@ -547,8 +544,8 @@ def make_dust_density_pdf(
         )
         print(f"{stage}: PDF integral = {integrals[stage]:.16f}")
         print(f"{stage}: dust-floor cell volume fraction = {floor_fractions[stage]:.16e}")
-    ax.set_xlabel(r"$s=\ln(\rho_{\rm d}/\langle\rho_{\rm d}\rangle)$")
-    ax.set_ylabel(r"$p_V(s)$")
+    ax.set_xlabel(r"$\ln(\rho_{\rm d}/\langle\rho_{\rm d}\rangle)$")
+    ax.set_ylabel(r"$\mathrm{PDF}\!\left(\ln(\rho_{\rm d}/\langle\rho_{\rm d}\rangle)\right)$")
     ax.set_ylim(bottom=0.0)
     ax.legend(loc="best")
 
@@ -576,7 +573,7 @@ def main() -> int:
     stages = stage_metadata(summary)
     slices = load_slices(data_dir)
     outputs = [
-        make_sigma_evolution(data_dir, output_dir, summary, stages),
+        make_sigma_evolution(data_dir, output_dir, summary),
         make_stage_cubes(output_dir, summary, stages, slices),
         make_dust_density_pdf(data_dir, output_dir, summary, stages, args.pdf_bins),
     ]

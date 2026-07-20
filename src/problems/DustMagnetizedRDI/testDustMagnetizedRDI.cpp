@@ -37,7 +37,7 @@ constexpr double time_tolerance = 1.0e-10;
 constexpr double bar_a = 5.0;
 constexpr double grain_radius_default = 5.0;
 constexpr double grain_density_default = 1.0;
-constexpr double charge_to_mass_parameter = 10.0;
+constexpr double charge_to_mass_parameter = -10.0;
 constexpr double dust_to_gas_mass_ratio = 0.01;
 constexpr double beta_param = 2.0;
 constexpr double theta_Ba_deg = 87.0;
@@ -46,7 +46,7 @@ constexpr int noise_seed_default = 20250305;
 
 constexpr std::array<char const *, 3> stage_labels = {"linear", "nonlinear", "saturation"};
 constexpr std::array<char const *, 3> slice_tags = {"xmax_slice", "ymin_slice", "zmax_slice"};
-constexpr std::array<double, 3> stage_times_over_ts0_default = {6.2, 8.3, 17.0};
+constexpr std::array<double, 3> stage_times_over_ts0_default = {5.8, 7.5, 17.0};
 constexpr double history_dt_over_ts0_default = 0.1;
 
 double g_history_dt_over_ts0 = history_dt_over_ts0_default;		     // NOLINT
@@ -202,7 +202,7 @@ auto solveDriftEquilibrium() -> EquilibriumState
 
 	result.drift_ = drift;
 	result.stop_time_ = ts_sub / std::sqrt(1.0 + supersonic_eta * square(norm(drift) / sound_speed));
-	result.tau_ = omega_L * result.stop_time_;
+	result.tau_ = std::abs(omega_L) * result.stop_time_;
 	result.drift_speed_ = norm(drift);
 	result.drift_angle_to_b_deg_ = angleDegrees(drift, result.magnetic_field_);
 	result.gas_velocity_ = (-dust_to_gas_mass_ratio / (1.0 + dust_to_gas_mass_ratio)) * drift;
@@ -430,7 +430,7 @@ void writeSummaryCsv(QuokkaSimulation<problem_t> const &sim, EquilibriumState co
 	file << "bar_a," << bar_a << "\n";
 	file << "grain_size_parameter," << grainSizeParameter() << "\n";
 	file << "xi," << charge_to_mass_parameter << "\n";
-	file << "bar_phi_d," << grainSizeParameter() * charge_to_mass_parameter << "\n";
+	file << "bar_phi_d," << grainSizeParameter() * std::abs(charge_to_mass_parameter) << "\n";
 	file << "dust_to_gas_mass_ratio," << dust_to_gas_mass_ratio << "\n";
 	file << "beta," << beta_param << "\n";
 	file << "gamma," << gamma_iso << "\n";
