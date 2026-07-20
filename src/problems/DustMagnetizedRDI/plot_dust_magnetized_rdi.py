@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-"""Convert DustMagnetizedRDI CSV diagnostics into one 2x2 figure and two 3-panel figures."""
+"""Plot DustMagnetizedRDI standard deviations, stage cubes, and the full-volume dust PDF."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -25,312 +26,389 @@ from matplotlib import colors
 import matplotlib.pyplot as plt
 import numpy as np
 
+SINGLE_COLUMN_WIDTH = 3.4
+DOUBLE_COLUMN_WIDTH = 6.9
 
-SNAPSHOT_TAGS = ("t6p2ts0", "t8p3ts0", "t17p0ts0")
-FACE_TAGS = ("xface", "yface", "zface")
-VISIBLE_FACE_ORDER = ("yface", "xface", "zface")
+_LATEX_AVAILABLE = shutil.which("latex") is not None
+
+plt.rcParams.update({
+    "font.size": 9.0,
+    "axes.labelsize": 10.5,
+    "axes.titlesize": 10.5,
+    "axes.linewidth": 0.8,
+    "xtick.labelsize": 9.0,
+    "ytick.labelsize": 9.0,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
+    "xtick.major.size": 3.0,
+    "ytick.major.size": 3.0,
+    "legend.fontsize": 8.5,
+    "legend.frameon": False,
+    "legend.handlelength": 1.6,
+    "legend.handletextpad": 0.45,
+    "legend.labelspacing": 0.25,
+    "legend.borderaxespad": 0.25,
+    "legend.columnspacing": 0.7,
+    "lines.linewidth": 1.1,
+    "lines.markersize": 3.8,
+    "lines.markerfacecolor": "none",
+    "lines.markeredgewidth": 0.9,
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "xtick.top": False,
+    "ytick.right": False,
+    "xtick.minor.visible": False,
+    "ytick.minor.visible": False,
+    "axes.formatter.use_mathtext": True,
+    "savefig.bbox": "tight",
+    "savefig.pad_inches": 0.03,
+})
+
+if _LATEX_AVAILABLE:
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman", "CMU Serif", "Latin Modern Roman"],
+        "text.latex.preamble": r"\usepackage{amsmath}\usepackage{amssymb}\usepackage{bm}",
+    })
+else:
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["STIXGeneral", "STIX Two Text", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+    })
+
+
+STAGES = ("linear", "nonlinear", "saturation")
+SLICE_TAGS = ("xmax_slice", "ymin_slice", "zmax_slice")
+VISIBLE_SLICE_ORDER = ("ymin_slice", "xmax_slice", "zmax_slice")
+COMPONENT_COLORS = {"x": "#D55E00", "y": "#009E73", "z": "#0072B2"}
+DENSITY_COLORS = {"gas": "#984EA3", "dust": "#A65628"}
+STAGE_FILL_COLORS = {"linear": "#F2C94C", "nonlinear": "#9B51E0", "saturation": "#F299C2"}
+STAGE_TEXT_COLORS = {"linear": "#9A7200", "nonlinear": "#7132A8", "saturation": "#B44E80"}
+
 PROJ_X = np.array([1.0, -0.36])
 PROJ_Y = np.array([0.72, 0.42])
 PROJ_Z = np.array([0.0, 1.0])
-PROJECTION_ORIGIN = np.array([0.0, 0.0, 0.0])
 
 
-def read_csv_rows(path: Path) -> list[dict[str, float | str]]:
+def read_table(path: Path) -> dict[str, np.ndarray]:
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing required CSV file: {path}")
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
-        rows: list[dict[str, float | str]] = []
+        columns = {name: [] for name in reader.fieldnames or []}
         for row in reader:
-            parsed: dict[str, float | str] = {}
             for key, value in row.items():
-                if value is None or value == "":
-                    continue
-                try:
-                    parsed[key] = float(value)
-                except ValueError:
-                    parsed[key] = value
-            rows.append(parsed)
-    return rows
+                columns[key].append(float(value))
+    return {key: np.asarray(values, dtype=float) for key, values in columns.items()}
 
 
 def read_summary(path: Path) -> dict[str, str]:
-    summary: dict[str, str] = {}
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing required summary CSV: {path}")
     with path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            summary[str(row["key"])] = str(row["value"])
-    return summary
+        return {str(row["key"]): str(row["value"]) for row in csv.DictReader(handle)}
 
 
-def reshape_face(rows: list[dict[str, float | str]]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    uvals = np.array(sorted({float(row["u"]) for row in rows}))
-    vvals = np.array(sorted({float(row["v"]) for row in rows}))
-    nu = uvals.size
-    nv = vvals.size
-    bvec_minus_b0_norm = np.empty((nv, nu))
-    dust_overdensity = np.empty((nv, nu))
-    u_index = {value: idx for idx, value in enumerate(uvals)}
-    v_index = {value: idx for idx, value in enumerate(vvals)}
-    for row in rows:
-        iu = u_index[float(row["u"])]
-        iv = v_index[float(row["v"])]
-        bvec_minus_b0_norm[iv, iu] = float(row["bvec_minus_b0_norm"])
-        dust_overdensity[iv, iu] = float(row["dust_overdensity"])
-    return uvals, vvals, bvec_minus_b0_norm, dust_overdensity
+def summary_float(summary: dict[str, str], key: str) -> float:
+    if key not in summary:
+        raise KeyError(f"Summary CSV is missing required key '{key}'.")
+    return float(summary[key])
 
 
-def compute_cell_edges(centers: np.ndarray) -> np.ndarray:
+def stage_metadata(summary: dict[str, str]) -> dict[str, dict[str, float | str]]:
+    metadata: dict[str, dict[str, float | str]] = {}
+    for stage in STAGES:
+        reached_key = f"stage_{stage}_reached"
+        if int(summary_float(summary, reached_key)) != 1:
+            raise RuntimeError(f"Stage '{stage}' was not reached according to summary key '{reached_key}'.")
+        plotfile_key = f"stage_{stage}_plotfile"
+        if plotfile_key not in summary or not summary[plotfile_key]:
+            raise KeyError(f"Summary CSV is missing a plotfile path for stage '{stage}'.")
+        metadata[stage] = {
+            "time_over_ts0": summary_float(summary, f"stage_{stage}_actual_time_over_ts0"),
+            "plotfile": summary[plotfile_key],
+        }
+    return metadata
+
+
+def positive(values: np.ndarray) -> np.ndarray:
+    return np.where(values > 0.0, values, np.nan)
+
+
+def growth_guide(time: np.ndarray, values: tuple[np.ndarray, ...], phase_mask: np.ndarray, rate: float) -> np.ndarray:
+    stacked_values = np.vstack(values)
+    mask = phase_mask[np.newaxis, :] & np.isfinite(stacked_values) & (stacked_values > 0.0)
+    intercept = np.median((np.log(stacked_values) - rate * time[np.newaxis, :])[mask])
+    return np.exp(intercept + rate * time)
+
+
+def make_sigma_evolution(
+    data_dir: Path,
+    output_dir: Path,
+    summary: dict[str, str],
+    stages: dict[str, dict[str, float | str]],
+) -> Path:
+    history = read_table(data_dir / "dust_magnetized_rdi_growth.csv")
+    ts0 = summary_float(summary, "equilibrium_stop_time")
+    cs0 = summary_float(summary, "cs0")
+    b0 = summary_float(summary, "B0")
+    crossing_time = summary_float(summary, "box_length_x") / cs0
+    x_time = history["t"] / ts0
+    code_time = history["t"] / crossing_time
+
+    series = {
+        "rho_g": positive(history["sigma_log_rho_g"]),
+        "rho_d": positive(history["sigma_log_rho_d"]),
+        "vgx": positive(history["sigma_vgx"] / cs0),
+        "vgy": positive(history["sigma_vgy"] / cs0),
+        "vgz": positive(history["sigma_vgz"] / cs0),
+        "vdx": positive(history["sigma_vdx"] / cs0),
+        "vdy": positive(history["sigma_vdy"] / cs0),
+        "vdz": positive(history["sigma_vdz"] / cs0),
+        "bx": positive(history["sigma_bx"] / b0),
+        "by": positive(history["sigma_by"] / b0),
+        "bz": positive(history["sigma_bz"] / b0),
+    }
+
+    fig, ax = plt.subplots(figsize=(DOUBLE_COLUMN_WIDTH, 3.75))
+    fig.subplots_adjust(left=0.105, right=0.985, bottom=0.15, top=0.84)
+
+    handles = {}
+    handles["rho_g"], = ax.semilogy(
+        x_time,
+        series["rho_g"],
+        color=DENSITY_COLORS["gas"],
+        label=r"$\ln[\rho_{\rm g}/\rho_{{\rm g},0}]$",
+    )
+    handles["rho_d"], = ax.semilogy(
+        x_time,
+        series["rho_d"],
+        color=DENSITY_COLORS["dust"],
+        label=r"$\ln[\rho_{\rm d}/\rho_{{\rm d},0}]$",
+    )
+    for component in ("x", "y", "z"):
+        color = COMPONENT_COLORS[component]
+        handles[f"vg{component}"], = ax.semilogy(
+            x_time,
+            series[f"vg{component}"],
+            color=color,
+            linestyle="-",
+            label=rf"$v_{{g,{component}}}/c_s$",
+        )
+        handles[f"vd{component}"], = ax.semilogy(
+            x_time,
+            series[f"vd{component}"],
+            color=color,
+            linestyle="--",
+            label=rf"$v_{{d,{component}}}/c_s$",
+        )
+        handles[f"b{component}"], = ax.semilogy(
+            x_time,
+            series[f"b{component}"],
+            color=color,
+            linestyle=":",
+            label=rf"$B_{component}/B_0$",
+        )
+
+    stage_times = [float(stages[stage]["time_over_ts0"]) for stage in STAGES]
+    boundaries = (
+        0.0,
+        0.5 * (stage_times[0] + stage_times[1]),
+        0.5 * (stage_times[1] + stage_times[2]),
+        float(np.max(x_time)),
+    )
+    for index, stage in enumerate(STAGES):
+        lower, upper = boundaries[index], boundaries[index + 1]
+        ax.axvspan(lower, upper, color=STAGE_FILL_COLORS[stage], alpha=0.16, linewidth=0.0, zorder=0)
+        ax.text(
+            0.5 * (lower + upper),
+            1.015,
+            stage,
+            color=STAGE_TEXT_COLORS[stage],
+            fontsize=8.5,
+            ha="center",
+            va="bottom",
+            transform=ax.get_xaxis_transform(),
+        )
+
+    all_series = tuple(series.values())
+    linear_mask = (x_time >= boundaries[0]) & (x_time < boundaries[1])
+    nonlinear_mask = (x_time >= boundaries[1]) & (x_time < boundaries[2])
+    # The t in these reference growth laws is code time, in units of L_box / c_s.
+    for phase_mask, rate, label in (
+        (linear_mask, 1.0, r"$e^t$"),
+        (nonlinear_mask, 0.1, r"$e^{0.1t}$"),
+    ):
+        guide = growth_guide(code_time, all_series, phase_mask, rate)
+        indices = np.flatnonzero(phase_mask)
+        ax.semilogy(x_time[indices], guide[indices], color="black", linestyle="-", linewidth=1.0)
+        label_index = indices[len(indices) // 2]
+        ax.annotate(
+            label,
+            xy=(x_time[label_index], guide[label_index]),
+            xytext=(3.0, 3.0),
+            textcoords="offset points",
+            fontsize=8.0,
+            color="black",
+        )
+
+    legend_order = (
+        "vdx",
+        "vdy",
+        "vdz",
+        "rho_d",
+        "vgx",
+        "vgy",
+        "vgz",
+        "rho_g",
+        "bx",
+        "by",
+        "bz",
+    )
+    ax.legend(handles=[handles[key] for key in legend_order], loc="upper left", ncol=3, fontsize=7.2)
+    ax.set_xlabel(r"$t/t_s^0$")
+    ax.set_ylabel("standard deviation")
+    ax.set_xlim(boundaries[0], boundaries[-1])
+
+    output = output_dir / "dust_magnetized_rdi_sigma_evolution.pdf"
+    fig.savefig(output)
+    plt.close(fig)
+    return output
+
+
+def reshape_slice(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    table = read_table(path)
+    uvals = np.unique(table["u"])
+    vvals = np.unique(table["v"])
+    iu = np.searchsorted(uvals, table["u"])
+    iv = np.searchsorted(vvals, table["v"])
+    shape = (vvals.size, uvals.size)
+    bdelta = np.empty(shape)
+    dust = np.empty(shape)
+    bdelta[iv, iu] = table["magnetic_perturbation_magnitude"]
+    dust[iv, iu] = table["dust_density_ratio"]
+    return uvals, vvals, bdelta, dust
+
+
+def load_slices(data_dir: Path) -> dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+    return {
+        (stage, slice_tag): reshape_slice(data_dir / f"dust_magnetized_rdi_{stage}_{slice_tag}.csv")
+        for stage in STAGES
+        for slice_tag in SLICE_TAGS
+    }
+
+
+def cell_edges(centers: np.ndarray) -> np.ndarray:
     if centers.size == 1:
-        width = 1.0
-        return np.array([centers[0] - 0.5 * width, centers[0] + 0.5 * width], dtype=float)
-    edges = np.empty(centers.size + 1, dtype=float)
+        return np.array([centers[0] - 0.5, centers[0] + 0.5])
+    edges = np.empty(centers.size + 1)
     edges[1:-1] = 0.5 * (centers[:-1] + centers[1:])
     edges[0] = centers[0] - 0.5 * (centers[1] - centers[0])
     edges[-1] = centers[-1] + 0.5 * (centers[-1] - centers[-2])
     return edges
 
 
-def project_cube_coordinates(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    dx = x - PROJECTION_ORIGIN[0]
-    dy = y - PROJECTION_ORIGIN[1]
-    dz = z - PROJECTION_ORIGIN[2]
-    x2d = (PROJ_X[0] * dx) + (PROJ_Y[0] * dy) + (PROJ_Z[0] * dz)
-    y2d = (PROJ_X[1] * dx) + (PROJ_Y[1] * dy) + (PROJ_Z[1] * dz)
-    return x2d, y2d
+def project_coordinates(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    return PROJ_X[0] * x + PROJ_Y[0] * y + PROJ_Z[0] * z, PROJ_X[1] * x + PROJ_Y[1] * y + PROJ_Z[1] * z
 
 
-def project_point(x: float, y: float, z: float) -> np.ndarray:
-    px, py = project_cube_coordinates(np.array(x), np.array(y), np.array(z))
-    return np.array([float(px), float(py)], dtype=float)
+def normalize_coordinate(values: np.ndarray, lo: float, hi: float) -> np.ndarray:
+    return (values - lo) / (hi - lo)
 
 
-def make_projected_face_grid(face_tag: str, uvals: np.ndarray, vvals: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    uedges = compute_cell_edges(uvals)
-    vedges = compute_cell_edges(vvals)
-    uu, vv = np.meshgrid(uedges, vedges, indexing="xy")
+def projected_slice_grid(slice_tag: str, uvals: np.ndarray, vvals: np.ndarray, summary: dict[str, str]) -> tuple[np.ndarray, np.ndarray]:
+    u, v = np.meshgrid(cell_edges(uvals), cell_edges(vvals), indexing="xy")
+    xlo, xhi = summary_float(summary, "box_xlo"), summary_float(summary, "box_xhi")
+    ylo, yhi = summary_float(summary, "box_ylo"), summary_float(summary, "box_yhi")
+    zlo, zhi = summary_float(summary, "box_zlo"), summary_float(summary, "box_zhi")
 
-    # The CSVs contain the three visible outer faces of the analog cube:
-    # y = y_min (front), x = x_max (right), and z = z_max (top).
-    if face_tag == "yface":
-        xx = uu
-        yy = np.zeros_like(uu)
-        zz = vv
-    elif face_tag == "xface":
-        xx = np.ones_like(uu)
-        yy = uu
-        zz = vv
-    elif face_tag == "zface":
-        xx = uu
-        yy = vv
-        zz = np.ones_like(uu)
+    if slice_tag == "ymin_slice":
+        x = normalize_coordinate(u, xlo, xhi)
+        y = np.zeros_like(u)
+        z = normalize_coordinate(v, zlo, zhi)
+    elif slice_tag == "xmax_slice":
+        x = np.ones_like(u)
+        y = normalize_coordinate(u, ylo, yhi)
+        z = normalize_coordinate(v, zlo, zhi)
     else:
-        raise ValueError(f"Unknown face tag '{face_tag}'.")
-    return project_cube_coordinates(xx, yy, zz)
+        x = normalize_coordinate(u, xlo, xhi)
+        y = normalize_coordinate(v, ylo, yhi)
+        z = np.ones_like(u)
+    return project_coordinates(x, y, z)
 
 
-def projected_cube_vertices() -> dict[str, np.ndarray]:
-    return {
-        "000": project_point(0.0, 0.0, 0.0),
-        "100": project_point(1.0, 0.0, 0.0),
-        "010": project_point(0.0, 1.0, 0.0),
-        "110": project_point(1.0, 1.0, 0.0),
-        "001": project_point(0.0, 0.0, 1.0),
-        "101": project_point(1.0, 0.0, 1.0),
-        "011": project_point(0.0, 1.0, 1.0),
-        "111": project_point(1.0, 1.0, 1.0),
-    }
+def cube_vertices() -> dict[str, np.ndarray]:
+    vertices = {}
+    for x in (0, 1):
+        for y in (0, 1):
+            for z in (0, 1):
+                px, py = project_coordinates(np.array(x), np.array(y), np.array(z))
+                vertices[f"{x}{y}{z}"] = np.array([float(px), float(py)])
+    return vertices
 
 
-def draw_projected_cube_outlines(ax: plt.Axes) -> None:
-    vertices = projected_cube_vertices()
-    visible_faces = (
+def decorate_cube(ax: plt.Axes) -> None:
+    vertices = cube_vertices()
+    for outline in (
         ("000", "100", "101", "001", "000"),
         ("100", "110", "111", "101", "100"),
         ("001", "101", "111", "011", "001"),
-    )
-    for face in visible_faces:
-        polygon = np.array([vertices[name] for name in face])
-        ax.plot(polygon[:, 0], polygon[:, 1], color="0.12", linewidth=0.85, solid_capstyle="round", solid_joinstyle="round")
+    ):
+        polygon = np.array([vertices[name] for name in outline])
+        ax.plot(polygon[:, 0], polygon[:, 1], color="0.12", linewidth=0.8)
 
+    for start, end, label, offset in (
+        ("000", "100", r"$+x$", np.array([0.05, -0.06])),
+        ("100", "110", r"$+y$", np.array([0.05, 0.03])),
+        ("000", "001", r"$+z$", np.array([-0.06, 0.05])),
+    ):
+        ax.annotate("", xy=vertices[end], xytext=vertices[start], arrowprops={"arrowstyle": "-|>", "color": "0.12", "linewidth": 0.9})
+        position = vertices[end] + offset
+        ax.text(position[0], position[1], label)
 
-def draw_projected_axis_triad(ax: plt.Axes) -> None:
-    vertices = projected_cube_vertices()
-    axis_specs = (
-        (vertices["000"], vertices["100"], "+x", np.array([0.06, -0.06])),
-        (vertices["100"], vertices["110"], "+y", np.array([0.06, 0.03])),
-        (vertices["000"], vertices["001"], "+z", np.array([-0.06, 0.05])),
-    )
-    for start, end, label, offset in axis_specs:
-        ax.annotate(
-            "",
-            xy=(end[0], end[1]),
-            xytext=(start[0], start[1]),
-            arrowprops={
-                "arrowstyle": "-|>",
-                "color": "0.12",
-                "linewidth": 0.95,
-                "mutation_scale": 10.0,
-                "shrinkA": 0.0,
-                "shrinkB": 0.0,
-            },
-        )
-        text_position = end + offset
-        ax.text(text_position[0], text_position[1], label, fontsize=10, color="0.12")
-
-
-def configure_projected_cube_axes(ax: plt.Axes) -> None:
-    vertices = np.stack(tuple(projected_cube_vertices().values()), axis=0)
-    ax.set_xlim(float(np.min(vertices[:, 0]) - 0.14), float(np.max(vertices[:, 0]) + 0.18))
-    ax.set_ylim(float(np.min(vertices[:, 1]) - 0.16), float(np.max(vertices[:, 1]) + 0.14))
+    points = np.stack(tuple(vertices.values()))
+    ax.set_xlim(np.min(points[:, 0]) - 0.14, np.max(points[:, 0]) + 0.18)
+    ax.set_ylim(np.min(points[:, 1]) - 0.16, np.max(points[:, 1]) + 0.14)
     ax.set_aspect("equal")
     ax.set_axis_off()
 
 
-def load_face_payload(data_dir: Path) -> dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
-    payload: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = {}
-    for snapshot_tag in SNAPSHOT_TAGS:
-        for face_tag in FACE_TAGS:
-            rows = read_csv_rows(data_dir / f"dust_magnetized_rdi_{snapshot_tag}_{face_tag}.csv")
-            payload[(snapshot_tag, face_tag)] = reshape_face(rows)
-    return payload
-
-
-def magnetic_field_values(payload: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
-    return payload[2]
-
-
-def dust_density_values(payload: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
-    return payload[3]
-
-
-def make_snapshot_norms(
-    face_payload: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
-    value_getter,
+def stage_norms(
+    slices: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
+    value_index: int,
     *,
-    lower_bound: float | None = None,
+    zero_minimum: bool,
 ) -> dict[str, colors.Normalize]:
-    norms: dict[str, colors.Normalize] = {}
-    for snapshot_tag in SNAPSHOT_TAGS:
-        values = [value_getter(face_payload[(snapshot_tag, face_tag)]) for face_tag in FACE_TAGS]
-        vmin = lower_bound if lower_bound is not None else float(min(np.min(arr) for arr in values))
-        vmax = float(max(np.max(arr) for arr in values))
-        if vmax <= vmin:
+    norms = {}
+    for stage in STAGES:
+        values = [slices[(stage, slice_tag)][value_index] for slice_tag in SLICE_TAGS]
+        vmin = 0.0 if zero_minimum else min(float(np.min(value)) for value in values)
+        vmax = max(float(np.max(value)) for value in values)
+        if vmax == vmin:
             vmax = vmin + max(abs(vmin), 1.0) * 1.0e-12
-        norms[snapshot_tag] = colors.Normalize(vmin=vmin, vmax=vmax)
+        norms[stage] = colors.Normalize(vmin=vmin, vmax=vmax)
     return norms
 
 
-def build_growth_guide(
-    t_code: np.ndarray,
-    t_over_ts0: np.ndarray,
-    series: np.ndarray,
-    growth_rate: float,
-    fit_window_over_ts0: tuple[float, float],
-) -> np.ndarray:
-    lo, hi = fit_window_over_ts0
-    positive = np.isfinite(series) & (series > 0.0)
-    fit_mask = positive & (t_over_ts0 >= lo) & (t_over_ts0 <= hi)
-    if np.count_nonzero(fit_mask) == 0:
-        fit_mask = positive
-    if np.count_nonzero(fit_mask) == 0:
-        return np.full_like(t_code, 1.0e-12, dtype=float)
-    intercept = float(np.median(np.log(series[fit_mask]) - growth_rate * t_code[fit_mask]))
-    return np.exp(intercept + growth_rate * t_code)
-
-
-def get_summary_float(summary: dict[str, str], key: str) -> float:
-    return float(summary[key])
-
-
-def make_fig8(data_dir: Path, output_dir: Path) -> Path:
-    growth_rows = read_csv_rows(data_dir / "dust_magnetized_rdi_growth.csv")
-    summary = read_summary(data_dir / "dust_magnetized_rdi_summary.csv")
-    ts0 = get_summary_float(summary, "equilibrium_stop_time")
-    cs0 = get_summary_float(summary, "cs0")
-    b0 = np.sqrt(
-        get_summary_float(summary, "Bx0") ** 2
-        + get_summary_float(summary, "By0") ** 2
-        + get_summary_float(summary, "Bz0") ** 2
-    )
-
-    t_code = np.array([float(row["t"]) for row in growth_rows])
-    t_over_ts0 = t_code / ts0
-
-    sig_log_rho_g = np.array([float(row["sigma_log_rho_g"]) for row in growth_rows])
-    sig_log_rho_d = np.array([float(row["sigma_log_rho_d"]) for row in growth_rows])
-    sig_vgx = np.array([float(row["sigma_vgx"]) for row in growth_rows]) / cs0
-    sig_vgy = np.array([float(row["sigma_vgy"]) for row in growth_rows]) / cs0
-    sig_vgz = np.array([float(row["sigma_vgz"]) for row in growth_rows]) / cs0
-    sig_vdx = np.array([float(row["sigma_vdx"]) for row in growth_rows]) / cs0
-    sig_vdy = np.array([float(row["sigma_vdy"]) for row in growth_rows]) / cs0
-    sig_vdz = np.array([float(row["sigma_vdz"]) for row in growth_rows]) / cs0
-    sig_bx = np.array([float(row["sigma_bx"]) for row in growth_rows]) / b0
-    sig_by = np.array([float(row["sigma_by"]) for row in growth_rows]) / b0
-    sig_bz = np.array([float(row["sigma_bz"]) for row in growth_rows]) / b0
-
-    guide_fast = build_growth_guide(t_code, t_over_ts0, sig_log_rho_d, growth_rate=1.0, fit_window_over_ts0=(8.0, 12.0))
-    guide_slow = build_growth_guide(t_code, t_over_ts0, sig_log_rho_g, growth_rate=0.1, fit_window_over_ts0=(8.0, 12.0))
-
-    fig, axes = plt.subplots(2, 2, figsize=(12.0, 8.5), sharex=True, constrained_layout=True)
-
-    ax = axes[0, 0]
-    ax.semilogy(t_over_ts0, sig_log_rho_g, color="red", linewidth=1.2, label=r"$\rho_g$")
-    ax.semilogy(t_over_ts0, sig_log_rho_d, color="black", linewidth=1.2, label=r"$\rho_d$")
-    ax.semilogy(t_over_ts0, guide_fast, color="0.55", linestyle="--", linewidth=1.0, label=r"$\propto e^{t}$")
-    ax.semilogy(t_over_ts0, guide_slow, color="0.65", linestyle=":", linewidth=1.0, label=r"$\propto e^{0.1t}$")
-    ax.set_ylabel(r"$\sigma(\log(\rho/\rho_0))$")
-    ax.legend(frameon=False, loc="upper left")
-
-    ax = axes[0, 1]
-    ax.semilogy(t_over_ts0, sig_vgx, color="tab:red", linewidth=1.15, label=r"$u_{g,x}$")
-    ax.semilogy(t_over_ts0, sig_vgy, color="tab:orange", linewidth=1.15, label=r"$u_{g,y}$")
-    ax.semilogy(t_over_ts0, sig_vgz, color="tab:brown", linewidth=1.15, label=r"$u_{g,z}$")
-    ax.semilogy(t_over_ts0, guide_fast, color="0.55", linestyle="--", linewidth=1.0)
-    ax.semilogy(t_over_ts0, guide_slow, color="0.65", linestyle=":", linewidth=1.0)
-    ax.set_ylabel(r"$\sigma(u_g/c_s)$")
-    ax.legend(frameon=False, loc="upper left")
-
-    ax = axes[1, 0]
-    ax.semilogy(t_over_ts0, sig_vdx, color="black", linewidth=1.15, label=r"$v_{d,x}$")
-    ax.semilogy(t_over_ts0, sig_vdy, color="0.35", linewidth=1.15, label=r"$v_{d,y}$")
-    ax.semilogy(t_over_ts0, sig_vdz, color="0.6", linewidth=1.15, label=r"$v_{d,z}$")
-    ax.semilogy(t_over_ts0, guide_fast, color="0.55", linestyle="--", linewidth=1.0)
-    ax.semilogy(t_over_ts0, guide_slow, color="0.65", linestyle=":", linewidth=1.0)
-    ax.set_ylabel(r"$\sigma(v_d/c_s)$")
-    ax.set_xlabel(r"$t/t_s^0$")
-    ax.legend(frameon=False, loc="upper left")
-
-    ax = axes[1, 1]
-    ax.semilogy(t_over_ts0, sig_bx, color="tab:blue", linewidth=1.15, label=r"$B_x$")
-    ax.semilogy(t_over_ts0, sig_by, color="tab:cyan", linewidth=1.15, label=r"$B_y$")
-    ax.semilogy(t_over_ts0, sig_bz, color="tab:green", linewidth=1.15, label=r"$B_z$")
-    ax.semilogy(t_over_ts0, guide_fast, color="0.55", linestyle="--", linewidth=1.0)
-    ax.semilogy(t_over_ts0, guide_slow, color="0.65", linestyle=":", linewidth=1.0)
-    ax.set_ylabel(r"$\sigma(B/B_0)$")
-    ax.set_xlabel(r"$t/t_s^0$")
-    ax.legend(frameon=False, loc="upper left")
-
-    output_path = output_dir / "dust_magnetized_rdi_fig8_analog.pdf"
-    fig.savefig(output_path)
-    plt.close(fig)
-    return output_path
-
-
-def render_projected_cube(
+def draw_cube(
     ax: plt.Axes,
-    snapshot_faces: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
-    values_getter,
+    summary: dict[str, str],
+    stage: str,
+    slices: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
+    value_index: int,
     cmap: str,
     norm: colors.Normalize,
 ):
     mesh = None
-    for face_tag in VISIBLE_FACE_ORDER:
-        uvals, vvals, _, _ = snapshot_faces[face_tag]
-        xgrid, ygrid = make_projected_face_grid(face_tag, uvals, vvals)
-        values = values_getter(snapshot_faces[face_tag])
+    for slice_tag in VISIBLE_SLICE_ORDER:
+        uvals, vvals, _, _ = slices[(stage, slice_tag)]
+        xgrid, ygrid = projected_slice_grid(slice_tag, uvals, vvals, summary)
         mesh = ax.pcolormesh(
             xgrid,
             ygrid,
-            values,
+            slices[(stage, slice_tag)][value_index],
             shading="flat",
             cmap=cmap,
             norm=norm,
@@ -338,75 +416,153 @@ def render_projected_cube(
             antialiased=False,
             rasterized=True,
         )
-    draw_projected_cube_outlines(ax)
-    draw_projected_axis_triad(ax)
-    configure_projected_cube_axes(ax)
+    decorate_cube(ax)
     return mesh
 
 
-def make_projected_cube_figure(
+def make_stage_cubes(
+    output_dir: Path,
     summary: dict[str, str],
-    face_payload: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
-    *,
-    values_getter,
-    norms: dict[str, colors.Normalize],
-    cmap: str,
-    colorbar_label: str,
-    output_name: str,
+    stages: dict[str, dict[str, float | str]],
+    slices: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
 ) -> Path:
-    fig = plt.figure(figsize=(7.4, 14.8), constrained_layout=True)
-    grid = fig.add_gridspec(3, 2, width_ratios=(1.0, 0.055))
+    magnetic_norms = stage_norms(slices, 2, zero_minimum=True)
+    dust_norms = stage_norms(slices, 3, zero_minimum=False)
+    fig = plt.figure(figsize=(DOUBLE_COLUMN_WIDTH, 5.0))
+    grid = fig.add_gridspec(
+        2,
+        6,
+        width_ratios=(1.0, 0.03, 1.0, 0.03, 1.0, 0.03),
+        left=0.01,
+        right=0.90,
+        bottom=0.04,
+        top=0.88,
+        hspace=0.08,
+        wspace=0.08,
+    )
 
-    for idx, snapshot_tag in enumerate(SNAPSHOT_TAGS):
-        ax = fig.add_subplot(grid[idx, 0])
-        cax = fig.add_subplot(grid[idx, 1])
-        snapshot_faces = {face_tag: face_payload[(snapshot_tag, face_tag)] for face_tag in FACE_TAGS}
-        mesh = render_projected_cube(ax, snapshot_faces, values_getter, cmap, norms[snapshot_tag])
-        snapshot_time_over_ts0 = get_summary_float(summary, f"snapshot_{snapshot_tag}_time_ts0")
-        ax.set_title(rf"$t/t_s^0 = {snapshot_time_over_ts0:.1f}$", pad=6.0)
-        cbar = fig.colorbar(mesh, cax=cax)
-        cbar.set_label(colorbar_label)
+    for column, stage in enumerate(STAGES):
+        top_ax = fig.add_subplot(grid[0, 2 * column])
+        bottom_ax = fig.add_subplot(grid[1, 2 * column])
+        top_cax = fig.add_subplot(grid[0, 2 * column + 1])
+        bottom_cax = fig.add_subplot(grid[1, 2 * column + 1])
+        for cax in (top_cax, bottom_cax):
+            box = cax.get_position()
+            cax.set_position([box.x0, box.y0 + 0.12 * box.height, box.width, 0.76 * box.height])
 
-    output_path = output_name
-    fig.savefig(output_path)
+        magnetic_mesh = draw_cube(top_ax, summary, stage, slices, 2, "viridis", magnetic_norms[stage])
+        top_ax.set_title(
+            rf"$t={float(stages[stage]['time_over_ts0']):.4g}\,t_s^0$",
+            fontsize=8.2,
+            y=0.98,
+        )
+        magnetic_cbar = fig.colorbar(magnetic_mesh, cax=top_cax)
+        if column == len(STAGES) - 1:
+            magnetic_cbar.set_label(r"$|\mathbf{B}-\mathbf{B}_0|$")
+
+        dust_mesh = draw_cube(bottom_ax, summary, stage, slices, 3, "magma", dust_norms[stage])
+        dust_cbar = fig.colorbar(dust_mesh, cax=bottom_cax)
+        if column == len(STAGES) - 1:
+            dust_cbar.set_label(r"$\rho_{\rm d}/\rho_{{\rm d},0}$")
+
+    output = output_dir / "dust_magnetized_rdi_stage_cubes.pdf"
+    fig.savefig(output)
     plt.close(fig)
-    return output_path
+    return output
 
 
-def make_fig9(output_dir: Path, summary: dict[str, str], face_payload: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]) -> Path:
-    rho_g0 = get_summary_float(summary, "rho_g0")
-    cs0 = get_summary_float(summary, "cs0")
-    p0 = rho_g0 * cs0 * cs0
-    magnetic_scale = np.sqrt(4.0 * np.pi * p0)
-    norms = make_snapshot_norms(face_payload, lambda payload: magnetic_field_values(payload) / magnetic_scale, lower_bound=0.0)
-    return make_projected_cube_figure(
-        summary,
-        face_payload,
-        values_getter=lambda payload: magnetic_field_values(payload) / magnetic_scale,
-        norms=norms,
-        cmap="viridis",
-        colorbar_label=r"$|\vec{B}-\vec{B}_0|/\sqrt{4\pi P_0}$",
-        output_name=output_dir / "dust_magnetized_rdi_fig9_analog.pdf",
+def resolve_plotfile(data_dir: Path, value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else data_dir / path
+
+
+def load_dust_density(plotfile: Path) -> np.ndarray:
+    if not (plotfile / "Header").is_file():
+        raise FileNotFoundError(f"Missing Quokka plotfile: {plotfile}")
+
+    import yt
+
+    yt.set_log_level(40)
+    dataset = yt.load(str(plotfile))
+    field = next((candidate for candidate in dataset.field_list if candidate[1] == "dustDensity-Group0"), None)
+    if field is None:
+        raise KeyError(f"Plotfile '{plotfile}' does not contain dustDensity-Group0.")
+    grid = dataset.covering_grid(level=0, left_edge=dataset.domain_left_edge, dims=dataset.domain_dimensions)
+    return np.asarray(grid[field], dtype=float).ravel()
+
+
+def compute_dust_pdfs(
+    dust_density: dict[str, np.ndarray],
+    dust_floor: float,
+    bins: int,
+) -> tuple[np.ndarray, dict[str, np.ndarray], dict[str, float], dict[str, float]]:
+    log_density = {stage: np.log(values / np.mean(values)) for stage, values in dust_density.items()}
+    lower = min(float(np.min(values)) for values in log_density.values())
+    upper = max(float(np.max(values)) for values in log_density.values())
+    if lower == upper:
+        lower, upper = lower - 0.5, upper + 0.5
+    edges = np.linspace(lower, upper, bins + 1)
+    widths = np.diff(edges)
+
+    pdfs = {}
+    integrals = {}
+    floor_fractions = {}
+    for stage, values in log_density.items():
+        counts, _ = np.histogram(values, bins=edges)
+        pdfs[stage] = counts / (counts.sum() * widths)
+        integrals[stage] = float(np.sum(pdfs[stage] * widths))
+        floor_fractions[stage] = float(np.mean(dust_density[stage] <= dust_floor * (1.0 + 1.0e-12)))
+    return edges, pdfs, integrals, floor_fractions
+
+
+def make_dust_density_pdf(
+    data_dir: Path,
+    output_dir: Path,
+    summary: dict[str, str],
+    stages: dict[str, dict[str, float | str]],
+    bins: int,
+) -> Path:
+    dust_density = {
+        stage: load_dust_density(resolve_plotfile(data_dir, str(stages[stage]["plotfile"])))
+        for stage in STAGES
+    }
+    edges, pdfs, integrals, floor_fractions = compute_dust_pdfs(
+        dust_density,
+        summary_float(summary, "dust_density_floor"),
+        bins,
     )
+    fig, ax = plt.subplots(figsize=(SINGLE_COLUMN_WIDTH, 2.7))
+    fig.subplots_adjust(left=0.18, right=0.98, bottom=0.18, top=0.97)
+    for stage in STAGES:
+        ax.stairs(
+            pdfs[stage],
+            edges,
+            baseline=0.0,
+            fill=True,
+            facecolor=STAGE_FILL_COLORS[stage],
+            edgecolor="none",
+            alpha=0.35,
+            linewidth=0.0,
+            label=stage,
+        )
+        print(f"{stage}: PDF integral = {integrals[stage]:.16f}")
+        print(f"{stage}: dust-floor cell volume fraction = {floor_fractions[stage]:.16e}")
+    ax.set_xlabel(r"$s=\ln(\rho_{\rm d}/\langle\rho_{\rm d}\rangle)$")
+    ax.set_ylabel(r"$p_V(s)$")
+    ax.set_ylim(bottom=0.0)
+    ax.legend(loc="best")
 
-
-def make_fig9_dust(output_dir: Path, summary: dict[str, str], face_payload: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]) -> Path:
-    norms = make_snapshot_norms(face_payload, dust_density_values)
-    return make_projected_cube_figure(
-        summary,
-        face_payload,
-        values_getter=dust_density_values,
-        norms=norms,
-        cmap="magma",
-        colorbar_label=r"$\rho_d/\rho_{d,0}$",
-        output_name=output_dir / "dust_magnetized_rdi_fig9_dust_analog.pdf",
-    )
+    output = output_dir / "dust_magnetized_rdi_dust_density_pdf.pdf"
+    fig.savefig(output)
+    plt.close(fig)
+    return output
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-dir", type=Path, default=Path.cwd(), help="Directory containing dust_magnetized_rdi_*.csv files.")
+    parser.add_argument("--data-dir", type=Path, default=Path.cwd(), help="Directory containing RDI CSV files and stage plotfiles.")
     parser.add_argument("--output-dir", type=Path, default=Path.cwd(), help="Directory for output PDFs.")
+    parser.add_argument("--pdf-bins", type=int, default=80, help="Number of common bins in the dust-density PDF.")
     return parser.parse_args()
 
 
@@ -415,15 +571,17 @@ def main() -> int:
     data_dir = args.data_dir.resolve()
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    summary = read_summary(data_dir / "dust_magnetized_rdi_summary.csv")
-    face_payload = load_face_payload(data_dir)
 
-    fig8 = make_fig8(data_dir, output_dir)
-    fig9 = make_fig9(output_dir, summary, face_payload)
-    fig9_dust = make_fig9_dust(output_dir, summary, face_payload)
-    print(fig8)
-    print(fig9)
-    print(fig9_dust)
+    summary = read_summary(data_dir / "dust_magnetized_rdi_summary.csv")
+    stages = stage_metadata(summary)
+    slices = load_slices(data_dir)
+    outputs = [
+        make_sigma_evolution(data_dir, output_dir, summary, stages),
+        make_stage_cubes(output_dir, summary, stages, slices),
+        make_dust_density_pdf(data_dir, output_dir, summary, stages, args.pdf_bins),
+    ]
+    for output in outputs:
+        print(output)
     return 0
 
 
