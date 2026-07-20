@@ -41,6 +41,6 @@ dust.grain_density = 1.0
 [problem]
 write_csv = 1
 history_dt_over_ts0 = 0.1
-stage_times_over_ts0 = [6.2, 8.3, 17.0]
-noise_amplitude = 1.0e-7
+stage_times_over_ts0 = [5.8, 7.5, 17.0]
+noise_amplitude = 1.0e-6
 noise_seed = 20250305
