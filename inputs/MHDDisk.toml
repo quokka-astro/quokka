@@ -9,7 +9,7 @@ amr.v = 2
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 64
+amr.n_cell = 64 64 64
 amr.blocking_factor = 32
 amr.max_grid_size   = 64
 amr.max_level       = 2
@@ -18,9 +18,9 @@ amr.grid_eff        = 0.75
 regrid_interval     = -1
 do_reflux           = 1
 do_subcycle         = 0
-plotfile_prefix = "plots/mhdplt"
-checkpoint_prefix = "mhdchk"
-statistics_prefix = "mhdstats.txt"
+plotfile_prefix = "tests/plotfile_prefix/mhdplt"
+checkpoint_prefix = "tests/chk/mhdchk"
+statistics_prefix = "tests/mhdstats.txt"
 statistics_interval = 1
 density_floor = 1.0e-30
 #restartfile = "mhddisk3_chk00021300"
@@ -45,5 +45,5 @@ mhd_galaxy.sn_jeans_J              = 4.0
 mhd_galaxy.sn_remnant_fraction     = 0.5
 mhd_galaxy.sn_momentum             = 3.0e3
 
-mhd.project_initial_b_field = false
-mhd.update_initial_b_energy = false
+mhd.project_initial_b_field = true
+mhd.update_initial_b_energy = true

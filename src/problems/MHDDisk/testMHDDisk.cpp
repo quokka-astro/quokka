@@ -45,7 +45,7 @@ namespace
 	constexpr double target_beta_seed = 1.0e3;
 	constexpr double Rmax_kpc = 8.0;
 	constexpr double Rmax = Rmax_kpc * 1.0e3 * C::parsec;
-	constexpr double refine_Rcyl_kpc = 9.0;
+	constexpr double refine_Rcyl_kpc = 8.0;
 	constexpr double refine_Hcyl_pc  = 600.0;
 	constexpr double refine_Rcyl     = refine_Rcyl_kpc * 1.0e3 * C::parsec;
 	constexpr double refine_Hcyl     = refine_Hcyl_pc  * C::parsec;
@@ -638,10 +638,10 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
 
 			// Hard-zero enforcement at the true x-domain boundary (normal component
 			// on x-faces), independent of seed-table taper calibration.
-			// if (std::abs(xf - prob_lo_dom[0]) < boundary_tol * dx[0] ||
-			//     std::abs(xf - prob_hi_dom[0]) < boundary_tol * dx[0]) {
-			// 	B_face = 0.0;
-			// }
+			if (std::abs(xf - prob_lo_dom[0]) < boundary_tol * dx[0] ||
+			    std::abs(xf - prob_hi_dom[0]) < boundary_tol * dx[0]) {
+				B_face = 0.0;
+			}
 
 		} else if (dir == quokka::direction::y) {
 			// By lives at y-faces: index (j) represents the y-node plane.
@@ -665,10 +665,10 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
 
 			// Hard-zero enforcement at the true y-domain boundary (normal component
 			// on y-faces), independent of seed-table taper calibration.
-			// if (std::abs(yf - prob_lo_dom[1]) < boundary_tol * dx[1] ||
-			//     std::abs(yf - prob_hi_dom[1]) < boundary_tol * dx[1]) {
-			// 	B_face = 0.0;
-			// }
+			if (std::abs(yf - prob_lo_dom[1]) < boundary_tol * dx[1] ||
+			    std::abs(yf - prob_hi_dom[1]) < boundary_tol * dx[1]) {
+				B_face = 0.0;
+			}
 
 		} else {
 			// Bz lives at z-faces: index (k) represents the z-node plane.
@@ -703,10 +703,10 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
 
 			// Hard-zero enforcement at the true z-domain boundary (normal component
 			// on z-faces), independent of seed-table taper calibration.
-			// if (std::abs(zf - prob_lo_dom[2]) < boundary_tol * dx[2] ||
-			//     std::abs(zf - prob_hi_dom[2]) < boundary_tol * dx[2]) {
-			// 	B_face = 0.0;
-			// }
+			if (std::abs(zf - prob_lo_dom[2]) < boundary_tol * dx[2] ||
+			    std::abs(zf - prob_hi_dom[2]) < boundary_tol * dx[2]) {
+				B_face = 0.0;
+			}
 		}
 		state_fc(i, j, k, 0) = B_face;
 	});
@@ -769,6 +769,20 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(
 	const auto dx      = geom[lev].CellSizeArray();
 	const auto tag     = tags.arrays();
 
+	amrex::ParmParse pp("mhd_galaxy");
+	amrex::Real shrink_kpc = 1.0;
+	amrex::Real shrink_pc  = 50.0;
+	pp.query("refine_shrink_per_level_kpc", shrink_kpc);
+	pp.query("refine_shrink_per_level_pc",  shrink_pc);
+
+	const amrex::Real margin_R = static_cast<amrex::Real>(lev) * shrink_kpc * 1.0e3 * C::parsec;
+	const amrex::Real margin_H = static_cast<amrex::Real>(lev) * shrink_pc  * C::parsec;
+
+	const amrex::Real Rcyl_lev = amrex::max(static_cast<amrex::Real>(refine_Rcyl) - margin_R,
+	                                         static_cast<amrex::Real>(0.3 * refine_Rcyl));
+	const amrex::Real Hcyl_lev = amrex::max(static_cast<amrex::Real>(refine_Hcyl) - margin_H,
+	                                         static_cast<amrex::Real>(0.3 * refine_Hcyl));
+
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const amrex::Real x0 = prob_lo[0] + i * dx[0];
 		const amrex::Real y0 = prob_lo[1] + j * dx[1];
@@ -778,7 +792,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(
 		const amrex::Real z1 = z0 + dx[2];
 
 		auto tagIfInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
-			if (std::sqrt(x*x + y*y) < refine_Rcyl && std::abs(z) < refine_Hcyl) {
+			if (std::sqrt(x*x + y*y) < Rcyl_lev && std::abs(z) < Hcyl_lev) {
 				tag[bx](i, j, k) = amrex::TagBox::SET;
 			}
 		};

@@ -14,22 +14,44 @@ Fixes:
     since only one rank should touch each output file. Ranks other than 0
     still participate in the collective yt calls above (required for yt's
     internal parallelism to work), they just skip drawing/saving.
-  - All output filenames are tagged with the plotfile timestep (plt#######)
+  - All output filenames are tagged with an optional run tag (from the
+    command line) followed by the plotfile timestep (plt#######), e.g.
+    velocity_12panel_vel0_0000001.png
   - FIXED color-scale ranges (see FIXED AXES block below) so that plots from
     different timesteps / different runs are directly comparable
   - Slice planes are re-oriented and correctly labeled: XY, XZ, YZ each show
     the expected pair of axes (horizontal, vertical) instead of everything
     being mislabeled "x"/"y"
+  - Added velocity 12-panel (vx, vy, vz, |v|; derived from momentum/density)
+    and an optional zoomed velocity panel around a specific point (e.g. an
+    SN injection site), plus a numeric net-momentum cross-check in that box.
 
 Launch (CPU nodes, no GPU involved anywhere in this script):
-    srun -N 1 -n 32 -c 4 python makeplots_fast.py
+    srun -N 1 -n 32 -c 4 python makeplots_fast.py plots/mhddisk_vel0_plt0000001 vel0
 or, outside Slurm (e.g. interactive salloc / local testing):
-    mpirun -n 8 python makeplots_fast.py
-Single-rank / no MPI at all also works (size=1 falls back to a serial run).
+    mpirun -n 8 python makeplots_fast.py plots/mhddisk_vel0_plt0000001 vel0
+Single-rank / no MPI at all also works (size=1 falls back to a serial run):
+    python3 makeplots_fast.py plots/mhddisk_vel0_plt0000001 vel0
+
+Positional command-line arguments (all optional, positional, in order):
+    1) plotfile_path — which plotfile to load (required to override the
+       hardcoded default; passed straight to yt.load)
+    2) run_tag       — optional free-form label folded into every output
+       filename, right before the timestep number. It does NOT need to
+       match anything in the plotfile path/name.
+    3) SN_X_KPC, 4) SN_Y_KPC, 5) SN_Z_KPC — optional center (in kpc, box
+       coordinates) for a zoomed velocity panel around a specific point
+       (e.g. an SN injection site). All three must be given together for
+       the zoom section to run; if omitted, the zoom section is skipped.
+    6) SN_WIDTH_KPC — optional zoom width in kpc (default 0.5 kpc = 500 pc)
+
+    velocity_12panel.png  -> velocity_12panel_vel0_0000001.png   (run_tag="vel0")
+    velocity_12panel.png  -> velocity_12panel_0000001.png        (no run_tag given)
 """
 
 import gc
 import re
+import sys
 import time
 import yt
 import numpy as np
@@ -55,6 +77,36 @@ def rprint(*args, **kwargs):
     """Print only from rank 0 — use for anything that isn't per-rank debugging."""
     if is_root:
         print(*args, **kwargs)
+
+# ── Command-line arguments ───────────────────────────────────────────────────
+# Usage: python3 makeplots_fast.py <plotfile_path> <run_tag> [SN_X SN_Y SN_Z [SN_WIDTH]]
+# e.g.:  python3 makeplots_fast.py plots/mhddisk_vel0_plt0000001 vel0
+# The two are independent: <plotfile_path> says which plotfile to load,
+# <run_tag> is just a label folded into output filenames. They don't have to
+# match (e.g. the tag can be a short label even if the plotfile path is long
+# or doesn't follow the mhddisk_<tag>_plt####### convention).
+# All ranks are launched with identical argv (mpirun/srun broadcast the same
+# command line to every rank), so reading sys.argv directly here is safe and
+# requires no MPI broadcast.
+RUN_TAG = sys.argv[2] if len(sys.argv) > 2 else ""
+rprint(f"Run tag: {RUN_TAG!r}" if RUN_TAG else "Run tag: (none given)")
+
+# Optional: zoom in on a specific SN injection site instead of (or in
+# addition to) the full-domain plots above. All four are optional;
+# if SN_X_KPC is not given, the zoomed section below is skipped
+# entirely. Units: kpc for position and width.
+SN_X_KPC     = float(sys.argv[3]) if len(sys.argv) > 3 else None
+SN_Y_KPC     = float(sys.argv[4]) if len(sys.argv) > 4 else None
+SN_Z_KPC     = float(sys.argv[5]) if len(sys.argv) > 5 else None
+SN_WIDTH_KPC = float(sys.argv[6]) if len(sys.argv) > 6 else 0.5  # 500 pc default
+do_sn_zoom = (SN_X_KPC is not None) and (SN_Y_KPC is not None) and (SN_Z_KPC is not None)
+if do_sn_zoom:
+    rprint(
+        f"SN zoom target: ({SN_X_KPC:.3f}, {SN_Y_KPC:.3f}, {SN_Z_KPC:.3f}) kpc, "
+        f"width={SN_WIDTH_KPC:.3f} kpc"
+    )
+else:
+    rprint("SN zoom target: (none given, skipping)")
 
 # yt's own parallelism distributes the grid/chunk IO of a single collective
 # call (SlicePlot, ProjectionPlot, covering_grid) across every rank in
@@ -86,10 +138,33 @@ DENS_LOG_VMAX = -22.0            # log10(rho_max   [g/cm^3])
 # div B slices: symmetric linear range (NOT log)
 DIVB_VMAX = 5e-31
 
+# Column-density (z-projection) panel: normalized to Sigma/Sigma_c0 on a log
+# color scale from 10^-1 to 10^0, matching Arora et al. (2025, A&A 695, A155)
+# Fig. 2/3 style, where Sigma_c0 = Sigma(R=0, t=0) is the INITIAL central
+# surface density of the disc. Set SIGMA_C0_GCM2 explicitly (in g/cm^2) once
+# you know it -- e.g. run this script once on your t=0 plotfile, read off the
+# "Central column density (this snapshot)" value it prints, and hardcode that
+# here -- so that every snapshot you plot afterwards is normalized by the SAME
+# reference value as the galaxy evolves. If left as None, the script falls
+# back to normalizing each snapshot by its OWN central pixel; that reproduces
+# the single-frame appearance of Fig. 2/3 but is not consistent across
+# different times of the same run (the norm would silently drift/shift
+# snapshot to snapshot as the central density itself evolves).
+SIGMA_C0_GCM2 = None
+SIGMA_PROJ_VMIN = 1e-1   # Sigma/Sigma_c0 lower bound (matches Fig. 2/3 colorbar)
+SIGMA_PROJ_VMAX = 1e0    # Sigma/Sigma_c0 upper bound (matches Fig. 2/3 colorbar)
+
+# Velocity 12-panel + zoom: components use SymLogNorm about a linear core,
+# magnitude uses LogNorm. VMAX_VEL/LINTHRESH set the FIXED full-domain
+# scale; the zoomed SN panel below auto-scales instead (see that section).
+VMAX_VEL = 2e7   # example 200 km/s in cm/s
+LINTHRESH = 1e5
+
 # ============================================================
 # Load
 # ============================================================
-PLOTFILE = "plots/mhddisk3_plt0000250"
+PLOTFILE = sys.argv[1] if len(sys.argv) > 1 else "BField_results/mhddisk3_8nodeb_plt0060000"
+rprint(f"Plotfile: {PLOTFILE}")
 
 ds = yt.load(
     PLOTFILE,
@@ -107,11 +182,19 @@ timestep_str = _m.group(1) if _m else "unknown"
 rprint(f"Timestep tag: {timestep_str}")
 
 def tag(name):
-    """Insert the timestep tag before the file extension."""
+    """Insert the run tag (if given) and timestep tag before the file extension.
+
+    Examples (RUN_TAG="vel0", timestep_str="0000001"):
+        tag("velocity_12panel.png") -> "velocity_12panel_vel0_0000001.png"
+    Examples (RUN_TAG="", timestep_str="0000001"):
+        tag("velocity_12panel.png") -> "velocity_12panel_0000001.png"
+    """
     base, dot, ext = name.rpartition(".")
+    suffix_parts = [p for p in (RUN_TAG, timestep_str) if p]
+    suffix = "_".join(suffix_parts)
     if dot:
-        return f"{base}_{timestep_str}.{ext}"
-    return f"{name}_{timestep_str}"
+        return f"{base}_{suffix}.{ext}"
+    return f"{name}_{suffix}"
 
 kpc   = 3.085677581e21
 t_myr = float(ds.current_time.v) / (3.15576e13)
@@ -125,16 +208,6 @@ rprint(f"MPI ranks: {size}")
 width_cm  = float(ds.domain_width[0].v)
 width_kpc = width_cm / kpc
 extent_kpc = [-width_kpc/2, width_kpc/2, -width_kpc/2, width_kpc/2]
-
-# Column-density (z-projection) range, derived from the same density floor
-# and ceiling used for the slices, integrated over the box's full z-extent.
-# This keeps the projection scale locked/consistent across runs too, since
-# it is derived from fixed inputs (DENS_LOG_VMIN/VMAX + domain depth) rather
-# than per-run percentiles. Adjust directly if a different fixed range is
-# preferred.
-Lz_domain_cm = float(ds.domain_width[2].v)
-DENS_PROJ_LOG_VMIN = DENS_LOG_VMIN + np.log10(Lz_domain_cm)
-DENS_PROJ_LOG_VMAX = DENS_LOG_VMAX + np.log10(Lz_domain_cm)
 
 # ── Aphi table metadata ───────────────────────────────────────────────────────
 meta = {}
@@ -202,6 +275,34 @@ def get_slice_xy(normal, field, res=RES):
         data = data.T
     return data, info["xlabel"], info["ylabel"], info["title"]
 
+def get_slice_zoom(normal, field, center_cm, width_cm_zoom, res=RES):
+    slc = yt.SlicePlot(
+        ds,
+        normal,
+        field,
+        center=center_cm,
+        width=(width_cm_zoom, "cm"),
+    )
+    slc.set_buff_size(res)
+    slc.render()
+    return slc.frb[field].v
+
+
+def get_slice_xy_zoom(normal, field, center_cm, width_cm_zoom, res=RES):
+    """
+    Zoomed version of get_slice_xy().
+    """
+    info = _PLANE_INFO[normal]
+    data = get_slice_zoom(
+        normal,
+        field,
+        center_cm,
+        width_cm_zoom,
+        res=res,
+    )
+    if info["transpose"]:
+        data = data.T
+    return data, info["xlabel"], info["ylabel"], info["title"]
 
 def get_proj(field, weight=None, res=RES):
     proj = yt.ProjectionPlot(ds, "z", field,
@@ -247,6 +348,45 @@ ds.add_field(
     function=_Bphi_reconstructed,
     sampling_type="cell",
     units="G",
+)
+
+# ============================================================
+# Derived fields: Velocity components and magnitude
+# ============================================================
+def _vel_comp(field, data, comp):
+    # Retrieve as arrays
+    p = data[("boxlib", f"{comp}-GasMomentum")]
+    rho = data[("boxlib", "gasDensity")]
+
+    # Perform division and explicitly multiply by the velocity unit
+    # to ensure the result is a unyt_array with units 'cm/s'
+    return (p / rho) * data.ds.quan(1.0, "cm/s")
+
+for comp in ['x', 'y', 'z']:
+    ds.add_field(
+        name=("boxlib", f"{comp}-Velocity"),
+        function=lambda field, data, c=comp: _vel_comp(field, data, c),
+        sampling_type="cell",
+        units="cm/s",
+    )
+
+def _vel_mag(field, data):
+    # Retrieve the velocity component fields
+    vx = data[("boxlib", "x-Velocity")]
+    vy = data[("boxlib", "y-Velocity")]
+    vz = data[("boxlib", "z-Velocity")]
+
+    # Calculate magnitude: (v_x^2 + v_y^2 + v_z^2)^(0.5)
+    # By extracting .v, we work with raw numpy arrays,
+    # then attach the correct unit 'cm/s' at the end.
+    mag_val = np.sqrt(vx.v**2 + vy.v**2 + vz.v**2)
+    return mag_val * data.ds.quan(1.0, "cm/s")
+
+ds.add_field(
+    name=("boxlib", "velocity_mag"),
+    function=_vel_mag,
+    sampling_type="cell",
+    units="cm/s",
 )
 
 # ============================================================
@@ -343,17 +483,38 @@ if is_root:
 
 rprint("  Column density projection...")
 proj_data = get_proj(("boxlib", "gasDensity"))  # collective — all ranks call this
+# get_proj integrates gasDensity along the sightline (no weight_field), so
+# proj_data is already a surface density Sigma in g/cm^2 -- exactly the
+# quantity plotted (normalized) in Fig. 2/3 of Arora et al. (2025).
 
 if is_root:
+    # Central pixel is our proxy for Sigma(R=0) at this snapshot. Reported
+    # every run so you can read it off once from your t=0 plotfile and
+    # hardcode it into SIGMA_C0_GCM2 above for consistent normalization
+    # across snapshots/times.
+    ny, nx = proj_data.shape
+    sigma_center_this_snapshot = proj_data[ny // 2, nx // 2]
+    rprint(f"  Central column density (this snapshot) = {sigma_center_this_snapshot:.3e} g/cm^2")
+
+    if SIGMA_C0_GCM2 is not None:
+        sigma_c0 = SIGMA_C0_GCM2
+    else:
+        sigma_c0 = sigma_center_this_snapshot
+        rprint("  WARNING: SIGMA_C0_GCM2 not set -- normalizing by this "
+               "snapshot's own central column density. Set SIGMA_C0_GCM2 "
+               "to the t=0 value above for consistent normalization across "
+               "different snapshots/times.")
+
+    sigma_ratio = proj_data / sigma_c0
+
     fig2, ax2 = plt.subplots(figsize=(7, 6))
     im2 = ax2.imshow(
-        np.log10(np.where(proj_data > 0, proj_data, 1e-300)),
+        sigma_ratio,
         origin="lower", extent=extent_kpc, cmap="viridis",
-        vmin=DENS_PROJ_LOG_VMIN, vmax=DENS_PROJ_LOG_VMAX,
+        norm=LogNorm(vmin=SIGMA_PROJ_VMIN, vmax=SIGMA_PROJ_VMAX),
         interpolation="nearest", aspect="equal",
     )
-    plt.colorbar(im2, ax=ax2,
-                 label=r"$\log_{10}(\Sigma\ [\mathrm{g\ cm^{-2}}])$")
+    plt.colorbar(im2, ax=ax2, label=r"$\Sigma/\Sigma_{c0}$")
     ax2.set_title(f"Column density (z-projection) — t = {t_myr:.1f} Myr")
     ax2.set_xlabel("x [kpc]"); ax2.set_ylabel("y [kpc]")
     fig2.tight_layout()
@@ -640,6 +801,200 @@ if is_root:
     dx_level0 = Lbox_cm / n_cell
     print(f"dR_table/dx_L0 = {dR_seed/dx_level0:.2f}  (want < 0.5)")
     print(f"dz_table/dx_L0 = {dz_seed/dx_level0:.2f}")
+
+# ============================================================
+# Velocity 12-panel
+# ============================================================
+rprint("\n--- Velocity 12-panel ---")
+
+vel_fields = ["x-Velocity", "y-Velocity", "z-Velocity", "velocity_mag"]
+vel_labels = [r"$v_x$", r"$v_y$", r"$v_z$", r"$|v|$"]
+normals = ["z", "y", "x"]
+
+# Collect slices (Collective call)
+vel_slices = {}
+for field in vel_fields:
+    for normal in normals:
+        rprint(f"  Slicing {field} {normal}...")
+        data, xlabel, ylabel, title = get_slice_xy(normal, ("boxlib", field))
+        vel_slices[(field, normal)] = (data, xlabel, ylabel, title)
+
+if is_root:
+    fig, axes = plt.subplots(4, 3, figsize=(16, 18))
+
+    for row, (field, rlabel) in enumerate(zip(vel_fields, vel_labels)):
+        for col, normal in enumerate(normals):
+            ax = axes[row, col]
+            data, xlabel, ylabel, plabel = vel_slices[(field, normal)]
+
+            if field == "velocity_mag":
+                # For magnitude, use LogNorm (exclude near-zero values to avoid artifacts)
+                norm = LogNorm(vmin=1e5, vmax=VMAX_VEL)
+                cmap = "magma"
+            else:
+                # For components (vx, vy, vz), use SymLogNorm for positive/negative range
+                norm = SymLogNorm(linthresh=LINTHRESH, linscale=1.0,
+                                vmin=-VMAX_VEL, vmax=VMAX_VEL, base=10)
+                cmap = "RdBu_r"
+
+            im = ax.pcolormesh(
+                np.linspace(extent_kpc[0], extent_kpc[1], data.shape[1]+1),
+                np.linspace(extent_kpc[2], extent_kpc[3], data.shape[0]+1),
+                data, norm=norm, cmap=cmap, shading="flat", rasterized=True,
+            )
+            plt.colorbar(im, ax=ax, label="cm/s")
+            ax.set_title(f"{rlabel} — {plabel}", fontsize=9)
+            ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+            ax.set_aspect("equal")
+
+    fig.suptitle(f"Velocity slices — t = {t_myr:.1f} Myr", fontsize=13)
+    fig.tight_layout()
+    fig.savefig(tag("velocity_12panel.png"), dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    rprint(f"Saved: {tag('velocity_12panel.png')}")
+
+# ============================================================
+# Zoomed velocity 12-panel around the SN injection site
+# ============================================================
+# This is what actually lets you judge whether a deposition looks like a
+# "proper ejection": the full-domain plots above are ~20 kpc across, so a
+# few-cell SN kernel is invisible as anything but a single pixel. This
+# section re-centers on the debug target with a much smaller width so you
+# can see the kernel's internal structure -- is it roughly isotropic, does
+# it fall off smoothly with radius, is there an obvious one-sided lopsided
+# component -- and reports the numeric momentum/mass sums in the box as an
+# independent cross-check against the [SN feedback conservation check] /
+# [SN_VEL] printouts already emitted by the C++ code.
+if do_sn_zoom:
+    rprint("\n--- Zoomed velocity panel around SN injection site ---")
+
+    center_cm = ds.arr(
+        [SN_X_KPC * kpc, SN_Y_KPC * kpc, SN_Z_KPC * kpc], "cm"
+    )
+    width_cm_zoom = SN_WIDTH_KPC * kpc
+    extent_zoom_kpc = [-SN_WIDTH_KPC / 2, SN_WIDTH_KPC / 2,
+                       -SN_WIDTH_KPC / 2, SN_WIDTH_KPC / 2]
+
+    # Collective reads on all ranks first (same SPMD requirement as the
+    # full-domain slices above -- every rank must call get_slice_xy_zoom).
+    zoom_slices = {}
+    for field in vel_fields:
+        for normal in normals:
+            rprint(f"  [zoom] Slicing {field} {normal}...")
+            data, xlabel, ylabel, title = get_slice_xy_zoom(
+                normal, ("boxlib", field), center_cm, width_cm_zoom
+            )
+            zoom_slices[(field, normal)] = (data, xlabel, ylabel, title)
+
+    if is_root:
+        fig, axes = plt.subplots(4, 3, figsize=(16, 18))
+
+        # Auto-scale rather than reuse the domain-wide FIXED VMAX_VEL: the
+        # circular-velocity scale that's appropriate for a 20 kpc disk plot
+        # would either clip a strong SN kick or wash out a weak one at this
+        # much smaller scale. Percentile-based limits let the actual kernel
+        # structure show up.
+        all_zoom_data = np.concatenate([
+            zoom_slices[(f, n)][0].ravel() for f in vel_fields for n in normals
+            if f != "velocity_mag"
+        ])
+        finite_zoom = all_zoom_data[np.isfinite(all_zoom_data)]
+        zoom_vmax = np.percentile(np.abs(finite_zoom), 99.5) if finite_zoom.size else 1e5
+        zoom_vmax = max(zoom_vmax, 1.0)  # guard against a degenerate all-zero box
+        zoom_linthresh = max(zoom_vmax * 1e-3, 1.0)
+
+        mag_data_all = np.concatenate([
+            zoom_slices[("velocity_mag", n)][0].ravel() for n in normals
+        ])
+        finite_mag = mag_data_all[np.isfinite(mag_data_all) & (mag_data_all > 0)]
+        mag_vmin = np.percentile(finite_mag, 1) if finite_mag.size else 1e3
+        mag_vmax = np.percentile(finite_mag, 99.5) if finite_mag.size else zoom_vmax
+
+        for row, (field, rlabel) in enumerate(zip(vel_fields, vel_labels)):
+            for col, normal in enumerate(normals):
+                ax = axes[row, col]
+                data, xlabel, ylabel, plabel = zoom_slices[(field, normal)]
+
+                if field == "velocity_mag":
+                    norm = LogNorm(vmin=max(mag_vmin, 1.0), vmax=max(mag_vmax, mag_vmin * 10))
+                    cmap = "magma"
+                else:
+                    norm = SymLogNorm(linthresh=zoom_linthresh, linscale=1.0,
+                                      vmin=-zoom_vmax, vmax=zoom_vmax, base=10)
+                    cmap = "RdBu_r"
+
+                im = ax.pcolormesh(
+                    np.linspace(extent_zoom_kpc[0], extent_zoom_kpc[1], data.shape[1] + 1),
+                    np.linspace(extent_zoom_kpc[2], extent_zoom_kpc[3], data.shape[0] + 1),
+                    data, norm=norm, cmap=cmap, shading="flat", rasterized=True,
+                )
+                plt.colorbar(im, ax=ax, label="cm/s")
+                ax.set_title(f"{rlabel} — {plabel}", fontsize=9)
+                ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+                ax.set_aspect("equal")
+                # Mark the injection site itself for reference.
+                ax.plot(0, 0, marker="+", color="lime", markersize=10, mew=1.5)
+
+        fig.suptitle(
+            f"Zoomed velocity around SN site "
+            f"({SN_X_KPC:.2f}, {SN_Y_KPC:.2f}, {SN_Z_KPC:.2f}) kpc, "
+            f"width={SN_WIDTH_KPC*1e3:.0f} pc — t = {t_myr:.3f} Myr",
+            fontsize=12,
+        )
+        fig.tight_layout()
+        fig.savefig(tag("velocity_zoom_sn.png"), dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        rprint(f"Saved: {tag('velocity_zoom_sn.png')}")
+
+    # ------------------------------------------------------------
+    # Numeric cross-check: net mass/momentum in a small box around the
+    # target. A properly isotropic, momentum-conserving kick should show
+    # |sum(px)|, |sum(py)|, |sum(pz)| each small relative to the RMS
+    # per-cell momentum magnitude in the box -- a large net vector in one
+    # direction indicates a lopsided deposit (e.g. clipped at a domain/box
+    # edge, or the Sx/Sy/Sz re-centering not fully cancelling). This uses
+    # a direct region select rather than the chunked slab loop above,
+    # since the box here is tiny (a few cells at the finest level) --
+    # run this with a single rank (or accept it only being exact on
+    # rank 0) if using MPI, since ds.box() region sums below are not
+    # wrapped in the same explicit round-robin distribution as the
+    # volume-average section.
+    if is_root:
+        half_width_cm = 0.5 * width_cm_zoom
+        box_left = center_cm.v - half_width_cm
+        box_right = center_cm.v + half_width_cm
+        region = ds.box(ds.arr(box_left, "cm"), ds.arr(box_right, "cm"))
+
+        rho_box = region[("boxlib", "gasDensity")].v
+        vol_box = region[("index", "cell_volume")].v
+        vx_box = region[("boxlib", "x-Velocity")].v
+        vy_box = region[("boxlib", "y-Velocity")].v
+        vz_box = region[("boxlib", "z-Velocity")].v
+
+        mass_box = rho_box * vol_box
+        px_box = mass_box * vx_box
+        py_box = mass_box * vy_box
+        pz_box = mass_box * vz_box
+
+        total_mass = np.sum(mass_box)
+        total_px, total_py, total_pz = np.sum(px_box), np.sum(py_box), np.sum(pz_box)
+        net_p_mag = np.sqrt(total_px**2 + total_py**2 + total_pz**2)
+        rms_cell_p = np.sqrt(np.mean(px_box**2 + py_box**2 + pz_box**2))
+
+        Msun = 1.989e33
+        print("====================================================")
+        print(f"SN zoom-box numeric check @ ({SN_X_KPC:.2f},{SN_Y_KPC:.2f},{SN_Z_KPC:.2f}) kpc, "
+              f"width={SN_WIDTH_KPC*1e3:.0f} pc, N_cells={rho_box.size}")
+        print(f"  total mass in box       = {total_mass/Msun:.3e} Msun")
+        print(f"  net momentum vector     = ({total_px:.3e}, {total_py:.3e}, {total_pz:.3e}) g cm/s")
+        print(f"  |net momentum|          = {net_p_mag:.3e} g cm/s")
+        print(f"  RMS per-cell |p|        = {rms_cell_p:.3e} g cm/s")
+        if rms_cell_p > 0:
+            print(f"  |net p| / RMS per-cell  = {net_p_mag/rms_cell_p:.3e}  "
+                  f"(near 0 => isotropic; near/above 1 => lopsided)")
+        print(f"  max |v| in box          = {np.max(np.sqrt(vx_box**2+vy_box**2+vz_box**2)):.3e} cm/s")
+        print("====================================================")
+
 
 # ============================================================
 # Rotation curve diagnostic
