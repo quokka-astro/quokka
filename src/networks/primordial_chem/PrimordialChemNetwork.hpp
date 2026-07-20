@@ -91,6 +91,12 @@ struct PrimordialChemNetwork {
 		}
 	}
 
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto temperature(IntegratorState<variable_count> state) noexcept -> amrex::Real
+	{
+		update_thermodynamics(state);
+		return state.temperature;
+	}
+
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto specific_energy_from_temperature(amrex::GpuArray<amrex::Real, species_count> const &number_density,
 											 amrex::Real temperature) noexcept -> amrex::Real
 	{

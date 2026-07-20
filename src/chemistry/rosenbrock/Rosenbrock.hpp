@@ -39,6 +39,23 @@ AMREX_GPU_HOST_DEVICE auto tolerance(Network const &network, IntegratorOptions c
 }
 
 template <typename Network>
+AMREX_GPU_HOST_DEVICE auto exceeds_maximum_temperature(Network const &network, IntegratorState<Network::variable_count> const &state,
+						       IntegratorOptions const &options) noexcept -> bool
+{
+	return network.temperature(state) >= options.maximum_temperature;
+}
+
+template <typename Network>
+AMREX_GPU_HOST_DEVICE void evaluate_rhs(Network const &network, IntegratorState<Network::variable_count> const &state, amrex::Real time,
+					IntegratorOptions const &options, amrex::GpuArray<amrex::Real, Network::variable_count> &derivative) noexcept
+{
+	derivative.fill(0.0);
+	if (!exceeds_maximum_temperature(network, state, options)) {
+		network.rhs(state, time, derivative);
+	}
+}
+
+template <typename Network>
 AMREX_GPU_HOST_DEVICE auto error_norm(Network const &network, IntegratorOptions const &options, Workspace<Network> const &workspace) noexcept -> amrex::Real
 {
 	amrex::Real sum = 0.0;
@@ -61,10 +78,15 @@ template <typename Network>
 AMREX_GPU_HOST_DEVICE void numerical_jacobian(Network const &network, IntegratorOptions const &options, Workspace<Network> &workspace, amrex::Real time,
 					      IntegratorDiagnostics &diagnostics) noexcept
 {
+	if (exceeds_maximum_temperature(network, workspace.state, options)) {
+		workspace.jacobian.zero();
+		++diagnostics.jacobian_evaluations;
+		return;
+	}
 	constexpr amrex::Real roundoff = std::numeric_limits<amrex::Real>::epsilon();
 	auto const baseline_state = workspace.state;
 	amrex::GpuArray<amrex::Real, Network::variable_count> baseline_rhs{};
-	network.rhs(baseline_state, time, baseline_rhs);
+	evaluate_rhs(network, baseline_state, time, options, baseline_rhs);
 	++diagnostics.rhs_evaluations;
 	for (int column = 0; column < Network::variable_count; ++column) {
 		workspace.state = baseline_state;
@@ -72,7 +94,7 @@ AMREX_GPU_HOST_DEVICE void numerical_jacobian(Network const &network, Integrator
 		    amrex::max(std::sqrt(roundoff) * std::abs(baseline_state.values[column]), tolerance(network, options, column, false) * std::sqrt(roundoff));
 		workspace.state.values[column] += delta;
 		amrex::GpuArray<amrex::Real, Network::variable_count> perturbed_rhs{};
-		network.rhs(workspace.state, time, perturbed_rhs);
+		evaluate_rhs(network, workspace.state, time, options, perturbed_rhs);
 		++diagnostics.rhs_evaluations;
 		for (int row = 0; row < Network::variable_count; ++row) {
 			workspace.jacobian(row, column) = (perturbed_rhs[row] - baseline_rhs[row]) / delta;
@@ -87,8 +109,8 @@ AMREX_GPU_HOST_DEVICE auto integrate_with_tableau(Network const &network, Integr
 						  IntegratorOptions const &options) noexcept -> IntegratorDiagnostics
 {
 	IntegratorDiagnostics diagnostics{};
-	if (!(timestep >= 0.0) || !(options.maximum_timestep > 0.0) || options.maximum_steps <= 0 || !(options.controller_b > 0.0) ||
-	    !(options.controller_k > 0.0)) {
+	if (!(timestep >= 0.0) || !(options.maximum_timestep > 0.0) || !(options.maximum_temperature > 0.0) || options.maximum_steps <= 0 ||
+	    !(options.controller_b > 0.0) || !(options.controller_k > 0.0)) {
 		diagnostics.status = IntegratorStatus::bad_inputs;
 		return diagnostics;
 	}
@@ -110,6 +132,7 @@ AMREX_GPU_HOST_DEVICE auto integrate_with_tableau(Network const &network, Integr
 	amrex::Real previous_error = 1.0;
 	amrex::Real previous_factor = 1.0;
 	bool rejected = false;
+	int linear_solve_failures = 0;
 
 	while (time < timestep) {
 		if (diagnostics.steps >= options.maximum_steps) {
@@ -126,7 +149,11 @@ AMREX_GPU_HOST_DEVICE auto integrate_with_tableau(Network const &network, Integr
 		}
 
 		if (options.analytic_jacobian) {
-			network.jacobian(workspace.state, time, workspace.jacobian);
+			if (exceeds_maximum_temperature(network, workspace.state, options)) {
+				workspace.jacobian.zero();
+			} else {
+				network.jacobian(workspace.state, time, workspace.jacobian);
+			}
 			++diagnostics.jacobian_evaluations;
 		} else {
 			numerical_jacobian(network, options, workspace, time, diagnostics);
@@ -141,14 +168,15 @@ AMREX_GPU_HOST_DEVICE auto integrate_with_tableau(Network const &network, Integr
 			step *= 0.5;
 			rejected = true;
 			++diagnostics.rejected_steps;
-			if (diagnostics.rejected_steps >= 5) {
+			++linear_solve_failures;
+			if (linear_solve_failures >= 5) {
 				diagnostics.status = IntegratorStatus::linear_solve_failure;
 				break;
 			}
 			continue;
 		}
 
-		network.rhs(workspace.state, time, workspace.stages[0]);
+		evaluate_rhs(network, workspace.state, time, options, workspace.stages[0]);
 		++diagnostics.rhs_evaluations;
 		solve<Network::variable_count>(workspace.jacobian, workspace.pivots, workspace.stages[0]);
 		bool valid_stage = true;
@@ -161,13 +189,13 @@ AMREX_GPU_HOST_DEVICE auto integrate_with_tableau(Network const &network, Integr
 					workspace.stages[stage][n] += Tableau::c(stage, prior) * workspace.stages[prior][n] / step;
 				}
 			}
-			network.clean(stage_state, options);
 			if (!network.valid(stage_state, options)) {
 				valid_stage = false;
 				break;
 			}
+			network.clean(stage_state, options);
 			amrex::GpuArray<amrex::Real, Network::variable_count> stage_rhs{};
-			network.rhs(stage_state, time + Tableau::ctime(stage) * step, stage_rhs);
+			evaluate_rhs(network, stage_state, time + Tableau::ctime(stage) * step, options, stage_rhs);
 			++diagnostics.rhs_evaluations;
 			for (int n = 0; n < Network::variable_count; ++n) {
 				workspace.stages[stage][n] += stage_rhs[n];
