@@ -1,0 +1,40 @@
+@namespace: network
+
+# Recombination switch
+recombination_switch                    int        1
+
+# Recombination is temperature dependent
+recombination_temperature_dependent     int        1
+
+# Collisional ionization switch
+collisional_ionization_switch           int        1
+
+# Heating/Cooling switch
+energy_switch                           int        1
+
+# Photoionization heating
+photoheating_switch                     int        1
+
+# KI heating
+KI_heating_switch                       int        1
+
+# Recombination cooling
+recombination_cooling_switch            int        1
+
+# KI cooling
+KI_cooling_switch                       int        1
+
+# Ion FF cooling
+ion_ff_cooling_switch                   int        1
+
+# Switch off cooling in mixed cells
+allow_mixed_cell_cooling                int        1
+mixed_cell_lb                           real       0.01
+mixed_cell_ub                           real       0.99
+
+# Placeholder constant injection rate added directly to the IR (band 0) and optical (band 1)
+# thermal groups' re_thermal[] energy-density equation inside actual_rhs.H, standing in for
+# recombination-line/continuum feedback from the ionizing band until a physically-derived
+# feedback term replaces it.
+recombination_feedback_switch           int        1
+recombination_feedback_rate             real       0.0
