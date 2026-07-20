@@ -1,10 +1,6 @@
 [submodule "extern/amrex"]
 	path = extern/amrex
 	url = https://github.com/AMReX-Codes/amrex.git
-[submodule "extern/Microphysics"]
-	path = extern/Microphysics
-	url = https://github.com/AMReX-Astro/Microphysics.git
-	branch = development
 [submodule "extern/yaml-cpp"]
 	path = extern/yaml-cpp
 	url = https://github.com/jbeder/yaml-cpp.git

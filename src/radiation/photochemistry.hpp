@@ -2,25 +2,26 @@
 #define PHOTOCHEMISTRY_HPP_
 
 #include <array>
+#include <format>
 #include <iostream>
 
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
 
+#include "chemistry/ChemistryNetwork.hpp"
+#include "chemistry/RuntimeParameters.hpp"
+#include "networks/photoionization/PhotoionizationNetwork.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 
 #ifdef PHOTOCHEMISTRY
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network_properties.H"
 #include "physics_numVars.hpp"
 
 namespace quokka::photochemistry
 {
+constexpr int NumSpec = quokka::chemistry::PhotoionizationNetwork::species_count;
+constexpr int NumChemBands = quokka::chemistry::PhotoionizationNetwork::chemistry_band_count;
 // Only relevant when the O(v/c) work term is active (see do_vc_work below). If true, the work-term kinetic
 // energy the gas gains from the absorbed-photon momentum kick is debited from the chem-band photon field
 // (photon energy density reduced by (c / chat) * dEkin, and each band's flux rescaled by the same factor to
@@ -31,7 +32,9 @@ namespace quokka::photochemistry
 // ionization-front propagation, so it is the default.
 static constexpr bool debit_work_term_from_radiation = false;
 
-AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
+AMREX_GPU_DEVICE auto photochem_burner(quokka::chemistry::IntegratorState<quokka::chemistry::PhotoionizationNetwork::variable_count> &state, Real dt,
+				       quokka::chemistry::PhotoionizationNetwork const &network, quokka::chemistry::IntegratorOptions const &options)
+    -> quokka::chemistry::IntegratorDiagnostics;
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt, const int stage,
@@ -64,6 +67,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		chemBandQuanta[nn] = RadSystem<problem_t>::GetChemBandQuanta(nn);
 		invChemBandQuanta[nn] = 1.0_rt / chemBandQuanta[nn];
 	}
+	const auto integratorOptions = quokka::chemistry::readIntegratorOptions();
+	const quokka::chemistry::PhotoionizationNetwork chemistryNetwork{quokka::chemistry::readPhotoionizationParameters()};
 
 	const BL_PROFILE("PhotoChemistry::computePhotoChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -100,56 +105,66 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, Emag);
 
-			burn_t photochemstate;
-			photochemstate.success = true;
+			quokka::chemistry::IntegratorState<quokka::chemistry::PhotoionizationNetwork::variable_count> photochemstate{};
 			int burn_failed = 0;
-			photochemstate.c_hat = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
+			photochemstate.reduced_speed_of_light = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
 			for (int nn = 0; nn < NumSpec; ++nn) {
-				photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
+				photochemstate.values[nn] =
+				    state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / quokka::chemistry::PhotoionizationNetwork::species_masses[nn];
 			}
 			for (int nn = 0; nn < NumChemBands; ++nn) {
-				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] =
+				photochemstate.values[quokka::chemistry::PhotoionizationNetwork::photon_number +
+						      quokka::chemistry::PhotoionizationNetwork::radiation_variables_per_group * nn] =
 				    state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) * invChemBandQuanta[nn];
-				photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] = 1.0_rt;
+				photochemstate.values[quokka::chemistry::PhotoionizationNetwork::photon_flux_factor +
+						      quokka::chemistry::PhotoionizationNetwork::radiation_variables_per_group * nn] = 1.0_rt;
 			}
-			photochemstate.rho = rho;
-			photochemstate.e = Eint / rho;
-
-			// call the EOS to set the temperature
-			eos(eos_input_re, photochemstate);
+			photochemstate.density = rho;
+			photochemstate.values[quokka::chemistry::PhotoionizationNetwork::energy] = Eint / rho;
 
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
-			photochem_burner(photochemstate, dt_stage);
+			const auto integrationDiagnostics = photochem_burner(photochemstate, dt_stage, chemistryNetwork, integratorOptions);
 
-			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
+			if (std::isnan(photochemstate.values[0]) || std::isnan(photochemstate.density) ||
+			    std::isnan(photochemstate.values[quokka::chemistry::PhotoionizationNetwork::photon_number])) {
 				amrex::Abort("Burner returned NAN");
 			}
 
-			if (!photochemstate.success) {
-				burn_failed = 1;
+			if (!integrationDiagnostics.succeeded()) {
+				burn_failed = static_cast<int>(integrationDiagnostics.status);
 			}
 
 			if (burn_failed) {
-				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
+				if (amrex::Gpu::Atomic::CAS(p_num_failed, 0, burn_failed) == 0) {
+					printf("photochemistry failure: status=%d dt=%g reached=%g suggested_dt=%g steps=%d rejected=%d rho=%g ne=%g nHI=%g "
+					       "nHII=%g e=%g "
+					       "photons=%g\n",
+					       burn_failed, dt_stage, integrationDiagnostics.reached_time, integrationDiagnostics.suggested_timestep,
+					       integrationDiagnostics.steps, integrationDiagnostics.rejected_steps, photochemstate.density,
+					       photochemstate.values[quokka::chemistry::PhotoionizationNetwork::electron],
+					       photochemstate.values[quokka::chemistry::PhotoionizationNetwork::neutral_hydrogen],
+					       photochemstate.values[quokka::chemistry::PhotoionizationNetwork::ionized_hydrogen],
+					       photochemstate.values[quokka::chemistry::PhotoionizationNetwork::energy],
+					       photochemstate.values[quokka::chemistry::PhotoionizationNetwork::photon_number]);
+				}
 			}
 
 			// Ensure positivity
-			for (double &nn : photochemstate.xn) {
-				nn = amrex::max(nn, small_x);
+			for (int nn = 0; nn < NumSpec; ++nn) {
+				photochemstate.values[nn] = amrex::max(photochemstate.values[nn], integratorOptions.small_state);
 			}
 			for (int nn = 0; nn < NumChemBands; nn += 1) {
 				// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
-				photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumRadVarsPerGroup] =
-				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumRadVarsPerGroup], small_x);
+				const int radiationIndex = quokka::chemistry::PhotoionizationNetwork::photon_number +
+							   nn * quokka::chemistry::PhotoionizationNetwork::radiation_variables_per_group;
+				photochemstate.values[radiationIndex] = amrex::max(photochemstate.values[radiationIndex], integratorOptions.small_state);
 			}
 
-			// get the updated specific eint
-			eos(eos_input_re, photochemstate);
-
 			for (int nn = 0; nn < NumSpec; ++nn) {
-				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
+				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) =
+				    photochemstate.values[nn] * quokka::chemistry::PhotoionizationNetwork::species_masses[nn];
 			}
 			// Update the chem-band photon number density, attenuate the flux by the burn's rn[1] factor, and
 			// accumulate the momentum the gas absorbs from the O(v/c) work term: dP = -(F_after - F_before) / c^2,
@@ -168,9 +183,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
-				const Real flux_factor = photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn];
+				const Real flux_factor = photochemstate.values[quokka::chemistry::PhotoionizationNetwork::photon_flux_factor +
+									       quokka::chemistry::PhotoionizationNetwork::radiation_variables_per_group * nn];
 				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * chemBandQuanta[nn];
+				    photochemstate.values[quokka::chemistry::PhotoionizationNetwork::photon_number +
+							  quokka::chemistry::PhotoionizationNetwork::radiation_variables_per_group * nn] *
+				    chemBandQuanta[nn];
 				const Real FxOld = state(i, j, k, fxIdx);
 				const Real FyOld = state(i, j, k, fyIdx);
 				const Real FzOld = state(i, j, k, fzIdx);
@@ -191,7 +209,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			}
 
 			// Quokka uses rho*eint
-			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
+			const Real dEint = (photochemstate.values[quokka::chemistry::PhotoionizationNetwork::energy] * photochemstate.density) - Eint;
 			state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) += dEint * energy_update_factor;
 			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint * energy_update_factor;
 
@@ -222,15 +240,15 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 						const Real dEkin = (xmom_new * xmom_new + ymom_new * ymom_new + zmom_new * zmom_new -
 								    (xmom * xmom + ymom * ymom + zmom * zmom)) /
 								   (2.0_rt * rho);
-						const Real E_debit = (C::c_light / photochemstate.c_hat) * dEkin;
+						const Real E_debit = (C::c_light / photochemstate.reduced_speed_of_light) * dEkin;
 						for (int nn = 0; nn < NumChemBands; ++nn) {
 							const int eIdx = firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 							const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 							const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 							const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 							const Real E_old = state(i, j, k, eIdx); // > 0: rn[0] was clamped to small_x above
-							const Real E_new =
-							    amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum), small_x * chemBandQuanta[nn]);
+							const Real E_new = amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum),
+										      integratorOptions.small_state * chemBandQuanta[nn]);
 							state(i, j, k, eIdx) = E_new;
 							const Real flux_rescale = E_new / E_old;
 							state(i, j, k, fxIdx) *= flux_rescale;
@@ -248,12 +266,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	}
 
 	num_failed = *(d_num_failed.copyToHost());
+	amrex::ParallelDescriptor::ReduceIntMin(num_failed);
 
 	photochem_burn_success = num_failed == 0;
-	amrex::ParallelDescriptor::ReduceIntMin(photochem_burn_success);
 
 	if (!photochem_burn_success) {
-		amrex::Abort("Burn failed in VODE. Aborting.");
+		amrex::Abort(std::format("Photochemistry integration failed with status {}.", num_failed));
 	}
 
 	return photochem_burn_success;

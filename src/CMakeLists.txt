@@ -128,12 +128,21 @@ include_directories(${HDF5_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
-# default network_name (for Microphysics EOS) for all tests:
-set(microphysics_network_name "gamma_law")
-# default output_dir (for Microphysics EOS) for all tests:
-set(microphysics_output_dir "${CMAKE_CURRENT_BINARY_DIR}/")
-setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_CURRENT_BINARY_DIR}/")
-include_directories(${gamma_law_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
+# Quokka-owned chemistry modules. The Rosenbrock implementation is header-only
+# so the same code can be instantiated for CPU, CUDA, and HIP network kernels.
+add_library(quokka_rosenbrock INTERFACE)
+target_include_directories(quokka_rosenbrock INTERFACE ${CMAKE_SOURCE_DIR}/src)
+add_library(quokka::rosenbrock ALIAS quokka_rosenbrock)
+
+add_library(quokka_photoionization INTERFACE)
+target_include_directories(quokka_photoionization INTERFACE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(quokka_photoionization INTERFACE quokka::rosenbrock)
+add_library(quokka::photoionization ALIAS quokka_photoionization)
+
+add_library(quokka_primordial_chem INTERFACE)
+target_include_directories(quokka_primordial_chem INTERFACE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(quokka_primordial_chem INTERFACE quokka::rosenbrock)
+add_library(quokka::primordial_chem ALIAS quokka_primordial_chem)
 
 if(TARGET amrex_hydro_api)
   link_libraries(amrex_hydro_api)
@@ -163,6 +172,6 @@ if(AMReX_SPACEDIM EQUAL 3)
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
 endif()
 
-set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
+set (QuokkaObjSources "${QuokkaSourcesNoEOS}")
 
 add_subdirectory(problems)

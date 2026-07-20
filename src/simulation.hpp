@@ -816,7 +816,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	// print version and git hashes to stdout
 	amrex::Print() << std::format("\nQuokka version {} (git: {})\n", QUOKKA_VERSION, getGitHashForQuokka());
 	amrex::Print() << std::format("\tAMReX git: {}\n", getGitHashForAmrex());
-	amrex::Print() << std::format("\tMicrophysics git: {}\n", MICROPHYSICS_GIT_HASH);
 #if AMREX_SPACEDIM == 3
 	amrex::Print() << std::format("\tAMReX-Hydro git: {}\n", AMREX_HYDRO_GIT_HASH);
 #endif
@@ -5246,7 +5245,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 	// Split particles
 	if constexpr (quokka::ParticleTypeTraits<particle_type>::allow_restart_refine_splitting) {
 		if (restartRefineFactor_ > 1 && splitParticlesOnRestartRefine_) {
-			const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
+			const int split_factor = restartRefineFactor_ * restartRefineFactor_ * restartRefineFactor_;
 			amrex::Print() << std::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type),
 						      split_factor);
 			auto descriptor = particleRegister_.getParticleDescriptor(particle_type);

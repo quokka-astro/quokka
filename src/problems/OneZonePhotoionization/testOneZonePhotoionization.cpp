@@ -10,6 +10,7 @@
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "networks/photoionization/PhotoionizationNetwork.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include <fstream>
@@ -25,14 +26,11 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
-
 struct PhotoionizationStreamingProblem {
 };
+
+using PhotoionizationNetwork = quokka::chemistry::PhotoionizationNetwork;
+constexpr int PhotoionizationSpeciesCount = PhotoionizationNetwork::species_count;
 
 constexpr double c = C::c_light;    // speed of light
 constexpr double chat = C::c_light; // reduced speed of light
@@ -46,8 +44,8 @@ template <> struct quokka::EOS_Traits<PhotoionizationStreamingProblem> {
 template <> struct Physics_Traits<PhotoionizationStreamingProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr int numMassScalars = PhotoionizationSpeciesCount; // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0;	   // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 };
 
@@ -55,7 +53,10 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBands() -> amrex::GpuArray<double, NumChemBands + 1> { return ChemBandsHeader_; }
+	static constexpr auto ChemBands() -> amrex::GpuArray<double, PhotoionizationNetwork::chemistry_band_count + 1>
+	{
+		return PhotoionizationNetwork::chemistry_band_edges;
+	}
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {
@@ -79,9 +80,6 @@ template <> struct SimulationData<PhotoionizationStreamingProblem> {
 
 template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("photoionization");
 	userData_.small_temp = 1e-2;
@@ -101,25 +99,19 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	pp.query("tend", userData_.tend);
 	pp.query("n_photon", userData_.n_photon);
 
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
-
-	burn_t state;
-	state.T = userData_.temperature;
+	amrex::GpuArray<Real, PhotoionizationSpeciesCount> const numberDensities = {userData_.primary_species_1, userData_.primary_species_2,
+										    userData_.primary_species_3};
 	Real rhotot = 0.0_rt;
-	state.xn[0] = userData_.primary_species_1;
-	state.xn[1] = userData_.primary_species_2;
-	state.xn[2] = userData_.primary_species_3;
-	rhotot = state.xn[0] * spmasses[0] + state.xn[1] * spmasses[1] + state.xn[2] * spmasses[2];
-	state.rho = rhotot;
-	eos(eos_input_rt, state);
+	for (int species = 0; species < PhotoionizationSpeciesCount; ++species) {
+		rhotot += numberDensities[species] * PhotoionizationNetwork::species_masses[species];
+	}
 
 	const amrex::Real t = 0.0;
 	const amrex::Real n_e = userData_.primary_species_1;
 	const amrex::Real n_HI = userData_.primary_species_2;
 	const amrex::Real n_HII = userData_.primary_species_3;
 	const amrex::Real n_gamma = userData_.n_photon;
-	const amrex::Real Egas_i = state.e * rhotot;
+	const amrex::Real Egas_i = PhotoionizationNetwork::specific_energy_from_temperature(numberDensities, userData_.temperature) * rhotot;
 	const amrex::Real temp = userData_.temperature;
 
 	userData_.output_file_.open("photoionization_quokka_output.csv");
@@ -145,9 +137,8 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
-	std::array<Real, NumSpec> numdens = {-1.0};
-	for (int n = 1; n <= NumSpec; ++n) {
+	std::array<Real, PhotoionizationSpeciesCount> numdens = {-1.0};
+	for (int n = 1; n <= PhotoionizationSpeciesCount; ++n) {
 		switch (n) {
 			case 1:
 				numdens[n - 1] = userData_.primary_species_1;
@@ -164,20 +155,15 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 		}
 	}
 
-	state.T = userData_.temperature;
-
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
-		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+	for (int n = 0; n < PhotoionizationSpeciesCount; ++n) {
+		rhotot += numdens[n] * PhotoionizationNetwork::species_masses[n];
 	}
-	state.rho = rhotot;
-	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
 
 	const auto Erad0 = userData_.n_photon * RadSystem<PhotoionizationStreamingProblem>::GetChemBandQuanta(0);
-	const auto Egas0 = state.e * rhotot; // initial_Egas;
+	amrex::GpuArray<Real, PhotoionizationSpeciesCount> const numberDensities = {numdens[0], numdens[1], numdens[2]};
+	const auto Egas0 = PhotoionizationNetwork::specific_energy_from_temperature(numberDensities, userData_.temperature) * rhotot;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -193,9 +179,9 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 		state_cc(i, j, k, RadSystem<PhotoionizationStreamingProblem>::x1GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PhotoionizationStreamingProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PhotoionizationStreamingProblem>::x3GasMomentum_index) = 0.;
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < PhotoionizationSpeciesCount; ++nn) {
 			state_cc(i, j, k, HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + nn) =
-			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			    numdens[nn] * PhotoionizationNetwork::species_masses[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
@@ -207,18 +193,20 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const amrex::Real time = tNew_[0];
 		const amrex::Real Erad_i = values.at(RadSystem<PhotoionizationStreamingProblem>::radEnergy_index)[0];
-		const amrex::Real n_e = values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index)[0] / spmasses[0];
-		const amrex::Real n_HI = values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + 1)[0] / spmasses[1];
-		const amrex::Real n_HII = values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + 2)[0] / spmasses[2];
+		const amrex::Real n_e = values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index)[0] / PhotoionizationNetwork::species_masses[0];
+		const amrex::Real n_HI =
+		    values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + 1)[0] / PhotoionizationNetwork::species_masses[1];
+		const amrex::Real n_HII =
+		    values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + 2)[0] / PhotoionizationNetwork::species_masses[2];
 		const amrex::Real n_gamma = Erad_i / RadSystem<PhotoionizationStreamingProblem>::GetChemBandQuanta(0);
 		const amrex::Real rho = values.at(RadSystem<PhotoionizationStreamingProblem>::gasDensity_index)[0];
 		const amrex::Real Egas_i = values.at(RadSystem<PhotoionizationStreamingProblem>::gasEnergy_index)[0];
 		const amrex::Real Eint_i = values.at(RadSystem<PhotoionizationStreamingProblem>::gasInternalEnergy_index)[0];
-		quokka::optional<amrex::GpuArray<amrex::Real, NumSpec>> massScalars;
-		amrex::GpuArray<amrex::Real, NumSpec> scalars{};
-		scalars[0] = n_e * spmasses[0];
-		scalars[1] = n_HI * spmasses[1];
-		scalars[2] = n_HII * spmasses[2];
+		quokka::optional<amrex::GpuArray<amrex::Real, PhotoionizationSpeciesCount>> massScalars;
+		amrex::GpuArray<amrex::Real, PhotoionizationSpeciesCount> scalars{};
+		scalars[0] = n_e * PhotoionizationNetwork::species_masses[0];
+		scalars[1] = n_HI * PhotoionizationNetwork::species_masses[1];
+		scalars[2] = n_HII * PhotoionizationNetwork::species_masses[2];
 		massScalars = scalars;
 		const amrex::Real temp = quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Eint_i, massScalars);
 

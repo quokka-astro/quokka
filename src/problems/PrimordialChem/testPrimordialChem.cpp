@@ -31,18 +31,16 @@
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
+#include "networks/primordial_chem/PrimordialChemNetwork.hpp"
 #include "radiation/radiation_system.hpp"
-
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
 
 using amrex::Real;
 
 struct PrimordialChemTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
+
+using PrimordialChemNetwork = quokka::chemistry::PrimordialChemNetwork;
+constexpr int NumSpec = PrimordialChemNetwork::species_count;
 
 template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 	// cell-centred
@@ -73,9 +71,6 @@ template <> struct SimulationData<PrimordialChemTest> {
 
 template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("primordial_chem");
 	userData_.small_temp = 1e1;
@@ -116,9 +111,6 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 	pp.query("primary_species_12", userData_.primary_species_12);
 	pp.query("primary_species_13", userData_.primary_species_13);
 	pp.query("primary_species_14", userData_.primary_species_14);
-
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 }
 
 template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -126,8 +118,6 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-
-	burn_t state;
 
 	std::array<Real, NumSpec> numdens = {-1.0};
 
@@ -183,45 +173,37 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 		}
 	}
 
-	state.T = userData_.temperature;
-
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < NumSpec; ++n) {
-		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+		rhotot += numdens[n] * PrimordialChemNetwork::species_masses[n];
 	}
-
-	state.rho = rhotot;
 
 	// normalize -- just in case
 
 	std::array<Real, NumSpec> mfracs = {-1.0};
+	amrex::GpuArray<Real, NumSpec> normalizedNumberDensities{};
 	Real msum = 0.0_rt;
 	for (int n = 0; n < NumSpec; ++n) {
-		mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
+		mfracs[n] = numdens[n] * PrimordialChemNetwork::species_masses[n] / rhotot;
 		msum += mfracs[n];
 	}
 
 	for (int n = 0; n < NumSpec; ++n) {
 		mfracs[n] /= msum;
 		// use the normalized mass fractions to obtain the corresponding number densities
-		state.xn[n] = mfracs[n] * rhotot / spmasses[n];
+		normalizedNumberDensities[n] = mfracs[n] * rhotot / PrimordialChemNetwork::species_masses[n];
 	}
 
-	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	const Real Eint = rhotot * PrimordialChemNetwork::specific_energy_from_temperature(normalizedNumberDensities, userData_.temperature);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real const rho = state.rho; // g cm^-3
+		Real const rho = rhotot; // g cm^-3
 
 		Real const xmom = 0;
 		Real const ymom = 0;
 		Real const zmom = 0;
-		// Microphysics calculates specific internal energy so multiply it by rho for Quokka
-		Real const Eint = rho * state.e;
-
 		static_assert(!Physics_Traits<PrimordialChemTest>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 		Real const Egas = quokka::EOS<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 

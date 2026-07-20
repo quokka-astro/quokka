@@ -118,16 +118,6 @@ else()
     set(AMREX_GIT_HASH "unknown")
 endif()
 
-if(EXISTS "${QuokkaCode_SOURCE_DIR}/extern/Microphysics/.git")
-    execute_process(COMMAND git rev-parse HEAD
-        WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/Microphysics
-        OUTPUT_VARIABLE MICROPHYSICS_GIT_HASH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-else()
-    set(MICROPHYSICS_GIT_HASH "unknown")
-endif()
-
 if(EXISTS "${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro/.git")
     execute_process(COMMAND git rev-parse HEAD
         WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro
@@ -169,13 +159,11 @@ endif()
 # add preprocessor macros for git commits
 add_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
 add_definitions(-DAMREX_GIT_HASH="${AMREX_GIT_HASH}")
-add_definitions(-DMICROPHYSICS_GIT_HASH="${MICROPHYSICS_GIT_HASH}")
 add_definitions(-DAMREX_HYDRO_GIT_HASH="${AMREX_HYDRO_GIT_HASH}")
 add_definitions(-DTURBULENCE_GIT_HASH="${TURBULENCE_GIT_HASH}")
 message(STATUS "Quokka git branch: ${QUOKKA_GIT_BRANCH}")
 message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
 message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
-message(STATUS "Microphysics git commit hash: ${MICROPHYSICS_GIT_HASH}")
 message(STATUS "AMReX-Hydro git commit hash: ${AMREX_HYDRO_GIT_HASH}")
 message(STATUS "turbulence git commit hash: ${TURBULENCE_GIT_HASH}")
 
@@ -186,12 +174,4 @@ endif()
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DIR}/yaml-cpp)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/turbulence/plugins/AMReX ${QuokkaCode_BINARY_DIR}/turbulence)
 
-#add compiler definitions again because
-#they do not carry forward from Microphysics
-#We use Strang operator-spliting while integrating the network
-#NAUX_NET defines the number of auxiliary variables
-#NET_LOOP_UNROLL_LEN is the unroll length used in Microphysics linpack/ArrayUtilities;
-#match Microphysics' CMake default of 1.
-add_definitions(-DNAUX_NET -DSTRANG -DNET_LOOP_UNROLL_LEN=1)
-add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/Microphysics ${QuokkaCode_BINARY_DIR}/Microphysics)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)

@@ -15,6 +15,7 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "networks/photoionization/PhotoionizationNetwork.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
@@ -27,15 +28,11 @@
 #include <math/quadrature.hpp>
 #include <string>
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
-
 struct DTypeFront {
 };
 
+using PhotoionizationNetwork = quokka::chemistry::PhotoionizationNetwork;
+constexpr int NumSpec = PhotoionizationNetwork::species_count;
 constexpr double c_hat = C::c_light / 1000.0;
 
 template <> struct quokka::EOS_Traits<DTypeFront> {
@@ -68,7 +65,7 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	// photochemistry momentum deposition is gated on beta_order == 1, so this test validates pure
 	// thermal-pressure D-type front expansion with radiation pressure.
 	static constexpr int beta_order = 1;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBands() { return PhotoionizationNetwork::chemistry_band_edges; }
 };
 
 template <> struct SimulationData<DTypeFront> {
@@ -102,8 +99,8 @@ auto compute_effective_radius(amrex::MultiFab const &state_mf, amrex::GpuArray<a
 	const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-		const amrex::Real n_HI = state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + 1) / spmasses[1];
-		const amrex::Real n_HII = state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + 2) / spmasses[2];
+		const amrex::Real n_HI = state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + 1) / PhotoionizationNetwork::species_masses[1];
+		const amrex::Real n_HII = state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + 2) / PhotoionizationNetwork::species_masses[2];
 		const amrex::Real denom = n_HI + n_HII;
 		if (denom <= 0.0_rt) {
 			return 0.0_rt;
@@ -196,33 +193,7 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 	return 0.5 * (T_lo + T_hi);
 }
 
-#ifdef DTYPEFRONT_USE_ROSENBROCK
-auto rosenbrock_tableau_name(int tableau) -> char const *
-{
-	switch (tableau) {
-		case 0:
-			return "Rodas5P";
-		case 1:
-			return "Rodas4P";
-		case 2:
-			return "Rodas3P";
-		case 3:
-			return "ROS2S";
-		default:
-			return "unknown";
-	}
-}
-#endif
-
-void print_microphysics_integrator()
-{
-#ifdef DTYPEFRONT_USE_ROSENBROCK
-	amrex::Print() << "DTypeFront microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
-		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
-#else
-	amrex::Print() << "DTypeFront microphysics integrator: VODE\n";
-#endif
-}
+void print_microphysics_integrator() { amrex::Print() << "DTypeFront chemistry integrator: Quokka Rosenbrock (ROS2S)\n"; }
 
 } // namespace
 
@@ -296,9 +267,6 @@ void RadSystem<DTypeFront>::SetRadEnergySource(array_t &radEnergy, const amrex::
 
 template <> void QuokkaSimulation<DTypeFront>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
 	userData_.small_temp = 1e-2;
@@ -316,8 +284,6 @@ template <> void QuokkaSimulation<DTypeFront>::preCalculateInitialConditions()
 	pp.query("primary_species_3", userData_.primary_species_3);
 	pp.query("Q", userData_.Q);
 
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -342,7 +308,6 @@ template <> void QuokkaSimulation<DTypeFront>::setInitialConditionsOnGrid(quokka
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
 	std::array<Real, NumSpec> numdens = {-1.0};
 	for (int n = 1; n <= NumSpec; ++n) {
 		switch (n) {
@@ -361,18 +326,13 @@ template <> void QuokkaSimulation<DTypeFront>::setInitialConditionsOnGrid(quokka
 		}
 	}
 
-	state.T = userData_.temperature;
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < NumSpec; ++n) {
-		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+		rhotot += numdens[n] * PhotoionizationNetwork::species_masses[n];
 	}
-	state.rho = rhotot;
-
-	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
-	const auto Egas0 = state.e * rhotot;
+	amrex::GpuArray<Real, NumSpec> const numberDensities = {numdens[0], numdens[1], numdens[2]};
+	const auto Egas0 = PhotoionizationNetwork::specific_energy_from_temperature(numberDensities, userData_.temperature) * rhotot;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -390,7 +350,7 @@ template <> void QuokkaSimulation<DTypeFront>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, RadSystem<DTypeFront>::x3GasMomentum_index) = 0.0_rt;
 		for (int nn = 0; nn < NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<DTypeFront>::scalar0_index + nn) =
-			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			    numdens[nn] * PhotoionizationNetwork::species_masses[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
@@ -410,8 +370,9 @@ template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
 	const amrex::Real mu = 0.5;
 	const amrex::Real Q = userData_.Q;
 	const amrex::Real c_i = std::sqrt(C::k_B * T_eq / (mu * C::m_p));
-	const amrex::Real rho =
-	    userData_.primary_species_1 * spmasses[0] + userData_.primary_species_2 * spmasses[1] + userData_.primary_species_3 * spmasses[2];
+	const amrex::Real rho = userData_.primary_species_1 * PhotoionizationNetwork::species_masses[0] +
+				userData_.primary_species_2 * PhotoionizationNetwork::species_masses[1] +
+				userData_.primary_species_3 * PhotoionizationNetwork::species_masses[2];
 	const amrex::Real eps = RadSystem<DTypeFront>::GetChemBandQuanta(0);
 
 	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_e * n_e), 1.0_rt / 3.0_rt);
@@ -526,8 +487,10 @@ auto problem_main() -> int
 			amrex::LoopOnCpu(box, [&](int i, int j, int k) noexcept {
 				const amrex::Real rho = state(i, j, k, HydroSystem<DTypeFront>::density_index);
 				const amrex::Real Eint = state(i, j, k, RadSystem<DTypeFront>::gasInternalEnergy_index);
-				const amrex::Real n_HI_cell = state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + 1) / spmasses[1];
-				const amrex::Real n_HII_cell = state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + 2) / spmasses[2];
+				const amrex::Real n_HI_cell =
+				    state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + 1) / PhotoionizationNetwork::species_masses[1];
+				const amrex::Real n_HII_cell =
+				    state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + 2) / PhotoionizationNetwork::species_masses[2];
 				const amrex::Real denom = n_HI_cell + n_HII_cell;
 				if (denom <= 0.0_rt) {
 					return;
@@ -535,15 +498,11 @@ auto problem_main() -> int
 				const amrex::Real x_HII = n_HII_cell / denom;
 				const amrex::Real x_HI = n_HI_cell / denom;
 
-				burn_t bstate;
+				amrex::GpuArray<amrex::Real, NumSpec> massScalars{};
 				for (int nn = 0; nn < NumSpec; ++nn) {
-					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + nn) / spmasses[nn];
+					massScalars[nn] = state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + nn);
 				}
-				bstate.rho = rho;
-				bstate.e = Eint / rho;
-				bstate.T = 1.0e4; // initial guess
-				eos(eos_input_re, bstate);
-				const double T_cell = bstate.T;
+				const double T_cell = quokka::EOS<DTypeFront>::ComputeTgasFromEint(rho, Eint, massScalars);
 
 				if (x_HII > 0.90_rt) {
 					cavity_temps.push_back(T_cell);

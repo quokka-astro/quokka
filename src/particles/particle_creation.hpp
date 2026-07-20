@@ -603,8 +603,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 							double constexpr v_min = 3.0;	  // Minimum velocity from the distribution
 							double constexpr v_max = 385.0;	  // Maximum velocity from the distribution
 							double constexpr beta = 1.8;	  // Slope of the velocity distribution
-							double constexpr vmin_pow = gcem::pow(v_min, 1. - beta);
-							double constexpr vmax_pow = gcem::pow(v_max, 1. - beta);
+							const double vmin_pow = std::pow(v_min, 1. - beta);
+							const double vmax_pow = std::pow(v_max, 1. - beta);
 
 							// Draw velocity from the power-law distribution with inverse transform sampling
 							double v_mag = amrex::Random(engine) * (vmax_pow - vmin_pow) + vmin_pow;
@@ -628,8 +628,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						// Set particle mass
 						{
 							// Sample mass from the IMF between m_star_high and m_imf_max using inverse transform sampling
-							constexpr double mimf_max_pow = gcem::pow(m_imf_max, 1.0 - alpha);
-							constexpr double mstar_high_pow = gcem::pow(m_star_high, 1.0 - alpha);
+							const double mimf_max_pow = std::pow(m_imf_max, 1.0 - alpha);
+							const double mstar_high_pow = std::pow(m_star_high, 1.0 - alpha);
 							double mass_of_star = amrex::Random(engine) * (mimf_max_pow - mstar_high_pow) + mstar_high_pow;
 							mass_of_star = std::pow(mass_of_star, 1. / (1. - alpha));
 							p.rdata(mass_idx) = mass_of_star;

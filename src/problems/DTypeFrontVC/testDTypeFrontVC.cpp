@@ -14,6 +14,7 @@
 #include "AMReX_Reduce.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "networks/photoionization/PhotoionizationNetwork.hpp"
 #include "physics_info.hpp"
 #include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
@@ -21,14 +22,11 @@
 #include <cmath>
 #include <limits>
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
-
 struct DTypeFrontVC {
 };
+
+using PhotoionizationNetwork = quokka::chemistry::PhotoionizationNetwork;
+constexpr int NumSpec = PhotoionizationNetwork::species_count;
 
 namespace
 {
@@ -66,7 +64,7 @@ template <> struct RadSystem_Traits<DTypeFrontVC> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	static constexpr int beta_order = 1;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBands() { return PhotoionizationNetwork::chemistry_band_edges; }
 };
 
 template <> struct SimulationData<DTypeFrontVC> {
@@ -88,8 +86,6 @@ void RadSystem<DTypeFrontVC>::SetRadEnergySource(array_t &radEnergy, const amrex
 
 template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 {
-	init_extern_parameters();
-
 	amrex::ParmParse const pp("photoionization_momentum");
 	userData_.small_temp = 1.0e-2;
 	userData_.small_dens = 1.0e-60;
@@ -103,9 +99,6 @@ template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 	pp.query("primary_species_1", userData_.primary_species_1);
 	pp.query("primary_species_2", userData_.primary_species_2);
 	pp.query("primary_species_3", userData_.primary_species_3);
-
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontVC>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -123,18 +116,14 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
 	std::array<Real, NumSpec> numdens = {userData_.primary_species_1, userData_.primary_species_2, userData_.primary_species_3};
-	state.T = userData_.temperature;
 
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < NumSpec; ++n) {
-		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n];
+		rhotot += numdens[n] * PhotoionizationNetwork::species_masses[n];
 	}
-	state.rho = rhotot;
-	eos(eos_input_rt, state);
-	const auto Egas0 = state.e * rhotot;
+	amrex::GpuArray<Real, NumSpec> const numberDensities = {numdens[0], numdens[1], numdens[2]};
+	const auto Egas0 = PhotoionizationNetwork::specific_energy_from_temperature(numberDensities, userData_.temperature) * rhotot;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<DTypeFrontVC>::nGroups; ++g) {
@@ -150,7 +139,7 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x3GasMomentum_index) = 0.0_rt;
 		for (int nn = 0; nn < NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<DTypeFrontVC>::scalar0_index + nn) = state.xn[nn] * spmasses[nn];
+			state_cc(i, j, k, HydroSystem<DTypeFrontVC>::scalar0_index + nn) = numdens[nn] * PhotoionizationNetwork::species_masses[nn];
 		}
 	});
 }

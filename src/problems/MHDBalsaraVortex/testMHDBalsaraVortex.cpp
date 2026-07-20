@@ -8,7 +8,6 @@
 
 #include <cassert>
 #include <cmath>
-#include <gcem.hpp>
 #include <numbers>
 
 #include "AMReX_Array.H"
@@ -20,6 +19,7 @@
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
+#include "math/constexpr_math.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
@@ -40,7 +40,7 @@ template <> struct Physics_Traits<MHDBalsaraVortex> : DefaultPhysicsTraits {
 constexpr double gamma_gas = quokka::EOS_Traits<MHDBalsaraVortex>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = 1.0;
-constexpr double sound_speed = gcem::sqrt(gamma_gas * bg_pressure / bg_density);
+constexpr double sound_speed = quokka::math::sqrt(gamma_gas * bg_pressure / bg_density);
 // vortex parameters
 AMREX_GPU_MANAGED double vortex_radius = 1.0;  // NOLINT
 AMREX_GPU_MANAGED double vortex_Mach = 0.01;   // NOLINT

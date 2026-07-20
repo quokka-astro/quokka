@@ -31,6 +31,7 @@
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
+#include "math/constexpr_math.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
@@ -47,7 +48,7 @@ template <> struct Physics_Traits<OrszagTang> : DefaultPhysicsTraits {
 	static constexpr bool is_mhd_enabled = true;
 };
 
-constexpr double B0 = 1.0 / gcem::sqrt(4.0 * PI);
+constexpr double B0 = 1.0 / quokka::math::sqrt(4.0 * PI);
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto A_z(double x, double y) -> double
 {

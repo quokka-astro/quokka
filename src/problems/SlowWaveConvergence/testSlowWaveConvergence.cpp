@@ -11,7 +11,6 @@
 #include <bitset>
 #include <cassert>
 #include <cmath>
-#include <gcem.hpp>
 #include <iostream>
 
 #include "AMReX_Array.H"
@@ -21,6 +20,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
+#include "math/constexpr_math.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 #include "util/richardson.hpp"
@@ -44,7 +44,7 @@ constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;
 constexpr double delta_b_magn = 1e-6;
-constexpr double alfven_speed = b0_magn / gcem::sqrt(bg_density);
+constexpr double alfven_speed = b0_magn / quokka::math::sqrt(bg_density);
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> double
 {

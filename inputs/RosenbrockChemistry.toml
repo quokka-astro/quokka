@@ -1,0 +1,11 @@
+max_timesteps = 0
+
+[amr]
+n_cell = 1
+max_level = 0
+
+[geometry]
+coord_sys = 0
+is_periodic = 1
+prob_lo = 0.0
+prob_hi = 1.0

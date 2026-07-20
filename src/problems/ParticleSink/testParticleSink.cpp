@@ -271,7 +271,7 @@ auto problem_main() -> int
 			const Real v_infty_sqr = 0.0;
 			const Real par_mass = 10.0 * C::M_solar;
 			const Real r_BH = C::Gconst * par_mass / (v_infty_sqr + cf_sqr);
-			const Real lambda = gcem::exp(1.5) / 4.0;
+			constexpr Real lambda = 1.1204222675845161; // exp(3/2) / 4
 			// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 cf^2), where lambda = exp(3/2) / 4
 			const Real M_dot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cf_sqr);
 			rho_dot_exact = M_dot_exact / std::pow(7 * dx0[0], 3);

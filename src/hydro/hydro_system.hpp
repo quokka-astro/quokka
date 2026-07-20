@@ -38,9 +38,6 @@
 #include "util/ArrayView.hpp"
 #include "util/valarray.hpp"
 
-// Microphysics headers
-#include "extern_parameters.H"
-
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct HydroSystem_Traits {
@@ -1071,7 +1068,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real sp_sum = 0.0;
 			for (int idx = 0; idx < nmscalars_; ++idx) {
 				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-					state[bx](i, j, k, scalar0_index + idx) = network_rp::small_x * rho_new;
+					state[bx](i, j, k, scalar0_index + idx) = 1.0e-30_rt * rho_new;
 				}
 				// get sum to renormalize
 				sp_sum += state[bx](i, j, k, scalar0_index + idx);

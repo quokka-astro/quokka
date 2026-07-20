@@ -6,7 +6,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file Chemistry.hpp
-/// \brief Defines methods for integrating primordial chemical network using Microphysics
+/// \brief Defines methods for integrating the primordial chemistry network.
 ///
 
 #include <array>
@@ -14,22 +14,24 @@
 #include "AMReX.H"
 #include "AMReX_GpuQualifiers.H"
 
+#include "chemistry/ChemistryNetwork.hpp"
+#include "chemistry/RuntimeParameters.hpp"
 #include "hydro/hydro_system.hpp"
+#include "networks/primordial_chem/PrimordialChemNetwork.hpp"
 #include "radiation/radiation_system.hpp"
 
 #ifdef CHEMISTRY
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
 namespace quokka::chemistry
 {
 
-AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
+AMREX_GPU_DEVICE auto chemburner(IntegratorState<PrimordialChemNetwork::variable_count> &state, Real dt, PrimordialChemNetwork const &network,
+				 IntegratorOptions const &options) -> bool;
 
 template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed) -> bool
 {
+	constexpr int NumSpec = PrimordialChemNetwork::species_count;
+	const auto integratorOptions = readIntegratorOptions();
+	const PrimordialChemNetwork chemistryNetwork{readPrimordialChemParameters()};
 
 	// Start off by assuming a successful burn.
 	int burn_success = 1;
@@ -62,15 +64,12 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 					   rho; // state has partial densities, so divide by rho to get mass fractions
 			}
 
-			// do chemistry using microphysics
-
-			burn_t chemstate;
-			chemstate.success = true;
+			IntegratorState<PrimordialChemNetwork::variable_count> chemstate{};
 			int burn_failed = 0;
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
-				inmfracs[nn] = chem[nn] * rho / spmasses[nn];
-				chemstate.xn[nn] = inmfracs[nn];
+				inmfracs[nn] = chem[nn] * rho / PrimordialChemNetwork::species_masses[nn];
+				chemstate.values[nn] = inmfracs[nn];
 			}
 
 			// dont do chemistry in cells with densities below the minimum density specified
@@ -83,24 +82,19 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 				amrex::Abort("Density exceeded max_density_allowed!");
 			}
 
-			// input density and eint in burn state
-			// Microphysics needs specific eint
-			chemstate.rho = rho;
-			chemstate.e = Eint / rho;
-
-			// call the EOS to set initial internal energy e
-			eos(eos_input_re, chemstate);
+			chemstate.density = rho;
+			chemstate.values[PrimordialChemNetwork::energy] = Eint / rho;
 
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
-			chemburner(chemstate, dt);
+			const bool integration_succeeded = chemburner(chemstate, dt, chemistryNetwork, integratorOptions);
 
-			if (std::isnan(chemstate.xn[0]) || std::isnan(chemstate.rho)) {
+			if (std::isnan(chemstate.values[0]) || std::isnan(chemstate.density)) {
 				amrex::Abort("Burner returned NAN");
 			}
 
-			if (!chemstate.success) {
+			if (!integration_succeeded) {
 				burn_failed = 1;
 			}
 
@@ -110,42 +104,38 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 
 			// ensure positivity and normalize
 			for (int nn = 0; nn < NumSpec; ++nn) {
-				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
-				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
+				chemstate.values[nn] = amrex::max(chemstate.values[nn], integratorOptions.small_state);
+				inmfracs[nn] = PrimordialChemNetwork::species_masses[nn] * chemstate.values[nn] / chemstate.density;
 				insum += inmfracs[nn];
 			}
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				inmfracs[nn] /= insum;
 				// update the number densities with conserved mass fractions
-				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
+				chemstate.values[nn] = inmfracs[nn] * chemstate.density / PrimordialChemNetwork::species_masses[nn];
 			}
 
 			// update the number density of electrons due to charge conservation
 			// TODO(psharda): generalize this to other chem networks
-			chemstate.xn[0] = -chemstate.xn[3] - chemstate.xn[7] + chemstate.xn[1] + chemstate.xn[12] + chemstate.xn[6] + chemstate.xn[4] +
-					  chemstate.xn[9] + 2.0 * chemstate.xn[11];
+			PrimordialChemNetwork::balance_charge(chemstate);
 
 			// reconserve mass fractions post charge conservation
 			insum = 0;
 			for (int nn = 0; nn < NumSpec; ++nn) {
-				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
-				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
+				chemstate.values[nn] = amrex::max(chemstate.values[nn], integratorOptions.small_state);
+				inmfracs[nn] = PrimordialChemNetwork::species_masses[nn] * chemstate.values[nn] / chemstate.density;
 				insum += inmfracs[nn];
 			}
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				inmfracs[nn] /= insum;
 				// update the number densities with conserved mass fractions
-				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
+				chemstate.values[nn] = inmfracs[nn] * chemstate.density / PrimordialChemNetwork::species_masses[nn];
 			}
-
-			// get the updated specific eint
-			eos(eos_input_rt, chemstate);
 
 			// get dEint
 			// Quokka uses rho*eint
-			const Real dEint = (chemstate.e * chemstate.rho) - Eint;
+			const Real dEint = (chemstate.values[PrimordialChemNetwork::energy] * chemstate.density) - Eint;
 			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
 			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
 
