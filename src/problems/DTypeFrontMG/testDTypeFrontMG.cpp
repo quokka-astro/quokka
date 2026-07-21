@@ -77,7 +77,7 @@ template <> struct RadSystem_Traits<DTypeFrontMG> {
 template <> struct ISM_Traits<DTypeFrontMG> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr bool enable_photoelectric_heating = false;
-	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-2;
 };
 
 template <> struct SimulationData<DTypeFrontMG> {
@@ -312,12 +312,18 @@ template <> void QuokkaSimulation<DTypeFrontMG>::preCalculateInitialConditions()
 	}
 }
 
-constexpr double kappa_IR = 1.0;
-constexpr double kappa_optical = 1.0e4;
+constexpr double kappa_IR = 1.0e-2;
+constexpr double kappa_optical = 1.0;
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontMG>::ComputeNumberDensityH(double /*rho*/, amrex::GpuArray<Real, nmscalars_> const &massScalars) -> double
+{
+	return (massScalars[1] + massScalars[2]) / C::m_p;
+}
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontMG>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/,
-											 const double rho, const double /*Tgas*/)
+											 const double /*rho*/, const double /*Tgas*/)
     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
@@ -325,8 +331,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontMG>::DefineOpacityExponentsAndLow
 		exponents_and_values[0][g] = 0.0;
 		exponents_and_values[1][g] = 0.0;
 	}
-	exponents_and_values[1][IRBand] = kappa_IR / rho;
-	exponents_and_values[1][OpticalBand] = kappa_optical / rho;
+	exponents_and_values[1][IRBand] = kappa_IR;
+	exponents_and_values[1][OpticalBand] = kappa_optical;
 	return exponents_and_values;
 }
 
@@ -370,7 +376,8 @@ template <> void QuokkaSimulation<DTypeFrontMG>::setInitialConditionsOnGrid(quok
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<DTypeFrontMG>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<DTypeFrontMG>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = 1.e-99_rt;
+			state_cc(i, j, k, RadSystem<DTypeFrontMG>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) =
+			    RadSystem_Traits<DTypeFrontMG>::Erad_floor;
 			state_cc(i, j, k, RadSystem<DTypeFrontMG>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<DTypeFrontMG>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<DTypeFrontMG>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
