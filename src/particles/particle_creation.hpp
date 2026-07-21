@@ -442,6 +442,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc,
 						 amrex::RandomEngine const &engine) const -> int
 		{
+			if (eps_ff_ <= 0.0) {
+				return 0;
+			}
+
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
