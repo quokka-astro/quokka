@@ -3,6 +3,7 @@
 
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
+#include "gcem.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particle_types.hpp"
@@ -61,7 +62,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const auto index = box.index(iv);
 					// Check if we should create a particle at this location and time
 					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr =
-					    (has_face_centered_state) ? &fab_fc : nullptr;
+					    has_face_centered_state ? &fab_fc : nullptr;
 					pcounts[index] = particle_checker(state_arr, accretion_rate_arr, i, j, k, dx, fab_fc_ptr, engine); // NOLINT
 				});
 
@@ -96,7 +97,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr =
-					    (has_face_centered_state) ? &fab_fc : nullptr;
+					    has_face_centered_state ? &fab_fc : nullptr;
 
 					if (pcounts[index] > 0) {			  // NOLINT
 						const int num_particles = pcounts[index]; // NOLINT
