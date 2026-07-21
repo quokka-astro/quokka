@@ -242,7 +242,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	const Real logx = std::log10(x);
 	Real y = NAN;
 	if (logx < LOG_X_MIN) {
-		// Taylor series of the Planck integral for small x: x^3/3 - x^4/8 + x^5/60, normalized by gInf to match interpolate_planck_integral()
+		// Taylor series of the Planck integral for small x: x^3/3 - x^4/8 + x^5/60 - x^7/5040 + x^9/272160, normalized by gInf to
+		// match interpolate_planck_integral(). Truncating at 5th order drops a negative 7th-order term, so this approximation is always positive.
 		y = (x * x * x / 3.0 - x * x * x * x / 8.0 + x * x * x * x * x / 60.0) / gInf;
 		// Y_INTERP_MIN is the minimum value returned from interpolate_planck_integral. To ensure y is monotonic with respect to x:
 		// AMREX_ASSERT(y <= Y_INTERP_MIN);
