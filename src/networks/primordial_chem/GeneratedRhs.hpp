@@ -3,6 +3,8 @@
 
 #include <cmath>
 
+#include "AMReX_Math.H"
+
 #include "networks/primordial_chem/PrimordialGeneratedTypes.hpp"
 
 namespace quokka::chemistry::primordial_detail
@@ -12,7 +14,7 @@ using amrex::Array1D;
 using amrex::Real;
 
 // Last updated July 2024
-// Update notes: 1. the original version of this file used std::pow, which we replaced with a combo of std::exp/std::log wherever possible.
+// Update notes: 1. the original version of this file used std::pow; integer powers now use amrex::Math::powi, while non-integer powers use std::exp/std::log.
 // Update notes: 2. added free-free cooling which was missing from the previous version
 // Author: Piyush Sharda (sharda@strw.leidenuniv.nl)
 
@@ -51,11 +53,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void rhs_specie(const PrimordialRhsState &sta
 
 	Real x11 = ((x7) * (x7) * (x7) * (x7) * (x7));
 
-	Real x12 = std::exp((6) * std::log(std::abs(x7)));
+	Real x12 = amrex::Math::powi<6>(std::abs(x7));
 
 	Real x13 = ((x7) * (x7) * (x7) * (x7) * (x7) * (x7) * (x7));
 
-	Real x14 = std::exp((8) * std::log(std::abs(x7)));
+	Real x14 = amrex::Math::powi<8>(std::abs(x7));
 
 	Real x15 = ((x7) * (x7) * (x7) * (x7) * (x7) * (x7) * (x7) * (x7) * (x7));
 
@@ -149,8 +151,8 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void rhs_specie(const PrimordialRhsState &sta
 
 	Real x46 = x45 * x6;
 
-	Real x47 = std::exp((-0.12690000000000001 * std::exp((-3.0) * std::log(std::abs(x44))) * ((x6) * (x6) * (x6)) +
-			     1.1180000000000001 * std::exp((-2.0) * std::log(std::abs(x44))) * ((x6) * (x6)) - 1.5229999999999999 * x46 - 19.379999999999999) *
+	Real x47 = std::exp((-0.12690000000000001 * amrex::Math::powi<-3>(std::abs(x44)) * ((x6) * (x6) * (x6)) +
+			     1.1180000000000001 * amrex::Math::powi<-2>(std::abs(x44)) * ((x6) * (x6)) - 1.5229999999999999 * x46 - 19.379999999999999) *
 			    std::log(std::abs(10.0)));
 
 	Real x48 = X(1) * X(5);
@@ -163,7 +165,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void rhs_specie(const PrimordialRhsState &sta
 
 	Real x52 = ((x6) * (x6));
 
-	Real x53 = std::exp((-2) * std::log(std::abs(x44)));
+	Real x53 = amrex::Math::powi<-2>(std::abs(x44));
 
 	Real x54 = x52 * x53;
 
@@ -186,7 +188,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void rhs_specie(const PrimordialRhsState &sta
 	Real x62 = X(1) * X(8) *
 		   ((T >= 100.0 && T <= 30000.0)
 			? ((-1.4491368e-7 * x52 + 3.4172804999999998e-8 * x56 + 3.5311931999999998e-13 * ((x6) * (x6) * (x6) * (x6) * (x6) * (x6) * (x6)) -
-			    1.8171411000000001e-11 * std::exp((6) * std::log(std::abs(x6))) + 3.3735381999999997e-7 * x6 - 4.7813727999999997e-9 * x60 +
+			    1.8171411000000001e-11 * amrex::Math::powi<6>(std::abs(x6)) + 3.3735381999999997e-7 * x6 - 4.7813727999999997e-9 * x60 +
 			    3.9731542e-10 * x61 - 3.3232183000000002e-7) *
 			   std::exp(-21237.150000000001 * x34))
 			: (0));
@@ -427,7 +429,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE Real rhs_eint(const PrimordialRhsState &state
 
 	Real x25 = 1.0 / x24;
 
-	Real x26 = std::exp((-2) * std::log(std::abs(x24)));
+	Real x26 = amrex::Math::powi<-2>(std::abs(x24));
 
 	Real x27 = 1.0 / (std::exp((1.3 * x25 * (x23 - 9.2103403719761836) -
 				    137.42519902360013 * x26 * ((0.10857362047581294 * x23 - 1) * (0.10857362047581294 * x23 - 1)) - 4.8449999999999998) *
@@ -463,7 +465,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE Real rhs_eint(const PrimordialRhsState &state
 
 	Real x41 = std::log(((T >= 10000.0) ? (10000.0) : (T)));
 
-	Real x42 = std::exp((-4) * std::log(std::abs(x24)));
+	Real x42 = amrex::Math::powi<-4>(std::abs(x24));
 
 	Real x43 = ((((x41) * (x41))) * (((x41) * (x41))));
 
@@ -483,11 +485,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE Real rhs_eint(const PrimordialRhsState &state
 
 	Real x51 = amrex::Math::powi<-5>(x24);
 
-	Real x52 = std::exp((-8) * std::log(std::abs(x24)));
+	Real x52 = amrex::Math::powi<-8>(std::abs(x24));
 
 	Real x53 = amrex::Math::powi<-7>(x24);
 
-	Real x54 = std::exp((-6) * std::log(std::abs(x24)));
+	Real x54 = amrex::Math::powi<-6>(std::abs(x24));
 
 	Real x55 = x0 >= 0.5;
 
@@ -517,7 +519,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE Real rhs_eint(const PrimordialRhsState &state
 
 	Real x67 = std::sqrt(x59);
 
-	Real x68 = std::exp((-2) * std::log(std::abs(x65)));
+	Real x68 = amrex::Math::powi<-2>(std::abs(x65));
 
 	Real x69 = std::sqrt(x59 * x68);
 
@@ -549,11 +551,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE Real rhs_eint(const PrimordialRhsState &state
 
 	Real x80 = ((x75) * (x75) * (x75) * (x75) * (x75));
 
-	Real x81 = x54 * std::exp((6) * std::log(std::abs(x75)));
+	Real x81 = x54 * amrex::Math::powi<6>(std::abs(x75));
 
 	Real x82 = x53 * ((x75) * (x75) * (x75) * (x75) * (x75) * (x75) * (x75));
 
-	Real x83 = std::exp((8) * std::log(std::abs(x75)));
+	Real x83 = amrex::Math::powi<8>(std::abs(x75));
 
 	Real x84 = std::exp((5.0194035000000001 * x25 * x74 + 5627.2167698544854 * x42 * x79 + 86051.290034608537 * x51 * x80 + 9415777.8988952208 * x52 * x83 -
 			     75.100986441619156 * x76 - 1554.3387057364687 * x78 - 428804.85473346239 * x81 - 1662263.0320406025 * x82 - 20.584225) *
@@ -1789,11 +1791,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x38 = ((x34) * (x34) * (x34) * (x34) * (x34));
 
-	x39 = std::exp((6) * std::log(std::abs(x34)));
+	x39 = amrex::Math::powi<6>(std::abs(x34));
 
 	x40 = ((x34) * (x34) * (x34) * (x34) * (x34) * (x34) * (x34));
 
-	x41 = std::exp((8) * std::log(std::abs(x34)));
+	x41 = amrex::Math::powi<8>(std::abs(x34));
 
 	x42 = std::exp(-0.28274430617039997 * x35 + 0.01623316639567 * x36 - 0.033650120313629989 * x37 + 0.01178329782711 * x38 - 0.001656194699504 * x39 +
 		       0.0001068275202678 * x40 - 2.6312858092069998e-6 * x41);
@@ -2001,11 +2003,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x5 = ((x1) * (x1) * (x1) * (x1) * (x1));
 
-	x6 = std::exp((6) * std::log(std::abs(x1)));
+	x6 = amrex::Math::powi<6>(std::abs(x1));
 
 	x7 = ((x1) * (x1) * (x1) * (x1) * (x1) * (x1) * (x1));
 
-	x8 = std::exp((8) * std::log(std::abs(x1)));
+	x8 = amrex::Math::powi<8>(std::abs(x1));
 
 	x9 = std::exp(-5.7393287500000003 * x2 + 1.56315498 * x3 - 0.28770560000000001 * x4 + 0.034825597700000002 * x5 - 0.00263197617 * x6 +
 		      0.000111954395 * x7 - 2.0391498499999999e-6 * x8);
@@ -2066,9 +2068,9 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x35 = x32 * x34;
 
-	x36 = std::exp((-3.0) * std::log(std::abs(x33)));
+	x36 = amrex::Math::powi<-3>(std::abs(x33));
 
-	x37 = std::exp((-2.0) * std::log(std::abs(x33)));
+	x37 = amrex::Math::powi<-2>(std::abs(x33));
 
 	x38 = ((x32) * (x32));
 
@@ -2083,7 +2085,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x43 = ((x32) * (x32) * (x32));
 
-	x44 = std::exp((-2) * std::log(std::abs(x33)));
+	x44 = amrex::Math::powi<-2>(std::abs(x33));
 
 	x45 = ((x32) * (x32));
 
@@ -2097,7 +2099,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x50 = ((x32) * (x32) * (x32) * (x32) * (x32));
 
-	x51 = std::exp((6) * std::log(std::abs(x32)));
+	x51 = amrex::Math::powi<6>(std::abs(x32));
 
 	x52 = x48 *
 	      (3.5311931999999998e-13 * ((x32) * (x32) * (x32) * (x32) * (x32) * (x32) * (x32)) + 3.3735381999999997e-7 * x32 + 3.4172804999999998e-8 * x43 -
@@ -2126,7 +2128,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x61 = 3.4767371836380304e-16 * x59;
 
-	x62 = std::exp((-2) * std::log(std::abs(T)));
+	x62 = amrex::Math::powi<-2>(std::abs(T));
 
 	x63 = x18 * x32;
 
@@ -2202,7 +2204,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 			   21237.150000000001 * x52 * x62)
 			: (0)) -
 	     X(1) * x40 *
-		 (5.1485802679346868 * x18 * std::exp((1.0) * std::log(std::abs(x32))) * x37 - 0.87659414490283338 * x18 * x36 * x38 -
+		 (5.1485802679346868 * x18 * amrex::Math::powi<1>(std::abs(x32)) * x37 - 0.87659414490283338 * x18 * x36 * x38 -
 		  3.5068370966299316 * x64) +
 	     7.2084342424042629e-17 * X(12) * X(2) * x21 +
 	     X(2) * X(4) *
@@ -2266,11 +2268,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x24 = ((x20) * (x20) * (x20) * (x20) * (x20));
 
-	x25 = std::exp((6) * std::log(std::abs(x20)));
+	x25 = amrex::Math::powi<6>(std::abs(x20));
 
 	x26 = ((x20) * (x20) * (x20) * (x20) * (x20) * (x20) * (x20));
 
-	x27 = std::exp((8) * std::log(std::abs(x20)));
+	x27 = amrex::Math::powi<8>(std::abs(x20));
 
 	x28 = std::exp(-0.28274430617039997 * x21 + 0.01623316639567 * x22 - 0.033650120313629989 * x23 + 0.01178329782711 * x24 - 0.001656194699504 * x25 +
 		       0.0001068275202678 * x26 - 2.6312858092069998e-6 * x27);
@@ -2327,7 +2329,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x52 = ((x48) * (x48) * (x48) * (x48) * (x48));
 
-	x53 = std::exp((6) * std::log(std::abs(x48)));
+	x53 = amrex::Math::powi<6>(std::abs(x48));
 
 	x54 = x47 * (3.5311931999999998e-13 * ((x48) * (x48) * (x48) * (x48) * (x48) * (x48) * (x48)) + 3.3735381999999997e-7 * x48 - 1.4491368e-7 * x49 +
 		     3.4172804999999998e-8 * x50 - 4.7813727999999997e-9 * x51 + 3.9731542e-10 * x52 - 1.8171411000000001e-11 * x53 - 3.3232183000000002e-7);
@@ -2348,7 +2350,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x62 = x50 * x61;
 
-	x63 = std::exp((-2) * std::log(std::abs(x58)));
+	x63 = amrex::Math::powi<-2>(std::abs(x58));
 
 	x64 = std::exp((1.786 * x49 * x63 - 3.194 * x60 - 0.2072 * x62 - 18.199999999999999) * std::log(std::abs(10)));
 
@@ -2506,7 +2508,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x139 = x138 + 1.0;
 
-	x140 = std::exp((-2) * std::log(std::abs(x139)));
+	x140 = amrex::Math::powi<-2>(std::abs(x139));
 
 	x141 = 1.0 - std::exp(-6000.0 * x7);
 
@@ -2578,9 +2580,9 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 			 2.0600000000000001e-10 * std::exp((0.39600000000000002) * std::log(std::abs(T))) * x173)
 		      : (0));
 
-	x175 = std::exp((-3.0) * std::log(std::abs(x58)));
+	x175 = amrex::Math::powi<-3>(std::abs(x58));
 
-	x176 = std::exp((-2.0) * std::log(std::abs(x58)));
+	x176 = amrex::Math::powi<-2>(std::abs(x58));
 
 	x177 = ((x48) * (x48));
 
@@ -2623,7 +2625,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x193 = amrex::Math::powi<-5>(x58);
 
-	x194 = std::exp((-4) * std::log(std::abs(x58)));
+	x194 = amrex::Math::powi<-4>(std::abs(x58));
 
 	x195 = std::exp((0.31788699999999998 * x193 * x52 - 2.1690299999999998 * x194 * x51 + 5.8888600000000002 * x60 + 2.2506900000000001 * x62 +
 			 7.1969200000000004 * x71 - 56.473700000000001) *
@@ -2813,7 +2815,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 			   8.1576000000000009e-11 * std::exp((-0.60399999999999998) * std::log(std::abs(T))) * x173)
 			: (0)) -
 	     X(2) * x179 *
-		 (-0.87659414490283338 * x175 * x177 * x7 + 5.1485802679346868 * x176 * std::exp((1.0) * std::log(std::abs(x48))) * x7 -
+		 (-0.87659414490283338 * x175 * x177 * x7 + 5.1485802679346868 * x176 * amrex::Math::powi<1>(std::abs(x48)) * x7 -
 		  3.5068370966299316 * x216) +
 	     X(3) * X(5) * x208 - 2.4999999999999998e-6 * X(3) * X(6) * x209 +
 	     X(5) * X(8) *
@@ -2872,11 +2874,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x12 = ((x8) * (x8) * (x8) * (x8) * (x8));
 
-	x13 = std::exp((6) * std::log(std::abs(x8)));
+	x13 = amrex::Math::powi<6>(std::abs(x8));
 
 	x14 = ((x8) * (x8) * (x8) * (x8) * (x8) * (x8) * (x8));
 
-	x15 = std::exp((8) * std::log(std::abs(x8)));
+	x15 = amrex::Math::powi<8>(std::abs(x8));
 
 	x16 = std::exp(0.01623316639567 * x10 - 0.033650120313629989 * x11 + 0.01178329782711 * x12 - 0.001656194699504 * x13 + 0.0001068275202678 * x14 -
 		       2.6312858092069998e-6 * x15 - 0.28274430617039997 * x9);
@@ -3030,9 +3032,9 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x12 = x10 * x11;
 
-	x13 = std::exp((-3.0) * std::log(std::abs(x9)));
+	x13 = amrex::Math::powi<-3>(std::abs(x9));
 
-	x14 = std::exp((-2.0) * std::log(std::abs(x9)));
+	x14 = amrex::Math::powi<-2>(std::abs(x9));
 
 	x15 = ((x11) * (x11));
 
@@ -3043,7 +3045,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x18 = 9.8726896031426014e-7 * std::exp((-0.5) * std::log(std::abs(T)));
 
-	x19 = std::exp((-2) * std::log(std::abs(x9)));
+	x19 = amrex::Math::powi<-2>(std::abs(x9));
 
 	x20 = 1.3700000000000002e-10 * ((x11) * (x11)) * x19 - 8.4600000000000008e-10 * x12 - 4.1700000000000001e-10;
 
@@ -3100,7 +3102,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 			  8.1576000000000009e-11 * std::exp((-0.60399999999999998) * std::log(std::abs(T))) * x7)
 		       : (0)) -
 	     X(2) * x17 *
-		 (5.1485802679346868 * x1 * std::exp((1.0) * std::log(std::abs(x11))) * x14 - 0.87659414490283338 * x1 * x13 * x15 - 3.5068370966299316 * x21) +
+		 (5.1485802679346868 * x1 * amrex::Math::powi<1>(std::abs(x11)) * x14 - 0.87659414490283338 * x1 * x13 * x15 - 3.5068370966299316 * x21) +
 	     X(4) * X(8) * (2.7400000000000004e-10 * x1 * x11 * x19 - 8.4600000000000008e-10 * x21) + 4.5700000000000003e-7 * X(1) * X(10) * x2 / ((T) * (T))) /
 	    (X(0) * x23 + X(1) * x23 + X(10) * x24 + X(11) * x23 + X(12) * x23 + X(13) * x23 + X(2) * x23 + X(3) * x23 + X(4) * x23 + X(5) * x23 + X(6) * x24 +
 	     X(7) * x23 + X(8) * x24 + X(9) * x24);
@@ -3137,9 +3139,9 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x14 = x12 * x13;
 
-	x15 = std::exp((-3.0) * std::log(std::abs(x11)));
+	x15 = amrex::Math::powi<-3>(std::abs(x11));
 
-	x16 = std::exp((-2.0) * std::log(std::abs(x11)));
+	x16 = amrex::Math::powi<-2>(std::abs(x11));
 
 	x17 = ((x13) * (x13));
 
@@ -3150,7 +3152,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x20 = 6.1739095063118665e-10 * std::exp((0.40999999999999998) * std::log(std::abs(T)));
 
-	x21 = std::exp((-2) * std::log(std::abs(T)));
+	x21 = amrex::Math::powi<-2>(std::abs(T));
 
 	x22 = 5.25e-11 * std::exp(173900.0 * x21 - 4430.0 * x7);
 
@@ -3168,7 +3170,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x28 = amrex::Math::powi<-5>(x11);
 
-	x29 = std::exp((-4) * std::log(std::abs(x11)));
+	x29 = amrex::Math::powi<-4>(std::abs(x11));
 
 	x30 = ((((x13) * (x13))) * (((x13) * (x13))));
 
@@ -3176,7 +3178,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x32 = ((x13) * (x13) * (x13));
 
-	x33 = std::exp((-2) * std::log(std::abs(x11)));
+	x33 = amrex::Math::powi<-2>(std::abs(x11));
 
 	x34 = ((x13) * (x13));
 
@@ -3243,7 +3245,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 			  4.8987999999999998e-17 * std::exp((0.47999999999999998) * std::log(std::abs(T))))
 		       : (0)) -
 	     X(1) * x19 *
-		 (5.1485802679346868 * std::exp((1.0) * std::log(std::abs(x13))) * x16 * x7 - 0.87659414490283338 * x15 * x17 * x7 - 3.5068370966299316 * x41) -
+		 (5.1485802679346868 * amrex::Math::powi<1>(std::abs(x13)) * x16 * x7 - 0.87659414490283338 * x15 * x17 * x7 - 3.5068370966299316 * x41) -
 	     3.9837168574084181e-7 * X(1) * x39 + X(10) * X(2) * ((x23) ? (x22 * (4430.0 * x21 - 347800.0 / ((T) * (T) * (T)))) : (0)) +
 	     X(2) * X(4) *
 		 ((x9) ? (6.7980000000000007e-9 * std::exp((-1.6040000000000001) * std::log(std::abs(T))) * x25 -
@@ -3286,7 +3288,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x11 = ((x7) * (x7) * (x7));
 
-	x12 = std::exp((-2) * std::log(std::abs(x8)));
+	x12 = amrex::Math::powi<-2>(std::abs(x8));
 
 	x13 = ((x7) * (x7));
 
@@ -3302,7 +3304,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x19 = ((x7) * (x7) * (x7) * (x7) * (x7));
 
-	x20 = std::exp((6) * std::log(std::abs(x7)));
+	x20 = amrex::Math::powi<6>(std::abs(x7));
 
 	x21 = x17 * (3.4172804999999998e-8 * x11 - 1.4491368e-7 * x13 - 4.7813727999999997e-9 * x18 + 3.9731542e-10 * x19 - 1.8171411000000001e-11 * x20 +
 		     3.5311931999999998e-13 * ((x7) * (x7) * (x7) * (x7) * (x7) * (x7) * (x7)) + 3.3735381999999997e-7 * x7 - 3.3232183000000002e-7);
@@ -3462,7 +3464,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x12 = ((x8) * (x8) * (x8) * (x8) * (x8));
 
-	x13 = std::exp((6) * std::log(std::abs(x8)));
+	x13 = amrex::Math::powi<6>(std::abs(x8));
 
 	x14 = x7 * (3.4172804999999998e-8 * x10 - 4.7813727999999997e-9 * x11 + 3.9731542e-10 * x12 - 1.8171411000000001e-11 * x13 +
 		    3.5311931999999998e-13 * ((x8) * (x8) * (x8) * (x8) * (x8) * (x8) * (x8)) + 3.3735381999999997e-7 * x8 - 1.4491368e-7 * x9 -
@@ -3488,7 +3490,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x24 = 1.0 / x23;
 
-	x25 = std::exp((-2) * std::log(std::abs(x23)));
+	x25 = amrex::Math::powi<-2>(std::abs(x23));
 
 	x26 = std::exp((-1.6200000000000001 * ((x22) * (x22)) * x25 + 1.3 * x22 * x24 - 4.8449999999999998) * std::log(std::abs(10.0)));
 
@@ -3496,7 +3498,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x28 = x27 + 1.0;
 
-	x29 = std::exp((-2) * std::log(std::abs(x28)));
+	x29 = amrex::Math::powi<-2>(std::abs(x28));
 
 	x30 = 1.0 * x29;
 
@@ -3672,7 +3674,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x114 = x113 * (-x103 * (x105 * x108 + x110 * x112) - x74 * (x76 * x80 + x82 * x84)) + x31 * x47 - x47 * x49;
 
-	x115 = std::exp((-2) * std::log(std::abs(T)));
+	x115 = amrex::Math::powi<-2>(std::abs(T));
 
 	x116 = 5.25e-11 * std::exp(-4430.0 * x0 + 173900.0 * x115);
 
@@ -3710,7 +3712,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x131 = amrex::Math::powi<-5>(x23);
 
-	x132 = std::exp((-4) * std::log(std::abs(x23)));
+	x132 = amrex::Math::powi<-4>(std::abs(x23));
 
 	x133 = std::exp((-2.1690299999999998 * x11 * x132 + 0.31788699999999998 * x12 * x131 + 7.1969200000000004 * x50 + 5.8888600000000002 * x61 +
 			 2.2506900000000001 * x64 - 56.473700000000001) *
@@ -3869,9 +3871,9 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x3 = 1.0 / x2;
 
-	x4 = std::exp((-3.0) * std::log(std::abs(x2)));
+	x4 = amrex::Math::powi<-3>(std::abs(x2));
 
-	x5 = std::exp((-2.0) * std::log(std::abs(x2)));
+	x5 = amrex::Math::powi<-2>(std::abs(x2));
 
 	x6 = ((x1) * (x1));
 
@@ -3884,7 +3886,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x10 = 1.0 / T;
 
-	x11 = 5.1485802679346868 * std::exp((1.0) * std::log(std::abs(x1))) * x10 * x5 - 3.5068370966299316 * x10 * x3 - 0.87659414490283338 * x10 * x4 * x6;
+	x11 = 5.1485802679346868 * amrex::Math::powi<1>(std::abs(x1)) * x10 * x5 - 3.5068370966299316 * x10 * x3 - 0.87659414490283338 * x10 * x4 * x6;
 
 	x12 = 1.0 / (9.1093818800000008e-28 * X(0) + 1.6726215800000001e-24 * X(1) + 5.01956503638e-24 * X(10) + 6.6902431600000005e-24 * X(11) +
 		     6.6911540981899994e-24 * X(12) + 6.6920650363799998e-24 * X(13) + 1.6735325181900001e-24 * X(2) + 1.6744434563800001e-24 * X(3) +
@@ -3935,7 +3937,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x3 = 2.6534040307116387e-9 * std::exp((-0.10000000000000001) * std::log(std::abs(T)));
 
-	x4 = std::exp((-2) * std::log(std::abs(T)));
+	x4 = amrex::Math::powi<-2>(std::abs(T));
 
 	x5 = 5.25e-11 * std::exp(-4430.0 * x0 + 173900.0 * x4);
 
@@ -3951,7 +3953,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x11 = x10 * x9;
 
-	x12 = std::exp((-2) * std::log(std::abs(x8)));
+	x12 = amrex::Math::powi<-2>(std::abs(x8));
 
 	x13 = ((x10) * (x10));
 
@@ -3961,7 +3963,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x16 = amrex::Math::powi<-5>(x8);
 
-	x17 = std::exp((-4) * std::log(std::abs(x8)));
+	x17 = amrex::Math::powi<-4>(std::abs(x8));
 
 	x18 = ((((x10) * (x10))) * (((x10) * (x10))));
 
@@ -4056,12 +4058,12 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x12 = ((x8) * (x8) * (x8) * (x8) * (x8));
 
-	x13 = std::exp((6) * std::log(std::abs(x8)));
+	x13 = amrex::Math::powi<6>(std::abs(x8));
 
 	x14 = ((x8) * (x8) * (x8) * (x8) * (x8) * (x8) * (x8));
 
 	x15 = std::exp(4.7016264867590021 * x10 - 0.76924663344919997 * x11 + 0.081130420973029999 * x12 - 0.005324020628287001 * x13 +
-		       0.00019757053122209999 * x14 - 3.1655810656650001e-6 * std::exp((8) * std::log(std::abs(x8))) - 18.480669935680002 * x9);
+		       0.00019757053122209999 * x14 - 3.1655810656650001e-6 * amrex::Math::powi<8>(std::abs(x8)) - 18.480669935680002 * x9);
 
 	x16 = X(12) * x15;
 
@@ -4159,11 +4161,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x18 = ((x14) * (x14) * (x14) * (x14) * (x14));
 
-	x19 = std::exp((6) * std::log(std::abs(x14)));
+	x19 = amrex::Math::powi<6>(std::abs(x14));
 
 	x20 = ((x14) * (x14) * (x14) * (x14) * (x14) * (x14) * (x14));
 
-	x21 = std::exp((8) * std::log(std::abs(x14)));
+	x21 = amrex::Math::powi<8>(std::abs(x14));
 
 	x22 = std::exp(-10.753230200000001 * x15 + 3.0580387500000001 * x16 - 0.56851189000000002 * x17 + 0.067953912300000002 * x18 - 0.0050090561 * x19 +
 		       0.000206723616 * x20 - 3.6491614100000001e-6 * x21);
@@ -4283,11 +4285,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x10 = ((x6) * (x6) * (x6) * (x6) * (x6));
 
-	x11 = std::exp((6) * std::log(std::abs(x6)));
+	x11 = amrex::Math::powi<6>(std::abs(x6));
 
 	x12 = ((x6) * (x6) * (x6) * (x6) * (x6) * (x6) * (x6));
 
-	x13 = std::exp(0.067953912300000002 * x10 - 0.0050090561 * x11 + 0.000206723616 * x12 - 3.6491614100000001e-6 * std::exp((8) * std::log(std::abs(x6))) -
+	x13 = std::exp(0.067953912300000002 * x10 - 0.0050090561 * x11 + 0.000206723616 * x12 - 3.6491614100000001e-6 * amrex::Math::powi<8>(std::abs(x6)) -
 		       10.753230200000001 * x7 + 3.0580387500000001 * x8 - 0.56851189000000002 * x9);
 
 	x14 = X(13) * x13;
@@ -4461,7 +4463,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x47 = 1.0 / x5;
 
-	x48 = std::exp((-2) * std::log(std::abs(T)));
+	x48 = amrex::Math::powi<-2>(std::abs(T));
 
 	x49 = std::exp(-160000.0 * x48);
 
@@ -4579,7 +4581,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x101 = 1.0 / x100;
 
-	x102 = std::exp((-2) * std::log(std::abs(x100)));
+	x102 = amrex::Math::powi<-2>(std::abs(x100));
 
 	x103 = std::exp((1.3 * x101 * x99 - 1.6200000000000001 * x102 * ((x99) * (x99)) - 4.8449999999999998) * std::log(std::abs(10.0)));
 
@@ -4717,7 +4719,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x168 = std::log(((x167) ? (10000.0) : (T)));
 
-	x169 = std::exp((-4) * std::log(std::abs(x100)));
+	x169 = amrex::Math::powi<-4>(std::abs(x100));
 
 	x170 = ((((x168) * (x168))) * (((x168) * (x168))));
 
@@ -4753,7 +4755,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x186 = x134 * x172;
 
-	x187 = std::exp((-8) * std::log(std::abs(x100)));
+	x187 = amrex::Math::powi<-8>(std::abs(x100));
 
 	x188 = x170 * x187;
 
@@ -4763,7 +4765,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x191 = x170 * x189;
 
-	x192 = std::exp((-6) * std::log(std::abs(x100)));
+	x192 = amrex::Math::powi<-6>(std::abs(x100));
 
 	x193 = x172 * x192;
 
@@ -4999,7 +5001,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x283 = X(2) * x282;
 
-	x284 = std::exp((8) * std::log(std::abs(x240)));
+	x284 = amrex::Math::powi<8>(std::abs(x240));
 
 	x285 = x187 * x284;
 
@@ -5007,7 +5009,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
 	x287 = x189 * x286;
 
-	x288 = std::exp((6) * std::log(std::abs(x240)));
+	x288 = amrex::Math::powi<6>(std::abs(x240));
 
 	x289 = x192 * x288;
 
@@ -5536,7 +5538,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
     x407 = x406 * (x145 * (x388 * x391 + x393 * x395) + x164 * (x397 * x400 + x402 * x404));
 
-    x408 = std::exp((-2) * std::log(std::abs(x105)));
+    x408 = amrex::Math::powi<-2>(std::abs(x105));
 
     x409 = x408 * std::log(x113);
 
@@ -5546,9 +5548,9 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const PrimordialRhsState &state,
 
     x412 = std::log(x98);
 
-    x413 = std::exp((-2) * std::log(std::abs(0.5 * X(1) + 0.5 * X(10) + 0.5 * X(2) + 0.5 * X(3) + 0.5 * X(9) + x202)));
+    x413 = amrex::Math::powi<-2>(std::abs(0.5 * X(1) + 0.5 * X(10) + 0.5 * X(2) + 0.5 * X(3) + 0.5 * X(9) + x202));
 
-    x414 = std::exp((-2) * std::log(std::abs(x55 + 9.9999999999999995e-7)));
+    x414 = amrex::Math::powi<-2>(std::abs(x55 + 9.9999999999999995e-7));
 
     x415 = -1.4139207259499998e-18 * X(2) * X(3) * x413 * x414 * x47 * x53 * x88 * x90 - 4.3979743826999997e-28 * X(2) * X(6) * x413 * x414 * x47 * x53 -
 	   1.7944376352000002e-18 * X(8) * x413 * x414 * x47 * x53 * x86 * x87 - 7.1777505408000004e-12 * x103 * x108 * x115 * x408 * x412 * x97 + x407 + x411 -
