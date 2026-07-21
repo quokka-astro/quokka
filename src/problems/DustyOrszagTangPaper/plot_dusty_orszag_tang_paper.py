@@ -59,6 +59,8 @@ plt.rcParams.update({
     "ytick.right": False,
     "xtick.minor.visible": False,
     "ytick.minor.visible": False,
+    "xtick.minor.size": 0.0,
+    "ytick.minor.size": 0.0,
     "axes.formatter.use_mathtext": True,
     "savefig.bbox": "tight",
     "savefig.pad_inches": 0.03,
