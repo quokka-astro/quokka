@@ -2,29 +2,15 @@ if(AMReX_SPACEDIM EQUAL 3)
   # Define a custom target that runs the Python script to produce the input
   # perturbations file
 
-  set(microphysics_network_name "primordial_chem") # this will override
-                                                   # network_name to
-                                                   # primordial_chem for this
-                                                   # directory only
-  setup_target_for_microphysics_compilation(${microphysics_network_name}
-                                            "${CMAKE_CURRENT_BINARY_DIR}/"
-                                            "Rosenbrock")
-
-  # use the BEFORE keyword so that these files get priority in compilation for
-  # targets in this directory this is critical to ensure the correct
-  # Microphysics files are linked to primordial chem target
-  include_directories(
-    BEFORE ${primordial_chem_dirs} "${CMAKE_CURRENT_BINARY_DIR}/"
-    "includes/extern_parameters.H" "includes/network_properties.H")
-
   set(JOB_NAME PopIII)
 
   add_executable(
     ${JOB_NAME}
     testPopIII.cpp "${QuokkaSourcesNoEOS}" ../../turbulence/TurbDataReader.cpp
-    ../../chemistry/Chemistry.cpp ${primordial_chem_sources})
-  target_compile_definitions(${JOB_NAME} PUBLIC CHEMISTRY) # this will add
-                                                           # #define CHEMISTRY
+    ../../chemistry/Chemistry.cpp)
+  # This will add #define CHEMISTRY.
+  target_compile_definitions(${JOB_NAME} PUBLIC CHEMISTRY)
+  target_link_libraries(${JOB_NAME} PRIVATE quokka::primordial_chem)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})

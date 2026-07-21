@@ -72,7 +72,6 @@ namespace filesystem = experimental::filesystem;
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
-#include "eos.H"
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
 #include "hyperbolic_system.hpp"
@@ -265,19 +264,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		defineDefaultPlotfileVariables();
 		// read in runtime parameters
 		readParmParse();
-		// set gamma
-		amrex::ParmParse eos("eos");
-		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
-		// initialize Microphysics params
-		init_extern_parameters();
-#if defined(PHOTOCHEMISTRY) || defined(CHEMISTRY)
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!integrator_rp::subtract_internal_energy,
-						 "integrator.subtract_internal_energy must be 0: Quokka reads total energy from burn_t::e, not the delta");
-#endif
-		// initialize Microphysics EOS
-		amrex::Real small_temp = 1e-10;
-		amrex::Real small_dens = 1e-100;
-		eos_init(small_temp, small_dens);
 		if constexpr (Physics_Traits<problem_t>::resistivity_model != ResistivityModel::none) {
 			const bool resistivity_active =
 			    (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) || (mhdResistivity_ != 0.0);
@@ -1126,7 +1112,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 #ifdef CHEMISTRY
 		if (enableChemistry_ == 1) {
 			// compute chemistry
-			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+			burn_success =
+			    quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed, userData_.small_temp);
 		}
 #endif
 	};
@@ -3278,7 +3265,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 #endif
 			}
 			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, 1, max_density_allowed,
-										 min_density_allowed);
+										 min_density_allowed, userData_.small_temp);
 		}
 #endif
 

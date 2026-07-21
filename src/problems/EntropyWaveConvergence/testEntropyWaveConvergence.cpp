@@ -13,7 +13,6 @@
 #include <array>
 #include <cassert>
 #include <cmath>
-#include <gcem.hpp>
 #include <iostream>
 
 #include "AMReX_Array.H"

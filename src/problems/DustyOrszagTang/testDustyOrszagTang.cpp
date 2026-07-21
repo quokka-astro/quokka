@@ -4,11 +4,11 @@
 #include "AMReX_Gpu.H"
 #include "AMReX_ParmParse.H"
 #include "QuokkaSimulation.hpp"
+#include "math/constexpr_math.hpp"
 #include <algorithm>
 #include <cmath>
 #include <format>
 #include <fstream>
-#include <gcem.hpp>
 #include <limits>
 #include <numbers>
 #include <string>
@@ -21,7 +21,7 @@ namespace
 {
 constexpr double pi = std::numbers::pi;
 constexpr double gamma_gas = 5.0 / 3.0;
-constexpr double inv_sqrt_4pi = 1.0 / gcem::sqrt(4.0 * pi);
+constexpr double inv_sqrt_4pi = 1.0 / quokka::math::sqrt(4.0 * pi);
 constexpr double rho_gas0 = 25.0 / (36.0 * pi);
 constexpr double pressure0 = 5.0 / (12.0 * pi);
 constexpr double stopping_time0 = 0.1;

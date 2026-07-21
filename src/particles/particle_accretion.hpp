@@ -5,7 +5,6 @@
 #include "AMReX_BLProfiler.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
-#include "gcem.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
@@ -121,7 +120,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 
 	// Compute the accretion rate in the accretion zone,
 	// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 cf^2), where lambda = exp(3/2) / 4
-	constexpr double lambda = gcem::exp(1.5) / 4.0;
+	constexpr double lambda = 1.1204222675845161; // exp(3/2) / 4
 	AMREX_ASSERT(rho_infty > 0.0);
 	const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cf_infty_sqr);
 	AMREX_ASSERT(M_dot >= 0.0);

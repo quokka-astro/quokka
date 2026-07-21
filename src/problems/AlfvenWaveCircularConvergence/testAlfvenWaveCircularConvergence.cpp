@@ -11,7 +11,6 @@
 #include <cassert>
 #include <cmath>
 #include <format>
-#include <gcem.hpp>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -21,6 +20,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
+#include "math/constexpr_math.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 #include "util/richardson.hpp"
@@ -57,9 +57,9 @@ constexpr double bg_mag_amplitude = 1.0;
 
 // magnetic field properties
 constexpr double delta_b = 1e-6;
-constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
+constexpr double alfven_speed = bg_mag_amplitude / quokka::math::sqrt(bg_density);
 
-constexpr double omega = gcem::sqrt(gcem::pow(alfven_speed, 2.0) * gcem::pow(k_amplitude, 2.0));
+constexpr double omega = quokka::math::sqrt((alfven_speed * alfven_speed) * (k_amplitude * k_amplitude));
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double x1, double /*x2*/, double x3, double time) -> double
 {

@@ -58,7 +58,7 @@ Presets: `1d`, `2d`, `3d`, `1d-debug`, `2d-debug`, `3d-debug`, `1d-hip`, `2d-hip
 
 ## Key Dependencies
 - **AMReX**: Underlying AMR framework (external submodule)
-- **Microphysics**: Nuclear reaction networks (external submodule)
+- **Chemistry**: Quokka-owned photoionization and primordial network modules with a vendored Rosenbrock integrator
 - **fmt, yaml-cpp**: Formatting and configuration parsing
 - **HDF5**: I/O backend
 - **OpenPMD-api**: Optional for large-scale output

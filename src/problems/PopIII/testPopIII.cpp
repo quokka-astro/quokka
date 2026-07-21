@@ -25,18 +25,17 @@
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
+#include "networks/primordial_chem/PrimordialChemNetwork.hpp"
 #include "radiation/radiation_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
-
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
 
 using amrex::Real;
 
 struct PopIII {
 };
+
+using PrimordialChemNetwork = quokka::chemistry::PrimordialChemNetwork;
+constexpr int NumSpec = PrimordialChemNetwork::species_count;
 
 template <> struct HydroSystem_Traits<PopIII> {
 	static constexpr bool reconstruct_eint = true;
@@ -86,9 +85,6 @@ template <> struct SimulationData<PopIII> {
 template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 {
 
-	// initialize microphysics routines
-	init_extern_parameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("primordial_chem");
 	userData_.small_temp = 1e1;
@@ -129,9 +125,6 @@ template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 	pp.query("primary_species_12", userData_.primary_species_12);
 	pp.query("primary_species_13", userData_.primary_species_13);
 	pp.query("primary_species_14", userData_.primary_species_14);
-
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 
 	static bool isSamplingDone = false;
 	if (!isSamplingDone) {
@@ -255,26 +248,22 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
-		eos_t state;
 		amrex::Real rhotot = 0.0;
 
 		for (int n = 0; n < NumSpec; ++n) {
-			state.xn[n] = numdens[n] * numdens_init;
-			rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+			rhotot += numdens[n] * numdens_init * PrimordialChemNetwork::species_masses[n];
 		}
 
 		// normalize -- just in case
 		std::array<Real, NumSpec> mfracs = {-1.0};
 		Real msum = 0.0;
 		for (int n = 0; n < NumSpec; ++n) {
-			mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
+			mfracs[n] = numdens[n] * numdens_init * PrimordialChemNetwork::species_masses[n] / rhotot;
 			msum += mfracs[n];
 		}
 
 		for (int n = 0; n < NumSpec; ++n) {
 			mfracs[n] /= msum;
-			// use the normalized mass fractions to obtain the corresponding number densities
-			state.xn[n] = mfracs[n] * rhotot / spmasses[n];
 		}
 
 		// amrex::Print() << "cell " << i << j << k << " " << rhotot << " " << numdens_init << " " << numdens[0] << std::endl;
@@ -285,10 +274,14 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 		double vy = renorm_amp * dvy(i, j, k);
 		double const vz = renorm_amp * dvz(i, j, k);
 
-		// calculate eos params for the core
-		state.rho = rhotot;
-		state.T = core_temp;
-		eos(eos_input_rt, state);
+		amrex::GpuArray<Real, NumSpec> massScalars{};
+		for (int n = 0; n < NumSpec; ++n) {
+			massScalars[n] = mfracs[n] * rhotot;
+		}
+		const amrex::Real corePressure =
+		    quokka::EOS<PopIII>::ComputePressure(rhotot, quokka::EOS<PopIII>::ComputeEintFromTgas(rhotot, core_temp, massScalars), massScalars);
+		amrex::Real density = rhotot;
+		amrex::Real internalEnergy = quokka::EOS<PopIII>::ComputeEintFromTgas(density, core_temp, massScalars);
 
 		if (r <= R_sphere) {
 			// add rotation to vx and vy
@@ -297,28 +290,25 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 
 		} else {
 			// re-calculate eos params outside the core, using pressure equilibrium (so, pressure within the core = pressure outside)
-			state.rho = 0.01 * rhotot;
-			state.p = state.p;
-			eos(eos_input_rp, state);
+			density = 0.01 * rhotot;
+			for (int n = 0; n < NumSpec; ++n) {
+				massScalars[n] = mfracs[n] * density;
+			}
+			internalEnergy = quokka::EOS<PopIII>::ComputeEintFromPres(density, corePressure, massScalars);
 		}
 
-		// call the EOS to set initial internal energy e
-		amrex::Real const e = state.rho * state.e;
-
-		// amrex::Print() << "cell " << i << j << k << " " << state.rho << " " << state.T << " " << e << std::endl;
-
-		state_cc(i, j, k, HydroSystem<PopIII>::density_index) = state.rho;
-		state_cc(i, j, k, HydroSystem<PopIII>::x1Momentum_index) = state.rho * vx;
-		state_cc(i, j, k, HydroSystem<PopIII>::x2Momentum_index) = state.rho * vy;
-		state_cc(i, j, k, HydroSystem<PopIII>::x3Momentum_index) = state.rho * vz;
-		state_cc(i, j, k, HydroSystem<PopIII>::internalEnergy_index) = e;
+		state_cc(i, j, k, HydroSystem<PopIII>::density_index) = density;
+		state_cc(i, j, k, HydroSystem<PopIII>::x1Momentum_index) = density * vx;
+		state_cc(i, j, k, HydroSystem<PopIII>::x2Momentum_index) = density * vy;
+		state_cc(i, j, k, HydroSystem<PopIII>::x3Momentum_index) = density * vz;
+		state_cc(i, j, k, HydroSystem<PopIII>::internalEnergy_index) = internalEnergy;
 
 		static_assert(!Physics_Traits<PopIII>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		Real const Egas = quokka::EOS<PopIII>::ComputeEgasFromEint(state.rho, state.rho * vx, state.rho * vy, state.rho * vz, e, 0.0);
+		Real const Egas = quokka::EOS<PopIII>::ComputeEgasFromEint(density, density * vx, density * vy, density * vz, internalEnergy, 0.0);
 		state_cc(i, j, k, HydroSystem<PopIII>::energy_index) = Egas;
 
 		for (int nn = 0; nn < NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<PopIII>::scalar0_index + nn) = mfracs[nn] * state.rho; // we use partial densities and not mass fractions
+			state_cc(i, j, k, HydroSystem<PopIII>::scalar0_index + nn) = mfracs[nn] * density; // we use partial densities and not mass fractions
 		}
 	});
 }

@@ -13,11 +13,11 @@
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
+#include "math/constexpr_math.hpp"
 #include "math/interpolate.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <format>
-#include <gcem.hpp>
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -38,8 +38,8 @@ struct AccretionProblem {
 constexpr double T0 = 10.0;
 constexpr double mu = 2.33 * C::m_p;
 constexpr double k_B = C::k_B;
-constexpr double cs0 = gcem::sqrt(k_B * T0 / mu); // = 18821.95750 cm / s for T = 10 K
-constexpr double B0 = 1.0e-7;			  // constant background field [Gauss-equivalent units]
+constexpr double cs0 = quokka::math::sqrt(k_B * T0 / mu); // = 18821.95750 cm / s for T = 10 K
+constexpr double B0 = 1.0e-7;				  // constant background field [Gauss-equivalent units]
 
 double rho0 = C::m_p;				 // NOLINT
 double t_end_over_t_b = 10.0;			 // NOLINT
@@ -551,7 +551,7 @@ auto problem_main() -> int
 			const Real cf_sqr = cs0 * cs0 * (1.0 + 2.0 / beta);
 			const Real v_infty_sqr = 0.0;
 			const Real r_BH_mhd = C::Gconst * M_star_in_g / (v_infty_sqr + cf_sqr);
-			const Real lambda = gcem::exp(1.5) / 4.0;
+			constexpr Real lambda = 1.1204222675845161; // exp(3/2) / 4
 			// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 cf^2), where lambda = exp(3/2) / 4
 			Mdot_exact = 4.0 * M_PI * rho_bg * r_BH_mhd * r_BH_mhd * std::sqrt(v_infty_sqr + lambda * lambda * cf_sqr);
 			amrex::Print() << "Mdot_exact = " << Mdot_exact << "\n";

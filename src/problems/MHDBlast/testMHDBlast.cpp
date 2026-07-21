@@ -14,6 +14,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
+#include "math/constexpr_math.hpp"
 #include "radiation/radiation_system.hpp"
 
 struct MHDBlast {
@@ -74,8 +75,8 @@ template <> void QuokkaSimulation<MHDBlast>::setInitialConditionsOnGridFaceVars(
 	const quokka::direction dir = grid_elem.dir_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		constexpr double bx = 10. / gcem::sqrt(2.);
-		constexpr double by = 10. / gcem::sqrt(2.);
+		constexpr double bx = 10. / quokka::math::sqrt(2.);
+		constexpr double by = 10. / quokka::math::sqrt(2.);
 		constexpr double bz = 0;
 
 		if (dir == quokka::direction::x) {

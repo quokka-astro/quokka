@@ -14,6 +14,7 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "networks/photoionization/PhotoionizationNetwork.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include <algorithm>
@@ -22,14 +23,11 @@
 #include <limits>
 #include <string>
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
-
 struct StromgrenSphere {
 };
+
+using PhotoionizationNetwork = quokka::chemistry::PhotoionizationNetwork;
+constexpr int NumSpec = PhotoionizationNetwork::species_count;
 
 constexpr double c_hat = C::c_light / 1.0;
 constexpr double sigma_star_coeff = 1.5 / 16.0;
@@ -57,7 +55,7 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBands() { return PhotoionizationNetwork::chemistry_band_edges; }
 };
 
 template <>
@@ -181,9 +179,6 @@ template <> struct SimulationData<StromgrenSphere> {
 
 template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
 	userData_.small_temp = 1e-2;
@@ -206,9 +201,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 
 	amrex::ParmParse const pp2("network");
 	pp2.query("recombination_switch", userData_.recombination_switch);
-
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
@@ -234,7 +226,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
 	std::array<Real, NumSpec> numdens = {-1.0};
 	for (int n = 1; n <= NumSpec; ++n) {
 		switch (n) {
@@ -253,18 +244,13 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 		}
 	}
 
-	state.T = userData_.temperature;
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < NumSpec; ++n) {
-		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+		rhotot += numdens[n] * PhotoionizationNetwork::species_masses[n];
 	}
-	state.rho = rhotot;
-
-	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
-	const auto Egas0 = state.e * rhotot;
+	amrex::GpuArray<Real, NumSpec> const numberDensities = {numdens[0], numdens[1], numdens[2]};
+	const auto Egas0 = PhotoionizationNetwork::specific_energy_from_temperature(numberDensities, userData_.temperature) * rhotot;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -282,7 +268,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, RadSystem<StromgrenSphere>::x3GasMomentum_index) = 0.0_rt;
 		for (int nn = 0; nn < NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + nn) =
-			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			    numdens[nn] * PhotoionizationNetwork::species_masses[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
@@ -312,8 +298,8 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 		auto *hist_ptr = d_hist.data();
 
 		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const amrex::Real n_HI = state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + 1) / spmasses[1];
-			const amrex::Real n_HII = state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + 2) / spmasses[2];
+			const amrex::Real n_HI = state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + 1) / PhotoionizationNetwork::species_masses[1];
+			const amrex::Real n_HII = state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + 2) / PhotoionizationNetwork::species_masses[2];
 			const amrex::Real denom = n_HI + n_HII;
 			if (denom <= 0.0_rt) {
 				return;
