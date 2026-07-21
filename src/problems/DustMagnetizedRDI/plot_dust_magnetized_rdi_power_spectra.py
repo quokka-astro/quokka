@@ -59,6 +59,8 @@ plt.rcParams.update({
     "ytick.right": False,
     "xtick.minor.visible": False,
     "ytick.minor.visible": False,
+    "xtick.minor.size": 0.0,
+    "ytick.minor.size": 0.0,
     "axes.formatter.use_mathtext": True,
     "savefig.bbox": "tight",
     "savefig.pad_inches": 0.03,
@@ -199,7 +201,6 @@ def add_resolution_axis(ax: plt.Axes, resolution: int) -> None:
     top.set_xticks(ticks)
     top.set_xticklabels([f"{resolution // tick:g}" for tick in ticks])
     top.set_xlabel("cells per wavelength")
-    top.tick_params(axis="x", which="minor", top=False)
 
 
 def power_law_guide(ax: plt.Axes, k: np.ndarray, power: np.ndarray, start: int, stop: int, slope: float, label: str) -> None:

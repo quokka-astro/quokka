@@ -59,6 +59,8 @@ plt.rcParams.update({
     "ytick.right": False,
     "xtick.minor.visible": False,
     "ytick.minor.visible": False,
+    "xtick.minor.size": 0.0,
+    "ytick.minor.size": 0.0,
     "axes.formatter.use_mathtext": True,
     "savefig.bbox": "tight",
     "savefig.pad_inches": 0.03,
@@ -233,9 +235,9 @@ def make_sigma_evolution(
 
     all_series = tuple(series.values())
     # The t in these reference growth laws is code time, in units of L_box / c_s.
-    for fit_limits, draw_limits, rate, label in (
-        ((2.0, boundaries[1]), (3.4, 5.4), 1.0, r"$e^t$"),
-        ((boundaries[1], boundaries[2]), (6.5, 9.5), 0.1, r"$e^{0.1t}$"),
+    for fit_limits, draw_limits, rate, label, label_height in (
+        ((2.0, boundaries[1]), (3.4, 5.4), 1.0, r"$e^t$", 9.0),
+        ((boundaries[1], boundaries[2]), (6.5, 9.5), 0.1, r"$e^{0.1t}$", 3.0),
     ):
         fit_mask = (x_time >= fit_limits[0]) & (x_time < fit_limits[1])
         guide = 1.0e-2 * growth_guide(code_time, all_series, fit_mask, rate)
@@ -245,7 +247,7 @@ def make_sigma_evolution(
         ax.annotate(
             label,
             xy=(x_time[label_index], guide[label_index]),
-            xytext=(3.0, 3.0),
+            xytext=(3.0, label_height),
             textcoords="offset points",
             fontsize=8.0,
             color="black",
@@ -376,16 +378,16 @@ def stage_norms(
     slices: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
     value_index: int,
     *,
-    zero_minimum: bool,
+    logarithmic: bool,
 ) -> dict[str, colors.Normalize]:
     norms = {}
     for stage in STAGES:
         values = [slices[(stage, slice_tag)][value_index] for slice_tag in SLICE_TAGS]
-        vmin = 0.0 if zero_minimum else min(float(np.min(value)) for value in values)
+        vmin = min(float(np.min(value)) for value in values)
         vmax = max(float(np.max(value)) for value in values)
         if vmax == vmin:
             vmax = vmin + max(abs(vmin), 1.0) * 1.0e-12
-        norms[stage] = colors.Normalize(vmin=vmin, vmax=vmax)
+        norms[stage] = colors.LogNorm(vmin=vmin, vmax=vmax) if logarithmic else colors.Normalize(vmin=0.0, vmax=vmax)
     return norms
 
 
@@ -423,8 +425,8 @@ def make_stage_cubes(
     stages: dict[str, dict[str, float | str]],
     slices: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
 ) -> Path:
-    magnetic_norms = stage_norms(slices, 2, zero_minimum=True)
-    dust_norms = stage_norms(slices, 3, zero_minimum=False)
+    magnetic_norms = stage_norms(slices, 2, logarithmic=False)
+    dust_norms = stage_norms(slices, 3, logarithmic=True)
     fig = plt.figure(figsize=(DOUBLE_COLUMN_WIDTH, 5.0))
     grid = fig.add_gridspec(
         2,
@@ -445,7 +447,7 @@ def make_stage_cubes(
         bottom_cax = fig.add_subplot(grid[1, 2 * column + 1])
         for cax in (top_cax, bottom_cax):
             box = cax.get_position()
-            cax.set_position([box.x0, box.y0 + 0.18 * box.height, box.width, 0.64 * box.height])
+            cax.set_position([box.x0 - 0.012, box.y0 + 0.18 * box.height, box.width, 0.64 * box.height])
 
         magnetic_mesh = draw_cube(top_ax, summary, stage, slices, 2, "viridis", magnetic_norms[stage])
         top_ax.set_title(
@@ -454,11 +456,13 @@ def make_stage_cubes(
             y=0.98,
         )
         magnetic_cbar = fig.colorbar(magnetic_mesh, cax=top_cax)
+        magnetic_cbar.ax.tick_params(labelsize=6.5)
         if column == len(STAGES) - 1:
             magnetic_cbar.set_label(r"$|\mathbf{B}-\mathbf{B}_0|$")
 
-        dust_mesh = draw_cube(bottom_ax, summary, stage, slices, 3, "magma", dust_norms[stage])
+        dust_mesh = draw_cube(bottom_ax, summary, stage, slices, 3, "turbo", dust_norms[stage])
         dust_cbar = fig.colorbar(dust_mesh, cax=bottom_cax)
+        dust_cbar.ax.tick_params(labelsize=6.5)
         if column == len(STAGES) - 1:
             dust_cbar.set_label(r"$\rho_{\rm d}/\rho_{{\rm d},0}$")
 
@@ -528,13 +532,14 @@ def make_dust_density_pdf(
         summary_float(summary, "dust_density_floor"),
         bins,
     )
+    pdf_baseline = 0.5 * min(float(np.min(values[values > 0.0])) for values in pdfs.values())
     fig, ax = plt.subplots(figsize=(SINGLE_COLUMN_WIDTH, 2.7))
     fig.subplots_adjust(left=0.18, right=0.98, bottom=0.18, top=0.97)
     for stage in STAGES:
         ax.stairs(
             pdfs[stage],
             edges,
-            baseline=0.0,
+            baseline=pdf_baseline,
             fill=True,
             facecolor=STAGE_FILL_COLORS[stage],
             edgecolor="none",
@@ -545,9 +550,10 @@ def make_dust_density_pdf(
         print(f"{stage}: PDF integral = {integrals[stage]:.16f}")
         print(f"{stage}: dust-floor cell volume fraction = {floor_fractions[stage]:.16e}")
     ax.set_xlabel(r"$\ln(\rho_{\rm d}/\langle\rho_{\rm d}\rangle)$")
-    ax.set_ylabel(r"$\mathrm{PDF}\!\left(\ln(\rho_{\rm d}/\langle\rho_{\rm d}\rangle)\right)$")
-    ax.set_ylim(bottom=0.0)
-    ax.legend(loc="best")
+    ax.set_ylabel(r"$\mathrm{PDF}\left(\ln(\rho_{\rm d}/\langle\rho_{\rm d}\rangle)\right)$")
+    ax.set_yscale("log")
+    ax.set_ylim(bottom=pdf_baseline)
+    ax.legend(loc="upper right")
 
     output = output_dir / "dust_magnetized_rdi_dust_density_pdf.pdf"
     fig.savefig(output)
