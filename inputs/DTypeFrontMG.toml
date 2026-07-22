@@ -46,6 +46,12 @@ network.allow_mixed_cell_cooling = 0
 
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 
+# Relative-change convergence tolerance for the gas-radiation Newton-Raphson iteration. A small number
+# of cells (those with a specific small Etot0) reach a stable solution but limit-cycle just above the
+# absolute residual tolerance (1e-11); their (Egas, Erad) are unchanged to machine precision between
+# iterations, so accept convergence once the relative change falls below this. Disabled (-1) by default.
+radiation.iteration_tolerance_rel = 1.0e-8
+
 # VODE absolute tolerances. NOTE: these were tuned for the original DTypeFront at n_H = 139.9
 # cm^-3. This problem runs at n_H = 1e4 cm^-3 (~70x denser), so several atol values that are
 # expressed as absolute number densities (atol_spec, atol_rad_num, species/radiation failure

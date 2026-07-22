@@ -236,6 +236,79 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	double Egas_guess = Egas0;
 	auto EradVec_guess = Erad0Vec;
 
+	// Analytical initial guess for the gas temperature (and the corresponding per-group Erad), valid across
+	// all regimes (gas-dominated, radiation-dominated, and the transition). Seeding the Newton-Raphson
+	// iteration here -- rather than at (Egas0, Erad0Vec) -- avoids the wild first Newton step that otherwise
+	// occurs when a large source Src is deposited into a group starting far from equilibrium (which previously
+	// forced the enable_dE_constrain clamp to pin the gas to a meaningless floor T_rad and stall convergence).
+	//
+	// The full gas+radiation backward-Euler balance reduces to a single scalar equation in the gas
+	// temperature T (eliminating Erad_g and R_g analytically, with piecewise-constant kappaP = kappaE):
+	//   G(T) = Cv*(T - T0) + cscale * sum_g w_g * ( a_rad*T^4*frac_g(T) - E_avail_g ) = 0,
+	//   where w_g = tau0_g/(1+tau0_g),  E_avail_g = Erad0_g + Src_g,  T0 = Egas0/Cv,
+	//   and a_rad*T^4*frac_g(T) = ComputeThermalRadiationMultiGroup(T)[g].
+	// Freezing frac_g gives A*T^4 + Cv*T = K, i.e. the universal non-dimensional form x^4 + x = kappa
+	// (x = T/T*, T* = (Cv/A)^(1/3), kappa = K/(Cv*T*)). We solve that quartic and then take a few
+	// fixed-point steps re-evaluating frac_g(T) at the current estimate; this matches the true root to
+	// several significant figures in every regime. Only used for gamma != 1 (a real gas heat capacity).
+	if constexpr (gamma_ != 1.0) {
+		const double T0 = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
+		const double Cv = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T0, massScalars);
+		if (T0 > 0.0 && Cv > 0.0) {
+			// per-group coupling weights w_g = tau0_g/(1+tau0_g), using kappaP evaluated at T0
+			const auto fourPiBoverC_0 = ComputeThermalRadiationMultiGroup(T0, rad_boundaries);
+			const auto opacity_0 =
+			    ComputeModelDependentKappaEAndKappaP(T0, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC_0, EradVec_guess, 0);
+			quokka::valarray<double, nGroups_> w_g{};
+			quokka::valarray<double, nGroups_> E_avail{};
+			for (int g = 0; g < nGroups_; ++g) {
+				const double tau0_g = dt * rho * opacity_0.kappaP[g] * chat;
+				w_g[g] = tau0_g / (1.0 + tau0_g);
+				E_avail[g] = Erad0Vec[g] + Src[g];
+			}
+
+			// Fixed-point on frac_g(T): start with frac evaluated at T0, solve x^4 + x = kappa, re-evaluate.
+			double T_guess = T0;
+			for (int fp = 0; fp < 5; ++fp) {
+				const auto BgVec = ComputeThermalRadiationMultiGroup(T_guess, rad_boundaries); // = a_rad*T^4*frac_g(T)
+				const double aT4 = radiation_constant_ * T_guess * T_guess * T_guess * T_guess;
+				double A = 0.0;	  // coefficient of T^4 in Cv*T + A*T^4 = K
+				double K = Egas0; // right-hand side (total weighted available energy)
+				for (int g = 0; g < nGroups_; ++g) {
+					const double f_g = (aT4 > 0.0) ? (BgVec[g] / aT4) : 0.0; // Planck fraction in band g at T_guess
+					A += cscale * radiation_constant_ * w_g[g] * f_g;
+					K += cscale * w_g[g] * E_avail[g];
+				}
+				if (A <= 0.0) {
+					// no radiative coupling: pure gas thermal balance, T = K/Cv
+					T_guess = K / Cv;
+					break;
+				}
+				const double Tstar = std::cbrt(Cv / A);
+				const double kappa_nd = K / (Cv * Tstar);
+				// blended asymptotic seed for x^4 + x = kappa_nd, then a few Newton steps (monotonic in x)
+				double x = kappa_nd / (1.0 + std::pow(kappa_nd, 0.75));
+				for (int it = 0; it < 4; ++it) {
+					x -= (x * x * x * x + x - kappa_nd) / (4.0 * x * x * x + 1.0);
+				}
+				T_guess = x * Tstar;
+			}
+
+			if (T_guess > 0.0 && std::isfinite(T_guess)) {
+				Egas_guess = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_guess, massScalars);
+				// recover the per-group Erad from the closed form Erad_g = [tau0_g*B_g(T) + E_avail_g]/(1+tau0_g)
+				const auto BgVec = ComputeThermalRadiationMultiGroup(T_guess, rad_boundaries);
+				for (int g = 0; g < nGroups_; ++g) {
+					const double tau0_g = dt * rho * opacity_0.kappaP[g] * chat;
+					EradVec_guess[g] = (tau0_g * BgVec[g] + E_avail[g]) / (1.0 + tau0_g);
+					if (EradVec_guess[g] < Erad_floor_) {
+						EradVec_guess[g] = Erad_floor_;
+					}
+				}
+			}
+		}
+	}
+
 	double Egas_guess_prev = Egas_guess;
 	auto EradVec_guess_prev = EradVec_guess;
 
@@ -325,6 +398,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 						}
 					}
 				}
+			}
+		}
+
+		// Handle groups with negligible optical depth (e.g. chem/ionizing bands with zero opacity). When tau[g]
+		// is tiny, the emission/absorption term cannot cancel the source residual no matter how many iterations
+		// we run, and ComputeJacobianForGas already excludes these groups from Fg_abs_sum / freezes them with
+		// Jgg = -inf -- so their deposited source Src[g] would otherwise be silently dropped. Mirror the
+		// single-group solver (source_terms_single_group.hpp): deposit Src[g] directly, Erad_guess = Erad0 + Src.
+		// Criterion matches single-group: tau[g] * max(a_rad*T_gas^4, Etot0) < resid_tol * Etot0.
+		for (int g = 0; g < nGroups_; ++g) {
+			if (tau[g] * std::max(radiation_constant_ * std::pow(T_gas, 4), Etot0) < resid_tol * Etot0) {
+				EradVec_guess[g] = Erad0Vec[g] + Src[g];
 			}
 		}
 
