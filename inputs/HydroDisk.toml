@@ -10,8 +10,8 @@ amr.v = 2
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell = 256 256 256
-amr.blocking_factor = 32
-amr.max_grid_size   = 64
+amr.blocking_factor = 128
+amr.max_grid_size   = 256
 amr.max_level       = 3
 amr.n_error_buf     = 2
 amr.grid_eff        = 0.75
@@ -27,13 +27,13 @@ density_floor = 1.0e-32
 # Time integration
 # *****************************************************************
 cfl                 = 0.3
-max_timesteps       = 1e8
+max_timesteps       = 1e10
 stop_time           = 2.9652e15   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s
 # *****************************************************************
 # Output
 # *****************************************************************
-checkpoint_interval = 1000
-plotfile_interval   = 100
+checkpoint_interval = 16000
+plotfile_interval   = 8000
 derived_vars        = gpot pressure radius_sph radial_velocity circular_velocity mach
 # *****************************************************************
 # Physics
@@ -42,5 +42,8 @@ poisson_supercycle_interval = 5
 # *****************************************************************
 # Problem parameters (Table 1, Q1_M29)
 # *****************************************************************
-hd_galaxy.Q_mean    = 0.96
-hd_galaxy.Mc        = 28.6
+mhd_galaxy.Q_mean    = 0.96
+mhd_galaxy.Mc        = 28.6
+mhd_galaxy.sn_jeans_J              = 4.0
+mhd_galaxy.sn_remnant_fraction     = 0.5
+mhd_galaxy.sn_momentum             = 3.0e3
