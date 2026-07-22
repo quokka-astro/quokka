@@ -289,10 +289,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				    "Physical resistivity requires use_dual_energy = 0: Ohmic heating is not yet added to the auxiliary energy equation.");
 			}
 		}
-	if (enableElectronConduction_) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0,
-								 "AMR subcycling is not supported with conduction. Set do_subcycle = 0.");
-			}
+		if (enableElectronConduction_) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0, "AMR subcycling is not supported with conduction. Set do_subcycle = 0.");
+		}
 	}
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto densityFloor(amrex::Real x, amrex::Real y, amrex::Real z,

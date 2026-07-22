@@ -229,7 +229,6 @@ auto problem_main() -> int
 	// amrex::Print() << "Finished." << '\n';
 	// return 0;
 
-
 	/***Richardson Extrapolation ****/
 
 	quokka::richardson::applyQuietDefaults();
