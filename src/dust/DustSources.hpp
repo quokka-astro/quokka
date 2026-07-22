@@ -11,7 +11,7 @@
 #include "AMReX_SmallMatrix.H"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
-#include "util/ArrayView_3d.hpp"
+#include "util/ArrayView.hpp"
 #include <cmath>
 #include <numbers>
 
@@ -178,10 +178,10 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeReciprocalStoppingTime
 			continue;
 		}
 		// compute stopping time t_s with/without supersonic correction
-		amrex::Real t_s_sub = std::sqrt(M_PI * quokka::EOS_Traits<problem_t>::gamma) * dust_grain_radius[g] * dust_grain_density[g] /
+		amrex::Real t_s_sub = std::sqrt(M_PI * ::quokka::EOS_Traits<problem_t>::gamma) * dust_grain_radius[g] * dust_grain_density[g] /
 				      (2.0 * std::numbers::sqrt2 * rho_g * cs);
 		amrex::Real const correction = 1.0 + static_cast<int>(enable_supersonic_correction) *
-							 (9.0 * M_PI * quokka::EOS_Traits<problem_t>::gamma / 128.0) *
+							 (9.0 * M_PI * ::quokka::EOS_Traits<problem_t>::gamma / 128.0) *
 							 (rel_vel_mag[g] * rel_vel_mag[g] / (cs * cs));
 		amrex::Real const t_s_fin = t_s_sub / std::sqrt(correction);
 
@@ -207,8 +207,8 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeSoundSpeedFromGasState
 		AMREX_ALWAYS_ASSERT(rho_g > 0.0);
 		amrex::Real const kinetic_energy = 0.5 * gas_momentum_sq / rho_g;
 		amrex::Real const thermal_energy = E_tot_g - kinetic_energy - magnetic_energy;
-		amrex::Real const pressure = quokka::EOS<problem_t>::ComputePressure(rho_g, thermal_energy, massScalars);
-		return quokka::EOS<problem_t>::ComputeSoundSpeed(rho_g, pressure, massScalars);
+		amrex::Real const pressure = ::quokka::EOS<problem_t>::ComputePressure(rho_g, thermal_energy, massScalars);
+		return ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_g, pressure, massScalars);
 	}
 }
 

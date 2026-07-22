@@ -1,10 +1,13 @@
-if(AMReX_SPACEDIM GREATER_EQUAL 2)
+if(AMReX_SPACEDIM EQUAL 3)
   set(microphysics_network_name "photoionization") # this will override
                                                   # network_name to
                                                   # photoionization for this
                                                   # directory only
+  set(DTypeFront_INTEGRATOR "Rosenbrock" CACHE STRING "Microphysics integrator for DTypeFront")
+  set_property(CACHE DTypeFront_INTEGRATOR PROPERTY STRINGS VODE Rosenbrock)
   setup_target_for_microphysics_compilation(${microphysics_network_name}
-                                            "${CMAKE_CURRENT_BINARY_DIR}/")
+                                            "${CMAKE_CURRENT_BINARY_DIR}/"
+                                            "${DTypeFront_INTEGRATOR}")
 
   # use the BEFORE keyword so that these files get priority in compilation for
   # targets in this directory this is critical to ensure the correct Microphysics
@@ -87,15 +90,21 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
 
 
   add_executable(
-    ${JOB_NAME} testDTypeFront.cpp "${QuokkaSourcesNoEOS}"
+    ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
                 ../../radiation/photochemistry.cpp ${photoionization_sources})
 
   # this will add #define CHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
+  if(DTypeFront_INTEGRATOR STREQUAL "Rosenbrock")
+    target_compile_definitions(${JOB_NAME} PUBLIC DTYPEFRONT_USE_ROSENBROCK)
+  else()
+    target_compile_definitions(${JOB_NAME} PUBLIC DTYPEFRONT_USE_VODE)
+  endif()
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME DTypeFront COMMAND ${JOB_NAME} ../inputs/DTypeFront.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME}RadPres COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}RadPres.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

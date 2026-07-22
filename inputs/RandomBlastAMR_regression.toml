@@ -38,9 +38,7 @@ max_timesteps = 10000  # set to avoid running the simulation indefinitely
 dt_shrink = 0.01
 stop_time = 7.32505344665246e11
 
-cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
 
 problem.boost_velocity = [0.0, 0.0, 0.0]
