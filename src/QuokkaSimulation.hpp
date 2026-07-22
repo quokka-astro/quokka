@@ -1162,10 +1162,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 											     .saturation_factor = electronConductionSaturationFactor_,
-											     .min_temperature = tempFloor_,
-											     .eos_flag = eosFlagForElectronConduction_};
-			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_,
-											   heat_flux);
+											     .min_temperature = tempFloor_};
+			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
 			if (do_reflux) {
 				std::array<amrex::MultiFab, AMREX_SPACEDIM> recal_fluxes;
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
