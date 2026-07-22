@@ -160,7 +160,7 @@ auto problem_main() -> int
 	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
 							 [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	amrex::Real const m_radius_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
-							 [radius_index](double sum, const auto &particle) { return sum + particle[radius_index]; });
+							  [radius_index](double sum, const auto &particle) { return sum + particle[radius_index]; });
 	const double m_tot_init = m_gas_init + m_stars_init;
 
 	// get total gas mass after step 1
@@ -211,7 +211,7 @@ auto problem_main() -> int
 	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
 							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	amrex::Real const m_radius_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
-							 [radius_index](double sum, const auto &particle) { return sum + particle[radius_index]; });
+							   [radius_index](double sum, const auto &particle) { return sum + particle[radius_index]; });
 	const double m_tot_final = m_gas_final + m_stars_final;
 
 	// Check relative error in the accretion step and confirm mass is conserved to machine precision

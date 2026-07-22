@@ -358,8 +358,7 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 // amz, mdeut, n, mdot, radius) + nGroups luminosity slots + model-defined extras.
 template <typename problem_t>
 constexpr int StarParticleRealComps = StarParticleFixedComps + Physics_Traits<problem_t>::nGroups + Particle_Traits<problem_t>::stellar_model::nExtraReal;
-template <typename problem_t>
-constexpr int StarParticleIntComps = StarParticleFixedIntComps + Particle_Traits<problem_t>::stellar_model::nExtraInt;
+template <typename problem_t> constexpr int StarParticleIntComps = StarParticleFixedIntComps + Particle_Traits<problem_t>::stellar_model::nExtraInt;
 
 template <typename problem_t> using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
 template <typename problem_t> using StarParticleIterator = amrex::ParIter<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;

@@ -325,7 +325,7 @@ struct DeuteriumBurningStellarModel {
 		const amrex::Real mass = rdata[StarParticleMassIdx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 		amrex::Real mdeut = rdata[StarParticleMdeutIdx];     // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 		const amrex::Real mdot = rdata[StarParticleMdotIdx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-		amrex::Real n = rdata[StarParticleNIdx];	      // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		amrex::Real n = rdata[StarParticleNIdx];	     // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 		amrex::Real radius = StellarPhysics::rad_init(mdot);
 		auto burn_state = static_cast<burningState>(idata[StarParticleBurnStateIdx]); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
@@ -339,8 +339,8 @@ struct DeuteriumBurningStellarModel {
 			n = StellarPhysics::n_init(mdot);
 			burn_state = burningState::None;
 
-			rdata[StarParticleNIdx] = n;	      // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-			rdata[StarParticleRadiusIdx] = radius; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			rdata[StarParticleNIdx] = n;					// NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			rdata[StarParticleRadiusIdx] = radius;				// NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 			idata[StarParticleBurnStateIdx] = static_cast<int>(burn_state); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 		}
 
@@ -387,9 +387,9 @@ struct DeuteriumBurningStellarModel {
 		}
 
 		// Update particle data
-		rdata[StarParticleMdeutIdx] = mdeut;	      // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-		rdata[StarParticleNIdx] = n;		      // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-		rdata[StarParticleRadiusIdx] = radius;	      // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		rdata[StarParticleMdeutIdx] = mdeut;				// NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		rdata[StarParticleNIdx] = n;					// NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		rdata[StarParticleRadiusIdx] = radius;				// NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 		idata[StarParticleBurnStateIdx] = static_cast<int>(burn_state); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 	}
 

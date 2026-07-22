@@ -10,20 +10,20 @@ namespace quokka
 // Every Star particle has StarParticleFixedComps fixed scalars followed by
 // nGroups luminosity slots and model-defined extras (nExtraReal / nExtraInt).
 AMREX_ENUM(StarParticleDataIdx, // NOLINT
-	   mass,       // Mass of the particle
-	   vx,	       // Velocity in x direction
-	   vy,	       // Velocity in y direction
-	   vz,	       // Velocity in z direction
-	   birth_time, // Simulation time when the particle formed
-	   death_time, // Simulation time when the particle becomes inactive (-1 if unset)
-	   amx,	       // Angular momentum in x direction (accreted from gas)
-	   amy,	       // Angular momentum in y direction (accreted from gas)
-	   amz,	       // Angular momentum in z direction (accreted from gas)
-	   mdeut,      // Mass of gas that still contains deuterium
-	   n,	       // Polytropic index
-	   mdot,       // Current mass accretion rate (set by the accretion module)
-	   radius,     // Stellar radius (set by the stellar-evolution model)
-	   lum	       // Base index for luminosity components (MUST be last; expands to lum_0, lum_1, ... for nGroups)
+	   mass,		// Mass of the particle
+	   vx,			// Velocity in x direction
+	   vy,			// Velocity in y direction
+	   vz,			// Velocity in z direction
+	   birth_time,		// Simulation time when the particle formed
+	   death_time,		// Simulation time when the particle becomes inactive (-1 if unset)
+	   amx,			// Angular momentum in x direction (accreted from gas)
+	   amy,			// Angular momentum in y direction (accreted from gas)
+	   amz,			// Angular momentum in z direction (accreted from gas)
+	   mdeut,		// Mass of gas that still contains deuterium
+	   n,			// Polytropic index
+	   mdot,		// Current mass accretion rate (set by the accretion module)
+	   radius,		// Stellar radius (set by the stellar-evolution model)
+	   lum			// Base index for luminosity components (MUST be last; expands to lum_0, lum_1, ... for nGroups)
 );
 
 constexpr int StarParticleMassIdx = static_cast<int>(StarParticleDataIdx::mass);
