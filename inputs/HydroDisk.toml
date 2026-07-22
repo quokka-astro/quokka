@@ -4,24 +4,25 @@
 # Box is [-10 kpc, 10 kpc] x [-10 kpc, 10 kpc] x [-10 kpc, 10 kpc]
 geometry.prob_lo     = -3.0856775814913674e22 -3.0856775814913674e22 -3.0856775814913674e22
 geometry.prob_hi     =  3.0856775814913674e22  3.0856775814913674e22  3.0856775814913674e22
-quokka.bc = foextrap foextrap foextrap
+geometry.is_periodic = [0, 0, 0]
 amr.v = 2
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 64
+amr.n_cell = 256 256 256
 amr.blocking_factor = 32
 amr.max_grid_size   = 64
-amr.max_level       = 2
+amr.max_level       = 3
 amr.n_error_buf     = 2
 amr.grid_eff        = 0.75
 regrid_interval     = -1
 do_reflux           = 1
 do_subcycle         = 0
-plotfile_prefix = "test_plt"
-checkpoint_prefix = "test_chk"
+plotfile_prefix = "tests/plt/hdplt_Q1"
+checkpoint_prefix = "tests/chk/hdchk_Q1"
+statistics_prefix = "tests/hdstats_Q1.txt"
+statistics_interval = 1
 density_floor = 1.0e-32
-##restartfile = "chk0000060"
 # *****************************************************************
 # Time integration
 # *****************************************************************
@@ -41,5 +42,5 @@ poisson_supercycle_interval = 5
 # *****************************************************************
 # Problem parameters (Table 1, Q1_M29)
 # *****************************************************************
-hd_galaxy.Q_mean    = 3.
+hd_galaxy.Q_mean    = 0.96
 hd_galaxy.Mc        = 28.6

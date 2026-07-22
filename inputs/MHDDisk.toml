@@ -9,21 +9,20 @@ amr.v = 2
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell = 64 64 64
+amr.n_cell = 256 256 256
 amr.blocking_factor = 32
 amr.max_grid_size   = 64
-amr.max_level       = 2
+amr.max_level       = 3
 amr.n_error_buf     = 2
 amr.grid_eff        = 0.75
 regrid_interval     = -1
 do_reflux           = 1
 do_subcycle         = 0
-plotfile_prefix = "tests/plotfile_prefix/mhdplt"
-checkpoint_prefix = "tests/chk/mhdchk"
-statistics_prefix = "tests/mhdstats.txt"
+plotfile_prefix = "tests/plt/mhdplt_Q1"
+checkpoint_prefix = "tests/chk/mhdchk_Q1"
+statistics_prefix = "tests/mhdstats_Q1.txt"
 statistics_interval = 1
-density_floor = 1.0e-30
-#restartfile = "mhddisk3_chk00021300"
+density_floor = 1.0e-32
 # *****************************************************************
 # Time integration
 # *****************************************************************
@@ -39,7 +38,7 @@ derived_vars        = gpot pressure radius_sph radial_velocity circular_velocity
 # *****************************************************************
 # Problem parameters (Table 1, Q1_M29)
 # *****************************************************************
-mhd_galaxy.Q_mean    = 3.
+mhd_galaxy.Q_mean    = 0.96
 mhd_galaxy.Mc        = 28.6
 mhd_galaxy.sn_jeans_J              = 4.0
 mhd_galaxy.sn_remnant_fraction     = 0.5

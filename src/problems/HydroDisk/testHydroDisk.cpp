@@ -67,11 +67,11 @@ template <> struct HydroSystem_Traits<HDGalaxy> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Particle_Traits<HDGalaxy> {
+template <> struct Particle_Traits<HDGalaxy> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 };
 
-template <> struct Physics_Traits<HDGalaxy> {
+template <> struct Physics_Traits<HDGalaxy> : DefaultPhysicsTraits {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
@@ -446,7 +446,13 @@ template <> void QuokkaSimulation<HDGalaxy>::refineGrid(int lev, amrex::TagBoxAr
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+
+template <>
+void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(
+    int lev, std::string const &dname, amrex::MultiFab &mf,
+    const int ncomp_cc_in,
+    amrex::MultiFab const &state_cc,
+    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	constexpr double cs_disk = quokka::EOS_Traits<HDGalaxy>::cs_disk;
 	constexpr double cs_cgm  = quokka::EOS_Traits<HDGalaxy>::cs_cgm;
@@ -546,49 +552,49 @@ template <> void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::str
 
 template <> auto QuokkaSimulation<HDGalaxy>::ComputeStatistics() -> std::map<std::string, amrex::Real>
 {
-	std::map<std::string, amrex::Real> stats;
+    std::map<std::string, amrex::Real> stats;
 
-	// Volume-averaged mean density over whole box
-	const amrex::Real mean_density = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k,
-		amrex::Array4<const amrex::Real> const &state) noexcept {
-		return state(i, j, k, HydroSystem<HDGalaxy>::density_index);
-	});
-	stats["mean_density"] = mean_density / geom[0].ProbSize();  // g/cm³;
+    using FaceStateArray = std::array<amrex::Array4<const Real>, AMREX_SPACEDIM>;
 
-	// Disk mass (rho integrated over disk cells)
-	const amrex::Real disk_mass = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k,
-		amrex::Array4<const amrex::Real> const &state) noexcept {
-		const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
-		return (rho > rho_transition) ? rho : static_cast<amrex::Real>(0.0); //M☉
-	});
-	stats["disk_mass"] = disk_mass / C::M_solar;
+    const amrex::Real mean_density = computeVolumeIntegral(
+        [=] AMREX_GPU_DEVICE(int i, int j, int k,
+                              amrex::Array4<const amrex::Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+            return state(i, j, k, HydroSystem<HDGalaxy>::density_index);
+        });
+    stats["mean_density"] = mean_density / geom[0].ProbSize();
 
-	// Disk volume (cm^3) — needed to convert rho integral to mean density
-	const amrex::Real disk_volume = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k,
-		amrex::Array4<const amrex::Real> const &state) noexcept {
-		const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
-		return (rho > rho_transition) ? static_cast<amrex::Real>(1.0) : static_cast<amrex::Real>(0.0);  //M☉
-	});
+    const amrex::Real disk_mass = computeVolumeIntegral(
+        [=] AMREX_GPU_DEVICE(int i, int j, int k,
+                              amrex::Array4<const amrex::Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+            const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
+            return (rho > rho_transition) ? rho : static_cast<amrex::Real>(0.0);
+        });
 
-	// Mass-weighted mean disk density: <rho> = disk_mass / disk_volume
-	// This is a host-side scalar — safe to capture by value into the next kernel
-	const amrex::Real mean_disk_density = (disk_volume > 0.0) ? (disk_mass / disk_volume) : 1.0;  // g/cm³
-	stats["mean_disk_density"] = mean_disk_density; // g/cm³;
-	stats["disk_mass"] = disk_mass / C::M_solar;  // convert to solar masses after
+    const amrex::Real disk_volume = computeVolumeIntegral(
+        [=] AMREX_GPU_DEVICE(int i, int j, int k,
+                              amrex::Array4<const amrex::Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+            const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
+            return (rho > rho_transition) ? static_cast<amrex::Real>(1.0) : static_cast<amrex::Real>(0.0);
+        });
 
-	// Volume-weighted log-density variance over disk cells:
-	// sigma_eta^2 = (1/V_disk) * int_{disk} [ln(rho/<rho>)]^2 dV
-	const amrex::Real sigma_eta_sq_times_vol = computeVolumeIntegral(
-		[=] AMREX_GPU_DEVICE(int i, int j, int k,
-		amrex::Array4<const amrex::Real> const &state) noexcept {
-		const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
-		if (rho <= rho_transition) { return static_cast<amrex::Real>(0.0); }
-		const amrex::Real eta = std::log(rho / mean_disk_density);
-		return eta * eta;
-	});
+    const amrex::Real mean_disk_density =
+        (disk_volume > 0.0) ? (disk_mass / disk_volume) : static_cast<amrex::Real>(1.0);
 
-	stats["sigma_eta"] = (disk_volume > 0.0) ? std::sqrt(sigma_eta_sq_times_vol / disk_volume) : static_cast<amrex::Real>(0.0);
+    stats["mean_disk_density"] = mean_disk_density;
+    stats["disk_mass"]         = disk_mass / C::M_solar;
 
+    const amrex::Real sigma_vol = computeVolumeIntegral(
+        [=] AMREX_GPU_DEVICE(int i, int j, int k,
+                              amrex::Array4<const amrex::Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+            const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
+            if (rho <= rho_transition) { return static_cast<amrex::Real>(0.0); }
+            const amrex::Real eta = std::log(rho / mean_disk_density);
+            return eta * eta;
+        });
+
+    stats["sigma_eta"] = (disk_volume > 0.0)
+                             ? std::sqrt(sigma_vol / disk_volume)
+                             : static_cast<amrex::Real>(0.0);
 	return stats;
 }
 
