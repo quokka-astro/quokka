@@ -17,6 +17,8 @@ amr.n_cell = [128, 128, 128]
 amr.max_level = 1  # number of levels = max_level + 1
 amr.blocking_factor = 16  # grid size must be divisible by this
 
+do_subcycle = 0
+
 cfl = 0.3
 
 conduction.enabled = 1
