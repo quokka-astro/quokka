@@ -60,5 +60,6 @@
 # Maintainer Guide
 
 - [Maintainer Guidelines](maintainer_guidelines.md)
+- [AMReX particle bugs affecting the RTSoA migration](amrex_particle_rtsoa_migration_bug_triage.md)
 - [Architecture Decision Records](adrs.md)
 - [PR Revert Policy](pr_revert_policy.md)
