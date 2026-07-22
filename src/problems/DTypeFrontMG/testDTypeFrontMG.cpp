@@ -16,7 +16,6 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "physics_info.hpp"
-#include "radiation/radiation_dust_system.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -75,7 +74,7 @@ template <> struct RadSystem_Traits<DTypeFrontMG> {
 };
 
 template <> struct ISM_Traits<DTypeFrontMG> {
-	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-2;
 };
@@ -313,7 +312,7 @@ template <> void QuokkaSimulation<DTypeFrontMG>::preCalculateInitialConditions()
 }
 
 constexpr double kappa_IR = 1.0e-2;
-constexpr double kappa_optical = 1.0;
+constexpr double kappa_optical = 3.0e2;
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontMG>::ComputeNumberDensityH(double /*rho*/, amrex::GpuArray<Real, nmscalars_> const &massScalars) -> double

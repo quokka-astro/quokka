@@ -43,7 +43,7 @@ static constexpr bool include_work_term_in_source = true;
 
 static const int max_iter_to_update_alpha_E = 5; // Apply to the PPL_opacity_full_spectrum only. Only update alpha_E for the first max_iter_to_update_alpha_E
 // iterations of the Newton iteration
-static constexpr bool enable_dE_constrain = true;
+static constexpr bool enable_dE_constrain = false; // DEBUG: temporarily disabled to test DTypeFrontMG convergence
 static constexpr bool use_D_as_base = false;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
