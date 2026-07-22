@@ -25,6 +25,14 @@ Fixes:
   - Added velocity 12-panel (vx, vy, vz, |v|; derived from momentum/density)
     and an optional zoomed velocity panel around a specific point (e.g. an
     SN injection site), plus a numeric net-momentum cross-check in that box.
+  - HYDRO SWITCH: if the plotfile path OR the run tag contains the
+    substring "hydro" (case-insensitive), all magnetic-field-dependent
+    diagnostics are skipped automatically — B-field 12-panel, plasma beta
+    (masked slices and the chunked volume-average section), div B, and
+    the Bphi comparison/consistency-check block. Density, velocity, and
+    rotation curve diagnostics still run as normal, since those don't
+    need B. Checking the run tag too matters because plotfile paths
+    don't always spell out "hydro"/"mhd" themselves.
 
 Launch (CPU nodes, no GPU involved anywhere in this script):
     srun -N 1 -n 32 -c 4 python makeplots_fast.py plots/mhddisk_vel0_plt0000001 vel0
@@ -35,10 +43,12 @@ Single-rank / no MPI at all also works (size=1 falls back to a serial run):
 
 Positional command-line arguments (all optional, positional, in order):
     1) plotfile_path — which plotfile to load (required to override the
-       hardcoded default; passed straight to yt.load)
+       hardcoded default; passed straight to yt.load).
     2) run_tag       — optional free-form label folded into every output
        filename, right before the timestep number. It does NOT need to
-       match anything in the plotfile path/name.
+       match anything in the plotfile path/name. If either this or the
+       plotfile path contains "hydro" (case-insensitive), the script
+       assumes a pure-hydro run and skips every magnetic-field diagnostic.
     3) SN_X_KPC, 4) SN_Y_KPC, 5) SN_Z_KPC — optional center (in kpc, box
        coordinates) for a zoomed velocity panel around a specific point
        (e.g. an SN injection site). All three must be given together for
@@ -165,6 +175,21 @@ LINTHRESH = 1e5
 # ============================================================
 PLOTFILE = sys.argv[1] if len(sys.argv) > 1 else "BField_results/mhddisk3_8nodeb_plt0060000"
 rprint(f"Plotfile: {PLOTFILE}")
+
+# ── Hydro switch ──────────────────────────────────────────────────────────────
+# If "hydro" appears anywhere in the plotfile path OR the run tag
+# (case-insensitive), treat this as a pure-hydro run with no magnetic field
+# data, and skip every B-field-dependent diagnostic: the B-field 12-panel,
+# plasma beta (both the masked slices and the chunked volume-average
+# section), div B, and the Bphi comparison/consistency-check block. Density,
+# velocity, and rotation curve diagnostics are unaffected and still run.
+# Checking RUN_TAG too matters because plotfile paths don't always encode
+# "hydro"/"mhd" themselves (e.g. "hddisk_Q1_plt0004000") -- the run tag
+# passed on the command line is often the more reliable signal.
+IS_HYDRO = ("hydro" in PLOTFILE.lower()) or ("hydro" in RUN_TAG.lower())
+if IS_HYDRO:
+    rprint("Detected 'hydro' in plotfile path/run tag -> skipping all magnetic-field "
+           "diagnostics (B-field 12-panel, plasma beta, div B, Bphi comparison).")
 
 ds = yt.load(
     PLOTFILE,
@@ -334,21 +359,24 @@ def make_norm_pos(data):
 # ============================================================
 # Derived field: Bphi reconstructed
 # ============================================================
-def _Bphi_reconstructed(field, data):
-    Bx = data[("boxlib", "x-BField")].v
-    By = data[("boxlib", "y-BField")].v
-    x  = data[("index",  "x")].v
-    y  = data[("index",  "y")].v
-    r2 = x**2 + y**2
-    r  = np.where(r2 > 0, np.sqrt(r2), 1.0)
-    return (By * x - Bx * y) / r * data.ds.quan(1.0, "G")
+# Skipped entirely for hydro runs — x-BField/y-BField don't exist, and
+# nothing downstream needs this field when IS_HYDRO is True.
+if not IS_HYDRO:
+    def _Bphi_reconstructed(field, data):
+        Bx = data[("boxlib", "x-BField")].v
+        By = data[("boxlib", "y-BField")].v
+        x  = data[("index",  "x")].v
+        y  = data[("index",  "y")].v
+        r2 = x**2 + y**2
+        r  = np.where(r2 > 0, np.sqrt(r2), 1.0)
+        return (By * x - Bx * y) / r * data.ds.quan(1.0, "G")
 
-ds.add_field(
-    name=("boxlib", "Bphi_reconstructed"),
-    function=_Bphi_reconstructed,
-    sampling_type="cell",
-    units="G",
-)
+    ds.add_field(
+        name=("boxlib", "Bphi_reconstructed"),
+        function=_Bphi_reconstructed,
+        sampling_type="cell",
+        units="G",
+    )
 
 # ============================================================
 # Derived fields: Velocity components and magnitude
@@ -392,62 +420,65 @@ ds.add_field(
 # ============================================================
 # B-field 12-panel
 # ============================================================
-rprint("\n--- B-field 12-panel ---")
+if not IS_HYDRO:
+    rprint("\n--- B-field 12-panel ---")
 
-normals     = ["z", "y", "x"]
+    normals     = ["z", "y", "x"]
 
-# Read all slices up front — one open per (field, normal).
-# get_slice_xy -> get_slice is a COLLECTIVE yt call: every rank must call it
-# (yt distributes the grid IO internally), so this loop runs on all ranks.
-slices = {}
-plane_meta = {}
-for field in ["x-BField", "y-BField", "z-BField"]:
+    # Read all slices up front — one open per (field, normal).
+    # get_slice_xy -> get_slice is a COLLECTIVE yt call: every rank must call it
+    # (yt distributes the grid IO internally), so this loop runs on all ranks.
+    slices = {}
+    plane_meta = {}
+    for field in ["x-BField", "y-BField", "z-BField"]:
+        for normal in normals:
+            rprint(f"  Slicing {field} {normal}...")
+            data, xlabel, ylabel, title = get_slice_xy(normal, ("boxlib", field))
+            slices[(field, normal)] = data
+            plane_meta[normal] = (xlabel, ylabel, title)
+
     for normal in normals:
-        rprint(f"  Slicing {field} {normal}...")
-        data, xlabel, ylabel, title = get_slice_xy(normal, ("boxlib", field))
-        slices[(field, normal)] = data
-        plane_meta[normal] = (xlabel, ylabel, title)
+        Bx = slices[("x-BField", normal)]
+        By = slices[("y-BField", normal)]
+        Bz = slices[("z-BField", normal)]
+        slices[("Bmag", normal)] = np.sqrt(Bx**2 + By**2 + Bz**2)
 
-for normal in normals:
-    Bx = slices[("x-BField", normal)]
-    By = slices[("y-BField", normal)]
-    Bz = slices[("z-BField", normal)]
-    slices[("Bmag", normal)] = np.sqrt(Bx**2 + By**2 + Bz**2)
+    # Only rank 0 draws and saves — every rank has identical `slices` data
+    # (yt gathers the collective read results to all ranks), but only one
+    # rank should touch the output file.
+    if is_root:
+        row_fields = ["x-BField", "y-BField", "z-BField", "Bmag"]
+        row_labels  = [r"$B_x$", r"$B_y$", r"$B_z$", r"$|B|$"]
 
-# Only rank 0 draws and saves — every rank has identical `slices` data
-# (yt gathers the collective read results to all ranks), but only one
-# rank should touch the output file.
-if is_root:
-    row_fields = ["x-BField", "y-BField", "z-BField", "Bmag"]
-    row_labels  = [r"$B_x$", r"$B_y$", r"$B_z$", r"$|B|$"]
+        fig, axes = plt.subplots(4, 3, figsize=(16, 18))
+        for row, (field, rlabel) in enumerate(zip(row_fields, row_labels)):
+            for col, normal in enumerate(normals):
+                ax   = axes[row, col]
+                data = slices[(field, normal)]
+                xlabel, ylabel, plabel = plane_meta[normal]
+                if row == 3:
+                    norm = plt.Normalize(vmin=BFIELD_MAG_VMIN, vmax=BFIELD_MAG_VMAX)
+                    cmap = "inferno"
+                else:
+                    norm = plt.Normalize(vmin=-BFIELD_COMP_VMAX, vmax=BFIELD_COMP_VMAX)
+                    cmap = "RdBu_r"
+                im = ax.pcolormesh(
+                    np.linspace(extent_kpc[0], extent_kpc[1], data.shape[1]+1),
+                    np.linspace(extent_kpc[2], extent_kpc[3], data.shape[0]+1),
+                    data, norm=norm, cmap=cmap, shading="flat", rasterized=True,
+                )
+                plt.colorbar(im, ax=ax, label="G")
+                ax.set_title(f"{rlabel} — {plabel}", fontsize=9)
+                ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+                ax.set_aspect("equal")
 
-    fig, axes = plt.subplots(4, 3, figsize=(16, 18))
-    for row, (field, rlabel) in enumerate(zip(row_fields, row_labels)):
-        for col, normal in enumerate(normals):
-            ax   = axes[row, col]
-            data = slices[(field, normal)]
-            xlabel, ylabel, plabel = plane_meta[normal]
-            if row == 3:
-                norm = plt.Normalize(vmin=BFIELD_MAG_VMIN, vmax=BFIELD_MAG_VMAX)
-                cmap = "inferno"
-            else:
-                norm = plt.Normalize(vmin=-BFIELD_COMP_VMAX, vmax=BFIELD_COMP_VMAX)
-                cmap = "RdBu_r"
-            im = ax.pcolormesh(
-                np.linspace(extent_kpc[0], extent_kpc[1], data.shape[1]+1),
-                np.linspace(extent_kpc[2], extent_kpc[3], data.shape[0]+1),
-                data, norm=norm, cmap=cmap, shading="flat", rasterized=True,
-            )
-            plt.colorbar(im, ax=ax, label="G")
-            ax.set_title(f"{rlabel} — {plabel}", fontsize=9)
-            ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
-            ax.set_aspect("equal")
-
-    fig.suptitle(f"Magnetic field slices — t = {t_myr:.1f} Myr", fontsize=13)
-    fig.tight_layout()
-    fig.savefig(tag("Bfield_12panel_ytb.png"), dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    rprint(f"Saved: {tag('Bfield_12panel_ytb.png')}")
+        fig.suptitle(f"Magnetic field slices — t = {t_myr:.1f} Myr", fontsize=13)
+        fig.tight_layout()
+        fig.savefig(tag("Bfield_12panel_ytb.png"), dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        rprint(f"Saved: {tag('Bfield_12panel_ytb.png')}")
+else:
+    rprint("\n--- B-field 12-panel: skipped (hydro run) ---")
 
 # ============================================================
 # Density
@@ -523,284 +554,297 @@ if is_root:
     rprint(f"Saved: {tag('density_projection3.png')}")
 
 # ============================================================
-# Plasma beta slices  (locked — unchanged)
+# Dead-zone / mask geometry — needed by plasma beta (below) AND by the
+# rotation curve diagnostic further down, so compute it unconditionally
+# (it only depends on the seed table geometry, not on B-field data).
 # ============================================================
-rprint("\n--- Plasma beta (masked) ---")
-
 dR_table_kpc  = Rmax_cm / nR / kpc
 dead_zone_kpc = 2.0 * dR_table_kpc
 mask_width_kpc = 4.0 * dead_zone_kpc
-
 rprint(f"  dead_zone_kpc  = {dead_zone_kpc:.4f} kpc")
 rprint(f"  mask_width_kpc = {mask_width_kpc:.4f} kpc")
 
-# Collective reads on all ranks first
-beta_slice_data = {}
-for normal in normals_3:
-    beta_slice_data[normal] = get_slice_xy(normal, ("boxlib", "plasma_beta"))
-
-if is_root:
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-    for ax, normal in zip(axes, normals_3):
-        data, xlabel, ylabel, title = beta_slice_data[normal]
-        log_data = np.log10(np.where(data > 0, data, 1e-300))
-
-        px = np.linspace(-width_kpc/2, width_kpc/2, data.shape[1])
-        py = np.linspace(-width_kpc/2, width_kpc/2, data.shape[0])
-        XX, YY = np.meshgrid(px, py)
-
-        if normal == "z":
-            mask = np.sqrt(XX**2 + YY**2) < mask_width_kpc
-        else:
-            mask = (np.abs(XX) < mask_width_kpc) | (np.abs(YY) < mask_width_kpc)
-
-        log_data_masked = np.where(mask, np.nan, log_data)
-        im = ax.imshow(log_data_masked, origin="lower", extent=extent_kpc,
-                       cmap="magma", vmin=-2, vmax=6,
-                       interpolation="nearest", aspect="equal")
-        plt.colorbar(im, ax=ax, label=r"$\log_{10}(\beta)$")
-        ax.set_title(f"Plasma beta — {title}", fontsize=9)
-        ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
-
-        if normal == "z":
-            ax.add_patch(plt.Circle((0, 0), mask_width_kpc,
-                                    color="white", fill=False, lw=0.8, ls="--"))
-        else:
-            for val in [-mask_width_kpc, mask_width_kpc]:
-                ax.axvline(val, color="white", lw=0.8, ls="--")
-                ax.axhline(val, color="white", lw=0.8, ls="--")
-
-    fig.suptitle(f"Plasma beta slices (axis-masked) — t = {t_myr:.1f} Myr", fontsize=12)
-    fig.tight_layout()
-    fig.savefig(tag("plasma_beta_slices_masked.png"), dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    rprint(f"Saved: {tag('plasma_beta_slices_masked.png')}")
-
 # ============================================================
-# Volume-averaged plasma beta — CHUNKED Z-SLAB LOOP, MPI-DISTRIBUTED
+# Plasma beta slices  (locked — unchanged)
 # ============================================================
-rprint("\n--- Volume averages (chunked z-slab, memory-efficient) ---")
+if not IS_HYDRO:
+    rprint("\n--- Plasma beta (masked) ---")
 
-max_level = ds.index.max_level
-dims_full = ds.domain_dimensions * (2 ** max_level)
-n_slabs   = max(128, size)
-slab_nz   = max(1, dims_full[2] // n_slabs)
+    # Collective reads on all ranks first
+    beta_slice_data = {}
+    for normal in normals_3:
+        beta_slice_data[normal] = get_slice_xy(normal, ("boxlib", "plasma_beta"))
 
-rho_transition = 1e-28
-dead_zone_cm   = 2.0 * (Rmax_cm / nR)
+    if is_root:
+        fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+        for ax, normal in zip(axes, normals_3):
+            data, xlabel, ylabel, title = beta_slice_data[normal]
+            log_data = np.log10(np.where(data > 0, data, 1e-300))
 
-acc = {k: {"sum_bv": 0.0, "sum_v": 0.0, "sum_brhov": 0.0, "sum_rhov": 0.0}
-       for k in ("all", "disk", "disk_clean")}
-acc_inner = {"sum_brhov": 0.0, "sum_rhov": 0.0}
+            px = np.linspace(-width_kpc/2, width_kpc/2, data.shape[1])
+            py = np.linspace(-width_kpc/2, width_kpc/2, data.shape[0])
+            XX, YY = np.meshgrid(px, py)
 
-rng            = np.random.default_rng(42 + rank)
-RESERVOIR_N    = 1_000_000 # Reduced slightly to ensure memory safety
-beta_reservoir = np.empty(RESERVOIR_N, dtype=np.float32)
-reservoir_fill = 0
-reservoir_full = False
-
-LE = ds.domain_left_edge.v
-dx = ds.domain_width.v / dims_full
-
-rprint(f"  Finest-level dims: {dims_full}")
-rprint(f"  n_slabs={n_slabs}, slab_nz={slab_nz} cells, {size} rank(s)")
-
-my_slab_indices = list(range(rank, n_slabs, size))
-
-for slab_idx in my_slab_indices:
-    z0_cell = slab_idx * slab_nz
-    z1_cell = min(z0_cell + slab_nz, dims_full[2])
-    if z0_cell >= dims_full[2]: continue
-
-    slab_left  = [LE[0], LE[1], LE[2] + z0_cell * dx[2]]
-    slab_right = [LE[0] + dims_full[0]*dx[0], LE[1] + dims_full[1]*dx[1], LE[2] + z1_cell * dx[2]]
-    region = ds.box(slab_left, slab_right)
-
-    for chunk in region.chunks([("boxlib", "plasma_beta"), ("boxlib", "gasDensity"), 
-                                ("index", "x"), ("index", "y"), ("index", "cell_volume")], "io"):
-        
-        beta  = chunk[("boxlib", "plasma_beta")].v.ravel()
-        rho   = chunk[("boxlib", "gasDensity")].v.ravel()
-        x     = chunk[("index", "x")].v.ravel()
-        y     = chunk[("index", "y")].v.ravel()
-        vol   = chunk[("index", "cell_volume")].v.ravel()
-        R     = np.sqrt(x**2 + y**2)
-
-        mask_disk = rho > rho_transition
-        mask_disk_clean = mask_disk & (R > dead_zone_cm)
-        mask_inner = mask_disk & (R < 5.0 * kpc)
-
-        for key, mask in [("all", np.ones(len(beta), dtype=bool)), 
-                          ("disk", mask_disk), ("disk_clean", mask_disk_clean)]:
-            b, v, r = beta[mask], vol[mask], rho[mask]
-            acc[key]["sum_bv"]    += np.sum(b * v)
-            acc[key]["sum_v"]     += np.sum(v)
-            acc[key]["sum_brhov"] += np.sum(b * r * v)
-            acc[key]["sum_rhov"]  += np.sum(r * v)
-
-        # Reservoir sampling
-        disk_beta = beta[mask_disk].astype(np.float32)
-        n_new = len(disk_beta)
-        if n_new > 0:
-            if not reservoir_full:
-                space = RESERVOIR_N - reservoir_fill
-                take = min(n_new, space)
-                beta_reservoir[reservoir_fill:reservoir_fill + take] = disk_beta[:take]
-                reservoir_fill += take
-                if reservoir_fill == RESERVOIR_N: reservoir_full = True
+            if normal == "z":
+                mask = np.sqrt(XX**2 + YY**2) < mask_width_kpc
             else:
-                idx = rng.integers(0, RESERVOIR_N, size=n_new)
-                beta_reservoir[idx] = disk_beta
+                mask = (np.abs(XX) < mask_width_kpc) | (np.abs(YY) < mask_width_kpc)
 
-        del beta, rho, x, y, vol, R, mask_disk, mask_disk_clean, mask_inner
-    gc.collect()
+            log_data_masked = np.where(mask, np.nan, log_data)
+            im = ax.imshow(log_data_masked, origin="lower", extent=extent_kpc,
+                           cmap="magma", vmin=-2, vmax=6,
+                           interpolation="nearest", aspect="equal")
+            plt.colorbar(im, ax=ax, label=r"$\log_{10}(\beta)$")
+            ax.set_title(f"Plasma beta — {title}", fontsize=9)
+            ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
 
-comm.Barrier()
-rprint("  All ranks finished. Reducing data...")
+            if normal == "z":
+                ax.add_patch(plt.Circle((0, 0), mask_width_kpc,
+                                        color="white", fill=False, lw=0.8, ls="--"))
+            else:
+                for val in [-mask_width_kpc, mask_width_kpc]:
+                    ax.axvline(val, color="white", lw=0.8, ls="--")
+                    ax.axhline(val, color="white", lw=0.8, ls="--")
 
-# GATHER AND PERCENTILES
-all_reservoirs = comm.gather(beta_reservoir[:reservoir_fill], root=0)
+        fig.suptitle(f"Plasma beta slices (axis-masked) — t = {t_myr:.1f} Myr", fontsize=12)
+        fig.tight_layout()
+        fig.savefig(tag("plasma_beta_slices_masked.png"), dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        rprint(f"Saved: {tag('plasma_beta_slices_masked.png')}")
 
-if is_root:
-    if all_reservoirs and any(len(arr) > 0 for arr in all_reservoirs):
-        master = np.concatenate(all_reservoirs)
-        rprint("  Disk beta percentiles:")
-        for p in [10, 25, 50, 75, 90]:
-            print(f"    {p}th: {np.percentile(master, p):.3e}")
-    else:
-        rprint("  No disk cells found in any rank.")
+    # ============================================================
+    # Volume-averaged plasma beta — CHUNKED Z-SLAB LOOP, MPI-DISTRIBUTED
+    # ============================================================
+    rprint("\n--- Volume averages (chunked z-slab, memory-efficient) ---")
+
+    max_level = ds.index.max_level
+    dims_full = ds.domain_dimensions * (2 ** max_level)
+    n_slabs   = max(128, size)
+    slab_nz   = max(1, dims_full[2] // n_slabs)
+
+    rho_transition = 1e-28
+    dead_zone_cm   = 2.0 * (Rmax_cm / nR)
+
+    acc = {k: {"sum_bv": 0.0, "sum_v": 0.0, "sum_brhov": 0.0, "sum_rhov": 0.0}
+           for k in ("all", "disk", "disk_clean")}
+    acc_inner = {"sum_brhov": 0.0, "sum_rhov": 0.0}
+
+    rng            = np.random.default_rng(42 + rank)
+    RESERVOIR_N    = 1_000_000 # Reduced slightly to ensure memory safety
+    beta_reservoir = np.empty(RESERVOIR_N, dtype=np.float32)
+    reservoir_fill = 0
+    reservoir_full = False
+
+    LE = ds.domain_left_edge.v
+    dx = ds.domain_width.v / dims_full
+
+    rprint(f"  Finest-level dims: {dims_full}")
+    rprint(f"  n_slabs={n_slabs}, slab_nz={slab_nz} cells, {size} rank(s)")
+
+    my_slab_indices = list(range(rank, n_slabs, size))
+
+    for slab_idx in my_slab_indices:
+        z0_cell = slab_idx * slab_nz
+        z1_cell = min(z0_cell + slab_nz, dims_full[2])
+        if z0_cell >= dims_full[2]: continue
+
+        slab_left  = [LE[0], LE[1], LE[2] + z0_cell * dx[2]]
+        slab_right = [LE[0] + dims_full[0]*dx[0], LE[1] + dims_full[1]*dx[1], LE[2] + z1_cell * dx[2]]
+        region = ds.box(slab_left, slab_right)
+
+        for chunk in region.chunks([("boxlib", "plasma_beta"), ("boxlib", "gasDensity"), 
+                                    ("index", "x"), ("index", "y"), ("index", "cell_volume")], "io"):
+            
+            beta  = chunk[("boxlib", "plasma_beta")].v.ravel()
+            rho   = chunk[("boxlib", "gasDensity")].v.ravel()
+            x     = chunk[("index", "x")].v.ravel()
+            y     = chunk[("index", "y")].v.ravel()
+            vol   = chunk[("index", "cell_volume")].v.ravel()
+            R     = np.sqrt(x**2 + y**2)
+
+            mask_disk = rho > rho_transition
+            mask_disk_clean = mask_disk & (R > dead_zone_cm)
+            mask_inner = mask_disk & (R < 5.0 * kpc)
+
+            for key, mask in [("all", np.ones(len(beta), dtype=bool)), 
+                              ("disk", mask_disk), ("disk_clean", mask_disk_clean)]:
+                b, v, r = beta[mask], vol[mask], rho[mask]
+                acc[key]["sum_bv"]    += np.sum(b * v)
+                acc[key]["sum_v"]     += np.sum(v)
+                acc[key]["sum_brhov"] += np.sum(b * r * v)
+                acc[key]["sum_rhov"]  += np.sum(r * v)
+
+            # Reservoir sampling
+            disk_beta = beta[mask_disk].astype(np.float32)
+            n_new = len(disk_beta)
+            if n_new > 0:
+                if not reservoir_full:
+                    space = RESERVOIR_N - reservoir_fill
+                    take = min(n_new, space)
+                    beta_reservoir[reservoir_fill:reservoir_fill + take] = disk_beta[:take]
+                    reservoir_fill += take
+                    if reservoir_fill == RESERVOIR_N: reservoir_full = True
+                else:
+                    idx = rng.integers(0, RESERVOIR_N, size=n_new)
+                    beta_reservoir[idx] = disk_beta
+
+            del beta, rho, x, y, vol, R, mask_disk, mask_disk_clean, mask_inner
+        gc.collect()
+
+    comm.Barrier()
+    rprint("  All ranks finished. Reducing data...")
+
+    # GATHER AND PERCENTILES
+    all_reservoirs = comm.gather(beta_reservoir[:reservoir_fill], root=0)
+
+    if is_root:
+        if all_reservoirs and any(len(arr) > 0 for arr in all_reservoirs):
+            master = np.concatenate(all_reservoirs)
+            rprint("  Disk beta percentiles:")
+            for p in [10, 25, 50, 75, 90]:
+                print(f"    {p}th: {np.percentile(master, p):.3e}")
+        else:
+            rprint("  No disk cells found in any rank.")
+else:
+    rprint("\n--- Plasma beta (masked + volume averages): skipped (hydro run) ---")
 
 # ============================================================
 # div B — per AMR level (free covering_grid immediately)
 # ============================================================
-rprint("\n--- div B ---")
+if not IS_HYDRO:
+    rprint("\n--- div B ---")
 
-# covering_grid objects don't support .chunks() in this yt version
-# (YTDataSelectorNotImplemented). divB is already per-level, non-interpolated
-# data (differenced directly from the level's own face data), so iterate the
-# real AMR grid patches at that level instead -- also naturally chunked
-# (each patch is blocking-factor sized) and distributes cleanly across ranks.
-for lev in range(ds.index.max_level + 1):
-    level_grids = ds.index.select_grids(lev)
-    my_grids = level_grids[rank::size]
+    # covering_grid objects don't support .chunks() in this yt version
+    # (YTDataSelectorNotImplemented). divB is already per-level, non-interpolated
+    # data (differenced directly from the level's own face data), so iterate the
+    # real AMR grid patches at that level instead -- also naturally chunked
+    # (each patch is blocking-factor sized) and distributes cleanly across ranks.
+    for lev in range(ds.index.max_level + 1):
+        level_grids = ds.index.select_grids(lev)
+        my_grids = level_grids[rank::size]
 
-    max_val = -np.inf
-    sum_val = 0.0
-    count = 0
+        max_val = -np.inf
+        sum_val = 0.0
+        count = 0
 
-    for g in my_grids:
-        data = g[("boxlib", "divB")].v
-        abs_data = np.abs(data)
+        for g in my_grids:
+            data = g[("boxlib", "divB")].v
+            abs_data = np.abs(data)
 
-        if abs_data.size > 0:
-            max_val = max(max_val, np.max(abs_data))
-        sum_val += np.sum(abs_data)
-        count += data.size
+            if abs_data.size > 0:
+                max_val = max(max_val, np.max(abs_data))
+            sum_val += np.sum(abs_data)
+            count += data.size
 
-        del data, abs_data
+            del data, abs_data
 
-    # Gather results from all MPI ranks to rank 0
-    global_max = comm.allreduce(max_val, op=MPI.MAX)
-    global_sum = comm.allreduce(sum_val, op=MPI.SUM)
-    global_count = comm.allreduce(count, op=MPI.SUM)
+        # Gather results from all MPI ranks to rank 0
+        global_max = comm.allreduce(max_val, op=MPI.MAX)
+        global_sum = comm.allreduce(sum_val, op=MPI.SUM)
+        global_count = comm.allreduce(count, op=MPI.SUM)
+
+        if is_root:
+            mean_val = global_sum / global_count if global_count > 0 else 0.0
+            rprint(f"  Level {lev}:  max |divB| = {global_max:.3e}  mean |divB| = {mean_val:.3e}")
+
+        gc.collect()
+
+    rprint("  Plotting raw divB slices...")
+    divB_panels = {}
+    divB_meta = {}
+    for normal in ["z", "y", "x"]:
+        data, xlabel, ylabel, title = get_slice_xy(normal, ("boxlib", "divB"))
+        divB_panels[normal] = data
+        divB_meta[normal] = (xlabel, ylabel, title)
 
     if is_root:
-        mean_val = global_sum / global_count if global_count > 0 else 0.0
-        rprint(f"  Level {lev}:  max |divB| = {global_max:.3e}  mean |divB| = {mean_val:.3e}")
+        all_divB_max = max(np.max(np.abs(d)) for d in divB_panels.values())
 
-    gc.collect()
+        fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+        for ax, normal in zip(axes, normals_3):
+            data = divB_panels[normal]
+            xlabel, ylabel, title = divB_meta[normal]
+            im = ax.imshow(data, origin="lower", extent=extent_kpc,
+                           cmap="RdBu_r", vmin=-DIVB_VMAX, vmax=DIVB_VMAX,
+                           interpolation="nearest", aspect="equal")
+            plt.colorbar(im, ax=ax, label=r"$\nabla\cdot B$")
+            ax.set_title(f"div B — {title}", fontsize=9)
+            ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
 
-rprint("  Plotting raw divB slices...")
-divB_panels = {}
-divB_meta = {}
-for normal in ["z", "y", "x"]:
-    data, xlabel, ylabel, title = get_slice_xy(normal, ("boxlib", "divB"))
-    divB_panels[normal] = data
-    divB_meta[normal] = (xlabel, ylabel, title)
-
-if is_root:
-    all_divB_max = max(np.max(np.abs(d)) for d in divB_panels.values())
-
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-    for ax, normal in zip(axes, normals_3):
-        data = divB_panels[normal]
-        xlabel, ylabel, title = divB_meta[normal]
-        im = ax.imshow(data, origin="lower", extent=extent_kpc,
-                       cmap="RdBu_r", vmin=-DIVB_VMAX, vmax=DIVB_VMAX,
-                       interpolation="nearest", aspect="equal")
-        plt.colorbar(im, ax=ax, label=r"$\nabla\cdot B$")
-        ax.set_title(f"div B — {title}", fontsize=9)
-        ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
-
-    fig.suptitle(
-        f"div B — t = {t_myr:.1f} Myr\nmax |divB| (this run) = {all_divB_max:.2e}  |  scale fixed to ±{DIVB_VMAX:.1e}",
-        fontsize=12)
-    fig.tight_layout()
-    fig.savefig(tag("divB_slices_raw.png"), dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    rprint(f"Saved: {tag('divB_slices_raw.png')}")
+        fig.suptitle(
+            f"div B — t = {t_myr:.1f} Myr\nmax |divB| (this run) = {all_divB_max:.2e}  |  scale fixed to ±{DIVB_VMAX:.1e}",
+            fontsize=12)
+        fig.tight_layout()
+        fig.savefig(tag("divB_slices_raw.png"), dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        rprint(f"Saved: {tag('divB_slices_raw.png')}")
+else:
+    rprint("\n--- div B: skipped (hydro run) ---")
 
 # ============================================================
 # Bphi comparison (2-way)
 # ============================================================
-rprint("\n--- Bphi Comparison ---")
+if not IS_HYDRO:
+    rprint("\n--- Bphi Comparison ---")
 
-bphi_fields  = [("boxlib", "Bphi"), ("boxlib", "Bphi_reconstructed")]
-bphi_labels  = ["Analytic Table Bphi", "Grid Reconstructed Bphi"]
+    bphi_fields  = [("boxlib", "Bphi"), ("boxlib", "Bphi_reconstructed")]
+    bphi_labels  = ["Analytic Table Bphi", "Grid Reconstructed Bphi"]
 
-# Collective reads on all ranks first
-bphi_slice_data = {}
-for field_tuple in bphi_fields:
-    for normal in normals_3:
-        bphi_slice_data[(field_tuple, normal)] = get_slice_xy(normal, field_tuple)
+    # Collective reads on all ranks first
+    bphi_slice_data = {}
+    for field_tuple in bphi_fields:
+        for normal in normals_3:
+            bphi_slice_data[(field_tuple, normal)] = get_slice_xy(normal, field_tuple)
 
-if is_root:
-    fig, axes = plt.subplots(2, 3, figsize=(16, 9))
-    for row, (field_tuple, rlabel) in enumerate(zip(bphi_fields, bphi_labels)):
-        for col, normal in enumerate(normals_3):
-            ax   = axes[row, col]
-            data, xlabel, ylabel, title = bphi_slice_data[(field_tuple, normal)]
+    if is_root:
+        fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+        for row, (field_tuple, rlabel) in enumerate(zip(bphi_fields, bphi_labels)):
+            for col, normal in enumerate(normals_3):
+                ax   = axes[row, col]
+                data, xlabel, ylabel, title = bphi_slice_data[(field_tuple, normal)]
 
-            vmax      = BPHI_XY_VMAX if normal == "z" else BPHI_EDGE_VMAX
-            linthresh = vmax * BPHI_LINTHRESH_FRACTION
+                vmax      = BPHI_XY_VMAX if normal == "z" else BPHI_EDGE_VMAX
+                linthresh = vmax * BPHI_LINTHRESH_FRACTION
 
-            im = ax.imshow(
-                data, origin="lower", extent=extent_kpc, cmap="RdBu_r",
-                norm=SymLogNorm(linthresh=linthresh, vmin=-vmax, vmax=vmax, base=10),
-                interpolation="nearest", aspect="equal",
-            )
-            plt.colorbar(im, ax=ax, label=r"$B_\phi$ [G]", format="%.1e")
-            ax.set_title(f"{rlabel} — {title}", fontsize=9)
-            ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+                im = ax.imshow(
+                    data, origin="lower", extent=extent_kpc, cmap="RdBu_r",
+                    norm=SymLogNorm(linthresh=linthresh, vmin=-vmax, vmax=vmax, base=10),
+                    interpolation="nearest", aspect="equal",
+                )
+                plt.colorbar(im, ax=ax, label=r"$B_\phi$ [G]", format="%.1e")
+                ax.set_title(f"{rlabel} — {title}", fontsize=9)
+                ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
 
-    fig.suptitle(f"$B_\\phi$ Initial Condition Comparison — t = {t_myr:.1f} Myr",
-                 fontsize=12)
-    fig.tight_layout()
-    fig.savefig(tag("Bphi_2way_comparison.png"), dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    rprint(f"Saved: {tag('Bphi_2way_comparison.png')}")
+        fig.suptitle(f"$B_\\phi$ Initial Condition Comparison — t = {t_myr:.1f} Myr",
+                     fontsize=12)
+        fig.tight_layout()
+        fig.savefig(tag("Bphi_2way_comparison.png"), dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        rprint(f"Saved: {tag('Bphi_2way_comparison.png')}")
 
-bphi_xy  = get_slice("z", ("boxlib", "Bphi"))  # collective — all ranks call this
-bmag_xy  = slices[("Bmag", "z")]
+    bphi_xy  = get_slice("z", ("boxlib", "Bphi"))  # collective — all ranks call this
+    bmag_xy  = slices[("Bmag", "z")]
 
-if is_root:
-    bphi_max = np.percentile(np.abs(bphi_xy[np.isfinite(bphi_xy)]), 99)
-    bmag_rms = np.sqrt(np.mean(bmag_xy**2))
-    bmag_max = np.percentile(bmag_xy[np.isfinite(bmag_xy)], 99)
+    if is_root:
+        bphi_max = np.percentile(np.abs(bphi_xy[np.isfinite(bphi_xy)]), 99)
+        bmag_rms = np.sqrt(np.mean(bmag_xy**2))
+        bmag_max = np.percentile(bmag_xy[np.isfinite(bmag_xy)], 99)
 
-    print("====================================================")
-    print(f"Bphi 99th percentile (midplane)   : {bphi_max:.3e} G")
-    print(f"|B|  rms             (midplane)   : {bmag_rms:.3e} G")
-    print(f"|B|  99th percentile (midplane)   : {bmag_max:.3e} G")
-    print(f"Bphi/|B|_rms                      : {bphi_max/bmag_rms:.3e}  (target: < 1e-2)")
-    print(f"Bphi/|B|_max                      : {bphi_max/bmag_max:.3e}  (target: < 1e-2)")
-    print("====================================================")
+        print("====================================================")
+        print(f"Bphi 99th percentile (midplane)   : {bphi_max:.3e} G")
+        print(f"|B|  rms             (midplane)   : {bmag_rms:.3e} G")
+        print(f"|B|  99th percentile (midplane)   : {bmag_max:.3e} G")
+        print(f"Bphi/|B|_rms                      : {bphi_max/bmag_rms:.3e}  (target: < 1e-2)")
+        print(f"Bphi/|B|_max                      : {bphi_max/bmag_max:.3e}  (target: < 1e-2)")
+        print("====================================================")
 
-    n_cell    = ds.domain_dimensions[0]
-    Lbox_cm   = float(ds.domain_width[0].v)
-    dx_level0 = Lbox_cm / n_cell
-    print(f"dR_table/dx_L0 = {dR_seed/dx_level0:.2f}  (want < 0.5)")
-    print(f"dz_table/dx_L0 = {dz_seed/dx_level0:.2f}")
+        n_cell    = ds.domain_dimensions[0]
+        Lbox_cm   = float(ds.domain_width[0].v)
+        dx_level0 = Lbox_cm / n_cell
+        print(f"dR_table/dx_L0 = {dR_seed/dx_level0:.2f}  (want < 0.5)")
+        print(f"dz_table/dx_L0 = {dz_seed/dx_level0:.2f}")
+else:
+    rprint("\n--- Bphi comparison: skipped (hydro run) ---")
 
 # ============================================================
 # Velocity 12-panel

@@ -91,7 +91,13 @@ template <> struct SimulationData<HDGalaxy> {
 	amrex::Real vc{};       // saturated circular velocity [cm/s]
 	amrex::Real Sigma0{};   // surface density normalisation [g/cm^2]
 	amrex::Real rho_cgm{};
+
+	amrex::Real sn_jeans_J;
+	amrex::Real sn_momentum;
+	amrex::Real sn_remnant_fraction;
+	amrex::Real sn_ejecta_mass{};   // Mej, grams
 };
+
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 auto surfaceDensityProfile(double R, double Sigma0) -> double
@@ -134,105 +140,19 @@ double diskDensityAnalytic(double R, double z,
     return rho0 * disk_factor * halo_factor;
 }
 
-
-/// Arora+25 Appendix A, Eq. A.2:
-///   phi_g(R) = 4*pi*G*Sigma0*Rd * y^2 * [I0(y)*K0(y) - I1(y)*K1(y)],  y = R/(2*Rd)
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto dPhiGas_dR(double R, double Sigma0) -> double
-{
-	const double y = R / (2.0 * Rd);
-
-	constexpr double eps = 1e-12;
-	if (std::abs(y) < eps) {
-		return 0.0;
-	}
-
-	// I0 via Abramowitz & Stegun 9.8.1 / 9.8.2
-	auto bessel_I0 = [](double x) -> double {
-		x = std::abs(x);
-		if (x <= 3.75) {
-			const double t_sq = (x / 3.75) * (x / 3.75);
-			return 1.0 + t_sq*(3.5156229 + t_sq*(3.0899424 + t_sq*(1.2067492
-			     + t_sq*(0.2659732 + t_sq*(0.0360768 + t_sq*0.0045813)))));
-		}
-		const double t_inv = 3.75 / x;
-		return (std::exp(x) / std::sqrt(x)) *
-		       (0.39894228 + t_inv*(0.01328592 
-			 + t_inv*(0.00225319 + t_inv*(-0.00157565
-		     + t_inv*(0.00916281 + t_inv*(-0.02057706 
-			 + t_inv*(0.02635537 + t_inv*(-0.01647633 
-			 					 + t_inv*0.00392377))))))));
-	};
-
-	// I1 via A&S 9.8.3 / 9.8.4
-	auto bessel_I1 = [](double x) -> double {
-		const double sign = (x >= 0.0) ? 1.0 : -1.0;
-		x = std::abs(x);
-		if (x <= 3.75) {
-			const double t_sq = (x / 3.75) * (x / 3.75);
-			return sign * x *
-			    (0.5 + t_sq*( 0.87890594 + t_sq*( 0.51498869 
-			  		 + t_sq*( 0.15084934 + t_sq*( 0.02658733 
-			 		 + t_sq*( 0.00301532 + t_sq*( 0.00032411)))))));
-		}
-		const double t_inv = 3.75 / x;
-		return sign * (std::exp(x) / std::sqrt(x)) *
-		       (0.39894228 + t_inv*(-0.03988024 + t_inv*(-0.00362018 + t_inv*( 0.00163801
-		    	 + t_inv*(-0.01031555 + t_inv*( 0.02282967 + t_inv*(-0.02895312
-		    	 + t_inv*( 0.01787654 - t_inv*( 0.00420059)))))))));
-	};
-
-	// K0 via A&S 9.8.5 / 9.8.6
-	auto bessel_K0 = [&bessel_I0](double x) -> double {
-		if (x <= 2.0) {
-			const double t_sq = (x / 2.0) * (x / 2.0);
-			return -std::log(x / 2.0) * bessel_I0(x) + (-0.57721566 
-				 + t_sq*(0.42278420 + t_sq*(0.23069756 
-				 + t_sq*(0.03488590 + t_sq*(0.00262698 
-				 + t_sq*(0.00010750 + t_sq*(0.00000740)))))));
-		}
-		const double t_inv = 2.0 / x;
-		return (std::exp(-x) / std::sqrt(x)) *
-		       (1.25331414 + t_inv*(-0.07832358 
-			  + t_inv*(0.02189568 + t_inv*(-0.01062446
-		      + t_inv*(0.00587872 + t_inv*(-0.00251540 
-								  + t_inv*( 0.00053208)))))));
-	};
-
-	// K1 via A&S 9.8.7 / 9.8.8
-	auto bessel_K1 = [&bessel_I1](double x) -> double {
-		if (x <= 2.0) {
-			const double t_sq = (x / 2.0) * (x / 2.0);
-			return (1.0 / x) * 
-				(x * std::log(x / 2.0) * bessel_I1(x) +  (1.0 + t_sq*(0.15443144 
-				 + t_sq*(-0.67278579 + t_sq*(-0.18156897
-			     + t_sq*(-0.01919402 + t_sq*(-0.00110404 
-									 + t_sq*(-0.00004686))))))));
-		}
-		const double t_inv = 2.0 / x;
-		return (std::exp(-x) / std::sqrt(x)) *
-		       		(1.25331414 + t_inv*(0.23498619 
-				+ t_inv*(-0.03655620 + t_inv*( 0.01504268
-		  	    + t_inv*(-0.00780353 + t_inv*( 0.00325614 
-									 + t_inv*(-0.00068245)))))));
-	};
-
-	const double I0v = bessel_I0(y);
-	const double I1v = bessel_I1(y);
-	const double K0v = bessel_K0(y);
-	const double K1v = bessel_K1(y);
-
-	// d(phi_g)/dR = 2*pi*G*Sigma0 * 2y * [I0*K0 + y*(I1*K0 - I0*K1)]
-	const double dfdy = 2.0 * y * (I0v*K0v + y*(I1v*K0v - I0v*K1v));
-	return 2.0 * M_PI * C::Gconst * Sigma0 * dfdy;
-}
-
 template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
 {
 	amrex::Print() << "Pre-calculating HDGalaxy initial conditions...\n";
 	amrex::ParmParse const pp("hd_galaxy");
     pp.get("Mc",     userData_.Mc);
     pp.get("Q_mean", userData_.Q_mean);
+	pp.query("sn_jeans_J", userData_.sn_jeans_J);
+	pp.query("sn_momentum", userData_.sn_momentum);	
+	pp.query("sn_remnant_fraction", userData_.sn_remnant_fraction);
+	double Mej_msun = 10.0; // default, matches Kim & Ostriker test value
+	pp.query("sn_ejecta_mass_msun", Mej_msun);
+	userData_.sn_ejecta_mass = Mej_msun * C::M_solar;
+
 
     constexpr double cs_disk = quokka::EOS_Traits<HDGalaxy>::cs_disk;
     constexpr double cs_cgm  = quokka::EOS_Traits<HDGalaxy>::cs_cgm;
@@ -446,6 +366,379 @@ template <> void QuokkaSimulation<HDGalaxy>::refineGrid(int lev, amrex::TagBoxAr
 	amrex::Gpu::streamSynchronize();
 }
 
+template <> void QuokkaSimulation<HDGalaxy>::computeAfterTimestep()
+{
+	if (!(userData_.sn_jeans_J > 0.0)) {
+		return;
+	}
+
+	constexpr double MSUN = C::M_solar;
+	constexpr double KM_S = 1.0e5;
+	constexpr double Esn = 1.0e51;          // erg, fixed SN energy (Sec 3.2.1)
+	constexpr double mu_H = 1.4 * C::m_u;   // mass per H nucleus, standard He abundance
+	constexpr int stencil_radius = 2;       // rK in units of dx (paper default is 3dx; adjust as needed)
+
+	const double Mej = userData_.sn_ejecta_mass;              // ejecta mass, Eq 17
+	const double sn_jeans_J = userData_.sn_jeans_J;
+	const double sn_momentum_ref = userData_.sn_momentum;     // calibration coefficient for Eq 20
+
+
+
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		auto &state = state_new_cc_[lev];
+
+		// Fill ghost zones before reading neighbor data below. Hydro-only: cell-centered
+		// state only, no face-centered fields to fill.
+		const auto time = tNew_[lev];
+		fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na,
+		                        InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+
+		const auto dx        = geom[lev].CellSizeArray();
+		const double dx_max  = amrex::max(dx[0], amrex::max(dx[1], dx[2]));
+		const double vol     = dx[0] * dx[1] * dx[2];
+
+		// Fine mask: covered cells -> 0, uncovered (real, finest-resolution) cells -> 1.
+		amrex::iMultiFab mask(state.boxArray(), state.DistributionMap(), 1, 0);
+		if (lev < finest_level) {
+			mask = amrex::makeFineMask(state.boxArray(), state.DistributionMap(),
+			                            state_new_cc_[lev + 1].boxArray(), refRatio(lev), 1, 0);
+		} else {
+			mask.setVal(1);
+		}
+
+
+		// delta components: 0=drho, 1=dpx, 2=dpy, 3=dpz, 4=dE.
+		// Everything here is the UNLIMITED deposit (paper Sec 2.2, Steps 1-2); the
+		// analytic limiter (Eq 21, Step 3) is applied once, after SumBoundary, in the
+		// apply pass below -- exactly matching the paper's separation of concerns.
+		amrex::MultiFab delta(state.boxArray(), state.DistributionMap(), 5, stencil_radius);
+		delta.setVal(0.0);
+
+		// --- Pass 1: deposit (unlimited) mass/momentum/energy contributions ---
+		for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
+			const amrex::Box &box = mfi.validbox();
+			auto const &s = state.const_array(mfi);
+			auto d = delta.array(mfi);
+			auto const &mask_arr = mask.const_array(mfi);
+
+			const auto slo = state[mfi].box().smallEnd();
+			const auto shi = state[mfi].box().bigEnd();
+			const auto dlo = delta[mfi].box().smallEnd();
+			const auto dhi = delta[mfi].box().bigEnd();
+
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				// Skip cells covered by a finer level
+				if (mask_arr(i, j, k) == 0) { return; }
+
+				const double rho = s(i, j, k, HydroSystem<HDGalaxy>::density_index);
+
+				// Hydro-only Jeans trigger: no magnetic pressure support, so cs_eff is
+				// just the thermal sound speed (no plasma-beta correction term).
+				const double cs = HydroSystem<HDGalaxy>::ComputeSoundSpeed(s, i, j, k);
+				const double cs_eff_sq = cs * cs;
+				const double rho_J = M_PI * cs_eff_sq / (C::Gconst * sn_jeans_J * sn_jeans_J * (dx_max * dx_max));
+				if (rho <= rho_J) { return; } // Jeans trigger, unchanged from before
+
+				const double px = s(i,j,k,HydroSystem<HDGalaxy>::x1Momentum_index);
+				const double py = s(i,j,k,HydroSystem<HDGalaxy>::x2Momentum_index);
+				const double pz = s(i,j,k,HydroSystem<HDGalaxy>::x3Momentum_index);
+				const double vx_c = px / rho;
+				const double vy_c = py / rho;
+				const double vz_c = pz / rho;
+
+				// --- Gather kernel sums: cell count, gas mass, momentum (for vCOM), Eq 17-18 ---
+				int    N_kernel   = 0;
+				double mass_sum   = 0.0; // Sum rho_ijk over kernel (incl. source cell)
+				double momx_sum   = 0.0;
+				double momy_sum   = 0.0;
+				double momz_sum   = 0.0;
+				double neighbor_mass_sum = 0.0; // excludes center; used for mass-weighted w_mom
+
+				for (int di = -stencil_radius; di <= stencil_radius; ++di) {
+					for (int dj = -stencil_radius; dj <= stencil_radius; ++dj) {
+						for (int dk = -stencil_radius; dk <= stencil_radius; ++dk) {
+							if (di*di + dj*dj + dk*dk > stencil_radius * stencil_radius) { continue; }
+							const int ii = i + di;
+							const int jj = j + dj;
+							const int kk = k + dk;
+							if (ii < slo[0] || ii > shi[0] || jj < slo[1] || jj > shi[1] ||
+								kk < slo[2] || kk > shi[2]) { continue; }
+							if (ii < dlo[0] || ii > dhi[0] || jj < dlo[1] || jj > dhi[1] ||
+								kk < dlo[2] || kk > dhi[2]) { continue; }
+
+							const double rho_nb = s(ii, jj, kk, HydroSystem<HDGalaxy>::density_index);
+							++N_kernel;
+							mass_sum += rho_nb;
+							momx_sum += s(ii, jj, kk, HydroSystem<HDGalaxy>::x1Momentum_index);
+							momy_sum += s(ii, jj, kk, HydroSystem<HDGalaxy>::x2Momentum_index);
+							momz_sum += s(ii, jj, kk, HydroSystem<HDGalaxy>::x3Momentum_index);
+							if (di != 0 || dj != 0 || dk != 0) { neighbor_mass_sum += rho_nb; }
+						}
+					}
+				}
+				if (N_kernel == 0) { return; }
+				const double Vsnr_local = static_cast<double>(N_kernel) * vol;
+
+				// Eq 17-18: total swept-up + ejecta mass, and mass-weighted vCOM.
+				// Simplification: ejecta velocity v_ej taken equal to the source cell's
+				// own velocity (we do not track an actual star particle here).
+				const double Msnr = mass_sum * vol + Mej;
+				const double vCOMx = (momx_sum * vol + Mej * vx_c) / Msnr;
+				const double vCOMy = (momy_sum * vol + Mej * vy_c) / Msnr;
+				const double vCOMz = (momz_sum * vol + Mej * vz_c) / Msnr;
+
+				// nH_amb, shell-formation mass (Sec 3.2.1). M_sf is rescaled by
+				// (p_terminal_ref / p_terminal_canonical)^2 so that the kinetic energy
+				// p_terminal^2/(2 M_sf) stays invariant under changes to the runtime
+				// sn_momentum_ref parameter -- matches the real reference implementation
+				// (SNFeedbackUtils::depositThermalKineticMomentumSNR)
+				const double nH_amb = Msnr / (mu_H * Vsnr_local);
+				constexpr double M_sf_canonical = 1679.0 * MSUN;   // at nH=1 cm^-3, calibrated to p_ref_canonical
+				constexpr double p_ref_canonical = 2.8e5 * MSUN * KM_S; // Kim & Ostriker (2015) canonical terminal momentum
+				const double p_ratio = (sn_momentum_ref * MSUN * KM_S) / p_ref_canonical;
+				const double M_sf = M_sf_canonical * std::pow(amrex::max(nH_amb, 1.0e-8), -0.26) * p_ratio * p_ratio;
+				const double R_M  = Msnr / M_sf;
+
+				// Eq 20: terminal momentum (extensive, g*cm/s)
+				const double p_terminal = sn_momentum_ref * MSUN * KM_S * std::pow(amrex::max(nH_amb, 1.0e-8), -0.17);
+
+				// MC regime only (Eq 19, R_M > 1): full terminal momentum, no thermal-only
+				// or Sedov-Taylor branching. R_M is retained purely as a diagnostic.
+				const double p_radial_mag = p_terminal / vol;
+
+				// Full weight omega_ijk = 1 applied to every included kernel cell; the
+				// 1/N_kernel normalization is already folded into Vsnr_local = N_kernel*vol,
+				// so summing this over all N_kernel cells gives exactly Mej (mass conserved).
+				const double drho_ej_cell = Mej / Vsnr_local;
+				const bool have_mass_weight = (neighbor_mass_sum > 0.0);
+
+				// --- Pass A: raw radial kicks, accumulate net vector S for re-centering.
+				// Even though p_radial is isotropic in the continuum limit (paper: "the
+				// cross term cancels when summing over all cells in the stencil"), a
+				// discrete/domain-clipped stencil is not exactly isotropic, so we still
+				// need the same re-centering trick as before to guarantee zero net thrust. ---
+				double Sx = 0.0;
+				double Sy = 0.0;
+				double Sz = 0.0;
+				double Lraw = 0.0;
+				for (int di = -stencil_radius; di <= stencil_radius; ++di) {
+					for (int dj = -stencil_radius; dj <= stencil_radius; ++dj) {
+						for (int dk = -stencil_radius; dk <= stencil_radius; ++dk) {
+							if (di == 0 && dj == 0 && dk == 0) { continue; }
+							if (di*di + dj*dj + dk*dk > stencil_radius * stencil_radius) { continue; }
+							const int ii = i + di;
+							const int jj = j + dj;
+							const int kk = k + dk;
+							if (ii < slo[0] || ii > shi[0] || jj < slo[1] || jj > shi[1] ||
+								kk < slo[2] || kk > shi[2]) { continue; }
+							if (ii < dlo[0] || ii > dhi[0] || jj < dlo[1] || jj > dhi[1] ||
+								kk < dlo[2] || kk > dhi[2]) { continue; }
+
+							const double rx = di * dx[0];
+							const double ry = dj * dx[1];
+							const double rz = dk * dx[2];
+							const double r = std::sqrt(rx*rx + ry*ry + rz*rz);
+							if (r == 0.0) { continue; }
+							const double rho_nb = s(ii, jj, kk, HydroSystem<HDGalaxy>::density_index);
+							const double w_mom = have_mass_weight ? (rho_nb / neighbor_mass_sum)
+							                                       : (1.0 / static_cast<double>(N_kernel - 1));
+							const double ex = rx / r;
+							const double ey = ry / r;
+							const double ez = rz / r;
+							const double dp = p_radial_mag * w_mom;
+							Sx += dp * ex; Sy += dp * ey; Sz += dp * ez;
+							Lraw += dp;
+						}
+					}
+				}
+
+				double Lprime = 0.0;
+				for (int di = -stencil_radius; di <= stencil_radius; ++di) {
+					for (int dj = -stencil_radius; dj <= stencil_radius; ++dj) {
+						for (int dk = -stencil_radius; dk <= stencil_radius; ++dk) {
+							if (di == 0 && dj == 0 && dk == 0) { continue; }
+							if (di*di + dj*dj + dk*dk > stencil_radius * stencil_radius) { continue; }
+							const int ii = i + di;
+							const int jj = j + dj;
+							const int kk = k + dk;
+							if (ii < slo[0] || ii > shi[0] || jj < slo[1] || jj > shi[1] ||
+								kk < slo[2] || kk > shi[2]) { continue; }
+							if (ii < dlo[0] || ii > dhi[0] || jj < dlo[1] || jj > dhi[1] ||
+								kk < dlo[2] || kk > dhi[2]) { continue; }
+
+							const double rx = di * dx[0];
+							const double ry = dj * dx[1];
+							const double rz = dk * dx[2];
+							const double r = std::sqrt(rx*rx + ry*ry + rz*rz);
+							if (r == 0.0) { continue; }
+							const double rho_nb = s(ii, jj, kk, HydroSystem<HDGalaxy>::density_index);
+							const double w_mom = have_mass_weight ? (rho_nb / neighbor_mass_sum)
+							                                       : (1.0 / static_cast<double>(N_kernel - 1));
+							const double ex = rx / r;
+							const double ey = ry / r;
+							const double ez = rz / r;
+							const double dp = p_radial_mag * w_mom;
+							const double cx = dp * ex - Sx * w_mom;
+							const double cy = dp * ey - Sy * w_mom;
+							const double cz = dp * ez - Sz * w_mom;
+							Lprime += std::sqrt(cx*cx + cy*cy + cz*cz);
+						}
+					}
+				}
+				const double rescale = (Lprime > 0.0) ? (Lraw / Lprime) : 0.0;
+
+				// --- Pass B: deposit Eq 17 into every kernel cell (mass, base momentum
+				// from velocity-smoothing, corrected radial kick, and energy including
+				// the vCOM . p_radial cross term). All UNLIMITED -- limiter applied later. ---
+				for (int di = -stencil_radius; di <= stencil_radius; ++di) {
+					for (int dj = -stencil_radius; dj <= stencil_radius; ++dj) {
+						for (int dk = -stencil_radius; dk <= stencil_radius; ++dk) {
+							if (di*di + dj*dj + dk*dk > stencil_radius * stencil_radius) { continue; }
+							const int ii = i + di;
+							const int jj = j + dj;
+							const int kk = k + dk;
+							if (ii < slo[0] || ii > shi[0] || jj < slo[1] || jj > shi[1] ||
+								kk < slo[2] || kk > shi[2]) { continue; }
+							if (ii < dlo[0] || ii > dhi[0] || jj < dlo[1] || jj > dhi[1] ||
+								kk < dlo[2] || kk > dhi[2]) { continue; }
+
+							const double rho_ijk = s(ii, jj, kk, HydroSystem<HDGalaxy>::density_index);
+							const double px_ijk  = s(ii, jj, kk, HydroSystem<HDGalaxy>::x1Momentum_index);
+							const double py_ijk  = s(ii, jj, kk, HydroSystem<HDGalaxy>::x2Momentum_index);
+							const double pz_ijk  = s(ii, jj, kk, HydroSystem<HDGalaxy>::x3Momentum_index);
+							const double rho_new_ijk = rho_ijk + drho_ej_cell;
+
+							// Eq 17, momentum row: rho_new*vCOM - rho_old*v_old, plus the
+							// (re-centered) radial kick for non-center cells.
+							double pradx = 0.0;
+							double prady = 0.0;
+							double pradz = 0.0;
+							if (di != 0 || dj != 0 || dk != 0) {
+								const double rx = di * dx[0];
+								const double ry = dj * dx[1];
+								const double rz = dk * dx[2];
+								const double r = std::sqrt(rx*rx + ry*ry + rz*rz);
+								const double rho_nb = rho_ijk;
+								const double w_mom = have_mass_weight ? (rho_nb / neighbor_mass_sum)
+								                                       : (1.0 / static_cast<double>(N_kernel - 1));
+								const double ex = rx / r;
+								const double ey = ry / r;
+								const double ez = rz / r;
+								const double dp = p_radial_mag * w_mom;
+								pradx = (dp * ex - Sx * w_mom) * rescale;
+								prady = (dp * ey - Sy * w_mom) * rescale;
+								pradz = (dp * ez - Sz * w_mom) * rescale;
+							}
+
+							const double dpx = rho_new_ijk * vCOMx - px_ijk + pradx;
+							const double dpy = rho_new_ijk * vCOMy - py_ijk + prady;
+							const double dpz = rho_new_ijk * vCOMz - pz_ijk + pradz;
+
+							// Eq 17, energy row, with omega_ijk = 1 (see mass-deposit comment
+							// above): (Esn+Ekin_ej)/Vsnr_local + vCOM . p_radial. Summed over
+							// all N_kernel cells this adds exactly (Esn+Ekin_ej) total, plus
+							// the vCOM.p_radial cross term which nets to ~0 by construction.
+							// Ekin_ej (ejecta kinetic energy) is set to 0 here: we do not track
+							// a separate ejecta launch velocity distinct from the source cell.
+							constexpr double Ekin_ej = 0.0;
+							const double dE_ijk = (Esn + Ekin_ej) / Vsnr_local
+								+ (vCOMx * pradx + vCOMy * prady + vCOMz * pradz);
+
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 0), drho_ej_cell);
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 1), dpx);
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 2), dpy);
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 3), dpz);
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 4), dE_ijk);
+						}
+					}
+				}
+			});
+		}
+		amrex::Gpu::streamSynchronize();
+		delta.SumBoundary(geom[lev].periodicity()); // Step 2: inter-rank buffer summation
+
+		// --- Pass 2 / Step 3-5: apply the analytic limiter (Eq 21) once per cell using
+		// the fully-summed delta, then commit to state. Hydro-only: no Emag term, so
+		// Etot = Ekin + Eint exactly. ---
+		for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
+			const amrex::Box &box = mfi.validbox();
+			auto s = state.array(mfi);
+			auto const &d = delta.const_array(mfi);
+
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const double drho = d(i, j, k, 0);
+				const double dE    = d(i, j, k, 4);
+				if (drho == 0.0 && dE == 0.0) { return; }
+
+				const double rho_old  = s(i, j, k, HydroSystem<HDGalaxy>::density_index);
+				const double px_old   = s(i, j, k, HydroSystem<HDGalaxy>::x1Momentum_index);
+				const double py_old   = s(i, j, k, HydroSystem<HDGalaxy>::x2Momentum_index);
+				const double pz_old   = s(i, j, k, HydroSystem<HDGalaxy>::x3Momentum_index);
+				const double Eint_old = s(i, j, k, HydroSystem<HDGalaxy>::internalEnergy_index);
+
+				const double rho_new = rho_old + drho;
+
+				// Internal-energy floor: hold SPECIFIC internal energy fixed and scale by
+				// the new density, i.e. the added ejecta mass carries its proportional
+				// share of internal energy too. Matches the real reference implementation
+				// (SNFeedbackUtils::addCompositeBufferToState's e_int_new_tmp), rather than
+				// holding the absolute Eint_old fixed as we had been doing, which implicitly
+				// assumed the added mass carries zero extra internal energy.
+				const double Eint_floor = (Eint_old / rho_old) * rho_new;
+
+				const double dpx = d(i, j, k, 1);
+				const double dpy = d(i, j, k, 2);
+				const double dpz = d(i, j, k, 3);
+
+				// Eq 21 limiter: find largest lambda in [0,1] s.t.
+				//   Eint_floor + |p_old + lambda*dp|^2 / (2 rho_new) <= Etot_old + dE
+				// Mass and energy are always added in full (matches paper: Delta e is fixed);
+				// only the momentum *vector* is rescaled. Hydro-only: Etot_old is read
+				// directly from the energy slot (no Emag to subtract out first).
+				const double Etot_old = s(i, j, k, HydroSystem<HDGalaxy>::energy_index);
+				const double a = dpx*dpx + dpy*dpy + dpz*dpz;
+				const double b = 2.0 * (px_old*dpx + py_old*dpy + pz_old*dpz);
+				const double c = (px_old*px_old + py_old*py_old + pz_old*pz_old)
+					- 2.0 * rho_new * (Etot_old + dE - Eint_floor);
+
+				double lambda = 1.0;
+				if (a > 0.0) {
+					// Feasible at lambda=1 iff a+b+c <= 0; else solve a*l^2+b*l+c=0 for
+					// the largest root in [0,1].
+					if (a + b + c > 0.0) {
+						const double disc = b*b - 4.0*a*c;
+						if (disc <= 0.0) {
+							lambda = 0.0; // no physically valid nonzero kick this step
+						} else {
+							const double sq = std::sqrt(disc);
+							const double l1 = (-b + sq) / (2.0*a);
+							const double l2 = (-b - sq) / (2.0*a);
+							const double lmax = amrex::max(l1, l2);
+							lambda = amrex::max(0.0, amrex::min(1.0, lmax));
+						}
+					}
+				}
+
+				const double px_new = px_old + lambda * dpx;
+				const double py_new = py_old + lambda * dpy;
+				const double pz_new = pz_old + lambda * dpz;
+
+				const double Etot_new = Etot_old + dE; // full energy always added (unscaled)
+				const double Ekin_new = 0.5 * (px_new*px_new + py_new*py_new + pz_new*pz_new) / rho_new;
+				const double Eint_new = Etot_new - Ekin_new; // absorbs any un-kicked energy as heat (no Emag term)
+
+				s(i, j, k, HydroSystem<HDGalaxy>::density_index)        = rho_new;
+				s(i, j, k, HydroSystem<HDGalaxy>::x1Momentum_index)     = px_new;
+				s(i, j, k, HydroSystem<HDGalaxy>::x2Momentum_index)     = py_new;
+				s(i, j, k, HydroSystem<HDGalaxy>::x3Momentum_index)     = pz_new;
+				s(i, j, k, HydroSystem<HDGalaxy>::internalEnergy_index) = Eint_new;
+				s(i, j, k, HydroSystem<HDGalaxy>::energy_index)         = Etot_new;
+			});
+		}
+		amrex::Gpu::streamSynchronize();
+	}
+	AverageDown(); 
+}
 
 template <>
 void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(
