@@ -30,20 +30,11 @@ AMREX_ENUM(RefineOn, Region, MagneticEnergy); // NOLINT
 template <> struct quokka::EOS_Traits<FieldLoop> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<FieldLoop> {
+template <> struct Physics_Traits<FieldLoop> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_self_gravity_enabled = false;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 constexpr double A = 1.0e-3;
@@ -70,7 +61,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		const double vy = std::cos(M_PI / 3.0);
 		const double vz = 1.0; // this should not affect the solution!
 
-		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy);
+		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy + vz * vz);
 		const double Eint = P0 / (gamma_gas - 1.0);
 
 		// Az = MAX([A ( R0 - r )],0)
@@ -169,13 +160,14 @@ template <> void QuokkaSimulation<FieldLoop>::refineGrid(int lev, amrex::TagBoxA
 	}
 }
 
-template <> void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
+template <>
+void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp,
+						    amrex::MultiFab const & /*state_cc*/, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "magnetic_divergence") {
 		const amrex::Geometry &geom_lev = geom[lev];
 		const auto dx = geom_lev.CellSizeArray();
-		auto const &state_fc = state_new_fc_[lev];
 		auto output = mf.arrays();
 
 		// Get the face-centered magnetic field arrays

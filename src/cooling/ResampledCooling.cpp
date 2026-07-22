@@ -1,5 +1,5 @@
 // ABOUTME: Implementation for resampled cooling tables that interpolate on (rho, e_int) grid
-// ABOUTME: Reads HDF5-format tables produced by extern/cooling/resample_cooling_tables.py
+// ABOUTME: Reads HDF5-format tables produced by extern/cooling/resample_grackle_cooling_tables.py
 //==============================================================================
 //  TwoMomentRad - a radiation transport library for patch-based AMR codes
 //  Copyright 2020 Benjamin Wibking.
@@ -12,13 +12,19 @@
 
 #include "cooling/ResampledCooling.hpp"
 
+#include "AMReX_Arena.H"
+#include "AMReX_FileSystem.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_Print.H"
+#include <H5Apublic.h>
+#include <H5Fpublic.h>
+#include <H5Gpublic.h>
+#include <H5Ppublic.h>
+#include <H5Tpublic.h>
 #include <format>
 
 namespace quokka::ResampledCooling
 {
-
-constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
 
 // return: is_include_pe
 auto readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables) -> bool
@@ -26,59 +32,97 @@ auto readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	amrex::Print() << "Initializing resampled cooling.\n";
 	amrex::Print() << std::format("resampled_table_file: {}.\n", hdf5_file);
 
-	// Check if file exists
 	if (!amrex::FileSystem::Exists(hdf5_file)) {
 		amrex::Abort("Resampled cooling table file does not exist!");
 	}
 
-	// Define coordinate names and fast_log setting
-	const std::vector<std::string> coord_names = {"rho", "eint"};
-	const int is_fast_log = 1;
+	// Read all 5 cooling outputs: cooling rate is linear, T/cs/P/S are fast_log
+	resampledTables.all_tables =
+	    quokka::DataTable<2, 5>::H5Reader(hdf5_file, "tab1",
+					      {quokka::TransformType::linear, quokka::TransformType::fast_log, quokka::TransformType::fast_log,
+					       quokka::TransformType::fast_log, quokka::TransformType::fast_log});
 
-	// Coordinate bounds will be read by H5Reader
-	std::array<std::pair<amrex::Real, amrex::Real>, 2> coord_bounds;
-	bool is_pe_enabled = false;
+	// Read domain-specific attributes (include_pe, cloudy_H_mass_fraction) from tab1
+	amrex::Real cloudy_H_mass_fraction_val = 0.0;
+	int include_pe_val = 0;
 
-	// Read all 2D datasets using generic DataTable H5Reader (file path-based interface)
-	resampledTables.cooling_rates =
-	    quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/cooling_rates", coord_names, is_fast_log, &coord_bounds, &is_pe_enabled);
-	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/temperatures", coord_names, is_fast_log);
-	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/sound_speeds", coord_names, is_fast_log);
-	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/pressures", coord_names, is_fast_log);
-	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/entropies", coord_names, is_fast_log);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		hid_t const file_id = H5Fopen(hdf5_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id >= 0, "Failed to reopen HDF5 file for extra attributes");
+		hid_t const group_id = H5Gopen2(file_id, "tab1", H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(group_id >= 0, "Failed to open tab1 group for extra attributes");
 
-	// Set coordinate bounds from H5Reader output
-	resampledTables.rho_min = coord_bounds[0].first;
-	resampledTables.rho_max = coord_bounds[0].second;
-	resampledTables.eint_min = coord_bounds[1].first;
-	resampledTables.eint_max = coord_bounds[1].second;
+		hid_t attr_id = H5Aopen(group_id, "cloudy_H_mass_fraction", H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open cloudy_H_mass_fraction attribute");
+		herr_t status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &cloudy_H_mass_fraction_val);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status >= 0, "Failed to read cloudy_H_mass_fraction attribute");
+		H5Aclose(attr_id);
 
-	// Get grid dimensions from the DataTable objects for logging
-	const int n_rho = resampledTables.cooling_rates.size(0);
-	const int n_eint = resampledTables.cooling_rates.size(1);
+		attr_id = H5Aopen(group_id, "include_pe", H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open include_pe attribute");
+		status = H5Aread(attr_id, H5T_NATIVE_INT, &include_pe_val);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status >= 0, "Failed to read include_pe attribute");
+		H5Aclose(attr_id);
 
-	resampledTables.cloudy_H_mass_fraction = cloudy_H_mass_fraction;
+		H5Gclose(group_id);
+		H5Fclose(file_id);
+	}
 
-	amrex::Print() << std::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
-	amrex::Print() << std::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
-	amrex::Print() << std::format("\tPhotoelectric heating: {}.\n", is_pe_enabled ? "enabled" : "disabled");
+	amrex::ParallelDescriptor::Bcast(&cloudy_H_mass_fraction_val, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+	amrex::ParallelDescriptor::Bcast(&include_pe_val, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
-	return is_pe_enabled;
+	resampledTables.cloudy_H_mass_fraction = cloudy_H_mass_fraction_val;
+	resampledTables.include_pe = (include_pe_val != 0);
+
+	// Log info using physical bounds from the DataTable
+	const int n_rho = resampledTables.all_tables.size(0);
+	const int n_eint = resampledTables.all_tables.size(1);
+	const amrex::Real rho_min = resampledTables.all_tables.coord_xlo()[0];
+	const amrex::Real rho_max = resampledTables.all_tables.coord_xhi()[0];
+	const amrex::Real eint_min = resampledTables.all_tables.coord_xlo()[1];
+	const amrex::Real eint_max = resampledTables.all_tables.coord_xhi()[1];
+
+	amrex::Print() << std::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", rho_min, rho_max, n_rho);
+	amrex::Print() << std::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", eint_min, eint_max, n_eint);
+	amrex::Print() << std::format("\tPhotoelectric heating: {}.\n", resampledTables.include_pe ? "included in table" : "NOT included in table");
+
+	return resampledTables.include_pe;
 }
 
 auto resampled_tables::const_tables() const -> resampledGpuConstTables
 {
-	resampledGpuConstTables tables{cooling_rates.const_tables(),
-				       temperatures.const_tables(),
-				       sound_speeds.const_tables(),
-				       pressures.const_tables(),
-				       entropies.const_tables(),
-				       rho_min,
-				       rho_max,
-				       eint_min,
-				       eint_max,
-				       cloudy_H_mass_fraction};
-	return tables;
+	return resampledGpuConstTables{
+	    .all_tables = all_tables.const_tables(),
+	    .cloudy_H_mass_fraction = cloudy_H_mass_fraction,
+	    .eint_min = all_tables.coord_xlo()[1],
+	    .eint_max = all_tables.coord_xhi()[1],
+	};
+}
+
+auto resampled_tables::const_tables_host() const -> resampledGpuConstTables
+{
+	return resampledGpuConstTables{
+	    .all_tables = all_tables.const_tables_host(),
+	    .cloudy_H_mass_fraction = cloudy_H_mass_fraction,
+	    .eint_min = all_tables.coord_xlo()[1],
+	    .eint_max = all_tables.coord_xhi()[1],
+	};
+}
+
+AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry = nullptr; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+/// Register (or re-register) resampled table sub-handles for the tabulated EOS backend.
+/// Lazily allocates the managed-memory registry on first call. Repeated calls overwrite
+/// the host and device tables, so the registry always reflects the most recently loaded
+/// cooling table. The pointer being non-null is the sole "registered" invariant.
+void registerEOSTabulated(resampledGpuConstTables host_tables, resampledGpuConstTables device_tables)
+{
+	if (g_eos_tabulated_registry == nullptr) {
+		auto *mem = amrex::The_Managed_Arena()->alloc(sizeof(EOSTabulatedRegistry));
+		g_eos_tabulated_registry = new (mem) EOSTabulatedRegistry{}; // NOLINT(cppcoreguidelines-owning-memory)
+	}
+	g_eos_tabulated_registry->host = host_tables;
+	g_eos_tabulated_registry->device = device_tables;
 }
 
 } // namespace quokka::ResampledCooling

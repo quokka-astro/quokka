@@ -68,11 +68,13 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
+#include "AMReX_TypeTraits.H"
 #include "AMReX_Utility.H"
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "util/BC.hpp"
 #include "util/time_units.hpp"
+#include "util/volume_integral.hpp"
 #include <AMReX_FluxRegister.H>
 #include <format>
 #include <unordered_set>
@@ -226,6 +228,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
+	// Conduction parameters
+	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
+	amrex::Real conductionCFL = 0.2;	      // default
+	int enableElectronConduction_ = 0;	      // default
+
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	     // default
@@ -298,6 +305,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void createInitialCICRadParticles() = 0;
 	virtual void createInitialStochasticStellarPopParticles() = 0;
 	virtual void createInitialSinkParticles() = 0;
+	virtual void createInitialStarParticles() = 0;
 	virtual void createInitialTestParticles() = 0;
 	void particleMeshInteraction(amrex::Real time, amrex::Real dt);
 	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow creating them at the start
@@ -311,8 +319,22 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf,
 							const amrex::Vector<std::string> &compNames, int lev, int interval) = 0;
 
-	// compute derived variables
-	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
+	/**
+	 * Compute a problem-defined derived plotfile variable.
+	 *
+	 * Implementations must read cell-centered and face-centered simulation state
+	 * from `state_cc` and `state_fc`, not directly from `state_new_cc_` or
+	 * `state_new_fc_`.  Plotfile generation may pass scratch MultiFabs here
+	 * instead of the live simulation state; when plotfile ghost cells are
+	 * requested, those scratch MultiFabs contain freshly filled ghost zones.
+	 * The only permitted side effect is writing the derived field into component
+	 * `ncomp` of `mf`; implementations must not mutate simulation state or the
+	 * provided input state.
+	 * The level index is still provided for level-indexed auxiliary data such as
+	 * geometry, gravitational potential, particles, and problem-owned caches.
+	 */
+	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+				       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const = 0;
 	virtual void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const;
 
 	// compute statistics
@@ -368,6 +390,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
+	void regrid(int lbase, amrex::Real time, bool initial) override;
 	void calculateGpotAllLevels();
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
@@ -450,7 +473,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	AMREX_GPU_DEVICE static void setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
 								     amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values);
 
-	// compute volume integrals
+	// compute volume integrals. The callback signature is (i, j, k, state_cc, state_fc).
 	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
 
 	// I/O functions
@@ -460,8 +483,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto GetPlotfileVarNames_fc() const -> std::array<amrex::Vector<std::string>, AMREX_SPACEDIM>;
 	[[nodiscard]] auto PlotFileMF_cc(int included_ghosts) -> amrex::Vector<amrex::MultiFab>;
 	[[nodiscard]] auto PlotFileMFAtLevel_cc(int lev, int included_ghosts) -> amrex::MultiFab;
+	[[nodiscard]] auto PlotFileMFAtLevel_cc(int lev, int included_ghosts, const amrex::MultiFab &src_cc,
+						const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &src_fc) -> amrex::MultiFab;
 	[[nodiscard]] auto PlotFileMF_fc(int nghost_fc_) -> std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM>;
 	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_) -> amrex::MultiFab;
+	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_, const amrex::MultiFab &src_fc) -> amrex::MultiFab;
+	void FillPlotFileScratchData(int finest_lev_to_fill, int included_ghosts, amrex::Vector<amrex::MultiFab> &scratch_cc,
+				     amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &scratch_fc);
+	void FillPlotFileScratchFaceData(int finest_lev_to_fill, int nghost_fc_, int idim, amrex::Vector<amrex::MultiFab> &scratch_fc);
 	void AverageDownDerived(const amrex::Vector<amrex::MultiFab *> &mfs, const amrex::Vector<std::string> &varnames) const;
 	void createDiagnostics();
 	void createRuntimeDerivedFields();
@@ -576,7 +605,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
-	quokka::SpacingType rad_table_output_spacing_ = quokka::SpacingType::fast_log;
+	quokka::TransformType rad_table_output_transform_ = quokka::TransformType::fast_log;
 
 #if AMREX_SPACEDIM == 3
 	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
@@ -666,6 +695,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
 	std::unique_ptr<quokka::StochasticStellarPopParticleContainer<problem_t>> StochasticStellarPopParticles;
 	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
+	std::unique_ptr<quokka::StarParticleContainer<problem_t>> StarParticles;
 	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
 
 	// Add PhysicsParticleRegister member
@@ -782,6 +812,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	// add git commit to metadata
 	simulationMetadata_["git_hash_quokka"] = getGitHashForQuokka();
 	simulationMetadata_["git_hash_amrex"] = getGitHashForAmrex();
+
+	// print version and git hashes to stdout
+	amrex::Print() << std::format("\nQuokka version {} (git: {})\n", QUOKKA_VERSION, getGitHashForQuokka());
+	amrex::Print() << std::format("\tAMReX git: {}\n", getGitHashForAmrex());
+	amrex::Print() << std::format("\tMicrophysics git: {}\n", MICROPHYSICS_GIT_HASH);
+#if AMREX_SPACEDIM == 3
+	amrex::Print() << std::format("\tAMReX-Hydro git: {}\n", AMREX_HYDRO_GIT_HASH);
+#endif
+	amrex::Print() << std::format("\tTurbGen git: {}\n", TURBULENCE_GIT_HASH);
 
 	// add units and physics-specific metadata
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -936,6 +975,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default checkpoint prefix
 	pp.query("checkpoint_prefix", chk_file);
 
+	// Default statistics file name
+	pp.query("statistics_file", stats_file);
+
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
 
@@ -1070,7 +1112,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		amrex::ParmParse const ppp("particles");
 		ppp.query("use_luminosity_table", useLuminosityTable_);
 		ppp.query("rad_table", luminosityTableFilename_);
-		ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
+		ppp.query("rad_table_output_spacing", rad_table_output_transform_);   // legacy key (pre-rename)
+		ppp.query("rad_table_output_transform", rad_table_output_transform_); // new key takes precedence
 		ppp.query("split_particles_on_restart_refine", splitParticlesOnRestartRefine_);
 
 		// if particle and radiation are enabled
@@ -1083,7 +1126,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
 
 				// Use specified spacing for luminosity values
-				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_spacing_);
+				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_transform_);
 
 				amrex::Print() << "Luminosity table loaded successfully.\n";
 				amrex::Print() << std::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
@@ -1223,6 +1266,21 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		printCellProperties(lev, hydro_dt.index);
 	}
 
+	// compute timestep based on conduction parameters
+	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
+								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+	if (enableElectronConduction_ == 1) {
+		double c_v = C::k_B / (::quokka::EOS_Traits<problem_t>::mean_molecular_weight * (::quokka::EOS_Traits<problem_t>::gamma - 1.0));
+		double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
+		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient;
+		conduction_dt.index = domain_signal_maxloc;
+
+		if (verbose) {
+			amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
+			amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
+		}
+	}
+
 	// compute maximum particle speed on level 'lev'
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> particle_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
@@ -1251,7 +1309,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 #endif
 
 	// compute minimum timestep
-	std::vector<dtloc_t *> dts = {&hydro_dt, &particle_dt};
+	std::vector<dtloc_t *> dts = {&hydro_dt, &conduction_dt, &particle_dt};
 	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end(), [](dtloc_t *const p1, dtloc_t *const p2) { return p1->value < p2->value; });
 
 	if (verbose) {
@@ -1260,6 +1318,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			amrex::Print() << std::format("...[level {}] timestep limited by HYDRO\n", lev);
 		} else if (dt_min_ptr == &particle_dt) {
 			amrex::Print() << std::format("...[level {}] timestep limited by PARTICLES\n", lev);
+		} else if (dt_min_ptr == &conduction_dt) {
+			amrex::Print() << std::format("...[level {}] timestep limited by CONDUCTION\n", lev);
 		}
 	}
 
@@ -1297,8 +1357,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 
 	for (int level = 0; level <= finest_level; ++level) {
 		n_factor *= nsubsteps[level];
+
+		auto effective_factor = static_cast<amrex::Real>(n_factor);
+		if (enableElectronConduction_ == 1) {
+			// Conduction timestep scales as dx^2, so we need to use n_factor^2 here instead of n_factor.
+			effective_factor = static_cast<amrex::Real>(n_factor) * static_cast<amrex::Real>(n_factor);
+		}
+
 		const amrex::Real dt_0_old = dt_0; // save old dt_0
-		dt_0 = std::min(dt_0, static_cast<amrex::Real>(n_factor) * dt_tmp[level]);
+		dt_0 = std::min(dt_0, effective_factor * dt_tmp[level]);
 		if (dt_0 < dt_0_old) {
 			// level 'level' has now set the timestep
 			level_that_sets_dt_0 = level;
@@ -1681,8 +1748,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	}
 
 	// write final checkpoint
-	// IMPORTANT: this MUST be written *after* the plotfile to avoid corruption:
-	// 	https://github.com/quokka-astro/quokka/issues/554
 	if (checkpointInterval_ > 0 && istep[0] > last_chk_file_step) {
 		WriteCheckpointFile();
 	}
@@ -2094,8 +2159,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Sink accretion, stage 2: update the particle states -- compute scale_down, apply to particle, apply to cells
 	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, geom[lev], lev, time, dt);
 
-	// We allow particle formation at the finest level only to avoid duplicate particle creation from multiple levels at the same location.
-	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
+	// Only create particles when the AMR hierarchy has fully refined to max_level.
+	// Creating a ForceFinestLevel particle at a sub-max level violates the invariant
+	// that sink particles always reside on the finest level of the AMR hierarchy.
+	if (finest_level == max_level) {
+		particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
+	}
 
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
@@ -2116,6 +2185,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 }
 #endif // AMREX_SPACEDIM == 3
 
+// N.B.  The ForceFinestLevel regrid guarantee lives in timeStepWithSubcycling, where a
+// level-0 regrid is forced at the start of the first coarse step.  The bare override here
+// keeps the virtual method available for future diagnostics.
+template <typename problem_t> void AMRSimulation<problem_t>::regrid(int lbase, amrex::Real time, bool initial) { amrex::AmrCore::regrid(lbase, time, initial); }
+
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
 template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, int iteration)
@@ -2131,12 +2205,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		// regrid changes level "lev+1" so we don't regrid on max_level
 		// also make sure we don't regrid fine levels again if
 		// it was taken care of during a coarser regrid
-		if (lev < max_level && istep[lev] > last_regrid_step[lev]) {
-			if (istep[lev] % regrid_int == 0) {
+		bool force_finest_regrid = false;
+#if AMREX_SPACEDIM == 3
+		// When ForceFinestLevel particles exist (e.g., sink particles), a level-0 regrid is
+		// forced at the start of every coarse step (istep[0] == 0), regardless of regrid_interval.
+		// This ensures the AMR hierarchy is fully rebuilt around sink particles before any level
+		// advance occurs, preventing the subcycled regrid from losing finest-level coverage.
+		force_finest_regrid = (lev == 0 && lev < max_level && istep[lev] == 0 && particleRegister_.anyParticleRequiresFinestLevel());
+#endif
+		if ((lev < max_level && istep[lev] > last_regrid_step[lev]) || force_finest_regrid) {
+			if (istep[lev] % regrid_int == 0 || force_finest_regrid) {
 				// regrid could add newly refined levels (if finest_level < max_level)
 				// so we save the previous finest level index
 				int old_finest = finest_level;
-				regrid(lev, time);
+				regrid(lev, time, false);
 
 				// mark that we have regridded this level already
 				for (int k = lev; k <= finest_level; ++k) {
@@ -3451,28 +3533,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 
 template <typename problem_t> template <typename F> auto AMRSimulation<problem_t>::computeVolumeIntegral(F const &user_f) -> amrex::Real
 {
-	// compute integral of user_f(i, j, k, state) along the given axis.
-	const BL_PROFILE("AMRSimulation::computeVolumeIntegral()");
-
-	// allocate temporary multifabs
-	amrex::Vector<amrex::MultiFab> q;
-	q.resize(finest_level + 1);
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		q[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
-	}
-
-	// evaluate user_f on all levels
-	// (note: it is not necessary to average down)
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		auto const &state = state_new_cc_[lev].const_arrays();
-		auto const &result = q[lev].arrays();
-		amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) { result[bx](i, j, k) = user_f(i, j, k, state[bx]); });
-	}
-	amrex::Gpu::streamSynchronize();
-
-	// call amrex::volumeWeightedSum
-	const amrex::Real result = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(q), 0, geom, ref_ratio);
-	return result;
+	return quokka::computeVolumeIntegral<problem_t>(finest_level, state_new_cc_, state_new_fc_, Geom(), refRatio(), user_f);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
@@ -3504,6 +3565,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 
 	// Read particle parameters from input file
 	quokka::particleParmParse();
+
+	// Sink and Star both accrete via the same accretion-rate buffer (see particleMeshInteraction).
+	// Enabling both would double-apply gas removal: computeSinkAccretion accumulates into the shared
+	// buffer once per accreting type, then applySinkAccretion applies UpdateHydroState once per type.
+	// To support multiple accreting particle types in the future, the accretion dispatch would need
+	// to be refactored: buffer all accretion rates first, compute a combined rate with a single
+	// limiting factor, and apply accretion on all types using that shared limit.
+	static_assert(!(Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) ||
+			  !(Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star),
+		      "Sink and Star particles cannot both be enabled. "
+		      "Both accrete via the same accretion-rate buffer and would double-apply gas removal. "
+		      "See the comment above for how to fix this if combined Sink+Star accretion is needed.");
 
 	const bool is_restart = (header_box_arrays != nullptr);
 
@@ -3582,6 +3655,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 		}
 	}
 
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star) {
+		if (is_restart) {
+			initializeParticleContainerFromCheckpoint<quokka::ParticleType::Star>(StarParticles, *header_box_arrays);
+		} else {
+			AMREX_ASSERT(StarParticles == nullptr);
+			static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for Star particles");
+
+			StarParticles = std::make_unique<quokka::StarParticleContainer<problem_t>>(this);
+			StarParticles->SetVerbose(0);
+
+			particleRegister_.template registerParticleType<quokka::ParticleType::Star>(StarParticles.get());
+
+			createInitialStarParticles();
+		}
+	}
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
 		if (is_restart) {
 			initializeParticleContainerFromCheckpoint<quokka::ParticleType::Sink>(SinkParticles, *header_box_arrays);
@@ -3660,24 +3748,123 @@ void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex
 	amrex::Gpu::streamSynchronize();
 }
 
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int included_ghosts) -> amrex::MultiFab
+template <typename problem_t>
+void AMRSimulation<problem_t>::FillPlotFileScratchFaceData(const int finest_lev_to_fill, const int nghost_fc_, const int idim,
+							   amrex::Vector<amrex::MultiFab> &scratch_fc)
 {
-	const int ncomp_plotMF = plotfileVarsToInclude_cc_.size();
-	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, included_ghosts);
+	AMREX_ASSERT(finest_lev_to_fill <= finest_level);
+	scratch_fc.clear();
 
-	if (included_ghosts > 0) {
-		// Fill ghost zones for state_new_cc_
-		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
-				       InterpHookNone, FillPatchType::fillpatch_function);
+	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
+		scratch_fc.reserve(finest_lev_to_fill + 1);
+		auto const dir = static_cast<quokka::direction>(idim);
 
-		// Fill ghost zones for state_new_fc_
+		for (int lev = 0; lev <= finest_lev_to_fill; ++lev) {
+			scratch_fc.emplace_back(state_new_fc_[lev][idim].boxArray(), state_new_fc_[lev][idim].DistributionMap(),
+						state_new_fc_[lev][idim].nComp(), nghost_fc_);
+			amrex::MultiFab::Copy(scratch_fc[lev], state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), 0);
+
+			if (lev == 0) {
+				fillBoundaryConditions(scratch_fc[lev], scratch_fc[lev], lev, tNew_[lev], quokka::centering::fc, dir, InterpHookNone,
+						       InterpHookNone, FillPatchType::fillpatch_function);
+			} else {
+				amrex::Vector<amrex::MultiFab *> coarseData{&scratch_fc[lev - 1]};
+				amrex::Vector<amrex::Real> coarseTime{tNew_[lev - 1]};
+				amrex::Vector<amrex::MultiFab *> fineData{&scratch_fc[lev]};
+				amrex::Vector<amrex::Real> fineTime{tNew_[lev]};
+				amrex::Vector<amrex::BCRec> BCs = BCs_fc_;
+				quokka::centering cen = quokka::centering::fc;
+
+				FillPatchWithData(lev, tNew_[lev], scratch_fc[lev], coarseData, coarseTime, fineData, fineTime, 0, scratch_fc[lev].nComp(), BCs,
+						  cen, dir, FillPatchType::fillpatch_function, InterpHookNone, InterpHookNone);
+			}
+
+			AMREX_ASSERT(!scratch_fc[lev].contains_nan(0, scratch_fc[lev].nComp()));
+			AMREX_ASSERT(!scratch_fc[lev].contains_nan());
+		}
+	}
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::FillPlotFileScratchData(const int finest_lev_to_fill, const int included_ghosts, amrex::Vector<amrex::MultiFab> &scratch_cc,
+						       amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &scratch_fc)
+{
+	AMREX_ASSERT(finest_lev_to_fill <= finest_level);
+	scratch_cc.clear();
+	scratch_fc.clear();
+	scratch_cc.reserve(finest_lev_to_fill + 1);
+	scratch_fc.resize(finest_lev_to_fill + 1);
+
+	for (int lev = 0; lev <= finest_lev_to_fill; ++lev) {
+		scratch_cc.emplace_back(state_new_cc_[lev].boxArray(), state_new_cc_[lev].DistributionMap(), state_new_cc_[lev].nComp(), included_ghosts);
+		amrex::MultiFab::Copy(scratch_cc[lev], state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
+
+		if (lev == 0) {
+			fillBoundaryConditions(scratch_cc[lev], scratch_cc[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
+					       InterpHookNone, FillPatchType::fillpatch_function);
+		} else {
+			amrex::Vector<amrex::MultiFab *> coarseData{&scratch_cc[lev - 1]};
+			amrex::Vector<amrex::Real> coarseTime{tNew_[lev - 1]};
+			amrex::Vector<amrex::MultiFab *> fineData{&scratch_cc[lev]};
+			amrex::Vector<amrex::Real> fineTime{tNew_[lev]};
+			amrex::Vector<amrex::BCRec> BCs = BCs_cc_;
+			quokka::centering cen = quokka::centering::cc;
+
+			FillPatchWithData(lev, tNew_[lev], scratch_cc[lev], coarseData, coarseTime, fineData, fineTime, 0, scratch_cc[lev].nComp(), BCs, cen,
+					  quokka::direction::na, FillPatchType::fillpatch_function, InterpHookNone, InterpHookNone);
+		}
+
+		AMREX_ASSERT(!scratch_cc[lev].contains_nan(0, scratch_cc[lev].nComp()));
+		AMREX_ASSERT(!scratch_cc[lev].contains_nan());
+
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
-						       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+				scratch_fc[lev][idim].define(state_new_fc_[lev][idim].boxArray(), state_new_fc_[lev][idim].DistributionMap(),
+							     state_new_fc_[lev][idim].nComp(), included_ghosts);
+				amrex::MultiFab::Copy(scratch_fc[lev][idim], state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), 0);
+
+				auto const dir = static_cast<quokka::direction>(idim);
+				if (lev == 0) {
+					fillBoundaryConditions(scratch_fc[lev][idim], scratch_fc[lev][idim], lev, tNew_[lev], quokka::centering::fc, dir,
+							       InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+				} else {
+					amrex::Vector<amrex::MultiFab *> coarseData{&scratch_fc[lev - 1][idim]};
+					amrex::Vector<amrex::Real> coarseTime{tNew_[lev - 1]};
+					amrex::Vector<amrex::MultiFab *> fineData{&scratch_fc[lev][idim]};
+					amrex::Vector<amrex::Real> fineTime{tNew_[lev]};
+					amrex::Vector<amrex::BCRec> BCs = BCs_fc_;
+					quokka::centering cen = quokka::centering::fc;
+
+					FillPatchWithData(lev, tNew_[lev], scratch_fc[lev][idim], coarseData, coarseTime, fineData, fineTime, 0,
+							  scratch_fc[lev][idim].nComp(), BCs, cen, dir, FillPatchType::fillpatch_function, InterpHookNone,
+							  InterpHookNone);
+				}
+
+				AMREX_ASSERT(!scratch_fc[lev][idim].contains_nan(0, scratch_fc[lev][idim].nComp()));
+				AMREX_ASSERT(!scratch_fc[lev][idim].contains_nan());
 			}
 		}
 	}
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int included_ghosts) -> amrex::MultiFab
+{
+	if (included_ghosts > 0) {
+		amrex::Vector<amrex::MultiFab> scratch_cc;
+		amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> scratch_fc;
+		FillPlotFileScratchData(lev, included_ghosts, scratch_cc, scratch_fc);
+		return PlotFileMFAtLevel_cc(lev, included_ghosts, scratch_cc[lev], scratch_fc[lev]);
+	}
+
+	return PlotFileMFAtLevel_cc(lev, included_ghosts, state_new_cc_[lev], state_new_fc_[lev]);
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int included_ghosts, const amrex::MultiFab &src_cc,
+						    const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &src_fc) -> amrex::MultiFab
+{
+	const int ncomp_plotMF = plotfileVarsToInclude_cc_.size();
+	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, included_ghosts);
 
 	// Process each variable in the configurable list
 	int comp = 0;
@@ -3686,7 +3873,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 		auto cc_it = std::ranges::find(componentNames_cc_, varname);
 		if (cc_it != componentNames_cc_.end()) {
 			int cc_comp = std::distance(componentNames_cc_.begin(), cc_it);
-			amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], cc_comp, comp, 1, included_ghosts);
+			amrex::MultiFab::Copy(plotMF, src_cc, cc_comp, comp, 1, included_ghosts);
 			comp++;
 			continue;
 		}
@@ -3702,7 +3889,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 				const int var_idx = fc_comp_flat / AMREX_SPACEDIM; // which variable type
 				const int idim = fc_comp_flat % AMREX_SPACEDIM;	   // which dimension
 				const int fc_comp = var_idx;			   // component index within that dimension's MultiFab
-				AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, fc_comp, 1);
+				AverageFCToCC(plotMF, src_fc[idim], idim, comp, fc_comp, 1);
 				comp++;
 				continue;
 			}
@@ -3721,7 +3908,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 				comp++;
 				continue;
 			}
-			ComputeDerivedVar(lev, varname, plotMF, comp);
+			ComputeDerivedVar(lev, varname, plotMF, comp, src_cc, src_fc);
 			comp++;
 			continue;
 		}
@@ -3773,6 +3960,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloor
 
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int nghost_fc_) -> amrex::MultiFab
 {
+	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
+		if (nghost_fc_ > 0) {
+			amrex::Vector<amrex::MultiFab> scratch_fc;
+			FillPlotFileScratchFaceData(lev, nghost_fc_, idim, scratch_fc);
+			return PlotFileMFAtLevel_fc(lev, idim, nghost_fc_, scratch_fc[lev]);
+		}
+	}
+
+	return PlotFileMFAtLevel_fc(lev, idim, nghost_fc_, state_new_fc_[lev][idim]);
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int nghost_fc_, const amrex::MultiFab &src_fc) -> amrex::MultiFab
+{
 	int comp = 0;
 	int nvar_dim_tot_fc = 0;
 	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
@@ -3781,15 +3982,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_f
 	const int ncomp_plotMF_fc = nvar_dim_tot_fc;
 
 	amrex::MultiFab plotMF_fc(amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim)), dmap[lev], ncomp_plotMF_fc, nghost_fc_);
-	// Fill ghost zones for state_new_fc_
-	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
-		fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
-				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
-	}
 
-	// copy data from face-centred state variables
+	// copy data from scratch (with filled ghost cells) to plot MF
 	for (int i = 0; i < ncomp_plotMF_fc; i++) {
-		amrex::MultiFab::Copy(plotMF_fc, state_new_fc_[lev][idim], i, comp, 1, nghost_fc_);
+		amrex::MultiFab::Copy(plotMF_fc, src_fc, i, comp, 1, nghost_fc_);
 		comp++;
 	}
 	return plotMF_fc;
@@ -3824,8 +4020,17 @@ void AMRSimulation<problem_t>::AverageDownDerived(const amrex::Vector<amrex::Mul
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_cc(const int included_ghosts) -> amrex::Vector<amrex::MultiFab>
 {
 	amrex::Vector<amrex::MultiFab> r;
-	for (int i = 0; i <= finest_level; ++i) {
-		r.push_back(PlotFileMFAtLevel_cc(i, included_ghosts));
+	if (included_ghosts > 0) {
+		amrex::Vector<amrex::MultiFab> scratch_cc;
+		amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> scratch_fc;
+		FillPlotFileScratchData(finest_level, included_ghosts, scratch_cc, scratch_fc);
+		for (int i = 0; i <= finest_level; ++i) {
+			r.push_back(PlotFileMFAtLevel_cc(i, included_ghosts, scratch_cc[i], scratch_fc[i]));
+		}
+	} else {
+		for (int i = 0; i <= finest_level; ++i) {
+			r.push_back(PlotFileMFAtLevel_cc(i, included_ghosts, state_new_cc_[i], state_new_fc_[i]));
+		}
 	}
 	amrex::Vector<amrex::MultiFab *> r_ptrs;
 	r_ptrs.reserve(r.size());
@@ -3845,8 +4050,19 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_fc(const
 {
 	std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> r_fc;
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
+			if (nghost_fc_ > 0) {
+				amrex::Vector<amrex::MultiFab> scratch_fc;
+				FillPlotFileScratchFaceData(finest_level, nghost_fc_, idim, scratch_fc);
+				for (int i = 0; i <= finest_level; ++i) {
+					r_fc[idim].push_back(PlotFileMFAtLevel_fc(i, idim, nghost_fc_, scratch_fc[i]));
+				}
+				continue;
+			}
+		}
+
 		for (int i = 0; i <= finest_level; ++i) {
-			r_fc[idim].push_back(PlotFileMFAtLevel_fc(i, idim, nghost_fc_));
+			r_fc[idim].push_back(PlotFileMFAtLevel_fc(i, idim, nghost_fc_, state_new_fc_[i][idim]));
 		}
 	}
 
@@ -4450,8 +4666,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	quokka::ScopedVisMFNOutFiles scoped_nfiles(checkpoint_nfiles);
 
 	// write the cell-centred MultiFab data to, e.g., chk0000010/Level_0/
+	// Copy valid cells into zero-ghost MultiFabs before writing so that
+	// checkpoint files never contain stale ghost-cell data.  (See
+	// https://github.com/quokka-astro/quokka/issues/1868.)
 	for (int lev = 0; lev <= finest_level; ++lev) {
-		amrex::VisMF::Write(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
+		amrex::MultiFab chkMF(state_new_cc_[lev].boxArray(), state_new_cc_[lev].DistributionMap(), state_new_cc_[lev].nComp(), 0);
+		amrex::MultiFab::Copy(chkMF, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
+		amrex::VisMF::Write(chkMF, amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
 		amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 	}
 
@@ -4459,8 +4680,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			for (int lev = 0; lev <= finest_level; ++lev) {
-				amrex::VisMF::Write(state_new_fc_[lev][idim], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_",
-													    std::string("Face_") + quokka::face_dir_str[idim]));
+				amrex::MultiFab chkMF(state_new_fc_[lev][idim].boxArray(), state_new_fc_[lev][idim].DistributionMap(),
+						      state_new_fc_[lev][idim].nComp(), 0);
+				amrex::MultiFab::Copy(chkMF, state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), 0);
+				amrex::VisMF::Write(
+				    chkMF, amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
 				amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 			}
 		}
@@ -4545,6 +4769,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeade
 
 	// read in finest_level
 	is >> finest_level;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(finest_level <= max_level,
+					 std::format("Checkpoint '{}' contains AMR levels 0-{}, but the restart input configured amr.max_level = {}. "
+						     "Restart with amr.max_level >= {} or use a checkpoint with fewer levels.",
+						     restart_file, finest_level, max_level, finest_level));
 	GotoNextLine(is);
 
 	// read in array of istep
@@ -4592,8 +4820,10 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 							      const amrex::Vector<amrex::BCRec> &bcs)
 {
 	if (!context.needs_refinement()) {
-		// if not refining, ParallelCopy
-		target.ParallelCopy(source, 0, 0, source.nComp(), target.nGrowVect(), source.nGrowVect());
+		// Copy only valid cells from checkpoint.  Ghost cells are treated as
+		// non-authoritative and are filled later by fillBoundaryConditions().
+		// (See https://github.com/quokka-astro/quokka/issues/1868.)
+		target.ParallelCopy(source, 0, 0, source.nComp(), amrex::IntVect(0), amrex::IntVect(0));
 	} else {
 		// if refining, InterpFromCoarseLevel
 		amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
@@ -4615,12 +4845,14 @@ void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const
 								  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &restart_fc)
 {
 	if (!context.needs_refinement()) {
-		// if not refining, we can read level-by-level and ParallelCopy to state_new_fc_[lev]
+		// Copy only valid cells from checkpoint.  Ghost cells are treated as
+		// non-authoritative and are filled later by fillBoundaryConditions().
+		// (See https://github.com/quokka-astro/quokka/issues/1868.)
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab tmp_read;
 			amrex::VisMF::Read(tmp_read,
 					   amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
-			state_new_fc_[lev][idim].ParallelCopy(tmp_read, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
+			state_new_fc_[lev][idim].ParallelCopy(tmp_read, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, amrex::IntVect(0), amrex::IntVect(0));
 			AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 		}
 	} else {
@@ -4732,8 +4964,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 					amrex::MultiFab tmp_read;
 					amrex::VisMF::Read(tmp_read, amrex::MultiFabFileFullPrefix(chklev, restart_chkfile, "Level_",
 												   std::string("Face_") + quokka::face_dir_str[idim]));
-					restart_fc[chklev][idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), nghost_fc_);
-					restart_fc[chklev][idim].ParallelCopy(tmp_read);
+					restart_fc[chklev][idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), 0);
+					restart_fc[chklev][idim].ParallelCopy(tmp_read, 0, 0, tmp_read.nComp(), amrex::IntVect(0), amrex::IntVect(0));
 					AMREX_ALWAYS_ASSERT(!restart_fc[chklev][idim].contains_nan(0, restart_fc[chklev][idim].nComp())); // check valid faces
 				}
 			}
@@ -4854,6 +5086,31 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	// 5. Load MultiFab data with refinement handling
 	loadMultiFabData(refinement_context);
+
+	// 6. Fill ghost cells using the normal boundary/fillpatch machinery.
+	// Checkpoint files only contain valid-cell data, so ghost zones must be
+	// explicitly populated before the first advance.  (See
+	// https://github.com/quokka-astro/quokka/issues/1868.)
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
+				       InterpHookNone, FillPatchType::fillpatch_function);
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
+						       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+			}
+		}
+	}
+	// Copy to state_old_cc_ (including ghost zones)
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		state_old_cc_[lev].ParallelCopy(state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), nghost_cc_, nghost_cc_);
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				state_old_fc_[lev][idim].ParallelCopy(state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), nghost_fc_, nghost_fc_);
+			}
+		}
+	}
+
 	// NOTE: postInitialization (including magnetic projection) is only for fresh ICs, not restarts.
 
 	// read particle data
@@ -4961,6 +5218,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 			particles->SetParticleBoxArray(lev, current_ba[lev]);
 			particles->SetParticleDistributionMap(lev, current_dm[lev]);
 		}
+		particles->Define(this->GetParGDB());
 
 		// Redistribute particles to refined grid
 		particles->Redistribute();

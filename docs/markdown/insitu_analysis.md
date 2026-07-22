@@ -16,13 +16,17 @@ There are three built-in diagnostics that can be configured to output at periodi
 
 This diagnostic outputs 2D axis-aligned projections as AMReX plotfiles prefixed with ``proj`` and is configured using the ``ProjectionPlot`` diagnostic type. Only one direction is supported per diagnostic; configure multiple diagnostics to output multiple directions.
 
-!!! Note
-    Filters are not supported for ProjectionPlot diagnostics and will be ignored with a warning.
+> **Note**
+>
+> Filters are not supported for ProjectionPlot diagnostics and will be ignored with a warning.
+>
 
-!!! Note
-    Projection outputs are line integrals along the projection axis, using code length units. Each cell value is multiplied by ``dx[dir]`` and summed, so the output units are *(field units) × length*.
-
-    Examples: ``nH`` (cm^-3) → projected ``nH`` (cm^-2) column density; ``pressure`` (K cm^-3) → projected pressure (K cm^-2). Avoid projecting per-cell extensive quantities like ``mass = rho * dV`` unless you intentionally want an extra length factor.
+> **Note**
+>
+> Projection outputs are line integrals along the projection axis, using code length units. Each cell value is multiplied by ``dx[dir]`` and summed, so the output units are *(field units) × length*.
+>
+> Examples: ``nH`` (cm^-3) → projected ``nH`` (cm^-2) column density; ``pressure`` (K cm^-3) → projected pressure (K cm^-2). Avoid projecting per-cell extensive quantities like ``mass = rho * dV`` unless you intentionally want an extra length factor.
+>
 
 **AMR Structure Preservation**: As of recent updates, 2D projections now preserve the full AMR structure from the 3D simulation, maintaining higher resolution where needed instead of averaging down to level 0. This provides better detail but may result in larger output files.
 
@@ -48,8 +52,10 @@ quokka.proj_z.field_names = nH
 
 ### 2D Slices
 
-!!! Note
-    This is based on the *DiagFramePlane* diagnostic from PelePhysics, and the same runtime parameters should apply here without modification. The output format is also the same as that produced by the *Pele* codes.
+> **Note**
+>
+> This is based on the *DiagFramePlane* diagnostic from PelePhysics, and the same runtime parameters should apply here without modification. The output format is also the same as that produced by the *Pele* codes.
+>
 
 This outputs 2D slices of the simulation as AMReX plotfiles that can be further examined using, e.g., VisIt or yt.
 
@@ -71,8 +77,10 @@ quokka.slice_z.field_names = gasDensity gasInternalEnergy temperature
 
 ### Histograms/PDFs
 
-!!! Note
-    This is based on the *DiagPDF* diagnostic from PelePhysics, but significant changes have been made to both the runtime parameters and the output format in order to support N-dimensional histograms, log-spaced binning, and histogramming by mass.
+> **Note**
+>
+> This is based on the *DiagPDF* diagnostic from PelePhysics, but significant changes have been made to both the runtime parameters and the output format in order to support N-dimensional histograms, log-spaced binning, and histogramming by mass.
+>
 
 This adds histogram outputs (as fixed-width text files) at fixed timestep intervals as the simulation evolves. The quantity accumulated in each bin is the total mass, volume, or cell count summed over all cells not covered by refined grids over all AMR levels. If unspecified in the input parameters, the default is to accumulate the volume in each bin.
 

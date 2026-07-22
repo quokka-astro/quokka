@@ -52,27 +52,21 @@ static_assert(AMREX_SPACEDIM == 3, "DiskGalaxy problem requires AMREX_SPACEDIM =
 template <> struct quokka::EOS_Traits<DiskGalaxy> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
+	using EOSBackend = quokka::EOSTabulated<DiskGalaxy>;
 };
 
 template <> struct HydroSystem_Traits<DiskGalaxy> {
 	static constexpr bool reconstruct_eint = true;
 };
 
-template <> struct Physics_Traits<DiskGalaxy> {
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+template <> struct Physics_Traits<DiskGalaxy> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
-	static constexpr int nGroups = 1;			     // number of radiation groups
 };
 
-template <> struct Particle_Traits<DiskGalaxy> {
+template <> struct Particle_Traits<DiskGalaxy> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::StochasticStellarPop;
 };
 
@@ -109,10 +103,10 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 	std::string filename;
 	pp.query("vcirc_file", filename);
 
-	auto halo_table = quokka::DataTable<1, 4, quokka::OutOfBounds::clamp>::CSVReader(filename, quokka::SpacingType::linear);
-	auto const halo_table_const = halo_table.const_tables();
+	auto halo_table = quokka::DataTable<1, 4, quokka::OutOfBounds::clamp>::CSVReader(filename, quokka::TransformType::linear);
+	auto const halo_table_const = halo_table.const_tables_host();
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.sizes[0] > 0, "disk_galaxy.vcirc_file contained no numeric rows.");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.spacing_types[0] == quokka::SpacingType::linear,
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.spacing_types[0] == quokka::TransformType::linear,
 					 "disk_galaxy.vcirc_file must use linear spacing for the radius coordinate.");
 
 	// 2. copy data to simData_.radius and simData_.vcirc
@@ -564,7 +558,9 @@ template <> void QuokkaSimulation<DiskGalaxy>::refineGrid(int lev, amrex::TagBox
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <>
+void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
@@ -577,19 +573,16 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
-		auto tables = resampledTables_.const_tables();
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
-				Real const x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
-				Real const x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
-				Real const x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
-				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-				Real const Eint = RadSystem<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
+				Real const Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint);
 				output(i, j, k, ncomp) = Tgas;
 			});
 		}
@@ -597,11 +590,10 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 
 	if (dname == "pressure") {
 		const int ncomp = ncomp_cc_in;
-		auto const &state_fc = state_new_fc_[lev];
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
 			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -613,19 +605,16 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 
 	if (dname == "entropy") {
 		const int ncomp = ncomp_cc_in;
-		auto tables = resampledTables_.const_tables();
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
-				Real const x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
-				Real const x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
-				Real const x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
-				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-				Real const Eint = RadSystem<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-				Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
+				Real const Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
+				Real const K_cgs = quokka::EOS<DiskGalaxy>::ComputeEntropyFromRhoEint(rho, Eint);
 				output(i, j, k, ncomp) = K_cgs / keV_in_ergs;
 			});
 		}
@@ -654,9 +643,9 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &bx_fc = state_new_fc_[lev][0].const_array(iter);
-			auto const &by_fc = state_new_fc_[lev][1].const_array(iter);
-			auto const &bz_fc = state_new_fc_[lev][2].const_array(iter);
+			auto const &bx_fc = state_fc[0].const_array(iter);
+			auto const &by_fc = state_fc[1].const_array(iter);
+			auto const &bz_fc = state_fc[2].const_array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real bx_cc = 0.5 * (bx_fc(i, j, k, 0) + bx_fc(i + 1, j, k, 0));
 				const amrex::Real by_cc = 0.5 * (by_fc(i, j, k, 0) + by_fc(i, j + 1, k, 0));
@@ -674,7 +663,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
 				const amrex::Real vx = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index) / rho;
@@ -697,7 +686,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
 				const amrex::Real vx = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index) / rho;
@@ -757,17 +746,14 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 	const amrex::Real disk_mass_refine = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(refine_mask), 0, geom, ref_ratio);
 	stats["disk_mass_refine_region"] = disk_mass_refine / C::M_solar;
 
-	auto tables = resampledTables_.const_tables();
-	const amrex::Real cold_mass = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		const Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
-		const Real x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
-		const Real x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
-		const Real x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
-		const Real Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-		const Real Eint = RadSystem<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-		const Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-		return (Tgas < 1.0e4) ? rho : 0.0;
-	});
+	const amrex::Real cold_mass =
+	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
+		    const Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
+		    const Real Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &state_fc);
+		    const Real Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint);
+		    return (Tgas < 1.0e4) ? rho : 0.0;
+	    });
 	stats["mass_T_lt_1e4"] = cold_mass / C::M_solar;
 
 	if (!std::isnan(flux_sphere_radius_kpc)) {
