@@ -13,10 +13,8 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = [64, 64, 64]
+amr.n_cell          = [32, 32, 32]
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 32  # grid size must be divisible by this
-amr.max_grid_size = 128  # at least 128 for GPUs
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
@@ -27,6 +25,7 @@ stromgen.primary_species_1 = 1.0e-10
 stromgen.primary_species_2 = 1.0e4
 stromgen.primary_species_3 = 1.0e-10
 stromgen.Q = 1.56e51
+stromgen.optical_to_ionizing_fraction = 0.1
 stromgen.temperature = 37.11
 
 photochemistry.enabled = 1
@@ -43,27 +42,15 @@ plotfile_prefix = "DTypeRadPres"
 
 network.allow_mixed_cell_cooling = 0
 
+max_timesteps = 1000000
 
-max_timesteps = 1000000  # stop_time governs; no artificial step cap
-
-# Relative-change convergence tolerance for the gas-radiation Newton-Raphson iteration. A small number
-# of cells (those with a specific small Etot0) reach a stable solution but limit-cycle just above the
-# absolute residual tolerance (1e-11); their (Egas, Erad) are unchanged to machine precision between
-# iterations, so accept convergence once the relative change falls below this. Disabled (-1) by default.
 radiation.iteration_tolerance_rel = 1.0e-8
 
-# VODE absolute tolerances. NOTE: these were tuned for the original DTypeFront at n_H = 139.9
-# cm^-3. This problem runs at n_H = 1e4 cm^-3 (~70x denser), so several atol values that are
-# expressed as absolute number densities (atol_spec, atol_rad_num, species/radiation failure
-# tolerances) may need to be rescaled up by a similar factor. Start here and adjust if VODE
-# spends excessive steps or the step-rejection loop triggers at the ionization front.
-#
-# atol_spec = 1e-5 * n_H = physical negligibility floor -> 1e-5 * 1e4 = 0.1 cm^-3.
-integrator.atol_spec                     = 1.0e-1   # cm^-3; 1e-5 x n_H (n_H = 1e4)
-integrator.atol_enuc                     = 1.24e8   # erg/g; c_v x 1 K temperature accuracy
-integrator.atol_rad_num                  = 1.0e-1     # cm^-3;
-integrator.species_failure_tolerance     = 1.0e-1   # cm^-3; = atol_spec
-integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at ionization front
+integrator.atol_spec                     = 1.0e-1
+integrator.atol_enuc                     = 1.24e8
+integrator.atol_rad_num                  = 1.0e-1
+integrator.species_failure_tolerance     = 1.0e-1
+integrator.radiation_failure_tolerance   = 0.5
 
 integrator.rtol_spec     = 1e-2
 integrator.rtol_rad_num  = 1e-2
