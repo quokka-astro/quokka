@@ -43,8 +43,8 @@ namespace
 	constexpr double rho_transition = 1.0e-28; 			// g/cm^3, disc-CGM interface density
 	constexpr double Rmax_kpc = 8.0;
 	constexpr double Rmax = Rmax_kpc * 1.0e3 * C::parsec;
-	constexpr double refine_Rcyl_kpc = 6.0;
-	constexpr double refine_Hcyl_pc  = 100.0;
+	constexpr double refine_Rcyl_kpc = 8.0;
+	constexpr double refine_Hcyl_pc  = 600.0;
 	constexpr double refine_Rcyl     = refine_Rcyl_kpc * 1.0e3 * C::parsec;
 	constexpr double refine_Hcyl     = refine_Hcyl_pc  * C::parsec;
 }
@@ -334,31 +334,44 @@ template <> void QuokkaSimulation<HDGalaxy>::addStrangSplitSources(amrex::MultiF
 }
 
 
-template <> void QuokkaSimulation<HDGalaxy>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<HDGalaxy>::refineGrid(
+	int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	amrex::Print() << "Refining HDGalaxy grid on level " << lev << "\n";
 	const auto prob_lo = geom[lev].ProbLoArray();
-	const auto dx = geom[lev].CellSizeArray();
-	const auto tag = tags.arrays();
+	const auto dx      = geom[lev].CellSizeArray();
+	const auto tag     = tags.arrays();
+
+	amrex::ParmParse pp("mhd_galaxy");
+	amrex::Real shrink_kpc = 1.0;
+	amrex::Real shrink_pc  = 50.0;
+	pp.query("refine_shrink_per_level_kpc", shrink_kpc);
+	pp.query("refine_shrink_per_level_pc",  shrink_pc);
+
+	const amrex::Real margin_R = static_cast<amrex::Real>(lev) * shrink_kpc * 1.0e3 * C::parsec;
+	const amrex::Real margin_H = static_cast<amrex::Real>(lev) * shrink_pc  * C::parsec;
+
+	const amrex::Real Rcyl_lev = amrex::max(static_cast<amrex::Real>(refine_Rcyl) - margin_R,
+	                                         static_cast<amrex::Real>(0.3 * refine_Rcyl));
+	const amrex::Real Hcyl_lev = amrex::max(static_cast<amrex::Real>(refine_Hcyl) - margin_H,
+	                                         static_cast<amrex::Real>(0.3 * refine_Hcyl));
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		const amrex::Real x0 = prob_lo[0] + (i * dx[0]);
-		const amrex::Real y0 = prob_lo[1] + (j * dx[1]);
-		const amrex::Real z0 = prob_lo[2] + (k * dx[2]);
-		const amrex::Real x1 = prob_lo[0] + ((i + 1) * dx[0]);
-		const amrex::Real y1 = prob_lo[1] + ((j + 1) * dx[1]);
-		const amrex::Real z1 = prob_lo[2] + ((k + 1) * dx[2]);
+		const amrex::Real x0 = prob_lo[0] + i * dx[0];
+		const amrex::Real y0 = prob_lo[1] + j * dx[1];
+		const amrex::Real z0 = prob_lo[2] + k * dx[2];
+		const amrex::Real x1 = x0 + dx[0];
+		const amrex::Real y1 = y0 + dx[1];
+		const amrex::Real z1 = z0 + dx[2];
 
-		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
-			const amrex::Real R = std::sqrt(x * x + y * y);
-			if ((R < refine_Rcyl) && (std::abs(z) < refine_Hcyl)) {
+		auto tagIfInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
+			if (std::sqrt(x*x + y*y) < Rcyl_lev && std::abs(z) < Hcyl_lev) {
 				tag[bx](i, j, k) = amrex::TagBox::SET;
 			}
 		};
 		for (auto const &x : {x0, x1}) {
 			for (auto const &y : {y0, y1}) {
 				for (auto const &z : {z0, z1}) {
-					tagIfPointInRegion(x, y, z);
+					tagIfInRegion(x, y, z);
 				}
 			}
 		}

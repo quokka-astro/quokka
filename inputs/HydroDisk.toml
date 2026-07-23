@@ -10,7 +10,9 @@ amr.v = 2
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell = 256 256 256
-amr.blocking_factor = 128
+amr.blocking_factor_x = 128
+amr.blocking_factor_y = 128
+amr.blocking_factor_z = 16
 amr.max_grid_size   = 256
 amr.max_level       = 3
 amr.n_error_buf     = 2
