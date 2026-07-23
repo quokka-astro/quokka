@@ -392,8 +392,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	template <SourceOrder Order>
-	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, amrex::FluxRegister *fr_as_crse,
-					      amrex::FluxRegister *fr_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, std::array<amrex::MultiFab, AMREX_SPACEDIM> *recal_fluxes,
+		 int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 	template <SourceOrder Order, typename... Fs> static auto callInOrder(Fs &&...fs) -> void
 	{
 		auto funcs = std::forward_as_tuple(std::forward<Fs>(fs)...);
@@ -1098,7 +1098,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExternalH
 template <typename problem_t>
 template <typename QuokkaSimulation<problem_t>::SourceOrder Order>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc,
-								   amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, int lev, amrex::Real time,
+								   std::array<amrex::MultiFab, AMREX_SPACEDIM> *recal_fluxes, int lev, amrex::Real time,
 								   amrex::Real dt) -> bool
 {
 	auto const applyDust = [&]() {
@@ -1143,7 +1143,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	};
 
 	auto const applyConduction = [&]() {
-		if (enableElectronConduction_ == 1) {
+		if (enableElectronConduction_ == 1 ) {
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
 
@@ -1165,14 +1165,14 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 											     .min_temperature = tempFloor_};
 			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
 			if (do_reflux) {
-				std::array<amrex::MultiFab, AMREX_SPACEDIM> recal_fluxes;
+				// std::array<amrex::MultiFab, AMREX_SPACEDIM> recal_fluxes;
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					recal_fluxes[idim].define(heat_flux[idim].boxArray(), heat_flux[idim].DistributionMap(), state.nComp(), 0);
-					recal_fluxes[idim].setVal(0.0);
-					amrex::MultiFab::Copy(recal_fluxes[idim], heat_flux[idim], 0, HydroSystem<problem_t>::energy_index, 1, 0);
-					amrex::MultiFab::Copy(recal_fluxes[idim], heat_flux[idim], 0, HydroSystem<problem_t>::internalEnergy_index, 1, 0);
+					(*recal_fluxes)[idim].define(heat_flux[idim].boxArray(), heat_flux[idim].DistributionMap(), state.nComp(), 0);
+					(*recal_fluxes)[idim].setVal(0.0);
+					amrex::MultiFab::Add((*recal_fluxes)[idim], heat_flux[idim], 0, HydroSystem<problem_t>::energy_index, 1, 0);
+					amrex::MultiFab::Add((*recal_fluxes)[idim], heat_flux[idim], 0, HydroSystem<problem_t>::internalEnergy_index, 1, 0);
 				}
-				incrementFluxRegisters(fr_as_crse, fr_as_fine, recal_fluxes, lev, dt);
+				// incrementFluxRegisters(fr_as_crse, fr_as_fine, recal_fluxes, lev, dt);
 			}
 		}
 	};
@@ -2287,6 +2287,21 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
 		amrex::ignore_unused(emf_as_crse, emf_as_fine);
 	}
+	std::optional<std::array<amrex::MultiFab, AMREX_SPACEDIM>> recal_fluxes;
+
+	if (enableElectronConduction_ == 1) {
+		// Construct the array of MultiFabs using emplace
+		recal_fluxes.emplace();
+		for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
+			amrex::BoxArray ba = boxArray(lev);
+			ba.surroundingNodes(dim); // nodal in direction dim
+			(*recal_fluxes)[dim].define(ba, DistributionMap(lev),  Physics_Indices<problem_t>::nvarTotal_cc, 0);
+			(*recal_fluxes)[dim].setVal(0.0);
+		}
+	}	
+
+	auto* recal_fluxes_ptr = 
+    recal_fluxes.has_value() ? &recal_fluxes.value() : nullptr;
 
 	const amrex::Real stage1Weight = (integratorOrder_ == 2) ? 0.5 : 1.0;
 	const int nghost_Riemann =
@@ -2298,7 +2313,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// do Strang split source terms (first half-step)
 	auto burn_success_first =
-	    addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, lev, time, 0.5 * dt_lev);
+	    addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, recal_fluxes_ptr, lev, time, 0.5 * dt_lev);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
@@ -2613,7 +2628,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	auto burn_success_second = addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], fr_as_crse, fr_as_fine, lev,
+	auto burn_success_second = addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], recal_fluxes_ptr, lev,
 											  time + dt_lev, 0.5 * dt_lev);
 	if (burn_success_second) {
 		ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
@@ -2624,6 +2639,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	if (do_reflux == 1 && final_success) {
 		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux_rk2, lev, dt_lev);
+		if (enableElectronConduction_ == 1) {
+        incrementFluxRegisters(fr_as_crse, fr_as_fine, recal_fluxes.value(), lev, dt_lev);
+    }
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			// E = -v x B, our emf is v x B, so we need to pass -dt
 			incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_ave, lev, -1.0 * dt_lev);
