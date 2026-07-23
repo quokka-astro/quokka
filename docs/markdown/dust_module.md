@@ -9,7 +9,7 @@ This module implements dust transport and dust-gas source terms. When dust is en
 
 ## Equations for Gas-Dust-MHD System
 
-<script type="math/tex; mode=display">
+\\[
 \begin{align}
 \frac{\partial \rho_{\mathrm{g}}}{\partial t} 
     + \nabla \cdot (\rho_{\mathrm{g}} \mathbf{v}_{\mathrm{g}}) 
@@ -51,7 +51,7 @@ This module implements dust transport and dust-gas source terms. When dust is en
         \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}
         + \rho_{\mathrm{d},n} \mathbf{a}_{\mathrm{ext},\mathrm{d},n},
 \end{align}
-</script>
+\\]
 
 where
 
@@ -73,7 +73,7 @@ where
 
 The Lorentz work term in the gas total-energy equation is the gas-side work from the dust back-reaction. It transfers kinetic energy between gas and dust, but it does not heat the combined gas-dust system. Adding the gas-side and dust-side Lorentz work terms for each dust species gives
 
-<script type="math/tex; mode=display">
+\\[
 \begin{aligned}
 &- \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
    \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
@@ -86,7 +86,7 @@ The Lorentz work term in the gas total-energy equation is the gas-side work from
    \cdot \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right)
  = 0 .
 \end{aligned}
-</script>
+\\]
 
 Only aerodynamic drag produces physical gas heating in these equations, through the \\(\omega_{\rm drag}\\) term. The `dust.omega_rk_residual` runtime parameter controls deposition of the discrete RK energy residual from the combined drag-plus-Lorentz update. This residual is not a separate physical heating rate and is not a Lorentz-heating parameter.
 
@@ -100,7 +100,7 @@ Dust reconstruction is performed together with gas using the same method. The Ri
 
 In one dimension along the x-direction, given the left/right states \\(W_{\mathrm{d}}^{\mathrm{L}/\mathrm{R}}\\), one can provide the Riemann flux for conserved variables as follows. The density flux reads (Huang & Bai 2022):
 
-<script type="math/tex; mode=display">
+\\[
 \begin{align*}
 F_{x}^{\mathrm{a}}(\rho_{\mathrm{d}}) = 
 \begin{cases}
@@ -110,7 +110,7 @@ F_{x}^{\mathrm{a}}(\rho_{\mathrm{d}}) =
 0 & \text{else}.
 \end{cases}
 \end{align*}
-</script>
+\\]
 
 Similar expressions hold for the momentum flux for all directions.
 
@@ -120,9 +120,9 @@ This is implemented in `src/dust/dustRiemannSolver.hpp` and called in `DustSyste
 
 A Strang-split method is used to integrate the dust-gas source terms together with the explicit transport update:
 
-<script type="math/tex; mode=display">
+\\[
 \mathbf{u}^{n+1} = \mathcal{C}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{C}_{\Delta t/2} \mathbf{u}^n
-</script>
+\\]
 
 where \\(\mathcal{H}\\) is the explicit gas/MHD and dust transport update, and \\(\mathcal{C}\\) denotes the local combined drag-plus-Lorentz update. In non-MHD runs, \\(\mathcal{C}\\) reduces to a drag-only update; in MHD runs, it integrates aerodynamic drag and the charged-dust Lorentz force in the same solve. The \\(\mathcal{C}\\) update is implemented in `src/dust/DustSources.hpp` and called from `QuokkaSimulation::addStrangSplitSourcesWithBuiltin`:
 
@@ -141,13 +141,13 @@ For a given problem, users must define a problem-specific dust stopping time by 
 
 Users can directly use the dust stopping time calculation helper `DustSources::ComputeReciprocalStoppingTimeKwok` to compute the physical dust stopping time, following Kwok (1975) with an optional supersonic correction. Problem setups that use this helper must provide the dust grain radius \\(a\\) and material density \\(\rho_{\mathrm{gr}}\\) for each dust group. These values can be read from the optional runtime parameters `dust.grain_radius` and `dust.grain_density` by calling `quokka::dust::readDustGrainParams`. The stopping time of dust \\(t_{\mathrm{s}}\\) is given by:
 
-<script type="math/tex; mode=display">
+\\[
 t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}{\rho_{\mathrm{g}} c_{\mathrm{s}}} \times 
 \begin{cases}
 \left( 1 + \dfrac{9\pi\gamma}{128} \left| \dfrac{\mathbf{v}_{\mathrm{d}} - \mathbf{v}_{\mathrm{g}}}{c_{\mathrm{s}}} \right|^2 \right)^{-1/2}, & \text{if supersonic correction is enabled,} \\[1.5em]
 1, & \text{if supersonic correction is disabled.}
 \end{cases}
-</script>
+\\]
 
 When \\(\gamma=1\\), this expression reduces exactly to the isothermal \\(t_{\mathrm{s}}\\). An example of its usage can be found in the `src/problems/DustDampingIteration` test.
 
@@ -157,9 +157,9 @@ For charged dust in MHD, users must also define the problem-specific dust charge
 
 For the dust-gas coupled system with \\(N\\) dust species, we use the following CFL condition:
 
-<script type="math/tex; mode=display">
+\\[
 \Delta t_{\mathrm{CFL}} = C_{\mathrm{CFL}} \cdot \min_{\mathrm{cells}} \left( \frac{\Delta x}{\max\left( |\mathbf{v}_{\mathrm{g}}| + c_{\mathrm{s}}, \max_{n=1}^{N} |\mathbf{v}_{\mathrm{d},n}| + c_{\mathrm{s}} \right)} \right).
-</script>
+\\]
 
 ## Runtime Controls
 

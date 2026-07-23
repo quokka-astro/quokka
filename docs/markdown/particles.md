@@ -28,9 +28,9 @@ A sink particle is created in a cell if **all** of the following conditions are 
 
 1. **Jeans instability**: The cell density exceeds the local Jeans density,
 
-<script type="math/tex; mode=display">
+\\[
 \rho > \rho_J = J^2 \frac{\pi c_{\text{eff}}^2}{G \Delta x^2},
-</script>
+\\]
 
 where \\(J = 0.25\\) is the Jeans number and \\(c_{\text{eff}} = c_s \sqrt{1 + 0.74 / \beta}\\) is the effective sound speed accounting for magnetic pressure support (\\(\beta = P_{\text{thermal}} / P_{\text{magnetic}}\\)). For non-MHD simulations, \\(\beta \to \infty\\) and \\(c_{\text{eff}} = c_s\\).
 
@@ -42,9 +42,9 @@ where \\(J = 0.25\\) is the Jeans number and \\(c_{\text{eff}} = c_s \sqrt{1 + 0
 
 When a sink particle forms, it receives the excess mass above the Jeans density:
 
-<script type="math/tex; mode=display">
+\\[
 m_{\text{particle}} = (\rho - \rho_J) \, \Delta x^3
-</script>
+\\]
 
 The particle inherits the gas velocity of the parent cell. The cell density is then set to \\(\rho_J\\), and all conserved quantities (momentum, energy, internal energy) are scaled by the factor \\(\rho_J / \rho\\).
 
@@ -63,17 +63,17 @@ Sink particle accretion follows the Bondi-Hoyle-Lyttleton prescription of Krumho
 
 The Bondi-Hoyle radius is
 
-<script type="math/tex; mode=display">
+\\[
 r_{\text{BH}} = \frac{G M}{v_\infty^2 + c_{f,\infty}^2},
-</script>
+\\]
 
 where \\(M\\) is the particle mass, \\(v_\infty\\) is the gas velocity relative to the particle (mass-weighted mean over the accretion zone), and \\(c_{f,\infty}\\) is the fast magnetosonic speed. We take the upper bound of the fast speed (when the wave propagates perpendicular to the magnetic field): \\(c_f^2 = c_s^2 + v_A^2 = c_s^2 (1 + 2/\beta)\\). For non-MHD, this reduces to \\(c_f = c_s\\).
 
 The accretion rate is
 
-<script type="math/tex; mode=display">
+\\[
 \dot{M} = 4 \pi \rho_\infty r_{\text{BH}}^2 \sqrt{v_\infty^2 + \lambda^2 c_{f,\infty}^2},
-</script>
+\\]
 
 where \\(\rho_\infty\\) is the mean gas density in the accretion zone and \\(\lambda = e^{3/2}/4\\).
 
@@ -81,19 +81,19 @@ where \\(\rho_\infty\\) is the mean gas density in the accretion zone and \\(\la
 
 The accretion zone is a sphere of radius \\(r_{\text{acc}} = 3 \Delta x\\) centered on the particle. Within this zone, each cell receives a Gaussian weight:
 
-<script type="math/tex; mode=display">
+\\[
 w = \exp\left(-r^2 / r_K^2\right),
-</script>
+\\]
 
 where \\(r\\) is the distance from the particle to the cell centre. The kernel radius \\(r_K\\) is resolution-adaptive:
 
-<script type="math/tex; mode=display">
+\\[
 r_K = \begin{cases}
 \Delta x / 4 & r_{\text{BH}} < \Delta x / 4, \\
 r_{\text{BH}} & \Delta x / 4 \leq r_{\text{BH}} \leq r_{\text{acc}} / 2, \\
 r_{\text{acc}} / 2 & r_{\text{BH}} > r_{\text{acc}} / 2.
 \end{cases}
-</script>
+\\]
 
 The accretion rate deposited in each cell is \\(-\dot{M} \, w_i / \sum_i w_i\\) (negative means accreting). Optionally, a uniform kernel (\\(w = 1\\) for all cells in the \\((7 \Delta x)^3\\) stencil) can be used for testing by setting `particles.sink_particle_use_uniform_kernel = 1`.
 
@@ -109,9 +109,9 @@ Two corrections are applied to the per-cell accretion rate, in the following ord
 
 When gas is accreted, the particle gains both mass and momentum. The new particle velocity is computed from momentum conservation:
 
-<script type="math/tex; mode=display">
+\\[
 \vec{v}_{\text{new}} = \frac{m_{\text{old}} \vec{v}_{\text{old}} + \Delta m \, \vec{v}_{\text{gas}}}{m_{\text{old}} + \Delta m},
-</script>
+\\]
 
 where \\(\Delta m\\) is the total accreted mass and \\(\vec{v}_{\text{gas}}\\) is the mass-weighted gas velocity over the accreted cells. The gas state is then updated by scaling all conserved quantities by \\((1 + \dot{M}_{\text{cell}} \Delta t / (\rho V))\\), which preserves the gas velocity field.
 
@@ -238,9 +238,9 @@ When a progenitor star reaches its death time, it explodes as a Type II supernov
 
 The terminal momentum is density-dependent and scales as:
 
-<script type="math/tex; mode=display">
+\\[
 p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{-0.17}
-</script>
+\\]
 
 where \\(n_{\text{H}}\\) is the ambient hydrogen number density averaged over the deposition kernel.
 
@@ -252,9 +252,9 @@ SN feedback is deposited into a \\((2 \times 3 + 1)^3 = 343\\) cell cubic stenci
 
 The feedback implementation uses the **resolution factor** \\(R_M\\) to determine whether the Sedov-Taylor phase is resolved:
 
-<script type="math/tex; mode=display">
+\\[
 R_M = \frac{M_{\text{SNR}}}{M_{\text{sf}}}
-</script>
+\\]
 
 where:
 - \\(M_{\text{SNR}} = M_{\text{gas}} + m_{\text{ej}}\\) is the total SNR mass (gas in stencil plus ejecta)
@@ -296,25 +296,25 @@ For schemes with momentum injection, the following momentum deposition procedure
 
 1. **Compute COM velocity** of the SNR (gas + ejecta):
 
-<script type="math/tex; mode=display">
+\\[
 \vec{v}_{\text{COM}} = \frac{\vec{P}_{\text{gas}} + m_{\text{ej}} \vec{v}_{\text{ej}}}{M_{\text{gas}} + m_{\text{ej}}}
-</script>
+\\]
 
 where \\(\vec{P}_{\text{gas}}\\) is the total momentum of gas in the stencil (kernel-weighted).
 
 2. **Deposit momentum** such that each cell receives:
 
-<script type="math/tex; mode=display">
+\\[
 \Delta \vec{p}_{ijk} = \left[\rho_{\text{new}} \vec{v}_{\text{COM}} - \vec{p}_{\text{old}}\right] + \vec{p}_{\text{radial}}
-</script>
+\\]
 
 where \\(\vec{p}_{\text{radial}} = f \, p_{\text{snr}} \, W_{ijk} \, \hat{\mathbf{r}}_{ijk}\\) is the radial momentum component.
 
 3. **Energy deposition** includes a cross term:
 
-<script type="math/tex; mode=display">
+\\[
 \Delta E_{ijk} = \left(E_{\text{blast}} + E_{\text{kin}}\right) W_{ijk} + \vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}
-</script>
+\\]
 
 The cross term <script type="math/tex">\vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}</script> accounts for the kinetic energy change from the radial expansion, ensuring Galilean invariance. This term sums to zero over all cells in the stencil, (momentum is conserved), ensuring energy conservation.
 

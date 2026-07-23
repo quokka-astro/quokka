@@ -4,11 +4,11 @@
 
 Assuming the speed of light is not reduced (\\(\hat{c} = c\\)), Quokka solves the following conservation laws for the cell-centered variables, as written below in the [Heaviside–Lorentz system of units](https://en.wikipedia.org/wiki/Heaviside%E2%80%93Lorentz_units):
 
-<script type="math/tex; mode=display">
+\\[
 \frac{\partial \vec{U}}{\partial t}+\nabla \cdot \vec{F}(\vec{U}) = \vec{S}(\vec{U}),
-</script>
+\\]
 
-<script type="math/tex; mode=display">
+\\[
 \begin{aligned}
 \vec{U} =\left[
 \begin{array}{c}
@@ -44,37 +44,37 @@ Assuming the speed of light is not reduced (\\(\hat{c} = c\\)), Quokka solves th
   \rho_{\mathrm{d},k} \frac{\vec{v} - \vec{v}_{\mathrm{d},k}}{T_{\mathrm{s},k}} + \rho_{\mathrm{d},k} \Omega_{\mathrm{L},k} \left(\vec{v}_{\mathrm{d},k} - \vec{v}\right) \times \hat{\vec{b}}
 \end{array}\right],
 \end{aligned}
-</script>
+\\]
 
 where the total fluid energy is
 
-<script type="math/tex; mode=display">
+\\[
 E = \rho e + \frac{1}{2} \rho v^2 + \frac{1}{2} B^2 \, ,
-</script>
+\\]
 
 and the face-centered magnetic field is evolved according to the ideal MHD induction equation:
 
-<script type="math/tex; mode=display">
+\\[
 \frac{\partial \vec{B}}{\partial t} - \nabla \times \left(\vec{v} \times \vec{B}\right) = 0.
-</script>
+\\]
 
 Quokka also solves the non-conservative auxiliary internal energy equation:
 
-<script type="math/tex; mode=display">
+\\[
 \begin{aligned}
 \frac{\partial (\rho e_{\text{aux}})}{\partial t} = - \nabla \cdot (\rho e_{\text{aux}} \vec{v}) - p \nabla \cdot \vec{v} + S_{\text{rad}} + \mathcal{H} - \mathcal{C} + \omega_{\rm drag} \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{(\vec{v}_{\mathrm{d},k} - \vec{v})^{2}}{T_{\mathrm{s},k}}, \\
 \Delta S_{\text{rad}} = \int \sum_g c G^0_g \ dt - \frac{1}{2} \Delta \left(\rho v^2 \right),
 \end{aligned}
-</script>
+\\]
 
 and the gravitational Poisson equation:
 
-<script type="math/tex; mode=display">
+\\[
 \begin{aligned}
 \nabla^2 \phi = -4 \pi G \left( \rho + \sum_i \rho_i \right), \\
 \vec{g} \equiv -\nabla \phi,
 \end{aligned}
-</script>
+\\]
 
 where
 
@@ -112,8 +112,8 @@ Note that since work done by radiation on the gas is included in the \\(c \sum_g
 
 Quokka solves the following equation of motion for collisionless particles:
 
-<script type="math/tex; mode=display">
+\\[
 \frac{d^2 \vec{x}_i}{d t^2} = \vec{g} ,
-</script>
+\\]
 
 where \\(\vec{x}_i\\) is the position vector of particle \\(i\\).

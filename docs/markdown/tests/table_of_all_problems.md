@@ -84,4 +84,5 @@ This table lists all test problems in the Quokka codebase. The acronyms used are
 | ShockCloud               | 3   | ✅    | ❌  | ❌                | ❌      | ❌                        | 3              |
 | SphericalCollapse        | 3   | ✅    | ❌  | ❌                | ✅      | CIC                       | ❌             |
 | StarCluster              | 3   | ✅    | ❌  | ❌                | ✅      | ❌                        | ❌             |
+| TaylorGreenRadiationDiffusion | 2   | ✅    | ❌  | SG                | ❌      | ❌                        | ❌             |
 | Turbulence               | 3   | ✅    | ❌  | ❌                | ❌      | ❌                        | ❌             |

@@ -13,6 +13,7 @@
 
 #include <array>
 #include <cmath>
+#include <type_traits>
 
 // library headers
 #include "AMReX.H" // IWYU pragma: keep
@@ -70,6 +71,7 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
+	static constexpr bool allow_signed_radiation_energy_source = false;
 };
 
 // this struct is specialized by the user application code
@@ -141,6 +143,15 @@ template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Mode
 
 template <typename problem_t>
 struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {
+};
+
+template <typename problem_t, typename = void> struct RadSystem_AllowSignedRadiationEnergySource {
+	static constexpr bool value = false;
+};
+
+template <typename problem_t>
+struct RadSystem_AllowSignedRadiationEnergySource<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::allow_signed_radiation_energy_source)>> {
+	static constexpr bool value = RadSystem_Traits<problem_t>::allow_signed_radiation_energy_source;
 };
 
 // Use SFINAE to check if ChemBands() is defined in RadSystem_Traits<problem_t> (indicates photoionization group)
@@ -240,6 +251,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	}();
 
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
+	static constexpr bool allow_signed_radiation_energy_source_ = RadSystem_AllowSignedRadiationEnergySource<problem_t>::value;
 
 	static constexpr OpacityModel opacity_model_ = []() constexpr {
 		if constexpr (RadSystem_Has_Opacity_Model<problem_t>::value) {

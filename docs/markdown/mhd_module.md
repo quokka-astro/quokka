@@ -79,11 +79,11 @@ Once EMFs are available, `MHDSystem::SolveInductionEqn` updates the face-centred
 magnetic fluxes using the area-integrated form of Faraday's law. For a face with
 normal direction \\(w_0\\) and transverse directions \\(w_1\\), \\(w_2\\) the update reads
 
-<script type="math/tex; mode=display">
+\\[
 B_{w_0}^{n+1} = B_{w_0}^n + \frac{\Delta t}{\Delta A_{w_0}}
 \left[ \mathcal{E}_{w_2}(i+\tfrac{1}{2},j+1,k) - \mathcal{E}_{w_2}(i+\tfrac{1}{2},j,k)
      - \mathcal{E}_{w_1}(i+1,j+\tfrac{1}{2},k) + \mathcal{E}_{w_1}(i,j+\tfrac{1}{2},k) \right].
-</script>
+\\]
 
 Because the EMFs on opposite edges are equal and opposite, the discrete
 divergence, computed as a finite difference of the face-centred fluxes, remains

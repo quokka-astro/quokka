@@ -11,3 +11,4 @@ Listed here are detailed descriptions of some of the test problems. *This list i
 - [Matter-radiation temperature equilibrium test](energy_exchange.md)
 - [Uniform advecting radiation in diffusive limit](radhydro_uniform_adv.md)
 - [Advecting radiation pulse test](radhydro_pulse.md)
+- [Taylor-Green Radiation Diffusion test](taylor_green_radiation_diffusion.md)

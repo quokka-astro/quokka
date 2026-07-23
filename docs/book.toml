@@ -25,6 +25,7 @@ order = "index"
 plantuml-cmd = "https://www.plantuml.com/plantuml"
 
 [output.html]
+theme = "theme"
 default-theme = "light"
 preferred-dark-theme = "navy"
 mathjax-support = false
