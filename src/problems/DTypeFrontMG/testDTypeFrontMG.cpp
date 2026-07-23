@@ -269,7 +269,7 @@ void RadSystem<DTypeFrontMG>::SetRadEnergySource(array_t &radEnergy, const amrex
 		radEnergy(i, j, k, IRBand) = 0.0_rt;
 		if (r2 <= cutoff_r2) {
 			const amrex::Real shape = wendland_c2(std::sqrt(r2) * inv_N) * inv_norm * inv_volume;
-			radEnergy(i, j, k, OpticalBand) = L_star_optical * shape;
+			// radEnergy(i, j, k, OpticalBand) = L_star_optical * shape;
 			radEnergy(i, j, k, IonizingBand) = L_star_ion * shape;
 		} else {
 			radEnergy(i, j, k, OpticalBand) = 0.0_rt;
