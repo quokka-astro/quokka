@@ -14,5 +14,3 @@ add_test(
   NAME RadiationMarshakDustPE-decoupled
   COMMAND ${JOB_NAME} ../inputs/RadMarshakDustPEdecoupled.toml ${QuokkaTestParams}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-
-# dummy touch to trigger quick GPU CI for PR #2119 (revert before merge)

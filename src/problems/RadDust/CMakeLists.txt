@@ -7,5 +7,3 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
 else()
 	add_test(NAME ${JOB_NAME} COMMAND mpirun -np 2 $<TARGET_FILE:${JOB_NAME}> ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
-
-# dummy touch to trigger quick GPU CI for PR #2119 (revert before merge)
