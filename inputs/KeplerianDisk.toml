@@ -1,4 +1,4 @@
-# A gas-only version of DiskGalaxy in a fixed spherical potential.
+# A self-gravitating cooling gas disk with star formation in a fixed spherical potential.
 
 geometry.prob_lo = [-1.8514065526075864e24, -1.8514065526075864e24, -1.8514065526075864e24]
 geometry.prob_hi = [1.8514065526075864e24, 1.8514065526075864e24, 1.8514065526075864e24]
@@ -24,14 +24,31 @@ stop_time = 3.1536e16
 dt_cutoff = 1.0e-12
 max_timesteps = 1000
 
+hydro.artificial_viscosity_coefficient = 0.1
 hydro.reconstruction_order = 3
+
+cooling.enabled = 1
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 temperature_floor = 1.0e4
 density_floor = 1.0e-28
 density_floor_expr = "x1=x*1.0e-22; y1=y*1.0e-22; z1=z*1.0e-22; r2=x1*x1+y1*y1+z1*z1; rb2=3.08567758*3.08567758; base_density_floor * (rb2 / max(r2, rb2))"
 
+particles.eps_ff = 0.01
+particles.low_mass_composite_max_mass = 5.957650359245478e35 # 299 Msun
+particles.reproducibility_roundoff_redundancy = 36
+particles.scalar_yield_per_SN = 1.99e33
+particles.SN_p_term_Msunkmps = 5.0e5
+
 checkpoint_interval = 10000
 plotfile_interval = 10000
-statistics_interval = -1
+statistics_interval = 250
+derived_vars = ["particle.StochasticStellarPop.birth_mass_density"]
+
+quokka.stellarpop_particle_mass.type = "DerivedParticleDeposition"
+quokka.stellarpop_particle_mass.particle_types = "StochasticStellarPop"
+quokka.stellarpop_particle_mass.deposit_fields = "birth_mass"
+quokka.stellarpop_particle_mass.t_age = 1.57788e14
+quokka.stellarpop_particle_mass.normalization_expr = "1.0/(5.0e6*yr)"
 
 # These are deliberately the same ParmParse names used by DiskGalaxy.
 disk_galaxy.vcirc_file = "../extern/agora_data/vcirc_with_constant_halo.csv"
@@ -43,3 +60,5 @@ disk_galaxy.disk_zscale_kpc = 0.343218
 disk_galaxy.disk_temperature = 1.0e4
 disk_galaxy.disk_perturb_amplitude = 1.0
 disk_galaxy.disk_perturb_Rmax_kpc = 20.0
+disk_galaxy.halo_vphi_expr = "R=sqrt(x*x+y*y); R0=1.4e3*3.085677581e18; Rt=15.0e3*3.085677581e18; Rs=22.0e3*3.085677581e18; dR=max(R-Rt,0.0); 2.30e7*(1.0 - exp(-R / R0))/sqrt(1.0 + (dR/Rs)*(dR/Rs))"
+disk_galaxy.initial_scalar_density = 1.67e-35
