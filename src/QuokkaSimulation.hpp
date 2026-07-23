@@ -392,8 +392,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	template <SourceOrder Order>
-	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, std::array<amrex::MultiFab, AMREX_SPACEDIM> *recal_fluxes,
-		 int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc,
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> *recal_fluxes, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 	template <SourceOrder Order, typename... Fs> static auto callInOrder(Fs &&...fs) -> void
 	{
 		auto funcs = std::forward_as_tuple(std::forward<Fs>(fs)...);
@@ -1143,7 +1143,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	};
 
 	auto const applyConduction = [&]() {
-		if (enableElectronConduction_ == 1 ) {
+		if (enableElectronConduction_ == 1) {
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
 
@@ -2295,13 +2295,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
 			amrex::BoxArray ba = boxArray(lev);
 			ba.surroundingNodes(dim); // nodal in direction dim
-			(*recal_fluxes)[dim].define(ba, DistributionMap(lev),  Physics_Indices<problem_t>::nvarTotal_cc, 0);
+			(*recal_fluxes)[dim].define(ba, DistributionMap(lev), Physics_Indices<problem_t>::nvarTotal_cc, 0);
 			(*recal_fluxes)[dim].setVal(0.0);
 		}
-	}	
+	}
 
-	auto* recal_fluxes_ptr = 
-    recal_fluxes.has_value() ? &recal_fluxes.value() : nullptr;
+	auto *recal_fluxes_ptr = recal_fluxes.has_value() ? &recal_fluxes.value() : nullptr;
 
 	const amrex::Real stage1Weight = (integratorOrder_ == 2) ? 0.5 : 1.0;
 	const int nghost_Riemann =
@@ -2628,8 +2627,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	auto burn_success_second = addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], recal_fluxes_ptr, lev,
-											  time + dt_lev, 0.5 * dt_lev);
+	auto burn_success_second =
+	    addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], recal_fluxes_ptr, lev, time + dt_lev, 0.5 * dt_lev);
 	if (burn_success_second) {
 		ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
 	}
@@ -2640,8 +2639,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	if (do_reflux == 1 && final_success) {
 		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux_rk2, lev, dt_lev);
 		if (enableElectronConduction_ == 1) {
-        incrementFluxRegisters(fr_as_crse, fr_as_fine, recal_fluxes.value(), lev, dt_lev);
-    }
+			incrementFluxRegisters(fr_as_crse, fr_as_fine, recal_fluxes.value(), lev, dt_lev);
+		}
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			// E = -v x B, our emf is v x B, so we need to pass -dt
 			incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_ave, lev, -1.0 * dt_lev);
