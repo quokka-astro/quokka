@@ -1,0 +1,66 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [2.0e19, 2.0e19, 2.0e19]
+quokka.bc = ["reflecting", "periodic", "periodic"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [128, 8, 8]
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 8     # grid size must be divisible by this
+amr.max_grid_size   = 128
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+# ~2 planar expansion times (t_exp = x_S / c_i ~ 3e12 s); front stays well inside the domain.
+stop_time = 6.0e12
+
+# Uniform neutral hydrogen slab: n_0 = 100 cm^-3, cold (100 K).
+photoionize.primary_species_1 = 1.0e-10   # e
+photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
+photoionize.primary_species_3 = 1.0e-10   # H+
+photoionize.temperature = 1.0e2
+# Ionizing photon flux injected at x = 0 [photons cm^-2 s^-1].
+photoionize.flux = 1.0e10
+
+photochemistry.enabled = 1
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+plotfile_interval = -1
+plotfile_prefix = "DType1D"
+
+max_timesteps = 1000000  # stop_time governs; no artificial step cap
+
+# Photoheating on (gas heats to ~10^4 K in the ionized region) and temperature-dependent
+# recombination so the network alpha_B matches the analytic reference.
+network.energy_switch = 1
+network.recombination_temperature_dependent = 1
+network.allow_mixed_cell_cooling = 0
+
+# VODE / Rosenbrock tolerances scaled for n_0 = 100 cm^-3 (atol_spec = 1e-5 * n_H).
+integrator.atol_spec                     = 1.0e-3   # cm^-3
+integrator.atol_enuc                     = 1.24e8   # erg/g; c_v * 1 K temperature accuracy
+integrator.atol_rad_num                  = 5.0e-2   # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3   # cm^-3; = atol_spec
+integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at the front
+
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2
+
+integrator.rosenbrock_tableau = 3
