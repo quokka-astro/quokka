@@ -10,7 +10,9 @@ amr.v = 2
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell = 256 256 256
-amr.blocking_factor = 128
+amr.blocking_factor_x = 128
+amr.blocking_factor_y = 128
+amr.blocking_factor_z = 16
 amr.max_grid_size   = 256
 amr.max_level       = 3
 amr.n_error_buf     = 2
@@ -44,5 +46,27 @@ mhd_galaxy.sn_jeans_J              = 4.0
 mhd_galaxy.sn_remnant_fraction     = 0.5
 mhd_galaxy.sn_momentum             = 3.0e3
 
-mhd.project_initial_b_field = false
-mhd.update_initial_b_energy = false
+mhd.project_initial_b_field = true
+mhd.update_initial_b_energy = true
+
+
+quokka.diagnostics = proj_z proj_x proj_y        # Space-separated name(s) of diagnostics (arbitrary)
+
+quokka.proj_z.type = ProjectionPlot
+quokka.proj_z.file = tests/projz_plt
+quokka.proj_z.int = 800
+quokka.proj_z.normal = 2
+quokka.proj_z.field_names = Bphi gasDensity x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum radial_velocity circular_velocity
+
+quokka.proj_x.type = ProjectionPlot
+quokka.proj_x.file = tests/projx_plt
+quokka.proj_x.int = 800
+quokka.proj_x.normal = 0
+quokka.proj_x.field_names = Bphi gasDensity x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum radial_velocity circular_velocity
+
+quokka.proj_y.type = ProjectionPlot
+quokka.proj_y.file = tests/projy_plt
+quokka.proj_y.int = 800
+quokka.proj_y.normal = 1
+quokka.proj_y.field_names = Bphi gasDensity x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum radial_velocity circular_velocity
+
