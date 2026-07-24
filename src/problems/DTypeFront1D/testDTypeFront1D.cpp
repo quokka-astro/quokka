@@ -44,6 +44,16 @@ struct DTypeFront1D {
 // reduced speed of light (same choice as the 3D DTypeFront problem)
 constexpr double c_hat = C::c_light / 1000.0;
 
+// Mean energy of an ionizing photon in the single chemistry band [3.29e15, 1.5e16] Hz (see
+// CMakeLists.txt CHEM_BANDS); this matches RadSystem::GetChemBandQuanta(0).
+constexpr double E_photon = 0.5 * (3.29e15 + 1.50e16) * C::hplanck; // erg
+// Radiation energy-density floor. Rather than the arbitrary blackbody-at-0.01-K value used by the 3D
+// DTypeFront, this is a physically meaningful, negligible photon-number density (1e-10 cm^-3, vs the
+// ~hundreds cm^-3 of the ionizing field) converted to a radiation energy density. Dark cells are
+// initialized to exactly this floor (see setInitialConditionsOnGrid), following the best practice of
+// RadStreaming / RadhydroShockMultigroup instead of seeding an unphysical 1e-99.
+constexpr double Erad_floor_ = 1.0e-10 * E_photon; // erg cm^-3
+
 template <> struct quokka::EOS_Traits<DTypeFront1D> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
@@ -59,7 +69,7 @@ template <> struct Physics_Traits<DTypeFront1D> : DefaultPhysicsTraits {
 
 template <> struct RadSystem_Traits<DTypeFront1D> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
-	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
+	static constexpr double Erad_floor = Erad_floor_;
 	// beta_order = 0: no O(v/c) photochemistry radiation-momentum kick. The analytic law is pure
 	// thermal-pressure, so the physics must match (radiation pressure is subdominant here anyway).
 	static constexpr int beta_order = 0;
@@ -278,7 +288,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::setInitialConditionsOnGrid(quok
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = 1.e-99_rt;
+			state_cc(i, j, k, RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_floor_;
 			state_cc(i, j, k, RadSystem<DTypeFront1D>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<DTypeFront1D>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<DTypeFront1D>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
