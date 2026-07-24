@@ -72,3 +72,15 @@ Because the simulation starts fully neutral, the R-type front needs a formation 
 2. the measured ionized-cavity temperature lies in the physical range \\(5000\,\text{K} < T_i < 20000\,\text{K}\\).
 
 At the reference resolution the front expands to \\(\sim 2.7\, x_S\\) (confirming genuine D-type expansion rather than R-type saturation) and \\(x_{\text{eff}}\\) tracks \\(x_i(t)\\) to \\(\sim 5\%\\) throughout the expansion, with \\(T_i \approx 1.05 \times 10^4\\) K.
+
+## Multigroup radiation: thermal bands alongside the ionizing band
+
+The problem uses **three radiation groups** to exercise a mixed thermal + chemical (ionizing) configuration: group 0 (IR) and group 1 (optical/UV) are **thermal** bands, and group 2 is the **ionizing** chemistry band \\([3.29\times10^{15}, 1.5\times10^{16}]\\) Hz. Chemistry bands are always the last groups. The two thermal bands are given zero opacity, so they free-stream and do not couple to the gas, and each is injected at \\(x = 0\\) with the same luminosity as the ionizing band.
+
+Chemical bands are decoupled from the thermal radiation update: the thermal gas–radiation energy exchange and blackbody emission act only on the thermal groups (blackbody above the first chemical-band boundary is dropped, not renormalized), while the chemical bands are handled by transport, direct source injection, and photochemistry. This lets the ionizing physics be validated together with an independent thermal multigroup field.
+
+The three-group run reproduces the single-group front result exactly (the transparent thermal bands do not perturb the hydrodynamics or the ionizing band), and additionally checks that:
+
+1. the two thermal bands, being identically configured, have identical domain-integrated radiation energy;
+2. each thermal band conserves energy — with zero opacity and reflecting boundaries its domain-integrated \\(E_{\text{rad}}\\) equals the injected amount (to \\(\ll 1\%\\)); and
+3. the ionizing band, unlike the transparent thermal bands, is depleted by photoionization (its integrated \\(E_{\text{rad}}\\) is below the injected amount).
