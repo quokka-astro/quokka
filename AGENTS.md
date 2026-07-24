@@ -17,6 +17,9 @@ Avoid capturing host pointers inside `AMREX_GPU_DEVICE` lambdas. Prefer device-s
 ## Testing Guidelines
 Add a unit test registered with CTest or extend `regression/quokka-tests.ini` with a matching `inputs/` file for new features. Preserve baseline outputs in `tests/` when regression scripts consume them, and document any GPU-only runs by recording the exact commands. Keep numerical changes reproducible with notes on key diagnostics.
 
+## Documentation
+When editing anything under `docs/markdown/` (including adding a documentation page for a new test problem), first read `docs/markdown/AGENTS.md`. It covers the mdBook build, the required `SUMMARY.md`/`tests/index.md` index updates without which a new page will not render, and the math syntax.
+
 ## Commit & Pull Request Guidelines
 Use short, imperative commit subjects (e.g., `fix clang-tidy`). Group related changes only and rebase onto `development` before opening a PR. Provide PR descriptions covering problem, solution, and validation, cite the `ctest` or benchmark commands run, and link relevant issues. Flag interface or input changes for documentation follow-up and mention required plots or logs when numerics shift.
 
