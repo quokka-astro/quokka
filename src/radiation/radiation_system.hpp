@@ -230,6 +230,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
+	// Chemical (ionizing) bands occupy the LAST NChemBands groups; the leading nGroupsThermal_ groups
+	// are thermal. The thermal radiation update (blackbody emission + gas-radiation energy exchange)
+	// acts only on the thermal groups; chemical bands are handled by transport, direct source injection,
+	// and photochemistry. When NChemBands == 0, nGroupsThermal_ == nGroups_ and all chem-specific code
+	// paths are inert.
+	static constexpr int nGroupsThermal_ = nGroups_ - RadSystem_NChemBands<problem_t>::value;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
 			return RadSystem_Traits<problem_t>::radBoundaries;
@@ -257,9 +263,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum), // NOLINT
 		      "PPL_opacity_full_spectrum requires at least 3 photon groups.");
 
-	// Assertion: mixed thermal+chemical band configurations are untested
-	static_assert(RadSystem_NChemBands<problem_t>::value == 0 || RadSystem_NChemBands<problem_t>::value == nGroups_,
-		      "Mixed thermal and chemical radiation bands are not supported.");
+	// Assertion: chemical (ionizing) bands, when present, occupy the last NChemBands groups; the
+	// leading (nGroups_ - NChemBands) groups are thermal. Mixed thermal+chemical configurations are
+	// therefore valid as long as there are no more chemical bands than groups.
+	static_assert(RadSystem_NChemBands<problem_t>::value <= nGroups_,
+		      "The number of chemical radiation bands cannot exceed the number of radiation groups.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -501,20 +509,26 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
 		amrex::Real y = NAN;
 		amrex::Real previous = 0.0;
-		for (int g = 0; g < nGroups_ - 1; ++g) {
-			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-			if (x >= 100.) { // 100. is the upper limit of x in the table
+		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission. When
+		// chemical bands are present the thermal fractions are NOT renormalized: the blackbody radiation
+		// above the first chemical-band boundary is simply dropped, so the fractions sum to < 1.
+		for (int g = 0; g < nGroupsThermal_; ++g) {
+			if (g == nGroups_ - 1) {
+				// no chemical bands: the last group carries all remaining blackbody, total fraction = 1.0
 				y = 1.0;
 			} else {
-				y = integrate_planck_from_0_to_x(x);
+				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
+				if (x >= 100.) { // 100. is the upper limit of x in the table
+					y = 1.0;
+				} else {
+					y = integrate_planck_from_0_to_x(x);
+				}
 			}
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
-		// last group, enforcing the total fraction to be 1.0
-		y = 1.0;
-		radEnergyFractions[nGroups_ - 1] = y - previous;
-		AMREX_ASSERT(std::abs(sum(radEnergyFractions) - 1.0) < 1.0e-10);
+		// chemical bands (g >= nGroupsThermal_) emit no blackbody radiation; left at 0.
+		AMREX_ASSERT(sum(radEnergyFractions) < 1.0 + 1.0e-10);
 
 		return radEnergyFractions;
 	}
@@ -546,8 +560,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 	const double power = radiation_constant_ * std::pow(temperature, 4);
 	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	auto Erad_g = power * radEnergyFractions;
-	// set floor
-	for (int g = 0; g < nGroups_; ++g) {
+	// set floor on the thermal groups only; chemical bands emit no blackbody radiation and are left at 0.
+	for (int g = 0; g < nGroupsThermal_; ++g) {
 		if (Erad_g[g] < Erad_floor_) {
 			Erad_g[g] = Erad_floor_;
 		}

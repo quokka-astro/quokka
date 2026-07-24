@@ -394,6 +394,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		// }
 	} // END NEWTON-RAPHSON LOOP
 
+	// Inject the source directly into transparent groups (tau ~ 0). The Newton solve above excludes such
+	// groups from its residual and Jacobian (Fg_abs_sum and Jgg skip tau <= 0) and leaves their radiation
+	// energy at Erad0, so an injected source in a transparent group would otherwise be silently dropped.
+	// This mirrors the single-group negligible-optical-depth branch. Transparent groups do not couple to
+	// the gas (their Rvec contribution is zero), so this is energy-consistent: Src is already counted in
+	// Etot0. Groups with tau > 0 (the usual case) and groups without a source are unaffected.
+	for (int g = 0; g < nGroups_; ++g) {
+		if (!(tau[g] > 0.0)) {
+			EradVec_guess[g] = Erad0Vec[g] + Src[g];
+		}
+	}
+
 	AMREX_ASSERT(Egas_guess > 0.0);
 	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
 
@@ -647,9 +659,20 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			// The last NChemBands groups are ionizing photon groups (no cscale).
 			// All other (thermal) groups require scaling by chat/c (= 1/cscale).
 			// Avoid if constexpr here: NVCC rejects first-captures inside constexpr-if in device lambdas.
-			Src[g] = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroups_ - RadSystem_NChemBands<problem_t>::value)
+			Src[g] = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_)
 				     ? dt * radEnergySource(i, j, k, g)
 				     : dt * (chat / c * radEnergySource(i, j, k, g));
+		}
+
+		// Chemical (ionizing) bands are decoupled from the thermal gas-radiation energy exchange. Their
+		// source is injected directly into the radiation energy after the Newton solve (see the store
+		// below), so it is not subject to the thermal opacity coupling (which would drop it at zero
+		// opacity) and does not pollute the gas energy balance. Remove the chem-band source from the
+		// thermal solve here. When NChemBands == 0 this loop is empty and behaviour is unchanged.
+		quokka::valarray<double, nGroups_> Src_chem{};
+		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
+			Src_chem[g] = Src[g];
+			Src[g] = 0.0;
 		}
 
 		double Egas0 = NAN;
@@ -803,7 +826,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				consNew(i, j, k, x2GasMomentum_index) = updated_flux.gasMomentum[1];
 				consNew(i, j, k, x3GasMomentum_index) = updated_flux.gasMomentum[2];
 				for (int g = 0; g < nGroups_; ++g) {
-					consNew(i, j, k, radEnergy_index + numRadVars_ * g) = updated_flux.Erad[g];
+					// For chemical bands, Src_chem[g] injects the ionizing source directly (the thermal
+					// solve left updated_flux.Erad[g] == Erad0[g]); for thermal groups Src_chem[g] == 0.
+					consNew(i, j, k, radEnergy_index + numRadVars_ * g) = updated_flux.Erad[g] + Src_chem[g];
 					consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = updated_flux.Frad[0][g];
 					consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = updated_flux.Frad[1][g];
 					consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = updated_flux.Frad[2][g];
