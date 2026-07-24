@@ -26,6 +26,12 @@ updated:
    `docs/markdown/tests/index.md` (the human-visible list of documented test problems). This is
    separate from, and additional to, the `SUMMARY.md` entry.
 
+CI enforces this: the `📚 mdBook validation` workflow runs `scripts/check_mdbook_summary.py`, which
+fails if any `docs/markdown/**/*.md` file is not reachable from `SUMMARY.md`. Meta-docs that are not
+book pages are exempted via that script's `HIDDEN_PAGES` set — this `AGENTS.md` is listed there, so it
+is intentionally absent from `SUMMARY.md`. If you add another non-book Markdown file under
+`docs/markdown/`, either link it from `SUMMARY.md` or add it to `HIDDEN_PAGES`.
+
 ### Adding a new test-problem doc
 
 Test-problem pages live in `docs/markdown/tests/`. When you add a new test problem (see the root
