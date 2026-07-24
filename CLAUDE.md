@@ -56,9 +56,6 @@ Presets: `1d`, `2d`, `3d`, `1d-debug`, `2d-debug`, `3d-debug`, `1d-hip`, `2d-hip
 - Problems use template specialization pattern for `QuokkaSimulation<ProblemName>`
 - Input files (`.toml`) in `inputs/` configure geometry, AMR, physics parameters
 
-## Documentation
-- When editing anything under `docs/markdown/` (including adding a doc page for a new test problem), first read `docs/markdown/AGENTS.md`. It covers the mdBook build, the required `SUMMARY.md`/`tests/index.md` index updates (without which a new page will not render), and the math syntax.
-
 ## Key Dependencies
 - **AMReX**: Underlying AMR framework (external submodule)
 - **Microphysics**: Nuclear reaction networks (external submodule)
