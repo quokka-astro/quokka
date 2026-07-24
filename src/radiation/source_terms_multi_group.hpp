@@ -659,9 +659,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			// The last NChemBands groups are ionizing photon groups (no cscale).
 			// All other (thermal) groups require scaling by chat/c (= 1/cscale).
 			// Avoid if constexpr here: NVCC rejects first-captures inside constexpr-if in device lambdas.
-			Src[g] = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_)
-				     ? dt * radEnergySource(i, j, k, g)
-				     : dt * (chat / c * radEnergySource(i, j, k, g));
+			Src[g] = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_) ? dt * radEnergySource(i, j, k, g)
+												      : dt * (chat / c * radEnergySource(i, j, k, g));
 		}
 
 		// Chemical (ionizing) bands are decoupled from the thermal gas-radiation energy exchange. Their
