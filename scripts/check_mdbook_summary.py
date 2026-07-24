@@ -9,7 +9,10 @@ from pathlib import Path
 
 
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-HIDDEN_PAGES = {"404.md", "SUMMARY.md"}
+# Pages that are intentionally not part of the mdBook table of contents and so are
+# exempt from the SUMMARY.md reachability check. AGENTS.md files are agent/contributor
+# guidance (not rendered book pages), like the special 404/summary pages.
+HIDDEN_PAGES = {"404.md", "SUMMARY.md", "AGENTS.md"}
 
 
 def main() -> int:
