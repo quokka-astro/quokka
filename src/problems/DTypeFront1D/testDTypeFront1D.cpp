@@ -65,6 +65,9 @@ template <> struct Physics_Traits<DTypeFront1D> : DefaultPhysicsTraits {
 	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
+	// 3 radiation groups: group 0 = IR, group 1 = optical/UV (both thermal), group 2 = ionizing (the
+	// chemistry band). Chemistry bands must be the last groups; see radiation_system.hpp.
+	static constexpr int nGroups = 3;
 };
 
 template <> struct RadSystem_Traits<DTypeFront1D> {
@@ -73,6 +76,13 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	// beta_order = 0: no O(v/c) photochemistry radiation-momentum kick. The analytic law is pure
 	// thermal-pressure, so the physics must match (radiation pressure is subdominant here anyway).
 	static constexpr int beta_order = 0;
+	static constexpr double energy_unit = C::hplanck; // radBoundaries below are frequencies in Hz
+	// Group frequency boundaries [Hz]: group 0 = IR [3e13, 4.3e14], group 1 = optical/UV [4.3e14,
+	// 3.29e15], group 2 = ionizing [3.29e15, 1.5e16]. The last group coincides with the chemistry
+	// band (ChemBands below). The two thermal groups are transparent (zero opacity), so the exact IR/
+	// optical boundaries are cosmetic.
+	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{3.0e13, 4.3e14, 3.29e15, 1.50e16};
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
 
@@ -115,6 +125,25 @@ auto compute_effective_length(amrex::MultiFab const &state_mf, amrex::GpuArray<a
 	amrex::Real total_ionized_length = amrex::get<0>(hv);
 	amrex::ParallelAllReduce::Sum(total_ionized_length, amrex::ParallelContext::CommunicatorSub());
 	return total_ionized_length;
+}
+
+// Domain-integrated radiation energy of group g: sum_cells Erad_g * dx  [erg cm^-2 in 1D].
+auto compute_group_total_erad(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int g) -> amrex::Real
+{
+	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
+	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+	auto const state = state_mf.const_arrays();
+	const amrex::Real cell_length = dx[0];
+	const int erad_index = RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g;
+
+	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
+		return cell_length * state[box_no](i, j, k, erad_index);
+	});
+
+	auto const &hv = reduce_data.value(reduce_op);
+	amrex::Real total = amrex::get<0>(hv);
+	amrex::ParallelAllReduce::Sum(total, amrex::ParallelContext::CommunicatorSub());
+	return total;
 }
 
 // Median temperature of ionized ("cavity") cells, x_HII > 0.90. Gathered to the IO processor.
@@ -208,9 +237,14 @@ void RadSystem<DTypeFront1D>::SetRadEnergySource(array_t &radEnergy, const amrex
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
 {
-	// Planar ionizing photon flux injected in the first cell (adjacent to x = 0). radEnergy is a
-	// luminosity volume density [erg s^-1 cm^-3]: F * E_gamma is the energy flux [erg cm^-2 s^-1],
-	// and dividing by the cell width dx[0] gives the volumetric injection rate.
+	// Planar photon flux injected in the first cell (adjacent to x = 0). radEnergy is a luminosity
+	// volume density [erg s^-1 cm^-3]: F * E_gamma is the energy flux [erg cm^-2 s^-1], and dividing by
+	// the cell width dx[0] gives the volumetric injection rate.
+	//
+	// The SAME luminosity density is injected into all three groups (IR, optical, ionizing). The code
+	// applies its own thermal-vs-chemical rescaling (thermal groups carry an internal chat/c factor;
+	// see source_terms_multi_group.hpp), which is intentional: an identical radEnergySource across
+	// groups corresponds to a physically identical luminosity in each band.
 	amrex::ParmParse const pp("photoionize");
 	amrex::Real flux = 1.0e11_rt;
 	pp.query("flux", flux);
@@ -218,7 +252,12 @@ void RadSystem<DTypeFront1D>::SetRadEnergySource(array_t &radEnergy, const amrex
 	const amrex::Real E_gamma = RadSystem<DTypeFront1D>::GetChemBandQuanta(0);
 	const amrex::Real src = flux * E_gamma / dx[0];
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { radEnergy(i, j, k) = (i == 0) ? src : 0.0_rt; });
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		const amrex::Real val = (i == 0) ? src : 0.0_rt;
+		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
+			radEnergy(i, j, k, g) = val;
+		}
+	});
 }
 
 template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
@@ -259,6 +298,22 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront1D>::ComputePlanckOpa
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront1D>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return 0.0_rt;
+}
+
+// Zero opacity for all (thermal) groups: the two thermal bands are transparent, so they free-stream and
+// do not couple to the gas. The ionizing (chemistry) band's absorption is handled by photochemistry,
+// not by this group-opacity model.
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<DTypeFront1D>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+							     const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+{
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	for (int i = 0; i < nGroups_ + 1; ++i) {
+		exponents_and_values[0][i] = 0.0;
+		exponents_and_values[1][i] = 0.0;
+	}
+	return exponents_and_values;
 }
 
 template <> void QuokkaSimulation<DTypeFront1D>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -410,6 +465,56 @@ auto problem_main() -> int
 		status = 1;
 	} else {
 		amrex::Print() << "Test passed: ionized-cavity temperature " << T_i << " K is within the physical range [5000, 20000] K.\n";
+	}
+
+	// Checks 3 & 4: the two extra thermal bands (group 0 = IR, group 1 = optical) with zero opacity.
+	// Step 3 (hydro + ionizing band unaffected) is already demonstrated by Checks 1 & 2 passing at the
+	// same values as the single-group baseline, since the thermal bands are transparent and beta_order=0.
+	{
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
+		const double E_gamma = RadSystem<DTypeFront1D>::GetChemBandQuanta(0);
+		const double t_end = sim.userData_.t_vec_.back();
+		const double E_ir = compute_group_total_erad(sim.state_new_cc_[0], dx, 0);
+		const double E_opt = compute_group_total_erad(sim.state_new_cc_[0], dx, 1);
+		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, 2);
+
+		// Radiation energy injected per unit area over the run. The chemical band receives F*E_gamma*t;
+		// thermal groups carry the code's internal chat/c source factor (see source_terms_multi_group.hpp).
+		const double injected_chem = F * E_gamma * t_end;
+		const double injected_thermal = (c_hat / C::c_light) * injected_chem;
+
+		amrex::Print() << "Thermal band (IR)  integrated Erad: " << E_ir << " ; (optical): " << E_opt << " ; ionizing: " << E_ion << '\n';
+		amrex::Print() << "Injected: thermal (chat/c * F*E*t) = " << injected_thermal << " ; chem (F*E*t) = " << injected_chem << '\n';
+
+		// Check 3: the two thermal bands have identical setup (same source, zero opacity) -> identical Erad.
+		const double band_rel_diff = (E_ir + E_opt > 0.0) ? std::abs(E_ir - E_opt) / (0.5 * (E_ir + E_opt)) : 0.0;
+		if (band_rel_diff > 1.0e-6) {
+			amrex::Print() << "Test FAILED: IR and optical thermal bands differ by " << band_rel_diff << " (should be identical).\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: IR and optical thermal bands are identical (relative difference " << band_rel_diff << ").\n";
+		}
+
+		// Check 4a: with zero opacity and reflecting boundaries (no escape), each thermal band conserves
+		// energy, so its integrated Erad equals the injected amount.
+		const double thermal_cons = std::abs(E_ir - injected_thermal) / injected_thermal;
+		if (thermal_cons > 0.03) {
+			amrex::Print() << "Test FAILED: thermal-band energy " << E_ir << " differs from injected " << injected_thermal << " by "
+				       << 100.0 * thermal_cons << "% (tolerance 3%).\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: thermal-band energy conserved to " << 100.0 * thermal_cons << "% of injected (tolerance 3%).\n";
+		}
+
+		// Check 4b: the ionizing band is depleted by photoionization, so its integrated Erad is below the
+		// amount injected (unlike the transparent thermal bands).
+		const double ion_frac = E_ion / injected_chem;
+		if (ion_frac >= 1.0) {
+			amrex::Print() << "Test FAILED: ionizing band is not depleted (Erad/injected = " << ion_frac << " >= 1).\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: ionizing band depleted by photoionization (Erad/injected = " << ion_frac << " < 1).\n";
+		}
 	}
 
 #ifdef HAVE_PYTHON

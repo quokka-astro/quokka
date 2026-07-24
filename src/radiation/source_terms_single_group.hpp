@@ -187,7 +187,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						}
 					}
 
-					fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
+					// A single chemical (ionizing) band emits no blackbody radiation (nGroupsThermal_ == 0);
+					// its source is injected directly via the negligible-optical-depth branch below.
+					fourPiBoverC = (nGroupsThermal_ == 0) ? 0.0 : ComputeThermalRadiationSingleGroup(T_d);
 
 					kappaP = ComputePlanckOpacity(rho, T_d);
 					kappaE = ComputeEnergyMeanOpacity(rho, T_d);
