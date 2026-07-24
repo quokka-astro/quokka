@@ -1,5 +1,5 @@
 # ADR-0001: Unify Gas Temperature Through EOS
-Date: 2026-04-18 • Status: Proposed
+Date: 2026-04-18 • Status: adopted in [PR2012](https://github.com/quokka-astro/quokka/pull/2012) 
 
 ## Context
 Quokka currently has two independent runtime ways to compute gas temperature from density and internal energy:
