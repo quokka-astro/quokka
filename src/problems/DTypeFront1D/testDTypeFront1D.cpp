@@ -421,7 +421,7 @@ auto problem_main() -> int
 		const auto &tv = sim.userData_.t_vec_;
 		const auto &xv = sim.userData_.xeff_vec_;
 		bool found = false;
-		for (size_t i = 1; i < tv.size(); ++i) {
+		for (int i = 1; i < static_cast<int>(tv.size()); ++i) {
 			if (xv[i] >= x_S) {
 				const double x0 = xv[i - 1];
 				const double x1 = xv[i];
