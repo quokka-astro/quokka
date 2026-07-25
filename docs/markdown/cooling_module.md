@@ -1,6 +1,6 @@
 # Cooling Module
 
-Radiative cooling in Quokka is selected at compile time by the `EOSBackend` member of `quokka::EOS_Traits<problem_t>`. The backend determines both how gas temperature is computed and whether a cooling source term is applied at all — there is no separate "enable cooling" trait.
+Radiative cooling in Quokka is selected at compile time by the `EOSBackend` member of `quokka::EOS_Traits<problem_t>`. The backend determines both how gas temperature is computed and whether a cooling source term is applied at all. Selecting the tabulated backend enables the cooling module; the integrator can then be toggled at runtime by `cooling.enabled` (on by default).
 
 ## Choosing an EOS backend
 
@@ -28,7 +28,7 @@ The gamma-law ideal gas EOS, and the default for most problems. Temperature foll
 
 ### EOSTabulated
 
-Applies optically-thin radiative cooling as a Strang-split source term, and computes temperature by interpolating a pre-computed table of \\((\rho, e\_{\rm int})\\). This is the backend used by the ISM and galaxy problems (`ShockCloud`, `TallBoxSf`, `DiskGalaxy`, `RandomBlast`, `SN`, `ParticleSF`). It is described in detail below.
+Applies optically-thin radiative cooling as a Strang-split source term, and computes temperature by interpolating a pre-computed table of \\(T(\rho, e\_{\rm int})\\). This is the backend used by the ISM and galaxy problems (`ShockCloud`, `TallBoxSf`, `DiskGalaxy`, `RandomBlast`, `SN`, `ParticleSF`). It is described in detail below.
 
 ### EOSMicrophysics
 
