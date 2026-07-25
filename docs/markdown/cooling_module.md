@@ -165,5 +165,3 @@ To build and run:
 ```bash
 quokka buildrun -d 1d ResampledCoolingTest
 ```
-
-<!-- CI validation touch: remove before merge. -->
