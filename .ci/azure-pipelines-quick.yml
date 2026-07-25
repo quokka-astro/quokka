@@ -188,12 +188,6 @@ jobs:
       condition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
       displayName: Publish test results
 
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: build/Testing/Temporary
-        ArtifactName: ctest-temporary-logs
-        publishLocation: Container
-      condition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
-      displayName: Publish CTest temporary logs artifact
+    - template: templates/publish-ctest-logs.yml
 
     - template: templates/ccache-stats.yml

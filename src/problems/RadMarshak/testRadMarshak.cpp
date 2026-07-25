@@ -6,6 +6,9 @@
 /// \file testRadMarshak.cpp
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
+// TEMPORARY: touched only so the quick GPU pipeline's src/problems/** path
+// filter matches and the CTest log artifact publish can be validated.
+// Revert before merging.
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
