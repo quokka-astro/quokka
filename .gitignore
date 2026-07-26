@@ -39,6 +39,7 @@ Backtrace.*
 # agent files
 /.claude/*
 !/.claude/settings.json
+!/.claude/skills/
 /.agent
 /.agents
 
