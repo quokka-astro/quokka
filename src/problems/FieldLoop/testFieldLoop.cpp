@@ -217,12 +217,6 @@ auto problem_main() -> int
 	pp.query("loop_radius", loop_radius);
 	pp.query("loop_center_x", loop_center_x);
 	pp.query("loop_center_y", loop_center_y);
-
-	double advection_angle_deg = 60.0;
-	pp.query("advection_angle_deg", advection_angle_deg);
-	const double advection_angle_rad = advection_angle_deg * M_PI / 180.0;
-	advection_vx = std::sin(advection_angle_rad);
-	advection_vy = std::cos(advection_angle_rad);
 	pp.query("advection_vz", advection_vz);
 
 	RefineOn refine_based_on{};
@@ -253,6 +247,15 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<FieldLoop> sim;
+
+	// default in-plane advection direction: the domain's own diagonal (x-y extent), so the loop
+	// crosses the periodic domain and returns to its starting position; independent of loop_center
+	double advection_angle_deg = std::atan2(sim.geom[0].ProbLength(0), sim.geom[0].ProbLength(1)) * 180.0 / M_PI;
+	pp.query("advection_angle_deg", advection_angle_deg);
+	const double advection_angle_rad = advection_angle_deg * M_PI / 180.0;
+	advection_vx = std::sin(advection_angle_rad);
+	advection_vy = std::cos(advection_angle_rad);
+
 	sim.setInitialConditions();
 	sim.evolve();
 	return 0;
