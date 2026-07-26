@@ -49,6 +49,10 @@ AMREX_GPU_MANAGED double loop_center_y = 0.0; // NOLINT
 AMREX_GPU_MANAGED double advection_vx = 0.0; // NOLINT
 AMREX_GPU_MANAGED double advection_vy = 0.0; // NOLINT
 
+// out-of-plane (z) drift; the loop's structure is invariant along z, so this
+// exercises the solver's handling of a flow component the true solution lacks
+AMREX_GPU_MANAGED double advection_vz = 1.0; // NOLINT
+
 // static refinement region: an x-y box spanning the full domain in z
 AMREX_GPU_MANAGED double region_lo_x = 0.4;	 // NOLINT
 AMREX_GPU_MANAGED double region_hi_x = 0.6;	 // NOLINT
@@ -71,7 +75,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		const double x = prob_lo[0] + ((i + 0.5) * dx[0]);
 		const double y = prob_lo[1] + ((j + 0.5) * dx[1]);
 
-		const double Ekin = 0.5 * rho0 * (advection_vx * advection_vx + advection_vy * advection_vy);
+		const double Ekin = 0.5 * rho0 * (advection_vx * advection_vx + advection_vy * advection_vy + advection_vz * advection_vz);
 		const double Eint = P0 / (gamma_gas - 1.0);
 
 		// Az = MAX([A ( loop_radius - r )],0)
@@ -90,7 +94,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		state_cc(i, j, k, HydroSystem<FieldLoop>::density_index) = rho0;
 		state_cc(i, j, k, HydroSystem<FieldLoop>::x1Momentum_index) = rho0 * advection_vx;
 		state_cc(i, j, k, HydroSystem<FieldLoop>::x2Momentum_index) = rho0 * advection_vy;
-		state_cc(i, j, k, HydroSystem<FieldLoop>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<FieldLoop>::x3Momentum_index) = rho0 * advection_vz;
 		state_cc(i, j, k, HydroSystem<FieldLoop>::internalEnergy_index) = Eint;
 		state_cc(i, j, k, HydroSystem<FieldLoop>::energy_index) = Eint + Ekin + Emag;
 	});
@@ -219,6 +223,7 @@ auto problem_main() -> int
 	const double advection_angle_rad = advection_angle_deg * M_PI / 180.0;
 	advection_vx = std::sin(advection_angle_rad);
 	advection_vy = std::cos(advection_angle_rad);
+	pp.query("advection_vz", advection_vz);
 
 	RefineOn refine_based_on{};
 	pp.query("refine_based_on", refine_based_on);

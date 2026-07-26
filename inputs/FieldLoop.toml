@@ -45,6 +45,7 @@ setup.loop_radius = 0.3
 setup.loop_center_x = 0.0
 setup.loop_center_y = 0.0
 setup.advection_angle_deg = 60.0  # measured from the y-axis: vx = sin(angle), vy = cos(angle)
+setup.advection_vz = 1.0  # out-of-plane drift; the loop is z-invariant, so this should not affect the solution
 
 setup.refine_based_on = "Region"  # "Region" or "MagneticEnergy"
 setup.region_lo_x = 0.4
