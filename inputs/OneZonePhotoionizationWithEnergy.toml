@@ -36,15 +36,15 @@ photoionization.temperature = 1e3
 
 # Validation test against Julia reference at 1e-6 L1 error tolerance.
 # Use very tight tolerances (effectively pure relative) to match the reference.
-integrator.atol_spec                     = 1e-3
-integrator.atol_enuc                     = 1e+3
-integrator.atol_rad_num                  = 1e-3
-integrator.species_failure_tolerance     = 1e-3    # cm^-3; matches atol_spec — VODE internal step guard
+integrator.atol_spec                     = 5e-4
+integrator.atol_enuc                     = 5e+2
+integrator.atol_rad_num                  = 5e-4
+integrator.species_failure_tolerance     = 5e-4    # cm^-3; matches atol_spec — VODE internal step guard
 integrator.radiation_failure_tolerance   = 0.05     # cm^-3; N_gamma guard, must exceed atol_rad_num
 
-integrator.rtol_spec     = 1e-7
-integrator.rtol_rad_num  = 1e-7
-integrator.rtol_enuc     = 1e-7
+integrator.rtol_spec     = 5e-8
+integrator.rtol_rad_num  = 5e-8
+integrator.rtol_enuc     = 5e-8
 
 integrator.rosenbrock_tableau = 3
 

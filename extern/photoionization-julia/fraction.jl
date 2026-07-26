@@ -9,14 +9,12 @@ using Plots
 using CSV
 using DataFrames
 
-const m_p = 1.672621777e-24
-const m_e = 9.10938291e-28
+const m_e = 9.1093837139e-28
+const m_HI = 1.67353286432139e-24
+const m_HII = 1.67262192595e-24
 const c   = 2.99792458e10
-const k_B = 1.3806488e-16
-const n_A = 6.02214129e23
-const h   = 6.62606957e-27
-const R   = k_B * n_A
-const σ_v = 1.5e-18
+const k_B = 1.3806490000000002e-16
+const σ_v = 2.1596876715103067e-18
 const E_ion = 6.4e-12
 
 struct State
@@ -113,9 +111,6 @@ tend = parse(Float64, ARGS[10])
 constant_dt = parse(Float64, ARGS[11])
 abstol, reltol = parse.(Float64, ARGS[12:13])
 save_path = ARGS[14]
-
-m_HI = m_p + m_e
-m_HII = m_p
 
 E0 = get_E(State([n_e, n_HI, n_HII], [n_photon0, 0], [γ_e, γ_HI, γ_HII], [m_e, m_HI, m_HII], 0.0), T0)
 state = State(
