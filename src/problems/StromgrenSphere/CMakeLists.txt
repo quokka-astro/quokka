@@ -22,21 +22,21 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   # Species enums
   set(SPECIES_ENUM
-  "e = 0,
-  H,
-  Hp"
+  "H = 0,
+  Hp,
+  e"
   )
 
   # Atomic masses (in atomic mass units)
   set(AION
-  "5.4858e-4,
+  "1.0,
   1.0,
-  1.0"
+  5.4858e-4"
   )
   set(AION_INV
-  "1822.89,
+  "1.0,
   1.0,
-  1.0"
+  1822.89"
   )
 
   # Charges
@@ -48,28 +48,28 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   # constexpr switch bodies
   set(AION_CONSTEXPR
-  "case e:  a = 1.0; break;
-  case H:  a = 1.0; break;
-  case Hp: a = 1.0; break;"
+  "case H:  a = 1.0; break;
+  case Hp: a = 1.0; break;
+  case e:  a = 1.0; break;"
   )
 
   set(ZION_CONSTEXPR
-  "case e:  z = 1.0; break;
-  case H:  z = 1.0; break;
-  case Hp: z = 1.0; break;"
+  "case H:  z = 1.0; break;
+  case Hp: z = 1.0; break;
+  case e:  z = 1.0; break;"
   )
 
   # Species names
   set(SHORT_SPEC_NAMES
-  "\"e\",
-  \"H\",
-  \"H+\""
+  "\"H\",
+  \"H+\",
+  \"e\""
   )
 
   set(SPEC_NAMES
-  "\"Electron\",
-  \"Hydrogen\",
-  \"Hydrogen_Ion\""
+  "\"Hydrogen\",
+  \"Hydrogen_Ion\",
+  \"Electron\""
   )
 
   # No extra network properties

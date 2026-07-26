@@ -163,9 +163,9 @@ template <> struct SimulationData<StromgrenSphere> {
 	amrex::Real small_temp{};
 	amrex::Real small_dens{};
 	amrex::Real temperature{};
-	amrex::Real primary_species_1{};
-	amrex::Real primary_species_2{};
-	amrex::Real primary_species_3{};
+	amrex::Real n_e_init{};
+	amrex::Real n_HI_init{};
+	amrex::Real n_HII_init{};
 	amrex::Real Q{};
 	amrex::Real tend{};
 	int recombination_switch{};
@@ -190,18 +190,18 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e4;
 	userData_.tend = 1000.0_rt;
-	userData_.primary_species_1 = 0.0e0_rt;
-	userData_.primary_species_2 = 1.0e2_rt;
-	userData_.primary_species_3 = 0.0e0_rt;
+	userData_.n_e_init = 0.0e0_rt;
+	userData_.n_HI_init = 1.0e2_rt;
+	userData_.n_HII_init = 0.0e0_rt;
 	userData_.Q = 1.0e49_rt;
 	userData_.recombination_switch = 0;
 	pp.query("small_temp", userData_.small_temp);
 	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("tend", userData_.tend);
-	pp.query("primary_species_1", userData_.primary_species_1);
-	pp.query("primary_species_2", userData_.primary_species_2);
-	pp.query("primary_species_3", userData_.primary_species_3);
+	pp.query("n_e_init", userData_.n_e_init);
+	pp.query("n_HI_init", userData_.n_HI_init);
+	pp.query("n_HII_init", userData_.n_HII_init);
 	pp.query("Q", userData_.Q);
 
 	amrex::ParmParse const pp2("network");
@@ -236,22 +236,9 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 
 	burn_t state;
 	std::array<Real, NumSpec> numdens = {-1.0};
-	for (int n = 1; n <= NumSpec; ++n) {
-		switch (n) {
-			case 1:
-				numdens[n - 1] = userData_.primary_species_1;
-				break;
-			case 2:
-				numdens[n - 1] = userData_.primary_species_2;
-				break;
-			case 3:
-				numdens[n - 1] = userData_.primary_species_3;
-				break;
-			default:
-				amrex::Abort("Cannot initialize number density for chem specie");
-				break;
-		}
-	}
+	numdens[Species::e] = userData_.n_e_init;
+	numdens[Species::H] = userData_.n_HI_init;
+	numdens[Species::Hp] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 	// find the density in g/cm^3
@@ -312,8 +299,10 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 		auto *hist_ptr = d_hist.data();
 
 		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const amrex::Real n_HI = state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + 1) / spmasses[1];
-			const amrex::Real n_HII = state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + 2) / spmasses[2];
+			const amrex::Real n_HI =
+			    state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+			const amrex::Real n_HII =
+			    state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::Hp)) / spmasses[Species::Hp];
 			const amrex::Real denom = n_HI + n_HII;
 			if (denom <= 0.0_rt) {
 				return;
@@ -428,7 +417,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 
 	amrex::Real r_analytical = std::numeric_limits<amrex::Real>::quiet_NaN();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		const amrex::Real n_HI0 = userData_.primary_species_2;
+		const amrex::Real n_HI0 = userData_.n_HI_init;
 		const amrex::Real alpha_B = 2.6e-13;
 		const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_HI0 * n_HI0), 1.0_rt / 3.0_rt);
 
@@ -485,13 +474,15 @@ auto problem_main() -> int
 		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 		const amrex::Real quanta = RadSystem<StromgrenSphere>::GetChemBandQuanta(0);
 		const amrex::Real n_photon_sum0 = sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
-		const amrex::Real n_e_sum0 = sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + 0) / C::m_e;
+		const amrex::Real n_e_sum0 =
+		    sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::e)) / spmasses[Species::e];
 
 		sim.evolve();
 
 		const amrex::Real error_tol = 1e-6;
 		const amrex::Real n_photon_sum = sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
-		const amrex::Real n_e_sum = sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + 0) / C::m_e;
+		const amrex::Real n_e_sum =
+		    sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::e)) / spmasses[Species::e];
 		amrex::Print() << "Final total number of photons: " << n_photon_sum << '\n';
 		amrex::Print() << "Final total number of electrons: " << n_e_sum << '\n';
 		const amrex::Real n_photon_added = sim.userData_.Q * sim.userData_.tend / 8.0_rt;

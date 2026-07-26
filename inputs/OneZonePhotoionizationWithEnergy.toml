@@ -27,9 +27,9 @@ integrator.jacobian = 1
 integrator.renormalize_abundances = 0
 integrator.subtract_internal_energy = 0
 
-photoionization.primary_species_1 = 1e-10
-photoionization.primary_species_2 = 1e2
-photoionization.primary_species_3 = 1e-10
+photoionization.n_e_init = 1e-10
+photoionization.n_HI_init = 1e2
+photoionization.n_HII_init = 1e-10
 photoionization.tend = 10000
 photoionization.n_photon = 5e3
 photoionization.temperature = 1e3

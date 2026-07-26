@@ -23,9 +23,9 @@ suppress_output = 0
 
 stop_time = 1.93e13 # = 20 t_s
 
-stromgen.primary_species_1 = 1.0e-10
-stromgen.primary_species_2 = 139.9
-stromgen.primary_species_3 = 1.0e-10
+stromgen.n_e_init = 1.0e-10
+stromgen.n_HI_init = 139.9
+stromgen.n_HII_init = 1.0e-10
 stromgen.Q = 4e46
 stromgen.temperature = 37.11
 
