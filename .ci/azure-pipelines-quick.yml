@@ -189,5 +189,7 @@ jobs:
       displayName: Publish test results
 
     - template: templates/publish-ctest-logs.yml
+      parameters:
+        stepCondition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
 
     - template: templates/ccache-stats.yml

@@ -6,6 +6,14 @@
 # build fails before CTest, PublishBuildArtifacts@1 fails the whole job with
 # "Not found PathtoPublish: .../build/Testing/Temporary". Probe for the
 # directory first and skip the publish when there is nothing to publish.
+#
+# stepCondition carries the caller's own skip gate (RunHeavyCI / hasProblems),
+# so a job that deliberately skipped CTest never publishes, independently of
+# what happens to be left in the workspace.
+parameters:
+- name: stepCondition
+  type: string
+  default: succeededOrFailed()
 
 steps:
 - script: |
@@ -16,12 +24,12 @@ steps:
       echo "##vso[task.setvariable variable=hasCtestLogs]false"
     fi
   displayName: Check for CTest temporary logs
-  condition: succeededOrFailed()
+  condition: ${{ parameters.stepCondition }}
 
 - task: PublishBuildArtifacts@1
   inputs:
     PathtoPublish: build/Testing/Temporary
     ArtifactName: ctest-temporary-logs
     publishLocation: Container
-  condition: and(succeededOrFailed(), eq(variables['hasCtestLogs'], 'true'))
+  condition: and(${{ parameters.stepCondition }}, eq(variables['hasCtestLogs'], 'true'))
   displayName: Publish CTest temporary logs artifact
