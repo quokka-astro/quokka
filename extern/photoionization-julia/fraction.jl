@@ -9,9 +9,9 @@ using Plots
 using CSV
 using DataFrames
 
-const m_e = 9.1093837139e-28
-const m_HI = 1.67353286432139e-24
-const m_HII = 1.67262192595e-24
+const m_e = 9.10938371e-28
+const m_HI = 1.673773e-24
+const m_HII = 1.6728620616289998e-24
 const c   = 2.99792458e10
 const k_B = 1.3806490000000002e-16
 const σ_v = 2.1596876715103067e-18
