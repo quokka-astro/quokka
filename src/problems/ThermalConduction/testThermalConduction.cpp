@@ -36,7 +36,7 @@ How to choose the parameters for the thermal conduction test problem
 5. Conductivity prefactor = D * rho * c_v should be supplied in the input file. */
 
 const double Eint0 = 2.505e-8;		     // equivalent to T = 2.e8 K for rho 1.0 cm^-3
-const double Efloor = 5.674216387016754e-11; // equivalent tp T = 2.e6 K
+const double Efloor = 5.674216387016754e-16; // equivalent tp T = 2.e6 K
 const double rho0 = 1.0;		     // 1/cm^3
 const double D = 38858197.24933303;	     // diffusion coefficient, in units of cm^2/s
 const double sigma = 1.2053428078125e+17;     // width of the Gaussian, in units of cm
