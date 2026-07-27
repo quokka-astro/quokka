@@ -36,10 +36,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) 
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) -> Real
 {
+	const amrex::Real coeff = 2.63e-13_rt;
 	if (recombination_temperature_dependent == 0) {
-		return 2.6e-13_rt;
+		return coeff;
 	}
-	return 2.6e-13 * (1.0 + std::pow(T / 1.0e4, -0.7) - 1.0);
+	return coeff * std::pow(T / 1.0e4, -0.69999999999999996);
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) -> Real
@@ -47,7 +48,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) ->
 	if (recombination_temperature_dependent == 0) {
 		return 0.0_rt;
 	}
-	return -2.6e-13 * 0.7 * std::pow(T / 1.0e4, -1.7) / 1.0e4;
+	return -2.63e-13 * 0.7 * std::pow(T / 1.0e4, -1.69999999999999996) / 1.0e4;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_collisional_ionization_coefficient(Real T) -> Real

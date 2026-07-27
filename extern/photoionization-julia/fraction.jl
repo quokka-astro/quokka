@@ -75,7 +75,7 @@ function rhs!(df::Vector{Float64}, f::Vector{Float64}, params, t)
     n_photon = n_rad[1]
     flux_photon = n_rad[2]
 
-    α_rec = 2.6e-13 * (1 + energy_switch * ((T / 1.0e4)^(-0.7) - 1.0))
+    α_rec = 2.63e-13 * (1 + energy_switch * ((T / 1.0e4)^(-0.69999999999999996) - 1.0))
     ionization_term = n_HI * c * σ_v * n_photon
     recombination_term = α_rec * n_e * n_HII
 
