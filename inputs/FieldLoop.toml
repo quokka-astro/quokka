@@ -54,3 +54,4 @@ setup.region_lo_x = 0.4
 setup.region_hi_x = 0.6
 setup.region_lo_y = -0.23125
 setup.region_hi_y = 0.23125
+# setup.region_lo_z / region_hi_z are left unset: they default to the full domain in z

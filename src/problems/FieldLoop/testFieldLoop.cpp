@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -53,11 +54,13 @@ AMREX_GPU_MANAGED double advection_vy = 0.0; // NOLINT
 // exercises the solver's handling of a flow component the true solution lacks
 AMREX_GPU_MANAGED double advection_vz = 1.0; // NOLINT
 
-// static refinement region: an x-y box spanning the full domain in z
-AMREX_GPU_MANAGED double region_lo_x = 0.4;	 // NOLINT
-AMREX_GPU_MANAGED double region_hi_x = 0.6;	 // NOLINT
-AMREX_GPU_MANAGED double region_lo_y = -0.23125; // NOLINT
-AMREX_GPU_MANAGED double region_hi_y = 0.23125;	 // NOLINT
+// static refinement region: a 3D box, defaulting to the full domain in z unless set
+AMREX_GPU_MANAGED double region_lo_x = 0.4;					 // NOLINT
+AMREX_GPU_MANAGED double region_hi_x = 0.6;					 // NOLINT
+AMREX_GPU_MANAGED double region_lo_y = -0.23125;				 // NOLINT
+AMREX_GPU_MANAGED double region_hi_y = 0.23125;					 // NOLINT
+AMREX_GPU_MANAGED double region_lo_z = -std::numeric_limits<double>::infinity(); // NOLINT
+AMREX_GPU_MANAGED double region_hi_z = std::numeric_limits<double>::infinity();	 // NOLINT
 
 template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -155,8 +158,9 @@ template <> void QuokkaSimulation<FieldLoop>::refineGrid(int lev, amrex::TagBoxA
 			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const double x = plo[0] + ((i + 0.5) * dx[0]);
 				const double y = plo[1] + ((j + 0.5) * dx[1]);
+				const double z = plo[2] + ((k + 0.5) * dx[2]);
 
-				if (x >= region_lo_x && x <= region_hi_x && y >= region_lo_y && y <= region_hi_y) {
+				if (x >= region_lo_x && x <= region_hi_x && y >= region_lo_y && y <= region_hi_y && z >= region_lo_z && z <= region_hi_z) {
 					tag(i, j, k) = amrex::TagBox::SET;
 				}
 			});
@@ -233,18 +237,6 @@ auto problem_main() -> int
 	if (region_lo_x >= region_hi_x || region_lo_y >= region_hi_y) {
 		amrex::Abort("setup.region_lo_* must be < setup.region_hi_* in both dimensions.");
 	}
-	if (refine_based_on == RefineOn::Region) {
-		// sanity check: the static refinement region must not overlap the field loop's support,
-		// otherwise the region's own refinement conflates with the loop's magnetic-energy features
-		const double closest_x = std::clamp(loop_center_x, region_lo_x, region_hi_x);
-		const double closest_y = std::clamp(loop_center_y, region_lo_y, region_hi_y);
-		const double dx_c = closest_x - loop_center_x;
-		const double dy_c = closest_y - loop_center_y;
-		const double dist_to_region = std::sqrt(dx_c * dx_c + dy_c * dy_c);
-		if (dist_to_region < loop_radius) {
-			amrex::Abort("the static refinement region overlaps the field loop; move setup.region_* or shrink setup.loop_radius.");
-		}
-	}
 
 	QuokkaSimulation<FieldLoop> sim;
 
@@ -255,6 +247,30 @@ auto problem_main() -> int
 	const double advection_angle_rad = advection_angle_deg * M_PI / 180.0;
 	advection_vx = std::sin(advection_angle_rad);
 	advection_vy = std::cos(advection_angle_rad);
+
+	// default the region's z-bounds to the full domain, matching the prior (z-unbounded) behavior
+	if (!pp.query("region_lo_z", region_lo_z)) {
+		region_lo_z = sim.geom[0].ProbLo(2);
+	}
+	if (!pp.query("region_hi_z", region_hi_z)) {
+		region_hi_z = sim.geom[0].ProbHi(2);
+	}
+	if (region_lo_z >= region_hi_z) {
+		amrex::Abort("setup.region_lo_z must be < setup.region_hi_z.");
+	}
+
+	if (refine_based_on == RefineOn::Region) {
+		// sanity check: the static refinement region must not overlap the field loop's support in the
+		// x-y plane; the loop's structure is z-invariant, so the region's z-bounds don't affect this
+		const double closest_x = std::clamp(loop_center_x, region_lo_x, region_hi_x);
+		const double closest_y = std::clamp(loop_center_y, region_lo_y, region_hi_y);
+		const double dx_c = closest_x - loop_center_x;
+		const double dy_c = closest_y - loop_center_y;
+		const double dist_to_region = std::sqrt(dx_c * dx_c + dy_c * dy_c);
+		if (dist_to_region < loop_radius) {
+			amrex::Abort("the static refinement region overlaps the field loop; move setup.region_* or shrink setup.loop_radius.");
+		}
+	}
 
 	sim.setInitialConditions();
 	sim.evolve();
