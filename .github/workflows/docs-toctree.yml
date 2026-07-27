@@ -19,7 +19,7 @@ jobs:
     needs: check_changes
     if: needs.check_changes.outputs.has_docs_changes == 'true' || needs.check_changes.outputs.has_specific_workflow_changes == 'true' || needs.check_changes.outputs.has_scripts_changes == 'true'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Set up Python
