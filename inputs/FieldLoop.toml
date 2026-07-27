@@ -45,13 +45,9 @@ setup.loop_radius = 0.3
 setup.loop_center_x = 0.0
 setup.loop_center_y = 0.0
 setup.advection_vz = 1.0  # out-of-plane drift; the loop is z-invariant, so this should not affect the solution
-# setup.advection_angle_deg is left unset: it defaults to the domain's own diagonal (measured from the
-# y-axis: vx = sin(angle), vy = cos(angle)), so the loop crosses the periodic domain and returns to its
-# starting position. Set explicitly to override with a fixed angle regardless of domain shape.
 
 setup.refine_based_on = "Region"  # "Region" or "MagneticEnergy"
 setup.region_lo_x = 0.4
 setup.region_hi_x = 0.6
 setup.region_lo_y = -0.23125
 setup.region_hi_y = 0.23125
-# setup.region_lo_z / region_hi_z are left unset: they default to the full domain in z
