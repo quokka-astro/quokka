@@ -332,7 +332,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction dir);
 	auto computeErrorNorm(bool use_rel_err = true) -> amrex::Real;
-	auto computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>;
+	auto computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real, amrex::Real>>;
 	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, const amrex::Vector<std::string> &compNames,
 						int lev, int interval) override;
 
@@ -1293,13 +1293,14 @@ AMREX_GPU_HOST_DEVICE auto QuokkaSimulation<problem_t>::densityFloor(amrex::Real
 	return base_density_floor;
 }
 
-template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>
+template <typename problem_t>
+auto QuokkaSimulation<problem_t>::computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real, amrex::Real>>
 {
-	// returns a vector of tuples: (component name, absolute error, relative error)
-	// absolute error is normalized by number of cells
+	// returns a vector of tuples: (component name, absolute error, relative error, reference norm)
+	// absolute error and reference norm are normalized by number of cells
 	// relative error is NAN if reference norm is zero
 
-	std::vector<std::tuple<std::string, amrex::Real, amrex::Real>> comp_errors{};
+	std::vector<std::tuple<std::string, amrex::Real, amrex::Real, amrex::Real>> comp_errors{};
 
 	// Compute cell-centered errors
 	const int ncomp = state_new_cc_[0].nComp();
@@ -1336,7 +1337,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			rel_err = abs_err / ref_norm;
 		}
 
-		comp_errors.emplace_back(componentNames_cc_[icomp], abs_err, rel_err);
+		comp_errors.emplace_back(componentNames_cc_[icomp], abs_err, rel_err, ref_norm);
 	}
 
 	// Compute face-centered errors (if MHD is enabled)
@@ -1380,7 +1381,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 					rel_err = abs_err / ref_norm;
 				}
 
-				comp_errors.emplace_back(componentNames_fc_[idim][icomp_fc], abs_err, rel_err);
+				comp_errors.emplace_back(componentNames_fc_[idim][icomp_fc], abs_err, rel_err, ref_norm);
 			}
 		}
 	}
@@ -1391,7 +1392,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			       << "Relative Error" << "\n";
 		amrex::Print() << std::string(70, '-') << "\n";
 	}
-	for (const auto &[name, abs_err, rel_err] : comp_errors) {
+	for (const auto &[name, abs_err, rel_err, ref_norm] : comp_errors) {
 		if (this->suppress_output == 0) {
 			amrex::Print() << std::setw(25) << std::left << name << std::setw(20) << std::right << std::scientific << std::setprecision(4)
 				       << abs_err;
@@ -1426,17 +1427,17 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 	amrex::Real sum_sq_err = 0.0;
 	amrex::Real sum_sq_ref = 0.0;
 
-	for (const auto &[name, abs_err, rel_err] : comp_errors) {
+	for (const auto &[name, abs_err, rel_err, ref_norm] : comp_errors) {
 		// Convert normalized errors back to L1 norms
-		amrex::Real L1_err = abs_err * n_cells;
+		amrex::Real const L1_err = abs_err * n_cells;
 		sum_sq_err += L1_err * L1_err;
 
-		// Reconstruct reference L1 norm
-		if (!std::isnan(rel_err) && rel_err != 0.0) {
-			amrex::Real L1_ref = (abs_err / rel_err) * n_cells;
-			sum_sq_ref += L1_ref * L1_ref;
-		}
-		// If rel_err is NaN or zero, reference was zero, contributes 0 to sum_sq_ref
+		// Reference L1 norm, carried directly from computeComponentErrors() rather than
+		// reconstructed via abs_err / rel_err: that division is unstable whenever a component's
+		// true error rounds to exactly zero, which silently drops the component's (potentially
+		// large) reference norm from the sum instead of correctly contributing zero error against it.
+		amrex::Real const L1_ref = ref_norm * n_cells;
+		sum_sq_ref += L1_ref * L1_ref;
 	}
 
 	const amrex::Real err_norm = std::sqrt(sum_sq_err);
