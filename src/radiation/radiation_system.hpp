@@ -677,10 +677,13 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 #ifdef PHOTOCHEMISTRY
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
 {
-	auto const freq_bounds = RadSystem_Traits<problem_t>::ChemBands();
-	amrex::Real freq_low = freq_bounds[group_index];
-	amrex::Real freq_high = freq_bounds[group_index + 1];
-	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
+	// ChemBands() is in eV (jaff's native unit for radiation band edges);
+	// convert to erg here rather than have every problem's CMakeLists
+	// convert to Hz by hand.
+	auto const ev_bounds = RadSystem_Traits<problem_t>::ChemBands();
+	amrex::Real ev_low = ev_bounds[group_index];
+	amrex::Real ev_high = ev_bounds[group_index + 1];
+	return 0.5_rt * (ev_high + ev_low) * C::ev2erg;
 }
 #endif
 

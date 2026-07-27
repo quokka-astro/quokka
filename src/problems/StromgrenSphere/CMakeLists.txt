@@ -27,49 +27,11 @@ if(AMReX_SPACEDIM EQUAL 3)
   e"
   )
 
-  # Atomic masses (in atomic mass units)
-  set(AION
-  "1.0,
-  1.0,
-  5.4858e-4"
-  )
-  set(AION_INV
-  "1.0,
-  1.0,
-  1822.89"
-  )
-
-  # Charges
-  set(ZION
-  "1.0,
-  1.0,
-  1.0"
-  )
-
-  # constexpr switch bodies
-  set(AION_CONSTEXPR
-  "case H:  a = 1.0; break;
-  case Hp: a = 1.0; break;
-  case e:  a = 1.0; break;"
-  )
-
-  set(ZION_CONSTEXPR
-  "case H:  z = 1.0; break;
-  case Hp: z = 1.0; break;
-  case e:  z = 1.0; break;"
-  )
-
   # Species names
-  set(SHORT_SPEC_NAMES
-  "\"H\",
-  \"H+\",
-  \"e\""
-  )
-
   set(SPEC_NAMES
-  "\"Hydrogen\",
-  \"Hydrogen_Ion\",
-  \"Electron\""
+  "\"H\",
+  \"Hp\",
+  \"e\""
   )
 
   # No extra network properties
@@ -77,7 +39,7 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   # Set photoionisation properties
   set(NUM_CHEM_BANDS 1)
-  set(CHEM_BANDS "3.29e15, 1.50e16") # Hz
+  set(CHEM_BANDS "13.6, 62.1") # eV
 
   # Configure the header
   configure_file(
