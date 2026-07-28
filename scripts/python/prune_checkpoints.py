@@ -8,7 +8,7 @@ Example:
     prune_checkpoints.py . '3*Myr'          # dry run: print what would be kept/deleted
     prune_checkpoints.py . '3*Myr' --delete # actually delete
 
-The simulation time is read from row 4 of <chk*>/Header. Units (yr, kyr, Myr, Gyr)
+The simulation time is read from row 5 of <chk*>/Header. Units (yr, kyr, Myr, Gyr)
 follow src/util/time_units.hpp (Julian year = 365.25 days).
 
 The newest checkpoint and the one pointed to by the last_chk symlink are always kept,
@@ -42,15 +42,22 @@ def parse_time(expr):
 
 
 def read_checkpoint_time(chk_dir):
-    """Return the simulation time (seconds) stored on row 4 of the checkpoint Header."""
+    """Return the simulation time (seconds) of level 0.
+
+    Row 5 of the checkpoint Header is the t_new array, with one entry per level;
+    see AMRSimulation::WriteCheckpointFile in src/simulation.hpp.
+    """
     header = chk_dir / "Header"
     if not header.is_file():
         return None
     lines = header.read_text().splitlines()
-    if len(lines) < 4:
+    if len(lines) < 5:
+        return None
+    fields = lines[4].split()
+    if not fields:
         return None
     try:
-        return float(lines[3].strip())
+        return float(fields[0])
     except ValueError:
         return None
 
