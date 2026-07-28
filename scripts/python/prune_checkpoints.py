@@ -16,9 +16,13 @@ so that the run stays restartable.
 """
 
 import argparse
+import re
 import shutil
 import sys
 from pathlib import Path
+
+# Checkpoint folders are named chk followed by the step number, e.g. chk0000010.
+CHK_PATTERN = re.compile(r"chk\d+")
 
 # Time unit conversion factors to CGS seconds; see src/util/time_units.hpp
 UNITS = {
@@ -76,7 +80,7 @@ def main():
     interval = parse_time(args.interval)
 
     checkpoints = []
-    for chk_dir in sorted(p for p in sim_dir.glob("chk*") if p.is_dir()):
+    for chk_dir in sorted(p for p in sim_dir.glob("chk*") if p.is_dir() and CHK_PATTERN.fullmatch(p.name)):
         time = read_checkpoint_time(chk_dir)
         if time is None:
             print(f"warning: skipping {chk_dir.name} (no readable time in Header)", file=sys.stderr)
