@@ -82,7 +82,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		const double Eint = P0 / (gamma_gas - 1.0);
 
 		// Az = MAX([A ( loop_radius - r )],0)
-		auto A_z = [=](double x, double y) {
+		auto A_z = [=](double x, double y) -> double {
 			const double dx_c = x - loop_center_x;
 			const double dy_c = y - loop_center_y;
 			const double R = std::sqrt(dx_c * dx_c + dy_c * dy_c);
@@ -116,7 +116,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGridFaceVars
 		const double yL = prob_lo[1] + (j * dx[1]);
 
 		// Az = MAX([A ( loop_radius - r )],0)
-		auto A_z = [=](double x, double y) {
+		auto A_z = [=](double x, double y) -> double {
 			const double dx_c = x - loop_center_x;
 			const double dy_c = y - loop_center_y;
 			const double R = std::sqrt(dx_c * dx_c + dy_c * dy_c);
