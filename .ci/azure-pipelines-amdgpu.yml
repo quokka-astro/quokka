@@ -139,13 +139,9 @@ jobs:
       condition: and(succeededOrFailed(), eq(variables['RunHeavyCI'], 'true'))
       displayName: Publish test results
 
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: build/Testing/Temporary
-        ArtifactName: ctest-temporary-logs
-        publishLocation: Container
-      condition: succeededOrFailed()
-      displayName: Publish CTest temporary logs artifact
+    - template: templates/publish-ctest-logs.yml
+      parameters:
+        stepCondition: and(succeededOrFailed(), eq(variables['RunHeavyCI'], 'true'))
 
     - template: templates/ccache-stats.yml
       parameters:
