@@ -24,6 +24,9 @@ from pathlib import Path
 # Checkpoint folders are named chk followed by the step number, e.g. chk0000010.
 CHK_PATTERN = re.compile(r"chk\d+")
 
+# First unit name appearing in the interval expression; used as the display unit.
+UNIT_PATTERN = re.compile(r"\b(Gyr|Myr|kyr|yr|s)\b")
+
 # Time unit conversion factors to CGS seconds; see src/util/time_units.hpp
 UNITS = {
     "s": 1.0,
@@ -109,7 +112,8 @@ def main():
             if chk_dir.resolve() == target:
                 reasons[chk_dir] = f"{reasons[chk_dir]}, last_chk" if chk_dir in reasons else "last_chk"
 
-    unit = "Myr"
+    match = UNIT_PATTERN.search(args.interval)
+    unit = match.group(1) if match is not None else "s"
     print(f"interval = {args.interval} = {interval / UNITS[unit]:g} {unit}")
     n_delete = 0
     for chk_dir, time in checkpoints:
