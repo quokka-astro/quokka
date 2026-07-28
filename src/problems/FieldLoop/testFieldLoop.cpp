@@ -249,10 +249,10 @@ auto problem_main() -> int
 	advection_vy = std::cos(advection_angle_rad);
 
 	// default the region's z-bounds to the full domain, matching the prior (z-unbounded) behavior
-	if (!pp.query("region_lo_z", region_lo_z)) {
+	if (pp.query("region_lo_z", region_lo_z) == 0) {
 		region_lo_z = sim.geom[0].ProbLo(2);
 	}
-	if (!pp.query("region_hi_z", region_hi_z)) {
+	if (pp.query("region_hi_z", region_hi_z) == 0) {
 		region_hi_z = sim.geom[0].ProbHi(2);
 	}
 	if (region_lo_z >= region_hi_z) {
