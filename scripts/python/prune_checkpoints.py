@@ -129,9 +129,12 @@ def main():
         print("dry run: nothing deleted (pass --delete to remove the folders marked [-])")
         return
 
+    print()
     for chk_dir, _ in checkpoints:
         if chk_dir not in reasons:
+            print(f"deleting {chk_dir} ...", end=" ", flush=True)
             shutil.rmtree(chk_dir)
+            print("done")
     print(f"deleted {n_delete} checkpoint folder(s)")
 
 
