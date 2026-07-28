@@ -100,8 +100,7 @@ where
 -   \\(\rho_{\mathrm{d},k}\\) is the dust mass density for dust species \\(k\\) (\\(k \in [1, N_{\mathrm{dust}}]\\)),
 -   \\(\vec{v}_{\mathrm{d},k}\\) is the dust velocity for dust species \\(k\\),
 -   \\(T_{\mathrm{s},k}\\) is the aerodynamic stopping time for dust species \\(k\\),
--   \\(\xi_k\\) is the charge-to-mass ratio for dust species \\(k\\),
--   \\(\Omega_{\mathrm{L},k} = \xi_k |\vec{B}|\\) is the dust gyrofrequency for dust species \\(k\\),
+-   \\(\Omega_{\mathrm{L},k}=q_k|\vec{B}|/(m_k c)\\) is the signed angular gyrofrequency for dust species \\(k\\), where \\(q_k\\) is its signed Heaviside–Lorentz charge, \\(m_k\\) is its grain mass, and \\(c\\) is the speed of light,
 -   \\(\hat{\vec{b}} = \vec{B}/|\vec{B}|\\) is the unit vector along the magnetic field,
 -   \\(\omega_{\rm drag}\\) is the fraction of dust-drag dissipation deposited into the gas.
 

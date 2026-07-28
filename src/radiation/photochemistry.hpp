@@ -107,10 +107,17 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
 			}
+#ifdef SKIP_PHOTOCHEMFLUX
+			amrex::GpuArray<Real, NumChemBands> n_gamma_initial{};
+#endif
 			for (int nn = 0; nn < NumChemBands; ++nn) {
-				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] =
-				    state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) * invChemBandQuanta[nn];
+				const Real n_gamma = state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) * invChemBandQuanta[nn];
+				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] = n_gamma;
+#ifdef SKIP_PHOTOCHEMFLUX
+				n_gamma_initial[nn] = n_gamma;
+#else
 				photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] = 1.0_rt;
+#endif
 			}
 			photochemstate.rho = rho;
 			photochemstate.e = Eint / rho;
@@ -151,12 +158,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
 			}
-			// Update the chem-band photon number density, attenuate the flux by the burn's rn[1] factor, and
-			// accumulate the momentum the gas absorbs from the O(v/c) work term: dP = -(F_after - F_before) / c^2,
-			// summed over chem bands. The absorbed photon momentum is tied to the physical photon flux F = c E; the
-			// reduced speed of light only changes the absorption rate used by the chemistry solve. dMom is computed
-			// here unconditionally (cheap) and only applied when do_vc_work is true -- computing it outside the
-			// `if constexpr (do_vc_work)` block avoids NVCC's "cannot first-capture in constexpr-if" restriction.
+			// Update the chem-band photon number density, attenuate the flux by the burn's rn[1] factor or algebraically using the photon number
+			// density if SKIP_PHOTOCHEMFLUX is defined, and accumulate the momentum the gas absorbs from the O(v/c) work term: dP = -(F_after -
+			// F_before) / c^2, summed over chem bands. The absorbed photon momentum is tied to the physical photon flux F = c E; the reduced speed
+			// of light only changes the absorption rate used by the chemistry solve. dMom is computed here unconditionally (cheap) and only applied
+			// when do_vc_work is true -- computing it outside the `if constexpr (do_vc_work)` block avoids NVCC's "cannot first-capture in
+			// constexpr-if" restriction.
 			const Real inv_c2 = 1.0_rt / (C::c_light * C::c_light);
 			Real dMomX = 0.0_rt;
 			Real dMomY = 0.0_rt;
@@ -168,12 +175,17 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
-				const Real flux_factor = photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn];
-				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * chemBandQuanta[nn];
+				const Real n_gamma_final = photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn];
+				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) = n_gamma_final * chemBandQuanta[nn];
 				const Real FxOld = state(i, j, k, fxIdx);
 				const Real FyOld = state(i, j, k, fyIdx);
 				const Real FzOld = state(i, j, k, fzIdx);
+#ifdef SKIP_PHOTOCHEMFLUX
+				// flux is not carried in photochemstate; derive the attenuation factor from the change in n_gamma
+				const Real flux_factor = (n_gamma_initial[nn] > 0.0_rt) ? (n_gamma_final / n_gamma_initial[nn]) : 0.0_rt;
+#else
+				const Real flux_factor = photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn];
+#endif
 				// dp = (F_before - F_after) / c^2 = (1 - flux_factor) * F_before / c^2
 				const Real dpx = (1.0_rt - flux_factor) * FxOld * inv_c2;
 				const Real dpy = (1.0_rt - flux_factor) * FyOld * inv_c2;

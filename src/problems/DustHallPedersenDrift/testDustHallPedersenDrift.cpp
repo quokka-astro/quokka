@@ -20,14 +20,14 @@ constexpr double epsilon = 1.0;
 constexpr double rho_dust = epsilon * rho_gas;
 constexpr double sound_speed = 1.0;
 constexpr double alpha_d = 1.0;
-constexpr double charge_to_mass_ratio = 1.0;
+constexpr double dimensionless_charge_to_mass_ratio = 1.0;
 constexpr double magnetic_field_z = 1.0;
 constexpr double external_force = 1.0;
 
 constexpr double constant_dt = 5.0;
 constexpr double stop_time = 20.0;
 
-constexpr double omega_L = charge_to_mass_ratio * magnetic_field_z;
+constexpr double omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_z;
 constexpr double alpha_rel = (1.0 + epsilon) * alpha_d;
 constexpr double omega_rel = (1.0 + epsilon) * omega_L;
 constexpr double g_rel_x = -external_force / rho_gas;
@@ -76,11 +76,12 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeReciprocal
 	return alpha;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, 1> q_over_m{};
-	q_over_m[0] = charge_to_mass_ratio;
-	return q_over_m;
+	amrex::GpuArray<amrex::Real, 1> dimensionless_charge_to_mass_ratio_array{};
+	dimensionless_charge_to_mass_ratio_array[0] = dimensionless_charge_to_mass_ratio;
+	return dimensionless_charge_to_mass_ratio_array;
 }
 
 template <> void QuokkaSimulation<DustHallPedersenDrift>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

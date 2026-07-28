@@ -33,7 +33,8 @@ integrator.jacobian = 1
 integrator.renormalize_abundances = 0
 integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
-integrator.rosenbrock_tableau = 3
+# ROS2S is too slow for this problem
+integrator.rosenbrock_tableau = 1
 
 integrator.atol_spec                     = 1.67e-2   # cm^-3; spec_abundance_tol (1e-5) × n_H (1670)
 integrator.atol_enuc                     = 1.24e8    # erg/g; c_v × 1 K temperature accuracy

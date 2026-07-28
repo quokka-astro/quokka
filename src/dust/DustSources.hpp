@@ -138,7 +138,8 @@ template <typename problem_t> class DustSources
 									amrex::GpuArray<amrex::Real, nMassScalars_> const &massScalars) -> amrex::Real;
 	AMREX_GPU_HOST_DEVICE static auto BuildCellCenteredMagneticField(int i, int j, int k,
 									 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> Vec3;
-	AMREX_GPU_HOST_DEVICE static auto ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>;
+	// compute dimensionless charge-to-mass ratio xi_i = q_i L_0 sqrt(rho_0) / (m_i c), where q_i is the Heaviside--Lorentz charge
+	AMREX_GPU_HOST_DEVICE static auto ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustStageAffineOperators(amrex::Real alpha, amrex::Real omega_L, amrex::Real epsilon, amrex::Real dt,
 									  // NOLINTNEXTLINE(misc-confusable-identifiers)
 									  amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
@@ -232,11 +233,12 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::BuildCellCenteredMagneticFiel
 	return B;
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, nDustGroups_> charge_to_mass_ratio;
-	charge_to_mass_ratio.fill(0.0);
-	return charge_to_mass_ratio;
+	amrex::GpuArray<amrex::Real, nDustGroups_> dimensionless_charge_to_mass_ratio;
+	dimensionless_charge_to_mass_ratio.fill(0.0);
+	return dimensionless_charge_to_mass_ratio;
 }
 
 template <typename problem_t>
@@ -644,7 +646,7 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 	int const numDustVars = Physics_NumVars::numDustVarsPerGroup;
 	amrex::Real const omega_drag = dust_omega_drag_;
 	amrex::Real const omega_gyro_res = dust_omega_gyro_res_;
-	auto const charge_to_mass_ratio = ComputeDustChargeToMassRatio();
+	auto const dimensionless_charge_to_mass_ratio = ComputeDustDimensionlessChargeToMassRatio();
 
 	amrex::ParallelFor(consVar_cc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
@@ -717,7 +719,7 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 		}
 		amrex::Real const dt_lev = 2.0 * dt;
 		for (int g = 0; g < nDustGroups_; ++g) {
-			omega_L[g] = charge_to_mass_ratio[g] * B_mag;
+			omega_L[g] = dimensionless_charge_to_mass_ratio[g] * B_mag;
 			// initial relative momentum used for GIRK; do not update inside Picard loop
 			q_n[g] = p_d_old[g] - epsilon[g] * p_g_old;
 		}

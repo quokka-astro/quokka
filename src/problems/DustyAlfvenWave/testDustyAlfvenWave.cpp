@@ -180,7 +180,7 @@ template <typename T> auto square(T value) -> T { return value * value; }
 
 auto dustDensityFromEpsilon(double epsilon) -> double { return std::max(epsilon * rho_gas, dust_density_floor); }
 
-AMREX_GPU_HOST_DEVICE auto chargeToMassRatio(double omega_l_target) -> double { return omega_l_target / initial_b_magnitude; }
+AMREX_GPU_HOST_DEVICE auto dimensionlessChargeToMassRatio(double omega_l_target) -> double { return omega_l_target / initial_b_magnitude; }
 
 auto projectHelicalAmplitude(const std::vector<double> &z, const std::vector<double> &vx, const std::vector<double> &vy) -> std::complex<double>
 {
@@ -211,15 +211,15 @@ auto referenceRhs(const ReferenceState &state, const CaseConfig &config) -> Refe
 {
 	const std::complex<double> imaginary(0.0, 1.0);
 	const double alpha = 1.0 / config.stopping_time_;
-	const double lorentz_qom = chargeToMassRatio(config.omega_l_target_);
+	const double dimensionless_charge_to_mass_ratio = dimensionlessChargeToMassRatio(config.omega_l_target_);
 
 	const std::complex<double> w_perp = state.dust_perp_ - state.gas_perp_;
 	const double w_z = state.dust_z_ - state.gas_z_;
 	const std::complex<double> cross_perp = imaginary * (w_z * state.b_perp_ - bz0 * w_perp);
 	const double cross_z = -std::imag(w_perp * std::conj(state.b_perp_));
 
-	const std::complex<double> dust_source_perp = -alpha * w_perp + lorentz_qom * cross_perp;
-	const double dust_source_z = -alpha * w_z + lorentz_qom * cross_z;
+	const std::complex<double> dust_source_perp = -alpha * w_perp + dimensionless_charge_to_mass_ratio * cross_perp;
+	const double dust_source_z = -alpha * w_z + dimensionless_charge_to_mass_ratio * cross_z;
 	const std::complex<double> gas_source_perp = -config.epsilon_ * dust_source_perp;
 	const double gas_source_z = -config.epsilon_ * dust_source_z;
 
@@ -402,7 +402,7 @@ auto tracerRhs(const TracerState &state, const HelicalFieldSample &field, const 
 {
 	const EvaluatedField local = evaluateFieldAtPosition(field, state.z_);
 	const double alpha = 1.0 / config.stopping_time_;
-	const double qom = chargeToMassRatio(config.omega_l_target_);
+	const double dimensionless_charge_to_mass_ratio = dimensionlessChargeToMassRatio(config.omega_l_target_);
 	const double wx = state.vx_ - local.ux_;
 	const double wy = state.vy_ - local.uy_;
 	const double wz = state.vz_ - local.uz_;
@@ -411,7 +411,10 @@ auto tracerRhs(const TracerState &state, const HelicalFieldSample &field, const 
 	const double cross_y = wz * local.bx_ - wx * local.bz_;
 	const double cross_z = wx * local.by_ - wy * local.bx_;
 
-	return {.z_ = state.vz_, .vx_ = -alpha * wx + qom * cross_x, .vy_ = -alpha * wy + qom * cross_y, .vz_ = -alpha * wz + qom * cross_z};
+	return {.z_ = state.vz_,
+		.vx_ = -alpha * wx + dimensionless_charge_to_mass_ratio * cross_x,
+		.vy_ = -alpha * wy + dimensionless_charge_to_mass_ratio * cross_y,
+		.vz_ = -alpha * wz + dimensionless_charge_to_mass_ratio * cross_z};
 }
 
 void rk4StepTracersWithSampledFields(std::vector<TracerState> &particles, double t, double dt, const std::vector<HelicalFieldSample> &field_history,
@@ -871,11 +874,11 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustyAlfvenWave>::ComputeReciprocalStoppi
 	return alpha;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustyAlfvenWave>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustyAlfvenWave>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, nDustGroups_> q_over_m{};
-	q_over_m[0] = chargeToMassRatio(g_omega_l_target);
-	return q_over_m;
+	amrex::GpuArray<amrex::Real, nDustGroups_> dimensionless_charge_to_mass_ratio{};
+	dimensionless_charge_to_mass_ratio[0] = dimensionlessChargeToMassRatio(g_omega_l_target);
+	return dimensionless_charge_to_mass_ratio;
 }
 
 template <> void QuokkaSimulation<DustyAlfvenWave>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

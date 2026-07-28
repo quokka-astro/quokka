@@ -27,7 +27,7 @@ constexpr double gamma_iso = 1.0;
 constexpr double eta = 9.0 * std::numbers::pi * gamma_iso / 128.0;
 constexpr double default_grain_density = 1.0;
 constexpr double default_grain_radius = 1.5957691216057308; // sqrt(8 / pi) gives alpha0 = 1 for gamma = rho_g = c_s = rho_gr = 1.
-constexpr double charge_to_mass_ratio = 1.0;
+constexpr double dimensionless_charge_to_mass_ratio = 1.0;
 
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_radius = {default_grain_radius};	  // NOLINT
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_density = {default_grain_density}; // NOLINT
@@ -81,7 +81,7 @@ template <> struct GyroCaseParams<DustGyroEpsteinNoB> {
 template <> struct GyroCaseParams<DustGyroNoDrag> {
 	static constexpr bool enable_epstein_drag = false;
 	static constexpr double magnetic_field_z = 5.0;
-	static constexpr double omega_L = charge_to_mass_ratio * magnetic_field_z;
+	static constexpr double omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_z;
 	static constexpr double stop_time = 2.0;
 	static constexpr double constant_dt = 0.1;
 };
@@ -89,7 +89,7 @@ template <> struct GyroCaseParams<DustGyroNoDrag> {
 template <> struct GyroCaseParams<DustGyroEpsteinWithB> {
 	static constexpr bool enable_epstein_drag = true;
 	static constexpr double magnetic_field_z = 5.0;
-	static constexpr double omega_L = charge_to_mass_ratio * magnetic_field_z;
+	static constexpr double omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_z;
 	static constexpr double stop_time = 2.0;
 	static constexpr double constant_dt = 0.1;
 };
@@ -209,26 +209,28 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinWithB>::ComputeReciprocalS
 	return computeDustGyroReciprocalStoppingTime<DustGyroEpsteinWithB>(rho_g, rho_d, rel_vel_mag, cs);
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto computeDustGyroChargeToMassRatio() -> amrex::GpuArray<amrex::Real, 1>
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto computeDustGyroDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, 1>
 {
-	amrex::GpuArray<amrex::Real, 1> q_over_m{};
-	q_over_m[0] = charge_to_mass_ratio;
-	return q_over_m;
+	amrex::GpuArray<amrex::Real, 1> dimensionless_charge_to_mass_ratio_array{};
+	dimensionless_charge_to_mass_ratio_array[0] = dimensionless_charge_to_mass_ratio;
+	return dimensionless_charge_to_mass_ratio_array;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinNoB>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinNoB>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return computeDustGyroChargeToMassRatio<DustGyroEpsteinNoB>();
+	return computeDustGyroDimensionlessChargeToMassRatio<DustGyroEpsteinNoB>();
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroNoDrag>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroNoDrag>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return computeDustGyroChargeToMassRatio<DustGyroNoDrag>();
+	return computeDustGyroDimensionlessChargeToMassRatio<DustGyroNoDrag>();
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinWithB>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinWithB>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return computeDustGyroChargeToMassRatio<DustGyroEpsteinWithB>();
+	return computeDustGyroDimensionlessChargeToMassRatio<DustGyroEpsteinWithB>();
 }
 
 template <typename problem_t> void setDustGyroInitialConditions(quokka::grid const &grid_elem)
