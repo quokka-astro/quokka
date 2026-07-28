@@ -71,13 +71,6 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(c
 	// $JAFF SUB nspec, nbands
 	int total_eqns = 3 + 2 + 1;
 	for (int i = 1; i <= total_eqns; i++) {
-		jac(i, 4) /= state.rho;
-	}
-
-	for (int i = 1; i <= total_eqns; i++) {
-		if (i == 4) {
-			continue;
-		}
 		jac(4, i) /= state.rho;
 	}
 	// $JAFF END
