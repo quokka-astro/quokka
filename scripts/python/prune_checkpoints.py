@@ -10,6 +10,9 @@ Example:
 
 The simulation time is read from row 4 of <chk*>/Header. Units (yr, kyr, Myr, Gyr)
 follow src/util/time_units.hpp (Julian year = 365.25 days).
+
+The newest checkpoint and the one pointed to by the last_chk symlink are always kept,
+so that the run stays restartable.
 """
 
 import argparse
@@ -83,27 +86,36 @@ def main():
         best = keep.get(index)
         if best is None or abs(time - index * interval) < abs(best[1] - index * interval):
             keep[index] = (chk_dir, time)
-    kept = {chk_dir for chk_dir, _ in keep.values()}
+    reasons = {chk_dir: f"~ {index} x {args.interval}" for index, (chk_dir, _) in keep.items()}
+
+    # Always protect the newest checkpoint and whatever the last_chk symlink points to.
+    newest = max(checkpoints, key=lambda item: item[1])[0]
+    reasons[newest] = f"{reasons[newest]}, newest" if newest in reasons else "newest"
+    last_chk = sim_dir / "last_chk"
+    if last_chk.is_symlink():
+        target = last_chk.resolve()
+        for chk_dir, _ in checkpoints:
+            if chk_dir.resolve() == target:
+                reasons[chk_dir] = f"{reasons[chk_dir]}, last_chk" if chk_dir in reasons else "last_chk"
 
     unit = "Myr"
     print(f"interval = {args.interval} = {interval / UNITS[unit]:g} {unit}")
     n_delete = 0
     for chk_dir, time in checkpoints:
-        if chk_dir in kept:
-            index = round(time / interval)
-            print(f"  {chk_dir.name}  {time / UNITS[unit]:12.4f} {unit}  [+] keep   (~ {index} x {args.interval})")
+        if chk_dir in reasons:
+            print(f"  {chk_dir.name}  {time / UNITS[unit]:12.4f} {unit}  [+] keep   ({reasons[chk_dir]})")
         else:
             n_delete += 1
             print(f"  {chk_dir.name}  {time / UNITS[unit]:12.4f} {unit}  [-] delete")
 
-    print(f"\n{len(kept)} to keep, {n_delete} to delete")
+    print(f"\n{len(reasons)} to keep, {n_delete} to delete")
 
     if not args.delete:
         print("dry run: nothing deleted (pass --delete to remove the folders marked [-])")
         return
 
     for chk_dir, _ in checkpoints:
-        if chk_dir not in kept:
+        if chk_dir not in reasons:
             shutil.rmtree(chk_dir)
     print(f"deleted {n_delete} checkpoint folder(s)")
 
