@@ -64,14 +64,13 @@ where
 -   \\(\rho_{\mathrm{d},n}\\) is the dust mass density for dust species \\(n\\) (\\(n \in [1, N]\\)),
 -   \\(\mathbf{v}_{\mathrm{d},n}\\) is the dust velocity for dust species \\(n\\),
 -   \\(T_{\mathrm{s},n}\\) is the aerodynamic stopping time for dust species \\(n\\),
--   \\(\xi_n\\) is the charge-to-mass ratio for dust species \\(n\\),
--   \\(\Omega_{\mathrm{L},n}= \xi_n |\vec{B}|\\) is the dust gyrofrequency for dust species \\(n\\),
+-   \\(\Omega_{\mathrm{L},n}=q_n|\vec{B}|/(m_n c)\\) is the signed angular gyrofrequency for dust species \\(n\\), where \\(q_n\\) is its signed Heaviside–Lorentz charge, \\(m_n\\) is its grain mass, and \\(c\\) is the speed of light,
 -   \\(\hat{\mathbf{b}}\\) is the unit vector along the magnetic field,
 -   \\(\mathbf{a}_{\mathrm{ext},\mathrm{g}}\\) is the external acceleration applied to the gas,
 -   \\(\mathbf{a}_{\mathrm{ext},\mathrm{d},n}\\) is the external acceleration applied to dust species \\(n\\),
 -   \\(\omega_{\rm drag}\\) is the fraction of dust-drag dissipation deposited into the gas.
 
-The Lorentz work term in the gas total-energy equation is the gas-side work from the dust back-reaction. It transfers kinetic energy between gas and dust, but it does not heat the combined gas-dust system. Adding the gas-side and dust-side Lorentz work terms for each dust species gives
+The Lorentz work term in the gas total-energy equation accounts for energy exchanged with the dust. The Lorentz force transfers kinetic energy between gas and dust but does not heat the combined gas-dust system, because the gas-side and dust-side work terms for each species sum to zero:
 
 <script type="math/tex; mode=display">
 \begin{aligned}
@@ -88,7 +87,37 @@ The Lorentz work term in the gas total-energy equation is the gas-side work from
 \end{aligned}
 </script>
 
-In `DustSources::computeDustDragAndLorentz`, Quokka splits the deposited gas-energy increment into a drag-like contribution controlled by `dust.omega_drag_heating` and a gyrofrequency-dependent residual contribution controlled by `dust.omega_gyro_residual`. 
+In `DustSources::computeDustDragAndLorentz`, Quokka splits the deposited gas-energy increment into a drag-like contribution controlled by `dust.omega_drag_heating` and a gyrofrequency-dependent residual contribution controlled by `dust.omega_gyro_residual`.
+
+### Dimensionless dust charge-to-mass ratio
+
+The equations above use dimensional Heaviside–Lorentz variables. In ideal MHD,
+
+<script type="math/tex; mode=display">
+\mathbf{E}=-\frac{\mathbf{v}_{\mathrm{g}}}{c}\times\mathbf{B},
+\qquad
+\mathbf{a}_{\mathrm{L},n}
+=\frac{q_n}{m_n c}
+\left(\mathbf{v}_{\mathrm{d},n}-\mathbf{v}_{\mathrm{g}}\right)\times\mathbf{B}.
+</script>
+
+For code units defined by \\(L_0\\), \\(M_0\\), and \\(\tau_0\\), let
+\\(\rho_0=M_0/L_0^3\\) and
+\\(B_0=\sqrt{\rho_0}L_0/\tau_0\\), so that
+\\(\widetilde{\mathbf{B}}=\mathbf{B}/B_0\\). The dust source integrator takes
+
+<script type="math/tex; mode=display">
+\xi_n=\frac{q_nL_0\sqrt{\rho_0}}{m_n c},
+\qquad
+\widetilde{\Omega}_{\mathrm{L},n}
+=\xi_n|\widetilde{\mathbf{B}}|.
+</script>
+
+Here \\(\xi_n\\) is signed and dimensionless. `UnitSystem::CGS` uses
+\\(L_0=1\\,\mathrm{cm}\\), \\(M_0=1\\,\mathrm{g}\\), and
+\\(\tau_0=1\\,\mathrm{s}\\); `UnitSystem::CUSTOM` uses the base units in
+`Physics_Traits`; and `UnitSystem::CONSTANTS` requires the problem to prescribe
+\\(\xi_n\\) directly.
 
 ## Variable Storage
 
@@ -129,7 +158,7 @@ where \\(\mathcal{H}\\) is the explicit gas/MHD and dust transport update, and \
 - If `Physics_Traits<problem_t>::is_dust_enabled = true` and MHD is disabled, Quokka calls `DustSources::computeDustDrag`, following Tedeschi-Prades et al. (2025).
 - If both `Physics_Traits<problem_t>::is_dust_enabled = true` and `Physics_Traits<problem_t>::is_mhd_enabled = true`, Quokka calls `DustSources::computeDustDragAndLorentz`.
 
-`DustSources::computeDustDragAndLorentz` integrates drag and Lorentz forces in the same source solve; it does not operator-split the Lorentz force from drag. The method uses a two-stage generalized implicit Runge-Kutta (GIRK) update for the local gas and dust momenta. For dust species \\(n\\), the relevant local rates are the drag rate \\(\alpha_n = 1/T_{\mathrm{s},n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},n} = \xi_n |\mathbf{B}|\\). The implementation selects the resolved or stiff GIRK coefficients from the local timescale, using \\((\alpha_n^2 + \Omega_{\mathrm{L},n}^2)^{-1/2}\\) for the drag-plus-Lorentz system. The resolved coefficients used in `computeDustDragAndLorentz` may be selected at runtime with `dust.resolved_rk_scheme`: `GL4` chooses the current two-stage Gauss-Legendre coefficients, `Midpoint` chooses the implicit midpoint coefficients, and `TP2025` reuses the resolved-branch coefficients from `DustSources::computeDustDrag`.
+`DustSources::computeDustDragAndLorentz` integrates drag and Lorentz forces in the same source solve; it does not operator-split the Lorentz force from drag. The method uses a two-stage generalized implicit Runge-Kutta (GIRK) update for the local gas and dust momenta. For dust species \\(n\\), the relevant local rates in code units are the drag rate \\(\alpha_n = 1/T_{\mathrm{s},n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},n} = \xi_n |\mathbf{B}|\\). The implementation selects the resolved or stiff GIRK coefficients from the local timescale, using \\((\alpha_n^2 + \Omega_{\mathrm{L},n}^2)^{-1/2}\\) for the drag-plus-Lorentz system. The resolved coefficients used in `computeDustDragAndLorentz` may be selected at runtime with `dust.resolved_rk_scheme`: `GL4` chooses the current two-stage Gauss-Legendre coefficients, `Midpoint` chooses the implicit midpoint coefficients, and `TP2025` reuses the resolved-branch coefficients from `DustSources::computeDustDrag`.
 
 ### Optional Picard iteration for dust–gas source update
 
@@ -151,7 +180,7 @@ t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}
 
 When \\(\gamma=1\\), this expression reduces exactly to the isothermal \\(t_{\mathrm{s}}\\). An example of its usage can be found in the `src/problems/DustDampingIteration` test.
 
-For charged dust in MHD, users must also define the problem-specific dust charge-to-mass ratio by specializing `DustSources::ComputeDustChargeToMassRatio`. This function returns \\(\xi_n\\) for each dust group. The default implementation returns zero for all groups, so dust behaves as neutral dust unless a problem overrides it. Examples can be found in `src/problems/DustDampedGyromotion`.
+For charged dust in MHD, users must also specialize `DustSources::ComputeDustDimensionlessChargeToMassRatio`. This function returns the signed dimensionless \\(\xi_n\\) defined above for each dust group. The default implementation returns zero for all groups, so dust behaves as neutral dust unless a problem overrides it. Examples can be found in `src/problems/DustDampedGyromotion`.
 
 ## CFL Condition for Dust
 

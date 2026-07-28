@@ -37,7 +37,7 @@ constexpr double time_tolerance = 1.0e-10;
 constexpr double bar_a = 5.0;
 constexpr double grain_radius_default = 5.0;
 constexpr double grain_density_default = 1.0;
-constexpr double charge_to_mass_parameter = -10.0;
+constexpr double dimensionless_charge_to_mass_ratio = -10.0;
 constexpr double dust_to_gas_mass_ratio = 0.01;
 constexpr double beta_param = 2.0;
 constexpr double theta_Ba_deg = 87.0;
@@ -180,7 +180,7 @@ auto solveDriftEquilibrium() -> EquilibriumState
 	Vec3 const acceleration = {bar_a, 0.0, 0.0};
 	Vec3 const b_hat = result.magnetic_field_ / magnetic_field_norm;
 	double const ts_sub = computeSubsonicStoppingTime();
-	double const omega_L = charge_to_mass_parameter * magnetic_field_norm;
+	double const omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_norm;
 
 	Vec3 drift = {(ts_sub / (1.0 + dust_to_gas_mass_ratio)) * bar_a, 0.0, 0.0};
 	for (int iter = 0; iter < 64; ++iter) {
@@ -429,8 +429,8 @@ void writeSummaryCsv(QuokkaSimulation<problem_t> const &sim, EquilibriumState co
 	file << "key,value\n";
 	file << "bar_a," << bar_a << "\n";
 	file << "grain_size_parameter," << grainSizeParameter() << "\n";
-	file << "xi," << charge_to_mass_parameter << "\n";
-	file << "bar_phi_d," << grainSizeParameter() * std::abs(charge_to_mass_parameter) << "\n";
+	file << "xi," << dimensionless_charge_to_mass_ratio << "\n";
+	file << "bar_phi_d," << grainSizeParameter() * std::abs(dimensionless_charge_to_mass_ratio) << "\n";
 	file << "dust_to_gas_mass_ratio," << dust_to_gas_mass_ratio << "\n";
 	file << "beta," << beta_param << "\n";
 	file << "gamma," << gamma_iso << "\n";
@@ -707,11 +707,11 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeReciprocalStop
 	return DustSources<DustMagnetizedRDI>::ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, grain_radius, grain_density, true);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, nDustGroups_> q_over_m{};
-	q_over_m[0] = charge_to_mass_parameter;
-	return q_over_m;
+	amrex::GpuArray<amrex::Real, nDustGroups_> dimensionless_charge_to_mass_ratio_array{};
+	dimensionless_charge_to_mass_ratio_array[0] = dimensionless_charge_to_mass_ratio;
+	return dimensionless_charge_to_mass_ratio_array;
 }
 
 template <> void QuokkaSimulation<DustMagnetizedRDI>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -857,7 +857,7 @@ auto problem_main() -> int
 	amrex::Print() << std::format("  grain radius       = {:.6f}\n", g_grain_radius);
 	amrex::Print() << std::format("  grain density      = {:.6f}\n", g_grain_density);
 	amrex::Print() << std::format("  grain size param.  = {:.6f}\n", grainSizeParameter());
-	amrex::Print() << std::format("  xi                 = {:.6f}\n", charge_to_mass_parameter);
+	amrex::Print() << std::format("  xi                 = {:.6f}\n", dimensionless_charge_to_mass_ratio);
 	amrex::Print() << std::format("  dust-to-gas ratio  = {:.6f}\n", dust_to_gas_mass_ratio);
 	amrex::Print() << std::format("  beta               = {:.6f}\n", beta_param);
 	amrex::Print() << std::format("  theta_Ba [deg]     = {:.6f}\n", theta_Ba_deg);

@@ -49,7 +49,7 @@ template <> struct ShockCaseParams<DustLorentzShockEps001OmegaTs0> {
 	static constexpr double dust_to_gas_ratio = 0.01;
 	static constexpr double stopping_time = 0.10;
 	static constexpr double target_magnetization = 0.0;
-	static constexpr double charge_to_mass_ratio = 0.0;
+	static constexpr double dimensionless_charge_to_mass_ratio = 0.0;
 	static constexpr char const *label = "epsilon = 0.01, Omega_L t_s = 0";
 	static constexpr char const *output_tag = "eps001_omega_ts0";
 };
@@ -62,7 +62,7 @@ template <> struct ShockCaseParams<DustLorentzShockEps001OmegaTs20> {
 	static constexpr double dust_to_gas_ratio = 0.01;
 	static constexpr double stopping_time = 0.10;
 	static constexpr double target_magnetization = 20.0;
-	static constexpr double charge_to_mass_ratio = target_magnetization / (stopping_time * bz_ambient);
+	static constexpr double dimensionless_charge_to_mass_ratio = target_magnetization / (stopping_time * bz_ambient);
 	static constexpr char const *label = "epsilon = 0.01, Omega_L t_s = 20";
 	static constexpr char const *output_tag = "eps001_omega_ts20";
 };
@@ -75,7 +75,7 @@ template <> struct ShockCaseParams<DustLorentzShockEps010OmegaTs20> {
 	static constexpr double dust_to_gas_ratio = 0.10;
 	static constexpr double stopping_time = 0.10;
 	static constexpr double target_magnetization = 20.0;
-	static constexpr double charge_to_mass_ratio = target_magnetization / (stopping_time * bz_ambient);
+	static constexpr double dimensionless_charge_to_mass_ratio = target_magnetization / (stopping_time * bz_ambient);
 	static constexpr char const *label = "epsilon = 0.10, Omega_L t_s = 20";
 	static constexpr char const *output_tag = "eps010_omega_ts20";
 };
@@ -168,11 +168,11 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto constantStoppingTime() 
 	return alpha;
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto constantChargeToMassRatio() -> amrex::GpuArray<amrex::Real, 1>
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto constantDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, 1>
 {
-	amrex::GpuArray<amrex::Real, 1> charge_to_mass{};
-	charge_to_mass[0] = ShockCaseParams<problem_t>::charge_to_mass_ratio;
-	return charge_to_mass;
+	amrex::GpuArray<amrex::Real, 1> dimensionless_charge_to_mass_ratio{};
+	dimensionless_charge_to_mass_ratio[0] = ShockCaseParams<problem_t>::dimensionless_charge_to_mass_ratio;
+	return dimensionless_charge_to_mass_ratio;
 }
 
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto makeShockInflowCellState()
@@ -446,9 +446,11 @@ DustSources<DustLorentzShockEps001OmegaTs0>::ComputeReciprocalStoppingTime(amrex
 	return constantStoppingTime<DustLorentzShockEps001OmegaTs0>();
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps001OmegaTs0>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps001OmegaTs0>::ComputeDustDimensionlessChargeToMassRatio()
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return constantChargeToMassRatio<DustLorentzShockEps001OmegaTs0>();
+	return constantDimensionlessChargeToMassRatio<DustLorentzShockEps001OmegaTs0>();
 }
 
 template <> void QuokkaSimulation<DustLorentzShockEps001OmegaTs0>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -489,9 +491,10 @@ DustSources<DustLorentzShockEps001OmegaTs20>::ComputeReciprocalStoppingTime(amre
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps001OmegaTs20>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps001OmegaTs20>::ComputeDustDimensionlessChargeToMassRatio()
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return constantChargeToMassRatio<DustLorentzShockEps001OmegaTs20>();
+	return constantDimensionlessChargeToMassRatio<DustLorentzShockEps001OmegaTs20>();
 }
 
 template <> void QuokkaSimulation<DustLorentzShockEps001OmegaTs20>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -532,9 +535,10 @@ DustSources<DustLorentzShockEps010OmegaTs20>::ComputeReciprocalStoppingTime(amre
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps010OmegaTs20>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps010OmegaTs20>::ComputeDustDimensionlessChargeToMassRatio()
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return constantChargeToMassRatio<DustLorentzShockEps010OmegaTs20>();
+	return constantDimensionlessChargeToMassRatio<DustLorentzShockEps010OmegaTs20>();
 }
 
 template <> void QuokkaSimulation<DustLorentzShockEps010OmegaTs20>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

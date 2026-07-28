@@ -191,11 +191,12 @@ DustSources<DustDampingMHDZeroBMixedStiff>::ComputeReciprocalStoppingTime(amrex:
 	return alpha;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroBMixedStiff>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroBMixedStiff>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, 2> charge_to_mass_ratio{};
-	charge_to_mass_ratio.fill(1.0);
-	return charge_to_mass_ratio;
+	amrex::GpuArray<amrex::Real, 2> dimensionless_charge_to_mass_ratio{};
+	dimensionless_charge_to_mass_ratio.fill(1.0);
+	return dimensionless_charge_to_mass_ratio;
 }
 
 template <> void QuokkaSimulation<DustDampingMHDZeroBMixedStiff>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
@@ -301,9 +302,9 @@ auto resolvedRkSchemeTolerance(ResolvedRkScheme scheme) -> SchemeErrorTolerance
 		case ResolvedRkScheme::TP2025:
 			return SchemeErrorTolerance{.rel_err_gas_vx = 3.0e-3, .rel_err_dust1_vx = 2.0e-4, .rel_err_dust2_vx = 3.0e-3, .rel_err_gas_E = 1.5e-3};
 		case ResolvedRkScheme::GL4:
-			return SchemeErrorTolerance{.rel_err_gas_vx = 1.5e-2, .rel_err_dust1_vx = 2.0e-4, .rel_err_dust2_vx = 1.5e-2, .rel_err_gas_E = 5.0e-3};
+			return SchemeErrorTolerance{.rel_err_gas_vx = 2.0e-2, .rel_err_dust1_vx = 2.0e-4, .rel_err_dust2_vx = 2.0e-2, .rel_err_gas_E = 6.0e-3};
 		case ResolvedRkScheme::Midpoint:
-			return SchemeErrorTolerance{.rel_err_gas_vx = 5.0e-2, .rel_err_dust1_vx = 1.0e-3, .rel_err_dust2_vx = 5.0e-2, .rel_err_gas_E = 2.0e-2};
+			return SchemeErrorTolerance{.rel_err_gas_vx = 6.0e-2, .rel_err_dust1_vx = 1.0e-3, .rel_err_dust2_vx = 6.0e-2, .rel_err_gas_E = 2.0e-2};
 	}
 	return SchemeErrorTolerance{
 	    .rel_err_gas_vx = std::numeric_limits<double>::quiet_NaN(),

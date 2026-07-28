@@ -111,11 +111,12 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroCharge>::ComputeRecipro
 	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density, enable_supersonic_correction);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroCharge>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroCharge>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, nDustGroups_> charge_to_mass_ratio{};
-	charge_to_mass_ratio.fill(0.0);
-	return charge_to_mass_ratio;
+	amrex::GpuArray<amrex::Real, nDustGroups_> dimensionless_charge_to_mass_ratio{};
+	dimensionless_charge_to_mass_ratio.fill(0.0);
+	return dimensionless_charge_to_mass_ratio;
 }
 
 template <typename problem_t> void setDustDampingInitialConditions(quokka::grid const &grid_elem)
