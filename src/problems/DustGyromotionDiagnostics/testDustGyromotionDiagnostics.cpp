@@ -26,11 +26,11 @@ constexpr double rho_gas = 1.0;
 constexpr double epsilon = 1.0;
 constexpr double rho_dust = epsilon * rho_gas;
 constexpr double sound_speed = 1.0;
-constexpr double charge_to_mass_ratio = 1.0;
+constexpr double dimensionless_charge_to_mass_ratio = 1.0;
 constexpr double magnetic_field_z = 1.0;
 constexpr double initial_relative_drift = 1.0;
 
-constexpr double omega_L = charge_to_mass_ratio * magnetic_field_z;
+constexpr double omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_z;
 constexpr double omega_rel = (1.0 + epsilon) * omega_L;
 constexpr double gas_velocity_x0 = -epsilon * initial_relative_drift / (1.0 + epsilon);
 constexpr double dust_velocity_x0 = initial_relative_drift / (1.0 + epsilon);
@@ -111,6 +111,7 @@ template <> struct Physics_Traits<DustPureGyromotion> {
 	static constexpr double gravitational_constant = 1.0;
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 };
 
 template <>
@@ -124,11 +125,12 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustPureGyromotion>::ComputeReciprocalSto
 	return alpha;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustPureGyromotion>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustPureGyromotion>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, 1> q_over_m{};
-	q_over_m[0] = charge_to_mass_ratio;
-	return q_over_m;
+	amrex::GpuArray<amrex::Real, 1> dimensionless_charge_to_mass_ratio_array{};
+	dimensionless_charge_to_mass_ratio_array[0] = dimensionless_charge_to_mass_ratio;
+	return dimensionless_charge_to_mass_ratio_array;
 }
 
 template <> void QuokkaSimulation<DustPureGyromotion>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

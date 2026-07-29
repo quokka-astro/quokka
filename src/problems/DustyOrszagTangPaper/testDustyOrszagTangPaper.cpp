@@ -27,7 +27,7 @@ constexpr double inv_sqrt_4pi = 1.0 / gcem::sqrt(4.0 * pi);
 constexpr double rho_gas0 = 25.0 / (36.0 * pi);
 constexpr double pressure0 = 5.0 / (12.0 * pi);
 constexpr double stopping_time0 = 0.1;
-constexpr double charge_to_mass0 = 100.0;
+constexpr double dimensionless_charge_to_mass_ratio0 = 100.0;
 constexpr double tiny_number = 1.0e-14;
 constexpr double first_snapshot_time = 0.25;
 constexpr double second_snapshot_time = 0.5;
@@ -35,7 +35,7 @@ constexpr double shock_window_ymax = 0.3;
 
 AMREX_GPU_MANAGED double g_initial_dust_density = 1.0e-1;    // NOLINT
 AMREX_GPU_MANAGED double g_stopping_time = stopping_time0;   // NOLINT
-AMREX_GPU_MANAGED double g_charge_to_mass = charge_to_mass0; // NOLINT
+AMREX_GPU_MANAGED double g_dimensionless_charge_to_mass_ratio = dimensionless_charge_to_mass_ratio0; // NOLINT
 std::string g_active_case_tag;				     // NOLINT
 std::string g_active_case_label;			     // NOLINT
 std::string g_output_prefix = "dusty_orszag_tang_paper";     // NOLINT
@@ -138,7 +138,7 @@ auto makeCaseConfigs() -> std::vector<CaseConfig>
 
 auto selectCases(amrex::Vector<std::string> const &requested_tags) -> std::vector<CaseConfig>
 {
-	std::vector<CaseConfig> const all_cases = makeCaseConfigs();
+	std::vector<CaseConfig> all_cases = makeCaseConfigs();
 	if (requested_tags.empty()) {
 		return all_cases;
 	}
@@ -450,7 +450,7 @@ template <typename problem_t> auto runCase(CaseConfig const &config) -> CaseResu
 {
 	g_initial_dust_density = config.dust_density0_;
 	g_stopping_time = stopping_time0;
-	g_charge_to_mass = charge_to_mass0;
+	g_dimensionless_charge_to_mass_ratio = dimensionless_charge_to_mass_ratio0;
 	g_active_case_tag = config.tag_;
 	g_active_case_label = config.label_;
 
@@ -476,12 +476,20 @@ template <typename problem_t> auto runCase(CaseConfig const &config) -> CaseResu
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		if (g_capture_slice_csv) {
-			writeSliceCsv(*snap_025.slice_);
-			writeSliceCsv(*snap_050.slice_);
+			if (snap_025.slice_.has_value() && snap_050.slice_.has_value()) {
+				writeSliceCsv(*snap_025.slice_);
+				writeSliceCsv(*snap_050.slice_);
+			} else {
+				amrex::Abort("DustyOrszagTangPaper requested slice CSV output, but slice data are missing.");
+			}
 		}
 		if (g_capture_profile_csv) {
-			writeProfileCsv(*snap_025.profile_);
-			writeProfileCsv(*snap_050.profile_);
+			if (snap_025.profile_.has_value() && snap_050.profile_.has_value()) {
+				writeProfileCsv(*snap_025.profile_);
+				writeProfileCsv(*snap_050.profile_);
+			} else {
+				amrex::Abort("DustyOrszagTangPaper requested profile CSV output, but profile data are missing.");
+			}
 		}
 	}
 
@@ -580,11 +588,12 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustyOrszagTangPaper>::ComputeReciprocalS
 	return alpha;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustyOrszagTangPaper>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustyOrszagTangPaper>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, nDustGroups_> charge_to_mass{};
-	charge_to_mass[0] = g_charge_to_mass;
-	return charge_to_mass;
+	amrex::GpuArray<amrex::Real, nDustGroups_> dimensionless_charge_to_mass_ratio{};
+	dimensionless_charge_to_mass_ratio[0] = g_dimensionless_charge_to_mass_ratio;
+	return dimensionless_charge_to_mass_ratio;
 }
 
 template <> void QuokkaSimulation<DustyOrszagTangPaper>::computeAfterTimestep()
