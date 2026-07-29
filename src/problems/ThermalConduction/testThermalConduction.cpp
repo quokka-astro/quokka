@@ -38,8 +38,8 @@ How to choose the parameters for the thermal conduction test problem
 const double Eint0 = 2.505e-8;		     // equivalent to T = 2.e8 K
 const double Efloor = 5.674216387016754e-11; // equivalent tp T = 2.e6 K
 const double rho0 = 0.1;		     // 1/cm^3
-const double D = 4.396303164750053e+28;	     // diffusion coefficient, in units of cm^2/s
-const double sigma = 2.41016e+17;	     // width of the Gaussian, in units of cm
+const double D = 2.1981515823750267e+28;	     // diffusion coefficient, in units of cm^2/s
+const double sigma = 1.2053428078125e+17;	     // width of the Gaussian, in units of cm
 
 struct ThermalConductionProblem {
 };
@@ -175,7 +175,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 {
 	// Read problem parameters
-	const double max_time = 469054.0075444166; // 1 conduction time
+	const double max_time = 660942.2643981476; // 1 conduction time
 
 	const double CFL_number = 0.3;
 	const int max_timesteps = std::max(2000, nx * 100);
@@ -183,7 +183,7 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, nx, nx};
-	pp.add("max_level", 1);
+	pp.add("max_level", 2);
 	pp.addarr("n_cell", ncells);
 
 	// Set domain bounds using AMReX parameter system
@@ -221,7 +221,7 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 
 auto problem_main() -> int
 {
-	// boundary conditions
+	/*** boundary conditions ***/
 	// constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	// amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	// for (int n = 0; n < ncomp_cc; ++n) {
