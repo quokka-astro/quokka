@@ -296,8 +296,8 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	userData_.flux = 1.0e11_rt;
 	userData_.flux_thermal_factor = 1.0_rt;
 	pp.query("flux_thermal_factor", userData_.flux_thermal_factor);
-	pp.query("kappa_thermal", kappa_thermal);     // gray opacity of the thermal band [cm^2 g^-1]
-	pp.query("T_dust_destroy", T_dust_destroy);   // dust-destruction temperature [K]; 0 disables
+	pp.query("kappa_thermal", kappa_thermal);   // gray opacity of the thermal band [cm^2 g^-1]
+	pp.query("T_dust_destroy", T_dust_destroy); // dust-destruction temperature [K]; 0 disables
 	pp.query("small_temp", userData_.small_temp);
 	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
@@ -329,8 +329,8 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront1D>::ComputeFluxMeanO
 // not by this group-opacity model.
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<DTypeFront1D>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-							      const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+RadSystem<DTypeFront1D>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/, const double Tgas)
+    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	// Group 0 (thermal) carries a dust-like gray opacity; group 1 (ionizing) has none — its interaction
 	// with the gas is photoionization, handled by the photochemistry network, not by this opacity.
@@ -530,8 +530,7 @@ auto problem_main() -> int
 		const double therm_frac = E_therm / injected_thermal;
 		if (kappa_thermal <= 0.0) {
 			if (std::abs(therm_frac - 1.0) > 0.03) {
-				amrex::Print() << "Test FAILED: transparent thermal band energy is " << therm_frac
-					       << " of injected (expected 1 within 3%).\n";
+				amrex::Print() << "Test FAILED: transparent thermal band energy is " << therm_frac << " of injected (expected 1 within 3%).\n";
 				status = 1;
 			} else {
 				amrex::Print() << "Test passed: transparent thermal band conserves energy (Erad/injected = " << therm_frac << ").\n";
