@@ -54,6 +54,12 @@ constexpr double E_photon = 0.5 * (3.29e15 + 1.50e16) * C::hplanck; // erg
 // RadStreaming / RadhydroShockMultigroup instead of seeding an unphysical 1e-99.
 constexpr double Erad_floor_ = 1.0e-10 * E_photon; // erg cm^-3
 
+// Gray opacity of the thermal band [cm^2 g^-1], set at runtime from photoionize.kappa_thermal.
+// Managed memory so the device-side opacity function can read it.
+AMREX_GPU_MANAGED double kappa_thermal = 0.0; // NOLINT
+// Temperature above which the thermal-band opacity is destroyed (dust sublimation in ionized gas).
+AMREX_GPU_MANAGED double T_dust_destroy = 0.0; // NOLINT
+
 template <> struct quokka::EOS_Traits<DTypeFront1D> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
@@ -65,9 +71,9 @@ template <> struct Physics_Traits<DTypeFront1D> : DefaultPhysicsTraits {
 	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	// 3 radiation groups: group 0 = IR, group 1 = optical/UV (both thermal), group 2 = ionizing (the
-	// chemistry band). Chemistry bands must be the last groups; see radiation_system.hpp.
-	static constexpr int nGroups = 3;
+	// 2 radiation groups: group 0 = thermal (non-ionizing), group 1 = ionizing (the chemistry band).
+	// Chemistry bands must be the last groups; see radiation_system.hpp.
+	static constexpr int nGroups = 2;
 };
 
 template <> struct RadSystem_Traits<DTypeFront1D> {
@@ -77,11 +83,18 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	// thermal-pressure, so the physics must match (radiation pressure is subdominant here anyway).
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = C::hplanck; // radBoundaries below are frequencies in Hz
-	// Group frequency boundaries [Hz]: group 0 = IR [3e13, 4.3e14], group 1 = optical/UV [4.3e14,
-	// 3.29e15], group 2 = ionizing [3.29e15, 1.5e16]. The last group coincides with the chemistry
-	// band (ChemBands below). The two thermal groups are transparent (zero opacity), so the exact IR/
-	// optical boundaries are cosmetic.
-	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{3.0e13, 4.3e14, 3.29e15, 1.50e16};
+	// Group frequency boundaries [Hz]: group 0 = thermal (non-ionizing) [2.5e15, 3.29e15], group 1 =
+	// ionizing [3.29e15, 1.5e16]. The last group coincides with the chemistry band (ChemBands below).
+	//
+	// The thermal band sits just below the Lyman edge on purpose. Opacity in Quokka is pure absorption,
+	// so a band with non-zero opacity also *emits* the local blackbody. The photoionized gas at ~10^4 K
+	// has a huge blackbody energy density (a T^4 ~ 76 erg cm^-3) but a minute thermal energy density
+	// (~2e-10 erg cm^-3), so if an appreciable fraction of its blackbody fell in the opaque band it would
+	// try to radiate away ~10^11 times its own heat content in one step and the energy solve diverges.
+	// Placing the band at h*nu >> k*T_ion (x = h*nu/kT ~ 12 at the lower edge) puts it deep on the Wien
+	// tail, where only ~2e-3 of the blackbody lies, which keeps the emission term tractable while the
+	// cold neutral gas (100 K, x ~ 1200) emits nothing at all and can absorb freely.
+	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{2.5e15, 3.29e15, 1.50e16};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
@@ -93,7 +106,8 @@ template <> struct SimulationData<DTypeFront1D> {
 	amrex::Real primary_species_1{};
 	amrex::Real primary_species_2{};
 	amrex::Real primary_species_3{};
-	amrex::Real flux{}; // ionizing photon flux F [photons cm^-2 s^-1] injected at x = 0
+	amrex::Real flux{};		   // ionizing photon flux F [photons cm^-2 s^-1] injected at x = 0
+	amrex::Real flux_thermal_factor{}; // thermal-band luminosity relative to the ionizing band
 	amrex::Vector<amrex::Real> t_vec_;
 	amrex::Vector<amrex::Real> xeff_vec_;
 	std::ofstream output_file_;
@@ -249,13 +263,19 @@ void RadSystem<DTypeFront1D>::SetRadEnergySource(array_t &radEnergy, const amrex
 	amrex::Real flux = 1.0e11_rt;
 	pp.query("flux", flux);
 
+	amrex::Real flux_thermal_factor = 1.0_rt;
+	pp.query("flux_thermal_factor", flux_thermal_factor);
+
 	const amrex::Real E_gamma = RadSystem<DTypeFront1D>::GetChemBandQuanta(0);
-	const amrex::Real src = flux * E_gamma / dx[0];
+	const amrex::Real src_ion = flux * E_gamma / dx[0];
+	// The thermal band (group 0) is injected with the same luminosity as the ionizing band by default,
+	// so the two bands differ only in how they interact with the gas.
+	const amrex::Real src_thermal = flux_thermal_factor * src_ion;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		const amrex::Real val = (i == 0) ? src : 0.0_rt;
 		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
-			radEnergy(i, j, k, g) = val;
+			const amrex::Real src = (g == 0) ? src_thermal : src_ion;
+			radEnergy(i, j, k, g) = (i == 0) ? src : 0.0_rt;
 		}
 	});
 }
@@ -274,6 +294,10 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	userData_.primary_species_2 = 1.0e2_rt;
 	userData_.primary_species_3 = 1.0e-10_rt;
 	userData_.flux = 1.0e11_rt;
+	userData_.flux_thermal_factor = 1.0_rt;
+	pp.query("flux_thermal_factor", userData_.flux_thermal_factor);
+	pp.query("kappa_thermal", kappa_thermal);     // gray opacity of the thermal band [cm^2 g^-1]
+	pp.query("T_dust_destroy", T_dust_destroy);   // dust-destruction temperature [K]; 0 disables
 	pp.query("small_temp", userData_.small_temp);
 	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
@@ -306,12 +330,23 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront1D>::ComputeFluxMeanO
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<DTypeFront1D>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+							      const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
+	// Group 0 (thermal) carries a dust-like gray opacity; group 1 (ionizing) has none — its interaction
+	// with the gas is photoionization, handled by the photochemistry network, not by this opacity.
+	//
+	// The opacity is destroyed above T_dust_destroy, mimicking dust sublimation inside the ionized gas.
+	// This is required, not cosmetic: opacity here is pure absorption, so opaque gas also emits its local
+	// blackbody. Any thermal band must lie below the Lyman edge, where the ~10^4 K photoionized gas still
+	// has a significant Wien tail (a T^4 ~ 76 erg cm^-3 against a gas thermal energy of ~2e-10 erg cm^-3),
+	// so retaining opacity in the ionized gas makes it radiate away its heat and collapses the cavity
+	// temperature. Dust-free ionized gas neither absorbs nor emits in this band, which is both the correct
+	// physics and what keeps the energy solve well behaved.
+	const double kappa_0 = (T_dust_destroy > 0.0) ? kappa_thermal * std::exp(-Tgas / T_dust_destroy) : kappa_thermal;
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
 		exponents_and_values[0][i] = 0.0;
-		exponents_and_values[1][i] = 0.0;
+		exponents_and_values[1][i] = (i == 0) ? kappa_0 : 0.0;
 	}
 	return exponents_and_values;
 }
@@ -474,36 +509,40 @@ auto problem_main() -> int
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 		const double E_gamma = RadSystem<DTypeFront1D>::GetChemBandQuanta(0);
 		const double t_end = sim.userData_.t_vec_.back();
-		const double E_ir = compute_group_total_erad(sim.state_new_cc_[0], dx, 0);
-		const double E_opt = compute_group_total_erad(sim.state_new_cc_[0], dx, 1);
-		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, 2);
+		const double E_therm = compute_group_total_erad(sim.state_new_cc_[0], dx, 0);
+		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, 1);
 
 		// Radiation energy injected per unit area over the run. The chemical band receives F*E_gamma*t;
-		// thermal groups carry the code's internal chat/c source factor (see source_terms_multi_group.hpp).
+		// the thermal group carries the code's internal chat/c source factor and the luminosity factor
+		// (see source_terms_multi_group.hpp).
 		const double injected_chem = F * E_gamma * t_end;
-		const double injected_thermal = (c_hat / C::c_light) * injected_chem;
+		const double injected_thermal = (c_hat / C::c_light) * sim.userData_.flux_thermal_factor * injected_chem;
+		const double rho_0 = sim.userData_.primary_species_2 * spmasses[1]; // initial neutral-H mass density
+		const double Lx = sim.geom[0].ProbHiArray()[0] - sim.geom[0].ProbLoArray()[0];
+		const double tau_dom = kappa_thermal * rho_0 * Lx; // domain optical depth of the thermal band
 
-		amrex::Print() << "Thermal band (IR)  integrated Erad: " << E_ir << " ; (optical): " << E_opt << " ; ionizing: " << E_ion << '\n';
-		amrex::Print() << "Injected: thermal (chat/c * F*E*t) = " << injected_thermal << " ; chem (F*E*t) = " << injected_chem << '\n';
+		amrex::Print() << "Thermal band integrated Erad: " << E_therm << " (injected " << injected_thermal << ", tau_dom = " << tau_dom << ")\n";
+		amrex::Print() << "Ionizing band integrated Erad: " << E_ion << " (injected " << injected_chem << ")\n";
 
-		// Check 3: the two thermal bands have identical setup (same source, zero opacity) -> identical Erad.
-		const double band_rel_diff = (E_ir + E_opt > 0.0) ? std::abs(E_ir - E_opt) / (0.5 * (E_ir + E_opt)) : 0.0;
-		if (band_rel_diff > 1.0e-6) {
-			amrex::Print() << "Test FAILED: IR and optical thermal bands differ by " << band_rel_diff << " (should be identical).\n";
-			status = 1;
+		// Check 3: the thermal band's energy budget. With zero opacity the band is transparent and
+		// conserves energy exactly (reflecting boundaries, no losses). With a non-zero opacity it exchanges
+		// energy with the gas, so its content departs measurably from the injected amount.
+		const double therm_frac = E_therm / injected_thermal;
+		if (kappa_thermal <= 0.0) {
+			if (std::abs(therm_frac - 1.0) > 0.03) {
+				amrex::Print() << "Test FAILED: transparent thermal band energy is " << therm_frac
+					       << " of injected (expected 1 within 3%).\n";
+				status = 1;
+			} else {
+				amrex::Print() << "Test passed: transparent thermal band conserves energy (Erad/injected = " << therm_frac << ").\n";
+			}
 		} else {
-			amrex::Print() << "Test passed: IR and optical thermal bands are identical (relative difference " << band_rel_diff << ").\n";
-		}
-
-		// Check 4a: with zero opacity and reflecting boundaries (no escape), each thermal band conserves
-		// energy, so its integrated Erad equals the injected amount.
-		const double thermal_cons = std::abs(E_ir - injected_thermal) / injected_thermal;
-		if (thermal_cons > 0.03) {
-			amrex::Print() << "Test FAILED: thermal-band energy " << E_ir << " differs from injected " << injected_thermal << " by "
-				       << 100.0 * thermal_cons << "% (tolerance 3%).\n";
-			status = 1;
-		} else {
-			amrex::Print() << "Test passed: thermal-band energy conserved to " << 100.0 * thermal_cons << "% of injected (tolerance 3%).\n";
+			if (std::abs(therm_frac - 1.0) < 1.0e-3) {
+				amrex::Print() << "Test FAILED: opaque thermal band shows no coupling to the gas (Erad/injected = " << therm_frac << ").\n";
+				status = 1;
+			} else {
+				amrex::Print() << "Test passed: thermal band exchanges energy with the gas (Erad/injected = " << therm_frac << ").\n";
+			}
 		}
 
 		// Check 4b: the ionizing band is depleted by photoionization, so its integrated Erad is below the
