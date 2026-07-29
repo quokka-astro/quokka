@@ -1274,7 +1274,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
 		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient;
 		conduction_dt.index = domain_signal_maxloc;
-
 		if (verbose) {
 			amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
 			amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
@@ -1344,28 +1343,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	}
 
 	// set default subcycling pattern
+	amrex::Vector<int> nsubsteps_max(max_level);	
 	if (do_subcycle == 1) {
 		for (int lev = 1; lev <= max_level; ++lev) {
-			nsubsteps[lev] = MaxRefRatio(lev - 1);
+			nsubsteps_max[lev] = std::pow(MaxRefRatio(lev - 1), 2);
 		}
 	}
 
 	// compute root level timestep given nsubsteps
 	amrex::Real dt_0 = dt_tmp[0];
 	int level_that_sets_dt_0 = 0; // keep track of which level sets the min dt
-	amrex::Long n_factor = 1;
+	amrex::Long Q = 1;
 
-	for (int level = 0; level <= finest_level; ++level) {
-		n_factor *= nsubsteps[level];
-
-		auto effective_factor = static_cast<amrex::Real>(n_factor);
-		if (enableElectronConduction_ == 1) {
-			// Conduction timestep scales as dx^2, so we need to use n_factor^2 here instead of n_factor.
-			effective_factor = static_cast<amrex::Real>(n_factor) * static_cast<amrex::Real>(n_factor);
-		}
+	for (int level = 1; level <= finest_level; ++level) {
 
 		const amrex::Real dt_0_old = dt_0; // save old dt_0
-		dt_0 = std::min(dt_0, effective_factor * dt_tmp[level]);
+		Q *= nsubsteps_max[level];
+		dt_0 = std::min(dt_0, Q * dt_tmp[level]);
+
 		if (dt_0 < dt_0_old) {
 			// level 'level' has now set the timestep
 			level_that_sets_dt_0 = level;
@@ -1395,12 +1390,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	if (tNew_[0] + dt_0 > stopTime_ - eps) {
 		dt_0 = stopTime_ - tNew_[0];
 	}
+	
+	// estimate subcycles required at each level
+	amrex::Vector<amrex::Real>  required_subcycles(finest_level);
+	required_subcycles[finest_level] = dt_0 / dt_tmp[finest_level];  // cycles required at the last level
+	amrex::Print() << std::format("...[level {}] required subcycles = {:e}\n", finest_level, required_subcycles[finest_level]);
+	for (int level = finest_level - 1; level >= 0; --level) {
+		required_subcycles[level] = std::max(dt_0 / dt_tmp[level], required_subcycles[level + 1] / MaxRefRatio(level + 1));
+		amrex::Print() << std::format("...[level {}] required subcycles = {:e}\n", level, required_subcycles[level]);
+	}
 
 	// assign timesteps on each level
+	nsubsteps[0] = 1;
 	dt_[0] = dt_0;
+	amrex::Real P = 1.0; 
 
 	for (int level = 1; level <= finest_level; ++level) {
-		dt_[level] = dt_[level - 1] / nsubsteps[level];
+		nsubsteps[level] = std::ceil(required_subcycles[level -1] / P);
+		nsubsteps[level] = std::max(1, nsubsteps[level]); // ensure at least 1 substep
+		P *= nsubsteps[level];
+		dt_[level] = dt_0 / P;
+		AMREX_ASSERT(dt_[level] <= dt_tmp[level] *  change_max); 
+		amrex::Print() << std::format("...[level {}] dt = {:e}, nsubsteps = {}, required subcycles = {:e}\n", level, dt_[level], nsubsteps[level], required_subcycles[level]);
 	}
 }
 

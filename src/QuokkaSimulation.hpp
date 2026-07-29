@@ -291,7 +291,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		}
 		if (enableElectronConduction_) {
 			//TODO (av): add support for subcycling with conduction
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0, "AMR subcycling is not supported with conduction. Set do_subcycle = 0.");
+			// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0, "AMR subcycling is not supported with conduction. Set do_subcycle = 0.");
 		}
 	}
 
