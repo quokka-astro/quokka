@@ -13,29 +13,30 @@ amr.n_cell = 256 256 256
 amr.blocking_factor_x = 128
 amr.blocking_factor_y = 128
 amr.blocking_factor_z = 16
-amr.max_grid_size   = 256
+amr.max_grid_size   = 128
 amr.max_level       = 3
 amr.n_error_buf     = 2
 amr.grid_eff        = 0.75
 regrid_interval     = -1
 do_reflux           = 1
 do_subcycle         = 0
-plotfile_prefix = "tests/plt/mhddisk_Q1_plt"
-checkpoint_prefix = "tests/chk/mhddisk_Q1_chk"
-statistics_prefix = "tests/mhddiskstats_Q1.txt"
+plotfile_prefix = "tests/plt/mhddisk_Q1turb_plt"
+checkpoint_prefix = "tests/chk/mhddisk_Q1turb_chk"
+statistics_file = "tests/mhddiskstats_Q1turb.txt"
 statistics_interval = 1
 density_floor = 1.0e-32
+restartfile = "tests/chk/mhddisk_Q1turb_chk0022203"
 # *****************************************************************
 # Time integration
 # *****************************************************************
 cfl                 = 0.3
 max_timesteps       = 1e8
-stop_time           = 2.9652e15   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s
+stop_time           = 1.18608e16   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s, 4 rotations
 # *****************************************************************
 # Output
 # *****************************************************************
-checkpoint_interval = 16000
-plotfile_interval   = 8000
+checkpointtime_interval = 1.4826e14
+plottime_interval   = 1.4826e14
 derived_vars        = gpot pressure radius_sph radial_velocity circular_velocity mach plasma_beta divB Bphi
 # *****************************************************************
 # Problem parameters (Table 1, Q1_M29)
@@ -49,24 +50,27 @@ mhd_galaxy.sn_momentum             = 3.0e3
 mhd.project_initial_b_field = true
 mhd.update_initial_b_energy = true
 
+mhd_galaxy.turb_file = zdrv.hdf5
 
-quokka.diagnostics = proj_z proj_x proj_y        # Space-separated name(s) of diagnostics (arbitrary)
+
+quokka.diagnostics = slice_z slice_x proj_z        # Space-separated name(s) of diagnostics (arbitrary)
 
 quokka.proj_z.type = ProjectionPlot
-quokka.proj_z.file = tests/projz_plt
-quokka.proj_z.int = 800
+quokka.proj_z.file = tests/projz/projz_plt
+quokka.proj_z.time_int = 2.9652e13
 quokka.proj_z.normal = 2
-quokka.proj_z.field_names = Bphi gasDensity x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum radial_velocity circular_velocity
+quokka.proj_z.field_names = Bphi gasDensity x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum 
 
-quokka.proj_x.type = ProjectionPlot
-quokka.proj_x.file = tests/projx_plt
-quokka.proj_x.int = 800
-quokka.proj_x.normal = 0
-quokka.proj_x.field_names = Bphi gasDensity x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum radial_velocity circular_velocity
+quokka.slice_z.type = DiagFramePlane
+quokka.slice_z.file = tests/slicez/slicez_plt
+quokka.slice_z.normal = 2
+quokka.slice_z.center = 0.0
+quokka.slice_z.time_int = 2.9652e12
+quokka.slice_z.field_names = Bphi x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum plasma_beta
 
-quokka.proj_y.type = ProjectionPlot
-quokka.proj_y.file = tests/projy_plt
-quokka.proj_y.int = 800
-quokka.proj_y.normal = 1
-quokka.proj_y.field_names = Bphi gasDensity x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum radial_velocity circular_velocity
-
+quokka.slice_x.type = DiagFramePlane
+quokka.slice_x.file = tests/slicex/slicex_plt
+quokka.slice_x.normal = 0
+quokka.slice_x.center = 0.0
+quokka.slice_x.time_int = 2.9652e12
+quokka.slice_x.field_names = Bphi x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum plasma_beta
