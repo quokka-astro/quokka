@@ -21,10 +21,11 @@ amr.max_grid_size = 128  # maximum patch size per MPI rank; at least 128 for GPU
 # *****************************************************************
 # Timestepping
 # *****************************************************************
+cfl = 0.3  # Courant number
 stop_time = 100  # simulation end time (in code units)
 max_timesteps = 100000  # hard cap on number of timesteps
 do_reflux = 1  # apply flux correction at AMR level boundaries
-do_subcycle = 0  # disable AMR subcycling (required for resistivity)
+do_subcycle = 0  # disable AMR subcycling; moot here (single level) but harmless
 
 # *****************************************************************
 # Output
@@ -33,11 +34,10 @@ plotfile_interval = 100  # write a plotfile every N timesteps
 checkpoint_interval = 1000  # write a restart checkpoint every N timesteps
 
 # *****************************************************************
-# Dissipation
+# Dissipation: ideal MHD, no explicit resistivity; hydro has no physical
+# viscosity implementation, only numerical (truncation-error) dissipation
 # *****************************************************************
-mhd.resistivity = 0.0  # Ohmic resistivity (requires do_subcycle = 0)
-hydro.viscosity_shear = 0.0  # physical shear viscosity eta (isothermal EOS only)
-hydro.viscosity_bulk = 0.0  # physical bulk viscosity zeta (isothermal EOS only)
+mhd.resistivity = 0.0  # Ohmic resistivity
 
 # *****************************************************************
 # Seed magnetic field (ABC field)
@@ -54,9 +54,9 @@ turbulence.target_vdisp = 0.5  # target velocity dispersion; equiv to Mach numbe
 turbulence.ampl_factor = 0.5  # scales the driving amplitude as ampl_factor^1.5; tune to reach target_vdisp
 turbulence.ampl_auto_adjust = 0  # keep off for SSD: varying amplitude complicates dynamo growth rate measurement
 turbulence.spect_form = 1  # 0: band (flat), 1: parabola (peak at midpoint of k_min and k_max), 2: power law
-turbulence.k_min = 2.0  # minimum driven wavenumber
-turbulence.k_max = 3.0  # maximum driven wavenumber
-turbulence.k_driv = 2.0  # OU autocorrelation time t_decay = L / (k_driv * vdisp); does not affect spectral shape
+turbulence.k_min = 1.0  # minimum driven wavenumber
+turbulence.k_max = 3.0  # maximum driven wavenumber; parabola peaks at k=2
+turbulence.k_driv = 2.0  # OU autocorrelation time t_decay = L / (k_driv * vdisp); matches the driving peak
 turbulence.nsteps_per_t_turb = 10  # number of OU pattern updates per t_decay; controls temporal smoothness of forcing
 turbulence.sol_weight = 1.0  # 0: purely compressive, 0.5: natural mix, 1: purely solenoidal
 turbulence.random_seed = 260303  # random seed for the OU phase sequence
