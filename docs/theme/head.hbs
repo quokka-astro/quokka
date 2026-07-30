@@ -1,0 +1,8 @@
+<script defer src="https://context7.com/widget.js" data-library="/quokka-astro/quokka"></script>
+<script>
+	document.addEventListener("DOMContentLoaded", () => {
+		document.getElementById("context7-widget")?.addEventListener("keydown", (event) => {
+			event.stopPropagation();
+		});
+	});
+</script>

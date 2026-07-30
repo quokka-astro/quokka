@@ -16,7 +16,7 @@
 - [Star Formation and Feedback (beta)](particles.md)
 - [Photoionization](photoionization.md)
 - [Dust Module (beta)](dust_module.md)
-- [Optically-Thin Radiative Cooling](cooling_module.md)
+- [Cooling Module](cooling_module.md)
 
 # Simulation Gallery
 

@@ -1,6 +1,6 @@
 FROM --platform=linux/amd64 opensuse/leap:15.6 AS build
 
-ARG ROCM_ZYPP_REPO_VERSION=7.2.0
+ARG ROCM_VERSION=7.14
 ARG ROCM_ZYPP_PACKAGES=
 ARG MPICH_VERSION=4.2.2
 ARG MPICH_URL=https://www.mpich.org/static/downloads/4.2.2/mpich-4.2.2.tar.gz
@@ -16,30 +16,27 @@ RUN set -euo pipefail && \
     if ! zypper repos -E | grep -q devel_languages_perl; then \
       zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:/languages:/perl/15.6/devel:languages:perl.repo; \
     fi && \
-    roc_repos_version="${ROCM_ZYPP_REPO_VERSION%.*}" && \
-    printf "[ROCm-%s]\nname=ROCm%s\nbaseurl=https://repo.radeon.com/rocm/zyp/%s/main\nenabled=1\ngpgcheck=1\ngpgkey=https://repo.radeon.com/rocm/rocm.gpg.key\n" \
-      "${ROCM_ZYPP_REPO_VERSION}" "${ROCM_ZYPP_REPO_VERSION}" "${roc_repos_version}" > /etc/zypp/repos.d/rocm.repo && \
+    printf "[rocm]\nname=ROCm %s\nbaseurl=https://repo.amd.com/rocm/packages-multi-arch/sles15/x86_64\nenabled=1\ngpgcheck=1\ngpgkey=https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg\npriority=50\n" \
+      "${ROCM_VERSION}" > /etc/zypp/repos.d/rocm.repo && \
     zypper --non-interactive --gpg-auto-import-keys refresh && \
     if [ -n "${ROCM_ZYPP_PACKAGES}" ]; then \
       zypper --non-interactive install --no-recommends ${ROCM_ZYPP_PACKAGES}; \
     else \
       zypper --non-interactive install --no-recommends \
-        rocm-llvm hipcc hip-runtime-amd hip-devel hsa-rocr comgr \
-        rocm-device-libs rocrand-devel hiprand-devel rocprim-devel rocsparse-devel; \
+        "amdrocm-core-devel${ROCM_VERSION}-${AMREX_AMD_ARCH}"; \
     fi && \
     zypper --non-interactive install --no-recommends \
       cmake git gcc13 gcc13-c++ libstdc++6-devel-gcc13 \
       make tar gzip wget patch hdf5-devel python3-devel && \
     ln -sf /usr/lib64/libefa.so.1 /usr/lib64/libefa.so && \
     zypper clean --all && \
-    printf "%s\n" "/opt/rocm/lib" "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf && \
+    printf "%s\n" "/opt/rocm/core-${ROCM_VERSION}/lib" >> /etc/ld.so.conf.d/rocm.conf && \
     ldconfig
 
-ENV LD_LIBRARY_PATH="/opt/rocm/lib"
+ENV ROCM_PATH="/opt/rocm/core-${ROCM_VERSION}"
 
-ENV PATH="/opt/rocm/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH}" \
-    ROCM_PATH="/opt/rocm" \
+ENV PATH="${ROCM_PATH}/lib/llvm/bin:${ROCM_PATH}/bin:${PATH}" \
+    LD_LIBRARY_PATH="${ROCM_PATH}/lib" \
     AMREX_AMD_ARCH="${AMREX_AMD_ARCH}" \
     CC="amdclang" \
     CXX="amdclang++"
@@ -54,7 +51,7 @@ RUN set -euo pipefail && \
     tar xzf "mpich-${MPICH_VERSION}.tar.gz" && \
     cd "mpich-${MPICH_VERSION}" && \
     patch -p1 < /tmp/mpich.patch && \
-    ./configure --with-device=ch4:ofi --with-hip=/opt/rocm --disable-fortran --prefix="/opt/mpich/${MPICH_VERSION}" && \
+    ./configure --with-device=ch4:ofi --with-hip="${ROCM_PATH}" --disable-fortran --prefix="/opt/mpich/${MPICH_VERSION}" && \
     make -j"$(nproc)" && \
     make install && \
     cd .. && \
@@ -88,6 +85,7 @@ RUN set -euo pipefail && \
 # Runtime stage (reduced image size)
 FROM --platform=linux/amd64 opensuse/leap:15.6
 
+ARG ROCM_VERSION=7.14
 ARG MPICH_VERSION=4.2.2
 
 COPY --from=build /opt/rocm /opt/rocm
@@ -98,9 +96,11 @@ RUN set -euo pipefail && \
     zypper --non-interactive refresh && \
     zypper --non-interactive install --no-recommends libhdf5 libpciaccess0 libnuma1 libdrm2 libdrm_amdgpu1 && \
     zypper clean --all && \
-    printf "%s\n" "/opt/rocm/lib" "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf && \
-    rm -rf /opt/rocm/bin /opt/rocm/include /opt/rocm/share /opt/rocm/lib/cmake \
-           /opt/rocm/llvm/bin /opt/rocm/llvm/include /opt/rocm/llvm/share /opt/rocm/llvm/lib/cmake && \
+    printf "%s\n" "/opt/rocm/core-${ROCM_VERSION}/lib" >> /etc/ld.so.conf.d/rocm.conf && \
+    rm -rf "/opt/rocm/core-${ROCM_VERSION}/bin" "/opt/rocm/core-${ROCM_VERSION}/include" \
+           "/opt/rocm/core-${ROCM_VERSION}/share" "/opt/rocm/core-${ROCM_VERSION}/lib/cmake" \
+           "/opt/rocm/core-${ROCM_VERSION}/lib/llvm/bin" "/opt/rocm/core-${ROCM_VERSION}/lib/llvm/include" \
+           "/opt/rocm/core-${ROCM_VERSION}/lib/llvm/share" "/opt/rocm/core-${ROCM_VERSION}/lib/llvm/lib/cmake" && \
     find /opt/rocm -type f -name "*.a" -delete && \
     find /opt/rocm -type f -name "*.o" -delete && \
     find /opt/mpich -type f -name "*.a" -delete && \
@@ -117,11 +117,11 @@ COPY --from=build /tmp/quokka-src/extern/agora_data/ /opt/quokka/share/quokka/ex
 RUN chmod 0755 /opt/quokka/bin/DiskGalaxy && \
     chown -R leap /opt/quokka
 
-ENV LD_LIBRARY_PATH="/opt/rocm/lib"
+ENV ROCM_PATH="/opt/rocm/core-${ROCM_VERSION}"
 
 ENV MPICH_VERSION="${MPICH_VERSION}" \
     PATH="/opt/quokka/bin:/opt/mpich/${MPICH_VERSION}/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:/opt/rocm/lib:${LD_LIBRARY_PATH}"
+    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:${ROCM_PATH}/lib"
 
 USER leap
 WORKDIR /home/leap
