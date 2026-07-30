@@ -449,7 +449,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(state_arr, i, j, k, fab_fc);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
-			const amrex::Real nominal_prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);
+			// Create increasing ramp for eps_ff_
+			const amrex::Real dx_over_LambdaJ = dx[0] / LambdaJ;
+			const amrex::Real eps_ff_eff = (dx_over_LambdaJ <= 1/J) ? eps_ff_ : eps_ff_ * std::exp(dx_over_LambdaJ - 1/J);
+			const amrex::Real nominal_prob_star_formation = (eps_ff_eff / eps_star) * (dt / t_ff);
 			// force P_sf to 1 if we are very far below the Jeans length (as determined by J_truncate)
 			const amrex::Real actual_prob_star_formation = (LambdaJ < (J_truncate * dx[0])) ? 1.0 : nominal_prob_star_formation;
 			const amrex::Real random_draw = amrex::Random(engine);
