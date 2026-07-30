@@ -31,9 +31,9 @@ template <> struct quokka::EOS_Traits<SmallScaleDynamo> {
 };
 
 template <> struct Physics_Traits<SmallScaleDynamo> : DefaultPhysicsTraits {
-	static constexpr bool is_hydro_enabled = true;	    // solve the Euler equations
-	static constexpr bool is_mhd_enabled = true;	    // solve the MHD equations
-	static constexpr int nDustGroups = 0;		    // no dust groups
+	static constexpr bool is_hydro_enabled = true; // solve the Euler equations
+	static constexpr bool is_mhd_enabled = true;   // solve the MHD equations
+	static constexpr int nDustGroups = 0;	       // no dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr amrex::Real gravitational_constant = 1.0;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::constant; // eta from mhd.resistivity in the TOML; defaults to 0
