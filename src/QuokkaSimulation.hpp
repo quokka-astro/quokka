@@ -1146,6 +1146,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	auto const applyConduction = [&]() {
 		if (enableElectronConduction_ == 1) {
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
+			// NOTE: heat_flux is defined (with 1 component) inside ElectronConduction::ComputeExplicit,
+			// so it only needs to be declared here.
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
 
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1155,25 +1157,23 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 							       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 				}
 			}
-			// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			// 	auto ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			// 	heat_flux[idim].define(ba_face, state.DistributionMap(), state.nComp(), 0);
-			// 	heat_flux[idim].setVal(0.0);
-			// }
 			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 											     .saturation_factor = electronConductionSaturationFactor_,
 											     .min_temperature = tempFloor_};
 			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
-			if (do_reflux) {
-				// std::array<amrex::MultiFab, AMREX_SPACEDIM> recal_fluxes;
+			if ((do_reflux != 0) && (recal_fluxes != nullptr)) {
+				// heat_flux has a single component, so accumulate it into the energy components of the
+				// multi-component reflux array (which the caller defines, zeroes and hands to the flux
+				// registers with the full time step). Each Strang half-step covers dt = 0.5 * dt_lev,
+				// hence the 0.5 weight here.
+				const amrex::Real reflux_weight = 0.5;
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					(*recal_fluxes)[idim].define(heat_flux[idim].boxArray(), heat_flux[idim].DistributionMap(), state.nComp(), 0);
-					(*recal_fluxes)[idim].setVal(0.0);
-					amrex::MultiFab::Add((*recal_fluxes)[idim], heat_flux[idim], 0, HydroSystem<problem_t>::energy_index, 1, 0);
-					amrex::MultiFab::Add((*recal_fluxes)[idim], heat_flux[idim], 0, HydroSystem<problem_t>::internalEnergy_index, 1, 0);
+					amrex::MultiFab::Saxpy((*recal_fluxes)[idim], reflux_weight, heat_flux[idim], 0, HydroSystem<problem_t>::energy_index,
+							       1, 0);
+					amrex::MultiFab::Saxpy((*recal_fluxes)[idim], reflux_weight, heat_flux[idim], 0,
+							       HydroSystem<problem_t>::internalEnergy_index, 1, 0);
 				}
-				// incrementFluxRegisters(fr_as_crse, fr_as_fine, recal_fluxes, lev, dt);
 			}
 		}
 	};
