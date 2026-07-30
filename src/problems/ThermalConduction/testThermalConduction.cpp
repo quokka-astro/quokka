@@ -96,7 +96,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		amrex::Real T;
 		amrex::Real vz;
 		amrex::Real cs_wind;
-		double R = std::sqrt((x-R0)*(x-R0) + (y-R0)*(y-R0) + (z-R0)*(z-R0));
+		double R = std::sqrt((x)*(x) + (y)*(y) + (z-R0)*(z-R0));
 		if(R < R0){
 			T = Tcloud;
 			rho = rho_cloud; // g/cm^3
@@ -115,7 +115,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
-		if(i==0 & j==0 * k==0 ){
+		if(i==0 & j==0 & k==0 ){
 			amrex::Print() << "Initial conditions at the center of the domain: " << std::endl;
 			amrex::Print() << "Density: " << rho << std::endl;
 			amrex::Print() << "Temperature: " << T << std::endl;
