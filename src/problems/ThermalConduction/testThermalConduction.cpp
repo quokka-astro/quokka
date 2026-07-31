@@ -66,32 +66,6 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
 		const amrex::Real z = prob_lo[2] + (k + 0.5) * dx[2];
 
-		/*-------------------------------*/
-		Problem ----> Gaussian temperature profile
-		const amrex::Real rho = rho0 * C::m_p;	  // g/cm^3
-		const amrex::Real sigma2 = sigma * sigma; // width of the Gaussian
-		const amrex::Real Eint = Eint0 * std::exp(-x * x / sigma2 / 2.) + Efloor;
-		/*-------------------------------*/
-
-		//Problem 5----> Top hat temperature profile with sharp boundary in wind
-		// amrex::Real rho;	  // g/cm^3
-		// amrex::Real T;
-		// amrex::Real vz;
-		// amrex::Real cs_wind;
-		// double R = std::sqrt(x*x + y*y + z*z);
-		// if(R < R0){
-		// 	T = Tcloud;
-		// 	rho = rho_cloud; // g/cm^3
-		// 	vz = 0.0; // cloud is stationary
-		// }
-		// else{
-		// 	T = Twind;
-		// 	rho = rho_cloud * Tcloud / Twind; // g/cm^3
-		// 	amrex::Real pressure = rho * T * C::k_B / C::m_u;
-		// 	cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
-		// 	vz = Mach * cs_wind; // 100 km/s
-		// }
-		// const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 		amrex::Real rho;	  // g/cm^3
 		amrex::Real T;
 		amrex::Real vz;
@@ -151,90 +125,43 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	});
 }
 
-// template <>
-// void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-// 									  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
-// {
 
-// 	const amrex::Real t = tNew_[0];
+template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// geometrical refinement
+	// tag cells within one-sigma of the initial Gaussian profile for refinement
+	const double refine_Lmax = 1.5 * R0; 
 
-// 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
-// 		const amrex::Box &indexRange = iter.validbox();
-// 		auto const &stateExact = ref.array(iter);
-// 		auto const ncomp = ref.nComp();
+	const auto prob_lo = geom[lev].ProbLoArray();
+	const auto dx = geom[lev].CellSizeArray();
+	const auto tag = tags.arrays();
 
-// 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-// 			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// NOTE: must check all nodes of the cell!
+		// Otherwise, cells that are too big can completely prevent refinement.
+		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
+		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
+		amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
+		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
+		amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
+		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
 
-// 			// Solution for the Gaussian temperature profile
-// 			const amrex::Real rho = rho0 * C::m_p;		     // g/cm^3
-// 			const amrex::Real sigma2_0 = sigma * sigma;	     // initial width of the Gaussian
-// 			const amrex::Real sigma2_t = sigma2_0 + 2.0 * D * t; // width of the Gaussian at time t
-// 			const amrex::Real norm = Eint0 * (std::sqrt(sigma2_0 / sigma2_t));
-// 			const amrex::Real Eint_exact = norm * std::exp(-x * x / sigma2_t / 2.) + Efloor;
+		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real /*z*/) {
+			if ((std::abs(x) < refine_Lmax) && (std::abs(y) < refine_Lmax) ) {
+				tag[bx](i, j, k) = amrex::TagBox::SET;
+			}
+		};
 
-// 			// clear all components
-// 			for (int n = 0; n < ncomp; ++n) {
-// 				stateExact(i, j, k, n) = 0.;
-// 			}
-
-// 			// fill gas components
-// 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
-// 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint_exact;
-// 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint_exact;
-// 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index) = 0.0;
-// 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index) = 0.;
-// 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = 0.;
-// 		});
-// 	}
-// }
-
-// auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
-// {
-// 	// Read problem parameters
-// 	const double max_time = 469054.0075444166; // 1 conduction time
-
-// 	const double CFL_number = 0.3;
-// 	const int max_timesteps = std::max(2000, nx * 100);
-
-// 	// Set grid dimensions using AMReX parameter system
-// 	amrex::ParmParse pp("amr");
-// 	amrex::Vector<int> const ncells = {nx, nx, nx};
-// 	pp.add("max_level", 0);
-// 	pp.addarr("n_cell", ncells);
-
-// 	// Set domain bounds using AMReX parameter system
-// 	amrex::ParmParse pp_geom("geometry");
-// 	amrex::Vector<double> const prob_lo = {-1.5428e18, -1.5428e18, -1.5428e18};
-// 	amrex::Vector<double> const prob_hi = {1.5428e+18, 1.5428e+18, 1.5428e+18};
-// 	amrex::Vector<int> const is_periodic = {0, 0, 0};
-// 	pp_geom.addarr("prob_lo", prob_lo);
-// 	pp_geom.addarr("prob_hi", prob_hi);
-// 	pp_geom.addarr("is_periodic", is_periodic);
-
-// 	// Setup boundary conditions
-// 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
-// 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-// 	for (int n = 0; n < ncomp_cc; ++n) {
-// 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-// 			BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
-// 			BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
-// 		}
-// 	}
-
-// 	// Run simulation
-// 	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc, );
-
-// 	sim.cflNumber_ = CFL_number;
-// 	sim.stopTime_ = max_time;
-// 	sim.maxTimesteps_ = max_timesteps;
-
-// 	// set initial conditions
-// 	sim.setInitialConditions();
-
-// 	sim.evolve();
-// 	return sim.computeErrorNorm();
-// }
+		for (auto const &x : {x0, x1}) {
+			for (auto const &y : {y0, y1}) {
+				for (auto const &z : {z0, z1}) {
+					tagIfPointInRegion(x, y, z);
+				}
+			}
+		}
+	});
+	amrex::Gpu::streamSynchronize();
+}
 
 auto problem_main() -> int
 {
