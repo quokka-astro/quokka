@@ -1392,7 +1392,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	}
 	
 	// estimate subcycles required at each level
-	amrex::Vector<amrex::Real>  required_subcycles(finest_level);
+	amrex::Vector<amrex::Real>  required_subcycles(finest_level + 1);
 	required_subcycles[finest_level] = dt_0 / dt_tmp[finest_level];  // cycles required at the last level
 	for (int level = finest_level - 1; level >= 0; --level) {
 		required_subcycles[level] = std::max(dt_0 / dt_tmp[level], required_subcycles[level + 1] / MaxRefRatio(level + 1));
