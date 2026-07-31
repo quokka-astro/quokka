@@ -1437,7 +1437,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	if (tNew_[0] + dt_0 > stopTime_ - eps) {
 		dt_0 = stopTime_ - tNew_[0];
 	}
-	
+	amrex::Print() << std::format("Required subcycles per level.\n");	
 	// estimate subcycles required at each level
 	amrex::Vector<amrex::Real>  required_subcycles(finest_level);
 	required_subcycles[finest_level] = dt_0 / dt_tmp[finest_level];  // cycles required at the last level
