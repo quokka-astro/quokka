@@ -33,7 +33,6 @@ mhd.emf_compute_scheme = "Balsara2025"
 
 dust.enable_iter_stoptime = 1
 dust.print_iteration_counts = 0
-dust.omega_gyro_residual = 1.0
 dust.density_floor = 1.0e-12
 dust.grain_radius = 5.0
 dust.grain_density = 1.0
