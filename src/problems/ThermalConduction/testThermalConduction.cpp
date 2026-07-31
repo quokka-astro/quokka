@@ -162,6 +162,42 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 	});
 	amrex::Gpu::streamSynchronize();
 }
+// Implement User-defined diode BC
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+                             amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+                             int /*orig_comp*/)
+{
+    auto [i, j, k] = iv.dim3();
+    amrex::Box const &box = geom.Domain();
+    const auto &domain_lo = box.loVect3d();
+    const auto &domain_hi = box.hiVect3d();
+    const int klo = domain_lo[2];
+    const int khi = domain_hi[2];
+    double rho_edge = NAN;
+    double x1Mom_edge = NAN;
+    double x2Mom_edge = NAN;
+    double x3Mom_edge = NAN;
+    double etot_edge = NAN;
+    double eint_edge = NAN;
+
+
+    rho_edge = rho_cloud * Tcloud / Twind; // g/cm^3
+    const double cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho_edge, rho_edge * Twind * C::k_B / C::m_u);
+    x3Mom_edge = rho_edge * Mach * cs_wind; // 100 km/s
+    eint_edge = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho_edge, Twind);
+    etot_edge = eint_edge + 0.5 * (x3Mom_edge * x3Mom_edge) / rho_edge;
+    
+    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho_edge;
+    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index) = 0.0;
+    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index) = 0.0;
+    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = x3Mom_edge;
+    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = etot_edge;
+    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = eint_edge;
+    
+}
+
 
 auto problem_main() -> int
 {
