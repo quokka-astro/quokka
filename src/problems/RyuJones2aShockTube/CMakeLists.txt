@@ -1,15 +1,3 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  set(JOB_NAME RyuJones2aShockTube)
-
-  add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
-
-  if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(${JOB_NAME})
-  endif(AMReX_GPU_BACKEND MATCHES "CUDA")
-
-  add_test(
-    NAME ${JOB_NAME}
-    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  set_tests_properties(RyuJones2aShockTube PROPERTIES LABELS "MHD")
+  quokka_add_problem(JOB_NAME RyuJones2aShockTube ADD_TEST OFF)
 endif()
