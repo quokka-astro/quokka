@@ -56,9 +56,9 @@ constexpr amrex::Real vy_R = 0.0;
 constexpr amrex::Real vz_R = 0.0;
 
 constexpr amrex::Real Bx = std::numbers::inv_sqrtpi; // 2 / sqrt(4 pi); constant
-constexpr amrex::Real By_L = 1.0155412503859613;      // 3.6 / sqrt(4 pi)
-constexpr amrex::Real By_R = 1.1283791670955125;      // 4 / sqrt(4 pi)
-constexpr amrex::Real Bz = std::numbers::inv_sqrtpi;  // 2 / sqrt(4 pi); constant
+constexpr amrex::Real By_L = 1.0155412503859613;     // 3.6 / sqrt(4 pi)
+constexpr amrex::Real By_R = 1.1283791670955125;     // 4 / sqrt(4 pi)
+constexpr amrex::Real Bz = std::numbers::inv_sqrtpi; // 2 / sqrt(4 pi); constant
 
 template <> void QuokkaSimulation<RyuJones2aShockTubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
