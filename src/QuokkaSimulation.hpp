@@ -2876,6 +2876,15 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 						      flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2],
 						      reconstructGhost, nvars, nghost_Riemann);)
 
+	// add physical shear/bulk viscous fluxes on top of the Riemann-solver flux, mirroring how
+	// AddResistiveEnergyFlux is layered on top of ComputeEMF for physical resistivity
+	if constexpr (Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
+		const auto &dx = geom[lev].CellSizeArray();
+		AMREX_D_TERM(HydroSystem<problem_t>::template AddViscousFluxes<FluxDir::X1>(flux[0], primVar, dx, shearViscosity_, bulkViscosity_);
+			     , HydroSystem<problem_t>::template AddViscousFluxes<FluxDir::X2>(flux[1], primVar, dx, shearViscosity_, bulkViscosity_);
+			     , HydroSystem<problem_t>::template AddViscousFluxes<FluxDir::X3>(flux[2], primVar, dx, shearViscosity_, bulkViscosity_);)
+	}
+
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
 
@@ -3068,6 +3077,15 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 							flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, reconstructRange, nvars, nghost_Riemann);
 		     , hydroFOFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2], rightState_bfield[2],
 							flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructRange, nvars, nghost_Riemann);)
+
+	// add physical shear/bulk viscous fluxes on top of the first-order fallback flux too, so FOFC cells
+	// (troubled cells that fall back to this path, e.g. near a strong shock) don't silently lose viscosity
+	if constexpr (Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
+		const auto &dx = geom[lev].CellSizeArray();
+		AMREX_D_TERM(HydroSystem<problem_t>::template AddViscousFluxes<FluxDir::X1>(flux[0], primVar, dx, shearViscosity_, bulkViscosity_);
+			     , HydroSystem<problem_t>::template AddViscousFluxes<FluxDir::X2>(flux[1], primVar, dx, shearViscosity_, bulkViscosity_);
+			     , HydroSystem<problem_t>::template AddViscousFluxes<FluxDir::X3>(flux[2], primVar, dx, shearViscosity_, bulkViscosity_);)
+	}
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
