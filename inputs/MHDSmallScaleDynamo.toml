@@ -51,7 +51,7 @@ setup.seed_b_fraction = 1.0e-6  # E_mag/E_kin at t=0; B0 = sqrt(fraction) * targ
 turbulence.enabled = 1  # enable turbulent driving
 turbulence.length = 1.0  # physical box size L; integer mode n has wavenumber k = n * 2*pi / L
 turbulence.target_vdisp = 0.5  # target velocity dispersion; equiv to Mach number since the plasma is isothermal
-turbulence.ampl_factor = 0.5  # scales the driving amplitude as ampl_factor^1.5; tune to reach target_vdisp
+turbulence.ampl_factor = 0.828  # scales the driving amplitude as ampl_factor^1.5; retuned from 0.5 to hit target_vdisp (measured M_rms=0.302 at ampl_factor=0.5)
 turbulence.ampl_auto_adjust = 0  # keep off for SSD: varying amplitude complicates dynamo growth rate measurement
 turbulence.spect_form = 1  # 0: band (flat), 1: parabola (peak at midpoint of k_min and k_max), 2: power law
 turbulence.k_min = 1.0  # minimum driven wavenumber
