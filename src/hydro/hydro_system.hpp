@@ -1669,35 +1669,37 @@ AMREX_GPU_DEVICE auto HydroSystem<problem_t>::ComputeViscousFlux(quokka::Array4V
 {
 	static_assert(AMREX_SPACEDIM == 3, "HydroSystem::ComputeViscousFlux currently only supports 3D.");
 
+	// u<dir> = velocity component along <dir>; n/v/w are the local orthonormal basis, so the velocity
+	// prefix is "u" (not "v") to avoid colliding with the "v" direction label, e.g. duv_dv != "d(v)/d(v)"
 	// normal-direction derivatives: one-sided difference across the face, between cells i-1 and i
-	const amrex::Real dvn_dn = (q(i, j, k, velN_index) - q(i - 1, j, k, velN_index)) / dx_n;
-	const amrex::Real dvv_dn = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dx_n;
-	const amrex::Real dvw_dn = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_n;
+	const amrex::Real dun_dn = (q(i, j, k, velN_index) - q(i - 1, j, k, velN_index)) / dx_n;
+	const amrex::Real duv_dn = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dx_n;
+	const amrex::Real duw_dn = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_n;
 
 	// transverse derivatives: averaged centered difference
-	const amrex::Real dvv_dv = 0.25 / dx_v *
+	const amrex::Real duv_dv = 0.25 / dx_v *
 	    ((q(i, j + 1, k, velV_index) - q(i, j - 1, k, velV_index)) + (q(i - 1, j + 1, k, velV_index) - q(i - 1, j - 1, k, velV_index)));
-	const amrex::Real dvn_dv = 0.25 / dx_v *
+	const amrex::Real dun_dv = 0.25 / dx_v *
 	    ((q(i, j + 1, k, velN_index) - q(i, j - 1, k, velN_index)) + (q(i - 1, j + 1, k, velN_index) - q(i - 1, j - 1, k, velN_index)));
-	const amrex::Real dvw_dw = 0.25 / dx_w *
+	const amrex::Real duw_dw = 0.25 / dx_w *
 	    ((q(i, j, k + 1, velW_index) - q(i, j, k - 1, velW_index)) + (q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k - 1, velW_index)));
-	const amrex::Real dvn_dw = 0.25 / dx_w *
+	const amrex::Real dun_dw = 0.25 / dx_w *
 	    ((q(i, j, k + 1, velN_index) - q(i, j, k - 1, velN_index)) + (q(i - 1, j, k + 1, velN_index) - q(i - 1, j, k - 1, velN_index)));
 
-	const amrex::Real div_v = dvn_dn + dvv_dv + dvw_dw;
+	const amrex::Real div_v = dun_dn + duv_dv + duw_dw;
 
 	// sigma = 2*nu_shear*S + nu_bulk*(div v)*I; only the normal-direction components are needed here
-	const amrex::Real sigma_nn = 2.0 * shearViscosity * dvn_dn + (bulkViscosity - (2.0 / 3.0) * shearViscosity) * div_v;
-	const amrex::Real sigma_nv = shearViscosity * (dvv_dn + dvn_dv);
-	const amrex::Real sigma_nw = shearViscosity * (dvw_dn + dvn_dw);
+	const amrex::Real sigma_nn = 2.0 * shearViscosity * dun_dn + (bulkViscosity - (2.0 / 3.0) * shearViscosity) * div_v;
+	const amrex::Real sigma_nv = shearViscosity * (duv_dn + dun_dv);
+	const amrex::Real sigma_nw = shearViscosity * (duw_dn + dun_dw);
 
-	// viscous heating v.sigma at the face; caller drops this for isothermal EOS
-	const amrex::Real v_face_n = 0.5 * (q(i, j, k, velN_index) + q(i - 1, j, k, velN_index));
-	const amrex::Real v_face_v = 0.5 * (q(i, j, k, velV_index) + q(i - 1, j, k, velV_index));
-	const amrex::Real v_face_w = 0.5 * (q(i, j, k, velW_index) + q(i - 1, j, k, velW_index));
-	const amrex::Real v_dot_sigma = v_face_n * sigma_nn + v_face_v * sigma_nv + v_face_w * sigma_nw;
+	// viscous heating u.sigma at the face; caller drops this for isothermal EOS
+	const amrex::Real u_face_n = 0.5 * (q(i, j, k, velN_index) + q(i - 1, j, k, velN_index));
+	const amrex::Real u_face_v = 0.5 * (q(i, j, k, velV_index) + q(i - 1, j, k, velV_index));
+	const amrex::Real u_face_w = 0.5 * (q(i, j, k, velW_index) + q(i - 1, j, k, velW_index));
+	const amrex::Real u_dot_sigma = u_face_n * sigma_nn + u_face_v * sigma_nv + u_face_w * sigma_nw;
 
-	return {sigma_nn, sigma_nv, sigma_nw, v_dot_sigma};
+	return {sigma_nn, sigma_nv, sigma_nw, u_dot_sigma};
 }
 
 #endif // HYDRO_SYSTEM_HPP_
