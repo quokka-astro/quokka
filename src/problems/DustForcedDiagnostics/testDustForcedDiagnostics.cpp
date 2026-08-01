@@ -31,8 +31,8 @@ constexpr double dimensionless_charge_to_mass_ratio = 1.0;
 constexpr double magnetic_field_z = 1.0;
 constexpr double external_force = 1.0;
 
-constexpr double sweep_stop_time = 1.0;
-constexpr double stiff_branch_reference_steps = 5.0;
+constexpr double sweep_stop_time = 20.0;
+constexpr double stiff_branch_reference_steps = 2.0;
 
 constexpr double omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_z;
 constexpr double alpha_rel = (1.0 + epsilon) * alpha_d;
