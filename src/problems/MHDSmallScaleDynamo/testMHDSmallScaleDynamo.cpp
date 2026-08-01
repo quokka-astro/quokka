@@ -61,9 +61,9 @@ template <> void QuokkaSimulation<MHDSmallScaleDynamo>::setInitialConditionsOnGr
 }
 
 // seed field parameters; defaults match input file, overwritten by problem_main() before use
-int seed_b_wavenumber = 2;
-double seed_b_fraction = 0.0;
-double target_vdisp = 0.0;
+int seed_b_wavenumber = 2;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+double seed_b_fraction = 0.0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+double target_vdisp = 0.0;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // we initialise the magnetic field using an ABC (Arnold-Beltrami-Childress) seed field:
 // a force-free, maximally helical field defined as the (discrete) curl of a sinusoidal vector potential.
