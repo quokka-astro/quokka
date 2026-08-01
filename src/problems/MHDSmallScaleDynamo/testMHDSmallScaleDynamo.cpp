@@ -2,7 +2,7 @@
 // Copyright 2026 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testSmallScaleDynamo.cpp
+/// \file testMHDSmallScaleDynamo.cpp
 /// \brief Small Scale Dynamo simulation.
 ///
 
@@ -20,17 +20,17 @@
 #include "AMReX_REAL.H"
 #include <cmath>
 
-struct SmallScaleDynamo {
+struct MHDSmallScaleDynamo {
 };
 
 // isothermal EOS: pressure = cs^2 * rho (no thermal energy equation)
-template <> struct quokka::EOS_Traits<SmallScaleDynamo> {
+template <> struct quokka::EOS_Traits<MHDSmallScaleDynamo> {
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = 1.0; // dimensionless sound speed
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<SmallScaleDynamo> : DefaultPhysicsTraits {
+template <> struct Physics_Traits<MHDSmallScaleDynamo> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true; // solve the Euler equations
 	static constexpr bool is_mhd_enabled = true;   // solve the MHD equations
 	static constexpr int nDustGroups = 0;	       // no dust groups
@@ -40,23 +40,23 @@ template <> struct Physics_Traits<SmallScaleDynamo> : DefaultPhysicsTraits {
 };
 
 // isothermal EOS has no internal energy to reconstruct; pressure computed directly from rho
-template <> struct HydroSystem_Traits<SmallScaleDynamo> {
+template <> struct HydroSystem_Traits<MHDSmallScaleDynamo> {
 	static constexpr bool reconstruct_eint = false;
 };
 
 // uniform density, zero velocity; turbulent driving (configured in input file) stirs the gas
-template <> void QuokkaSimulation<SmallScaleDynamo>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDSmallScaleDynamo>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, HydroSystem<SmallScaleDynamo>::density_index) = 1.0;
-		state_cc(i, j, k, HydroSystem<SmallScaleDynamo>::x1Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SmallScaleDynamo>::x2Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SmallScaleDynamo>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SmallScaleDynamo>::energy_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SmallScaleDynamo>::internalEnergy_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::density_index) = 1.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::energy_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::internalEnergy_index) = 0.0;
 	});
 }
 
@@ -68,7 +68,7 @@ double target_vdisp = 0.0;
 // we initialise the magnetic field using an ABC (Arnold-Beltrami-Childress) seed field:
 // a force-free, maximally helical field defined as the (discrete) curl of a sinusoidal vector potential.
 // the general ABC field has three independent amplitudes (per spatial axis); here we choose them to be equal.
-template <> void QuokkaSimulation<SmallScaleDynamo>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDSmallScaleDynamo>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -81,7 +81,7 @@ template <> void QuokkaSimulation<SmallScaleDynamo>::setInitialConditionsOnGridF
 	const double seed_wavenumber = 2.0 * M_PI * seed_b_wavenumber / box_length;
 	const double seed_vecpot_amplitude = std::sqrt(seed_b_fraction) * target_vdisp / seed_wavenumber;
 
-	constexpr int b_index = Physics_Indices<SmallScaleDynamo>::mhdFirstIndex;
+	constexpr int b_index = Physics_Indices<MHDSmallScaleDynamo>::mhdFirstIndex;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		if (dir == quokka::direction::x) {
@@ -142,9 +142,9 @@ auto problem_main() -> int
 				  "and tuning ampl_factor manually to achieve the desired velocity dispersion.\n";
 	}
 
-	auto BCs_cc = quokka::BC<SmallScaleDynamo>(quokka::BCType::int_dir);
+	auto BCs_cc = quokka::BC<MHDSmallScaleDynamo>(quokka::BCType::int_dir);
 
-	const int nvars_fc = Physics_Indices<SmallScaleDynamo>::nvarTotal_fc;
+	const int nvars_fc = Physics_Indices<MHDSmallScaleDynamo>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -153,7 +153,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<SmallScaleDynamo> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDSmallScaleDynamo> sim(BCs_cc, BCs_fc);
 
 	sim.setInitialConditions();
 
