@@ -87,7 +87,7 @@ The Lorentz work term in the gas total-energy equation accounts for energy excha
 \end{aligned}
 </script>
 
-In `DustSources::computeDustDragAndLorentz`, Quokka splits the deposited gas-energy increment into a drag-like contribution controlled by `dust.omega_drag_heating` and a gyrofrequency-dependent residual contribution controlled by `dust.omega_gyro_residual`.
+In `DustSources::computeDustDragAndLorentz`, Quokka splits the deposited gas-energy increment into a drag-like contribution controlled by `dust.omega_drag_heating` and a gyrofrequency-dependent residual contribution controlled by `dust.omega_gyro_residual`. The defaults are `dust.omega_drag_heating = 1` and `dust.omega_gyro_residual = 0`: drag-like heating is deposited in the gas, while the gyrofrequency-dependent Runge–Kutta residual is not treated as physical heating. Setting both parameters to unity applies the full discrete energy compensation and conserves the sum of gas internal energy and gas-dust kinetic energy during the local source update. With the default choice, this sum is not strictly conserved when the gyrofrequency-dependent residual is nonzero.
 
 ### Dimensionless dust charge-to-mass ratio
 
@@ -113,11 +113,13 @@ For code units defined by \\(L_0\\), \\(M_0\\), and \\(\tau_0\\), let
 =\xi_n|\widetilde{\mathbf{B}}|.
 </script>
 
-Here \\(\xi_n\\) is signed and dimensionless. `UnitSystem::CGS` uses
+Here \\(\xi_n\\) is signed and dimensionless. For every unit system, a
+charged-dust problem supplies this dimensionless quantity directly through
+`DustSources::ComputeDustDimensionlessChargeToMassRatio`. The conversion uses
 \\(L_0=1\\,\mathrm{cm}\\), \\(M_0=1\\,\mathrm{g}\\), and
-\\(\tau_0=1\\,\mathrm{s}\\); `UnitSystem::CUSTOM` uses the base units in
-`Physics_Traits`; and `UnitSystem::CONSTANTS` requires the problem to prescribe
-\\(\xi_n\\) directly.
+\\(\tau_0=1\\,\mathrm{s}\\) for `UnitSystem::CGS`, the base units in
+`Physics_Traits` for `UnitSystem::CUSTOM`, or the normalization chosen by the
+problem for `UnitSystem::CONSTANTS`.
 
 ## Variable Storage
 
@@ -158,11 +160,20 @@ where \\(\mathcal{H}\\) is the explicit gas/MHD and dust transport update, and \
 - If `Physics_Traits<problem_t>::is_dust_enabled = true` and MHD is disabled, Quokka calls `DustSources::computeDustDrag`, following Tedeschi-Prades et al. (2025).
 - If both `Physics_Traits<problem_t>::is_dust_enabled = true` and `Physics_Traits<problem_t>::is_mhd_enabled = true`, Quokka calls `DustSources::computeDustDragAndLorentz`.
 
-`DustSources::computeDustDragAndLorentz` integrates drag and Lorentz forces in the same source solve; it does not operator-split the Lorentz force from drag. The method uses a two-stage generalized implicit Runge-Kutta (GIRK) update for the local gas and dust momenta. For dust species \\(n\\), the relevant local rates in code units are the drag rate \\(\alpha_n = 1/T_{\mathrm{s},n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},n} = \xi_n |\mathbf{B}|\\). The implementation selects the resolved or stiff GIRK coefficients from the local timescale, using \\((\alpha_n^2 + \Omega_{\mathrm{L},n}^2)^{-1/2}\\) for the drag-plus-Lorentz system. The resolved coefficients used in `computeDustDragAndLorentz` may be selected at runtime with `dust.resolved_rk_scheme`: `GL4` chooses the current two-stage Gauss-Legendre coefficients, `Midpoint` chooses the implicit midpoint coefficients, and `TP2025` reuses the resolved-branch coefficients from `DustSources::computeDustDrag`.
+`DustSources::computeDustDragAndLorentz` integrates drag and Lorentz forces in the same source solve; it does not operator-split the Lorentz force from drag. The method uses a two-stage generalized implicit Runge-Kutta (GIRK) update for the local gas and dust momenta, with a conservative momentum exchange between the gas and dust that preserves the total gas-dust momentum to roundoff. The magnetic field used by the local source update is obtained by arithmetically averaging each face-centered magnetic-field component to the cell center.
+
+For dust species \\(n\\), the relevant local rates in code units are the drag rate \\(\alpha_n = 1/T_{\mathrm{s},n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},n} = \xi_n |\mathbf{B}|\\). The branch timescale is
+
+<script type="math/tex; mode=display">
+\tau_{\mathrm{DL}} = \max_{n=1}^{N}
+\left(\alpha_n^2+\Omega_{\mathrm{L},n}^2\right)^{-1/2}.
+</script>
+
+The resolved coefficients are used when the full transport timestep satisfies \\(\Delta t < \tau_{\mathrm{DL}}\\); otherwise, the stiff coefficients are used. Because both branches are implicit, the drag and gyrofrequency timescales do not impose an additional explicit timestep restriction. The resolved coefficients may be selected at runtime with `dust.resolved_rk_scheme`: `GL4` chooses the current two-stage Gauss-Legendre coefficients, `Midpoint` chooses the implicit midpoint coefficients, and `TP2025` reuses the resolved-branch coefficients from `DustSources::computeDustDrag`.
 
 ### Optional Picard iteration for dust–gas source update
 
-Users may optionally enable Picard iteration for the local update represented by \\(\mathcal{C}\\). When the stopping time depends on the gas or dust velocity, enabling iteration is required to maintain an implicit dust source update. This option applies to both `DustSources::computeDustDrag` and `DustSources::computeDustDragAndLorentz`. See [Runtime parameters](parameters.md) for details.
+Users may optionally enable Picard iteration for the local update represented by \\(\mathcal{C}\\). When the stopping time depends on state variables that evolve during the source update, such as the relative velocity, sound speed, or gas energy, enabling iteration is required to maintain an implicit dust source update. The iteration stops when the maximum change in the gas or dust speed is below a relative tolerance of \\(10^{-6}\\), with the iteration count capped at 20 in the current implementation. This option applies to both `DustSources::computeDustDrag` and `DustSources::computeDustDragAndLorentz`. See [Runtime parameters](parameters.md) for details.
 
 ### User-defined dust stopping time and charge
 
@@ -184,21 +195,27 @@ For charged dust in MHD, users must also specialize `DustSources::ComputeDustDim
 
 ## CFL Condition for Dust
 
-For the dust-gas coupled system with \\(N\\) dust species, we use the following CFL condition:
+For the dust-gas coupled system with \\(N\\) dust species, the CFL condition depends on whether MHD is enabled. Without MHD, we use
 
 <script type="math/tex; mode=display">
-\Delta t_{\mathrm{CFL}} = C_{\mathrm{CFL}} \cdot \min_{\mathrm{cells}} \left( \frac{\Delta x}{\max\left( |\mathbf{v}_{\mathrm{g}}| + c_{\mathrm{s}}, \max_{n=1}^{N} |\mathbf{v}_{\mathrm{d},n}| + c_{\mathrm{s}} \right)} \right).
+\Delta t_{\mathrm{CFL}} = C_{\mathrm{CFL}} \cdot \min_{\mathrm{cells}} \left( \frac{\Delta x_{\min}}{\max\left( |\mathbf{v}_{\mathrm{g}}| + c_{\mathrm{s}}, \max_{n=1}^{N} \left[|\mathbf{v}_{\mathrm{d},n}| + c_{\mathrm{s}}\right] \right)} \right).
+</script>
+
+When MHD is enabled, the sound speed is replaced by the maximum fast-magnetosonic speed over the coordinate directions, \\(c_{\mathrm{f,max}}\\):
+
+<script type="math/tex; mode=display">
+\Delta t_{\mathrm{CFL}} = C_{\mathrm{CFL}} \cdot \min_{\mathrm{cells}} \left( \frac{\Delta x_{\min}}{\max\left( |\mathbf{v}_{\mathrm{g}}| + c_{\mathrm{f,max}}, \max_{n=1}^{N} \left[|\mathbf{v}_{\mathrm{d},n}| + c_{\mathrm{f,max}}\right] \right)} \right).
 </script>
 
 ## Runtime Controls
 
 The following input parameters tune the dust module and are documented in more detail in [Runtime parameters](parameters.md):
 
-- `enable_iter_stoptime` – switch of iterative dust stopping time calculation.
-- `omega_drag_heating` – controls deposition of the drag-like heating contribution in the dust source update.
-- `omega_gyro_residual` – controls deposition of the gyrofrequency-dependent residual contribution in `computeDustDragAndLorentz`.
-- `resolved_rk_scheme` – selects the GIRK coefficients in resolved branch used by `DustSources::computeDustDragAndLorentz`. Supported values are `TP2025`, `GL4`, and `Midpoint`.
-- `print_iteration_counts` - switch to turn on/off printing of dust source iteration counts for debugging.
+- `dust.enable_iter_stoptime` – switch of iterative dust stopping time calculation.
+- `dust.omega_drag_heating` – controls deposition of the drag-like heating contribution in the dust source update.
+- `dust.omega_gyro_residual` – controls deposition of the gyrofrequency-dependent residual contribution in `computeDustDragAndLorentz`.
+- `dust.resolved_rk_scheme` – selects the GIRK coefficients in resolved branch used by `DustSources::computeDustDragAndLorentz`. Supported values are `TP2025`, `GL4`, and `Midpoint`.
+- `dust.print_iteration_counts` - switch to turn on/off printing of dust source iteration counts for debugging.
 - `dust.density_floor` - the minimum dust density value allowed in the simulation.
 - `dust.grain_radius` - optional dust grain radius values for problem setups that use the Kwok stopping-time helper.
 - `dust.grain_density` - optional dust grain material density values for problem setups that use the Kwok stopping-time helper.
