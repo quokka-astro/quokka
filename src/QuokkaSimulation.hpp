@@ -233,8 +233,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
-	amrex::Real shearViscosity_ = 0.0;	 // physical shear viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
-	amrex::Real bulkViscosity_ = 0.0;	 // physical bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
+	amrex::Real shearViscosity_ = 0.0;	 // shear viscosity coefficient; see viscous CFL limit below
+	amrex::Real bulkViscosity_ = 0.0;	 // bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
@@ -928,9 +928,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 		}
 	}
 
-	// diffusive CFL constraint for physical shear/bulk viscosity: dt <= cfl * dx^2 / (2*max(nu_shear,nu_bulk))
-	// unlike resistivity's eta (already a diffusivity), shear/bulk viscosity are dynamic coefficients, so
-	// the kinematic viscosity nu = mu/rho varies with local density; the signal is evaluated per cell
+	// diffusive CFL constraint for viscosity: dt <= cfl * dx^2 / (2*max(nu_shear,nu_bulk))
+	// nu = mu/rho depends on local density (unlike resistivity's eta), so evaluated per cell
 	// not enforced for problem_defined viscosity; the problem must ensure stability
 	if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
 		if (shearViscosity_ != 0.0 || bulkViscosity_ != 0.0) {
@@ -2876,8 +2875,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 						      flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2],
 						      reconstructGhost, nvars, nghost_Riemann);)
 
-	// add physical shear/bulk viscous fluxes on top of the Riemann-solver flux, mirroring how
-	// AddResistiveEnergyFlux is layered on top of ComputeEMF for physical resistivity
+	// viscous fluxes on top, mirroring AddResistiveEnergyFlux layered on top of ComputeEMF
 	if constexpr (Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
 		const auto &dx = geom[lev].CellSizeArray();
 		AMREX_D_TERM(HydroSystem<problem_t>::template AddViscousFluxes<FluxDir::X1>(flux[0], primVar, dx, shearViscosity_, bulkViscosity_);
@@ -3078,8 +3076,7 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 		     , hydroFOFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2], rightState_bfield[2],
 							flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructRange, nvars, nghost_Riemann);)
 
-	// add physical shear/bulk viscous fluxes on top of the first-order fallback flux too, so FOFC cells
-	// (troubled cells that fall back to this path, e.g. near a strong shock) don't silently lose viscosity
+	// also add here so FOFC-fallback cells (e.g. near a strong shock) don't silently lose viscosity
 	if constexpr (Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
 		const auto &dx = geom[lev].CellSizeArray();
 		AMREX_D_TERM(HydroSystem<problem_t>::template AddViscousFluxes<FluxDir::X1>(flux[0], primVar, dx, shearViscosity_, bulkViscosity_);

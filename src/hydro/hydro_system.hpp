@@ -1638,8 +1638,7 @@ void HydroSystem<problem_t>::AddViscousFluxes(amrex::MultiFab &x1Flux_mf, amrex:
 
 	const BL_PROFILE("HydroSystem::AddViscousFluxes()");
 
-	// index permutation for this sweep direction: N = face-normal, V/W = the two transverse directions,
-	// following the same convention as ComputeFluxes' velN_index/velV_index/velW_index.
+	// N = face-normal direction, V/W = the two transverse directions, as in ComputeFluxes
 	int velN_index = x1Velocity_index;
 	int velV_index = x2Velocity_index;
 	int velW_index = x3Velocity_index;
@@ -1689,8 +1688,7 @@ void HydroSystem<problem_t>::AddViscousFluxes(amrex::MultiFab &x1Flux_mf, amrex:
 		auto const q = primVar_in[bx];
 		auto flux = x1Flux_in[bx];
 
-		// cell "behind" the face along the normal direction: the face at (i,j,k) sits between this cell
-		// and (i,j,k) itself, matching the convention used by the Riemann-solver flux in ComputeFluxes.
+		// cell behind the face along the normal direction
 		const int im = i - delta_n[0];
 		const int jm = j - delta_n[1];
 		const int km = k - delta_n[2];
@@ -1700,8 +1698,7 @@ void HydroSystem<problem_t>::AddViscousFluxes(amrex::MultiFab &x1Flux_mf, amrex:
 		const amrex::Real dvv_dn = (q(i, j, k, velV_index) - q(im, jm, km, velV_index)) / dx_n;
 		const amrex::Real dvw_dn = (q(i, j, k, velW_index) - q(im, jm, km, velW_index)) / dx_n;
 
-		// transverse derivatives: average of the centered difference at the two cells bounding the face,
-		// following the stencil in Beattie, Federrath, Kriel et al. (2025), arXiv:2312.03984, appendix E.
+		// transverse derivatives: averaged centered difference, per Beattie et al. 2025 (arXiv:2312.03984) appendix E
 		const amrex::Real dvv_dv =
 		    0.25 / dx_v *
 		    ((q(i + delta_v[0], j + delta_v[1], k + delta_v[2], velV_index) - q(i - delta_v[0], j - delta_v[1], k - delta_v[2], velV_index)) +
@@ -1721,21 +1718,18 @@ void HydroSystem<problem_t>::AddViscousFluxes(amrex::MultiFab &x1Flux_mf, amrex:
 
 		const amrex::Real div_v = dvn_dn + dvv_dv + dvw_dw;
 
-		// sigma = 2*nu_shear*S + nu_bulk*(div v)*I, with S the traceless strain-rate tensor; only the
-		// tensor components acting on this face's normal direction are needed for its flux contribution.
+		// sigma = 2*nu_shear*S + nu_bulk*(div v)*I; only the normal-direction components are needed here
 		const amrex::Real sigma_nn = 2.0 * shearViscosity * dvn_dn + (bulkViscosity - (2.0 / 3.0) * shearViscosity) * div_v;
 		const amrex::Real sigma_nv = shearViscosity * (dvv_dn + dvn_dv);
 		const amrex::Real sigma_nw = shearViscosity * (dvw_dn + dvn_dw);
 
-		// the momentum equation is d(rho*v)/dt + div(F_advective) = div(sigma), i.e. F_total = F_advective - sigma
+		// d(rho*v)/dt = -div(F_advective) + div(sigma), so sigma enters the flux with a minus sign
 		flux(i, j, k, momN_index) -= sigma_nn;
 		flux(i, j, k, momV_index) -= sigma_nv;
 		flux(i, j, k, momW_index) -= sigma_nw;
 
 		if constexpr (!is_eos_isothermal()) {
-			// viscous heating: v.sigma at the face, using the same face-averaging convention as the
-			// transverse derivatives above (mass and momentum still diffuse under isothermal EOS; only
-			// this energy term is dropped, since there is no energy equation to add it to).
+			// viscous heating v.sigma; momentum still diffuses under isothermal EOS, only this is skipped
 			const amrex::Real v_face_n = 0.5 * (q(i, j, k, velN_index) + q(im, jm, km, velN_index));
 			const amrex::Real v_face_v = 0.5 * (q(i, j, k, velV_index) + q(im, jm, km, velV_index));
 			const amrex::Real v_face_w = 0.5 * (q(i, j, k, velW_index) + q(im, jm, km, velW_index));
