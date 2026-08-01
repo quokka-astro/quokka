@@ -182,6 +182,10 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
 
 	template <FluxDir DIR>
+	static void AddViscousFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &primVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+				     amrex::Real shearViscosity, amrex::Real bulkViscosity);
+
+	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
 
 	template <FluxDir DIR> static void ComputeFlatteningCoefficients(amrex::MultiFab const &primVar_mf, amrex::MultiFab &x1Chi_mf, int nghost);
@@ -1617,6 +1621,126 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		// calculate dust fluxes if enabled
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			DustSystem<problem_t>::template ComputeDustFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k);
+		}
+	});
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+void HydroSystem<problem_t>::AddViscousFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &primVar_mf,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real shearViscosity, amrex::Real bulkViscosity)
+{
+	static_assert(AMREX_SPACEDIM == 3, "HydroSystem::AddViscousFluxes currently supports 3D only.");
+
+	if (shearViscosity == 0.0 && bulkViscosity == 0.0) {
+		return;
+	}
+
+	const BL_PROFILE("HydroSystem::AddViscousFluxes()");
+
+	// index permutation for this sweep direction: N = face-normal, V/W = the two transverse directions,
+	// following the same convention as ComputeFluxes' velN_index/velV_index/velW_index.
+	int velN_index = x1Velocity_index;
+	int velV_index = x2Velocity_index;
+	int velW_index = x3Velocity_index;
+	int momN_index = x1Momentum_index;
+	int momV_index = x2Momentum_index;
+	int momW_index = x3Momentum_index;
+	amrex::Real dx_n = dx[0];
+	amrex::Real dx_v = dx[1];
+	amrex::Real dx_w = dx[2];
+	std::array<int, 3> delta_n{1, 0, 0};
+	std::array<int, 3> delta_v{0, 1, 0};
+	std::array<int, 3> delta_w{0, 0, 1};
+
+	if constexpr (DIR == FluxDir::X2) {
+		velN_index = x2Velocity_index;
+		velV_index = x3Velocity_index;
+		velW_index = x1Velocity_index;
+		momN_index = x2Momentum_index;
+		momV_index = x3Momentum_index;
+		momW_index = x1Momentum_index;
+		dx_n = dx[1];
+		dx_v = dx[2];
+		dx_w = dx[0];
+		delta_n = {0, 1, 0};
+		delta_v = {0, 0, 1};
+		delta_w = {1, 0, 0};
+	} else if constexpr (DIR == FluxDir::X3) {
+		velN_index = x3Velocity_index;
+		velV_index = x1Velocity_index;
+		velW_index = x2Velocity_index;
+		momN_index = x3Momentum_index;
+		momV_index = x1Momentum_index;
+		momW_index = x2Momentum_index;
+		dx_n = dx[2];
+		dx_v = dx[0];
+		dx_w = dx[1];
+		delta_n = {0, 0, 1};
+		delta_v = {1, 0, 0};
+		delta_w = {0, 1, 0};
+	}
+
+	auto const &primVar_in = primVar_mf.const_arrays();
+	auto x1Flux_in = x1Flux_mf.arrays();
+	amrex::IntVect const ng = x1Flux_mf.nGrowVect();
+
+	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		auto const q = primVar_in[bx];
+		auto flux = x1Flux_in[bx];
+
+		// cell "behind" the face along the normal direction: the face at (i,j,k) sits between this cell
+		// and (i,j,k) itself, matching the convention used by the Riemann-solver flux in ComputeFluxes.
+		const int im = i - delta_n[0];
+		const int jm = j - delta_n[1];
+		const int km = k - delta_n[2];
+
+		// normal-direction derivatives: one-sided difference across the face
+		const amrex::Real dvn_dn = (q(i, j, k, velN_index) - q(im, jm, km, velN_index)) / dx_n;
+		const amrex::Real dvv_dn = (q(i, j, k, velV_index) - q(im, jm, km, velV_index)) / dx_n;
+		const amrex::Real dvw_dn = (q(i, j, k, velW_index) - q(im, jm, km, velW_index)) / dx_n;
+
+		// transverse derivatives: average of the centered difference at the two cells bounding the face,
+		// following the stencil in Beattie, Federrath, Kriel et al. (2025), arXiv:2312.03984, appendix E.
+		const amrex::Real dvv_dv =
+		    0.25 / dx_v *
+		    ((q(i + delta_v[0], j + delta_v[1], k + delta_v[2], velV_index) - q(i - delta_v[0], j - delta_v[1], k - delta_v[2], velV_index)) +
+		     (q(im + delta_v[0], jm + delta_v[1], km + delta_v[2], velV_index) - q(im - delta_v[0], jm - delta_v[1], km - delta_v[2], velV_index)));
+		const amrex::Real dvn_dv =
+		    0.25 / dx_v *
+		    ((q(i + delta_v[0], j + delta_v[1], k + delta_v[2], velN_index) - q(i - delta_v[0], j - delta_v[1], k - delta_v[2], velN_index)) +
+		     (q(im + delta_v[0], jm + delta_v[1], km + delta_v[2], velN_index) - q(im - delta_v[0], jm - delta_v[1], km - delta_v[2], velN_index)));
+		const amrex::Real dvw_dw =
+		    0.25 / dx_w *
+		    ((q(i + delta_w[0], j + delta_w[1], k + delta_w[2], velW_index) - q(i - delta_w[0], j - delta_w[1], k - delta_w[2], velW_index)) +
+		     (q(im + delta_w[0], jm + delta_w[1], km + delta_w[2], velW_index) - q(im - delta_w[0], jm - delta_w[1], km - delta_w[2], velW_index)));
+		const amrex::Real dvn_dw =
+		    0.25 / dx_w *
+		    ((q(i + delta_w[0], j + delta_w[1], k + delta_w[2], velN_index) - q(i - delta_w[0], j - delta_w[1], k - delta_w[2], velN_index)) +
+		     (q(im + delta_w[0], jm + delta_w[1], km + delta_w[2], velN_index) - q(im - delta_w[0], jm - delta_w[1], km - delta_w[2], velN_index)));
+
+		const amrex::Real div_v = dvn_dn + dvv_dv + dvw_dw;
+
+		// sigma = 2*nu_shear*S + nu_bulk*(div v)*I, with S the traceless strain-rate tensor; only the
+		// tensor components acting on this face's normal direction are needed for its flux contribution.
+		const amrex::Real sigma_nn = 2.0 * shearViscosity * dvn_dn + (bulkViscosity - (2.0 / 3.0) * shearViscosity) * div_v;
+		const amrex::Real sigma_nv = shearViscosity * (dvv_dn + dvn_dv);
+		const amrex::Real sigma_nw = shearViscosity * (dvw_dn + dvn_dw);
+
+		// the momentum equation is d(rho*v)/dt + div(F_advective) = div(sigma), i.e. F_total = F_advective - sigma
+		flux(i, j, k, momN_index) -= sigma_nn;
+		flux(i, j, k, momV_index) -= sigma_nv;
+		flux(i, j, k, momW_index) -= sigma_nw;
+
+		if constexpr (!is_eos_isothermal()) {
+			// viscous heating: v.sigma at the face, using the same face-averaging convention as the
+			// transverse derivatives above (mass and momentum still diffuse under isothermal EOS; only
+			// this energy term is dropped, since there is no energy equation to add it to).
+			const amrex::Real v_face_n = 0.5 * (q(i, j, k, velN_index) + q(im, jm, km, velN_index));
+			const amrex::Real v_face_v = 0.5 * (q(i, j, k, velV_index) + q(im, jm, km, velV_index));
+			const amrex::Real v_face_w = 0.5 * (q(i, j, k, velW_index) + q(im, jm, km, velW_index));
+			const amrex::Real v_dot_sigma = v_face_n * sigma_nn + v_face_v * sigma_nv + v_face_w * sigma_nw;
+			flux(i, j, k, energy_index) -= v_dot_sigma;
 		}
 	});
 }
