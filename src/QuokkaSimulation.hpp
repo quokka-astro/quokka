@@ -233,6 +233,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
+	amrex::Real shearViscosity_ = 0.0;	 // physical shear viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
+	amrex::Real bulkViscosity_ = 0.0;	 // physical bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
@@ -287,6 +289,17 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    useDualEnergy_ == 0,
 				    "Physical resistivity requires use_dual_energy = 0: Ohmic heating is not yet added to the auxiliary energy equation.");
+			}
+		}
+		if constexpr (Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
+			const bool viscosity_active = (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) ||
+						       (shearViscosity_ != 0.0) || (bulkViscosity_ != 0.0);
+			if (viscosity_active) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0,
+								 "AMR subcycling is not supported with nonzero viscosity. Set do_subcycle = 0.");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(useDualEnergy_ == 0,
+								 "Physical viscosity requires use_dual_energy = 0: viscous heating is not yet "
+								 "added to the auxiliary energy equation.");
 			}
 		}
 	}
@@ -610,6 +623,26 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
+		if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
+			hpp.query("shear_viscosity", shearViscosity_);
+			hpp.query("bulk_viscosity", bulkViscosity_);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shearViscosity_ >= 0.0, "hydro.shear_viscosity must be >= 0.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bulkViscosity_ >= 0.0, "hydro.bulk_viscosity must be >= 0.");
+		} else if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::none ||
+				     Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) {
+			// hydro.shear_viscosity / hydro.bulk_viscosity are only read in the `constant` branch above;
+			// every other model falls through to here.
+			const bool shear_key_present = hpp.contains("shear_viscosity");
+			const bool bulk_key_present = hpp.contains("bulk_viscosity");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!shear_key_present && !bulk_key_present,
+							 "hydro.shear_viscosity or hydro.bulk_viscosity is set in the input file, but this "
+							 "problem's Physics_Traits::viscosity_model is not `constant`, so these values are "
+							 "ignored (with `none`, no viscosity is applied; with `problem_defined`, viscosity "
+							 "comes from the problem's computeViscosity function instead). This is a "
+							 "compile-time trait, not a runtime switch: to test viscosity with this problem, set "
+							 "`viscosity_model = ViscosityModel::constant` in its Physics_Traits specialization "
+							 "and rebuild.");
+		}
 	}
 
 	// set MHD runtime parameters
@@ -890,6 +923,28 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 				auto const &maxSignal = max_signal_speed_[level].array(iter);
 				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 					maxSignal(i, j, k) = std::max(maxSignal(i, j, k), resistive_signal);
+				});
+			}
+		}
+	}
+
+	// diffusive CFL constraint for physical shear/bulk viscosity: dt <= cfl * dx^2 / (2*max(nu_shear,nu_bulk))
+	// unlike resistivity's eta (already a diffusivity), shear/bulk viscosity are dynamic coefficients, so
+	// the kinematic viscosity nu = mu/rho varies with local density; the signal is evaluated per cell
+	// not enforced for problem_defined viscosity; the problem must ensure stability
+	if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
+		if (shearViscosity_ != 0.0 || bulkViscosity_ != 0.0) {
+			const auto &dx = geom[level].CellSizeArray();
+			const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+			const amrex::Real maxViscosity = std::max(shearViscosity_, bulkViscosity_);
+			for (amrex::MFIter iter(max_signal_speed_[level]); iter.isValid(); ++iter) {
+				const amrex::Box &indexRange = iter.validbox();
+				auto const &stateNew_cc = state_new_cc_[level].const_array(iter);
+				auto const &maxSignal = max_signal_speed_[level].array(iter);
+				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+					const amrex::Real rho = stateNew_cc(i, j, k, HydroSystem<problem_t>::density_index);
+					const amrex::Real viscous_signal = 2.0 * maxViscosity / (rho * dx_min);
+					maxSignal(i, j, k) = std::max(maxSignal(i, j, k), viscous_signal);
 				});
 			}
 		}
