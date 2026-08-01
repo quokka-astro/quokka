@@ -459,6 +459,15 @@ auto problem_main() -> int
 		}
 
 		QuokkaSimulation<EntropyWaveLinear> sim(BCs_cc, BCs_fc);
+
+		double num_periods = 1.0;
+		{
+			amrex::ParmParse const pp("setup");
+			pp.query("num_periods", num_periods);
+		}
+		const double wavelength = 2.0 * M_PI / k_magn;
+		sim.stopTime_ = num_periods * wavelength / adv_speed;
+
 		sim.setInitialConditions();
 		sim.evolve();
 

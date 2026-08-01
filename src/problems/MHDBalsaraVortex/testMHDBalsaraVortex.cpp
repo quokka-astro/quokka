@@ -218,11 +218,11 @@ auto problem_main() -> int
 	amrex::ParmParse const hpp("setup");
 
 	int advection_int = 0;
-	int num_orbits = 1;
+	int num_periods = 1;
 	hpp.query("vortex_Mach", vortex_Mach);
 	hpp.query("vortex_b_magn", vortex_b_magn);
 	hpp.query("advection", advection_int);
-	hpp.query("num_orbits", num_orbits);
+	hpp.query("num_periods", num_periods);
 	const double vortex_u_magn = vortex_Mach * sound_speed;
 	const bool is_advection_enabled = (advection_int != 0);
 	if (vortex_radius <= 0.0) {
@@ -253,11 +253,11 @@ auto problem_main() -> int
 		}
 		const double advection_distance = std::sqrt(length_x1 * length_x1 + length_x2 * length_x2);
 		const double advection_duration = advection_distance / vortex_u_magn;
-		stop_time = static_cast<double>(num_orbits) * advection_duration;
+		stop_time = static_cast<double>(num_periods) * advection_duration;
 	} else {
 		vortex_drift_x1 = vortex_drift_x2 = 0.0;
 		const double orbital_duration = 2.0 * std::numbers::pi / vortex_u_magn;
-		stop_time = static_cast<double>(num_orbits) * orbital_duration;
+		stop_time = static_cast<double>(num_periods) * orbital_duration;
 	}
 
 	sim.stopTime_ = stop_time;

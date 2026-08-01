@@ -591,6 +591,19 @@ auto problem_main() -> int
 		}
 
 		QuokkaSimulation<FastWaveConvergence> sim(BCs_cc, BCs_fc);
+
+		double num_periods = 1.0;
+		{
+			amrex::ParmParse const pp("setup");
+			pp.query("num_periods", num_periods);
+		}
+		const double wavelength = 2.0 * M_PI / k_magn;
+		const double a = sound_speed;
+		const double vA = alfven_speed;
+		const double cosθ = std::cos(angle_between_k_b0_rad);
+		const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
+		sim.stopTime_ = num_periods * wavelength / cf;
+
 		sim.setInitialConditions();
 		sim.evolve();
 

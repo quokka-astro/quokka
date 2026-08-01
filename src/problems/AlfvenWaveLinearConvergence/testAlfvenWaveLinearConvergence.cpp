@@ -567,6 +567,16 @@ auto problem_main() -> int
 		}
 
 		QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
+
+		double num_periods = 1.0;
+		{
+			amrex::ParmParse const pp("setup");
+			pp.query("num_periods", num_periods);
+		}
+		const double wavelength = 2.0 * M_PI / k_magn;
+		const double cA = alfven_speed * std::abs(std::cos(angle_between_k_b0_rad));
+		sim.stopTime_ = num_periods * wavelength / cA;
+
 		sim.setInitialConditions();
 		sim.evolve();
 
