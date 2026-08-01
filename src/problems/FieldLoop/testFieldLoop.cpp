@@ -248,6 +248,13 @@ auto problem_main() -> int
 	advection_vx = std::sin(advection_angle_rad);
 	advection_vy = std::cos(advection_angle_rad);
 
+	// advection speed in the x1-x2 plane is 1 by construction (sin^2 + cos^2 = 1); one period is one
+	// full crossing of the domain diagonal
+	double num_periods = 1.0;
+	pp.query("num_periods", num_periods);
+	const double domain_diagonal = std::hypot(sim.geom[0].ProbLength(0), sim.geom[0].ProbLength(1));
+	sim.stopTime_ = num_periods * domain_diagonal;
+
 	// default the region's z-bounds to the full domain, matching the prior (z-unbounded) behavior
 	if (pp.query("region_lo_z", region_lo_z) == 0) {
 		region_lo_z = sim.geom[0].ProbLo(2);
