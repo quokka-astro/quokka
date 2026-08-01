@@ -1669,8 +1669,7 @@ AMREX_GPU_DEVICE auto HydroSystem<problem_t>::ComputeViscousFlux(quokka::Array4V
 {
 	static_assert(AMREX_SPACEDIM == 3, "HydroSystem::ComputeViscousFlux currently only supports 3D.");
 
-	// dq<c>_d<dir> = derivative of q's <c>-component along <dir>; n/v/w are the local orthonormal basis,
-	// so derivatives are named after q (the array being read), not a new letter that could collide with them
+	// dq<comp>_d<dir> = derivative of q's <comp>-component along <dir>; n/v/w are the local orthonormal basis
 	// normal-direction derivatives: one-sided difference across the face, between cells i-1 and i
 	const amrex::Real dqn_dn = (q(i, j, k, velN_index) - q(i - 1, j, k, velN_index)) / dx_n;
 	const amrex::Real dqv_dn = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dx_n;
@@ -1693,7 +1692,7 @@ AMREX_GPU_DEVICE auto HydroSystem<problem_t>::ComputeViscousFlux(quokka::Array4V
 	const amrex::Real sigma_nv = shearViscosity * (dqv_dn + dqn_dv);
 	const amrex::Real sigma_nw = shearViscosity * (dqw_dn + dqn_dw);
 
-	// viscous heating q.sigma at the face; caller drops this for isothermal EOS
+	// viscous heating dot(q,sigma) at the face; caller drops this for isothermal EOS
 	const amrex::Real q_face_n = 0.5 * (q(i, j, k, velN_index) + q(i - 1, j, k, velN_index));
 	const amrex::Real q_face_v = 0.5 * (q(i, j, k, velV_index) + q(i - 1, j, k, velV_index));
 	const amrex::Real q_face_w = 0.5 * (q(i, j, k, velW_index) + q(i - 1, j, k, velW_index));
