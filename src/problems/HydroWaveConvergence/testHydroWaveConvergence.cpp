@@ -150,7 +150,9 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 		// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
 		err_sq += dU_k * dU_k;
 	}
-	const amrex::Real epsilon = std::sqrt(err_sq);
+	amrex::Real epsilon = std::sqrt(err_sq);
+	// fextract only gathers the full comparison to the IO processor; broadcast so every rank agrees
+	amrex::ParallelDescriptor::Bcast(&epsilon, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 	return epsilon;
 }
@@ -202,7 +204,9 @@ auto problem_main() -> int
 			}
 			err_sq += dU_k * dU_k;
 		}
-		const amrex::Real epsilon = std::sqrt(err_sq);
+		amrex::Real epsilon = std::sqrt(err_sq);
+		// fextract only gathers the full comparison to the IO processor; broadcast so every rank agrees
+		amrex::ParallelDescriptor::Bcast(&epsilon, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 		amrex::Print() << std::format("\nrun_sim error norm = {:.6e}  (tol = {:.6e})\n", static_cast<double>(epsilon), error_tol);
 		if (epsilon > error_tol) {
