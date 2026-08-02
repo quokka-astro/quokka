@@ -6,11 +6,16 @@
 /// \file testHydroShearWave.cpp
 /// \brief A single-mode transverse shear flow, decaying under physical shear viscosity.
 ///
-/// v_x(y,t) = amp*sin(2*pi*y)*exp(-decay_rate*t), decay_rate = shear_viscosity*(2*pi)^2/rho0.
-/// Since v_x depends only on y and v_y = v_z = 0, div(v) = 0 everywhere: this flow isolates
-/// shear viscosity exactly (bulk viscosity has no effect), and the decay rate is exact, not a
-/// weak-damping approximation, because a sinusoid is an eigenfunction of the 1D diffusion
+/// v_{flow_axis}(x_{grad_axis},t) = amp*sin(2*pi*x_{grad_axis})*exp(-decay_rate*t), decay_rate =
+/// shear_viscosity*(2*pi)^2/rho0. Since the flow-axis velocity depends only on the grad-axis
+/// coordinate and the other two velocity components are zero, div(v) = 0 everywhere: this flow
+/// isolates shear viscosity exactly (bulk viscosity has no effect), and the decay rate is exact,
+/// not a weak-damping approximation, because a sinusoid is an eigenfunction of the 1D diffusion
 /// operator that the shear-viscous momentum equation reduces to here.
+///
+/// flow_axis/grad_axis are runtime-selectable (setup.shear_flow_axis/setup.shear_grad_axis) so the
+/// same physical setup can be run with the roles of two axes swapped, checking that the sweep
+/// permutation and cross-derivative terms in ComputeViscousFlux are direction-independent.
 ///
 
 #include "hydro/hydro_system.hpp"
@@ -45,21 +50,26 @@ constexpr double amp = 1.0e-6; // velocity perturbation amplitude
 // shear decay rate: shear_viscosity*k^2/rho0, for the single hardcoded mode k=2*pi below; zero (no
 // decay) unless hydro.shear_viscosity is set
 AMREX_GPU_MANAGED double shear_decay_rate = 0.0; // NOLINT
+// which velocity component varies (0=x1,1=x2,2=x3), and which spatial coordinate it varies along;
+// must differ from each other, else div(v) != 0 and this is no longer a pure-shear flow
+AMREX_GPU_MANAGED int shear_flow_axis = 0; // NOLINT
+AMREX_GPU_MANAGED int shear_grad_axis = 1; // NOLINT
 
 AMREX_GPU_DEVICE void computeShearSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
 {
-	const amrex::Real y_C = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
-	const amrex::Real vx = amp * std::sin(2.0 * M_PI * y_C) * std::exp(-shear_decay_rate * time);
+	amrex::GpuArray<int, 3> const cell_idx{i, j, k};
+	const amrex::Real pos_C = prob_lo[shear_grad_axis] + (cell_idx[shear_grad_axis] + static_cast<amrex::Real>(0.5)) * dx[shear_grad_axis];
+	const amrex::Real v = amp * std::sin(2.0 * M_PI * pos_C) * std::exp(-shear_decay_rate * time);
 
 	const double Eint = P0 / (quokka::EOS_Traits<ShearWaveProblem>::gamma - 1.0);
-	const double Ekin = 0.5 * rho0 * vx * vx;
+	const double Ekin = 0.5 * rho0 * v * v;
 
 	state(i, j, k, HydroSystem<ShearWaveProblem>::density_index) = rho0;
-	state(i, j, k, HydroSystem<ShearWaveProblem>::x1Momentum_index) = rho0 * vx;
-	state(i, j, k, HydroSystem<ShearWaveProblem>::x2Momentum_index) = 0;
-	state(i, j, k, HydroSystem<ShearWaveProblem>::x3Momentum_index) = 0;
+	state(i, j, k, HydroSystem<ShearWaveProblem>::x1Momentum_index) = (shear_flow_axis == 0) ? rho0 * v : 0.0;
+	state(i, j, k, HydroSystem<ShearWaveProblem>::x2Momentum_index) = (shear_flow_axis == 1) ? rho0 * v : 0.0;
+	state(i, j, k, HydroSystem<ShearWaveProblem>::x3Momentum_index) = (shear_flow_axis == 2) ? rho0 * v : 0.0;
 	state(i, j, k, HydroSystem<ShearWaveProblem>::energy_index) = Eint + Ekin;
 	state(i, j, k, HydroSystem<ShearWaveProblem>::internalEnergy_index) = Eint;
 }
@@ -79,10 +89,19 @@ template <> void QuokkaSimulation<ShearWaveProblem>::setInitialConditionsOnGrid(
 	});
 }
 
-// Sets shear_decay_rate from hydro.shear_viscosity. Zero (no decay) when absent, recovering the
-// undamped shear flow.
+// Sets shear_decay_rate from hydro.shear_viscosity, and flow_axis/grad_axis from
+// setup.shear_flow_axis/setup.shear_grad_axis. Zero decay when hydro.shear_viscosity is absent,
+// recovering the undamped shear flow.
 void configureShearViscousParameters()
 {
+	{
+		amrex::ParmParse const pp("setup");
+		pp.query("shear_flow_axis", shear_flow_axis);
+		pp.query("shear_grad_axis", shear_grad_axis);
+	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shear_flow_axis != shear_grad_axis,
+					 "setup.shear_flow_axis must differ from setup.shear_grad_axis (else div(v) != 0).");
+
 	double shearViscosity = 0.0;
 	amrex::ParmParse const hpp("hydro");
 	hpp.query("shear_viscosity", shearViscosity);
@@ -90,7 +109,8 @@ void configureShearViscousParameters()
 	constexpr double k_magn = 2.0 * M_PI; // single hardcoded mode, box length 1
 	shear_decay_rate = shearViscosity * k_magn * k_magn / rho0;
 	if (shearViscosity > 0.0) {
-		amrex::Print() << "Hydro shear wave (viscous): decay_rate=" << shear_decay_rate << "\n";
+		amrex::Print() << "Hydro shear wave (viscous): flow_axis=" << shear_flow_axis << " grad_axis=" << shear_grad_axis
+			       << " decay_rate=" << shear_decay_rate << "\n";
 	}
 }
 
@@ -134,14 +154,14 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 	sim.evolve();
 
-	// extract along y (idir=1), at fixed x=z=0.5 -- any x,z slice gives the same profile
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 1, 0.5);
+	// extract along grad_axis, at the midplane of the other two -- any slice there gives the same profile
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], shear_grad_axis, 0.5);
 	const int ny_final = static_cast<int>(position.size());
 
 	// analytic solution at the final simulation time
 	amrex::MultiFab exactState(sim.boxArray(0), sim.DistributionMap(0), QuokkaSimulation<ShearWaveProblem>::nvars_, 0);
 	fillShearSolutionState(exactState, sim.geom[0].CellSizeArray(), sim.geom[0].ProbLoArray(), sim.tNew_[0]);
-	auto [pos_exact, val_exact] = fextract(exactState, sim.geom[0], 1, 0.5);
+	auto [pos_exact, val_exact] = fextract(exactState, sim.geom[0], shear_grad_axis, 0.5);
 
 	amrex::Real err_sq = 0.;
 	for (int n = 0; n < QuokkaSimulation<ShearWaveProblem>::nvars_; ++n) {
