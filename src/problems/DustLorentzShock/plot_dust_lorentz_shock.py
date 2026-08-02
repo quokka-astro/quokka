@@ -84,9 +84,6 @@ CASE_FILES = {
     "eps010_omega_ts20": "dust_lorentz_shock_eps010_omega_ts20.csv",
 }
 
-REGRESSION_CASES = ("eps001_omega_ts0", "eps001_omega_ts20", "eps010_omega_ts20")
-
-
 def read_profile(path: Path) -> dict[str, list[float]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -95,10 +92,6 @@ def read_profile(path: Path) -> dict[str, list[float]]:
             for key, value in row.items():
                 columns[key].append(float(value) if value not in (None, "") else float("nan"))
     return columns
-
-
-def has_required_files(data_dir: Path, case_names: tuple[str, ...]) -> bool:
-    return all((data_dir / CASE_FILES[case_name]).exists() for case_name in case_names)
 
 
 def plot_velocity_panel(
@@ -112,7 +105,7 @@ def plot_velocity_panel(
     dust_line, = ax.plot(profile["x"], profile["v_dx"], color="black")
     gas_line, = ax.plot(profile["x"], profile["v_gx"], color="red")
     guiding_line = None
-    if guiding_key is not None and guiding_key in profile:
+    if guiding_key is not None:
         guiding_line, = ax.plot(profile["x"], profile[guiding_key], color="black", linestyle="--")
     ax.set_xlim(0.6, 1.0)
     ax.set_ylim(0.0, 4.0)
@@ -191,9 +184,6 @@ def main() -> int:
     data_dir = args.data_dir.resolve()
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    if not has_required_files(data_dir, REGRESSION_CASES):
-        raise FileNotFoundError("Missing one or more DustLorentzShock CSV files.")
 
     output = make_regression_figure(data_dir, output_dir)
     print(output)

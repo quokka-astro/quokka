@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Convert DustyAlfvenWave CSV files into four 2x3 panel figures."""
+"""Plot multifluid and tracer diagnostics for DustyAlfvenWave."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import csv
 import os
 import shutil
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 _cache_root = Path(tempfile.gettempdir()) / "quokka-matplotlib-cache"
@@ -25,6 +26,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 DOUBLE_COLUMN_WIDTH = 6.9
+FIGURE_WIDTH = DOUBLE_COLUMN_WIDTH + 0.35
 
 _LATEX_AVAILABLE = shutil.which("latex") is not None
 
@@ -90,6 +92,12 @@ OMEGA_CASES = (
     ("omega_low", r"$-\Omega_L/\Omega_{\rm AW}=0.1$"),
 )
 
+EPSILON_TOP_LIMITS = ((-0.1, 0.1), (-0.1, 0.1), (-0.5, 0.5))
+EPSILON_BOTTOM_LIMITS = ((-0.58, 0.58),) * 3
+OMEGA_LIMITS = ((-0.5, 0.5),) * 3
+
+CasePlotter = Callable[[plt.Axes, plt.Axes, Path, str, str], None]
+
 
 def read_csv(path: Path) -> dict[str, list[float]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
@@ -101,35 +109,29 @@ def read_csv(path: Path) -> dict[str, list[float]]:
     return columns
 
 
-def require_files(data_dir: Path, sweep: str, cases: tuple[tuple[str, str], ...]) -> None:
-    missing: list[Path] = []
-    for tag, _ in cases:
-        for kind in ("particle_profile", "particle_history", "particle_history_dense"):
-            path = data_dir / f"dusty_alfven_{sweep}_{tag}_{kind}.csv"
-            if not path.exists():
-                missing.append(path)
-    if missing:
-        names = "\n".join(str(path) for path in missing)
-        raise FileNotFoundError(f"Missing DustyAlfvenWave particle CSV files:\n{names}")
+def plot_multifluid_case(profile_ax: plt.Axes, history_ax: plt.Axes, data_dir: Path, sweep: str, tag: str) -> None:
+    profile = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_profile.csv")
+    history = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_history.csv")
+
+    profile_ax.plot(profile["z"], profile["ref_gas_vx"], color="tab:red", label="gas")
+    profile_ax.plot(profile["z"], profile["ref_dust_vx"], color="black", label="dust")
+    profile_ax.plot(profile["z"], profile["gas_vx"], color="tab:red", linestyle="None", marker="s", markevery=4)
+    profile_ax.plot(profile["z"], profile["dust_vx"], color="black", linestyle="None", marker="s", markevery=4)
+    history_ax.plot(history["t"], history["ref_dust_vx"], color="black")
+    history_ax.plot(history["t"], history["dust_vx"], color="black", linestyle="None", marker="s", markevery=2)
 
 
-def plot_particle_profile_panel(ax: plt.Axes, profile: dict[str, list[float]], title: str) -> None:
-    ax.plot(profile["z_ref"], profile["gas_vx_ref"], color="tab:red", label="gas")
-    ax.plot(profile["z_ref"], profile["dust_vx_ref"], color="black", label="dust")
-    ax.plot(profile["z_num"], profile["gas_vx_num"], color="tab:red", linestyle="None", marker="s", markevery=4)
-    ax.plot(profile["z_num"], profile["dust_vx_num"], color="black", linestyle="None", marker="s", markevery=4)
-    ax.set_xlim(0.0, 1.0)
-    ax.set_title(title)
+def plot_tracer_case(profile_ax: plt.Axes, history_ax: plt.Axes, data_dir: Path, sweep: str, tag: str) -> None:
+    profile = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_particle_profile.csv")
+    history = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_particle_history.csv")
+    dense_history = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_particle_history_dense.csv")
 
-
-def plot_particle_history_panel(ax: plt.Axes, history: dict[str, list[float]], dense_history: dict[str, list[float]]) -> None:
-    ax.plot(dense_history["t"], dense_history["ref_dust_vx"], color="black")
-    ax.plot(history["t"], history["dust_vx"], color="black", linestyle="None", marker="s", markevery=2)
-    ax.set_xlim(0.0, 5.0)
-
-
-def figure_width() -> float:
-    return DOUBLE_COLUMN_WIDTH + 0.35
+    profile_ax.plot(profile["z_ref"], profile["gas_vx_ref"], color="tab:red", label="gas")
+    profile_ax.plot(profile["z_ref"], profile["dust_vx_ref"], color="black", label="dust")
+    profile_ax.plot(profile["z_num"], profile["gas_vx_num"], color="tab:red", linestyle="None", marker="s", markevery=4)
+    profile_ax.plot(profile["z_num"], profile["dust_vx_num"], color="black", linestyle="None", marker="s", markevery=4)
+    history_ax.plot(dense_history["t"], dense_history["ref_dust_vx"], color="black")
+    history_ax.plot(history["t"], history["dust_vx"], color="black", linestyle="None", marker="s", markevery=2)
 
 
 def make_figure(
@@ -137,34 +139,22 @@ def make_figure(
     output_dir: Path,
     sweep: str,
     cases: tuple[tuple[str, str], ...],
+    plot_case: CasePlotter,
     filename: str,
-    y_limits: tuple[float, float] | None = None,
-    top_row_limits: tuple[tuple[float, float], ...] | None = None,
-    bottom_row_limits: tuple[tuple[float, float], ...] | None = None,
+    top_row_limits: tuple[tuple[float, float], ...],
+    bottom_row_limits: tuple[tuple[float, float], ...],
 ) -> Path:
-    require_files(data_dir, sweep, cases)
-
-    fig, axes = plt.subplots(2, len(cases), figsize=(figure_width(), 4.35), sharex="row")
-    if len(cases) == 1:
-        axes = axes.reshape(2, 1)
+    fig, axes = plt.subplots(2, len(cases), figsize=(FIGURE_WIDTH, 4.35), sharex="row")
     fig.subplots_adjust(left=0.08, right=0.985, bottom=0.12, top=0.90, wspace=0.24, hspace=0.28)
 
     for column, (tag, title) in enumerate(cases):
-        profile = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_particle_profile.csv")
-        history = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_particle_history.csv")
-        dense_history = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_particle_history_dense.csv")
-
-        plot_particle_profile_panel(axes[0, column], profile, title)
-        plot_particle_history_panel(axes[1, column], history, dense_history)
-        axes[0, column].set_xlabel(r"$z$", labelpad=1.5)
-        axes[1, column].set_xlabel(r"$t$", labelpad=1.0)
-        if y_limits is not None:
-            axes[0, column].set_ylim(*y_limits)
-            axes[1, column].set_ylim(*y_limits)
-        if top_row_limits is not None:
-            axes[0, column].set_ylim(*top_row_limits[column])
-        if bottom_row_limits is not None:
-            axes[1, column].set_ylim(*bottom_row_limits[column])
+        profile_ax = axes[0, column]
+        history_ax = axes[1, column]
+        plot_case(profile_ax, history_ax, data_dir, sweep, tag)
+        profile_ax.set(xlim=(0.0, 1.0), ylim=top_row_limits[column], title=title)
+        history_ax.set(xlim=(0.0, 5.0), ylim=bottom_row_limits[column])
+        profile_ax.set_xlabel(r"$z$", labelpad=1.5)
+        history_ax.set_xlabel(r"$t$", labelpad=1.0)
 
     axes[0, 0].set_ylabel(r"$v_x$")
     axes[1, 0].set_ylabel(r"$v_{d,x}$")
@@ -195,21 +185,41 @@ def main() -> int:
             output_dir,
             "epsilon",
             EPSILON_CASES,
-            "dusty_alfven_epsilon.pdf",
-            top_row_limits=((-0.1, 0.1), (-0.1, 0.1), (-0.5, 0.5)),
-            bottom_row_limits=((-0.58, 0.58), (-0.58, 0.58), (-0.58, 0.58)),
+            plot_multifluid_case,
+            "dusty_alfven_epsilon_multifluid.pdf",
+            EPSILON_TOP_LIMITS,
+            EPSILON_BOTTOM_LIMITS,
         ),
-        make_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega.pdf", y_limits=(-0.5, 0.5)),
+        make_figure(
+            data_dir,
+            output_dir,
+            "omega",
+            OMEGA_CASES,
+            plot_multifluid_case,
+            "dusty_alfven_omega_multifluid.pdf",
+            OMEGA_LIMITS,
+            OMEGA_LIMITS,
+        ),
         make_figure(
             data_dir,
             output_dir,
             "epsilon",
             EPSILON_CASES,
-            "dusty_alfven_epsilon_paper_like.pdf",
-            top_row_limits=((-0.1, 0.1), (-0.1, 0.1), (-0.5, 0.5)),
-            bottom_row_limits=((-0.58, 0.58), (-0.58, 0.58), (-0.58, 0.58)),
+            plot_tracer_case,
+            "dusty_alfven_epsilon_tracer.pdf",
+            EPSILON_TOP_LIMITS,
+            EPSILON_BOTTOM_LIMITS,
         ),
-        make_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega_paper_like.pdf", y_limits=(-0.5, 0.5)),
+        make_figure(
+            data_dir,
+            output_dir,
+            "omega",
+            OMEGA_CASES,
+            plot_tracer_case,
+            "dusty_alfven_omega_tracer.pdf",
+            OMEGA_LIMITS,
+            OMEGA_LIMITS,
+        ),
     ]
     for output in outputs:
         print(output)

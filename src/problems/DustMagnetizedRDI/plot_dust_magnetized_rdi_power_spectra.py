@@ -86,10 +86,6 @@ def read_summary(path: Path) -> dict[str, str]:
         return {str(row["key"]): str(row["value"]) for row in csv.DictReader(handle)}
 
 
-def summary_float(summary: dict[str, str], key: str) -> float:
-    return float(summary[key])
-
-
 def load_stage_fields(data_dir: Path, summary: dict[str, str]) -> tuple[dict[str, np.ndarray], np.ndarray]:
     import yt
 
@@ -147,19 +143,13 @@ def mhd_mode_power_spectra(
     wavenumber: np.ndarray,
     summary: dict[str, str],
 ) -> tuple[np.ndarray, dict[str, np.ndarray], float]:
-    background_field = np.array(
-        [
-            summary_float(summary, "Bx0"),
-            summary_float(summary, "By0"),
-            summary_float(summary, "Bz0"),
-        ]
-    )
+    background_field = np.array([float(summary[key]) for key in ("Bx0", "By0", "Bz0")])
     b_hat = background_field / np.linalg.norm(background_field)
     k_parallel_scalar = np.einsum("i...,i->...", k_vector, b_hat)
     k_parallel = b_hat[:, np.newaxis, np.newaxis, np.newaxis] * k_parallel_scalar
     k_perpendicular = k_vector - k_parallel
 
-    alpha = 0.5 * summary_float(summary, "beta") * summary_float(summary, "gamma")
+    alpha = 0.5 * float(summary["beta"]) * float(summary["gamma"])
     k_squared = wavenumber * wavenumber
     discriminant = (1.0 + alpha) ** 2 - 4.0 * alpha * k_parallel_scalar**2 / np.where(k_squared > 0.0, k_squared, 1.0)
     root = np.sqrt(discriminant)
@@ -187,8 +177,10 @@ def mhd_mode_power_spectra(
     closure_error = abs(
         sum(np.sum(power[nonzero]) for power in mode_power.values()) / np.sum(total_power[nonzero]) - 1.0
     )
-    spectra = {name: shell_average(power, wavenumber)[1] for name, power in mode_power.items()}
-    k = shell_average(total_power, wavenumber)[0]
+    k, alfven_spectrum = shell_average(mode_power["alfven"], wavenumber)
+    _, slow_spectrum = shell_average(mode_power["slow"], wavenumber)
+    _, fast_spectrum = shell_average(mode_power["fast"], wavenumber)
+    spectra = {"alfven": alfven_spectrum, "slow": slow_spectrum, "fast": fast_spectrum}
     return k, spectra, closure_error
 
 
