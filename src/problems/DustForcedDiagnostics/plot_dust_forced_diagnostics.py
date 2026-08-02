@@ -97,11 +97,11 @@ def read_rows(path: Path) -> list[dict[str, float | str]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
-            parsed: dict[str, float | str] = {"scheme": row["scheme"] or ""}
+            parsed: dict[str, float | str] = {"scheme": row["scheme"]}
             for key, value in row.items():
                 if key == "scheme":
                     continue
-                parsed[key] = float(value) if value not in (None, "") else float("nan")
+                parsed[key] = float(value)
             rows.append(parsed)
     return rows
 
@@ -115,11 +115,7 @@ def group_by_scheme(rows: list[dict[str, float | str]]) -> dict[str, list[dict[s
     return grouped
 
 
-def paper_legend_handles() -> list[Line2D]:
-    return [Line2D([], [], color=color, linestyle="-", label=label) for _, label, color, _ in SCHEMES]
-
-
-def reference_legend_handles() -> list[Line2D]:
+def legend_handles() -> list[Line2D]:
     return [Line2D([], [], color=color, linestyle="-", label=label) for _, label, color, _ in SCHEMES]
 
 
@@ -129,28 +125,19 @@ def plot_panel(
     value_key: str,
     theory_key: str,
     ylabel: str,
-    *,
-    legend_handles: list[Line2D] | None = None,
 ) -> None:
-    boundary_dt = None
-
-    for slug, label, color, marker in SCHEMES:
-        rows = grouped.get(slug, [])
-        if not rows:
-            continue
+    for slug, _, color, marker in SCHEMES:
+        rows = grouped[slug]
 
         requested_dt = [float(row["requested_dt"]) for row in rows]
         values = [max(float(row[value_key]), float(row["plot_floor"])) for row in rows]
         theory_values = [max(float(row[theory_key]), float(row["plot_floor"])) for row in rows]
-        boundary_dt = float(rows[0]["resolved_stiff_boundary_dt"])
-
         ax.plot(
             requested_dt,
             values,
             color=color,
             marker=marker,
             linestyle="None",
-            label="_nolegend_",
             zorder=3,
         )
         ax.plot(
@@ -158,59 +145,52 @@ def plot_panel(
             theory_values,
             color=color,
             linestyle="-",
-            label="_nolegend_",
             zorder=2,
         )
 
-    if boundary_dt is not None:
-        ax.axvline(boundary_dt, color="black", linestyle=":", zorder=1)
+    boundary_dt = float(grouped[SCHEMES[0][0]][0]["resolved_stiff_boundary_dt"])
+    ax.axvline(boundary_dt, color="black", linestyle=":", zorder=1)
 
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.xaxis.set_minor_locator(NullLocator())
     ax.yaxis.set_minor_locator(NullLocator())
-    ax.tick_params(which="minor", bottom=False, top=False, left=False, right=False)
     ax.set_ylabel(ylabel)
-    if legend_handles is not None:
-        ax.legend(handles=legend_handles, loc="best")
+    ax.legend(handles=legend_handles(), loc="best")
+
+
+def make_panel_figure(
+    grouped: dict[str, list[dict[str, float | str]]],
+    output_path: Path,
+    value_key: str,
+    theory_key: str,
+    ylabel: str,
+) -> Path:
+    fig, ax = plt.subplots(1, 1, figsize=(SINGLE_COLUMN_WIDTH, 2.35))
+    plot_panel(ax, grouped, value_key, theory_key, ylabel)
+    ax.set_xlabel(r"$\Delta t$")
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+    return output_path
 
 
 def make_figure(data_dir: Path, output_dir: Path) -> tuple[Path, Path]:
     grouped = group_by_scheme(read_rows(data_dir / DATA_FILE))
-
-    fig, ax = plt.subplots(1, 1, figsize=(SINGLE_COLUMN_WIDTH, 2.35))
-
-    plot_panel(
-        ax,
+    output_path = make_panel_figure(
         grouped,
+        output_dir / OUTPUT_FILE,
         "final_data_error",
         "terminal_error",
         r"distance to $\boldsymbol{w}_*$",
-        legend_handles=paper_legend_handles(),
     )
-
-    ax.set_xlabel(r"$\Delta t$")
-    fig.tight_layout()
-
-    output_path = output_dir / OUTPUT_FILE
-    fig.savefig(output_path)
-    plt.close(fig)
-
-    ref_fig, ref_ax = plt.subplots(1, 1, figsize=(SINGLE_COLUMN_WIDTH, 2.35))
-    plot_panel(
-        ref_ax,
+    reference_output_path = make_panel_figure(
         grouped,
+        output_dir / REFERENCE_OUTPUT_FILE,
         "final_to_fixed_point_error",
         "predicted_final_to_fixed_point_error",
         r"distance to $\boldsymbol{w}_{\rm fp}$",
-        legend_handles=reference_legend_handles(),
     )
-    ref_ax.set_xlabel(r"$\Delta t$")
-    ref_fig.tight_layout()
-
-    reference_output_path = output_dir / REFERENCE_OUTPUT_FILE
-    ref_fig.savefig(reference_output_path)
-    plt.close(ref_fig)
     return output_path, reference_output_path
 
 
@@ -226,9 +206,6 @@ def main() -> int:
     data_dir = args.data_dir.resolve()
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    if not (data_dir / DATA_FILE).exists():
-        raise FileNotFoundError(f"Missing required CSV file: {DATA_FILE}")
 
     output, reference_output = make_figure(data_dir, output_dir)
     print(output)

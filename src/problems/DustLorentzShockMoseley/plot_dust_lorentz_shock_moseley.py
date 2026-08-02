@@ -79,25 +79,21 @@ else:
 
 
 CASES = (
-    {
-        "tag": "moseley_eps1em4_omega1p8_ts0p04",
-        "title": "$\\epsilon = 10^{-4},\\ \\Omega_{\\rm L} t_{\\rm s} = 1.8$\n$ t_{\\rm s} = 0.04\\,L/c_{\\rm s}$",
-    },
-    {
-        "tag": "moseley_eps1em1_omega3p0_ts0p04",
-        "title": "$\\epsilon = 10^{-1},\\ \\Omega_{\\rm L} t_{\\rm s} = 3.0$\n$ t_{\\rm s} = 0.04\\,L/c_{\\rm s}$",
-    },
-    {
-        "tag": "moseley_eps1em4_omega12_ts0p10",
-        "title": "$\\epsilon = 10^{-4},\\ \\Omega_{\\rm L} t_{\\rm s} = 12$\n$ t_{\\rm s} = 0.10\\,L/c_{\\rm s}$",
-    },
+    (
+        "moseley_eps1em4_omega1p8_ts0p04",
+        "$\\epsilon = 10^{-4},\\ \\Omega_{\\rm L} t_{\\rm s} = 1.8$\n$ t_{\\rm s} = 0.04\\,L/c_{\\rm s}$",
+    ),
+    (
+        "moseley_eps1em1_omega3p0_ts0p04",
+        "$\\epsilon = 10^{-1},\\ \\Omega_{\\rm L} t_{\\rm s} = 3.0$\n$ t_{\\rm s} = 0.04\\,L/c_{\\rm s}$",
+    ),
+    (
+        "moseley_eps1em4_omega12_ts0p10",
+        "$\\epsilon = 10^{-4},\\ \\Omega_{\\rm L} t_{\\rm s} = 12$\n$ t_{\\rm s} = 0.10\\,L/c_{\\rm s}$",
+    ),
 )
 
 OUTPUT_FILE = "dust_lorentz_shock_moseley.pdf"
-
-
-def case_filename(tag: str) -> str:
-    return f"dust_lorentz_shock_{tag}.csv"
 
 
 def read_profile(path: Path) -> dict[str, list[float]]:
@@ -106,14 +102,11 @@ def read_profile(path: Path) -> dict[str, list[float]]:
         columns: dict[str, list[float]] = {name: [] for name in reader.fieldnames or []}
         for row in reader:
             for key, value in row.items():
-                if value is None or value == "":
-                    columns[key].append(float("nan"))
-                else:
-                    columns[key].append(float(value))
+                columns[key].append(float(value))
     return columns
 
 
-def plot_velocity_panel(ax, profile: dict[str, list[float]], title: str, *, show_legend: bool = False) -> None:
+def plot_velocity_panel(ax: plt.Axes, profile: dict[str, list[float]], title: str, *, show_legend: bool = False) -> None:
     dust_line, = ax.plot(profile["x"], profile["v_dx"], color="black")
     gas_line, = ax.plot(profile["x"], profile["v_gx"], color="red")
     guiding_line, = ax.plot(profile["x"], profile["v_guiding_x"], color="black", linestyle="--")
@@ -128,7 +121,7 @@ def plot_velocity_panel(ax, profile: dict[str, list[float]], title: str, *, show
         )
 
 
-def plot_density_panel(ax, profile: dict[str, list[float]]) -> None:
+def plot_density_panel(ax: plt.Axes, profile: dict[str, list[float]]) -> None:
     ax.plot(profile["x"], profile["rho_d_scaled"], color="black")
     ax.plot(profile["x"], profile["rho_g"], color="red")
     ax.set_xlim(0.6, 1.0)
@@ -136,18 +129,17 @@ def plot_density_panel(ax, profile: dict[str, list[float]]) -> None:
 
 
 def make_figure(data_dir: Path, output_dir: Path) -> Path:
-    profiles = [read_profile(data_dir / case_filename(case["tag"])) for case in CASES]
-
     fig, axes = plt.subplots(2, 3, figsize=(DOUBLE_COLUMN_WIDTH, 4.05), sharex="col")
 
-    for column, (case, profile) in enumerate(zip(CASES, profiles)):
-        plot_velocity_panel(axes[0, column], profile, case["title"], show_legend=(column == 2))
+    for column, (tag, title) in enumerate(CASES):
+        profile = read_profile(data_dir / f"dust_lorentz_shock_{tag}.csv")
+        plot_velocity_panel(axes[0, column], profile, title, show_legend=(column == 2))
         plot_density_panel(axes[1, column], profile)
 
     axes[0, 0].set_ylabel(r"$v_x$")
     axes[1, 0].set_ylabel("density (scaled)")
-    for column in range(3):
-        axes[1, column].set_xlabel("x")
+    for ax in axes[1]:
+        ax.set_xlabel("x")
 
     fig.tight_layout()
     output_path = output_dir / OUTPUT_FILE
@@ -168,11 +160,6 @@ def main() -> int:
     data_dir = args.data_dir.resolve()
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    for case in CASES:
-        filename = case_filename(case["tag"])
-        if not (data_dir / filename).exists():
-            raise FileNotFoundError(f"Missing required CSV file: {filename}")
 
     output = make_figure(data_dir, output_dir)
     print(output)

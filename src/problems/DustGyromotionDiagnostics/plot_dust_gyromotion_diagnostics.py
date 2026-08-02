@@ -96,11 +96,11 @@ def read_rows(path: Path) -> list[dict[str, float | str]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
-            parsed: dict[str, float | str] = {"scheme": row["scheme"] or ""}
+            parsed: dict[str, float | str] = {"scheme": row["scheme"]}
             for key, value in row.items():
                 if key == "scheme":
                     continue
-                parsed[key] = float(value) if value not in (None, "") else float("nan")
+                parsed[key] = float(value)
             rows.append(parsed)
     return rows
 
@@ -127,25 +127,18 @@ def plot_panel(
     *,
     show_legend: bool,
 ) -> None:
-    boundary_dt = None
-
-    for slug, label, color, marker in SCHEMES:
-        rows = grouped.get(slug, [])
-        if not rows:
-            continue
+    for slug, _, color, marker in SCHEMES:
+        rows = grouped[slug]
 
         requested_dt = [float(row["requested_dt"]) for row in rows]
         values = [max(float(row[value_key]), float(row["plot_floor"])) for row in rows]
         theory_values = [max(abs(float(row[theory_key])), float(row["plot_floor"])) for row in rows]
-        boundary_dt = float(rows[0]["resolved_stiff_boundary_dt"])
-
         ax.plot(
             requested_dt,
             values,
             color=color,
             marker=marker,
             linestyle="None",
-            label=label if show_legend else "_nolegend_",
             zorder=3,
         )
         ax.plot(
@@ -153,18 +146,16 @@ def plot_panel(
             theory_values,
             color=color,
             linestyle="-",
-            label="_nolegend_",
             zorder=2,
         )
 
-    if boundary_dt is not None:
-        ax.axvline(boundary_dt, color="black", linestyle=":")
+    boundary_dt = float(grouped[SCHEMES[0][0]][0]["resolved_stiff_boundary_dt"])
+    ax.axvline(boundary_dt, color="black", linestyle=":")
 
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.xaxis.set_minor_locator(NullLocator())
     ax.yaxis.set_minor_locator(NullLocator())
-    ax.tick_params(which="minor", bottom=False, top=False, left=False, right=False)
     ax.set_ylabel(ylabel)
     if show_legend:
         ax.legend(handles=legend_handles(), loc="best")
@@ -173,7 +164,7 @@ def plot_panel(
 def make_figure(data_dir: Path, output_dir: Path) -> Path:
     grouped = group_by_scheme(read_rows(data_dir / DATA_FILE))
 
-    fig, axes = plt.subplots(2, 1, figsize=(SINGLE_COLUMN_WIDTH, 4.2), sharex=True, gridspec_kw={"hspace": 0.0})
+    fig, axes = plt.subplots(2, 1, figsize=(SINGLE_COLUMN_WIDTH, 4.2), sharex=True)
     fig.subplots_adjust(left=0.18, right=0.98, bottom=0.10, top=0.98, hspace=0.0)
 
     plot_panel(axes[0], grouped, "abs_delta_log_amplitude", "theory_delta_log_amplitude", r"$|\delta a|$", show_legend=True)
@@ -201,9 +192,6 @@ def main() -> int:
     data_dir = args.data_dir.resolve()
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    if not (data_dir / DATA_FILE).exists():
-        raise FileNotFoundError(f"Missing required CSV file: {DATA_FILE}")
 
     output = make_figure(data_dir, output_dir)
     print(output)

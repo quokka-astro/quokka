@@ -85,11 +85,10 @@ OUTPUT_FILE = "dust_hall_pedersen_drift.pdf"
 
 
 def legend_handles() -> list[Line2D]:
-    handles = [
+    return [
         Line2D([], [], color="C0", marker="o", markerfacecolor="none", linestyle="None", label=r"$w_x$"),
         Line2D([], [], color="C1", marker="s", markerfacecolor="none", linestyle="None", label=r"$w_y$"),
     ]
-    return handles
 
 
 def read_table(path: Path) -> dict[str, list[float]]:
@@ -98,7 +97,7 @@ def read_table(path: Path) -> dict[str, list[float]]:
         columns: dict[str, list[float]] = {name: [] for name in reader.fieldnames or []}
         for row in reader:
             for key, value in row.items():
-                columns[key].append(float(value) if value not in (None, "") else float("nan"))
+                columns[key].append(float(value))
     return columns
 
 
@@ -113,7 +112,6 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
         exact["wx_exact"],
         color="C0",
         linestyle="--",
-        label=r"analytic $w_x$",
     )
     ax.plot(
         history["t"],
@@ -128,7 +126,6 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
         exact["wy_exact"],
         color="C1",
         linestyle="--",
-        label=r"analytic $w_y$",
     )
     ax.plot(
         history["t"],
@@ -163,10 +160,6 @@ def main() -> int:
     data_dir = args.data_dir.resolve()
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    for filename in (HISTORY_FILE, EXACT_FILE):
-        if not (data_dir / filename).exists():
-            raise FileNotFoundError(f"Missing required CSV file: {filename}")
 
     output = make_figure(data_dir, output_dir)
     print(output)

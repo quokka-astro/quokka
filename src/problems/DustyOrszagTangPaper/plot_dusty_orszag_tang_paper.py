@@ -82,11 +82,11 @@ else:
 
 OUTPUT_PREFIX = "dusty_orszag_tang_paper"
 
-CASE_INFO = {
-    "high_epsilon": {"label": r"$\epsilon \approx 0.45$", "title": r"$\epsilon \approx 0.45$"},
-    "low_epsilon": {"label": r"$\epsilon \approx 4.5\times10^{-6}$", "title": r"$\epsilon \approx 4.5\times10^{-6}$"},
+CASE_LABELS = {
+    "high_epsilon": r"$\epsilon \approx 0.45$",
+    "low_epsilon": r"$\epsilon \approx 4.5\times10^{-6}$",
 }
-SNAPSHOTS = ("t0p25", "t0p50")
+SNAPSHOTS = (("t0p25", 0.25), ("t0p50", 0.5))
 CONTOUR_LEVELS = [0.1, 0.6, 1.1, 1.6, 2.1, 2.6, 3.1]
 LINE_STYLES = {
     64: ":",
@@ -99,10 +99,7 @@ LINE_STYLES = {
 def read_csv(path: Path) -> list[dict[str, float]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
-        rows: list[dict[str, float]] = []
-        for row in reader:
-            rows.append({key: float(value) for key, value in row.items() if value is not None and value != ""})
-    return rows
+        return [{key: float(value) for key, value in row.items()} for row in reader]
 
 
 def csv_path(data_dir: Path, prefix: str, resolution: int, case_tag: str, snapshot_tag: str, kind: str) -> Path:
@@ -165,7 +162,7 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
     axes[1, 1] = fig.add_subplot(grid[1, 1], sharex=axes[0, 0], sharey=axes[0, 0])
     cax = fig.add_subplot(grid[:, 2])
     for row, case_tag in enumerate(("high_epsilon", "low_epsilon")):
-        for col, snapshot in enumerate(SNAPSHOTS):
+        for col, (snapshot, time) in enumerate(SNAPSHOTS):
             rows = read_csv(csv_path(data_dir, prefix, resolution, case_tag, snapshot, "slice"))
             xs, ys, rho_g, rho_d_scaled = reshape_slice(rows)
             ax = axes[row, col]
@@ -183,12 +180,12 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
             normalized_dust = rho_d_scaled / np.mean(rho_d_scaled)
             ax.contour(xs, ys, normalized_dust, levels=CONTOUR_LEVELS, colors="black", linewidths=0.55, alpha=0.75)
             if row == 0:
-                ax.set_title(f"t = {0.25 if snapshot == 't0p25' else 0.5:g}")
+                ax.set_title(f"t = {time:g}")
             if col == 0:
                 ax.text(
                     0.03,
                     0.97,
-                    CASE_INFO[case_tag]["label"],
+                    CASE_LABELS[case_tag],
                     color="white",
                     fontsize=11.0,
                     ha="left",
@@ -218,7 +215,7 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
 
 
 def make_fig7(data_dir: Path, output_dir: Path, prefix: str, case_tag: str, resolutions: list[int]) -> Path:
-    fig, axes = plt.subplots(2, 1, figsize=(SINGLE_COLUMN_WIDTH, 3.8), sharex=True, gridspec_kw={"hspace": 0.0})
+    fig, axes = plt.subplots(2, 1, figsize=(SINGLE_COLUMN_WIDTH, 3.8), sharex=True)
     fig.subplots_adjust(left=0.14, right=0.98, bottom=0.10, top=0.95, hspace=0.0)
 
     for resolution in resolutions:
@@ -237,7 +234,7 @@ def make_fig7(data_dir: Path, output_dir: Path, prefix: str, case_tag: str, reso
         axes[1].plot(y, rho_d_scaled, color="black", linestyle=linestyle)
         axes[1].plot(y, rho_g, color="red", linestyle=linestyle)
 
-    axes[0].set_title(CASE_INFO[case_tag]["title"])
+    axes[0].set_title(CASE_LABELS[case_tag])
     axes[0].set_ylabel(r"$v_y$")
     axes[1].set_ylabel("density")
     axes[1].set_xlabel("y")
@@ -263,8 +260,7 @@ def make_fig7(data_dir: Path, output_dir: Path, prefix: str, case_tag: str, reso
         borderaxespad=0.15,
     )
 
-    for ax in axes:
-        ax.set_xlim(0.0, 0.3)
+    axes[0].set_xlim(0.0, 0.3)
 
     axes[0].tick_params(labelbottom=False)
     output_path = output_dir / "dusty_orszag_tang_paper_fig7_analog.pdf"
@@ -288,7 +284,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--fig7-case",
-        choices=tuple(CASE_INFO.keys()),
+        choices=tuple(CASE_LABELS),
         default="high_epsilon",
         help="Case tag used for the Fig. 7-style convergence plot.",
     )
