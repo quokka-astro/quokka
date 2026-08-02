@@ -191,7 +191,13 @@ template <> void QuokkaSimulation<SedovProblem>::computeAfterEvolve(amrex::Vecto
 			E_test_passes = true;
 		}
 
-		if ((std::abs(rel_err_Ekin) > 0.01) || std::isnan(rel_err_Ekin)) {
+		// the inviscid self-similar Sedov solution's KE fraction doesn't apply once physical viscosity
+		// dissipates kinetic energy into heat; skip only this sub-check in that case
+		const bool viscosityActive = (shearViscosity_ != 0.0) || (bulkViscosity_ != 0.0);
+		if (viscosityActive) {
+			amrex::Print() << "Kinetic energy check skipped: nonzero viscosity invalidates the inviscid self-similar fraction.\n";
+			KE_test_passes = true;
+		} else if ((std::abs(rel_err_Ekin) > 0.01) || std::isnan(rel_err_Ekin)) {
 			amrex::Print() << "Kinetic energy production is incorrect by more than 1 percent!\n";
 			KE_test_passes = false;
 		} else {
