@@ -636,13 +636,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			const bool shear_key_present = hpp.contains("shear_viscosity");
 			const bool bulk_key_present = hpp.contains("bulk_viscosity");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!shear_key_present && !bulk_key_present,
-							 "hydro.shear_viscosity or hydro.bulk_viscosity is set in the input file, but this "
-							 "problem's Physics_Traits::viscosity_model is not `constant`, so these values are "
-							 "ignored (with `none`, no viscosity is applied; with `problem_defined`, viscosity "
-							 "comes from the problem's computeViscosity function instead). This is a "
-							 "compile-time trait, not a runtime switch: to test viscosity with this problem, set "
-							 "`viscosity_model = ViscosityModel::constant` in its Physics_Traits specialization "
-							 "and rebuild.");
+							 "hydro.shear_viscosity or hydro.bulk_viscosity is set, but this problem's "
+							 "Physics_Traits::viscosity_model is not `constant`, so they are ignored.");
 		}
 	}
 
