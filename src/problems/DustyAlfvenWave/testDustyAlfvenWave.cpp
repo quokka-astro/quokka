@@ -281,7 +281,7 @@ auto integrateReferenceToTimes(const CaseConfig &config, const std::vector<doubl
 	ref_dust_vx.reserve(times.size());
 
 	double t = 0.0;
-	const double dt_ref = final_time / static_cast<double>(std::max(reference_steps, 1));
+	const double dt_ref = final_time / static_cast<double>(reference_steps);
 	for (double const target_time : times) {
 		while (t + advance_tolerance < target_time) {
 			const double dt = std::min(dt_ref, target_time - t);
@@ -440,16 +440,14 @@ auto integrateTracerThroughSampledFields(const CaseConfig &config, const std::ve
 	std::vector<TracerState> particles = makeInitialTracers();
 	std::vector<double> tracer_dust_vx;
 	ParticleProfile profile;
-	if (sample_times.empty()) {
-		return {tracer_dust_vx, profile};
-	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!sample_times.empty(), "DustyAlfvenWave tracer integration requires at least one sample time.");
 
 	double t = sample_times.front();
 	tracer_dust_vx.push_back(particles.front().vx_);
 
 	for (size_t i = 0; i + 1 < sample_times.size(); ++i) {
 		const double target_time = sample_times[i + 1];
-		const int substeps = std::max(numerical_tracer_substeps, 1);
+		const int substeps = numerical_tracer_substeps;
 		for (int step = 0; step < substeps; ++step) {
 			const double dt = (target_time - t) / static_cast<double>(substeps - step);
 			rk4StepTracersWithSampledFields(particles, t, dt, field_history, config);
@@ -516,9 +514,9 @@ auto integrateReferenceTracerEnsemble(const CaseConfig &config, const std::vecto
 	std::vector<double> dust_vx_dense;
 
 	double t = 0.0;
-	const double dt_ref = final_time / static_cast<double>(std::max(reference_steps, 1));
+	const double dt_ref = final_time / static_cast<double>(reference_steps);
 	size_t sample_index = 0;
-	const double dense_dt = final_time / static_cast<double>(std::max(reference_dense_history_points - 1, 1));
+	const double dense_dt = final_time / static_cast<double>(reference_dense_history_points - 1);
 	double next_dense_time = 0.0;
 
 	auto recordDensePoint = [&](double time) {
@@ -544,7 +542,7 @@ auto integrateReferenceTracerEnsemble(const CaseConfig &config, const std::vecto
 			tracer_dust_vx.push_back(particles.front().vx_);
 			++sample_index;
 		}
-		if ((t_dense.empty() || std::abs(t - t_dense.back()) > time_tolerance) && std::abs(t - (next_dense_time + dense_dt)) < time_tolerance) {
+		if (std::abs(t - t_dense.back()) > time_tolerance && std::abs(t - (next_dense_time + dense_dt)) < time_tolerance) {
 			recordDensePoint(t);
 			next_dense_time = t;
 		}
@@ -954,6 +952,7 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("problem");
 	pp.query("write_csv", write_csv);
 	pp.query("reference_steps", reference_steps);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reference_steps > 0, "problem.reference_steps must be positive.");
 
 	std::vector<CaseResult> results;
 	for (CaseConfig const &config : makeEpsilonCases()) {

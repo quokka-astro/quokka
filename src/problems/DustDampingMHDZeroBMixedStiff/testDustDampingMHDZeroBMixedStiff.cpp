@@ -419,13 +419,12 @@ auto computeRunResult(ResolvedRkScheme scheme, SimulationData<DustDampingMHDZero
 
 void writeHistoryCsv(const std::vector<SchemeRunResult> &runs)
 {
-	if (runs.empty()) {
-		return;
-	}
-
-	size_t n_samples = runs.front().data.t_vec_.size();
+	const size_t n_samples = runs.front().data.t_vec_.size();
 	for (auto const &run : runs) {
-		n_samples = std::min(n_samples, run.data.t_vec_.size());
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+		    run.data.t_vec_.size() == n_samples && run.data.v_gas_vec_.size() == n_samples && run.data.v_dust1_vec_.size() == n_samples &&
+			run.data.v_dust2_vec_.size() == n_samples && run.data.E_gas_vec_.size() == n_samples,
+		    "DustDampingMHDZeroBMixedStiff histories must have equal lengths.");
 	}
 
 	std::ofstream file("dust_damping_mhd_zero_b_mixed_stiff_history.csv");
@@ -476,10 +475,6 @@ void writeHistoryCsv(const std::vector<SchemeRunResult> &runs)
 
 void writeExactCsv(const std::vector<SchemeRunResult> &runs)
 {
-	if (runs.empty()) {
-		return;
-	}
-
 	const size_t n_dense_points = 1000;
 	const double t_max = runs.front().data.t_vec_.empty() ? 0.0 : runs.front().data.t_vec_.back();
 
@@ -535,21 +530,14 @@ auto problem_main() -> int
 			}
 		}
 
-		auto const find_run = [&runs](ResolvedRkScheme scheme) {
-			return std::find_if(runs.begin(), runs.end(), [scheme](auto const &run) { return run.scheme == scheme; });
-		};
-		auto const tp2025 = find_run(ResolvedRkScheme::TP2025);
-		auto const gl4 = find_run(ResolvedRkScheme::GL4);
-		auto const midpoint = find_run(ResolvedRkScheme::Midpoint);
-		if ((tp2025 == runs.end()) || (gl4 == runs.end()) || (midpoint == runs.end())) {
+		auto const &tp2025 = runs[0];
+		auto const &gl4 = runs[1];
+		auto const &midpoint = runs[2];
+		bool const gas_order_ok = (tp2025.rel_err_gas_vx < gl4.rel_err_gas_vx) && (gl4.rel_err_gas_vx < midpoint.rel_err_gas_vx);
+		bool const dust2_order_ok = (tp2025.rel_err_dust2_vx < gl4.rel_err_dust2_vx) && (gl4.rel_err_dust2_vx < midpoint.rel_err_dust2_vx);
+		bool const energy_order_ok = (tp2025.rel_err_gas_E < gl4.rel_err_gas_E) && (gl4.rel_err_gas_E < midpoint.rel_err_gas_E);
+		if (!gas_order_ok || !dust2_order_ok || !energy_order_ok) {
 			status = 1;
-		} else {
-			bool const gas_order_ok = (tp2025->rel_err_gas_vx < gl4->rel_err_gas_vx) && (gl4->rel_err_gas_vx < midpoint->rel_err_gas_vx);
-			bool const dust2_order_ok = (tp2025->rel_err_dust2_vx < gl4->rel_err_dust2_vx) && (gl4->rel_err_dust2_vx < midpoint->rel_err_dust2_vx);
-			bool const energy_order_ok = (tp2025->rel_err_gas_E < gl4->rel_err_gas_E) && (gl4->rel_err_gas_E < midpoint->rel_err_gas_E);
-			if (!gas_order_ok || !dust2_order_ok || !energy_order_ok) {
-				status = 1;
-			}
 		}
 
 		if (write_csv) {
