@@ -13,7 +13,7 @@ if(AMReX_SPACEDIM EQUAL 3)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
   add_test(
-    NAME HydroShearWaveTranspose
-    COMMAND ${JOB_NAME} ../inputs/HydroShearWaveTranspose.toml
+    NAME ${JOB_NAME}Transpose
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}Transpose.toml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
