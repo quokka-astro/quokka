@@ -1322,6 +1322,11 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		if (Physics_Traits<problem_t>::is_mhd_enabled) {
 			x1FSpds_ref = x1FSpds_in[bx];
 		}
+		// dx/shearViscosity/bulkViscosity are only read inside `if constexpr` below; nvcc can't first-capture
+		// a variable from inside constexpr-if, so touch them unconditionally here first
+		[[maybe_unused]] auto const dx_captured = dx;
+		[[maybe_unused]] amrex::Real const shearViscosity_captured = shearViscosity;
+		[[maybe_unused]] amrex::Real const bulkViscosity_captured = bulkViscosity;
 
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
