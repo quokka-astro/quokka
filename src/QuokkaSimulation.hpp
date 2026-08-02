@@ -924,8 +924,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 		}
 	}
 
-	// diffusive CFL constraint for viscosity: dt <= cfl * dx^2 / (2*max(nu_shear,nu_bulk))
-	// nu = mu/rho depends on local density (unlike resistivity's eta), so evaluated per cell
+	// diffusive CFL constraint: dt <= cfl * dx^2 * rho / (2*max(shearViscosity_,bulkViscosity_))
+	// unlike resistivity's eta, these coefficients still need dividing by density to get a real
+	// diffusivity, so the limit depends on local density and is evaluated per cell, not once globally
 	// not enforced for problem_defined viscosity; the problem must ensure stability
 	if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
 		if (shearViscosity_ != 0.0 || bulkViscosity_ != 0.0) {
