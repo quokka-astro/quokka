@@ -31,8 +31,8 @@ template <> struct Physics_Traits<ShearWaveProblem> : DefaultPhysicsTraits {
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear defaults to 0; no-op unless set
 };
 
-constexpr double rho0 = 1.0;  // background density
-constexpr double P0 = 1.0;    // background pressure
+constexpr double rho0 = 1.0;   // background density
+constexpr double P0 = 1.0;     // background pressure
 constexpr double amp = 1.0e-6; // velocity perturbation amplitude
 
 // shear decay rate: shear_viscosity*k^2/rho0, for the single hardcoded mode k=2*pi below; zero (no
@@ -43,8 +43,7 @@ AMREX_GPU_MANAGED double shear_decay_rate = 0.0; // NOLINT
 AMREX_GPU_MANAGED int shear_flow_axis = 0; // NOLINT
 AMREX_GPU_MANAGED int shear_grad_axis = 1; // NOLINT
 
-AMREX_GPU_DEVICE void computeShearSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+AMREX_GPU_DEVICE void computeShearSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
 {
 	amrex::GpuArray<int, 3> const cell_idx{i, j, k};

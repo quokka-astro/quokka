@@ -184,8 +184,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeViscousFlux(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k, int velN_index,
-							 int velV_index, int velW_index, amrex::Real dx_n, amrex::Real dx_v, amrex::Real dx_w,
-							 amrex::Real shearViscosity, amrex::Real bulkViscosity)
+							int velV_index, int velW_index, amrex::Real dx_n, amrex::Real dx_v, amrex::Real dx_w,
+							amrex::Real shearViscosity, amrex::Real bulkViscosity)
 	    -> quokka::valarray<amrex::Real, 4>; // {sigma_nn, sigma_nv, sigma_nw, v.sigma}
 
 	template <FluxDir DIR>
@@ -1667,8 +1667,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE auto HydroSystem<problem_t>::ComputeViscousFlux(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k, int velN_index,
-								  int velV_index, int velW_index, amrex::Real dx_n, amrex::Real dx_v, amrex::Real dx_w,
-								  amrex::Real shearViscosity, amrex::Real bulkViscosity) -> quokka::valarray<amrex::Real, 4>
+								 int velV_index, int velW_index, amrex::Real dx_n, amrex::Real dx_v, amrex::Real dx_w,
+								 amrex::Real shearViscosity, amrex::Real bulkViscosity) -> quokka::valarray<amrex::Real, 4>
 {
 	static_assert(AMREX_SPACEDIM == 3, "HydroSystem::ComputeViscousFlux currently only supports 3D.");
 
@@ -1679,14 +1679,14 @@ AMREX_GPU_DEVICE auto HydroSystem<problem_t>::ComputeViscousFlux(quokka::Array4V
 	const amrex::Real dqw_dn = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_n;
 
 	// transverse derivatives: averaged centered difference
-	const amrex::Real dqv_dv = 0.25 / dx_v *
-	    ((q(i, j + 1, k, velV_index) - q(i, j - 1, k, velV_index)) + (q(i - 1, j + 1, k, velV_index) - q(i - 1, j - 1, k, velV_index)));
-	const amrex::Real dqn_dv = 0.25 / dx_v *
-	    ((q(i, j + 1, k, velN_index) - q(i, j - 1, k, velN_index)) + (q(i - 1, j + 1, k, velN_index) - q(i - 1, j - 1, k, velN_index)));
-	const amrex::Real dqw_dw = 0.25 / dx_w *
-	    ((q(i, j, k + 1, velW_index) - q(i, j, k - 1, velW_index)) + (q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k - 1, velW_index)));
-	const amrex::Real dqn_dw = 0.25 / dx_w *
-	    ((q(i, j, k + 1, velN_index) - q(i, j, k - 1, velN_index)) + (q(i - 1, j, k + 1, velN_index) - q(i - 1, j, k - 1, velN_index)));
+	const amrex::Real dqv_dv =
+	    0.25 / dx_v * ((q(i, j + 1, k, velV_index) - q(i, j - 1, k, velV_index)) + (q(i - 1, j + 1, k, velV_index) - q(i - 1, j - 1, k, velV_index)));
+	const amrex::Real dqn_dv =
+	    0.25 / dx_v * ((q(i, j + 1, k, velN_index) - q(i, j - 1, k, velN_index)) + (q(i - 1, j + 1, k, velN_index) - q(i - 1, j - 1, k, velN_index)));
+	const amrex::Real dqw_dw =
+	    0.25 / dx_w * ((q(i, j, k + 1, velW_index) - q(i, j, k - 1, velW_index)) + (q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k - 1, velW_index)));
+	const amrex::Real dqn_dw =
+	    0.25 / dx_w * ((q(i, j, k + 1, velN_index) - q(i, j, k - 1, velN_index)) + (q(i - 1, j, k + 1, velN_index) - q(i - 1, j, k - 1, velN_index)));
 
 	const amrex::Real div_q = dqn_dn + dqv_dv + dqw_dw;
 

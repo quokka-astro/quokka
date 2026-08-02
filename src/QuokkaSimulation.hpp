@@ -233,8 +233,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
-	amrex::Real shearViscosity_ = 0.0;	 // shear viscosity coefficient; see viscous CFL limit below
-	amrex::Real bulkViscosity_ = 0.0;	 // bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
+	amrex::Real shearViscosity_ = 0.0;	// shear viscosity coefficient; see viscous CFL limit below
+	amrex::Real bulkViscosity_ = 0.0;	// bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
@@ -293,7 +293,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		}
 		if constexpr (Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
 			const bool viscosity_active = (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) ||
-						       (shearViscosity_ != 0.0) || (bulkViscosity_ != 0.0);
+						      (shearViscosity_ != 0.0) || (bulkViscosity_ != 0.0);
 			if (viscosity_active) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0,
 								 "AMR subcycling is not supported with nonzero viscosity. Set do_subcycle = 0.");
@@ -3007,13 +3007,13 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											 rightState_bfield, primVar_mf, artificialViscosityK_, dx, shearViscosity_,
-											 bulkViscosity_, &x1FSpds, &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(
+		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, artificialViscosityK_, dx, shearViscosity_,
+		    bulkViscosity_, &x1FSpds, &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
 	} else {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											 rightState_bfield, primVar_mf, artificialViscosityK_, dx, shearViscosity_,
-											 bulkViscosity_, nullptr, nullptr, nghost_Riemann);
+											 rightState_bfield, primVar_mf, artificialViscosityK_, dx,
+											 shearViscosity_, bulkViscosity_, nullptr, nullptr, nghost_Riemann);
 	}
 }
 
@@ -3095,14 +3095,13 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 
 	// LLF solver
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											    rightState_bfield, primVar_mf, artificialViscosityK_, dx, shearViscosity_,
-											    bulkViscosity_, &x1FSpds, &x1ConsVar_fc_mf[static_cast<int>(DIR)],
-											    nghost_Riemann);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(
+		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, artificialViscosityK_, dx, shearViscosity_,
+		    bulkViscosity_, &x1FSpds, &x1ConsVar_fc_mf[static_cast<int>(DIR)], nghost_Riemann);
 	} else {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											rightState_bfield, primVar_mf, artificialViscosityK_, dx, shearViscosity_,
-											bulkViscosity_, nullptr, nullptr, nghost_Riemann);
+											rightState_bfield, primVar_mf, artificialViscosityK_, dx,
+											shearViscosity_, bulkViscosity_, nullptr, nullptr, nghost_Riemann);
 	}
 }
 

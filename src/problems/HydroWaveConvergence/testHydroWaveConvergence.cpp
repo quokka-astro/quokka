@@ -95,8 +95,7 @@ void configureViscousParameters()
 	amrex::ParmParse const hpp("hydro");
 	hpp.query("shear_viscosity", shearViscosity);
 	hpp.query("bulk_viscosity", bulkViscosity);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shearViscosity >= 0.0 && bulkViscosity >= 0.0,
-					 "hydro.shear_viscosity and hydro.bulk_viscosity must be non-negative.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shearViscosity >= 0.0 && bulkViscosity >= 0.0, "hydro.shear_viscosity and hydro.bulk_viscosity must be non-negative.");
 	constexpr double k_magn = 2.0 * M_PI; // single hardcoded mode, box length 1
 	viscous_decay_rate = (4.0 / 3.0 * shearViscosity + bulkViscosity) * k_magn * k_magn / (2.0 * rho0);
 	if (shearViscosity > 0.0 || bulkViscosity > 0.0) {
