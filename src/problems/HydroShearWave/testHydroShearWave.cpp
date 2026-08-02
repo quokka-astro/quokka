@@ -1,21 +1,9 @@
 //==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
+// Copyright 2026 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testHydroShearWave.cpp
 /// \brief A single-mode transverse shear flow, decaying under physical shear viscosity.
-///
-/// v_{flow_axis}(x_{grad_axis},t) = amp*sin(2*pi*x_{grad_axis})*exp(-decay_rate*t), decay_rate =
-/// shear_viscosity*(2*pi)^2/rho0. Since the flow-axis velocity depends only on the grad-axis
-/// coordinate and the other two velocity components are zero, div(v) = 0 everywhere: this flow
-/// isolates shear viscosity exactly (bulk viscosity has no effect), and the decay rate is exact,
-/// not a weak-damping approximation, because a sinusoid is an eigenfunction of the 1D diffusion
-/// operator that the shear-viscous momentum equation reduces to here.
-///
-/// flow_axis/grad_axis are runtime-selectable (setup.shear_flow_axis/setup.shear_grad_axis) so the
-/// same physical setup can be run with the roles of two axes swapped, checking that the sweep
-/// permutation and cross-derivative terms in ComputeViscousFlux are direction-independent.
 ///
 
 #include "hydro/hydro_system.hpp"
