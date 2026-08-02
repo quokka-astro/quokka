@@ -1685,17 +1685,18 @@ AMREX_GPU_DEVICE auto HydroSystem<problem_t>::ComputeViscousFlux(quokka::Array4V
 
 	const amrex::Real div_q = dqn_dn + dqv_dv + dqw_dw;
 
-	// sigma = 2*nu_shear*S + nu_bulk*(div q)*I; only the normal-direction components are needed here
+	// sigma_ni = 2*nu_shear*S_ni + nu_bulk*div[q]*delta_ni, i in {n,v,w}: the row that fluxes through this face
 	const amrex::Real sigma_nn = 2.0 * shearViscosity * dqn_dn + (bulkViscosity - (2.0 / 3.0) * shearViscosity) * div_q;
 	const amrex::Real sigma_nv = shearViscosity * (dqv_dn + dqn_dv);
 	const amrex::Real sigma_nw = shearViscosity * (dqw_dn + dqn_dw);
 
-	// viscous heating dot(q,sigma) at the face; caller drops this for isothermal EOS
+	// viscous heating dot[q,sigma] at the face; caller drops this for isothermal EOS
 	const amrex::Real q_face_n = 0.5 * (q(i, j, k, velN_index) + q(i - 1, j, k, velN_index));
 	const amrex::Real q_face_v = 0.5 * (q(i, j, k, velV_index) + q(i - 1, j, k, velV_index));
 	const amrex::Real q_face_w = 0.5 * (q(i, j, k, velW_index) + q(i - 1, j, k, velW_index));
 	const amrex::Real q_dot_sigma = q_face_n * sigma_nn + q_face_v * sigma_nv + q_face_w * sigma_nw;
 
+	// sigma's other rows flux through the other two sweep directions' faces
 	return {sigma_nn, sigma_nv, sigma_nw, q_dot_sigma};
 }
 
