@@ -250,10 +250,6 @@ auto relativeDriftL2Error(SimulationData<DustHallPedersenDrift> const &data) -> 
 
 auto finalRelativeDriftError(SimulationData<DustHallPedersenDrift> const &data) -> double
 {
-	if (data.t_vec_.empty()) {
-		return 1.0;
-	}
-
 	const size_t i = data.t_vec_.size() - 1;
 	DriftState const exact = analyticRelativeDrift(data.t_vec_[i]);
 	const double dwx = data.wx_vec_[i] - exact.wx;
@@ -288,7 +284,7 @@ void writeHistoryCsv(SimulationData<DustHallPedersenDrift> const &data)
 void writeExactCsv(SimulationData<DustHallPedersenDrift> const &data)
 {
 	const size_t n_dense = 1000;
-	const double t_max = data.t_vec_.empty() ? 0.0 : data.t_vec_.back();
+	const double t_max = data.t_vec_.back();
 
 	std::ofstream file("dust_hall_pedersen_drift_exact.csv");
 	file << std::setprecision(17);

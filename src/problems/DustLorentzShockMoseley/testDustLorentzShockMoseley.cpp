@@ -102,7 +102,7 @@ struct ShockPhysicsTraits : DefaultPhysicsTraits {
 	static constexpr double radiation_constant = 1.0;
 };
 
-template <typename problem_t> AMREX_GPU_DEVICE auto computeGasEnergy(double rho, double vx, double bz) -> double
+AMREX_GPU_DEVICE auto computeGasEnergy(double rho, double vx, double bz) -> double
 {
 	const double kinetic = 0.5 * rho * vx * vx;
 	const double magnetic = 0.5 * bz * bz;
@@ -118,7 +118,7 @@ AMREX_GPU_DEVICE void fillCellState(const amrex::Array4<double> &state_cc, int i
 	}
 
 	state_cc(i, j, k, HydroSystem<problem_t>::density_index) = rho_g;
-	state_cc(i, j, k, HydroSystem<problem_t>::energy_index) = computeGasEnergy<problem_t>(rho_g, vx_g, bz);
+	state_cc(i, j, k, HydroSystem<problem_t>::energy_index) = computeGasEnergy(rho_g, vx_g, bz);
 	state_cc(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = 0.0;
 	state_cc(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = rho_g * vx_g;
 	state_cc(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = 0.0;
@@ -179,7 +179,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto makeShockInflowCellStat
 	amrex::GpuArray<amrex::Real, nvar> inflow_state{};
 	inflow_state[HydroSystem<problem_t>::density_index] = ShockCaseParams<problem_t>::rho_inflow;
 	inflow_state[HydroSystem<problem_t>::energy_index] =
-	    computeGasEnergy<problem_t>(ShockCaseParams<problem_t>::rho_inflow, ShockCaseParams<problem_t>::u_inflow, ShockCaseParams<problem_t>::bz_inflow);
+	    computeGasEnergy(ShockCaseParams<problem_t>::rho_inflow, ShockCaseParams<problem_t>::u_inflow, ShockCaseParams<problem_t>::bz_inflow);
 	inflow_state[HydroSystem<problem_t>::internalEnergy_index] = 0.0;
 	inflow_state[HydroSystem<problem_t>::x1Momentum_index] = ShockCaseParams<problem_t>::rho_inflow * ShockCaseParams<problem_t>::u_inflow;
 	inflow_state[HydroSystem<problem_t>::x2Momentum_index] = 0.0;
@@ -283,12 +283,12 @@ template <typename problem_t> auto extractShockProfile(QuokkaSimulation<problem_
 		const double mom_dy = values.at(HydroSystem<problem_t>::x2DustMomentum_index)[i];
 
 		profile.rho_g_[i] = rho_g;
-		profile.v_gx_[i] = (rho_g > 0.0) ? mom_gx / rho_g : 0.0;
-		profile.v_gy_[i] = (rho_g > 0.0) ? mom_gy / rho_g : 0.0;
+		profile.v_gx_[i] = mom_gx / rho_g;
+		profile.v_gy_[i] = mom_gy / rho_g;
 		profile.bz_[i] = bz[i];
 		profile.rho_d_[i] = rho_d;
-		profile.v_dx_[i] = (rho_d > 0.0) ? mom_dx / rho_d : 0.0;
-		profile.v_dy_[i] = (rho_d > 0.0) ? mom_dy / rho_d : 0.0;
+		profile.v_dx_[i] = mom_dx / rho_d;
+		profile.v_dy_[i] = mom_dy / rho_d;
 	}
 
 	return profile;
@@ -364,7 +364,7 @@ void writeShockProfileCsv(const ShockProfile &profile, const std::vector<double>
 						   ? profile.dimensionless_charge_to_mass_ratio_ * profile.bz_[i] * profile.stopping_time_
 						   : profile.target_magnetization_;
 		file << profile.x_[i] << "," << profile.rho_g_[i] << "," << profile.v_gx_[i] << "," << profile.v_gy_[i] << "," << profile.bz_[i] << ","
-		     << omega_ts_guiding << "," << profile.rho_d_[i] / std::max(profile.epsilon_, 1.0e-12) << "," << profile.v_dx_[i] << ","
+		     << omega_ts_guiding << "," << profile.rho_d_[i] / profile.epsilon_ << "," << profile.v_dx_[i] << ","
 		     << profile.v_dy_[i] << "," << w_y << "," << guiding_vx[i] << "\n";
 	}
 }

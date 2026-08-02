@@ -9,7 +9,6 @@
 #include <format>
 #include <fstream>
 #include <gcem.hpp>
-#include <limits>
 #include <numbers>
 #include <optional>
 #include <string>
@@ -37,7 +36,6 @@ AMREX_GPU_MANAGED double g_initial_dust_density = 1.0e-1;    // NOLINT
 AMREX_GPU_MANAGED double g_stopping_time = stopping_time0;   // NOLINT
 AMREX_GPU_MANAGED double g_dimensionless_charge_to_mass_ratio = dimensionless_charge_to_mass_ratio0; // NOLINT
 std::string g_active_case_tag;				     // NOLINT
-std::string g_active_case_label;			     // NOLINT
 std::string g_output_prefix = "dusty_orszag_tang_paper";     // NOLINT
 std::string g_resolution_tag = "64";			     // NOLINT
 bool g_capture_slice_csv = true;			     // NOLINT
@@ -54,7 +52,6 @@ struct ProblemRuntimeConfig {
 // input parameters for one dusty Orszag-Tang run
 struct CaseConfig {
 	std::string tag_;
-	std::string label_;
 	double dust_density0_ = 0.0;
 	double epsilon0_ = 0.0;
 };
@@ -63,7 +60,6 @@ struct CaseConfig {
 struct SliceData {
 	std::string case_tag_;
 	std::string snapshot_tag_;
-	double time_ = 0.0;
 	std::vector<double> x_;
 	std::vector<double> y_;
 	std::vector<double> rho_g_;
@@ -75,7 +71,6 @@ struct SliceData {
 struct ProfileData {
 	std::string case_tag_;
 	std::string snapshot_tag_;
-	double time_ = 0.0;
 	std::vector<double> y_;
 	std::vector<double> rho_g_;
 	std::vector<double> rho_d_scaled_;
@@ -104,8 +99,7 @@ struct CaseResult {
 // reconstruct the active case metadata for mid-run snapshot capture
 auto activeCaseConfig() -> CaseConfig
 {
-	return {
-	    .tag_ = g_active_case_tag, .label_ = g_active_case_label, .dust_density0_ = g_initial_dust_density, .epsilon0_ = g_initial_dust_density / rho_gas0};
+	return {.tag_ = g_active_case_tag, .dust_density0_ = g_initial_dust_density, .epsilon0_ = g_initial_dust_density / rho_gas0};
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto vectorPotentialAz(double x, double y) -> double
@@ -133,7 +127,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeTotalEnergy(double rho_g, double
 
 auto makeCaseConfigs() -> std::vector<CaseConfig>
 {
-	return {{"high_epsilon", "high epsilon", 1.0e-1, 1.0e-1 / rho_gas0}, {"low_epsilon", "low epsilon", 1.0e-6, 1.0e-6 / rho_gas0}};
+	return {{"high_epsilon", 1.0e-1, 1.0e-1 / rho_gas0}, {"low_epsilon", 1.0e-6, 1.0e-6 / rho_gas0}};
 }
 
 auto selectCases(amrex::Vector<std::string> const &requested_tags) -> std::vector<CaseConfig>
@@ -327,7 +321,6 @@ template <typename problem_t> auto extractSlice(QuokkaSimulation<problem_t> &sim
 	SliceData slice;
 	slice.case_tag_ = config.tag_;
 	slice.snapshot_tag_ = snapshotTag(time);
-	slice.time_ = time;
 	slice.x_.resize(npts);
 	slice.y_.resize(npts);
 	slice.rho_g_.assign(rho_g.begin(), rho_g.end());
@@ -385,7 +378,6 @@ template <typename problem_t> auto extractProfile(QuokkaSimulation<problem_t> &s
 	ProfileData profile;
 	profile.case_tag_ = config.tag_;
 	profile.snapshot_tag_ = snapshotTag(time);
-	profile.time_ = time;
 	profile.y_.resize(ny);
 	profile.rho_g_.resize(ny);
 	profile.rho_d_scaled_.resize(ny);
@@ -449,10 +441,7 @@ namespace
 template <typename problem_t> auto runCase(CaseConfig const &config) -> CaseResult
 {
 	g_initial_dust_density = config.dust_density0_;
-	g_stopping_time = stopping_time0;
-	g_dimensionless_charge_to_mass_ratio = dimensionless_charge_to_mass_ratio0;
 	g_active_case_tag = config.tag_;
-	g_active_case_label = config.label_;
 
 	auto BCs_cc = makePeriodicBCsCC<problem_t>();
 	auto BCs_fc = makePeriodicBCsFC<problem_t>();
@@ -470,8 +459,8 @@ template <typename problem_t> auto runCase(CaseConfig const &config) -> CaseResu
 
 	sim.setInitialConditions();
 	sim.evolve();
-	SnapshotData snap_025 = sim.userData_.has_snap_025_ ? sim.userData_.snap_025_
-							    : extractSnapshot(sim, config, first_snapshot_time, g_capture_slice_csv, g_capture_profile_csv);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.userData_.has_snap_025_, "DustyOrszagTangPaper failed to capture the t = 0.25 snapshot.");
+	SnapshotData snap_025 = std::move(sim.userData_.snap_025_);
 	SnapshotData snap_050 = extractSnapshot(sim, config, second_snapshot_time, g_capture_slice_csv, g_capture_profile_csv);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {

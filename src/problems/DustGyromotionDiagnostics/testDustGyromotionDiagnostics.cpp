@@ -9,7 +9,6 @@
 #include <cmath>
 #include <fstream>
 #include <iomanip>
-#include <limits>
 #include <numbers>
 #include <string>
 #include <string_view>
@@ -39,11 +38,6 @@ using ResolvedRkScheme = quokka::dust::ResolvedRkScheme;
 constexpr std::array<double, 11> requested_dt_values = {1.0e-2, 3.0e-2, 1.0e-1, 2.0e-1, 3.0e-1, 5.0e-1, 1.0e0, 2.0e0, 4.0e0, 8.0e0, 1.6e1};
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
 constexpr double plot_floor = 1.0e-16;
-
-struct DriftState {
-	double wx;
-	double wy;
-};
 
 struct GyroSample {
 	double requested_dt;
@@ -214,7 +208,7 @@ template <> void QuokkaSimulation<DustPureGyromotion>::computeAfterTimestep() { 
 
 auto resolvedBranchThresholdDt() -> double { return 1.0 / std::abs(omega_L); }
 
-auto usesResolvedBranch(double effective_dt) -> bool { return effective_dt < (1.0 / std::abs(omega_L)); }
+auto usesResolvedBranch(double effective_dt) -> bool { return effective_dt < resolvedBranchThresholdDt(); }
 
 auto runGyroSimulation(ResolvedRkScheme scheme, double constant_dt) -> SimulationData<DustPureGyromotion>
 {
@@ -297,11 +291,8 @@ auto theoryStiffDeltaLogAmplitude(double theta) -> double { return std::log((1.0
 auto computeGyroSample(ResolvedRkScheme scheme, double requested_dt) -> GyroSample
 {
 	SimulationData<DustPureGyromotion> const data = runGyroSimulation(scheme, requested_dt);
-	double effective_dt = 0.0;
-	if (data.t_vec_.size() >= 2) {
-		effective_dt = data.t_vec_[1] - data.t_vec_[0];
-	}
-	const double end_time = data.t_vec_.empty() ? 0.0 : data.t_vec_.back();
+	const double effective_dt = data.t_vec_[1] - data.t_vec_[0];
+	const double end_time = data.t_vec_.back();
 	const size_t last = data.t_vec_.size() - 1;
 	const double wx = data.wx_vec_[last];
 	const double wy = data.wy_vec_[last];

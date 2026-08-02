@@ -255,7 +255,7 @@ void QuokkaSimulation<DustHallPedersenForcedDiagnostics>::addStrangSplitSources(
 
 auto resolvedBranchThresholdDt() -> double { return 1.0 / std::sqrt(alpha_d * alpha_d + omega_L * omega_L); }
 
-auto usesResolvedBranch(double effective_dt) -> bool { return effective_dt < (1.0 / std::sqrt(alpha_d * alpha_d + omega_L * omega_L)); }
+auto usesResolvedBranch(double effective_dt) -> bool { return effective_dt < resolvedBranchThresholdDt(); }
 
 auto runStopTime(double requested_dt) -> double { return std::max(sweep_stop_time, stiff_branch_reference_steps * requested_dt); }
 
@@ -339,10 +339,6 @@ auto advanceDiscreteMapOneStep(ResolvedRkScheme scheme, double dt_step, Complex 
 
 auto finalNumericalState(SimulationData<DustHallPedersenForcedDiagnostics> const &data) -> Complex
 {
-	if (data.t_vec_.empty()) {
-		return initial_rel;
-	}
-
 	const size_t i = data.t_vec_.size() - 1;
 	return {data.ux_vec_[i], -data.uy_vec_[i]};
 }
@@ -373,10 +369,6 @@ auto transientRelativeL2Error(SimulationData<DustHallPedersenForcedDiagnostics> 
 
 auto finalTransientError(SimulationData<DustHallPedersenForcedDiagnostics> const &data, Complex numerical_fixed_point) -> double
 {
-	if (data.t_vec_.size() < 2) {
-		return 1.0;
-	}
-
 	const size_t i = data.t_vec_.size() - 1;
 	const Complex numerical_state{data.ux_vec_[i], -data.uy_vec_[i]};
 	const Complex exact_transient = exactRelativeDrift(data.t_vec_[i]) - exactSteadyRelativeDrift();
@@ -388,11 +380,6 @@ auto terminalDriftError(Complex numerical_fixed_point) -> double { return std::a
 auto finalDataError(SimulationData<DustHallPedersenForcedDiagnostics> const &data) -> double
 {
 	return std::abs(finalNumericalState(data) - exactSteadyRelativeDrift());
-}
-
-auto finalToFixedPointError(SimulationData<DustHallPedersenForcedDiagnostics> const &data, Complex numerical_fixed_point) -> double
-{
-	return std::abs(finalNumericalState(data) - numerical_fixed_point);
 }
 
 auto maxMomentumResidual(SimulationData<DustHallPedersenForcedDiagnostics> const &data) -> double
@@ -411,11 +398,8 @@ auto maxMomentumResidual(SimulationData<DustHallPedersenForcedDiagnostics> const
 auto computeSweepSample(ResolvedRkScheme scheme, double requested_dt) -> SweepSample
 {
 	SimulationData<DustHallPedersenForcedDiagnostics> const data = runForcedSimulation(scheme, requested_dt);
-	double effective_dt = 0.0;
-	if (data.t_vec_.size() >= 2) {
-		effective_dt = data.t_vec_[1] - data.t_vec_[0];
-	}
-	const double end_time = data.t_vec_.empty() ? 0.0 : data.t_vec_.back();
+	const double effective_dt = data.t_vec_[1] - data.t_vec_[0];
+	const double end_time = data.t_vec_.back();
 	const Complex numerical_fixed_point = numericalFixedPoint(scheme, effective_dt);
 	const Complex predicted_final_state = predictedDiscreteFinalState(scheme, data);
 	const Complex final_state = finalNumericalState(data);
