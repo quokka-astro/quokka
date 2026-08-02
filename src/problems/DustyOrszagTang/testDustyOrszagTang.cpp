@@ -111,10 +111,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeTotalEnergy(double rho_g, double
 	return internal + kinetic + magnetic;
 }
 
-auto makeCaseConfigs() -> std::vector<CaseConfig>
-{
-	return {{"high_epsilon", 1.0e-1, 1.0e-1 / rho_gas0}, {"low_epsilon", 1.0e-6, 1.0e-6 / rho_gas0}};
-}
+auto makeCaseConfigs() -> std::vector<CaseConfig> { return {{"high_epsilon", 1.0e-1, 1.0e-1 / rho_gas0}, {"low_epsilon", 1.0e-6, 1.0e-6 / rho_gas0}}; }
 
 auto snapshotTag(double time) -> std::string
 {

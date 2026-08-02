@@ -367,12 +367,12 @@ auto runShockRegression(bool write_csv) -> int
 
 	const double vy_max_eps001_omega_ts0 = maxAbsValue(shock_eps001_omega_ts0.v_dy_);
 	const double vy_max_eps001_omega_ts20 = maxAbsValue(shock_eps001_omega_ts20.v_dy_);
-	const double mean_drift_eps001_omega_ts20 = meanWindowDifference(shock_eps001_omega_ts20, shock_eps001_omega_ts20.v_dx_,
-							       shock_eps001_omega_ts20.v_gx_, shock_position_eps001_omega_ts20, 0.02, 0.18);
+	const double mean_drift_eps001_omega_ts20 = meanWindowDifference(shock_eps001_omega_ts20, shock_eps001_omega_ts20.v_dx_, shock_eps001_omega_ts20.v_gx_,
+									 shock_position_eps001_omega_ts20, 0.02, 0.18);
 	const std::vector<double> guiding_vx_eps001_omega_ts20 = computeGuidingCenterVx(shock_eps001_omega_ts20);
 	const std::vector<double> guiding_vx_eps010_omega_ts20 = computeGuidingCenterVx(shock_eps010_omega_ts20);
-	const double mean_guiding_drift_eps001_omega_ts20 = meanWindowDifference(
-	    shock_eps001_omega_ts20, guiding_vx_eps001_omega_ts20, shock_eps001_omega_ts20.v_gx_, shock_position_eps001_omega_ts20, 0.02, 0.18);
+	const double mean_guiding_drift_eps001_omega_ts20 = meanWindowDifference(shock_eps001_omega_ts20, guiding_vx_eps001_omega_ts20,
+										 shock_eps001_omega_ts20.v_gx_, shock_position_eps001_omega_ts20, 0.02, 0.18);
 
 	if (write_csv) {
 		writeShockProfileCsv(shock_eps001_omega_ts0);

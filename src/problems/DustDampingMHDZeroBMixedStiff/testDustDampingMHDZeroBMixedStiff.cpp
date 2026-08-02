@@ -421,10 +421,10 @@ void writeHistoryCsv(const std::vector<SchemeRunResult> &runs)
 {
 	const size_t n_samples = runs.front().data.t_vec_.size();
 	for (auto const &run : runs) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-		    run.data.t_vec_.size() == n_samples && run.data.v_gas_vec_.size() == n_samples && run.data.v_dust1_vec_.size() == n_samples &&
-			run.data.v_dust2_vec_.size() == n_samples && run.data.E_gas_vec_.size() == n_samples,
-		    "DustDampingMHDZeroBMixedStiff histories must have equal lengths.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(run.data.t_vec_.size() == n_samples && run.data.v_gas_vec_.size() == n_samples &&
+						     run.data.v_dust1_vec_.size() == n_samples && run.data.v_dust2_vec_.size() == n_samples &&
+						     run.data.E_gas_vec_.size() == n_samples,
+						 "DustDampingMHDZeroBMixedStiff histories must have equal lengths.");
 	}
 
 	std::ofstream file("dust_damping_mhd_zero_b_mixed_stiff_history.csv");
