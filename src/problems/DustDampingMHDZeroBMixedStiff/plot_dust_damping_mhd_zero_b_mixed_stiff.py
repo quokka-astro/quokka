@@ -140,7 +140,7 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
     history = read_table(data_dir / HISTORY_FILE)
     exact = read_table(data_dir / EXACT_FILE)
 
-    fig, axes = plt.subplots(4, 1, figsize=(SINGLE_COLUMN_WIDTH, 6.1), sharex=True, gridspec_kw={"hspace": 0.0})
+    fig, axes = plt.subplots(4, 1, figsize=(SINGLE_COLUMN_WIDTH, 6.1), sharex=True)
     fig.subplots_adjust(left=0.24, right=0.98, bottom=0.08, top=0.995, hspace=0.0)
 
     for index, (ax, (prefix, ylabel)) in enumerate(zip(axes, PANELS)):
@@ -168,10 +168,6 @@ def main() -> int:
     data_dir = args.data_dir.resolve()
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    for filename in (HISTORY_FILE, EXACT_FILE):
-        if not (data_dir / filename).exists():
-            raise FileNotFoundError(f"Missing required CSV file: {filename}")
 
     output = make_figure(data_dir, output_dir)
     print(output)

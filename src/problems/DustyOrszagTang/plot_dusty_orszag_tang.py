@@ -79,11 +79,11 @@ else:
     })
 
 
-CASE_INFO = {
-    "high_epsilon": {"label": r"$\epsilon \approx 0.45$", "title": r"$\epsilon \approx 0.45$"},
-    "low_epsilon": {"label": r"$\epsilon \approx 4.5\times10^{-6}$", "title": r"$\epsilon \approx 4.5\times10^{-6}$"},
+CASE_LABELS = {
+    "high_epsilon": r"$\epsilon \approx 0.45$",
+    "low_epsilon": r"$\epsilon \approx 4.5\times10^{-6}$",
 }
-SNAPSHOTS = ("t0p25", "t0p50")
+SNAPSHOTS = (("t0p25", 0.25), ("t0p50", 0.5))
 CONTOUR_LEVELS = [0.1, 0.6, 1.1, 1.6, 2.1, 2.6, 3.1]
 
 
@@ -152,7 +152,7 @@ def make_fig6(data_dir: Path, output_dir: Path) -> Path:
     axes[1, 1] = fig.add_subplot(grid[1, 1], sharex=axes[0, 0], sharey=axes[0, 0])
     cax = fig.add_subplot(grid[:, 2])
     for row, case_tag in enumerate(("high_epsilon", "low_epsilon")):
-        for col, snapshot in enumerate(SNAPSHOTS):
+        for col, (snapshot, time) in enumerate(SNAPSHOTS):
             rows = read_csv(data_dir / f"dusty_orszag_tang_{case_tag}_{snapshot}_slice.csv")
             xs, ys, rho_g, rho_d_scaled = reshape_slice(rows)
             ax = axes[row, col]
@@ -170,12 +170,12 @@ def make_fig6(data_dir: Path, output_dir: Path) -> Path:
             normalized_dust = rho_d_scaled / np.mean(rho_d_scaled)
             ax.contour(xs, ys, normalized_dust, levels=CONTOUR_LEVELS, colors="black", linewidths=0.55, alpha=0.75)
             if row == 0:
-                ax.set_title(f"t = {0.25 if snapshot == 't0p25' else 0.5:g}")
+                ax.set_title(f"t = {time:g}")
             if col == 0:
                 ax.text(
                     0.03,
                     0.97,
-                    CASE_INFO[case_tag]["label"],
+                    CASE_LABELS[case_tag],
                     color="white",
                     fontsize=11.0,
                     ha="left",
@@ -205,7 +205,7 @@ def make_fig6(data_dir: Path, output_dir: Path) -> Path:
 
 
 def make_fig7(data_dir: Path, output_dir: Path) -> Path:
-    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COLUMN_WIDTH, 4.35), sharex="col", sharey="row", gridspec_kw={"wspace": 0.0, "hspace": 0.0})
+    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COLUMN_WIDTH, 4.35), sharex="col", sharey="row")
     fig.subplots_adjust(left=0.09, right=0.985, bottom=0.10, top=0.92, wspace=0.0, hspace=0.0)
 
     for col, case_tag in enumerate(("high_epsilon", "low_epsilon")):
@@ -220,7 +220,7 @@ def make_fig7(data_dir: Path, output_dir: Path) -> Path:
 
         axes[0, col].plot(y, v_dy, color="black", label="dust")
         axes[0, col].plot(y, v_gy, color="red", label="gas")
-        axes[0, col].set_title(CASE_INFO[case_tag]["title"])
+        axes[0, col].set_title(CASE_LABELS[case_tag])
 
         axes[1, col].plot(y, rho_d_scaled, color="black", label="dust")
         axes[1, col].plot(y, rho_g, color="red", label="gas")
@@ -228,7 +228,6 @@ def make_fig7(data_dir: Path, output_dir: Path) -> Path:
     axes[0, 0].set_ylabel(r"$v_y$")
     axes[1, 0].set_ylabel("density")
     axes[1, 0].set_ylim(bottom=0.0)
-    axes[1, 1].set_ylim(bottom=0.0)
     fig.supxlabel("y")
     trim_shared_edge_ticks(axes[1, 0], axis="x", drop_last=True)
     trim_shared_edge_ticks(axes[1, 1], axis="x", drop_first=True)

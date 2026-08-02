@@ -96,8 +96,6 @@ PROJ_Z = np.array([0.0, 1.0])
 
 
 def read_table(path: Path) -> dict[str, np.ndarray]:
-    if not path.is_file():
-        raise FileNotFoundError(f"Missing required CSV file: {path}")
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         columns = {name: [] for name in reader.fieldnames or []}
@@ -108,8 +106,6 @@ def read_table(path: Path) -> dict[str, np.ndarray]:
 
 
 def read_summary(path: Path) -> dict[str, str]:
-    if not path.is_file():
-        raise FileNotFoundError(f"Missing required summary CSV: {path}")
     with path.open("r", encoding="utf-8", newline="") as handle:
         return {str(row["key"]): str(row["value"]) for row in csv.DictReader(handle)}
 

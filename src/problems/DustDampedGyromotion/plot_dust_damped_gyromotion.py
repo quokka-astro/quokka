@@ -88,9 +88,9 @@ SCHEMES = (
 )
 
 CASES = (
-    ("pure_damping", r"$\Omega_{\rm L} t_{\rm s,0}=0$", r"$t/t_{s,0}$"),
-    ("undamped_gyromotion", r"$\Omega_{\rm L} t_{\rm s,0}\to\infty$", r"$\Omega_{\rm L} t$"),
-    ("damped_gyromotion", r"$\Omega_{\rm L} t_{\rm s,0}=5$", r"$t/t_{s,0}$"),
+    ("pure_damping", r"$\Omega_{\rm L} t_{\rm s,0}=0$", r"$t/t_{s,0}$", 2.0),
+    ("undamped_gyromotion", r"$\Omega_{\rm L} t_{\rm s,0}\to\infty$", r"$\Omega_{\rm L} t$", 10.0),
+    ("damped_gyromotion", r"$\Omega_{\rm L} t_{\rm s,0}=5$", r"$t/t_{s,0}$", 2.0),
 )
 
 
@@ -117,7 +117,7 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
     fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COLUMN_WIDTH, 2.55), sharey=True)
     fig.subplots_adjust(left=0.08, right=0.99, bottom=0.16, top=0.88, wspace=0.17)
 
-    for column, (ax, (case_tag, title, xlabel)) in enumerate(zip(axes, CASES)):
+    for ax, (case_tag, title, xlabel, xmax) in zip(axes, CASES):
         history = read_table(data_dir / f"dust_damped_gyromotion_{case_tag}_history.csv")
         exact = read_table(data_dir / f"dust_damped_gyromotion_{case_tag}_exact.csv")
 
@@ -136,10 +136,10 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
         ax.set_title(title)
         ax.set_xlabel(xlabel)
         ax.set_ylim(-1.0, 1.0)
-        ax.set_xlim(0.0, 10.0 if case_tag == "undamped_gyromotion" else 2.0)
-        if column == 0:
-            ax.set_ylabel(r"$w_x/w_0$")
-            ax.legend(handles=legend_handles(), loc="best")
+        ax.set_xlim(0.0, xmax)
+
+    axes[0].set_ylabel(r"$w_x/w_0$")
+    axes[0].legend(handles=legend_handles(), loc="best")
 
     output_path = output_dir / OUTPUT_FILE
     fig.savefig(output_path)
@@ -159,12 +159,6 @@ def main() -> int:
     data_dir = args.data_dir.resolve()
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    for case_tag, _, _ in CASES:
-        for suffix in ("history", "exact"):
-            filename = f"dust_damped_gyromotion_{case_tag}_{suffix}.csv"
-            if not (data_dir / filename).exists():
-                raise FileNotFoundError(f"Missing required CSV file: {filename}")
 
     output = make_figure(data_dir, output_dir)
     print(output)
