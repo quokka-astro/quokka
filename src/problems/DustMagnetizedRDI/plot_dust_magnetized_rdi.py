@@ -262,7 +262,17 @@ def make_sigma_evolution(
         "by",
         "bz",
     )
-    ax.legend(handles=[handles[key] for key in legend_order], loc="lower right", ncol=3, fontsize=7.2)
+    ax.legend(
+        handles=[handles[key] for key in legend_order],
+        loc="lower right",
+        ncol=3,
+        fontsize=7.2,
+        frameon=True,
+        facecolor="white",
+        edgecolor="0.75",
+        framealpha=0.9,
+        borderpad=0.35,
+    )
     ax.set_xlabel(r"$t/t_s^0$")
     ax.set_ylabel("standard deviation")
     ax.set_xlim(boundaries[0], boundaries[-1])
@@ -548,8 +558,8 @@ def make_dust_density_pdf(
     ax.set_xlabel(r"$\ln(\rho_{\rm d}/\langle\rho_{\rm d}\rangle)$")
     ax.set_ylabel(r"$\mathrm{PDF}\left(\ln(\rho_{\rm d}/\langle\rho_{\rm d}\rangle)\right)$")
     ax.set_yscale("log")
-    ax.set_ylim(bottom=pdf_baseline)
-    ax.legend(loc="upper right")
+    ax.set_ylim(bottom=pdf_baseline, top=3.0)
+    ax.legend(loc="upper left")
 
     output = output_dir / "dust_magnetized_rdi_dust_density_pdf.pdf"
     fig.savefig(output)
