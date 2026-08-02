@@ -1430,10 +1430,20 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		int velV_index = x2Velocity_index;
 		int velW_index = x3Velocity_index;
 
+		// grid spacing along normal/transverse directions, for the viscous stress below (3D only)
+		[[maybe_unused]] amrex::Real dx_n = NAN;
+		[[maybe_unused]] amrex::Real dx_v = NAN;
+		[[maybe_unused]] amrex::Real dx_w = NAN;
+
 		if constexpr (DIR == FluxDir::X1) {
 			velN_index = x1Velocity_index;
 			velV_index = x2Velocity_index;
 			velW_index = x3Velocity_index;
+			if constexpr (AMREX_SPACEDIM == 3) {
+				dx_n = dx[0];
+				dx_v = dx[1];
+				dx_w = dx[2];
+			}
 		} else if constexpr (DIR == FluxDir::X2) {
 #if (AMREX_SPACEDIM == 2)
 			velN_index = x2Velocity_index;
@@ -1444,27 +1454,15 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			velN_index = x2Velocity_index;
 			velV_index = x3Velocity_index;
 			velW_index = x1Velocity_index;
+			dx_n = dx[1];
+			dx_v = dx[2];
+			dx_w = dx[0];
 #endif
 		} else if constexpr (DIR == FluxDir::X3) {
 			velN_index = x3Velocity_index;
 			velV_index = x1Velocity_index;
 			velW_index = x2Velocity_index;
-		}
-
-		// grid spacing along normal/transverse directions, for the viscous stress below (3D only)
-		[[maybe_unused]] amrex::Real dx_n = NAN;
-		[[maybe_unused]] amrex::Real dx_v = NAN;
-		[[maybe_unused]] amrex::Real dx_w = NAN;
-		if constexpr (AMREX_SPACEDIM == 3) {
-			if constexpr (DIR == FluxDir::X1) {
-				dx_n = dx[0];
-				dx_v = dx[1];
-				dx_w = dx[2];
-			} else if constexpr (DIR == FluxDir::X2) {
-				dx_n = dx[1];
-				dx_v = dx[2];
-				dx_w = dx[0];
-			} else if constexpr (DIR == FluxDir::X3) {
+			if constexpr (AMREX_SPACEDIM == 3) {
 				dx_n = dx[2];
 				dx_v = dx[0];
 				dx_w = dx[1];
