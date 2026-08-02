@@ -104,7 +104,7 @@ struct ShockPhysicsTraits {
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 };
 
-template <typename problem_t> AMREX_GPU_DEVICE auto computeGasEnergy(double rho, double vx, double bz) -> double
+AMREX_GPU_DEVICE auto computeGasEnergy(double rho, double vx, double bz) -> double
 {
 	const double kinetic = 0.5 * rho * vx * vx;
 	const double magnetic = 0.5 * bz * bz;
@@ -120,7 +120,7 @@ AMREX_GPU_DEVICE void fillCellState(const amrex::Array4<double> &state_cc, int i
 	}
 
 	state_cc(i, j, k, HydroSystem<problem_t>::density_index) = rho_g;
-	state_cc(i, j, k, HydroSystem<problem_t>::energy_index) = computeGasEnergy<problem_t>(rho_g, vx_g, bz);
+	state_cc(i, j, k, HydroSystem<problem_t>::energy_index) = computeGasEnergy(rho_g, vx_g, bz);
 	state_cc(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = 0.0;
 	state_cc(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = rho_g * vx_g;
 	state_cc(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = 0.0;
@@ -181,7 +181,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto makeShockInflowCellStat
 	amrex::GpuArray<amrex::Real, nvar> inflow_state{};
 	inflow_state[HydroSystem<problem_t>::density_index] = ShockCaseParams<problem_t>::rho_inflow;
 	inflow_state[HydroSystem<problem_t>::energy_index] =
-	    computeGasEnergy<problem_t>(ShockCaseParams<problem_t>::rho_inflow, ShockCaseParams<problem_t>::u_inflow, ShockCaseParams<problem_t>::bz_inflow);
+	    computeGasEnergy(ShockCaseParams<problem_t>::rho_inflow, ShockCaseParams<problem_t>::u_inflow, ShockCaseParams<problem_t>::bz_inflow);
 	inflow_state[HydroSystem<problem_t>::internalEnergy_index] = 0.0;
 	inflow_state[HydroSystem<problem_t>::x1Momentum_index] = ShockCaseParams<problem_t>::rho_inflow * ShockCaseParams<problem_t>::u_inflow;
 	inflow_state[HydroSystem<problem_t>::x2Momentum_index] = 0.0;
@@ -261,11 +261,11 @@ template <typename problem_t> auto extractShockProfile(QuokkaSimulation<problem_
 		const double mom_dy = values.at(HydroSystem<problem_t>::x2DustMomentum_index)[i];
 
 		profile.rho_g_[i] = rho_g;
-		profile.v_gx_[i] = (rho_g > 0.0) ? mom_gx / rho_g : 0.0;
-		profile.v_gy_[i] = (rho_g > 0.0) ? mom_gy / rho_g : 0.0;
+		profile.v_gx_[i] = mom_gx / rho_g;
+		profile.v_gy_[i] = mom_gy / rho_g;
 		profile.rho_d_[i] = rho_d;
-		profile.v_dx_[i] = (rho_d > 0.0) ? mom_dx / rho_d : 0.0;
-		profile.v_dy_[i] = (rho_d > 0.0) ? mom_dy / rho_d : 0.0;
+		profile.v_dx_[i] = mom_dx / rho_d;
+		profile.v_dy_[i] = mom_dy / rho_d;
 	}
 
 	return profile;
@@ -299,10 +299,6 @@ auto maxAbsValue(const std::vector<double> &values) -> double
 
 auto detectShockPosition(const ShockProfile &profile) -> double
 {
-	if (profile.rho_g_.size() < 2) {
-		return profile.x_.empty() ? 0.0 : profile.x_.front();
-	}
-
 	double max_jump = -1.0;
 	size_t shock_index = 0;
 	for (size_t i = 0; i + 1 < profile.rho_g_.size(); ++i) {
@@ -315,14 +311,15 @@ auto detectShockPosition(const ShockProfile &profile) -> double
 	return profile.x_[shock_index];
 }
 
-auto meanRelativeWindowDrift(const ShockProfile &profile, double shock_position, double rel_lo, double rel_hi) -> double
+auto meanWindowDifference(const ShockProfile &profile, const std::vector<double> &first, const std::vector<double> &second, double shock_position,
+			  double rel_lo, double rel_hi) -> double
 {
 	double sum = 0.0;
 	int count = 0;
 	for (size_t i = 0; i < profile.x_.size(); ++i) {
 		const double x_rel = profile.x_[i] - shock_position;
 		if (x_rel >= rel_lo && x_rel <= rel_hi) {
-			sum += std::abs(profile.v_dx_[i] - profile.v_gx_[i]);
+			sum += std::abs(first[i] - second[i]);
 			count++;
 		}
 	}
@@ -351,7 +348,7 @@ void writeShockProfileCsv(const ShockProfile &profile, const std::vector<double>
 	for (size_t i = 0; i < profile.x_.size(); ++i) {
 		const double w_y = profile.v_dy_[i] - profile.v_gy_[i];
 		file << profile.x_[i] << "," << profile.rho_g_[i] << "," << profile.v_gx_[i] << "," << profile.v_gy_[i] << ","
-		     << profile.rho_d_[i] / std::max(profile.epsilon_, 1.0e-12) << "," << profile.v_dx_[i] << "," << profile.v_dy_[i] << "," << w_y << ",";
+		     << profile.rho_d_[i] / profile.epsilon_ << "," << profile.v_dx_[i] << "," << profile.v_dy_[i] << "," << w_y << ",";
 		if (guiding_vx != nullptr) {
 			file << (*guiding_vx)[i];
 		}
@@ -370,21 +367,12 @@ auto runShockRegression(bool write_csv) -> int
 
 	const double vy_max_eps001_omega_ts0 = maxAbsValue(shock_eps001_omega_ts0.v_dy_);
 	const double vy_max_eps001_omega_ts20 = maxAbsValue(shock_eps001_omega_ts20.v_dy_);
-	const double mean_drift_eps001_omega_ts20 = meanRelativeWindowDrift(shock_eps001_omega_ts20, shock_position_eps001_omega_ts20, 0.02, 0.18);
+	const double mean_drift_eps001_omega_ts20 = meanWindowDifference(shock_eps001_omega_ts20, shock_eps001_omega_ts20.v_dx_, shock_eps001_omega_ts20.v_gx_,
+									 shock_position_eps001_omega_ts20, 0.02, 0.18);
 	const std::vector<double> guiding_vx_eps001_omega_ts20 = computeGuidingCenterVx(shock_eps001_omega_ts20);
 	const std::vector<double> guiding_vx_eps010_omega_ts20 = computeGuidingCenterVx(shock_eps010_omega_ts20);
-	double mean_guiding_drift_eps001_omega_ts20 = 0.0;
-	int guiding_count = 0;
-	for (size_t i = 0; i < shock_eps001_omega_ts20.x_.size(); ++i) {
-		const double x_rel = shock_eps001_omega_ts20.x_[i] - shock_position_eps001_omega_ts20;
-		if (x_rel >= 0.02 && x_rel <= 0.18) {
-			mean_guiding_drift_eps001_omega_ts20 += std::abs(guiding_vx_eps001_omega_ts20[i] - shock_eps001_omega_ts20.v_gx_[i]);
-			guiding_count++;
-		}
-	}
-	if (guiding_count > 0) {
-		mean_guiding_drift_eps001_omega_ts20 /= static_cast<double>(guiding_count);
-	}
+	const double mean_guiding_drift_eps001_omega_ts20 = meanWindowDifference(shock_eps001_omega_ts20, guiding_vx_eps001_omega_ts20,
+										 shock_eps001_omega_ts20.v_gx_, shock_position_eps001_omega_ts20, 0.02, 0.18);
 
 	if (write_csv) {
 		writeShockProfileCsv(shock_eps001_omega_ts0);

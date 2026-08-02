@@ -466,7 +466,7 @@ void fillDenseDriftXData(const DustGyroHistory &data, AnalyticFn analytic, doubl
 	t_dense.resize(n_dense);
 	x_dense.resize(n_dense);
 	wx_dense.resize(n_dense);
-	const double t_max = data.t_vec_.empty() ? 0.0 : data.t_vec_.back();
+	const double t_max = data.t_vec_.back();
 	for (size_t i = 0; i < n_dense; ++i) {
 		const double t = t_max * static_cast<double>(i) / static_cast<double>(n_dense - 1);
 		DriftState const exact = analytic(t);
@@ -493,10 +493,6 @@ template <typename AnalyticFn> void writeDenseExactCsv(const DustGyroHistory &da
 
 template <typename AnalyticFn> void writeHistoryCsv(const std::vector<SchemeRunResult> &runs, AnalyticFn analytic, std::string_view filename, double x_scale)
 {
-	if (runs.empty()) {
-		return;
-	}
-
 	size_t n_samples = runs.front().data.t_vec_.size();
 	for (auto const &run : runs) {
 		n_samples = std::min(n_samples, run.data.t_vec_.size());
@@ -522,10 +518,6 @@ template <typename AnalyticFn> void writeHistoryCsv(const std::vector<SchemeRunR
 
 template <typename AnalyticFn> void writeCaseOutputs(const std::vector<SchemeRunResult> &runs, AnalyticFn analytic, std::string_view case_tag, double x_scale)
 {
-	if (runs.empty()) {
-		return;
-	}
-
 	std::string const history_filename = "dust_damped_gyromotion_" + std::string(case_tag) + "_history.csv";
 	std::string const exact_filename = "dust_damped_gyromotion_" + std::string(case_tag) + "_exact.csv";
 	writeHistoryCsv(runs, analytic, history_filename, x_scale);
