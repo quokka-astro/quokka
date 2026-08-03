@@ -452,7 +452,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			// Create increasing ramp for eps_ff_
 			const amrex::Real Jdx_over_LambdaJ = J * dx[0] / LambdaJ;
 			amrex::Real eps_ff_eff = eps_ff_;
-			if(Jdx_over_LambdaJ > 1.0) {
+			if (Jdx_over_LambdaJ > 1.0) {
 				eps_ff_eff = std::min(eps_ff_ * std::exp(Jdx_over_LambdaJ), 1.0);
 			}
 			const amrex::Real nominal_prob_star_formation = (eps_ff_eff / eps_star) * (dt / t_ff);
