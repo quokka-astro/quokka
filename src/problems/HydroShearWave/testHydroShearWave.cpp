@@ -86,6 +86,8 @@ void configureShearViscousParameters()
 		pp.query("shear_flow_axis", shear_flow_axis);
 		pp.query("shear_grad_axis", shear_grad_axis);
 	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shear_flow_axis >= 0 && shear_flow_axis < AMREX_SPACEDIM, "setup.shear_flow_axis must be a valid spatial axis.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shear_grad_axis >= 0 && shear_grad_axis < AMREX_SPACEDIM, "setup.shear_grad_axis must be a valid spatial axis.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shear_flow_axis != shear_grad_axis,
 					 "setup.shear_flow_axis must differ from setup.shear_grad_axis (else div(v) != 0).");
 
