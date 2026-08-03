@@ -1670,7 +1670,7 @@ AMREX_GPU_DEVICE auto HydroSystem<problem_t>::ComputeViscousFlux(quokka::Array4V
 								 int velV_index, int velW_index, amrex::Real dx_n, amrex::Real dx_v, amrex::Real dx_w,
 								 amrex::Real shearViscosity, amrex::Real bulkViscosity) -> quokka::valarray<amrex::Real, 4>
 {
-	static_assert(AMREX_SPACEDIM == 3, "HydroSystem::ComputeViscousFlux currently only supports 3D.");
+	static_assert(AMREX_SPACEDIM == 3 || dependent_false_v<problem_t>, "HydroSystem::ComputeViscousFlux currently only supports 3D.");
 
 	// dq<comp>_d<dir> = derivative of q's <comp>-component along <dir>; n/v/w are the local orthonormal basis
 	// normal-direction derivatives: one-sided difference across the face, between cells i-1 and i
