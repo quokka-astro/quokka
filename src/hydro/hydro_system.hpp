@@ -1597,8 +1597,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				localBulkViscosity = local_viscosity[1];
 			}
 			if (localShearViscosity != 0.0 || localBulkViscosity != 0.0) {
-				const auto sigma = ComputeViscousFlux<DIR>(q, i, j, k, velN_index, velV_index, velW_index, dx_n, dx_v, dx_w, localShearViscosity,
-									    localBulkViscosity);
+				const auto sigma = ComputeViscousFlux<DIR>(q, i, j, k, velN_index, velV_index, velW_index, dx_n, dx_v, dx_w,
+									   localShearViscosity, localBulkViscosity);
 				F_canonical[x1Momentum_index] -= sigma[0];
 				F_canonical[x2Momentum_index] -= sigma[1];
 				F_canonical[x3Momentum_index] -= sigma[2];
