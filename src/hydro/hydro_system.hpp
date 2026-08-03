@@ -1278,6 +1278,14 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::
 	});
 }
 
+template <typename problem_t, FluxDir DIR>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeViscosity(int /*i*/, int /*j*/, int /*k*/, quokka::Array4View<const amrex::Real, DIR> const & /*q*/)
+    -> quokka::valarray<amrex::Real, 2> // {shear_viscosity, bulk_viscosity}
+{
+	static_assert(sizeof(problem_t) == 0, "computeViscosity must be specialized in the problem file when using ViscosityModel::problem_defined");
+	return {0.0, 0.0};
+}
+
 template <typename problem_t>
 template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
@@ -1581,9 +1589,16 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		// physical shear/bulk viscosity, added the same way as the artificial viscosity above
 		if constexpr (AMREX_SPACEDIM == 3 && Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
-			if (shearViscosity != 0.0 || bulkViscosity != 0.0) {
-				const auto sigma =
-				    ComputeViscousFlux<DIR>(q, i, j, k, velN_index, velV_index, velW_index, dx_n, dx_v, dx_w, shearViscosity, bulkViscosity);
+			amrex::Real localShearViscosity = shearViscosity;
+			amrex::Real localBulkViscosity = bulkViscosity;
+			if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) {
+				const auto local_viscosity = computeViscosity<problem_t, DIR>(i, j, k, q);
+				localShearViscosity = local_viscosity[0];
+				localBulkViscosity = local_viscosity[1];
+			}
+			if (localShearViscosity != 0.0 || localBulkViscosity != 0.0) {
+				const auto sigma = ComputeViscousFlux<DIR>(q, i, j, k, velN_index, velV_index, velW_index, dx_n, dx_v, dx_w, localShearViscosity,
+									    localBulkViscosity);
 				F_canonical[x1Momentum_index] -= sigma[0];
 				F_canonical[x2Momentum_index] -= sigma[1];
 				F_canonical[x3Momentum_index] -= sigma[2];
