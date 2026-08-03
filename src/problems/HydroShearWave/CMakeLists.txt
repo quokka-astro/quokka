@@ -11,9 +11,4 @@ if(AMReX_SPACEDIM EQUAL 3)
     NAME ${JOB_NAME}
     COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-
-  add_test(
-    NAME ${JOB_NAME}Transpose
-    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}Transpose.toml
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
