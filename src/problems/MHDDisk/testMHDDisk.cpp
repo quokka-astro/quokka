@@ -13,6 +13,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <hdf5.h>
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArrayBase.H"
@@ -50,6 +51,12 @@ namespace
 	constexpr double refine_Rcyl     = refine_Rcyl_kpc * 1.0e3 * C::parsec;
 	constexpr double refine_Hcyl     = refine_Hcyl_pc  * C::parsec;
 	constexpr double axis_fallback_cells = 1.0;
+	constexpr double turb_target_Mach = 0.5;
+	constexpr double turb_velocity_scale = 3.5e5; // cm/s = 0.5 * cs_disk (7 km/s)
+
+	constexpr int turb_nx = 512;
+	constexpr int turb_ny = 512;
+	constexpr int turb_nz = 512;
 } // namespace
 
 struct MHDGalaxy {
@@ -94,6 +101,7 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real vc{};
 	amrex::Real Sigma0{};
 	amrex::Real rho_cgm{};
+	amrex::Real rho_mid{};
 	amrex::Real n_cell{};
 	amrex::Real max_level{};
 	
@@ -107,10 +115,26 @@ template <> struct SimulationData<MHDGalaxy> {
 
 	// Vector allocation on the GPU
 	amrex::Gpu::DeviceVector<amrex::Real> Aphi_device;
-	amrex::Real sn_jeans_J;
-	amrex::Real sn_momentum;
-	amrex::Real sn_remnant_fraction;
+
+	// Supernova feedback parameters
+	amrex::Real sn_jeans_J{};
+	amrex::Real sn_momentum{};
+	amrex::Real sn_remnant_fraction{};
 	amrex::Real sn_ejecta_mass{};   // Mej, grams
+
+	// turbulence parameters
+	// Owning GPU storage for the pertx/perty/pertz cubes loaded from zdrv.hdf5.
+	// (amrex::Table3D has no file-reading constructor -- it is just a lightweight
+	// indexing view over a raw pointer -- so the data must be loaded into these
+	// device vectors first, then wrapped in an Array4 view at point of use.)
+	amrex::Gpu::DeviceVector<amrex::Real> turb_vx_device;
+	amrex::Gpu::DeviceVector<amrex::Real> turb_vy_device;
+	amrex::Gpu::DeviceVector<amrex::Real> turb_vz_device;
+	amrex::Real turb_rescale_factor{};
+
+	int turb_nx{};
+	int turb_ny{};
+	int turb_nz{};
 };
 
 // for Initializing Gas Densities & Surface Densities
@@ -144,6 +168,19 @@ auto diskDensityAnalytic(double R, double z,
 		-vc*vc / (2.0 * cs*cs));
 
 	return rho0 * disk_factor * halo_factor;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+auto get_beta_taper_factor(double R, double z,
+                           double Sigma0, double vc,
+                           double cs_disk, double cs_cgm,
+                           double rho_cgm, double rho_mid) -> double
+{
+    const double rho_disc_raw = diskDensityAnalytic(R, z, Sigma0, vc, cs_disk);
+    const bool   in_disk      = (rho_disc_raw > rho_transition);
+    const double rho          = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
+    const double cs           = in_disk ? cs_disk : cs_cgm;
+    return std::sqrt((rho * cs * cs) / (rho_mid * cs_disk * cs_disk));
 }
 
 // 1D and 2D Interpolation Operators for Cylindrical A_phi Evaluation
@@ -216,6 +253,47 @@ auto sample_bicubic(
 	return cubic_interp(col[0], col[1], col[2], col[3], tZ);
 }
 
+AMREX_GPU_HOST_DEVICE
+inline amrex::Real interpolate_turbulence(
+    const amrex::Array4<const amrex::Real>& table,
+    int nx, int ny, int nz,
+    amrex::Real x, amrex::Real y, amrex::Real z)
+{
+    x = amrex::max(0.0, amrex::min(x, static_cast<amrex::Real>(nx-1)));
+    y = amrex::max(0.0, amrex::min(y, static_cast<amrex::Real>(ny-1)));
+    z = amrex::max(0.0, amrex::min(z, static_cast<amrex::Real>(nz-1)));
+
+    int i0 = static_cast<int>(x);
+    int j0 = static_cast<int>(y);
+    int k0 = static_cast<int>(z);
+
+    int i1 = amrex::min(i0+1, nx-1);
+    int j1 = amrex::min(j0+1, ny-1);
+    int k1 = amrex::min(k0+1, nz-1);
+
+    amrex::Real fx = x-i0;
+    amrex::Real fy = y-j0;
+    amrex::Real fz = z-k0;
+
+    auto c000 = table(i0,j0,k0);
+    auto c100 = table(i1,j0,k0);
+    auto c010 = table(i0,j1,k0);
+    auto c110 = table(i1,j1,k0);
+    auto c001 = table(i0,j0,k1);
+    auto c101 = table(i1,j0,k1);
+    auto c011 = table(i0,j1,k1);
+    auto c111 = table(i1,j1,k1);
+
+    return
+        c000*(1-fx)*(1-fy)*(1-fz) +
+        c100*fx*(1-fy)*(1-fz) +
+        c010*(1-fx)*fy*(1-fz) +
+        c110*fx*fy*(1-fz) +
+        c001*(1-fx)*(1-fy)*fz +
+        c101*fx*(1-fy)*fz +
+        c011*(1-fx)*fy*fz +
+        c111*fx*fy*fz;
+}
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE 
 auto get_taper_factor(double x, double y, double z, 
@@ -273,6 +351,55 @@ load_bin_to_device(const std::string &path, std::size_t n_expect) -> amrex::Gpu:
     
     amrex::Print() << "Loaded " << path << " (" << n_expect << " elements)\n";
     return dev;
+}
+
+// Loads a single named dataset (e.g. "pertx", "perty", "pertz") from an HDF5 file
+// (e.g. zdrv.hdf5) into a flat host buffer of size n_expect, verifies the on-disk
+// dataset size matches, then copies it to a newly-allocated device vector.
+inline auto
+load_hdf5_dataset_to_device(const std::string &path, const std::string &dset_name,
+                             std::size_t n_expect) -> amrex::Gpu::DeviceVector<amrex::Real>
+{
+	hid_t file_id = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id >= 0, ("Cannot open HDF5 file " + path).c_str());
+
+	hid_t dset_id = H5Dopen2(file_id, dset_name.c_str(), H5P_DEFAULT);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id >= 0,
+		("Cannot open dataset '" + dset_name + "' in " + path).c_str());
+
+	// Sanity-check the on-disk dataset size against what the caller expects
+	// (turb_nx * turb_ny * turb_nz), so a mismatched turb_file fails loudly
+	// instead of silently reading garbage or overrunning the host buffer.
+	hid_t space_id = H5Dget_space(dset_id);
+	const int ndims = H5Sget_simple_extent_ndims(space_id);
+	std::vector<hsize_t> dims(static_cast<std::size_t>(ndims));
+	H5Sget_simple_extent_dims(space_id, dims.data(), nullptr);
+	hsize_t total = 1;
+	for (auto d : dims) { total *= d; }
+	H5Sclose(space_id);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(total == n_expect,
+		("HDF5 dataset '" + dset_name + "' in " + path +
+		 " has a different element count than turb_nx*turb_ny*turb_nz").c_str());
+
+	std::vector<amrex::Real> host(n_expect);
+#ifdef AMREX_USE_FLOAT
+	herr_t status = H5Dread(dset_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, host.data());
+#else
+	herr_t status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, host.data());
+#endif
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status >= 0,
+		("Error reading dataset '" + dset_name + "' from " + path).c_str());
+
+	H5Dclose(dset_id);
+	H5Fclose(file_id);
+
+	amrex::Gpu::DeviceVector<amrex::Real> dev(n_expect);
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, host.begin(), host.end(), dev.begin());
+	amrex::Gpu::synchronize();
+
+	amrex::Print() << "Loaded HDF5 dataset '" << dset_name << "' from " << path
+	               << " (" << n_expect << " elements)\n";
+	return dev;
 }
 
 // preCalculateInitialConditions: loads parameters and the 2D cylindrical A_phi potential table from disk, 
@@ -401,6 +528,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			constexpr double gam = quokka::EOS_Traits<MHDGalaxy>::gamma;
 			const double Sigma_Rd = surfaceDensityProfile(Rd, userData_.Sigma0);
 			const double rho_mid  = (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * cs * cs);
+			userData_.rho_mid = rho_mid;
 			const double B_rms_HL = cs * std::sqrt(2.0 * rho_mid / (gam * target_beta_seed));
 			userData_.seed_B0_HL  = B_rms_HL * userData_.seed_Rmax;
 			amrex::Print() << "Seed field: target_beta=" << target_beta_seed
@@ -408,6 +536,40 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			               << "  B_rms_HL=" << B_rms_HL
 			               << "  B0_scale=" << userData_.seed_B0_HL << " G*cm (HL)\n";
 		}
+	}
+
+	static bool isTurbSamplingDone = false;
+	if (!isTurbSamplingDone) {
+
+		userData_.turb_nx = turb_nx;
+		userData_.turb_ny = turb_ny;
+		userData_.turb_nz = turb_nz;
+
+		amrex::ParmParse pp("mhd_galaxy");
+
+		std::string turb_file;
+		pp.get("turb_file", turb_file); // e.g. "zdrv.hdf5"
+
+		const std::size_t n_turb = static_cast<std::size_t>(turb_nx) *
+		                           static_cast<std::size_t>(turb_ny) *
+		                           static_cast<std::size_t>(turb_nz);
+
+		userData_.turb_vx_device = load_hdf5_dataset_to_device(turb_file, "pertx", n_turb);
+		userData_.turb_vy_device = load_hdf5_dataset_to_device(turb_file, "perty", n_turb);
+		userData_.turb_vz_device = load_hdf5_dataset_to_device(turb_file, "pertz", n_turb);
+
+		// perturbations.py produces unit RMS velocity fields
+		constexpr double turb_rescale = turb_velocity_scale;
+		userData_.turb_rescale_factor = turb_rescale;
+
+		amrex::Print()
+			<< "Turbulence loaded from " << turb_file << ": "
+			<< turb_nx << "^3 cube\n"
+			<< "Velocity scale = "
+			<< turb_rescale / 1.0e5
+			<< " km/s\n";
+
+		isTurbSamplingDone = true;
 	}
 
 	amrex::Print()
@@ -440,7 +602,45 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 	const amrex::Box            &indexRange = grid_elem.indexRange_;
 	const auto                  dx        = grid_elem.dx_;
 	const auto                  prob_lo   = grid_elem.prob_lo_;
-	const amrex::Array4<double> &state_cc  = grid_elem.array_;
+	const amrex::Array4<amrex::Real> &state_cc = grid_elem.array_;
+
+	// -- turbulent velocity perturbations from zdrv.hdf5 --
+	const int turb_nx = userData_.turb_nx;
+	const int turb_ny = userData_.turb_ny;
+	const int turb_nz = userData_.turb_nz;
+
+	// Array4 views over the device buffers loaded in preCalculateInitialConditions
+	// (indices run [0,turb_nx-1] x [0,turb_ny-1] x [0,turb_nz-1], ncomp=1).
+	const amrex::Dim3 turb_arr_lo{0, 0, 0};
+	const amrex::Dim3 turb_arr_hi{turb_nx, turb_ny, turb_nz};
+	const amrex::Array4<const amrex::Real> turb_vx(userData_.turb_vx_device.data(), turb_arr_lo, turb_arr_hi, 1);
+	const amrex::Array4<const amrex::Real> turb_vy(userData_.turb_vy_device.data(), turb_arr_lo, turb_arr_hi, 1);
+	const amrex::Array4<const amrex::Real> turb_vz(userData_.turb_vz_device.data(), turb_arr_lo, turb_arr_hi, 1);
+
+	const double turb_rescale = userData_.turb_rescale_factor;
+
+	const double turb_xmin = geom[0].ProbLoArray()[0];
+	const double turb_ymin = geom[0].ProbLoArray()[1];
+	const double turb_zmin = geom[0].ProbLoArray()[2];
+
+	const double turb_Lx =
+		geom[0].ProbHiArray()[0] - geom[0].ProbLoArray()[0];
+
+	const double turb_Ly =
+		geom[0].ProbHiArray()[1] - geom[0].ProbLoArray()[1];
+
+	const double turb_Lz =
+		geom[0].ProbHiArray()[2] - geom[0].ProbLoArray()[2];
+
+	const double turb_dx =
+		turb_Lx / static_cast<double>(turb_nx - 1);
+
+	const double turb_dy =
+		turb_Ly / static_cast<double>(turb_ny - 1);
+
+	const double turb_dz =
+		turb_Lz / static_cast<double>(turb_nz - 1);
+
 
 	// Cylindrical Potential Table Pointers & Parameters for GPU Lambdas
 	const amrex::Real* aphi_ptr = userData_.Aphi_device.data();
@@ -452,14 +652,18 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
     const double dR_table = Rmax_table / static_cast<double>(nR_table);
     const double axis_dead_zone = axis_fallback_cells * dR_table;
 
+
+
     // physical potential with hard boundary guard and smooth tapering, sampled directly in the node lambdas 
 	// to ensure consistency with the interpolated values used for curl calculation.
+	const double rho_mid_local = userData_.rho_mid;   // add this line before the lambda
+
 	auto get_Aphi_physical = [=] AMREX_GPU_DEVICE(double x_val, double y_val, double z_val) -> double {
 		const double R_val = std::sqrt(x_val * x_val + y_val * y_val);
 		double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
-		return aphi_nd * B0_scale;
+		const double beta_taper = get_beta_taper_factor(R_val, z_val, Sigma0, vc, cs_disk, cs_cgm, rho_cgm, rho_mid_local); // use local, not userData_.rho_mid
+		return aphi_nd * B0_scale * beta_taper;
 	};
-
     auto get_Ax = [=] AMREX_GPU_DEVICE(double x_e, double y_e, double z_e) -> double {
         const double R_e = std::sqrt(x_e * x_e + y_e * y_e);
         
@@ -507,9 +711,42 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 			vy =  vrot * x / R;
 		}
 
+		double dvx_pert = 0.0;
+		double dvy_pert = 0.0;
+		double dvz_pert = 0.0;
+
+		if (in_disk) {
+
+			const double tx = (x - turb_xmin) / turb_dx;
+			const double ty = (y - turb_ymin) / turb_dy;
+			const double tz = (z - turb_zmin) / turb_dz;
+
+			const double tx_c = amrex::min(amrex::max(tx,0.0),
+										double(turb_nx-1));
+			const double ty_c = amrex::min(amrex::max(ty,0.0),
+										double(turb_ny-1));
+			const double tz_c = amrex::min(amrex::max(tz,0.0),
+										double(turb_nz-1));
+
+			dvx_pert = interpolate_turbulence(turb_vx,turb_nx,turb_ny,turb_nz,
+										tx_c,ty_c,tz_c)
+					* turb_rescale;
+
+			dvy_pert = interpolate_turbulence(turb_vy,turb_nx,turb_ny,turb_nz,
+										tx_c,ty_c,tz_c)
+					* turb_rescale;
+
+			dvz_pert = interpolate_turbulence(turb_vz,turb_nx,turb_ny,turb_nz,
+										tx_c,ty_c,tz_c)
+					* turb_rescale;
+		}
+		vx += dvx_pert;
+		vy += dvy_pert;
+		double vz = dvz_pert;
+
 		const double pressure = rho * cs * cs;
 		const double Eint     = pressure / (gamma - 1.0);
-		const double Ekin     = 0.5 * rho * (vx*vx + vy*vy);
+		const double Ekin = 0.5 * rho * (vx*vx + vy*vy + vz*vz);
 
 		// Cell-Centered Magnetic Energy Calculation 
 		// define local total energy at cell centers by calculating the analytic differences
@@ -548,7 +785,7 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 		state_cc(i,j,k,HydroSystem<MHDGalaxy>::density_index)        = rho;
 		state_cc(i,j,k,HydroSystem<MHDGalaxy>::x1Momentum_index)     = rho * vx;
 		state_cc(i,j,k,HydroSystem<MHDGalaxy>::x2Momentum_index)     = rho * vy;
-		state_cc(i,j,k,HydroSystem<MHDGalaxy>::x3Momentum_index)     = 0.0;
+		state_cc(i,j,k,HydroSystem<MHDGalaxy>::x3Momentum_index)     = rho * vz;
 		state_cc(i,j,k,HydroSystem<MHDGalaxy>::energy_index)         = Ekin + Eint + Emag;
 		state_cc(i,j,k,HydroSystem<MHDGalaxy>::internalEnergy_index) = Eint;
 	});
@@ -558,13 +795,19 @@ template <>
 void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
 	quokka::grid const &grid_elem)
 {
-	const amrex::Array4<double> &state_fc   = grid_elem.array_;
+	const amrex::Array4<amrex::Real> &state_fc = grid_elem.array_;
 	const amrex::Box            &indexRange = grid_elem.indexRange_;
 	const quokka::direction      dir        = grid_elem.dir_;
 	const auto                   dx         = grid_elem.dx_;
 	const auto                   prob_lo    = grid_elem.prob_lo_;
 
 	const double B0_scale = userData_.seed_B0_HL;
+
+	const double vc      = userData_.vc;
+	const double Sigma0  = userData_.Sigma0;
+	const double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
+	const double cs_cgm  = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
+	const double rho_cgm = userData_.rho_cgm;
 
 	// Cylindrical Potential Table Pointers & Parameters 
 	const amrex::Real* aphi_ptr = userData_.Aphi_device.data();
@@ -583,10 +826,13 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
 	constexpr double boundary_tol = 1.0e-6; // relative tolerance, scaled by dx below
 
 	// magnetic potential with hard boundary guard
+	const double rho_mid_local = userData_.rho_mid;   // add this line before the lambda
+
 	auto get_Aphi_physical = [=] AMREX_GPU_DEVICE(double x_val, double y_val, double z_val) -> double {
 		const double R_val = std::sqrt(x_val * x_val + y_val * y_val);
 		double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
-		return aphi_nd * B0_scale;
+		const double beta_taper = get_beta_taper_factor(R_val, z_val, Sigma0, vc, cs_disk, cs_cgm, rho_cgm, rho_mid_local); // use local, not userData_.rho_mid
+		return aphi_nd * B0_scale * beta_taper;
 	};
     // cartesian mapping with deadzone
     auto get_Ax_node = [=] AMREX_GPU_DEVICE(double x_n, double y_n, double z_n) -> double {
