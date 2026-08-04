@@ -142,7 +142,6 @@ double diskDensityAnalytic(double R, double z,
 
 template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
 {
-	amrex::Print() << "Pre-calculating HDGalaxy initial conditions...\n";
 	amrex::ParmParse const pp("hd_galaxy");
     pp.get("Mc",     userData_.Mc);
     pp.get("Q_mean", userData_.Q_mean);
@@ -190,19 +189,18 @@ template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
     // Pressure matching: P = cs_disk^2 * rho_transition = cs_cgm^2 * rho_cgm
     userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
 
-    amrex::Print() << "HDGalaxy:"
-                   << " Q_mean = "    << userData_.Q_mean
-                   << ", Mc = "       << userData_.Mc
-                   << ", vc = "       << vc / 1.0e5        << " km/s"
-                   << ", cs_disk = "  << cs_disk / 1.0e5   << " km/s"
-                   << ", cs_cgm = "   << cs_cgm  / 1.0e5   << " km/s"
-                   << ", Sigma0 = "   << userData_.Sigma0   << " g/cm^2"
-                   << ", rho_cgm = "  << userData_.rho_cgm  << " g/cm^3\n";
+    // amrex::Print() << "HDGalaxy:"
+                //    << " Q_mean = "    << userData_.Q_mean
+                //    << ", Mc = "       << userData_.Mc
+                //    << ", vc = "       << vc / 1.0e5        << " km/s"
+                //    << ", cs_disk = "  << cs_disk / 1.0e5   << " km/s"
+                //    << ", cs_cgm = "   << cs_cgm  / 1.0e5   << " km/s"
+                //    << ", Sigma0 = "   << userData_.Sigma0   << " g/cm^2"
+                //    << ", rho_cgm = "  << userData_.rho_cgm  << " g/cm^3\n";
 }
 
 template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	amrex::Print() << "Setting HDGalaxy initial conditions on grid...\n";
 	const double vc      = userData_.vc;
 	const double Sigma0  = userData_.Sigma0;
 	const double cs_disk = quokka::EOS_Traits<HDGalaxy>::cs_disk;
@@ -266,7 +264,6 @@ template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::
 
 template <> void QuokkaSimulation<HDGalaxy>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real /*time*/, amrex::Real dt_lev)
 {
-	amrex::Print() << "Adding HDGalaxy Strang split sources...\n";
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx      = geom[lev].CellSizeArray();
 	const amrex::Real dt = dt_lev;

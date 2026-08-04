@@ -14,7 +14,7 @@ amr.blocking_factor_x = 128
 amr.blocking_factor_y = 128
 amr.blocking_factor_z = 16
 amr.max_grid_size   = 128
-amr.max_level       = 3
+amr.max_level       = 1
 amr.n_error_buf     = 2
 amr.grid_eff        = 0.75
 regrid_interval     = -1
@@ -25,12 +25,12 @@ checkpoint_prefix = "tests/chk/mhddisk_Q1turb_chk"
 statistics_file = "tests/mhddiskstats_Q1turb.txt"
 statistics_interval = 1
 density_floor = 1.0e-32
-restartfile = "tests/chk/mhddisk_Q1turb_chk0022203"
+#restartfile = "tests/chk/mhddisk_Q1turb_chk0022203"
 # *****************************************************************
 # Time integration
 # *****************************************************************
 cfl                 = 0.3
-max_timesteps       = 1e8
+max_timesteps       = 3
 stop_time           = 1.18608e16   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s, 4 rotations
 # *****************************************************************
 # Output
@@ -50,7 +50,9 @@ mhd_galaxy.sn_momentum             = 3.0e3
 mhd.project_initial_b_field = true
 mhd.update_initial_b_energy = true
 
-mhd_galaxy.turb_file = zdrv.hdf5
+mhd_galaxy.turb_vx_file = vx.bin
+mhd_galaxy.turb_vy_file = vy.bin
+mhd_galaxy.turb_vz_file = vz.bin
 
 
 quokka.diagnostics = slice_z slice_x proj_z        # Space-separated name(s) of diagnostics (arbitrary)
