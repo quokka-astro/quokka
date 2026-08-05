@@ -1152,9 +1152,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 			auto d = delta.array(mfi);
 			auto const &mask_arr = mask.const_array(mfi);
 
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{
+			const std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{
 				state_fc[0].const_array(mfi), state_fc[1].const_array(mfi), state_fc[2].const_array(mfi)};
-			auto const *fab_fc_ptr = &fab_fc;
 
 			const auto slo = state[mfi].box().smallEnd();
 			const auto shi = state[mfi].box().bigEnd();
@@ -1167,8 +1166,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 
 				const double rho = s(i, j, k, HydroSystem<MHDGalaxy>::density_index);
 
-				const double cs          = HydroSystem<MHDGalaxy>::ComputeIsothermalSoundSpeed(s, i, j, k, fab_fc_ptr);
-				const double plasma_beta = HydroSystem<MHDGalaxy>::ComputePlasmaBeta(s, i, j, k, fab_fc_ptr);
+				const double cs          = HydroSystem<MHDGalaxy>::ComputeIsothermalSoundSpeed(s, i, j, k, &fab_fc);
+				const double plasma_beta = HydroSystem<MHDGalaxy>::ComputePlasmaBeta(s, i, j, k, &fab_fc);
 				const double beta_safe   = amrex::max(plasma_beta, 1.0e-10);
 				const double cs_eff_sq   = cs * cs * (1.0 + 0.74 / beta_safe);
 				const double rho_J = M_PI * cs_eff_sq / (C::Gconst * sn_jeans_J * sn_jeans_J * (dx_max * dx_max));
