@@ -31,4 +31,4 @@ hydro.bulk_viscosity = 0.004
 
 setup.run_convergence = false
 setup.run_sim = true
-setup.error_tol = 1.0e-6
+setup.error_tol = 1.0e-8
