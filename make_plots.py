@@ -1109,6 +1109,87 @@ if is_root:
     plt.close(fig)
     rprint(f"Saved: {tag('rotation_curve_diagnostic.png')}")
 
+
+# ============================================================
+# Velocity fluctuations (turbulent residual, midplane)
+# ============================================================
+if is_root:
+    rprint("\n--- Velocity fluctuations (turbulent residual) ---")
+    vx_xy, xlabel, ylabel, _ = vel_slices[("x-Velocity", "z")]
+    vy_xy, _, _, _           = vel_slices[("y-Velocity", "z")]
+    vz_xy, _, _, _           = vel_slices[("z-Velocity", "z")]
+    px = np.linspace(-width_kpc/2, width_kpc/2, vx_xy.shape[1])
+    py = np.linspace(-width_kpc/2, width_kpc/2, vx_xy.shape[0])
+    XX, YY = np.meshgrid(px, py)
+    R_grid = np.sqrt(XX**2 + YY**2)
+    R_safe = np.where(R_grid > 0, R_grid, 1.0)
+    # Cylindrical decomposition
+    vR_xy   = (vx_xy * XX + vy_xy * YY) / R_safe
+    vphi_xy = (vy_xy * XX - vx_xy * YY) / R_safe
+
+    # Analytic rotation-curve baseline, subtracted EXACTLY (not via a coarse
+    # binned numerical mean). The true curve vc*R/sqrt(R^2+Rc^2) rises
+    # steeply within the first ~Rc, so a piecewise-constant binned-mean
+    # baseline (the previous approach) systematically over/under-shoots
+    # within each bin near the center, leaving a spurious concentric
+    # ripple in the residual that has nothing to do with real turbulence
+    # or AMR structure. Subtracting the known analytic form directly
+    # removes that artifact entirely.
+    Rc_kpc  = 2.0
+    Rc_cm   = Rc_kpc * 1.0e3 * 3.085677581e18
+    cs_disk = 7.0e5
+    Mc      = float(ds.parameters.get("mhd_galaxy.Mc", 30.0))
+    vc_cms  = Mc * cs_disk
+
+    R_grid_cm = R_grid * kpc
+    vrot_analytic_2d = vc_cms * R_grid_cm / np.sqrt(R_grid_cm**2 + Rc_cm**2)
+
+    dvphi_xy = vphi_xy - vrot_analytic_2d   # azimuthal fluctuation (exact baseline)
+    dvR_xy   = vR_xy                        # radial: mean ~0 by symmetry
+    dvz_xy   = vz_xy                        # vertical: mean ~0 by symmetry
+
+    axis_mask = R_grid < dead_zone_kpc
+    dvR_xy   = np.where(axis_mask, np.nan, dvR_xy)
+    dvphi_xy = np.where(axis_mask, np.nan, dvphi_xy)
+    dvz_xy   = np.where(axis_mask, np.nan, dvz_xy)
+
+    # 1D dispersion profile still uses binning, but only to AGGREGATE the
+    # already-correct residual by radius for the profile plot — the bins
+    # here no longer define the baseline being subtracted, so their
+    # coarseness no longer introduces any artifact.
+    R_bins_f = np.linspace(0.0, width_kpc / 2, 60)
+    R_mid_f  = 0.5 * (R_bins_f[:-1] + R_bins_f[1:])
+    sigma_turb_1d = np.zeros(len(R_mid_f))
+    for i, (rlo, rhi) in enumerate(zip(R_bins_f[:-1], R_bins_f[1:])):
+        m = (R_grid >= rlo) & (R_grid < rhi)
+        if m.sum() > 4:
+            sigma_turb_1d[i] = np.sqrt(np.nanmean(dvphi_xy[m]**2 + dvR_xy[m]**2 + dvz_xy[m]**2))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    fluct_vmax = np.nanpercentile(
+        np.abs(np.concatenate([dvphi_xy.ravel(), dvR_xy.ravel(), dvz_xy.ravel()])), 99)
+    for ax, data, label in zip(axes.flat[:3],
+                               [dvR_xy, dvphi_xy, dvz_xy],
+                               [r"$\delta v_R$", r"$\delta v_\phi$", r"$\delta v_z$"]):
+        im = ax.imshow(data, origin="lower", extent=extent_kpc, cmap="RdBu_r",
+                       vmin=-fluct_vmax, vmax=fluct_vmax,
+                       interpolation="nearest", aspect="equal")
+        plt.colorbar(im, ax=ax, label="cm/s")
+        ax.set_title(f"{label} (turbulent residual)", fontsize=10)
+        ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+    ax4 = axes.flat[3]
+    ax4.plot(R_mid_f, sigma_turb_1d / 1e5, lw=2)
+    ax4.set_xlabel("R [kpc]")
+    ax4.set_ylabel(r"$\sigma_{turb}$ [km/s]")
+    ax4.set_title("Turbulent velocity dispersion vs R (midplane)")
+    ax4.axvline(dead_zone_kpc, color="red", ls=":", lw=1,
+                label=f"Dead zone ({dead_zone_kpc:.2f} kpc)")
+    ax4.legend(fontsize=8)
+    fig.suptitle(f"Velocity fluctuations (midplane) — t = {t_myr:.1f} Myr", fontsize=13)
+    fig.tight_layout()
+    fig.savefig(tag("velocity_fluctuations.png"), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    rprint(f"Saved: {tag('velocity_fluctuations.png')}")
+
 comm.Barrier()
 elapsed = time.time() - t_start
 rprint(f"\nAll plots complete. Wall time: {elapsed:.1f} s  ({size} rank(s))")
