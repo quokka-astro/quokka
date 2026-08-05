@@ -295,6 +295,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			const bool viscosity_active = (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) ||
 						      (shearViscosity_ != 0.0) || (bulkViscosity_ != 0.0);
 			if (viscosity_active) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(AMREX_SPACEDIM == 3, "Physical viscosity is only implemented in 3D. Set AMREX_SPACEDIM=3.");
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0,
 								 "AMR subcycling is not supported with nonzero viscosity. Set do_subcycle = 0.");
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(useDualEnergy_ == 0,
