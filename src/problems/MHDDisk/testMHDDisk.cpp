@@ -7,7 +7,6 @@
 /// \brief Defines a simulation using disk galaxy initial conditions.
 ///
 
-#include <math.h>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -52,7 +51,6 @@ namespace
 	constexpr double refine_Hcyl     = refine_Hcyl_pc  * C::parsec;
 	constexpr double axis_fallback_cells = 1.0;
 	constexpr double turb_target_Mach = 0.5;
-	constexpr double turb_velocity_scale = 3.5e5; // cm/s = 0.5 * cs_disk (7 km/s)
 
 	constexpr int turb_nx = 512;
 	constexpr int turb_ny = 512;
@@ -254,10 +252,10 @@ auto sample_bicubic(
 }
 
 AMREX_GPU_HOST_DEVICE
-inline amrex::Real interpolate_turbulence(
+inline auto interpolate_turbulence(
     const amrex::Array4<const amrex::Real>& table,
     int nx, int ny, int nz,
-    amrex::Real x, amrex::Real y, amrex::Real z)
+    amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
 {
     x = amrex::max(0.0, amrex::min(x, static_cast<amrex::Real>(nx-1)));
     y = amrex::max(0.0, amrex::min(y, static_cast<amrex::Real>(ny-1)));
@@ -403,11 +401,17 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
 
     // Load 2D Cylindrical A_phi Potential Table first time only
+    // Load 2D Cylindrical A_phi Potential Table first time only
 	if (userData_.Aphi_device.empty()) {
-		std::string meta_filename = "Aphi_2d_meta.txt";
-		std::ifstream meta_file(meta_filename);
+		amrex::ParmParse pp_field("mhd_galaxy");
+		std::string aphi_meta_file;
+		std::string aphi_data_file;
+		pp_field.get("aphi_meta_file", aphi_meta_file);
+		pp_field.get("aphi_data_file", aphi_data_file);
+
+		std::ifstream meta_file(aphi_meta_file);
 		if (!meta_file.is_open()) {
-			amrex::Abort("Could not open 2D seed field metadata file: " + meta_filename);
+			amrex::Abort("Could not open 2D seed field metadata file: " + aphi_meta_file);
 		}
 
 		std::string line;
@@ -462,8 +466,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			"Error parsing cylindrical vector potential meta variables from init_seed_pot_field.");
 
 		std::size_t total_elements = userData_.seed_nR * userData_.seed_nz;
-		std::string data_filename = "Aphi_2d_Aphi.bin";
-		userData_.Aphi_device = load_bin_to_device(data_filename, total_elements);
+		userData_.Aphi_device = load_bin_to_device(aphi_data_file, total_elements);
 
 		amrex::Print() << "Loaded 2D Cylindrical Aphi Table cleanly. Map Size: " 
 		               << userData_.seed_nR << " x " << userData_.seed_nz << "\n";
@@ -522,7 +525,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 
 
 		// perturbations.py produces unit RMS velocity fields
-		constexpr double turb_rescale = turb_velocity_scale;
+		constexpr double turb_rescale = turb_target_Mach * quokka::EOS_Traits<MHDGalaxy>::cs_disk;
 		userData_.turb_rescale_factor = turb_rescale;
 
 
@@ -581,8 +584,8 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 
 	// Array4 views over the device buffers loaded in preCalculateInitialConditions
 	// (indices run [0,turb_nx-1] x [0,turb_ny-1] x [0,turb_nz-1], ncomp=1).
-	const amrex::Dim3 turb_arr_lo{0, 0, 0};
-	const amrex::Dim3 turb_arr_hi{turb_nx, turb_ny, turb_nz};
+	const amrex::Dim3 turb_arr_lo{.x=0, .y=0, .z=0};
+	const amrex::Dim3 turb_arr_hi{.x=turb_nx, .y=turb_ny, .z=turb_nz};
 	const amrex::Array4<const amrex::Real> turb_vx(userData_.turb_vx_device.data(), turb_arr_lo, turb_arr_hi, 1);
 	const amrex::Array4<const amrex::Real> turb_vy(userData_.turb_vy_device.data(), turb_arr_lo, turb_arr_hi, 1);
 	const amrex::Array4<const amrex::Real> turb_vz(userData_.turb_vz_device.data(), turb_arr_lo, turb_arr_hi, 1);
@@ -691,24 +694,16 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 			const double ty = (y - turb_ymin) / turb_dy;
 			const double tz = (z - turb_zmin) / turb_dz;
 
-			const double tx_c = amrex::min(amrex::max(tx,0.0),
-										double(turb_nx-1));
-			const double ty_c = amrex::min(amrex::max(ty,0.0),
-										double(turb_ny-1));
-			const double tz_c = amrex::min(amrex::max(tz,0.0),
-										double(turb_nz-1));
+			const double tx_c = amrex::min(amrex::max(tx,0.0),static_cast<double>(turb_nx-1));
+			const double ty_c = amrex::min(amrex::max(ty,0.0),static_cast<double>(turb_ny-1));
+			const double tz_c = amrex::min(amrex::max(tz,0.0),static_cast<double>(turb_nz-1));
 
 			dvx_pert = interpolate_turbulence(turb_vx,turb_nx,turb_ny,turb_nz,
-										tx_c,ty_c,tz_c)
-					* turb_rescale;
-
+										tx_c,ty_c,tz_c) * turb_rescale;
 			dvy_pert = interpolate_turbulence(turb_vy,turb_nx,turb_ny,turb_nz,
-										tx_c,ty_c,tz_c)
-					* turb_rescale;
-
+										tx_c,ty_c,tz_c) * turb_rescale;
 			dvz_pert = interpolate_turbulence(turb_vz,turb_nx,turb_ny,turb_nz,
-										tx_c,ty_c,tz_c)
-					* turb_rescale;
+										tx_c,ty_c,tz_c) * turb_rescale;
 		}
 		vx += dvx_pert;
 		vy += dvy_pert;
@@ -1023,68 +1018,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(
 	amrex::Gpu::streamSynchronize();
 }
 
-
-// =============================================================================
-// Patched computeAfterTimestep() for testMHDDisk.cpp
-//
-// WHAT CHANGED vs. the version currently in the repo, and why
-// -----------------------------------------------------------------------------
-// 1) `mask` is now built WITH ghost cells (stencil_radius = 2) and FillBoundary'd,
-//    instead of a 0-ghost iMultiFab. Previously `mask_arr(ii,jj,kk)` was never
-//    checked for neighbor cells at all -- only the source cell (i,j,k) was gated
-//    by the Jeans trigger. A triggering coarse cell near a coarse/fine AMR
-//    boundary could therefore deposit mass/momentum/energy into `delta` for a
-//    neighbor cell that is *covered* by a finer level. That neighbor's density/
-//    momentum in `state` may be stale or otherwise non-representative at this
-//    level, and Pass 2's limiter solve (division by rho_new, sqrt(discriminant))
-//    is not guarded against that -- a strong suspect for the corruption that's
-//    ultimately manifesting as the GPU memory fault localized to Pass B.
-//
-// 2) The SAME mask check is now applied in ALL FOUR stencil loops (gather /
-//    Pass 0, Pass A radial-kick, Lprime re-centering, and Pass B deposit) --
-//    not just Pass B -- so that N_kernel, Vsnr_local, mass_sum,
-//    neighbor_mass_sum, Sx/Sy/Sz, Lraw, Lprime, and rescale are all computed
-//    over EXACTLY the same cell set that Pass B actually deposits into. Adding
-//    the check only to Pass B (and not the earlier passes) would silently break
-//    mass/energy conservation, since drho_ej_cell / p_radial_mag are calibrated
-//    against N_kernel / Vsnr_local from the gather step.
-//
-// 3) Everything else -- indexing, bounds checks against slo/shi and dlo/dhi,
-//    the re-centering math, the Eq 21 limiter in Pass 2 -- is UNCHANGED. This
-//    is a targeted fix for the one identified correctness gap, not a rewrite.
-//
-// HOW TO TEST ON A CPU-ONLY MAC BUILD
-// -----------------------------------------------------------------------------
-// - Build AMReX/Quokka with GPU backends OFF (you've done this before for the
-//   OpenBCSolver NaN bug):
-//     CMake:    -DAMReX_GPU_BACKEND=NONE  (or simply omit CUDA/HIP options)
-//     GNUmake:  USE_CUDA=FALSE USE_HIP=FALSE
-//
-// - Turn on AMReX's own Array4 bounds checking -- this is the single highest-
-//   value flag for this bug, since it will abort with the exact (i,j,k,n) and
-//   the FAB's real bounds the instant any Array4 access (including the
-//   `s(ii,jj,kk,*)` reads and `d(ii,jj,kk,*)` atomic-add targets in Pass B) goes
-//   out of range, with no debugger needed:
-//     CMake:    -DAMReX_BOUND_CHECK=ON  -DCMAKE_BUILD_TYPE=Debug
-//     GNUmake:  DEBUG=TRUE BOUND_CHECK=TRUE
-//
-// - Also worth adding on AppleClang, cheap and catches anything the AMReX
-//   bounds checks wouldn't (e.g. a stale/dangling Array4 view):
-//     -fsanitize=address,undefined   (both compile and link flags)
-//
-// - Reproducer setup:
-//     * max_grid_size small relative to n_cell (e.g. 16) so you get MULTIPLE
-//       boxes/FABs -- a single-box run never exercises the cross-box deposit
-//       path this fix targets.
-//     * amr.max_level >= 1 with your normal refinement criteria, so
-//       makeFineMask actually produces covered cells to test against.
-//     * Force triggering fast: either drop `sn_jeans_J` low enough that normal
-//       disk cells trip it on step 1, or use `debugInjectJeansViolation` to
-//       force a trigger deterministically in a cell you place near BOTH a
-//       coarse/fine boundary and a box edge, since that's where the two
-//       suspect paths (mask gap + cross-box ghost deposit) intersect.
-// =============================================================================
-
 template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 {
 	if (!(userData_.sn_jeans_J > 0.0)) {
@@ -1119,10 +1052,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 		const double dx_max  = amrex::max(dx[0], amrex::max(dx[1], dx[2]));
 		const double vol     = dx[0] * dx[1] * dx[2];
 
-		// --- FIX (1): fine mask now carries ghost cells, filled from neighbor
-		// boxes at the same level, so mask_arr(ii,jj,kk) is meaningful for
-		// stencil offsets that land outside this box's own valid region --
-		// exactly the region the stencil loops below actually reach into.
 		amrex::iMultiFab mask_valid(state.boxArray(), state.DistributionMap(), 1, 0);
 		if (lev < finest_level) {
 			mask_valid = amrex::makeFineMask(state.boxArray(), state.DistributionMap(),
@@ -1131,9 +1060,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 			mask_valid.setVal(1);
 		}
 		amrex::iMultiFab mask(state.boxArray(), state.DistributionMap(), 1, stencil_radius);
-		// Default ghost value = 1 ("not covered"): cells outside the physical
-		// domain (non-periodic boundary, no real neighbor to borrow from) are
-		// treated as usable rather than silently excluded.
 		mask.setVal(1);
 		amrex::iMultiFab::Copy(mask, mask_valid, 0, 0, 1, 0);
 		mask.FillBoundary(geom[lev].periodicity());
@@ -1141,7 +1067,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 		// delta components: 0=drho, 1=dpx, 2=dpy, 3=dpz, 4=dE.
 		// Everything here is the UNLIMITED deposit (paper Sec 2.2, Steps 1-2); the
 		// analytic limiter (Eq 21, Step 3) is applied once, after SumBoundary, in the
-		// apply pass below -- exactly matching the paper's separation of concerns.
+		// apply pass below 
 		amrex::MultiFab delta(state.boxArray(), state.DistributionMap(), 5, stencil_radius);
 		delta.setVal(0.0);
 
@@ -1199,9 +1125,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 								kk < slo[2] || kk > shi[2]) { continue; }
 							if (ii < dlo[0] || ii > dhi[0] || jj < dlo[1] || jj > dhi[1] ||
 								kk < dlo[2] || kk > dhi[2]) { continue; }
-							// --- FIX (2): exclude covered neighbor cells from the
-							// gather stats too, so N_kernel/Vsnr_local/drho_ej_cell
-							// stay consistent with what Pass B actually deposits into.
 							if (mask_arr(ii, jj, kk) == 0) { continue; }
 
 							const double rho_nb = s(ii, jj, kk, HydroSystem<MHDGalaxy>::density_index);
@@ -1425,7 +1348,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 
 				const double rho_new = rho_old + drho;
 
-				// Internal-energy floor: hold SPECIFIC internal energy fixed and scale by
+				// Internal-energy floor: hold specific internal energy fixed and scale by
 				// the new density, i.e. the added ejecta mass carries its proportional
 				// share of internal energy too. Matches the real reference implementation
 				// (SNFeedbackUtils::addCompositeBufferToState's e_int_new_tmp), rather than
