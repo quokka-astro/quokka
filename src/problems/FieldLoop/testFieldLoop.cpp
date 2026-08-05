@@ -249,9 +249,21 @@ auto problem_main() -> int
 	advection_vy = std::cos(advection_angle_rad);
 
 	// advection speed in the x1-x2 plane is 1 by construction (sin^2 + cos^2 = 1); one period is one
-	// full crossing of the domain diagonal
+	// domain-diagonal length of travel. This exactly returns the loop to its starting position only at
+	// the default advection_angle_deg (chosen so vx/vy = Lx/Ly); at any other angle, num_periods is just
+	// a normalised run-duration unit, not a guarantee that the loop retraces itself.
 	double num_periods = 1.0;
 	pp.query("num_periods", num_periods);
+	if (num_periods <= 0.0) {
+		amrex::Abort("setup.num_periods must be > 0.");
+	}
+	{
+		double unused_stop_time = 0.0;
+		if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
+			amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
+				     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
+		}
+	}
 	const double domain_diagonal = std::hypot(sim.geom[0].ProbLength(0), sim.geom[0].ProbLength(1));
 	sim.stopTime_ = num_periods * domain_diagonal;
 

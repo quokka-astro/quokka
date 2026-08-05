@@ -218,10 +218,17 @@ void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution_fc(amrex::Mu
 	}
 }
 
-auto runWaveTest(int nx, int ny, int nz) -> double
+// one wave period (num_modes and alfven_speed are fixed constants for this problem); shared by
+// runWaveTest() (always exactly one period) and problem_main()'s run_sim path (num_periods * this)
+auto computeWavePeriod() -> double
 {
 	const double wavelength = 1.0 / num_modes;
-	const double max_time = wavelength / alfven_speed;
+	return wavelength / alfven_speed;
+}
+
+auto runWaveTest(int nx, int ny, int nz) -> double
+{
+	const double max_time = computeWavePeriod();
 	const int max_timesteps = std::max(20000, nx * 100);
 
 	// Set grid dimensions using AMReX parameter system
@@ -283,6 +290,13 @@ auto problem_main() -> int
 		pp.query("run_convergence", run_convergence);
 		pp.query("run_sim", run_sim);
 		pp.query("error_tol", error_tol);
+
+		double unused_num_periods = 0.0;
+		if (run_convergence && !run_sim && (pp.query("num_periods", unused_num_periods) != 0)) {
+			amrex::Abort("setup.num_periods has no effect when setup.run_convergence=true and setup.run_sim=false; the "
+				     "convergence sweep always uses a fixed one-period run length. Remove setup.num_periods or set "
+				     "setup.run_sim=true.");
+		}
 	}
 
 	// AlfvenWaveCircularConvergence does not model resistivity; abort early rather than silently
@@ -317,8 +331,17 @@ auto problem_main() -> int
 			amrex::ParmParse const pp("setup");
 			pp.query("num_periods", num_periods);
 		}
-		const double wavelength = 1.0 / num_modes;
-		sim.stopTime_ = num_periods * wavelength / alfven_speed;
+		if (num_periods <= 0.0) {
+			amrex::Abort("setup.num_periods must be > 0.");
+		}
+		{
+			double unused_stop_time = 0.0;
+			if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
+				amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
+					     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
+			}
+		}
+		sim.stopTime_ = num_periods * computeWavePeriod();
 
 		sim.setInitialConditions();
 		sim.evolve();
