@@ -926,22 +926,25 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 		}
 	}
 
-	// diffusive CFL constraint: dt <= cfl * dx^2 * rho / (2*max(shearViscosity_,bulkViscosity_))
-	// unlike resistivity's eta, these coefficients still need dividing by density to get a real
-	// diffusivity, so the limit depends on local density and is evaluated per cell, not once globally
+	// diffusive CFL constraint: dt <= cfl * dx^2 * rho / (2*((4/3)*shearViscosity_ + bulkViscosity_))
+	// the longitudinal (compressional) mode feels the full combination (4/3)*shear + bulk, not just
+	// the larger of the two; unlike resistivity's eta, these coefficients still need dividing by
+	// density to get a real diffusivity, so the limit depends on local density and is evaluated per
+	// cell, not once globally
+	// in N dimensions the true stability limit requires cfl < 1/N, so for 3D use cfl < 1/3
 	// not enforced for problem_defined viscosity; the problem must ensure stability
 	if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
 		if (shearViscosity_ != 0.0 || bulkViscosity_ != 0.0) {
 			const auto &dx = geom[level].CellSizeArray();
 			const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-			const amrex::Real maxViscosity = std::max(shearViscosity_, bulkViscosity_);
+			const amrex::Real longitudinalViscosity = (4.0 / 3.0) * shearViscosity_ + bulkViscosity_;
 			for (amrex::MFIter iter(max_signal_speed_[level]); iter.isValid(); ++iter) {
 				const amrex::Box &indexRange = iter.validbox();
 				auto const &stateNew_cc = state_new_cc_[level].const_array(iter);
 				auto const &maxSignal = max_signal_speed_[level].array(iter);
 				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 					const amrex::Real rho = stateNew_cc(i, j, k, HydroSystem<problem_t>::density_index);
-					const amrex::Real viscous_signal = 2.0 * maxViscosity / (rho * dx_min);
+					const amrex::Real viscous_signal = 2.0 * longitudinalViscosity / (rho * dx_min);
 					maxSignal(i, j, k) = std::max(maxSignal(i, j, k), viscous_signal);
 				});
 			}
