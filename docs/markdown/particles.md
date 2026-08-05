@@ -186,8 +186,21 @@ Two efficiency parameters tune how aggressively eligible gas is converted into s
 - \\(\epsilon_{ff}\\): efficiency per free-fall time, defined through \\(\epsilon_{ff} = (\dot M_{\star} \, t_{ff}) / (M_{cell} \, \Delta t)\\).
 - \\(\epsilon_{\star}\\): fraction of the cell mass used when a particle is spawned.
 - The target stellar mass for the step is \\(\epsilon_{ff} M_{cell} (\Delta t / t_{ff})\\).
-- Bernoulli probability for spawning: \\( P = \frac{\epsilon_{ff}}{\epsilon_{\star}} \frac{\Delta t}{t_{ff}} \\).
-- The expectation value \\(\langle M_{\star} \rangle = P \epsilon_{\star} M_{cell}\\) matches the target mass provided \\(\Delta t < t_{ff}\\); the CFL condition typically enforces that inequality.
+- Bernoulli probability for spawning: \\( P = \min\left(\frac{\epsilon_{ff}}{\epsilon_{\star}} \frac{\Delta t}{t_{ff}},\, 1\right) \\).
+- The expectation value \\(\langle M_{\star} \rangle = P \epsilon_{\star} M_{cell}\\) matches the target mass provided \\(\Delta t < t_{ff}\\); the CFL condition typically enforces that inequality. If the clamp on \\(P\\) becomes active the prescription is outside its regime of validity, and every eligible cell converts \\(\epsilon_{\star} M_{cell}\\) per step regardless of the draw.
+
+### Density-dependent efficiency ramp (optional)
+
+A constant \\(\epsilon_{ff}\\) lets cells that are badly under-resolving their own Jeans length collapse to arbitrarily high density, because gas is removed no faster as the cell becomes more unstable. Setting `particles.eps_ff_ramp = 1` replaces \\(\epsilon_{ff}\\) with an effective value that grows exponentially once the cell exceeds its Jeans length,
+
+\\[ \epsilon_{ff,\rm eff} = \min\left(\epsilon_{ff} \exp(x - 1),\, 1\right), \qquad x \equiv \frac{J \Delta x}{\lambda_J}, \\]
+
+and leaves \\(\epsilon_{ff}\\) untouched for \\(x \le 1\\). The two branches agree at \\(x = 1\\), so the efficiency is continuous across the threshold. Since star formation already requires \\(\lambda_J < J \Delta x\\), the ramp is active in every cell that can form a star; the parameter is disabled by default so that existing setups are unaffected.
+
+Two caveats are worth noting when enabling it:
+
+- The ramp is steep. With the default \\(\epsilon_{ff} = 0.01\\), the efficiency saturates at unity by \\(x \approx 5.6\\), and a cell only three times below its Jeans length already forms stars several times faster than it would at constant \\(\epsilon_{ff}\\).
+- The ramp depends explicitly on \\(\Delta x\\), so the same gas is assigned a different efficiency on different AMR levels. Refining a collapsing region lowers \\(x\\) and therefore weakens the suppression on the finer level.
 
 ### Sampling the stellar population
 

@@ -1,0 +1,66 @@
+# Stochastic star formation with the density-dependent eps_ff ramp enabled.
+#
+# Same setup as ParticleSF.toml, but with particles.eps_ff_ramp = true. The cooling integrator and
+# photoelectric heating are switched off (the tabulated EOS tables are still read) so that the gas
+# stays at problem.Tamb through the first step. That makes the effective efficiency exactly
+# predictable: the ramp depends on the sound speed, so a test that let the gas be heated before
+# particle creation could not state its own expectation.
+#
+# The uniform initial state sits at J*dx/lambda_J ~ 4.54, so the ramp boosts the efficiency by
+# exp(3.54) ~ 34x, from the production default eps_ff = 0.01 to ~0.34. The resulting spawn
+# probability is ~0.42 -- well below 1, so the Bernoulli statistics stay meaningful -- versus ~0.012
+# with the ramp disabled. The two differ by a factor ~35, far outside the test tolerances.
+
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [-3.949667304e+19, -3.949667304e+19, -3.949667304e+19]
+geometry.prob_hi = [3.949667304e+19, 3.949667304e+19, 3.949667304e+19]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1  # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [32, 32, 32]
+amr.max_level = 0  # number of levels = max_level + 1
+amr.blocking_factor = 16  # grid size must be divisible by this
+amr.max_grid_size = 16  # at least 128 for GPUs
+amr.n_error_buf = 2  # minimum 3 cell buffer around tagged cells
+amr.grid_eff = 0.7  # default
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 0  # turn on tracer particles
+
+hydro.artificial_viscosity_coefficient = 0.1
+
+particles.SN_scheme = "SN_thermal_or_thermal_momentum"
+particles.verbose = 0
+particles.eps_ff = 0.01
+particles.eps_ff_ramp = true
+# Maximum velocity limit for stellar particles (cm/s), default: 1.0e8 (1000 km/s)
+particles.stellar_velocity_limit = 1.0e8
+
+problem.n0 = 1.0e5
+problem.Tamb = 1.0e1
+
+max_timesteps = 1
+initial_dt = 3.15576e12
+plotfile_prefix = "plt_sf_efframp"
+checkpoint_prefix = "chk_sf_efframp"
+plotfile_interval = -1
+checkpoint_interval = -1
+
+# *****************************************************************
+# Cooling parameters
+# *****************************************************************
+# The tabulated EOS needs the cooling tables, but the cooling integrator itself is disabled so that
+# the gas temperature (and hence the Jeans length that drives the ramp) is held fixed.
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled_noPE.h5"
+cooling.enabled = 0
+cooling.read_tables_even_if_disabled = 1

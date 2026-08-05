@@ -14,7 +14,9 @@
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_creation.hpp"
 #include "particles/particle_types.hpp"
 
 struct ParticleSFProblem {
@@ -92,13 +94,30 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 		const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 
 		amrex::Real eps_ff = 0.5;
+		bool eps_ff_ramp = false;
 		amrex::ParmParse const pp("particles");
 		pp.query("eps_ff", eps_ff);
+		pp.query("eps_ff_ramp", eps_ff_ramp);
 
-		const amrex::Real eps_star = 0.5;
+		// take the Jeans number and the per-spawn mass fraction from the particle-creation traits rather than
+		// duplicating their values, so the expectation below cannot silently drift away from the kernel
+		using SFTraits = quokka::ParticleCreationTraits<quokka::ParticleType::StochasticStellarPop>;
+		const amrex::Real eps_star = SFTraits::eps_star;
 		const amrex::Real rho0 = n0 * mu;
 		const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
-		const amrex::Real prob_star_formation = (eps_ff / eps_star) * (initDt_ / t_ff);
+
+		// Reproduce the effective efficiency used by the particle-creation kernel. The isothermal sound speed
+		// is evaluated through the same EOS the kernel uses, since an analytic c_s = sqrt(k_B T / mu) does not
+		// hold for a tabulated EOS.
+		const amrex::Real e_int0 = 1.0 / (gamma_ - 1.0) * rho0 * C::k_B * Tamb / mu;
+		const amrex::Real p0 = quokka::EOS<ParticleSFProblem>::ComputePressure(rho0, e_int0);
+		const amrex::Real cs0 = quokka::EOS<ParticleSFProblem>::ComputeIsothermalSoundSpeed(rho0, p0);
+		const amrex::Real lambda_J0 = cs0 / std::sqrt(C::Gconst * rho0);
+		const amrex::Real Jdx_over_LambdaJ = SFTraits::J * dx0[0] / lambda_J0;
+		const amrex::Real eps_ff_eff = eps_ff_ramp ? quokka::rampedStarFormationEfficiency(eps_ff, Jdx_over_LambdaJ) : eps_ff;
+
+		const amrex::Real prob_star_formation = (eps_ff_eff / eps_star) * (initDt_ / t_ff);
+		amrex::Print() << "J*dx/lambda_J = " << Jdx_over_LambdaJ << ", effective eps_ff = " << eps_ff_eff << "\n";
 		amrex::Print() << "Probability of star formation = " << prob_star_formation << "\n";
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
 						 "Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
@@ -205,7 +224,11 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 				status = 1;
 				amrex::Print() << "Test failed: Number of high-mass stars does not match expectation\n";
 			}
-			if (!((n_star_low - exp_n_star_low_total) / exp_n_star_low_total < tol_n_star_low)) {
+			// Exactly one low-mass composite particle is spawned per successful Bernoulli draw, so this count is
+			// a direct measurement of the spawn probability and is checked two-sided against its 3-sigma
+			// Poisson bound. A one-sided check here would accept an arbitrarily low star-formation rate, and
+			// so could not detect an effective efficiency (e.g. the eps_ff ramp) that is silently too small.
+			if (!(std::abs(n_star_low - exp_n_star_low_total) / exp_n_star_low_total < tol_n_star_low)) {
 				status = 1;
 				amrex::Print() << "Test failed: Number of low-mass stars does not match expectation\n";
 			}

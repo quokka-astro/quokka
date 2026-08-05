@@ -6,6 +6,8 @@
 #include "AMReX_ParIter.H"
 #include "particles/stellar_models.hpp"
 #include "physics_info.hpp"
+#include <algorithm>
+#include <cmath>
 
 // Function to create bit flags: bitflag(position) = 2^(position - 1)
 // Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
@@ -530,6 +532,42 @@ inline amrex::Real particle_param2 = -1.0; // NOLINT
 inline amrex::Real particle_param3 = -1.0; // NOLINT
 inline amrex::Real eps_ff = 0.01;	   // NOLINT
 
+// Enable the density-dependent ramp applied to eps_ff (see rampedStarFormationEfficiency below).
+// Disabled by default so that existing setups reproduce their previous behaviour exactly.
+inline bool eps_ff_ramp = false; // NOLINT
+
+// Any value of J*dx/lambda_J at or above (1 + eps_ff_ramp_max_exponent) saturates the ramp.
+// std::exp overflows above ~709 in IEEE double precision, and amrex.fpe_trap_overflow=1 is set
+// for every ctest run, so the exponent must be clamped strictly below that bound.
+inline constexpr amrex::Real eps_ff_ramp_max_exponent = 700.0;
+
+//! \brief Density-dependent ramp for the star-formation efficiency per free-fall time.
+//!
+//! Cells that are large compared to their Jeans length are unresolved collapsing regions, and a
+//! constant efficiency lets them run away to arbitrarily high density. Ramping the efficiency up
+//! exponentially with x = J*dx/lambda_J consumes such cells faster and suppresses the runaway.
+//!
+//! \param eps_ff_in baseline efficiency per free-fall time (particles.eps_ff).
+//! \param Jdx_over_LambdaJ the ratio x = J*dx/lambda_J; values <= 1 leave the efficiency untouched.
+//! \return eps_ff_in for x <= 1, otherwise min(eps_ff_in * exp(x - 1), 1). Continuous at x = 1.
+//!
+//! The result is clamped to unity (100 per cent of the cell mass per free-fall time). The exponent
+//! is clamped before calling std::exp so that the function is total for every finite input: for
+//! 0 < eps_ff_in < 1 the product eps_ff_in * exp(exponent) cannot overflow.
+[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rampedStarFormationEfficiency(amrex::Real eps_ff_in, amrex::Real Jdx_over_LambdaJ)
+    -> amrex::Real
+{
+	// below the Jeans-length threshold, or nothing to ramp
+	if (!(Jdx_over_LambdaJ > 1.0) || (eps_ff_in <= 0.0)) {
+		return eps_ff_in;
+	}
+	if (eps_ff_in >= 1.0) {
+		return 1.0;
+	}
+	const amrex::Real exponent = std::min(Jdx_over_LambdaJ - 1.0, eps_ff_ramp_max_exponent);
+	return std::min(eps_ff_in * std::exp(exponent), 1.0);
+}
+
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 
@@ -582,6 +620,7 @@ inline void particleParmParse()
 
 	// Stochastic SF parameters
 	pp.query("eps_ff", eps_ff);
+	pp.query("eps_ff_ramp", eps_ff_ramp);
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
