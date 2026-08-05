@@ -927,11 +927,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 	}
 
 	// diffusive CFL constraint: dt <= cfl * dx^2 * rho / (2*((4/3)*shearViscosity_ + bulkViscosity_))
-	// the longitudinal (compressional) mode feels the full combination (4/3)*shear + bulk, not just
-	// the larger of the two; unlike resistivity's eta, these coefficients still need dividing by
-	// density to get a real diffusivity, so the limit depends on local density and is evaluated per
-	// cell, not once globally
-	// in N dimensions the true stability limit requires cfl < 1/N, so for 3D use cfl < 1/3
+	// where (4/3)*shear+bulk is the longitudinal diffusivity; unlike resistivity's eta, this depends
+	// on the local density, so it needs to be evaluated per cell
 	// not enforced for problem_defined viscosity; the problem must ensure stability
 	if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
 		if (shearViscosity_ != 0.0 || bulkViscosity_ != 0.0) {
