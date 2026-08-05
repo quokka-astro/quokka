@@ -554,8 +554,7 @@ inline constexpr amrex::Real eps_ff_ramp_max_exponent = 700.0;
 //! The result is clamped to unity (100 per cent of the cell mass per free-fall time). The exponent
 //! is clamped before calling std::exp so that the function is total for every finite input: for
 //! 0 < eps_ff_in < 1 the product eps_ff_in * exp(exponent) cannot overflow.
-[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rampedStarFormationEfficiency(amrex::Real eps_ff_in, amrex::Real Jdx_over_LambdaJ)
-    -> amrex::Real
+[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rampedStarFormationEfficiency(amrex::Real eps_ff_in, amrex::Real Jdx_over_LambdaJ) -> amrex::Real
 {
 	// below the Jeans-length threshold, or nothing to ramp
 	if (!(Jdx_over_LambdaJ > 1.0) || (eps_ff_in <= 0.0)) {

@@ -457,8 +457,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			// is set for every ctest run).
 			amrex::Real eps_ff_eff = eps_ff_;
 			if (eps_ff_ramp_) {
-				const amrex::Real Jdx_over_LambdaJ =
-				    (LambdaJ > 0.0) ? (J * dx[0] / LambdaJ) : (1.0 + quokka::eps_ff_ramp_max_exponent);
+				const amrex::Real Jdx_over_LambdaJ = (LambdaJ > 0.0) ? (J * dx[0] / LambdaJ) : (1.0 + quokka::eps_ff_ramp_max_exponent);
 				eps_ff_eff = quokka::rampedStarFormationEfficiency(eps_ff_, Jdx_over_LambdaJ);
 			}
 
