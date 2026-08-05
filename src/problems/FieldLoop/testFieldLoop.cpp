@@ -254,8 +254,8 @@ auto problem_main() -> int
 	// a normalised run-duration unit, not a guarantee that the loop retraces itself.
 	double num_periods = 1.0;
 	pp.query("num_periods", num_periods);
-	if (num_periods <= 0.0) {
-		amrex::Abort("setup.num_periods must be > 0.");
+	if (!std::isfinite(num_periods) || num_periods <= 0.0) {
+		amrex::Abort("setup.num_periods must be finite and > 0.");
 	}
 	{
 		double unused_stop_time = 0.0;

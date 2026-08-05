@@ -228,8 +228,8 @@ auto problem_main() -> int
 	if (vortex_radius <= 0.0) {
 		amrex::Abort("vortex_radius must be > 0.");
 	}
-	if (num_periods <= 0.0) {
-		amrex::Abort("setup.num_periods must be > 0.");
+	if (!std::isfinite(num_periods) || num_periods <= 0.0) {
+		amrex::Abort("setup.num_periods must be finite and > 0.");
 	}
 	{
 		double unused_stop_time = 0.0;
