@@ -530,6 +530,10 @@ inline amrex::Real particle_param2 = -1.0; // NOLINT
 inline amrex::Real particle_param3 = -1.0; // NOLINT
 inline amrex::Real eps_ff = 0.01;	   // NOLINT
 
+// Bounds for StochasticStellarPop high-mass-star runaway kicks [km/s]
+inline amrex::Real stochastic_stellar_pop_kick_velocity_min = 3.0;   // NOLINT
+inline amrex::Real stochastic_stellar_pop_kick_velocity_max = 385.0; // NOLINT
+
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 
@@ -579,6 +583,13 @@ inline void particleParmParse()
 
 	// Stochastic SF parameters
 	pp.query("eps_ff", eps_ff);
+	pp.query("stochastic_stellar_pop_kick_velocity_min", stochastic_stellar_pop_kick_velocity_min);
+	pp.query("stochastic_stellar_pop_kick_velocity_max", stochastic_stellar_pop_kick_velocity_max);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_kick_velocity_min > 0.0,
+					 "particles.stochastic_stellar_pop_kick_velocity_min must be positive.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_kick_velocity_max >= stochastic_stellar_pop_kick_velocity_min,
+					 "particles.stochastic_stellar_pop_kick_velocity_max must be greater than or equal to "
+					 "particles.stochastic_stellar_pop_kick_velocity_min.");
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);

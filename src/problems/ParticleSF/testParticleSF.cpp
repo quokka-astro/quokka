@@ -149,36 +149,55 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 			double vy = NAN;
 			double vz = NAN;
 			double vtot = NAN;
-			double vmin = 3.e5;  // minimum velocity in km/s
-			double vmax = -3.e5; // maximum velocity in km/s
+			double vmin = std::numeric_limits<double>::max();
+			double vmax = 0.0;
 			const int n_bins = 20;
-			const double log_v_min = std::log(3.0);	  // minimum velocity of the input distribution
-			const double log_v_max = std::log(385.0); // maximum velocity of the input distributions
-			const double bin_width = (log_v_max - log_v_min) / n_bins;
+			const double kick_velocity_min = quokka::stochastic_stellar_pop_kick_velocity_min;
+			const double kick_velocity_max = quokka::stochastic_stellar_pop_kick_velocity_max;
+			const double velocity_tolerance = 1.0e-12 * kick_velocity_max;
+			const bool fixed_kick_speed = (kick_velocity_max == kick_velocity_min);
+			const double log_v_min = std::log(kick_velocity_min);
+			const double log_v_max = std::log(kick_velocity_max);
+			const double bin_width = fixed_kick_speed ? 0.0 : (log_v_max - log_v_min) / n_bins;
 			std::vector<int> hist(n_bins, 0);
+			int velocity_range_violations = 0;
 			for (int i = 0; i < n_star_tot; ++i) {
 				if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
 					vx = real_data_final[i][mass_idx + 1] / 1.e5;
 					vy = real_data_final[i][mass_idx + 2] / 1.e5;
 					vz = real_data_final[i][mass_idx + 3] / 1.e5;
 					vtot = std::sqrt(vx * vx + vy * vy + vz * vz);
+					if (vtot < (kick_velocity_min - velocity_tolerance) || vtot > (kick_velocity_max + velocity_tolerance)) {
+						velocity_range_violations++;
+					}
 					if (vtot < vmin) {
 						vmin = vtot; // update minimum velocity
-					} else if (vtot > vmax) {
+					}
+					if (vtot > vmax) {
 						vmax = vtot; // update maximum velocity
 					}
-					log_vel = std::log(vtot); // store log of velocity in km/s
-					int const bin_index = static_cast<int>((log_vel - log_v_min) / bin_width);
-					if (bin_index >= 0 && bin_index < n_bins) {
-						hist[bin_index]++;
+					if (!fixed_kick_speed) {
+						log_vel = std::log(vtot); // store log of velocity in km/s
+						int const bin_index = static_cast<int>((log_vel - log_v_min) / bin_width);
+						if (bin_index >= 0 && bin_index < n_bins) {
+							hist[bin_index]++;
+						}
 					}
 				}
 			}
 
-			double const slope_predicted = 1. - ((std::log(hist[n_bins - 1]) - std::log(hist[0])) / (log_v_max - log_v_min));
-			amrex::Print() << "Slope of velocity distribution = " << slope_predicted << "\n";
+			if (fixed_kick_speed) {
+				amrex::Print() << "Fixed kick speed = " << kick_velocity_min << " km/s\n";
+			} else {
+				double const slope_predicted = 1. - ((std::log(hist[n_bins - 1]) - std::log(hist[0])) / (log_v_max - log_v_min));
+				amrex::Print() << "Slope of velocity distribution = " << slope_predicted << "\n";
+			}
 			amrex::Print() << "Minimum velocity = " << vmin << " km/s\n";
 			amrex::Print() << "Maximum velocity = " << vmax << " km/s\n";
+			if (velocity_range_violations != 0) {
+				status = 1;
+				amrex::Print() << "Test failed: High-mass-star velocity kick is outside the configured range\n";
+			}
 
 			// get total mass in gas
 			const double m_gas_change = userData_.m_gas_init - m_gas_final;
