@@ -154,7 +154,8 @@ def plot_panel(
             branch_rows = [row for row in theory_rows if float(row["used_resolved_branch"]) == used_resolved_branch]
             theory_dt = [float(row["requested_dt"]) for row in branch_rows]
             theory_values = [max(abs(float(row[theory_key])), plot_floor) for row in branch_rows]
-            ax.plot(theory_dt, theory_values, color="black", linestyle="--", zorder=2)
+            linewidth = 0.9 if (theory_key == "theory_delta_phase" and used_resolved_branch == 0.0) else plt.rcParams["lines.linewidth"]
+            ax.plot(theory_dt, theory_values, color="black", linewidth=linewidth, linestyle="--", zorder=2)
 
     boundary_dt = float(numerical_grouped[SCHEMES[0][0]][0]["resolved_stiff_boundary_dt"])
     ax.axvline(boundary_dt, color="black", linestyle=":", zorder=1)
@@ -198,6 +199,8 @@ def make_figure(
     axes[0].tick_params(bottom=False, labelbottom=False)
     axes[1].tick_params(top=False)
     axes[1].set_xlabel(r"$\Delta t$")
+    theory_dt_max = float(theory_grouped[SCHEMES[0][0]][-1]["requested_dt"])
+    axes[1].set_xlim(right=theory_dt_max * 10.0**0.3)
 
     output_path = output_dir / OUTPUT_FILE
     fig.savefig(output_path)

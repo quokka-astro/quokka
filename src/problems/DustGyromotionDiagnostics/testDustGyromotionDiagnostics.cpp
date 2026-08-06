@@ -45,6 +45,9 @@ constexpr std::array<double, 12> requested_dt_values = {half_decade_factor * 1.0
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
 constexpr int energy_diagnostic_steps = 20;
 constexpr int theory_sample_count = 401;
+constexpr double theory_dt_max = half_decade_factor * 1.0e1;
+constexpr double stiff_phase_step = std::numbers::pi / 4.0;
+constexpr double stiff_phase_zero_offset = std::numbers::pi / 64.0;
 constexpr double conservative_dt_factor = 1.333521432163324; // 10^(1/8)
 constexpr double plot_floor = std::numeric_limits<double>::epsilon();
 
@@ -303,13 +306,56 @@ auto theoryResolvedDeltaPhase(ResolvedRkScheme scheme, double theta) -> double
 	return 0.0;
 }
 
-auto theoryStiffDeltaPhase(double theta) -> double
+auto unwrappedTheoryStiffDeltaPhase(double theta) -> double
 {
 	const double arg_g = 2.0 * (std::atan2(theta, 1.0 - theta * theta / 2.0) - std::atan(theta / 2.0));
-	return std::remainder(arg_g - theta, 2.0 * std::numbers::pi);
+	return arg_g - theta;
 }
 
+auto theoryStiffDeltaPhase(double theta) -> double { return std::remainder(unwrappedTheoryStiffDeltaPhase(theta), 2.0 * std::numbers::pi); }
+
 auto theoryStiffDeltaLogAmplitude(double theta) -> double { return std::log((1.0 + theta * theta / 4.0) / (1.0 + theta * theta * theta * theta / 4.0)); }
+
+auto timestepAtStiffPhase(double target_phase) -> double
+{
+	double dt_lower = resolvedBranchThresholdDt();
+	double dt_upper = theory_dt_max;
+	for (int i = 0; i < 60; ++i) {
+		const double dt_midpoint = 0.5 * (dt_lower + dt_upper);
+		if (unwrappedTheoryStiffDeltaPhase(omega_rel * dt_midpoint) > target_phase) {
+			dt_lower = dt_midpoint;
+		} else {
+			dt_upper = dt_midpoint;
+		}
+	}
+	return 0.5 * (dt_lower + dt_upper);
+}
+
+auto stiffTheoryTimesteps() -> std::vector<double>
+{
+	const double dt_min = resolvedBranchThresholdDt();
+	const double phase_max = unwrappedTheoryStiffDeltaPhase(omega_rel * dt_min);
+	const double phase_min = unwrappedTheoryStiffDeltaPhase(omega_rel * theory_dt_max);
+	const int first_phase_index = static_cast<int>(std::ceil(phase_min / stiff_phase_step));
+	const int last_phase_index = static_cast<int>(std::floor(phase_max / stiff_phase_step));
+
+	std::vector<double> timesteps = {dt_min};
+	for (int index = last_phase_index; index >= first_phase_index; --index) {
+		const double target_phase = static_cast<double>(index) * stiff_phase_step;
+		if (index % 8 == 0) {
+			for (double const offset : {stiff_phase_zero_offset, -stiff_phase_zero_offset}) {
+				const double offset_phase = target_phase + offset;
+				if (offset_phase < phase_max && offset_phase > phase_min) {
+					timesteps.push_back(timestepAtStiffPhase(offset_phase));
+				}
+			}
+		} else {
+			timesteps.push_back(timestepAtStiffPhase(target_phase));
+		}
+	}
+	timesteps.push_back(theory_dt_max);
+	return timesteps;
+}
 
 auto computeGyroSample(ResolvedRkScheme scheme, double requested_dt) -> GyroSample
 {
@@ -370,6 +416,16 @@ void writeSweepCsv(std::vector<SchemeSweepResult> const &runs)
 	}
 }
 
+void writeTheoryRow(std::ofstream &file, ResolvedRkScheme scheme, double requested_dt)
+{
+	const double theta = omega_rel * requested_dt;
+	const bool used_resolved_branch = usesResolvedBranch(requested_dt);
+	const double delta_log_amplitude = used_resolved_branch ? theoryResolvedDeltaLogAmplitude(scheme, theta) : theoryStiffDeltaLogAmplitude(theta);
+	const double delta_phase = used_resolved_branch ? theoryResolvedDeltaPhase(scheme, theta) : theoryStiffDeltaPhase(theta);
+	file << resolvedRkSchemeSlug(scheme) << "," << requested_dt << "," << delta_log_amplitude << "," << delta_phase << ","
+	     << (used_resolved_branch ? 1 : 0) << "\n";
+}
+
 void writeTheoryCsv()
 {
 	std::ofstream file("dust_gyromotion_diagnostics_theory.csv");
@@ -377,17 +433,17 @@ void writeTheoryCsv()
 	file << "scheme,requested_dt,theory_delta_log_amplitude,theory_delta_phase,used_resolved_branch\n";
 	const double log_dt_min = std::log(requested_dt_values.front());
 	const double log_dt_max = std::log(requested_dt_values.back());
+	const std::vector<double> stiff_timesteps = stiffTheoryTimesteps();
 	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
 		for (int i = 0; i < theory_sample_count; ++i) {
 			const double fraction = static_cast<double>(i) / static_cast<double>(theory_sample_count - 1);
 			const double requested_dt = std::exp(log_dt_min + fraction * (log_dt_max - log_dt_min));
-			const double theta = omega_rel * requested_dt;
-			const bool used_resolved_branch = usesResolvedBranch(requested_dt);
-			const double delta_log_amplitude =
-			    used_resolved_branch ? theoryResolvedDeltaLogAmplitude(scheme, theta) : theoryStiffDeltaLogAmplitude(theta);
-			const double delta_phase = used_resolved_branch ? theoryResolvedDeltaPhase(scheme, theta) : theoryStiffDeltaPhase(theta);
-			file << resolvedRkSchemeSlug(scheme) << "," << requested_dt << "," << delta_log_amplitude << "," << delta_phase << ","
-			     << (used_resolved_branch ? 1 : 0) << "\n";
+			if (usesResolvedBranch(requested_dt)) {
+				writeTheoryRow(file, scheme, requested_dt);
+			}
+		}
+		for (double const requested_dt : stiff_timesteps) {
+			writeTheoryRow(file, scheme, requested_dt);
 		}
 	}
 }
