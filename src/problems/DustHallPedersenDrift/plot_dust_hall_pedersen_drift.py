@@ -86,8 +86,9 @@ OUTPUT_FILE = "dust_hall_pedersen_drift.pdf"
 
 def legend_handles() -> list[Line2D]:
     return [
+        Line2D([], [], color="black", linestyle="--", label="analytic"),
         Line2D([], [], color="C0", marker="o", markerfacecolor="none", linestyle="None", label=r"$w_x$"),
-        Line2D([], [], color="C1", marker="s", markerfacecolor="none", linestyle="None", label=r"$w_y$"),
+        Line2D([], [], color="C1", marker="o", markerfacecolor="none", linestyle="None", label=r"$w_y$"),
     ]
 
 
@@ -110,7 +111,7 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
     ax.plot(
         exact["t"],
         exact["wx_exact"],
-        color="C0",
+        color="black",
         linestyle="--",
     )
     ax.plot(
@@ -124,14 +125,14 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
     ax.plot(
         exact["t"],
         exact["wy_exact"],
-        color="C1",
+        color="black",
         linestyle="--",
     )
     ax.plot(
         history["t"],
         history["wy"],
         color="C1",
-        marker="s",
+        marker="o",
         linestyle="None",
         zorder=3,
     )
@@ -139,7 +140,7 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
     ax.set_xlabel("t")
     ax.set_ylabel(r"$w_x,\ w_y$")
     ax.set_xlim(0.0, 20.0)
-    ax.legend(handles=legend_handles(), loc="center right", ncol=2)
+    ax.legend(handles=legend_handles(), loc="center right")
     fig.tight_layout()
 
     output_path = output_dir / OUTPUT_FILE

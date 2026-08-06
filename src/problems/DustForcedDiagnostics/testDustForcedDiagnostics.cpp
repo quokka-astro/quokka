@@ -32,7 +32,8 @@ constexpr double magnetic_field_z = 1.0;
 constexpr double external_force = 1.0;
 
 constexpr double sweep_stop_time = 20.0;
-constexpr double stiff_branch_reference_steps = 2.0;
+constexpr int minimum_timesteps = 2;
+constexpr int theory_sample_count = 401;
 
 constexpr double omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_z;
 constexpr double alpha_rel = (1.0 + epsilon) * alpha_d;
@@ -43,7 +44,10 @@ using Complex = std::complex<double>;
 
 // Sweep from resolved to stiff timesteps for comparison with the analytic
 // forced-response diagnostics.
-constexpr std::array<double, 7> requested_dt_values = {1.0e-3, 1.0e-2, 1.0e-1, 1.0e0, 1.0e1, 1.0e2, 1.0e3};
+constexpr double half_decade_factor = 3.1622776601683795;
+constexpr std::array<double, 13> requested_dt_values = {
+    1.0e-3, half_decade_factor * 1.0e-3, 1.0e-2, half_decade_factor * 1.0e-2, 1.0e-1, half_decade_factor * 1.0e-1, 1.0e0, half_decade_factor * 1.0e0,
+    1.0e1,  half_decade_factor * 1.0e1,	 1.0e2,	 half_decade_factor * 1.0e2,  1.0e3};
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
 constexpr double plot_floor = 1.0e-16;
 
@@ -257,16 +261,14 @@ auto resolvedBranchThresholdDt() -> double { return 1.0 / std::sqrt(alpha_d * al
 
 auto usesResolvedBranch(double effective_dt) -> bool { return effective_dt < resolvedBranchThresholdDt(); }
 
-auto runStopTime(double requested_dt) -> double { return std::max(sweep_stop_time, stiff_branch_reference_steps * requested_dt); }
-
 auto runForcedSimulation(ResolvedRkScheme scheme, double constant_dt) -> SimulationData<DustHallPedersenForcedDiagnostics>
 {
-	const double run_stop_time = runStopTime(constant_dt);
-	const int required_max_timesteps = static_cast<int>(std::ceil(run_stop_time / constant_dt)) + 4;
+	const int step_count = std::max(static_cast<int>(std::ceil(sweep_stop_time / constant_dt)), minimum_timesteps);
+	const double run_stop_time = static_cast<double>(step_count) * constant_dt;
 	amrex::ParmParse pp;
 	pp.add("constant_dt", constant_dt);
 	pp.add("stop_time", run_stop_time);
-	pp.add("max_timesteps", required_max_timesteps);
+	pp.add("max_timesteps", step_count);
 	pp.add("suppress_output", 1);
 	pp.add("show_performance_hints", 0);
 
@@ -286,7 +288,7 @@ auto runForcedSimulation(ResolvedRkScheme scheme, double constant_dt) -> Simulat
 	sim.cflNumber_ = 1.0e12;
 	sim.constantDt_ = constant_dt;
 	sim.stopTime_ = run_stop_time;
-	sim.maxTimesteps_ = required_max_timesteps;
+	sim.maxTimesteps_ = step_count;
 	sim.dustResolvedRkScheme_ = scheme;
 	sim.print_dust_counter_ = false;
 
@@ -343,12 +345,11 @@ auto finalNumericalState(SimulationData<DustHallPedersenForcedDiagnostics> const
 	return {data.ux_vec_[i], -data.uy_vec_[i]};
 }
 
-auto predictedDiscreteFinalState(ResolvedRkScheme scheme, SimulationData<DustHallPedersenForcedDiagnostics> const &data) -> Complex
+auto predictedDiscreteFinalState(ResolvedRkScheme scheme, double dt, int step_count) -> Complex
 {
 	Complex state = initial_rel;
-	for (size_t i = 1; i < data.t_vec_.size(); ++i) {
-		double const dt_step = data.t_vec_[i] - data.t_vec_[i - 1];
-		state = advanceDiscreteMapOneStep(scheme, dt_step, state);
+	for (int i = 0; i < step_count; ++i) {
+		state = advanceDiscreteMapOneStep(scheme, dt, state);
 	}
 	return state;
 }
@@ -401,7 +402,7 @@ auto computeSweepSample(ResolvedRkScheme scheme, double requested_dt) -> SweepSa
 	const double effective_dt = data.t_vec_[1] - data.t_vec_[0];
 	const double end_time = data.t_vec_.back();
 	const Complex numerical_fixed_point = numericalFixedPoint(scheme, effective_dt);
-	const Complex predicted_final_state = predictedDiscreteFinalState(scheme, data);
+	const Complex predicted_final_state = predictedDiscreteFinalState(scheme, effective_dt, static_cast<int>(data.t_vec_.size()) - 1);
 	const Complex final_state = finalNumericalState(data);
 
 	return SweepSample{
@@ -454,6 +455,24 @@ void writeSweepCsv(std::vector<SchemeSweepResult> const &runs)
 			     << sample.final_data_error << "," << sample.final_to_fixed_point_error << "," << sample.predicted_final_to_fixed_point_error << ","
 			     << sample.predicted_final_data_error << "," << sample.final_state_map_consistency_error << "," << sample.momentum_residual << ","
 			     << (sample.used_resolved_branch ? 1 : 0) << "," << resolvedBranchThresholdDt() << "," << plot_floor << "\n";
+		}
+	}
+}
+
+void writeTheoryCsv()
+{
+	std::ofstream file("dust_forced_diagnostics_theory.csv");
+	file << std::setprecision(17);
+	file << "scheme,requested_dt,terminal_error,used_resolved_branch\n";
+	const double log_dt_min = std::log(requested_dt_values.front());
+	const double log_dt_max = std::log(requested_dt_values.back());
+	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
+		for (int i = 0; i < theory_sample_count; ++i) {
+			const double fraction = static_cast<double>(i) / static_cast<double>(theory_sample_count - 1);
+			const double requested_dt = std::exp(log_dt_min + fraction * (log_dt_max - log_dt_min));
+			const Complex numerical_fixed_point = numericalFixedPoint(scheme, requested_dt);
+			file << resolvedRkSchemeSlug(scheme) << "," << requested_dt << "," << terminalDriftError(numerical_fixed_point) << ","
+			     << (usesResolvedBranch(requested_dt) ? 1 : 0) << "\n";
 		}
 	}
 }
@@ -537,6 +556,7 @@ auto problem_main() -> int
 		}
 		if (write_csv) {
 			writeSweepCsv(runs);
+			writeTheoryCsv();
 		}
 	}
 

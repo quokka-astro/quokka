@@ -82,12 +82,13 @@ else:
 
 
 DATA_FILE = "dust_forced_diagnostics.csv"
+THEORY_DATA_FILE = "dust_forced_diagnostics_theory.csv"
 OUTPUT_FILE = "dust_forced_diagnostics_panels.pdf"
 REFERENCE_OUTPUT_FILE = "dust_forced_diagnostics_residual_reference.pdf"
 
 SCHEMES = (
-    ("tp2025", "TP2025", "C0", "o"),
     ("gl4", "GL4", "C1", "s"),
+    ("tp2025", "TP2025", "C0", "o"),
     ("midpoint", "Midpoint", "C2", "^"),
 )
 
@@ -116,39 +117,44 @@ def group_by_scheme(rows: list[dict[str, float | str]]) -> dict[str, list[dict[s
 
 
 def legend_handles() -> list[Line2D]:
-    return [Line2D([], [], color=color, linestyle="-", label=label) for _, label, color, _ in SCHEMES]
+    scheme_handles = [
+        Line2D([], [], color=color, marker=marker, markerfacecolor="none", linestyle="None", label=label)
+        for _, label, color, marker in SCHEMES
+    ]
+    return [Line2D([], [], color="black", linestyle="--", label="analytic")] + scheme_handles
 
 
 def plot_panel(
     ax: plt.Axes,
-    grouped: dict[str, list[dict[str, float | str]]],
+    numerical_grouped: dict[str, list[dict[str, float | str]]],
+    theory_grouped: dict[str, list[dict[str, float | str]]],
     value_key: str,
     theory_key: str,
     ylabel: str,
 ) -> None:
     for slug, _, color, marker in SCHEMES:
-        rows = grouped[slug]
-
-        requested_dt = [float(row["requested_dt"]) for row in rows]
-        values = [max(float(row[value_key]), float(row["plot_floor"])) for row in rows]
-        theory_values = [max(float(row[theory_key]), float(row["plot_floor"])) for row in rows]
+        numerical_rows = numerical_grouped[slug]
+        requested_dt = [float(row["requested_dt"]) for row in numerical_rows]
+        plot_floor = float(numerical_rows[0]["plot_floor"])
+        values = [max(float(row[value_key]), plot_floor) for row in numerical_rows]
         ax.plot(
             requested_dt,
             values,
             color=color,
             marker=marker,
+            markerfacecolor="none",
             linestyle="None",
             zorder=3,
         )
-        ax.plot(
-            requested_dt,
-            theory_values,
-            color=color,
-            linestyle="-",
-            zorder=2,
-        )
 
-    boundary_dt = float(grouped[SCHEMES[0][0]][0]["resolved_stiff_boundary_dt"])
+        theory_rows = theory_grouped[slug]
+        for used_resolved_branch in (1.0, 0.0):
+            branch_rows = [row for row in theory_rows if float(row["used_resolved_branch"]) == used_resolved_branch]
+            theory_dt = [float(row["requested_dt"]) for row in branch_rows]
+            theory_values = [max(float(row[theory_key]), plot_floor) for row in branch_rows]
+            ax.plot(theory_dt, theory_values, color="black", linestyle="--", zorder=2)
+
+    boundary_dt = float(numerical_grouped[SCHEMES[0][0]][0]["resolved_stiff_boundary_dt"])
     ax.axvline(boundary_dt, color="black", linestyle=":", zorder=1)
 
     ax.set_xscale("log")
@@ -160,14 +166,15 @@ def plot_panel(
 
 
 def make_panel_figure(
-    grouped: dict[str, list[dict[str, float | str]]],
+    numerical_grouped: dict[str, list[dict[str, float | str]]],
+    theory_grouped: dict[str, list[dict[str, float | str]]],
     output_path: Path,
     value_key: str,
     theory_key: str,
     ylabel: str,
 ) -> Path:
     fig, ax = plt.subplots(1, 1, figsize=(SINGLE_COLUMN_WIDTH, 2.35))
-    plot_panel(ax, grouped, value_key, theory_key, ylabel)
+    plot_panel(ax, numerical_grouped, theory_grouped, value_key, theory_key, ylabel)
     ax.set_xlabel(r"$\Delta t$")
     fig.tight_layout()
     fig.savefig(output_path)
@@ -176,16 +183,19 @@ def make_panel_figure(
 
 
 def make_figure(data_dir: Path, output_dir: Path) -> tuple[Path, Path]:
-    grouped = group_by_scheme(read_rows(data_dir / DATA_FILE))
+    numerical_grouped = group_by_scheme(read_rows(data_dir / DATA_FILE))
+    theory_grouped = group_by_scheme(read_rows(data_dir / THEORY_DATA_FILE))
     output_path = make_panel_figure(
-        grouped,
+        numerical_grouped,
+        theory_grouped,
         output_dir / OUTPUT_FILE,
         "final_data_error",
         "terminal_error",
         r"distance to $\boldsymbol{w}_*$",
     )
     reference_output_path = make_panel_figure(
-        grouped,
+        numerical_grouped,
+        numerical_grouped,
         output_dir / REFERENCE_OUTPUT_FILE,
         "final_to_fixed_point_error",
         "predicted_final_to_fixed_point_error",
