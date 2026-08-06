@@ -85,8 +85,8 @@ OUTPUT_FILE = "dust_damping_mhd_zero_b_mixed_stiff_panels.pdf"
 T_MAX = 2.0
 
 SCHEMES = (
-    ("tp2025", "TP2025", "C0", "o"),
     ("gl4", "GL4", "C1", "s"),
+    ("tp2025", "TP2025", "C0", "o"),
     ("midpoint", "Midpoint", "C2", "^"),
 )
 
