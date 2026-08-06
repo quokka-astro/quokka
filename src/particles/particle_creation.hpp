@@ -490,7 +490,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
 		amrex::Real eps_ff_ = eps_ff;
-		amrex::Real stellar_velocity_limit_ = stellar_velocity_limit;
 		amrex::Real low_mass_composite_max_mass_ = low_mass_composite_max_mass;
 
 		AMREX_GPU_HOST_DEVICE

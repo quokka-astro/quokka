@@ -546,9 +546,6 @@ inline int particle_verbose = 0; // NOLINT print particle logistics
 // Disable particle drift
 inline bool disable_particle_drift = false; // NOLINT
 
-// Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
-inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
-
 // Maximum mass for LowMassComposite particles. Default is set to max(), so no splitting is performed.
 inline amrex::Real low_mass_composite_max_mass = std::numeric_limits<amrex::Real>::max(); // NOLINT
 
@@ -588,9 +585,6 @@ inline void particleParmParse()
 
 	// Disable particle drift
 	pp.query("disable_particle_drift", disable_particle_drift);
-
-	// Stellar velocity limit parameter
-	pp.query("stellar_velocity_limit", stellar_velocity_limit);
 
 	// Low-mass composite particle mass cap (split into multiple particles if exceeded)
 	pp.query("low_mass_composite_max_mass", low_mass_composite_max_mass);
