@@ -82,8 +82,8 @@ else:
 OUTPUT_FILE = "dust_damped_gyromotion_panels.pdf"
 
 SCHEMES = (
-    ("tp2025", "TP2025", "C0", "o"),
     ("gl4", "GL4", "C1", "s"),
+    ("tp2025", "TP2025", "C0", "o"),
     ("midpoint", "Midpoint", "C2", "^"),
 )
 
