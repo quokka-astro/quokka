@@ -1,9 +1,9 @@
 # Quokka-side microphysics network registry.
 
-foreach(_pi_name photoionization dtype_jaff)
+foreach(_pi_name photoionization DType_JAFF)
   # photoionization itself is hand-written; the other two are jaff-generated.
   set(_pi_is_jaff FALSE)
-  if (_pi_name STREQUAL "dtype_jaff")
+  if (_pi_name STREQUAL "DType_JAFF")
     set(_pi_is_jaff TRUE)
   endif()
 
