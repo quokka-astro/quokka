@@ -1,5 +1,0 @@
-[network.radiation]
-bands = [13.6, 62.1]
-power_law_index = 0
-energy_density = false
-rsl = 2.99792458e7
