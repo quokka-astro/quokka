@@ -1,11 +1,11 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  set(microphysics_network_name "photoionization") # this will override
+  set(microphysics_network_name "DType_JAFF") # this will override
                                                    # network_name to
                                                    # photoionization for this
                                                    # directory only
   setup_target_for_microphysics_compilation(${microphysics_network_name}
                                             "${CMAKE_CURRENT_BINARY_DIR}/"
-                                            "Rosenbrock")
+                                            INTEGRATOR "Rosenbrock")
 
   # use the BEFORE keyword so that these files get priority in compilation for
   # targets in this directory this is critical to ensure the correct Microphysics
@@ -16,30 +16,11 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   set(JOB_NAME DTypeFrontVC)
 
-  # Number of species
-  set(NSPEC 3)
+  include(${jaff_network_vars_file})
   set(NEXTRASPEC 0)
-
-  # Species enums
-  set(SPECIES_ENUM
-  "H = 0,
-  Hp,
-  e"
-  )
-
-  # Species names
-  set(SPEC_NAMES
-  "\"H\",
-  \"Hp\",
-  \"e\""
-  )
 
   # No extra network properties
   set(PROPERTIES "")
-
-  # Set photoionisation properties
-  set(NUM_CHEM_BANDS 1)
-  set(CHEM_BANDS "13.6, 62.1") # eV
 
   # Configure the header
   configure_file(

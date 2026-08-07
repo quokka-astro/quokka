@@ -128,6 +128,11 @@ include_directories(${HDF5_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
+# Registers Quokka's networks. Must precede every
+# setup_target_for_microphysics_compilation() call, here and in
+# src/problems/*/CMakeLists.txt.
+include(${CMAKE_SOURCE_DIR}/src/networks/NetworkRegistry.cmake)
+
 # default network_name (for Microphysics EOS) for all tests:
 set(microphysics_network_name "gamma_law")
 # default output_dir (for Microphysics EOS) for all tests:
