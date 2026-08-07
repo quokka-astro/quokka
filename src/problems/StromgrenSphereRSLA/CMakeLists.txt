@@ -34,6 +34,48 @@ if(AMReX_SPACEDIM EQUAL 3)
   \"e\""
   )
 
+  set(SHORT_SPEC_NAMES
+  "\"H\",
+   \"H+\",
+   \"e-\""
+  )
+
+  # Atomic masses (in atomic mass units) and charges. EOS/photoionization computes
+  # everything it needs from spmasses/gammas directly, but eos() in
+  # interfaces/eos.H unconditionally calls composition(), which forms
+  # sum(xn[n] * aion_inv[n]) and inverts it -- leaving these unset makes
+  # configure_file() emit empty (i.e. all-zero) arrays and that inversion divides
+  # by zero.
+  set(AION
+  "1.0,
+   1.0,
+   5.4858e-4"
+  )
+  set(AION_INV
+  "1.0,
+   1.0,
+   1822.89"
+  )
+
+  set(ZION
+  "1.0,
+   1.0,
+   1.0"
+  )
+
+  # constexpr switch bodies
+  set(AION_CONSTEXPR
+  "case H:  a = 1.0; break;
+   case Hp: a = 1.0; break;
+   case e:  a = 1.0; break;"
+  )
+
+  set(ZION_CONSTEXPR
+  "case H:  z = 1.0; break;
+   case Hp: z = 1.0; break;
+   case e:  z = 1.0; break;"
+  )
+
   # No extra network properties
   set(PROPERTIES "")
 
