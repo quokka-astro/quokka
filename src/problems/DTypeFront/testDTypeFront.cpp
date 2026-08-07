@@ -69,6 +69,7 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	// thermal-pressure D-type front expansion with radiation pressure.
 	static constexpr int beta_order = 1;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
 };
 
 template <> struct SimulationData<DTypeFront> {

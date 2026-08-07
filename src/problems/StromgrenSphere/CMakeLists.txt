@@ -40,6 +40,7 @@ if(AMReX_SPACEDIM EQUAL 3)
   # Set photoionisation properties
   set(NUM_CHEM_BANDS 1)
   set(CHEM_BANDS "13.6, 62.1") # eV
+  set(POWER_LAW_INDEX 0) # jaff network.radiation.power_law_index
 
   # Configure the header
   configure_file(

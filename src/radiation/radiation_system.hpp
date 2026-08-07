@@ -681,9 +681,26 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::G
 	// convert to erg here rather than have every problem's CMakeLists
 	// convert to Hz by hand.
 	auto const ev_bounds = RadSystem_Traits<problem_t>::ChemBands();
-	amrex::Real ev_low = ev_bounds[group_index];
-	amrex::Real ev_high = ev_bounds[group_index + 1];
-	return 0.5_rt * (ev_high + ev_low) * C::ev2erg;
+	amrex::Real const ev_low = ev_bounds[group_index];
+	amrex::Real const ev_high = ev_bounds[group_index + 1];
+
+	amrex::Real const alpha = RadSystem_Traits<problem_t>::ChemBandsPowerLawIndex();
+
+	amrex::Real ev_avg = NAN;
+	if (std::isinf(ev_high)) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alpha < 0.0, "GetChemBandQuanta: an open-topped chemistry band only has a "
+							      "finite average photon energy for power_law_index < 0");
+		ev_avg = ev_low * (1.0 - 1.0 / alpha);
+	} else if (alpha == 0.0) {
+		ev_avg = ev_low * ev_high * std::log(ev_high / ev_low) / (ev_high - ev_low);
+	} else if (alpha == 1.0) {
+		ev_avg = (ev_high - ev_low) / std::log(ev_high / ev_low);
+	} else {
+		ev_avg = ((alpha - 1.0) / alpha) * (std::pow(ev_high, alpha) - std::pow(ev_low, alpha)) /
+			 (std::pow(ev_high, alpha - 1.0) - std::pow(ev_low, alpha - 1.0));
+	}
+
+	return ev_avg * C::ev2erg;
 }
 #endif
 

@@ -58,6 +58,7 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
 };
 
 template <>
