@@ -41,9 +41,6 @@ integrator.ode_max_steps = 50000
 plotfile_interval = -1
 plotfile_prefix = "DType"
 
-network.allow_mixed_cell_cooling = 0
-
-
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 
 # VODE absolute tolerances — tuned for DTypeFront (n_H = 139.9 cm^-3).
