@@ -383,7 +383,6 @@ void DustSources<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std
 		amrex::Real E_int_iter_new = E_int;
 
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, nDustGroups_ + 1> vel_iter_old;
-		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, nDustGroups_ + 1> vel_iter_new;
 
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			vel_iter_old[0][dir] = vel_g_old[dir];
@@ -391,6 +390,7 @@ void DustSources<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std
 				vel_iter_old[1 + g][dir] = vel_d_old[g][dir];
 			}
 		}
+		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, nDustGroups_ + 1> vel_iter_new = vel_iter_old;
 
 		// Picard iteration loop
 		for (int iteration = 0; iteration < max_iterations; ++iteration) {
