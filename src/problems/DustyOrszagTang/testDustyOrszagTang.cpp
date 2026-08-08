@@ -482,17 +482,17 @@ template <> void QuokkaSimulation<DustyOrszagTang>::setInitialConditionsOnGridFa
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustyOrszagTang>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
-										       amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-										       amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-										       double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustyOrszagTang>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> alpha{};
 	alpha[0] = 1.0 / g_stopping_time;
 	return alpha;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustyOrszagTang>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustyOrszagTang>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> dimensionless_charge_to_mass_ratio{};
 	dimensionless_charge_to_mass_ratio[0] = g_dimensionless_charge_to_mass_ratio;

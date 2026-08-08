@@ -12,6 +12,13 @@ namespace quokka::dust
 
 enum class ResolvedRkScheme { TP2025, GL4, Midpoint };
 
+struct CoefficientIterationConfig {
+	bool enabled = false;
+	amrex::Real alphaRelativeTolerance = 1.0e-6;
+	amrex::Real chargeRelativeTolerance = 1.0e-6;
+	int maxIterations = 20;
+};
+
 inline auto resolvedRkSchemeName(ResolvedRkScheme scheme) -> char const *
 {
 	switch (scheme) {

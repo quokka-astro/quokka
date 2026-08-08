@@ -67,10 +67,8 @@ template <> struct Physics_Traits<DustHallPedersenDrift> : DefaultPhysicsTraits 
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
-											     amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-											     amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-											     double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> alpha{};
 	alpha[0] = alpha_d;
@@ -78,7 +76,8 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeReciprocal
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> dimensionless_charge_to_mass_ratio_array{};
 	dimensionless_charge_to_mass_ratio_array[0] = dimensionless_charge_to_mass_ratio;
