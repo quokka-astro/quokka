@@ -173,11 +173,22 @@ The resolved coefficients are used when the full transport timestep satisfies \\
 
 ### Optional Picard iteration for dust–gas source update
 
-Users may optionally enable Picard iteration for the local update represented by \\(\mathcal{C}\\). When the stopping time depends on state variables that evolve during the source update, such as the relative velocity, sound speed, or gas energy, enabling iteration is required to maintain an implicit dust source update. The iteration stops when the maximum change in the gas or dust speed is below a relative tolerance of \\(10^{-6}\\), with the iteration count capped at 20 in the current implementation. This option applies to both `DustSources::computeDustDrag` and `DustSources::computeDustDragAndLorentz`. See [Runtime parameters](parameters.md) for details.
+Picard iteration can be enabled with `dust.enable_coefficient_iteration` when the stopping time or dust charge depends on the state updated by \\(\mathcal{C}\\). If iteration is disabled, the coefficients are evaluated from the input state and held fixed during the source update. If it is enabled, Quokka repeatedly solves the source update and recomputes the coefficients from the candidate output state.
+
+For each active dust species, `DustSources::computeDustDrag` checks the reciprocal stopping time \\(\alpha_n=1/T_{\mathrm{s},n}\\):
+
+<script type="math/tex; mode=display">
+\left|\alpha_n^{(k+1)}-\alpha_n^{(k)}\right|
+\leq \epsilon_\alpha\alpha_n^{(k)}.
+</script>
+
+`DustSources::computeDustDragAndLorentz` also checks the dimensionless charge-to-mass ratio \\(\xi_n\\) when the magnetic field is nonzero, using its own relative tolerance. A change of charge sign or a change between zero and nonzero always triggers another iteration. Both source updates also require the candidate state to select the same resolved or stiff integration branch as the preceding iterate.
+
+The default relative tolerances are \\(\epsilon_\alpha=\epsilon_\xi=10^{-6}\\), and the default maximum is 20 iterations. If a cell does not converge, Quokka prints a warning and uses the final iterate. See [Runtime parameters](parameters.md) for the corresponding controls.
 
 ### User-defined dust stopping time and charge
 
-For a given problem, users must define a problem-specific dust stopping time by implementing the `DustSources::ComputeReciprocalStoppingTime` function (note that this function should return the reciprocal of the stopping time). An example can be found in the `src/problems/DustDamping` test.
+For a given problem, users must define a problem-specific dust stopping time by implementing `DustSources::ComputeReciprocalStoppingTime`, which returns the reciprocal stopping time for each dust group. The stopping-time and charge callbacks receive a `DustCoefficientState` containing the gas density, dust densities, gas-dust relative speeds, and gas sound speed. This state is recomputed during coefficient iteration, so either callback may define state-dependent coefficients.
 
 Users can directly use the dust stopping time calculation helper `DustSources::ComputeReciprocalStoppingTimeKwok` to compute the physical dust stopping time, following Kwok (1975) with an optional supersonic correction. Problem setups that use this helper must provide the dust grain radius \\(a\\) and material density \\(\rho_{\mathrm{gr}}\\) for each dust group. These values can be read from the optional runtime parameters `dust.grain_radius` and `dust.grain_density` by calling `quokka::dust::readDustGrainParams`. The stopping time of dust \\(t_{\mathrm{s}}\\) is given by:
 
@@ -191,7 +202,7 @@ t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}
 
 When \\(\gamma=1\\), this expression reduces exactly to the isothermal \\(t_{\mathrm{s}}\\). An example of its usage can be found in the `src/problems/DustDampingIteration` test.
 
-For charged dust in MHD, users must also specialize `DustSources::ComputeDustDimensionlessChargeToMassRatio`. This function returns the signed dimensionless \\(\xi_n\\) defined above for each dust group. The default implementation returns zero for all groups, so dust behaves as neutral dust unless a problem overrides it. Examples can be found in `src/problems/DustDampedGyromotion`.
+For charged dust in MHD, users must also specialize `DustSources::ComputeDustDimensionlessChargeToMassRatio`. This function returns the signed dimensionless \\(\xi_n\\) defined above for each dust group. The default implementation returns zero for all groups, so dust behaves as neutral dust unless a problem overrides it. Examples of both constant and state-dependent charge can be found in `src/problems/DustDampedGyromotion`.
 
 ## CFL Condition for Dust
 
@@ -211,7 +222,10 @@ When MHD is enabled, the sound speed is replaced by the maximum fast-magnetosoni
 
 The following input parameters tune the dust module and are documented in more detail in [Runtime parameters](parameters.md):
 
-- `dust.enable_iter_stoptime` – switch of iterative dust stopping time calculation.
+- `dust.enable_coefficient_iteration` – enables Picard iteration for state-dependent stopping-time and charge coefficients.
+- `dust.picard_alpha_rtol` – relative convergence tolerance for the reciprocal stopping time.
+- `dust.picard_charge_rtol` – relative convergence tolerance for the dimensionless charge-to-mass ratio.
+- `dust.picard_max_iterations` – maximum number of coefficient iterations per source update.
 - `dust.omega_drag_heating` – controls deposition of the drag-like heating contribution in the dust source update.
 - `dust.omega_gyro_residual` – controls deposition of the gyrofrequency-dependent residual contribution in `computeDustDragAndLorentz`.
 - `dust.resolved_rk_scheme` – selects the GIRK coefficients in resolved branch used by `DustSources::computeDustDragAndLorentz`. Supported values are `TP2025`, `GL4`, and `Midpoint`.
