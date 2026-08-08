@@ -155,16 +155,19 @@ VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`, except for optional Kwok stopping-time grain parameters that are read by problem setups that opt into `quokka::dust::readDustGrainParams`.
 
-| Parameter Name                | Type          | Default        | Description                                                                                                                                       |
-|-------------------------------|---------------|----------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
-| dust.enable_iter_stoptime     | Boolean (0/1) | `0` (Disabled) | If set to 1, enables iterative dust stopping time calculation.                                                                                    |
-| dust.omega_drag_heating       | Float         | `1.0`          | Controls deposition of the drag-like heating contribution in the dust source update. In `computeDustDragAndLorentz`, this is the total discrete kinetic-energy loss after subtracting the gyrofrequency-dependent residual. |
-| dust.omega_gyro_residual      | Float         | `0.0`          | Controls deposition of the gyrofrequency-dependent part of the discrete RK energy residual in `computeDustDragAndLorentz`.                       |
-| dust.resolved_rk_scheme       | String        | `GL4`          | Selects the GIRK coefficients in resolved branch used by the dust source update. Supported values are `TP2025`, `GL4`, and `Midpoint`. At present this only affects `DustSources::computeDustDragAndLorentz`; `DustSources::computeDustDrag` is not affected. |
-| dust.print_iteration_counts   | Boolean (0/1) | `0` (Disabled) | If set to 1, prints dust drag or dust drag-plus-Lorentz iteration counts for debugging.                                                          |
-| dust.density_floor            | Float         | `0.0`          | The minimum dust density value allowed in the simulation. Enforced through EnforceLimits.                                                        |
-| dust.grain_radius             | Float or list | Problem default | Optional dust grain radius values used by problem setups that call the Kwok stopping-time helper. Must contain one value per dust group.         |
-| dust.grain_density            | Float or list | Problem default | Optional dust grain material density values used by problem setups that call the Kwok stopping-time helper. Must contain one value per dust group. |
+| Parameter Name                     | Type          | Default        | Description                                                                                                                                       |
+|------------------------------------|---------------|----------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| dust.enable_coefficient_iteration  | Boolean (0/1) | `0` (Disabled) | If set to 1, iterates state-dependent stopping-time and charge coefficients during each dust source update.                                      |
+| dust.picard_alpha_rtol             | Float         | `1e-6`         | Relative convergence tolerance for the reciprocal stopping time \\(\alpha=1/T_{\mathrm{s}}\\).                                                   |
+| dust.picard_charge_rtol            | Float         | `1e-6`         | Relative convergence tolerance for the dimensionless charge-to-mass ratio \\(\xi\\); used only when the magnetic field is nonzero.                |
+| dust.picard_max_iterations         | Integer       | `20`           | Maximum number of coefficient iterations per dust source update. A nonconverged cell emits a warning and uses the final iterate.                 |
+| dust.omega_drag_heating            | Float         | `1.0`          | Controls deposition of the drag-like heating contribution in the dust source update. In `computeDustDragAndLorentz`, this is the total discrete kinetic-energy loss after subtracting the gyrofrequency-dependent residual. |
+| dust.omega_gyro_residual           | Float         | `0.0`          | Controls deposition of the gyrofrequency-dependent part of the discrete RK energy residual in `computeDustDragAndLorentz`.                       |
+| dust.resolved_rk_scheme            | String        | `GL4`          | Selects the GIRK coefficients in resolved branch used by the dust source update. Supported values are `TP2025`, `GL4`, and `Midpoint`. At present this only affects `DustSources::computeDustDragAndLorentz`; `DustSources::computeDustDrag` is not affected. |
+| dust.print_iteration_counts        | Boolean (0/1) | `0` (Disabled) | If set to 1, prints dust drag or dust drag-plus-Lorentz iteration counts for debugging.                                                          |
+| dust.density_floor                 | Float         | `0.0`          | The minimum dust density value allowed in the simulation. Enforced through EnforceLimits.                                                        |
+| dust.grain_radius                  | Float or list | Problem default | Optional dust grain radius values used by problem setups that call the Kwok stopping-time helper. Must contain one value per dust group.         |
+| dust.grain_density                 | Float or list | Problem default | Optional dust grain material density values used by problem setups that call the Kwok stopping-time helper. Must contain one value per dust group. |
 
 ## Particles
 

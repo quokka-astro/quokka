@@ -180,9 +180,7 @@ template <> struct Physics_Traits<DustDampingMHDZeroBMixedStiff> : DefaultPhysic
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustSources<DustDampingMHDZeroBMixedStiff>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-									  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroBMixedStiff>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 2> alpha{};
@@ -192,7 +190,8 @@ DustSources<DustDampingMHDZeroBMixedStiff>::ComputeReciprocalStoppingTime(amrex:
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroBMixedStiff>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroBMixedStiff>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 2> dimensionless_charge_to_mass_ratio{};
 	dimensionless_charge_to_mass_ratio.fill(1.0);

@@ -698,16 +698,18 @@ template <> struct Physics_Traits<DustMagnetizedRDI> : DefaultPhysicsTraits {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-											 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> const grain_radius = {g_grain_radius};
 	amrex::GpuArray<amrex::Real, nDustGroups_> const grain_density = {g_grain_density};
-	return DustSources<DustMagnetizedRDI>::ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, grain_radius, grain_density, true);
+	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, grain_radius, grain_density,
+						 true);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> dimensionless_charge_to_mass_ratio_array{};
 	dimensionless_charge_to_mass_ratio_array[0] = dimensionless_charge_to_mass_ratio;

@@ -168,7 +168,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
 	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
-	int enableIterDustStoptime_ = 0;
+	quokka::dust::CoefficientIterationConfig dustCoefficientIteration_;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
@@ -799,7 +799,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		if (dpp.query("resolved_rk_scheme", resolved_rk_scheme_name) != 0) {
 			dustResolvedRkScheme_ = quokka::dust::parseResolvedRkScheme(resolved_rk_scheme_name);
 		}
-		dpp.query("enable_iter_stoptime", enableIterDustStoptime_);
+		dpp.query("enable_coefficient_iteration", dustCoefficientIteration_.enabled);
+		dpp.query("picard_alpha_rtol", dustCoefficientIteration_.alphaRelativeTolerance);
+		dpp.query("picard_charge_rtol", dustCoefficientIteration_.chargeRelativeTolerance);
+		dpp.query("picard_max_iterations", dustCoefficientIteration_.maxIterations);
 		dpp.query("print_iteration_counts", print_dust_counter_);
 		dpp.query("density_floor", dustDensityFloor_);
 	}
@@ -1105,9 +1108,9 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	auto const applyDust = [&]() {
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
 			DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega_drag_, dust_omega_gyro_res_, dustResolvedRkScheme_,
-									  enableIterDustStoptime_, print_dust_counter_);
+									  dustCoefficientIteration_, print_dust_counter_);
 		} else if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-			DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_drag_, enableIterDustStoptime_, print_dust_counter_);
+			DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_drag_, dustCoefficientIteration_, print_dust_counter_);
 		}
 	};
 

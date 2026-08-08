@@ -28,6 +28,7 @@ constexpr double eta = 9.0 * std::numbers::pi * gamma_iso / 128.0;
 constexpr double default_grain_density = 1.0;
 constexpr double default_grain_radius = 1.5957691216057308; // sqrt(8 / pi) gives alpha0 = 1 for gamma = rho_g = c_s = rho_gr = 1.
 constexpr double dimensionless_charge_to_mass_ratio = 1.0;
+constexpr double dynamic_charge_offset = 0.95;
 
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_radius = {default_grain_radius};	  // NOLINT
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_density = {default_grain_density}; // NOLINT
@@ -55,6 +56,12 @@ auto computeInitialReciprocalStoppingTime() -> double
 	return (2.0 * std::numbers::sqrt2 * rho_gas * sound_speed) /
 	       (std::sqrt(std::numbers::pi * gamma_iso) * g_dust_grain_radius[0] * g_dust_grain_density[0]);
 }
+
+AMREX_GPU_HOST_DEVICE auto dynamicChargeFromDrift(amrex::Real drift) -> amrex::Real
+{
+	amrex::Real const normalized_drift = drift / initial_drift;
+	return normalized_drift - dynamic_charge_offset;
+}
 } // namespace
 
 struct DustGyroEpsteinNoB {
@@ -64,6 +71,9 @@ struct DustGyroNoDrag {
 };
 
 struct DustGyroEpsteinWithB {
+};
+
+struct DustGyroDynamicCharge {
 };
 
 namespace
@@ -90,6 +100,13 @@ template <> struct GyroCaseParams<DustGyroEpsteinWithB> {
 	static constexpr bool enable_epstein_drag = true;
 	static constexpr double magnetic_field_z = 5.0;
 	static constexpr double omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_z;
+	static constexpr double stop_time = 2.0;
+	static constexpr double constant_dt = 0.1;
+};
+
+template <> struct GyroCaseParams<DustGyroDynamicCharge> {
+	static constexpr bool enable_epstein_drag = true;
+	static constexpr double magnetic_field_z = 5.0;
 	static constexpr double stop_time = 2.0;
 	static constexpr double constant_dt = 0.1;
 };
@@ -153,6 +170,9 @@ template <> struct SimulationData<DustGyroNoDrag> : DustGyroHistory {
 template <> struct SimulationData<DustGyroEpsteinWithB> : DustGyroHistory {
 };
 
+template <> struct SimulationData<DustGyroDynamicCharge> : DustGyroHistory {
+};
+
 template <> struct quokka::EOS_Traits<DustGyroEpsteinNoB> : DustGyroEOSTraits {
 };
 
@@ -160,6 +180,9 @@ template <> struct quokka::EOS_Traits<DustGyroNoDrag> : DustGyroEOSTraits {
 };
 
 template <> struct quokka::EOS_Traits<DustGyroEpsteinWithB> : DustGyroEOSTraits {
+};
+
+template <> struct quokka::EOS_Traits<DustGyroDynamicCharge> : DustGyroEOSTraits {
 };
 
 template <> struct Physics_Traits<DustGyroEpsteinNoB> : DustGyroPhysicsTraits {
@@ -171,13 +194,16 @@ template <> struct Physics_Traits<DustGyroNoDrag> : DustGyroPhysicsTraits {
 template <> struct Physics_Traits<DustGyroEpsteinWithB> : DustGyroPhysicsTraits {
 };
 
+template <> struct Physics_Traits<DustGyroDynamicCharge> : DustGyroPhysicsTraits {
+};
+
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto computeDustGyroReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, 1> rho_d,
-								 amrex::GpuArray<amrex::Real, 1> rel_vel_mag, double cs) -> amrex::GpuArray<amrex::Real, 1>
+AMREX_GPU_HOST_DEVICE auto computeDustGyroReciprocalStoppingTime(typename DustSources<problem_t>::DustCoefficientState const &state)
+    -> amrex::GpuArray<amrex::Real, 1>
 {
 	if constexpr (GyroCaseParams<problem_t>::enable_epstein_drag) {
-		return DustSources<problem_t>::ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density,
-										 true);
+		return DustSources<problem_t>::ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed,
+										 g_dust_grain_radius, g_dust_grain_density, true);
 	} else {
 		amrex::GpuArray<amrex::Real, 1> alpha{};
 		alpha.fill(0.0);
@@ -186,27 +212,31 @@ AMREX_GPU_HOST_DEVICE auto computeDustGyroReciprocalStoppingTime(amrex::Real rho
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinNoB>::ComputeReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-											  amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinNoB>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return computeDustGyroReciprocalStoppingTime<DustGyroEpsteinNoB>(rho_g, rho_d, rel_vel_mag, cs);
+	return computeDustGyroReciprocalStoppingTime<DustGyroEpsteinNoB>(state);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroNoDrag>::ComputeReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-										      amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroNoDrag>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return computeDustGyroReciprocalStoppingTime<DustGyroNoDrag>(rho_g, rho_d, rel_vel_mag, cs);
+	return computeDustGyroReciprocalStoppingTime<DustGyroNoDrag>(state);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinWithB>::ComputeReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-											    amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinWithB>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return computeDustGyroReciprocalStoppingTime<DustGyroEpsteinWithB>(rho_g, rho_d, rel_vel_mag, cs);
+	return computeDustGyroReciprocalStoppingTime<DustGyroEpsteinWithB>(state);
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroDynamicCharge>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	return computeDustGyroReciprocalStoppingTime<DustGyroDynamicCharge>(state);
 }
 
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto computeDustGyroDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, 1>
@@ -217,20 +247,33 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto computeDustGyroDimensio
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinNoB>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinNoB>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return computeDustGyroDimensionlessChargeToMassRatio<DustGyroEpsteinNoB>();
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroNoDrag>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroNoDrag>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return computeDustGyroDimensionlessChargeToMassRatio<DustGyroNoDrag>();
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinWithB>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroEpsteinWithB>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return computeDustGyroDimensionlessChargeToMassRatio<DustGyroEpsteinWithB>();
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustGyroDynamicCharge>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const &state)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	amrex::GpuArray<amrex::Real, nDustGroups_> charge_to_mass_ratio{};
+	charge_to_mass_ratio[0] = dynamicChargeFromDrift(state.relativeVelocityMagnitude[0]);
+	return charge_to_mass_ratio;
 }
 
 template <typename problem_t> void setDustGyroInitialConditions(quokka::grid const &grid_elem)
@@ -293,6 +336,11 @@ template <> void QuokkaSimulation<DustGyroEpsteinWithB>::setInitialConditionsOnG
 	setDustGyroInitialConditions<DustGyroEpsteinWithB>(grid_elem);
 }
 
+template <> void QuokkaSimulation<DustGyroDynamicCharge>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	setDustGyroInitialConditions<DustGyroDynamicCharge>(grid_elem);
+}
+
 template <> void QuokkaSimulation<DustGyroEpsteinNoB>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	setDustGyroFaceVars<DustGyroEpsteinNoB>(grid_elem);
@@ -306,6 +354,11 @@ template <> void QuokkaSimulation<DustGyroNoDrag>::setInitialConditionsOnGridFac
 template <> void QuokkaSimulation<DustGyroEpsteinWithB>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	setDustGyroFaceVars<DustGyroEpsteinWithB>(grid_elem);
+}
+
+template <> void QuokkaSimulation<DustGyroDynamicCharge>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	setDustGyroFaceVars<DustGyroDynamicCharge>(grid_elem);
 }
 
 template <typename problem_t> void appendDustGyroHistory(QuokkaSimulation<problem_t> &sim)
@@ -347,6 +400,8 @@ template <> void QuokkaSimulation<DustGyroNoDrag>::computeAfterTimestep() { appe
 
 template <> void QuokkaSimulation<DustGyroEpsteinWithB>::computeAfterTimestep() { appendDustGyroHistory(*this); }
 
+template <> void QuokkaSimulation<DustGyroDynamicCharge>::computeAfterTimestep() { appendDustGyroHistory(*this); }
+
 template <typename problem_t> auto makePeriodicFaceBCs() -> amrex::Vector<amrex::BCRec>
 {
 	const int nvars_fc = Physics_Indices<problem_t>::nvarTotal_fc;
@@ -360,7 +415,7 @@ template <typename problem_t> auto makePeriodicFaceBCs() -> amrex::Vector<amrex:
 	return BCs_fc;
 }
 
-template <typename problem_t> auto runDustGyroSimulation(ResolvedRkScheme scheme) -> SimulationData<problem_t>
+template <typename problem_t> auto runDustGyroSimulation(ResolvedRkScheme scheme, bool enable_coefficient_iteration = true) -> SimulationData<problem_t>
 {
 	auto BCs_cc = quokka::BC<problem_t>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 	auto BCs_fc = makePeriodicFaceBCs<problem_t>();
@@ -373,7 +428,7 @@ template <typename problem_t> auto runDustGyroSimulation(ResolvedRkScheme scheme
 	sim.constantDt_ = GyroCaseParams<problem_t>::constant_dt;
 	sim.stopTime_ = GyroCaseParams<problem_t>::stop_time;
 	sim.maxTimesteps_ = 10000000;
-	sim.enableIterDustStoptime_ = GyroCaseParams<problem_t>::enable_epstein_drag ? 1 : 0;
+	sim.dustCoefficientIteration_.enabled = GyroCaseParams<problem_t>::enable_epstein_drag && enable_coefficient_iteration;
 	sim.dustResolvedRkScheme_ = scheme;
 	sim.print_dust_counter_ = false;
 
@@ -384,7 +439,7 @@ template <typename problem_t> auto runDustGyroSimulation(ResolvedRkScheme scheme
 	return sim.userData_;
 }
 
-auto analyticEpsteinDrift(double t, double omega_L) -> DriftState
+auto analyticEpsteinDriftAmplitude(double t) -> double
 {
 	const double drift_factor = std::sqrt(1.0 + eta * initial_drift * initial_drift / (sound_speed * sound_speed));
 	const double alpha0 = computeInitialReciprocalStoppingTime();
@@ -392,8 +447,25 @@ auto analyticEpsteinDrift(double t, double omega_L) -> DriftState
 	const double numerator = std::sinh(tau) + drift_factor * std::cosh(tau);
 	const double denominator = std::cosh(tau) + drift_factor * std::sinh(tau);
 	const double ratio = numerator / denominator;
-	const double amplitude = sound_speed * std::sqrt(std::max(ratio * ratio - 1.0, 0.0)) / std::sqrt(eta);
+	return sound_speed * std::sqrt(std::max(ratio * ratio - 1.0, 0.0)) / std::sqrt(eta);
+}
+
+auto analyticEpsteinDrift(double t, double omega_L) -> DriftState
+{
+	const double amplitude = analyticEpsteinDriftAmplitude(t);
 	const double phase = (1.0 + epsilon) * omega_L * t;
+	return {.wx = amplitude * std::cos(phase), .wy = -amplitude * std::sin(phase)};
+}
+
+auto analyticDynamicChargeDrift(double t) -> DriftState
+{
+	const double amplitude = analyticEpsteinDriftAmplitude(t);
+	const double alpha0 = computeInitialReciprocalStoppingTime();
+	const double inverse_speed_scale = std::sqrt(eta) / sound_speed;
+	const double magnetic_field = GyroCaseParams<DustGyroDynamicCharge>::magnetic_field_z;
+	const double phase = magnetic_field / (alpha0 * initial_drift * inverse_speed_scale) *
+				 (std::asinh(inverse_speed_scale * initial_drift) - std::asinh(inverse_speed_scale * amplitude)) -
+			     (1.0 + epsilon) * magnetic_field * dynamic_charge_offset * t;
 	return {.wx = amplitude * std::cos(phase), .wy = -amplitude * std::sin(phase)};
 }
 
@@ -440,6 +512,16 @@ auto maxConservationError(const DustGyroHistory &data) -> double
 {
 	return std::max({maxAbsVectorComponent(data.center_momentum_x_vec_), maxAbsVectorComponent(data.center_momentum_y_vec_),
 			 maxAbsVectorComponent(data.center_momentum_z_vec_), maxAbsVectorComponent(data.wz_vec_)});
+}
+
+auto maxRelativeHistoryDifference(const DustGyroHistory &first, const DustGyroHistory &second) -> double
+{
+	double max_difference = 0.0;
+	for (size_t i = 0; i < first.t_vec_.size(); ++i) {
+		max_difference = std::max(max_difference, std::abs(first.wx_vec_[i] - second.wx_vec_[i]) / initial_drift);
+		max_difference = std::max(max_difference, std::abs(first.wy_vec_[i] - second.wy_vec_[i]) / initial_drift);
+	}
+	return max_difference;
 }
 
 template <typename problem_t, typename AnalyticFn>
@@ -532,6 +614,36 @@ void writeSummaryCsv(const std::string_view case_tag, const std::vector<SchemeRu
 	}
 }
 
+void writeDynamicChargeHistoryCsv(const DustGyroHistory &iterated_run, const DustGyroHistory &frozen_run)
+{
+	size_t const n_samples = std::min(iterated_run.t_vec_.size(), frozen_run.t_vec_.size());
+	std::ofstream file("dust_dynamic_charge_iteration_history.csv");
+	file << std::setprecision(17);
+	file << "t,wx_iterated_norm,wy_iterated_norm,xi_iterated,wx_frozen_norm,wy_frozen_norm,xi_frozen\n";
+	for (size_t i = 0; i < n_samples; ++i) {
+		double const iterated_drift = std::hypot(iterated_run.wx_vec_[i], iterated_run.wy_vec_[i]);
+		double const frozen_drift = std::hypot(frozen_run.wx_vec_[i], frozen_run.wy_vec_[i]);
+		file << iterated_run.t_vec_[i] << "," << iterated_run.wx_vec_[i] / initial_drift << "," << iterated_run.wy_vec_[i] / initial_drift << ","
+		     << dynamicChargeFromDrift(iterated_drift) << "," << frozen_run.wx_vec_[i] / initial_drift << "," << frozen_run.wy_vec_[i] / initial_drift
+		     << "," << dynamicChargeFromDrift(frozen_drift) << "\n";
+	}
+}
+
+void writeDynamicChargeExactCsv(const DustGyroHistory &data)
+{
+	constexpr size_t n_samples = 1000;
+	double const t_max = data.t_vec_.back();
+	std::ofstream file("dust_dynamic_charge_iteration_exact.csv");
+	file << std::setprecision(17);
+	file << "t,wx_exact_norm,wy_exact_norm,xi_exact\n";
+	for (size_t i = 0; i < n_samples; ++i) {
+		double const t = t_max * static_cast<double>(i) / static_cast<double>(n_samples - 1);
+		DriftState const exact = analyticDynamicChargeDrift(t);
+		double const drift = std::hypot(exact.wx, exact.wy);
+		file << t << "," << exact.wx / initial_drift << "," << exact.wy / initial_drift << "," << dynamicChargeFromDrift(drift) << "\n";
+	}
+}
+
 auto problem_main() -> int
 {
 	bool write_csv = true;
@@ -543,6 +655,7 @@ auto problem_main() -> int
 	auto epstein_no_b_exact = [](double t) { return analyticEpsteinDrift(t, GyroCaseParams<DustGyroEpsteinNoB>::omega_L); };
 	auto gyro_no_drag_exact = [](double t) { return analyticGyroDrift(t, GyroCaseParams<DustGyroNoDrag>::omega_L); };
 	auto epstein_with_b_exact = [](double t) { return analyticEpsteinDrift(t, GyroCaseParams<DustGyroEpsteinWithB>::omega_L); };
+	auto dynamic_charge_exact = [](double t) { return analyticDynamicChargeDrift(t); };
 
 	std::vector<SchemeRunResult> epstein_no_b_runs;
 	std::vector<SchemeRunResult> gyro_no_drag_runs;
@@ -556,6 +669,8 @@ auto problem_main() -> int
 		gyro_no_drag_runs.push_back(computeRunResult(scheme, runDustGyroSimulation<DustGyroNoDrag>(scheme), gyro_no_drag_exact));
 		epstein_with_b_runs.push_back(computeRunResult(scheme, runDustGyroSimulation<DustGyroEpsteinWithB>(scheme), epstein_with_b_exact));
 	}
+	auto dynamic_charge_iterated_run = runDustGyroSimulation<DustGyroDynamicCharge>(ResolvedRkScheme::GL4);
+	auto dynamic_charge_frozen_run = runDustGyroSimulation<DustGyroDynamicCharge>(ResolvedRkScheme::GL4, false);
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -565,6 +680,8 @@ auto problem_main() -> int
 		const double gyro_amplitude_tol = 0.1;
 		const double epstein_with_b_tol = 8.0e-2;
 		const double conservation_tol = 1.0e-10;
+		const double dynamic_charge_drift_tol = 8.0e-2;
+		const double dynamic_charge_minimum_change = 1.0e-2;
 
 		bool passed = true;
 		for (auto const &run : epstein_no_b_runs) {
@@ -600,6 +717,28 @@ auto problem_main() -> int
 			}
 		}
 
+		double const dynamic_charge_drift_error = relativeDriftL2Error(dynamic_charge_iterated_run, dynamic_charge_exact);
+		double const dynamic_charge_frozen_drift_error = relativeDriftL2Error(dynamic_charge_frozen_run, dynamic_charge_exact);
+		double const dynamic_charge_difference = maxRelativeHistoryDifference(dynamic_charge_iterated_run, dynamic_charge_frozen_run);
+		double const final_drift = std::hypot(dynamic_charge_iterated_run.wx_vec_.back(), dynamic_charge_iterated_run.wy_vec_.back());
+		double const initial_charge = dynamicChargeFromDrift(initial_drift);
+		double const final_charge = dynamicChargeFromDrift(final_drift);
+		double const dynamic_charge_change = std::abs(final_charge - initial_charge);
+		bool const dynamic_charge_sign_changed = initial_charge * final_charge < 0.0;
+		double const dynamic_charge_conservation_error = maxConservationError(dynamic_charge_iterated_run);
+		double const dynamic_charge_frozen_conservation_error = maxConservationError(dynamic_charge_frozen_run);
+		amrex::Print() << "[Dynamic Charge] Iterated analytic drift error      = " << dynamic_charge_drift_error << "\n";
+		amrex::Print() << "[Dynamic Charge] Frozen-coefficient drift error    = " << dynamic_charge_frozen_drift_error << "\n";
+		amrex::Print() << "[Dynamic Charge] Iterated/frozen solution difference = " << dynamic_charge_difference << "\n";
+		amrex::Print() << "[Dynamic Charge] Initial/final charge-to-mass ratio = " << initial_charge << ", " << final_charge << "\n";
+		amrex::Print() << "[Dynamic Charge] Charge-to-mass ratio change      = " << dynamic_charge_change << "\n";
+		amrex::Print() << "[Dynamic Charge] Conservation error               = " << dynamic_charge_conservation_error << "\n";
+		amrex::Print() << "[Dynamic Charge] Frozen-coefficient conservation error = " << dynamic_charge_frozen_conservation_error << "\n";
+		if (!dynamic_charge_sign_changed || (dynamic_charge_drift_error > dynamic_charge_drift_tol) ||
+		    (dynamic_charge_change < dynamic_charge_minimum_change) || (dynamic_charge_conservation_error > conservation_tol)) {
+			passed = false;
+		}
+
 		if (!passed) {
 			status = 1;
 			amrex::Print() << "\nTest FAILED: dust-gas gyromotion errors exceeded tolerance.\n";
@@ -611,6 +750,8 @@ auto problem_main() -> int
 			writeCaseOutputs(epstein_no_b_runs, epstein_no_b_exact, "pure_damping", alpha0);
 			writeCaseOutputs(gyro_no_drag_runs, gyro_no_drag_exact, "undamped_gyromotion", GyroCaseParams<DustGyroNoDrag>::omega_L);
 			writeCaseOutputs(epstein_with_b_runs, epstein_with_b_exact, "damped_gyromotion", alpha0);
+			writeDynamicChargeHistoryCsv(dynamic_charge_iterated_run, dynamic_charge_frozen_run);
+			writeDynamicChargeExactCsv(dynamic_charge_iterated_run);
 
 			std::ofstream summary_file("dust_damped_gyromotion_summary.csv");
 			summary_file << std::setprecision(17);
