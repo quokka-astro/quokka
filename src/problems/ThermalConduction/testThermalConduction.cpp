@@ -38,8 +38,8 @@ How to choose the parameters for the thermal conduction test problem
 const double Eint0 = 2.505e-8;		     // equivalent to T = 2.e8 K
 const double Efloor = 5.674216387016754e-11; // equivalent tp T = 2.e6 K
 const double rho0 = 0.1;		     // 1/cm^3
-const double D = 4.396303164750053e+28;	     // diffusion coefficient, in units of cm^2/s
-const double sigma = 2.41016e+17;	     // width of the Gaussian, in units of cm
+const double D = 2.1981515823750267e+28;	     // diffusion coefficient, in units of cm^2/s
+const double sigma = 1.2053428078125e+17;	     // width of the Gaussian, in units of cm
 
 struct ThermalConductionProblem {
 };
@@ -70,12 +70,31 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
-
+		// amrex::Real Eint;
+		#if AMREX_SPACEDIM >= 2
+		const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
+		#endif
+		#if AMREX_SPACEDIM == 3
+		const amrex::Real z = prob_lo[2] + (k + 0.5) * dx[2];
+		#endif
 		/*-------------------------------*/
 		// Problem ----> Gaussian temperature profile
 		const amrex::Real rho = rho0 * C::m_p;	  // g/cm^3
 		const amrex::Real sigma2 = sigma * sigma; // width of the Gaussian
 		const amrex::Real Eint = Eint0 * std::exp(-x * x / sigma2 / 2.) + Efloor;
+		// if(i==16 && j==16 && k==16){ 
+		// 	Eint = Eint0 ;
+		// }
+		// else {
+		// 	Eint = Efloor;
+		// }
+		// #if AMREX_SPACEDIM >= 2
+		// Eint *= std::exp(-y * y / sigma2 / 2.);
+		// #endif
+		// #if AMREX_SPACEDIM == 3
+		// Eint *= std::exp(-z * z / sigma2 / 2.);
+		// #endif
+		// Eint += Efloor; // add floor to the energy
 		/*-------------------------------*/
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
@@ -117,8 +136,19 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 		z1 = prob_lo[2] + ((k + 1) * dx[2]);
 #endif
 
-		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real /*y*/, amrex::Real /*z*/) {
-			if ((std::abs(x) < refine_Lmax)) {
+		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
+			bool in_region = (std::abs(x) < refine_Lmax);
+
+		// #if (AMREX_SPACEDIM >= 2)
+		// 	in_region = in_region && (std::abs(y) < refine_Lmax);
+		// #endif
+		// #if (AMREX_SPACEDIM == 3)
+		// 	in_region = in_region && (std::abs(z) < refine_Lmax);
+		// #endif
+
+			amrex::ignore_unused(y, z); // avoids unused-variable warnings in 1D
+
+			if (in_region) {
 				tag[bx](i, j, k) = amrex::TagBox::SET;
 			}
 		};
@@ -148,13 +178,26 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+			// #if AMREX_SPACEDIM >= 2
+			// const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
+			// #endif
+			// #if AMREX_SPACEDIM == 3
+			// const amrex::Real z = prob_lo[2] + (k + 0.5) * dx[2];
+			// #endif
 
 			// Solution for the Gaussian temperature profile
 			const amrex::Real rho = rho0 * C::m_p;		     // g/cm^3
 			const amrex::Real sigma2_0 = sigma * sigma;	     // initial width of the Gaussian
 			const amrex::Real sigma2_t = sigma2_0 + 2.0 * D * t; // width of the Gaussian at time t
-			const amrex::Real norm = Eint0 * (std::sqrt(sigma2_0 / sigma2_t));
-			const amrex::Real Eint_exact = norm * std::exp(-x * x / sigma2_t / 2.) + Efloor;
+			const amrex::Real norm = Eint0 * std::pow(sigma2_0 / sigma2_t, 1.0 / 2.0);
+			amrex::Real Eint_exact = norm * std::exp(-x * x / sigma2_t / 2.); 
+			// #if AMREX_SPACEDIM >= 2
+			// Eint_exact *= std::exp(-y * y / sigma2_t / 2.);
+			// #endif
+			// #if AMREX_SPACEDIM == 3
+			// Eint_exact *= std::exp(-z * z / sigma2_t / 2.);
+			// #endif
+			Eint_exact += Efloor; // add floor to the energy
 
 			// clear all components
 			for (int n = 0; n < ncomp; ++n) {
@@ -221,13 +264,31 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 
 auto problem_main() -> int
 {
+
+	/*** boundary conditions ***/
+	// constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
+	// amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	// for (int n = 0; n < ncomp_cc; ++n) {
+	// 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+	// 	BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
+	// 	BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
+	// 	}
+	// }
+	// QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
+	// sim.setInitialConditions();
+	// sim.evolve();
+	// const double error_norm = sim.computeErrorNorm();
+	// amrex::Print() << std::format("\nrun_sim error norm = {:.6e})\n", error_norm);
+	// amrex::Print() << "Finished." << '\n';
+	// return 0;
+
 	/***Richardson Extrapolation ****/
 
 	quokka::richardson::applyQuietDefaults();
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	params.nx_initial = 32;
-	params.nx_max = 128;
+	params.nx_initial = 16;
+	params.nx_max = 64;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Thermal Conduction";
