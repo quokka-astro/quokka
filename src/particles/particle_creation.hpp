@@ -314,11 +314,14 @@ AMREX_GPU_DEVICE inline void initializeSinkLikeParticles(PType *particles, int n
 
 	// update cell density to be the threshold density
 	const amrex::Real scale_factor = rho_J / cell_density;
+	// the magnetic field is unchanged by particle creation, so only the gas part of the total energy is scaled
+	// (Emag is identically zero unless MHD is enabled)
+	const amrex::Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
 	state_arr(i, j, k, HydroSystem<problem_t>::density_index) = rho_J;
 	state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= scale_factor;
 	state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= scale_factor;
 	state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= scale_factor;
-	state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= scale_factor;
+	state_arr(i, j, k, HydroSystem<problem_t>::energy_index) = (state_arr(i, j, k, HydroSystem<problem_t>::energy_index) - Emag) * scale_factor + Emag;
 	state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= scale_factor;
 	// scale passive scalars to conserve mass fractions
 	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
@@ -506,7 +509,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		AMREX_GPU_DEVICE void
 		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*accretion_rate_arr*/, int i, int j,
 			   int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*fab_fc*/, amrex::Long base_offset,
+			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, amrex::Long base_offset,
 			   amrex::RandomEngine const &engine) const
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
@@ -713,6 +716,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					// 	NOT the actual mass of the stochastically created particles, to update the hydro state.)
 					const double factor = (1. - particle_mass / cell_mass);
 
+					// The magnetic field is unchanged by star formation, so only the gas part of the total
+					// energy is scaled below (Emag is identically zero unless MHD is enabled)
+					const double Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
+
 					// Update the cell density to reflect mass conversion into stars
 					state_arr(i, j, k, HydroSystem<problem_t>::density_index) *= factor;
 
@@ -724,8 +731,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					// Update internal energy to reflect mass change
 					state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= factor;
 
-					// Update total energy
-					state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= factor;
+					// Update total energy (magnetic energy is left untouched)
+					state_arr(i, j, k, HydroSystem<problem_t>::energy_index) =
+					    (state_arr(i, j, k, HydroSystem<problem_t>::energy_index) - Emag) * factor + Emag;
 
 					// Update mass scalars including passive scalars
 					if (nscalars > 0) {
