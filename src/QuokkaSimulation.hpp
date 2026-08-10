@@ -387,7 +387,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				 amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
 				 amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
-	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
+	void addStrangSplitSources(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev, amrex::Real time, amrex::Real dt_lev);
 	template <SourceOrder Order>
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev, amrex::Real time,
 					      amrex::Real dt_lev) -> bool;
@@ -1048,7 +1048,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterLeve
 	// user should implement if desired
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+template <typename problem_t> void QuokkaSimulation<problem_t>::addStrangSplitSources(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc,int lev, amrex::Real time, amrex::Real dt)
 {
 	// user should implement
 	// (when Strang splitting is enabled, dt is actually 0.5*dt_lev)
@@ -1161,7 +1161,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 
 	auto const applyUserSources = [&]() {
 		// compute user-specified sources
-		addStrangSplitSources(state, lev, time, dt);
+		addStrangSplitSources(state, state_fc, lev, time, dt);
 	};
 
 	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyConduction, applyUserSources);
