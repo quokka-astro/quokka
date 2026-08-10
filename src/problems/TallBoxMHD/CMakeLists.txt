@@ -1,0 +1,6 @@
+if (AMReX_SPACEDIM EQUAL 3)
+    add_executable(TallBoxMHD testTallBoxMHD.cpp ../../turbulence/TurbDataReader.cpp ${QuokkaObjSources})
+    if(AMReX_GPU_BACKEND MATCHES "CUDA")
+        setup_target_for_cuda_compilation(TallBoxMHD)
+    endif()
+endif()
