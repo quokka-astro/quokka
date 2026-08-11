@@ -5,15 +5,23 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <memory>
 
 #include "AMReX_Array.H"
+#include "AMReX_FillPatchUtil.H"
+#include "AMReX_GMRES_MLMG.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_MLABecLaplacian.H"
+#include "AMReX_MLMG.H"
 #include "AMReX_Math.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_MultiFabUtil.H"
+#include "AMReX_Reduce.H"
 
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "math/NewtonKrylovSolver.hpp"
 #include "particles/particle_types.hpp"
 #include "util/DataTable.hpp"
 
@@ -27,34 +35,407 @@ amrex::Real constexpr mean_particle_mass_mu = 1.27;
 amrex::Real constexpr alphaB = 2.6e-13;
 amrex::Real constexpr sigma_HI = 6.3e-18; // cm^2
 bool constexpr table_axes_are_mass_age = true;
-constexpr int max_stage_retries = 6;
+amrex::Real constexpr photon_smoothing_fraction = 1.0e-12;
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto smoothPositive(amrex::Real value, amrex::Real smoothing) noexcept -> amrex::Real
+{
+	amrex::Real const magnitude = std::sqrt(value * value + smoothing * smoothing);
+	if (value >= 0.0) {
+		return 0.5 * (value + magnitude);
+	}
+	return 0.5 * smoothing * smoothing / (magnitude - value);
+}
 
 #if AMREX_SPACEDIM == 3
+template <typename problem_t> class StromgrenHierarchyNewtonProblem
+{
+      public:
+	using State = amrex::Vector<amrex::MultiFab>;
+	using RT = amrex::Real;
+	using FaceCoefficients = amrex::Vector<std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+
+	StromgrenHierarchyNewtonProblem(amrex::Vector<amrex::Geometry> const &geometry, amrex::Vector<amrex::BoxArray> const &grids,
+					amrex::Vector<amrex::DistributionMapping> const &distribution_map, amrex::Vector<amrex::IntVect> const &ref_ratio,
+					amrex::Vector<amrex::MultiFab> const &hydro_state, State const &rhs, amrex::Vector<amrex::iMultiFab> const &masks,
+					RT phi_scale, RT operator_rate, RT dt, RT residual_tolerance)
+	    : geometry_(geometry), grids_(grids), distributionMap_(distribution_map), refRatio_(ref_ratio), hydroState_(hydro_state), rhs_(rhs), masks_(masks),
+	      phiScale_(phi_scale), operatorRate_(operator_rate), dt_(dt), residualTolerance_(residual_tolerance), reactionRate_(makeState(0)),
+	      trialReactionRate_(makeState(0)), diffusionCoeff_(makeFaceCoefficients()), trialDiffusionCoeff_(makeFaceCoefficients())
+	{
+		AMREX_ALWAYS_ASSERT(dt_ > 0.0);
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			auto const bc = geometry_[0].isPeriodic(dir) ? amrex::LinOpBCType::Periodic : amrex::LinOpBCType::Dirichlet;
+			bcLo_[dir] = bc;
+			bcHi_[dir] = bc;
+		}
+		for (int lev = 0; lev < static_cast<int>(masks_.size()); ++lev) {
+			auto const dx = geometry_[lev].CellSizeArray();
+			RT const volume = dx[0] * dx[1] * dx[2];
+			totalVolume_ += volume * static_cast<RT>(masks_[lev].sum(0, 0, true));
+		}
+		amrex::ParallelDescriptor::ReduceRealSum(totalVolume_);
+	}
+
+	void prepare(State const &state)
+	{
+		fillCoefficients(state, reactionRate_, diffusionCoeff_);
+		operator_ = makeOperator(reactionRate_, diffusionCoeff_);
+		mlmg_ = std::make_unique<amrex::MLMG>(*operator_);
+		mlmg_->setVerbose(0);
+		mlmg_->setBottomVerbose(0);
+		mlmg_->setFixedIter(1);
+		mlmg_->setBottomSolver(amrex::BottomSolver::smoother);
+		preconditioner_ = std::make_unique<amrex::GMRESMLMG>(*mlmg_);
+		preconditioner_->setPrecondNumIters(2);
+	}
+
+	void residual(State const &state, State &output) { evaluateResidual(state, output); }
+	void linearized_residual(State const &state, State &output) { evaluateResidual(state, output); }
+
+	void predict(State &state, RT damping)
+	{
+		AMREX_ALWAYS_ASSERT((damping > 0.0) && (damping <= 1.0));
+		fillCoefficients(state, trialReactionRate_, trialDiffusionCoeff_);
+		auto picard_operator = makeOperator(trialReactionRate_, trialDiffusionCoeff_);
+		picard_operator->prepareForSolve();
+		State state_with_ghosts = clone(state);
+		fillGhosts(state_with_ghosts);
+		State fixed_point_residual = makeVecRHS();
+		for (int lev = 0; lev < static_cast<int>(state.size()); ++lev) {
+			amrex::MultiFab const *coarse_state = (lev > 0) ? &state_with_ghosts[lev - 1] : nullptr;
+			picard_operator->solutionResidual(lev, fixed_point_residual[lev], state_with_ghosts[lev], rhs_[lev], coarse_state);
+			amrex::MultiFab::Saxpy(state[lev], damping / operatorRate_, fixed_point_residual[lev], 0, 0, 1, 0);
+			auto arrays = state[lev].arrays();
+			amrex::ParallelFor(state[lev], [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+				arrays[nbx](i, j, k, 0) = amrex::max(arrays[nbx](i, j, k, 0), 0.0);
+			});
+		}
+		averageDown(state);
+	}
+
+	[[nodiscard]] auto makeVecRHS() const -> State { return makeState(0); }
+	[[nodiscard]] auto makeVecLHS() const -> State { return makeState(1); }
+
+	void precondition(State &output, State const &rhs)
+	{
+		AMREX_ALWAYS_ASSERT(preconditioner_ != nullptr);
+		setToZero(output);
+		State scaled_rhs = clone(rhs);
+		scale(scaled_rhs, operatorRate_);
+		amrex::GMRESMLMG::VEC output_vector;
+		amrex::GMRESMLMG::VEC rhs_vector;
+		for (int lev = 0; lev < static_cast<int>(output.size()); ++lev) {
+			output_vector.emplace_back(output[lev], amrex::make_alias, 0, 1);
+			rhs_vector.emplace_back(scaled_rhs[lev], amrex::make_alias, 0, 1);
+		}
+		preconditioner_->precond(output_vector, rhs_vector);
+	}
+
+	void assign(State &lhs, State const &rhs) const
+	{
+		for (int lev = 0; lev < static_cast<int>(lhs.size()); ++lev) {
+			amrex::MultiFab::Copy(lhs[lev], rhs[lev], 0, 0, 1, std::min(lhs[lev].nGrow(), rhs[lev].nGrow()));
+		}
+	}
+
+	[[nodiscard]] auto dotProduct(State const &lhs, State const &rhs) const -> RT
+	{
+		amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
+		amrex::ReduceData<RT> reduce_data(reduce_op);
+		using Tuple = typename decltype(reduce_data)::Type;
+		for (int lev = 0; lev < static_cast<int>(lhs.size()); ++lev) {
+			auto const dx = geometry_[lev].CellSizeArray();
+			RT const volume = dx[0] * dx[1] * dx[2];
+			for (amrex::MFIter mfi(lhs[lev]); mfi.isValid(); ++mfi) {
+				auto const x = lhs[lev].const_array(mfi);
+				auto const y = rhs[lev].const_array(mfi);
+				auto const mask = masks_[lev].const_array(mfi);
+				reduce_op.eval(mfi.validbox(), reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept -> Tuple {
+					return {mask(i, j, k) != 0 ? volume * x(i, j, k, 0) * y(i, j, k, 0) : 0.0};
+				});
+			}
+		}
+		RT result = amrex::get<0>(reduce_data.value(reduce_op));
+		amrex::ParallelDescriptor::ReduceRealSum(result);
+		return result / totalVolume_;
+	}
+
+	void increment(State &lhs, State const &rhs, RT factor) const
+	{
+		for (int lev = 0; lev < static_cast<int>(lhs.size()); ++lev) {
+			amrex::MultiFab::Saxpy(lhs[lev], factor, rhs[lev], 0, 0, 1, 0);
+		}
+	}
+
+	void linComb(State &lhs, RT a, State const &rhs_a, RT b, State const &rhs_b) const
+	{
+		for (int lev = 0; lev < static_cast<int>(lhs.size()); ++lev) {
+			amrex::MultiFab::LinComb(lhs[lev], a, rhs_a[lev], 0, b, rhs_b[lev], 0, 0, 1, 0);
+		}
+	}
+
+	[[nodiscard]] auto norm2(State const &state) const -> RT { return std::sqrt(amrex::max(dotProduct(state, state), 0.0)); }
+	void scale(State &state, RT factor) const
+	{
+		for (auto &level : state) {
+			level.mult(factor, 0, 1, 0);
+		}
+	}
+	void setToZero(State &state) const
+	{
+		for (auto &level : state) {
+			level.setVal(0.0);
+		}
+	}
+	[[nodiscard]] auto clone(State const &state) const -> State
+	{
+		State result;
+		result.reserve(state.size());
+		for (auto const &level : state) {
+			result.emplace_back(level.boxArray(), level.DistributionMap(), 1, level.nGrow());
+			amrex::MultiFab::Copy(result.back(), level, 0, 0, 1, level.nGrow());
+		}
+		return result;
+	}
+
+	void fill_candidate(State &candidate, State const &state, State const &correction, RT step_length) const
+	{
+		linComb(candidate, 1.0, state, step_length, correction);
+	}
+
+	[[nodiscard]] auto admissible(State const &state) const -> bool
+	{
+		for (auto const &level : state) {
+			RT const minimum = level.min(0, 0, false);
+			RT const maximum = level.max(0, 0, false);
+			if (!std::isfinite(minimum) || !std::isfinite(maximum)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	[[nodiscard]] auto relative_change(State const &lhs, State const &rhs) const -> RT
+	{
+		RT maximum = 0.0;
+		for (int lev = 0; lev < static_cast<int>(lhs.size()); ++lev) {
+			amrex::MultiFab change(grids_[lev], distributionMap_[lev], 1, 0);
+			auto const lhs_arr = lhs[lev].const_arrays();
+			auto const rhs_arr = rhs[lev].const_arrays();
+			auto const hydro_arr = hydroState_[lev].const_arrays();
+			auto change_arr = change.arrays();
+			RT const phi_scale = phiScale_;
+			RT const tolerance = residualTolerance_;
+			RT const n_to_rho = mean_particle_mass_mu * mH;
+			amrex::ParallelFor(change, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+				RT const nH = amrex::max(hydro_arr[nbx](i, j, k, HydroSystem<problem_t>::density_index) / n_to_rho, 0.0);
+				auto ion_fraction = [=] AMREX_GPU_DEVICE(RT u) noexcept {
+					RT const ng = smoothPositive(u, photon_smoothing_fraction) * phi_scale;
+					if (nH <= 0.0) {
+						return 0.0;
+					}
+					RT const ratio = 4.0 * alphaB * nH / (C::c_light * sigma_HI * ng);
+					return 2.0 / (1.0 + std::sqrt(1.0 + ratio));
+				};
+				RT const xl = ion_fraction(lhs_arr[nbx](i, j, k, 0));
+				RT const xr = ion_fraction(rhs_arr[nbx](i, j, k, 0));
+				change_arr[nbx](i, j, k, 0) = tolerance * std::abs(xl - xr) / (1.0e-3 + tolerance * 0.5 * (std::abs(xl) + std::abs(xr)));
+			});
+			maximum = amrex::max(maximum, change.norm0(0, 0, false));
+		}
+		return maximum;
+	}
+
+      private:
+	[[nodiscard]] auto makeState(int nghost) const -> State
+	{
+		State result;
+		result.reserve(grids_.size());
+		for (int lev = 0; lev < static_cast<int>(grids_.size()); ++lev) {
+			result.emplace_back(grids_[lev], distributionMap_[lev], 1, nghost);
+			result.back().setVal(0.0);
+		}
+		return result;
+	}
+
+	[[nodiscard]] auto makeFaceCoefficients() const -> FaceCoefficients
+	{
+		FaceCoefficients result(grids_.size());
+		for (int lev = 0; lev < static_cast<int>(grids_.size()); ++lev) {
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				auto const face_grids = amrex::convert(grids_[lev], amrex::IntVect::TheDimensionVector(dir));
+				result[lev][dir].define(face_grids, distributionMap_[lev], 1, 0);
+			}
+		}
+		return result;
+	}
+
+	void fillGhosts(State &state) const
+	{
+		for (int lev = 0; lev < static_cast<int>(state.size()); ++lev) {
+			state[lev].FillBoundary(geometry_[lev].periodicity());
+			if (lev > 0) {
+				amrex::Vector<amrex::MultiFab *> coarse{&state[lev - 1]};
+				amrex::Vector<amrex::MultiFab *> fine{&state[lev]};
+				amrex::Vector<RT> const times{0.0};
+				amrex::Vector<amrex::BCRec> bcs(1);
+				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+					int const type = geometry_[lev].isPeriodic(dir) ? amrex::BCType::int_dir : amrex::BCType::foextrap;
+					bcs[0].setLo(dir, type);
+					bcs[0].setHi(dir, type);
+				}
+				amrex::FillPatchTwoLevels(state[lev], amrex::IntVect(state[lev].nGrow()), amrex::IntVect(0), 0.0, coarse, times, fine, times, 0,
+							  0, 1, geometry_[lev - 1], geometry_[lev], refRatio_[lev - 1], &amrex::cell_cons_interp, bcs, 0);
+			}
+		}
+	}
+
+	void averageDown(State &state) const
+	{
+		for (int lev = static_cast<int>(state.size()) - 2; lev >= 0; --lev) {
+			amrex::average_down(state[lev + 1], state[lev], geometry_[lev + 1], geometry_[lev], 0, 1, refRatio_[lev]);
+		}
+	}
+
+	void fillCoefficients(State const &dimensionless_state, State &reaction_rate, FaceCoefficients &diffusion_coeff) const
+	{
+		State state = clone(dimensionless_state);
+		fillGhosts(state);
+		for (int lev = 0; lev < static_cast<int>(state.size()); ++lev) {
+			auto const state_arr = state[lev].const_arrays();
+			auto const hydro_arr = hydroState_[lev].const_arrays();
+			auto reaction_arr = reaction_rate[lev].arrays();
+			RT const phi_scale = phiScale_;
+			RT const n_to_rho = mean_particle_mass_mu * mH;
+			RT const inv_dt = 1.0 / dt_;
+			amrex::ParallelFor(reaction_rate[lev], [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+				RT const nH = amrex::max(hydro_arr[nbx](i, j, k, HydroSystem<problem_t>::density_index) / n_to_rho, 0.0);
+				RT const ng = smoothPositive(state_arr[nbx](i, j, k, 0), photon_smoothing_fraction) * phi_scale;
+				RT x = 0.0;
+				if (nH > 0.0) {
+					RT const ratio = 4.0 * alphaB * nH / (C::c_light * sigma_HI * ng);
+					x = 2.0 / (1.0 + std::sqrt(1.0 + ratio));
+				}
+				reaction_arr[nbx](i, j, k, 0) = inv_dt + C::c_light * sigma_HI * nH * (1.0 - x);
+			});
+
+			auto const domain = geometry_[lev].Domain();
+			auto const is_per = geometry_[lev].periodicity().intVect();
+			auto const dx = geometry_[lev].CellSizeArray();
+			auto const prob_lo = geometry_[lev].ProbLoArray();
+			auto const prob_hi = geometry_[lev].ProbHiArray();
+			RT const Lbox = std::min({prob_hi[0] - prob_lo[0], prob_hi[1] - prob_lo[1], prob_hi[2] - prob_lo[2]});
+			RT const kappa_ref = 1.0 / Lbox;
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				for (amrex::MFIter mfi(diffusion_coeff[lev][dir], amrex::TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+					auto const u = state[lev].const_array(mfi);
+					auto const diffusion = diffusion_coeff[lev][dir].array(mfi);
+					amrex::ParallelFor(mfi.tilebox(), [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+						int il = i;
+						int jl = j;
+						int kl = k;
+						if (dir == 0) {
+							--il;
+						} else if (dir == 1) {
+							--jl;
+						} else {
+							--kl;
+						}
+						int const face_index = (dir == 0) ? i : ((dir == 1) ? j : k);
+						bool const at_lo = (is_per[dir] == 0) && (face_index == domain.smallEnd(dir));
+						bool const at_hi = (is_per[dir] == 0) && (face_index == domain.bigEnd(dir) + 1);
+						RT const phi_lo = at_lo ? 0.0 : smoothPositive(u(il, jl, kl, 0), photon_smoothing_fraction) * phi_scale;
+						RT const phi_hi = at_hi ? 0.0 : smoothPositive(u(i, j, k, 0), photon_smoothing_fraction) * phi_scale;
+						RT const distance = (at_lo || at_hi) ? 0.5 * dx[dir] : dx[dir];
+						RT const gradient = (phi_hi - phi_lo) / distance;
+						RT const phi_face = 0.5 * (phi_lo + phi_hi);
+						RT const limiter_denominator = std::sqrt((kappa_ref * phi_face) * (kappa_ref * phi_face) + 1.0e-60);
+						RT const R = std::abs(gradient) / limiter_denominator;
+						RT const lambda = (2.0 + R) / (6.0 + 3.0 * R + R * R);
+						diffusion(i, j, k, 0) = C::c_light * lambda / kappa_ref;
+					});
+				}
+			}
+		}
+	}
+
+	void configureOperator(amrex::MLABecLaplacian &op, State const &reaction_rate, FaceCoefficients const &diffusion_coeff) const
+	{
+		op.setDomainBC(bcLo_, bcHi_);
+		op.setScalars(1.0, 1.0);
+		op.setMaxOrder(2);
+		for (int lev = 0; lev < static_cast<int>(reaction_rate.size()); ++lev) {
+			op.setLevelBC(lev, nullptr);
+			op.setACoeffs(lev, reaction_rate[lev]);
+			op.setBCoeffs(lev, amrex::GetArrOfConstPtrs(diffusion_coeff[lev]));
+		}
+	}
+
+	[[nodiscard]] auto makeOperator(State const &reaction_rate, FaceCoefficients const &diffusion_coeff) const -> std::unique_ptr<amrex::MLABecLaplacian>
+	{
+		amrex::LPInfo info;
+		info.setDeterministic(true);
+		if (geometry_.size() > 1) {
+			info.setAgglomeration(false);
+			info.setConsolidation(false);
+		}
+		auto op = std::make_unique<amrex::MLABecLaplacian>(geometry_, grids_, distributionMap_, info);
+		configureOperator(*op, reaction_rate, diffusion_coeff);
+		return op;
+	}
+
+	void evaluateResidual(State const &state, State &output)
+	{
+		fillCoefficients(state, trialReactionRate_, trialDiffusionCoeff_);
+		auto trial_operator = makeOperator(trialReactionRate_, trialDiffusionCoeff_);
+		amrex::MLMG trial_mlmg(*trial_operator);
+		State state_with_ghosts = clone(state);
+		fillGhosts(state_with_ghosts);
+		trial_mlmg.apply(amrex::GetVecOfPtrs(output), amrex::GetVecOfPtrs(state_with_ghosts));
+		for (int lev = 0; lev < static_cast<int>(output.size()); ++lev) {
+			output[lev].mult(1.0 / operatorRate_, 0, 1, 0);
+			amrex::MultiFab::Saxpy(output[lev], -1.0 / operatorRate_, rhs_[lev], 0, 0, 1, 0);
+		}
+	}
+
+	amrex::Vector<amrex::Geometry> const &geometry_;
+	amrex::Vector<amrex::BoxArray> const &grids_;
+	amrex::Vector<amrex::DistributionMapping> const &distributionMap_;
+	amrex::Vector<amrex::IntVect> const &refRatio_;
+	amrex::Vector<amrex::MultiFab> const &hydroState_;
+	State const &rhs_;
+	amrex::Vector<amrex::iMultiFab> const &masks_;
+	RT phiScale_;
+	RT operatorRate_;
+	RT dt_;
+	RT residualTolerance_;
+	RT totalVolume_ = 0.0;
+	State reactionRate_;
+	State trialReactionRate_;
+	FaceCoefficients diffusionCoeff_;
+	FaceCoefficients trialDiffusionCoeff_;
+	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bcLo_{};
+	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bcHi_{};
+	std::unique_ptr<amrex::MLABecLaplacian> operator_;
+	std::unique_ptr<amrex::MLMG> mlmg_;
+	std::unique_ptr<amrex::GMRESMLMG> preconditioner_;
+};
+
 template <typename problem_t, quokka::OutOfBounds oob_policy>
-void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContainer<problem_t> *stellar_particles, int lev, amrex::Real time,
-				    amrex::BoxArray const &ba_lev, amrex::DistributionMapping const &dm_lev, amrex::Geometry const &geom_lev,
-				    amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc, quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table,
-				    int const max_pseudo_iters = 20, amrex::Real const residual_tol = 1.0e-3, bool const abort_on_max_iters = false,
-				    bool const use_anderson_accel = false, amrex::Real const anderson_beta_min = -0.25,
-				    amrex::Real const anderson_beta_max = 1.25)
+void DepositStromgrenPhotonSourceAtLevel(quokka::StochasticStellarPopParticleContainer<problem_t> *stellar_particles, int lev, amrex::Real time,
+					 amrex::BoxArray const &ba_lev, amrex::DistributionMapping const &dm_lev, amrex::Geometry const &geom_lev,
+					 amrex::MultiFab &source_q, quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table)
 {
 	if (stellar_particles == nullptr) {
+		source_q.setVal(0.0);
 		return;
 	}
 
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_cc.boxArray() == n_gamma_cc.boxArray(), "state_cc and n_gamma_cc must have the same BoxArray.");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_cc.DistributionMap() == n_gamma_cc.DistributionMap(),
-					 "state_cc and n_gamma_cc must have the same DistributionMap.");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_gamma_cc.nComp() == 1, "n_gamma_cc must have exactly one component.");
-
-	auto const dx = geom_lev.CellSizeArray();
 	auto const p_lo = geom_lev.ProbLoArray();
-	auto const p_hi = geom_lev.ProbHiArray();
 	auto const dxi = geom_lev.InvCellSizeArray();
-	amrex::Real const cell_volume = dx[0] * dx[1] * dx[2];
-	amrex::Real const n_to_rho = mean_particle_mass_mu * mH;
-
-	amrex::MultiFab source_q(ba_lev, dm_lev, 1, 1);
+	AMREX_ALWAYS_ASSERT(source_q.boxArray() == ba_lev);
+	AMREX_ALWAYS_ASSERT(source_q.DistributionMap() == dm_lev);
+	AMREX_ALWAYS_ASSERT(source_q.nComp() == 1 && source_q.nGrow() >= 1);
 	source_q.setVal(0.0);
 
 	auto const domain = geom_lev.Domain();
@@ -171,292 +552,125 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 		});
 	}
 	source_q.SumBoundary(geom_lev.periodicity());
+}
 
-	amrex::MultiFab phi(ba_lev, dm_lev, 1, 1);
-	amrex::MultiFab phi_new(ba_lev, dm_lev, 1, 1);
-	amrex::MultiFab explicit_rhs(ba_lev, dm_lev, 1, 0);
-	amrex::MultiFab reaction_rate(ba_lev, dm_lev, 1, 0);
-	amrex::MultiFab residual(ba_lev, dm_lev, 1, 0);
-	amrex::MultiFab midpoint_scale(ba_lev, dm_lev, 1, 0);
-	amrex::MultiFab x_old(ba_lev, dm_lev, 1, 0);
-	amrex::MultiFab x_new(ba_lev, dm_lev, 1, 0);
-	amrex::MultiFab x_delta(ba_lev, dm_lev, 1, 0);
-	amrex::MultiFab phi_picard(ba_lev, dm_lev, 1, 1);
-	amrex::MultiFab phi_g_prev(ba_lev, dm_lev, 1, 1);
-	amrex::MultiFab correction(ba_lev, dm_lev, 1, 0);
-	amrex::MultiFab correction_prev(ba_lev, dm_lev, 1, 0);
-	amrex::MultiFab correction_diff(ba_lev, dm_lev, 1, 0);
-	phi.setVal(0.0);
-	phi_new.setVal(0.0);
-	explicit_rhs.setVal(0.0);
-	reaction_rate.setVal(0.0);
-	residual.setVal(0.0);
-	midpoint_scale.setVal(0.0);
-	x_old.setVal(0.0);
-	x_new.setVal(0.0);
-	x_delta.setVal(0.0);
-	phi_picard.setVal(0.0);
-	phi_g_prev.setVal(0.0);
-	correction.setVal(0.0);
-	correction_prev.setVal(0.0);
-	correction_diff.setVal(0.0);
+template <typename problem_t, quokka::OutOfBounds oob_policy>
+[[nodiscard]] auto AdvanceStromgrenPhotonFieldAllLevels(quokka::StochasticStellarPopParticleContainer<problem_t> *stellar_particles, amrex::Real time,
+							amrex::Real dt, amrex::Vector<amrex::Geometry> const &geometry,
+							amrex::Vector<amrex::BoxArray> const &grids,
+							amrex::Vector<amrex::DistributionMapping> const &distribution_map,
+							amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Vector<amrex::MultiFab> const &hydro_state,
+							amrex::Vector<amrex::MultiFab> &n_gamma, quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table,
+							int max_nonlinear_iterations, amrex::Real residual_tolerance) -> bool
+{
+	int const nlevels = static_cast<int>(geometry.size());
+	AMREX_ALWAYS_ASSERT(nlevels > 0 && static_cast<int>(grids.size()) == nlevels && static_cast<int>(distribution_map.size()) == nlevels);
+	AMREX_ALWAYS_ASSERT(static_cast<int>(hydro_state.size()) >= nlevels && static_cast<int>(n_gamma.size()) == nlevels);
 
-	auto const state = state_cc.const_arrays();
-	auto const source_arr = source_q.const_arrays();
+	amrex::Vector<amrex::MultiFab> source;
+	amrex::Vector<amrex::MultiFab> old_state;
+	amrex::Vector<amrex::iMultiFab> masks(nlevels);
+	source.reserve(nlevels);
+	old_state.reserve(nlevels);
+	amrex::Real rhs_scale = 0.0;
+	amrex::Real operator_rate = 1.0 / dt;
+	for (int lev = 0; lev < nlevels; ++lev) {
+		source.emplace_back(grids[lev], distribution_map[lev], 1, 1);
+		DepositStromgrenPhotonSourceAtLevel<problem_t, oob_policy>(stellar_particles, lev, time, grids[lev], distribution_map[lev], geometry[lev],
+									   source[lev], qh0_table);
+		auto const dx = geometry[lev].CellSizeArray();
+		source[lev].mult(1.0 / (dx[0] * dx[1] * dx[2]), 0, 1, 0);
 
-	//
-	// Pseudo-time FLD solve for photon number density:
-	//   dn_gamma/dtau = div(D_FLD grad(n_gamma)) + q_vol - c*sigma_HI*n_HI*n_gamma,
-	// with D_FLD = c*lambda(R)/kappa_F.
-	//
-	// We use a constant opacity floor for transport corresponding to mean free path
-	// equal to the simulation box size: kappa_F = 1 / Lbox.
-	// The flux limiter lambda(R) is the Levermore & Pomraning (1981) limiter.
-	//
-	// Local ionization balance (used for n_HI):
-	//   c*sigma_HI*n_gamma*(1-x) = alphaB*n_H*x^2.
-	//
-	// We use a lowest-order IMEX time discretization:
-	//   forward Euler for the explicit flux divergence and source terms,
-	//   and backward Euler for the reaction term.
-	// We iterate in pseudo-time until the ionization fraction x converges:
-	//   mixed absolute/relative update norm in x is below threshold.
-	// We also enforce positivity of the solution with timestep retries.
-	//
+		old_state.emplace_back(grids[lev], distribution_map[lev], 1, 1);
+		amrex::MultiFab::Copy(old_state[lev], n_gamma[lev], 0, 0, 1, 0);
+		old_state[lev].FillBoundary(geometry[lev].periodicity());
+		rhs_scale = amrex::max(rhs_scale, source[lev].norm0(0, 0, false));
+		rhs_scale = amrex::max(rhs_scale, old_state[lev].norm0(0, 0, false) / dt);
 
-	amrex::Real const Lbox = std::min({p_hi[0] - p_lo[0], p_hi[1] - p_lo[1], p_hi[2] - p_lo[2]});
-	amrex::Real const kappa_ref = 1.0 / Lbox;
-	amrex::Real const lambda_lp_max = 1.0 / 3.0;
-	amrex::Real const D_max = C::c_light * lambda_lp_max / kappa_ref;
-	amrex::Real const sum_inv_dx2 = (1.0 / (dx[0] * dx[0])) + (1.0 / (dx[1] * dx[1])) + (1.0 / (dx[2] * dx[2]));
-	amrex::Real const dtau_explicit_max = 1.0 / (2.0 * D_max * sum_inv_dx2);
-	amrex::Real const diffusion_cfl = 0.8;
-	amrex::Real const dtau = diffusion_cfl * dtau_explicit_max;
-	int const min_pseudo_iters = 4;
-	amrex::Real const eps_phi = 1.0e-30;
+		amrex::Real const rho_max = hydro_state[lev].max(HydroSystem<problem_t>::density_index, 0, false);
+		amrex::Real const nH_max = amrex::max(rho_max / (mean_particle_mass_mu * mH), 0.0);
+		auto const prob_lo = geometry[lev].ProbLoArray();
+		auto const prob_hi = geometry[lev].ProbHiArray();
+		amrex::Real const Lbox = std::min({prob_hi[0] - prob_lo[0], prob_hi[1] - prob_lo[1], prob_hi[2] - prob_lo[2]});
+		amrex::Real const max_diffusion = C::c_light * Lbox / 3.0;
+		amrex::Real const diffusion_rate = 2.0 * max_diffusion * ((1.0 / (dx[0] * dx[0])) + (1.0 / (dx[1] * dx[1])) + (1.0 / (dx[2] * dx[2])));
+		operator_rate = amrex::max(operator_rate, (1.0 / dt) + diffusion_rate + C::c_light * sigma_HI * nH_max);
 
-	auto compute_explicit_and_reaction = [&](amrex::MultiFab &phi_in, amrex::MultiFab &explicit_out, amrex::MultiFab &k_out) {
-		phi_in.FillBoundary(geom_lev.periodicity());
-		auto const phi_arr = phi_in.const_arrays();
-		auto explicit_arr = explicit_out.arrays();
-		auto k_arr = k_out.arrays();
-
-		amrex::ParallelFor(explicit_out, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-			amrex::Real const phi_c = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
-			amrex::Real const phi_ip = amrex::max(phi_arr[nbx](i + 1, j, k, 0), 0.0);
-			amrex::Real const phi_im = amrex::max(phi_arr[nbx](i - 1, j, k, 0), 0.0);
-			amrex::Real const phi_jp = amrex::max(phi_arr[nbx](i, j + 1, k, 0), 0.0);
-			amrex::Real const phi_jm = amrex::max(phi_arr[nbx](i, j - 1, k, 0), 0.0);
-			amrex::Real const phi_kp = amrex::max(phi_arr[nbx](i, j, k + 1, 0), 0.0);
-			amrex::Real const phi_km = amrex::max(phi_arr[nbx](i, j, k - 1, 0), 0.0);
-
-			amrex::Real const gxp = (phi_ip - phi_c) / dx[0];
-			amrex::Real const gxm = (phi_c - phi_im) / dx[0];
-			amrex::Real const gyp = (phi_jp - phi_c) / dx[1];
-			amrex::Real const gym = (phi_c - phi_jm) / dx[1];
-			amrex::Real const gzp = (phi_kp - phi_c) / dx[2];
-			amrex::Real const gzm = (phi_c - phi_km) / dx[2];
-
-			amrex::Real const rho_c = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
-			amrex::Real const n_c = (rho_c > 0.0) ? (rho_c / n_to_rho) : 0.0;
-
-			auto ion_frac_eq = [=] AMREX_GPU_DEVICE(amrex::Real nH_local, amrex::Real ng_local) noexcept {
-				if ((nH_local <= 0.0) || (ng_local <= 0.0)) {
-					return amrex::Real(0.0);
-				}
-				amrex::Real const a = alphaB * nH_local;
-				amrex::Real const b = C::c_light * sigma_HI * ng_local;
-				amrex::Real const disc = b * b + 4.0 * a * b;
-				amrex::Real const x = (-b + std::sqrt(disc)) / (2.0 * a);
-				return amrex::min<amrex::Real>(1.0, amrex::max<amrex::Real>(0.0, x));
-			};
-
-			amrex::Real const x_c = ion_frac_eq(n_c, phi_c);
-
-			amrex::Real const nHI_c = n_c * (1.0 - x_c);
-
-			amrex::Real const phi_xp = 0.5 * (phi_c + phi_ip);
-			amrex::Real const phi_xm = 0.5 * (phi_c + phi_im);
-			amrex::Real const phi_yp = 0.5 * (phi_c + phi_jp);
-			amrex::Real const phi_ym = 0.5 * (phi_c + phi_jm);
-			amrex::Real const phi_zp = 0.5 * (phi_c + phi_kp);
-			amrex::Real const phi_zm = 0.5 * (phi_c + phi_km);
-
-			amrex::Real const kappaxp = kappa_ref;
-			amrex::Real const kappaxm = kappa_ref;
-			amrex::Real const kappayp = kappa_ref;
-			amrex::Real const kappaym = kappa_ref;
-			amrex::Real const kappazp = kappa_ref;
-			amrex::Real const kappazm = kappa_ref;
-
-			amrex::Real const Rxp = std::abs(gxp) / amrex::max(kappaxp * phi_xp, eps_phi);
-			amrex::Real const Rxm = std::abs(gxm) / amrex::max(kappaxm * phi_xm, eps_phi);
-			amrex::Real const Ryp = std::abs(gyp) / amrex::max(kappayp * phi_yp, eps_phi);
-			amrex::Real const Rym = std::abs(gym) / amrex::max(kappaym * phi_ym, eps_phi);
-			amrex::Real const Rzp = std::abs(gzp) / amrex::max(kappazp * phi_zp, eps_phi);
-			amrex::Real const Rzm = std::abs(gzm) / amrex::max(kappazm * phi_zm, eps_phi);
-
-			amrex::Real const lambdaxp = (2.0 + Rxp) / (6.0 + 3.0 * Rxp + Rxp * Rxp);
-			amrex::Real const lambdaxm = (2.0 + Rxm) / (6.0 + 3.0 * Rxm + Rxm * Rxm);
-			amrex::Real const lambdayp = (2.0 + Ryp) / (6.0 + 3.0 * Ryp + Ryp * Ryp);
-			amrex::Real const lambdaym = (2.0 + Rym) / (6.0 + 3.0 * Rym + Rym * Rym);
-			amrex::Real const lambdazp = (2.0 + Rzp) / (6.0 + 3.0 * Rzp + Rzp * Rzp);
-			amrex::Real const lambdazm = (2.0 + Rzm) / (6.0 + 3.0 * Rzm + Rzm * Rzm);
-
-			amrex::Real const Fxp = -(C::c_light * lambdaxp / kappaxp) * gxp;
-			amrex::Real const Fxm = -(C::c_light * lambdaxm / kappaxm) * gxm;
-			amrex::Real const Fyp = -(C::c_light * lambdayp / kappayp) * gyp;
-			amrex::Real const Fym = -(C::c_light * lambdaym / kappaym) * gym;
-			amrex::Real const Fzp = -(C::c_light * lambdazp / kappazp) * gzp;
-			amrex::Real const Fzm = -(C::c_light * lambdazm / kappazm) * gzm;
-
-			amrex::Real const divF = (Fxp - Fxm) / dx[0] + (Fyp - Fym) / dx[1] + (Fzp - Fzm) / dx[2];
-
-			amrex::Real const k_reac = C::c_light * sigma_HI * nHI_c;
-			amrex::Real const qsrc = source_arr[nbx](i, j, k, 0) / cell_volume;
-
-			amrex::Real const transport_term = -divF;
-			amrex::Real const source_term = qsrc;
-
-			explicit_arr[nbx](i, j, k, 0) = transport_term + source_term;
-			k_arr[nbx](i, j, k, 0) = k_reac;
-		});
-	};
-	amrex::Real constexpr x_atol = 1.0e-3;
-	amrex::Real constexpr dot_eps = 1.0e-100;
-	bool have_prev_picard = false;
-
-	int iter = 0;
-	bool converged = false;
-	amrex::Real final_x_mixed_update = std::numeric_limits<amrex::Real>::infinity();
-	for (; iter < max_pseudo_iters; ++iter) {
-		compute_explicit_and_reaction(phi, explicit_rhs, reaction_rate);
-
-		amrex::Real dt_try = amrex::max(dtau, 1.0e-60);
-		bool accepted = false;
-
-		for (int retry = 0; retry < max_stage_retries; ++retry) {
-			// Lowest-order IMEX update: forward Euler for explicit terms + backward Euler for reaction.
-			amrex::ParallelFor(phi_new, [phi_arr = phi.const_arrays(), E0_arr = explicit_rhs.const_arrays(), k0_arr = reaction_rate.const_arrays(),
-						     phi1_arr = phi_new.arrays(), dt_try] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-				amrex::Real const numer = phi_arr[nbx](i, j, k, 0) + dt_try * E0_arr[nbx](i, j, k, 0);
-				amrex::Real const denom = amrex::max(1.0 + dt_try * k0_arr[nbx](i, j, k, 0), 1.0e-60);
-				phi1_arr[nbx](i, j, k, 0) = numer / denom;
-			});
-
-			amrex::Real const phi1_min = phi_new.min(0, 0, false);
-			if (!(phi1_min >= 0.0)) {
-				dt_try *= 0.5;
-				continue;
-			}
-
-			accepted = true;
-			break;
-		}
-
-		if (!accepted) {
-			continue;
-		}
-
-		amrex::MultiFab::Copy(phi_picard, phi_new, 0, 0, 1, 1);
-		amrex::MultiFab::Copy(correction, phi_new, 0, 0, 1, 0);
-		amrex::MultiFab::Saxpy(correction, -1.0, phi, 0, 0, 1, 0);
-
-		amrex::Real anderson_beta = 0.0;
-		if (use_anderson_accel && have_prev_picard) {
-			amrex::MultiFab::Copy(correction_diff, correction, 0, 0, 1, 0);
-			amrex::MultiFab::Saxpy(correction_diff, -1.0, correction_prev, 0, 0, 1, 0);
-
-			amrex::Real const denom = amrex::MultiFab::Dot(correction_diff, 0, correction_diff, 0, 1, 0, false);
-			if (denom > dot_eps) {
-				amrex::Real const numer = amrex::MultiFab::Dot(correction, 0, correction_diff, 0, 1, 0, false);
-				anderson_beta = std::clamp(numer / denom, anderson_beta_min, anderson_beta_max);
-				if (std::abs(anderson_beta) > 1.0e-12) {
-					amrex::ParallelFor(phi_new, [phi1_arr = phi_new.arrays(), phi_picard_arr = phi_picard.const_arrays(),
-								     phi_prev_g_arr = phi_g_prev.const_arrays(),
-								     anderson_beta] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-						phi1_arr[nbx](i, j, k, 0) =
-						    (1.0 - anderson_beta) * phi_picard_arr[nbx](i, j, k, 0) + anderson_beta * phi_prev_g_arr[nbx](i, j, k, 0);
-					});
-
-					amrex::Real const phi1_min = phi_new.min(0, 0, false);
-					amrex::Real const phi1_max = phi_new.max(0, 0, false);
-					if (std::isfinite(phi1_min) && std::isfinite(phi1_max) && (phi1_min >= 0.0)) {
-					} else {
-						amrex::MultiFab::Copy(phi_new, phi_picard, 0, 0, 1, 1);
-					}
-				}
-			}
-		}
-
-		amrex::ParallelFor(
-		    x_old, [phi_arr = phi.const_arrays(), state, x_arr = x_old.arrays(), n_to_rho] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-			    amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
-			    amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
-			    amrex::Real const ng = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
-			    if ((nH <= 0.0) || (ng <= 0.0)) {
-				    x_arr[nbx](i, j, k, 0) = 0.0;
-			    } else {
-				    amrex::Real const a = alphaB * nH;
-				    amrex::Real const b = C::c_light * sigma_HI * ng;
-				    amrex::Real const disc = b * b + 4.0 * a * b;
-				    amrex::Real const x = (-b + std::sqrt(disc)) / (2.0 * a);
-				    x_arr[nbx](i, j, k, 0) = amrex::min<amrex::Real>(1.0, amrex::max<amrex::Real>(0.0, x));
-			    }
-		    });
-		amrex::ParallelFor(
-		    x_new, [phi_arr = phi_new.const_arrays(), state, x_arr = x_new.arrays(), n_to_rho] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-			    amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
-			    amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
-			    amrex::Real const ng = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
-			    if ((nH <= 0.0) || (ng <= 0.0)) {
-				    x_arr[nbx](i, j, k, 0) = 0.0;
-			    } else {
-				    amrex::Real const a = alphaB * nH;
-				    amrex::Real const b = C::c_light * sigma_HI * ng;
-				    amrex::Real const disc = b * b + 4.0 * a * b;
-				    amrex::Real const x = (-b + std::sqrt(disc)) / (2.0 * a);
-				    x_arr[nbx](i, j, k, 0) = amrex::min<amrex::Real>(1.0, amrex::max<amrex::Real>(0.0, x));
-			    }
-		    });
-		amrex::ParallelFor(x_delta, [x0_arr = x_old.const_arrays(), x1_arr = x_new.const_arrays(),
-					     dx_arr = x_delta.arrays()] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-			dx_arr[nbx](i, j, k, 0) = std::abs(x1_arr[nbx](i, j, k, 0) - x0_arr[nbx](i, j, k, 0));
-		});
-		amrex::ParallelFor(midpoint_scale, [x0_arr = x_old.const_arrays(), x1_arr = x_new.const_arrays(),
-						    midpoint_arr = midpoint_scale.arrays()] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-			midpoint_arr[nbx](i, j, k, 0) = 0.5 * (std::abs(x1_arr[nbx](i, j, k, 0)) + std::abs(x0_arr[nbx](i, j, k, 0)));
-		});
-		amrex::ParallelFor(residual,
-				   [delta_arr = x_delta.const_arrays(), midpoint_arr = midpoint_scale.const_arrays(), scaled_update_arr = residual.arrays(),
-				    x_atol, residual_tol] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-					   amrex::Real const denom = x_atol + residual_tol * midpoint_arr[nbx](i, j, k, 0);
-					   scaled_update_arr[nbx](i, j, k, 0) = delta_arr[nbx](i, j, k, 0) / amrex::max(denom, 1.0e-60);
-				   });
-		amrex::Real const x_mixed_update_norm = residual.norm0(0, 0, false);
-		final_x_mixed_update = x_mixed_update_norm;
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(x_mixed_update_norm), "Stromgren pseudo-time solve produced non-finite x mixed update norm.");
-
-		amrex::MultiFab::Copy(phi_g_prev, phi_picard, 0, 0, 1, 1);
-		amrex::MultiFab::Copy(correction_prev, correction, 0, 0, 1, 0);
-		have_prev_picard = true;
-		amrex::MultiFab::Copy(phi, phi_new, 0, 0, 1, 1);
-		if ((iter >= min_pseudo_iters) && (x_mixed_update_norm < 1.0)) {
-			converged = true;
-			break;
+		if (lev + 1 < nlevels) {
+			masks[lev] = amrex::makeFineMask(grids[lev], distribution_map[lev], amrex::IntVect(0), grids[lev + 1], ref_ratio[lev],
+							 geometry[lev].periodicity(), 1, 0);
+		} else {
+			masks[lev].define(grids[lev], distribution_map[lev], 1, 0);
+			masks[lev].setVal(1);
 		}
 	}
-	if (abort_on_max_iters && !converged) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, std::format("Stromgren pseudo-time solve reached max iterations ({}) without satisfying x-change "
-								    "tolerance (rtol={}, x_atol={}, final_x_mixed_update={}).",
-								    max_pseudo_iters, residual_tol, x_atol, final_x_mixed_update)
-							    .c_str());
+	amrex::ParallelDescriptor::ReduceRealMax(rhs_scale);
+	amrex::ParallelDescriptor::ReduceRealMax(operator_rate);
+	if (!(rhs_scale > 0.0)) {
+		for (auto &level : n_gamma) {
+			level.setVal(0.0);
+		}
+		return true;
 	}
 
-	auto const phi_arr = phi.const_arrays();
-	auto n_gamma = n_gamma_cc.arrays();
-	amrex::ParallelFor(
-	    n_gamma_cc, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept { n_gamma[nbx](i, j, k, 0) = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0); });
+	amrex::Real const phi_scale = rhs_scale / operator_rate;
+	amrex::Vector<amrex::MultiFab> dimensionless_state;
+	amrex::Vector<amrex::MultiFab> rhs;
+	dimensionless_state.reserve(nlevels);
+	rhs.reserve(nlevels);
+	for (int lev = 0; lev < nlevels; ++lev) {
+		dimensionless_state.emplace_back(grids[lev], distribution_map[lev], 1, 1);
+		amrex::MultiFab::Copy(dimensionless_state[lev], old_state[lev], 0, 0, 1, 0);
+		dimensionless_state[lev].mult(1.0 / phi_scale, 0, 1, 0);
+		dimensionless_state[lev].FillBoundary(geometry[lev].periodicity());
+
+		rhs.emplace_back(grids[lev], distribution_map[lev], 1, 0);
+		amrex::MultiFab::Copy(rhs[lev], source[lev], 0, 0, 1, 0);
+		rhs[lev].mult(1.0 / phi_scale, 0, 1, 0);
+		amrex::MultiFab::Saxpy(rhs[lev], 1.0 / dt, dimensionless_state[lev], 0, 0, 1, 0);
+	}
+
+	StromgrenHierarchyNewtonProblem<problem_t> problem(geometry, grids, distribution_map, ref_ratio, hydro_state, rhs, masks, phi_scale, operator_rate, dt,
+							   residual_tolerance);
+	int constexpr picard_predictor_steps = 1;
+	for (int step = 0; step < picard_predictor_steps; ++step) {
+		problem.predict(dimensionless_state, 0.7);
+	}
+	quokka::math::NewtonKrylovOptions options;
+	options.nonlinear_tolerance = residual_tolerance;
+	options.linear_tolerance = amrex::min(1.0e-2, 10.0 * residual_tolerance);
+	options.maximum_nonlinear_iterations = max_nonlinear_iterations;
+	options.maximum_linear_iterations = 50;
+	options.krylov_restart_length = 50;
+	options.maximum_line_search_iterations = 24;
+	options.centered_difference = true;
+	options.require_change_convergence = false;
+	options.linear_verbosity = 0;
+	options.problem_name = "The time-dependent AMR H II-region FLD system";
+	quokka::math::NewtonKrylovSolver<StromgrenHierarchyNewtonProblem<problem_t>> newton(problem, options);
+	auto const result = newton.solve(dimensionless_state);
+	amrex::Print() << "Strömgren AMR backward-Euler solve: Picard predictor steps = " << picard_predictor_steps
+		       << ", Newton iterations = " << result.nonlinear_iterations << ", Newton GMRES iterations = " << result.total_linear_iterations
+		       << " (max " << result.maximum_linear_iterations << "), final residual = " << result.final_residual_norm << '\n';
+	if (!result.converged) {
+		return false;
+	}
+
+	for (int lev = 0; lev < nlevels; ++lev) {
+		amrex::MultiFab::Copy(n_gamma[lev], dimensionless_state[lev], 0, 0, 1, 0);
+		n_gamma[lev].mult(phi_scale, 0, 1, 0);
+		auto arrays = n_gamma[lev].arrays();
+		amrex::ParallelFor(n_gamma[lev], [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			arrays[nbx](i, j, k, 0) = amrex::max(arrays[nbx](i, j, k, 0), 0.0);
+		});
+	}
+	for (int lev = nlevels - 2; lev >= 0; --lev) {
+		amrex::average_down(n_gamma[lev + 1], n_gamma[lev], geometry[lev + 1], geometry[lev], 0, 1, ref_ratio[lev]);
+	}
+	for (int lev = 0; lev < nlevels; ++lev) {
+		n_gamma[lev].FillBoundary(geometry[lev].periodicity());
+	}
+	return true;
 }
 #endif
 

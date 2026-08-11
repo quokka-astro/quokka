@@ -230,22 +230,24 @@ auto problem_main() -> int
 	const amrex::Real v_exact = (4.0 / 3.0) * M_PI * rs * rs * rs;
 	const amrex::Real rs_eff = (hot_volume > 0.0) ? std::cbrt((3.0 * hot_volume) / (4.0 * M_PI)) : 0.0;
 	const amrex::Real vol_rel_error = std::abs(hot_volume - v_exact) / v_exact;
-	const bool oversized_but_within_2x = (rs_eff > rs) && (rs_eff < (2.0 * rs));
+	const amrex::Real ionized_sound_speed = std::sqrt(C::k_B * T_ion / quokka::EOS_Traits<HIIRegionProblem>::mean_molecular_weight);
+	const amrex::Real spitzer_radius = rs * std::pow(1.0 + (7.0 * ionized_sound_speed * current_time) / (4.0 * rs), 4.0 / 7.0);
+	const amrex::Real expansion_radius_rel_error = std::abs(rs_eff - spitzer_radius) / spitzer_radius;
+	const bool expansion_radius_ok = expansion_radius_rel_error <= sim.userData_.volume_rel_tol;
 
 	const amrex::Real core_tavg = (core_vol_cells > 0.0) ? (core_tmin_proxy / core_vol_cells) : 0.0;
 	const bool core_floor_ok = core_tavg >= (sim.userData_.core_temp_tol * T_ion);
 
 	amrex::Print() << "HIIRegion (Strömgren floor):\n";
 	amrex::Print() << "\tR_s (analytic) = " << rs << " cm\n";
+	amrex::Print() << "\tR_D (Spitzer expansion) = " << spitzer_radius << " cm\n";
 	amrex::Print() << "\tR_hot,eff (from hot volume) = " << rs_eff << " cm\n";
-	amrex::Print() << "\tHot volume rel. error = " << vol_rel_error << " (tol " << sim.userData_.volume_rel_tol << ")\n";
+	amrex::Print() << "\tStatic hot-volume rel. error = " << vol_rel_error << '\n';
+	amrex::Print() << "\tExpansion-radius rel. error = " << expansion_radius_rel_error << " (tol " << sim.userData_.volume_rel_tol << ")\n";
 	amrex::Print() << "\tCore average T / 1e4 K = " << (core_tavg / T_ion) << " (threshold " << sim.userData_.core_temp_tol << ")\n";
-	if (oversized_but_within_2x) {
-		amrex::Print() << "\tApplying relaxed volume criterion: R_hot,eff in (R_s, 2 R_s).\n";
-	}
 
-	if (((vol_rel_error > sim.userData_.volume_rel_tol) && !oversized_but_within_2x) || !core_floor_ok || std::isnan(vol_rel_error) ||
-	    std::isnan(core_tavg)) {
+	if (!expansion_radius_ok || !core_floor_ok || !std::isfinite(vol_rel_error) || !std::isfinite(expansion_radius_rel_error) ||
+	    !std::isfinite(core_tavg)) {
 		amrex::Print() << "HIIRegion test FAILED.\n";
 		return 1;
 	}

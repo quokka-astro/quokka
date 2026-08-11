@@ -232,8 +232,7 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 			if ((n > 0.0) && (ng > 0.0)) {
 				const Real a = alphaB * n;
 				const Real b = C::c_light * sigma_HI * ng;
-				const Real disc = b * b + 4.0 * a * b;
-				Real x = (-b + std::sqrt(disc)) / (2.0 * a);
+				Real x = 2.0 / (1.0 + std::sqrt(1.0 + 4.0 * a / b));
 				x = amrex::min<Real>(1.0, amrex::max<Real>(0.0, x));
 				const Real nHI = n * (1.0 - x);
 				photoion_heating_rate = C::c_light * sigma_HI * nHI * ng * photoion_heat_per_abs;

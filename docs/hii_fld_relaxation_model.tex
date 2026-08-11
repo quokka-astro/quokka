@@ -56,7 +56,7 @@ c\,\sigma_{\mathrm{HI}}\,\phi\,(1-x)=\alpha_B\,n_H\,x^2,
 \end{equation}
 where $x$ is ionized fraction and $n_{\mathrm{HI}}=n_H(1-x)$. Solving Eq.~\eqref{eq:xeq} gives
 \begin{equation}
-x(\phi)=\frac{-b+\sqrt{b^2+4ab}}{2a},
+x(\phi)=\frac{2}{1+\sqrt{1+4a/b}},
 \quad a=\alpha_B n_H,\quad b=c\,\sigma_{\mathrm{HI}}\,\phi,
 \end{equation}
 clipped to $[0,1]$.
@@ -96,9 +96,11 @@ The Python script above is a 1D spherical reference model. In Quokka, the corres
 \subsection*{Where it is used in the timestep}
 When \texttt{particles.use\_stromgren\_photoionization = true}, Quokka:
 \begin{enumerate}
-\item Builds \texttt{n\_gamma\_cc} once per level at the start of \texttt{advanceHydroAtLevel()}.
+\item Reads the persistent level view of \texttt{n\_gamma\_cc} at the start of \texttt{advanceHydroAtLevel()}.
 \item Passes \texttt{n\_gamma\_cc} into the Strang-split cooling source update.
 \item Reuses the same \texttt{n\_gamma\_cc} for both half source steps in that hydro step.
+\item After all AMR levels advance, evolves the photon field over the coarse timestep in
+\texttt{AMRSimulation::ellipticSolveAllLevels()}.
 \end{enumerate}
 The cooling operator then converts \texttt{n\_gamma} into a local photoionization heating term
 \[
@@ -115,12 +117,13 @@ Unlike the 1D top-hat source, Quokka constructs a volumetric source from stellar
 \item The volumetric source in the PDE is then $q_{\mathrm{vol}} = \texttt{source\_q}/\Delta V$.
 \end{itemize}
 
-\subsection*{Pseudo-time solver differences vs. the Python script}
-Quokka solves
+\subsection*{Newton--Krylov solver differences vs. the Python script}
+Quokka solves the fully implicit, time-dependent equation
 \[
-\partial_\tau n_\gamma = \nabla\!\cdot\!\left(D_{\mathrm{FLD}}\nabla n_\gamma\right) + q_{\mathrm{vol}} - k_{\mathrm{reac}} n_\gamma
+\frac{n_\gamma^{n+1}-n_\gamma^n}{\Delta t}
++\left[k_{\mathrm{reac}}(n_\gamma^{n+1})-\nabla\!\cdot D_{\mathrm{FLD}}(n_\gamma^{n+1})\nabla\right]n_\gamma^{n+1}=q_{\mathrm{vol}}
 \]
-on the full 3D mesh, with
+as one composite solve over the full 3D AMR hierarchy, with
 \[
 k_{\mathrm{reac}} = c\,\sigma_{\mathrm{HI}}\,n_{\mathrm{HI}},
 \qquad
@@ -130,14 +133,15 @@ D_{\mathrm{FLD}} = \frac{c\,\lambda(R)}{\kappa_F},
 \]
 Key implementation details:
 \begin{itemize}
-\item \textbf{Initialization:} Gaussian guess centered on the luminosity-weighted source centroid:
-$n_{\gamma,0}\propto \alpha_B n_H^2 \exp[-(r/r_{\mathrm{src}})^2]$.
+\item \textbf{Initialization:} One damped fixed-point predictor applies the composite frozen-coefficient operator directly, without GMRES or MLMG iteration.
 \item \textbf{FLD operator:} Face-centered fluxes in each Cartesian direction with Levermore--Pomraning limiter
 $\lambda=(2+R)/(6+3R+R^2)$.
-\item \textbf{Time integration in pseudo-time:} positivity-preserving two-stage explicit--implicit update (predictor + corrector), with adaptive step halving if any stage gives negative $n_\gamma$.
-\item \textbf{Convergence metric:} $\|E-k n_\gamma\|_\infty / \max(q_{\mathrm{vol}})$, where $E\equiv -\nabla\!\cdot F + q_{\mathrm{vol}}$.
+\item \textbf{Nonlinear solve:} Jacobian-free Newton--Krylov with centered finite-difference Jacobian products and a projected Armijo line search that enforces nonnegative $n_\gamma$.
+\item \textbf{Linear solve:} AMReX GMRES, capped at 50 iterations, with a frozen composite $\mathrm{ABecLap}$ operator as an MLMG preconditioner.
+\item \textbf{Adaptive retry:} A failed nonlinear solve restores the old photon field and bisects the photon timestep recursively; successful full-timestep solves are not subcycled.
+\item \textbf{Convergence metric:} the volume-weighted composite residual of the backward-Euler equation.
 \end{itemize}
-So, unlike the 1D script's tridiagonal Picard solve, Quokka uses a 3D local-update pseudo-time integrator tailored for GPU execution and AMReX domain decomposition.
+Thus the 1D script retains its steady tridiagonal Picard reference solve, while Quokka uses a GPU-parallel, domain-decomposed Newton--Krylov evolution of the corresponding 3D Cartesian AMR system.
 
 \section{Parameters and script inputs}
 \begin{center}
