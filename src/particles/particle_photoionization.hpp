@@ -70,6 +70,7 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 	void prepare(State const &state, RT pseudo_transient_shift = 0.0)
 	{
 		fillCoefficients(state, reactionRate_, diffusionCoeff_);
+		fillReducedReactionCoefficient(state, reactionRate_);
 		for (auto &level : reactionRate_) {
 			level.plus(pseudo_transient_shift * operatorRate_, 0, 1, 0);
 		}
@@ -388,21 +389,16 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 		}
 	}
 
-	void fillJacobianCoefficients(State const &dimensionless_state, State const &direction, State &reaction_tangent,
-				      FaceCoefficients &diffusion_derivative) const
+	void fillReducedReactionCoefficient(State const &dimensionless_state, State &reaction_coefficient) const
 	{
-		State state = clone(dimensionless_state);
-		State tangent = clone(direction);
-		fillGhosts(state);
-		fillGhosts(tangent);
-		for (int lev = 0; lev < static_cast<int>(state.size()); ++lev) {
-			auto const state_arr = state[lev].const_arrays();
+		for (int lev = 0; lev < static_cast<int>(dimensionless_state.size()); ++lev) {
+			auto const state_arr = dimensionless_state[lev].const_arrays();
 			auto const hydro_arr = hydroState_[lev].const_arrays();
-			auto reaction_arr = reaction_tangent[lev].arrays();
+			auto reaction_arr = reaction_coefficient[lev].arrays();
 			RT const phi_scale = phiScale_;
 			RT const n_to_rho = mean_particle_mass_mu * mH;
 			RT const inv_dt = 1.0 / dt_;
-			amrex::ParallelFor(reaction_tangent[lev], [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			amrex::ParallelFor(reaction_coefficient[lev], [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
 				RT const nH = amrex::max(hydro_arr[nbx](i, j, k, HydroSystem<problem_t>::density_index) / n_to_rho, 0.0);
 				RT const ng = amrex::max(state_arr[nbx](i, j, k, 0) * phi_scale, 0.0);
 				RT const absorption_rate = C::c_light * sigma_HI * nH;
@@ -415,7 +411,19 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 				}
 				reaction_arr[nbx](i, j, k, 0) = inv_dt + absorption_tangent;
 			});
+		}
+	}
 
+	void fillJacobianCoefficients(State const &dimensionless_state, State const &direction, State &reaction_tangent,
+				      FaceCoefficients &diffusion_derivative) const
+	{
+		fillReducedReactionCoefficient(dimensionless_state, reaction_tangent);
+		State state = clone(dimensionless_state);
+		State tangent = clone(direction);
+		fillGhosts(state);
+		fillGhosts(tangent);
+		for (int lev = 0; lev < static_cast<int>(state.size()); ++lev) {
+			RT const phi_scale = phiScale_;
 			auto const domain = geometry_[lev].Domain();
 			auto const is_per = geometry_[lev].periodicity().intVect();
 			auto const dx = geometry_[lev].CellSizeArray();
