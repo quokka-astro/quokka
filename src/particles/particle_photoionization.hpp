@@ -35,16 +35,6 @@ amrex::Real constexpr mean_particle_mass_mu = 1.27;
 amrex::Real constexpr alphaB = 2.6e-13;
 amrex::Real constexpr sigma_HI = 6.3e-18; // cm^2
 bool constexpr table_axes_are_mass_age = true;
-amrex::Real constexpr photon_smoothing_fraction = 1.0e-12;
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto smoothPositive(amrex::Real value, amrex::Real smoothing) noexcept -> amrex::Real
-{
-	amrex::Real const magnitude = std::sqrt(value * value + smoothing * smoothing);
-	if (value >= 0.0) {
-		return 0.5 * (value + magnitude);
-	}
-	return 0.5 * smoothing * smoothing / (magnitude - value);
-}
 
 #if AMREX_SPACEDIM == 3
 template <typename problem_t> class StromgrenHierarchyNewtonProblem
@@ -60,7 +50,8 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 					RT phi_scale, RT operator_rate, RT dt, RT residual_tolerance)
 	    : geometry_(geometry), grids_(grids), distributionMap_(distribution_map), refRatio_(ref_ratio), hydroState_(hydro_state), rhs_(rhs), masks_(masks),
 	      phiScale_(phi_scale), operatorRate_(operator_rate), dt_(dt), residualTolerance_(residual_tolerance), reactionRate_(makeState(0)),
-	      trialReactionRate_(makeState(0)), diffusionCoeff_(makeFaceCoefficients()), trialDiffusionCoeff_(makeFaceCoefficients())
+	      trialReactionRate_(makeState(0)), jacobianReactionRate_(makeState(0)), zeroReactionRate_(makeState(0)), diffusionCoeff_(makeFaceCoefficients()),
+	      trialDiffusionCoeff_(makeFaceCoefficients()), jacobianDiffusionDerivative_(makeFaceCoefficients())
 	{
 		AMREX_ALWAYS_ASSERT(dt_ > 0.0);
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
@@ -76,9 +67,12 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 		amrex::ParallelDescriptor::ReduceRealSum(totalVolume_);
 	}
 
-	void prepare(State const &state)
+	void prepare(State const &state, RT pseudo_transient_shift = 0.0)
 	{
 		fillCoefficients(state, reactionRate_, diffusionCoeff_);
+		for (auto &level : reactionRate_) {
+			level.plus(pseudo_transient_shift * operatorRate_, 0, 1, 0);
+		}
 		operator_ = makeOperator(reactionRate_, diffusionCoeff_);
 		mlmg_ = std::make_unique<amrex::MLMG>(*operator_);
 		mlmg_->setVerbose(0);
@@ -91,6 +85,35 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 
 	void residual(State const &state, State &output) { evaluateResidual(state, output); }
 	void linearized_residual(State const &state, State &output) { evaluateResidual(state, output); }
+	void applyJacobian(State const &state, State const &direction, State &output)
+	{
+		fillJacobianCoefficients(state, direction, jacobianReactionRate_, jacobianDiffusionDerivative_);
+		if (jacobianOperator_ == nullptr) {
+			jacobianOperator_ = makeOperator(jacobianReactionRate_, diffusionCoeff_);
+			jacobianMlmg_ = std::make_unique<amrex::MLMG>(*jacobianOperator_);
+		} else {
+			setOperatorCoefficients(*jacobianOperator_, jacobianReactionRate_, diffusionCoeff_);
+		}
+		State direction_with_ghosts = clone(direction);
+		fillGhosts(direction_with_ghosts);
+		jacobianMlmg_->apply(amrex::GetVecOfPtrs(output), amrex::GetVecOfPtrs(direction_with_ghosts));
+
+		if (diffusionDerivativeOperator_ == nullptr) {
+			diffusionDerivativeOperator_ = makeOperator(zeroReactionRate_, jacobianDiffusionDerivative_);
+			diffusionDerivativeMlmg_ = std::make_unique<amrex::MLMG>(*diffusionDerivativeOperator_);
+		} else {
+			setOperatorCoefficients(*diffusionDerivativeOperator_, zeroReactionRate_, jacobianDiffusionDerivative_);
+		}
+		State state_with_ghosts = clone(state);
+		fillGhosts(state_with_ghosts);
+		State diffusion_derivative = makeVecRHS();
+		diffusionDerivativeMlmg_->apply(amrex::GetVecOfPtrs(diffusion_derivative), amrex::GetVecOfPtrs(state_with_ghosts));
+
+		for (int lev = 0; lev < static_cast<int>(output.size()); ++lev) {
+			amrex::MultiFab::Add(output[lev], diffusion_derivative[lev], 0, 0, 1, 0);
+			output[lev].mult(1.0 / operatorRate_, 0, 1, 0);
+		}
+	}
 
 	void predict(State &state, RT damping)
 	{
@@ -201,6 +224,13 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 	void fill_candidate(State &candidate, State const &state, State const &correction, RT step_length) const
 	{
 		linComb(candidate, 1.0, state, step_length, correction);
+		for (auto &level : candidate) {
+			auto arrays = level.arrays();
+			amrex::ParallelFor(level, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+				arrays[nbx](i, j, k, 0) = amrex::max(arrays[nbx](i, j, k, 0), 0.0);
+			});
+		}
+		averageDown(candidate);
 	}
 
 	[[nodiscard]] auto admissible(State const &state) const -> bool
@@ -208,7 +238,7 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 		for (auto const &level : state) {
 			RT const minimum = level.min(0, 0, false);
 			RT const maximum = level.max(0, 0, false);
-			if (!std::isfinite(minimum) || !std::isfinite(maximum)) {
+			if (!std::isfinite(minimum) || !std::isfinite(maximum) || (minimum < 0.0)) {
 				return false;
 			}
 		}
@@ -230,8 +260,8 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 			amrex::ParallelFor(change, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
 				RT const nH = amrex::max(hydro_arr[nbx](i, j, k, HydroSystem<problem_t>::density_index) / n_to_rho, 0.0);
 				auto ion_fraction = [=] AMREX_GPU_DEVICE(RT u) noexcept {
-					RT const ng = smoothPositive(u, photon_smoothing_fraction) * phi_scale;
-					if (nH <= 0.0) {
+					RT const ng = amrex::max(u * phi_scale, 0.0);
+					if ((nH <= 0.0) || (ng <= 0.0)) {
 						return 0.0;
 					}
 					RT const ratio = 4.0 * alphaB * nH / (C::c_light * sigma_HI * ng);
@@ -310,9 +340,9 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 			RT const inv_dt = 1.0 / dt_;
 			amrex::ParallelFor(reaction_rate[lev], [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
 				RT const nH = amrex::max(hydro_arr[nbx](i, j, k, HydroSystem<problem_t>::density_index) / n_to_rho, 0.0);
-				RT const ng = smoothPositive(state_arr[nbx](i, j, k, 0), photon_smoothing_fraction) * phi_scale;
+				RT const ng = amrex::max(state_arr[nbx](i, j, k, 0) * phi_scale, 0.0);
 				RT x = 0.0;
-				if (nH > 0.0) {
+				if ((nH > 0.0) && (ng > 0.0)) {
 					RT const ratio = 4.0 * alphaB * nH / (C::c_light * sigma_HI * ng);
 					x = 2.0 / (1.0 + std::sqrt(1.0 + ratio));
 				}
@@ -344,15 +374,94 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 						int const face_index = (dir == 0) ? i : ((dir == 1) ? j : k);
 						bool const at_lo = (is_per[dir] == 0) && (face_index == domain.smallEnd(dir));
 						bool const at_hi = (is_per[dir] == 0) && (face_index == domain.bigEnd(dir) + 1);
-						RT const phi_lo = at_lo ? 0.0 : smoothPositive(u(il, jl, kl, 0), photon_smoothing_fraction) * phi_scale;
-						RT const phi_hi = at_hi ? 0.0 : smoothPositive(u(i, j, k, 0), photon_smoothing_fraction) * phi_scale;
+						RT const phi_lo = at_lo ? 0.0 : amrex::max(u(il, jl, kl, 0) * phi_scale, 0.0);
+						RT const phi_hi = at_hi ? 0.0 : amrex::max(u(i, j, k, 0) * phi_scale, 0.0);
 						RT const distance = (at_lo || at_hi) ? 0.5 * dx[dir] : dx[dir];
 						RT const gradient = (phi_hi - phi_lo) / distance;
 						RT const phi_face = 0.5 * (phi_lo + phi_hi);
-						RT const limiter_denominator = std::sqrt((kappa_ref * phi_face) * (kappa_ref * phi_face) + 1.0e-60);
-						RT const R = std::abs(gradient) / limiter_denominator;
+						RT const R = std::abs(gradient) / amrex::max(kappa_ref * phi_face, 1.0e-30);
 						RT const lambda = (2.0 + R) / (6.0 + 3.0 * R + R * R);
 						diffusion(i, j, k, 0) = C::c_light * lambda / kappa_ref;
+					});
+				}
+			}
+		}
+	}
+
+	void fillJacobianCoefficients(State const &dimensionless_state, State const &direction, State &reaction_tangent,
+				      FaceCoefficients &diffusion_derivative) const
+	{
+		State state = clone(dimensionless_state);
+		State tangent = clone(direction);
+		fillGhosts(state);
+		fillGhosts(tangent);
+		for (int lev = 0; lev < static_cast<int>(state.size()); ++lev) {
+			auto const state_arr = state[lev].const_arrays();
+			auto const hydro_arr = hydroState_[lev].const_arrays();
+			auto reaction_arr = reaction_tangent[lev].arrays();
+			RT const phi_scale = phiScale_;
+			RT const n_to_rho = mean_particle_mass_mu * mH;
+			RT const inv_dt = 1.0 / dt_;
+			amrex::ParallelFor(reaction_tangent[lev], [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+				RT const nH = amrex::max(hydro_arr[nbx](i, j, k, HydroSystem<problem_t>::density_index) / n_to_rho, 0.0);
+				RT const ng = amrex::max(state_arr[nbx](i, j, k, 0) * phi_scale, 0.0);
+				RT const absorption_rate = C::c_light * sigma_HI * nH;
+				RT absorption_tangent = absorption_rate;
+				if ((nH > 0.0) && (ng > 0.0)) {
+					RT const s = std::sqrt(1.0 + 4.0 * alphaB * nH / (C::c_light * sigma_HI * ng));
+					RT const x = 2.0 / (1.0 + s);
+					RT const ng_dx_dng = (s - 1.0) / (s * (s + 1.0));
+					absorption_tangent = absorption_rate * (1.0 - x - ng_dx_dng);
+				}
+				reaction_arr[nbx](i, j, k, 0) = inv_dt + absorption_tangent;
+			});
+
+			auto const domain = geometry_[lev].Domain();
+			auto const is_per = geometry_[lev].periodicity().intVect();
+			auto const dx = geometry_[lev].CellSizeArray();
+			auto const prob_lo = geometry_[lev].ProbLoArray();
+			auto const prob_hi = geometry_[lev].ProbHiArray();
+			RT const Lbox = std::min({prob_hi[0] - prob_lo[0], prob_hi[1] - prob_lo[1], prob_hi[2] - prob_lo[2]});
+			RT const kappa_ref = 1.0 / Lbox;
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				for (amrex::MFIter mfi(diffusion_derivative[lev][dir], amrex::TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+					auto const u = state[lev].const_array(mfi);
+					auto const v = tangent[lev].const_array(mfi);
+					auto const diffusion_delta = diffusion_derivative[lev][dir].array(mfi);
+					amrex::ParallelFor(mfi.tilebox(), [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+						int il = i;
+						int jl = j;
+						int kl = k;
+						if (dir == 0) {
+							--il;
+						} else if (dir == 1) {
+							--jl;
+						} else {
+							--kl;
+						}
+						int const face_index = (dir == 0) ? i : ((dir == 1) ? j : k);
+						bool const at_lo = (is_per[dir] == 0) && (face_index == domain.smallEnd(dir));
+						bool const at_hi = (is_per[dir] == 0) && (face_index == domain.bigEnd(dir) + 1);
+						RT const phi_lo = at_lo ? 0.0 : amrex::max(u(il, jl, kl, 0) * phi_scale, 0.0);
+						RT const phi_hi = at_hi ? 0.0 : amrex::max(u(i, j, k, 0) * phi_scale, 0.0);
+						RT const delta_phi_lo = at_lo ? 0.0 : v(il, jl, kl, 0) * phi_scale;
+						RT const delta_phi_hi = at_hi ? 0.0 : v(i, j, k, 0) * phi_scale;
+						RT const distance = (at_lo || at_hi) ? 0.5 * dx[dir] : dx[dir];
+						RT const gradient = (phi_hi - phi_lo) / distance;
+						RT const delta_gradient = (delta_phi_hi - delta_phi_lo) / distance;
+						RT const phi_face = 0.5 * (phi_lo + phi_hi);
+						RT const delta_phi_face = 0.5 * (delta_phi_lo + delta_phi_hi);
+						RT const raw_denominator = kappa_ref * phi_face;
+						RT const denominator = amrex::max(raw_denominator, 1.0e-30);
+						RT const delta_denominator = (raw_denominator > 1.0e-30) ? kappa_ref * delta_phi_face : 0.0;
+						RT const abs_gradient = std::abs(gradient);
+						RT const delta_abs_gradient = (gradient > 0.0) ? delta_gradient : ((gradient < 0.0) ? -delta_gradient : 0.0);
+						RT const R = abs_gradient / denominator;
+						RT const delta_R =
+						    delta_abs_gradient / denominator - abs_gradient * delta_denominator / (denominator * denominator);
+						RT const limiter_denominator = 6.0 + 3.0 * R + R * R;
+						RT const lambda_derivative = -R * (4.0 + R) / (limiter_denominator * limiter_denominator);
+						diffusion_delta(i, j, k, 0) = (C::c_light / kappa_ref) * lambda_derivative * delta_R;
 					});
 				}
 			}
@@ -366,6 +475,14 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 		op.setMaxOrder(2);
 		for (int lev = 0; lev < static_cast<int>(reaction_rate.size()); ++lev) {
 			op.setLevelBC(lev, nullptr);
+			op.setACoeffs(lev, reaction_rate[lev]);
+			op.setBCoeffs(lev, amrex::GetArrOfConstPtrs(diffusion_coeff[lev]));
+		}
+	}
+
+	void setOperatorCoefficients(amrex::MLABecLaplacian &op, State const &reaction_rate, FaceCoefficients const &diffusion_coeff) const
+	{
+		for (int lev = 0; lev < static_cast<int>(reaction_rate.size()); ++lev) {
 			op.setACoeffs(lev, reaction_rate[lev]);
 			op.setBCoeffs(lev, amrex::GetArrOfConstPtrs(diffusion_coeff[lev]));
 		}
@@ -412,13 +529,20 @@ template <typename problem_t> class StromgrenHierarchyNewtonProblem
 	RT totalVolume_ = 0.0;
 	State reactionRate_;
 	State trialReactionRate_;
+	State jacobianReactionRate_;
+	State zeroReactionRate_;
 	FaceCoefficients diffusionCoeff_;
 	FaceCoefficients trialDiffusionCoeff_;
+	FaceCoefficients jacobianDiffusionDerivative_;
 	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bcLo_{};
 	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bcHi_{};
 	std::unique_ptr<amrex::MLABecLaplacian> operator_;
 	std::unique_ptr<amrex::MLMG> mlmg_;
 	std::unique_ptr<amrex::GMRESMLMG> preconditioner_;
+	std::unique_ptr<amrex::MLABecLaplacian> jacobianOperator_;
+	std::unique_ptr<amrex::MLMG> jacobianMlmg_;
+	std::unique_ptr<amrex::MLABecLaplacian> diffusionDerivativeOperator_;
+	std::unique_ptr<amrex::MLMG> diffusionDerivativeMlmg_;
 };
 
 template <typename problem_t, quokka::OutOfBounds oob_policy>
@@ -643,6 +767,10 @@ template <typename problem_t, quokka::OutOfBounds oob_policy>
 	options.maximum_linear_iterations = 50;
 	options.krylov_restart_length = 50;
 	options.maximum_line_search_iterations = 24;
+	options.initial_pseudo_transient_shift = 0.0;
+	options.maximum_pseudo_transient_retries = 6;
+	options.minimum_acceptable_step_length = 0.25;
+	options.adaptive_linear_tolerance = false;
 	options.centered_difference = true;
 	options.require_change_convergence = false;
 	options.linear_verbosity = 0;
@@ -651,7 +779,8 @@ template <typename problem_t, quokka::OutOfBounds oob_policy>
 	auto const result = newton.solve(dimensionless_state);
 	amrex::Print() << "Strömgren AMR backward-Euler solve: Picard predictor steps = " << picard_predictor_steps
 		       << ", Newton iterations = " << result.nonlinear_iterations << ", Newton GMRES iterations = " << result.total_linear_iterations
-		       << " (max " << result.maximum_linear_iterations << "), final residual = " << result.final_residual_norm << '\n';
+		       << " (max " << result.maximum_linear_iterations << "), pseudo-transient retries = " << result.pseudo_transient_retries
+		       << ", final pseudo shift = " << result.final_pseudo_transient_shift << ", final residual = " << result.final_residual_norm << '\n';
 	if (!result.converged) {
 		return false;
 	}
@@ -659,15 +788,6 @@ template <typename problem_t, quokka::OutOfBounds oob_policy>
 	for (int lev = 0; lev < nlevels; ++lev) {
 		amrex::MultiFab::Copy(n_gamma[lev], dimensionless_state[lev], 0, 0, 1, 0);
 		n_gamma[lev].mult(phi_scale, 0, 1, 0);
-		auto arrays = n_gamma[lev].arrays();
-		amrex::ParallelFor(n_gamma[lev], [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-			arrays[nbx](i, j, k, 0) = amrex::max(arrays[nbx](i, j, k, 0), 0.0);
-		});
-	}
-	for (int lev = nlevels - 2; lev >= 0; --lev) {
-		amrex::average_down(n_gamma[lev + 1], n_gamma[lev], geometry[lev + 1], geometry[lev], 0, 1, ref_ratio[lev]);
-	}
-	for (int lev = 0; lev < nlevels; ++lev) {
 		n_gamma[lev].FillBoundary(geometry[lev].periodicity());
 	}
 	return true;
