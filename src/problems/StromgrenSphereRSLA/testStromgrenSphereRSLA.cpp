@@ -299,7 +299,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 	userData_.t_vec_.push_back(tNew_[lev]);
 
 	const amrex::Real n_HI0 = userData_.n_HI_init;
-	const amrex::Real alpha_B = 2.6e-13;
+	const amrex::Real alpha_B = 2.63e-13;
 	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_HI0 * n_HI0), 1.0_rt / 3.0_rt);
 
 	amrex::Real dt = tNew_[lev] - userData_.r_analytical_last_t;

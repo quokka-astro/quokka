@@ -134,7 +134,7 @@ auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.
 
 auto net_energy_ionized(double T, double n_e) -> double
 {
-	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
+	const double alpha_B = 2.63e-13 * std::pow(T / 1.0e4, -0.7);
 	const double epsilon = 6.4e-12;
 	// alpha_B * n_e^2 = n_gamma
 	const double photoheating = alpha_B * n_e * n_e * epsilon;
