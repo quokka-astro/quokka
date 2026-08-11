@@ -1,11 +1,33 @@
 # About
 
-<figure align="center">
-  <img src="../media/quokka-favicon.svg" alt="quokka-favicon" width="200">
-  <figcaption>Quokka riding a rocket</figcaption>
-</figure>
+<p style="text-align: center;">
+  <img
+    src="media/quokka-favicon.svg"
+    alt="Quokka riding a rocket"
+    style="width: min(18rem, 45%); height: auto;"
+  >
+</p>
+
+<p style="text-align: center;"><em>Quokka riding a rocket</em></p>
 
 Quokka is a high-resolution shock capturing AMR radiation hydrodynamics code using the AMReX library [@AMReX_JOSS] to provide patch-based adaptive mesh functionality. We take advantage of the C++ loop abstractions in AMReX in order to run with high performance on either CPUs, NVIDIA GPUs, or AMD GPUs.
+
+## Physics module status
+
+Per the documentation policy in the maintainer guide, physics features that have not yet been exercised in a published science application are marked as **beta**.
+
+| Module | Status | Notes |
+| ------ | :----: | ----- |
+| Radiation | beta | Two-moment radiation transport and matter-radiation coupling |
+| MHD | beta | Ideal MHD with constrained transport |
+| Dust | beta | Dedicated dust dynamics, drag, and charged-dust Lorentz source terms |
+| Particles | beta | Particle-mesh gravity, sink particles, star formation, and feedback |
+| Chemistry | beta | Primordial chemistry source terms |
+| Self-gravity | beta | Poisson solve for gas and particle mass |
+
+Hydrodynamics and optically-thin cooling are not currently marked as beta.
+
+See [Known Issues and Errata](known_issues.md) for the current caveats and unsupported combinations.
 
 ## Development methodology
 
@@ -33,7 +55,7 @@ The radiation hydrodynamics formulation is based on the mixed-frame moment equat
 
 The hyperbolic radiation subsystem is solved using an unsplit method, using PPM for reconstruction of the moment variables, with fluxes computed via the HLL Riemann solver, with the wavespeeds computed using the 'frozen Eddington factor' approximation [@Balsara_1999], which is more robust than using the eigenvalues of the M1 system [@Skinner_2013] itself.
 
-We reconstruct the energy density and the *reduced flux* $f = F/cE$, in order to maintain the flux-limiting condition $F \le cE$ in discontinuous and near-discontinuous radiation flows.
+We reconstruct the energy density and the *reduced flux* \\(f = F/cE\\), in order to maintain the flux-limiting condition \\(F \le cE\\) in discontinuous and near-discontinuous radiation flows.
 
 To ensure the correct behavior of the advection terms in the asymptotic diffusion limit [@Lowrie_2001], we modify the Riemann solver according to [@Skinner_2019]. We use the Lorentz-factor local closure of [@Levermore_1984] to compute the variable Eddington tensor.
 

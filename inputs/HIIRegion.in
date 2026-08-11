@@ -36,6 +36,7 @@ temperature_floor = 10.0
 # *****************************************************************
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
+cooling.read_tables_even_if_disabled = 1
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 # *****************************************************************
@@ -56,5 +57,6 @@ particles.verbose = 0
 # *****************************************************************
 problem.nH0 = 1.0e2
 problem.T0 = 500.0
+problem.stars_file = "../inputs/hii_stars.txt"
 problem.volume_rel_tol = 0.5
 problem.core_temp_tol = 0.7

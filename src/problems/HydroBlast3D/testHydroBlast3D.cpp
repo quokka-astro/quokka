@@ -37,19 +37,10 @@ template <> struct HydroSystem_Traits<SedovProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<SedovProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<SedovProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear/bulk default to 0; no-op unless set
 };
 
 // declare global variables
@@ -200,7 +191,13 @@ template <> void QuokkaSimulation<SedovProblem>::computeAfterEvolve(amrex::Vecto
 			E_test_passes = true;
 		}
 
-		if ((std::abs(rel_err_Ekin) > 0.01) || std::isnan(rel_err_Ekin)) {
+		// the inviscid self-similar Sedov solution's KE fraction doesn't apply once physical viscosity
+		// dissipates kinetic energy into heat; skip only this sub-check in that case
+		const bool viscosityActive = (shearViscosity_ != 0.0) || (bulkViscosity_ != 0.0);
+		if (viscosityActive) {
+			amrex::Print() << "Kinetic energy check skipped: nonzero viscosity invalidates the inviscid self-similar fraction.\n";
+			KE_test_passes = true;
+		} else if ((std::abs(rel_err_Ekin) > 0.01) || std::isnan(rel_err_Ekin)) {
 			amrex::Print() << "Kinetic energy production is incorrect by more than 1 percent!\n";
 			KE_test_passes = false;
 		} else {

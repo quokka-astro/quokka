@@ -41,16 +41,13 @@ max_t_cc = 20.0
 
 plotfile_interval = -1
 checkpoint_interval = -1
-ascent_interval = -1
 
 statistics_interval = 200
 
 derived_vars = ["pressure", "entropy", "nH", "nH_cloud", "nH_wind", "nH_residual", "temperature", "cooling_length", "cloud_fraction", "lab_velocity_x", "mass", "velocity_mag", "c_s"]
 
-cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 
-cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/isrf_1000Go_grains_resampled.h5"
 
 nH_bg = 0.003356403333  # cm^-3

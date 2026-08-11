@@ -29,19 +29,10 @@ template <> struct quokka::EOS_Traits<WaveProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<WaveProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<WaveProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear/bulk default to 0; no-op unless set
 };
 
 constexpr double rho0 = 1.0;					    // background density
@@ -49,12 +40,16 @@ constexpr double P0 = 1.0 / quokka::EOS_Traits<WaveProblem>::gamma; // backgroun
 constexpr double v0 = 0.;					    // background velocity
 constexpr double amp = 1.0e-6;					    // perturbation amplitude
 
+// viscous decay rate for the wave analytic solution: (4/3*shear + bulk)*k^2/(2*rho0), for the single
+// hardcoded mode k=2*pi below; zero (no decay) unless hydro.shear_viscosity/hydro.bulk_viscosity are set
+AMREX_GPU_MANAGED double viscous_decay_rate = 0.0; // NOLINT
+
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
 {
 	const amrex::Real x_L = prob_lo[0] + (i + static_cast<amrex::Real>(0.0)) * dx[0];
 	const amrex::Real x_R = prob_lo[0] + (i + static_cast<amrex::Real>(1.0)) * dx[0];
-	const amrex::Real A = amp;
+	const amrex::Real A = amp * std::exp(-viscous_decay_rate * time);
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
 	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblem>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
@@ -86,12 +81,49 @@ template <> void QuokkaSimulation<WaveProblem>::setInitialConditionsOnGrid(quokk
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0; // fill unused components with zeros
 		}
-		computeWaveSolution(i, j, k, state_cc, dx, prob_lo);
+		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, 0.0);
 	});
 }
 
-auto runWaveTest(int nx) -> double
+// Sets viscous_decay_rate from hydro.shear_viscosity/hydro.bulk_viscosity. Zero (no decay) when both
+// are absent, recovering the ideal wave solution. Shared by the convergence sweep (runWaveTest) and
+// the fixed-resolution run_sim path.
+void configureViscousParameters()
 {
+	double shearViscosity = 0.0;
+	double bulkViscosity = 0.0;
+	amrex::ParmParse const hpp("hydro");
+	hpp.query("shear_viscosity", shearViscosity);
+	hpp.query("bulk_viscosity", bulkViscosity);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shearViscosity >= 0.0 && bulkViscosity >= 0.0, "hydro.shear_viscosity and hydro.bulk_viscosity must be non-negative.");
+	constexpr double k_magn = 2.0 * M_PI; // single hardcoded mode, box length 1
+	viscous_decay_rate = (4.0 / 3.0 * shearViscosity + bulkViscosity) * k_magn * k_magn / (2.0 * rho0);
+	if (shearViscosity > 0.0 || bulkViscosity > 0.0) {
+		amrex::Print() << "Hydro wave (viscous): decay_rate=" << viscous_decay_rate << "\n";
+	}
+}
+
+// fills every cell of mf with the analytic wave solution at the given time
+void fillWaveSolutionState(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+			   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
+{
+	const int ncomp = mf.nComp();
+	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &state = mf.array(iter);
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			for (int n = 0; n < ncomp; ++n) {
+				state(i, j, k, n) = 0; // fill unused components with zeros
+			}
+			computeWaveSolution(i, j, k, state, dx, prob_lo, time);
+		});
+	}
+}
+
+auto runWaveTest(int nx, int ny, int nz) -> double
+{
+	configureViscousParameters();
+
 	// Problem parameters
 	const double CFL_number = 0.1;
 	const double max_time = 1.0;
@@ -109,12 +141,14 @@ auto runWaveTest(int nx) -> double
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, 8, 8};
+	amrex::Vector<int> const ncells = {nx, ny, nz};
 	pp.add("max_level", 0);
-	pp.add("blocking_factor_x", nx);
-	pp.add("blocking_factor_y", 8);
-	pp.add("blocking_factor_z", 8);
-	pp.add("max_grid_size", nx);
+	if (!pp.contains("blocking_factor")) {
+		pp.add("blocking_factor", 8);
+	}
+	if (!pp.contains("max_grid_size")) {
+		pp.add("max_grid_size", 128);
+	}
 	pp.addarr("n_cell", ncells);
 
 	// Set domain bounds using AMReX parameter system
@@ -134,13 +168,17 @@ auto runWaveTest(int nx) -> double
 
 	// set initial conditions
 	sim.setInitialConditions();
-	auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 
 	// Main time loop
 	sim.evolve();
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 	int const nx_final = static_cast<int>(position.size());
+
+	// analytic solution at the final simulation time; equals the t=0 state only when viscous_decay_rate == 0
+	amrex::MultiFab exactState(sim.boxArray(0), sim.DistributionMap(0), QuokkaSimulation<WaveProblem>::nvars_, 0);
+	fillWaveSolutionState(exactState, sim.geom[0].CellSizeArray(), sim.geom[0].ProbLoArray(), sim.tNew_[0]);
+	auto [pos_exact, val_exact] = fextract(exactState, sim.geom[0], 0, 0.5);
 
 	// compute error norm
 	amrex::Real err_sq = 0.;
@@ -158,23 +196,99 @@ auto runWaveTest(int nx) -> double
 		// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
 		err_sq += dU_k * dU_k;
 	}
-	const amrex::Real epsilon = std::sqrt(err_sq);
+	amrex::Real epsilon = std::sqrt(err_sq);
+	// fextract only gathers the full comparison to the IO processor; broadcast so every rank agrees
+	amrex::ParallelDescriptor::Bcast(&epsilon, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 	return epsilon;
 }
 
 auto problem_main() -> int
 {
-	quokka::richardson::applyQuietDefaults();
+	bool run_convergence = true;
+	bool run_sim = false;
+	double error_tol = 1.0e-8;
+	{
+		amrex::ParmParse const pp("setup");
+		pp.query("run_convergence", run_convergence);
+		pp.query("run_sim", run_sim);
+		pp.query("error_tol", error_tol);
+	}
 
-	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-11; // limit based on delta_rho_magn
-	params.nx_initial = 128;
-	params.nx_max = 2048;
-	params.expected_rate = 2.0;
-	params.tolerance = 0.3;
-	params.test_name = "Hydro Wave";
-	params.csv_filename = "hydro_wave_convergence.csv";
+	int status = 0;
 
-	return quokka::richardson::run(params, [](int nx) { return runWaveTest(nx); });
+	if (run_sim) {
+		configureViscousParameters();
+
+		const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
+		amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+		for (int n = 0; n < ncomp_cc; ++n) {
+			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+				BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+				BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			}
+		}
+
+		QuokkaSimulation<WaveProblem> sim(BCs_cc);
+		sim.cflNumber_ = 0.3;
+		sim.setInitialConditions();
+
+		sim.evolve();
+
+		auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
+		const int nx_final = static_cast<int>(position.size());
+
+		// analytic solution at the final simulation time; equals the t=0 state only when viscous_decay_rate == 0
+		amrex::MultiFab exactState(sim.boxArray(0), sim.DistributionMap(0), QuokkaSimulation<WaveProblem>::nvars_, 0);
+		fillWaveSolutionState(exactState, sim.geom[0].CellSizeArray(), sim.geom[0].ProbLoArray(), sim.tNew_[0]);
+		auto [pos_exact, val_exact] = fextract(exactState, sim.geom[0], 0, 0.5);
+
+		amrex::Real err_sq = 0.;
+		for (int n = 0; n < QuokkaSimulation<WaveProblem>::nvars_; ++n) {
+			if (n == HydroSystem<WaveProblem>::internalEnergy_index) {
+				continue;
+			}
+			amrex::Real dU_k = 0.;
+			for (int i = 0; i < nx_final; ++i) {
+				const amrex::Real U_k0 = val_exact.at(n)[i];
+				const amrex::Real U_k1 = values.at(n)[i];
+				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final);
+			}
+			err_sq += dU_k * dU_k;
+		}
+		amrex::Real epsilon = std::sqrt(err_sq);
+		// fextract only gathers the full comparison to the IO processor; broadcast so every rank agrees
+		amrex::ParallelDescriptor::Bcast(&epsilon, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+
+		amrex::Print() << std::format("\nrun_sim error norm = {:.6e}  (tol = {:.6e})\n", static_cast<double>(epsilon), error_tol);
+		if (epsilon > error_tol) {
+			status = 1;
+		}
+	}
+
+	if (run_convergence) {
+		quokka::richardson::applyQuietDefaults();
+
+		quokka::richardson::Parameters params{};
+		params.machine_precision_target = 2.0e-11;
+		params.nx_initial = 128;
+		params.nx_max = 2048;
+		{
+			amrex::ParmParse const pp("setup");
+			pp.query("nx_start", params.nx_initial);
+			pp.query("nx_max", params.nx_max);
+			pp.query("machine_precision_target", params.machine_precision_target);
+			pp.query("refine_n_dims", params.refine_n_dims);
+		}
+		params.expected_rate = 2.0;
+		params.tolerance = 0.3;
+		params.test_name = "Hydro Wave";
+		params.csv_filename = "hydro_wave_convergence.csv";
+
+		if (quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); }) != 0) {
+			status = 1;
+		}
+	}
+
+	return status;
 }

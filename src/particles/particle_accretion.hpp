@@ -183,9 +183,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					const double x = plo[0] + (ii + static_cast<amrex::Real>(0.5)) * dx[0] - p.pos(0);
+					const double y = plo[1] + (jj + static_cast<amrex::Real>(0.5)) * dx[1] - p.pos(1);
+					const double z = plo[2] + (kk + static_cast<amrex::Real>(0.5)) * dx[2] - p.pos(2);
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -209,9 +209,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					const double x = plo[0] + (ii + static_cast<amrex::Real>(0.5)) * dx[0] - p.pos(0);
+					const double y = plo[1] + (jj + static_cast<amrex::Real>(0.5)) * dx[1] - p.pos(1);
+					const double z = plo[2] + (kk + static_cast<amrex::Real>(0.5)) * dx[2] - p.pos(2);
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -328,7 +328,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
 					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
 					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc, int mass_index, amrex::Real /*time*/,
-					amrex::Real dt, amrex::Real /*vol*/, int mdot_index = -1)
+					amrex::Real dt, amrex::Real /*vol*/, int mdot_index = -1, int ang_mom_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentumInBox()");
 	// Get the particle array of structs
@@ -357,9 +357,9 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					const double x = plo[0] + (ii + static_cast<amrex::Real>(0.5)) * dx[0] - p.pos(0);
+					const double y = plo[1] + (jj + static_cast<amrex::Real>(0.5)) * dx[1] - p.pos(1);
+					const double z = plo[2] + (kk + static_cast<amrex::Real>(0.5)) * dx[2] - p.pos(2);
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -379,17 +379,26 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 			}
 		}
 
+		// get particle velocity
+		const double pvx = p.rdata(mass_index + 1);
+		const double pvy = p.rdata(mass_index + 2);
+		const double pvz = p.rdata(mass_index + 3);
+
 		// compute the accretion rate at each cell; use atomic operations
 		double accreted_mass = 0.0;
 		double accreted_momentum_x = 0.0;
 		double accreted_momentum_y = 0.0;
 		double accreted_momentum_z = 0.0;
+		double accreted_ang_mom_x = 0.0;
+		double accreted_ang_mom_y = 0.0;
+		double accreted_ang_mom_z = 0.0;
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					// x,y,z = r_cell = cell_center - par_pos (vector from particle to cell center)
+					const double x = plo[0] + (ii + static_cast<amrex::Real>(0.5)) * dx[0] - p.pos(0);
+					const double y = plo[1] + (jj + static_cast<amrex::Real>(0.5)) * dx[1] - p.pos(1);
+					const double z = plo[2] + (kk + static_cast<amrex::Real>(0.5)) * dx[2] - p.pos(2);
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -412,13 +421,38 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					// M_dot_cell is negative, so we multiply it by -1 to get the accreted mass
 					const double accreted_mass_cell = -M_dot_cell * dt * scale_down_factor;
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
-					const double vx = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index) / rho;
-					const double vy = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index) / rho;
-					const double vz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index) / rho;
+					const double vx_lab = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index) / rho;
+					const double vy_lab = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index) / rho;
+					const double vz_lab = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index) / rho;
+					const double vx_rel = vx_lab - pvx;
+					const double vy_rel = vy_lab - pvy;
+					const double vz_rel = vz_lab - pvz;
 					accreted_mass += accreted_mass_cell;
-					accreted_momentum_x += accreted_mass_cell * vx;
-					accreted_momentum_y += accreted_mass_cell * vy;
-					accreted_momentum_z += accreted_mass_cell * vz;
+					accreted_momentum_x += accreted_mass_cell * vx_lab;
+					accreted_momentum_y += accreted_mass_cell * vy_lab;
+					accreted_momentum_z += accreted_mass_cell * vz_lab;
+					// Angular momentum: L += dm * (r_cell × v_rel), where r_cell = (x, y, z) = cell_center - par_pos
+					// and v_rel = v_gas - v_par (relative velocity, Galilean invariant by construction).
+					// L_x = dm * (y*vz_rel - z*vy_rel)
+					// L_y = dm * (z*vx_rel - x*vz_rel)
+					// L_z = dm * (x*vy_rel - y*vx_rel)
+					//
+					// NOTE: Galilean invariance of L is only approximate (~2% at typical boost/dt).
+					// The residual error arises because p.pos() here is the *post-drift* position:
+					// the particle mover has already advanced the particle by v_par*dt before this
+					// accretion step is called. In a boosted frame, this shifts r_cell by -v_par*dt
+					// relative to the unboosted frame, breaking exact Galilean invariance of L.
+					// A potential solution is to use the pre-drift (rewound) particle position when
+					// computing r_cell for angular momentum, e.g.:
+					//   const double x_rewind = plo[0] + (ii + 0.5) * dx[0] - (p.pos(0) - pvx * dt);
+					// This might restore Galilean invariance for all particles. However, this breaks
+					// the order of operations of the current scheme, so it is not necessarily the
+					// right thing to do.
+					if (ang_mom_index >= 0) {
+						accreted_ang_mom_x += accreted_mass_cell * (y * vz_rel - z * vy_rel);
+						accreted_ang_mom_y += accreted_mass_cell * (z * vx_rel - x * vz_rel);
+						accreted_ang_mom_z += accreted_mass_cell * (x * vy_rel - y * vx_rel);
+					}
 					//-----------------------------------------------------------------------------------------------------
 				}
 			}
@@ -433,13 +467,18 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		if (mdot_index >= 0) {
 			p.rdata(mdot_index) = accreted_mass / dt;
 		}
+		if (ang_mom_index >= 0) {
+			p.rdata(ang_mom_index) += accreted_ang_mom_x;
+			p.rdata(ang_mom_index + 1) += accreted_ang_mom_y;
+			p.rdata(ang_mom_index + 2) += accreted_ang_mom_z;
+		}
 	});
 }
 
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down,
 				   std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, int mass_index, amrex::Real time, amrex::Real dt,
-				   int mdot_index = -1)
+				   int mdot_index = -1, int ang_mom_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentum()");
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
@@ -463,7 +502,7 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 
 		// Process particles in this box
 		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dx, local_fab_fc, mass_index, time, dt,
-									     vol, mdot_index);
+									     vol, mdot_index, ang_mom_index);
 	}
 }
 
@@ -527,7 +566,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 template <typename ContainerType, typename problem_t>
 void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 		    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt,
-		    int mass_index, int mdot_index = -1)
+		    int mass_index, int mdot_index = -1, int ang_mom_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::applyAccretion()");
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
@@ -537,8 +576,8 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	// Update accretion_rate and compute scale_down
 	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, geom, state_fc);
 
-	// Step 3: Update particle mass, momentum, and accretion rate
-	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt, mdot_index);
+	// Step 3: Update particle mass, momentum, accretion rate, and angular momentum
+	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt, mdot_index, ang_mom_index);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	UpdateHydroState<problem_t>(state, state_accretion_rate);

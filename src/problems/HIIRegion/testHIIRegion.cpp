@@ -40,9 +40,10 @@ template <> struct HydroSystem_Traits<HIIRegionProblem> {
 
 template <> struct Particle_Traits<HIIRegionProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
+	using stellar_model = quokka::ToyStellarModel;
 };
 
-template <> struct Physics_Traits<HIIRegionProblem> {
+template <> struct Physics_Traits<HIIRegionProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_self_gravity_enabled = false;
@@ -98,8 +99,11 @@ template <> void QuokkaSimulation<HIIRegionProblem>::setInitialConditionsOnGrid(
 	});
 }
 
-template <> void QuokkaSimulation<HIIRegionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <>
+void QuokkaSimulation<HIIRegionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+							   amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
+	amrex::ignore_unused(lev, state_fc);
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "HIIRegion diagnostics require resampled cooling tables.");
@@ -109,7 +113,7 @@ template <> void QuokkaSimulation<HIIRegionProblem>::ComputeDerivedVar(int lev, 
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const rho = state(i, j, k, HydroSystem<HIIRegionProblem>::density_index);
@@ -117,7 +121,7 @@ template <> void QuokkaSimulation<HIIRegionProblem>::ComputeDerivedVar(int lev, 
 				Real const x2Mom = state(i, j, k, HydroSystem<HIIRegionProblem>::x2Momentum_index);
 				Real const x3Mom = state(i, j, k, HydroSystem<HIIRegionProblem>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<HIIRegionProblem>::energy_index);
-				Real const Eint = RadSystem<HIIRegionProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Eint = quokka::EOS<HIIRegionProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 				output(i, j, k, ncomp) = Tgas;
 			});
@@ -181,19 +185,21 @@ auto problem_main() -> int
 	const amrex::Real core_radius = 0.8 * rs;
 
 	const amrex::Real hot_volume =
-	    sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
+	    sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
+							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept {
 		    const amrex::Real rho = state(i, j, k, HydroSystem<HIIRegionProblem>::density_index);
 		    const amrex::Real px = state(i, j, k, HydroSystem<HIIRegionProblem>::x1Momentum_index);
 		    const amrex::Real py = state(i, j, k, HydroSystem<HIIRegionProblem>::x2Momentum_index);
 		    const amrex::Real pz = state(i, j, k, HydroSystem<HIIRegionProblem>::x3Momentum_index);
 		    const amrex::Real Egas = state(i, j, k, HydroSystem<HIIRegionProblem>::energy_index);
-		    const amrex::Real Eint = RadSystem<HIIRegionProblem>::ComputeEintFromEgas(rho, px, py, pz, Egas);
+		    const amrex::Real Eint = quokka::EOS<HIIRegionProblem>::ComputeEintFromEgas(rho, px, py, pz, Egas, 0.0);
 		    const amrex::Real T = quokka::EOS<HIIRegionProblem>::ComputeTgasFromEint(rho, Eint, {});
 		    return (T > 0.5 * T_ion) ? 1.0 : 0.0;
 	    });
 
 	const amrex::Real core_tmin_proxy =
-	    sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
+	    sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
+							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept {
 		    const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
 		    const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
 		    const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
@@ -206,13 +212,14 @@ auto problem_main() -> int
 		    const amrex::Real py = state(i, j, k, HydroSystem<HIIRegionProblem>::x2Momentum_index);
 		    const amrex::Real pz = state(i, j, k, HydroSystem<HIIRegionProblem>::x3Momentum_index);
 		    const amrex::Real Egas = state(i, j, k, HydroSystem<HIIRegionProblem>::energy_index);
-		    const amrex::Real Eint = RadSystem<HIIRegionProblem>::ComputeEintFromEgas(rho, px, py, pz, Egas);
+		    const amrex::Real Eint = quokka::EOS<HIIRegionProblem>::ComputeEintFromEgas(rho, px, py, pz, Egas, 0.0);
 		    const amrex::Real T = quokka::EOS<HIIRegionProblem>::ComputeTgasFromEint(rho, Eint, {});
 		    return T;
 	    });
 
 	const amrex::Real core_vol_cells =
-	    sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const & /*state*/) noexcept {
+	    sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const & /*state*/,
+							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept {
 		    const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
 		    const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
 		    const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];

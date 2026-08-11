@@ -141,13 +141,8 @@ template <typename problem_t> void DiagFramePlane::processDiag(int a_nstep, cons
 			ref_ratio.push_back(rref);
 		}
 
-		// File name based on step or time
-		std::string diagfile;
-		if (m_per > 0.0) {
-			diagfile = m_diagfile + std::to_string(a_time);
-		} else {
-			diagfile = amrex::Concatenate(m_diagfile, a_nstep, 6);
-		}
+		// File name based on step index
+		std::string const diagfile = amrex::Concatenate(m_diagfile, a_nstep, 7);
 		amrex::Vector<int> const step_array(nlevs, a_nstep);
 		Write2DMultiLevelPlotfile(diagfile, nlevs, GetVecOfConstPtrs(planeData), m_fieldNames, pltGeoms, a_time, step_array, ref_ratio,
 					  simulationMetadata);

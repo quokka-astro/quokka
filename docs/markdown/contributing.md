@@ -13,11 +13,120 @@ Bug fixes, questions, and contributions of new features are welcome!
         * **Please ensure that your PR title and first post are descriptive, since these will be used for a squashed commit message.**
         * **Don't group together unrelated changes in a single PR. Instead, create separate PRs for each logically-related set of changes to the code.**
 
-!!! Warning
-    **Please note:** If you choose to make contributions to the code,
-    you hereby grant a non-exclusive, royalty-free perpetual license
-    to install, use, modify, prepare derivative works, incorporate into other computer software,
-    distribute, and sublicense such enhancements or derivative works thereof, in binary and source code form.
+> **Warning**
+>
+> **Please note:** If you choose to make contributions to the code,
+> you hereby grant a non-exclusive, royalty-free perpetual license
+> to install, use, modify, prepare derivative works, incorporate into other computer software,
+> distribute, and sublicense such enhancements or derivative works thereof, in binary and source code form.
+>
+
+## The `quokka` developer script
+
+The `scripts/bash/quokka` script provides a convenient interface for configuring, building, and running problems during development. Install it by copying it to a directory on your `PATH`, e.g.:
+
+```bash
+cp scripts/bash/quokka ~/.local/bin/
+```
+
+### Commands
+
+```
+quokka config [-d <preset>] [--delete] [--source <file>] [--root <path>] [-D<k>=<v> ...]
+    Configure the CMake build directory for the given preset.
+
+quokka build [-d <preset>] <problem> [<problem> ...] [-j <N>] [--source <file>] [--root <path>]
+    Compile one or more specific problem targets using ninja.
+
+quokka build [-d <preset>] --filter <glob> [-j <N>] [--source <file>] [--root <path>]
+    Compile all problem targets matching a shell glob (e.g. `Rad*`).
+
+quokka buildrun [-d <preset>] <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>] [--source <file>] [--root <path>]
+    Build then run one or more specific problems.
+
+quokka buildrun [-d <preset>] --filter <pattern> [-j <N>] [--source <file>] [--root <path>]
+    Build matching problems then run matching tests.
+
+quokka run [-d <preset>] <problem> [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
+    Run one or more problem executables from the tests/ directory.
+
+quokka run [-d <preset>] [--filter <regex>] [-j <N>] [--source <file>] [--root <path>]
+    Run all tests, or those matching a regex via ctest -R.
+
+quokka list [--root <path>]
+    List all available problem directories.
+
+quokka target [-d <preset>] [--source <file>] [--root <path>]
+    Show all available CMake build targets.
+
+quokka clean [--root <path>]
+    Remove plotfiles, checkpoints, and output files from tests/.
+```
+
+### Presets
+
+| Preset     | Dimensionality | Build type |
+|------------|---------------|------------|
+| `1d`       | 1D            | Release    |
+| `3d`       | 3D            | Release    |
+| `1d-debug` | 1D            | Debug      |
+| `3d-debug` | 3D            | Debug      |
+
+### Options
+
+| Option           | Description                                                          |
+|------------------|----------------------------------------------------------------------|
+| `-d <preset>`    | Preset to use: `1d`, `3d`, `1d-debug`, `3d-debug` (default: `QUOKKA_PRESET` if set, otherwise `1d`)    |
+| `--root <path>`  | Path to the quokka repository root (default: current directory)      |
+| `--input <file>` | Input file for the executable (default: `inputs/<problem>.toml`); valid only when running exactly one `<problem>` |
+| `--fpe`          | Enable floating-point exception traps (invalid, overflow, div-by-0) for direct executable runs (`run <problem>`, `buildrun <problem>`) |
+| `--filter <pattern>` | For `run`: ctest regex via `ctest -R`; for `build`: shell glob over problem names; for `buildrun`: build via glob and run only the tests collected from the same matched problems; exclusive with positional `<problem>` args. Quote patterns like `'Rad*'` to avoid shell expansion before `quokka` sees them |
+| `--source <file>` | Optional environment file to source before `config`, `build`, `buildrun`, `run`, and `target` |
+| `--delete`       | `config` only: force reconfigure by deleting existing `build/<preset>` directory first |
+| `-D<k>=<v>`      | `config` only: pass extra CMake cache definitions (repeatable)       |
+| `-j <N>`         | Number of parallel jobs for ninja or ctest (default: 8)              |
+
+You can set `QUOKKA_PRESET` in your shell environment to change the default preset used by `config`, `build`, `buildrun`, `run`, and `target`. Passing `-d <preset>` still takes precedence.
+
+`build`, `run`, and `buildrun` print final summary lines (`<name> SUCCESS|FAIL|SKIPPED`) to make tail-based status checks easy.
+
+### Typical workflow
+
+```bash
+# 1. Configure (only needed once, or after CMakeLists changes)
+quokka config -d 3d
+
+# 2. Build specific problems
+quokka build -d 3d ParticleSink
+quokka build -d 3d RadDust RadDustMG
+
+# 3. Or build all matching problems
+quokka build -d 3d --filter "Rad*"
+
+# 4. Build and run in one command
+quokka buildrun -d 3d RadDust RadTube
+
+# 5. Run one problem
+quokka run -d 3d ParticleSink
+
+# 6. Run multiple problems
+quokka run -d 3d RadDust RadDustMG
+
+# 7. Run with a custom input file and FPE traps enabled
+quokka run -d 3d ParticleSink --input inputs/ParticleSink_custom.toml --fpe
+
+# 8. Run all 3D tests (8 parallel jobs)
+quokka run -d 3d -j 8
+
+# 9. Run tests matching a regex pattern
+quokka run -d 3d --filter "Particle*"
+
+# 10. List available problems (all presets)
+quokka list
+
+# 11. Clean up test output
+quokka clean
+```
 
 ## Git workflow
 
@@ -61,13 +170,15 @@ For instructions on setting up SSH access to your Github account on a new machin
 Now you are free to play with your fork (for additional information, you can visit the
 [Github fork help page](https://help.github.com/en/articles/fork-a-repo)).
 
-!!! Note  
-    You do not have to re-do the setup above every time.
-    Instead, in the future, you need to update the `development` branch on your fork with
-    ```
-    git checkout development
-    git pull
-    ```
+> **Note**
+>
+> You do not have to re-do the setup above every time.
+> Instead, in the future, you need to update the `development` branch on your fork with
+> ```
+> git checkout development
+> git pull
+> ```
+>
 
 Make sure you are on the `development` branch with
 ```
@@ -130,14 +241,16 @@ your PR. People who review your PR are happy to know
 * Press `Create pull request`. Now you can navigate through your PR, which
 highlights the changes you made.
 
-!!! Note
-    **Please *do not* write large Pull Requests, as they are very difficult and
-    time-consuming to review. As much as possible, split them into small, targeted PRs.**
-    For example, if you find typos in the documentation open a pull request that only fixes typos.
-    If you want to fix a bug, make a small pull request that only fixes a bug.
-    
-    If you want to implement a feature and are not sure how to split it,
-    just open a Discussion or Issue about your plans and request feedback from other Quokka developers.
+> **Note**
+>
+> **Please *do not* write large Pull Requests, as they are very difficult and
+> time-consuming to review. As much as possible, split them into small, targeted PRs.**
+> For example, if you find typos in the documentation open a pull request that only fixes typos.
+> If you want to fix a bug, make a small pull request that only fixes a bug.
+>
+> If you want to implement a feature and are not sure how to split it,
+> just open a Discussion or Issue about your plans and request feedback from other Quokka developers.
+>
 
 Even before your work is ready to merge, it can be convenient to create a PR
 (so you can use Github tools to visualize your changes). In this case, please

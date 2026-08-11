@@ -26,6 +26,7 @@ struct Parameters {
 	double machine_precision_target = 0.0;
 	int nx_initial = 0;
 	int nx_max = 0;
+	int refine_n_dims = 1;
 	double expected_rate = 2.0;
 	double tolerance = 0.3;
 	std::string test_name;
@@ -61,8 +62,14 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 	amrex::Print() << "Resolution\tError Norm\n";
 	amrex::Print() << "----------\t----------\n";
 
+	if (params.refine_n_dims < 1 || params.refine_n_dims > 3) {
+		amrex::Abort("refine_n_dims must be 1, 2, or 3.");
+	}
+
 	for (int nx = params.nx_initial; nx <= params.nx_max; nx *= 2) {
-		double error = std::forward<Callable>(runTest)(nx);
+		const int ny = (params.refine_n_dims >= 2) ? nx : 8;
+		const int nz = (params.refine_n_dims >= 3) ? nx : 8;
+		double error = std::forward<Callable>(runTest)(nx, ny, nz);
 		amrex::ParallelDescriptor::Bcast(&error, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 		resolutions.push_back(nx);

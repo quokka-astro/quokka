@@ -11,6 +11,7 @@
 
 // c++ headers
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 // library headers
@@ -135,6 +136,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
 	    -> amrex::Real;
 
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
+	ComputeCellCenteredMagneticEnergy(int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> amrex::Real
+	{
+		return ::ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, fc);
+	}
+
 	AMREX_GPU_DEVICE static auto ComputePlasmaBeta(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
@@ -159,7 +166,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	template <typename DensityFloorFunc>
 	static void EnforceLimits(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf,
-				  amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func);
+				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
+				  DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -171,7 +179,14 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &leftState_bfield_mf,
 				  amrex::MultiFab const &rightState_bfield_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc,
+				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real shearViscosity, amrex::Real bulkViscosity,
 				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
+
+	template <FluxDir DIR>
+	AMREX_GPU_DEVICE static auto ComputeViscousFlux(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k, int velN_index,
+							int velV_index, int velW_index, amrex::Real dx_n, amrex::Real dx_v, amrex::Real dx_w,
+							amrex::Real shearViscosity, amrex::Real bulkViscosity)
+	    -> quokka::valarray<amrex::Real, 4>; // {sigma_nn, sigma_nv, sigma_nw, v.sigma}
 
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
@@ -184,8 +199,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
-	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
-	static constexpr double cs_iso_ = quokka::EOS_Traits<problem_t>::cs_isothermal;
+	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
+	static constexpr double cs_iso_ = ::quokka::EOS_Traits<problem_t>::cs_isothermal;
 	static constexpr auto is_eos_isothermal() -> bool { return (gamma_ == 1.0); }
 
 	static constexpr bool reconstruct_eint = HydroSystem_Traits<problem_t>::reconstruct_eint;
@@ -414,8 +429,8 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 			const auto bx2 = 0.5 * (bx2_m + bx2_p);
 			const auto bx3 = 0.5 * (bx3_m + bx3_p);
 			double b_sq = bx1 * bx1 + bx2 * bx2 + bx3 * bx3;
-			const auto pressure = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
-			double gp = quokka::EOS<problem_t>::gamma_ * pressure;
+			const auto pressure = ::quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+			double gp = ::quokka::EOS<problem_t>::gamma_ * pressure;
 
 			double bgp_p = b_sq + gp;
 			double const bgp_m = b_sq - gp;
@@ -537,7 +552,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 		P = rho * cs_iso_ * cs_iso_;
 	} else {
 		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-		P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+		P = ::quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
 	}
 
 	quokka::valarray<amrex::Real, nHydroScalars_> primVars{rho, vx, vy, vz, P, Eint_aux};
@@ -560,7 +575,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 	Real const P = prim[4];
 	Real const Eint_aux = prim[5];
 
-	Real const Eint = quokka::EOS<problem_t>::ComputeEintFromPres(rho, P);
+	Real const Eint = ::quokka::EOS<problem_t>::ComputeEintFromPres(rho, P);
 	Real const Egas = Eint + 0.5 * rho * (v1 * v1 + v2 * v2 + v3 * v3);
 
 	quokka::valarray<amrex::Real, nHydroScalars_> consVars{rho, rho * v1, rho * v2, rho * v3, Egas, Eint_aux};
@@ -593,7 +608,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 		P = rho * cs_iso_ * cs_iso_;
 	} else {
 		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-		P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+		P = ::quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
 	}
 	return P;
 }
@@ -624,8 +639,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 	const auto Eint = ComputeInternalEnergy(cons, i, j, k, cons_fc);
 
 	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
-	amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
+	amrex::Real P = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
+	amrex::Real cs = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
 
 	return cs;
 }
@@ -648,8 +663,8 @@ HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(amrex::Array4<const amrex::R
 	const auto thermal_energy = E - kinetic_energy - magnetic_energy;
 
 	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
-	amrex::Real cs = quokka::EOS<problem_t>::ComputeIsothermalSoundSpeed(rho, P);
+	amrex::Real P = ::quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+	amrex::Real cs = ::quokka::EOS<problem_t>::ComputeIsothermalSoundSpeed(rho, P);
 
 	return cs;
 }
@@ -869,19 +884,20 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 		if constexpr (reconstruct_eint) {
 			// compute (rho e) (gamma - 1)
 			amrex::GpuArray<Real, nmscalars_> massScalars_plus2 = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 2, j, k);
-			Pplus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 2, j, k, primDensity_index),
-									 primVar(i + 2, j, k, primDensity_index) * Pplus2, massScalars_plus2);
+			Pplus2 = ::quokka::EOS<problem_t>::ComputePressure(primVar(i + 2, j, k, primDensity_index),
+									   primVar(i + 2, j, k, primDensity_index) * Pplus2, massScalars_plus2);
 			amrex::GpuArray<Real, nmscalars_> massScalars_plus1 = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 1, j, k);
-			Pplus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 1, j, k, primDensity_index),
-									 primVar(i + 1, j, k, primDensity_index) * Pplus1, massScalars_plus1);
+			Pplus1 = ::quokka::EOS<problem_t>::ComputePressure(primVar(i + 1, j, k, primDensity_index),
+									   primVar(i + 1, j, k, primDensity_index) * Pplus1, massScalars_plus1);
 			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
-			P = quokka::EOS<problem_t>::ComputePressure(primVar(i, j, k, primDensity_index), primVar(i, j, k, primDensity_index) * P, massScalars);
+			P = ::quokka::EOS<problem_t>::ComputePressure(primVar(i, j, k, primDensity_index), primVar(i, j, k, primDensity_index) * P,
+								      massScalars);
 			amrex::GpuArray<Real, nmscalars_> massScalars_minus1 = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 1, j, k);
-			Pminus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 1, j, k, primDensity_index),
-									  primVar(i - 1, j, k, primDensity_index) * Pminus1, massScalars_minus1);
+			Pminus1 = ::quokka::EOS<problem_t>::ComputePressure(primVar(i - 1, j, k, primDensity_index),
+									    primVar(i - 1, j, k, primDensity_index) * Pminus1, massScalars_minus1);
 			amrex::GpuArray<Real, nmscalars_> massScalars_minus2 = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 2, j, k);
-			Pminus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 2, j, k, primDensity_index),
-									  primVar(i - 2, j, k, primDensity_index) * Pminus2, massScalars_minus2);
+			Pminus2 = ::quokka::EOS<problem_t>::ComputePressure(primVar(i - 2, j, k, primDensity_index),
+									    primVar(i - 2, j, k, primDensity_index) * Pminus2, massScalars_minus2);
 		}
 
 		if constexpr (is_eos_isothermal()) {
@@ -907,7 +923,7 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 
 		// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
 		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
-		double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(primVar(i, j, k, primDensity_index), P, massScalars), 2) *
+		double K_S = std::pow(::quokka::EOS<problem_t>::ComputeSoundSpeed(primVar(i, j, k, primDensity_index), P, massScalars), 2) *
 			     primVar(i, j, k, primDensity_index);
 		if constexpr (is_eos_isothermal()) {
 			K_S = primVar(i, j, k, primDensity_index) * cs_iso_ * cs_iso_;
@@ -1006,9 +1022,17 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 template <typename problem_t>
 template <typename DensityFloorFunc>
 void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const dustDensityFloor, amrex::Real const tempFloor,
-					   amrex::MultiFab &state_mf, amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
+					   amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf,
+					   amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
+	auto const &state_fc_x0 = state_fc_mf[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+	auto const &state_fc_x1 = state_fc_mf[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+	auto const &state_fc_x2 = state_fc_mf[2].const_arrays();
+#endif
 	auto const prob_lo = geom.ProbLoArray();
 	auto const dx = geom.CellSizeArray();
 
@@ -1088,21 +1112,48 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real const Ekin = 0.5 * rho_new * (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
 
 			// Enforce temperature floor (for total energy)
+			// First-capture face-centered arrays before any constexpr-if context for CUDA.
+			std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x0[bx])>> state_fc_x0_ref{};
+#if AMREX_SPACEDIM >= 2
+			std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x1[bx])>> state_fc_x1_ref{};
+#endif
+#if AMREX_SPACEDIM == 3
+			std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x2[bx])>> state_fc_x2_ref{};
+#endif
+			if (Physics_Traits<problem_t>::is_mhd_enabled) {
+				state_fc_x0_ref = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+				state_fc_x1_ref = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+				state_fc_x2_ref = state_fc_x2[bx];
+#endif
+			}
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
+			state_fc[0] = state_fc_x0_ref;
+#if AMREX_SPACEDIM >= 2
+			state_fc[1] = state_fc_x1_ref;
+#endif
+#if AMREX_SPACEDIM == 3
+			state_fc[2] = state_fc_x2_ref;
+#endif
+
+			amrex::Real const Emag = ComputeMagneticEnergy(i, j, k, &state_fc);
+			amrex::Real const Eint = ComputeInternalEnergy(state[bx], i, j, k, &state_fc);
 			amrex::GpuArray<Real, nmscalars_> const massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
-			amrex::Real const Etot = state[bx](i, j, k, energy_index);
-			amrex::Real const primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, (Etot - Ekin), massScalars);
+			amrex::Real const primTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, Eint, massScalars);
 
 			if (primTemp < tempFloor) {
-				amrex::Real const prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
-				state[bx](i, j, k, energy_index) = Ekin + prim_eint;
+				amrex::Real const prim_eint = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
+				state[bx](i, j, k, energy_index) = Ekin + Emag + prim_eint;
 			}
 
 			// Enforce temperature floor (for auxiliary internal energy)
 			amrex::Real const auxEint = state[bx](i, j, k, internalEnergy_index);
-			amrex::Real const auxTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, auxEint, massScalars);
+			amrex::Real const auxTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, auxEint, massScalars);
 
 			if (auxTemp < tempFloor) {
-				amrex::Real const new_Eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
+				amrex::Real const new_Eint = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
 				state[bx](i, j, k, internalEnergy_index) = new_Eint;
 				// total energy should NOT be updated here
 			}
@@ -1227,11 +1278,20 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::
 	});
 }
 
+template <typename problem_t, FluxDir DIR>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeViscosity(int /*i*/, int /*j*/, int /*k*/, quokka::Array4View<const amrex::Real, DIR> const & /*q*/)
+    -> quokka::valarray<amrex::Real, 2> // {shear_viscosity, bulk_viscosity}
+{
+	static_assert(sizeof(problem_t) == 0, "computeViscosity must be specialized in the problem file when using ViscosityModel::problem_defined");
+	return {0.0, 0.0};
+}
+
 template <typename problem_t>
 template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &x1LeftState_bfield_mf,
 					   amrex::MultiFab const &x1RightState_bfield_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc,
+					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const amrex::Real shearViscosity, const amrex::Real bulkViscosity,
 					   amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf, const int nghost_vel)
 {
 
@@ -1270,6 +1330,11 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		if (Physics_Traits<problem_t>::is_mhd_enabled) {
 			x1FSpds_ref = x1FSpds_in[bx];
 		}
+		// dx/shearViscosity/bulkViscosity are only read inside `if constexpr` below; nvcc can't first-capture
+		// a variable from inside constexpr-if, so touch them unconditionally here first
+		[[maybe_unused]] auto const dx_captured = dx;
+		[[maybe_unused]] amrex::Real const shearViscosity_captured = shearViscosity;
+		[[maybe_unused]] amrex::Real const bulkViscosity_captured = bulkViscosity;
 
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
@@ -1343,9 +1408,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				const double eint_L = x1LeftState(i, j, k, pressure_index);
 				const double eint_R = x1RightState(i, j, k, pressure_index);
 				amrex::GpuArray<Real, nmscalars_> massScalars_L = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
-				P_L = quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L * rho_L, massScalars_L);
+				P_L = ::quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L * rho_L, massScalars_L);
 				amrex::GpuArray<Real, nmscalars_> massScalars_R = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
-				P_R = quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R * rho_R, massScalars_R);
+				P_R = ::quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R * rho_R, massScalars_R);
 
 				// auxiliary Eint is actually (auxiliary) specific internal energy
 				Eint_L = rho_L * x1LeftState(i, j, k, primEint_index);
@@ -1361,12 +1426,12 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			}
 
 			amrex::GpuArray<Real, nmscalars_> massScalars_L = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
-			cs_L = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_L, P_L, massScalars_L);
-			E_L = quokka::EOS<problem_t>::ComputeEintFromPres(rho_L, P_L, massScalars_L) + ke_L + magnetic_energy_L;
+			cs_L = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_L, P_L, massScalars_L);
+			E_L = ::quokka::EOS<problem_t>::ComputeEintFromPres(rho_L, P_L, massScalars_L) + ke_L + magnetic_energy_L;
 
 			amrex::GpuArray<Real, nmscalars_> massScalars_R = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
-			cs_R = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_R, P_R, massScalars_R);
-			E_R = quokka::EOS<problem_t>::ComputeEintFromPres(rho_R, P_R, massScalars_R) + ke_R + magnetic_energy_R;
+			cs_R = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_R, P_R, massScalars_R);
+			E_R = ::quokka::EOS<problem_t>::ComputeEintFromPres(rho_R, P_R, massScalars_R) + ke_R + magnetic_energy_R;
 		}
 
 		AMREX_ASSERT(cs_L > 0.0);
@@ -1378,10 +1443,20 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		int velV_index = x2Velocity_index;
 		int velW_index = x3Velocity_index;
 
+		// grid spacing along normal/transverse directions, for the viscous stress below (3D only)
+		[[maybe_unused]] amrex::Real dx_n = NAN;
+		[[maybe_unused]] amrex::Real dx_v = NAN;
+		[[maybe_unused]] amrex::Real dx_w = NAN;
+
 		if constexpr (DIR == FluxDir::X1) {
 			velN_index = x1Velocity_index;
 			velV_index = x2Velocity_index;
 			velW_index = x3Velocity_index;
+			if constexpr (AMREX_SPACEDIM == 3) {
+				dx_n = dx[0];
+				dx_v = dx[1];
+				dx_w = dx[2];
+			}
 		} else if constexpr (DIR == FluxDir::X2) {
 #if (AMREX_SPACEDIM == 2)
 			velN_index = x2Velocity_index;
@@ -1392,11 +1467,19 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			velN_index = x2Velocity_index;
 			velV_index = x3Velocity_index;
 			velW_index = x1Velocity_index;
+			dx_n = dx[1];
+			dx_v = dx[2];
+			dx_w = dx[0];
 #endif
 		} else if constexpr (DIR == FluxDir::X3) {
 			velN_index = x3Velocity_index;
 			velV_index = x1Velocity_index;
 			velW_index = x2Velocity_index;
+			if constexpr (AMREX_SPACEDIM == 3) {
+				dx_n = dx[2];
+				dx_v = dx[0];
+				dx_w = dx[1];
+			}
 		}
 
 		quokka::HydroState<nscalars_, nmscalars_> sL{};
@@ -1504,6 +1587,25 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		F_canonical = F_canonical + viscosity * (U_L - U_R);
 
+		// physical shear/bulk viscosity, added the same way as the artificial viscosity above
+		if constexpr (AMREX_SPACEDIM == 3 && Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
+			amrex::Real localShearViscosity = shearViscosity;
+			amrex::Real localBulkViscosity = bulkViscosity;
+			if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) {
+				const auto local_viscosity = computeViscosity<problem_t, DIR>(i, j, k, q);
+				localShearViscosity = local_viscosity[0];
+				localBulkViscosity = local_viscosity[1];
+			}
+			if (localShearViscosity != 0.0 || localBulkViscosity != 0.0) {
+				const auto sigma = ComputeViscousFlux<DIR>(q, i, j, k, velN_index, velV_index, velW_index, dx_n, dx_v, dx_w,
+									   localShearViscosity, localBulkViscosity);
+				F_canonical[x1Momentum_index] -= sigma[0];
+				F_canonical[x2Momentum_index] -= sigma[1];
+				F_canonical[x3Momentum_index] -= sigma[2];
+				F_canonical[energy_index] -= sigma[3]; // zeroed below if EOS is isothermal
+			}
+		}
+
 		quokka::valarray<double, nHydroScalars_> F = F_canonical;
 
 		// permute momentum components according to flux direction DIR
@@ -1517,18 +1619,31 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			F[internalEnergy_index] = 0;
 		}
 
-		// compute face-centered normal velocity
-		double v_norm = 0.0;
-		if (F[density_index] >= 0.) {
-			if (rho_R > 0.) {
-				v_norm = F[density_index] / rho_R;
+		// compute face-centered normal velocity using HLL star state; matches Mignone21a eqn. (29), feeds
+		// ComputeEMF_Quokka2026's face velocity.
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
+			amrex::Real const fspd_m = x1FSpds(i, j, k, 0);
+			amrex::Real const fspd_p = x1FSpds(i, j, k, 1);
+			if (fspd_p + fspd_m > 0.0) {
+				x1FaceVel(i, j, k) = (fspd_p * sL.u + fspd_m * sR.u) / (fspd_p + fspd_m);
+			} else {
+				x1FaceVel(i, j, k) = 0.5 * (sL.u + sR.u);
 			}
 		} else {
-			if (rho_L > 0.) {
-				v_norm = F[density_index] / rho_L;
+			// compute face-centered normal velocity
+			double v_norm = 0.0;
+			if (F[density_index] >= 0.) {
+				if (rho_R > 0.) {
+					v_norm = F[density_index] / rho_R;
+				}
+			} else {
+				if (rho_L > 0.) {
+					v_norm = F[density_index] / rho_L;
+				}
 			}
+			x1FaceVel(i, j, k) = v_norm;
 		}
-		x1FaceVel(i, j, k) = v_norm;
 
 		// use the same logic as above to scale and conserve specie fluxes
 		if (F[density_index] >= 0.) {
@@ -1562,6 +1677,47 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			DustSystem<problem_t>::template ComputeDustFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k);
 		}
 	});
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_DEVICE auto HydroSystem<problem_t>::ComputeViscousFlux(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k, int velN_index,
+								 int velV_index, int velW_index, amrex::Real dx_n, amrex::Real dx_v, amrex::Real dx_w,
+								 amrex::Real shearViscosity, amrex::Real bulkViscosity) -> quokka::valarray<amrex::Real, 4>
+{
+	static_assert(AMREX_SPACEDIM == 3 || dependent_false_v<problem_t>, "HydroSystem::ComputeViscousFlux currently only supports 3D.");
+
+	// dq<comp>_d<dir> = derivative of q's <comp>-component along <dir>; n/v/w are the local orthonormal basis
+	// normal-direction derivatives: one-sided difference across the face, between cells i-1 and i
+	const amrex::Real dqn_dn = (q(i, j, k, velN_index) - q(i - 1, j, k, velN_index)) / dx_n;
+	const amrex::Real dqv_dn = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dx_n;
+	const amrex::Real dqw_dn = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_n;
+
+	// transverse derivatives: averaged centered difference
+	const amrex::Real dqv_dv =
+	    0.25 / dx_v * ((q(i, j + 1, k, velV_index) - q(i, j - 1, k, velV_index)) + (q(i - 1, j + 1, k, velV_index) - q(i - 1, j - 1, k, velV_index)));
+	const amrex::Real dqn_dv =
+	    0.25 / dx_v * ((q(i, j + 1, k, velN_index) - q(i, j - 1, k, velN_index)) + (q(i - 1, j + 1, k, velN_index) - q(i - 1, j - 1, k, velN_index)));
+	const amrex::Real dqw_dw =
+	    0.25 / dx_w * ((q(i, j, k + 1, velW_index) - q(i, j, k - 1, velW_index)) + (q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k - 1, velW_index)));
+	const amrex::Real dqn_dw =
+	    0.25 / dx_w * ((q(i, j, k + 1, velN_index) - q(i, j, k - 1, velN_index)) + (q(i - 1, j, k + 1, velN_index) - q(i - 1, j, k - 1, velN_index)));
+
+	const amrex::Real div_q = dqn_dn + dqv_dv + dqw_dw;
+
+	// sigma_ni = 2*nu_shear*S_ni + nu_bulk*div[q]*delta_ni, i in {n,v,w}: sigma's normal row, not the full tensor
+	const amrex::Real sigma_nn = 2.0 * shearViscosity * dqn_dn + (bulkViscosity - (2.0 / 3.0) * shearViscosity) * div_q;
+	const amrex::Real sigma_nv = shearViscosity * (dqv_dn + dqn_dv);
+	const amrex::Real sigma_nw = shearViscosity * (dqw_dn + dqn_dw);
+
+	// viscous heating dot[q,sigma] at the face; caller drops this for isothermal EOS
+	const amrex::Real q_face_n = 0.5 * (q(i, j, k, velN_index) + q(i - 1, j, k, velN_index));
+	const amrex::Real q_face_v = 0.5 * (q(i, j, k, velV_index) + q(i - 1, j, k, velV_index));
+	const amrex::Real q_face_w = 0.5 * (q(i, j, k, velW_index) + q(i - 1, j, k, velW_index));
+	const amrex::Real q_dot_sigma = q_face_n * sigma_nn + q_face_v * sigma_nv + q_face_w * sigma_nw;
+
+	// sigma's remaining rows are computed by the other two DIR sweeps, not here
+	return {sigma_nn, sigma_nv, sigma_nw, q_dot_sigma};
 }
 
 #endif // HYDRO_SYSTEM_HPP_

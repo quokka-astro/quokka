@@ -9,6 +9,7 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for linear advection.
 
+#include <algorithm>
 #include <array>
 #include <fstream>
 
@@ -40,6 +41,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::dt_;
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::nghost_cc_;
+	using AMRSimulation<problem_t>::nghost_fc_;
 	using AMRSimulation<problem_t>::cycleCount_;
 	using AMRSimulation<problem_t>::istep;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
@@ -68,8 +70,23 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::luminosityTables_;
 #endif // AMREX_SPACEDIM == 3
 
-	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { componentNames_cc_.push_back({"density"}); }
-	explicit AdvectionSimulation() : AMRSimulation<problem_t>() { componentNames_cc_.push_back({"density"}); }
+	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { initialize(); }
+	explicit AdvectionSimulation() : AMRSimulation<problem_t>() { initialize(); }
+
+	void initialize()
+	{
+		AMRSimulation<problem_t>::initialize();
+		componentNames_cc_.push_back({"density"});
+	}
+
+	void setCustomGhostCells() override
+	{
+		// PPM_EP reconstructs a 3-cell ghost range with a 5-point stencil.
+		constexpr int reconstruct_ghost = 3;
+		constexpr int required_cell_ghost = reconstruct_ghost + 2;
+		nghost_cc_ = std::max(nghost_cc_, required_cell_ghost);
+		nghost_fc_ = std::max(nghost_fc_, nghost_cc_);
+	}
 
 	void computeMaxSignalLocal(int level) override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
@@ -82,6 +99,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
 	void createInitialSinkParticles() override;
+	void createInitialStarParticles() override;
 	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
@@ -96,7 +114,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
 	// compute derived variables
-	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+			       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const override;
 	// compute projected vars
 
 	// compute statistics
@@ -206,6 +225,12 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 	// note: an implementation is only effective if Sink particles are used
 }
 
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialStarParticles()
+{
+	// Optional implementation
+	// note: an implementation is only effective if Star particles are used
+}
+
 template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialTestParticles()
 {
 	// Optional implementation
@@ -223,9 +248,17 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterT
 	// do nothing -- user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+						       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// user should implement
+	(void)lev;
+	(void)dname;
+	(void)mf;
+	(void)ncomp;
+	(void)state_cc;
+	(void)state_fc;
 }
 
 template <typename problem_t> auto AdvectionSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>

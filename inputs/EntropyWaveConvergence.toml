@@ -25,7 +25,6 @@ plotfile_interval = -1
 
 cfl = 0.3
 
-
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
 hydro.use_dual_energy = 0
@@ -35,4 +34,4 @@ setup.num_modes_y = 0
 setup.num_modes_z = 0
 setup.angle_between_k_b0 = 0
 
-mhd.reconstruction_order = 3
+mhd.emf_reconstruction_order = 3

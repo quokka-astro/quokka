@@ -89,6 +89,13 @@ if(DISABLE_FMAD)
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Mnofma>)
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-gpu=nofma>)
   endif()
+
+  if(AMReX_GPU_BACKEND MATCHES "HIP")
+    # HIP device code compiles through the CXX/C language (hipcc/amdclang++), not a separate CUDA-like
+    # language, so disabling FMA contraction here (as for the CUDA-Clang branch above) covers device code too.
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:-ffp-contract=off>)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-ffp-contract=off>)
+  endif()
 else()
   # fused MAD causes directional asymmetry -- enabled by default by nvcc and clang
   message(STATUS "Fused multiply-add (FMAD) is *enabled* for device code. Exact direction symmetry will NOT be preserved.")
@@ -140,17 +147,19 @@ include(CTest)
 
 set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagBase.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DerivedFieldBase.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DerivedParticleDeposition.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFilter.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFramePlane.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPDF.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagParticleTxt.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
                         "${openPMDSources}")
 
 if(AMReX_SPACEDIM EQUAL 3)
+  list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
 endif()
 
