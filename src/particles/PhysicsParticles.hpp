@@ -6,7 +6,9 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include <format>
@@ -36,6 +38,78 @@
 
 namespace quokka
 {
+
+[[nodiscard]] constexpr auto getParticleTypeShortName(ParticleType type) -> std::string_view
+{
+	switch (type) {
+		case ParticleType::Rad:
+			return "Rad";
+		case ParticleType::CIC:
+			return "CIC";
+		case ParticleType::CICRad:
+			return "CICRad";
+		case ParticleType::Test:
+			return "Test";
+		case ParticleType::StochasticStellarPop:
+			return "StochasticStellarPop";
+		case ParticleType::Sink:
+			return "Sink";
+		case ParticleType::Star:
+			return "Star";
+		default:
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
+			return "Unknown";
+	}
+}
+
+[[nodiscard]] constexpr auto getParticleSwitchName(ParticleType type) -> std::string_view
+{
+	switch (type) {
+		case ParticleType::Rad:
+			return "ParticleSwitch::Rad";
+		case ParticleType::CIC:
+			return "ParticleSwitch::CIC";
+		case ParticleType::CICRad:
+			return "ParticleSwitch::CICRad";
+		case ParticleType::Test:
+			return "ParticleSwitch::Test";
+		case ParticleType::StochasticStellarPop:
+			return "ParticleSwitch::StochasticStellarPop";
+		case ParticleType::Sink:
+			return "ParticleSwitch::Sink";
+		case ParticleType::Star:
+			return "ParticleSwitch::Star";
+		default:
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
+			return "ParticleSwitch::Unknown";
+	}
+}
+
+[[nodiscard]] inline auto parseParticleTypeShortName(std::string_view particle_type_name) -> std::optional<ParticleType>
+{
+	if (particle_type_name == "Rad") {
+		return ParticleType::Rad;
+	}
+	if (particle_type_name == "CIC") {
+		return ParticleType::CIC;
+	}
+	if (particle_type_name == "CICRad") {
+		return ParticleType::CICRad;
+	}
+	if (particle_type_name == "Test") {
+		return ParticleType::Test;
+	}
+	if (particle_type_name == "StochasticStellarPop") {
+		return ParticleType::StochasticStellarPop;
+	}
+	if (particle_type_name == "Sink") {
+		return ParticleType::Sink;
+	}
+	if (particle_type_name == "Star") {
+		return ParticleType::Star;
+	}
+	return std::nullopt;
+}
 
 // Forward declarations
 template <typename problem_t> class PhysicsParticleRegister;
@@ -133,6 +207,8 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto computeStellarMassAtBirthBornByTime(amrex::Real time) const -> amrex::Real = 0;
 
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
+	virtual void depositParticleMassDensity(amrex::MultiFab &deposition_field, int lev, int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max,
+						bool use_age_filter, amrex::Real current_time, amrex::Real age_max, bool deposit_birth_mass) const = 0;
 
 	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
@@ -329,6 +405,36 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// Deposit count into the last component of rhs
 			const int count_comp = 1; // Second component is the count
 			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, DepositionCount{this->getMassIndex(), count_comp, 1}, false, false);
+		}
+	}
+
+	void depositParticleMassDensity(amrex::MultiFab &deposition_field, int lev, int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max,
+					bool use_age_filter, amrex::Real current_time, amrex::Real age_max, bool deposit_birth_mass) const override
+	{
+		const std::string particle_type_name{getParticleTypeShortName(particleType_)};
+
+		int mass_comp = this->getMassIndex();
+		if (deposit_birth_mass) {
+			mass_comp = this->getMassAtBirthIndex();
+			if (mass_comp < 0) {
+				amrex::Abort("Derived field deposit_fields=birth_mass is not supported for particle type " + particle_type_name + ".");
+			}
+		} else if (mass_comp < 0) {
+			amrex::Abort("Derived field deposit_fields=mass is not supported for particle type " + particle_type_name + ".");
+		}
+
+		int birth_time_comp = -1;
+		if (use_age_filter) {
+			birth_time_comp = this->getBirthTimeIndex();
+			if (birth_time_comp < 0) {
+				amrex::Abort("Derived field age filter (t_age) is not supported for particle type " + particle_type_name +
+					     " (missing birth_time).");
+			}
+		}
+
+		if (container_ != nullptr) {
+			quokka::depositParticleMassDensity(container_, deposition_field, lev, mass_comp, start_mesh_comp, mass_min, mass_max, use_age_filter,
+							   birth_time_comp, current_time, age_max);
 		}
 	}
 
@@ -636,27 +742,79 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			return;
 		}
 
+		// Use level-lev geometry for all position-to-cell conversions.
+		const auto &geom_lev = container_->Geom(lev);
+		const auto plo = geom_lev.ProbLoArray();
+		const auto dxi = geom_lev.InvCellSizeArray();
+
+		// Same-level: particles stored AT level lev — tags.array(pti) aligns with pti, GPU-safe.
 		for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
 			auto &particles = pti.GetArrayOfStructs();
 			auto *pData = particles().data();
 			const amrex::Long np = pti.numParticles();
-
-			// Get geometry information for this level
-			const auto &geom = container_->Geom(lev);
-			const auto plo = geom.ProbLoArray();
-			const auto dxi = geom.InvCellSizeArray();
-
 			const auto tag = tags.array(pti);
-
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-				// Find the cell containing the particle
 				const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
 				const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
 				const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
-
 				tag(ix, iy, iz) = amrex::TagBox::SET;
 			});
+		}
+
+		// Cross-level: project particles from ALL other levels to level lev.
+		// A ForceFinestLevel particle may live at a level != lev; project its
+		// physical position to level-lev coordinates so the cell gets tagged.
+		// amrex::AllGatherBoxes guarantees every rank sees every tag cell —
+		// a particle on rank A may project to a level-lev cell owned by rank B.
+		amrex::Gpu::streamSynchronize(); // ensure same-level GPU writes complete before host reads
+		amrex::Vector<amrex::Box> cross_level_boxes;
+		for (int l = 0; l <= container_->finestLevel(); ++l) {
+			if (l == lev) {
+				continue;
+			}
+			for (typename ContainerType::ParIterType pti(*container_, l); pti.isValid(); ++pti) {
+				auto &particles = pti.GetArrayOfStructs();
+				const amrex::Long np = pti.numParticles();
+				// Copy device particle data to host: soa().data() is a device pointer in GPU builds.
+				const typename ContainerType::ParticleType *pData = particles().data();
+				amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
+				amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
+				for (amrex::Long idx = 0; idx < np; ++idx) {
+					const auto &p = pData_h[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					if (p.id() <= 0) {
+						continue;
+					}
+					const amrex::IntVect cell(AMREX_D_DECL(static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0])),
+									       static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1])),
+									       static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]))));
+					if (geom_lev.Domain().contains(cell)) {
+						cross_level_boxes.emplace_back(cell, cell);
+					}
+				}
+			}
+		}
+		// AllGatherBoxes is a collective MPI call: must be called on all ranks unconditionally,
+		// even on ranks with zero particles (otherwise those ranks deadlock waiting for the others).
+		amrex::AllGatherBoxes(cross_level_boxes);
+		if (!cross_level_boxes.empty()) {
+			// Copy gathered boxes to device so we can tag from a GPU kernel.
+			// tags[mfi](cell) is device memory in GPU builds — host-side access segfaults.
+			// Use tags.array(mfi) + ParallelFor to match the GPU-safe pattern used above.
+			amrex::Gpu::DeviceVector<amrex::Box> cross_level_boxes_d(cross_level_boxes.size());
+			amrex::Gpu::copy(amrex::Gpu::hostToDevice, cross_level_boxes.begin(), cross_level_boxes.end(), cross_level_boxes_d.begin());
+			const amrex::Box *boxes_ptr = cross_level_boxes_d.dataPtr();
+			const int nboxes = static_cast<int>(cross_level_boxes_d.size());
+			for (amrex::MFIter mfi(tags); mfi.isValid(); ++mfi) {
+				const auto tag = tags.array(mfi);
+				const amrex::Box vb = mfi.validbox();
+				amrex::ParallelFor(nboxes, [=] AMREX_GPU_DEVICE(int i) {
+					const amrex::IntVect cell = boxes_ptr[i].smallEnd(); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					if (vb.contains(cell)) {
+						tag(cell) = amrex::TagBox::SET;
+					}
+				});
+			}
 		}
 	}
 
@@ -788,6 +946,8 @@ template <typename problem_t> class PhysicsParticleRegister
 				return "StochasticStellarPop_particles";
 			case ParticleType::Sink:
 				return "Sink_particles";
+			case ParticleType::Star:
+				return "Star_particles";
 			default:
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
 				return "Unknown_particles";
@@ -819,6 +979,13 @@ template <typename problem_t> class PhysicsParticleRegister
 		} else if constexpr (particleType == ParticleType::Sink) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
 			    container, SinkParticleMassIdx, -1, -1, -1, true, false, -1, true, -1, SinkParticleMdotIdx, SinkParticleLxIdx);
+			descriptor->setForceFinestLevel(true); // sink particles must always reside on the finest AMR level
+		} else if constexpr (particleType == ParticleType::Star) {
+			constexpr int lum_idx = (Physics_Traits<problem_t>::nGroups > 0) ? StarParticleLumIdx : -1;
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Star>>(
+			    container, StarParticleMassIdx, lum_idx, StarParticleBirthTimeIdx, -1, /*allows_creation=*/false,
+			    /*allows_destruction=*/false, /*evolution_stage_idx=*/-1, /*allows_accretion=*/true, /*mass_at_birth_idx=*/-1, StarParticleMdotIdx);
+			descriptor->setForceFinestLevel(true); // star particles must always reside on the finest AMR level
 		} else if constexpr (particleType == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleDeathTimeIdx, true, true,
@@ -861,6 +1028,25 @@ template <typename problem_t> class PhysicsParticleRegister
 				descriptor->depositMass(rhs, finest_lev, Gconst);
 			}
 		}
+	}
+
+	void depositParticleMassDensity(std::string_view particle_type_name, bool deposit_birth_mass, amrex::MultiFab &deposition_field, int lev,
+					int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max, bool use_age_filter, amrex::Real current_time,
+					amrex::Real age_max) const
+	{
+		auto const particle_type = parseParticleTypeShortName(particle_type_name);
+		if (!particle_type.has_value()) {
+			amrex::Abort("Unsupported particle type requested by runtime derived field provider: " + std::string(particle_type_name));
+		}
+
+		auto it = particleRegistry_.find(*particle_type);
+		if (it == particleRegistry_.end()) {
+			amrex::Abort("Derived field requested particle type " + std::string(particle_type_name) + ", but " +
+				     std::string(getParticleSwitchName(*particle_type)) + " is not enabled for this problem.");
+		}
+
+		it->second->depositParticleMassDensity(deposition_field, lev, start_mesh_comp, mass_min, mass_max, use_age_filter, current_time, age_max,
+						       deposit_birth_mass);
 	}
 
 	// Deposit supernova energy and momentum from all particles
@@ -1050,6 +1236,17 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 		return max_speed;
+	}
+
+	// Returns true if any registered particle type requires all particles to reside on the finest level
+	[[nodiscard]] auto anyParticleRequiresFinestLevel() const -> bool
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getForceFinestLevel()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// Refine grids around particles that require finest level

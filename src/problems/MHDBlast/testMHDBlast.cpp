@@ -28,17 +28,9 @@ template <> struct HydroSystem_Traits<MHDBlast> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<MHDBlast> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<MHDBlast> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> void QuokkaSimulation<MHDBlast>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -131,13 +123,14 @@ template <> void QuokkaSimulation<MHDBlast>::refineGrid(int lev, amrex::TagBoxAr
 	}
 }
 
-template <> void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
+template <>
+void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp,
+						   amrex::MultiFab const & /*state_cc*/, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "magnetic_divergence") {
 		const amrex::Geometry &geom_lev = geom[lev];
 		const auto dx = geom_lev.CellSizeArray();
-		auto const &state_fc = state_new_fc_[lev];
 		auto output = mf.arrays();
 
 		// Get the face-centered magnetic field arrays

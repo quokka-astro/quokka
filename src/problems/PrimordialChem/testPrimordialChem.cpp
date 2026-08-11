@@ -44,19 +44,11 @@ using amrex::Real;
 struct PrimordialChemTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct Physics_Traits<PrimordialChemTest> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = NumSpec;		     // number of chemical species
 	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct SimulationData<PrimordialChemTest> {
@@ -230,7 +222,8 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 		// Microphysics calculates specific internal energy so multiply it by rho for Quokka
 		Real const Eint = rho * state.e;
 
-		Real const Egas = RadSystem<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		static_assert(!Physics_Traits<PrimordialChemTest>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		Real const Egas = quokka::EOS<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::energy_index) = Egas;
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::internalEnergy_index) = Eint;

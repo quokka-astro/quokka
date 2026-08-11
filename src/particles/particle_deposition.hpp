@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <numbers>
 
 #include "AMReX_Array.H"
@@ -11,8 +12,10 @@
 #include "AMReX_Extension.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
+#include "AMReX_ParticleMesh.H"
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
+#include "math/quadrature.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 
@@ -47,6 +50,106 @@ struct NearestEight : public Base<NearestEight, amrex::Real> {
 		}
 	}
 };
+
+/** \brief SPH-like particle/mesh interpolator using the Wendland C2 kernel.
+ *
+ *  Template parameter N controls the support radius: the kernel is non-zero only
+ *  within a sphere of radius N*dx centred on the particle.  The stencil bounding
+ *  box is (2N+1)^3 cells; cells outside the sphere receive zero weight.
+ *  Requires N+1 ghost cells; N is capped at 7 (hard limit of 8 ghost cells).
+ *
+ *  The kernel weight at distance r (in units of dx) is
+ *      kernel_wendland_c2(r / N)   for r <= N
+ *      0                           for r >  N
+ *  and weights are re-normalised over the discrete stencil so their sum equals 1,
+ *  ensuring strict energy conservation.
+ *
+ *  Does NOT inherit from amrex::ParticleInterpolator::Base — the spherical cutoff
+ *  breaks the separability assumed by Base::ParticleToMesh.
+ */
+template <int N = 2> struct WendlandC2 {
+	static_assert(N >= 1 && N <= 7, "N must be between 1 and 7 (ghost-cell limit is 8)");
+	static constexpr int stencil_width = 2 * N + 1;
+	static constexpr amrex::Real cutoff_r2 = static_cast<amrex::Real>(N * N); // spherical cutoff radius squared
+
+	int index[3]{};		// NOLINT lower-left corner of stencil box
+	amrex::Real frac[3]{};	// NOLINT fractional cell position per dimension
+	amrex::Real inv_norm{}; // NOLINT 1 / (sum of weights within sphere)
+
+	template <typename P>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE WendlandC2(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
+						       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
+	{
+		// frac[i] is the fractional position of the particle within its containing cell,
+		// in [0, 1). The stencil spans index[i] .. index[i]+stencil_width-1, centred on
+		// the containing cell. Signed distance from particle to stencil cell ii is
+		//   (ii - N) + 0.5 - frac[i]
+		// which is exactly 0 at ii=N when the particle is at the cell centre (frac=0.5).
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			const amrex::Real pos_in_cells = (p.pos(i) - plo[i]) * dxi[i];
+			const auto cell = static_cast<int>(amrex::Math::floor(pos_in_cells));
+			index[i] = cell - N;
+			frac[i] = pos_in_cells - static_cast<amrex::Real>(cell);
+		}
+		for (int i = AMREX_SPACEDIM; i < 3; ++i) {
+			index[i] = 0;
+			frac[i] = 0.0;
+		}
+
+		// Compute normalization: sum of Wendland C2 weights within the sphere
+		const amrex::Real inv_N = 1.0 / static_cast<amrex::Real>(N);
+		amrex::Real norm_sum = 0.0;
+		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
+		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
+		for (int kk = 0; kk < nz_loop; ++kk) {
+			const amrex::Real dz =
+			    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - N) + 0.5 - frac[2] : 0.0; // NOLINT(misc-redundant-expression)
+			for (int jj = 0; jj < ny_loop; ++jj) {
+				const amrex::Real dy =
+				    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - N) + 0.5 - frac[1] : 0.0; // NOLINT(misc-redundant-expression)
+				for (int ii = 0; ii < stencil_width; ++ii) {
+					const amrex::Real dx = static_cast<amrex::Real>(ii - N) + 0.5 - frac[0];
+					const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+					if (r2 <= cutoff_r2) {
+						norm_sum += kernel_wendland_c2(std::sqrt(r2) * inv_N);
+					}
+				}
+			}
+		}
+		inv_norm = 1.0 / norm_sum;
+	}
+
+	/// Deposit particle data onto the mesh using the Wendland C2 kernel.
+	/// Same interface as amrex::ParticleInterpolator::Base::ParticleToMesh.
+	template <typename P, typename V, typename F>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void ParticleToMesh(const P &p, amrex::Array4<V> const &arr, int src_comp, int dst_comp, int num_comps, F const &f)
+	{
+		const amrex::Real inv_N = 1.0 / static_cast<amrex::Real>(N);
+		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
+		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
+
+		for (int ic = 0; ic < num_comps; ++ic) {
+			const auto pval = f(p, src_comp + ic);
+			for (int kk = 0; kk < nz_loop; ++kk) {
+				const amrex::Real dz =
+				    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - N) + 0.5 - frac[2] : 0.0; // NOLINT(misc-redundant-expression)
+				for (int jj = 0; jj < ny_loop; ++jj) {
+					const amrex::Real dy =
+					    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - N) + 0.5 - frac[1] : 0.0; // NOLINT(misc-redundant-expression)
+					for (int ii = 0; ii < stencil_width; ++ii) {
+						const amrex::Real dx = static_cast<amrex::Real>(ii - N) + 0.5 - frac[0];
+						const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+						if (r2 <= cutoff_r2) {
+							const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * inv_N) * inv_norm;
+							amrex::Gpu::Atomic::AddNoRet(&arr(index[0] + ii, index[1] + jj, index[2] + kk, ic + dst_comp),
+										     static_cast<V>(wt * pval));
+						}
+					}
+				}
+			}
+		}
+	}
+};
 } // namespace amrex::ParticleInterpolator
 
 namespace quokka
@@ -68,13 +171,13 @@ struct RadDeposition {
 	int num_comp{};	       // Number of components to deposit
 	int birthTimeIndex{};  // Index for particle birth time
 
-	// Operator to perform radiation deposition using linear interpolation
+	// Operator to perform radiation deposition using Wendland C2 SPH kernel interpolation
 	template <typename ContainerType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &radEnergySource,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
-		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		amrex::ParticleInterpolator::WendlandC2<> interp(p, plo, dxi);
 		const auto currentTime = current_time;
 		const auto birthIndex = birthTimeIndex;
 		// Deposit radiation energy only if particle is active
@@ -87,6 +190,100 @@ struct RadDeposition {
 				      });
 	}
 };
+
+//-------------------- Particle property depositions --------------------
+
+// Functor for depositing particle mass density onto the grid
+struct ParticleMassDensityDeposition {
+	int mass_comp{};
+	int birth_time_comp{-1};
+	int start_mesh_comp{};
+	int num_comp{};
+	amrex::Real mass_min{std::numeric_limits<amrex::Real>::lowest()};
+	amrex::Real mass_max{std::numeric_limits<amrex::Real>::max()};
+	bool use_age_filter{false};
+	amrex::Real current_time{};
+	amrex::Real age_max{std::numeric_limits<amrex::Real>::max()};
+
+	template <typename ContainerType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &deposition_array,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	{
+		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		const auto massMin = mass_min;
+		const auto massMax = mass_max;
+		const auto birthTimeComp = birth_time_comp;
+		const auto useAgeFilter = use_age_filter;
+		const auto currentTime = current_time;
+		const auto ageMax = age_max;
+		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+			const auto mass = part.rdata(comp);
+			if (mass < massMin || mass > massMax) {
+				return 0.0;
+			}
+			if (useAgeFilter) {
+				const auto birthTime = part.rdata(birthTimeComp);
+				if (currentTime < birthTime) {
+					return 0.0;
+				}
+				const auto age = currentTime - birthTime;
+				if (age > ageMax) {
+					return 0.0;
+				}
+			}
+			return mass * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		});
+	}
+};
+
+template <typename ContainerType>
+void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &deposition_field, int lev, int mass_comp, int start_mesh_comp = 0,
+				amrex::Real mass_min = std::numeric_limits<amrex::Real>::lowest(),
+				amrex::Real mass_max = std::numeric_limits<amrex::Real>::max(), bool use_age_filter = false, int birth_time_comp = -1,
+				amrex::Real current_time = 0.0, amrex::Real age_max = std::numeric_limits<amrex::Real>::max())
+{
+	const BL_PROFILE("depositParticleMassDensity");
+	if (use_age_filter && birth_time_comp < 0) {
+		amrex::Abort("depositParticleMassDensity: age filter requested, but birth_time_comp is invalid.");
+	}
+
+	ParticleMassDensityDeposition deposition_functor;
+	deposition_functor.mass_comp = mass_comp;
+	deposition_functor.birth_time_comp = birth_time_comp;
+	deposition_functor.start_mesh_comp = start_mesh_comp;
+	deposition_functor.num_comp = 1;
+	deposition_functor.mass_min = mass_min;
+	deposition_functor.mass_max = mass_max;
+	deposition_functor.use_age_filter = use_age_filter;
+	deposition_functor.current_time = current_time;
+	deposition_functor.age_max = age_max;
+
+	// ParticleToMesh uses tile-local buffers grown by mf.nGrowVect(). Linear deposition needs one
+	// grow cell to avoid out-of-bounds accesses near tile boundaries.
+	constexpr int required_n_grow = amrex::ParticleInterpolator::Linear::stencil_width - 1;
+	if (deposition_field.nGrowVect().allGE(required_n_grow)) {
+		// The final argument here is zero_out_input.
+		// In this AMReX overload, zero_out_input=false deposits into a temporary particle-grid
+		// MultiFab and then ParallelAdd's it back into deposition_field using src_nghost=mf.nGrowVect()
+		// and dst_nghost=0, so ghost-cell contributions are still folded into the valid region.
+		amrex::ParticleToMesh(*container, deposition_field, lev, deposition_functor, false);
+		return;
+	}
+
+	// Callers often provide a zero-ghost output MultiFab (e.g., diagnostics/derived fields),
+	// but AMReX ParticleToMesh sizes its internal temp/scratch storage from mf.nGrowVect(),
+	// and linear interpolation uses a 2-point stencil in each dimension. We therefore need
+	// one grow cell here so deposition near tile boundaries has valid storage. Deposit into a
+	// temporary MultiFab with sufficient ghost cells, then add the valid region back into the
+	// caller's field after ParticleToMesh has summed ghost contributions internally.
+	amrex::MultiFab deposition_with_ghosts(deposition_field.boxArray(), deposition_field.DistributionMap(), deposition_field.nComp(),
+					       amrex::IntVect(required_n_grow));
+	deposition_with_ghosts.setVal(0.0);
+	amrex::ParticleToMesh(*container, deposition_with_ghosts, lev, deposition_functor, true);
+	deposition_field.ParallelAdd(deposition_with_ghosts, start_mesh_comp, start_mesh_comp, 1, amrex::IntVect(0), amrex::IntVect(0),
+				     container->Geom(lev).periodicity());
+}
 
 //-------------------- Mass depositions --------------------
 
@@ -506,6 +703,10 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 	const double d_pz = local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 	const double d_e = local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
 
+	// SN feedback does not change the magnetic field, so the magnetic energy is the same before and after.
+	// It is zero unless MHD is enabled, and must be excluded from the gas internal energy budget below.
+	const double Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
+
 	const double rho_new = rho + d_rho;
 	double px_new = px + d_px;
 	double py_new = py + d_py;
@@ -514,7 +715,8 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 
 	const double d_e_int_d_rho = e_int / rho;
 	const double e_int_new_tmp = d_e_int_d_rho * rho_new;
-	const double e_int_plus_kinetic = e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+	// total energy (internal + kinetic + magnetic) implied by holding the specific internal energy fixed
+	const double e_int_plus_kinetic = ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho_new, px_new, py_new, pz_new, e_int_new_tmp, Emag);
 
 	const Real uncertainty_tol = static_cast<Real>(5.) * std::numeric_limits<Real>::epsilon();
 
@@ -522,7 +724,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 		e_tot_new = std::max(e_int_plus_kinetic, e_tot_new);
 	} else {
 		// find the lambda such that e_int_plus_kinetic == e_tot_new
-		const double e_kinetic_max = e_tot_new - e_int_new_tmp;
+		const double e_kinetic_max = e_tot_new - e_int_new_tmp - Emag;
 		AMREX_ASSERT(e_kinetic_max >= 0.0);
 
 		// If e_kinetic_max < (0.5 * (px * px + py * py + pz * pz) / rho_new), it means the SN energy (10^51 erg) is not enough to accelerate
@@ -534,7 +736,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 			px_new = rho_new * (px / rho);
 			py_new = rho_new * (py / rho);
 			pz_new = rho_new * (pz / rho);
-			e_tot_new = e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+			e_tot_new = ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho_new, px_new, py_new, pz_new, e_int_new_tmp, Emag);
 		} else {
 
 			// Find analytical solution of the following equation:
@@ -576,7 +778,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 		}
 	}
 
-	const double e_int_new = e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+	const double e_int_new = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho_new, px_new, py_new, pz_new, e_tot_new, Emag);
 	AMREX_ASSERT(e_int_new > 0.0);
 	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
 	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
@@ -595,7 +797,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 	// Compute sound speed
 	Real cs = NAN;
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+		cs = ::quokka::EOS_Traits<problem_t>::cs_isothermal;
 	} else {
 		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, fab_fc);
 	}
@@ -640,7 +842,9 @@ addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex
 	const double py_new = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 	const double pz_new = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 	const double e_new = local_state(i, j, k, HydroSystem<problem_t>::energy_index) + local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
-	const double e_int_new = e_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+	// SN feedback does not change the magnetic field; the magnetic energy is zero unless MHD is enabled
+	const double Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
+	const double e_int_new = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho_new, px_new, py_new, pz_new, e_new, Emag);
 
 	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
 	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
@@ -659,7 +863,7 @@ addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex
 	// Compute sound speed. For thermal-only feedback, the gas velocity stays unchanged, so we only report sound speed.
 	Real cs = NAN;
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+		cs = ::quokka::EOS_Traits<problem_t>::cs_isothermal;
 	} else {
 		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, fab_fc);
 	}

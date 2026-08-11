@@ -2,16 +2,13 @@
 
 There are several ways to post-process the output of Quokka simulations. AMReX PlotfileTools, yt, and VisIt all allow you to analyze the outputs after they are written to disk.
 
-## Amrvis-container
+## AMReXplorer
 
-[Amrvis-container](https://github.com/AMReX-Codes/Amrvis-container) bundles Amrvis in a Docker/Apptainer image with a browser-based X11 frontend. To browse Quokka plotfiles locally (Docker required), run from the Amrvis-container repo:
+[AMReXplorer](https://github.com/AMReX-Codes/amrexplorer) is a Qt 6 desktop application for interactively exploring 2D and 3D AMReX plotfiles. Follow the [installation instructions](https://github.com/AMReX-Codes/amrexplorer/blob/main/INSTALL.md), then open a Quokka plotfile from the command line:
 
-    ./launch_amrvis_browser.sh /path/to/plotfiles
+    amrexplorer /path/to/plotfile
 
-The target directory is bind-mounted to `/home/vscode/data` in the container. The launcher prints a one-time password; open `http://localhost:8080`, paste the password, and use the `xterm` window to start `amrvis2d` or `amrvis3d` on your `plt*` directories.
-
-!!! Tip
-    On SLURM clusters with Apptainer, pull the image once with `apptainer pull amrvis-container.sif docker://ghcr.io/amrex-codes/amrvis-container:main`, then use `./launch_amrvis_browser_hpc.sh /path/to/plotfiles` on a compute node and follow the printed SSH tunnel instructions.
+AMReXplorer supports AMR level selection, value probing, line plots, grid and contour overlays, plotfile-sequence animation, and image or video export. See the [AMReXplorer User Guide](https://github.com/AMReX-Codes/amrexplorer/blob/main/docs/user-guide.md) for the complete workflow and controls.
 
 ## AMReX PlotfileTools
 
@@ -32,21 +29,24 @@ Other tools:
 
 ## yt
 
-!!! Warning
-    There are [known bugs](https://github.com/yt-project/yt/issues/3889) that affect Quokka outputs. PlotfileTools (see above) can be used instead for axis-aligned slice plots.
+yt can load Quokka AMReX plotfiles through its Quokka frontend, which is now available in the main [yt](https://github.com/yt-project/yt) repository. Until a released yt version includes the frontend, install yt from the main branch with the optional Quokka dependencies:
 
-!!! Tip
-    One of the most useful things to do is to convert the data into a uniform-resolution NumPy array with the [covering_grid](https://yt-project.org/doc/examining/low_level_inspection.html#examining-grid-data-in-a-fixed-resolution-array) function.
+    pip install "yt[quokka] @ git+https://github.com/yt-project/yt.git"
 
-We have a fork of YT that includes a customized Quokka frontend: [https://github.com/chongchonghe/yt](https://github.com/chongchonghe/yt). To install it, run `pip install "yt[quokka] @ git+https://github.com/chongchonghe/yt.git"`. A comprehensive documentation is available at [this link](https://github.com/chongchonghe/yt/blob/Rongjun-ANUquokka-frontend/doc/source/examining/loading_data.rst#quokka-data), and a Jupyter Notebook with tutorials is available at [README.ipynb](https://github.com/Rongjun-ANU/README-of-yt-frontend-for-QUOKKA/blob/main/README.ipynb).
+After installation, load a plotfile with `yt.load("plt00000")` or point yt to any other Quokka plotfile directory. The upstream Quokka frontend documentation is available in the [yt documentation source](https://github.com/yt-project/yt/blob/main/doc/source/examining/loading_data.rst#quokka-data), and a tutorial notebook is available at [README.ipynb](https://github.com/Rongjun-ANU/README-of-yt-frontend-for-QUOKKA/blob/main/README.ipynb).
+
+> **Tip**
+>
+> One of the most useful things to do is to convert the data into a uniform-resolution NumPy array with the [covering_grid](https://yt-project.org/doc/examining/low_level_inspection.html#examining-grid-data-in-a-fixed-resolution-array) function.
+>
 
 ### quick_plot script for batch processing
 
-The `quick_plot` script in `scripts/python/` is a convenient tool for visualizing Quokka outputs. It is a wrapper around YT for batch processing snapshots and generating slice or projection plots. The script has detailed documentation in the code itself, accessible at the top of the file and also by running `quick_plot -h`.
+The `quick_plot` script in `scripts/python/` wraps yt for batch visualization of Quokka outputs. It can process multiple snapshots and generate slice or projection plots. For usage details, see the documentation at the top of the script or run `quick_plot -h`.
 
 ### yt-studio for web-based visualization
 
-[yt-studio](https://github.com/chongchonghe/yt-studio) is a visualization tool for QUOKKA simulation data that provides both a web-based interface and Python API. Install it with `pip install git+https://github.com/chongchonghe/yt-studio.git`, then start the web interface with `yt-studio` and open http://localhost:5173 in your browser. The tool supports slice plots, projection plots, volume rendering, multiple colormaps, and high-resolution export, with optional particle overlay and AMR grid annotations. For programmatic use, the Python API offers `QuokkaPlotter` class methods like `slice()` and `project()` for generating publication-quality visualizations.
+[yt-studio](https://github.com/chongchonghe/yt-studio) provides a web interface and Python API for visualizing Quokka simulation data. Install it with `pip install git+https://github.com/chongchonghe/yt-studio.git`, then start the web interface with `yt-studio` and open http://localhost:5173 in your browser. It supports slice plots, projection plots, volume rendering, multiple colormaps, high-resolution export, optional particle overlays, and AMR grid annotations. For scripts and notebooks, use the `QuokkaPlotter` methods such as `slice()` and `project()`.
 
 ![yt-studio-screenshot](media/yt-studio-screenshot.jpg)
 
@@ -62,5 +62,6 @@ If you want to read a timeseries of plotfiles, you can create a file with a ``.v
 
 Then select ``plotfiles.visit`` in VisIt's Open dialog box.
 
-!!! Warning
-    There are rendering bugs with unscaled box dimensions. Slices generally work. However, do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.
+> **Warning**
+>
+> There are rendering bugs with unscaled box dimensions. Slices generally work. However, do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.

@@ -29,7 +29,6 @@ initial_dt = 1.0e6
 do_reflux = 1
 do_subcycle = 0
 
-#ascent_interval = 50
 plotfile_interval = 50  #100
 checkpoint_interval = 200
 
@@ -100,8 +99,10 @@ integrator.X_reject_buffer = 1e100
 # 2 = numerical jacobian
 integrator.jacobian = 1
 
-# do you want to normalize abundances within VODE? (you don't!)
+# do you want to normalize abundances within the integrator? (you don't!)
 integrator.renormalize_abundances = 0
+# 0 = Rodas5P Rosenbrock tableau
+integrator.rosenbrock_tableau = 0
 # tolerances
 integrator.rtol_spec = 1.0e-4
 integrator.atol_spec = 1.0e-4

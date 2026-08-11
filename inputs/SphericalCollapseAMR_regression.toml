@@ -31,7 +31,6 @@ do_reflux = 1
 do_subcycle = 0
 do_tracers = 0  # turn on tracer particles
 
-ascent_interval = -1
 plotfile_interval = 200
 checkpoint_interval = -1
 

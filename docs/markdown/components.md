@@ -35,6 +35,48 @@ Defined in `src/physics_info.hpp`. User-specialized per problem to enable/disabl
 | `nGroups`                                                                       | Number of radiation photon groups                                                   |
 | `nDustGroups`                                                                   | Number of dust groups                                                               |
 
+## Physics module compatibility matrix
+
+The table below summarizes the current compatibility status for the built-in physics modules documented in Quokka.
+
+- `✅` means the combination is supported and exercised by at least one in-tree problem or test case.
+- `❌` means the combination is explicitly unsupported.
+- `⚠️` means the combination appears intended to work, but no in-tree test problem currently exercises it.
+- A blank cell means the compatibility is currently unknown.
+
+Here, `Dust` refers to the dedicated dust dynamics module enabled with `Physics_Traits<problem_t>::is_dust_enabled`. It is distinct from the thermal dust coupling used in several radiation test problems.
+
+This matrix covers hydro, MHD, radiation, cooling, chemistry, particles, and the dedicated dust module. It does not include self-gravity.
+
+| Module | Hydro | MHD | Radiation | Cooling | Photoionization | Chemistry | Particles | Dust |
+| ------ |:-----:|:---:|:---------:|:-------:|:---------------:|:---------:|:---------:|:----:|
+| Hydro | - | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| MHD | - | - | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ |
+| Radiation | - | - | - | ⚠️ | ✅ | | ✅ | |
+| Cooling | - | - | - | - | ❌ | ⚠️ | ✅ | |
+| Photoionization | - | - | - | - | - | | ⚠️ | |
+| Chemistry | - | - | - | - | - | - | | |
+| Particles | - | - | - | - | - | - | - | |
+| Dust | - | - | - | - | - | - | - | - |
+
+Notes:
+
+- `Hydro + MHD` is tested by the MHD problem suite, including `AlfvenWave*`, `BrioWuShockTube`, `MHDBlast`, `MHDQuirk`, and `OrszagTang`.
+- `Hydro + radiation` is tested by the radiation-hydrodynamics problems such as `RadhydroPulse*`, `RadhydroShock*`, `RadhydroShell`, `RadTube`, and `RadhydroBB`.
+- `Hydro + cooling` is tested by `ResampledCoolingTest`, `ShockCloud`, `RandomBlast`, and `SN`.
+- `Hydro + chemistry` is tested by `PrimordialChem` and `PopIII`.
+- `MHD + radiation` is tested by `RadhydroPulseMGconst` (Problem 3: `MGproblemMHD`, a multigroup advecting radiation pulse with a constant background magnetic field). The combination is 3D-only because MHD requires `AMREX_SPACEDIM == 3`.
+- `MHD + cooling` is exercised by the `SN` problem with `is_mhd_enabled = true` and `cooling.enabled = 1`.
+- `Hydro + photoionization` is tested by `DTypeFront`, `StromgrenSphere`, and `OneZonePhotoionization`.
+- `Radiation + photoionization` is tested by `DTypeFront` and `StromgrenSphere` — photoionization requires `is_radiation_enabled = true`.
+- `Cooling + photoionization` is explicitly forbidden: both modules compute H thermochemistry (photoheating, recombination cooling, collisional ionization cooling), so enabling both simultaneously double-counts those rates. Quokka aborts at startup if `cooling.enabled = 1` and `photochemistry.enabled = 1` are set together. See `docs/markdown/photoionization.md §4.1`.
+- `Hydro + particles` is exercised by problems such as `BinaryOrbitCIC`, `ParticleSink*`, `ParticleSF`, `ParticleRadiation`, `RandomBlast`, and `SN`.
+- `MHD + particles` is exercised by `DiskGalaxy`, `ParticleAccretion`, `ParticleCreation`, `ParticleSink`, and `ParticleSinkFormation`.
+- `Radiation + particles` is exercised by `ParticleRadiation` and `GravRadParticle3D`.
+- `Cooling + particles` is exercised by `ParticleSF`, `TallBoxSf`, `RandomBlast`, and `DiskGalaxy` through their input files.
+- `Hydro + dust` is exercised by the dust dynamics problems `DustAdvection*`, `DustDamping*`, `DustSoundwave`, and `DustyShock`.
+- `MHD + dust` is exercised by charged-dust and dust-MHD problems including `DustDampedGyromotion`, `DustDampingMHDZeroB`, `DustHallPedersenDrift`, `DustLorentzShock`, `DustMagnetizedRDI`, `DustyAlfvenWave`, and `DustyOrszagTang`.
+
 
 ## Cell-centred state vector layout
 
@@ -183,4 +225,3 @@ Cell-centred layout (16 components total):
   [14] x2RadFlux (group 1)
   [15] x3RadFlux (group 1)
 ```
-

@@ -42,21 +42,16 @@ template <> struct quokka::EOS_Traits<ParticleProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Particle_Traits<ParticleProblem> {
+template <> struct Particle_Traits<ParticleProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad | ParticleSwitch::CICRad;
 };
 
-template <> struct Physics_Traits<ParticleProblem> {
+template <> struct Physics_Traits<ParticleProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_self_gravity_enabled = true;
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = nGroups_; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
@@ -133,13 +128,17 @@ namespace
 auto checkGasDensityProjection(const QuokkaSimulation<ParticleProblem> &sim) -> int
 {
 	const amrex::Vector<const amrex::MultiFab *> state_mfs = amrex::GetVecOfConstPtrs(sim.state_new_cc_);
+	amrex::Vector<amrex::IntVect> max_grid_size(sim.finestLevel() + 1);
+	for (int lev = 0; lev <= sim.finestLevel(); ++lev) {
+		max_grid_size[lev] = sim.maxGridSize(lev);
+	}
 
 	constexpr std::array dirs = {amrex::Direction::x, amrex::Direction::y, amrex::Direction::z};
 	const amrex::Box &domain = sim.Geom(0).Domain();
 
 	for (const auto dir : dirs) {
-		const auto projections = quokka::diagnostics::ComputePlaneProjectionFromMultiFab(state_mfs, sim.finestLevel(), sim.Geom(), sim.refRatio(), dir,
-												 RadSystem<ParticleProblem>::gasDensity_index);
+		const auto projections = quokka::diagnostics::ComputePlaneProjectionFromMultiFab(
+		    state_mfs, sim.finestLevel(), sim.Geom(), sim.refRatio(), max_grid_size, dir, RadSystem<ParticleProblem>::gasDensity_index);
 		const amrex::MultiFab &projection = projections.front();
 		const amrex::Real projection_min = projection.min(0);
 		const amrex::Real projection_max = projection.max(0);

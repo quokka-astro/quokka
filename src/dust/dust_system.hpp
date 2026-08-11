@@ -13,7 +13,7 @@
 #include "dust/DustState.hpp"
 #include "dust/dustRiemannSolver.hpp"
 #include "physics_info.hpp"
-#include "util/ArrayView_3d.hpp"
+#include "util/ArrayView.hpp"
 
 template <typename problem_t> class DustSystem
 {
