@@ -929,7 +929,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx      = geom[lev].CellSizeArray();
 	const double vc = userData_.vc;
-
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
@@ -967,7 +966,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(
 			state(i,j,k,HydroSystem<MHDGalaxy>::energy_index)     = Ekin_new + Eint + Emag;
 		});
 	}
-
 }
 
 
@@ -976,6 +974,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(
 template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(
 	int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
+
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx      = geom[lev].CellSizeArray();
 	const auto tag     = tags.arrays();
@@ -1067,8 +1066,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 		// delta components: 0=drho, 1=dpx, 2=dpy, 3=dpz, 4=dE.
 		// Everything here is the UNLIMITED deposit (paper Sec 2.2, Steps 1-2); the
 		// analytic limiter (Eq 21, Step 3) is applied once, after SumBoundary, in the
-		// apply pass below 
+		// apply pass below
 		amrex::MultiFab delta(state.boxArray(), state.DistributionMap(), 5, stencil_radius);
+		amrex::Print() << "FAB bytes = " << amrex::TotalBytesAllocatedInFabs() << "\n";
 		delta.setVal(0.0);
 
 		// --- Pass 1: deposit (unlimited) mass/momentum/energy contributions ---
@@ -1324,7 +1324,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 		}
 		amrex::Gpu::streamSynchronize();
 		delta.SumBoundary(geom[lev].periodicity()); // Step 2: inter-rank buffer summation
-
 		// --- Pass 2 / Step 3-5: apply the analytic limiter (Eq 21) once per cell using
 		// the fully-summed delta, then commit to state. ---
 		for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
@@ -1408,6 +1407,192 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 	AverageDown();
 }
 
+//for a more conservative, quicker running code, uncomment this and 
+// comment out the above ComputerAfterTimestep function
+
+// template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
+// {
+// 	if (!(userData_.sn_jeans_J > 0.0)) {
+// 		return;
+// 	}
+
+// 	constexpr int kernel_radius = 2;                 // cells; Gaussian support radius
+// 	constexpr int kernel_array_size = kernel_radius + 1;
+// 	constexpr double kernel_sigma = 1.0;              // Gaussian sigma, in units of dx
+// 	constexpr double mass_fraction = 0.5;             // fraction of cell (rho, p, Eint, Etot) removed and redistributed per trigger
+
+// 	// Precompute normalized Gaussian kernel weights, indexed by |di|,|dj|,|dk| (radial
+// 	// symmetry lets a (radius+1)^3 table cover the full (2*radius+1)^3 stencil -- same trick
+// 	// as SNFeedbackUtils::stencil_weights_gpu in the reference Quokka SN implementation).
+// 	static const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<double, kernel_array_size>, kernel_array_size>, kernel_array_size> kernel_weights = [] {
+// 		amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<double, kernel_array_size>, kernel_array_size>, kernel_array_size> w{};
+// 		double norm = 0.0;
+// 		for (int dk = -kernel_radius; dk <= kernel_radius; ++dk) {
+// 			for (int dj = -kernel_radius; dj <= kernel_radius; ++dj) {
+// 				for (int di = -kernel_radius; di <= kernel_radius; ++di) {
+// 					const double r2 = static_cast<double>(di * di + dj * dj + dk * dk);
+// 					if (r2 > static_cast<double>(kernel_radius * kernel_radius)) { continue; }
+// 					norm += std::exp(-0.5 * r2 / (kernel_sigma * kernel_sigma));
+// 				}
+// 			}
+// 		}
+// 		for (int dk = 0; dk <= kernel_radius; ++dk) {
+// 			for (int dj = 0; dj <= kernel_radius; ++dj) {
+// 				for (int di = 0; di <= kernel_radius; ++di) {
+// 					const double r2 = static_cast<double>(di * di + dj * dj + dk * dk);
+// 					w[di][dj][dk] = (r2 <= static_cast<double>(kernel_radius * kernel_radius))
+// 							     ? std::exp(-0.5 * r2 / (kernel_sigma * kernel_sigma)) / norm
+// 							     : 0.0;
+// 				}
+// 			}
+// 		}
+// 		return w;
+// 	}();
+
+// 	const double sn_jeans_J = userData_.sn_jeans_J;
+
+// 	for (int lev = 0; lev <= finest_level; ++lev) {
+// 		auto &state = state_new_cc_[lev];
+// 		auto const &state_fc = state_new_fc_[lev];
+
+// 		const auto time = tNew_[lev];
+// 		fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na,
+// 		                        InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+// 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+// 			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time, quokka::centering::fc,
+// 			                        static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone,
+// 			                        FillPatchType::fillpatch_function);
+// 		}
+
+// 		const auto dx = geom[lev].CellSizeArray();
+// 		const double dx_max = amrex::max(dx[0], amrex::max(dx[1], dx[2]));
+
+// 		amrex::iMultiFab mask_valid(state.boxArray(), state.DistributionMap(), 1, 0);
+// 		if (lev < finest_level) {
+// 			mask_valid = amrex::makeFineMask(state.boxArray(), state.DistributionMap(),
+// 			                                  state_new_cc_[lev + 1].boxArray(), refRatio(lev), 1, 0);
+// 		} else {
+// 			mask_valid.setVal(1);
+// 		}
+// 		amrex::iMultiFab mask(state.boxArray(), state.DistributionMap(), 1, kernel_radius);
+// 		mask.setVal(1);
+// 		amrex::iMultiFab::Copy(mask, mask_valid, 0, 0, 1, 0);
+// 		mask.FillBoundary(geom[lev].periodicity());
+
+// 		// delta components: 0=drho, 1=dpx, 2=dpy, 3=dpz, 4=dEint, 5=dEtot
+// 		amrex::MultiFab delta(state.boxArray(), state.DistributionMap(), 6, kernel_radius);
+// 		delta.setVal(0.0);
+
+// 		amrex::Gpu::DeviceScalar<amrex::Long> fired_count_dev(0);
+// 		amrex::Long *fired_count_ptr = fired_count_dev.dataPtr();
+
+// 		// --- Pass 1: for each triggering cell, shrink it in place (density, momentum,
+// 		// internal & total energy all scaled by the same factor, so velocity and specific
+// 		// internal energy are exactly preserved) and deposit the removed conserved
+// 		// quantities into a normalized Gaussian kernel centered on that cell. ---
+// 		for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
+// 			const amrex::Box &box = mfi.validbox();
+// 			auto s = state.array(mfi);
+// 			auto d = delta.array(mfi);
+// 			auto const &mask_arr = mask.const_array(mfi);
+
+// 			const std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{
+// 				state_fc[0].const_array(mfi), state_fc[1].const_array(mfi), state_fc[2].const_array(mfi)};
+
+// 			const auto dlo = delta[mfi].box().smallEnd();
+// 			const auto dhi = delta[mfi].box().bigEnd();
+
+// 			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+// 				if (mask_arr(i, j, k) == 0) { return; }
+
+// 				const double rho = s(i, j, k, HydroSystem<MHDGalaxy>::density_index);
+// 				const double cs          = HydroSystem<MHDGalaxy>::ComputeIsothermalSoundSpeed(s, i, j, k, &fab_fc);
+// 				const double plasma_beta = HydroSystem<MHDGalaxy>::ComputePlasmaBeta(s, i, j, k, &fab_fc);
+// 				const double beta_safe   = amrex::max(plasma_beta, 1.0e-10);
+// 				const double cs_eff_sq   = cs * cs * (1.0 + 0.74 / beta_safe);
+// 				const double rho_J = M_PI * cs_eff_sq / (C::Gconst * sn_jeans_J * sn_jeans_J * (dx_max * dx_max));
+// 				if (rho <= rho_J) { return; }
+
+// 				amrex::Gpu::Atomic::Add(fired_count_ptr, static_cast<amrex::Long>(1));
+
+// 				const double px   = s(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index);
+// 				const double py   = s(i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index);
+// 				const double pz   = s(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index);
+// 				const double eint = s(i, j, k, HydroSystem<MHDGalaxy>::internalEnergy_index);
+// 				const double etot = s(i, j, k, HydroSystem<MHDGalaxy>::energy_index);
+
+// 				const double removed_rho  = mass_fraction * rho;
+// 				const double removed_px   = mass_fraction * px;
+// 				const double removed_py   = mass_fraction * py;
+// 				const double removed_pz   = mass_fraction * pz;
+// 				const double removed_eint = mass_fraction * eint;
+// 				const double removed_etot = mass_fraction * etot;
+
+// 				const double keep = 1.0 - mass_fraction;
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::density_index)        = rho  * keep;
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index)     = px   * keep;
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index)     = py   * keep;
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index)     = pz   * keep;
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::internalEnergy_index) = eint * keep;
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::energy_index)         = etot * keep;
+
+// 				for (int dk = -kernel_radius; dk <= kernel_radius; ++dk) {
+// 					const int kk = k + dk;
+// 					if (kk < dlo[2] || kk > dhi[2]) { continue; }
+// 					for (int dj = -kernel_radius; dj <= kernel_radius; ++dj) {
+// 						const int jj = j + dj;
+// 						if (jj < dlo[1] || jj > dhi[1]) { continue; }
+// 						for (int di = -kernel_radius; di <= kernel_radius; ++di) {
+// 							const int ii = i + di;
+// 							if (ii < dlo[0] || ii > dhi[0]) { continue; }
+// 							const double w = kernel_weights[std::abs(di)][std::abs(dj)][std::abs(dk)]; // NOLINT
+// 							if (w == 0.0) { continue; }
+// 							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 0), w * removed_rho);
+// 							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 1), w * removed_px);
+// 							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 2), w * removed_py);
+// 							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 3), w * removed_pz);
+// 							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 4), w * removed_eint);
+// 							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 5), w * removed_etot);
+// 						}
+// 					}
+// 				}
+// 			});
+// 		}
+// 		amrex::Gpu::streamSynchronize();
+// 		delta.SumBoundary(geom[lev].periodicity());
+
+// 		// --- Pass 2: commit the accumulated deposit. No energy limiter is needed here --
+// 		// unlike SN feedback, this scheme never adds new energy, only redistributes what
+// 		// was already present, so positivity of Eint/Etot is automatic. ---
+// 		for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
+// 			const amrex::Box &box = mfi.validbox();
+// 			auto s = state.array(mfi);
+// 			auto const &d = delta.const_array(mfi);
+// 			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+// 				const double drho = d(i, j, k, 0);
+// 				if (drho == 0.0) { return; }
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::density_index)        += drho;
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index)     += d(i, j, k, 1);
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index)     += d(i, j, k, 2);
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index)     += d(i, j, k, 3);
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::internalEnergy_index) += d(i, j, k, 4);
+// 				s(i, j, k, HydroSystem<MHDGalaxy>::energy_index)         += d(i, j, k, 5);
+// 			});
+// 		}
+// 		amrex::Gpu::streamSynchronize();
+// 	}
+
+// 	amrex::Long fired_this_step = fired_count_dev.dataValue();
+// 	amrex::ParallelDescriptor::ReduceLongSum(fired_this_step);
+// 	if (fired_this_step > 0) {
+// 		userData_.jeans_redistribution_count_total += fired_this_step;
+// 		amrex::Print() << "Jeans redistribution: " << fired_this_step << " cell(s) triggered this step "
+// 		               << "(cumulative total: " << userData_.jeans_redistribution_count_total << ")\n";
+// 	}
+
+// 	AverageDown();
+// }
+
 template <>
 void QuokkaSimulation<MHDGalaxy>::ComputeDerivedVar(
     int lev, std::string const &dname, amrex::MultiFab &mf,
@@ -1415,7 +1600,7 @@ void QuokkaSimulation<MHDGalaxy>::ComputeDerivedVar(
     amrex::MultiFab const &state_cc,
     amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
-    constexpr double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
+	constexpr double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
     constexpr double cs_cgm  = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
 
     const int  ncomp   = ncomp_cc_in;
@@ -1573,7 +1758,7 @@ template <>
 auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics()
     -> std::map<std::string, amrex::Real>
 {
-    std::map<std::string, amrex::Real> stats;
+	std::map<std::string, amrex::Real> stats;
     const amrex::Real R_min = 2.0 * 1.0e3 * C::parsec;
     const amrex::Real R_max = 8.0 * 1.0e3 * C::parsec;
     const amrex::Real z_max = 0.5 * 1.0e3 * C::parsec;
@@ -1756,7 +1941,6 @@ auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics()
     stats["divB_rms_normalized"] = (divB_sums[2] > 0.0)
         ? std::sqrt(divB_sums[1] / divB_sums[2])
         : static_cast<amrex::Real>(0.0);
-
     return stats;
 }
 
