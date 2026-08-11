@@ -34,9 +34,10 @@ plotfile_interval = 100  # write a plotfile every N timesteps
 checkpoint_interval = 1000  # write a restart checkpoint every N timesteps
 
 # *****************************************************************
-# Dissipation: ideal MHD, no explicit resistivity; hydro has no physical
-# viscosity implementation, only numerical (truncation-error) dissipation
+# Dissipation (ideal MHD by default)
 # *****************************************************************
+hydro.shear_viscosity = 0.0  # shear viscosity
+hydro.bulk_viscosity = 0.0  # bulk viscosity
 mhd.resistivity = 0.0  # Ohmic resistivity
 
 # *****************************************************************

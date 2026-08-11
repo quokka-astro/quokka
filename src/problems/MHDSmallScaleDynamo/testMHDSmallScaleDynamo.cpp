@@ -37,6 +37,7 @@ template <> struct Physics_Traits<MHDSmallScaleDynamo> : DefaultPhysicsTraits {
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr amrex::Real gravitational_constant = 1.0;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::constant; // eta from mhd.resistivity in the TOML; defaults to 0
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant;	  // shear/bulk viscosity from the TOML; both default to 0
 };
 
 // isothermal EOS has no internal energy to reconstruct; pressure computed directly from rho
