@@ -331,14 +331,16 @@ void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const 
 				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
 				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
-				output[bx](i, j, k, ncomp) = (Tgas > warm_T && Tgas <= hot_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
+				output[bx](i, j, k, ncomp) =
+				    (Tgas > warm_T && Tgas <= hot_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
 			});
 		} else if (dname == "true_cool_gas_z_outflow_rate") {
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
 				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
-				output[bx](i, j, k, ncomp) = (Tgas > cold_T && Tgas <= warm_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
+				output[bx](i, j, k, ncomp) =
+				    (Tgas > cold_T && Tgas <= warm_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
 			});
 		} else if (dname == "true_cold_gas_z_outflow_rate") {
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
