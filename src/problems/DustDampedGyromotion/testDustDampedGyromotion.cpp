@@ -114,6 +114,7 @@ struct DustGyroPhysicsTraits {
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::none;
 };
 } // namespace
 

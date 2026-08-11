@@ -506,11 +506,22 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 	}
 }
 
-template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate)
+template <typename problem_t>
+void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateHydroState()");
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &state_arr = state.arrays();
+
+	// the magnetic field is unchanged by accretion, so the magnetic energy must be excluded when the gas
+	// energies are scaled down below (it is identically zero unless MHD is enabled)
+	std::array<amrex::MultiArray4<const amrex::Real>, AMREX_SPACEDIM> state_fc_arrs{};
+	const bool has_state_fc = (state_fc != nullptr);
+	if (has_state_fc) {
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			state_fc_arrs[dir] = (*state_fc)[dir].const_arrays();
+		}
+	}
 
 	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
@@ -518,12 +529,24 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 		AMREX_ASSERT(accretion_rate_cell > -1.0);
 		const double accretion_down_factor = 1.0 + accretion_rate_cell;
 		AMREX_ASSERT(accretion_down_factor > 0.0);
+
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{};
+		if (has_state_fc) {
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				fab_fc[dir] = state_fc_arrs[dir][bx];
+			}
+		}
+		const auto *const fab_fc_ptr = has_state_fc ? &fab_fc : nullptr;
+		const double Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc_ptr);
+
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= accretion_down_factor;
-		state_arr[bx](i, j, k, HydroSystem<problem_t>::energy_index) *= accretion_down_factor;
+		// scale only the gas part of the total energy, leaving the magnetic energy untouched
+		state_arr[bx](i, j, k, HydroSystem<problem_t>::energy_index) =
+		    (state_arr[bx](i, j, k, HydroSystem<problem_t>::energy_index) - Emag) * accretion_down_factor + Emag;
 
 		// update passive scalars
 		for (int n = 0; n < Physics_Traits<problem_t>::numPassiveScalars; ++n) {
@@ -580,7 +603,7 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt, mdot_index, ang_mom_index);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
-	UpdateHydroState<problem_t>(state, state_accretion_rate);
+	UpdateHydroState<problem_t>(state, state_accretion_rate, state_fc);
 }
 
 } // namespace SinkAccretionUtils
