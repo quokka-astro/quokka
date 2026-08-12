@@ -2,11 +2,19 @@
 /// \brief Defines a 1D planar test of dust reprocessing a beamed optical source into the IR.
 ///
 /// There are three radiation groups: IR (group 0), optical (group 1) and an ionizing chemistry band
-/// (group 2). A constant photon flux F [photons cm^-2 s^-1] is injected into the OPTICAL band in the first
-/// cell (adjacent to x = 0) of a uniform, cold, dusty hydrogen slab. Both the radiation energy source and
-/// the companion radiation flux source are set, with flux = c * E, so the inflow is fully beamed along +x.
-/// The IR band receives no source at all, and the ionizing band is left dark, which isolates the dust
-/// physics from the photochemistry.
+/// (group 2). Constant photon fluxes are injected in the first cell (adjacent to x = 0) of a uniform, cold,
+/// dusty hydrogen slab: photoionize.flux into the OPTICAL band and photoionize.flux_ion into the ionizing
+/// band. Both the radiation energy source and the companion radiation flux source are set, with
+/// flux = c * E, so both inflows are fully beamed along +x. The IR band receives no source at all.
+///
+/// The two sourced bands are scaled differently inside the solver -- a thermal group's source is multiplied
+/// by chat/c and a chemistry band's is not -- so the shipped fluxes differ by exactly c/chat = 1000 and
+/// deliver equal energy. Photochemistry is disabled, so the ionizing band is a pure transport channel here;
+/// it is transparent to the dust opacity and nothing absorbs it.
+///
+/// A separate dust temperature is solved for, with the gas-dust collisional coupling switched off
+/// (radiation.dust_gas_interaction_coeff = 0), so the dust sits at radiative equilibrium and exchanges no
+/// energy with the gas. Radiation momentum is still deposited, so the beam does accelerate the gas.
 ///
 /// The dust opacity is gray within each band and set at runtime (photoionize.kappa1 for the IR,
 /// photoionize.kappa2 for the optical), with the optical opacity much the larger, as for real dust. The
@@ -16,10 +24,11 @@
 ///
 /// Opacity in Quokka is pure absorption, so an opaque group also emits its share of the local blackbody,
 /// which is what supplies the re-emission. The dust settles where absorption balances emission,
-/// a * T^4 = E_IR + (kappa_opt / kappa_IR) * E_optical, giving ~130 K for the shipped parameters. At that
-/// temperature h*nu/(k*T) = 37 at the IR/optical boundary, so the Planck function has nothing left above
-/// the boundary and essentially all of the re-emission lands in the IR band rather than back in the optical
-/// one. Behind the light front the optical band is then in pure attenuation,
+/// a * T^4 = E_IR + (kappa_opt / kappa_IR) * E_optical, giving ~130 K for the shipped parameters (the dust
+/// temperature is internal to the solver and is not stored in the state, so the checks below do not read it
+/// directly). At that temperature h*nu/(k*T) = 37 at the IR/optical boundary, so the Planck function has
+/// nothing left above the boundary and essentially all of the re-emission lands in the IR band rather than
+/// back in the optical one. Behind the light front the optical band is then in pure attenuation,
 ///
 ///   E_optical(x) = (F * E_photon / c) * exp(-kappa_opt * rho * x),
 ///
@@ -29,7 +38,7 @@
 /// optical light front sits near chat * t, that the radiation leaves the injection cell beamed (reduced
 /// flux of unity, the only check here that exercises the flux source), that the dust reprocessed a
 /// substantial fraction of the beam into the IR with the survivors following exp(-tau), and that the
-/// unsourced ionizing band stays at the radiation floor.
+/// ionizing band retains every erg injected into it.
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
@@ -39,6 +48,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "physics_info.hpp"
+#include "radiation/radiation_dust_system.hpp" // for the separate dust-temperature solver (see ISM_Traits below)
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -112,7 +122,8 @@ template <> struct Physics_Traits<DTypeFront1D> : DefaultPhysicsTraits {
 template <> struct RadSystem_Traits<DTypeFront1D> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = Erad_floor_;
-	// beta_order = 0: no O(v/c) radiation-momentum kick, so the beam free-streams without dragging the gas.
+	// beta_order = 0: drop the O(v/c) terms in the radiation-matter coupling. Note this does not switch off
+	// radiation pressure -- momentum from absorbed radiation is still deposited in the gas.
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = C::hplanck; // radBoundaries below are frequencies in Hz
 	// Group frequency boundaries [Hz]: group 0 = IR (below 1e14 Hz, i.e. longward of 3 um), group 1 =
@@ -133,6 +144,22 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
 
+template <> struct ISM_Traits<DTypeFront1D> {
+	// Solve for a separate dust temperature rather than assuming T_dust == T_gas. With
+	// radiation.dust_gas_interaction_coeff = 0 in the input file the gas-dust collisional term vanishes, so
+	// the solver takes its decoupled branch (dust_model == 2 in radiation_dust_system.hpp): the dust
+	// temperature is fixed purely by radiative equilibrium with the local radiation field, and no energy is
+	// exchanged with the gas at all.
+	//
+	// Decoupled here means thermally decoupled only. Radiation momentum is a separate channel and is still
+	// deposited, so the beam drives the gas: it reaches ~8e6 cm/s and evacuates the cells nearest the source
+	// by a factor of a few hundred in density. The gas temperature therefore still varies widely, through
+	// compression and expansion rather than through radiative heating.
+	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr bool enable_photoelectric_heating = false;
+};
+
 template <> struct SimulationData<DTypeFront1D> {
 	amrex::Real small_temp{};
 	amrex::Real small_dens{};
@@ -140,7 +167,8 @@ template <> struct SimulationData<DTypeFront1D> {
 	amrex::Real primary_species_1{};
 	amrex::Real primary_species_2{};
 	amrex::Real primary_species_3{};
-	amrex::Real flux{}; // photon flux F [photons cm^-2 s^-1] injected at x = 0
+	amrex::Real flux{};	 // optical photon flux [photons cm^-2 s^-1] injected at x = 0
+	amrex::Real flux_ion{}; // ionizing photon flux [photons cm^-2 s^-1] injected at x = 0
 	amrex::Vector<amrex::Real> t_vec_;
 	amrex::Vector<amrex::Real> xfront_vec_;
 	std::ofstream output_file_;
@@ -236,18 +264,28 @@ void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux,
 	// The companion flux source is set to c * (energy source), i.e. the injected radiation has a reduced flux
 	// of unity and therefore free-streams along +x instead of spreading isotropically.
 	//
-	// Only the optical band is fed. The IR band starts dark and is filled purely by the dust's own thermal
-	// re-emission of the absorbed optical light, and the ionizing band is left dark entirely, so that this
-	// problem isolates dust reprocessing from the photochemistry.
+	// The optical and ionizing bands are fed; the IR band starts dark and is filled purely by the dust's own
+	// thermal re-emission of the absorbed optical light.
+	//
+	// The two sourced bands take different internal scalings: a thermal group's source is multiplied by
+	// chat/c, a chemistry band's is not (see source_terms_multi_group.hpp). The shipped fluxes differ by
+	// exactly that factor of c/chat = 1000, so the two bands receive the same injected energy and the
+	// energy budget below would be off by three orders of magnitude if either scaling were wrong.
 	amrex::ParmParse const pp("photoionize");
 	amrex::Real flux = 1.0e11_rt;
 	pp.query("flux", flux);
+	amrex::Real flux_ion = 0.0_rt;
+	pp.query("flux_ion", flux_ion);
 
 	const amrex::Real src_optical = flux * E_photon / dx[0];
+	const amrex::Real src_ionizing = flux_ion * E_photon / dx[0];
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
-			const amrex::Real src = ((g == group_optical) && (i == 0)) ? src_optical : 0.0_rt;
+			amrex::Real src = 0.0_rt;
+			if (i == 0) {
+				src = (g == group_optical) ? src_optical : ((g == group_ionizing) ? src_ionizing : 0.0_rt);
+			}
 			radEnergy(i, j, k, g) = src;
 			radFlux(i, j, k, 3 * g + 0) = C::c_light * src;
 			radFlux(i, j, k, 3 * g + 1) = 0.0_rt;
@@ -270,6 +308,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	userData_.primary_species_2 = 1.0e2_rt;
 	userData_.primary_species_3 = 1.0e-10_rt;
 	userData_.flux = 1.0e11_rt;
+	userData_.flux_ion = 0.0_rt;
 	pp.query("kappa1", kappa1); // gray opacity of the thermal band, group 0 [cm^2 g^-1]
 	pp.query("kappa2", kappa2); // gray opacity of the ionizing band, group 1 [cm^2 g^-1]
 	// Old dust-destruction knob:
@@ -282,6 +321,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	pp.query("primary_species_2", userData_.primary_species_2);
 	pp.query("primary_species_3", userData_.primary_species_3);
 	pp.query("flux", userData_.flux);
+	pp.query("flux_ion", userData_.flux_ion);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
@@ -411,6 +451,7 @@ auto problem_main() -> int
 	int status = 0;
 
 	const double F = sim.userData_.flux;
+	const double F_ion = sim.userData_.flux_ion;
 	const double t_end = sim.userData_.t_vec_.back();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 	const double Lx = sim.geom[0].ProbHiArray()[0] - sim.geom[0].ProbLoArray()[0];
@@ -430,9 +471,10 @@ auto problem_main() -> int
 			amrex::Print() << "Group " << g << " integrated Erad: " << E_g << "\n";
 			E_total += E_g;
 		}
-		// The thermal groups carry the code's internal chat/c source factor (see source_terms_multi_group.hpp).
-		// Only the optical group is sourced (see SetRadSource); every group starts at the radiation floor.
-		const double injected = (c_hat / C::c_light) * F * E_photon * t_end + Physics_Traits<DTypeFront1D>::nGroups * Erad_floor_ * Lx;
+		// A thermal group's source carries the code's internal chat/c factor and a chemistry band's does not
+		// (see source_terms_multi_group.hpp), so the optical and ionizing contributions are counted
+		// differently here. Every group starts at the radiation floor.
+		const double injected = ((c_hat / C::c_light) * F + F_ion) * E_photon * t_end + Physics_Traits<DTypeFront1D>::nGroups * Erad_floor_ * Lx;
 		const double energy_frac = E_total / injected;
 		const double tol = 0.01;
 
@@ -538,20 +580,22 @@ auto problem_main() -> int
 		}
 	}
 
-	// Check 5: the ionizing band (the last group) receives no source at all and is transparent to the gray
-	// opacity, so it must stay at the radiation floor.
+	// Check 5: the ionizing band. It is transparent to the dust opacity and, with photochemistry disabled,
+	// nothing absorbs it, so it must retain every erg injected into it. This is the check that pins the
+	// chemistry-band source scaling: unlike the thermal bands, a chemistry band's source is NOT multiplied
+	// by chat/c, so getting that wrong would show up here as a factor of c/chat = 1000.
 	{
 		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, group_ionizing);
-		const double E_ion_floor = Erad_floor_ * Lx;
-		const double ion_frac = E_ion / E_ion_floor;
+		const double injected_ion = F_ion * E_photon * t_end + Erad_floor_ * Lx;
+		const double ion_frac = E_ion / injected_ion;
 
-		amrex::Print() << "Ionizing band integrated Erad: " << E_ion << " (floor " << E_ion_floor << ")\n";
+		amrex::Print() << "Ionizing band integrated Erad: " << E_ion << " (injected " << injected_ion << ")\n";
 
-		if (ion_frac > 1.01) {
-			amrex::Print() << "Test FAILED: unsourced ionizing band rose above the radiation floor (Erad/floor = " << ion_frac << ").\n";
+		if (std::abs(ion_frac - 1.0) > 0.01) {
+			amrex::Print() << "Test FAILED: ionizing band holds " << ion_frac << " of its injected energy (expected 1 within 1%).\n";
 			status = 1;
 		} else {
-			amrex::Print() << "Test passed: unsourced ionizing band stays at the radiation floor (Erad/floor = " << ion_frac << ").\n";
+			amrex::Print() << "Test passed: unabsorbed ionizing band conserves its injected energy (Erad/injected = " << ion_frac << ").\n";
 		}
 	}
 
