@@ -335,35 +335,62 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			jacobian.Jgg = jacobian.Jgg * tau0;
 		}
 
-		// check relative convergence of the residuals
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
+		// Round-off floor on the radiation residual. Each iteration reconstructs the group energy as
+		// Erad_g = kappaPoverE_g * (4 pi B_g / c - R_g / tau_g). When a group is optically thin and sits far
+		// below its local blackbody, that subtraction cancels catastrophically: the result is many orders of
+		// magnitude smaller than either operand, so Erad_g -- and hence Fg_g -- cannot be resolved to better
+		// than the double-precision round-off of the larger operand. Without this floor the purely relative
+		// test below is unreachable in that regime and the iteration spins until maxIter and aborts, even
+		// though it reached its fixed point in a handful of steps.
+		double Fg_roundoff = 0.0;
+		for (int g = 0; g < nGroups_; ++g) {
+			if (tau[g] > 0.0) {
+				Fg_roundoff += std::numeric_limits<double>::epsilon() * std::max(fourPiBoverC[g], EradVec_guess[g]);
+			}
+		}
+
+		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
+		// the round-off floor and cannot be reduced any further
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) ||
+								    (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
 #if 0 // NOLINT
-      // For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
-		if (n == 0) {
-			std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = [";
-			for (int g = 0; g < nGroups_; ++g) {
-				std::cout << Erad0Vec[g] << ", ";
+      // For debugging: print the Newton-Raphson iterates for each cell.
+		if (n >= 0) {
+			if (n == 0) {
+				std::cout << "NRDBG initial: Egas0 = " << Egas0 << ", Erad0Vec = [";
+				for (int g = 0; g < nGroups_; ++g) {
+					std::cout << Erad0Vec[g] << ", ";
+				}
+				std::cout << "], Src = [";
+				for (int g = 0; g < nGroups_; ++g) {
+					std::cout << Src[g] << ", ";
+				}
+				std::cout << "], tau0 = [";
+				for (int g = 0; g < nGroups_; ++g) {
+					std::cout << tau0[g] << ", ";
+				}
+				std::cout << "], c_v = " << c_v << ", Etot0 = " << Etot0 << "\n";
 			}
-			std::cout << "], tau0 = [";
-			for (int g = 0; g < nGroups_; ++g) {
-				std::cout << tau0[g] << ", ";
-			}
-			std::cout << "]";
-			std::cout << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << ", coeff_n = " << coeff_n << "\n";
-		} else if (n >= 0) {
-			std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = [";
+			std::cout << "NRDBG n = " << n << ", T_gas = " << T_gas << ", Egas = " << Egas_guess << ", Erad = [";
 			for (int g = 0; g < nGroups_; ++g) {
 				std::cout << EradVec_guess[g] << ", ";
+			}
+			std::cout << "], Rvec = [";
+			for (int g = 0; g < nGroups_; ++g) {
+				std::cout << Rvec[g] << ", ";
+			}
+			std::cout << "], 4piB/c = [";
+			for (int g = 0; g < nGroups_; ++g) {
+				std::cout << fourPiBoverC[g] << ", ";
 			}
 			std::cout << "], tau = [";
 			for (int g = 0; g < nGroups_; ++g) {
 				std::cout << tau[g] << ", ";
 			}
-			std::cout << "]";
-			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
+			std::cout << "], F0/Etot0 = " << jacobian.F0 / Etot0 << ", cscale*Fg/Etot0 = " << cscale * jacobian.Fg_abs_sum / Etot0 << "\n";
 		}
 #endif
 
