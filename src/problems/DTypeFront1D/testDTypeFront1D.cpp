@@ -377,8 +377,11 @@ auto problem_main() -> int
 			E_total += E_g;
 		}
 		// The thermal groups carry the code's internal chat/c source factor (see source_terms_multi_group.hpp).
-		// Only group 0 is sourced; every group starts at the radiation floor.
-		const double injected = (c_hat / C::c_light) * F * E_photon * t_end + Physics_Traits<DTypeFront1D>::nGroups * Erad_floor_ * Lx;
+		// Every thermal group is sourced with the same luminosity (see SetRadSource), and every group starts
+		// at the radiation floor.
+		const int num_sourced_groups = Physics_Traits<DTypeFront1D>::nGroups - 1;
+		const double injected =
+		    num_sourced_groups * (c_hat / C::c_light) * F * E_photon * t_end + Physics_Traits<DTypeFront1D>::nGroups * Erad_floor_ * Lx;
 		const double energy_frac = E_total / injected;
 		const double tol = 0.01;
 
