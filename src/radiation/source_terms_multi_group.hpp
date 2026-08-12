@@ -438,7 +438,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 // Update radiation flux and gas momentum. Returns FluxUpdateResult struct. The function also updates energy.Egas and energy.work.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arrayconst_t &consPrev, NewtonIterationResult<problem_t> &energy,
-						       double const dt, double const gas_update_factor, double const Ekin0, double Emag)
+						       double const dt, double const gas_update_factor, double const Ekin0,
+						       amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> const &Src_flux, double Emag)
     -> FluxUpdateResult<problem_t>
 {
 	amrex::GpuArray<amrex::Real, 3> Frad_t0{};
@@ -460,9 +461,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 	const double chat = c_hat_;
 
 	for (int g = 0; g < nGroups_; ++g) {
-		Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-		Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-		Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+		// The user-defined flux source is added to the old-time flux, so the implicit absorption below acts on
+		// the freshly injected radiation as well.
+		Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g) + Src_flux[0][g];
+		Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g) + Src_flux[1][g];
+		Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g) + Src_flux[2][g];
 
 		if constexpr ((gamma_ == 1.0) || (beta_order_ == 0)) {
 			for (int n = 0; n < 3; ++n) {
@@ -599,10 +602,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
-						    double gas_update_factor_in, double dustGasCoeff, double const tol_h, double const tol_rel_h,
-						    double const tempFloor_local, int *p_iteration_counter, int *p_iteration_failure_counter,
-						    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
+void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource,
+						    amrex::Box const &indexRange, amrex::Real dt_implicit, double gas_update_factor_in, double dustGasCoeff,
+						    double const tol_h, double const tol_rel_h, double const tempFloor_local, int *p_iteration_counter,
+						    int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
@@ -672,6 +675,16 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
 			Src_chem[g] = Src[g];
 			Src[g] = 0.0;
+		}
+
+		// load the radiation flux source term, scaled exactly like the energy source above so that a user
+		// setting radFluxSource = c * radEnergySource injects free-streaming (|F| = c E) radiation.
+		amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> Src_flux{};
+		for (int g = 0; g < nGroups_; ++g) {
+			const double flux_scale = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_) ? dt : dt * (chat / c);
+			for (int n = 0; n < 3; ++n) {
+				Src_flux[n][g] = flux_scale * radFluxSource(i, j, k, 3 * g + n);
+			}
 		}
 
 		double Egas0 = NAN;
@@ -797,7 +810,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			// 2. Compute radiation flux update
 
 			// 2.1. Update flux and gas momentum
-			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0, Emag);
+			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0, Src_flux, Emag);
 
 			// 2.2. Check for convergence of the work term
 			bool work_converged = true;
