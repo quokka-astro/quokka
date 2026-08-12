@@ -42,6 +42,17 @@ photoionize.kappa1 = 1.0e1
 photoionize.kappa2 = 1.0e3
 radiation.iteration_tolerance = 1e-8
 
+# Ionizing photon flux injected at x = 0 [photons cm^-2 s^-1]. A chemistry band's source is not scaled by
+# chat/c the way a thermal band's is, so this value is c/chat = 1000 times smaller than photoionize.flux in
+# order to inject the same energy into the ionizing band as into the optical one.
+photoionize.flux_ion = 1.0e10
+
+# Solve for a separate dust temperature (ISM_Traits::enable_dust_gas_thermal_coupling_model), but switch the
+# gas-dust collisional term off. The dust is then set purely by radiative equilibrium with the local
+# radiation field and exchanges no energy with the gas. Note this is thermal decoupling only: radiation
+# momentum is still deposited, so the beam accelerates the gas to ~8e6 cm/s and sweeps the near-source cells.
+radiation.dust_gas_interaction_coeff = 0.0
+
 # The ionizing band is left dark (see SetRadSource), so photochemistry has nothing to do.
 photochemistry.enabled = 0
 integrator.use_number_densities = 1
