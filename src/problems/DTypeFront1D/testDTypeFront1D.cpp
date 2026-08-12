@@ -468,7 +468,8 @@ auto problem_main() -> int
 		amrex::Print() << "Reduced flux at the injection cell: " << reduced_flux << " (expected in [" << f_min << ", " << f_max << "])\n";
 
 		if (reduced_flux < f_min) {
-			amrex::Print() << "Test FAILED: injected radiation is not beamed (f = " << reduced_flux << "); the flux source is missing or too small.\n";
+			amrex::Print() << "Test FAILED: injected radiation is not beamed (f = " << reduced_flux
+				       << "); the flux source is missing or too small.\n";
 			status = 1;
 		} else if (reduced_flux > f_max) {
 			amrex::Print() << "Test FAILED: injected radiation exceeds the free-streaming limit (f = " << reduced_flux
