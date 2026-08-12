@@ -3,19 +3,21 @@
 ///
 /// A constant photon flux F [photons cm^-2 s^-1] is injected into the first cell (adjacent to x = 0) of a
 /// uniform, cold, neutral hydrogen slab. Both the radiation energy source and the companion radiation flux
-/// source are set, with flux = c * E, so the injected radiation is fully beamed along +x. Only the thermal
-/// band (group 0) is fed; the ionizing band (group 1) is left dark, which isolates thermal-band transport
-/// from the photochemistry.
+/// source are set, with flux = c * E, so the injected radiation is fully beamed along +x. There are two
+/// thermal groups and one ionizing (chemistry) group; only the first thermal group is fed, and the ionizing
+/// group is left dark, which isolates thermal-band transport from the photochemistry.
 ///
-/// Each group carries a constant gray opacity set at runtime (photoionize.kappa1, photoionize.kappa2), both
-/// zero in the shipped input file. With a transparent domain the injected radiation free-streams at the
-/// reduced speed of light, giving a top-hat profile whose analytic solution is
+/// The thermal groups carry a constant gray opacity set at runtime (photoionize.kappa1, photoionize.kappa2).
+/// Opacity in Quokka is pure absorption, so an opaque group also emits the local blackbody; with no other
+/// heating or cooling channel the gas therefore relaxes to radiative equilibrium with the local radiation
+/// field, at which point absorption is balanced by re-emission. Radiation energy is then conserved, but
+/// since the re-emission is isotropic while the source is beamed, the medium progressively isotropizes the
+/// beam: the reduced flux f = F / (c E) falls below unity and the front lags chat * t slightly. With the
+/// opacities set to zero the beam instead free-streams as an exact top-hat of height F * E_photon / c
+/// reaching x = chat * t.
 ///
-///   E_gamma(x, t) = F * E_photon / c   for x < chat * t,   0 otherwise.
-///
-/// The test checks that the total radiation energy in the domain equals the injected energy (exact for a
-/// transparent domain with reflecting boundaries), that the front sits at chat * t, and that the unsourced
-/// ionizing band stays at the radiation floor.
+/// The test checks that the total radiation energy in the domain equals the injected energy, that the front
+/// sits near chat * t, and that the unsourced ionizing band stays at the radiation floor.
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
@@ -57,9 +59,10 @@ constexpr double E_photon = 0.5 * (3.29e15 + 1.50e16) * C::hplanck; // erg
 // of RadStreaming / RadhydroShockMultigroup instead of seeding an unphysical 1e-99.
 constexpr double Erad_floor_ = 1.0e-10 * E_photon; // erg cm^-3
 
-// Gray opacities of the two radiation groups [cm^2 g^-1], set at runtime from photoionize.kappa1 (thermal
-// band, group 0) and photoionize.kappa2 (ionizing band, group 1). Both default to zero, i.e. a transparent
-// domain. Managed memory so the device-side opacity function can read them.
+// Gray opacities of the two thermal groups [cm^2 g^-1], set at runtime from photoionize.kappa1 (group 0)
+// and photoionize.kappa2 (group 1). Both default to zero, i.e. a transparent domain. The ionizing band is
+// always transparent to this gray opacity; it couples to the gas through photochemistry instead. Managed
+// memory so the device-side opacity function can read them.
 AMREX_GPU_MANAGED double kappa1 = 0.0; // NOLINT
 AMREX_GPU_MANAGED double kappa2 = 0.0; // NOLINT
 
@@ -78,9 +81,9 @@ template <> struct Physics_Traits<DTypeFront1D> : DefaultPhysicsTraits {
 	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	// 2 radiation groups: group 0 = thermal (non-ionizing), group 1 = ionizing (the chemistry band).
+	// 3 radiation groups: groups 0 and 1 = thermal (non-ionizing), group 2 = ionizing (the chemistry band).
 	// Chemistry bands must be the last groups; see radiation_system.hpp.
-	static constexpr int nGroups = 2;
+	static constexpr int nGroups = 3;
 };
 
 template <> struct RadSystem_Traits<DTypeFront1D> {
@@ -89,14 +92,16 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	// beta_order = 0: no O(v/c) radiation-momentum kick, so the beam free-streams without dragging the gas.
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = C::hplanck; // radBoundaries below are frequencies in Hz
-	// Group frequency boundaries [Hz]: group 0 = thermal (non-ionizing) [2.5e15, 3.29e15], group 1 =
-	// ionizing [3.29e15, 1.5e16]. The last group coincides with the chemistry band (ChemBands below).
+	// Group frequency boundaries [Hz]: group 0 = thermal [2.5e15, 2.9e15], group 1 = thermal
+	// [2.9e15, 3.29e15], group 2 = ionizing [3.29e15, 1.5e16]. The last group coincides with the chemistry
+	// band (ChemBands below).
 	//
-	// The thermal band sits just below the Lyman edge on purpose. Opacity in Quokka is pure absorption,
-	// so a band with non-zero opacity also *emits* the local blackbody. Placing the band deep on the Wien
-	// tail of the gas temperature keeps the emission term tractable when kappa_thermal is turned on, while
-	// the cold neutral gas (100 K) emits nothing at all and can absorb freely.
-	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{2.5e15, 3.29e15, 1.50e16};
+	// Note that placing the thermal bands high in frequency does NOT shield them from blackbody emission:
+	// ComputePlanckEnergyFractions accumulates from zero, so group 0 receives the entire blackbody below
+	// radBoundaries[1] rather than just the light inside its own band. Opacity in Quokka is pure absorption,
+	// so whenever kappa1 is non-zero the gas both absorbs and re-emits essentially its full a*T^4, and it
+	// relaxes to radiative equilibrium (a*T^4 = sum of the thermal-group Erad) instead of simply heating.
+	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{2.5e15, 2.9e15, 3.29e15, 1.50e16};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
@@ -181,8 +186,9 @@ void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux,
 	// The companion flux source is set to c * (energy source), i.e. the injected radiation has a reduced flux
 	// of unity and therefore free-streams along +x instead of spreading isotropically.
 	//
-	// Only the thermal band (group 0) is fed. The ionizing band (group 1) is left dark so that this problem
-	// exercises thermal-band transport in isolation from the photochemistry.
+	// Only the first thermal band (group 0) is fed. The second thermal band (group 1) starts dark and is
+	// filled only by the gas's own emission, and the ionizing band (group 2) is left dark entirely, so that
+	// this problem exercises thermal-band transport in isolation from the photochemistry.
 	amrex::ParmParse const pp("photoionize");
 	amrex::Real flux = 1.0e11_rt;
 	pp.query("flux", flux);
@@ -254,15 +260,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<DTypeFront1D>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
 							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
-	// Each group carries its own constant gray opacity: kappa1 for the thermal band, kappa2 for the ionizing
-	// band. The trailing entry (i == nGroups_) is the unused upper band edge.
+	// Each thermal group carries its own constant gray opacity; the ionizing (chemistry) band is left
+	// transparent. The trailing entry (i == nGroups_) is the unused upper band edge.
 	//
 	// Old temperature-dependent form, which destroyed the opacity above T_dust_destroy to mimic dust
 	// sublimation in hot gas. Opacity here is pure absorption, so opaque gas also emits its local blackbody;
 	// dust-free hot gas neither absorbs nor emits in this band, which keeps the energy solve well behaved:
 	//
 	// const double kappa_0 = (T_dust_destroy > 0.0) ? kappa_thermal * std::exp(-Tgas / T_dust_destroy) : kappa_thermal;
-	const amrex::GpuArray<double, nGroups_> kappa_g{kappa1, kappa2};
+	const amrex::GpuArray<double, nGroups_> kappa_g{kappa1, kappa2, 0.0};
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
 		exponents_and_values[0][i] = 0.0;
@@ -358,17 +364,22 @@ auto problem_main() -> int
 	// Analytic free-streaming solution: a top-hat of height F * E_photon / c reaching x = chat * t.
 	auto x_analytic = [=](double t_now) -> double { return c_hat * t_now; };
 
-	// Check 1: conservation of total radiation energy. With transparent groups and reflecting boundaries no
-	// radiation is absorbed or lost, so the domain-integrated Erad summed over all groups must equal the
-	// energy injected by SetRadSource. This is the primary check on the source-term accounting.
+	// Check 1: conservation of total radiation energy. Reflecting boundaries lose nothing, and the gray
+	// opacity only moves energy between the gas and the thermal groups, so once the gas has settled into
+	// radiative equilibrium the domain-integrated Erad summed over all groups must equal the energy injected
+	// by SetRadSource plus the initial floor. This is the primary check on the source-term accounting; the
+	// tolerance absorbs the small amount of heat the gas releases on its way to equilibrium.
 	{
 		double E_total = 0.0;
 		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
-			E_total += compute_group_total_erad(sim.state_new_cc_[0], dx, g);
+			const double E_g = compute_group_total_erad(sim.state_new_cc_[0], dx, g);
+			amrex::Print() << "Group " << g << " integrated Erad: " << E_g << "\n";
+			E_total += E_g;
 		}
-		// The thermal group carries the code's internal chat/c source factor (see source_terms_multi_group.hpp).
-		// Only the thermal band is sourced; the ionizing band contributes its negligible initial floor.
-		const double injected = (c_hat / C::c_light) * F * E_photon * t_end + Erad_floor_ * Lx;
+		// The thermal groups carry the code's internal chat/c source factor (see source_terms_multi_group.hpp).
+		// Only group 0 is sourced; every group starts at the radiation floor.
+		const double injected =
+		    (c_hat / C::c_light) * F * E_photon * t_end + Physics_Traits<DTypeFront1D>::nGroups * Erad_floor_ * Lx;
 		const double energy_frac = E_total / injected;
 		const double tol = 0.01;
 
@@ -384,14 +395,16 @@ auto problem_main() -> int
 		}
 	}
 
-	// Check 2: the beamed source (flux = c * E) must free-stream at the reduced speed of light. This is what
-	// verifies that SetRadSource actually injected a directed flux: an energy source alone leaves f = 0, and
-	// the M1 closure would then spread the radiation at chat / sqrt(3), i.e. ~42 percent short.
+	// Check 2: the beamed source (flux = c * E) must propagate at close to the reduced speed of light. This
+	// is what verifies that SetRadSource actually injected a directed flux: an energy source alone leaves
+	// f = 0, and the M1 closure would then spread the radiation at chat / sqrt(3), i.e. ~42 percent short.
+	// The tolerance is loose enough to absorb the isotropization caused by the gray opacity, which re-emits
+	// absorbed beam energy in all directions and so drags the front a few percent behind chat * t.
 	{
 		const double x_front = sim.userData_.xfront_vec_.back();
 		const double x_ref = x_analytic(t_end);
 		const double percent_diff = std::abs(x_front - x_ref) / x_ref * 100.0;
-		const double tol_percent = 5.0;
+		const double tol_percent = 10.0;
 
 		amrex::Print() << "Radiation front position: " << x_front << " cm\n";
 		amrex::Print() << "Analytic front position:  " << x_ref << " cm (chat * t; an isotropic source would give " << x_ref / std::sqrt(3.0) << ")\n";
@@ -408,9 +421,10 @@ auto problem_main() -> int
 		}
 	}
 
-	// Check 3: the ionizing band receives no source at all, so it must stay at the radiation floor.
+	// Check 3: the ionizing band (the last group) receives no source at all and is transparent to the gray
+	// opacity, so it must stay at the radiation floor.
 	{
-		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, 1);
+		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, Physics_Traits<DTypeFront1D>::nGroups - 1);
 		const double E_ion_floor = Erad_floor_ * Lx;
 		const double ion_frac = E_ion / E_ion_floor;
 

@@ -33,10 +33,10 @@ photoionize.temperature = 1.0e2
 # Photon flux injected into the thermal band at x = 0 [photons cm^-2 s^-1].
 photoionize.flux = 1.0e10
 
-# Gray opacity of each radiation group [cm^2 g^-1]: kappa1 = thermal band, kappa2 = ionizing band.
-# Both zero, so the domain is transparent and the injected radiation energy is exactly conserved.
-photoionize.kappa1 = 0.0
-photoionize.kappa2 = 0.0
+# Gray opacity of the two thermal groups [cm^2 g^-1]. With rho = n_0 * m_H = 1.67e-22 g cm^-3 these give a
+# domain optical depth of ~0.33. The ionizing band is always transparent to this gray opacity.
+photoionize.kappa1 = 1.0e2
+photoionize.kappa2 = 1.0e2
 
 # The ionizing band is left dark (see SetRadSource), so photochemistry has nothing to do.
 photochemistry.enabled = 0
