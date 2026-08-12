@@ -7,13 +7,15 @@
 /// band (group 0) is fed; the ionizing band (group 1) is left dark, which isolates thermal-band transport
 /// from the photochemistry.
 ///
-/// With zero thermal opacity the injected radiation free-streams at the reduced speed of light, giving a
-/// top-hat profile whose analytic solution is
+/// Each group carries a constant gray opacity set at runtime (photoionize.kappa1, photoionize.kappa2), both
+/// zero in the shipped input file. With a transparent domain the injected radiation free-streams at the
+/// reduced speed of light, giving a top-hat profile whose analytic solution is
 ///
 ///   E_gamma(x, t) = F * E_photon / c   for x < chat * t,   0 otherwise.
 ///
-/// The test checks the front position (chat * t), the plateau energy budget, and that the ionizing band
-/// stays at the radiation floor.
+/// The test checks that the total radiation energy in the domain equals the injected energy (exact for a
+/// transparent domain with reflecting boundaries), that the front sits at chat * t, and that the unsourced
+/// ionizing band stays at the radiation floor.
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
@@ -55,11 +57,15 @@ constexpr double E_photon = 0.5 * (3.29e15 + 1.50e16) * C::hplanck; // erg
 // of RadStreaming / RadhydroShockMultigroup instead of seeding an unphysical 1e-99.
 constexpr double Erad_floor_ = 1.0e-10 * E_photon; // erg cm^-3
 
-// Gray opacity of the thermal band [cm^2 g^-1], set at runtime from photoionize.kappa_thermal.
-// Managed memory so the device-side opacity function can read it.
-AMREX_GPU_MANAGED double kappa_thermal = 0.0; // NOLINT
-// Temperature above which the thermal-band opacity is destroyed (dust sublimation in ionized gas).
-AMREX_GPU_MANAGED double T_dust_destroy = 0.0; // NOLINT
+// Gray opacities of the two radiation groups [cm^2 g^-1], set at runtime from photoionize.kappa1 (thermal
+// band, group 0) and photoionize.kappa2 (ionizing band, group 1). Both default to zero, i.e. a transparent
+// domain. Managed memory so the device-side opacity function can read them.
+AMREX_GPU_MANAGED double kappa1 = 0.0; // NOLINT
+AMREX_GPU_MANAGED double kappa2 = 0.0; // NOLINT
+
+// Old dust-destruction knob, kept for reference:
+// // Temperature above which the thermal-band opacity is destroyed (dust sublimation in ionized gas).
+// AMREX_GPU_MANAGED double T_dust_destroy = 0.0; // NOLINT
 
 template <> struct quokka::EOS_Traits<DTypeFront1D> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -208,8 +214,11 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	userData_.primary_species_2 = 1.0e2_rt;
 	userData_.primary_species_3 = 1.0e-10_rt;
 	userData_.flux = 1.0e11_rt;
-	pp.query("kappa_thermal", kappa_thermal);   // gray opacity of the thermal band [cm^2 g^-1]
-	pp.query("T_dust_destroy", T_dust_destroy); // dust-destruction temperature [K]; 0 disables
+	pp.query("kappa1", kappa1); // gray opacity of the thermal band, group 0 [cm^2 g^-1]
+	pp.query("kappa2", kappa2); // gray opacity of the ionizing band, group 1 [cm^2 g^-1]
+	// Old dust-destruction knob:
+	//
+	// pp.query("T_dust_destroy", T_dust_destroy); // dust-destruction temperature [K]; 0 disables
 	pp.query("small_temp", userData_.small_temp);
 	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
@@ -226,33 +235,38 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	}
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront1D>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return 0.0_rt;
-}
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront1D>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return 0.0_rt;
-}
+// ComputePlanckOpacity / ComputeFluxMeanOpacity are only consulted by the single-group solver. This problem
+// runs with nGroups = 2, so the group opacities come from DefineOpacityExponentsAndLowerValues below and
+// these specializations are dead code:
+//
+// template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront1D>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+// {
+//	return 0.0_rt;
+// }
+//
+// template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront1D>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+// {
+//	return 0.0_rt;
+// }
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<DTypeFront1D>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/, const double Tgas)
-    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+RadSystem<DTypeFront1D>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
-	// Group 0 (thermal) carries a dust-like gray opacity, zero by default so the injected beam free-streams;
-	// group 1 (ionizing) has none — its interaction with the gas would be photoionization, handled by the
-	// photochemistry network rather than by this opacity.
+	// Each group carries its own constant gray opacity: kappa1 for the thermal band, kappa2 for the ionizing
+	// band. The trailing entry (i == nGroups_) is the unused upper band edge.
 	//
-	// The opacity is destroyed above T_dust_destroy, mimicking dust sublimation in hot gas. Opacity here is
-	// pure absorption, so opaque gas also emits its local blackbody; dust-free hot gas neither absorbs nor
-	// emits in this band, which is both the correct physics and what keeps the energy solve well behaved.
-	const double kappa_0 = (T_dust_destroy > 0.0) ? kappa_thermal * std::exp(-Tgas / T_dust_destroy) : kappa_thermal;
+	// Old temperature-dependent form, which destroyed the opacity above T_dust_destroy to mimic dust
+	// sublimation in hot gas. Opacity here is pure absorption, so opaque gas also emits its local blackbody;
+	// dust-free hot gas neither absorbs nor emits in this band, which keeps the energy solve well behaved:
+	//
+	// const double kappa_0 = (T_dust_destroy > 0.0) ? kappa_thermal * std::exp(-Tgas / T_dust_destroy) : kappa_thermal;
+	const amrex::GpuArray<double, nGroups_> kappa_g{kappa1, kappa2};
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
 		exponents_and_values[0][i] = 0.0;
-		exponents_and_values[1][i] = (i == 0) ? kappa_0 : 0.0;
+		exponents_and_values[1][i] = (i < nGroups_) ? kappa_g[i] : 0.0;
 	}
 	return exponents_and_values;
 }
@@ -342,20 +356,46 @@ auto problem_main() -> int
 	const double Lx = sim.geom[0].ProbHiArray()[0] - sim.geom[0].ProbLoArray()[0];
 
 	// Analytic free-streaming solution: a top-hat of height F * E_photon / c reaching x = chat * t.
-	const double Erad_plateau = compute_plateau_erad(F);
 	auto x_analytic = [=](double t_now) -> double { return c_hat * t_now; };
 
-	// Check 1: the beamed source (flux = c * E) must free-stream at the reduced speed of light. Without the
-	// flux source the radiation would spread isotropically at chat / sqrt(3), so this check is what verifies
-	// that SetRadSource actually injected a directed flux.
+	// Check 1: conservation of total radiation energy. With transparent groups and reflecting boundaries no
+	// radiation is absorbed or lost, so the domain-integrated Erad summed over all groups must equal the
+	// energy injected by SetRadSource. This is the primary check on the source-term accounting.
+	{
+		double E_total = 0.0;
+		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
+			E_total += compute_group_total_erad(sim.state_new_cc_[0], dx, g);
+		}
+		// The thermal group carries the code's internal chat/c source factor (see source_terms_multi_group.hpp).
+		// Only the thermal band is sourced; the ionizing band contributes its negligible initial floor.
+		const double injected = (c_hat / C::c_light) * F * E_photon * t_end + Erad_floor_ * Lx;
+		const double energy_frac = E_total / injected;
+		const double tol = 0.01;
+
+		amrex::Print() << "Total radiation energy: " << E_total << " (injected " << injected << ")\n";
+		amrex::Print() << "Opacities: kappa1 = " << kappa1 << ", kappa2 = " << kappa2 << " cm^2/g\n";
+
+		if (std::abs(energy_frac - 1.0) > tol) {
+			amrex::Print() << "Test FAILED: total radiation energy is " << energy_frac << " of injected (expected 1 within " << tol * 100.0
+				       << "%).\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: radiation energy is conserved (Erad/injected = " << energy_frac << ").\n";
+		}
+	}
+
+	// Check 2: the beamed source (flux = c * E) must free-stream at the reduced speed of light. This is what
+	// verifies that SetRadSource actually injected a directed flux: an energy source alone leaves f = 0, and
+	// the M1 closure would then spread the radiation at chat / sqrt(3), i.e. ~42 percent short.
 	{
 		const double x_front = sim.userData_.xfront_vec_.back();
 		const double x_ref = x_analytic(t_end);
 		const double percent_diff = std::abs(x_front - x_ref) / x_ref * 100.0;
 		const double tol_percent = 5.0;
 
-		amrex::Print() << "Free-streaming front position: " << x_front << " cm\n";
-		amrex::Print() << "Analytic front position:      " << x_ref << " cm (chat * t)\n";
+		amrex::Print() << "Radiation front position: " << x_front << " cm\n";
+		amrex::Print() << "Analytic front position:  " << x_ref << " cm (chat * t; an isotropic source would give " << x_ref / std::sqrt(3.0)
+			       << ")\n";
 		amrex::Print() << "Difference: " << percent_diff << " percent (tolerance: " << tol_percent << " percent)\n";
 
 		if (x_ref >= Lx) {
@@ -365,28 +405,7 @@ auto problem_main() -> int
 			amrex::Print() << "Test FAILED: radiation front differs from chat * t by more than " << tol_percent << " percent.\n";
 			status = 1;
 		} else {
-			amrex::Print() << "Test passed: radiation front free-streams at chat within " << tol_percent << " percent.\n";
-		}
-	}
-
-	// Check 2: energy budget of the thermal band. With zero opacity the band is transparent and conserves
-	// energy exactly, so the domain-integrated Erad must equal the injected amount. Together with Check 1
-	// (which fixes the width of the top-hat) this also pins down its height, F * E_photon / c.
-	{
-		const double E_therm = compute_group_total_erad(sim.state_new_cc_[0], dx, 0);
-		// The thermal group carries the code's internal chat/c source factor (see source_terms_multi_group.hpp).
-		const double injected_thermal = (c_hat / C::c_light) * F * E_photon * t_end;
-		const double therm_frac = E_therm / injected_thermal;
-		const double tau_dom = kappa_thermal * sim.userData_.primary_species_2 * spmasses[1] * Lx; // domain optical depth
-
-		amrex::Print() << "Thermal band integrated Erad: " << E_therm << " (injected " << injected_thermal << ", tau_dom = " << tau_dom << ")\n";
-		amrex::Print() << "Plateau Erad (analytic):      " << Erad_plateau << " erg cm^-3\n";
-
-		if (std::abs(therm_frac - 1.0) > 0.03) {
-			amrex::Print() << "Test FAILED: transparent thermal band energy is " << therm_frac << " of injected (expected 1 within 3%).\n";
-			status = 1;
-		} else {
-			amrex::Print() << "Test passed: transparent thermal band conserves energy (Erad/injected = " << therm_frac << ").\n";
+			amrex::Print() << "Test passed: beamed source propagates at chat within " << tol_percent << " percent.\n";
 		}
 	}
 
