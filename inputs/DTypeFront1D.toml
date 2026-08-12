@@ -21,18 +21,20 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-# ~2 planar expansion times (t_exp = x_S / c_i ~ 3e12 s); front stays well inside the domain.
-stop_time = 6.0e12
+# The beam free-streams at chat = c/1000 = 3e7 cm/s, crossing the 2e19 cm domain in 6.7e11 s.
+# Stop at 60% of that so the front is still well inside the domain when it is measured.
+stop_time = 4.0e11
 
 # Uniform neutral hydrogen slab: n_0 = 100 cm^-3, cold (100 K).
 photoionize.primary_species_1 = 1.0e-10   # e
 photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
 photoionize.primary_species_3 = 1.0e-10   # H+
 photoionize.temperature = 1.0e2
-# Ionizing photon flux injected at x = 0 [photons cm^-2 s^-1].
+# Photon flux injected into the thermal band at x = 0 [photons cm^-2 s^-1].
 photoionize.flux = 1.0e10
 
-photochemistry.enabled = 1
+# The ionizing band is left dark (see SetRadSource), so photochemistry has nothing to do.
+photochemistry.enabled = 0
 integrator.use_number_densities = 1
 integrator.do_species_clip = 0
 integrator.jacobian = 1
