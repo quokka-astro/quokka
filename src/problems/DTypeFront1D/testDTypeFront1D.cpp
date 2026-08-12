@@ -516,7 +516,7 @@ auto problem_main() -> int
 		const double E_ir = compute_group_total_erad(sim.state_new_cc_[0], dx, group_ir);
 		const double E_opt = compute_group_total_erad(sim.state_new_cc_[0], dx, group_optical);
 		const double rho_0 = sim.userData_.primary_species_2 * spmasses[1]; // initial neutral-H mass density
-		const double alpha_opt = rho_0 * kappa2;			   // optical absorption coefficient [cm^-1]
+		const double alpha_opt = rho_0 * kappa2;			    // optical absorption coefficient [cm^-1]
 		const double tau_front = alpha_opt * x_analytic(t_end);
 		const double E_opt_ref = compute_plateau_erad(F) * (1.0 - std::exp(-tau_front)) / alpha_opt;
 		const double reprocessed = E_ir / (E_ir + E_opt);
