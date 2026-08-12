@@ -92,16 +92,21 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	// beta_order = 0: no O(v/c) radiation-momentum kick, so the beam free-streams without dragging the gas.
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = C::hplanck; // radBoundaries below are frequencies in Hz
-	// Group frequency boundaries [Hz]: group 0 = thermal [2.5e15, 2.9e15], group 1 = thermal
-	// [2.9e15, 3.29e15], group 2 = ionizing [3.29e15, 1.5e16]. The last group coincides with the chemistry
-	// band (ChemBands below).
+	// Group frequency boundaries [Hz]: groups 0 and 1 are thermal, group 2 is the ionizing chemistry band,
+	// which starts at the Lyman edge (3.29e15 Hz) to match ChemBands below.
 	//
-	// Note that placing the thermal bands high in frequency does NOT shield them from blackbody emission:
-	// ComputePlanckEnergyFractions accumulates from zero, so group 0 receives the entire blackbody below
-	// radBoundaries[1] rather than just the light inside its own band. Opacity in Quokka is pure absorption,
-	// so whenever kappa1 is non-zero the gas both absorbs and re-emits essentially its full a*T^4, and it
-	// relaxes to radiative equilibrium (a*T^4 = sum of the thermal-group Erad) instead of simply heating.
-	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{2.5e15, 2.9e15, 3.29e15, 1.50e16};
+	// The outermost two boundaries are deliberately set far outside the range that carries any energy, and
+	// should be read as 0 and infinity. They are not physical band edges: ComputePlanckEnergyFractions
+	// accumulates the Planck integral from zero, so group 0 receives the whole blackbody below
+	// radBoundaries[1] no matter what radBoundaries[0] says, and emission above radBoundaries[2] is dropped
+	// rather than assigned to the chemistry band, so radBoundaries[3] never enters the emission budget.
+	//
+	// The split between the two thermal groups sits at 6e11 Hz because the gas here relaxes to radiative
+	// equilibrium with the beam, a*T^4 = sum of the thermal-group Erad, which for this photon flux gives
+	// T ~ 8.5 K. At that temperature h*nu/(k*T) = 3.37 at the split, so the two thermal groups carry 47% and
+	// 53% of the blackbody and both take a real part in the emission-absorption exchange. Raising the photon
+	// flux raises the equilibrium temperature and moves the split, so this boundary tracks photoionize.flux.
+	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{1.0e8, 6.0e11, 3.29e15, 1.0e19};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
@@ -150,6 +155,29 @@ auto compute_front_position(amrex::MultiFab const &state_mf, amrex::GpuArray<amr
 	amrex::Real x_front = amrex::get<0>(hv);
 	amrex::ParallelAllReduce::Max(x_front, amrex::ParallelContext::CommunicatorSub());
 	return x_front;
+}
+
+// Reduced flux f = F_x / (c * Erad) of thermal group 0 in the injection cell (i == 0). Free-streaming
+// radiation has f = 1; isotropic radiation has f = 0.
+auto compute_injection_reduced_flux(amrex::MultiFab const &state_mf) -> amrex::Real
+{
+	amrex::ReduceOps<amrex::ReduceOpMax> reduce_op;
+	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+	auto const state = state_mf.const_arrays();
+	const int erad_index = RadSystem<DTypeFront1D>::radEnergy_index;
+	const int frad_index = RadSystem<DTypeFront1D>::x1RadFlux_index;
+
+	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
+		if (i != 0) {
+			return 0.0_rt;
+		}
+		return state[box_no](i, j, k, frad_index) / (C::c_light * state[box_no](i, j, k, erad_index));
+	});
+
+	auto const &hv = reduce_data.value(reduce_op);
+	amrex::Real reduced_flux = amrex::get<0>(hv);
+	amrex::ParallelAllReduce::Max(reduced_flux, amrex::ParallelContext::CommunicatorSub());
+	return reduced_flux;
 }
 
 // Domain-integrated radiation energy of group g: sum_cells Erad_g * dx  [erg cm^-2 in 1D].
@@ -397,11 +425,12 @@ auto problem_main() -> int
 		}
 	}
 
-	// Check 2: the beamed source (flux = c * E) must propagate at close to the reduced speed of light. This
-	// is what verifies that SetRadSource actually injected a directed flux: an energy source alone leaves
-	// f = 0, and the M1 closure would then spread the radiation at chat / sqrt(3), i.e. ~42 percent short.
-	// The tolerance is loose enough to absorb the isotropization caused by the gray opacity, which re-emits
-	// absorbed beam energy in all directions and so drags the front a few percent behind chat * t.
+	// Check 2: the beam must propagate at close to the reduced speed of light. This is a sanity check on
+	// transport, NOT a test of the flux source -- Check 3 is that. Deleting the flux source entirely moves
+	// the measured front only from 3.6% to 10.1% behind chat * t, because the M1 closure lets the leading
+	// edge of an isotropic pulse go free-streaming anyway; it does not crawl at chat / sqrt(3). The
+	// tolerance also has to absorb the isotropization caused by the gray opacity, which re-emits absorbed
+	// beam energy in all directions and so drags the front a few percent back.
 	{
 		const double x_front = sim.userData_.xfront_vec_.back();
 		const double x_ref = x_analytic(t_end);
@@ -423,7 +452,34 @@ auto problem_main() -> int
 		}
 	}
 
-	// Check 3: the ionizing band (the last group) receives no source at all and is transparent to the gray
+	// Check 3: the reduced flux of the sourced band in the injection cell. This is the check that actually
+	// exercises the flux source; neither of the checks above does. SetRadSource sets
+	// radFluxSource = c * radEnergySource, so the injected radiation must arrive fully beamed, f = 1.
+	// Measured behaviour of the three cases: f = 0.998 as written, f = 0.093 with the flux source deleted,
+	// and f = 1000 with the flux source scaled up by c / chat. The upper bound matters because the M1 flux
+	// limiter in ConservedToPrimitive only acts during reconstruction and does not repair the conserved
+	// state, so an over-large flux source leaves an unphysical f > 1 sitting in the state array that neither
+	// the energy budget nor the front position would reveal.
+	{
+		const double reduced_flux = compute_injection_reduced_flux(sim.state_new_cc_[0]);
+		const double f_min = 0.9;
+		const double f_max = 1.0 - 1.0e-6;
+
+		amrex::Print() << "Reduced flux at the injection cell: " << reduced_flux << " (expected in [" << f_min << ", " << f_max << "])\n";
+
+		if (reduced_flux < f_min) {
+			amrex::Print() << "Test FAILED: injected radiation is not beamed (f = " << reduced_flux << "); the flux source is missing or too small.\n";
+			status = 1;
+		} else if (reduced_flux > f_max) {
+			amrex::Print() << "Test FAILED: injected radiation exceeds the free-streaming limit (f = " << reduced_flux
+				       << "); the flux source is too large.\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: SetRadSource injected free-streaming radiation (f = " << reduced_flux << ").\n";
+		}
+	}
+
+	// Check 4: the ionizing band (the last group) receives no source at all and is transparent to the gray
 	// opacity, so it must stay at the radiation floor.
 	{
 		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, Physics_Traits<DTypeFront1D>::nGroups - 1);
@@ -473,5 +529,5 @@ auto problem_main() -> int
 #endif
 
 	amrex::Print() << "Finished." << '\n';
-	return 0;
+	return status;
 }
