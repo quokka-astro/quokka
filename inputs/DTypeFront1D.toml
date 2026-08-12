@@ -30,13 +30,16 @@ photoionize.primary_species_1 = 1.0e-10   # e
 photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
 photoionize.primary_species_3 = 1.0e-10   # H+
 photoionize.temperature = 1.0e2
-# Photon flux injected into the thermal band at x = 0 [photons cm^-2 s^-1].
-photoionize.flux = 1.0e10
+# Photon flux injected into the optical band at x = 0 [photons cm^-2 s^-1]. This sets the dust temperature,
+# which settles at a*T^4 = E_IR + (kappa2/kappa1) * E_optical.
+photoionize.flux = 1.0e13
 
-# Gray opacity of the two thermal groups [cm^2 g^-1]. With rho = n_0 * m_H = 1.67e-22 g cm^-3 these give a
-# domain optical depth of ~0.33. The ionizing band is always transparent to this gray opacity.
-photoionize.kappa1 = 1.0e2
-photoionize.kappa2 = 1.0e2
+# Gray dust opacity of the two thermal groups [cm^2 g^-1]: kappa1 = IR, kappa2 = optical. Dust is optically
+# thick to the incoming optical light and thin to the IR it re-emits, which is what drives the reprocessing.
+# With rho = n_0 * m_H = 1.66e-22 g cm^-3 the domain optical depths are 3.3 (optical) and 0.033 (IR).
+# The ionizing band is always transparent to this gray opacity.
+photoionize.kappa1 = 1.0e1
+photoionize.kappa2 = 1.0e3
 radiation.iteration_tolerance = 1e-8
 
 # The ionizing band is left dark (see SetRadSource), so photochemistry has nothing to do.
