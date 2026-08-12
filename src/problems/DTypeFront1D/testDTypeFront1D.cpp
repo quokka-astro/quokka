@@ -394,8 +394,7 @@ auto problem_main() -> int
 		const double tol_percent = 5.0;
 
 		amrex::Print() << "Radiation front position: " << x_front << " cm\n";
-		amrex::Print() << "Analytic front position:  " << x_ref << " cm (chat * t; an isotropic source would give " << x_ref / std::sqrt(3.0)
-			       << ")\n";
+		amrex::Print() << "Analytic front position:  " << x_ref << " cm (chat * t; an isotropic source would give " << x_ref / std::sqrt(3.0) << ")\n";
 		amrex::Print() << "Difference: " << percent_diff << " percent (tolerance: " << tol_percent << " percent)\n";
 
 		if (x_ref >= Lx) {
