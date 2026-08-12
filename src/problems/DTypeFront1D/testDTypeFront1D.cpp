@@ -4,8 +4,8 @@
 /// A constant photon flux F [photons cm^-2 s^-1] is injected into the first cell (adjacent to x = 0) of a
 /// uniform, cold, neutral hydrogen slab. Both the radiation energy source and the companion radiation flux
 /// source are set, with flux = c * E, so the injected radiation is fully beamed along +x. There are two
-/// thermal groups and one ionizing (chemistry) group; only the first thermal group is fed, and the ionizing
-/// group is left dark, which isolates thermal-band transport from the photochemistry.
+/// thermal groups and one ionizing (chemistry) group; both thermal groups are fed, and the ionizing group is
+/// left dark, which isolates thermal-band transport from the photochemistry.
 ///
 /// The thermal groups carry a constant gray opacity set at runtime (photoionize.kappa1, photoionize.kappa2).
 /// Opacity in Quokka is pure absorption, so an opaque group also emits the local blackbody; with no other
@@ -17,7 +17,8 @@
 /// reaching x = chat * t.
 ///
 /// The test checks that the total radiation energy in the domain equals the injected energy, that the front
-/// sits near chat * t, and that the unsourced ionizing band stays at the radiation floor.
+/// sits near chat * t, that the radiation leaves the injection cell beamed (reduced flux of unity, the only
+/// check here that exercises the flux source), and that the unsourced ionizing band stays at the floor.
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
