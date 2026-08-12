@@ -123,9 +123,9 @@ const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum
 
 template <>
 void RadSystem<MarshakProblem>::SetRadSource(array_t &radEnergySource, array_t & /*radFluxSource*/, amrex::Box const &indexRange,
-						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
-						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time)
+					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
+					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const xl = (i + 0.) * dx[0];

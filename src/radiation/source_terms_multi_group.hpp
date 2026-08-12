@@ -602,9 +602,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource,
-						    amrex::Box const &indexRange, amrex::Real dt_implicit, double gas_update_factor_in, double dustGasCoeff,
-						    double const tol_h, double const tol_rel_h, double const tempFloor_local, int *p_iteration_counter,
+void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
+						    amrex::Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double const tol_h,
+						    double const tol_rel_h, double const tempFloor_local, int *p_iteration_counter,
 						    int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
