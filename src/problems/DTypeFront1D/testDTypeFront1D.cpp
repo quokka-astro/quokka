@@ -167,7 +167,7 @@ template <> struct SimulationData<DTypeFront1D> {
 	amrex::Real primary_species_1{};
 	amrex::Real primary_species_2{};
 	amrex::Real primary_species_3{};
-	amrex::Real flux{};	 // optical photon flux [photons cm^-2 s^-1] injected at x = 0
+	amrex::Real flux{};	// optical photon flux [photons cm^-2 s^-1] injected at x = 0
 	amrex::Real flux_ion{}; // ionizing photon flux [photons cm^-2 s^-1] injected at x = 0
 	amrex::Vector<amrex::Real> t_vec_;
 	amrex::Vector<amrex::Real> xfront_vec_;
