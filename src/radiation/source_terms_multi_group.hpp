@@ -678,10 +678,12 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		}
 
 		// load the radiation flux source term, scaled exactly like the energy source above so that a user
-		// setting radFluxSource = c * radEnergySource injects free-streaming (|F| = c E) radiation.
+		// setting radFluxSource = c * radEnergySource injects free-streaming (|F| = c E) radiation:
+		// thermal groups are scaled by chat/c, chemical (ionizing) bands are not.
 		amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> Src_flux{};
 		for (int g = 0; g < nGroups_; ++g) {
-			const double flux_scale = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_) ? dt : dt * (chat / c);
+			const bool is_chem_band = (RadSystem_NChemBands<problem_t>::value > 0) && (g >= nGroupsThermal_);
+			const double flux_scale = is_chem_band ? dt : dt * (chat / c);
 			for (int n = 0; n < 3; ++n) {
 				Src_flux[n][g] = flux_scale * radFluxSource(i, j, k, 3 * g + n);
 			}

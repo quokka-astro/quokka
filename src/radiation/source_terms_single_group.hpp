@@ -63,8 +63,11 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		}
 
 		// load the radiation flux source term, scaled exactly like the energy source above so that a user
-		// setting radFluxSource = c * radEnergySource injects free-streaming (|F| = c E) radiation.
-		const double flux_scale = RadSystem_Has_ChemBands<problem_t>::value ? dt : dt / cscale;
+		// setting radFluxSource = c * radEnergySource injects free-streaming (|F| = c E) radiation:
+		// a thermal group is scaled by chat/c (= 1/cscale), a chemical (ionizing) band is not. In a
+		// single-group run the only group is a chemical band exactly when ChemBands is defined.
+		const bool is_chem_band = RadSystem_Has_ChemBands<problem_t>::value;
+		const double flux_scale = is_chem_band ? dt : dt / cscale;
 		amrex::GpuArray<amrex::Real, 3> Src_flux{};
 		for (int n = 0; n < 3; ++n) {
 			Src_flux[n] = flux_scale * radFluxSource(i, j, k, n);
