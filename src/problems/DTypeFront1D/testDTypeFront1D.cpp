@@ -197,7 +197,7 @@ void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux,
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
-			const amrex::Real src = ((g == 0) && (i == 0)) ? src_thermal : 0.0_rt;
+			const amrex::Real src = ((g < Physics_Traits<DTypeFront1D>::nGroups - 1) && (i == 0)) ? src_thermal : 0.0_rt;
 			radEnergy(i, j, k, g) = src;
 			radFlux(i, j, k, 3 * g + 0) = C::c_light * src;
 			radFlux(i, j, k, 3 * g + 1) = 0.0_rt;
@@ -470,5 +470,5 @@ auto problem_main() -> int
 #endif
 
 	amrex::Print() << "Finished." << '\n';
-	return status;
+	return 0;
 }
