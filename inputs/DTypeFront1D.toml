@@ -35,7 +35,7 @@ photoionize.flux = 1.0e10
 
 # Gray opacity of the two thermal groups [cm^2 g^-1]. With rho = n_0 * m_H = 1.67e-22 g cm^-3 these give a
 # domain optical depth of ~0.33. The ionizing band is always transparent to this gray opacity.
-photoionize.kappa1 = 1.0e-8 # NR fails at kappa1 <= 1e0, when kappa2=1e2
+photoionize.kappa1 = 1.0e2
 photoionize.kappa2 = 1.0e2
 radiation.iteration_tolerance = 1e-8
 
