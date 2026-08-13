@@ -1136,7 +1136,8 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 }
 
 template <typename problem_t>
-auto QuokkaSimulation<problem_t>::makeExternalHeatingRate(int lev, amrex::Real current_time, amrex::Real dt) const -> quokka::ResampledCooling::ExternalHeatingRate
+auto QuokkaSimulation<problem_t>::makeExternalHeatingRate(int lev, amrex::Real current_time, amrex::Real dt) const
+    -> quokka::ResampledCooling::ExternalHeatingRate
 {
 	if (!this->useHeatingRateExternalParser_) {
 		return {};
@@ -1166,10 +1167,10 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			if (enableCooling_ != 1) {
 				return;
 			}
-			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time);		    // unit: erg/s/H
-			auto const external_heating = makeExternalHeatingRate(lev, time, dt);			    // unit: erg/s/H
+			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time); // unit: erg/s/H
+			auto const external_heating = makeExternalHeatingRate(lev, time, dt);	     // unit: erg/s/H
 			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, state_fc, dt, resampledTables_, tempFloor_,
-											  const_heating_rate_per_H, external_heating);
+											   const_heating_rate_per_H, external_heating);
 		}
 	};
 

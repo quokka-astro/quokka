@@ -232,8 +232,7 @@ auto problem_main() -> int
 			auto const &Etot = final_values.at(HydroSystem<ResampledCoolingTest>::energy_index);
 			auto const &rho = final_values.at(HydroSystem<ResampledCoolingTest>::density_index);
 			const size_t i_last = Etot.size() - 1;
-			const double T_first =
-			    quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[0], Etot[0] - active_magnetic_energy_initial);
+			const double T_first = quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[0], Etot[0] - active_magnetic_energy_initial);
 			const double T_last =
 			    quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[i_last], Etot[i_last] - active_magnetic_energy_initial);
 			const double T_ratio_x = T_last / T_first;
