@@ -1,0 +1,60 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = -3.0e19 -3.0e19 -3.0e19
+geometry.prob_hi =  3.0e19  3.0e19  3.0e19
+quokka.bc = foextrap foextrap foextrap
+
+# *****************************************************************
+# Resolution and runtime
+# *****************************************************************
+amr.n_cell = 64 64 64
+amr.max_level = 0
+amr.max_grid_size = 32
+amr.blocking_factor = 16
+
+do_reflux = 0
+do_subcycle = 0
+
+cfl = 0.3
+initial_dt = 5.0e10
+stop_time = 3.0e13
+max_timesteps = 200
+
+plotfile_interval = -1
+checkpoint_interval = -1
+suppress_output = 1
+tiny_profiler.enabled = 0
+
+derived_vars = temperature
+
+density_floor = 1.0e-30
+temperature_floor = 10.0
+
+# *****************************************************************
+# Cooling enabled (test exercises source-step cooling with local floor)
+# *****************************************************************
+cooling.enabled = 1
+cooling.cooling_table_type = "resampled"
+cooling.read_tables_even_if_disabled = 1
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+
+# *****************************************************************
+# Particle-based Strömgren photoionization
+# *****************************************************************
+particles.use_stromgren_photoionization = true
+particles.stromgren_qh0_table_hdf5_file = "../extern/stellar_tables/QH0_mist_9to120_quokka_best.h5"
+particles.stromgren_abort_on_max_iters = false
+particles.stromgren_max_nonlinear_iters = 100
+particles.stromgren_residual_tol = 1.0e-8
+particles.disable_SN_feedback = true
+particles.verbose = 0
+
+# *****************************************************************
+# Problem parameters
+# *****************************************************************
+problem.nH0 = 1.0e2
+problem.T0 = 500.0
+problem.stars_file = "../inputs/hii_stars.txt"
+problem.volume_rel_tol = 0.5
+problem.core_temp_tol = 0.7

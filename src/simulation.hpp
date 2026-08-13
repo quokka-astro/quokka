@@ -313,6 +313,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #endif // AMREX_SPACEDIM == 3
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
+	virtual void ellipticSolveAdditionalPhysics(amrex::Real dt) { amrex::ignore_unused(dt); }
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
 	virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
@@ -1981,6 +1982,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		// this must be done every step
 		gravAccelAllLevels(dt);
 	}
+	ellipticSolveAdditionalPhysics(dt);
 #endif
 }
 

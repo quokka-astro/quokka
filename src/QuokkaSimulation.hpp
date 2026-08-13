@@ -76,6 +76,7 @@ namespace filesystem = experimental::filesystem;
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
 #include "hyperbolic_system.hpp"
+#include "particles/particle_photoionization.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 #include "radiation/photochemistry.hpp"
@@ -161,6 +162,18 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real const_sfr_Msun_per_year_per_kpc2_ = -1.0; // constant star formation rate in Msun/year/kpc^2 (for computing the PE heating rate); will
 							      // override real star formation rate from the simulation if non-negative
 	quokka::PeHeatingTables<> peHeatingTables_;
+
+	// Stochastic stellar population photoionization heating (Strömgren approximation)
+	bool use_stochastic_stellar_pop_stromgren_photoionization_ = false;
+	std::string stochastic_stellar_pop_qh0_table_hdf5_file_;
+	std::string stochastic_stellar_pop_qh0_table_dataset_ = "/data/QH0";
+	bool stochastic_stellar_pop_qh0_table_axes_are_mass_age_ = true;
+	int stochastic_stellar_pop_qh0_table_is_fast_log_ = 0;
+	int stochastic_stellar_pop_stromgren_max_nonlinear_iters_ = 20;
+	amrex::Real stochastic_stellar_pop_stromgren_residual_tol_ = 1.0e-3;
+	bool stochastic_stellar_pop_stromgren_abort_on_max_iters_ = false;
+	quokka::DataTable<2, 1> stochasticStellarPopQH0Table_;
+	amrex::Vector<amrex::MultiFab> stochasticStellarPopStromgrenPhotonField_;
 
 	int enableCooling_ = 1; // only takes effect when quokka::EOS<problem_t>::is_tabulated; lets tests disable the cooling integrator while still
 				// using the tabulated EOS to compute temperature
@@ -339,6 +352,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
+	void ellipticSolveAdditionalPhysics(amrex::Real dt) override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -362,6 +376,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// fix-up states
 	void FixupState(int level) override;
+	void FillNGammaFromStromgrenAtLevel(int lev, amrex::Real time, amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc);
+	void AdvanceStromgrenPhotonFieldAllLevels(amrex::Real dt);
 	void ApplyHydroStateFixup(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev);
 
 	// implement FillPatch function
@@ -404,7 +420,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	template <SourceOrder Order>
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev, amrex::Real time,
-					      amrex::Real dt_lev) -> bool;
+					      amrex::Real dt_lev, amrex::MultiFab const *n_gamma_cc = nullptr) -> bool;
 	template <SourceOrder Order, typename... Fs> static auto callInOrder(Fs &&...fs) -> void
 	{
 		auto funcs = std::forward_as_tuple(std::forward<Fs>(fs)...);
@@ -810,6 +826,63 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		quokka::g_pe_heating_tables_ptr<> = &peHeatingTables_;
 	}
 
+	// Stochastic stellar population photoionization heating (Strömgren approximation)
+	{
+		amrex::ParmParse const ppp("particles");
+		ppp.query("use_stromgren_photoionization", use_stochastic_stellar_pop_stromgren_photoionization_);
+		ppp.query("stromgren_qh0_table_hdf5_file", stochastic_stellar_pop_qh0_table_hdf5_file_);
+		ppp.query("stromgren_max_nonlinear_iters", stochastic_stellar_pop_stromgren_max_nonlinear_iters_);
+		ppp.query("stromgren_residual_tol", stochastic_stellar_pop_stromgren_residual_tol_);
+		ppp.query("stromgren_abort_on_max_iters", stochastic_stellar_pop_stromgren_abort_on_max_iters_);
+
+		if (use_stochastic_stellar_pop_stromgren_photoionization_) {
+#if AMREX_SPACEDIM != 3
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "particles.use_stromgren_photoionization=true is only supported for AMREX_SPACEDIM=3.");
+#endif
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!stochastic_stellar_pop_qh0_table_hdf5_file_.empty(),
+							 "particles.use_stromgren_photoionization=true requires particles.stromgren_qh0_table_hdf5_file");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_max_nonlinear_iters_ >= 1,
+							 "particles.stromgren_max_nonlinear_iters must be >= 1.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_residual_tol_ > 0.0, "particles.stromgren_residual_tol must be > 0.");
+
+			// Infer dataset path directly from the HDF5 file. Coordinate encoding
+			// is auto-detected in DataTable::H5Reader.
+			auto infer_stromgren_qh0_metadata = [](std::string const &file_path) -> std::tuple<std::string, int> {
+				hid_t const h5_error = -1;
+				hid_t const file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, ("Failed to open HDF5 file: " + file_path).c_str());
+
+				// Require an exact /data/QH0 dataset to avoid ambiguous inference in multi-dataset files.
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(H5Lexists(file_id, "/data/QH0", H5P_DEFAULT) > 0,
+								 "Missing required HDF5 dataset /data/QH0 for Str\xC3\xB6mgren photoionization table.");
+				std::string const inferred_dataset = "/data/QH0";
+				int constexpr inferred_is_fast_log = -1; // auto-detect in DataTable::H5Reader
+
+				H5Fclose(file_id);
+
+				return {inferred_dataset, inferred_is_fast_log};
+			};
+
+			auto [inferred_dataset, inferred_is_fast_log] = infer_stromgren_qh0_metadata(stochastic_stellar_pop_qh0_table_hdf5_file_);
+			stochastic_stellar_pop_qh0_table_dataset_ = std::move(inferred_dataset);
+			stochastic_stellar_pop_qh0_table_axes_are_mass_age_ = true; // convention: QH0 axes are ordered (mass, age)
+			stochastic_stellar_pop_qh0_table_is_fast_log_ = inferred_is_fast_log;
+
+			std::vector<std::string> coord_names = {"mass", "age"};
+
+			amrex::Print() << "Loading StochasticStellarPop QH0 table for Strömgren photoionization from: "
+				       << stochastic_stellar_pop_qh0_table_hdf5_file_ << " dataset " << stochastic_stellar_pop_qh0_table_dataset_ << "\n";
+			amrex::Print() << "\tUsing QH0 axis order convention: (mass, age)\n";
+			amrex::Print() << std::format("\tInferred grid encoding: {}\n",
+						      (stochastic_stellar_pop_qh0_table_is_fast_log_ == -1)
+							  ? "auto"
+							  : ((stochastic_stellar_pop_qh0_table_is_fast_log_ == 1) ? "fast_log" : "linear/log"));
+			stochasticStellarPopQH0Table_ =
+			    quokka::DataTable<2, 1>::H5Reader(stochastic_stellar_pop_qh0_table_hdf5_file_, stochastic_stellar_pop_qh0_table_dataset_,
+							      coord_names, stochastic_stellar_pop_qh0_table_is_fast_log_);
+		}
+	}
+
 #ifdef CHEMISTRY
 	// set chemistry runtime parameters
 	{
@@ -1148,7 +1221,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExternalH
 template <typename problem_t>
 template <typename QuokkaSimulation<problem_t>::SourceOrder Order>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev,
-								   amrex::Real time, amrex::Real dt) -> bool
+								   amrex::Real time, amrex::Real dt, amrex::MultiFab const *n_gamma_cc) -> bool
 {
 	auto const applyDust = [&]() {
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1162,14 +1235,19 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
 	auto const applyCooling = [&]() {
-		if constexpr (quokka::EOS<problem_t>::is_tabulated) {
-			if (enableCooling_ != 1) {
-				return;
-			}
-			const Real external_heating_rate_per_H = computeExternalHeatingRate(time, dt); // unit: erg/s/H
-			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time) + external_heating_rate_per_H;
+		if (enableCooling_ != 1) {
+			return;
+		}
+		const Real external_heating_rate_per_H = computeExternalHeatingRate(time, dt); // unit: erg/s/H
+		const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time) + external_heating_rate_per_H;
+		if (n_gamma_cc != nullptr) {
 			cool_success =
-			    quokka::ResampledCooling::computeCooling<problem_t>(state, state_fc, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
+			    quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, *n_gamma_cc, const_heating_rate_per_H);
+		} else {
+			if constexpr (quokka::EOS<problem_t>::is_tabulated) {
+				cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, state_fc, dt, resampledTables_, tempFloor_,
+												   const_heating_rate_per_H);
+			}
 		}
 	};
 
@@ -2002,6 +2080,103 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::postInitializati
 }
 
 template <typename problem_t>
+void QuokkaSimulation<problem_t>::FillNGammaFromStromgrenAtLevel(int lev, amrex::Real time, amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc)
+{
+#if AMREX_SPACEDIM == 3
+	amrex::ignore_unused(time, state_cc);
+	if (use_stochastic_stellar_pop_stromgren_photoionization_) {
+		if ((stochasticStellarPopStromgrenPhotonField_.size() > static_cast<std::size_t>(lev)) &&
+		    stochasticStellarPopStromgrenPhotonField_[lev].isDefined()) {
+			amrex::MultiFab::Copy(n_gamma_cc, stochasticStellarPopStromgrenPhotonField_[lev], 0, 0, 1, 0);
+		} else {
+			n_gamma_cc.setVal(0.0);
+		}
+	} else {
+		n_gamma_cc.setVal(0.0);
+	}
+#else
+	amrex::ignore_unused(lev, time, state_cc);
+	n_gamma_cc.setVal(0.0);
+#endif
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::AdvanceStromgrenPhotonFieldAllLevels(amrex::Real dt)
+{
+#if AMREX_SPACEDIM == 3
+	if (!use_stochastic_stellar_pop_stromgren_photoionization_) {
+		return;
+	}
+	int const nlevels = finest_level + 1;
+	if (static_cast<int>(stochasticStellarPopStromgrenPhotonField_.size()) != nlevels) {
+		stochasticStellarPopStromgrenPhotonField_.resize(nlevels);
+	}
+	for (int lev = 0; lev < nlevels; ++lev) {
+		auto &field = stochasticStellarPopStromgrenPhotonField_[lev];
+		if (!field.isDefined() || (field.boxArray() != grids[lev]) || (field.DistributionMap() != dmap[lev])) {
+			field.define(grids[lev], dmap[lev], 1, 1);
+			field.setVal(0.0);
+		}
+	}
+	amrex::Vector<amrex::Geometry> geometry(geom.begin(), geom.begin() + nlevels);
+	amrex::Vector<amrex::BoxArray> level_grids(grids.begin(), grids.begin() + nlevels);
+	amrex::Vector<amrex::DistributionMapping> level_dmap(dmap.begin(), dmap.begin() + nlevels);
+	amrex::Vector<amrex::IntVect> refinement_ratio;
+	if (nlevels > 1) {
+		auto const &all_ratios = refRatio();
+		refinement_ratio.assign(all_ratios.begin(), all_ratios.begin() + nlevels - 1);
+	}
+	auto const qh0_table = stochasticStellarPopQH0Table_.const_tables();
+	auto clone_photon_field = [&]() {
+		amrex::Vector<amrex::MultiFab> copy;
+		copy.reserve(stochasticStellarPopStromgrenPhotonField_.size());
+		for (auto const &level : stochasticStellarPopStromgrenPhotonField_) {
+			copy.emplace_back(level.boxArray(), level.DistributionMap(), 1, level.nGrow());
+			amrex::MultiFab::Copy(copy.back(), level, 0, 0, 1, level.nGrow());
+		}
+		return copy;
+	};
+	auto restore_photon_field = [&](amrex::Vector<amrex::MultiFab> const &saved) {
+		for (int lev = 0; lev < nlevels; ++lev) {
+			amrex::MultiFab::Copy(stochasticStellarPopStromgrenPhotonField_[lev], saved[lev], 0, 0, 1, saved[lev].nGrow());
+		}
+	};
+	int constexpr maximum_bisections = 8;
+	auto advance_interval = [&](auto &&self, amrex::Real interval_start, amrex::Real interval_dt, int bisections) -> bool {
+		auto const saved = clone_photon_field();
+		bool const converged = quokka::photoionization::AdvanceStromgrenPhotonFieldAllLevels<problem_t>(
+		    this->StochasticStellarPopParticles.get(), interval_start + interval_dt, interval_dt, geometry, level_grids, level_dmap, refinement_ratio,
+		    state_new_cc_, stochasticStellarPopStromgrenPhotonField_, qh0_table, stochastic_stellar_pop_stromgren_max_nonlinear_iters_,
+		    stochastic_stellar_pop_stromgren_residual_tol_);
+		if (converged) {
+			return true;
+		}
+		restore_photon_field(saved);
+		if (bisections >= maximum_bisections) {
+			return false;
+		}
+		amrex::Real const half_dt = 0.5 * interval_dt;
+		amrex::Print() << "Strömgren AMR solve retry: reducing photon dt from " << interval_dt << " to " << half_dt << '\n';
+		if (!self(self, interval_start, half_dt, bisections + 1) || !self(self, interval_start + half_dt, half_dt, bisections + 1)) {
+			restore_photon_field(saved);
+			return false;
+		}
+		return true;
+	};
+	bool const advanced = advance_interval(advance_interval, tNew_[0] - dt, dt, 0);
+	if (!advanced) {
+		if (stochastic_stellar_pop_stromgren_abort_on_max_iters_) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "The adaptive time-dependent AMR H II-region solve exhausted its timestep bisections.");
+		}
+		amrex::Print() << "WARNING: Strömgren photon advance failed after " << maximum_bisections << " timestep bisections; retaining the old field.\n";
+	}
+#else
+	amrex::ignore_unused(dt);
+#endif
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::ellipticSolveAdditionalPhysics(amrex::Real dt) { AdvanceStromgrenPhotonFieldAllLevels(dt); }
+
+template <typename problem_t>
 void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev)
 {
 	// Apply the hydro floors after any operator-split state update before the next operator consumes the state.
@@ -2330,8 +2505,17 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto dm = dmap[lev];
 	auto dx = geom[lev].CellSizeArray();
 
+	amrex::MultiFab n_gamma_cc;
+	amrex::MultiFab const *n_gamma_cc_ptr = nullptr;
+	if (use_stochastic_stellar_pop_stromgren_photoionization_) {
+		n_gamma_cc.define(ba_cc, dm, 1, 0);
+		FillNGammaFromStromgrenAtLevel(lev, time, state_old_cc_tmp, n_gamma_cc);
+		n_gamma_cc_ptr = &n_gamma_cc;
+	}
+
 	// do Strang split source terms (first half-step)
-	auto burn_success_first = addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
+	auto burn_success_first =
+	    addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev, n_gamma_cc_ptr);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
@@ -2647,7 +2831,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// do Strang split source terms (second half-step)
 	auto burn_success_second =
-	    addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	    addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev, n_gamma_cc_ptr);
 	if (burn_success_second) {
 		ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
 	}
