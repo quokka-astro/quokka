@@ -13,6 +13,7 @@
 
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_Parser.H"
 #include "AMReX_iMultiFab.H"
 
 #include "cooling/EOSTabulatedRegistry.hpp"
@@ -77,6 +78,37 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real 
 	return tables.all_tables.interpolate_single(point, SOUND_SPEED_IDX);
 }
 
+//! \brief Spatially varying external heating rate per H atom (erg/s/H), evaluated as f(x, y, z, time, dt).
+//!
+//! Holds the compiled `heating_rate_external` parser together with the level geometry needed to turn
+//! cell indices into coordinates. A default-constructed instance carries no parser and evaluates to zero.
+struct ExternalHeatingRate {
+	amrex::ParserExecutor<5> parser;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo{};
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx{};
+	amrex::Real time{0.0};
+	amrex::Real dt{0.0};
+
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, [[maybe_unused]] int j, [[maybe_unused]] int k) const -> amrex::Real
+	{
+		if (!parser) {
+			return 0.0;
+		}
+		const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+		const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+#else
+		const amrex::Real y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+		const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+#else
+		const amrex::Real z = 0.0;
+#endif
+		return parser(x, y, z, time, dt);
+	}
+};
+
 struct ResampledCoolingFunctor {
 	Real rho;
 	resampledGpuConstTables tables;
@@ -101,10 +133,11 @@ struct ResampledCoolingFunctor {
 	}
 };
 
-// const_heating_rate_per_H: unit erg/s/H
+// const_heating_rate_per_H: spatially uniform heating rate, unit erg/s/H
+// external_heating: optional position-dependent heating rate added to it, unit erg/s/H
 template <typename problem_t>
 auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &mf_fc, const Real dt_in, resampled_tables &resampledTables,
-		    const Real temp_floor, const Real const_heating_rate_per_H) -> bool
+		    const Real temp_floor, const Real const_heating_rate_per_H, ExternalHeatingRate const &external_heating = {}) -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
@@ -137,8 +170,9 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			// cooling function
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
-			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p;			    // unit: cm^-3
-			const ResampledCoolingFunctor user_rhs(rho, tables, const_heating_rate_per_H * nH); // unit: erg/cm^3/s
+			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p;			      // unit: cm^-3
+			const Real heating_rate_per_H = const_heating_rate_per_H + external_heating(i, j, k); // unit: erg/s/H
+			const ResampledCoolingFunctor user_rhs(rho, tables, heating_rate_per_H * nH);	      // unit: erg/cm^3/s
 
 			// state vector
 			const Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(state, i, j, k, &state_fc);
@@ -156,7 +190,7 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 
 			// check if integration failed
 			if (nsteps >= maxStepsODEIntegrate) {
-				Real const Edot = resampled_cooling_function(rho, Eint, tables) + const_heating_rate_per_H * nH; // unit: erg/cm^3/s
+				Real const Edot = resampled_cooling_function(rho, Eint, tables) + heating_rate_per_H * nH; // unit: erg/cm^3/s
 				Real const t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
 				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
 				       "time = %g, dt = %.17e\n",
