@@ -83,7 +83,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real 
 //! Holds the compiled `heating_rate_external` parser together with the level geometry needed to turn
 //! cell indices into coordinates. A default-constructed instance carries no parser and evaluates to zero.
 struct ExternalHeatingRate {
-	amrex::ParserExecutor<5> parser;
+	amrex::ParserExecutor<5> parser{};
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo{};
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx{};
 	amrex::Real time{0.0};

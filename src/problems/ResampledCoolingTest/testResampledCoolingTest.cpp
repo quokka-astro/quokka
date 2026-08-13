@@ -238,7 +238,7 @@ auto problem_main() -> int
 			const double T_ratio_x = T_last / T_first;
 			amrex::Print() << "Spatial heating check: T(x_last)/T(x_first) = " << T_ratio_x << " (required > " << min_spatial_heating_T_ratio
 				       << ")\n";
-			if (!(T_ratio_x > min_spatial_heating_T_ratio)) {
+			if (!(T_ratio_x > min_spatial_heating_T_ratio)) { // negated so that a NaN ratio also fails
 				amrex::Print() << "ERROR: external heating rate does not vary with position!\n";
 				status = 1;
 			}

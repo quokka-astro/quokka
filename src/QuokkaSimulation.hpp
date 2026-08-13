@@ -418,7 +418,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	}
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
-	auto makeExternalHeatingRate(int lev, Real current_time, Real dt) const -> quokka::ResampledCooling::ExternalHeatingRate;
+	[[nodiscard]] auto makeExternalHeatingRate(int lev, Real current_time, Real dt) const -> quokka::ResampledCooling::ExternalHeatingRate;
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
