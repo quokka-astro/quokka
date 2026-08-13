@@ -41,4 +41,9 @@ if(AMReX_SPACEDIM EQUAL 3)
     COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml problem.n_amb=0.1 particles.SN_smooth_gas_velocity=false
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   set_tests_properties(${JOB_NAME}-n0.1-no-smoothing PROPERTIES COST 85)
+
+  add_test(
+    NAME ${JOB_NAME}-osaka-II-local-mechanical
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml particles.SN_scheme=SN_osaka_II_local_mechanical problem.plot_profiles=false max_timesteps=1 stop_time=3.0e7)
+  set_tests_properties(${JOB_NAME}-osaka-II-local-mechanical PROPERTIES COST 5 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

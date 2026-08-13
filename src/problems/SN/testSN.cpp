@@ -37,6 +37,7 @@ static std::vector<double> t_history{};	       // NOLINT
 
 static std::string SN_particles_file = "";	    // NOLINT
 static std::string coolingTableType_ = "resampled"; // NOLINT
+static bool plot_profiles = true;		    // NOLINT
 
 constexpr double mu = 1.0 * C::m_u;
 // constexpr double mu = 1.295 * C::m_u; // neutral gas
@@ -215,11 +216,30 @@ auto problem_main() -> int
 	pp.query("n_amb", n_amb);
 	pp.query("SN_particles_file", SN_particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
+	pp.query("plot_profiles", plot_profiles);
 	double boost_vel_x = 1.0e8;
 	pp.query("boost_vel_x", boost_vel_x);
 
 	amrex::ParmParse const cpp("cooling");
 	cpp.query("cooling_table_type", coolingTableType_);
+
+	int osaka_validation_status = 0;
+	if (quokka::SN_scheme == quokka::SNScheme::SN_osaka_II_local_mechanical) {
+		constexpr amrex::Real E_blast = 1.0e51;
+		constexpr amrex::Real receiving_mass = 100.0 * C::M_solar;
+		constexpr amrex::Real weight = 0.125;
+		const amrex::Real p_n1 = quokka::SNFeedbackUtils::osakaIILocalMomentum(1.0);
+		const amrex::Real p_n100 = quokka::SNFeedbackUtils::osakaIILocalMomentum(100.0);
+		const amrex::Real expected_ratio = std::pow(100.0, -0.05);
+		const amrex::Real momentum_ratio_error = std::abs((p_n100 / p_n1) - expected_ratio) / expected_ratio;
+		const amrex::Real momentum_cap = quokka::SNFeedbackUtils::osakaIILocalMomentumCap(receiving_mass, weight, E_blast);
+		const amrex::Real expected_cap = std::sqrt(2.0 * receiving_mass * 0.3 * E_blast * weight);
+		const amrex::Real momentum_cap_error = std::abs(momentum_cap - expected_cap) / expected_cap;
+		if (momentum_ratio_error > 1.0e-14 || momentum_cap_error > 1.0e-14) {
+			amrex::Print() << "FAIL: Osaka-II local mechanical scaling or kinetic-energy cap is incorrect.\n";
+			osaka_validation_status = 1;
+		}
+	}
 
 	// Problem initialization
 	QuokkaSimulation<SNProblem> sim;
@@ -376,27 +396,29 @@ auto problem_main() -> int
 		}
 
 #ifdef HAVE_PYTHON
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(x, T, {{"label", "base"}, {"color", "C0"}});
-		matplotlibcpp::plot(x2, T2, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("x (cm)");
-		matplotlibcpp::ylabel("T (K)");
-		matplotlibcpp::title(std::format("time t = {:.4g}", sim2.tNew_[0]));
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save(std::format("sn_temperature_profile_n0_{:.1g}.pdf", n_amb));
+		if (plot_profiles) {
+			matplotlibcpp::clf();
+			matplotlibcpp::plot(x, T, {{"label", "base"}, {"color", "C0"}});
+			matplotlibcpp::plot(x2, T2, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
+			matplotlibcpp::legend();
+			matplotlibcpp::xlabel("x (cm)");
+			matplotlibcpp::ylabel("T (K)");
+			matplotlibcpp::title(std::format("time t = {:.4g}", sim2.tNew_[0]));
+			matplotlibcpp::tight_layout();
+			matplotlibcpp::save(std::format("sn_temperature_profile_n0_{:.1g}.pdf", n_amb));
 
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(x, vx, {{"label", "base"}, {"color", "C0"}});
-		matplotlibcpp::plot(x2, vx2_rel, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("x (cm)");
-		matplotlibcpp::ylabel("vx (cm/s)");
-		matplotlibcpp::title(std::format("time t = {:.4g}", sim2.tNew_[0]));
-		matplotlibcpp::save(std::format("sn_velocity_profile_n0_{:.1g}_boost_vel_{:.1g}.pdf", n_amb, boost_vel_x));
+			matplotlibcpp::clf();
+			matplotlibcpp::plot(x, vx, {{"label", "base"}, {"color", "C0"}});
+			matplotlibcpp::plot(x2, vx2_rel, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
+			matplotlibcpp::legend();
+			matplotlibcpp::xlabel("x (cm)");
+			matplotlibcpp::ylabel("vx (cm/s)");
+			matplotlibcpp::title(std::format("time t = {:.4g}", sim2.tNew_[0]));
+			matplotlibcpp::save(std::format("sn_velocity_profile_n0_{:.1g}_boost_vel_{:.1g}.pdf", n_amb, boost_vel_x));
+		}
 #endif
 	}
 
 	// Return combined status (Galilean invariance + scalar validation)
-	return status + scalar_validation_status;
+	return status + scalar_validation_status + osaka_validation_status;
 }

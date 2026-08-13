@@ -264,7 +264,7 @@ When \\(R_M < 1\\), the Sedov-Taylor phase is resolved and the blast wave dynami
 
 ##### Available Schemes
 
-Quokka provides four SN feedback schemes controlled by `particles.SN_scheme`:
+Quokka provides five SN feedback schemes controlled by `particles.SN_scheme`:
 
 1.  **`SN_thermal_only`**: Pure thermal energy injection
 
@@ -289,6 +289,19 @@ Quokka provides four SN feedback schemes controlled by `particles.SN_scheme`:
     c. **`SN_pure_kinetic_or_thermal_momentum`**:
 
        - Always injects full terminal momentum regardless of resolution with \\(f = 1\\)
+
+3. **`SN_osaka_II_local_mechanical`**:
+
+   - Implements a local, mechanical-only approximation to the Osaka-II model of Oku et al. (2022).
+   - Assumes solar metallicity and injects momentum per individual SN according to
+     \\(p_{\\rm Osaka}=1.75\\times10^5\\,M_\\odot\\,{\\rm km\\,s^{-1}}\\,n_{\\rm H}^{-0.05}\\Lambda_{6,-22}(Z_\\odot)^{-0.17}\\), with
+     \\(\\Lambda_{6,-22}(Z_\\odot)=1.05+10^{-1.33}\\).
+   - Does not use the shell-formation mass or the \\(R_M\\) resolution switch. The requested momentum is instead capped cell by cell using a kinetic-energy
+     allocation of \\(0.3E_{\\rm SN}\\).
+   - Adds ejecta mass and the exact kinetic-energy change implied by the momentum update, but no SN thermal energy.
+   - Retains Quokka's fixed \\(7^3\\) deposition stencil. It does not implement Osaka-II's density-dependent shock radius, grouped-SN superbubble radius,
+     metallicity dependence, Voronoi coupling, or stochastic thermal feedback.
+   - `particles.SN_p_term_Msunkmps` and `particles.SN_smooth_gas_velocity` do not affect this scheme.
 
 #### Momentum Deposition
 
@@ -324,7 +337,7 @@ The cross term <script type="math/tex">\vec{v}_{\text{COM}} \cdot \vec{p}_{\text
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `particles.SN_scheme` | String | `SN_thermal_or_thermal_momentum` | Feedback scheme (see above) |
+| `particles.SN_scheme` | String | `SN_thermal_or_thermal_momentum` | Feedback scheme (see above), including the local mechanical-only Osaka-II option `SN_osaka_II_local_mechanical` |
 | `particles.SN_p_term_Msunkmps` | Float | `2.8e5` | Terminal momentum \\(p_{\text{snr},0}\\) in units of \\(M_\odot\,\mathrm{km\,s}^{-1}\\). The shell-formation mass \\(M_\mathrm{sf}\\) is scaled as \\((p/p_\mathrm{canonical})^2\\) to preserve the kinetic energy \\(p^2/(2M_\mathrm{sf})\\). |
 | `particles.disable_SN_feedback` | Boolean | `0` | Disable SN feedback entirely |
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
