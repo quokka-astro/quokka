@@ -143,6 +143,10 @@ jobs:
         # the generated build system for a target it does not define is a hard error rather than a no-op,
         # so intersect the changed problems with the targets that actually exist before building.
         AVAILABLE=$(cmake --build build --target help 2>/dev/null | sed 's/^\.\.\. *//' | awk '{print $1}')
+        if [ -z "$AVAILABLE" ]; then
+          echo "##[warning]Could not list build targets; building all changed problems unfiltered."
+          AVAILABLE=$(echo $(changedProblems) | tr ' ' '\n')
+        fi
         KEPT=""
         TEST_NAMES=""
         for p in $(changedProblems); do
