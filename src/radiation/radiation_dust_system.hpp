@@ -481,8 +481,8 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 
 		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
 		// the round-off floor and cannot be reduced any further
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) ||
-								    (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) &&
+		    ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) || (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
@@ -863,8 +863,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
 		// the round-off floor and cannot be reduced any further
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) ||
-								    (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) &&
+		    ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) || (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
