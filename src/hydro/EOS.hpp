@@ -635,6 +635,9 @@ template <typename problem_t> class EOS
 	{
 		const double Ekin = 0.5 * (mx * mx + my * my + mz * mz) / rho;
 		const double Eint = Etot - Ekin - magnetic_energy;
+		if (Eint <= 0.) {
+			amrex::Abort("Gas internal energy is not positive!");
+		}
 		AMREX_ASSERT_WITH_MESSAGE(Eint > 0., "Gas internal energy is not positive!");
 		return Eint;
 	}

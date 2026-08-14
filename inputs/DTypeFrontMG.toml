@@ -1,0 +1,63 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [3.12e19, 3.12e19, 3.12e19]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [32, 32, 32]
+amr.max_level       = 0     # number of levels = max_level + 1
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+stop_time = 6.18e13 # ~ 1 t_ch
+
+stromgen.primary_species_1 = 1.0e-10
+stromgen.primary_species_2 = 1.0e4
+stromgen.primary_species_3 = 1.0e-10
+stromgen.Q_ion = 1.56e51
+stromgen.Q_optical = 4.5e51
+stromgen.temperature = 37.11
+stromgen.kappa_IR = 1.0e-2
+stromgen.kappa_optical = 100
+
+photochemistry.enabled = 1
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+plotfile_interval = 10
+plotfile_prefix = "DTypeMG"
+
+network.allow_mixed_cell_cooling = 0
+
+max_timesteps = 1000000
+
+integrator.atol_spec                     = 1.0e-1
+integrator.atol_enuc                     = 1.24e8
+integrator.atol_rad_num                  = 1.0e-1
+integrator.species_failure_tolerance     = 1.0e-1
+integrator.radiation_failure_tolerance   = 0.5
+
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2
+
+integrator.rosenbrock_tableau = 3
+
+radiation.iteration_tolerance = 1e-3
+radiation.iteration_tolerance_rel = 1e-3
+radiation.dust_gas_interaction_coeff = 0.0

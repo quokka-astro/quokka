@@ -61,7 +61,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 	dEg_dT *= d_Td_d_T;
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
-	result.Jg0 = 1.0 / c_v * dEg_dT - (1 / cscale) * cooling_derivative - 1.0 / cscale * rg * result.J00;
+	result.Jg0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * result.J00;
+	if constexpr (add_line_cooling_to_radiation_in_jac) {
+		result.Jg0 -= (1 / cscale) * cooling_derivative;
+	}
 	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.
 	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
 	for (int g = 0; g < nGroups_; ++g) {
@@ -180,7 +183,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	const auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t * d_Td_d_T;
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
-	result.Jg0 = 1.0 / c_v * dEg_dT - (1 / cscale) * cooling_derivative - 1.0 / cscale * rg * result.J00;
+	result.Jg0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * result.J00;
+	if constexpr (add_line_cooling_to_radiation_in_jac) {
+		result.Jg0 -= (1 / cscale) * cooling_derivative;
+	}
 	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.
 	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
 	result.Jgg = d_Eg_d_Rg + (-1.0);
@@ -270,9 +276,11 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 	}
 
 	const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
+	double T_d0_seed = T_d0;
 	if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
 		dust_model = 2;
 		lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
+		T_d0_seed = ComputeDustTemperatureBateKeto(T_gas0, T_d0, rho, Erad0Vec + Src, coeff_n, dt, NAN, 0, rad_boundaries);
 	}
 
 	// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
@@ -340,15 +348,25 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 	AMREX_ASSERT(T_gas >= 0.);
 
 	const int maxIter = 100;
+	// Adaptive damping state. In the decoupled-dust branch the Newton iteration can oscillate with growing
+	// amplitude rather than converge, so the step is shortened whenever the radiation residual fails to
+	// decrease, and allowed to grow back towards a full step when it does. See newton_damping_* below.
+	double relax = 1.0;
+	double Fg_abs_sum_prev = std::numeric_limits<double>::max();
+	double delta_x_prev = 0.0;
+	quokka::valarray<double, nGroups_> delta_R_prev{};
 	int n = 0;
+	double T_d_rel_change = std::numeric_limits<double>::infinity();
 	for (; n < maxIter; ++n) { // NOSONAR
 		// if relative change is within tol, break
 		if (rel_change_tol > 0.0 && n > 0) {
 			const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
 			const auto Erad_rel_diff = abs(EradVec_guess - EradVec_guess_prev);
 			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
+			const bool primary_converged =
+			    (dust_model == 2) ? (T_d_rel_change <= rel_change_tol) : (Egas_rel_diff <= rel_change_tol * Egas_guess_prev);
 
-			if ((sum(Erad_rel_diff) <= rel_change_tol * Erad_tot_guess_prev) && (Egas_rel_diff <= rel_change_tol * Egas_guess_prev)) {
+			if ((sum(Erad_rel_diff) <= rel_change_tol * Erad_tot_guess_prev) && primary_converged) {
 				break;
 			}
 		}
@@ -374,7 +392,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 			}
 		} else {
 			if (n == 0) {
-				T_d = T_d0;
+				T_d = T_d0_seed;
 			}
 		}
 		if (T_d < 0.0) {
@@ -468,8 +486,21 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 			jacobian.Jgg = jacobian.Jgg * tau0;
 		}
 
-		// check relative convergence of the residuals
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
+		// Round-off floor on the radiation residual, as in SolveGasRadiationEnergyExchange: an optically
+		// thin group sitting far below its local blackbody has its energy reconstructed by a catastrophic
+		// cancellation, so |Fg| cannot fall below the double-precision round-off of the larger operand and a
+		// purely relative test is unreachable.
+		double Fg_roundoff = 0.0;
+		for (int g = 0; g < nGroups_; ++g) {
+			if (tau[g] > 0.0) {
+				Fg_roundoff += std::numeric_limits<double>::epsilon() * std::max(fourPiBoverC[g], EradVec_guess[g]);
+			}
+		}
+
+		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
+		// the round-off floor and cannot be reduced any further
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) &&
+		    ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) || (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
@@ -496,8 +527,9 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 				std::cout << tau[g] << ", ";
 			}
 			std::cout << "]";
-			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
+			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0;
 		}
+		std::cout << ", dust_model = " << dust_model << "\n";
 #endif
 
 		// update variables
@@ -509,8 +541,27 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		// enable_dE_constrain is used to prevent the gas temperature from dropping/increasing below/above the radiation
 		// temperature
 		if (dust_model == 2) {
-			T_d += delta_x;
-			Rvec += delta_R;
+			T_d_rel_change = (T_d != 0.0) ? std::abs(delta_x / T_d) : std::numeric_limits<double>::infinity();
+			if (n > 0) {
+				relax = (jacobian.Fg_abs_sum > Fg_abs_sum_prev) ? std::max(newton_damping_min, relax * newton_damping_down)
+										: std::min(1.0, relax * newton_damping_up);
+			}
+			Fg_abs_sum_prev = jacobian.Fg_abs_sum;
+			// Oscillation catch. When the iteration cycles about the root rather than approaching it, the
+			// steps alternate in sign and each one overshoots past the root; the mean of two consecutive
+			// steps is what actually points at it (for a clean period-two cycle the mean lands on it).
+			// Advance by that mean instead of the raw Newton step, and let the usual convergence test
+			// below decide -- this damps the cycle without bypassing the criterion.
+			double step_x = delta_x;
+			auto step_R = delta_R;
+			if (n > 0 && delta_x * delta_x_prev < 0.0) {
+				step_x = 0.5 * (delta_x + delta_x_prev);
+				step_R = 0.5 * (delta_R + delta_R_prev);
+			}
+			delta_x_prev = delta_x;
+			delta_R_prev = delta_R;
+			T_d += relax * step_x;
+			Rvec += relax * step_R;
 		} else {
 			const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
 			if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {
@@ -563,11 +614,18 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		EradVec_guess += (1 / cscale) * cooling_tend;
 	}
 
+	for (int g = 0; g < nGroups_; ++g) {
+		if (!(tau[g] > 0.0)) {
+			EradVec_guess[g] = Erad0Vec[g] + Src[g];
+		}
+	}
+
 	AMREX_ASSERT(Egas_guess > 0.0);
 	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
 
 	AMREX_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration for matter-radiation coupling failed to converge!");
 	if (n >= maxIter) {
+		amrex::Abort("radiation_dust_system.hpp: Newton-Raphson iteration for matter-radiation coupling failed to converge!");
 		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1); // NOLINT
 	}
 
@@ -837,8 +895,21 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 			jacobian.Jgg = jacobian.Jgg * tau0;
 		}
 
-		// check relative convergence of the residuals
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
+		// Round-off floor on the radiation residual, as in SolveGasRadiationEnergyExchange: an optically
+		// thin group sitting far below its local blackbody has its energy reconstructed by a catastrophic
+		// cancellation, so |Fg| cannot fall below the double-precision round-off of the larger operand and a
+		// purely relative test is unreachable.
+		double Fg_roundoff = 0.0;
+		for (int g = 0; g < nGroups_; ++g) {
+			if (tau[g] > 0.0) {
+				Fg_roundoff += std::numeric_limits<double>::epsilon() * std::max(fourPiBoverC[g], EradVec_guess[g]);
+			}
+		}
+
+		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
+		// the round-off floor and cannot be reduced any further
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) &&
+		    ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) || (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
@@ -865,7 +936,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 				std::cout << tau[g] << ", ";
 			}
 			std::cout << "]";
-			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
+			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0;
 		}
 #endif
 
@@ -930,6 +1001,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 	if constexpr (!add_line_cooling_to_radiation_in_jac) {
 		EradVec_guess += (1 / cscale) * cooling_tend;
+	}
+
+	for (int g = 0; g < nGroups_; ++g) {
+		if (!(tau[g] > 0.0)) {
+			EradVec_guess[g] = Erad0Vec[g] + Src[g];
+		}
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);

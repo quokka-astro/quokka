@@ -1,20 +1,20 @@
 if(AMReX_SPACEDIM EQUAL 1)
-  set(microphysics_network_name "3band") # this will override
+  set(microphysics_network_name "photoionization") # this will override
                                                   # network_name to
                                                   # photoionization for this
                                                   # directory only
   setup_target_for_microphysics_compilation(${microphysics_network_name}
-                                          "${CMAKE_CURRENT_BINARY_DIR}/"
-                                          "Rosenbrock")
+                                            "${CMAKE_CURRENT_BINARY_DIR}/"
+                                            "Rosenbrock")
 
   # use the BEFORE keyword so that these files get priority in compilation for
   # targets in this directory this is critical to ensure the correct Microphysics
   # files are linked to photoionization target
   include_directories(
-  BEFORE ${photoionization_dirs} "${CMAKE_CURRENT_BINARY_DIR}/"
-  "includes/extern_parameters.H" "includes/network_properties.H")
+    BEFORE ${photoionization_dirs} "${CMAKE_CURRENT_BINARY_DIR}/"
+    "includes/extern_parameters.H" "includes/network_properties.H")
 
-  set(JOB_NAME DTypeFront1D)
+  set(JOB_NAME DTypeFrontPass)
 
   # Number of species
   set(NSPEC 3)
@@ -76,8 +76,8 @@ if(AMReX_SPACEDIM EQUAL 1)
   set(PROPERTIES "")
 
   # Set photoionisation properties
-  set(NUM_THERMAL_BANDS 2)
   set(NUM_CHEM_BANDS 1)
+  set(NUM_THERMAL_BANDS 2)
   set(CHEM_BANDS "3.29e15, 1.50e16") # Hz
 
   # Configure the header
@@ -89,14 +89,14 @@ if(AMReX_SPACEDIM EQUAL 1)
 
 
   add_executable(
-  ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
-              ../../radiation/photochemistry.cpp ${photoionization_sources})
+    ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
+                ../../radiation/photochemistry.cpp ${photoionization_sources})
 
   # this will add #define PHOTOCHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
+  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
-  setup_target_for_cuda_compilation(${JOB_NAME})
+    setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
   add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

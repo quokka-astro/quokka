@@ -21,22 +21,45 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-# ~2 planar expansion times (t_exp = x_S / c_i ~ 3e12 s); front stays well inside the domain.
-stop_time = 4.0e12
+# The beam free-streams at chat = c/1000 = 3e7 cm/s, crossing the 2e19 cm domain in 6.7e11 s.
+# Stop at 60% of that so the front is still well inside the domain when it is measured.
+stop_time = 4.0e11
 
 # Uniform neutral hydrogen slab: n_0 = 100 cm^-3, cold (100 K).
 photoionize.primary_species_1 = 1.0e-10   # e
-photoionize.primary_species_2 = 1.0e3     # H  (neutral, n_0)
+photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
 photoionize.primary_species_3 = 1.0e-10   # H+
 photoionize.temperature = 1.0e2
-# Ionizing photon flux injected at x = 0 [photons cm^-2 s^-1].
-photoionize.ion_flux = 0.0
-photoionize.optical_flux = 1.0e12
-photoionize.IR_flux = 0.0
-photoionize.kappa_IR = 1e-1
-photoionize.kappa_optical = 1e3
+# Photon flux injected into the optical band at x = 0 [photons cm^-2 s^-1]. This sets the dust temperature,
+# which settles at a*T^4 = E_IR + (kappa2/kappa1) * E_optical.
+photoionize.flux_optical = 1.0e13
 
-photochemistry.enabled = 0
+# Gray dust opacity of the two thermal groups [cm^2 g^-1]: kappa1 = IR, kappa2 = optical. Dust is optically
+# thick to the incoming optical light and thin to the IR it re-emits, which is what drives the reprocessing.
+# With rho = n_0 * m_H = 1.66e-22 g cm^-3 the domain optical depths are 3.3 (optical) and 0.033 (IR).
+# The ionizing band is always transparent to this gray opacity.
+photoionize.kappa1 = 1e-10
+photoionize.kappa2 = 1e-10
+radiation.iteration_tolerance = 1e-8
+
+# Ionizing photon flux injected at x = 0 [photons cm^-2 s^-1]. A chemistry band's source is not scaled by
+# chat/c the way a thermal band's is, so this value is c/chat = 1000 times smaller than
+# photoionize.flux_optical in order to inject the same energy into the ionizing band as into the optical one.
+photoionize.flux_ion = 1.0e10
+
+# Photon flux injected directly into the IR band at x = 0 [photons cm^-2 s^-1]. Same chat/c thermal-group
+# scaling as photoionize.flux_optical, so this value is directly comparable to it. Nonzero here means the IR
+# band's energy budget is the direct beam plus whatever the dust reprocesses out of the optical band.
+photoionize.flux_ir = 1.0e12
+
+# Solve for a separate dust temperature (ISM_Traits::enable_dust_gas_thermal_coupling_model), but switch the
+# gas-dust collisional term off. The dust is then set purely by radiative equilibrium with the local
+# radiation field and exchanges no energy with the gas. Note this is thermal decoupling only: radiation
+# momentum is still deposited, so the beam accelerates the gas to ~8e6 cm/s and sweeps the near-source cells.
+radiation.dust_gas_interaction_coeff = 0.0
+
+# The ionizing band is left dark (see SetRadSource), so photochemistry has nothing to do.
+photochemistry.enabled = 1
 integrator.use_number_densities = 1
 integrator.do_species_clip = 0
 integrator.jacobian = 1
@@ -45,7 +68,7 @@ integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 integrator.ode_max_steps = 50000
 
-plotfile_interval = 50
+plotfile_interval = -1
 plotfile_prefix = "DType1D"
 
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
@@ -68,7 +91,3 @@ integrator.rtol_rad_num  = 1e-2
 integrator.rtol_enuc     = 1e-2
 
 integrator.rosenbrock_tableau = 3
-
-radiation.iteration_tolerance = 1e-8
-radiation.iteration_tolerance_rel = -1
-radiation.dust_gas_interaction_coeff = 0.0

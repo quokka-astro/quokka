@@ -31,13 +31,16 @@ constexpr int NumSpecExtra = @NEXTRASPEC@;
 constexpr int NumSpecTotal = NumSpec + NumSpecExtra;
 
 #ifdef PHOTOCHEMISTRY
-constexpr int NumChemBands = @NUM_CHEM_BANDS@;
+constexpr int NumThermalBands = @NUM_THERMAL_BANDS@; // leading subset of radiation groups with no photon-number concept
+constexpr int NumChemBands = @NUM_CHEM_BANDS@; // trailing subset of radiation groups that is chemically active
+constexpr int NumRadGroups = NumThermalBands + NumChemBands; // total radiation groups (thermal + chem)
 #ifdef SKIP_PHOTOCHEMFLUX
-constexpr int MicrophysicsNumRadVarsPerGroup = 1;
+constexpr int MicrophysicsNumChemRadVarsPerGroup = 1;
 #else
-constexpr int MicrophysicsNumRadVarsPerGroup = 2;
+constexpr int MicrophysicsNumChemRadVarsPerGroup = 2;
 #endif
-constexpr int NumRadEqs = NumChemBands * MicrophysicsNumRadVarsPerGroup;
+constexpr int NumChemRadEqs = NumChemBands * MicrophysicsNumChemRadVarsPerGroup;
+constexpr int NumRadEqs = NumChemBands * MicrophysicsNumChemRadVarsPerGroup;
 constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBandsHeader_{ @CHEM_BANDS@ };
 #endif
 
