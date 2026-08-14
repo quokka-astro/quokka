@@ -330,7 +330,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	userData_.flux = 1.0e11_rt;
 	userData_.flux_ion = 0.0_rt;
 	pp.query("kappa1", kappa1); // gray opacity of the thermal band, group 0 [cm^2 g^-1]
-	pp.query("kappa2", kappa2); // gray opacity of the ionizing band, group 1 [cm^2 g^-1]
+	pp.query("kappa2", kappa2); // gray opacity of the optical band, group 1 [cm^2 g^-1]
 	// Old dust-destruction knob:
 	//
 	// pp.query("T_dust_destroy", T_dust_destroy); // dust-destruction temperature [K]; 0 disables
@@ -352,7 +352,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 }
 
 // ComputePlanckOpacity / ComputeFluxMeanOpacity are only consulted by the single-group solver. This problem
-// runs with nGroups = 2, so the group opacities come from DefineOpacityExponentsAndLowerValues below and
+// runs with nGroups = 3, so the group opacities come from DefineOpacityExponentsAndLowerValues below and
 // these specializations are dead code:
 //
 // template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront1D>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -587,7 +587,12 @@ auto problem_main() -> int
 		amrex::Print() << "IR band " << E_ir << ", optical band " << E_opt << " (analytic unprocessed " << E_opt_ref << ")\n";
 		amrex::Print() << "Optical depth to the front: " << tau_front << ", reprocessed fraction: " << reprocessed << "\n";
 
-		if (reprocessed < 0.25) {
+		if (!(alpha_opt > 0.0)) {
+			// With kappa2 = 0 the attenuated-beam reference is 0/0. Both comparisons below would then be
+			// false against the resulting NaN and the check would report a pass, so reject it here.
+			amrex::Print() << "Test FAILED: photoionize.kappa2 must be positive for the attenuated-beam check.\n";
+			status = 1;
+		} else if (reprocessed < 0.25) {
 			amrex::Print() << "Test FAILED: too little of the optical beam was reprocessed into the IR (" << reprocessed << ").\n";
 			status = 1;
 		} else if (std::abs(opt_frac - 1.0) > 0.10) {

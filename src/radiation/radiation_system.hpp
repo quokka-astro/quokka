@@ -311,8 +311,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// Assertion: chemical (ionizing) bands, when present, occupy the last NChemBands groups; the
 	// leading (nGroups_ - NChemBands) groups are thermal. Mixed thermal+chemical configurations are
 	// therefore valid as long as there are no more chemical bands than groups.
-	static_assert(RadSystem_NChemBands<problem_t>::value <= nGroups_,
-		      "The number of chemical radiation bands cannot exceed the number of radiation groups.");
+	static_assert(RadSystem_NChemBands<problem_t>::value >= 0 && RadSystem_NChemBands<problem_t>::value <= nGroups_,
+		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
