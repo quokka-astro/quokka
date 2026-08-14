@@ -80,7 +80,7 @@ template <> void QuokkaSimulation<MHDSmallScaleDynamo>::setInitialConditionsOnGr
 
 	const double box_length = prob_hi[0] - prob_lo[0];
 	const double seed_wavenumber = 2.0 * M_PI * seed_b_wavenumber / box_length;
-	const double seed_vecpot_amplitude = std::sqrt(seed_b_fraction) * target_vdisp / seed_wavenumber;
+	const double seed_vecpot_amplitude = std::sqrt(seed_b_fraction / 3.0) * target_vdisp / seed_wavenumber;
 
 	constexpr int b_index = Physics_Indices<MHDSmallScaleDynamo>::mhdFirstIndex;
 

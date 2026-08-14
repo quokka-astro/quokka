@@ -44,7 +44,7 @@ mhd.resistivity = 0.0  # Ohmic resistivity
 # Seed magnetic field (ABC field)
 # *****************************************************************
 setup.seed_b_wavenumber = 2  # integer mode number n; k0 = 2*pi*n/L (default: 2)
-setup.seed_b_fraction = 1.0e-10  # E_mag/E_kin at t=0; B0 = sqrt(fraction) * target_vdisp
+setup.seed_b_fraction = 1.0e-10  # E_mag/E_kin at t=0; B_seed = sqrt(fraction / 3) * target_vdisp per component
 
 # *****************************************************************
 # Turbulent driving
