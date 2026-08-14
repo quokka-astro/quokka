@@ -531,7 +531,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		if (dust_model == 2) {
 			if (n > 0) {
 				relax = (jacobian.Fg_abs_sum > Fg_abs_sum_prev) ? std::max(newton_damping_min, relax * newton_damping_down)
-									       : std::min(1.0, relax * newton_damping_up);
+										: std::min(1.0, relax * newton_damping_up);
 			}
 			Fg_abs_sum_prev = jacobian.Fg_abs_sum;
 			// Oscillation catch. When the iteration cycles about the root rather than approaching it, the
