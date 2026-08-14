@@ -1,0 +1,185 @@
+//==============================================================================
+// Copyright 2026 Neco Kriel.
+// Released under the MIT license. See LICENSE file included in the GitHub repo.
+//==============================================================================
+/// \file testMHDSmallScaleDynamo.cpp
+/// \brief Small Scale Dynamo simulation.
+///
+
+#include "AMReX_Print.H"
+#include "QuokkaSimulation.hpp"
+#include "hydro/hydro_system.hpp"
+#include "hydro/mhd_system.hpp"
+#include "turbulence/TurbulentDriving.hpp"
+#include "util/BC.hpp"
+
+#include "AMReX_FabArray.H"
+#include "AMReX_Geometry.H"
+#include "AMReX_GpuDevice.H"
+#include "AMReX_MultiFab.H"
+#include "AMReX_REAL.H"
+#include <cmath>
+
+struct MHDSmallScaleDynamo {
+};
+
+// isothermal EOS: pressure = cs^2 * rho (no thermal energy equation)
+template <> struct quokka::EOS_Traits<MHDSmallScaleDynamo> {
+	static constexpr double gamma = 1.0;
+	static constexpr double cs_isothermal = 1.0; // dimensionless sound speed
+	static constexpr double mean_molecular_weight = C::m_u;
+};
+
+template <> struct Physics_Traits<MHDSmallScaleDynamo> : DefaultPhysicsTraits {
+	static constexpr bool is_hydro_enabled = true; // solve the Euler equations
+	static constexpr bool is_mhd_enabled = true;   // solve the MHD equations
+	static constexpr int nDustGroups = 0;	       // no dust groups
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+	static constexpr amrex::Real gravitational_constant = 1.0;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::constant; // eta from mhd.resistivity in the TOML; defaults to 0
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant;	  // shear/bulk viscosity from the TOML; both default to 0
+};
+
+// isothermal EOS has no internal energy to reconstruct; pressure computed directly from rho
+template <> struct HydroSystem_Traits<MHDSmallScaleDynamo> {
+	static constexpr bool reconstruct_eint = false;
+};
+
+// uniform density, zero velocity; turbulent driving (configured in input file) stirs the gas
+template <> void QuokkaSimulation<MHDSmallScaleDynamo>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::density_index) = 1.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::energy_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<MHDSmallScaleDynamo>::internalEnergy_index) = 0.0;
+	});
+}
+
+int seed_b_wavenumber = 2;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+double seed_b_fraction = 0.0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+double target_vdisp = 0.0;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+// we initialise the magnetic field using an ABC (Arnold-Beltrami-Childress) seed field:
+// a force-free, maximally helical field defined as the (discrete) curl of a sinusoidal vector potential.
+// the general ABC field has three independent amplitudes (per spatial axis); here we choose them to be equal.
+template <> void QuokkaSimulation<MHDSmallScaleDynamo>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
+
+	const double box_length = prob_hi[0] - prob_lo[0];
+	const double seed_wavenumber = 2.0 * M_PI * seed_b_wavenumber / box_length;
+	const double seed_vecpot_amplitude = std::sqrt(seed_b_fraction / 3.0) * target_vdisp / seed_wavenumber;
+
+	constexpr int b_index = Physics_Indices<MHDSmallScaleDynamo>::mhdFirstIndex;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		if (dir == quokka::direction::x) {
+			// x-face: B_x = dA_z/dy - dA_y/dz
+			const double x_face = prob_lo[0] + i * dx[0];
+			const double y_hi = prob_lo[1] + (j + 1) * dx[1];
+			const double y_lo = prob_lo[1] + j * dx[1];
+			const double z_hi = prob_lo[2] + (k + 1) * dx[2];
+			const double z_lo = prob_lo[2] + k * dx[2];
+			const double vecpot_z_at_y_hi = seed_vecpot_amplitude * (std::sin(seed_wavenumber * y_hi) + std::cos(seed_wavenumber * x_face));
+			const double vecpot_z_at_y_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * y_lo) + std::cos(seed_wavenumber * x_face));
+			const double vecpot_y_at_z_hi = seed_vecpot_amplitude * (std::sin(seed_wavenumber * x_face) + std::cos(seed_wavenumber * z_hi));
+			const double vecpot_y_at_z_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * x_face) + std::cos(seed_wavenumber * z_lo));
+			state_fc(i, j, k, b_index) = (vecpot_z_at_y_hi - vecpot_z_at_y_lo) / dx[1] - (vecpot_y_at_z_hi - vecpot_y_at_z_lo) / dx[2];
+		} else if (dir == quokka::direction::y) {
+			// y-face: B_y = dA_x/dz - dA_z/dx
+			const double y_face = prob_lo[1] + j * dx[1];
+			const double z_hi = prob_lo[2] + (k + 1) * dx[2];
+			const double z_lo = prob_lo[2] + k * dx[2];
+			const double x_hi = prob_lo[0] + (i + 1) * dx[0];
+			const double x_lo = prob_lo[0] + i * dx[0];
+			const double vecpot_x_at_z_hi = seed_vecpot_amplitude * (std::sin(seed_wavenumber * z_hi) + std::cos(seed_wavenumber * y_face));
+			const double vecpot_x_at_z_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * z_lo) + std::cos(seed_wavenumber * y_face));
+			const double vecpot_z_at_x_hi = seed_vecpot_amplitude * (std::sin(seed_wavenumber * y_face) + std::cos(seed_wavenumber * x_hi));
+			const double vecpot_z_at_x_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * y_face) + std::cos(seed_wavenumber * x_lo));
+			state_fc(i, j, k, b_index) = (vecpot_x_at_z_hi - vecpot_x_at_z_lo) / dx[2] - (vecpot_z_at_x_hi - vecpot_z_at_x_lo) / dx[0];
+		} else if (dir == quokka::direction::z) {
+			// z-face: B_z = dA_y/dx - dA_x/dy
+			const double z_face = prob_lo[2] + k * dx[2];
+			const double x_hi = prob_lo[0] + (i + 1) * dx[0];
+			const double x_lo = prob_lo[0] + i * dx[0];
+			const double y_hi = prob_lo[1] + (j + 1) * dx[1];
+			const double y_lo = prob_lo[1] + j * dx[1];
+			const double vecpot_y_at_x_hi = seed_vecpot_amplitude * (std::sin(seed_wavenumber * x_hi) + std::cos(seed_wavenumber * z_face));
+			const double vecpot_y_at_x_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * x_lo) + std::cos(seed_wavenumber * z_face));
+			const double vecpot_x_at_y_hi = seed_vecpot_amplitude * (std::sin(seed_wavenumber * z_face) + std::cos(seed_wavenumber * y_hi));
+			const double vecpot_x_at_y_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * z_face) + std::cos(seed_wavenumber * y_lo));
+			state_fc(i, j, k, b_index) = (vecpot_y_at_x_hi - vecpot_y_at_x_lo) / dx[0] - (vecpot_x_at_y_hi - vecpot_x_at_y_lo) / dx[1];
+		}
+	});
+}
+
+auto problem_main() -> int
+{
+	amrex::ParmParse const pp("setup");
+	pp.query("seed_b_wavenumber", seed_b_wavenumber);
+	pp.query("seed_b_fraction", seed_b_fraction);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(seed_b_wavenumber > 0, "setup.seed_b_wavenumber must be a positive integer");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(seed_b_fraction > 0.0,
+					 "setup.seed_b_fraction must be a positive value; the default of 0 runs with zero magnetic seed field (pure-hydro)");
+
+	amrex::ParmParse const pp_turb("turbulence");
+	pp_turb.query("target_vdisp", target_vdisp);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(target_vdisp > 0.0,
+					 "turbulence.target_vdisp must be a positive value; the default of 0 leaves the velocity field to decay "
+					 "(and thus the magnetic field, too)");
+
+	amrex::ParmParse const pp_geom("geometry");
+	amrex::Vector<amrex::Real> prob_lo_vec;
+	amrex::Vector<amrex::Real> prob_hi_vec;
+	pp_geom.getarr("prob_lo", prob_lo_vec);
+	pp_geom.getarr("prob_hi", prob_hi_vec);
+	const double box_length = prob_hi_vec[0] - prob_lo_vec[0];
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(box_length - (prob_hi_vec[1] - prob_lo_vec[1])) < 1e-10 * box_length &&
+					     std::abs(box_length - (prob_hi_vec[2] - prob_lo_vec[2])) < 1e-10 * box_length,
+					 "geometry.prob_hi - geometry.prob_lo must be equal in all three dimensions; both the seed field and "
+					 "turbulence driving assume a cubic box");
+
+	double turbulence_length = 0.0;
+	pp_turb.query("length", turbulence_length);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(box_length - turbulence_length) < 1e-10 * turbulence_length,
+					 "turbulence.length must match the box length (geometry.prob_hi[0] - geometry.prob_lo[0]); the seed "
+					 "field and turbulence driving must agree on the box length");
+
+	int ampl_auto_adjust = 0;
+	pp_turb.query("ampl_auto_adjust", ampl_auto_adjust);
+	if (ampl_auto_adjust == 1) {
+		amrex::Print() << "WARNING: turbulence.ampl_auto_adjust = 1 is set. The driving amplitude will vary over time, "
+				  "which makes it harder to interpret the dynamo growth rate. Consider setting ampl_auto_adjust = 0 "
+				  "and tuning ampl_factor manually to achieve the desired velocity dispersion.\n";
+	}
+
+	auto BCs_cc = quokka::BC<MHDSmallScaleDynamo>(quokka::BCType::int_dir);
+
+	const int nvars_fc = Physics_Indices<MHDSmallScaleDynamo>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
+		}
+	}
+
+	QuokkaSimulation<MHDSmallScaleDynamo> sim(BCs_cc, BCs_fc);
+
+	sim.setInitialConditions();
+
+	sim.evolve();
+
+	return 0;
+}
