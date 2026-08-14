@@ -598,10 +598,42 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 												 amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
-	// by default, d emission/dT = 4 emission / T
-	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	double d_power_dt = 4. * radiation_constant_ * std::pow(temperature, 3);
-	return d_power_dt * radEnergyFractions;
+	quokka::valarray<amrex::Real, nGroups_> d_fourpiboverc_d_t{};
+	const double a_T3 = radiation_constant_ * temperature * temperature * temperature;
+	if constexpr (nGroups_ == 1) {
+		d_fourpiboverc_d_t[0] = 4. * a_T3;
+		return d_fourpiboverc_d_t;
+	} else {
+		// The group emission is a T^4 f_g(T), so its temperature derivative is 4 a T^3 f_g + a T^4 df_g/dT.
+		// The second term is not a small correction for a group sitting on the Wien tail, where f_g rises
+		// far faster than T^4; dropping it makes this Jacobian entry several times too small and the
+		// resulting Newton step correspondingly too long, which costs the iteration its convergence.
+		// Integrating the exact kernel by parts gives the cumulative form
+		//     D(x) = (15/pi^4) \int_0^x s^4 e^s / (e^s - 1)^2 ds = 4 P(x) - (15/pi^4) x^4 / (e^x - 1),
+		// where P is the same normalized Planck integral used for the energy fractions, so the exact
+		// derivative costs one extra term per group boundary. D(inf) = 4 recovers d(a T^4)/dT.
+		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
+		amrex::Real y = NAN;
+		amrex::Real previous = 0.0;
+		// Only the thermal groups emit; the chemical bands are left at 0, as in ComputePlanckEnergyFractions.
+		for (int g = 0; g < nGroupsThermal_; ++g) {
+			if (g == nGroups_ - 1) {
+				// no chemical bands: the last group carries all remaining blackbody, so D = D(inf) = 4
+				y = 4.0;
+			} else {
+				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
+				if (x >= 100.) { // 100. is the upper limit of x in the table
+					y = 4.0;
+				} else {
+					y = 4. * integrate_planck_from_0_to_x(x) - (x * x * x * x / std::expm1(x)) / gInf;
+				}
+			}
+			d_fourpiboverc_d_t[g] = a_T3 * (y - previous);
+			previous = y;
+		}
+
+		return d_fourpiboverc_d_t;
+	}
 }
 
 // Define the background heating rate for the gas-dust-radiation system. Units in cgs: erg cm^-3 s^-1
