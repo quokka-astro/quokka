@@ -397,7 +397,7 @@ template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
 	// so n_HI_init also gives the equilibrium electron density there.
 	const amrex::Real n_e = userData_.n_HI_init;
 	const amrex::Real T_eq = compute_equilibrium_temperature_ionized(n_e);
-	const amrex::Real alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
+	const amrex::Real alpha_B = 2.63e-13 * std::pow(T_eq / 1.0e4, -0.7);
 	const amrex::Real mu = 0.5;
 	const amrex::Real Q = userData_.Q;
 	const amrex::Real c_i = std::sqrt(C::k_B * T_eq / (mu * C::m_p));
