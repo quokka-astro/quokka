@@ -53,8 +53,8 @@ photoionize.flux_ion = 1.0e10
 # momentum is still deposited, so the beam accelerates the gas to ~8e6 cm/s and sweeps the near-source cells.
 radiation.dust_gas_interaction_coeff = 0.0
 
-# The ionizing band is left dark (see SetRadSource), so photochemistry has nothing to do.
-photochemistry.enabled = 0
+# Photoionization of the slab by the ionizing band.
+photochemistry.enabled = 1
 integrator.use_number_densities = 1
 integrator.do_species_clip = 0
 integrator.jacobian = 1

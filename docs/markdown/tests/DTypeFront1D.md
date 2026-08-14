@@ -10,7 +10,7 @@ Three groups are used, with frequency boundaries \\(\{10^{8},\, 10^{14},\, 3.29\
 |---|---|---|
 | 0 | IR, below \\(10^{14}\\) Hz | unsourced; filled only by dust re-emission |
 | 1 | optical, \\(10^{14}\\) Hz to the Lyman edge | carries the injected beam |
-| 2 | ionizing, above the Lyman edge | chemistry band; sourced, but transparent and unabsorbed |
+| 2 | ionizing, above the Lyman edge | chemistry band; sourced, transparent to dust, absorbed by photoionization |
 
 Chemistry bands must always be the last groups. The two outermost boundaries should be read as \\(0\\) and \\(\infty\\) rather than as physical band edges: `ComputePlanckEnergyFractions` accumulates the Planck integral from zero, so group 0 receives the whole blackbody below \\(10^{14}\\) Hz whatever the first entry says, and emission above the first chemistry-band boundary is dropped rather than assigned to group 2, so the last entry never enters the emission budget.
 
@@ -56,7 +56,7 @@ so the surviving unprocessed energy has the closed form
 \int_0^{\hat c t} E_{\text{opt}} \, dx = \frac{F_{\text{opt}} E_\gamma}{c} \, \frac{1 - e^{-\tau_f}}{\kappa_{\text{opt}} \rho} \, , \qquad \tau_f = \kappa_{\text{opt}} \, \rho \, \hat c \, t \, .
 </script>
 
-Everything the optical band loses reappears in the IR, so the total radiation energy in the domain must equal the energy injected by the source.
+Everything the optical band loses reappears in the IR, so the two thermal bands together must retain the energy injected into the optical one. The ionizing band is budgeted separately, since photoionization drains it: photons injected equal photons still in the field, plus the ionized column, plus recombinations.
 
 ## Answer check
 
@@ -64,15 +64,16 @@ The test passes if all of the following hold. Measured values at the reference r
 
 | # | check | tolerance | measured |
 |---|---|---|---|
-| 1 | total \\(E_{\text{rad}}\\) over all groups equals the injected energy | 1% | 1.0000000 |
+| 1 | IR + optical equals the energy injected into the optical band | 1% | 1.0000000 |
 | 2 | optical light front sits at \\(\hat c \, t\\) | 10% | 0.33% |
 | 3 | reduced flux at the injection cell, \\(f \in [0.9,\, 1+10^{-6}]\\) | — | \\(1 - f = 3\times10^{-15}\\) |
 | 4a | fraction reprocessed into the IR | \\(> 0.25\\) | 0.552 |
 | 4b | surviving optical energy against the \\(e^{-\tau}\\) integral above | 10% | 1.039 |
-| 5 | ionizing band retains its injected energy | 1% | 1.0000000 |
+| 5a | ionizing band is depleted, surviving fraction in \\([0.02, 1)\\) | — | 0.198 |
+| 5b | photons absorbed from the ionizing band cover the ionized column | — | \\(3.2\times10^{21} \ge 3.0\times10^{20}\\) |
 
 Check 3 is the one that exercises the directed source: deleting the flux source gives \\(f = 0.09\\), and scaling it up by \\(c/\hat c\\) gives \\(f = 1000\\). It is needed because check 2 barely discriminates on its own — with the flux source removed the front still reaches 90% of \\(\hat c\, t\\), since the M1 closure lets the leading edge of an isotropic pulse free-stream anyway.
 
-Check 5 pins the chemistry-band source scaling. A chemistry band's source is not multiplied by \\(\hat c / c\\), so getting that wrong would show up here as a factor of \\(c/\hat c = 1000\\).
+Check 5 pins the chemistry-band source scaling, which is not multiplied by \\(\hat c / c\\) the way a thermal band's is. The budget inequality 5b alone does not catch a mis-scaling, because fewer photons produce a proportionally smaller ionized column and the inequality still holds; the lower bound in 5a is what catches it, since the ionization front stalls at its Strömgren column well inside \\(\hat c\, t\\) and always leaves a stable fraction of the photons in flight. Mis-scaling the source by \\(c/\hat c\\) collapses the surviving fraction from 0.198 to \\(8\times10^{-5}\\).
 
 The front position is located on the optical band using a threshold of 5% of the unattenuated plateau, rather than the more natural 50%, because dust absorption thins the beam by \\(e^{-\tau} \approx 0.14\\) before it reaches the front; a 50% threshold would report the absorption depth instead.

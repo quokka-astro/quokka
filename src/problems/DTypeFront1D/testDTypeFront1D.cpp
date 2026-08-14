@@ -9,8 +9,8 @@
 ///
 /// The two sourced bands are scaled differently inside the solver -- a thermal group's source is multiplied
 /// by chat/c and a chemistry band's is not -- so the shipped fluxes differ by exactly c/chat = 1000 and
-/// deliver equal energy. Photochemistry is disabled, so the ionizing band is a pure transport channel here;
-/// it is transparent to the dust opacity and nothing absorbs it.
+/// deliver equal energy. The ionizing band is transparent to the dust opacity, so photoionization is the
+/// only process that removes it, and it ionizes the slab as it advances.
 ///
 /// A separate dust temperature is solved for, with the gas-dust collisional coupling switched off
 /// (radiation.dust_gas_interaction_coeff = 0), so the dust sits at radiative equilibrium and exchanges no
@@ -34,11 +34,12 @@
 ///
 /// and the energy it loses reappears in the IR. The IR is nearly transparent and escapes.
 ///
-/// The test checks that the total radiation energy in the domain equals the injected energy, that the
-/// optical light front sits near chat * t, that the radiation leaves the injection cell beamed (reduced
-/// flux of unity, the only check here that exercises the flux source), that the dust reprocessed a
-/// substantial fraction of the beam into the IR with the survivors following exp(-tau), and that the
-/// ionizing band retains every erg injected into it.
+/// The test checks that the two thermal bands together conserve the energy injected into the optical one
+/// (photoionization drains the ionizing band only, so it is budgeted separately), that the optical light
+/// front sits near chat * t, that the radiation leaves the injection cell beamed (reduced flux of unity,
+/// the only check here that exercises the flux source), that the dust reprocessed a substantial fraction of
+/// the beam into the IR with the survivors following exp(-tau), and that the ionizing band's photon budget
+/// balances against the ionized column it produced.
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
@@ -228,6 +229,25 @@ auto compute_injection_reduced_flux(amrex::MultiFab const &state_mf, int g) -> a
 	amrex::Real reduced_flux = amrex::get<0>(hv);
 	amrex::ParallelAllReduce::Max(reduced_flux, amrex::ParallelContext::CommunicatorSub());
 	return reduced_flux;
+}
+
+// Ionized hydrogen column: sum_cells n_HII * dx  [cm^-2 in 1D].
+auto compute_ionized_column(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> amrex::Real
+{
+	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
+	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+	auto const state = state_mf.const_arrays();
+	const amrex::Real cell_length = dx[0];
+	const amrex::Real mass_HII = spmasses[2];
+
+	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
+		return cell_length * state[box_no](i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + 2) / mass_HII;
+	});
+
+	auto const &hv = reduce_data.value(reduce_op);
+	amrex::Real column = amrex::get<0>(hv);
+	amrex::ParallelAllReduce::Sum(column, amrex::ParallelContext::CommunicatorSub());
+	return column;
 }
 
 // Domain-integrated radiation energy of group g: sum_cells Erad_g * dx  [erg cm^-2 in 1D].
@@ -459,34 +479,34 @@ auto problem_main() -> int
 	// Analytic free-streaming solution: a top-hat of height F * E_photon / c reaching x = chat * t.
 	auto x_analytic = [=](double t_now) -> double { return c_hat * t_now; };
 
-	// Check 1: conservation of total radiation energy. Reflecting boundaries lose nothing, and the gray
-	// opacity only moves energy between the gas and the thermal groups, so once the gas has settled into
-	// radiative equilibrium the domain-integrated Erad summed over all groups must equal the energy injected
-	// by SetRadSource plus the initial floor. This is the primary check on the source-term accounting; the
-	// tolerance absorbs the small amount of heat the gas releases on its way to equilibrium.
+	// Check 1: conservation of energy in the two thermal bands. Reflecting boundaries lose nothing, and with
+	// the gas thermally decoupled the dust only shuffles energy between the IR and optical groups, so their
+	// combined domain-integrated Erad must equal the energy injected into the optical band. Photoionization
+	// removes energy from the ionizing band only, which is why that band is excluded here and gets its own
+	// budget in Check 5. This is the primary check on the source-term accounting.
 	{
-		double E_total = 0.0;
+		double E_thermal = 0.0;
 		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
 			const double E_g = compute_group_total_erad(sim.state_new_cc_[0], dx, g);
 			amrex::Print() << "Group " << g << " integrated Erad: " << E_g << "\n";
-			E_total += E_g;
+			if (g != group_ionizing) {
+				E_thermal += E_g;
+			}
 		}
-		// A thermal group's source carries the code's internal chat/c factor and a chemistry band's does not
-		// (see source_terms_multi_group.hpp), so the optical and ionizing contributions are counted
-		// differently here. Every group starts at the radiation floor.
-		const double injected = ((c_hat / C::c_light) * F + F_ion) * E_photon * t_end + Physics_Traits<DTypeFront1D>::nGroups * Erad_floor_ * Lx;
-		const double energy_frac = E_total / injected;
+		// A thermal group's source carries the code's internal chat/c factor (see source_terms_multi_group.hpp).
+		// Only the optical group is sourced among the thermal ones; both start at the radiation floor.
+		const double injected = (c_hat / C::c_light) * F * E_photon * t_end + 2.0 * Erad_floor_ * Lx;
+		const double energy_frac = E_thermal / injected;
 		const double tol = 0.01;
 
-		amrex::Print() << "Total radiation energy: " << E_total << " (injected " << injected << ")\n";
+		amrex::Print() << "Thermal bands (IR + optical): " << E_thermal << " (injected " << injected << ")\n";
 		amrex::Print() << "Opacities: kappa1 = " << kappa1 << ", kappa2 = " << kappa2 << " cm^2/g\n";
 
 		if (std::abs(energy_frac - 1.0) > tol) {
-			amrex::Print() << "Test FAILED: total radiation energy is " << energy_frac << " of injected (expected 1 within " << tol * 100.0
-				       << "%).\n";
+			amrex::Print() << "Test FAILED: thermal-band energy is " << energy_frac << " of injected (expected 1 within " << tol * 100.0 << "%).\n";
 			status = 1;
 		} else {
-			amrex::Print() << "Test passed: radiation energy is conserved (Erad/injected = " << energy_frac << ").\n";
+			amrex::Print() << "Test passed: thermal-band energy is conserved (Erad/injected = " << energy_frac << ").\n";
 		}
 	}
 
@@ -580,22 +600,50 @@ auto problem_main() -> int
 		}
 	}
 
-	// Check 5: the ionizing band. It is transparent to the dust opacity and, with photochemistry disabled,
-	// nothing absorbs it, so it must retain every erg injected into it. This is the check that pins the
-	// chemistry-band source scaling: unlike the thermal bands, a chemistry band's source is NOT multiplied
-	// by chat/c, so getting that wrong would show up here as a factor of c/chat = 1000.
+	// Check 5: photon budget of the ionizing band. It is transparent to the dust opacity, so photoionization
+	// is the only thing that removes it: every photon absorbed ionizes one hydrogen atom, and the ones that
+	// have not since recombined are still visible as the ionized column. Photon conservation therefore reads
+	//
+	//   injected = still in the field + ionized column + recombinations,
+	//
+	// and since the recombinations are not tracked here this is enforced as the two inequalities below: the
+	// band must be measurably depleted, and the absorbed photons must at least cover the ionized column.
+	//
+	// The budget inequality alone is weak -- it has a factor of ten of headroom here, and it does NOT catch
+	// a mis-scaled chemistry-band source, because fewer photons simply produce a proportionally smaller
+	// ionized column and the inequality still holds (verified: scaling the source by chat/c passes it). The
+	// surviving fraction is what catches that. The ionization front stalls at its Stromgren column well
+	// inside the light-travel distance chat * t, so a good fraction of the injected photons are always still
+	// in flight; mis-scaling the source by c/chat = 1000 collapses the surviving fraction from 0.20 to
+	// 8e-5. Hence the lower bound as well as the upper one.
 	{
 		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, group_ionizing);
 		const double injected_ion = F_ion * E_photon * t_end + Erad_floor_ * Lx;
 		const double ion_frac = E_ion / injected_ion;
+		const double n_injected = injected_ion / E_photon;
+		const double n_absorbed = (injected_ion - E_ion) / E_photon;
+		const double column_HII = compute_ionized_column(sim.state_new_cc_[0], dx);
 
-		amrex::Print() << "Ionizing band integrated Erad: " << E_ion << " (injected " << injected_ion << ")\n";
+		amrex::Print() << "Ionizing band integrated Erad: " << E_ion << " (injected " << injected_ion << ", surviving fraction " << ion_frac << ")\n";
+		amrex::Print() << "Ionizing photons: " << n_injected << " injected, " << n_absorbed << " absorbed; ionized column " << column_HII
+			       << " cm^-2 (recombinations account for the rest)\n";
 
-		if (std::abs(ion_frac - 1.0) > 0.01) {
-			amrex::Print() << "Test FAILED: ionizing band holds " << ion_frac << " of its injected energy (expected 1 within 1%).\n";
+		const double ion_frac_min = 0.02;
+
+		if (ion_frac >= 1.0) {
+			amrex::Print() << "Test FAILED: ionizing band was not depleted by photoionization (surviving fraction " << ion_frac << ").\n";
+			status = 1;
+		} else if (ion_frac < ion_frac_min) {
+			amrex::Print() << "Test FAILED: ionizing band is almost entirely gone (surviving fraction " << ion_frac << " < " << ion_frac_min
+				       << "); too few photons were injected, or they are being over-absorbed.\n";
+			status = 1;
+		} else if (n_absorbed < column_HII) {
+			amrex::Print() << "Test FAILED: ionized column " << column_HII << " cm^-2 exceeds the " << n_absorbed
+				       << " photons absorbed from the ionizing band.\n";
 			status = 1;
 		} else {
-			amrex::Print() << "Test passed: unabsorbed ionizing band conserves its injected energy (Erad/injected = " << ion_frac << ").\n";
+			amrex::Print() << "Test passed: ionizing photon budget is consistent (" << n_absorbed << " absorbed >= " << column_HII
+				       << " ionized).\n";
 		}
 	}
 
