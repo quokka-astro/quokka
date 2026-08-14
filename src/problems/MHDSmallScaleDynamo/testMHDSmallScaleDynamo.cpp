@@ -61,7 +61,6 @@ template <> void QuokkaSimulation<MHDSmallScaleDynamo>::setInitialConditionsOnGr
 	});
 }
 
-// seed field parameters; defaults match input file, overwritten by problem_main() before use
 int seed_b_wavenumber = 2;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 double seed_b_fraction = 0.0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 double target_vdisp = 0.0;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -131,9 +130,31 @@ auto problem_main() -> int
 	pp.query("seed_b_wavenumber", seed_b_wavenumber);
 	pp.query("seed_b_fraction", seed_b_fraction);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(seed_b_wavenumber > 0, "setup.seed_b_wavenumber must be a positive integer");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(seed_b_fraction > 0.0,
+					  "setup.seed_b_fraction must be a positive value; the default of 0 runs with zero magnetic seed field (pure-hydro)");
 
 	amrex::ParmParse const pp_turb("turbulence");
 	pp_turb.query("target_vdisp", target_vdisp);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(target_vdisp > 0.0,
+					  "turbulence.target_vdisp must be a positive value; the default of 0 leaves the velocity field to decay "
+					  "(and thus the magnetic field, too)");
+
+	amrex::ParmParse const pp_geom("geometry");
+	amrex::Vector<amrex::Real> prob_lo_vec;
+	amrex::Vector<amrex::Real> prob_hi_vec;
+	pp_geom.getarr("prob_lo", prob_lo_vec);
+	pp_geom.getarr("prob_hi", prob_hi_vec);
+	const double box_length = prob_hi_vec[0] - prob_lo_vec[0];
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(box_length - (prob_hi_vec[1] - prob_lo_vec[1])) < 1e-10 * box_length &&
+					      std::abs(box_length - (prob_hi_vec[2] - prob_lo_vec[2])) < 1e-10 * box_length,
+					  "geometry.prob_hi - geometry.prob_lo must be equal in all three dimensions; both the seed field and "
+					  "turbulence driving assume a cubic box");
+
+	double turbulence_length = 0.0;
+	pp_turb.query("length", turbulence_length);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(box_length - turbulence_length) < 1e-10 * turbulence_length,
+					  "turbulence.length must match the box length (geometry.prob_hi[0] - geometry.prob_lo[0]); the seed "
+					  "field and turbulence driving must agree on the box length");
 
 	int ampl_auto_adjust = 0;
 	pp_turb.query("ampl_auto_adjust", ampl_auto_adjust);
