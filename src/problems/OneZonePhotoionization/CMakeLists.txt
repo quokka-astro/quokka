@@ -1,4 +1,4 @@
-set(microphysics_network_name "photoionization") # this will override
+set(microphysics_network_name "photoionization_H_caseB_handwritten") # this will override
                                                  # network_name to
                                                  # photoionization for this
                                                  # directory only

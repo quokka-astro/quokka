@@ -19,10 +19,10 @@ set(_pi_hand_written_species_args
   POWER_LAW_INDEX 0 # jaff network.radiation.power_law_index
 )
 
-foreach(_pi_name photoionization DType_JAFF)
+foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten)
   set(_pi_is_jaff FALSE)
   set(_pi_species_args "")
-  if (_pi_name STREQUAL "DType_JAFF")
+  if (_pi_name STREQUAL "photoionization_H_caseB")
     set(_pi_is_jaff TRUE)
   else()
     set(_pi_species_args ${_pi_hand_written_species_args})

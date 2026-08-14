@@ -1,5 +1,5 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  set(microphysics_network_name "DType_JAFF")
+  set(microphysics_network_name "photoionization_H_caseB")
   set(DTypeFront_INTEGRATOR "Rosenbrock" CACHE STRING "Microphysics integrator for DTypeFront")
   set_property(CACHE DTypeFront_INTEGRATOR PROPERTY STRINGS VODE Rosenbrock)
   setup_target_for_microphysics_compilation(${microphysics_network_name}
