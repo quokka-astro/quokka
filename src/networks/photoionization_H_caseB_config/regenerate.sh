@@ -24,7 +24,7 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-JAFF_REPO="git@github.com:jaff-chemistry/jaff.git"
+JAFF_REPO="https://github.com/jaff-chemistry/jaff.git"
 JAFF_COMMIT="116ba9e"
 
 CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

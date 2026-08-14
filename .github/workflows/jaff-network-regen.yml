@@ -1,0 +1,37 @@
+name: 🧪 jaff network regeneration
+
+on:
+  push:
+    branches:
+      - development
+  pull_request:
+    branches:
+      - development
+
+permissions:
+  contents: read
+
+jobs:
+  regen-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install --yes clang-format
+
+      - name: Regenerate photoionization_H_caseB network
+        run: |
+          set -euo pipefail
+          src/networks/photoionization_H_caseB_config/regenerate.sh
+
+      - name: Fail if regeneration produced a diff
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- src/networks/photoionization_H_caseB; then
+            echo "::error::Regenerating the photoionization_H_caseB network produced a diff." \
+                 "The committed network is out of sync with src/networks/photoionization_H_caseB_config/." \
+                 "Re-run regenerate.sh and commit the result, or check for hand-edits to generated files."
+            exit 1
+          fi
