@@ -468,8 +468,21 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 			jacobian.Jgg = jacobian.Jgg * tau0;
 		}
 
-		// check relative convergence of the residuals
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
+		// Round-off floor on the radiation residual, as in SolveGasRadiationEnergyExchange: an optically
+		// thin group sitting far below its local blackbody has its energy reconstructed by a catastrophic
+		// cancellation, so |Fg| cannot fall below the double-precision round-off of the larger operand and a
+		// purely relative test is unreachable.
+		double Fg_roundoff = 0.0;
+		for (int g = 0; g < nGroups_; ++g) {
+			if (tau[g] > 0.0) {
+				Fg_roundoff += std::numeric_limits<double>::epsilon() * std::max(fourPiBoverC[g], EradVec_guess[g]);
+			}
+		}
+
+		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
+		// the round-off floor and cannot be reduced any further
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) ||
+								    (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
@@ -837,8 +850,21 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 			jacobian.Jgg = jacobian.Jgg * tau0;
 		}
 
-		// check relative convergence of the residuals
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
+		// Round-off floor on the radiation residual, as in SolveGasRadiationEnergyExchange: an optically
+		// thin group sitting far below its local blackbody has its energy reconstructed by a catastrophic
+		// cancellation, so |Fg| cannot fall below the double-precision round-off of the larger operand and a
+		// purely relative test is unreachable.
+		double Fg_roundoff = 0.0;
+		for (int g = 0; g < nGroups_; ++g) {
+			if (tau[g] > 0.0) {
+				Fg_roundoff += std::numeric_limits<double>::epsilon() * std::max(fourPiBoverC[g], EradVec_guess[g]);
+			}
+		}
+
+		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
+		// the round-off floor and cannot be reduced any further
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) ||
+								    (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
