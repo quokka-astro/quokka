@@ -1499,37 +1499,91 @@ template <typename RHSFunction, typename JacFunction>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, const double x0, const double compare)
     -> double
 {
-	double x = x0;
 	const double rel_tol = 1.0e-8;
 	const double rel_change_tol = 1.0e-6;
 	const int max_iter_td = 100;
-	// The caller passes the physical scale the residual is measured against. For the dust temperature that
-	// scale is the gas-dust collisional term, which vanishes identically when the coupling coefficient is
-	// set to zero -- and then the tolerance below is zero and can never be met, leaving the iteration to run
-	// to max_iter_td and bail out with its negative sentinel. Fall back to the size of the initial residual
-	// so the criterion degrades to a relative reduction rather than to something unsatisfiable.
-	const double scale = std::max(compare, std::abs(rhs(x0)));
+
+	// Tolerance scale. The caller passes the physical scale its residual should be measured against, but for
+	// the dust temperature that scale is the gas-dust collisional term, which vanishes identically when the
+	// coupling coefficient is set to zero. The tolerance would then be zero and could never be met. Fall
+	// back to the size of the initial residual so the criterion degrades to a relative reduction instead of
+	// something unsatisfiable.
+	const double f0 = rhs(x0);
+	const double scale = std::max(compare, std::abs(f0));
+	if (std::abs(f0) < rel_tol * scale) {
+		return x0;
+	}
+
+	// Bracket the root, then solve with Newton guarded by bisection.
+	//
+	// Every residual solved through this routine is monotone in its unknown -- emission and the collisional
+	// term both grow with the dust temperature, and the gas-energy residual grows with the gas energy -- so
+	// the root is unique and can be bracketed by marching outward in the Newton direction. That guard is
+	// what makes this robust: a bare Newton iteration is unsafe on these functions because a band-limited
+	// Planck function is stiff enough that one step can leave the neighbourhood of the root and never
+	// return, which is the origin of the "dust temperature failed to converge" abort. Both unknowns are
+	// physically positive, so the search is confined to x > 0.
+	const double j0 = jac(x0);
+	const double dir = (j0 * f0 > 0.0) ? -1.0 : 1.0; // sign of the Newton step -f/j
+	double xa = x0;
+	double fa = f0;
+	double xb = x0;
+	double fb = f0;
+	// March multiplicatively rather than by fixed increments: both unknowns are positive and can sit orders
+	// of magnitude from the initial guess, and halving repeatedly also keeps the search inside x > 0 without
+	// needing a special case.
+	bool bracketed = false;
+	double x_prev = x0;
+	double f_prev = f0;
+	double factor = (dir > 0.0) ? 2.0 : 0.5;
+	for (int k = 0; k < 200; ++k) {
+		const double x_try = x_prev * factor;
+		if (!(x_try > 0.0) || !std::isfinite(x_try)) {
+			break;
+		}
+		const double f_try = rhs(x_try);
+		if (f_try * f0 <= 0.0) {
+			xa = std::min(x_prev, x_try);
+			xb = std::max(x_prev, x_try);
+			fa = (xa == x_prev) ? f_prev : f_try;
+			fb = (xb == x_prev) ? f_prev : f_try;
+			bracketed = true;
+			break;
+		}
+		x_prev = x_try;
+		f_prev = f_try;
+	}
+	if (!bracketed) {
+		return -1.0; // caller treats a negative return as failure
+	}
+
+	double x = 0.5 * (xa + xb);
 	int iter_Td = 0;
 	for (; iter_Td < max_iter_td; ++iter_Td) {
-		const auto the_rhs = rhs(x);
+		const double the_rhs = rhs(x);
 		if (std::abs(the_rhs) < rel_tol * scale) {
 			break;
 		}
 
-		double dT = -the_rhs / jac(x);
-		// Damp the step so that x stays positive. The band-integrated Planck function is exponentially flat
-		// on the Wien tail, so its derivative there is tiny and an undamped Newton step can be arbitrarily
-		// large -- routinely overshooting to a negative temperature, from which the iteration cannot recover
-		// and this solver bails out by returning its -1 sentinel. Limiting each step to a halving or a
-		// doubling of x keeps the iterate physical while leaving the near-root behaviour untouched, so
-		// quadratic convergence is preserved where it matters.
-		dT = std::max(-0.5 * x, std::min(dT, x));
-		x += dT;
+		// keep the bracket around the root
+		if (the_rhs * fa > 0.0) {
+			xa = x;
+			fa = the_rhs;
+		} else {
+			xb = x;
+			fb = the_rhs;
+		}
 
-		if (iter_Td > 0) {
-			if (std::abs(dT) < rel_change_tol * std::abs(x)) {
-				break;
-			}
+		const double j = jac(x);
+		double x_new = (j != 0.0) ? (x - the_rhs / j) : (0.5 * (xa + xb));
+		// fall back to bisection whenever Newton would leave the bracket
+		if (!(x_new > xa && x_new < xb)) {
+			x_new = 0.5 * (xa + xb);
+		}
+		const double dx = x_new - x;
+		x = x_new;
+		if (std::abs(dx) < rel_change_tol * std::abs(x)) {
+			break;
 		}
 	}
 
@@ -1537,6 +1591,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	if (iter_Td >= max_iter_td) {
 		x = -1.0;
 	}
+	amrex::ignore_unused(fb);
 
 	return x;
 }
