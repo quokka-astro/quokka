@@ -182,7 +182,7 @@ struct SchemeEndpointPicardHistory {
 };
 
 struct EndpointPicardResult {
-	std::complex<double> endpoint{};
+	std::complex<double> endpoint;
 	int iterations = 0;
 	bool converged = false;
 };

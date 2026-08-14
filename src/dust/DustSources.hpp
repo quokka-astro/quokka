@@ -125,6 +125,7 @@ template <typename problem_t> class DustSources
 	};
 
 	struct GirkCoefficients {
+		// NOLINTNEXTLINE(misc-confusable-identifiers)
 		amrex::Real gamma1 = 0.0;
 		amrex::Real gamma2 = 0.0;
 		amrex::Real beta1 = 0.0;
