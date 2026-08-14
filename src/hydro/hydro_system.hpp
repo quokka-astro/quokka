@@ -179,7 +179,14 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &leftState_bfield_mf,
 				  amrex::MultiFab const &rightState_bfield_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc,
+				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real shearViscosity, amrex::Real bulkViscosity,
 				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
+
+	template <FluxDir DIR>
+	AMREX_GPU_DEVICE static auto ComputeViscousFlux(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k, int velN_index,
+							int velV_index, int velW_index, amrex::Real dx_n, amrex::Real dx_v, amrex::Real dx_w,
+							amrex::Real shearViscosity, amrex::Real bulkViscosity)
+	    -> quokka::valarray<amrex::Real, 4>; // {sigma_nn, sigma_nv, sigma_nw, v.sigma}
 
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
@@ -1271,11 +1278,20 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::
 	});
 }
 
+template <typename problem_t, FluxDir DIR>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeViscosity(int /*i*/, int /*j*/, int /*k*/, quokka::Array4View<const amrex::Real, DIR> const & /*q*/)
+    -> quokka::valarray<amrex::Real, 2> // {shear_viscosity, bulk_viscosity}
+{
+	static_assert(sizeof(problem_t) == 0, "computeViscosity must be specialized in the problem file when using ViscosityModel::problem_defined");
+	return {0.0, 0.0};
+}
+
 template <typename problem_t>
 template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &x1LeftState_bfield_mf,
 					   amrex::MultiFab const &x1RightState_bfield_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc,
+					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const amrex::Real shearViscosity, const amrex::Real bulkViscosity,
 					   amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf, const int nghost_vel)
 {
 
@@ -1314,6 +1330,11 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		if (Physics_Traits<problem_t>::is_mhd_enabled) {
 			x1FSpds_ref = x1FSpds_in[bx];
 		}
+		// dx/shearViscosity/bulkViscosity are only read inside `if constexpr` below; nvcc can't first-capture
+		// a variable from inside constexpr-if, so touch them unconditionally here first
+		[[maybe_unused]] auto const dx_captured = dx;
+		[[maybe_unused]] amrex::Real const shearViscosity_captured = shearViscosity;
+		[[maybe_unused]] amrex::Real const bulkViscosity_captured = bulkViscosity;
 
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
@@ -1422,10 +1443,20 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		int velV_index = x2Velocity_index;
 		int velW_index = x3Velocity_index;
 
+		// grid spacing along normal/transverse directions, for the viscous stress below (3D only)
+		[[maybe_unused]] amrex::Real dx_n = NAN;
+		[[maybe_unused]] amrex::Real dx_v = NAN;
+		[[maybe_unused]] amrex::Real dx_w = NAN;
+
 		if constexpr (DIR == FluxDir::X1) {
 			velN_index = x1Velocity_index;
 			velV_index = x2Velocity_index;
 			velW_index = x3Velocity_index;
+			if constexpr (AMREX_SPACEDIM == 3) {
+				dx_n = dx[0];
+				dx_v = dx[1];
+				dx_w = dx[2];
+			}
 		} else if constexpr (DIR == FluxDir::X2) {
 #if (AMREX_SPACEDIM == 2)
 			velN_index = x2Velocity_index;
@@ -1436,11 +1467,19 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			velN_index = x2Velocity_index;
 			velV_index = x3Velocity_index;
 			velW_index = x1Velocity_index;
+			dx_n = dx[1];
+			dx_v = dx[2];
+			dx_w = dx[0];
 #endif
 		} else if constexpr (DIR == FluxDir::X3) {
 			velN_index = x3Velocity_index;
 			velV_index = x1Velocity_index;
 			velW_index = x2Velocity_index;
+			if constexpr (AMREX_SPACEDIM == 3) {
+				dx_n = dx[2];
+				dx_v = dx[0];
+				dx_w = dx[1];
+			}
 		}
 
 		quokka::HydroState<nscalars_, nmscalars_> sL{};
@@ -1548,6 +1587,25 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		F_canonical = F_canonical + viscosity * (U_L - U_R);
 
+		// physical shear/bulk viscosity, added the same way as the artificial viscosity above
+		if constexpr (AMREX_SPACEDIM == 3 && Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
+			amrex::Real localShearViscosity = shearViscosity;
+			amrex::Real localBulkViscosity = bulkViscosity;
+			if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) {
+				const auto local_viscosity = computeViscosity<problem_t, DIR>(i, j, k, q);
+				localShearViscosity = local_viscosity[0];
+				localBulkViscosity = local_viscosity[1];
+			}
+			if (localShearViscosity != 0.0 || localBulkViscosity != 0.0) {
+				const auto sigma = ComputeViscousFlux<DIR>(q, i, j, k, velN_index, velV_index, velW_index, dx_n, dx_v, dx_w,
+									   localShearViscosity, localBulkViscosity);
+				F_canonical[x1Momentum_index] -= sigma[0];
+				F_canonical[x2Momentum_index] -= sigma[1];
+				F_canonical[x3Momentum_index] -= sigma[2];
+				F_canonical[energy_index] -= sigma[3]; // zeroed below if EOS is isothermal
+			}
+		}
+
 		quokka::valarray<double, nHydroScalars_> F = F_canonical;
 
 		// permute momentum components according to flux direction DIR
@@ -1619,6 +1677,47 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			DustSystem<problem_t>::template ComputeDustFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k);
 		}
 	});
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_DEVICE auto HydroSystem<problem_t>::ComputeViscousFlux(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k, int velN_index,
+								 int velV_index, int velW_index, amrex::Real dx_n, amrex::Real dx_v, amrex::Real dx_w,
+								 amrex::Real shearViscosity, amrex::Real bulkViscosity) -> quokka::valarray<amrex::Real, 4>
+{
+	static_assert(AMREX_SPACEDIM == 3 || dependent_false_v<problem_t>, "HydroSystem::ComputeViscousFlux currently only supports 3D.");
+
+	// dq<comp>_d<dir> = derivative of q's <comp>-component along <dir>; n/v/w are the local orthonormal basis
+	// normal-direction derivatives: one-sided difference across the face, between cells i-1 and i
+	const amrex::Real dqn_dn = (q(i, j, k, velN_index) - q(i - 1, j, k, velN_index)) / dx_n;
+	const amrex::Real dqv_dn = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dx_n;
+	const amrex::Real dqw_dn = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_n;
+
+	// transverse derivatives: averaged centered difference
+	const amrex::Real dqv_dv =
+	    0.25 / dx_v * ((q(i, j + 1, k, velV_index) - q(i, j - 1, k, velV_index)) + (q(i - 1, j + 1, k, velV_index) - q(i - 1, j - 1, k, velV_index)));
+	const amrex::Real dqn_dv =
+	    0.25 / dx_v * ((q(i, j + 1, k, velN_index) - q(i, j - 1, k, velN_index)) + (q(i - 1, j + 1, k, velN_index) - q(i - 1, j - 1, k, velN_index)));
+	const amrex::Real dqw_dw =
+	    0.25 / dx_w * ((q(i, j, k + 1, velW_index) - q(i, j, k - 1, velW_index)) + (q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k - 1, velW_index)));
+	const amrex::Real dqn_dw =
+	    0.25 / dx_w * ((q(i, j, k + 1, velN_index) - q(i, j, k - 1, velN_index)) + (q(i - 1, j, k + 1, velN_index) - q(i - 1, j, k - 1, velN_index)));
+
+	const amrex::Real div_q = dqn_dn + dqv_dv + dqw_dw;
+
+	// sigma_ni = 2*nu_shear*S_ni + nu_bulk*div[q]*delta_ni, i in {n,v,w}: sigma's normal row, not the full tensor
+	const amrex::Real sigma_nn = 2.0 * shearViscosity * dqn_dn + (bulkViscosity - (2.0 / 3.0) * shearViscosity) * div_q;
+	const amrex::Real sigma_nv = shearViscosity * (dqv_dn + dqn_dv);
+	const amrex::Real sigma_nw = shearViscosity * (dqw_dn + dqn_dw);
+
+	// viscous heating dot[q,sigma] at the face; caller drops this for isothermal EOS
+	const amrex::Real q_face_n = 0.5 * (q(i, j, k, velN_index) + q(i - 1, j, k, velN_index));
+	const amrex::Real q_face_v = 0.5 * (q(i, j, k, velV_index) + q(i - 1, j, k, velV_index));
+	const amrex::Real q_face_w = 0.5 * (q(i, j, k, velW_index) + q(i - 1, j, k, velW_index));
+	const amrex::Real q_dot_sigma = q_face_n * sigma_nn + q_face_v * sigma_nv + q_face_w * sigma_nw;
+
+	// sigma's remaining rows are computed by the other two DIR sweeps, not here
+	return {sigma_nn, sigma_nv, sigma_nw, q_dot_sigma};
 }
 
 #endif // HYDRO_SYSTEM_HPP_
