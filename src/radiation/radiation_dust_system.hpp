@@ -549,8 +549,16 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		// temperature
 		if (dust_model == 2) {
 			if (n > 0) {
-				relax = (jacobian.Fg_abs_sum > Fg_abs_sum_prev) ? std::max(newton_damping_min, relax * newton_damping_down)
-										: std::min(1.0, relax * newton_damping_up);
+				// Clamped with explicit comparisons rather than std::max/std::min: those bind their
+				// arguments by reference, which ODR-uses the constexpr constants and makes them
+				// unavailable in device code under nvcc.
+				relax *= (jacobian.Fg_abs_sum > Fg_abs_sum_prev) ? newton_damping_down : newton_damping_up;
+				if (relax < newton_damping_min) {
+					relax = newton_damping_min;
+				}
+				if (relax > 1.0) {
+					relax = 1.0;
+				}
 			}
 			Fg_abs_sum_prev = jacobian.Fg_abs_sum;
 			// Oscillation catch. When the iteration cycles about the root rather than approaching it, the

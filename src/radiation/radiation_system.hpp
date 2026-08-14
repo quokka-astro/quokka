@@ -658,7 +658,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 				if (x >= 100.) { // 100. is the upper limit of x in the table
 					y = 4.0;
 				} else {
-					y = 4. * integrate_planck_from_0_to_x(x) - (x * x * x * x / std::expm1(x)) / gInf;
+					y = 4. * integrate_planck_from_0_to_x(x) - (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
 				}
 			}
 			d_fourpiboverc_d_t[g] = a_T3 * (y - previous);
