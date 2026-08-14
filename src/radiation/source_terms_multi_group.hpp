@@ -304,12 +304,19 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 					}
 				}
 			}
-		} else { // in the second and later loops, calculate tau and E (given R)
+		} else { // in the second and later loops, calculate tau, then recover whichever of E and R is not
+			 // the unknown for that group (see newton_erad_base_tau_threshold)
 			tau = dt * rho * opacity_terms.kappaP * chat;
 			for (int g = 0; g < nGroups_; ++g) {
 				// If tau = 0.0, Erad_guess shouldn't change
 				if (tau[g] > 0.0) {
-					EradVec_guess[g] = opacity_terms.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
+					if (!use_D_as_base && (tau[g] < newton_erad_base_tau_threshold)) {
+						// Erad_g is the unknown for this thin group; R_g follows from it without
+						// cancellation
+						Rvec[g] = (fourPiBoverC[g] - EradVec_guess[g] / opacity_terms.kappaPoverE[g]) * tau[g] + work_local[g];
+					} else {
+						EradVec_guess[g] = opacity_terms.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
+					}
 					if constexpr (force_rad_floor_in_iteration) {
 						if (EradVec_guess[g] < 0.0) {
 							Egas_guess -= cscale * (Erad_floor_ - EradVec_guess[g]);
@@ -333,19 +340,26 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		if constexpr (use_D_as_base) {
 			jacobian.J0g = jacobian.J0g * tau0;
 			jacobian.Jgg = jacobian.Jgg * tau0;
+		} else {
+			RebaseThinGroupsOntoErad(jacobian, tau, opacity_terms.kappaPoverE);
 		}
 
-		// Round-off floor on the radiation residual. Each iteration reconstructs the group energy as
-		// Erad_g = kappaPoverE_g * (4 pi B_g / c - R_g / tau_g). When a group is optically thin and sits far
-		// below its local blackbody, that subtraction cancels catastrophically: the result is many orders of
-		// magnitude smaller than either operand, so Erad_g -- and hence Fg_g -- cannot be resolved to better
-		// than the double-precision round-off of the larger operand. Without this floor the purely relative
-		// test below is unreachable in that regime and the iteration spins until maxIter and aborts, even
-		// though it reached its fixed point in a handful of steps.
+		// Round-off floor on the radiation residual. A group whose unknown is R_g has its energy recovered
+		// as Erad_g = kappaPoverE_g * (4 pi B_g / c - R_g / tau_g). Where that subtraction cancels, the
+		// result is orders of magnitude smaller than either operand, so Erad_g -- and hence Fg_g -- cannot
+		// be resolved to better than the double-precision round-off of the larger operand. Without this
+		// floor the purely relative test below is unreachable in that regime and the iteration spins until
+		// maxIter and aborts, even though it reached its fixed point in a handful of steps.
 		double Fg_roundoff = 0.0;
 		for (int g = 0; g < nGroups_; ++g) {
 			if (tau[g] > 0.0) {
-				Fg_roundoff += std::numeric_limits<double>::epsilon() * std::max(fourPiBoverC[g], EradVec_guess[g]);
+				// A group rebased onto Erad_g reaches its residual without that cancellation, so its floor
+				// is just the round-off of the terms of the residual itself.
+				const double operand =
+				    (!use_D_as_base && (tau[g] < newton_erad_base_tau_threshold))
+					? std::max(std::max(std::abs(EradVec_guess[g]), std::abs(Rvec[g])), std::max(std::abs(Erad0Vec[g]), std::abs(Src[g])))
+					: std::max(fourPiBoverC[g], EradVec_guess[g]);
+				Fg_roundoff += std::numeric_limits<double>::epsilon() * operand;
 			}
 		}
 
@@ -411,7 +425,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			if constexpr (use_D_as_base) {
 				Rvec += tau0 * delta_R;
 			} else {
-				Rvec += delta_R;
+				for (int g = 0; g < nGroups_; ++g) {
+					if ((tau[g] > 0.0) && (tau[g] < newton_erad_base_tau_threshold)) {
+						// delta_R holds delta_Erad for a rebased group. Rvec is advanced to first
+						// order as well, so that it stays usable if the group leaves the thin
+						// regime; when it does not, Rvec is recovered exactly at the top of the
+						// next iteration.
+						EradVec_guess[g] += delta_R[g];
+						Rvec[g] += -tau[g] / opacity_terms.kappaPoverE[g] * delta_R[g];
+					} else {
+						Rvec[g] += delta_R[g];
+					}
+				}
 			}
 		}
 

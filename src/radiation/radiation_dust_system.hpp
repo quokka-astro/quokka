@@ -340,6 +340,11 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 	AMREX_ASSERT(T_gas >= 0.);
 
 	const int maxIter = 100;
+	// Rebasing an optically thin group onto Erad_g (see newton_erad_base_tau_threshold) is applied only in
+	// the decoupled branch. With dust_model == 1 the dust temperature is itself a function of sum(Rvec), and
+	// ComputeJacobianForGasAndDust has already eliminated that coupling in the R_g unknowns, so the columns
+	// are no longer a plain change of variable away from the Erad_g ones.
+	const bool rebase_thin = (dust_model == 2) && !use_D_as_base;
 	// Adaptive damping state. In the decoupled-dust branch the Newton iteration can oscillate with growing
 	// amplitude rather than converge, so the step is shortened whenever the radiation residual fails to
 	// decrease, and allowed to grow back towards a full step when it does. See newton_damping_* below.
@@ -437,12 +442,19 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 					}
 				}
 			}
-		} else { // in the second and later loops, calculate tau and E (given R)
+		} else { // in the second and later loops, calculate tau, then recover whichever of E and R is not
+			 // the unknown for that group (see newton_erad_base_tau_threshold)
 			tau = dt * rho * opacity_terms.kappaP * chat;
 			for (int g = 0; g < nGroups_; ++g) {
 				// If tau = 0.0, Erad_guess shouldn't change
 				if (tau[g] > 0.0) {
-					EradVec_guess[g] = opacity_terms.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
+					if (rebase_thin && (tau[g] < newton_erad_base_tau_threshold)) {
+						// Erad_g is the unknown for this thin group; R_g follows from it without
+						// cancellation
+						Rvec[g] = (fourPiBoverC[g] - EradVec_guess[g] / opacity_terms.kappaPoverE[g]) * tau[g] + work_local[g];
+					} else {
+						EradVec_guess[g] = opacity_terms.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
+					}
 					if constexpr (force_rad_floor_in_iteration) {
 						if (EradVec_guess[g] < 0.0) {
 							Egas_guess -= cscale * (Erad_floor_ - EradVec_guess[g]);
@@ -473,16 +485,23 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		if constexpr (use_D_as_base) {
 			jacobian.J0g = jacobian.J0g * tau0;
 			jacobian.Jgg = jacobian.Jgg * tau0;
+		} else if (rebase_thin) {
+			RebaseThinGroupsOntoErad(jacobian, tau, opacity_terms.kappaPoverE);
 		}
 
-		// Round-off floor on the radiation residual, as in SolveGasRadiationEnergyExchange: an optically
-		// thin group sitting far below its local blackbody has its energy reconstructed by a catastrophic
-		// cancellation, so |Fg| cannot fall below the double-precision round-off of the larger operand and a
-		// purely relative test is unreachable.
+		// Round-off floor on the radiation residual, as in SolveGasRadiationEnergyExchange: a group whose
+		// unknown is R_g has its energy recovered from a cancelling difference, so |Fg| cannot fall below
+		// the double-precision round-off of the larger operand and a purely relative test is unreachable.
 		double Fg_roundoff = 0.0;
 		for (int g = 0; g < nGroups_; ++g) {
 			if (tau[g] > 0.0) {
-				Fg_roundoff += std::numeric_limits<double>::epsilon() * std::max(fourPiBoverC[g], EradVec_guess[g]);
+				// A group rebased onto Erad_g reaches its residual without that cancellation, so its floor
+				// is just the round-off of the terms of the residual itself.
+				const double operand =
+				    (rebase_thin && (tau[g] < newton_erad_base_tau_threshold))
+					? std::max(std::max(std::abs(EradVec_guess[g]), std::abs(Rvec[g])), std::max(std::abs(Erad0Vec[g]), std::abs(Src[g])))
+					: std::max(fourPiBoverC[g], EradVec_guess[g]);
+				Fg_roundoff += std::numeric_limits<double>::epsilon() * operand;
 			}
 		}
 
@@ -548,7 +567,17 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 			delta_x_prev = delta_x;
 			delta_R_prev = delta_R;
 			T_d += relax * step_x;
-			Rvec += relax * step_R;
+			for (int g = 0; g < nGroups_; ++g) {
+				if (rebase_thin && (tau[g] > 0.0) && (tau[g] < newton_erad_base_tau_threshold)) {
+					// step_R holds the Erad_g step for a rebased group. Rvec is advanced to first order
+					// as well, so that it stays usable if the group leaves the thin regime; when it does
+					// not, Rvec is recovered exactly at the top of the next iteration.
+					EradVec_guess[g] += relax * step_R[g];
+					Rvec[g] += -tau[g] / opacity_terms.kappaPoverE[g] * relax * step_R[g];
+				} else {
+					Rvec[g] += relax * step_R[g];
+				}
+			}
 		} else {
 			const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
 			if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {

@@ -56,6 +56,17 @@ static constexpr double newton_damping_down = 0.5;
 static constexpr double newton_damping_up = 1.5;
 static constexpr double newton_damping_min = 0.05;
 static constexpr bool use_D_as_base = false;
+// Optical depth below which a group's Newton unknown is its radiation energy Erad_g rather than its
+// exchange term R_g. With R_g as the unknown, Erad_g must be recovered as
+//     Erad_g = (kappa_P/kappa_E)_g * (4 pi B_g / c - (R_g - w_g) / tau_g),
+// and for tau_g << 1 the two terms in that difference agree to within a factor tau_g, so Erad_g -- and
+// with it the group residual -- loses its leading digits to cancellation. Taking Erad_g as the unknown
+// instead reverses the map, R_g = (4 pi B_g / c - Erad_g / (kappa_P/kappa_E)_g) * tau_g + w_g, which
+// carries no cancellation in that regime; the two parametrizations are affinely related, so the Newton
+// iterates agree in exact arithmetic and only the round-off differs (by a factor tau_g). Above the
+// threshold the roles reverse -- a thick group near radiative equilibrium has 4 pi B_g / c close to
+// Erad_g and it is R_g that must be recovered from a difference -- so R_g stays the unknown there.
+static constexpr double newton_erad_base_tau_threshold = 1.0;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
 
@@ -133,6 +144,28 @@ template <typename problem_t> struct JacobianResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jg1; // (g, 1) components of the Jacobian matrix, g = 1, 2, ..., nGroups
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;  // (g) components of the residual, g = 1, 2, ..., nGroups
 };
+
+// Rebase the optically thin groups of a Jacobian built in the R_g unknowns onto the Erad_g unknowns.
+// See newton_erad_base_tau_threshold for why. The map is R_g = (4 pi B_g / c - Erad_g / kappaPoverE_g) *
+// tau_g + w_g, so dR_g/dErad_g = -tau_g / kappaPoverE_g: the column of group g is scaled by that factor.
+// The (g, 0) entry is scaled too, because dF_g/dx at fixed Erad_g is not the same partial derivative as
+// dF_g/dx at fixed R_g. The (0, 0) entry instead gains a term, since R_g now varies with x: F0 contains
+// J0g[g] * R_g, contributing J0g[g] * dR_g/dx = -J0g[g] * scale * Jg0[g]. The residuals are unchanged --
+// they are the same numbers regardless of which variable is held independent.
+template <typename problem_t>
+AMREX_GPU_DEVICE void RebaseThinGroupsOntoErad(JacobianResult<problem_t> &jacobian, quokka::valarray<double, Physics_Traits<problem_t>::nGroups> const &tau,
+					       quokka::valarray<double, Physics_Traits<problem_t>::nGroups> const &kappaPoverE)
+{
+	for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+		if ((tau[g] > 0.0) && (tau[g] < newton_erad_base_tau_threshold)) {
+			const double scale = -tau[g] / kappaPoverE[g]; // dR_g / dErad_g
+			jacobian.J00 -= jacobian.J0g[g] * scale * jacobian.Jg0[g];
+			jacobian.Jgg[g] *= scale;
+			jacobian.J0g[g] *= scale;
+			jacobian.Jg0[g] *= scale;
+		}
+	}
+}
 
 // A struct to hold the results of UpdateFlux(), containing the following elements:
 // Erad, gasMomentum, Frad
