@@ -215,6 +215,42 @@ A few implementation notes help interpret corner cases and limitations of the cu
 - Star formation is operator-split from the hydrodynamics. When \\(t_{ff}\\) is unresolved (\\(\Delta t \gtrsim t_{ff}\\)), the true star formation rate is not captured, and this scheme provides one possible approximation; no explicit limiter is enforced beyond the CFL-controlled hydro step.
 - All spawned particles are inserted at the cell centre. Other physics modules are responsible for any subsequent repositioning or feedback coupling.
 
+## Empirically motivated early feedback
+
+The optional empirically motivated early-feedback (EMF) model follows Keller, Kruijssen & Chevance (2022). For a `StochasticStellarPop` particle with birth mass \\(M_{\\rm birth}\\), birth time \\(t_{\\rm birth}\\), step start \\(t\\), and timestep \\(\\Delta t\\), it requests the finite momentum increment
+
+<script type="math/tex; mode=display">
+\Delta p = \alpha p_0 M_{\rm birth}\left[x_1^{4\alpha-1}-x_0^{4\alpha-1}\right],
+\qquad
+x_0 = {\rm clamp}\!\left(\frac{t-t_{\rm birth}}{t_{\rm FB}},0,1\right),
+\qquad
+x_1 = {\rm clamp}\!\left(\frac{t+\Delta t-t_{\rm birth}}{t_{\rm FB}},0,1\right).
+</script>
+
+This is already a timestep-integrated impulse and is not multiplied by \\(\\Delta t\\) again. At \\(t=t_{\\rm birth}+t_{\\rm FB}\\), the integrated momentum is \\(\\alpha p_0 M_{\\rm birth}\\). The default values are \\(p_0=377\\) km s\\(^{-1}\\), \\(t_{\\rm FB}=3.3\\) Myr, and \\(\\alpha=1\\).
+
+All valid stellar-population representations participate while their age interval overlaps \\([0,t_{\\rm FB}]\\): `LowMassComposite`, `SNProgenitor`, `HighMassNonExploding`, and `SNRemnant`. This stage-independent rule makes a formation event's EMF budget proportional to the sum of its represented birth masses; later SN mass loss does not reduce the budget. Particle splitting divides both current mass and `mass_at_birth` among the children.
+
+EMF uses the same normalized three-cell spherical weights and four-ghost-cell requirement as SN feedback, but it constructs corrected radial vectors for each particle. Subtracting the weighted mean direction and renormalizing the vector magnitudes enforces, to deposition roundoff,
+
+<script type="math/tex; mode=display">
+\sum_j \Delta \boldsymbol{p}_j = 0,
+\qquad
+\sum_j \left|\Delta \boldsymbol{p}_j\right| = \Delta p.
+</script>
+
+It injects no mass, metals, passive scalars, or radiation energy. After all particle events have been accumulated, each cell's total energy receives the exact kinetic-energy change associated with its net momentum change, leaving internal energy unchanged. For each individual event, negative work \\(\\sum_j \\boldsymbol{v}_j\\!\\cdot\\!\\Delta\\boldsymbol{p}_j\\) is added as thermal energy to the particle's host cell. Cancellation between separate particle events is represented by the aggregated kinetic-energy update; it does not receive an additional inter-event thermalization term.
+
+The operation occurs after end-of-step particle drift and star formation, and before SN deposition. A newborn particle therefore receives the clipped increment for the current \\([t,t+\\Delta t]\\) interval at its end-of-step position. This is a first-order operator split.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `particles.EMF_enabled` | Boolean | `0` | Enable early feedback for `StochasticStellarPop` particles |
+| `particles.EMF_p0_kmps` | Real | `377.0` | Momentum normalization \\(p_0\\) in km s\\(^{-1}\\) |
+| `particles.EMF_tFB_Myr` | Real | `3.3` | Feedback duration in Myr |
+| `particles.EMF_alpha` | Real | `1.0` | Expansion exponent; must lie in \\([0.5,1.0]\\) |
+
+The current implementation supports a single-level three-dimensional hierarchy only (`amr.max_level=0`). It aborts if EMF is enabled on a multilevel hierarchy or if an active particle's full stencil is not representable inside its particle grid and the physical domain. This prevents silent loss of momentum at coarse-fine or non-periodic physical boundaries. EMF is independent of `particles.disable_SN_feedback` and `particles.SN_scheme`, so EMF-only and SN-only controls are both available.
 
 ## Supernova Feedback
 
