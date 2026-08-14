@@ -28,7 +28,7 @@ S = \frac{F \, E_\gamma}{\Delta x} \, ,
 
 where \\(E_\gamma\\) is the mean photon energy and \\(\Delta x = L/128\\). The companion radiation *flux* source is set to \\(c\,S\\), so the injected radiation has reduced flux \\(f = F_{\text{rad}}/(c E_{\text{rad}}) = 1\\) and free-streams along \\(+x\\) instead of spreading isotropically.
 
-A thermal group's source is scaled internally by \\(\hat c / c\\) and a chemistry band's is not, so the two shipped fluxes differ by exactly that factor and deliver equal energy: \\(F_{\text{opt}} = 10^{13}\\) and \\(F_{\text{ion}} = 10^{10}\,\text{cm}^{-2}\,\text{s}^{-1}\\). Photochemistry is disabled, so the ionizing band is a pure transport channel here.
+A thermal group's source is scaled internally by \\(\hat c / c\\) and a chemistry band's is not, so the two shipped fluxes differ by exactly that factor and deliver equal energy: \\(F_{\text{opt}} = 10^{13}\\) and \\(F_{\text{ion}} = 10^{10}\,\text{cm}^{-2}\,\text{s}^{-1}\\). Photochemistry is enabled, so the ionizing band is not merely transported: it is absorbed by photoionization, and the resulting front stalls at its Strömgren column well inside \\(\hat c\, t\\).
 
 ## Dust model
 
