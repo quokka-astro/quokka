@@ -340,6 +340,13 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 	AMREX_ASSERT(T_gas >= 0.);
 
 	const int maxIter = 100;
+	// Adaptive damping state. In the decoupled-dust branch the Newton iteration can oscillate with growing
+	// amplitude rather than converge, so the step is shortened whenever the radiation residual fails to
+	// decrease, and allowed to grow back towards a full step when it does. See newton_damping_* below.
+	double relax = 1.0;
+	double Fg_abs_sum_prev = std::numeric_limits<double>::max();
+	double delta_x_prev = 0.0;
+	quokka::valarray<double, nGroups_> delta_R_prev{};
 	int n = 0;
 	for (; n < maxIter; ++n) { // NOSONAR
 		// if relative change is within tol, break
@@ -522,8 +529,26 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		// enable_dE_constrain is used to prevent the gas temperature from dropping/increasing below/above the radiation
 		// temperature
 		if (dust_model == 2) {
-			T_d += delta_x;
-			Rvec += delta_R;
+			if (n > 0) {
+				relax = (jacobian.Fg_abs_sum > Fg_abs_sum_prev) ? std::max(newton_damping_min, relax * newton_damping_down)
+									       : std::min(1.0, relax * newton_damping_up);
+			}
+			Fg_abs_sum_prev = jacobian.Fg_abs_sum;
+			// Oscillation catch. When the iteration cycles about the root rather than approaching it, the
+			// steps alternate in sign and each one overshoots past the root; the mean of two consecutive
+			// steps is what actually points at it (for a clean period-two cycle the mean lands on it).
+			// Advance by that mean instead of the raw Newton step, and let the usual convergence test
+			// below decide -- this damps the cycle without bypassing the criterion.
+			double step_x = delta_x;
+			auto step_R = delta_R;
+			if (n > 0 && delta_x * delta_x_prev < 0.0) {
+				step_x = 0.5 * (delta_x + delta_x_prev);
+				step_R = 0.5 * (delta_R + delta_R_prev);
+			}
+			delta_x_prev = delta_x;
+			delta_R_prev = delta_R;
+			T_d += relax * step_x;
+			Rvec += relax * step_R;
 		} else {
 			const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
 			if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {

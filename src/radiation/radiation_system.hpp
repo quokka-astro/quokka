@@ -48,6 +48,13 @@ static constexpr bool enable_dE_constrain = false;
 // SolveGasRadiationEnergyExchange: an optically thin group that sits far below its local blackbody cannot
 // resolve its residual below ~epsilon * (4 pi B / c), so a purely relative tolerance is unreachable there.
 static constexpr double newton_resid_roundoff_factor = 10.0;
+// Adaptive damping for the decoupled-dust branch of the gas-dust-radiation Newton solve, where the
+// iteration can oscillate with growing amplitude instead of converging. A step that fails to reduce the
+// radiation residual is shortened by newton_damping_down, one that succeeds lengthens by newton_damping_up
+// (capped at a full Newton step), and newton_damping_min bounds how short a step may get.
+static constexpr double newton_damping_down = 0.5;
+static constexpr double newton_damping_up = 1.5;
+static constexpr double newton_damping_min = 0.05;
 static constexpr bool use_D_as_base = false;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
@@ -1496,14 +1503,27 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	const double rel_tol = 1.0e-8;
 	const double rel_change_tol = 1.0e-6;
 	const int max_iter_td = 100;
+	// The caller passes the physical scale the residual is measured against. For the dust temperature that
+	// scale is the gas-dust collisional term, which vanishes identically when the coupling coefficient is
+	// set to zero -- and then the tolerance below is zero and can never be met, leaving the iteration to run
+	// to max_iter_td and bail out with its negative sentinel. Fall back to the size of the initial residual
+	// so the criterion degrades to a relative reduction rather than to something unsatisfiable.
+	const double scale = std::max(compare, std::abs(rhs(x0)));
 	int iter_Td = 0;
 	for (; iter_Td < max_iter_td; ++iter_Td) {
 		const auto the_rhs = rhs(x);
-		if (std::abs(the_rhs) < rel_tol * compare) {
+		if (std::abs(the_rhs) < rel_tol * scale) {
 			break;
 		}
 
-		const double dT = -the_rhs / jac(x);
+		double dT = -the_rhs / jac(x);
+		// Damp the step so that x stays positive. The band-integrated Planck function is exponentially flat
+		// on the Wien tail, so its derivative there is tiny and an undamped Newton step can be arbitrarily
+		// large -- routinely overshooting to a negative temperature, from which the iteration cannot recover
+		// and this solver bails out by returning its -1 sentinel. Limiting each step to a halving or a
+		// doubling of x keeps the iterate physical while leaving the near-root behaviour untouched, so
+		// quadratic convergence is preserved where it matters.
+		dT = std::max(-0.5 * x, std::min(dT, x));
 		x += dT;
 
 		if (iter_Td > 0) {
