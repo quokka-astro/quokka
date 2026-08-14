@@ -57,6 +57,7 @@
 #include <cmath>
 #include <fstream>
 #include <map>
+#include <numbers>
 #include <string>
 #include <vector>
 
@@ -304,7 +305,11 @@ void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux,
 		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
 			amrex::Real src = 0.0_rt;
 			if (i == 0) {
-				src = (g == group_optical) ? src_optical : ((g == group_ionizing) ? src_ionizing : 0.0_rt);
+				if (g == group_optical) {
+					src = src_optical;
+				} else if (g == group_ionizing) {
+					src = src_ionizing;
+				}
 			}
 			radEnergy(i, j, k, g) = src;
 			radFlux(i, j, k, 3 * g + 0) = C::c_light * src;
@@ -523,7 +528,8 @@ auto problem_main() -> int
 		const double tol_percent = 10.0;
 
 		amrex::Print() << "Radiation front position: " << x_front << " cm\n";
-		amrex::Print() << "Analytic front position:  " << x_ref << " cm (chat * t; an isotropic source would give " << x_ref / std::sqrt(3.0) << ")\n";
+		amrex::Print() << "Analytic front position:  " << x_ref << " cm (chat * t; an isotropic source would give " << x_ref / std::numbers::sqrt3
+			       << ")\n";
 		amrex::Print() << "Difference: " << percent_diff << " percent (tolerance: " << tol_percent << " percent)\n";
 
 		if (x_ref >= Lx) {

@@ -2,6 +2,8 @@
 #ifndef RADIATION_DUST_SYSTEM_HPP_
 #define RADIATION_DUST_SYSTEM_HPP_
 
+#include <algorithm>
+
 #include "radiation/radiation_system.hpp"
 
 template <typename problem_t>
@@ -549,16 +551,12 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		// temperature
 		if (dust_model == 2) {
 			if (n > 0) {
-				// Clamped with explicit comparisons rather than std::max/std::min: those bind their
-				// arguments by reference, which ODR-uses the constexpr constants and makes them
-				// unavailable in device code under nvcc.
+				// The bound is copied into a local first: std::max binds its argument by reference, and
+				// that would ODR-use the namespace-scope constexpr constant, which nvcc does not make
+				// available in device code.
+				const double damping_min = newton_damping_min;
 				relax *= (jacobian.Fg_abs_sum > Fg_abs_sum_prev) ? newton_damping_down : newton_damping_up;
-				if (relax < newton_damping_min) {
-					relax = newton_damping_min;
-				}
-				if (relax > 1.0) {
-					relax = 1.0;
-				}
+				relax = std::min(std::max(relax, damping_min), 1.0);
 			}
 			Fg_abs_sum_prev = jacobian.Fg_abs_sum;
 			// Oscillation catch. When the iteration cycles about the root rather than approaching it, the

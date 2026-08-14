@@ -1600,7 +1600,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	bool bracketed = false;
 	double x_prev = x0;
 	double f_prev = f0;
-	double factor = (dir > 0.0) ? 2.0 : 0.5;
+	const double factor = (dir > 0.0) ? 2.0 : 0.5;
 	for (int k = 0; k < 200; ++k) {
 		const double x_try = x_prev * factor;
 		if (!(x_try > 0.0) || !std::isfinite(x_try)) {
@@ -1641,8 +1641,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 
 		const double j = jac(x);
 		double x_new = (j != 0.0) ? (x - the_rhs / j) : (0.5 * (xa + xb));
-		// fall back to bisection whenever Newton would leave the bracket
-		if (!(x_new > xa && x_new < xb)) {
+		// Fall back to bisection whenever Newton would leave the bracket. Written as the negation of the
+		// in-bracket test rather than its DeMorgan dual so that a NaN step also lands here.
+		if (!(x_new > xa && x_new < xb)) { // NOLINT(readability-simplify-boolean-expr)
 			x_new = 0.5 * (xa + xb);
 		}
 		const double dx = x_new - x;
