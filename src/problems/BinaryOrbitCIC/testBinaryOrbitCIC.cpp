@@ -256,8 +256,8 @@ auto problem_main() -> int
 		if (print_particle_state) {
 			amrex::Print() << "[STATE] t = " << sim.tNew_[0] << "\n";
 			for (const auto &p : real_data) {
-				amrex::Print() << std::format("[STATE] pos = ({:.14e}, {:.14e}, {:.14e}) vel = ({:.14e}, {:.14e}, {:.14e})\n", p[0], p[1],
-							      p[2], p[4], p[5], p[6]);
+				amrex::Print() << std::format("[STATE] pos = ({:.14e}, {:.14e}, {:.14e}) vel = ({:.14e}, {:.14e}, {:.14e})\n", p[0], p[1], p[2],
+							      p[4], p[5], p[6]);
 			}
 		}
 
