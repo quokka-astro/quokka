@@ -223,8 +223,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// error acts as a spurious Dirichlet perturbation on the refinement boundary and produces
 	// a gravitational self-force ~ G M h^3 / d^5 on a source at distance d from the boundary.
 	int gravityCoarseFineOrder_ = 3;
-	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
-	bool splitParticlesOnRestartRefine_ = true;		     // whether to split particles when restarting with refinement
+	int poissonSupercycleInterval_ = 1;	    // number of coarse steps between Poisson solves (default: 1)
+	bool splitParticlesOnRestartRefine_ = true; // whether to split particles when restarting with refinement
 	amrex::Vector<amrex::MultiFab> phi;
 
 	// SFH parameters
@@ -997,8 +997,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("poisson_reltol", reltolPoisson_);
 	pp.query("poisson_abstol", abstolPoisson_);
 	pp.query("gravity_coarse_fine_order", gravityCoarseFineOrder_);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(gravityCoarseFineOrder_ >= 2 && gravityCoarseFineOrder_ <= 4,
-					 "quokka.gravity_coarse_fine_order must be 2, 3 or 4");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(gravityCoarseFineOrder_ >= 2 && gravityCoarseFineOrder_ <= 4, "quokka.gravity_coarse_fine_order must be 2, 3 or 4");
 
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
