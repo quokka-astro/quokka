@@ -181,6 +181,13 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 		const auto real_data = gatherParticleDataAllLevels(*this);
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
+			if (print_particle_state) {
+				for (const auto &p : real_data) {
+					amrex::Print() << std::format("[TRAJ] t = {:.8e} pos = ({:.10e}, {:.10e}, {:.10e}) vel = ({:.10e}, {:.10e}, {:.10e})\n",
+								      tNew_[0], p[0], p[1], p[2], p[4], p[5], p[6]);
+				}
+			}
+
 			if (real_data.size() >= 2) {
 				amrex::Print() << "Computing particle statistics...\n";
 
