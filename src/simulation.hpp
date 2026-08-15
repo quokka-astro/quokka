@@ -2168,10 +2168,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 		particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 	}
 
-	if (quokka::EMF_enabled) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_level == 0, "particles.EMF_enabled currently supports only a single-level hierarchy (amr.max_level=0); "
-								 "multilevel AMR coupling is not yet implemented.");
-	}
+	// Match the existing SN feedback AMR policy: deposit only particles stored on the finest level. There is no explicit coarse-fine source
+	// synchronization when a feedback stencil crosses a refinement boundary.
 	const auto early_feedback_stats = particleRegister_.depositEarlyFeedback(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
 	emf_active_particle_count_ = early_feedback_stats.active_particles;
 	emf_momentum_requested_ = early_feedback_stats.scalar_momentum;

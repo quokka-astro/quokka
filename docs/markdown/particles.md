@@ -241,6 +241,16 @@ EMF uses the same normalized three-cell spherical weights and four-ghost-cell re
 
 It injects no mass, metals, passive scalars, or radiation energy. After all particle events have been accumulated, each cell's total energy receives the exact kinetic-energy change associated with its net momentum change, leaving internal energy unchanged. For each individual event, negative work \\(\\sum_j \\boldsymbol{v}_j\\!\\cdot\\!\\Delta\\boldsymbol{p}_j\\) is added as thermal energy to the particle's host cell. Cancellation between separate particle events is represented by the aggregated kinetic-energy update; it does not receive an additional inter-event thermalization term.
 
+### Deliberate differences from the published deposition algorithm
+
+Quokka adopts equation 10 and the observational parameters of Keller, Kruijssen & Chevance (2022), but its mesh coupling is an accepted numerical adaptation rather than an exact reproduction of the paper's AREPO implementation:
+
+- The paper distributes an event over the host cell's face-sharing neighbours, weighted by shared face area and directed along the face normals. Quokka instead reuses its normalized three-cell spherical feedback kernel. For an off-centre particle this kernel can deposit into the host cell and into cells that do not share a face with it, so the coupling radius and angular distribution differ from the published algorithm.
+- The paper's face-area vectors have zero sum by the divergence theorem. Quokka obtains the same zero-net-vector and prescribed-scalar-momentum invariants by subtracting the kernel's weighted mean direction and renormalizing the corrected vectors. The corrected vectors therefore need not coincide with Cartesian face normals or exact cell-centre radial directions.
+- Quokka evaluates \\(\\sum_j \\boldsymbol{v}_j\\!\\cdot\\!\\Delta\\boldsymbol{p}_j\\) once per particle and thermalizes it in the host cell only when this event-wide sum is negative. Negative work in one recipient cell can therefore be offset by positive work in another. Momentum increments from different particles are buffered together, and cancellation between those increments is not separately thermalized. The paper does not specify simultaneous-event ordering in enough detail to establish a unique inter-event convention.
+
+These choices are intentional: they retain Quokka's existing feedback support scale and GPU-friendly buffered deposition while enforcing the paper's total scalar- and vector-momentum constraints. They can nevertheless change small-scale coupling and heating relative to the published face-weighted scheme. The focused `ParticleEarlyFeedback` tests validate equation 10, the two global momentum invariants, energy-state consistency, uniform-boost invariance, and the adopted event-wide negative-work convention; they do not claim cell-by-cell equivalence with the paper's deposition geometry or cancellation treatment.
+
 The operation occurs after end-of-step particle drift and star formation, and before SN deposition. A newborn particle therefore receives the clipped increment for the current \\([t,t+\\Delta t]\\) interval at its end-of-step position. This is a first-order operator split.
 
 | Parameter | Type | Default | Description |
@@ -250,7 +260,7 @@ The operation occurs after end-of-step particle drift and star formation, and be
 | `particles.EMF_tFB_Myr` | Real | `3.3` | Feedback duration in Myr |
 | `particles.EMF_alpha` | Real | `1.0` | Expansion exponent; must lie in \\([0.5,1.0]\\) |
 
-The current implementation supports a single-level three-dimensional hierarchy only (`amr.max_level=0`). It aborts if EMF is enabled on a multilevel hierarchy or if an active particle's full stencil is not representable inside its particle grid and the physical domain. This prevents silent loss of momentum at coarse-fine or non-periodic physical boundaries. EMF is independent of `particles.disable_SN_feedback` and `particles.SN_scheme`, so EMF-only and SN-only controls are both available.
+On a multilevel hierarchy, EMF follows the existing SN-feedback AMR policy: feedback is deposited only from particles stored on the finest AMR level, and particles stored on coarser levels are ignored. Both paths use a same-level feedback buffer without explicit coarse-fine source synchronization, so deposition can be inconsistent when a stencil crosses a coarse-fine boundary. An active particle whose stencil is not representable inside its particle grid or the physical domain still causes an abort. EMF is independent of `particles.disable_SN_feedback` and `particles.SN_scheme`, so EMF-only and SN-only controls are both available.
 
 ## Supernova Feedback
 
