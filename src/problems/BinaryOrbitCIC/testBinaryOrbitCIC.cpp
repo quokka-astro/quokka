@@ -48,6 +48,11 @@ static std::string particles_file = "../inputs/BinaryOrbit_particles.txt"; // NO
 // criterion alone determines the (static) mesh hierarchy.
 static bool force_finest_level = true; // NOLINT
 
+// Diagnostic: print the final position and velocity of every particle. With a single
+// stationary particle this measures the gravitational self-force directly, since
+// v = a_self * t.
+static bool print_particle_state = false; // NOLINT
+
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	       // isothermal
 	static constexpr double cs_isothermal = 1.3e7; // cm s^{-1}
@@ -218,6 +223,7 @@ auto problem_main() -> int
 	pp.query("refine_x_min", refine_x_min);
 	pp.query("particles_file", particles_file);
 	pp.query("force_finest_level", force_finest_level);
+	pp.query("print_particle_state", print_particle_state);
 
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim;
@@ -246,6 +252,14 @@ auto problem_main() -> int
 	double max_deviation = 0.0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::Print() << "Number of particles: " << n_particles << "\n";
+
+		if (print_particle_state) {
+			amrex::Print() << "[STATE] t = " << sim.tNew_[0] << "\n";
+			for (const auto &p : real_data) {
+				amrex::Print() << std::format("[STATE] pos = ({:.14e}, {:.14e}, {:.14e}) vel = ({:.14e}, {:.14e}, {:.14e})\n", p[0], p[1],
+							      p[2], p[4], p[5], p[6]);
+			}
+		}
 
 		// compute total particle mass and error
 		double max_part_mass = 0.0;
