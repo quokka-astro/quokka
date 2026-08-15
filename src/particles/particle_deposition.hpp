@@ -10,6 +10,7 @@
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_Extension.H"
+#include "AMReX_GpuQualifiers.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_ParticleMesh.H"
@@ -157,6 +158,24 @@ namespace quokka
 
 constexpr int SN_stencil_size = 3;
 constexpr int SN_stencil_array_size = SN_stencil_size + 1;
+static AMREX_GPU_CONSTANT const
+    amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
+	stencil_weights_gpu = {{{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
+				  {0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
+				  {0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
+				  {0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000}}},
+				{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
+				  {0.00884198143074, 0.00884198143074, 0.00861063982859, 0.00119306623841},
+				  {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
+				  {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000}}},
+				{{{0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
+				  {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
+				  {0.00596795726055, 0.00400459528385, 0.00045652034325, 0.00000000000000},
+				  {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000}}},
+				{{{0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000},
+				  {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000},
+				  {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000},
+				  {0.00000000000000, 0.00000000000000, 0.00000000000000, 0.00000000000000}}}}};
 
 constexpr double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 constexpr double m_u = C::m_u;
@@ -340,7 +359,7 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 		  const amrex::Real SN_kin_energy, const amrex::Real p_vx, const amrex::Real p_vy, const amrex::Real p_vz, const amrex::Real vol_inverse,
 		  const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
 		      &stencil_weights_gpu,
-		  const amrex::Real scalar_yield_per_SN_d) noexcept
+		  const amrex::Real scalar_yield_per_SN_d, const bool enable_chemical_feedback_d) noexcept
 {
 	for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
 		for (int jj = -SN_stencil_size; jj <= SN_stencil_size; ++jj) {
@@ -364,12 +383,13 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
 							     SNR_energy_per_cell);
 
-				// Deposit passive scalar if enabled
-				// TODO(chongchonghe): Add support for multiple passive scalars (currently only deposits to scalar0)
+				// Legacy passive-scalar SN yield used only when table-driven chemical feedback is disabled.
 				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
-					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
-					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::scalar0_index),
-								     scalar_per_cell);
+					if (!enable_chemical_feedback_d) {
+						const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
+						amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::scalar0_index),
+									     scalar_per_cell);
+					}
 				}
 
 				// Deposit count into the last component for roundoff algorithm
@@ -381,15 +401,15 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy,
-				 const int iz, const amrex::Real stencil_volume, const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z,
-				 const amrex::Real m_ej, const amrex::Real E_blast, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
-				 const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>,
-						       SN_stencil_array_size> &stencil_weights_gpu,
-				 const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-				 const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy,
-				 const Real pvz, const bool SN_smooth_gas_velocity, const amrex::Real scalar_yield_per_SN_d)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
+    amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz,
+    const amrex::Real stencil_volume, const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z, const amrex::Real m_ej,
+    const amrex::Real E_blast, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
+    const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
+	&stencil_weights_gpu,
+    const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
+    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy, const Real pvz,
+    const bool SN_smooth_gas_velocity, const amrex::Real scalar_yield_per_SN_d, const bool enable_chemical_feedback_d)
 {
 	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
 	const amrex::Real M_gas = avg_density * stencil_volume * vol; // Gas mass in stencil
@@ -522,11 +542,12 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), e_snr_per_cell);
 
-				// Deposit passive scalar if enabled
-				// TODO(chongchonghe): Add support for multiple passive scalars (currently only deposits to scalar0)
+				// Legacy passive-scalar SN yield used only when table-driven chemical feedback is disabled.
 				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
-					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
-					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::scalar0_index), scalar_per_cell);
+					if (!enable_chemical_feedback_d) {
+						const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
+						amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::scalar0_index), scalar_per_cell);
+					}
 				}
 
 				// Deposit count into the last component for roundoff algorithm
@@ -543,23 +564,6 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 {
 	const BL_PROFILE("SNFeedbackUtils::depositToBuffer()");
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
-	constexpr amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
-	    stencil_weights_gpu = {{{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
-				      {0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
-				      {0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
-				      {0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000}}},
-				    {{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
-				      {0.00884198143074, 0.00884198143074, 0.00861063982859, 0.00119306623841},
-				      {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
-				      {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000}}},
-				    {{{0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
-				      {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
-				      {0.00596795726055, 0.00400459528385, 0.00045652034325, 0.00000000000000},
-				      {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000}}},
-				    {{{0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000},
-				      {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000},
-				      {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000},
-				      {0.00000000000000, 0.00000000000000, 0.00000000000000, 0.00000000000000}}}}};
 
 	const amrex::Real step_end_time = time + dt;
 
@@ -592,6 +596,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 
 		const bool SN_smooth_gas_velocity_d = SN_smooth_gas_velocity;
 		const amrex::Real scalar_yield_per_SN_d = scalar_yield_per_SN;
+		const bool enable_chemical_feedback_d = enable_chemical_feedback;
 
 		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
@@ -662,14 +667,14 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 					const amrex::Real SN_kin_energy = 0.5 * m_ej * (p_vx * p_vx + p_vy * p_vy + p_vz * p_vz);
 					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz, vol_inverse,
-								     stencil_weights_gpu, scalar_yield_per_SN_d);
+								     stencil_weights_gpu, scalar_yield_per_SN_d, enable_chemical_feedback_d);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					// (SN kinetic energy computed inside function using COM frame for Galilean invariance)
 					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z,
 										    m_ej, E_blast, p_snr_0, vol_inverse, stencil_weights_gpu, avg_density, vol,
 										    dx, plo, SN_scheme_d, p_vx, p_vy, p_vz, SN_smooth_gas_velocity_d,
-										    scalar_yield_per_SN_d);
+										    scalar_yield_per_SN_d, enable_chemical_feedback_d);
 				}
 			}
 		});
@@ -983,6 +988,223 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 }
 
 } // namespace SNFeedbackUtils
+
+namespace ChemicalFeedbackUtils
+{
+
+struct ChemicalChannelYields {
+	amrex::Real snii_mass = 0.0;
+	amrex::Real agb_mass = 0.0;
+};
+
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeSNIIChannelYield(ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables, bool use_chemical_tables,
+								 int isotope_index, amrex::Real mass_birth, amrex::Real mass_birth_msun,
+								 amrex::Real birth_iso_abundance, amrex::Real metallicity_lookup, int stage,
+								 amrex::Real step_end_time, amrex::Real death_time, bool enable_snii_metal,
+								 amrex::Real fallback_yield_fraction) -> amrex::Real
+{
+	if (!enable_snii_metal || stage != static_cast<int>(StellarEvolutionStage::SNProgenitor) || step_end_time <= death_time) {
+		return 0.0;
+	}
+
+	if (use_chemical_tables) {
+		const amrex::Real snii_total_frac =
+		    ChemicalYieldLookup::queryYieldFraction(yield_tables, 0, isotope_index, mass_birth_msun, metallicity_lookup);
+		return std::max<amrex::Real>(0.0, snii_total_frac * mass_birth);
+	}
+
+	const amrex::Real snii_total_frac = fallback_yield_fraction;
+	return std::max<amrex::Real>(0.0, (birth_iso_abundance + snii_total_frac) * mass_birth);
+}
+
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeAGBChannelYield(ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables, bool use_chemical_tables,
+								int isotope_index, amrex::Real mass_birth, amrex::Real mass_birth_msun,
+								amrex::Real birth_iso_abundance, bool agb_death, amrex::Real fallback_yield_fraction,
+								amrex::Real metallicity_lookup) -> amrex::Real
+{
+	if (!agb_death) {
+		return 0.0;
+	}
+
+	if (use_chemical_tables) {
+		const amrex::Real agb_total_frac = ChemicalYieldLookup::queryYieldFraction(yield_tables, 2, isotope_index, mass_birth_msun, metallicity_lookup);
+		return std::max<amrex::Real>(0.0, agb_total_frac * mass_birth);
+	}
+
+	const amrex::Real agb_total_frac = fallback_yield_fraction;
+	return std::max<amrex::Real>(0.0, (birth_iso_abundance + agb_total_frac) * mass_birth);
+}
+
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeChannelYields(ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables, bool use_chemical_tables,
+							      int isotope_index, amrex::Real mass_birth, amrex::Real mass_birth_msun,
+							      amrex::Real birth_iso_abundance, amrex::Real metallicity_lookup, int stage,
+							      amrex::Real step_end_time, amrex::Real death_time, bool agb_death, bool enable_snii_metal,
+							      amrex::Real snii_fallback_yield_fraction, amrex::Real agb_fallback_yield_fraction,
+							      amrex::Real agb_metallicity_lookup) -> ChemicalChannelYields
+{
+	ChemicalChannelYields yields{};
+	yields.snii_mass = computeSNIIChannelYield(yield_tables, use_chemical_tables, isotope_index, mass_birth, mass_birth_msun, birth_iso_abundance,
+						   metallicity_lookup, stage, step_end_time, death_time, enable_snii_metal, snii_fallback_yield_fraction);
+	yields.agb_mass = computeAGBChannelYield(yield_tables, use_chemical_tables, isotope_index, mass_birth, mass_birth_msun, birth_iso_abundance, agb_death,
+						 agb_fallback_yield_fraction, agb_metallicity_lookup);
+	return yields;
+}
+
+template <typename BufferArray>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositSNStencil(BufferArray const &local_buffer, int ix, int iy, int iz, int comp, amrex::Real yield_mass,
+							  amrex::Real vol_inverse)
+{
+	// SNII metals use the same spatial stencil as SN feedback.
+	for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
+		for (int jj = -SN_stencil_size; jj <= SN_stencil_size; ++jj) {
+			for (int kk = -SN_stencil_size; kk <= SN_stencil_size; ++kk) {
+				const int iii = std::abs(ii);
+				const int jjj = std::abs(jj);
+				const int kkk = std::abs(kk);
+				const amrex::Real kernel_times_vol_inverse = stencil_weights_gpu[iii][jjj][kkk] * vol_inverse;
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, comp), yield_mass * kernel_times_vol_inverse);
+			}
+		}
+	}
+}
+
+template <typename BufferArray, typename Interpolator>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositWendland(BufferArray const &local_buffer, Interpolator const &interp, int comp, amrex::Real yield_mass,
+							 amrex::Real vol_inverse)
+{
+	// AGB metals use the stellar-wind kernel; WR metals use the same kernel in particle_update.hpp.
+	constexpr int W_stencil_N = 2;
+	constexpr int W_stencil_width = 2 * W_stencil_N + 1;
+	constexpr amrex::Real W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
+	constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
+	const int nz_loop = (AMREX_SPACEDIM >= 3) ? W_stencil_width : 1;
+	const int ny_loop = (AMREX_SPACEDIM >= 2) ? W_stencil_width : 1;
+
+	for (int kk = 0; kk < nz_loop; ++kk) {
+		const amrex::Real dz = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2] : 0.0;
+		for (int jj = 0; jj < ny_loop; ++jj) {
+			const amrex::Real dy = (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1] : 0.0;
+			for (int ii = 0; ii < W_stencil_width; ++ii) {
+				const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
+				const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+				if (r2 <= W_cutoff_r2) {
+					const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
+					amrex::Gpu::Atomic::AddNoRet(&local_buffer(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, comp),
+								     wt * yield_mass * vol_inverse);
+				}
+			}
+		}
+	}
+}
+
+} // namespace ChemicalFeedbackUtils
+
+template <ParticleType particleType, typename ContainerType, typename problem_t>
+void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+{
+	const BL_PROFILE("[particle_deposition] ChemicalFeedbackDeposition()");
+
+	if (!enable_chemical_feedback || container == nullptr) {
+		return;
+	}
+
+	if constexpr (Physics_Traits<problem_t>::numPassiveScalars <= 0) {
+		return;
+	}
+
+	const int nPassive = Physics_Traits<problem_t>::numPassiveScalars;
+	const int scalar_offset = std::max(0, chemical_scalar_offset);
+	const int nchem = std::max(0, std::min(chemical_num_scalars, nPassive - scalar_offset));
+	if (nchem <= 0) {
+		return;
+	}
+	const bool use_chemical_tables = use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded();
+	ChemicalYieldLookup::ChemicalYieldGpuConstTables yield_tables{};
+	if (use_chemical_tables) {
+		yield_tables = ChemicalYieldLookup::constTables();
+	}
+
+	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
+	state_buffer.setVal(0.0);
+
+	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
+		auto &particles = pti.GetArrayOfStructs();
+		auto *pData = particles().data();
+		const amrex::Long np = pti.numParticles();
+
+		const auto &local_buffer = state_buffer.array(pti);
+		const auto &geom = container->Geom(lev);
+		const auto plo = geom.ProbLoArray();
+		const auto dxi = geom.InvCellSizeArray();
+		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
+		const int chem_block_size = StochasticStellarPopParticleChemistryBlockSize<problem_t>();
+		const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
+		const bool enable_snii_metal = enable_SNII_metal;
+		const bool enable_agb_metal = enable_AGB_metal;
+		const bool store_channel_fields_local = store_channel_fields;
+		const amrex::Real snii_fallback_yield_fraction = snii_metal_yield_fraction;
+		const amrex::Real agb_fallback_yield_fraction = agb_metal_yield_rate_per_mass;
+		const amrex::Real stellar_metallicity_lookup = stellar_metallicity_fraction;
+		constexpr int W_stencil_N = 2;
+
+		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+
+			const amrex::Real mass_birth = std::max<amrex::Real>(0.0, p.rdata(StochasticStellarPopParticleMassAtBirthIdx));
+			const amrex::Real mass_birth_msun = mass_birth / C::M_solar;
+			const int stage = p.idata(StochasticStellarPopParticleStageIdx);
+			const amrex::Real death_time = p.rdata(StochasticStellarPopParticleDeathTimeIdx);
+			const bool agb_death = enable_agb_metal && (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding)) &&
+					       (mass_birth_msun <= 8.0) && ((time + dt) > death_time);
+			amrex::ParticleInterpolator::WendlandC2<W_stencil_N> interp(p, plo, dxi);
+
+			const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
+			const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
+			const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+
+			for (int n = 0; n < nchem; ++n) {
+				const amrex::Real birth_iso_abundance = std::max<amrex::Real>(0.0, p.rdata(chem_base + n));
+				const amrex::Real z_snii_lookup = store_channel_fields_local
+								      ? std::max<amrex::Real>(1.0e-12, p.rdata(chem_base + chem_block_size + n))
+								      : std::max<amrex::Real>(1.0e-12, stellar_metallicity_lookup);
+				const amrex::Real z_agb_lookup = std::max<amrex::Real>(1.0e-12, stellar_metallicity_lookup);
+				const auto channel_yields = ChemicalFeedbackUtils::computeChannelYields(
+				    yield_tables, use_chemical_tables, n, mass_birth, mass_birth_msun, birth_iso_abundance, z_snii_lookup, stage, time + dt,
+				    death_time, agb_death, enable_snii_metal, snii_fallback_yield_fraction, agb_fallback_yield_fraction, z_agb_lookup);
+
+				const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
+				ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, total_comp, channel_yields.snii_mass, vol_inverse);
+
+				if (channel_yields.agb_mass > 0.0) {
+					ChemicalFeedbackUtils::depositWendland(local_buffer, interp, total_comp, channel_yields.agb_mass, vol_inverse);
+				}
+
+				if (store_channel_fields_local && enable_snii_metal) {
+					const int sn_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + nchem + n;
+					if (sn_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+						ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, sn_comp, channel_yields.snii_mass,
+											vol_inverse);
+					}
+				}
+
+				if (store_channel_fields_local && channel_yields.agb_mass > 0.0) {
+					const int agb_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 3 * nchem + n;
+					if (agb_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+						ChemicalFeedbackUtils::depositWendland(local_buffer, interp, agb_comp, channel_yields.agb_mass, vol_inverse);
+					}
+				}
+			}
+
+			if (agb_death) {
+				p.idata(StochasticStellarPopParticleStageIdx) = static_cast<int>(StellarEvolutionStage::Removed);
+			}
+		});
+	}
+
+	state_buffer.SumBoundary(container->Geom(lev).periodicity());
+	ParticleUtils::roundoffMultiFab(state_buffer);
+	state.plus(state_buffer, 0, state.nComp(), 0);
+}
 
 template <ParticleType particleType, typename ContainerType, typename problem_t>
 auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time,
