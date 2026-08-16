@@ -239,10 +239,10 @@ When a progenitor star reaches its death time, it explodes as a Type II supernov
 The terminal momentum is density-dependent and scales as:
 
 <script type="math/tex; mode=display">
-p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{-0.17}
+p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{\alpha_p}
 </script>
 
-where \\(n_{\text{H}}\\) is the ambient hydrogen number density averaged over the deposition kernel.
+where \\(n_{\text{H}}\\) is the ambient hydrogen number density averaged over the deposition kernel and \\(\alpha_p = -0.17\\) by default (configurable via `particles.SN_p_term_exponent`).
 
 #### Deposition Kernel
 
@@ -326,6 +326,7 @@ The cross term <script type="math/tex">\vec{v}_{\text{COM}} \cdot \vec{p}_{\text
 |-----------|------|---------|-------------|
 | `particles.SN_scheme` | String | `SN_thermal_or_thermal_momentum` | Feedback scheme (see above) |
 | `particles.SN_p_term_Msunkmps` | Float | `2.8e5` | Terminal momentum \\(p_{\text{snr},0}\\) in units of \\(M_\odot\,\mathrm{km\,s}^{-1}\\). The shell-formation mass \\(M_\mathrm{sf}\\) is scaled as \\((p/p_\mathrm{canonical})^2\\) to preserve the kinetic energy \\(p^2/(2M_\mathrm{sf})\\). |
+| `particles.SN_p_term_exponent` | Float | `-0.17` | Exponent \\(\alpha_p\\) of the ambient-density scaling of the terminal momentum, \\(p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{\alpha_p}\\). |
 | `particles.disable_SN_feedback` | Boolean | `0` | Disable SN feedback entirely |
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
 | `particles.stellar_velocity_limit` | Float | \\(10^8\\) cm/s | Maximum allowed stellar velocity (aborts if exceeded) |
