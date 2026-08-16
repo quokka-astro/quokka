@@ -283,3 +283,39 @@ incorrect temperatures and ionization fractions.
 **Correct setup:** use `photochemistry.enabled = 1` and leave `cooling.enabled = 0`
 (the default). The photoionization chemistry network handles all heating and cooling
 internally.
+
+## 5. Strömgren-Volume Subgrid Feedback
+
+The M1 solver described above transports ionizing photons and solves the hydrogen chemistry explicitly. That is the accurate option, but it is expensive, and it only works when the H II region is resolved by several cells. In galaxy-scale and cloud-scale runs the H II region around a young star is often smaller than one cell, so the M1 solve costs a great deal and still cannot represent the feedback. For those cases Quokka provides a much cheaper subgrid alternative in `src/particles/particle_photoionization.hpp`, which transports no photons at all.
+
+The module follows the Strömgren-volume technique of Kessel-Deynet & Burkert (2000) and Dale et al. (2007b), in the form used for stellar feedback by Hopkins et al. (2018, FIRE-2). For each star particle it finds the volume whose recombinations exactly consume the particle's ionizing photon budget $Q$, marks the gas inside as ionized, and holds it at a fixed temperature $T_{\rm HII}$. The resulting overpressure is what drives the H II region expansion. Like the M1 module, it assumes the on-the-spot approximation, which is why the case-B recombination coefficient appears.
+
+FIRE-2 sorts the cells near a star by distance and walks outward consuming the budget. Because cells are consumed in order of increasing distance, the consumed set is always a distance-prefix, which is exactly a ball. The walk is therefore equivalent to finding the single radius $R_{\rm St}$ at which the enclosed recombination rate equals $Q$, and that equivalence is exact for an arbitrary, non-uniform density field. Quokka uses this to replace the cross-rank cell sort with a radial-bin histogram and one small MPI reduction per source, which parallelizes cleanly over AMReX boxes and ranks.
+
+The ionizing photon rate is a per-particle property assigned once at birth from the stellar mass, using the Vacca, Garmany & Shull (1996) fitting formula $Q(m) = 3.12\times10^{41}\,m^{4.91}\ \mathrm{s}^{-1}$ with $m$ in solar masses. It is stored in a dedicated particle component by `ToyStellarModel` and is deliberately not refreshed as the particle accretes.
+
+**Important:** the stellar model assigns $Q$ on the first update, and detects the "not yet assigned" state by the component still being zero. `amrex::ParticleContainer::InitFromAsciiFile` only fills the components present in the file and leaves the rest uninitialized, so a problem that creates star particles that way must explicitly zero the remaining real components. See `src/problems/StromgrenVolumeFeedback/` for a worked example.
+
+### 5.1 Input parameters
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `stromgren.enabled` | `0` | Master switch. |
+| `stromgren.T_HII` | `1.0e4` | Temperature imposed on fully ionized gas (K). |
+| `stromgren.alpha_B` | `2.59e-13` | Case-B recombination coefficient ($\mathrm{cm}^3\ \mathrm{s}^{-1}$). |
+| `stromgren.hydrogen_mass_fraction` | `1.0` | Converts mass density to hydrogen number density. |
+| `stromgren.R_max_cells` | `32.0` | Cap on the search radius, in cells. |
+| `stromgren.x_ion_scalar_index` | `-1` | Passive scalar slot receiving $x_{\rm ion}$; negative disables the output. |
+| `stromgren.Q_ion` | `-1.0` | When positive, overrides the per-particle rate from the stellar model. |
+
+### 5.2 Limitations
+
+1. **The ionized region is always spherical.** Champagne flows, breakout along low-density channels, and shadowing behind dense clumps are not represented. This is inherent to the Strömgren-volume approximation, not to Quokka's implementation of it; capturing anisotropy would require angular binning.
+2. **Finest level only.** Like the supernova deposition, the module acts on the finest level, where star particles are assumed to live. An H II region extending beyond the finest-level grids is truncated.
+3. **Photons are not conserved globally.** A budget not exhausted within `R_max_cells` is discarded, as in FIRE-1. There is no long-range transfer step to receive the remainder; the module warns when this happens.
+4. **The mean molecular weight does not track ionization.** Quokka's EOS uses a fixed $\mu$ unless mass scalars are evolved, so ionized gas keeps its neutral $\mu$. Since $P = \rho k T / (\mu m_H)$, the overpressure driving the expansion is underestimated by roughly $\mu_{\rm neutral} / \mu_{\rm ionized} \approx 2$. Compensate by setting $T_{\rm HII}$ to an effective value near $2\times10^4$ K rather than $10^4$ K.
+5. **No radiation pressure and no MHD.** Only thermal feedback is applied. The module aborts at runtime if enabled for a problem with face-centred (MHD) variables, because the internal energy update does not remove the magnetic contribution.
+
+### 5.3 Validation
+
+`StromgrenVolumeFeedback` places one star particle in a uniform medium and checks the equivalent radius of the ionized region against the analytic Strömgren radius $R_{\rm St} = (3Q / 4\pi \alpha_B n_H^2)^{1/3}$; the measured radius agrees to better than $0.01$ cells. The `StromgrenVolumeGradient` variant runs the same binary with a linear density gradient and an off-centre source, where the analytic radius no longer applies, and verifies instead that the recombination rate inside the ionized region equals $Q$ exactly. The dynamical benchmark for this class of model is the StarBench D-type expansion comparison (Bisbas et al. 2015), which should be checked against the Hosokawa & Inutsuka (2006) solution rather than the Spitzer (1978) one; it is not part of the automated test suite.

@@ -124,18 +124,24 @@ The consequence is that the ionized region is only applied to cells covered by t
 
 ### 4.7 Obtaining the ionizing photon rate
 
-Two paths, because the test problem needs an exact rate and production runs need one tied to stellar properties:
+The ionizing photon rate is a **per-particle property assigned once at birth** from the stellar mass, using the Vacca, Garmany & Shull (1996) fitting formula
 
-1. **Fixed rate** — input parameter `stromgren.Q_ion`, applied to every star particle. Used by the test problem, where an exact $Q$ is required to compare with the analytic radius.
-2. **Derived from luminosity** — $Q = f_{\rm ion} L_0 / (h\bar\nu)$, where $L_0$ is the particle's first luminosity slot (already populated by the stellar-evolution model), $f_{\rm ion}$ is `stromgren.ionizing_fraction`, and $h\bar\nu$ is `stromgren.mean_photon_energy` (default 18 eV).
+$$\log_{10} Q\ (\mathrm{s}^{-1}) = 49 + \log_{10}\!\left(3.12\times10^{-8}\right) + 4.91 \log_{10} m,$$
 
-`Physics_Traits::nGroups` defaults to 1, so a `Star` particle carries a luminosity slot even when radiation is disabled. No new particle components are needed for either path.
+equivalently $Q(m) = 3.12\times10^{41}\,m^{4.91}\ \mathrm{s}^{-1}$, with $m$ the stellar mass in solar masses. The fit was derived for $20 \le m \le 30\,M_\odot$; we apply it at all masses as a toy model, which is adequate because the ionizing budget is dominated by the most massive stars. As a sanity check it gives $\log_{10} Q \approx 47.9$ at $20\,M_\odot$ and $\approx 48.8$ at $30\,M_\odot$, both consistent with tabulated O-star values.
+
+Because $Q$ is fixed at birth, it does not change as the particle accretes. It is therefore stored in a dedicated per-particle real component rather than recomputed each step. We add it to `ToyStellarModel` by setting `nExtraReal = 1`, which places the slot immediately after the luminosity slots at index `StarParticleLumIdx + nGroups`. The stellar model assigns it on the first `evolve` call, detected by the slot still holding its zero-initialized value; thereafter the value is left untouched.
+
+Putting $Q$ in the stellar model is the right home for it — $Q(m)$ is a stellar-evolution fitting formula, exactly the kind of relation the model already supplies for radius and luminosity. `ToyStellarModel` is the default for all problems, but only `ParticleStarEvolution` currently uses `Star` particles, so the layout change has a very small blast radius.
+
+The test problem needs an exact $Q$ to compare against the analytic radius, so it sets the particle mass such that the formula yields the desired rate, and additionally supports an override via `stromgren.Q_ion` (a non-positive value, the default, means "use the stellar model").
 
 ## 5. Code Layout
 
 | File | Contents |
 |---|---|
 | `src/particles/particle_photoionization.hpp` | New. The whole module: parameter struct, the binning reduction, the cumulative-sum solve for $R_{\rm St}$, and the gas update. Header-only, matching the style of the other `src/particles/` modules. |
+| `src/particles/stellar_models.hpp` | `ToyStellarModel` gains `nExtraReal = 1` for the birth-assigned ionizing photon rate, plus the $Q(m)$ fitting formula. |
 | `src/simulation.hpp` | One call added inside `particleMeshInteraction`, guarded so it is a no-op when the module is off. |
 | `src/problems/StromgrenVolumeFeedback/` | New 3D test problem: `testStromgrenVolumeFeedback.cpp`, `CMakeLists.txt`. |
 | `inputs/StromgrenVolumeFeedback.toml` | Test problem input. |
@@ -169,9 +175,12 @@ These are deliberate and should be stated in the user-facing documentation.
 4. **The mean molecular weight does not track ionization.** Quokka's EOS uses a fixed $\mu$ unless mass scalars are evolved, so ionized gas keeps its neutral $\mu$. Since the pressure is $P = \rho k T/(\mu m_H)$, the overpressure driving the expansion is underestimated by roughly the ratio $\mu_{\rm neutral}/\mu_{\rm ionized} \approx 2$. Users should compensate by setting $T_{\rm HII}$ to an effective value of about $2\times10^4$ K rather than $10^4$ K. This is a documentation note; making $\mu$ ionization-dependent is out of scope.
 5. **No radiation pressure.** Only thermal feedback, by explicit choice.
 
-## 8. Open Question for Review
+## 8. Resolved Review Questions
 
-Section 4.7 assumes the luminosity-derived path is worth having in v1. If star particles in the intended production runs will always set $Q$ some other way, that path could be dropped and the module reduced to the fixed-rate parameter plus a user-supplied hook. Please confirm.
+Both questions raised at review were settled by the user:
+
+1. **Ionizing photon rate** — assign $Q$ at birth from the stellar mass using the Vacca, Garmany & Shull toy formula, rather than deriving it from the luminosity each step. Implemented as described in Section 4.7.
+2. **Finest-level-only** — accepted for v1. The intended production runs use static mesh refinement with essentially all star particles on the finest level, so the truncation described in limitation 2 does not bite in practice.
 
 ## 9. References
 
