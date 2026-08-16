@@ -28,7 +28,9 @@ namespace quokka
 
 struct EarlyFeedbackStats {
 	int active_particles = 0;
+	int clipped_cells = 0;
 	amrex::Real scalar_momentum = 0.0;
+	amrex::Real min_momentum_scale = 1.0;
 	amrex::Real max_signal_speed = 0.0;
 };
 
@@ -231,22 +233,86 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 }
 
 template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeSignalSpeed(amrex::Array4<const amrex::Real> const &state, amrex::Array4<const amrex::Real> const &buffer,
+							    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc, int i, int j, int k,
+							    amrex::Real momentum_scale, int count_component) noexcept -> amrex::Real
+{
+	if (!(buffer(i, j, k, count_component) > 0.0)) {
+		return 0.0;
+	}
+
+	const amrex::Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
+	const amrex::Real px =
+	    state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) + momentum_scale * buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const amrex::Real py =
+	    state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) + momentum_scale * buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const amrex::Real pz =
+	    state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) + momentum_scale * buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	amrex::Real sound_speed = NAN;
+	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+		sound_speed = ::quokka::EOS_Traits<problem_t>::cs_isothermal;
+	} else {
+		const amrex::Real internal_energy =
+		    HydroSystem<problem_t>::ComputeInternalEnergy(state, i, j, k, state_fc) +
+		    momentum_scale * std::max(buffer(i, j, k, HydroSystem<problem_t>::energy_index), static_cast<amrex::Real>(0.0));
+		const auto mass_scalars = RadSystem<problem_t>::ComputeMassScalars(state, i, j, k);
+		const amrex::Real pressure = ::quokka::EOS<problem_t>::ComputePressure(rho, internal_energy, mass_scalars);
+		sound_speed = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, pressure, mass_scalars);
+	}
+	const amrex::Real velocity = std::sqrt((px * px) + (py * py) + (pz * pz)) / rho;
+	return velocity + sound_speed;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeMomentumScale(amrex::Array4<const amrex::Real> const &state, amrex::Array4<const amrex::Real> const &buffer,
+							      std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc, int i, int j, int k,
+							      int count_component, amrex::Real signal_speed_cap) noexcept -> amrex::Real
+{
+	if (computeSignalSpeed<problem_t>(state, buffer, state_fc, i, j, k, 1.0, count_component) <= signal_speed_cap) {
+		return 1.0;
+	}
+	if (computeSignalSpeed<problem_t>(state, buffer, state_fc, i, j, k, 0.0, count_component) >= signal_speed_cap) {
+		return 0.0;
+	}
+
+	// Both the feedback impulse and its negative-work thermalization are linear in this scale. The zero-scale state is below the cap and the full
+	// deposition is above it, so bisection finds the largest allowed contribution while including the cell's pre-existing velocity.
+	amrex::Real lower = 0.0;
+	amrex::Real upper = 1.0;
+	for (int iteration = 0; iteration < 40; ++iteration) {
+		const amrex::Real midpoint = 0.5 * (lower + upper);
+		if (computeSignalSpeed<problem_t>(state, buffer, state_fc, i, j, k, midpoint, count_component) <= signal_speed_cap) {
+			lower = midpoint;
+		} else {
+			upper = midpoint;
+		}
+	}
+	return lower;
+}
+
+template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addBufferToState(amrex::Array4<amrex::Real> const &state, amrex::Array4<const amrex::Real> const &buffer,
 							  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc, int i, int j, int k,
-							  int count_component, amrex::Real *max_signal_speed) noexcept
+							  int count_component, amrex::Real signal_speed_cap, int *clipped_cell_count,
+							  amrex::Real *min_momentum_scale, amrex::Real *max_signal_speed) noexcept
 {
 	if (!(buffer(i, j, k, count_component) > 0.0)) {
 		return;
 	}
 
+	const amrex::Real momentum_scale = computeMomentumScale<problem_t>(state, buffer, state_fc, i, j, k, count_component, signal_speed_cap);
+	if (momentum_scale < 1.0) {
+		amrex::Gpu::Atomic::AddNoRet(clipped_cell_count, 1);
+		amrex::Gpu::Atomic::Min(min_momentum_scale, momentum_scale);
+	}
 	const amrex::Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 	const amrex::Real px = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 	const amrex::Real py = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 	const amrex::Real pz = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-	const amrex::Real delta_px = buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-	const amrex::Real delta_py = buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-	const amrex::Real delta_pz = buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-	const amrex::Real thermalized_energy = std::max(buffer(i, j, k, HydroSystem<problem_t>::energy_index), static_cast<amrex::Real>(0.0));
+	const amrex::Real delta_px = momentum_scale * buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const amrex::Real delta_py = momentum_scale * buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const amrex::Real delta_pz = momentum_scale * buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	const amrex::Real thermalized_energy = momentum_scale * std::max(buffer(i, j, k, HydroSystem<problem_t>::energy_index), static_cast<amrex::Real>(0.0));
 	const amrex::Real px_new = px + delta_px;
 	const amrex::Real py_new = py + delta_py;
 	const amrex::Real pz_new = pz + delta_pz;
@@ -274,7 +340,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addBufferToState(amrex::Array4<amrex::R
 
 template <typename problem_t>
 void applyBuffer(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, amrex::MultiFab const &state_buffer,
-		 amrex::Real *max_signal_speed)
+		 amrex::Real signal_speed_cap, int *clipped_cell_count, amrex::Real *min_momentum_scale, amrex::Real *max_signal_speed)
 {
 	const BL_PROFILE("EarlyFeedbackUtils::applyBuffer()");
 	const int count_component = state_buffer.nComp() - 1;
@@ -293,7 +359,8 @@ void applyBuffer(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACE
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const auto *face_state_ptr = has_face_state ? &face_state : nullptr;
-			addBufferToState<problem_t>(local_state, local_buffer, face_state_ptr, i, j, k, count_component, max_signal_speed);
+			addBufferToState<problem_t>(local_state, local_buffer, face_state_ptr, i, j, k, count_component, signal_speed_cap, clipped_cell_count,
+						    min_momentum_scale, max_signal_speed);
 		});
 	}
 }
@@ -314,6 +381,8 @@ auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, s
 	amrex::Gpu::Buffer<int> active_particle_buffer({0});
 	amrex::Gpu::Buffer<amrex::Real> scalar_momentum_buffer({0.0});
 	amrex::Gpu::Buffer<int> invalid_source_buffer({0});
+	amrex::Gpu::Buffer<int> clipped_cell_buffer({0});
+	amrex::Gpu::Buffer<amrex::Real> min_momentum_scale_buffer({1.0});
 	amrex::Gpu::Buffer<amrex::Real> max_signal_speed_buffer({0.0});
 
 	EarlyFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, birth_time_index, mass_at_birth_index,
@@ -328,14 +397,19 @@ auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, s
 
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
 	ParticleUtils::roundoffMultiFab(state_buffer);
-	EarlyFeedbackUtils::applyBuffer<problem_t>(state, state_fc, state_buffer, max_signal_speed_buffer.data());
+	EarlyFeedbackUtils::applyBuffer<problem_t>(state, state_fc, state_buffer, EMF_max_signal_speed, clipped_cell_buffer.data(),
+						   min_momentum_scale_buffer.data(), max_signal_speed_buffer.data());
 
 	EarlyFeedbackStats stats;
 	stats.active_particles = active_particle_buffer.copyToHost()[0];
+	stats.clipped_cells = clipped_cell_buffer.copyToHost()[0];
 	stats.scalar_momentum = scalar_momentum_buffer.copyToHost()[0];
+	stats.min_momentum_scale = min_momentum_scale_buffer.copyToHost()[0];
 	stats.max_signal_speed = max_signal_speed_buffer.copyToHost()[0];
 	amrex::ParallelDescriptor::ReduceIntSum(stats.active_particles);
+	amrex::ParallelDescriptor::ReduceIntSum(stats.clipped_cells);
 	amrex::ParallelDescriptor::ReduceRealSum(stats.scalar_momentum);
+	amrex::ParallelDescriptor::ReduceRealMin(stats.min_momentum_scale);
 	amrex::ParallelDescriptor::ReduceRealMax(stats.max_signal_speed);
 	return stats;
 }
