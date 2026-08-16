@@ -237,10 +237,8 @@ class PhysicsParticleDescriptorBase
 #if AMREX_SPACEDIM == 3
 	// Append this particle type's ionizing sources, as (x, y, z, Q) tuples, to the list.
 	// Only Star particles carry an ionizing photon rate, so every other type is a no-op.
-	virtual void collectIonizingSources(amrex::Vector<amrex::Real> & /*sources*/, int /*lev*/,
-					    quokka::photoionization::Parameters const & /*par*/) const
-	{ /* Default empty implementation */
-	}
+	virtual void collectIonizingSources(amrex::Vector<amrex::Real> & /*sources*/, int /*lev*/, quokka::photoionization::Parameters const & /*par*/) const
+	{ /* Default empty implementation */ }
 #endif
 
 	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,

@@ -100,7 +100,8 @@ template <typename problem_t> [[nodiscard]] constexpr auto ionizingPhotonRateInd
 }
 
 //! Append this rank's star particles at level lev to the source list as (x, y, z, Q) tuples.
-template <typename problem_t> void collectSources(StarParticleContainer<problem_t> *container, amrex::Vector<amrex::Real> &sources, int lev, Parameters const &par)
+template <typename problem_t>
+void collectSources(StarParticleContainer<problem_t> *container, amrex::Vector<amrex::Real> &sources, int lev, Parameters const &par)
 {
 	if (container == nullptr) {
 		return;
@@ -326,8 +327,9 @@ void applyStromgrenFeedback(amrex::MultiFab &state, amrex::Vector<amrex::Real> c
 	}
 
 	if (n_unbounded > 0 && amrex::ParallelDescriptor::IOProcessor()) {
-		amrex::Print() << "[STROMGREN] Warning: " << n_unbounded << " source(s) did not exhaust their ionizing photon budget within R_max = "
-			       << par.R_max_cells << " cells; the remainder was discarded.\n";
+		amrex::Print() << "[STROMGREN] Warning: " << n_unbounded
+			       << " source(s) did not exhaust their ionizing photon budget within R_max = " << par.R_max_cells
+			       << " cells; the remainder was discarded.\n";
 	}
 
 	// --- Heat the ionized gas toward T_HII ---

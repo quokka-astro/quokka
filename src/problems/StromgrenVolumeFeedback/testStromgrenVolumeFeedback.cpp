@@ -44,9 +44,9 @@ constexpr double Q_target = 1.0e49; // 1/s
 // Case-B recombination coefficient at 1e4 K. Must match stromgren.alpha_B in the inputs file.
 constexpr double alpha_B = 2.59e-13; // cm^3/s
 // Uniform ambient hydrogen number density. Must be consistent with stromgren.hydrogen_mass_fraction=1.
-constexpr double n_H = 1.0e3;	     // 1/cm^3
+constexpr double n_H = 1.0e3;	      // 1/cm^3
 constexpr double rho0 = n_H * C::m_p; // g/cm^3, pure hydrogen
-constexpr double T0 = 100.0;	     // K, cold neutral ambient medium
+constexpr double T0 = 100.0;	      // K, cold neutral ambient medium
 
 // Mass whose Vacca, Garmany & Shull rate equals Q_target:
 //   Q(m) = Q_ion_coeff * (m / M_sun)^Q_ion_exponent  =>  m = M_sun * (Q_target / Q_ion_coeff)^(1/exponent)
@@ -57,8 +57,8 @@ AMREX_GPU_MANAGED double M_star = 0.0; // NOLINT, set in problem_main
 // and the source is displaced from the centre by source_offset_frac of the box width. In this
 // configuration the analytic Strömgren radius no longer applies, but photon conservation still
 // must hold exactly, which is what the test checks.
-AMREX_GPU_MANAGED double density_gradient = 0.0;	// NOLINT
-AMREX_GPU_MANAGED double source_offset_frac = 0.0;	// NOLINT
+AMREX_GPU_MANAGED double density_gradient = 0.0;   // NOLINT
+AMREX_GPU_MANAGED double source_offset_frac = 0.0; // NOLINT
 
 template <> struct Particle_Traits<StromgrenVolumeProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
