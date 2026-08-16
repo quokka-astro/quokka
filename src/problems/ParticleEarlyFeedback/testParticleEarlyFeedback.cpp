@@ -82,6 +82,7 @@ template <> struct SimulationData<ParticleEarlyFeedback> {
 	std::string particlesFile = "../inputs/ParticleEarlyFeedback_particles.txt";
 	amrex::Real boostVelocity = 0.0;
 	amrex::Real inflowSpeed = 0.0;
+	bool expectClipping = false;
 };
 
 template <> void QuokkaSimulation<ParticleEarlyFeedback>::setInitialConditionsOnGrid(quokka::grid const &grid_element)
@@ -161,6 +162,7 @@ auto problem_main() -> int
 	problem_parameters.query("particles_file", simulation.userData_.particlesFile);
 	problem_parameters.query("boost_velocity", simulation.userData_.boostVelocity);
 	problem_parameters.query("inflow_speed", simulation.userData_.inflowSpeed);
+	problem_parameters.query("expect_clipping", simulation.userData_.expectClipping);
 	simulation.setInitialConditions();
 	auto *stellar_descriptor = simulation.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop);
 	const amrex::Real stellar_mass_before_split = stellar_descriptor->computeStellarMass();
@@ -228,21 +230,34 @@ auto problem_main() -> int
 
 	amrex::Print() << "EMF requested scalar momentum = " << stats.scalar_momentum << " g cm/s (expected " << expected_momentum << ")\n"
 		       << "EMF deposited scalar impulse = " << scalar_impulse << " g cm/s\n"
-		       << "EMF net vector momentum = (" << momentum_x << ", " << momentum_y << ", " << momentum_z << ") g cm/s\n";
+		       << "EMF net vector momentum = (" << momentum_x << ", " << momentum_y << ", " << momentum_z << ") g cm/s\n"
+		       << "EMF clipped cells = " << stats.clipped_cells << ", minimum scale = " << stats.min_momentum_scale
+		       << ", maximum signal speed = " << stats.max_signal_speed << " cm/s\n";
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.active_particles == 6, "EMF must include split composite, individual high-mass, and remnant particles.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(stats.scalar_momentum, expected_momentum),
 					 "Equation-10 requested momentum does not use the summed birth mass.");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(scalar_impulse, expected_momentum, deposition_tolerance),
-					 "Deposited scalar impulse does not equal the Equation-10 request.");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(momentum_x) <= deposition_tolerance * expected_momentum &&
-					     std::abs(momentum_y) <= deposition_tolerance * expected_momentum &&
-					     std::abs(momentum_z) <= deposition_tolerance * expected_momentum,
-					 "Early-feedback stencil does not have zero net vector momentum.");
+	if (!simulation.userData_.expectClipping) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.clipped_cells == 0, "Nominal EMF test unexpectedly activated the signal-speed limiter.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(scalar_impulse, expected_momentum, deposition_tolerance),
+						 "Deposited scalar impulse does not equal the Equation-10 request.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(momentum_x) <= deposition_tolerance * expected_momentum &&
+						     std::abs(momentum_y) <= deposition_tolerance * expected_momentum &&
+						     std::abs(momentum_z) <= deposition_tolerance * expected_momentum,
+						 "Unclipped early-feedback stencil does not have zero net vector momentum.");
+	} else {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.clipped_cells > 0, "Extreme EMF test did not activate the signal-speed limiter.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.min_momentum_scale < 1.0, "Clipped EMF cells did not report a reduced momentum scale.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.max_signal_speed <= quokka::EMF_max_signal_speed * (1.0 + 2.0e-12),
+						 "EMF cell-by-cell limiter exceeded its signal-speed cap.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_impulse < expected_momentum, "Clipped EMF did not reduce the deposited scalar impulse.");
+	}
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_gas_mass, initial_gas_mass), "EMF changed gas mass.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_scalar_mass, initial_scalar_mass), "EMF changed a MassScalar.");
 	if (simulation.userData_.inflowSpeed > 0.0) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(final_internal_energy > initial_internal_energy,
 						 "Negative gas-motion work was not thermalized into the host cell.");
+	} else if (simulation.userData_.expectClipping) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(final_internal_energy >= initial_internal_energy, "Limited EMF produced negative thermal energy.");
 	} else {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_internal_energy, initial_internal_energy),
 						 "A uniform gas boost spuriously changed internal energy.");
