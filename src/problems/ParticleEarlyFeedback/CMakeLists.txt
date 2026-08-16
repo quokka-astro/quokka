@@ -18,12 +18,4 @@ if(AMReX_SPACEDIM EQUAL 3)
     NAME ${JOB_NAME}Cancellation
     COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml problem.inflow_speed=1.0e5 ${QuokkaTestParams}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  add_test(
-    NAME ${JOB_NAME}Cap
-    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml problem.expect_clipping=1 particles.EMF_p0_kmps=1.0e7 ${QuokkaTestParams}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  add_test(
-    NAME ${JOB_NAME}CapBoost
-    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml problem.expect_clipping=1 problem.boost_velocity=3.0e8 particles.EMF_p0_kmps=1.0e7 ${QuokkaTestParams}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

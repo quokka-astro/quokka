@@ -13,7 +13,7 @@ The first implementation should:
 - coexist with, but remain independent of, the existing SN and radiation feedback paths;
 - conserve vector momentum and implement the paper's thermalization of cancelled momentum;
 - work on CPU and GPU and preserve Quokka's roundoff-resistant deposition workflow;
-- follow the existing SN-feedback AMR policy, accepting its coarse-fine-boundary inconsistency.
+- fail explicitly rather than silently omit feedback when an active particle cannot be deposited safely on the AMR hierarchy.
 
 This plan was prepared against branch `BenWibking/EMEF` at commit `9b1a0c976`.
 
@@ -103,7 +103,7 @@ Validate finite values at startup. Require `EMF_p0_kmps >= 0`, `EMF_tFB_Myr > 0`
 - \(p_0\): km s\(^{-1}\) to cm s\(^{-1}\);
 - \(t_{\rm FB}\): Myr to seconds.
 
-EMF must have its own enable flag. It must not be controlled by `disable_SN_feedback` or `SN_scheme`; this permits EMF-only verification and avoids conflating two independent feedback models. Leave it disabled in existing inputs initially, then enable it in `DiskGalaxy.toml` in a separate, reviewable rollout after the focused tests pass.
+EMF must have its own enable flag. It must not be controlled by `disable_SN_feedback` or `SN_scheme`; this permits EMF-only verification and avoids conflating two independent feedback models. Leave it disabled in all existing inputs initially. Enable it in `DiskGalaxy.toml` only in a separate, reviewable rollout after the focused tests pass.
 
 ## Code design
 
@@ -199,9 +199,16 @@ In `AMRSimulation::particleMeshInteraction()`, call EMF after `createParticlesFr
 
 This gives newborn particles their first finite interval of feedback immediately and uses birth mass even if an SN later changes current mass. It is a first-order operator split: the interval's feedback is deposited at the particle's end-of-step position. Document that choice.
 
-### 6. Match the existing SN-feedback AMR policy
+### 6. Treat AMR as an explicit support boundary
 
-The particle-mesh interaction deposits SN feedback only at `finest_level`. EMF follows the same policy: particles stored on coarser levels are ignored, and the same-level feedback buffer has no explicit coarse-fine source synchronization when a stencil crosses a refinement boundary. The resulting inconsistency is an accepted limitation of this rollout. EMF continues to abort when a stencil is not representable inside the particle grid or physical domain.
+The current particle-mesh interaction deposits SN feedback only at `finest_level` and contains a TODO for AMR subcycling. EMF must not silently inherit this limitation because runaway high-mass particles can move substantially during 3.3 Myr.
+
+Implement in two stages:
+
+1. **Correct single-level/no-subcycling implementation.** This is the focused physics milestone and covers `TallBoxSf`-style runs. Add a runtime check that every active EMF particle is present on the level being deposited and its full three-cell stencil is addressable through valid cells plus allocated ghosts.
+2. **Multilevel production support before enabling `DiskGalaxy`.** Dispatch on every particle-owning level after level synchronization (`do_subcycle = 0`), and define how a stencil crossing a coarse-fine interface is represented. The preferred solution is to keep the full active-source stencil on one level using age-gated refinement/tagging around particles younger than `tFB`; otherwise the source buffer needs conservative prolongation/restriction across the interface. Add an AMR test in which a young particle approaches a refinement boundary. An abort with a precise unsupported-configuration message is acceptable in the first milestone; omitted momentum is not.
+
+General AMR subcycling is out of scope for the first patch and should remain explicitly rejected while EMF is enabled.
 
 ## File-level implementation map
 
@@ -215,7 +222,7 @@ The particle-mesh interaction deposits SN feedback only at `finest_level`. EMF f
 | `src/problems/ParticleEarlyFeedback/` | Add a focused 3D CTest problem and CMake registration. |
 | `inputs/ParticleEarlyFeedback.toml` | Provide the deterministic uniform-medium test input. |
 | `src/problems/ParticleSF/testParticleSF.cpp` | Extend restart/splitting checks to assert conservation of total `mass_at_birth` and EMF normalization. |
-| `inputs/DiskGalaxy.toml` | Opt in with the documented SN-matching AMR approximation. |
+| `inputs/DiskGalaxy.toml` | Opt in only after multilevel validation, in a separate change. |
 
 No new particle real component is required. Existing checkpoints already carry `birth_time` and `mass_at_birth` in this checkout.
 
@@ -252,7 +259,7 @@ Create a small `ParticleEarlyFeedback` problem with an ideal-gas uniform medium 
 - A progenitor that becomes an SN remnant before `tFB` retains the correct remaining EMF schedule through `mass_at_birth`.
 - A checkpoint/restart inside the feedback interval matches an uninterrupted run without storing cumulative EMF state.
 - Restart-time particle splitting preserves total `mass_at_birth` and total equation-10 momentum.
-- A multilevel smoke test confirms that EMF runs without aborting under the same finest-level-only policy as SN feedback; conservative coarse-fine deposition is not required.
+- An active particle at a refinement boundary either deposits conservatively according to the implemented multilevel policy or produces the intentional first-milestone abort; it must never be silently skipped.
 - Run with CPU plus at least one GPU backend when available. The test should use tolerances scaled to total injected scalar momentum because enabled FMA can prevent bitwise directional symmetry.
 
 ## Implementation sequence
@@ -261,7 +268,7 @@ Create a small `ParticleEarlyFeedback` problem with an ideal-gas uniform medium 
 2. **Physics kernel:** add parameters and the pure clipped equation-10 helper with analytic tests.
 3. **Single-level deposition:** implement corrected radial momentum, energy bookkeeping, buffer exchange, and focused conservation/Galilean tests.
 4. **Lifecycle integration:** add registry dispatch and timestep ordering; test newborns, SN overlap, and restart continuity.
-5. **AMR policy:** match SN feedback's finest-level-only deposition and document the accepted coarse-fine inconsistency.
+5. **AMR support:** implement active-source level handling and the refinement-boundary regression.
 6. **Documentation and rollout:** update `particles.md`; only then enable EMF in a production input in a separate commit.
 
 Each slice should remain buildable and independently reviewable. Do not mix changes to the existing SN scheme's numerical results into these commits.
@@ -287,6 +294,6 @@ The implementation is complete when:
 - the stencil conserves vector momentum for centered and off-center particles;
 - birth-mass splitting, restart continuity, and SN-remnant overlap do not change the integrated EMF budget;
 - energy bookkeeping is Galilean invariant for a uniform boost, preserves positive internal energy, and follows the documented host-cell thermalization convention;
-- the SN-matching finest-level-only AMR policy and its coarse-fine inconsistency are documented;
+- active particles cannot be silently skipped by AMR placement;
 - the feature is disabled by default and existing focused particle/SN tests still pass;
 - `particles.md` states the model parameters, operator split, energy convention, and current AMR limits.
