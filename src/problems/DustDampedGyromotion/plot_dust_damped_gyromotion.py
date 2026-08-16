@@ -81,6 +81,7 @@ else:
 
 OUTPUT_FILE = "dust_damped_gyromotion_panels.pdf"
 DYNAMIC_CHARGE_OUTPUT_FILE = "dust_dynamic_charge_iteration.pdf"
+DYNAMIC_EPSTEIN_OUTPUT_FILE = "dust_dynamic_epstein_iteration.pdf"
 
 SCHEMES = (
     ("gl4", "GL4", "C1", "s"),
@@ -94,6 +95,12 @@ CASES = (
     ("damped_gyromotion", r"$\Omega_{\rm L} t_{\rm s,0}=5$", r"$t/t_{s,0}$", 2.0),
 )
 
+TREATMENTS = (
+    ("frozen", "frozen", "C9", "v", 3),
+    ("endpoint", "endpoint Picard", "C4", "D", 4),
+    ("stage", "stage Picard", "C1", "s", 5),
+)
+
 
 def read_table(path: Path) -> dict[str, list[float]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
@@ -105,6 +112,11 @@ def read_table(path: Path) -> dict[str, list[float]]:
     return columns
 
 
+def read_rows(path: Path) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
 def legend_handles() -> list[Line2D]:
     handles = [Line2D([], [], color="black", linestyle="--", label="analytic")]
     handles.extend(
@@ -114,12 +126,12 @@ def legend_handles() -> list[Line2D]:
     return handles
 
 
-def dynamic_charge_legend_handles() -> tuple[Line2D, ...]:
-    return (
-        Line2D([], [], color="black", linestyle="--", label="analytic"),
-        Line2D([], [], color="C1", marker="s", markerfacecolor="none", linestyle="None", label="frozen"),
-        Line2D([], [], color="C0", marker="o", markerfacecolor="none", linestyle="None", label="iterated"),
+def coefficient_treatment_legend_handles() -> tuple[Line2D, ...]:
+    treatments = tuple(
+        Line2D([], [], color=color, marker=marker, markerfacecolor="none", linestyle="None", label=label)
+        for _, label, color, marker, _ in TREATMENTS
     )
+    return (Line2D([], [], color="black", linestyle="--", label="analytic"),) + treatments
 
 
 def make_figure(data_dir: Path, output_dir: Path) -> Path:
@@ -159,38 +171,108 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
 def make_dynamic_charge_figure(data_dir: Path, output_dir: Path) -> Path:
     history = read_table(data_dir / "dust_dynamic_charge_iteration_history.csv")
     exact = read_table(data_dir / "dust_dynamic_charge_iteration_exact.csv")
-    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COLUMN_WIDTH, 2.55))
-    fig.subplots_adjust(left=0.075, right=0.99, bottom=0.16, top=0.98, wspace=0.27)
+    convergence = read_table(data_dir / "dust_dynamic_charge_convergence.csv")
+    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COLUMN_WIDTH, 2.45))
+    fig.subplots_adjust(left=0.07, right=0.995, bottom=0.17, top=0.98, wspace=0.34)
+
+    treatment_styles = {slug: (color, marker, zorder) for slug, _, color, marker, zorder in TREATMENTS}
 
     axes[0].plot(exact["t"], exact["wx_exact_norm"], color="black", linestyle="--", zorder=2)
-    axes[0].plot(
-        history["t"], history["wx_frozen_norm"], color="C1", marker="s", linestyle="None", markerfacecolor="none", zorder=3
-    )
-    axes[0].plot(
-        history["t"], history["wx_iterated_norm"], color="C0", marker="o", linestyle="None", markerfacecolor="none", zorder=3
-    )
+    for treatment, column in (("frozen", "wx_frozen_norm"), ("endpoint", "wx_endpoint_norm"), ("stage", "wx_stage_norm")):
+        color, marker, zorder = treatment_styles[treatment]
+        axes[0].plot(history["t"], history[column], color=color, marker=marker, linestyle="None", markerfacecolor="none", zorder=zorder)
 
     axes[0].set_xlabel(r"$t/t_{\rm s,0}$")
     axes[0].set_ylabel(r"$w_x/w_0$")
     axes[0].set_xlim(0.0, 2.0)
     axes[0].set_ylim(-0.25, 1.05)
-    axes[0].legend(handles=dynamic_charge_legend_handles(), loc="best")
+    axes[0].legend(handles=coefficient_treatment_legend_handles(), loc="best")
 
-    axes[1].plot(exact["t"], exact["xi_exact"], color="black", linestyle="--", label="analytic", zorder=2)
-    axes[1].plot(
-        history["t"], history["xi_frozen"], color="C1", marker="s", markerfacecolor="none", linestyle="None", label="frozen", zorder=3
-    )
-    axes[1].plot(
-        history["t"], history["xi_iterated"], color="C0", marker="o", markerfacecolor="none", linestyle="None", label="iterated", zorder=3
-    )
+    axes[1].plot(exact["t"], exact["xi_exact"], color="black", linestyle="--", zorder=2)
+    for treatment, column in (("frozen", "xi_frozen"), ("endpoint", "xi_endpoint"), ("stage", "xi_stage")):
+        color, marker, zorder = treatment_styles[treatment]
+        axes[1].plot(history["t"], history[column], color=color, marker=marker, markerfacecolor="none", linestyle="None", zorder=zorder)
     axes[1].axhline(0.0, color="0.45", linewidth=0.8, linestyle=":", zorder=1)
     axes[1].set_xlabel(r"$t/t_{\rm s,0}$")
     axes[1].set_ylabel(r"$\xi$")
     axes[1].set_xlim(0.0, 2.0)
     axes[1].set_ylim(-1.0, 0.1)
-    axes[1].legend(handles=dynamic_charge_legend_handles(), loc="best")
+    for treatment in ("frozen", "endpoint", "stage"):
+        color, marker, zorder = treatment_styles[treatment]
+        axes[2].loglog(
+            convergence["dt"],
+            convergence[f"{treatment}_error"],
+            color=color,
+            marker=marker,
+            markerfacecolor="none",
+            linestyle="-",
+            zorder=zorder,
+        )
+    axes[2].set_xlabel(r"$\Delta t/t_{\rm s,0}$")
+    axes[2].set_ylabel(r"$\langle|\delta\boldsymbol{w}/w_0|\rangle$")
 
     output_path = output_dir / DYNAMIC_CHARGE_OUTPUT_FILE
+    fig.savefig(output_path)
+    plt.close(fig)
+    return output_path
+
+
+def make_dynamic_epstein_figure(data_dir: Path, output_dir: Path) -> Path:
+    history = read_table(data_dir / "dust_dynamic_epstein_iteration_history.csv")
+    convergence = [row for row in read_rows(data_dir / "dust_dynamic_epstein_iteration_convergence.csv") if row["scheme"] == "gl4"]
+
+    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COLUMN_WIDTH, 2.45))
+    fig.subplots_adjust(left=0.07, right=0.995, bottom=0.17, top=0.98, wspace=0.34)
+
+    axes[0].plot(history["t"], history["wx_exact_norm"], color="black", linestyle="--", zorder=2)
+    for slug, _, color, marker, zorder in TREATMENTS:
+        axes[0].plot(
+            history["t"],
+            history[f"wx_gl4_{slug}_norm"],
+            color=color,
+            marker=marker,
+            markerfacecolor="none",
+            linestyle="None",
+            zorder=zorder,
+        )
+    axes[0].set_xlabel(r"$t/t_{\rm s,0}$")
+    axes[0].set_ylabel(r"$w_x/w_0$")
+    axes[0].set_xlim(0.0, 2.0)
+    axes[0].set_ylim(-0.25, 1.05)
+    axes[0].legend(
+        handles=coefficient_treatment_legend_handles(),
+        loc="best",
+    )
+
+    axes[1].plot(history["t"], history["wy_exact_norm"], color="black", linestyle="--", zorder=2)
+    for slug, _, color, marker, zorder in TREATMENTS:
+        axes[1].plot(
+            history["t"],
+            history[f"wy_gl4_{slug}_norm"],
+            color=color,
+            marker=marker,
+            markerfacecolor="none",
+            linestyle="None",
+            zorder=zorder,
+        )
+    axes[1].set_xlabel(r"$t/t_{\rm s,0}$")
+    axes[1].set_ylabel(r"$w_y/w_0$")
+    axes[1].set_xlim(0.0, 2.0)
+
+    for slug, _, color, marker, zorder in TREATMENTS:
+        axes[2].loglog(
+            [float(row["dt"]) for row in convergence],
+            [float(row[f"{slug}_error"]) for row in convergence],
+            color=color,
+            marker=marker,
+            markerfacecolor="none",
+            linestyle="-",
+            zorder=zorder,
+        )
+    axes[2].set_xlabel(r"$\Delta t/t_{\rm s,0}$")
+    axes[2].set_ylabel(r"$\langle|\delta\boldsymbol{w}/w_0|\rangle$")
+
+    output_path = output_dir / DYNAMIC_EPSTEIN_OUTPUT_FILE
     fig.savefig(output_path)
     plt.close(fig)
     return output_path
@@ -209,7 +291,11 @@ def main() -> int:
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    outputs = (make_figure(data_dir, output_dir), make_dynamic_charge_figure(data_dir, output_dir))
+    outputs = (
+        make_figure(data_dir, output_dir),
+        make_dynamic_charge_figure(data_dir, output_dir),
+        make_dynamic_epstein_figure(data_dir, output_dir),
+    )
     for output in outputs:
         print(output)
     return 0
