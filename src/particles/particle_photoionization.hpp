@@ -334,8 +334,13 @@ void applyStromgrenFeedback(amrex::MultiFab &state, amrex::Vector<amrex::Real> c
 
 	// --- Heat the ionized gas toward T_HII ---
 	const amrex::Real T_HII = par.T_HII;
-	const int x_ion_scalar_index = par.x_ion_scalar_index;
 	constexpr int nscalars = Hydro::nscalars_;
+	// Resolve the x_ion output component on the host, as a plain runtime index that is negative when
+	// the output is disabled or unavailable. An `if constexpr` inside the device lambda below would
+	// first-capture these variables in a constexpr-if context, which nvcc rejects for extended
+	// __device__ lambdas.
+	const int x_ion_comp =
+	    ((nscalars > 0) && (par.x_ion_scalar_index >= 0) && (par.x_ion_scalar_index < nscalars)) ? (Hydro::scalar0_index + par.x_ion_scalar_index) : -1;
 
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &bx = mfi.tilebox();
@@ -364,10 +369,8 @@ void applyStromgrenFeedback(amrex::MultiFab &state, amrex::Vector<amrex::Real> c
 				cons(i, j, k, Hydro::internalEnergy_index) += dEint;
 			}
 
-			if constexpr (nscalars > 0) {
-				if (x_ion_scalar_index >= 0 && x_ion_scalar_index < nscalars) {
-					cons(i, j, k, Hydro::scalar0_index + x_ion_scalar_index) = x_ion;
-				}
+			if (x_ion_comp >= 0) {
+				cons(i, j, k, x_ion_comp) = x_ion;
 			}
 		});
 	}
