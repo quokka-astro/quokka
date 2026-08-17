@@ -652,28 +652,25 @@ template <typename AnalyticFn> auto relativeDriftL2Error(const DustGyroHistory &
 }
 
 template <typename AnalyticFn>
-auto timeAveragedRelativeDriftError(const std::vector<double> &time, const std::vector<double> &wx, const std::vector<double> &wy, AnalyticFn analytic)
+auto meanRelativeDriftError(const std::vector<double> &time, const std::vector<double> &wx, const std::vector<double> &wy, AnalyticFn analytic)
     -> double
 {
-	double error_integral = 0.0;
+	double error_sum = 0.0;
 	for (size_t i = 1; i < time.size(); ++i) {
-		DriftState const exact_left = analytic(time[i - 1]);
-		DriftState const exact_right = analytic(time[i]);
-		double const error_left = std::hypot(wx[i - 1] - exact_left.wx, wy[i - 1] - exact_left.wy);
-		double const error_right = std::hypot(wx[i] - exact_right.wx, wy[i] - exact_right.wy);
-		error_integral += 0.5 * (error_left + error_right) * (time[i] - time[i - 1]);
+		DriftState const exact = analytic(time[i]);
+		error_sum += std::hypot(wx[i] - exact.wx, wy[i] - exact.wy);
 	}
-	return error_integral / ((time.back() - time.front()) * initial_drift);
+	return error_sum / (static_cast<double>(time.size() - 1) * initial_drift);
 }
 
-template <typename AnalyticFn> auto timeAveragedRelativeDriftError(const DustGyroHistory &data, AnalyticFn analytic) -> double
+template <typename AnalyticFn> auto meanRelativeDriftError(const DustGyroHistory &data, AnalyticFn analytic) -> double
 {
-	return timeAveragedRelativeDriftError(data.t_vec_, data.wx_vec_, data.wy_vec_, analytic);
+	return meanRelativeDriftError(data.t_vec_, data.wx_vec_, data.wy_vec_, analytic);
 }
 
-template <typename AnalyticFn> auto timeAveragedRelativeDriftError(const EndpointPicardHistory &data, AnalyticFn analytic) -> double
+template <typename AnalyticFn> auto meanRelativeDriftError(const EndpointPicardHistory &data, AnalyticFn analytic) -> double
 {
-	return timeAveragedRelativeDriftError(data.t, data.wx, data.wy, analytic);
+	return meanRelativeDriftError(data.t, data.wx, data.wy, analytic);
 }
 
 auto observedOrder(double coarse_error, double fine_error) -> double { return std::log2(coarse_error / fine_error); }
@@ -973,9 +970,9 @@ auto problem_main() -> int
 		endpoint_picard_converged = endpoint_picard_converged && endpoint_run.converged;
 		CoefficientTreatmentConvergencePoint point{.scheme = ResolvedRkScheme::GL4, .steps = steps, .dt = dt};
 		if (amrex::ParallelDescriptor::IOProcessor()) {
-			point.frozen_error = timeAveragedRelativeDriftError(frozen_run, dynamic_charge_exact);
-			point.stage_error = timeAveragedRelativeDriftError(stage_run, dynamic_charge_exact);
-			point.endpoint_error = timeAveragedRelativeDriftError(endpoint_run, dynamic_charge_exact);
+			point.frozen_error = meanRelativeDriftError(frozen_run, dynamic_charge_exact);
+			point.stage_error = meanRelativeDriftError(stage_run, dynamic_charge_exact);
+			point.endpoint_error = meanRelativeDriftError(endpoint_run, dynamic_charge_exact);
 			if (!dynamic_charge_convergence.empty()) {
 				auto const &previous = dynamic_charge_convergence.back();
 				point.frozen_order = observedOrder(previous.frozen_error, point.frozen_error);
@@ -1002,9 +999,9 @@ auto problem_main() -> int
 			epstein_endpoint_picard_converged = epstein_endpoint_picard_converged && endpoint_run.converged;
 			CoefficientTreatmentConvergencePoint point{.scheme = scheme, .steps = steps, .dt = dt};
 			if (amrex::ParallelDescriptor::IOProcessor()) {
-				point.frozen_error = timeAveragedRelativeDriftError(frozen_run, epstein_with_b_exact);
-				point.stage_error = timeAveragedRelativeDriftError(stage_run, epstein_with_b_exact);
-				point.endpoint_error = timeAveragedRelativeDriftError(endpoint_run, epstein_with_b_exact);
+				point.frozen_error = meanRelativeDriftError(frozen_run, epstein_with_b_exact);
+				point.stage_error = meanRelativeDriftError(stage_run, epstein_with_b_exact);
+				point.endpoint_error = meanRelativeDriftError(endpoint_run, epstein_with_b_exact);
 				if (previous.steps > 0) {
 					point.frozen_order = observedOrder(previous.frozen_error, point.frozen_error);
 					point.stage_order = observedOrder(previous.stage_error, point.stage_error);
