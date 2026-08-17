@@ -241,6 +241,8 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<MHDBalsaraVortex> sim(BCs_cc, BCs_fc);
+	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+	sim.tempFloor_ = 0.0;
 
 	double stop_time = 0.0;
 	if (is_advection_enabled) {

@@ -280,6 +280,8 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<MHDQuirk> sim(BCs_cc, BCs_fc);
+	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+	sim.tempFloor_ = 0.0;
 
 	sim.stopTime_ = 0.4;
 	sim.cflNumber_ = 0.4;

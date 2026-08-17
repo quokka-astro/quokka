@@ -239,6 +239,8 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<FieldLoop> sim;
+	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+	sim.tempFloor_ = 0.0;
 
 	// default in-plane advection direction: the domain's own diagonal (x-y extent), so the loop
 	// crosses the periodic domain and returns to its starting position; independent of loop_center

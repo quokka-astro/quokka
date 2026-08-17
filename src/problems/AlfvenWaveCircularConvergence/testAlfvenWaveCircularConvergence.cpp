@@ -262,6 +262,8 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 
 	// Run simulation
 	QuokkaSimulation<AlfvenWaveCircular> sim(BCs_cc, BCs_fc);
+	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+	sim.tempFloor_ = 0.0;
 
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
@@ -311,6 +313,8 @@ auto problem_main() -> int
 		}
 
 		QuokkaSimulation<AlfvenWaveCircular> sim(BCs_cc, BCs_fc);
+		// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+		sim.tempFloor_ = 0.0;
 		sim.setInitialConditions();
 		sim.evolve();
 
