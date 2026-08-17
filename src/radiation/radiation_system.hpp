@@ -67,6 +67,12 @@ static constexpr bool use_D_as_base = false;
 // threshold the roles reverse -- a thick group near radiative equilibrium has 4 pi B_g / c close to
 // Erad_g and it is R_g that must be recovered from a difference -- so R_g stays the unknown there.
 static constexpr double newton_erad_base_tau_threshold = 1.0;
+// Smallest fraction of a cell's internal energy that the beta_order = 1 work term is allowed to leave
+// behind. The work done by radiation is credited to internal energy by the source term and then moved to
+// kinetic energy in UpdateFlux; in a cold, strongly radiation-driven cell that transfer can exceed the
+// internal energy available, and subtracting it unclamped leaves a negative internal energy. See the cap
+// in UpdateFlux.
+static constexpr double work_term_min_eint_fraction = 0.1;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
 

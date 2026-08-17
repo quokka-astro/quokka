@@ -593,7 +593,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 		if constexpr (include_work_term_in_source) {
 			// New scheme: the work term is included in the source terms. The work done by radiation went to internal energy, but it
 			// should go to the kinetic energy. Remove the work term from internal energy.
-			energy.Egas -= dEkin_work;
+			// Cap the transfer at the internal energy actually available. In a cold cell that the beam is
+			// driving hard, dEkin_work can exceed Egas -- the momentum deposited over one radiation step buys
+			// more kinetic energy than the gas holds internally, a mismatch the reduced speed of light widens
+			// because the momentum and energy exchanges carry different powers of chat/c. Subtracting it
+			// unclamped leaves a negative internal energy, which the EOS rejects outright (debug) and which
+			// otherwise flows on silently: it flips the sign of the gas-dust branch test and NaNs the solve.
+			// The cap is not energy conserving; reaching it means the radiation timestep is too long here.
+			const double max_eint_transfer = (1.0 - work_term_min_eint_fraction) * energy.Egas;
+			energy.Egas -= std::min(dEkin_work, max_eint_transfer);
 			// The work term is included in the source term, but it is lagged. We update the work term here.
 			for (int g = 0; g < nGroups_; ++g) {
 				// compute new work term from the updated radiation flux and velocity
