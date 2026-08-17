@@ -629,7 +629,9 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		auto jac = [=](double Egas_) -> double {
 			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, H_num_den) * dt;
-			return 1.0 + sum(d_cooling_d_Tgas_);
+			const double c_v_ = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas_, massScalars); // Egas = c_v * T
+			// The residual is a function of Egas_, so convert dCooling/dT to dCooling/dEgas via the chain rule (dT/dEgas = 1 / c_v).
+			return 1.0 + sum(d_cooling_d_Tgas_) / c_v_;
 		};
 
 		Egas_guess = BackwardEulerOneVariable(rhs, jac, Egas0, compare);
@@ -1018,7 +1020,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		auto jac = [=](double Egas_) -> double {
 			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, H_num_den) * dt;
-			return 1.0 + sum(d_cooling_d_Tgas_);
+			const double c_v_ = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas_, massScalars); // Egas = c_v * T
+			// The residual is a function of Egas_, so convert dCooling/dT to dCooling/dEgas via the chain rule (dT/dEgas = 1 / c_v).
+			return 1.0 + sum(d_cooling_d_Tgas_) / c_v_;
 		};
 
 		Egas_guess = BackwardEulerOneVariable(rhs, jac, Egas0, compare);
