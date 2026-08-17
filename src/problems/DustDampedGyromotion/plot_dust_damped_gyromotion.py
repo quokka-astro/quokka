@@ -209,7 +209,7 @@ def make_dynamic_charge_figure(data_dir: Path, output_dir: Path) -> Path:
             zorder=zorder,
         )
     axes[2].set_xlabel(r"$\Delta t/t_{\rm s,0}$")
-    axes[2].set_ylabel(r"$\langle|\delta\boldsymbol{w}/w_0|\rangle$")
+    axes[2].set_ylabel(r"$e_w$")
 
     output_path = output_dir / DYNAMIC_CHARGE_OUTPUT_FILE
     fig.savefig(output_path)
@@ -270,7 +270,7 @@ def make_dynamic_epstein_figure(data_dir: Path, output_dir: Path) -> Path:
             zorder=zorder,
         )
     axes[2].set_xlabel(r"$\Delta t/t_{\rm s,0}$")
-    axes[2].set_ylabel(r"$\langle|\delta\boldsymbol{w}/w_0|\rangle$")
+    axes[2].set_ylabel(r"$e_w$")
 
     output_path = output_dir / DYNAMIC_EPSTEIN_OUTPUT_FILE
     fig.savefig(output_path)
