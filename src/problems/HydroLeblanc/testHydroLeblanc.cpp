@@ -345,6 +345,8 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<ShocktubeProblem>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	QuokkaSimulation<ShocktubeProblem> sim;
+	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+	sim.tempFloor_ = 0.0;
 
 	sim.cflNumber_ = CFL_number;
 	sim.maxDt_ = max_dt;

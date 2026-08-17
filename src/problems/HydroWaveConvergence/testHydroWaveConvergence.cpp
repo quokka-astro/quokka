@@ -161,6 +161,8 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	pp_geom.addarr("is_periodic", is_periodic);
 
 	QuokkaSimulation<WaveProblem> sim(BCs_cc);
+	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+	sim.tempFloor_ = 0.0;
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
@@ -230,6 +232,8 @@ auto problem_main() -> int
 		}
 
 		QuokkaSimulation<WaveProblem> sim(BCs_cc);
+		// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+		sim.tempFloor_ = 0.0;
 		sim.cflNumber_ = 0.3;
 		sim.setInitialConditions();
 

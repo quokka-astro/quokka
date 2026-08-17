@@ -126,7 +126,7 @@ Old-format files (pre-`tab1`) can be converted in-place with `scripts/python/con
 | `cooling.cooling_table_type` | string | `"resampled"` | Table type. Only `"resampled"` is supported. |
 | `cooling.read_tables_even_if_disabled` | bool (0/1) | `0` | Read tables at startup even when the problem does not use `EOSTabulated` (useful for diagnostics). |
 | `heating_rate_external` | string | `""` | AMReX parser expression for a space- and time-variable external heating rate per H atom (erg s⁻¹ H⁻¹). Variables: `x`, `y`, `z`, `time`, `dt`; constants: `yr`, `kyr`, `Myr`, `Gyr`. Evaluated at cell centres; `y` and `z` are zero when `AMREX_SPACEDIM` is smaller than 2 or 3. |
-| `temperature_floor` | float | `0.0` | Minimum temperature (K). Clamps the cooling integration and sets its absolute tolerance. |
+| `temperature_floor` | float | `5.0` (CGS), `0.0` (otherwise) | Minimum temperature (K). Clamps the cooling integration and sets its absolute tolerance. |
 
 See [Runtime parameters](parameters.md) for the full parameter table, including the star formation history parameters below.
 

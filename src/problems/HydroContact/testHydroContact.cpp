@@ -184,6 +184,8 @@ auto problem_main() -> int
 {
 	// Problem initialization
 	QuokkaSimulation<ContactProblem> sim;
+	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+	sim.tempFloor_ = 0.0;
 
 	sim.stopTime_ = 2.0;
 	sim.cflNumber_ = 0.8;

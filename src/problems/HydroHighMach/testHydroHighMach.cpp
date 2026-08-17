@@ -246,6 +246,8 @@ auto problem_main() -> int
 {
 	// Problem initialization
 	QuokkaSimulation<HighMachProblem> sim;
+	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+	sim.tempFloor_ = 0.0;
 
 	// initialize and evolve
 	sim.setInitialConditions();
