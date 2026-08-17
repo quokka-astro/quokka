@@ -230,6 +230,8 @@ auto problem_main() -> int
 {
 	// Problem initialization
 	QuokkaSimulation<QuirkProblem> sim;
+	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+	sim.tempFloor_ = 0.0;
 
 	sim.reconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = 0.4;
