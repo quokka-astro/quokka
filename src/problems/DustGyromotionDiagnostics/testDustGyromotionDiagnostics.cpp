@@ -63,8 +63,8 @@ struct GyroSample {
 	double delta_phase;
 	double abs_delta_log_amplitude;
 	double abs_delta_phase;
-	double mean_relative_energy_error;
-	double conservative_mean_relative_energy_error;
+	double mean_absolute_relative_energy_error;
+	double conservative_mean_absolute_relative_energy_error;
 	double momentum_conservation_error;
 	bool used_resolved_branch;
 };
@@ -273,11 +273,11 @@ auto maxMomentumConservationError(SimulationData<DustPureGyromotion> const &data
 	return max_err;
 }
 
-auto meanRelativeEnergyError(SimulationData<DustPureGyromotion> const &data) -> double
+auto meanAbsoluteRelativeEnergyError(SimulationData<DustPureGyromotion> const &data) -> double
 {
 	double error_sum = 0.0;
 	for (size_t i = 1; i < data.total_energy_vec_.size(); ++i) {
-		error_sum += (data.total_energy_vec_[i] - analytic_total_energy) / analytic_total_energy;
+		error_sum += std::abs((data.total_energy_vec_[i] - analytic_total_energy) / analytic_total_energy);
 	}
 	return error_sum / static_cast<double>(data.total_energy_vec_.size() - 1);
 }
@@ -381,8 +381,8 @@ auto computeGyroSample(ResolvedRkScheme scheme, double requested_dt) -> GyroSamp
 	    .delta_phase = delta_phase,
 	    .abs_delta_log_amplitude = std::max(std::abs(delta_log_amplitude), plot_floor),
 	    .abs_delta_phase = std::max(std::abs(delta_phase), plot_floor),
-	    .mean_relative_energy_error = meanRelativeEnergyError(data),
-	    .conservative_mean_relative_energy_error = meanRelativeEnergyError(conservative_data),
+	    .mean_absolute_relative_energy_error = meanAbsoluteRelativeEnergyError(data),
+	    .conservative_mean_absolute_relative_energy_error = meanAbsoluteRelativeEnergyError(conservative_data),
 	    .momentum_conservation_error = maxMomentumConservationError(data),
 	    .used_resolved_branch = usesResolvedBranch(effective_dt),
 	};
@@ -403,14 +403,14 @@ void writeSweepCsv(std::vector<SchemeSweepResult> const &runs)
 	std::ofstream file("dust_gyromotion_diagnostics.csv");
 	file << std::setprecision(17);
 	file << "scheme,requested_dt,conservative_requested_dt,effective_dt,theta,amplitude_ratio,delta_log_amplitude,delta_phase,"
-		"abs_delta_log_amplitude,abs_delta_phase,mean_relative_energy_error,conservative_mean_relative_energy_error,momentum_conservation_error,"
-		"used_resolved_branch,resolved_stiff_boundary_dt,plot_floor\n";
+		"abs_delta_log_amplitude,abs_delta_phase,mean_absolute_relative_energy_error,conservative_mean_absolute_relative_energy_error,"
+		"momentum_conservation_error,used_resolved_branch,resolved_stiff_boundary_dt,plot_floor\n";
 	for (auto const &run : runs) {
 		for (auto const &sample : run.samples) {
 			file << resolvedRkSchemeSlug(run.scheme) << "," << sample.requested_dt << "," << sample.conservative_requested_dt << ","
 			     << sample.effective_dt << "," << sample.theta << "," << sample.amplitude_ratio << "," << sample.delta_log_amplitude << ","
 			     << sample.delta_phase << "," << sample.abs_delta_log_amplitude << "," << sample.abs_delta_phase << ","
-			     << sample.mean_relative_energy_error << "," << sample.conservative_mean_relative_energy_error << ","
+			     << sample.mean_absolute_relative_energy_error << "," << sample.conservative_mean_absolute_relative_energy_error << ","
 			     << sample.momentum_conservation_error << "," << (sample.used_resolved_branch ? 1 : 0) << "," << resolvedBranchThresholdDt() << ","
 			     << plot_floor << "\n";
 		}
@@ -483,14 +483,14 @@ auto problem_main() -> int
 					       << ", branch = " << (sample.used_resolved_branch ? "resolved" : "stiff")
 					       << ", amplitude ratio = " << sample.amplitude_ratio << ", delta log amplitude = " << sample.delta_log_amplitude
 					       << ", delta phase = " << sample.delta_phase
-					       << ", mean relative energy error = " << sample.mean_relative_energy_error
-					       << ", conservative mean relative energy error = " << sample.conservative_mean_relative_energy_error
+					       << ", mean absolute relative energy error = " << sample.mean_absolute_relative_energy_error
+					       << ", conservative mean absolute relative energy error = " << sample.conservative_mean_absolute_relative_energy_error
 					       << ", momentum conservation error = " << sample.momentum_conservation_error << "\n";
 
 				if (!std::isfinite(sample.delta_log_amplitude) || !std::isfinite(sample.delta_phase) ||
-				    !std::isfinite(sample.mean_relative_energy_error) || !std::isfinite(sample.conservative_mean_relative_energy_error) ||
+				    !std::isfinite(sample.mean_absolute_relative_energy_error) || !std::isfinite(sample.conservative_mean_absolute_relative_energy_error) ||
 				    !std::isfinite(sample.momentum_conservation_error) ||
-				    (std::abs(sample.conservative_mean_relative_energy_error) > conservation_tol) ||
+				    (sample.conservative_mean_absolute_relative_energy_error > conservation_tol) ||
 				    (sample.momentum_conservation_error > conservation_tol)) {
 					passed = false;
 				}

@@ -221,8 +221,8 @@ def make_energy_figure(grouped: dict[str, list[dict[str, float | str]]], output_
 
     for slug, label, color, marker in SCHEMES:
         rows = grouped[slug]
-        default_values = [max(abs(float(row["mean_relative_energy_error"])), plot_floor) for row in rows]
-        conservative_values = [max(abs(float(row["conservative_mean_relative_energy_error"])), plot_floor) for row in rows]
+        default_values = [max(float(row["mean_absolute_relative_energy_error"]), plot_floor) for row in rows]
+        conservative_values = [max(float(row["conservative_mean_absolute_relative_energy_error"]), plot_floor) for row in rows]
         ax.plot(
             requested_dt,
             default_values,
@@ -253,7 +253,7 @@ def make_energy_figure(grouped: dict[str, list[dict[str, float | str]]], output_
     ax.xaxis.set_minor_locator(NullLocator())
     ax.yaxis.set_minor_locator(NullLocator())
     ax.set_xlabel(r"$\Delta t$")
-    ax.set_ylabel(r"$|\langle\delta E/E\rangle|$")
+    ax.set_ylabel(r"$\langle|\delta E/E|\rangle$")
     ax.legend(loc="center right", bbox_to_anchor=(1.0, 0.5), fontsize=7.5, handlelength=2.5)
 
     output_path = output_dir / ENERGY_OUTPUT_FILE

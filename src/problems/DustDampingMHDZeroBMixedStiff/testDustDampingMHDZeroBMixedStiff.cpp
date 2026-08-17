@@ -487,23 +487,16 @@ auto reconstructTp2025WithoutResidualCorrection(SimulationData<DustDampingMHDZer
 
 auto computeTimeAveragedVelocityError(SimulationData<DustDampingMHDZeroBMixedStiff> const &data) -> double
 {
-	double const total_mass = rho + rho_dust1 + rho_dust2;
-	double const v_com = getAnalyticModeData().v_com;
-	double const initial_relative_velocity_rms =
-	    std::sqrt((rho * std::pow(gas_velocity_initial - v_com, 2) + rho_dust1 * std::pow(dust1_velocity_initial - v_com, 2) +
-		       rho_dust2 * std::pow(dust2_velocity_initial - v_com, 2)) /
-		      total_mass);
 	double error_sum = 0.0;
 	for (size_t i = 1; i < data.t_vec_.size(); ++i) {
 		AnalyticState const exact = analyticState(data.t_vec_[i]);
-		error_sum += (rho * std::pow(data.v_gas_vec_[i] - exact.v_gas, 2) + rho_dust1 * std::pow(data.v_dust1_vec_[i] - exact.v_dust1, 2) +
-			      rho_dust2 * std::pow(data.v_dust2_vec_[i] - exact.v_dust2, 2)) /
-			     total_mass;
+		error_sum += std::abs((data.v_gas_vec_[i] - exact.v_gas) / exact.v_gas);
+		error_sum += std::abs((data.v_dust1_vec_[i] - exact.v_dust1) / exact.v_dust1);
+		error_sum += std::abs((data.v_dust2_vec_[i] - exact.v_dust2) / exact.v_dust2);
 	}
-	// All samples in a run have the same timestep. This is the mass-weighted RMS
-	// velocity error averaged over post-step times and normalized by the initial
-	// RMS velocity relative to the center of mass. Gas energy is not included.
-	return std::sqrt(error_sum / static_cast<double>(data.t_vec_.size() - 1)) / initial_relative_velocity_rms;
+	// Average the sum of the gas, dust-1, and dust-2 component-wise relative
+	// velocity errors over all post-step samples. Do not divide the sum by three.
+	return error_sum / static_cast<double>(data.t_vec_.size() - 1);
 }
 
 auto runTimestepSweep() -> std::vector<SweepSample>

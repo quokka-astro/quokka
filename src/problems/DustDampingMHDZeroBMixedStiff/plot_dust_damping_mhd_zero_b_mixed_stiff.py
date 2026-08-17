@@ -199,7 +199,7 @@ def make_timestep_sweep_figure(data_dir: Path, output_dir: Path) -> Path:
     ax.xaxis.set_minor_locator(NullLocator())
     ax.yaxis.set_minor_locator(NullLocator())
     ax.set_xlabel(r"$\Delta t$")
-    ax.set_ylabel("relative velocity error")
+    ax.set_ylabel(r"$e_v$")
     ax.text(
         fast_stopping_time,
         0.04,
