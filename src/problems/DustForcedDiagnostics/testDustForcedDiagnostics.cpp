@@ -130,9 +130,7 @@ template <> struct Physics_Traits<DustHallPedersenForcedDiagnostics> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustSources<DustHallPedersenForcedDiagnostics>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-									      amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenForcedDiagnostics>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> alpha{};
@@ -141,7 +139,7 @@ DustSources<DustHallPedersenForcedDiagnostics>::ComputeReciprocalStoppingTime(am
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenForcedDiagnostics>::ComputeDustDimensionlessChargeToMassRatio()
+AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenForcedDiagnostics>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> dimensionless_charge_to_mass_ratio_array{};

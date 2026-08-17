@@ -24,6 +24,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.ticker import NullLocator
 
 SINGLE_COLUMN_WIDTH = 3.4
 
@@ -82,6 +83,8 @@ else:
 HISTORY_FILE = "dust_damping_mhd_zero_b_mixed_stiff_history.csv"
 EXACT_FILE = "dust_damping_mhd_zero_b_mixed_stiff_exact.csv"
 OUTPUT_FILE = "dust_damping_mhd_zero_b_mixed_stiff_panels.pdf"
+SWEEP_FILE = "dust_damping_mhd_zero_b_mixed_stiff_timestep_sweep.csv"
+SWEEP_OUTPUT_FILE = "dust_damping_mhd_zero_b_mixed_stiff_timestep_sweep.pdf"
 T_MAX = 2.0
 
 SCHEMES = (
@@ -130,6 +133,17 @@ def plot_panel(ax: plt.Axes, history: dict[str, list[float]], exact: dict[str, l
             zorder=3,
         )
 
+    if prefix == "E_gas":
+        ax.plot(
+            history["t"],
+            history["E_gas_tp2025_no_residual_correction"],
+            color="0.45",
+            linestyle="-.",
+            zorder=2,
+            label="TP2025 (no residual correction)",
+        )
+        ax.legend(loc="best", fontsize=7.5)
+
     ax.set_ylabel(ylabel)
     ax.set_xlim(0.0, T_MAX)
     if show_legend:
@@ -156,6 +170,63 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
     return output_path
 
 
+def make_timestep_sweep_figure(data_dir: Path, output_dir: Path) -> Path:
+    with (data_dir / SWEEP_FILE).open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    fig, ax = plt.subplots(1, 1, figsize=(SINGLE_COLUMN_WIDTH, 2.5))
+    for slug, label, color, marker in SCHEMES:
+        scheme_rows = [row for row in rows if row["scheme"] == slug]
+        for used_resolved_branch in (1, 0):
+            branch_rows = [row for row in scheme_rows if int(row["used_resolved_branch"]) == used_resolved_branch]
+            ax.plot(
+                [float(row["requested_dt"]) for row in branch_rows],
+                [float(row["velocity_error"]) for row in branch_rows],
+                color=color,
+                marker=marker,
+                linestyle="-",
+                zorder=3,
+            )
+
+    fast_stopping_time = float(rows[0]["fast_stopping_time"])
+    branch_transition_dt = float(rows[0]["branch_transition_dt"])
+    ax.axvline(fast_stopping_time, color="0.45", linestyle="--", zorder=1)
+    ax.axvline(branch_transition_dt, color="black", linestyle=":", zorder=1)
+    ax.legend(handles=legend_handles()[1:], loc="upper right", fontsize=7.5)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlim(1.0e-4, 1.0e3)
+    ax.xaxis.set_minor_locator(NullLocator())
+    ax.yaxis.set_minor_locator(NullLocator())
+    ax.set_xlabel(r"$\Delta t$")
+    ax.set_ylabel("relative velocity error")
+    ax.text(
+        fast_stopping_time,
+        0.04,
+        r"$t_{{\rm s},2}$",
+        color="0.35",
+        rotation=90,
+        va="bottom",
+        ha="right",
+        transform=ax.get_xaxis_transform(),
+    )
+    ax.text(
+        branch_transition_dt,
+        0.04,
+        r"$t_{{\rm s},1}$",
+        rotation=90,
+        va="bottom",
+        ha="right",
+        transform=ax.get_xaxis_transform(),
+    )
+    fig.tight_layout()
+
+    output_path = output_dir / SWEEP_OUTPUT_FILE
+    fig.savefig(output_path)
+    plt.close(fig)
+    return output_path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=Path.cwd(), help="Directory containing the mixed-stiff CSV outputs.")
@@ -170,7 +241,9 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     output = make_figure(data_dir, output_dir)
+    sweep_output = make_timestep_sweep_figure(data_dir, output_dir)
     print(output)
+    print(sweep_output)
     return 0
 
 

@@ -159,6 +159,7 @@ def plot_panel(
 
     ax.set_xscale("log")
     ax.set_yscale("log")
+    ax.set_xticks([10.0**exponent for exponent in range(-3, 4)])
     ax.xaxis.set_minor_locator(NullLocator())
     ax.yaxis.set_minor_locator(NullLocator())
     ax.set_ylabel(ylabel)

@@ -199,8 +199,10 @@ def make_figure(
     axes[0].tick_params(bottom=False, labelbottom=False)
     axes[1].tick_params(top=False)
     axes[1].set_xlabel(r"$\Delta t$")
-    theory_dt_max = float(theory_grouped[SCHEMES[0][0]][-1]["requested_dt"])
-    axes[1].set_xlim(right=theory_dt_max * 10.0**0.3)
+    numerical_dt_min = min(float(row["requested_dt"]) for row in numerical_grouped[SCHEMES[0][0]])
+    theory_dt_max = max(float(row["requested_dt"]) for row in theory_grouped[SCHEMES[0][0]])
+    log_padding = 1.0 / 6.0
+    axes[1].set_xlim(numerical_dt_min * 10.0**-log_padding, theory_dt_max * 10.0**log_padding)
 
     output_path = output_dir / OUTPUT_FILE
     fig.savefig(output_path)

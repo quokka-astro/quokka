@@ -38,14 +38,16 @@ constexpr double analytic_total_energy =
     0.5 * magnetic_field_z * magnetic_field_z + 0.5 * rho_gas * gas_velocity_x0 * gas_velocity_x0 + 0.5 * rho_dust * dust_velocity_x0 * dust_velocity_x0;
 using ResolvedRkScheme = quokka::dust::ResolvedRkScheme;
 
-constexpr double half_decade_factor = 3.1622776601683795;
-constexpr std::array<double, 12> requested_dt_values = {half_decade_factor * 1.0e-3, 1.0e-2, half_decade_factor * 1.0e-2, 1.0e-1,
-							half_decade_factor * 1.0e-1, 1.0e0,  half_decade_factor * 1.0e0,  1.0e1,
-							half_decade_factor * 1.0e1,  1.0e2,  half_decade_factor * 1.0e2,  1.0e3};
+constexpr double third_decade_factor = 2.154434690031884;
+constexpr double two_thirds_decade_factor = 4.641588833612778;
+constexpr std::array<double, 17> requested_dt_values = {
+    1.0e-2 / third_decade_factor,      1.0e-2, third_decade_factor * 1.0e-2, two_thirds_decade_factor * 1.0e-2, 1.0e-1, third_decade_factor * 1.0e-1,
+    two_thirds_decade_factor * 1.0e-1, 1.0,    third_decade_factor,	     two_thirds_decade_factor,		1.0e1,	third_decade_factor * 1.0e1,
+    two_thirds_decade_factor * 1.0e1,  1.0e2,  third_decade_factor * 1.0e2,  two_thirds_decade_factor * 1.0e2,	1.0e3};
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
 constexpr int energy_diagnostic_steps = 20;
 constexpr int theory_sample_count = 401;
-constexpr double theory_dt_max = half_decade_factor * 1.0e1;
+constexpr double theory_dt_max = third_decade_factor * 1.0e1;
 constexpr double stiff_phase_step = std::numbers::pi / 4.0;
 constexpr double stiff_phase_zero_offset = std::numbers::pi / 64.0;
 constexpr double conservative_dt_factor = 1.333521432163324; // 10^(1/8)
@@ -122,10 +124,8 @@ template <> struct Physics_Traits<DustPureGyromotion> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustPureGyromotion>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
-											  amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-											  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-											  double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto
+DustSources<DustPureGyromotion>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> alpha{};
 	alpha[0] = 0.0;
@@ -133,7 +133,8 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustPureGyromotion>::ComputeReciprocalSto
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustPureGyromotion>::ComputeDustDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto
+DustSources<DustPureGyromotion>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> dimensionless_charge_to_mass_ratio_array{};
 	dimensionless_charge_to_mass_ratio_array[0] = dimensionless_charge_to_mass_ratio;

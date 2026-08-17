@@ -427,18 +427,15 @@ template <> struct Physics_Traits<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010> 
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustSources<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
-											   amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-											   amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-											   double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantStoppingTime<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>();
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>::ComputeDustDimensionlessChargeToMassRatio()
-    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>::ComputeDustDimensionlessChargeToMassRatio(
+    DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantDimensionlessChargeToMassRatio<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>();
 }
@@ -473,18 +470,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockMoseleyEp
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustSources<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
-											   amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-											   amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-											   double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantStoppingTime<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>();
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>::ComputeDustDimensionlessChargeToMassRatio()
-    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>::ComputeDustDimensionlessChargeToMassRatio(
+    DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantDimensionlessChargeToMassRatio<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>();
 }
@@ -519,18 +513,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockMoseleyEp
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustSources<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
-											  amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-											  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-											  double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantStoppingTime<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>();
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>::ComputeDustDimensionlessChargeToMassRatio()
-    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>::ComputeDustDimensionlessChargeToMassRatio(
+    DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantDimensionlessChargeToMassRatio<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>();
 }

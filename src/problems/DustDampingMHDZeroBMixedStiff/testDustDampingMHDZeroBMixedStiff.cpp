@@ -23,6 +23,7 @@ constexpr double TS2 = 0.002;
 constexpr double P_INITIAL = 1.0;
 constexpr double OMEGA_DRAG = 1.0;
 constexpr double STOP_TIME = 2.0;
+constexpr double HISTORY_DT = 0.1;
 constexpr double gas_gamma = 1.4;
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
@@ -263,6 +264,26 @@ template <> void QuokkaSimulation<DustDampingMHDZeroBMixedStiff>::computeAfterTi
 namespace
 {
 using ResolvedRkScheme = quokka::dust::ResolvedRkScheme;
+using MixedStiffDustSources = DustSources<DustDampingMHDZeroBMixedStiff>;
+
+constexpr double HALF_DECADE_FACTOR = 3.1622776601683795;
+constexpr std::array<double, 17> SWEEP_DT_VALUES = {1.0e-4,
+						    HALF_DECADE_FACTOR * 1.0e-4,
+						    1.0e-3,
+						    TS2,
+						    HALF_DECADE_FACTOR * 1.0e-3,
+						    1.0e-2,
+						    HALF_DECADE_FACTOR * 1.0e-2,
+						    1.0e-1,
+						    TS1,
+						    HALF_DECADE_FACTOR * 1.0e-1,
+						    1.0,
+						    HALF_DECADE_FACTOR,
+						    1.0e1,
+						    HALF_DECADE_FACTOR * 1.0e1,
+						    1.0e2,
+						    HALF_DECADE_FACTOR * 1.0e2,
+						    1.0e3};
 
 struct SchemeRunResult {
 	ResolvedRkScheme scheme;
@@ -278,6 +299,22 @@ struct SchemeErrorTolerance {
 	double rel_err_dust1_vx;
 	double rel_err_dust2_vx;
 	double rel_err_gas_E;
+};
+
+struct SweepSample {
+	ResolvedRkScheme scheme;
+	double requested_dt;
+	double effective_dt;
+	int step_count;
+	double end_time;
+	double velocity_error;
+	bool used_resolved_branch;
+};
+
+struct NoResidualCorrectionState {
+	MixedStiffDustSources::Vec3 gas_momentum;
+	amrex::GpuArray<MixedStiffDustSources::Vec3, 2> dust_momentum;
+	double gas_energy;
 };
 
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
@@ -326,9 +363,15 @@ auto makePeriodicFaceBCs() -> amrex::Vector<amrex::BCRec>
 	return BCs_fc;
 }
 
-auto runDustDampingSimulation(ResolvedRkScheme scheme) -> SimulationData<DustDampingMHDZeroBMixedStiff>
+auto runDustDampingSimulation(ResolvedRkScheme scheme, double constant_dt, int step_count) -> SimulationData<DustDampingMHDZeroBMixedStiff>
 {
 	const double CFL_number = 1000000.0; // large CFL number to avoid CFL violation
+	amrex::ParmParse pp;
+	pp.add("constant_dt", constant_dt);
+	pp.add("stop_time", static_cast<double>(step_count) * constant_dt);
+	pp.add("max_timesteps", step_count);
+	pp.add("suppress_output", 1);
+	pp.add("show_performance_hints", 0);
 
 	auto BCs_cc = quokka::BC<DustDampingMHDZeroBMixedStiff>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 	auto BCs_fc = makePeriodicFaceBCs();
@@ -338,10 +381,12 @@ auto runDustDampingSimulation(ResolvedRkScheme scheme) -> SimulationData<DustDam
 	sim.radiationReconstructionOrder_ = 3;
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
+	sim.constantDt_ = constant_dt;
 	sim.dustResolvedRkScheme_ = scheme;
 	sim.dust_omega_drag_ = OMEGA_DRAG;
 	sim.dust_omega_gyro_res_ = 0.0;
-	sim.stopTime_ = STOP_TIME;
+	sim.stopTime_ = static_cast<double>(step_count) * constant_dt;
+	sim.maxTimesteps_ = step_count;
 
 	sim.setInitialConditions();
 
@@ -366,6 +411,122 @@ auto runDustDampingSimulation(ResolvedRkScheme scheme) -> SimulationData<DustDam
 
 	sim.evolve();
 	return sim.userData_;
+}
+
+void advanceTp2025WithoutResidualCorrectionHalfStep(NoResidualCorrectionState &state, double source_dt, double full_dt)
+{
+	amrex::GpuArray<double, 2> const rho_d = {rho_dust1, rho_dust2};
+	amrex::GpuArray<double, 2> const alpha = {1.0 / TS1, 1.0 / TS2};
+	amrex::GpuArray<double, 2> const epsilon = {rho_dust1 / rho, rho_dust2 / rho};
+	amrex::GpuArray<double, 2> const omega_L = {0.0, 0.0};
+	amrex::GpuArray<MixedStiffDustSources::Vec3, 2> q_n{};
+	MixedStiffDustSources::Vec3 const b_hat = MixedStiffDustSources::Vec3::Zero();
+
+	for (int g = 0; g < 2; ++g) {
+		q_n[g] = state.dust_momentum[g] - epsilon[g] * state.gas_momentum;
+	}
+
+	bool const resolved_branch = full_dt < TS1;
+	auto const coefficients = MixedStiffDustSources::SelectGirkCoefficients(resolved_branch, ResolvedRkScheme::TP2025);
+	amrex::GpuArray<MixedStiffDustSources::DustStageAffineOperators, 2> ops{};
+	for (int g = 0; g < 2; ++g) {
+		ops[g] =
+		    MixedStiffDustSources::ComputeDustStageAffineOperators(alpha[g], omega_L[g], alpha[g], omega_L[g], epsilon[g], source_dt,
+									   coefficients.gamma1, coefficients.gamma2, coefficients.beta1, coefficients.beta2);
+	}
+
+	auto const gas_stage = MixedStiffDustSources::SolveGasStageRates(ops, q_n, b_hat);
+	amrex::GpuArray<MixedStiffDustSources::Vec3, 2> dust_rate1{};
+	amrex::GpuArray<MixedStiffDustSources::Vec3, 2> dust_rate2{};
+	amrex::GpuArray<MixedStiffDustSources::Vec3, 2> q1{};
+	amrex::GpuArray<MixedStiffDustSources::Vec3, 2> q2{};
+	for (int g = 0; g < 2; ++g) {
+		dust_rate1[g] = ops[g].P1.apply(q_n[g], b_hat) + ops[g].X1.apply(gas_stage.k1, b_hat) + ops[g].Y1.apply(gas_stage.k2, b_hat);
+		dust_rate2[g] = ops[g].P2.apply(q_n[g], b_hat) + ops[g].X2.apply(gas_stage.k1, b_hat) + ops[g].Y2.apply(gas_stage.k2, b_hat);
+		auto const relative_rate1 = dust_rate1[g] - epsilon[g] * gas_stage.k1;
+		auto const relative_rate2 = dust_rate2[g] - epsilon[g] * gas_stage.k2;
+		q1[g] = q_n[g] + source_dt * (coefficients.gamma1 * relative_rate1 + coefficients.beta1 * relative_rate2);
+		q2[g] = q_n[g] + source_dt * (coefficients.beta2 * relative_rate1 + coefficients.gamma2 * relative_rate2);
+	}
+
+	auto const gas_momentum_old = state.gas_momentum;
+	state.gas_momentum += source_dt * (coefficients.b * gas_stage.k1 + (1.0 - coefficients.b) * gas_stage.k2);
+	double physical_drag_heating = 0.0;
+	for (int g = 0; g < 2; ++g) {
+		state.dust_momentum[g] += source_dt * (coefficients.b * dust_rate1[g] + (1.0 - coefficients.b) * dust_rate2[g]);
+		physical_drag_heating +=
+		    source_dt / rho_d[g] * (coefficients.b * alpha[g] * q1[g].dot(q1[g]) + (1.0 - coefficients.b) * alpha[g] * q2[g].dot(q2[g]));
+	}
+	double const gas_work = (state.gas_momentum.dot(state.gas_momentum) - gas_momentum_old.dot(gas_momentum_old)) / (2.0 * rho);
+	state.gas_energy += gas_work + physical_drag_heating;
+}
+
+auto reconstructTp2025WithoutResidualCorrection(SimulationData<DustDampingMHDZeroBMixedStiff> const &tp2025_data) -> std::vector<double>
+{
+	NoResidualCorrectionState state{
+	    .gas_momentum = MixedStiffDustSources::Vec3{rho * gas_velocity_initial, 0.0, 0.0},
+	    .dust_momentum = {MixedStiffDustSources::Vec3{rho_dust1 * dust1_velocity_initial, 0.0, 0.0},
+			      MixedStiffDustSources::Vec3{rho_dust2 * dust2_velocity_initial, 0.0, 0.0}},
+	    .gas_energy = Egas0,
+	};
+	std::vector<double> gas_energy{state.gas_energy};
+	for (size_t i = 1; i < tp2025_data.t_vec_.size(); ++i) {
+		double const full_dt = tp2025_data.t_vec_[i] - tp2025_data.t_vec_[i - 1];
+		advanceTp2025WithoutResidualCorrectionHalfStep(state, 0.5 * full_dt, full_dt);
+		advanceTp2025WithoutResidualCorrectionHalfStep(state, 0.5 * full_dt, full_dt);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(state.gas_momentum[0] / rho - tp2025_data.v_gas_vec_[i]) < 1.0e-12,
+						 "TP2025 diagnostic reconstruction must preserve the gas momentum update.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(state.dust_momentum[0][0] / rho_dust1 - tp2025_data.v_dust1_vec_[i]) < 1.0e-12,
+						 "TP2025 diagnostic reconstruction must preserve the first dust momentum update.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(state.dust_momentum[1][0] / rho_dust2 - tp2025_data.v_dust2_vec_[i]) < 1.0e-12,
+						 "TP2025 diagnostic reconstruction must preserve the second dust momentum update.");
+		gas_energy.push_back(state.gas_energy);
+	}
+	return gas_energy;
+}
+
+auto computeTimeAveragedVelocityError(SimulationData<DustDampingMHDZeroBMixedStiff> const &data) -> double
+{
+	double const total_mass = rho + rho_dust1 + rho_dust2;
+	double const v_com = getAnalyticModeData().v_com;
+	double const initial_relative_velocity_rms =
+	    std::sqrt((rho * std::pow(gas_velocity_initial - v_com, 2) + rho_dust1 * std::pow(dust1_velocity_initial - v_com, 2) +
+		       rho_dust2 * std::pow(dust2_velocity_initial - v_com, 2)) /
+		      total_mass);
+	double error_sum = 0.0;
+	for (size_t i = 1; i < data.t_vec_.size(); ++i) {
+		AnalyticState const exact = analyticState(data.t_vec_[i]);
+		error_sum += (rho * std::pow(data.v_gas_vec_[i] - exact.v_gas, 2) + rho_dust1 * std::pow(data.v_dust1_vec_[i] - exact.v_dust1, 2) +
+			      rho_dust2 * std::pow(data.v_dust2_vec_[i] - exact.v_dust2, 2)) /
+			     total_mass;
+	}
+	// All samples in a run have the same timestep. This is the mass-weighted RMS
+	// velocity error averaged over post-step times and normalized by the initial
+	// RMS velocity relative to the center of mass. Gas energy is not included.
+	return std::sqrt(error_sum / static_cast<double>(data.t_vec_.size() - 1)) / initial_relative_velocity_rms;
+}
+
+auto runTimestepSweep() -> std::vector<SweepSample>
+{
+	std::vector<SweepSample> samples;
+	samples.reserve(resolved_rk_schemes.size() * SWEEP_DT_VALUES.size());
+	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
+		for (double const requested_dt : SWEEP_DT_VALUES) {
+			int const step_count = (requested_dt < TS1) ? static_cast<int>(std::ceil(TS1 / requested_dt)) : 1;
+			auto const data = runDustDampingSimulation(scheme, requested_dt, step_count);
+			double const effective_dt = data.t_vec_[1] - data.t_vec_[0];
+			samples.push_back({
+			    .scheme = scheme,
+			    .requested_dt = requested_dt,
+			    .effective_dt = effective_dt,
+			    .step_count = step_count,
+			    .end_time = data.t_vec_.back(),
+			    .velocity_error = computeTimeAveragedVelocityError(data),
+			    .used_resolved_branch = effective_dt < TS1,
+			});
+		}
+	}
+	return samples;
 }
 
 auto computeRunResult(ResolvedRkScheme scheme, SimulationData<DustDampingMHDZeroBMixedStiff> data) -> SchemeRunResult
@@ -416,7 +577,7 @@ auto computeRunResult(ResolvedRkScheme scheme, SimulationData<DustDampingMHDZero
 	};
 }
 
-void writeHistoryCsv(const std::vector<SchemeRunResult> &runs)
+void writeHistoryCsv(const std::vector<SchemeRunResult> &runs, std::vector<double> const &tp2025_no_residual_correction)
 {
 	const size_t n_samples = runs.front().data.t_vec_.size();
 	for (auto const &run : runs) {
@@ -448,7 +609,7 @@ void writeHistoryCsv(const std::vector<SchemeRunResult> &runs)
 		std::string_view const slug = resolvedRkSchemeSlug(run.scheme);
 		file << ",E_gas_" << slug;
 	}
-	file << ",E_gas_exact\n";
+	file << ",E_gas_tp2025_no_residual_correction,E_gas_exact\n";
 
 	for (size_t i = 0; i < n_samples; ++i) {
 		double const t = runs.front().data.t_vec_[i];
@@ -468,7 +629,7 @@ void writeHistoryCsv(const std::vector<SchemeRunResult> &runs)
 		for (auto const &run : runs) {
 			file << "," << run.data.E_gas_vec_[i];
 		}
-		file << "," << E_gas_analytic(t) << "\n";
+		file << "," << tp2025_no_residual_correction[i] << "," << E_gas_analytic(t) << "\n";
 	}
 }
 
@@ -496,6 +657,17 @@ void writeSummaryCsv(const std::vector<SchemeRunResult> &runs)
 		     << run.rel_err_gas_E << "\n";
 	}
 }
+
+void writeTimestepSweepCsv(std::vector<SweepSample> const &samples)
+{
+	std::ofstream file("dust_damping_mhd_zero_b_mixed_stiff_timestep_sweep.csv");
+	file << std::setprecision(17);
+	file << "scheme,requested_dt,effective_dt,step_count,end_time,velocity_error,used_resolved_branch,fast_stopping_time,branch_transition_dt\n";
+	for (auto const &sample : samples) {
+		file << resolvedRkSchemeSlug(sample.scheme) << "," << sample.requested_dt << "," << sample.effective_dt << "," << sample.step_count << ","
+		     << sample.end_time << "," << sample.velocity_error << "," << (sample.used_resolved_branch ? 1 : 0) << "," << TS2 << "," << TS1 << "\n";
+	}
+}
 } // namespace
 
 auto problem_main() -> int
@@ -507,8 +679,11 @@ auto problem_main() -> int
 	std::vector<SchemeRunResult> runs;
 	runs.reserve(resolved_rk_schemes.size());
 	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
-		runs.push_back(computeRunResult(scheme, runDustDampingSimulation(scheme)));
+		int const step_count = static_cast<int>(std::lround(STOP_TIME / HISTORY_DT));
+		runs.push_back(computeRunResult(scheme, runDustDampingSimulation(scheme, HISTORY_DT, step_count)));
 	}
+	std::vector<double> const tp2025_no_residual_correction = reconstructTp2025WithoutResidualCorrection(runs[0].data);
+	std::vector<SweepSample> const sweep_samples = write_csv ? runTimestepSweep() : std::vector<SweepSample>{};
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -540,9 +715,10 @@ auto problem_main() -> int
 		}
 
 		if (write_csv) {
-			writeHistoryCsv(runs);
+			writeHistoryCsv(runs, tp2025_no_residual_correction);
 			writeExactCsv(runs);
 			writeSummaryCsv(runs);
+			writeTimestepSweepCsv(sweep_samples);
 		}
 		amrex::Print() << "Finished.\n";
 	}
