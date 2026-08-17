@@ -159,6 +159,8 @@ void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::string const &d
 auto problem_main() -> int
 {
 	QuokkaSimulation<MHDBlast> sim;
+	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
+	sim.tempFloor_ = 0.0;
 
 	// initialize
 	sim.setInitialConditions();
