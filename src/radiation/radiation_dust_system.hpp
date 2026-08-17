@@ -272,7 +272,12 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 	}
 
 	const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
-	if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
+	// A zero collisional coupling coefficient means the gas and the dust exchange no energy at all, which is
+	// exactly what the decoupled model describes, so select it on that ground alone. The comparison below
+	// cannot be relied on to do it: it flips sense once Egas0 is negative, and the coupled branch it then
+	// selects divides by coeff_n, filling the state with NaNs that surface later as a spurious
+	// "Newton-Raphson iteration failed to converge".
+	if (!(coeff_n > 0.0) || (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0)) {
 		dust_model = 2;
 		lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
 	}
@@ -711,7 +716,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	}
 
 	const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
-	if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
+	// A zero collisional coupling coefficient means the gas and the dust exchange no energy at all, which is
+	// exactly what the decoupled model describes, so select it on that ground alone. The comparison below
+	// cannot be relied on to do it: it flips sense once Egas0 is negative, and the coupled branch it then
+	// selects divides by coeff_n, filling the state with NaNs that surface later as a spurious
+	// "Newton-Raphson iteration failed to converge".
+	if (!(coeff_n > 0.0) || (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0)) {
 		dust_model = 2;
 		lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
 	}

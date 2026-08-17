@@ -126,7 +126,7 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	static constexpr double Erad_floor = Erad_floor_;
 	// beta_order = 0: drop the O(v/c) terms in the radiation-matter coupling. Note this does not switch off
 	// radiation pressure -- momentum from absorbed radiation is still deposited in the gas.
-	static constexpr int beta_order = 0;
+	static constexpr int beta_order = 1;
 	static constexpr double energy_unit = C::hplanck; // radBoundaries below are frequencies in Hz
 	// Group frequency boundaries [Hz]: group 0 = IR (below 1e14 Hz, i.e. longward of 3 um), group 1 =
 	// optical (1e14 Hz to the Lyman edge), group 2 = the ionizing chemistry band, which starts at the Lyman
