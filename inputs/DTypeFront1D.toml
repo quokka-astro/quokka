@@ -46,6 +46,7 @@ radiation.iteration_tolerance = 1e-8
 # chat/c the way a thermal band's is, so this value is c/chat = 1000 times smaller than photoionize.flux in
 # order to inject the same energy into the ionizing band as into the optical one.
 photoionize.flux_ion = 1.0e10
+temperature_floor = 10.0
 
 # Solve for a separate dust temperature (ISM_Traits::enable_dust_gas_thermal_coupling_model), but switch the
 # gas-dust collisional term off. The dust is then set purely by radiative equilibrium with the local
