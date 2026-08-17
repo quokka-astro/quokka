@@ -652,8 +652,7 @@ template <typename AnalyticFn> auto relativeDriftL2Error(const DustGyroHistory &
 }
 
 template <typename AnalyticFn>
-auto meanRelativeDriftError(const std::vector<double> &time, const std::vector<double> &wx, const std::vector<double> &wy, AnalyticFn analytic)
-    -> double
+auto meanRelativeDriftError(const std::vector<double> &time, const std::vector<double> &wx, const std::vector<double> &wy, AnalyticFn analytic) -> double
 {
 	double error_sum = 0.0;
 	for (size_t i = 1; i < time.size(); ++i) {
