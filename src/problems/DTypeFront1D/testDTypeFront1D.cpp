@@ -597,7 +597,7 @@ auto problem_main() -> int
 		// This is the only check that exercises the radiation force, and it does bite. Radiation and gas
 		// momentum are updated as an equal and opposite pair, but the radiation's own flux loss is computed
 		// from the absorption independently of the kick handed to the gas, so deleting that kick does not
-		// silently move the momentum elsewhere -- it drops the ratio to 0.61, well under the floor. Mis-scaling
+		// silently move the momentum elsewhere -- it drops the ratio to 0.63, well under the floor. Mis-scaling
 		// the kick by c / chat = 1000 overshoots by three orders of magnitude. The gas ends up holding about a
 		// third of the outward momentum here (0.317 at 128 cells, 0.329 in the continuum limit).
 		//
