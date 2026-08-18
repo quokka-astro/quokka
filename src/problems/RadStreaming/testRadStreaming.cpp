@@ -11,12 +11,14 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include "AMReX.H"
+#include "AMReX_ParmParse.H"
 #include "QuokkaSimulation.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
+#include <algorithm>
 #include <format>
 
 struct StreamingProblem {
@@ -28,6 +30,18 @@ constexpr double c = 1.0;	   // speed of light
 constexpr double chat = 0.2;	   // reduced speed of light
 constexpr double kappa0 = 1.0e-10; // opacity
 constexpr double rho = 1.0;
+
+// Flux-source variant, selected with problem.flux_source = 1 in the input file. Instead of letting the
+// beam enter through the left Dirichlet boundary, it is injected in the interior slab [beam_lo, beam_hi)
+// by SetRadSource, which sets radFluxSource = c * radEnergySource so that the injected radiation is fully
+// beamed (|F| = c E) along +x. In steady state the beam leaving the slab has
+// Erad = beam_S * (beam_hi - beam_lo) / c, so beam_S is chosen to make that equal to 1.
+constexpr double beam_lo = 0.1;
+constexpr double beam_hi = 0.2;
+constexpr double beam_width = beam_hi - beam_lo;
+constexpr double beam_S = c / beam_width; // erg s^-1 cm^-3
+// managed so that setCustomBoundaryConditions can read it on the device
+AMREX_GPU_MANAGED int use_flux_source = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables); set in problem_main()
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -60,6 +74,26 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanc
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return kappa0;
+}
+
+template <>
+void RadSystem<StreamingProblem>::SetRadSource(array_t &radEnergySource, array_t &radFluxSource, amrex::Box const &indexRange,
+					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
+{
+	if (use_flux_source == 0) {
+		return; // the default variant injects the beam through the left boundary instead
+	}
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
+		if ((x >= beam_lo) && (x < beam_hi)) {
+			radEnergySource(i, j, k, 0) += beam_S;
+			// setting the flux source to c times the energy source injects fully beamed radiation
+			radFluxSource(i, j, k, 0) += c * beam_S;
+		}
+	});
 }
 
 template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -103,11 +137,12 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<StreamingProblem>::nvarTotal_cc;
 
-	// Prepare left boundary values (streaming inflow)
+	// Prepare left boundary values: streaming inflow, or the ambient state when the beam is instead
+	// injected in the interior by SetRadSource, so that the source is the only radiation input
 	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
 	{
-		const double Erad = 1.0;
-		const double Frad = c * Erad;
+		const double Erad = (use_flux_source != 0) ? initial_Erad : 1.0;
+		const double Frad = (use_flux_source != 0) ? 0.0 : c * Erad;
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 			const double radEnergyFraction = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
 			low_bdr_cells[RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad * radEnergyFraction;
@@ -157,6 +192,12 @@ auto problem_main() -> int
 	const double tmax = 1.0;
 	const int max_timesteps = 5000;
 
+	// Select the injection mode: boundary inflow (default) or the radFluxSource hook
+	{
+		amrex::ParmParse const pp("problem");
+		pp.query("flux_source", use_flux_source);
+	}
+
 	// Boundary conditions
 	constexpr int nvars = RadSystem<StreamingProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
@@ -196,7 +237,15 @@ auto problem_main() -> int
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
+		if (use_flux_source != 0) {
+			// Radiation injected in [beam_lo, beam_hi) with |F| = c E free-streams in +x at speed
+			// chat, giving a trapezoid: a ramp 0 -> 1 across the source slab, a plateau at 1 out to
+			// beam_lo + chat * t, and a ramp 1 -> 0 down to the front at beam_hi + chat * t.
+			erad_exact.at(i) =
+			    std::clamp(std::min((x - beam_lo) / beam_width, (beam_hi + chat * tmax - x) / beam_width), 0.0, 1.0);
+		} else {
+			erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
+		}
 		double erad_sim = 0.0;
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 			erad_sim += values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
@@ -219,6 +268,28 @@ auto problem_main() -> int
 	}
 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << '\n';
 
+	if (use_flux_source != 0) {
+		// The source-injected radiation must be fully beamed, i.e. the reduced flux F / (c E) must be 1
+		// inside the beam. Check it on the plateau, away from the ramps and the front.
+		double max_dev = 0.;
+		for (int i = 0; i < nx; ++i) {
+			const amrex::Real x = position[i];
+			if ((x < beam_hi) || (x > beam_lo + chat * tmax)) {
+				continue;
+			}
+			const double erad_i = values.at(RadSystem<StreamingProblem>::radEnergy_index)[i];
+			const double frad_i = values.at(RadSystem<StreamingProblem>::x1RadFlux_index)[i];
+			max_dev = std::max(max_dev, std::abs(frad_i / (c * erad_i) - 1.0));
+		}
+		// if the flux source were ignored the injected radiation would be isotropic and this deviation
+		// would be of order unity, so this is a sharp check despite the loose tolerance
+		const double max_dev_tol = 1.0e-4;
+		amrex::Print() << "Max deviation of the reduced flux F / (c E) from 1 = " << max_dev << '\n';
+		if (max_dev > max_dev_tol) {
+			status = 1;
+		}
+	}
+
 #ifdef HAVE_PYTHON
 	// Plot results
 	matplotlibcpp::clf();
@@ -234,7 +305,7 @@ auto problem_main() -> int
 
 	matplotlibcpp::legend();
 	matplotlibcpp::title(std::format("t = {:.4f}", sim.tNew_[0]));
-	matplotlibcpp::save("./radiation_streaming.pdf");
+	matplotlibcpp::save((use_flux_source != 0) ? "./radiation_streaming_flux_source.pdf" : "./radiation_streaming.pdf");
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
