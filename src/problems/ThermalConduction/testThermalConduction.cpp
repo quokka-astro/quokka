@@ -258,21 +258,22 @@ auto problem_main() -> int
 {
 
 	/*** boundary conditions ***/
-	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-		BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
-		BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
-		}
-	}
-	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
-	sim.setInitialConditions();
-	sim.evolve();
-	const double error_norm = sim.computeErrorNorm();
-	amrex::Print() << std::format("\nrun_sim error norm = {:.6e})\n", error_norm);
-	amrex::Print() << "Finished." << '\n';
-	return 0;
+	//Keeping this bit of code for now until I'm sure it passes Richardson
+	// constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
+	// amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	// for (int n = 0; n < ncomp_cc; ++n) {
+	// 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+	// 	BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
+	// 	BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
+	// 	}
+	// }
+	// QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
+	// sim.setInitialConditions();
+	// sim.evolve();
+	// const double error_norm = sim.computeErrorNorm();
+	// amrex::Print() << std::format("\nrun_sim error norm = {:.6e})\n", error_norm);
+	// amrex::Print() << "Finished." << '\n';
+	// return 0;
 
 	/***Richardson Extrapolation ****/
 
