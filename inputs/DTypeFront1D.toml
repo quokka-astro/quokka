@@ -21,28 +21,31 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-# The beam free-streams at chat = c/1000 = 3e7 cm/s, crossing the 2e19 cm domain in 6.7e11 s.
-# Stop at 60% of that so the front is still well inside the domain when it is measured.
-stop_time = 4.0e11
+# The source sits at the middle of the domain and radiates both ways at chat = c/1000 = 3e7 cm/s, so each
+# front has 1e19 cm to cross and reaches a boundary at 3.3e11 s. Stop at 60% of that, so both fronts are still
+# well inside the domain when they are measured and neither reflecting wall is ever reached.
+stop_time = 2.0e11
 
 # Uniform neutral hydrogen slab: n_0 = 100 cm^-3, cold (100 K).
 photoionize.primary_species_1 = 1.0e-10   # e
 photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
 photoionize.primary_species_3 = 1.0e-10   # H+
 photoionize.temperature = 1.0e2
-# Photon flux injected into the optical band at x = 0 [photons cm^-2 s^-1]. This sets the dust temperature,
-# which settles at a*T^4 = E_IR + (kappa2/kappa1) * E_optical.
+# Photon flux injected into the optical band, per side [photons cm^-2 s^-1]. The source is isotropic and sits
+# at the middle of the domain, so it emits twice this and each side receives this flux. It sets the dust
+# temperature, which settles at a*T^4 = E_IR + (kappa2/kappa1) * E_optical.
 photoionize.flux = 1.0e13
 
 # Gray dust opacity of the two thermal groups [cm^2 g^-1]: kappa1 = IR, kappa2 = optical. Dust is optically
 # thick to the incoming optical light and thin to the IR it re-emits, which is what drives the reprocessing.
-# With rho = n_0 * m_H = 1.66e-22 g cm^-3 the domain optical depths are 3.3 (optical) and 0.033 (IR).
+# With rho = n_0 * m_H = 1.66e-22 g cm^-3 the optical depth from the source to each front is 1.0 (optical) and
+# 0.01 (IR).
 # The ionizing band is always transparent to this gray opacity.
 photoionize.kappa1 = 1.0e1
 photoionize.kappa2 = 1.0e3
 radiation.iteration_tolerance = 1e-8
 
-# Ionizing photon flux injected at x = 0 [photons cm^-2 s^-1]. A chemistry band's source is not scaled by
+# Ionizing photon flux injected per side [photons cm^-2 s^-1]. A chemistry band's source is not scaled by
 # chat/c the way a thermal band's is, so this value is c/chat = 1000 times smaller than photoionize.flux in
 # order to inject the same energy into the ionizing band as into the optical one.
 photoionize.flux_ion = 1.0e10
@@ -51,7 +54,7 @@ temperature_floor = 10.0
 # Solve for a separate dust temperature (ISM_Traits::enable_dust_gas_thermal_coupling_model), but switch the
 # gas-dust collisional term off. The dust is then set purely by radiative equilibrium with the local
 # radiation field and exchanges no energy with the gas. Note this is thermal decoupling only: radiation
-# momentum is still deposited, so the beam accelerates the gas to ~8e6 cm/s and sweeps the near-source cells.
+# momentum is still deposited, so the radiation accelerates the gas outward and sweeps the near-source cells.
 radiation.dust_gas_interaction_coeff = 0.0
 
 # Photoionization of the slab by the ionizing band.
