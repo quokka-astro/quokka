@@ -243,7 +243,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	bool useHeatingRateExternalParser_ = false;
 	std::string heatingRateExternalExpr_;
 	std::optional<amrex::Parser> heatingRateExternalParser_;
-	std::optional<amrex::ParserExecutor<2>> heatingRateExternalParserExe_;
+	std::optional<amrex::ParserExecutor<5>> heatingRateExternalParserExe_;
 	bool debugDensityFloorPlot_ = false; // default: disabled
 
 	mutable YAML::Node simulationMetadata_;
@@ -1034,7 +1034,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		densityFloorParserExe_.reset();
 	}
 
-	// optional external heating rate expression (variables: time, dt)
+	// optional external heating rate expression (variables: x, y, z, time, dt)
 	heatingRateExternalExpr_.clear();
 	pp.query("heating_rate_external", heatingRateExternalExpr_);
 	useHeatingRateExternalParser_ = !heatingRateExternalExpr_.empty();
@@ -1044,9 +1044,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		if (!amrex::ParmParse::ParserPrefix.empty()) {
 			amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
 			for (auto const &symbol : symbols) {
-				// `time` and `dt` are runtime parser inputs, not constants from ParmParse.
+				// `x`, `y`, `z`, `time` and `dt` are runtime parser inputs, not constants from ParmParse.
 				// Available ParmParse constants are: `yr`, `kyr`, `Myr`, `Gyr`.
-				if (symbol == "time" || symbol == "dt") {
+				if (symbol == "x" || symbol == "y" || symbol == "z" || symbol == "time" || symbol == "dt") {
 					continue;
 				}
 				amrex::Real value = 0.0;
@@ -1058,11 +1058,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 			amrex::Abort("Internal error: ParserPrefix is empty while parsing `heating_rate_external` unit symbols (`yr`, `kyr`, `Myr`, `Gyr`). "
 				     "This indicates a code regression. Please report this to Quokka maintainers and reference PR #1791. ");
 		}
-		heatingRateExternalParser_->registerVariables({"time", "dt"});
-		heatingRateExternalParserExe_ = heatingRateExternalParser_->compile<2>();
+		heatingRateExternalParser_->registerVariables({"x", "y", "z", "time", "dt"});
+		heatingRateExternalParserExe_ = heatingRateExternalParser_->compile<5>();
 #ifdef AMREX_USE_GPU
 		if (heatingRateExternalParserExe_->m_device_executor == nullptr) {
-			amrex::Abort("heating_rate_external: device parser executor is null after compile<2>()");
+			amrex::Abort("heating_rate_external: device parser executor is null after compile<5>()");
 		}
 #endif
 	} else {

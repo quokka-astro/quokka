@@ -44,7 +44,7 @@ Each hydrodynamic timestep, the cooling operator integrates the internal energy 
 \frac{d E_{\rm int}}{d t} = \dot{E}_{\rm tab}(\rho, e_{\rm int}) \, \rho^2 + \Gamma \, n_H
 </script>
 
-The first term is interpolated from the table; the second is a spatially uniform heating rate per hydrogen atom (erg s⁻¹ H⁻¹), where \\(n\_H = \rho \, X\_H / m\_p\\) and \\(X\_H\\) is the Cloudy hydrogen mass fraction stored in the table. \\(\Gamma\\) is the sum of the [SFH-based photoelectric heating rate](#star-formation-history-based-photoelectric-heating) and the `heating_rate_external` parser expression; both are zero by default.
+The first term is interpolated from the table; the second is a heating rate per hydrogen atom (erg s⁻¹ H⁻¹), where \\(n\_H = \rho \, X\_H / m\_p\\) and \\(X\_H\\) is the Cloudy hydrogen mass fraction stored in the table. \\(\Gamma\\) is the sum of the [SFH-based photoelectric heating rate](#star-formation-history-based-photoelectric-heating), which is spatially uniform, and the `heating_rate_external` parser expression, which is evaluated per cell and may therefore vary in space; both are zero by default.
 
 The tabulated term \\(\dot{E}\_{\rm tab}\\) bundles three physical processes, all baked into the table when it is generated:
 
@@ -125,7 +125,7 @@ Old-format files (pre-`tab1`) can be converted in-place with `scripts/python/con
 | `cooling.hdf5_data_file` | string | **required** with `EOSTabulated` | Path to the cooling table HDF5 file. |
 | `cooling.cooling_table_type` | string | `"resampled"` | Table type. Only `"resampled"` is supported. |
 | `cooling.read_tables_even_if_disabled` | bool (0/1) | `0` | Read tables at startup even when the problem does not use `EOSTabulated` (useful for diagnostics). |
-| `heating_rate_external` | string | `""` | AMReX parser expression for a time-variable external heating rate per H atom (erg s⁻¹ H⁻¹). Variables: `time`, `dt`; constants: `yr`, `kyr`, `Myr`, `Gyr`. |
+| `heating_rate_external` | string | `""` | AMReX parser expression for a space- and time-variable external heating rate per H atom (erg s⁻¹ H⁻¹). Variables: `x`, `y`, `z`, `time`, `dt`; constants: `yr`, `kyr`, `Myr`, `Gyr`. Evaluated at cell centres; `y` and `z` are zero when `AMREX_SPACEDIM` is smaller than 2 or 3. |
 | `temperature_floor` | float | `0.0` | Minimum temperature (K). Clamps the cooling integration and sets its absolute tolerance. |
 
 See [Runtime parameters](parameters.md) for the full parameter table, including the star formation history parameters below.
