@@ -1,6 +1,6 @@
 # 1D dust reprocessing test
 
-This problem is a one-dimensional, planar test of dust absorbing a beamed optical source and re-emitting it in the infrared. A constant optical photon flux is injected at the \\(x = 0\\) boundary into a uniform, cold, dusty hydrogen slab. Dust absorbs the beam, heats until emission balances absorption, and radiates the energy back out in a band where the dust is nearly transparent, so the reprocessed light escapes. The test exercises a mixed thermal + chemical multigroup configuration, the directed (beamed) radiation source, and the separate dust-temperature solver.
+This problem is a one-dimensional, planar test of dust absorbing an optical source and re-emitting it in the infrared. A constant optical photon flux is injected at the middle of a uniform, cold, dusty hydrogen slab and beamed outward in both directions. Dust absorbs the light, heats until emission balances absorption, and radiates the energy back out in a band where the dust is nearly transparent, so the reprocessed light escapes. The test exercises a mixed thermal + chemical multigroup configuration, the directed (beamed) radiation source, and the separate dust-temperature solver.
 
 ## Radiation groups
 
@@ -9,30 +9,32 @@ Three groups are used, with frequency boundaries \\(\{10^{8},\, 10^{14},\, 3.29\
 | group | band | role |
 |---|---|---|
 | 0 | IR, below \\(10^{14}\\) Hz | unsourced; filled only by dust re-emission |
-| 1 | optical, \\(10^{14}\\) Hz to the Lyman edge | carries the injected beam |
+| 1 | optical, \\(10^{14}\\) Hz to the Lyman edge | carries the injected light |
 | 2 | ionizing, above the Lyman edge | chemistry band; sourced, transparent to dust, absorbed by photoionization |
 
 Chemistry bands must always be the last groups. The two outermost boundaries should be read as \\(0\\) and \\(\infty\\) rather than as physical band edges: `ComputePlanckEnergyFractions` accumulates the Planck integral from zero, so group 0 receives the whole blackbody below \\(10^{14}\\) Hz whatever the first entry says, and emission above the first chemistry-band boundary is dropped rather than assigned to group 2, so the last entry never enters the emission budget.
 
 ## Initial conditions
 
-The domain is \\(x \in [0, L]\\) with \\(L = 2 \times 10^{19}\\) cm, resolved by 128 uniform cells. The gas is uniform, neutral atomic hydrogen with number density \\(n_0 = 100 \, \text{cm}^{-3}\\) at \\(T_0 = 100\\) K. Every radiation group is initialized to the negligible energy-density floor \\(E_{\text{rad,floor}}\\). The reduced speed of light is \\(\hat c = c/1000\\) and the run integrates to \\(t_{\text{end}} = 4 \times 10^{11}\\) s, which keeps the light front at about 60% of the domain.
+The domain is \\(x \in [0, L]\\) with \\(L = 2 \times 10^{19}\\) cm, resolved by 128 uniform cells. The gas is uniform, neutral atomic hydrogen with number density \\(n_0 = 100 \, \text{cm}^{-3}\\) at \\(T_0 = 100\\) K. Every radiation group is initialized to the negligible energy-density floor \\(E_{\text{rad,floor}}\\). The reduced speed of light is \\(\hat c = c/1000\\) and the run integrates to \\(t_{\text{end}} = 2 \times 10^{11}\\) s, so each front travels \\(\hat c\, t = 6 \times 10^{18}\\) cm, about 60% of the way from the source to the wall.
 
 ## Boundary conditions and source
 
-Reflecting boundaries are applied at \\(x = 0\\) and \\(x = L\\). The source is imposed in the first cell adjacent to \\(x = 0\\). Because the internal source array carries a luminosity volume density (\\(\text{erg}\,\text{s}^{-1}\,\text{cm}^{-3}\\)), the injected value for a photon flux \\(F\\) is
+Reflecting boundaries are applied at \\(x = 0\\) and \\(x = L\\), and the source sits at the middle of the domain, \\(x_c = L/2\\), occupying one cell on each side of it. Because the internal source array carries a luminosity volume density (\\(\text{erg}\,\text{s}^{-1}\,\text{cm}^{-3}\\)), the injected value for a photon flux \\(F\\) delivered to each side is
 
 <script type="math/tex; mode=display">
-S = \frac{F \, E_\gamma}{\Delta x} \, ,
+S = \frac{F \, E_\gamma}{n_s \, \Delta x} \, ,
 </script>
 
-where \\(E_\gamma\\) is the mean photon energy and \\(\Delta x = L/128\\). The companion radiation *flux* source is set to \\(c\,S\\), so the injected radiation has reduced flux \\(f = F_{\text{rad}}/(c E_{\text{rad}}) = 1\\) and free-streams along \\(+x\\) instead of spreading isotropically.
+where \\(E_\gamma\\) is the mean photon energy, \\(\Delta x = L/128\\), and \\(n_s\\) is the number of source cells per side (`photoionize.source_cells`, shipped as 1). The companion radiation *flux* source is set to \\(-c\,S\\) in the cells left of \\(x_c\\) and \\(+c\,S\\) in those to the right, so each half of the slab injects radiation with reduced flux \\(f = F_{\text{rad}}/(c E_{\text{rad}}) = 1\\), free-streaming away from the centre. Setting `photoionize.beamed = 0` drops the flux source and makes the injection isotropic instead, which is useful for the comparison in the answer check below.
 
-A thermal group's source is scaled internally by \\(\hat c / c\\) and a chemistry band's is not, so the two shipped fluxes differ by exactly that factor and deliver equal energy: \\(F_{\text{opt}} = 10^{13}\\) and \\(F_{\text{ion}} = 10^{10}\,\text{cm}^{-2}\,\text{s}^{-1}\\). Photochemistry is enabled, so the ionizing band is not merely transported: it is absorbed by photoionization, and the resulting front stalls at its Strömgren column well inside \\(\hat c\, t\\).
+Both choices — a central source and outward beaming — exist to keep the momentum budget clean. Both walls are reflecting, and a reflecting wall is a momentum source: it turns radiation around, and the reduced speed of light amplifies the bookkeeping value of what it turns around by \\(c/\hat c\\). Placing the source at the centre and stopping before either front arrives means no wall is ever reached. Beaming matters for a different reason: an isotropic source injects no net momentum at all, so the outward momentum would have to be generated by transport as the M1 closure beams the two wings, and the budget would then measure how fast that happens rather than what the solver did with the momentum.
+
+A thermal group's source is scaled internally by \\(\hat c / c\\) and a chemistry band's is not, so the two shipped fluxes differ by exactly that factor and deliver equal energy: \\(F_{\text{opt}} = 10^{13}\\) and \\(F_{\text{ion}} = 10^{10}\,\text{cm}^{-2}\,\text{s}^{-1}\\) per side. The flux source is scaled to match its own energy source, so \\(F_{\text{rad,src}} = c\,S\\) means "beamed" for either kind of band. Photochemistry is enabled, so the ionizing band is not merely transported: it is absorbed by photoionization, and each resulting front stalls at its Strömgren column well inside \\(\hat c\, t\\).
 
 ## Dust model
 
-Each thermal group carries a constant gray dust opacity, \\(\kappa_{\text{IR}} = 10\\) and \\(\kappa_{\text{opt}} = 10^{3}\,\text{cm}^{2}\,\text{g}^{-1}\\), giving domain optical depths of \\(0.033\\) and \\(3.3\\). Dust is therefore optically thick to the incoming light and thin to what it re-emits, which is what makes the reprocessing one-way. Opacity in Quokka is pure absorption, so an opaque group also emits its share of the local blackbody, and that is what supplies the re-emission.
+Each thermal group carries a constant gray dust opacity, \\(\kappa_{\text{IR}} = 10\\) and \\(\kappa_{\text{opt}} = 10^{3}\,\text{cm}^{2}\,\text{g}^{-1}\\). With \\(\rho = n_0 m_H = 1.66\times10^{-22}\,\text{g}\,\text{cm}^{-3}\\) the optical depth from the source out to each front is \\(1.0\\) in the optical and \\(0.01\\) in the IR. Dust is therefore optically thick to the incoming light and thin to what it re-emits, which is what makes the reprocessing one-way. Opacity in Quokka is pure absorption, so an opaque group also emits its share of the local blackbody, and that is what supplies the re-emission.
 
 A separate dust temperature is solved for, with the gas–dust collisional coupling switched off (`radiation.dust_gas_interaction_coeff = 0`). The dust is then fixed purely by radiative equilibrium with the local radiation field,
 
@@ -40,23 +42,31 @@ A separate dust temperature is solved for, with the gas–dust collisional coupl
 a \, T_d^4 = E_{\text{IR}} + \frac{\kappa_{\text{opt}}}{\kappa_{\text{IR}}} \, E_{\text{opt}} \, ,
 </script>
 
-which gives \\(T_d \approx 130\\) K for these parameters. At that temperature \\(h\nu/(k T_d) = 37\\) at the IR/optical boundary, so the Planck function has nothing left above the boundary: essentially all re-emission lands in the IR group and none returns to the optical one. Note that this decoupling is thermal only — radiation momentum is a separate channel and is still deposited, so the beam accelerates the gas to \\(\sim 8 \times 10^{6}\,\text{cm}\,\text{s}^{-1}\\) and evacuates the cells nearest the source.
+which gives \\(T_d \approx 130\\) K for these parameters. At that temperature \\(h\nu/(k T_d) = 37\\) at the IR/optical boundary, so the Planck function has nothing left above the boundary: essentially all re-emission lands in the IR group and none returns to the optical one. Note that this decoupling is thermal only — radiation momentum is a separate channel and is still deposited, so the radiation accelerates the gas outward and evacuates the cells nearest the source.
 
 ## Analytic solution
 
-Because the dust returns nothing to the optical band, behind the light front the optical group is in pure attenuation,
+Because the dust returns nothing to the optical band, behind each light front the optical group is in pure attenuation,
 
 <script type="math/tex; mode=display">
-E_{\text{opt}}(x) = \frac{F_{\text{opt}} E_\gamma}{c} \, e^{-\kappa_{\text{opt}} \rho x} \quad (x < \hat c \, t) \, ,
+E_{\text{opt}}(x) = \frac{F_{\text{opt}} E_\gamma}{c} \, e^{-\kappa_{\text{opt}} \rho \, |x - x_c|} \quad (|x - x_c| < \hat c \, t) \, ,
 </script>
 
-so the surviving unprocessed energy has the closed form
+so the surviving unprocessed energy, summed over both wings, has the closed form
 
 <script type="math/tex; mode=display">
-\int_0^{\hat c t} E_{\text{opt}} \, dx = \frac{F_{\text{opt}} E_\gamma}{c} \, \frac{1 - e^{-\tau_f}}{\kappa_{\text{opt}} \rho} \, , \qquad \tau_f = \kappa_{\text{opt}} \, \rho \, \hat c \, t \, .
+\int E_{\text{opt}} \, dx = 2 \, \frac{F_{\text{opt}} E_\gamma}{c} \, \frac{1 - e^{-\tau_f}}{\kappa_{\text{opt}} \rho} \, , \qquad \tau_f = \kappa_{\text{opt}} \, \rho \, \hat c \, t \, .
 </script>
 
 Everything the optical band loses reappears in the IR, so the two thermal bands together must retain the energy injected into the optical one. The ionizing band is budgeted separately, since photoionization drains it: photons injected equal photons still in the field, plus the ionized column, plus recombinations.
+
+Momentum gives an independent statement. Each wing is injected beamed, so it arrives already carrying \\(F E_\gamma / c\\) per unit time and area, and the two together inject
+
+<script type="math/tex; mode=display">
+p_{\text{inj}} = \frac{2 \, (F_{\text{opt}} + F_{\text{ion}}) \, E_\gamma \, t}{c} \, .
+</script>
+
+Because the source is mirror-symmetric the signed total momentum is zero and says nothing on its own; the informative quantity is the *outward* momentum, each cell signed by \\(\text{sgn}(x - x_c)\\). Note the absence of any \\(\hat c\\) factor here, whereas the energy budget carries \\(\hat c / c\\), so the two are independent statements.
 
 ## Answer check
 
@@ -65,15 +75,18 @@ The test passes if all of the following hold. Measured values at the reference r
 | # | check | tolerance | measured |
 |---|---|---|---|
 | 1 | IR + optical equals the energy injected into the optical band | 1% | 1.0000000 |
-| 2 | optical light front sits at \\(\hat c \, t\\) | 10% | 0.33% |
-| 3 | reduced flux at the injection cell, \\(f \in [0.9,\, 1+10^{-6}]\\) | — | \\(1 - f = 3\times10^{-15}\\) |
-| 4a | fraction reprocessed into the IR | \\(> 0.25\\) | 0.552 |
-| 4b | surviving optical energy against the \\(e^{-\tau}\\) integral above | 10% | 1.039 |
-| 5a | ionizing band is depleted, surviving fraction in \\([0.02, 1)\\) | — | 0.198 |
-| 5b | photons absorbed from the ionizing band cover the ionized column | — | \\(3.2\times10^{21} \ge 3.0\times10^{20}\\) |
+| 2a | outward momentum of the gas plus the two sourced bands against \\(p_{\text{inj}}\\) | 1% | 1.0038 |
+| 2b | signed total momentum over the gas and all three bands vanishes | \\(10^{-10}\\) | \\(1.8\times10^{-16}\\) |
+| 3 | optical light front sits at \\(\hat c \, t\\) from the source | 10% | 4.2% |
+| 4a | fraction reprocessed into the IR | \\(> 0.25\\) | 0.367 |
+| 4b | surviving optical energy against the \\(e^{-\tau}\\) integral above | 10% | 1.0032 |
+| 5a | ionizing band is depleted, surviving fraction in \\([0.02, 1)\\) | — | 0.316 |
+| 5b | photons absorbed from the ionizing band cover the ionized column | — | \\(2.7\times10^{21} \ge 6.7\times10^{20}\\) |
 
-Check 3 is the one that exercises the directed source: deleting the flux source gives \\(f = 0.09\\), and scaling it up by \\(c/\hat c\\) gives \\(f = 1000\\). It is needed because check 2 barely discriminates on its own — with the flux source removed the front still reaches 90% of \\(\hat c\, t\\), since the M1 closure lets the leading edge of an isotropic pulse free-stream anyway.
+Check 2a is the one that exercises the radiation force, and it is a conservation law only because the source is beamed: it measures 1.0038 at 128 cells and 1.0041 at 1024, flat to \\(4\times10^{-4}\\) over an eightfold refinement. Run with `photoionize.beamed = 0` and it falls to 0.78 and drifts with resolution, because the outward momentum then has to be generated by the M1 closure rather than injected. Deleting the gas momentum kick drops it to 0.644. Widening the source slab does not help either: `photoionize.source_cells` of 1, 2, 4, 8 gives 1.0038, 1.0083, 1.0105, 1.0118 beamed and 0.78, 0.74, 0.63, 0.47 isotropic, and a wide slab also pushes the measured light front outward, so one cell per side is shipped.
 
-Check 5 pins the chemistry-band source scaling, which is not multiplied by \\(\hat c / c\\) the way a thermal band's is. The budget inequality 5b alone does not catch a mis-scaling, because fewer photons produce a proportionally smaller ionized column and the inequality still holds; the lower bound in 5a is what catches it, since the ionization front stalls at its Strömgren column well inside \\(\hat c\, t\\) and always leaves a stable fraction of the photons in flight. Mis-scaling the source by \\(c/\hat c\\) collapses the surviving fraction from 0.198 to \\(8\times10^{-5}\\).
+The IR band is excluded from check 2a for the same reason the ionizing band is excluded from check 1: nothing injects momentum into it. The dust creates the IR by re-emission, which is isotropic and carries no net momentum, and the outward flux it later develops is generated by transport down the radiation pressure gradient rather than by the source. Outward momentum is not conserved under transport — only the signed total is — so that term has no place in a budget against what was injected. It is not small either: including it would add 9.2%, because the reservoir \\(F/(c\,\hat c)\\) is inflated by \\(c/\hat c\\) relative to the physical \\(E/c\\). The residual \\(+0.4\%\\) in check 2a is the IR the dust reabsorbs, a fraction \\(\tau_{\text{IR}} = \rho\,\kappa_{\text{IR}}\,\hat c\, t\\) of the outward IR flux landing in the gas momentum.
 
-The front position is located on the optical band using a threshold of 5% of the unattenuated plateau, rather than the more natural 50%, because dust absorption thins the beam by \\(e^{-\tau} \approx 0.14\\) before it reaches the front; a 50% threshold would report the absorption depth instead.
+Check 3 measures the front one cell beyond \\(\hat c\, t\\) at this resolution; one cell is 2.6% of the front distance, and the difference falls to 0.7% by 1024 cells. The front is located on the optical band using a threshold of 5% of the unattenuated plateau, rather than the more natural 50%, because dust absorption thins the light by \\(e^{-\tau} \approx 0.37\\) before it reaches the front; a 50% threshold would report the absorption depth instead.
+
+Check 5 pins the chemistry-band source scaling, which is not multiplied by \\(\hat c / c\\) the way a thermal band's is. The budget inequality 5b alone does not catch a mis-scaling, because fewer photons produce a proportionally smaller ionized column and the inequality still holds; the lower bound in 5a is what catches it, since the ionization front stalls at its Strömgren column well inside \\(\hat c\, t\\) and always leaves a stable fraction of the photons in flight. Mis-scaling the source by \\(c/\hat c\\) collapses the surviving fraction to \\(8\times10^{-5}\\).
