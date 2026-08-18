@@ -318,8 +318,7 @@ auto compute_group_rad_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray
 
 template <>
 void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux, const amrex::Box &indexRange,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	// Planar photon source straddling the middle of the domain, occupying photoionize.source_cells cells on
@@ -653,8 +652,8 @@ auto problem_main() -> int
 			const double tol_symmetry = 1.0e-10;
 
 			amrex::Print() << "Outward momentum: gas " << p_gas_out << " + sourced bands " << p_out_beamed << " = " << p_gas_out + p_out_beamed
-				       << " (injected " << p_injected << ", ratio " << p_frac << ", gas share "
-				       << p_gas_out / (p_gas_out + p_out_beamed) << ")\n";
+				       << " (injected " << p_injected << ", ratio " << p_frac << ", gas share " << p_gas_out / (p_gas_out + p_out_beamed)
+				       << ")\n";
 			amrex::Print() << "Signed total momentum: " << p_signed_total << ", i.e. " << std::abs(p_signed_total) / p_injected
 				       << " of injected (zero by symmetry)\n";
 
