@@ -71,12 +71,6 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real xlow = prob_lo[0] + i * dx[0];
 		const amrex::Real xhigh = prob_lo[0] + (i + 1) * dx[0];
-#if AMREX_SPACEDIM >= 2
-		const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
-#endif
-#if AMREX_SPACEDIM == 3
-		const amrex::Real z = prob_lo[2] + (k + 0.5) * dx[2];
-#endif
 		/*-------------------------------*/
 		// Problem ----> Gaussian temperature profile, cell-averaged in x via the erf antiderivative
 		// (y/z left point-sampled/flat: this is still the 1D-in-3D variant, not the true 3D Gaussian)
