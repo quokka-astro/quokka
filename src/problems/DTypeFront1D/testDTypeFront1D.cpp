@@ -4,15 +4,19 @@
 /// There are three radiation groups: IR (group 0), optical (group 1) and an ionizing chemistry band
 /// (group 2). Constant photon fluxes are injected in the two cells straddling the middle of a uniform, cold,
 /// dusty hydrogen slab: photoionize.flux into the OPTICAL band and photoionize.flux_ion into the ionizing
-/// band. Only the radiation energy is sourced, never the radiation flux, so the source is isotropic and each
-/// sourced band spreads symmetrically in both directions; photoionize.flux is therefore the photon flux
+/// band. Both the radiation energy source and the companion radiation flux source are set, the latter as
+/// -c * E on the left of the source and +c * E on the right, so each half of the slab is injected fully
+/// beamed away from the centre. The two wings are mirror images, so the source injects zero net momentum
+/// while each wing carries the outward momentum its luminosity implies; photoionize.flux is the photon flux
 /// delivered to EACH side. The IR band receives no source at all.
 ///
 /// Putting the source in the middle rather than against a boundary is what keeps the budgets below clean.
 /// Both domain boundaries are reflecting, and a reflecting wall is a momentum source -- it turns radiation
 /// around, and the reduced speed of light amplifies the bookkeeping value of what it turns around by c/chat.
 /// With the source at the centre and the run stopped well before either front arrives, neither wall is ever
-/// reached, so nothing is reflected and nothing escapes.
+/// reached, so nothing is reflected and nothing escapes. Beaming each wing outward at injection is the other
+/// half of that: an isotropic source injects no momentum at all, leaving the momentum budget below to measure
+/// how fast the M1 closure can beam it instead of what the solver did with it.
 ///
 /// The two sourced bands are scaled differently inside the solver -- a thermal group's source is multiplied
 /// by chat/c and a chemistry band's is not -- so the shipped fluxes differ by exactly c/chat = 1000 and
@@ -313,43 +317,63 @@ auto compute_group_rad_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray
 } // namespace
 
 template <>
-void RadSystem<DTypeFront1D>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux, const amrex::Box &indexRange,
+					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
-	// Planar photon source occupying the two cells that straddle the middle of the domain. radEnergy is a
-	// luminosity volume density [erg s^-1 cm^-3]: the slab emits 2 * F * E_photon per unit area per unit time,
-	// half of it to each side, and dividing by the slab width 2 * dx[0] gives the volumetric rate. The two
-	// factors of two cancel, so the expression below is simply F * E_photon / dx[0] in each of the two cells
-	// and photoionize.flux is the photon flux delivered to EACH side.
+	// Planar photon source straddling the middle of the domain, occupying photoionize.source_cells cells on
+	// each side of it. radEnergy is a luminosity volume density [erg s^-1 cm^-3]: the slab emits
+	// 2 * F * E_photon per unit area per unit time, half of it to each side, and dividing by the slab width
+	// 2 * n * dx[0] gives the volumetric rate F * E_photon / (n * dx[0]) in each source cell. So
+	// photoionize.flux is the photon flux delivered to EACH side, whatever the slab is widened to.
 	//
-	// Only the energy source is set; there is no flux source, so the injected radiation is isotropic and
-	// spreads symmetrically about the source. The optical and ionizing bands are fed; the IR band starts dark
-	// and is filled purely by the dust's own thermal re-emission of the absorbed optical light.
+	// The flux source makes each half of the slab emit outward instead of isotropically: the cells left of
+	// centre are given radFlux = -c * radEnergy and those right of centre radFlux = +c * radEnergy, which is
+	// the fully beamed (free-streaming, |F| = c E) injection documented on SetRadSource. The two wings are
+	// mirror images, so the source still injects zero *net* momentum, but each wing now arrives carrying the
+	// outward momentum F * E_photon / c per unit area and time that a beam of that luminosity must have.
+	// That is what makes the outward-momentum budget in problem_main a conservation law rather than a
+	// statement about how fast M1 can beam an isotropic source (see the discussion there). Setting
+	// photoionize.beamed = 0 restores the isotropic source and is useful for exactly that comparison.
+	//
+	// The optical and ionizing bands are fed; the IR band receives no source at all and is filled purely by
+	// the dust's own thermal re-emission of the absorbed optical light.
 	//
 	// The two sourced bands take different internal scalings: a thermal group's source is multiplied by
-	// chat/c, a chemistry band's is not (see source_terms_multi_group.hpp). The shipped fluxes differ by
-	// exactly that factor of c/chat = 1000, so the two bands receive the same injected energy and the energy
-	// budget in problem_main would be off by three orders of magnitude if either scaling were wrong.
+	// chat/c, a chemistry band's is not (see source_terms_multi_group.hpp), and the flux source is scaled to
+	// match its own energy source so that radFlux = c * radEnergy means "beamed" for either kind of band.
+	// The shipped fluxes differ by exactly that factor of c/chat = 1000, so the two bands receive the same
+	// injected energy and the energy budget in problem_main would be off by three orders of magnitude if
+	// either scaling were wrong.
 	amrex::ParmParse const pp("photoionize");
 	amrex::Real flux = 1.0e11_rt;
 	pp.query("flux", flux);
 	amrex::Real flux_ion = 0.0_rt;
 	pp.query("flux_ion", flux_ion);
+	int source_cells = 1;
+	pp.query("source_cells", source_cells); // cells per side occupied by the source slab
+	int beamed = 1;
+	pp.query("beamed", beamed); // 1 = each wing injected beamed outward, 0 = isotropic
 
-	const amrex::Real src_optical = flux * E_photon / dx[0];
-	const amrex::Real src_ionizing = flux_ion * E_photon / dx[0];
+	const amrex::Real n_cells = static_cast<amrex::Real>(source_cells);
+	const amrex::Real src_optical = flux * E_photon / (n_cells * dx[0]);
+	const amrex::Real src_ionizing = flux_ion * E_photon / (n_cells * dx[0]);
 
-	// A cell belongs to the source slab when its centre lies within one cell width of the middle of the
-	// domain, which selects exactly the two cells adjacent to it and keeps the source symmetric at any
+	// A cell belongs to the source slab when its centre lies within source_cells cell widths of the middle of
+	// the domain, which selects exactly source_cells cells per side and keeps the source symmetric at any
 	// resolution with an even cell count.
 	const amrex::Real x_source = 0.5_rt * (prob_lo[0] + prob_hi[0]);
 	const amrex::Real cell_length = dx[0];
 	const amrex::Real x_lo = prob_lo[0];
+	const amrex::Real half_width = n_cells * cell_length;
+	const amrex::Real beam_factor = (beamed != 0) ? C::c_light : 0.0_rt;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		const amrex::Real x = x_lo + (static_cast<amrex::Real>(i) + 0.5_rt) * cell_length;
-		const bool in_source = std::abs(x - x_source) < cell_length;
+		const bool in_source = std::abs(x - x_source) < half_width;
+		// Outward is -x on the left of the source and +x on the right.
+		const amrex::Real outward = (x > x_source) ? 1.0_rt : -1.0_rt;
 		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
 			amrex::Real src = 0.0_rt;
 			if (in_source) {
@@ -360,6 +384,9 @@ void RadSystem<DTypeFront1D>::SetRadEnergySource(array_t &radEnergy, const amrex
 				}
 			}
 			radEnergy(i, j, k, g) = src;
+			radFlux(i, j, k, 3 * g + 0) = outward * beam_factor * src;
+			radFlux(i, j, k, 3 * g + 1) = 0.0_rt;
+			radFlux(i, j, k, 3 * g + 2) = 0.0_rt;
 		}
 	});
 }
@@ -569,88 +596,88 @@ auto problem_main() -> int
 			amrex::Print() << "Test passed: thermal-band energy is conserved (Erad/injected = " << energy_frac << ").\n";
 		}
 
-		// Momentum. An isotropic source injects no net momentum at all, so unlike the energy budget above this
-		// is not a statement that what came out equals what went in. What the source injects is energy, and the
-		// outward momentum is *generated* by transport: the two wings separate, and the M1 closure beams each of
-		// them until its reduced flux f = |F| / (c E) approaches 1, at which point a wing carrying energy L per
-		// unit time and area also carries momentum L / c. The budget below is therefore an approach to
-		// 2 * (F + F_ion) * E_photon * t / c from below, and the tolerance is a window rather than a symmetric
-		// band. Note the absence of any chat factor: the energy budget above is scaled by chat / c and this one
-		// is not, so the two are independent statements.
+		// Momentum. Every change the solver makes to a radiation flux is paired with an equal and opposite kick
+		// to the gas momentum, so the two sourced bands plus the gas must still hold what the source injected.
+		// The source is mirror-symmetric, so the signed total momentum is zero and says nothing on its own;
+		// what carries the information is the OUTWARD momentum, each cell signed by sgn(x - x_source). Each
+		// wing is injected beamed (see SetRadSource), so it arrives already carrying F * E_photon / c per unit
+		// time and area, and the two together inject 2 * (F + F_ion) * E_photon / c. Note the absence of any
+		// chat factor. The energy budget above is scaled by chat / c and this one is not, so the two are
+		// independent statements, and this is the only check that exercises the radiation force. The gas ends
+		// up carrying about a third of the injected momentum, so dropping the gas momentum kick, or mis-scaling
+		// it by c / chat, misses by far more than the tolerance.
 		//
-		// Measured ratios at t_end, refining the shipped 128-cell grid (front spanning 38 cells) by up to 16x:
+		// The beaming is what makes this a conservation law rather than a statement about the M1 closure. An
+		// isotropic source injects no net momentum at all: the outward momentum then has to be *generated* by
+		// transport as M1 beams the two wings, which it does only gradually, leaving the budget short and
+		// strongly resolution-dependent. Run with photoionize.beamed = 0 to see it -- the ratio falls to 0.78
+		// and drifts with resolution. Beamed, it is 1.0038 at the shipped 128 cells and 1.0041 at 1024, i.e.
+		// flat to 4e-4 over an eightfold refinement, which is why a 1% tolerance is meaningful here.
 		//
-		//   cells   128     256     512     1024    2048
-		//   ratio   0.894   0.935   0.954   0.963   0.967
+		// Widening the source slab does not help either: photoionize.source_cells = 1, 2, 4, 8 gives 1.0038,
+		// 1.0083, 1.0105, 1.0118 beamed and 0.78, 0.74, 0.63, 0.47 isotropic. One cell per side is both the
+		// tightest and the least intrusive, since a wide slab also pushes the measured light front outward.
 		//
-		// The residual ~3% in the continuum limit is real and not a discretization error: the cells nearest the
-		// source have not beamed yet, and the IR the dust re-emits is created isotropically, so the half of it
-		// that starts inward only stops counting against the budget once it has crossed to the other wing. The
-		// rest of the gap at 128 cells is resolution. Hence the window below; do not read it as a 15% claim
-		// about momentum conservation, which is exercised by the signed total instead (see below).
+		// The IR band is excluded, for the same reason the ionizing band is excluded from the energy budget
+		// above: nothing injects momentum into it. The dust creates the IR by re-emission, which is isotropic
+		// and carries no net momentum, and the outward flux it subsequently develops is generated by transport
+		// down the radiation pressure gradient rather than by the source. Outward momentum is not conserved
+		// under transport -- only the signed total is -- so that term has no place in a budget against what was
+		// injected. It is not small either: including it would add 9.2% here, because the reservoir
+		// F / (c * chat) is inflated by c / chat relative to the physical E / c.
 		//
-		// All three bands are summed, not just the sourced two. The old beamed version of this problem excluded
-		// the IR because the reflecting wall at the injection face turned the dust's inward emission around and
-		// fed it back as spurious outward momentum. With the source at the centre no wall is ever reached, so
-		// the IR's outward momentum is honest and belongs in the budget.
+		// The residual +0.4% is the IR the dust reabsorbs: a fraction tau_IR = rho * kappa1 * chat * t_end of
+		// the outward IR flux is absorbed and lands in the gas momentum. The tolerance covers it.
 		//
-		// This is the only check that exercises the radiation force, and it does bite. Radiation and gas
-		// momentum are updated as an equal and opposite pair, but the radiation's own flux loss is computed
-		// from the absorption independently of the kick handed to the gas, so deleting that kick does not
-		// silently move the momentum elsewhere -- it drops the ratio to 0.63, well under the floor. Mis-scaling
-		// the kick by c / chat = 1000 overshoots by three orders of magnitude. The gas ends up holding about a
-		// third of the outward momentum here (0.317 at 128 cells, 0.329 in the continuum limit).
-		//
-		// The signed total momentum is the exact conservation law for an isotropic source, and it is checked
-		// separately and much more tightly: the source injects zero net momentum, nothing reaches a boundary,
-		// and every radiation-gas exchange is equal and opposite, so the signed sum over the gas and all three
-		// bands must vanish to round-off. It is what catches an asymmetry between the two wings.
+		// The signed total is checked alongside, and much more tightly: the source injects zero net momentum,
+		// nothing reaches a boundary, and every radiation-gas exchange is equal and opposite, so the signed sum
+		// over the gas and all three bands must vanish to round-off. It is what catches an asymmetry between
+		// the two wings.
 		{
-			double p_out_rad = 0.0;
+			double p_out_beamed = 0.0;
 			double p_signed_total = 0.0;
 			for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
 				const double p_out = compute_group_rad_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, true, g);
 				p_signed_total += compute_group_rad_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, false, g);
 				amrex::Print() << "Group " << g << " outward momentum: " << p_out << "\n";
-				p_out_rad += p_out;
+				if (g != group_ir) {
+					p_out_beamed += p_out;
+				}
 			}
 			const double p_gas_out = compute_gas_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, true);
 			p_signed_total += compute_gas_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, false);
 			const double p_injected = 2.0 * (F + F_ion) * E_photon * t_end / C::c_light;
-			const double p_out_total = p_gas_out + p_out_rad;
-			const double p_frac = p_out_total / p_injected;
-			// Window rather than a symmetric tolerance: the beaming is incomplete, so the ratio sits below one.
-			const double p_frac_min = 0.85;
-			const double p_frac_max = 1.05;
-			// The signed total is a round-off quantity; it measures 1e-17 of the injected scale here.
+			const double p_frac = (p_gas_out + p_out_beamed) / p_injected;
+			const double tol_p = 0.01;
+			// The signed total is a round-off quantity; it measures 1e-16 of the injected scale here.
 			const double tol_symmetry = 1.0e-10;
 
-			amrex::Print() << "Outward momentum: gas " << p_gas_out << " + radiation " << p_out_rad << " = " << p_out_total << " (injected "
-				       << p_injected << ", ratio " << p_frac << ", gas share " << p_gas_out / p_out_total << ")\n";
+			amrex::Print() << "Outward momentum: gas " << p_gas_out << " + sourced bands " << p_out_beamed << " = " << p_gas_out + p_out_beamed
+				       << " (injected " << p_injected << ", ratio " << p_frac << ", gas share "
+				       << p_gas_out / (p_gas_out + p_out_beamed) << ")\n";
 			amrex::Print() << "Signed total momentum: " << p_signed_total << ", i.e. " << std::abs(p_signed_total) / p_injected
 				       << " of injected (zero by symmetry)\n";
 
-			if ((p_frac < p_frac_min) || (p_frac > p_frac_max)) {
-				amrex::Print() << "Test FAILED: outward linear momentum is " << p_frac << " of injected (expected between " << p_frac_min
-					       << " and " << p_frac_max << ").\n";
+			if (std::abs(p_frac - 1.0) > tol_p) {
+				amrex::Print() << "Test FAILED: outward linear momentum is " << p_frac << " of injected (expected 1 within " << tol_p * 100.0
+					       << "%).\n";
 				status = 1;
 			} else if (std::abs(p_signed_total) / p_injected > tol_symmetry) {
 				amrex::Print() << "Test FAILED: the two wings are not mirror images; signed total momentum is "
 					       << std::abs(p_signed_total) / p_injected << " of injected.\n";
 				status = 1;
 			} else {
-				amrex::Print() << "Test passed: outward linear momentum is " << p_frac << " of injected and the signed total vanishes.\n";
+				amrex::Print() << "Test passed: outward linear momentum is conserved (p/injected = " << p_frac << ").\n";
 			}
 		}
 	}
 
 	// Check 2: the light must propagate outward at close to the reduced speed of light. This is a sanity check
-	// on transport, and it is what confirms the beaming the momentum budget above relies on. Exact transport
-	// would spread an isotropic planar source over every ray angle and put its energy-weighted front well
-	// short of chat * t, but the M1 closure carries a single beam direction, so each wing free-streams and the
-	// front tracks chat * t instead of crawling at chat / sqrt(3). It does so to about 1% here, so the
-	// tolerance mostly covers the one-cell quantization of the front position (2.6% of the front distance at
-	// the shipped resolution) and the drag from the gray opacity re-emitting absorbed energy isotropically.
+	// on transport. Each wing is injected beamed, so it free-streams from the start and its front tracks
+	// chat * t rather than the chat / sqrt(3) an isotropic pulse would start at. The measured front lands one
+	// cell beyond chat * t at the shipped resolution, so the tolerance mostly covers the quantization of the
+	// front position (one cell is 2.6% of the front distance here; the difference falls to 0.7% by 1024
+	// cells) and the drag from the gray opacity re-emitting absorbed energy isotropically.
 	{
 		const double x_front = sim.userData_.xfront_vec_.back();
 		const double x_ref = x_analytic(t_end);

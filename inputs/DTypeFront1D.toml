@@ -31,9 +31,17 @@ photoionize.primary_species_1 = 1.0e-10   # e
 photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
 photoionize.primary_species_3 = 1.0e-10   # H+
 photoionize.temperature = 1.0e2
-# Photon flux injected into the optical band, per side [photons cm^-2 s^-1]. The source is isotropic and sits
-# at the middle of the domain, so it emits twice this and each side receives this flux. It sets the dust
+# Photon flux injected into the optical band, per side [photons cm^-2 s^-1]. The source sits at the middle of
+# the domain and emits twice this, half to each side, so each side receives this flux. It sets the dust
 # temperature, which settles at a*T^4 = E_IR + (kappa2/kappa1) * E_optical.
+
+# Source geometry. beamed = 1 gives each half of the source slab a flux source of -c * E on the left and
+# +c * E on the right, so both wings are injected fully beamed outward; the outward-momentum budget in the
+# test is a conservation law only in that case (it closes to 1.004 beamed, 0.78 isotropic). source_cells is
+# the number of cells per side the slab occupies; widening it does not improve the budget (1.004, 1.008,
+# 1.011, 1.012 for 1, 2, 4, 8) and pushes the measured light front outward, so one cell per side is shipped.
+photoionize.beamed = 1
+photoionize.source_cells = 1
 photoionize.flux = 1.0e13
 
 # Gray dust opacity of the two thermal groups [cm^2 g^-1]: kappa1 = IR, kappa2 = optical. Dust is optically
