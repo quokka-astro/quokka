@@ -7,9 +7,9 @@
 #define LARGE 1.0e100
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
-						     Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/,
-						     double /*tempFloor*/, int *p_iteration_counter, int *p_iteration_failure_counter,
+void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_implicit,
+						     double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/,
+						     int *p_iteration_counter, int *p_iteration_failure_counter,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
@@ -60,17 +60,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const double Src = RadSystem_Has_ChemBands<problem_t>::value ? radEnergySource(i, j, k, 0) * dt : radEnergySource(i, j, k, 0) * dt / cscale;
 		if constexpr (gamma_ != 1.0) {
 			AMREX_ASSERT(Src >= 0.0);
-		}
-
-		// load the radiation flux source term, scaled exactly like the energy source above so that a user
-		// setting radFluxSource = c * radEnergySource injects free-streaming (|F| = c E) radiation:
-		// a thermal group is scaled by chat/c (= 1/cscale), a chemical (ionizing) band is not. In a
-		// single-group run the only group is a chemical band exactly when ChemBands is defined.
-		const bool is_chem_band = RadSystem_Has_ChemBands<problem_t>::value;
-		const double flux_scale = is_chem_band ? dt : dt / cscale;
-		amrex::GpuArray<amrex::Real, 3> Src_flux{};
-		for (int n = 0; n < 3; ++n) {
-			Src_flux[n] = flux_scale * radFluxSource(i, j, k, n);
 		}
 
 		double Egas0 = NAN;
@@ -403,11 +392,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			amrex::GpuArray<amrex::Real, 3> Frad_t0{};
 			dMomentum = {0., 0., 0.};
 
-			// The user-defined flux source is added to the old-time flux, so the implicit absorption below acts
-			// on the freshly injected radiation as well.
-			Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index) + Src_flux[0];
-			Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index) + Src_flux[1];
-			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index) + Src_flux[2];
+			Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index);
+			Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index);
+			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index);
 
 			if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
 				auto erad = Erad_guess;

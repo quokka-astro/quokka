@@ -61,10 +61,9 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 };
 
 template <>
-void RadSystem<StromgrenSphere>::SetRadSource(array_t &radEnergy, array_t & /*radFluxSource*/, const amrex::Box &indexRange,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
