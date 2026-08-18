@@ -70,12 +70,12 @@ partition "AMRSimulation::evolve() — main time loop" {
           end note
           :**IMEX Stage 2** — explicit ForwardEuler + implicit coupling;
           :advanceRadiationForwardEuler(dt · Aex₂₁) → state_tmp1_rad;
-          :SetRadEnergySource() + particle radiation deposition //(3D)//;
+          :SetRadSource() + particle radiation deposition //(3D)//;
           :AddSourceTermsSingleGroup/MultiGroup(dt · Aim₂₂)\n//(implicit Newton–Raphson: matter–radiation coupling)//;
           :**IMEX Stage 3** — explicit MidpointRK2 + implicit coupling;
           :advanceRadiationMidpointRK2(dt) //(uses state_tmp1 as U^(2))//;
           :Shu-Osher gas combination:\nstate_new_gas ← ½·state_new + ½·state_tmp1;
-          :SetRadEnergySource() + particle radiation deposition //(3D)//;
+          :SetRadSource() + particle radiation deposition //(3D)//;
           :AddSourceTermsSingleGroup/MultiGroup(dt · Aim₃₃)\n//(implicit Newton–Raphson: matter–radiation coupling)//;
         repeat while (i < nsubSteps?) is (yes)
         -> no;
