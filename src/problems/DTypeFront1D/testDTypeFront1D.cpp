@@ -280,14 +280,13 @@ auto compute_gas_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex
 	return momentum;
 }
 
-// Domain-integrated x-momentum of the radiation field: sum_cells sign * w_g * F_x,g * dx for group g, with the same sign convention as compute_gas_momentum. The weight w_g turns a
-// radiation flux into the momentum the solver actually trades with the gas, and it is not the same for the two
-// kinds of band. A thermal group uses w = 1 / (c * chat), the pairing in UpdateFlux (source_terms_multi_group.hpp),
-// while a chemistry band uses w = 1 / c^2, the pairing in computePhotoChemistry (photochemistry.hpp). They differ
-// because a chemistry band's energy density is deliberately inflated by c / chat so that chat * n_photon
-// reproduces the physical photon flux and the ionization rate comes out right; its momentum weight divides that
-// factor back out. Under either weight an injected photon flux Phi carries the physical momentum flux
-// Phi * E_photon / c, which is what makes the single budget below meaningful across both kinds of band.
+// Domain-integrated x-momentum of the radiation field: sum_cells sign * w_g * F_x,g * dx for group g, with the same sign convention as compute_gas_momentum.
+// The weight w_g turns a radiation flux into the momentum the solver actually trades with the gas, and it is not the same for the two kinds of band. A thermal
+// group uses w = 1 / (c * chat), the pairing in UpdateFlux (source_terms_multi_group.hpp), while a chemistry band uses w = 1 / c^2, the pairing in
+// computePhotoChemistry (photochemistry.hpp). They differ because a chemistry band's energy density is deliberately inflated by c / chat so that chat *
+// n_photon reproduces the physical photon flux and the ionization rate comes out right; its momentum weight divides that factor back out. Under either weight
+// an injected photon flux Phi carries the physical momentum flux Phi * E_photon / c, which is what makes the single budget below meaningful across both kinds
+// of band.
 auto compute_group_rad_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real x_source, bool outward, int g) -> amrex::Real
 {
@@ -640,8 +639,7 @@ auto problem_main() -> int
 					       << std::abs(p_signed_total) / p_injected << " of injected.\n";
 				status = 1;
 			} else {
-				amrex::Print() << "Test passed: outward linear momentum is " << p_frac
-					       << " of injected and the signed total vanishes.\n";
+				amrex::Print() << "Test passed: outward linear momentum is " << p_frac << " of injected and the signed total vanishes.\n";
 			}
 		}
 	}
