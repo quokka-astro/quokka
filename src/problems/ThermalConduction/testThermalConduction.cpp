@@ -36,11 +36,11 @@ How to choose the parameters for the thermal conduction test problem
 5. Conductivity prefactor = D * rho * c_v should be supplied in the input file. */
 
 const double Eint0 = 2.505e-8;		     // equivalent to T = 2.e8 K
-const double Efloor = 5.674216387016754e-11; // equivalent tp T = 2.e6 K
+const double Efloor = 5.674216387016754e-11; // equivalent to T = 2.e6 K
 const double rho0 = 0.1;		     // 1/cm^3
 const double D = 4.396303164750053e+28;	     // diffusion coefficient, in units of cm^2/s
 const double sigma = 2.410685615625e+17;	     // width of the Gaussian, in units of cm
-
+const double Lref = 7.714e+17;		     //half box length
 struct ThermalConductionProblem {
 };
 
@@ -101,7 +101,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 {
 	// geometrical refinement
 	// tag cells within one-sigma of the initial Gaussian profile for refinement
-	const double refine_Lmax = 2. * sigma; // 0.2 pc
+	const double refine_Lmax = Lref; 
 
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx = geom[lev].CellSizeArray();
@@ -128,13 +128,6 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 
 		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
 			bool in_region = (std::abs(x) < refine_Lmax);
-
-		// #if (AMREX_SPACEDIM >= 2)
-		// 	in_region = in_region && (std::abs(y) < refine_Lmax);
-		// #endif
-		// #if (AMREX_SPACEDIM == 3)
-		// 	in_region = in_region && (std::abs(z) < refine_Lmax);
-		// #endif
 
 			amrex::ignore_unused(y, z); // avoids unused-variable warnings in 1D
 
@@ -188,12 +181,6 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const xlow = prob_lo[0] + i * dx[0];
 			amrex::Real const xhigh = prob_lo[0] + (i + 1) * dx[0];
-			// #if AMREX_SPACEDIM >= 2
-			// const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
-			// #endif
-			// #if AMREX_SPACEDIM == 3
-			// const amrex::Real z = prob_lo[2] + (k + 0.5) * dx[2];
-			// #endif
 
 			// Solution for the Gaussian temperature profile, cell-averaged in x via the erf antiderivative
 			const amrex::Real rho = rho0 * C::m_p;		     // g/cm^3
@@ -202,12 +189,6 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 			const amrex::Real erfx_low = std::erf(xlow / std::sqrt(2.0 * sigma2_t));
 			const amrex::Real erfx_high = std::erf(xhigh / std::sqrt(2.0 * sigma2_t));
 			amrex::Real Eint_exact = Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx[0];
-			// #if AMREX_SPACEDIM >= 2
-			// Eint_exact *= std::exp(-y * y / sigma2_t / 2.);
-			// #endif
-			// #if AMREX_SPACEDIM == 3
-			// Eint_exact *= std::exp(-z * z / sigma2_t / 2.);
-			// #endif
 			Eint_exact += Efloor; // add floor to the energy
 
 			// clear all components
@@ -295,16 +276,16 @@ auto problem_main() -> int
 
 	/***Richardson Extrapolation ****/
 
-	// quokka::richardson::applyQuietDefaults();
-	// quokka::richardson::Parameters params{};
-	// params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	// params.nx_initial = 64;
-	// params.nx_max = 256;
-	// params.expected_rate = 2.0;
-	// params.tolerance = 0.3;
-	// params.test_name = "Thermal Conduction";
-	// params.csv_filename = "thermal_conduction_convergence.csv";
+	quokka::richardson::applyQuietDefaults();
+	quokka::richardson::Parameters params{};
+	params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
+	params.nx_initial = 32;
+	params.nx_max = 128;
+	params.expected_rate = 2.0;
+	params.tolerance = 0.3;
+	params.test_name = "Thermal Conduction";
+	params.csv_filename = "thermal_conduction_convergence.csv";
 
-	// return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runConductionTest(nx, ny, nz); });
+	return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runConductionTest(nx, ny, nz); });
 
 }
