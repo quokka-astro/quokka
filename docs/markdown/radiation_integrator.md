@@ -187,7 +187,7 @@ and the group unknown is tied to \\(E\_g\\) by the definition of the exchange te
 R_g = \left( \frac{4 \pi B_g}{c} - \frac{E_g}{(\kappa_P/\kappa_E)_g} \right) \tau_g + w_g \, ,
 </script>
 
-with \\(\tau\_g = \Delta t\, \rho\, \kappa\_{P,g}\, \hat c\\) the optical depth across the step and \\(w\_g\\) the work term. Two properties of this system are easy to get wrong and are worth stating.
+with \\(\tau\_g = \Delta t\\, \rho\\, \kappa\_{P,g}\\, \hat c\\) the optical depth across the step and \\(w\_g\\) the work term. Two properties of this system are easy to get wrong and are worth stating.
 
 ### Group Planck temperature derivative
 
