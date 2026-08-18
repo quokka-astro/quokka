@@ -127,7 +127,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 #endif
 
 		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
-			bool in_region = (std::abs(x) < refine_Lmax);
+			bool const in_region = (std::abs(x) < refine_Lmax);
 
 			amrex::ignore_unused(y, z); // avoids unused-variable warnings in 1D
 
@@ -148,7 +148,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
+void QuokkaSimulation<ThermalConductionProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
 								   amrex::MultiFab const &state_cc,
 								   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
