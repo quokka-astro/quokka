@@ -270,6 +270,51 @@ auto compute_group_total_erad(amrex::MultiFab const &state_mf, amrex::GpuArray<a
 	return total;
 }
 
+// Domain-integrated x-momentum of the gas: sum_cells rho * v_x * dx  [g cm^-1 s^-1 in 1D].
+auto compute_gas_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> amrex::Real
+{
+	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
+	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+	auto const state = state_mf.const_arrays();
+	const amrex::Real cell_length = dx[0];
+
+	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
+		return cell_length * state[box_no](i, j, k, RadSystem<DTypeFront1D>::x1GasMomentum_index);
+	});
+
+	auto const &hv = reduce_data.value(reduce_op);
+	amrex::Real momentum = amrex::get<0>(hv);
+	amrex::ParallelAllReduce::Sum(momentum, amrex::ParallelContext::CommunicatorSub());
+	return momentum;
+}
+
+// Domain-integrated x-momentum of the radiation field: sum_cells w_g * F_x,g * dx for group g. The weight w_g turns a
+// radiation flux into the momentum the solver actually trades with the gas, and it is not the same for the two
+// kinds of band. A thermal group uses w = 1 / (c * chat), the pairing in UpdateFlux (source_terms_multi_group.hpp),
+// while a chemistry band uses w = 1 / c^2, the pairing in computePhotoChemistry (photochemistry.hpp). They differ
+// because a chemistry band's energy density is deliberately inflated by c / chat so that chat * n_photon
+// reproduces the physical photon flux and the ionization rate comes out right; its momentum weight divides that
+// factor back out. Under either weight an injected photon flux Phi carries the physical momentum flux
+// Phi * E_photon / c, which is what makes the single budget below meaningful across both kinds of band.
+auto compute_group_rad_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int g) -> amrex::Real
+{
+	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
+	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+	auto const state = state_mf.const_arrays();
+	const amrex::Real cell_length = dx[0];
+	const int frad_index = RadSystem<DTypeFront1D>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g;
+	const amrex::Real weight = (g == group_ionizing) ? 1.0_rt / (C::c_light * C::c_light) : 1.0_rt / (C::c_light * c_hat);
+
+	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
+		return cell_length * weight * state[box_no](i, j, k, frad_index);
+	});
+
+	auto const &hv = reduce_data.value(reduce_op);
+	amrex::Real momentum = amrex::get<0>(hv);
+	amrex::ParallelAllReduce::Sum(momentum, amrex::ParallelContext::CommunicatorSub());
+	return momentum;
+}
+
 } // namespace
 
 template <>
@@ -484,7 +529,8 @@ auto problem_main() -> int
 	// Analytic free-streaming solution: a top-hat of height F * E_photon / c reaching x = chat * t.
 	auto x_analytic = [=](double t_now) -> double { return c_hat * t_now; };
 
-	// Check 1: conservation of energy in the two thermal bands. Reflecting boundaries lose nothing, and with
+	// Check 1: conservation of energy in the two thermal bands, and of linear momentum across all three. The
+	// energy part first. Reflecting boundaries lose nothing, and with
 	// the gas thermally decoupled the dust only shuffles energy between the IR and optical groups, so their
 	// combined domain-integrated Erad must equal the energy injected into the optical band. Photoionization
 	// removes energy from the ionizing band only, which is why that band is excluded here and gets its own
@@ -512,6 +558,57 @@ auto problem_main() -> int
 			status = 1;
 		} else {
 			amrex::Print() << "Test passed: thermal-band energy is conserved (Erad/injected = " << energy_frac << ").\n";
+		}
+
+		// Momentum. Every change the solver makes to a radiation flux is paired with an equal and opposite kick
+		// to the gas momentum, so the two sourced bands plus the gas must still hold what the beam injected:
+		// Phi * E_photon / c per unit time and area, summed over both. Note the absence of any chat factor. The
+		// energy budget above is scaled by chat / c and this one is not, so the two are independent statements,
+		// and this is the only check that exercises the radiation force away from the injection cell. The gas
+		// carries 4.5e3 of the 8.1e3 injected here, so dropping the gas momentum kick, or mis-scaling it by
+		// c / chat, misses by far more than the tolerance.
+		//
+		// The IR band is excluded, for the same reason the ionizing band is excluded from the energy budget
+		// above: nothing injects momentum into it. The dust creates the IR by re-emission, which is isotropic
+		// and carries no net momentum, so whatever net flux the IR ends up with was put there by the geometry
+		// and by the boundaries -- the slab emits into a half-space bounded by the reflecting wall at x = 0,
+		// and that wall turns the leftward half of the emission around. That is a real force on a real wall,
+		// but it is not the beam's momentum and it does not belong in this budget. It is not a small term
+		// either: the reservoir F / (c * chat) is inflated by c / chat relative to the physical E / c, so the
+		// wall's physically tiny push shows up as 1.3e3, i.e. 16% of the injected momentum. That fraction is
+		// fixed by how much of the beam the dust reprocesses and by the emitting slab's geometry, not by the
+		// reduced speed of light, and it does not shrink when chat is raised (verified at chat = c).
+		//
+		// The right boundary is reflecting too and is genuinely harmless: the front stops at chat * t_end, well
+		// inside the domain (Check 2), so no wave ever reaches it.
+		//
+		// What is left is a +0.3% excess, and it is the IR the dust reabsorbs: a fraction
+		// tau_IR = rho * kappa1 * chat * t_end = 0.02 of the IR flux is absorbed and lands in the gas momentum.
+		// The tolerance covers it.
+		{
+			double p_beamed = 0.0;
+			for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
+				const double p_g = compute_group_rad_momentum(sim.state_new_cc_[0], dx, g);
+				amrex::Print() << "Group " << g << " integrated momentum: " << p_g << "\n";
+				if (g != group_ir) {
+					p_beamed += p_g;
+				}
+			}
+			const double p_gas = compute_gas_momentum(sim.state_new_cc_[0], dx);
+			const double p_injected = (F + F_ion) * E_photon * t_end / C::c_light;
+			const double p_frac = (p_gas + p_beamed) / p_injected;
+			const double tol_p = 0.01;
+
+			amrex::Print() << "Momentum: gas " << p_gas << " + sourced bands " << p_beamed << " = " << p_gas + p_beamed << " (injected "
+				       << p_injected << ")\n";
+
+			if (std::abs(p_frac - 1.0) > tol_p) {
+				amrex::Print() << "Test FAILED: linear momentum is " << p_frac << " of injected (expected 1 within " << tol_p * 100.0
+					       << "%).\n";
+				status = 1;
+			} else {
+				amrex::Print() << "Test passed: linear momentum is conserved (p/injected = " << p_frac << ").\n";
+			}
 		}
 	}
 
