@@ -241,8 +241,7 @@ auto problem_main() -> int
 			// Radiation injected in [beam_lo, beam_hi) with |F| = c E free-streams in +x at speed
 			// chat, giving a trapezoid: a ramp 0 -> 1 across the source slab, a plateau at 1 out to
 			// beam_lo + chat * t, and a ramp 1 -> 0 down to the front at beam_hi + chat * t.
-			erad_exact.at(i) =
-			    std::clamp(std::min((x - beam_lo) / beam_width, (beam_hi + chat * tmax - x) / beam_width), 0.0, 1.0);
+			erad_exact.at(i) = std::clamp(std::min((x - beam_lo) / beam_width, (beam_hi + chat * tmax - x) / beam_width), 0.0, 1.0);
 		} else {
 			erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
 		}
