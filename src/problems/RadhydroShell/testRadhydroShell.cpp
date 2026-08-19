@@ -78,7 +78,7 @@ constexpr amrex::Real rho_0 = M_shell / ((4. / 3.) * M_PI * r_0 * r_0 * r_0); //
 constexpr amrex::Real c_v = k_B / ((2.2 * m_H) * (gamma_gas - 1.0));
 
 template <>
-void RadSystem<ShellProblem>::SetRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
+void RadSystem<ShellProblem>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
@@ -105,7 +105,7 @@ void RadSystem<ShellProblem>::SetRadSource(array_t &radEnergy, array_t & /*reduc
 		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 
-		radEnergy(i, j, k) += source_norm * std::exp(-(r * r) / (2.0 * sigma_star * sigma_star));
+		radEnergy(i, j, k) = source_norm * std::exp(-(r * r) / (2.0 * sigma_star * sigma_star));
 	});
 }
 

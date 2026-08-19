@@ -304,15 +304,26 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	//! Set the user-defined radiation source terms.
 	//!
+	//! Both buffers belong to this hook alone and are zeroed before every call, so assign to them; the
+	//! framework merges the result into any radiation that particles have already deposited.
+	//!
 	//! \param radEnergySource luminosity volume density of group g, in component g; unit: erg s^-1 cm^-3.
 	//! \param reducedFluxSource reduced flux f = F / (c E) of the injected radiation of group g along direction n,
 	//!			   in component 3 * g + n; dimensionless, and physical only if |f| <= 1 (asserted in a debug
 	//!			   build). The deposited flux source is c * f * radEnergySource, so c is always the runtime
 	//!			   speed of light and the injected radiation satisfies F = f c E by construction. f = 0 (the
 	//!			   default) injects isotropic radiation; |f| = 1 injects fully beamed (free-streaming) radiation.
-	static void SetRadSource(array_t &radEnergySource, array_t &reducedFluxSource, amrex::Box const &indexRange,
+	static void AddRadSource(array_t &radEnergySource, array_t &reducedFluxSource, amrex::Box const &indexRange,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time);
+
+	//! Merge the source written by AddRadSource into the source that is actually deposited.
+	//!
+	//! Radiation from particles has already been deposited into radEnergySource, so the user source is
+	//! collected in its own buffers and merged here. Particle radiation is isotropic, so only the user
+	//! source carries a flux, and the reduced flux of the merged source is f_user * E_user / E_total.
+	static void MergeUserRadSource(array_t &radEnergySource, array_t &reducedFluxSource, arrayconst_t &userEnergySource, arrayconst_t &userReducedFlux,
+				       amrex::Box const &indexRange);
 
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
 						double gas_update_factor, double Ekin0, amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> const &Src_flux,
@@ -647,15 +658,39 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::SetRadSource(array_t &radEnergySource, array_t &reducedFluxSource, amrex::Box const &indexRange,
+void RadSystem<problem_t>::AddRadSource(array_t &radEnergySource, array_t &reducedFluxSource, amrex::Box const &indexRange,
 					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time)
 {
 	// Default implementation: no radiation source is added.
-	// Users should override this method to *add* custom radiation sources to radEnergySource, since particle
-	// radiation has already been deposited there. reducedFluxSource is a ratio rather than an amount, so it
-	// should be assigned, not accumulated; it defaults to zero, i.e. isotropic injection.
+	// Users should override this method to set their own radiation source. Both buffers belong to this hook
+	// alone and are zeroed before every call, so simply assign to them; the framework merges the result into
+	// the source that particles have already deposited into.
 	// This function is intentionally left blank.
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::MergeUserRadSource(array_t &radEnergySource, array_t &reducedFluxSource, arrayconst_t &userEnergySource,
+					      arrayconst_t &userReducedFlux, amrex::Box const &indexRange)
+{
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		for (int g = 0; g < nGroups_; ++g) {
+			const double fx = userReducedFlux(i, j, k, 3 * g + 0);
+			const double fy = userReducedFlux(i, j, k, 3 * g + 1);
+			const double fz = userReducedFlux(i, j, k, 3 * g + 2);
+			AMREX_ASSERT(fx * fx + fy * fy + fz * fz <= 1.0 + 1.0e-10); // |f| <= 1 is required for a physical flux
+
+			const double Euser = userEnergySource(i, j, k, g);
+			const double Etot = radEnergySource(i, j, k, g) + Euser;
+			radEnergySource(i, j, k, g) = Etot;
+
+			// particle radiation is isotropic, so only the user source contributes to the flux
+			const double weight = (Etot > 0.0) ? (Euser / Etot) : 0.0;
+			reducedFluxSource(i, j, k, 3 * g + 0) = weight * fx;
+			reducedFluxSource(i, j, k, 3 * g + 1) = weight * fy;
+			reducedFluxSource(i, j, k, 3 * g + 2) = weight * fz;
+		}
+	});
 }
 
 template <typename problem_t>

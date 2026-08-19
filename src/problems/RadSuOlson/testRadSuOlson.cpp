@@ -122,7 +122,7 @@ const auto initial_Egas = 1e-10 * quokka::EOS<MarshakProblem>::ComputeEintFromTg
 const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum));      // NOLINT
 
 template <>
-void RadSystem<MarshakProblem>::SetRadSource(array_t &radEnergySource, array_t & /*reducedFluxSource*/, amrex::Box const &indexRange,
+void RadSystem<MarshakProblem>::AddRadSource(array_t &radEnergySource, array_t & /*reducedFluxSource*/, amrex::Box const &indexRange,
 					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
 					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time)
@@ -144,7 +144,7 @@ void RadSystem<MarshakProblem>::SetRadSource(array_t &radEnergySource, array_t &
 		if (time < t0) {
 			src = S * vol_frac;
 		}
-		radEnergySource(i, j, k, 0) += src;
+		radEnergySource(i, j, k, 0) = src;
 	});
 }
 
