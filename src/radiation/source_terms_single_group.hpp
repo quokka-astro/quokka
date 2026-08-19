@@ -57,20 +57,16 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
 		// Single-group: if ChemBands is defined the only group is an ionizing photon group (no cscale).
 		// For thermal groups, radEnergySource must be scaled by chat/c (= 1/cscale).
-		const double Src = RadSystem_Has_ChemBands<problem_t>::value ? radEnergySource(i, j, k, 0) * dt : radEnergySource(i, j, k, 0) * dt / cscale;
+		const double src_scale = RadSystem_Has_ChemBands<problem_t>::value ? dt : dt / cscale;
+		const double Src = src_scale * radEnergySource(i, j, k, 0);
 		if constexpr (gamma_ != 1.0) {
 			AMREX_ASSERT(Src >= 0.0);
 		}
 
-		// load the radiation flux source term, scaled exactly like the energy source above so that a user
-		// setting radFluxSource = c * radEnergySource injects free-streaming (|F| = c E) radiation:
-		// a thermal group is scaled by chat/c (= 1/cscale), a chemical (ionizing) band is not. In a
-		// single-group run the only group is a chemical band exactly when ChemBands is defined.
-		const bool is_chem_band = RadSystem_Has_ChemBands<problem_t>::value;
-		const double flux_scale = is_chem_band ? dt : dt / cscale;
+		// load the radiation flux source term, scaled exactly like the energy source above; unit: erg cm^-2 s^-2
 		amrex::GpuArray<amrex::Real, 3> Src_flux{};
 		for (int n = 0; n < 3; ++n) {
-			Src_flux[n] = flux_scale * radFluxSource(i, j, k, n);
+			Src_flux[n] = src_scale * radFluxSource(i, j, k, n);
 		}
 
 		double Egas0 = NAN;

@@ -318,7 +318,7 @@ auto compute_group_rad_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray
 } // namespace
 
 template <>
-void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux, const amrex::Box &indexRange,
+void RadSystem<DTypeFront1D>::AddRadSource(array_t &radEnergy, array_t &reducedFlux, const amrex::Box &indexRange,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
@@ -329,8 +329,8 @@ void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux,
 	// photoionize.flux is the photon flux delivered to EACH side, whatever the slab is widened to.
 	//
 	// The flux source makes each half of the slab emit outward instead of isotropically: the cells left of
-	// centre are given radFlux = -c * radEnergy and those right of centre radFlux = +c * radEnergy, which is
-	// the fully beamed (free-streaming, |F| = c E) injection documented on SetRadSource. The two wings are
+	// centre are given a reduced flux of -1 and those right of centre +1, which is the fully beamed
+	// (free-streaming, |F| = c E) injection documented on AddRadSource. The two wings are
 	// mirror images, so the source still injects zero *net* momentum, but each wing now arrives carrying the
 	// outward momentum F * E_photon / c per unit area and time that a beam of that luminosity must have.
 	// That is what makes the outward-momentum budget in problem_main a conservation law rather than a
@@ -342,7 +342,8 @@ void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux,
 	//
 	// The two sourced bands take different internal scalings: a thermal group's source is multiplied by
 	// chat/c, a chemistry band's is not (see source_terms_multi_group.hpp), and the flux source is scaled to
-	// match its own energy source so that radFlux = c * radEnergy means "beamed" for either kind of band.
+	// match its own energy source. The hook takes a reduced flux rather than a flux, so a reduced flux of
+	// unit magnitude means "beamed" for either kind of band and |F| > c E is unrepresentable.
 	// The shipped fluxes differ by exactly that factor of c/chat = 1000, so the two bands receive the same
 	// injected energy and the energy budget in problem_main would be off by three orders of magnitude if
 	// either scaling were wrong.
@@ -367,7 +368,8 @@ void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux,
 	const amrex::Real cell_length = dx[0];
 	const amrex::Real x_lo = prob_lo[0];
 	const amrex::Real half_width = n_cells * cell_length;
-	const amrex::Real beam_factor = (beamed != 0) ? C::c_light : 0.0_rt;
+	// A reduced flux of unit magnitude is fully beamed; zero leaves the injection isotropic.
+	const amrex::Real beam_factor = (beamed != 0) ? 1.0_rt : 0.0_rt;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		const amrex::Real x = x_lo + (static_cast<amrex::Real>(i) + 0.5_rt) * cell_length;
@@ -384,9 +386,9 @@ void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux,
 				}
 			}
 			radEnergy(i, j, k, g) = src;
-			radFlux(i, j, k, 3 * g + 0) = outward * beam_factor * src;
-			radFlux(i, j, k, 3 * g + 1) = 0.0_rt;
-			radFlux(i, j, k, 3 * g + 2) = 0.0_rt;
+			reducedFlux(i, j, k, 3 * g + 0) = (src > 0.0_rt) ? outward * beam_factor : 0.0_rt;
+			reducedFlux(i, j, k, 3 * g + 1) = 0.0_rt;
+			reducedFlux(i, j, k, 3 * g + 2) = 0.0_rt;
 		}
 	});
 }
@@ -600,7 +602,7 @@ auto problem_main() -> int
 		// to the gas momentum, so the two sourced bands plus the gas must still hold what the source injected.
 		// The source is mirror-symmetric, so the signed total momentum is zero and says nothing on its own;
 		// what carries the information is the OUTWARD momentum, each cell signed by sgn(x - x_source). Each
-		// wing is injected beamed (see SetRadSource), so it arrives already carrying F * E_photon / c per unit
+		// wing is injected beamed (see AddRadSource), so it arrives already carrying F * E_photon / c per unit
 		// time and area, and the two together inject 2 * (F + F_ion) * E_photon / c. Note the absence of any
 		// chat factor. The energy budget above is scaled by chat / c and this one is not, so the two are
 		// independent statements, and this is the only check that exercises the radiation force. The gas ends

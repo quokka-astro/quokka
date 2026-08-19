@@ -127,7 +127,7 @@ auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B,
 } // namespace
 
 template <>
-void RadSystem<StromgrenSphere>::SetRadSource(array_t &radEnergy, array_t & /*radFluxSource*/, const amrex::Box &indexRange,
+void RadSystem<StromgrenSphere>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)

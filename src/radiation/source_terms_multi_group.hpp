@@ -717,13 +717,18 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// load radiation energy source term
 		// plus advection source term (for well-balanced/SDC integrators)
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
+		// The radiation flux source is scaled exactly like the energy source; unit: erg cm^-2 s^-2.
 		quokka::valarray<double, nGroups_> Src;
+		amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> Src_flux{};
 		for (int g = 0; g < nGroups_; ++g) {
 			// The last NChemBands groups are ionizing photon groups (no cscale).
 			// All other (thermal) groups require scaling by chat/c (= 1/cscale).
 			// Avoid if constexpr here: NVCC rejects first-captures inside constexpr-if in device lambdas.
-			Src[g] = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_) ? dt * radEnergySource(i, j, k, g)
-												      : dt * (chat / c * radEnergySource(i, j, k, g));
+			const double src_scale = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_) ? dt : dt * (chat / c);
+			Src[g] = src_scale * radEnergySource(i, j, k, g);
+			for (int n = 0; n < 3; ++n) {
+				Src_flux[n][g] = src_scale * radFluxSource(i, j, k, 3 * g + n);
+			}
 		}
 
 		// Chemical (ionizing) bands are decoupled from the thermal gas-radiation energy exchange. Their
@@ -735,18 +740,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
 			Src_chem[g] = Src[g];
 			Src[g] = 0.0;
-		}
-
-		// load the radiation flux source term, scaled exactly like the energy source above so that a user
-		// setting radFluxSource = c * radEnergySource injects free-streaming (|F| = c E) radiation:
-		// thermal groups are scaled by chat/c, chemical (ionizing) bands are not.
-		amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> Src_flux{};
-		for (int g = 0; g < nGroups_; ++g) {
-			const bool is_chem_band = (RadSystem_NChemBands<problem_t>::value > 0) && (g >= nGroupsThermal_);
-			const double flux_scale = is_chem_band ? dt : dt * (chat / c);
-			for (int n = 0; n < 3; ++n) {
-				Src_flux[n][g] = flux_scale * radFluxSource(i, j, k, 3 * g + n);
-			}
 		}
 
 		double Egas0 = NAN;

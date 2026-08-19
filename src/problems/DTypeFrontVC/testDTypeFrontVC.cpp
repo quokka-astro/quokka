@@ -79,7 +79,7 @@ template <> struct SimulationData<DTypeFrontVC> {
 };
 
 template <>
-void RadSystem<DTypeFrontVC>::SetRadSource(array_t &radEnergy, array_t & /*radFluxSource*/, const amrex::Box &indexRange,
+void RadSystem<DTypeFrontVC>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
