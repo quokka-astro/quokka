@@ -1074,6 +1074,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 	const double Mej_single = userData_.sn_ejecta_mass_msun * C::M_solar;              // ejecta mass, Eq 17
 	const double sn_jeans_J = userData_.sn_jeans_J;
 	const double sn_momentum_ref = userData_.sn_momentum;     // calibration coefficient for Eq 20
+	const double SFE = userData_.star_formation_efficiency;   // star formation efficiency, Eq 19
 
 	const double M_cluster_per_SN = amrex::max(userData_.sn_mass_per_event_msun, 1.0e-3) * MSUN; // guard against 0
 	const double cluster_exponent = userData_.sn_cluster_momentum_exponent;
@@ -1131,7 +1132,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 			const auto dlo = delta[mfi].box().smallEnd();
 			const auto dhi = delta[mfi].box().bigEnd();
 
-			amrex::ParallelFor(box, [=, this] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				// Skip cells covered by a finer level
 				if (mask_arr(i, j, k) == 0) { return; }
 
@@ -1142,23 +1143,17 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				const double beta_safe   = amrex::max(plasma_beta, 1.0e-10);
 				const double cs_eff_sq   = cs * cs * (1.0 + 0.74 / beta_safe);
 				const double rho_J = M_PI * cs_eff_sq / (C::Gconst * sn_jeans_J * sn_jeans_J * (dx_max * dx_max));
-				if (rho > rho_J) {
-					amrex::Print() << "Jeans Trigger Check: cell (" << i << ", " << j << ", " << k 
-						<< ") rho = " << rho 
-						<< " rho_crit (rho_J) = " << rho_J 
-						<< " Triggered? " << (rho > rho_J ? "YES" : "NO") 
-						<< '\n';
-				}
 
-				if (rho <= rho_J) { return; } // Jeans trigger, unchanged from before
+				if (rho <= rho_J) { return; } 
 
+				printf("SN_TRIGGER lev=%d step=%lld i=%d j=%d k=%d rho=%e rho_J=%e\n",lev, static_cast<long long>(-1), i, j, k, rho, rho_J);
 				// Star mass formed this cell: M_stars = epsilon * M_cell, where epsilon is
 				// the star-formation efficiency (star_formation_efficiency, repurposed — no longer
 				// used for ejecta-mass reduction; see Mej_single above). N_SN is then the
 				// number of IMF-averaged SN events implied by that stellar mass, at a fixed
 				// mass-per-SN (sn_mass_per_event_msun, ~100 Msun for a standard IMF).
 				const double M_cell  = rho * vol;
-				const double M_stars = userData_.star_formation_efficiency * M_cell;   // epsilon * Mass_cell
+				const double M_stars = SFE * M_cell;   // epsilon * Mass_cell
 				const int N_SN = amrex::max(1, static_cast<int>(std::floor(M_stars / M_cluster_per_SN)));
 				const double Mej_event = Mej_single * static_cast<double>(N_SN);
 				const double Esn_event = Esn * static_cast<double>(N_SN);
@@ -1239,14 +1234,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				const double p_terminal = sn_momentum_ref * MSUN * KM_S
 					* std::pow(amrex::max(nH_amb, 1.0e-8), -0.17)
 					* std::pow(static_cast<double>(N_SN), cluster_exponent);\
-				
-				amrex::Print() << "SN Feedback: cell (" << i << ", " << j << ", " << k
-				             << ") nH_amb = " << nH_amb
-							 << " N_SN = " << N_SN
-				             << " Msnr = " << Msnr / MSUN << " Msun"
-				             << " R_M = " << R_M
-				             << " p_terminal = " << p_terminal / (MSUN * KM_S) << " Msun km/s"
-				             << '\n';
 
 				// MC regime only (Eq 19, R_M > 1): full terminal momentum, no thermal-only
 				// or Sedov-Taylor branching. R_M is retained purely as a diagnostic.
@@ -1435,7 +1422,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 			auto s = state.array(mfi);
 			auto const &d = delta.const_array(mfi);
 
-			amrex::ParallelFor(box, [=, this] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const double drho = d(i, j, k, 0);
 				const double dE    = d(i, j, k, 4);
 				if (drho == 0.0 && dE == 0.0) { return; }
