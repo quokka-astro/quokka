@@ -590,7 +590,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
+void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &reducedFluxSource, amrex::Box const &indexRange,
 						    amrex::Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double const tol_h,
 						    double const tol_rel_h, double const tempFloor_local, int *p_iteration_counter,
 						    int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
@@ -655,16 +655,18 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				     : dt * (chat / c * radEnergySource(i, j, k, g));
 		}
 
-		// load the radiation flux source term, scaled exactly like the energy source above so that a user
-		// setting radFluxSource = c * radEnergySource injects free-streaming (|F| = c E) radiation:
-		// thermal groups are scaled by chat/c, chemical (ionizing) bands are not.
+		// load the user-defined reduced flux f = F / (c E) of the injected radiation of each group. The flux
+		// source is c * f * Src, so it inherits the group-dependent scaling of the energy source above and
+		// the injected radiation satisfies F = f c E exactly, with c the runtime speed of light.
 		amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> Src_flux{};
 		for (int g = 0; g < nGroups_; ++g) {
-			const bool is_chem_band = (RadSystem_NChemBands<problem_t>::value > 0) && (g >= nGroups_ - RadSystem_NChemBands<problem_t>::value);
-			const double flux_scale = is_chem_band ? dt : dt * (chat / c);
-			for (int n = 0; n < 3; ++n) {
-				Src_flux[n][g] = flux_scale * radFluxSource(i, j, k, 3 * g + n);
-			}
+			const double fx = reducedFluxSource(i, j, k, 3 * g + 0);
+			const double fy = reducedFluxSource(i, j, k, 3 * g + 1);
+			const double fz = reducedFluxSource(i, j, k, 3 * g + 2);
+			AMREX_ASSERT(fx * fx + fy * fy + fz * fz <= 1.0 + 1.0e-10); // |f| <= 1 is required for a physical flux
+			Src_flux[0][g] = c * fx * Src[g];
+			Src_flux[1][g] = c * fy * Src[g];
+			Src_flux[2][g] = c * fz * Src[g];
 		}
 
 		double Egas0 = NAN;

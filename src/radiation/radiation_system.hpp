@@ -305,9 +305,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	//! Set the user-defined radiation source terms.
 	//!
 	//! \param radEnergySource luminosity volume density of group g, in component g; unit: erg s^-1 cm^-3.
-	//! \param radFluxSource   flux source of group g along direction n, in component 3 * g + n; unit: erg cm^-2 s^-2.
-	//!			   Setting radFluxSource = c * radEnergySource injects fully beamed (free-streaming) radiation.
-	static void SetRadSource(array_t &radEnergySource, array_t &radFluxSource, amrex::Box const &indexRange,
+	//! \param reducedFluxSource reduced flux f = F / (c E) of the injected radiation of group g along direction n,
+	//!			   in component 3 * g + n; dimensionless, and physical only if |f| <= 1 (asserted in a debug
+	//!			   build). The deposited flux source is c * f * radEnergySource, so c is always the runtime
+	//!			   speed of light and the injected radiation satisfies F = f c E by construction. f = 0 (the
+	//!			   default) injects isotropic radiation; |f| = 1 injects fully beamed (free-streaming) radiation.
+	static void SetRadSource(array_t &radEnergySource, array_t &reducedFluxSource, amrex::Box const &indexRange,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time);
 
@@ -315,12 +318,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 						double gas_update_factor, double Ekin0, amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> const &Src_flux,
 						double Emag = {}) -> FluxUpdateResult<problem_t>;
 
-	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
+	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &reducedFluxSource, amrex::Box const &indexRange,
 					     amrex::Real dt_implicit, double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h,
 					     double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter,
 					     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
 
-	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
+	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &reducedFluxSource, amrex::Box const &indexRange,
 					      amrex::Real dt_implicit, double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h,
 					      double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter,
 					      std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
@@ -644,12 +647,14 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::SetRadSource(array_t &radEnergySource, array_t &radFluxSource, amrex::Box const &indexRange,
+void RadSystem<problem_t>::SetRadSource(array_t &radEnergySource, array_t &reducedFluxSource, amrex::Box const &indexRange,
 					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time)
 {
 	// Default implementation: no radiation source is added.
-	// Users should override this method to *add* custom radiation sources to radEnergySource and radFluxSource.
+	// Users should override this method to *add* custom radiation sources to radEnergySource, since particle
+	// radiation has already been deposited there. reducedFluxSource is a ratio rather than an amount, so it
+	// should be assigned, not accumulated; it defaults to zero, i.e. isotropic injection.
 	// This function is intentionally left blank.
 }
 

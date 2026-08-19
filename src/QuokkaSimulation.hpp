@@ -3169,9 +3169,10 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		// radEnergySource should have the unit of luminosity density, erg s^-1 cm^-3
 		int const nghost = 3; // WendlandC2<N=2>: stencil spans N=2 cells + 1 for possible particle drift
 		amrex::MultiFab radEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
-		// Companion buffer holding the radiation flux source, in components 3 * g + n (group g, direction n);
-		// unit: erg cm^-2 s^-2. Only SetRadSource writes to it (particles deposit isotropically).
-		amrex::MultiFab radFluxSource(grids[lev], dmap[lev], 3 * Physics_Traits<problem_t>::nGroups, nghost);
+		// Companion buffer holding the reduced flux f = F / (c E) of the injected radiation, in components
+		// 3 * g + n (group g, direction n); dimensionless, with |f| <= 1. Only SetRadSource writes to it
+		// (particles deposit isotropically, i.e. f = 0).
+		amrex::MultiFab reducedFluxSource(grids[lev], dmap[lev], 3 * Physics_Traits<problem_t>::nGroups, nghost);
 
 		// === Stage 1: trivial U^(1) = U^n; skipped ===
 
@@ -3188,7 +3189,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 			// Implicit source terms for stage 2
 			radEnergySource.setVal(0.0);
-			radFluxSource.setVal(0.0);
+			reducedFluxSource.setVal(0.0);
 
 #if AMREX_SPACEDIM == 3
 			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
@@ -3203,8 +3204,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				auto const &prob_hi = geom[lev].ProbHiArray();
 
 				auto const &radEnergySource_arr = radEnergySource.array(iter);
-				auto const &radFluxSource_arr = radFluxSource.array(iter);
-				RadSystem<problem_t>::SetRadSource(radEnergySource_arr, radFluxSource_arr, indexRange, dx, prob_lo, prob_hi,
+				auto const &reducedFluxSource_arr = reducedFluxSource.array(iter);
+				RadSystem<problem_t>::SetRadSource(radEnergySource_arr, reducedFluxSource_arr, indexRange, dx, prob_lo, prob_hi,
 								   time_subcycle + dt_radiation);
 
 				// Build face-centered array for MHD-aware radiation coupling
@@ -3220,11 +3221,11 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				// Full gas update (gas_update_factor = 1.0)
 				if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
 					RadSystem<problem_t>::AddSourceTermsSingleGroup(
-					    stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage2_implicit, 1.0, dustGasInteractionCoeff_,
+					    stateTmp1, radEnergySource_arr, reducedFluxSource_arr, indexRange, dt_stage2_implicit, 1.0, dustGasInteractionCoeff_,
 					    rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 				} else {
 					RadSystem<problem_t>::AddSourceTermsMultiGroup(
-					    stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage2_implicit, 1.0, dustGasInteractionCoeff_,
+					    stateTmp1, radEnergySource_arr, reducedFluxSource_arr, indexRange, dt_stage2_implicit, 1.0, dustGasInteractionCoeff_,
 					    rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 				}
 			}
@@ -3290,7 +3291,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		// Implicit source terms for stage 3
 		radEnergySource.setVal(0.0);
-		radFluxSource.setVal(0.0);
+		reducedFluxSource.setVal(0.0);
 
 #if AMREX_SPACEDIM == 3
 		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
@@ -3305,8 +3306,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			auto const &prob_hi = geom[lev].ProbHiArray();
 
 			auto const &radEnergySource_arr = radEnergySource.array(iter);
-			auto const &radFluxSource_arr = radFluxSource.array(iter);
-			RadSystem<problem_t>::SetRadSource(radEnergySource_arr, radFluxSource_arr, indexRange, dx, prob_lo, prob_hi,
+			auto const &reducedFluxSource_arr = reducedFluxSource.array(iter);
+			RadSystem<problem_t>::SetRadSource(radEnergySource_arr, reducedFluxSource_arr, indexRange, dx, prob_lo, prob_hi,
 							   time_subcycle + dt_radiation);
 
 			// Build face-centered array for MHD-aware radiation coupling
@@ -3321,11 +3322,11 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 			// Full gas update (gas_update_factor = 1.0)
 			if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
-				RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew_cc, radEnergySource_arr, radFluxSource_arr, indexRange,
+				RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew_cc, radEnergySource_arr, reducedFluxSource_arr, indexRange,
 										dt_stage3_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
 										tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 			} else {
-				RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, radFluxSource_arr, indexRange,
+				RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, reducedFluxSource_arr, indexRange,
 									       dt_stage3_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
 									       tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 			}

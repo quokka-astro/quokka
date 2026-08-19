@@ -79,12 +79,13 @@ template <> struct SimulationData<DTypeFrontVC> {
 };
 
 template <>
-void RadSystem<DTypeFrontVC>::SetRadSource(array_t &radEnergy, array_t & /*radFluxSource*/, const amrex::Box &indexRange,
+void RadSystem<DTypeFrontVC>::SetRadSource(array_t & /*radEnergy*/, array_t & /*reducedFluxSource*/, const amrex::Box & /*indexRange*/,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
 {
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { radEnergy(i, j, k) = 0.0_rt; });
+	// This problem adds no radiation source of its own. The caller has already zeroed the buffers, so
+	// overwriting them here would only discard radiation deposited by particles.
 }
 
 template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()

@@ -235,7 +235,7 @@ AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
 }
 
 template <>
-void RadSystem<DTypeFront>::SetRadSource(array_t &radEnergy, array_t & /*radFluxSource*/, const amrex::Box &indexRange,
+void RadSystem<DTypeFront>::SetRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
 {
@@ -287,9 +287,7 @@ void RadSystem<DTypeFront>::SetRadSource(array_t &radEnergy, array_t & /*radFlux
 		const amrex::Real dk = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(k - src_k) + 0.5 - frac_z : 0.0;
 		const amrex::Real r2 = AMREX_D_TERM(di * di, +dj * dj, +dk * dk);
 		if (r2 <= cutoff_r2) {
-			radEnergy(i, j, k) = L_star * wendland_c2(std::sqrt(r2) * inv_N) * inv_norm * inv_volume;
-		} else {
-			radEnergy(i, j, k) = 0.0_rt;
+			radEnergy(i, j, k) += L_star * wendland_c2(std::sqrt(r2) * inv_N) * inv_norm * inv_volume;
 		}
 	});
 }

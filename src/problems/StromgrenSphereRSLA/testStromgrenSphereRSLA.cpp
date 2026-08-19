@@ -127,7 +127,7 @@ auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B,
 } // namespace
 
 template <>
-void RadSystem<StromgrenSphere>::SetRadSource(array_t &radEnergy, array_t & /*radFluxSource*/, const amrex::Box &indexRange,
+void RadSystem<StromgrenSphere>::SetRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
@@ -169,9 +169,7 @@ void RadSystem<StromgrenSphere>::SetRadSource(array_t &radEnergy, array_t & /*ra
 		if (r <= r_trunc) {
 			amrex::Real const w_i = std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) / (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
 			amrex::Real const val = L_star * w_i / sum;
-			radEnergy(i, j, k) = val;
-		} else {
-			radEnergy(i, j, k) = 0.0_rt;
+			radEnergy(i, j, k) += val;
 		}
 	});
 }

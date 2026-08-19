@@ -33,7 +33,7 @@ constexpr double rho = 1.0;
 
 // Flux-source variant, selected with problem.flux_source = 1 in the input file. Instead of letting the
 // beam enter through the left Dirichlet boundary, it is injected in the interior slab [beam_lo, beam_hi)
-// by SetRadSource, which sets radFluxSource = c * radEnergySource so that the injected radiation is fully
+// by SetRadSource, which sets the reduced flux to f = (1, 0, 0) so that the injected radiation is fully
 // beamed (|F| = c E) along +x. In steady state the beam leaving the slab has
 // Erad = beam_S * (beam_hi - beam_lo) / c, so beam_S is chosen to make that equal to 1.
 constexpr double beam_lo = 0.1;
@@ -77,7 +77,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxM
 }
 
 template <>
-void RadSystem<StreamingProblem>::SetRadSource(array_t &radEnergySource, array_t &radFluxSource, amrex::Box const &indexRange,
+void RadSystem<StreamingProblem>::SetRadSource(array_t &radEnergySource, array_t &reducedFluxSource, amrex::Box const &indexRange,
 					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
@@ -90,8 +90,8 @@ void RadSystem<StreamingProblem>::SetRadSource(array_t &radEnergySource, array_t
 		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
 		if ((x >= beam_lo) && (x < beam_hi)) {
 			radEnergySource(i, j, k, 0) += beam_S;
-			// setting the flux source to c times the energy source injects fully beamed radiation
-			radFluxSource(i, j, k, 0) += c * beam_S;
+			// a reduced flux of unit magnitude injects fully beamed (|F| = c E) radiation along +x
+			reducedFluxSource(i, j, k, 0) = 1.0;
 		}
 	});
 }
@@ -192,7 +192,7 @@ auto problem_main() -> int
 	const double tmax = 1.0;
 	const int max_timesteps = 5000;
 
-	// Select the injection mode: boundary inflow (default) or the radFluxSource hook
+	// Select the injection mode: boundary inflow (default) or the reducedFluxSource hook
 	{
 		amrex::ParmParse const pp("problem");
 		pp.query("flux_source", use_flux_source);
