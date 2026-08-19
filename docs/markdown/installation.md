@@ -116,7 +116,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release \
          -DCMAKE_CXX_COMPILER=amdclang++ \
          -DCMAKE_C_COMPILER=amdclang \
          -DAMReX_GPU_BACKEND=HIP \
-         -DAMReX_GPU_ARCH=gfx1031 \
+         -DAMReX_AMD_ARCH=gfx1031 \
          -G Ninja
 ```
 
