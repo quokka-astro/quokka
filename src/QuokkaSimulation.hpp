@@ -3416,7 +3416,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		long nf_coupling = h_iteration_failure_counter[0]; // number of matter-radiation coupling failures, NOLINT(google-runtime-int)
 		long nf_dust = h_iteration_failure_counter[1];	   // number of dust temperature failures, NOLINT(google-runtime-int)
 		long nf_outer = h_iteration_failure_counter[2];	   // number of outer iterations failures, NOLINT(google-runtime-int)
-		long n_work_cap = h_iteration_failure_counter[3];   // number of cells where the work-term transfer was capped, NOLINT(google-runtime-int)
+		long n_work_cap = h_iteration_failure_counter[3];  // number of cells where the work-term transfer was capped, NOLINT(google-runtime-int)
 
 		amrex::ParallelDescriptor::ReduceLongSum(nf_coupling);
 		amrex::ParallelDescriptor::ReduceLongSum(nf_dust);
