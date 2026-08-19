@@ -671,8 +671,8 @@ void RadSystem<problem_t>::AddRadSource(array_t &radEnergySource, array_t &reduc
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::MergeUserRadSource(array_t &radEnergySource, array_t &radFluxSource, arrayconst_t &userEnergySource,
-					      arrayconst_t &userReducedFlux, amrex::Box const &indexRange)
+void RadSystem<problem_t>::MergeUserRadSource(array_t &radEnergySource, array_t &radFluxSource, arrayconst_t &userEnergySource, arrayconst_t &userReducedFlux,
+					      amrex::Box const &indexRange)
 {
 	const double c = c_light_;
 
