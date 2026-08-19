@@ -1,5 +1,6 @@
 /// \file testDTypeFront1D.cpp
-/// \brief Defines a 1D planar test of dust reprocessing an isotropic optical source into the IR.
+/// \brief Defines a 1D planar H II region test: a central ionizing source drives an ionization front out to
+/// its Stromgren column, while dust reprocesses the accompanying optical light into the IR.
 ///
 /// There are three radiation groups: IR (group 0), optical (group 1) and an ionizing chemistry band
 /// (group 2). Constant photon fluxes are injected in the two cells straddling the middle of a uniform, cold,
@@ -51,7 +52,7 @@
 /// injected luminosity while the signed total stays exactly zero, that the optical light front sits near
 /// chat * t from the source, that the dust reprocessed a substantial fraction of the optical light into the
 /// IR with the survivors following exp(-tau), and that the ionizing band's photon budget balances against
-/// the ionized column it produced.
+/// the ionized column it produced, which is the Stromgren column for this slab.
 
 #include "AMReX.H"
 #include "AMReX_Array.H"

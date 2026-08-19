@@ -35,7 +35,7 @@
     - [Matter-radiation temperature equilibrium test](tests/energy_exchange.md)
     - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md)
     - [Advecting radiation pulse test](tests/radhydro_pulse.md)
-    - [1D dust reprocessing test](tests/DTypeFront1D.md)
+    - [1D H II region and dust reprocessing test](tests/DTypeFront1D.md)
 - [Runtime parameters](parameters.md)
 - [In-situ analysis](insitu_analysis.md)
 - [Postprocessing](postprocessing.md)
