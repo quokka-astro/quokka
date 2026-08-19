@@ -3216,8 +3216,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				auto const &userReducedFlux_arr = userReducedFlux.array(iter);
 				RadSystem<problem_t>::AddRadSource(userEnergySource_arr, userReducedFlux_arr, indexRange, dx, prob_lo, prob_hi,
 								   time_subcycle + dt_radiation);
-				RadSystem<problem_t>::MergeUserRadSource(radEnergySource_arr, reducedFluxSource_arr, userEnergySource_arr,
-									 userReducedFlux_arr, indexRange);
+				RadSystem<problem_t>::MergeUserRadSource(radEnergySource_arr, reducedFluxSource_arr, userEnergySource_arr, userReducedFlux_arr,
+									 indexRange);
 
 				// Build face-centered array for MHD-aware radiation coupling
 				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
