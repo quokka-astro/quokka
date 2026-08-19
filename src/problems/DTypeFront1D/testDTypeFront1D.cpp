@@ -137,8 +137,9 @@ template <> struct Physics_Traits<DTypeFront1D> : DefaultPhysicsTraits {
 template <> struct RadSystem_Traits<DTypeFront1D> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = Erad_floor_;
-	// beta_order = 0: drop the O(v/c) terms in the radiation-matter coupling. Note this does not switch off
-	// radiation pressure -- momentum from absorbed radiation is still deposited in the gas.
+	// beta_order = 1: keep the O(v/c) terms in the radiation-matter coupling, including the work term. The
+	// outward-momentum budget in problem_main is the check that needs them; with beta_order = 0 the radiation
+	// force is still applied, but the work done by that force on the moving gas is dropped.
 	static constexpr int beta_order = 1;
 	static constexpr double energy_unit = C::hplanck; // radBoundaries below are frequencies in Hz
 	// Group frequency boundaries [Hz]: group 0 = IR (below 1e14 Hz, i.e. longward of 3 um), group 1 =
@@ -313,6 +314,33 @@ auto compute_group_rad_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray
 	amrex::Real momentum = amrex::get<0>(hv);
 	amrex::ParallelAllReduce::Sum(momentum, amrex::ParallelContext::CommunicatorSub());
 	return momentum;
+}
+
+// Largest reduced flux |F| / (c E) of group g anywhere in the domain. The M1 closure admits no state with
+// |F| > c E, so this is a physical invariant rather than a tuned tolerance: a value above one means the
+// radiation flux and the radiation energy have been updated inconsistently. It is what detects a flux source
+// applied to a group whose energy source was dropped, which is how a transparent sourced group behaved in the
+// dust solvers before the injection loop there was added (radiation_dust_system.hpp).
+auto compute_max_reduced_flux(amrex::MultiFab const &state_mf, int g) -> amrex::Real
+{
+	amrex::ReduceOps<amrex::ReduceOpMax> reduce_op;
+	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+	auto const state = state_mf.const_arrays();
+	const int erad_index = RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g;
+	const int frad_index = RadSystem<DTypeFront1D>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g;
+
+	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
+		const amrex::Real erad = state[box_no](i, j, k, erad_index);
+		if (!(erad > 0.0_rt)) {
+			return 0.0_rt;
+		}
+		return std::abs(state[box_no](i, j, k, frad_index)) / (C::c_light * erad);
+	});
+
+	auto const &hv = reduce_data.value(reduce_op);
+	amrex::Real max_f = amrex::get<0>(hv);
+	amrex::ParallelAllReduce::Max(max_f, amrex::ParallelContext::CommunicatorSub());
+	return max_f;
 }
 
 } // namespace
@@ -784,6 +812,31 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "Test passed: ionizing photon budget is consistent (" << n_absorbed << " absorbed >= " << column_HII
 				       << " ionized).\n";
+		}
+	}
+
+	// Check 5: the M1 reduced-flux invariant, |F| <= c E, in every cell of every group. This is not a
+	// tuned tolerance but a property the closure cannot violate, so any excess means the radiation flux and
+	// the radiation energy were updated inconsistently -- which is exactly what happens if a flux source is
+	// applied to a group whose energy source was dropped. The dust solvers used to drop the energy source of
+	// a transparent (tau == 0) group while UpdateFlux applied its flux source regardless; that produced
+	// |F| / (c E) ~ 1e12 here. Run with photoionize.kappa2 = 0 to exercise that path: it makes the optical
+	// band transparent while the dust solver is still active, and this check is what catches a regression.
+	{
+		double max_f = 0.0;
+		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
+			const double f_g = compute_max_reduced_flux(sim.state_new_cc_[0], g);
+			amrex::Print() << "Group " << g << " max reduced flux |F|/(cE): " << f_g << "\n";
+			max_f = std::max(max_f, f_g);
+		}
+		// The beamed bands sit at exactly 1; allow only round-off above it.
+		const double max_f_tol = 1.0 + 1.0e-6;
+
+		if (max_f > max_f_tol) {
+			amrex::Print() << "Test FAILED: reduced flux |F|/(cE) reaches " << max_f << ", which the M1 closure forbids.\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: reduced flux stays within the M1 bound (max " << max_f << ").\n";
 		}
 	}
 

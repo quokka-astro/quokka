@@ -600,7 +600,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 			// unclamped leaves a negative internal energy, which the EOS rejects outright (debug) and which
 			// otherwise flows on silently: it flips the sign of the gas-dust branch test and NaNs the solve.
 			// The cap is not energy conserving; reaching it means the radiation timestep is too long here.
+			// It is therefore reported: the cell count is accumulated in iteration_failure_counter[3] and
+			// warned about once per radiation substep, so a run cannot lose energy here silently.
 			const double max_eint_transfer = (1.0 - work_term_min_eint_fraction) * energy.Egas;
+			if (dEkin_work > max_eint_transfer) {
+				updated_flux.work_cap_hit = true;
+			}
 			energy.Egas -= std::min(dEkin_work, max_eint_transfer);
 			// The work term is included in the source term, but it is lagged. We update the work term here.
 			for (int g = 0; g < nGroups_; ++g) {
@@ -866,6 +871,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 			// 2.1. Update flux and gas momentum
 			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0, Src_flux, Emag);
+			if (updated_flux.work_cap_hit) {
+				amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[3], 1); // NOLINT
+			}
 
 			// 2.2. Check for convergence of the work term
 			bool work_converged = true;

@@ -241,6 +241,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real mhdResistivity_ = 0.0;					// Ohmic resistivity eta; parabolic limit: dt < dx^2 / (2*eta)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
+	amrex::Long workTermCapCount_ = 0;     // cell-updates where the radiation work term had to be capped (not energy conserving)
 	std::unique_ptr<quokka::turbulence::turbulentDriving<problem_t>> td;
 
 	enum class SourceOrder { forward, reverse };
@@ -1571,6 +1572,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 		}
 	} else {
 		amrex::Print() << "No cell updates performed!\n";
+		amrex::Print() << '\n';
+	}
+
+	// Reported unconditionally, including under suppress_output: the cap keeps the gas internal energy
+	// positive but does not conserve energy, so a run that reached it must not look clean.
+	if (workTermCapCount_ > 0) {
+		amrex::Print() << "Warning: the radiation work term was capped in " << workTermCapCount_
+			       << " cell-updates to keep the gas internal energy positive. Energy is not conserved in those cells; "
+				  "shorten the radiation timestep or raise temperature_floor to avoid it.\n";
 		amrex::Print() << '\n';
 	}
 }
@@ -3159,7 +3169,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		// We use the three-stage IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
 
 		// failure counter for: matter-radiation coupling, dust temperature, outer iteration
-		amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0});
+		amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0, 0});
 		// iteration counter for: radiation update, Newton-Raphson iterations, max Newton-Raphson iterations, decoupled gas-dust update
 		amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0, 0});
 		int *p_iteration_failure_counter = iteration_failure_counter.data();
@@ -3406,10 +3416,18 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		long nf_coupling = h_iteration_failure_counter[0]; // number of matter-radiation coupling failures, NOLINT(google-runtime-int)
 		long nf_dust = h_iteration_failure_counter[1];	   // number of dust temperature failures, NOLINT(google-runtime-int)
 		long nf_outer = h_iteration_failure_counter[2];	   // number of outer iterations failures, NOLINT(google-runtime-int)
+		long n_work_cap = h_iteration_failure_counter[3];   // number of cells where the work-term transfer was capped, NOLINT(google-runtime-int)
 
 		amrex::ParallelDescriptor::ReduceLongSum(nf_coupling);
 		amrex::ParallelDescriptor::ReduceLongSum(nf_dust);
 		amrex::ParallelDescriptor::ReduceLongSum(nf_outer);
+		amrex::ParallelDescriptor::ReduceLongSum(n_work_cap);
+
+		// The work-term cap keeps the internal energy positive but does not conserve energy, so a run that
+		// reaches it is losing energy in those cells. That is a signal the radiation timestep is too long
+		// there, not a failure to abort on -- the capped state is still well defined -- so it is accumulated
+		// here and reported once at the end of the run, rather than warned about on every substep.
+		workTermCapCount_ += n_work_cap;
 
 		// Note that the nf_dust has to abort BEFORE nf_coupling, because the dust temperature is used in the matter-radiation coupling and if
 		// dust temperature is negative, the matter-radiation coupling will fail to converge.

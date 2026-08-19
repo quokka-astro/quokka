@@ -71,7 +71,9 @@ static constexpr double newton_erad_base_tau_threshold = 1.0;
 // behind. The work done by radiation is credited to internal energy by the source term and then moved to
 // kinetic energy in UpdateFlux; in a cold, strongly radiation-driven cell that transfer can exceed the
 // internal energy available, and subtracting it unclamped leaves a negative internal energy. See the cap
-// in UpdateFlux.
+// in UpdateFlux, and the matching one in AddSourceTermsSingleGroup -- the failure mode is not specific to
+// either solver. Capping does not conserve energy, so capped cell-updates are counted and reported at the
+// end of the run rather than passing silently.
 static constexpr double work_term_min_eint_fraction = 0.1;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
@@ -179,6 +181,7 @@ template <typename problem_t> struct FluxUpdateResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Erad;			   // radiation energy density
 	amrex::GpuArray<double, 3> gasMomentum;							   // gas momentum
 	amrex::GpuArray<amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nGroups>, 3> Frad; // radiation flux
+	bool work_cap_hit{false}; // the work-term transfer was clamped to keep the internal energy positive
 };
 
 [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double

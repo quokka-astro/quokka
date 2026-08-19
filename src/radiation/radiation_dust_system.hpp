@@ -610,6 +610,19 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		// }
 	} // END NEWTON-RAPHSON LOOP
 
+	// Inject the source directly into transparent groups (tau ~ 0). The Newton solve above excludes such
+	// groups from its residual and Jacobian (Fg_abs_sum and Jgg skip tau <= 0) and leaves their radiation
+	// energy at Erad0, so an injected source in a transparent group would otherwise be silently dropped
+	// while UpdateFlux still applies the matching flux source, leaving |F| > c E. This mirrors the loop in
+	// the gas-only solver (source_terms_multi_group.hpp) and the single-group negligible-optical-depth
+	// branch; Src is already counted in Etot0, so it is energy-consistent. Groups with tau > 0 (the usual
+	// case) and groups without a source are unaffected.
+	for (int g = 0; g < nGroups_; ++g) {
+		if (!(tau[g] > 0.0)) {
+			EradVec_guess[g] = Erad0Vec[g] + Src[g];
+		}
+	}
+
 	const auto cooling_tend = DefineNetCoolingRate(T_gas, H_num_den) * dt;
 	if (dust_model == 2) {
 		// include line cooling/heating, cosmic ray heating terms; implicitly update Egas_guess
@@ -998,6 +1011,19 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// 	break;
 		// }
 	} // END NEWTON-RAPHSON LOOP
+
+	// Inject the source directly into transparent groups (tau ~ 0). The Newton solve above excludes such
+	// groups from its residual and Jacobian (Fg_abs_sum and Jgg skip tau <= 0) and leaves their radiation
+	// energy at Erad0, so an injected source in a transparent group would otherwise be silently dropped
+	// while UpdateFlux still applies the matching flux source, leaving |F| > c E. This mirrors the loop in
+	// the gas-only solver (source_terms_multi_group.hpp) and the single-group negligible-optical-depth
+	// branch; Src is already counted in Etot0, so it is energy-consistent. Groups with tau > 0 (the usual
+	// case) and groups without a source are unaffected.
+	for (int g = 0; g < nGroups_; ++g) {
+		if (!(tau[g] > 0.0)) {
+			EradVec_guess[g] = Erad0Vec[g] + Src[g];
+		}
+	}
 
 	const auto cooling_tend = DefineNetCoolingRate(T_gas, H_num_den) * dt;
 	if (dust_model == 2) {
