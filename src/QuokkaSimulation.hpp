@@ -3198,8 +3198,11 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			userEnergySource.setVal(0.0);
 			userReducedFlux.setVal(0.0);
 
+			// Both implicit stages of the IMEX PD-ARS tableau have abscissa c = 1 (rows 2 and 3 of Aim each
+			// sum to 1), so every implicit source term is evaluated at the end of the step. Particle
+			// deposition and AddRadSource must therefore use the same time.
 #if AMREX_SPACEDIM == 3
-			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
+			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle + dt_radiation);
 #endif
 
 			const amrex::Real dt_stage2_implicit = IMEX_Aim_22 * dt_radiation;
@@ -3306,8 +3309,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		userEnergySource.setVal(0.0);
 		userReducedFlux.setVal(0.0);
 
+		// evaluated at the end of the step, as in stage 2 above
 #if AMREX_SPACEDIM == 3
-		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
+		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle + dt_radiation);
 #endif
 
 		const amrex::Real dt_stage3_implicit = IMEX_Aim_33 * dt_radiation;
