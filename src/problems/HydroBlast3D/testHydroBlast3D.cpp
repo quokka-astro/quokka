@@ -38,6 +38,7 @@ template <> struct HydroSystem_Traits<SedovProblem> {
 };
 
 template <> struct Physics_Traits<SedovProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear/bulk default to 0; no-op unless set
@@ -220,8 +221,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<SedovProblem> sim(BCs_cc);
-	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-	sim.tempFloor_ = 0.0;
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 

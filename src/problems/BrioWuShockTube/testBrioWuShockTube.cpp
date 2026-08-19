@@ -37,6 +37,7 @@ template <> struct quokka::EOS_Traits<MHDShocktubeProblem> {
 };
 
 template <> struct Physics_Traits<MHDShocktubeProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };
@@ -225,8 +226,6 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::refineGrid(int lev, amre
 auto problem_main() -> int
 {
 	QuokkaSimulation<MHDShocktubeProblem> sim;
-	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-	sim.tempFloor_ = 0.0;
 
 	// Main time loop
 	sim.setInitialConditions();

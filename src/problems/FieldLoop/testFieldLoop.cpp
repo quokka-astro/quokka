@@ -35,6 +35,7 @@ template <> struct quokka::EOS_Traits<FieldLoop> {
 };
 
 template <> struct Physics_Traits<FieldLoop> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };
@@ -239,8 +240,6 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<FieldLoop> sim;
-	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-	sim.tempFloor_ = 0.0;
 
 	// default in-plane advection direction: the domain's own diagonal (x-y extent), so the loop
 	// crosses the periodic domain and returns to its starting position; independent of loop_center

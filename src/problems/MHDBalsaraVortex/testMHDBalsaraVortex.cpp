@@ -32,6 +32,7 @@ template <> struct quokka::EOS_Traits<MHDBalsaraVortex> {
 };
 
 template <> struct Physics_Traits<MHDBalsaraVortex> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };
@@ -241,8 +242,6 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<MHDBalsaraVortex> sim(BCs_cc, BCs_fc);
-	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-	sim.tempFloor_ = 0.0;
 
 	double stop_time = 0.0;
 	if (is_advection_enabled) {

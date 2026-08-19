@@ -41,6 +41,7 @@ template <> struct quokka::EOS_Traits<AlfvenWaveLinear> {
 };
 
 template <> struct Physics_Traits<AlfvenWaveLinear> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::constant; // eta defaults to 0; no-op unless set
@@ -492,8 +493,6 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 
 	// Run simulation
 	QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
-	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-	sim.tempFloor_ = 0.0;
 
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
@@ -569,8 +568,6 @@ auto problem_main() -> int
 		}
 
 		QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
-		// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-		sim.tempFloor_ = 0.0;
 		sim.setInitialConditions();
 		sim.evolve();
 

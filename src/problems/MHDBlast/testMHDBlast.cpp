@@ -29,6 +29,7 @@ template <> struct HydroSystem_Traits<MHDBlast> {
 };
 
 template <> struct Physics_Traits<MHDBlast> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };
@@ -159,8 +160,6 @@ void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::string const &d
 auto problem_main() -> int
 {
 	QuokkaSimulation<MHDBlast> sim;
-	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-	sim.tempFloor_ = 0.0;
 
 	// initialize
 	sim.setInitialConditions();

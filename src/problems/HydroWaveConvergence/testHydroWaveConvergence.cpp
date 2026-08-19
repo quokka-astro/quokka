@@ -30,6 +30,7 @@ template <> struct quokka::EOS_Traits<WaveProblem> {
 };
 
 template <> struct Physics_Traits<WaveProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear/bulk default to 0; no-op unless set
@@ -161,8 +162,6 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	pp_geom.addarr("is_periodic", is_periodic);
 
 	QuokkaSimulation<WaveProblem> sim(BCs_cc);
-	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-	sim.tempFloor_ = 0.0;
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
@@ -232,8 +231,6 @@ auto problem_main() -> int
 		}
 
 		QuokkaSimulation<WaveProblem> sim(BCs_cc);
-		// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-		sim.tempFloor_ = 0.0;
 		sim.cflNumber_ = 0.3;
 		sim.setInitialConditions();
 

@@ -30,6 +30,7 @@ template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 };
@@ -283,8 +284,6 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
-	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-	sim.tempFloor_ = 0.0;
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;

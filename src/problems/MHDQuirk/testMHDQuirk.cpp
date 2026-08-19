@@ -46,6 +46,7 @@ template <> struct HydroSystem_Traits<MHDQuirk> {
 };
 
 template <> struct Physics_Traits<MHDQuirk> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	// face-centred
@@ -280,8 +281,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<MHDQuirk> sim(BCs_cc, BCs_fc);
-	// idealized test in non-physical CGS units: disable the default 5 K temperature floor
-	sim.tempFloor_ = 0.0;
 
 	sim.stopTime_ = 0.4;
 	sim.cflNumber_ = 0.4;
