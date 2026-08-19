@@ -36,7 +36,7 @@ A thermal group's source is scaled internally by \\(\hat c / c\\) and a chemistr
 
 ## Ionization front and the Strömgren column
 
-The ionizing band is transparent to the gray dust opacity, so photoionization is the only process that removes it. The network uses a photoionization cross-section of \\(1.5 \times 10^{-18}\,\text{cm}^{2}\\) and a case-B recombination coefficient
+The ionizing band is transparent to the gray dust opacity, so photoionization is the only process that removes it. The network uses a photoionization cross-section of \\(1.5 \times 10^{-18}\\,\text{cm}^{2}\\) and a case-B recombination coefficient
 
 <script type="math/tex; mode=display">
 \alpha_B(T) = 2.6 \times 10^{-13} \left( \frac{T}{10^4 \, \text{K}} \right)^{-0.7} \text{cm}^{3}\,\text{s}^{-1} \, ,
@@ -44,15 +44,15 @@ The ionizing band is transparent to the gray dust opacity, so photoionization is
 
 enabled by `network.recombination_temperature_dependent = 1`. Photoheating is on (`network.energy_switch = 1`), so the gas the front ionizes is heated toward \\(\sim 10^4\\) K rather than staying at its initial 100 K.
 
-Each front advances outward until the recombinations behind it consume the arriving ionizing photons. In plane-parallel geometry that balance is \\(F_{\text{ion}} = \alpha_B \, n_0^2 \, x_S\\), so the equilibrium ionized column per side is
+Each front advances outward until the recombinations behind it consume the arriving ionizing photons. In plane-parallel geometry that balance is \\(F_{\text{ion}} = \alpha_B \\, n_0^2 \\, x_S\\), so the equilibrium ionized column per side is
 
 <script type="math/tex; mode=display">
 N_S = n_0 \, x_S = \frac{F_{\text{ion}}}{\alpha_B \, n_0} \, .
 </script>
 
-For \\(F_{\text{ion}} = 10^{10}\,\text{cm}^{-2}\,\text{s}^{-1}\\) and \\(n_0 = 100\,\text{cm}^{-3}\\) this is \\(3.8 \times 10^{20}\,\text{cm}^{-2}\\) at \\(10^4\\) K, falling to \\(3.3 \times 10^{20}\\) at 8000 K because \\(\alpha_B\\) is larger there. The measured ionized column at \\(t_{\text{end}}\\) is \\(6.7 \times 10^{20}\,\text{cm}^{-2}\\) over both wings, i.e. \\(3.3 \times 10^{20}\\) per side, which lands inside that range — so each front is at or close to its Strömgren column, the residual depending on how far the ionized gas has been photoheated.
+For \\(F_{\text{ion}} = 10^{10}\\,\text{cm}^{-2}\\,\text{s}^{-1}\\) and \\(n_0 = 100\\,\text{cm}^{-3}\\) this is \\(3.8 \times 10^{20}\\,\text{cm}^{-2}\\) at \\(10^4\\) K, falling to \\(3.3 \times 10^{20}\\) at 8000 K because \\(\alpha_B\\) is larger there. The measured ionized column at \\(t_{\text{end}}\\) is \\(6.7 \times 10^{20}\\,\text{cm}^{-2}\\) over both wings, i.e. \\(3.3 \times 10^{20}\\) per side, which lands inside that range — so each front is at or close to its Strömgren column, the residual depending on how far the ionized gas has been photoheated.
 
-That column sits well inside the light-travel distance: the neutral column out to each light front is \\(n_0 \, \hat c \, t = 6 \times 10^{20}\,\text{cm}^{-2}\\), nearly twice \\(N_S\\). The ionization front therefore stalls while a stable fraction of the injected ionizing photons is still in flight, which is what the surviving-fraction bound in the answer check relies on.
+That column sits well inside the light-travel distance: the neutral column out to each light front is \\(n_0 \\, \hat c \\, t = 6 \times 10^{20}\\,\text{cm}^{-2}\\), nearly twice \\(N_S\\). The ionization front therefore stalls while a stable fraction of the injected ionizing photons is still in flight, which is what the surviving-fraction bound in the answer check relies on.
 
 ## Dust model
 
