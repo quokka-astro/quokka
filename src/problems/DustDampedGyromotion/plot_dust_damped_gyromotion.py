@@ -96,9 +96,8 @@ CASES = (
 )
 
 TREATMENTS = (
-    ("frozen", "frozen", "C9", "v", 3),
-    ("endpoint", "endpoint Picard", "C4", "D", 4),
-    ("stage", "stage Picard", "C1", "s", 5),
+    ("frozen", "Frozen", "C4", "D", 3),
+    ("picard", "Picard", "C1", "s", 4),
 )
 
 
@@ -175,12 +174,17 @@ def make_dynamic_charge_figure(data_dir: Path, output_dir: Path) -> Path:
     fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COLUMN_WIDTH, 2.45))
     fig.subplots_adjust(left=0.07, right=0.995, bottom=0.17, top=0.98, wspace=0.34)
 
-    treatment_styles = {slug: (color, marker, zorder) for slug, _, color, marker, zorder in TREATMENTS}
-
     axes[0].plot(exact["t"], exact["wx_exact_norm"], color="black", linestyle="--", zorder=2)
-    for treatment, column in (("frozen", "wx_frozen_norm"), ("endpoint", "wx_endpoint_norm"), ("stage", "wx_stage_norm")):
-        color, marker, zorder = treatment_styles[treatment]
-        axes[0].plot(history["t"], history[column], color=color, marker=marker, linestyle="None", markerfacecolor="none", zorder=zorder)
+    for treatment, _, color, marker, zorder in TREATMENTS:
+        axes[0].plot(
+            history["t"],
+            history[f"wx_{treatment}_norm"],
+            color=color,
+            marker=marker,
+            linestyle="None",
+            markerfacecolor="none",
+            zorder=zorder,
+        )
 
     axes[0].set_xlabel(r"$t/t_{\rm s,0}$")
     axes[0].set_ylabel(r"$w_x/w_0$")
@@ -189,16 +193,22 @@ def make_dynamic_charge_figure(data_dir: Path, output_dir: Path) -> Path:
     axes[0].legend(handles=coefficient_treatment_legend_handles(), loc="best")
 
     axes[1].plot(exact["t"], exact["xi_exact"], color="black", linestyle="--", zorder=2)
-    for treatment, column in (("frozen", "xi_frozen"), ("endpoint", "xi_endpoint"), ("stage", "xi_stage")):
-        color, marker, zorder = treatment_styles[treatment]
-        axes[1].plot(history["t"], history[column], color=color, marker=marker, markerfacecolor="none", linestyle="None", zorder=zorder)
+    for treatment, _, color, marker, zorder in TREATMENTS:
+        axes[1].plot(
+            history["t"],
+            history[f"xi_{treatment}"],
+            color=color,
+            marker=marker,
+            markerfacecolor="none",
+            linestyle="None",
+            zorder=zorder,
+        )
     axes[1].axhline(0.0, color="0.45", linewidth=0.8, linestyle=":", zorder=1)
     axes[1].set_xlabel(r"$t/t_{\rm s,0}$")
     axes[1].set_ylabel(r"$\xi$")
     axes[1].set_xlim(0.0, 2.0)
     axes[1].set_ylim(-1.0, 0.1)
-    for treatment in ("frozen", "endpoint", "stage"):
-        color, marker, zorder = treatment_styles[treatment]
+    for treatment, _, color, marker, zorder in TREATMENTS:
         axes[2].loglog(
             convergence["dt"],
             convergence[f"{treatment}_error"],
