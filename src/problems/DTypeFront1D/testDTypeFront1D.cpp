@@ -356,7 +356,7 @@ void RadSystem<DTypeFront1D>::SetRadSource(array_t &radEnergy, array_t &radFlux,
 	int beamed = 1;
 	pp.query("beamed", beamed); // 1 = each wing injected beamed outward, 0 = isotropic
 
-	const amrex::Real n_cells = static_cast<amrex::Real>(source_cells);
+	const auto n_cells = static_cast<amrex::Real>(source_cells);
 	const amrex::Real src_optical = flux * E_photon / (n_cells * dx[0]);
 	const amrex::Real src_ionizing = flux_ion * E_photon / (n_cells * dx[0]);
 
@@ -790,7 +790,7 @@ auto problem_main() -> int
 		constexpr amrex::Real seconds_per_Myr = 3.15576e13;
 		constexpr amrex::Real cm_per_pc = 3.085677581491367e18;
 
-		const int n = static_cast<int>(sim.userData_.t_vec_.size());
+		const auto n = static_cast<int>(sim.userData_.t_vec_.size());
 		std::vector<amrex::Real> t_Myr(n);
 		std::vector<amrex::Real> x_front_pc(n);
 		std::vector<amrex::Real> x_ref_pc(n);
