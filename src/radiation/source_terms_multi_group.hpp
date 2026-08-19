@@ -590,7 +590,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &reducedFluxSource,
+void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource,
 						    amrex::Box const &indexRange, amrex::Real dt_implicit, double gas_update_factor_in, double dustGasCoeff,
 						    double const tol_h, double const tol_rel_h, double const tempFloor_local, int *p_iteration_counter,
 						    int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
@@ -645,28 +645,19 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// load radiation energy source term
 		// plus advection source term (for well-balanced/SDC integrators)
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
+		// The radiation flux source is scaled exactly like the energy source; unit: erg cm^-2 s^-2.
 		quokka::valarray<double, nGroups_> Src;
+		amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> Src_flux{};
 		for (int g = 0; g < nGroups_; ++g) {
 			// The last NChemBands groups are ionizing photon groups (no cscale).
 			// All other (thermal) groups require scaling by chat/c (= 1/cscale).
 			// Avoid if constexpr here: NVCC rejects first-captures inside constexpr-if in device lambdas.
-			Src[g] = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroups_ - RadSystem_NChemBands<problem_t>::value)
-				     ? dt * radEnergySource(i, j, k, g)
-				     : dt * (chat / c * radEnergySource(i, j, k, g));
-		}
-
-		// load the user-defined reduced flux f = F / (c E) of the injected radiation of each group. The flux
-		// source is c * f * Src, so it inherits the group-dependent scaling of the energy source above and
-		// the injected radiation satisfies F = f c E exactly, with c the runtime speed of light.
-		amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> Src_flux{};
-		for (int g = 0; g < nGroups_; ++g) {
-			const double fx = reducedFluxSource(i, j, k, 3 * g + 0);
-			const double fy = reducedFluxSource(i, j, k, 3 * g + 1);
-			const double fz = reducedFluxSource(i, j, k, 3 * g + 2);
-			AMREX_ASSERT(fx * fx + fy * fy + fz * fz <= 1.0 + 1.0e-10); // |f| <= 1 is required for a physical flux
-			Src_flux[0][g] = c * fx * Src[g];
-			Src_flux[1][g] = c * fy * Src[g];
-			Src_flux[2][g] = c * fz * Src[g];
+			const double src_scale =
+			    (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroups_ - RadSystem_NChemBands<problem_t>::value) ? dt : dt * (chat / c);
+			Src[g] = src_scale * radEnergySource(i, j, k, g);
+			for (int n = 0; n < 3; ++n) {
+				Src_flux[n][g] = src_scale * radFluxSource(i, j, k, 3 * g + n);
+			}
 		}
 
 		double Egas0 = NAN;

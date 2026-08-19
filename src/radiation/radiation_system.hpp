@@ -313,6 +313,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	//!			   build). The deposited flux source is c * f * radEnergySource, so c is always the runtime
 	//!			   speed of light and the injected radiation satisfies F = f c E by construction. f = 0 (the
 	//!			   default) injects isotropic radiation; |f| = 1 injects fully beamed (free-streaming) radiation.
+	//!			   Asking for the reduced flux rather than the flux itself makes |F| > c E unrepresentable.
 	static void AddRadSource(array_t &radEnergySource, array_t &reducedFluxSource, amrex::Box const &indexRange,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time);
@@ -320,21 +321,21 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	//! Merge the source written by AddRadSource into the source that is actually deposited.
 	//!
 	//! Radiation from particles has already been deposited into radEnergySource, so the user source is
-	//! collected in its own buffers and merged here. Particle radiation is isotropic, so only the user
-	//! source carries a flux, and the reduced flux of the merged source is f_user * E_user / E_total.
-	static void MergeUserRadSource(array_t &radEnergySource, array_t &reducedFluxSource, arrayconst_t &userEnergySource, arrayconst_t &userReducedFlux,
+	//! collected in its own buffers and added here. The user gives a reduced flux, which is converted to
+	//! the flux source c * f * E that the solver consumes; unit: erg cm^-2 s^-2.
+	static void MergeUserRadSource(array_t &radEnergySource, array_t &radFluxSource, arrayconst_t &userEnergySource, arrayconst_t &userReducedFlux,
 				       amrex::Box const &indexRange);
 
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
 						double gas_update_factor, double Ekin0, amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> const &Src_flux,
 						double Emag = {}) -> FluxUpdateResult<problem_t>;
 
-	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &reducedFluxSource, amrex::Box const &indexRange,
+	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
 					     amrex::Real dt_implicit, double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h,
 					     double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter,
 					     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
 
-	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &reducedFluxSource, amrex::Box const &indexRange,
+	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
 					      amrex::Real dt_implicit, double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h,
 					      double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter,
 					      std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
@@ -670,25 +671,28 @@ void RadSystem<problem_t>::AddRadSource(array_t &radEnergySource, array_t &reduc
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::MergeUserRadSource(array_t &radEnergySource, array_t &reducedFluxSource, arrayconst_t &userEnergySource,
+void RadSystem<problem_t>::MergeUserRadSource(array_t &radEnergySource, array_t &radFluxSource, arrayconst_t &userEnergySource,
 					      arrayconst_t &userReducedFlux, amrex::Box const &indexRange)
 {
+	const double c = c_light_;
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int g = 0; g < nGroups_; ++g) {
+			const double Euser = userEnergySource(i, j, k, g);
 			const double fx = userReducedFlux(i, j, k, 3 * g + 0);
 			const double fy = userReducedFlux(i, j, k, 3 * g + 1);
 			const double fz = userReducedFlux(i, j, k, 3 * g + 2);
-			AMREX_ASSERT(fx * fx + fy * fy + fz * fz <= 1.0 + 1.0e-10); // |f| <= 1 is required for a physical flux
 
-			const double Euser = userEnergySource(i, j, k, g);
-			const double Etot = radEnergySource(i, j, k, g) + Euser;
-			radEnergySource(i, j, k, g) = Etot;
+			// Each contribution must be physical on its own. The set {(E, F) : E >= 0, |F| <= c E} is a
+			// convex cone, so the sum of physical contributions is physical by the triangle inequality:
+			// |F1 + F2| <= |F1| + |F2| <= c (E1 + E2). No flux limiter is needed here.
+			AMREX_ASSERT(Euser >= 0.0);
+			AMREX_ASSERT(fx * fx + fy * fy + fz * fz <= 1.0 + 1.0e-10);
 
-			// particle radiation is isotropic, so only the user source contributes to the flux
-			const double weight = (Etot > 0.0) ? (Euser / Etot) : 0.0;
-			reducedFluxSource(i, j, k, 3 * g + 0) = weight * fx;
-			reducedFluxSource(i, j, k, 3 * g + 1) = weight * fy;
-			reducedFluxSource(i, j, k, 3 * g + 2) = weight * fz;
+			radEnergySource(i, j, k, g) += Euser;
+			radFluxSource(i, j, k, 3 * g + 0) += c * fx * Euser;
+			radFluxSource(i, j, k, 3 * g + 1) += c * fy * Euser;
+			radFluxSource(i, j, k, 3 * g + 2) += c * fz * Euser;
 		}
 	});
 }

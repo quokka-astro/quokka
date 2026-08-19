@@ -7,7 +7,7 @@
 #define LARGE 1.0e100
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &reducedFluxSource,
+void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource,
 						     amrex::Box const &indexRange, Real dt_implicit, double gas_update_factor_in, double dustGasCoeff,
 						     double tol_h, double /*tol_rel_h*/, double /*tempFloor*/, int *p_iteration_counter,
 						     int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
@@ -57,23 +57,16 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
 		// Single-group: if ChemBands is defined the only group is an ionizing photon group (no cscale).
 		// For thermal groups, radEnergySource must be scaled by chat/c (= 1/cscale).
-		const double Src = RadSystem_Has_ChemBands<problem_t>::value ? radEnergySource(i, j, k, 0) * dt : radEnergySource(i, j, k, 0) * dt / cscale;
+		const double src_scale = RadSystem_Has_ChemBands<problem_t>::value ? dt : dt / cscale;
+		const double Src = src_scale * radEnergySource(i, j, k, 0);
 		if constexpr (gamma_ != 1.0) {
 			AMREX_ASSERT(Src >= 0.0);
 		}
 
-		// load the user-defined reduced flux f = F / (c E) of the injected radiation. The flux source is
-		// c * f * Src, so it inherits the scaling of the energy source above and the injected radiation
-		// satisfies F = f c E exactly, with c the runtime speed of light.
+		// load the radiation flux source term, scaled exactly like the energy source above; unit: erg cm^-2 s^-2
 		amrex::GpuArray<amrex::Real, 3> Src_flux{};
-		{
-			const double fx = reducedFluxSource(i, j, k, 0);
-			const double fy = reducedFluxSource(i, j, k, 1);
-			const double fz = reducedFluxSource(i, j, k, 2);
-			AMREX_ASSERT(fx * fx + fy * fy + fz * fz <= 1.0 + 1.0e-10); // |f| <= 1 is required for a physical flux
-			Src_flux[0] = c * fx * Src;
-			Src_flux[1] = c * fy * Src;
-			Src_flux[2] = c * fz * Src;
+		for (int n = 0; n < 3; ++n) {
+			Src_flux[n] = src_scale * radFluxSource(i, j, k, n);
 		}
 
 		double Egas0 = NAN;
