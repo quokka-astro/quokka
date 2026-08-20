@@ -46,6 +46,7 @@ template <> struct HydroSystem_Traits<MHDQuirk> {
 };
 
 template <> struct Physics_Traits<MHDQuirk> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	// face-centred

@@ -34,6 +34,7 @@ template <> struct quokka::EOS_Traits<AlfvenWaveCircular> {
 };
 
 template <> struct Physics_Traits<AlfvenWaveCircular> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };
