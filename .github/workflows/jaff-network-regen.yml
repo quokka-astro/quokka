@@ -19,12 +19,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
 
       - name: Install clang-format
-        run: sudo apt-get update && sudo apt-get install --yes clang-format
+        run: pipx install "clang-format==22.1.8"
 
       - name: Regenerate photoionization_H_caseB network
         run: |
           set -euo pipefail
+          git rm -r -f --ignore-unmatch --quiet -- src/networks/photoionization_H_caseB
           git clean -fdx -- src/networks/photoionization_H_caseB
+          mkdir -p src/networks/photoionization_H_caseB
           src/networks/photoionization_H_caseB_config/regenerate.sh
 
       - name: Fail if regeneration produced a diff

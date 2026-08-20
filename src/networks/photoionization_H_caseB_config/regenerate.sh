@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Regenerates the photoionization_H_caseB network from this directory's
-# jaffgen.toml/dtype.jet. By default, clones jaff at the pinned commit into a
-# temp dir and runs jaffgen there. Pass --jaff-path to use an existing local
-# jaff checkout instead, bypassing the clone.
+# jaffgen.toml/photoionization_H_caseB.jet. By default, clones jaff at the
+# pinned commit into a temp dir and runs jaffgen there. Pass --jaff-path to
+# use an existing local jaff checkout instead, bypassing the clone.
 set -euo pipefail
 
 usage() {
@@ -25,7 +25,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 JAFF_REPO="https://github.com/jaff-chemistry/jaff.git"
-JAFF_COMMIT="116ba9e"
+JAFF_COMMIT="116ba9e1acaf42d56f04bb150f9034c8559921fb"
+# Pin sympy version so that jaffgen's output is reproducible
+SYMPY_VERSION="1.14.0"
 
 CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTDIR="$(cd "${CONFIG_DIR}/../photoionization_H_caseB" && pwd)"
@@ -55,11 +57,13 @@ echo "==> Creating venv at ${TMPDIR}/venv"
 python3 -m venv "${TMPDIR}/venv"
 echo "==> Installing jaff from ${JAFF_DIR}"
 "${TMPDIR}/venv/bin/pip" install --quiet -e "${JAFF_DIR}"
+echo "==> Pinning sympy==${SYMPY_VERSION}"
+"${TMPDIR}/venv/bin/pip" install --quiet "sympy==${SYMPY_VERSION}"
 
 echo "==> Running jaffgen, output to ${OUTDIR}"
 "${TMPDIR}/venv/bin/jaffgen" \
 	--config "${CONFIG_DIR}/jaffgen.toml" \
-	--network "${CONFIG_DIR}/dtype.jet" \
+	--network "${CONFIG_DIR}/photoionization_H_caseB.jet" \
 	--template microphysics \
 	--lang cxx \
 	--outdir "${OUTDIR}"
