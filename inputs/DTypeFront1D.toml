@@ -1,0 +1,106 @@
+# This one input serves both the 1D and the 3D build of the problem. It is planar -- the slab is uniform across
+# y and z and the source is a plane at the middle of the x domain -- so every transverse column repeats the 1D
+# solution exactly, and running it in 3D checks that the radiation, dust and photochemistry paths behave
+# identically there. Only the x entries matter in 1D; the eight transverse cells are the Quokka minimum and
+# are sized to keep the cells cubic in 3D.
+
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [2.0e19, 1.250000e+18, 1.250000e+18]
+quokka.bc = ["reflecting", "periodic", "periodic"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [128, 8, 8]
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 8     # grid size must be divisible by this
+amr.max_grid_size   = 128
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+# The source sits at the middle of the domain and radiates both ways at chat = c/1000 = 3e7 cm/s, so each
+# front has 1e19 cm to cross and reaches a boundary at 3.3e11 s. Stop at 60% of that, so both fronts are still
+# well inside the domain when they are measured and neither reflecting wall is ever reached.
+stop_time = 2.0e11
+
+# Uniform neutral hydrogen slab: n_0 = 100 cm^-3, cold (100 K).
+photoionize.primary_species_1 = 1.0e-10   # e
+photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
+photoionize.primary_species_3 = 1.0e-10   # H+
+photoionize.temperature = 1.0e2
+# Photon flux injected into the optical band, per side [photons cm^-2 s^-1]. The source sits at the middle of
+# the domain and emits twice this, half to each side, so each side receives this flux. It sets the dust
+# temperature, which settles at a*T^4 = E_IR + (kappa2/kappa1) * E_optical.
+
+# Source geometry. beamed = 1 gives each half of the source slab a flux source of -c * E on the left and
+# +c * E on the right, so both wings are injected fully beamed outward; the outward-momentum budget in the
+# test is a conservation law only in that case (it closes to 1.004 beamed, 0.78 isotropic). source_cells is
+# the number of cells per side the slab occupies; widening it does not improve the budget (1.004, 1.008,
+# 1.011, 1.012 for 1, 2, 4, 8) and pushes the measured light front outward, so one cell per side is shipped.
+photoionize.beamed = 1
+photoionize.source_cells = 1
+photoionize.flux = 1.0e13
+
+# Gray dust opacity of the two thermal groups [cm^2 g^-1]: kappa1 = IR, kappa2 = optical. Dust is optically
+# thick to the incoming optical light and thin to the IR it re-emits, which is what drives the reprocessing.
+# With rho = n_0 * m_H = 1.66e-22 g cm^-3 the optical depth from the source to each front is 1.0 (optical) and
+# 0.01 (IR).
+# The ionizing band is always transparent to this gray opacity.
+photoionize.kappa1 = 1.0e1
+photoionize.kappa2 = 1.0e3
+radiation.iteration_tolerance = 1e-8
+
+# Ionizing photon flux injected per side [photons cm^-2 s^-1]. A chemistry band's source is not scaled by
+# chat/c the way a thermal band's is, so this value is c/chat = 1000 times smaller than photoionize.flux in
+# order to inject the same energy into the ionizing band as into the optical one.
+photoionize.flux_ion = 1.0e10
+temperature_floor = 10.0
+
+# Solve for a separate dust temperature (ISM_Traits::enable_dust_gas_thermal_coupling_model), but switch the
+# gas-dust collisional term off. The dust is then set purely by radiative equilibrium with the local
+# radiation field and exchanges no energy with the gas. Note this is thermal decoupling only: radiation
+# momentum is still deposited, so the radiation accelerates the gas outward and sweeps the near-source cells.
+radiation.dust_gas_interaction_coeff = 0.0
+
+# Photoionization of the slab by the ionizing band.
+photochemistry.enabled = 1
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+plotfile_interval = -1
+plotfile_prefix = "DType1D"
+
+max_timesteps = 1000000  # stop_time governs; no artificial step cap
+
+# Photoheating on (gas heats to ~10^4 K in the ionized region) and temperature-dependent
+# recombination so the network alpha_B matches the analytic reference.
+network.energy_switch = 1
+network.recombination_temperature_dependent = 1
+network.allow_mixed_cell_cooling = 0
+
+# VODE / Rosenbrock tolerances scaled for n_0 = 100 cm^-3 (atol_spec = 1e-5 * n_H).
+integrator.atol_spec                     = 1.0e-3   # cm^-3
+integrator.atol_enuc                     = 1.24e8   # erg/g; c_v * 1 K temperature accuracy
+integrator.atol_rad_num                  = 5.0e-2   # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3   # cm^-3; = atol_spec
+integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at the front
+
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2
+
+integrator.rosenbrock_tableau = 3

@@ -42,8 +42,53 @@ static constexpr bool include_work_term_in_source = true;
 
 static const int max_iter_to_update_alpha_E = 5; // Apply to the PPL_opacity_full_spectrum only. Only update alpha_E for the first max_iter_to_update_alpha_E
 // iterations of the Newton iteration
-static constexpr bool enable_dE_constrain = true;
+static constexpr bool enable_dE_constrain = false;
+// Multiple of the estimated double-precision round-off floor at which the radiation residual of the
+// gas-radiation Newton solve is accepted as converged. See the Fg_roundoff floor in
+// SolveGasRadiationEnergyExchange: an optically thin group that sits far below its local blackbody cannot
+// resolve its residual below ~epsilon * (4 pi B / c), so a purely relative tolerance is unreachable there.
+static constexpr double newton_resid_roundoff_factor = 10.0;
+// Adaptive damping for the decoupled-dust branch of the gas-dust-radiation Newton solve, where the
+// iteration can oscillate with growing amplitude instead of converging. A step that fails to reduce the
+// radiation residual is shortened by newton_damping_down, one that succeeds lengthens by newton_damping_up
+// (capped at a full Newton step), and newton_damping_min bounds how short a step may get.
+static constexpr double newton_damping_down = 0.5;
+static constexpr double newton_damping_up = 1.5;
+static constexpr double newton_damping_min = 0.05;
 static constexpr bool use_D_as_base = false;
+// Optical depth below which a group's Newton unknown is its radiation energy Erad_g rather than its
+// exchange term R_g. With R_g as the unknown, Erad_g must be recovered as
+//     Erad_g = (kappa_P/kappa_E)_g * (4 pi B_g / c - (R_g - w_g) / tau_g),
+// and for tau_g << 1 the two terms in that difference agree to within a factor tau_g, so Erad_g -- and
+// with it the group residual -- loses its leading digits to cancellation. Taking Erad_g as the unknown
+// instead reverses the map, R_g = (4 pi B_g / c - Erad_g / (kappa_P/kappa_E)_g) * tau_g + w_g, which
+// carries no cancellation in that regime; the two parametrizations are affinely related, so the Newton
+// iterates agree in exact arithmetic and only the round-off differs (by a factor tau_g). Above the
+// threshold the roles reverse -- a thick group near radiative equilibrium has 4 pi B_g / c close to
+// Erad_g and it is R_g that must be recovered from a difference -- so R_g stays the unknown there.
+static constexpr double newton_erad_base_tau_threshold = 1.0;
+// Smallest fraction of a cell's internal energy that the beta_order = 1 work term is allowed to leave
+// behind. The work done by radiation is credited to internal energy by the source term and then moved to
+// kinetic energy in UpdateFlux; in a cold, strongly radiation-driven cell that transfer can exceed the
+// internal energy available, and subtracting it unclamped leaves a negative internal energy. See the cap
+// in UpdateFlux, and the matching one in AddSourceTermsSingleGroup -- the failure mode is not specific to
+// either solver.
+//
+// Capping does not conserve energy. It is a known limitation of the lagged O(v/c) work term rather than a
+// symptom of too long a radiation timestep: the work term is lagged from the previous outer iteration while
+// dEkin_work is evaluated from the freshly updated momentum, so the two do not cancel exactly, and refining
+// dt does not help. Measured on DTypeFront1D, the fraction of radiation cell-updates that reach the cap is
+// invariant at ~27% across a fourfold refinement of dt (26.8% / 27.2% / 26.5% at 128 / 256 / 512 cells).
+//
+// It is nonetheless benign, which is why it is left in place and not reported at runtime. The cap can only
+// bind where dEkin_work already exceeds the internal energy available, i.e. in cold cells the radiation has
+// evacuated, so Egas there is minuscule and the absolute energy discarded is negligible however many cells
+// are involved: DTypeFront1D closes its thermal-band energy budget to 1.0000000 with ~27% of its radiation
+// cell-updates capping. Counting them would mean an atomic on one address in a large fraction of every
+// radiation kernel, which is not worth paying for in a production GPU run.
+//
+// See https://github.com/quokka-astro/quokka/issues/2173 for the two candidate fixes.
+static constexpr double work_term_min_eint_fraction = 0.1;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
 
@@ -121,6 +166,28 @@ template <typename problem_t> struct JacobianResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jg1; // (g, 1) components of the Jacobian matrix, g = 1, 2, ..., nGroups
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;  // (g) components of the residual, g = 1, 2, ..., nGroups
 };
+
+// Rebase the optically thin groups of a Jacobian built in the R_g unknowns onto the Erad_g unknowns.
+// See newton_erad_base_tau_threshold for why. The map is R_g = (4 pi B_g / c - Erad_g / kappaPoverE_g) *
+// tau_g + w_g, so dR_g/dErad_g = -tau_g / kappaPoverE_g: the column of group g is scaled by that factor.
+// The (g, 0) entry is scaled too, because dF_g/dx at fixed Erad_g is not the same partial derivative as
+// dF_g/dx at fixed R_g. The (0, 0) entry instead gains a term, since R_g now varies with x: F0 contains
+// J0g[g] * R_g, contributing J0g[g] * dR_g/dx = -J0g[g] * scale * Jg0[g]. The residuals are unchanged --
+// they are the same numbers regardless of which variable is held independent.
+template <typename problem_t>
+AMREX_GPU_DEVICE void RebaseThinGroupsOntoErad(JacobianResult<problem_t> &jacobian, quokka::valarray<double, Physics_Traits<problem_t>::nGroups> const &tau,
+					       quokka::valarray<double, Physics_Traits<problem_t>::nGroups> const &kappaPoverE)
+{
+	for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+		if ((tau[g] > 0.0) && (tau[g] < newton_erad_base_tau_threshold)) {
+			const double scale = -tau[g] / kappaPoverE[g]; // dR_g / dErad_g
+			jacobian.J00 -= jacobian.J0g[g] * scale * jacobian.Jg0[g];
+			jacobian.Jgg[g] *= scale;
+			jacobian.J0g[g] *= scale;
+			jacobian.Jg0[g] *= scale;
+		}
+	}
+}
 
 // A struct to hold the results of UpdateFlux(), containing the following elements:
 // Erad, gasMomentum, Frad
@@ -230,6 +297,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
+	// Chemical (ionizing) bands occupy the LAST NChemBands groups; the leading nGroupsThermal_ groups
+	// are thermal. The thermal radiation update (blackbody emission + gas-radiation energy exchange)
+	// acts only on the thermal groups; chemical bands are handled by transport, direct source injection,
+	// and photochemistry. When NChemBands == 0, nGroupsThermal_ == nGroups_ and all chem-specific code
+	// paths are inert.
+	static constexpr int nGroupsThermal_ = nGroups_ - RadSystem_NChemBands<problem_t>::value;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
 			return RadSystem_Traits<problem_t>::radBoundaries;
@@ -257,9 +330,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum), // NOLINT
 		      "PPL_opacity_full_spectrum requires at least 3 photon groups.");
 
-	// Assertion: mixed thermal+chemical band configurations are untested
-	static_assert(RadSystem_NChemBands<problem_t>::value == 0 || RadSystem_NChemBands<problem_t>::value == nGroups_,
-		      "Mixed thermal and chemical radiation bands are not supported.");
+	// Assertion: chemical (ionizing) bands, when present, occupy the last NChemBands groups; the
+	// leading (nGroups_ - NChemBands) groups are thermal. Mixed thermal+chemical configurations are
+	// therefore valid as long as there are no more chemical bands than groups.
+	static_assert(RadSystem_NChemBands<problem_t>::value >= 0 && RadSystem_NChemBands<problem_t>::value <= nGroups_,
+		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -522,20 +597,26 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
 		amrex::Real y = NAN;
 		amrex::Real previous = 0.0;
-		for (int g = 0; g < nGroups_ - 1; ++g) {
-			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-			if (x >= 100.) { // 100. is the upper limit of x in the table
+		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission. When
+		// chemical bands are present the thermal fractions are NOT renormalized: the blackbody radiation
+		// above the first chemical-band boundary is simply dropped, so the fractions sum to < 1.
+		for (int g = 0; g < nGroupsThermal_; ++g) {
+			if (g == nGroups_ - 1) {
+				// no chemical bands: the last group carries all remaining blackbody, total fraction = 1.0
 				y = 1.0;
 			} else {
-				y = integrate_planck_from_0_to_x(x);
+				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
+				if (x >= 100.) { // 100. is the upper limit of x in the table
+					y = 1.0;
+				} else {
+					y = integrate_planck_from_0_to_x(x);
+				}
 			}
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
-		// last group, enforcing the total fraction to be 1.0
-		y = 1.0;
-		radEnergyFractions[nGroups_ - 1] = y - previous;
-		AMREX_ASSERT(std::abs(sum(radEnergyFractions) - 1.0) < 1.0e-10);
+		// chemical bands (g >= nGroupsThermal_) emit no blackbody radiation; left at 0.
+		AMREX_ASSERT(sum(radEnergyFractions) < 1.0 + 1.0e-10);
 
 		return radEnergyFractions;
 	}
@@ -567,8 +648,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 	const double power = radiation_constant_ * std::pow(temperature, 4);
 	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	auto Erad_g = power * radEnergyFractions;
-	// set floor
-	for (int g = 0; g < nGroups_; ++g) {
+	// set floor on the thermal groups only; chemical bands emit no blackbody radiation and are left at 0.
+	for (int g = 0; g < nGroupsThermal_; ++g) {
 		if (Erad_g[g] < Erad_floor_) {
 			Erad_g[g] = Erad_floor_;
 		}
@@ -587,10 +668,42 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 												 amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
-	// by default, d emission/dT = 4 emission / T
-	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	double d_power_dt = 4. * radiation_constant_ * std::pow(temperature, 3);
-	return d_power_dt * radEnergyFractions;
+	quokka::valarray<amrex::Real, nGroups_> d_fourpiboverc_d_t{};
+	const double a_T3 = radiation_constant_ * temperature * temperature * temperature;
+	if constexpr (nGroups_ == 1) {
+		d_fourpiboverc_d_t[0] = 4. * a_T3;
+		return d_fourpiboverc_d_t;
+	} else {
+		// The group emission is a T^4 f_g(T), so its temperature derivative is 4 a T^3 f_g + a T^4 df_g/dT.
+		// The second term is not a small correction for a group sitting on the Wien tail, where f_g rises
+		// far faster than T^4; dropping it makes this Jacobian entry several times too small and the
+		// resulting Newton step correspondingly too long, which costs the iteration its convergence.
+		// Integrating the exact kernel by parts gives the cumulative form
+		//     D(x) = (15/pi^4) \int_0^x s^4 e^s / (e^s - 1)^2 ds = 4 P(x) - (15/pi^4) x^4 / (e^x - 1),
+		// where P is the same normalized Planck integral used for the energy fractions, so the exact
+		// derivative costs one extra term per group boundary. D(inf) = 4 recovers d(a T^4)/dT.
+		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
+		amrex::Real y = NAN;
+		amrex::Real previous = 0.0;
+		// Only the thermal groups emit; the chemical bands are left at 0, as in ComputePlanckEnergyFractions.
+		for (int g = 0; g < nGroupsThermal_; ++g) {
+			if (g == nGroups_ - 1) {
+				// no chemical bands: the last group carries all remaining blackbody, so D = D(inf) = 4
+				y = 4.0;
+			} else {
+				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
+				if (x >= 100.) { // 100. is the upper limit of x in the table
+					y = 4.0;
+				} else {
+					y = 4. * integrate_planck_from_0_to_x(x) - (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
+				}
+			}
+			d_fourpiboverc_d_t[g] = a_T3 * (y - previous);
+			previous = y;
+		}
+
+		return d_fourpiboverc_d_t;
+	}
 }
 
 // Define the background heating rate for the gas-dust-radiation system. Units in cgs: erg cm^-3 s^-1
@@ -1517,24 +1630,92 @@ template <typename RHSFunction, typename JacFunction>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, const double x0, const double compare)
     -> double
 {
-	double x = x0;
 	const double rel_tol = 1.0e-8;
 	const double rel_change_tol = 1.0e-6;
 	const int max_iter_td = 100;
+
+	// Tolerance scale. The caller passes the physical scale its residual should be measured against, but for
+	// the dust temperature that scale is the gas-dust collisional term, which vanishes identically when the
+	// coupling coefficient is set to zero. The tolerance would then be zero and could never be met. Fall
+	// back to the size of the initial residual so the criterion degrades to a relative reduction instead of
+	// something unsatisfiable.
+	const double f0 = rhs(x0);
+	const double scale = std::max(compare, std::abs(f0));
+	if (std::abs(f0) < rel_tol * scale) {
+		return x0;
+	}
+
+	// Bracket the root, then solve with Newton guarded by bisection.
+	//
+	// Every residual solved through this routine is monotone in its unknown -- emission and the collisional
+	// term both grow with the dust temperature, and the gas-energy residual grows with the gas energy -- so
+	// the root is unique and can be bracketed by marching outward in the Newton direction. That guard is
+	// what makes this robust: a bare Newton iteration is unsafe on these functions because a band-limited
+	// Planck function is stiff enough that one step can leave the neighbourhood of the root and never
+	// return, which is the origin of the "dust temperature failed to converge" abort. Both unknowns are
+	// physically positive, so the search is confined to x > 0.
+	const double j0 = jac(x0);
+	const double dir = (j0 * f0 > 0.0) ? -1.0 : 1.0; // sign of the Newton step -f/j
+	double xa = x0;
+	double fa = f0;
+	double xb = x0;
+	double fb = f0;
+	// March multiplicatively rather than by fixed increments: both unknowns are positive and can sit orders
+	// of magnitude from the initial guess, and halving repeatedly also keeps the search inside x > 0 without
+	// needing a special case.
+	bool bracketed = false;
+	double x_prev = x0;
+	double f_prev = f0;
+	const double factor = (dir > 0.0) ? 2.0 : 0.5;
+	for (int k = 0; k < 200; ++k) {
+		const double x_try = x_prev * factor;
+		if (!(x_try > 0.0) || !std::isfinite(x_try)) {
+			break;
+		}
+		const double f_try = rhs(x_try);
+		if (f_try * f0 <= 0.0) {
+			xa = std::min(x_prev, x_try);
+			xb = std::max(x_prev, x_try);
+			fa = (xa == x_prev) ? f_prev : f_try;
+			fb = (xb == x_prev) ? f_prev : f_try;
+			bracketed = true;
+			break;
+		}
+		x_prev = x_try;
+		f_prev = f_try;
+	}
+	if (!bracketed) {
+		return -1.0; // caller treats a negative return as failure
+	}
+
+	double x = 0.5 * (xa + xb);
 	int iter_Td = 0;
 	for (; iter_Td < max_iter_td; ++iter_Td) {
-		const auto the_rhs = rhs(x);
-		if (std::abs(the_rhs) < rel_tol * compare) {
+		const double the_rhs = rhs(x);
+		if (std::abs(the_rhs) < rel_tol * scale) {
 			break;
 		}
 
-		const double dT = -the_rhs / jac(x);
-		x += dT;
+		// keep the bracket around the root
+		if (the_rhs * fa > 0.0) {
+			xa = x;
+			fa = the_rhs;
+		} else {
+			xb = x;
+			fb = the_rhs;
+		}
 
-		if (iter_Td > 0) {
-			if (std::abs(dT) < rel_change_tol * std::abs(x)) {
-				break;
-			}
+		const double j = jac(x);
+		double x_new = (j != 0.0) ? (x - the_rhs / j) : (0.5 * (xa + xb));
+		// Fall back to bisection whenever Newton would leave the bracket. Written as the negation of the
+		// in-bracket test rather than its DeMorgan dual so that a NaN step also lands here.
+		if (!(x_new > xa && x_new < xb)) { // NOLINT(readability-simplify-boolean-expr)
+			x_new = 0.5 * (xa + xb);
+		}
+		const double dx = x_new - x;
+		x = x_new;
+		if (std::abs(dx) < rel_change_tol * std::abs(x)) {
+			break;
 		}
 	}
 
@@ -1542,6 +1723,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	if (iter_Td >= max_iter_td) {
 		x = -1.0;
 	}
+	amrex::ignore_unused(fb);
 
 	return x;
 }
