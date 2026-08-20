@@ -32,6 +32,7 @@ jobs:
       - name: Fail if regeneration produced a diff
         run: |
           set -euo pipefail
+          git add -A -- src/networks/photoionization_H_caseB
           if [[ -n "$(git status --porcelain --untracked-files=all -- src/networks/photoionization_H_caseB)" ]]; then
             git status --porcelain --untracked-files=all -- src/networks/photoionization_H_caseB
             echo "::error::Regenerating the photoionization_H_caseB network produced a diff." \
