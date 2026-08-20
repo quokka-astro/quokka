@@ -101,11 +101,6 @@ if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  if(AMReX_SPACEDIM EQUAL 1)
-    add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  else()
-    # Same problem on a coarser grid and a shorter run, so the 3D variant stays cheap enough for CI while
-    # still exercising every check.
-    add_test(NAME ${JOB_NAME}3D COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}3D.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  endif()
+  # One input serves both dimensionalities; only the x entries matter in 1D.
+  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
