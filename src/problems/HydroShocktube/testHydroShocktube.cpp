@@ -40,6 +40,7 @@ template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 };

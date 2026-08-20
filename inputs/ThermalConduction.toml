@@ -3,6 +3,7 @@
 # *****************************************************************
 geometry.prob_lo = [-1.5428e18, -1.5428e18, -1.5428e18]
 geometry.prob_hi = [1.5428e18, 1.5428e18, 1.5428e18]
+geometry.is_periodic = [0, 0, 0]
 quokka.bc = ["foextrap", "foextrap", "foextrap"]
 
 # *****************************************************************
@@ -14,17 +15,23 @@ amr.v = 1      # verbosity in Amr
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell = [128, 128, 128]
-amr.max_level = 0  # number of levels = max_level + 1
-amr.blocking_factor = 16  # grid size must be divisible by this
+amr.max_level = 1  # number of levels = max_level + 1
+amr.blocking_factor = 8  # grid size must be divisible by this
 
+# ghost-cell interpolation at the coarse-fine AMR boundary: the default
+# (method=1) over-limits for this problem and breaks second-order convergence;
+# method=3 (unlimited linear conservative interpolation) restores it
+amr_interpolation_method = 3
+
+do_reflux = 1
+do_subcycle = 0
+
+stop_time = 469054.0075444166 # 1 conduction time
 cfl = 0.3
-
-cooling.read_tables_even_if_disabled = 1
-cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
-
 
 conduction.enabled = 1
 conduction.conductivity_prefactor = 0.6113916490935586e12
 conduction.flux_limiter_phi = 1
 conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
+conduction.conduction_type = "spitzer"

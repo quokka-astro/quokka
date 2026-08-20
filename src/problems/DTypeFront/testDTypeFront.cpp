@@ -235,9 +235,9 @@ AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
 }
 
 template <>
-void RadSystem<DTypeFront>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
+void RadSystem<DTypeFront>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;

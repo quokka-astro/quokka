@@ -33,6 +33,7 @@ template <> struct quokka::EOS_Traits<ContactProblem> {
 };
 
 template <> struct Physics_Traits<ContactProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numPassiveScalars = numMassScalars + 2; // number of passive scalars

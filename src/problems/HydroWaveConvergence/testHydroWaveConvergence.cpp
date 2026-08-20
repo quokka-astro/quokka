@@ -30,8 +30,10 @@ template <> struct quokka::EOS_Traits<WaveProblem> {
 };
 
 template <> struct Physics_Traits<WaveProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear/bulk default to 0; no-op unless set
 };
 
 constexpr double rho0 = 1.0;					    // background density
@@ -39,12 +41,16 @@ constexpr double P0 = 1.0 / quokka::EOS_Traits<WaveProblem>::gamma; // backgroun
 constexpr double v0 = 0.;					    // background velocity
 constexpr double amp = 1.0e-6;					    // perturbation amplitude
 
+// viscous decay rate for the wave analytic solution: (4/3*shear + bulk)*k^2/(2*rho0), for the single
+// hardcoded mode k=2*pi below; zero (no decay) unless hydro.shear_viscosity/hydro.bulk_viscosity are set
+AMREX_GPU_MANAGED double viscous_decay_rate = 0.0; // NOLINT
+
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
 {
 	const amrex::Real x_L = prob_lo[0] + (i + static_cast<amrex::Real>(0.0)) * dx[0];
 	const amrex::Real x_R = prob_lo[0] + (i + static_cast<amrex::Real>(1.0)) * dx[0];
-	const amrex::Real A = amp;
+	const amrex::Real A = amp * std::exp(-viscous_decay_rate * time);
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
 	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblem>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
@@ -76,12 +82,49 @@ template <> void QuokkaSimulation<WaveProblem>::setInitialConditionsOnGrid(quokk
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0; // fill unused components with zeros
 		}
-		computeWaveSolution(i, j, k, state_cc, dx, prob_lo);
+		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, 0.0);
 	});
+}
+
+// Sets viscous_decay_rate from hydro.shear_viscosity/hydro.bulk_viscosity. Zero (no decay) when both
+// are absent, recovering the ideal wave solution. Shared by the convergence sweep (runWaveTest) and
+// the fixed-resolution run_sim path.
+void configureViscousParameters()
+{
+	double shearViscosity = 0.0;
+	double bulkViscosity = 0.0;
+	amrex::ParmParse const hpp("hydro");
+	hpp.query("shear_viscosity", shearViscosity);
+	hpp.query("bulk_viscosity", bulkViscosity);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shearViscosity >= 0.0 && bulkViscosity >= 0.0, "hydro.shear_viscosity and hydro.bulk_viscosity must be non-negative.");
+	constexpr double k_magn = 2.0 * M_PI; // single hardcoded mode, box length 1
+	viscous_decay_rate = (4.0 / 3.0 * shearViscosity + bulkViscosity) * k_magn * k_magn / (2.0 * rho0);
+	if (shearViscosity > 0.0 || bulkViscosity > 0.0) {
+		amrex::Print() << "Hydro wave (viscous): decay_rate=" << viscous_decay_rate << "\n";
+	}
+}
+
+// fills every cell of mf with the analytic wave solution at the given time
+void fillWaveSolutionState(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+			   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
+{
+	const int ncomp = mf.nComp();
+	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &state = mf.array(iter);
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			for (int n = 0; n < ncomp; ++n) {
+				state(i, j, k, n) = 0; // fill unused components with zeros
+			}
+			computeWaveSolution(i, j, k, state, dx, prob_lo, time);
+		});
+	}
 }
 
 auto runWaveTest(int nx, int ny, int nz) -> double
 {
+	configureViscousParameters();
+
 	// Problem parameters
 	const double CFL_number = 0.1;
 	const double max_time = 1.0;
@@ -126,13 +169,17 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 
 	// set initial conditions
 	sim.setInitialConditions();
-	auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 
 	// Main time loop
 	sim.evolve();
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 	int const nx_final = static_cast<int>(position.size());
+
+	// analytic solution at the final simulation time; equals the t=0 state only when viscous_decay_rate == 0
+	amrex::MultiFab exactState(sim.boxArray(0), sim.DistributionMap(0), QuokkaSimulation<WaveProblem>::nvars_, 0);
+	fillWaveSolutionState(exactState, sim.geom[0].CellSizeArray(), sim.geom[0].ProbLoArray(), sim.tNew_[0]);
+	auto [pos_exact, val_exact] = fextract(exactState, sim.geom[0], 0, 0.5);
 
 	// compute error norm
 	amrex::Real err_sq = 0.;
@@ -150,7 +197,9 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 		// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
 		err_sq += dU_k * dU_k;
 	}
-	const amrex::Real epsilon = std::sqrt(err_sq);
+	amrex::Real epsilon = std::sqrt(err_sq);
+	// fextract only gathers the full comparison to the IO processor; broadcast so every rank agrees
+	amrex::ParallelDescriptor::Bcast(&epsilon, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 	return epsilon;
 }
@@ -170,6 +219,8 @@ auto problem_main() -> int
 	int status = 0;
 
 	if (run_sim) {
+		configureViscousParameters();
+
 		const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
 		amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 		for (int n = 0; n < ncomp_cc; ++n) {
@@ -182,12 +233,16 @@ auto problem_main() -> int
 		QuokkaSimulation<WaveProblem> sim(BCs_cc);
 		sim.cflNumber_ = 0.3;
 		sim.setInitialConditions();
-		auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 
 		sim.evolve();
 
 		auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 		const int nx_final = static_cast<int>(position.size());
+
+		// analytic solution at the final simulation time; equals the t=0 state only when viscous_decay_rate == 0
+		amrex::MultiFab exactState(sim.boxArray(0), sim.DistributionMap(0), QuokkaSimulation<WaveProblem>::nvars_, 0);
+		fillWaveSolutionState(exactState, sim.geom[0].CellSizeArray(), sim.geom[0].ProbLoArray(), sim.tNew_[0]);
+		auto [pos_exact, val_exact] = fextract(exactState, sim.geom[0], 0, 0.5);
 
 		amrex::Real err_sq = 0.;
 		for (int n = 0; n < QuokkaSimulation<WaveProblem>::nvars_; ++n) {
@@ -202,7 +257,9 @@ auto problem_main() -> int
 			}
 			err_sq += dU_k * dU_k;
 		}
-		const amrex::Real epsilon = std::sqrt(err_sq);
+		amrex::Real epsilon = std::sqrt(err_sq);
+		// fextract only gathers the full comparison to the IO processor; broadcast so every rank agrees
+		amrex::ParallelDescriptor::Bcast(&epsilon, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 		amrex::Print() << std::format("\nrun_sim error norm = {:.6e}  (tol = {:.6e})\n", static_cast<double>(epsilon), error_tol);
 		if (epsilon > error_tol) {

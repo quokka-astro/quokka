@@ -232,10 +232,17 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
 	amrex::Real conductionCFL = 0.2;	      // default
 	int enableElectronConduction_ = 0;	      // default
+	std::string conductionType_ = "isotropic";    // "isotropic" or "spitzer"; controls the conduction timestep estimate
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
-	amrex::Real tempFloor_ = 0.0;	     // default
+	// Default temperature floor: the CMB temperature, 2.7 K, for problems in CGS units, where the
+	// literal value below is unambiguously in kelvin. It defaults to 0 for the CONSTANTS and CUSTOM
+	// unit systems, because there the value would be interpreted in code units rather than kelvin:
+	// CONSTANTS fixes the physical constants without defining a temperature scale, and CUSTOM
+	// rescales temperature by Physics_Traits::unit_temperature. Such problems should set
+	// temperature_floor explicitly.
+	amrex::Real tempFloor_ = (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) ? 2.7 : 0.0; // K (CGS only)
 	bool useDensityFloorParser_ = false;
 	std::string densityFloorExpr_;
 	std::optional<amrex::Parser> densityFloorParser_;
@@ -243,7 +250,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	bool useHeatingRateExternalParser_ = false;
 	std::string heatingRateExternalExpr_;
 	std::optional<amrex::Parser> heatingRateExternalParser_;
-	std::optional<amrex::ParserExecutor<2>> heatingRateExternalParserExe_;
+	std::optional<amrex::ParserExecutor<5>> heatingRateExternalParserExe_;
 	bool debugDensityFloorPlot_ = false; // default: disabled
 
 	mutable YAML::Node simulationMetadata_;
@@ -1034,7 +1041,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		densityFloorParserExe_.reset();
 	}
 
-	// optional external heating rate expression (variables: time, dt)
+	// optional external heating rate expression (variables: x, y, z, time, dt)
 	heatingRateExternalExpr_.clear();
 	pp.query("heating_rate_external", heatingRateExternalExpr_);
 	useHeatingRateExternalParser_ = !heatingRateExternalExpr_.empty();
@@ -1044,9 +1051,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		if (!amrex::ParmParse::ParserPrefix.empty()) {
 			amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
 			for (auto const &symbol : symbols) {
-				// `time` and `dt` are runtime parser inputs, not constants from ParmParse.
+				// `x`, `y`, `z`, `time` and `dt` are runtime parser inputs, not constants from ParmParse.
 				// Available ParmParse constants are: `yr`, `kyr`, `Myr`, `Gyr`.
-				if (symbol == "time" || symbol == "dt") {
+				if (symbol == "x" || symbol == "y" || symbol == "z" || symbol == "time" || symbol == "dt") {
 					continue;
 				}
 				amrex::Real value = 0.0;
@@ -1058,11 +1065,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 			amrex::Abort("Internal error: ParserPrefix is empty while parsing `heating_rate_external` unit symbols (`yr`, `kyr`, `Myr`, `Gyr`). "
 				     "This indicates a code regression. Please report this to Quokka maintainers and reference PR #1791. ");
 		}
-		heatingRateExternalParser_->registerVariables({"time", "dt"});
-		heatingRateExternalParserExe_ = heatingRateExternalParser_->compile<2>();
+		heatingRateExternalParser_->registerVariables({"x", "y", "z", "time", "dt"});
+		heatingRateExternalParserExe_ = heatingRateExternalParser_->compile<5>();
 #ifdef AMREX_USE_GPU
 		if (heatingRateExternalParserExe_->m_device_executor == nullptr) {
-			amrex::Abort("heating_rate_external: device parser executor is null after compile<2>()");
+			amrex::Abort("heating_rate_external: device parser executor is null after compile<5>()");
 		}
 #endif
 	} else {
@@ -1269,63 +1276,55 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	// compute timestep based on conduction parameters
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
-	// if (enableElectronConduction_ == 1) {
-	// 	double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
-	// 	//
-	// 	// amrex::Real electronConductionKappa = quokka::conduction::ElectronConduction<problem_t>::ComputeMinConductivity(state, state_fc, electronConductionKappa0_, resampledTables_);
-	// 	double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
-	// 	conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
-	// 	conduction_dt.index = domain_signal_maxloc;
-
-	// 	if (verbose) {
-	// 		amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
-	// 		amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
-	// 	}
-	// }
 	if (enableElectronConduction_ == 1) {
-    auto const &state_mf = state_new_cc_[lev].const_arrays(); // MultiFab containing the cell-centered state
-    auto const &geom = Geom(lev);
-    auto const dx = geom.CellSize();
-    amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+		if (conductionType_ == "isotropic") {
+			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+			double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
+			conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
+			conduction_dt.index = domain_signal_maxloc;
 
-    double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
-    amrex::Real kappa_0 = electronConductionKappa0_;
-    amrex::Real cfl = conductionCFL;
+			if (verbose) {
+				amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
+				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
+			}
+		} else { // conductionType_ == "spitzer"
+			auto const &state_mf = state_new_cc_[lev].const_arrays(); // MultiFab containing the cell-centered state
 
-    // Use amrex::ParReduce to find the minimum dt and its location across all GPU threads
-    auto r = amrex::ParReduce(
-        amrex::TypeList<amrex::ReduceOpMin>{}, 
-        amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{}, state_new_cc_[lev], amrex::IntVect(0),
-        [=, this] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> 
-        {
-            
-            
-            amrex::Real rho = state_mf[bx](i, j, k, HydroSystem<problem_t>::density_index);
-            amrex::Real Eint = state_mf[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index); 
-            amrex::Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
+			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+			amrex::Real cfl = conductionCFL;
 
-            // 2. Calculate Spitzer Diffusion Coefficient: (kappa_0 * T^2.5) / (rho * c_v)
-            amrex::Real kappa_spitzer =  electronConductionKappa0_  * std::pow(T, 2.5);
-            amrex::Real diffusion_coefficient = kappa_spitzer / (rho * c_v);
+			// Use amrex::ParReduce to find the minimum dt and its location across all GPU threads
+			auto r = amrex::ParReduce(
+			    amrex::TypeList<amrex::ReduceOpMin>{},
+			    amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{}, state_new_cc_[lev], amrex::IntVect(0),
+			    [=, this] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
+				    amrex::Real rho = state_mf[bx](i, j, k, HydroSystem<problem_t>::density_index);
+				    amrex::Real Eint = state_mf[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+				    amrex::Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
 
-            // Avoid division by zero for unphysical states
-            amrex::Real cell_dt = std::numeric_limits<amrex::Real>::max();
-            if (diffusion_coefficient > 0.0) {
-                cell_dt = cfl * (dx_min * dx_min) / diffusion_coefficient;
-            }
+				    // Spitzer diffusion coefficient: (kappa_0 * T^2.5) / (rho * c_v)
+				    amrex::Real kappa_spitzer = electronConductionKappa0_ * std::pow(T, 2.5);
+				    amrex::Real diffusion_coefficient = kappa_spitzer / (rho * c_v);
 
-            return {cell_dt, amrex::IntVect{AMREX_D_DECL(i, j, k)}};
-        });
+				    // Avoid division by zero for unphysical states
+				    amrex::Real cell_dt = std::numeric_limits<amrex::Real>::max();
+				    if (diffusion_coefficient > 0.0) {
+					    cell_dt = cfl * (dx_min * dx_min) / diffusion_coefficient;
+				    }
 
-    // Extract the global reduction results
-    conduction_dt = r;
-    amrex::ParallelAllReduce::Min(conduction_dt, amrex::ParallelContext::CommunicatorSub());
+				    return {cell_dt, amrex::IntVect{AMREX_D_DECL(i, j, k)}};
+			    });
 
-    if (verbose) {
-        amrex::Print() << std::format("...[level {}] \testimated Spitzer conduction timestep: {:e}\n", lev, conduction_dt.value);
-        amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
-    }
-}
+			// Extract the global reduction results
+			conduction_dt = r;
+			amrex::ParallelAllReduce::Min(conduction_dt, amrex::ParallelContext::CommunicatorSub());
+
+			if (verbose) {
+				amrex::Print() << std::format("...[level {}] \testimated Spitzer conduction timestep: {:e}\n", lev, conduction_dt.value);
+				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
+			}
+		}
+	}
 
 	// compute maximum particle speed on level 'lev'
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> particle_dt{.value = std::numeric_limits<amrex::Real>::max(),
@@ -2461,10 +2460,20 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterC
 	if (amrInterpMethod_ == 1) { // slope-limited linear interpolation
 		//  It has the following important properties:
 		// 1. should NOT produce new extrema
-		//    (will revert to piecewise constant if any component has a local min/max)
+		//    (will revert to piecewise constant if any component has a local min/max
+		//     -- including in directions where the field is exactly flat, e.g. y/z for a 1D-in-3D problem)
 		// 2. should be conservative
 		// 3. preserves linear combinations of variables in each cell
 		return &amrex::mf_linear_slope_minmax_interp;
+	}
+	if (amrInterpMethod_ == 2) { // linear conservative interpolation (gentler limiter, no min/max reversion)
+		// preserves linear combinations of variables in each cell, without the no-new-extrema
+		// reversion to piecewise-constant that mf_linear_slope_minmax_interp applies whenever
+		// any direction (including an exactly-flat one) contains a local extremum.
+		return &amrex::mf_lincc_interp;
+	}
+	if (amrInterpMethod_ == 3) { // pure linear conservative interpolation, no limiting at all
+		return &amrex::mf_cell_cons_interp;
 	}
 
 	amrex::Abort("Invalid AMR interpolation method specified!");
