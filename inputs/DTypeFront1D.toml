@@ -1,14 +1,14 @@
 # This one input serves both the 1D and the 3D build of the problem. It is planar -- the slab is uniform across
 # y and z and the source is a plane at the middle of the x domain -- so every transverse column repeats the 1D
 # solution exactly, and running it in 3D checks that the radiation, dust and photochemistry paths behave
-# identically there. Only the x entries matter in 1D; the four transverse cells are sized to keep the cells
-# cubic in 3D.
+# identically there. Only the x entries matter in 1D; the eight transverse cells are the Quokka minimum and
+# are sized to keep the cells cubic in 3D.
 
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  [0.0, 0.0, 0.0]
-geometry.prob_hi     =  [2.0e19, 6.250000e+17, 6.250000e+17]
+geometry.prob_hi     =  [2.0e19, 1.250000e+18, 1.250000e+18]
 quokka.bc = ["reflecting", "periodic", "periodic"]
 
 # *****************************************************************
@@ -19,9 +19,9 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = [128, 4, 4]
+amr.n_cell          = [128, 8, 8]
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 4     # grid size must be divisible by this; 4 transverse cells
+amr.blocking_factor = 8     # grid size must be divisible by this
 amr.max_grid_size   = 128
 do_reflux = 0
 do_subcycle = 0

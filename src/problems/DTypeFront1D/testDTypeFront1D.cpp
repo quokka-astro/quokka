@@ -600,7 +600,7 @@ auto problem_main() -> int
 	// domain sums below would then count it once per transverse cell; dividing by that count keeps every
 	// budget a per-unit-area quantity and lets the same tolerances apply in any dimensionality.
 	const amrex::Box &domain_box = sim.geom[0].Domain();
-	const double transverse_cells = static_cast<double>(AMREX_D_TERM(1, *domain_box.length(1), *domain_box.length(2)));
+	const auto transverse_cells = static_cast<double>(AMREX_D_TERM(1, *domain_box.length(1), *domain_box.length(2)));
 
 	// Analytic free-streaming solution: a pair of top-hats of height F * E_photon / c reaching
 	// |x - x_source| = chat * t.

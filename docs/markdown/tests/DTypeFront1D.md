@@ -92,7 +92,7 @@ Because the source is mirror-symmetric the signed total momentum is zero and say
 
 ## Running in 3D
 
-The problem is planar, so it runs unchanged in 3D under the same test name and the same input file. The slab is uniform across `y` and `z` and the source is a plane at the middle of the `x` domain, so every transverse column repeats the one-dimensional solution; the point of running it in 3D is to check that the radiation, dust and photochemistry paths behave identically there. `inputs/DTypeFront1D.toml` serves both builds: only its `x` entries matter in 1D, and its four transverse cells are sized to keep the cells cubic in 3D.
+The problem is planar, so it runs unchanged in 3D under the same test name and the same input file. The slab is uniform across `y` and `z` and the source is a plane at the middle of the `x` domain, so every transverse column repeats the one-dimensional solution; the point of running it in 3D is to check that the radiation, dust and photochemistry paths behave identically there. `inputs/DTypeFront1D.toml` serves both builds: only its `x` entries matter in 1D, and its eight transverse cells -- the minimum Quokka allows -- span an extent of `8 dx`, so the cells stay cubic in 3D.
 
 The domain sums the checks rely on are per unit area, so in more than one dimension they are divided by the number of transverse cells; otherwise each column would be counted once per transverse cell. With that normalization the 3D run reproduces the 1D answers to six or seven significant figures -- momentum ratio 1.0038444 against 1.0038441, reprocessed fraction 0.3667441 against 0.3667438, and an identical front position -- and takes a few seconds.
 
