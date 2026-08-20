@@ -224,8 +224,11 @@ auto compute_front_position(amrex::MultiFab const &state_mf, amrex::GpuArray<amr
 	return x_front;
 }
 
-// Ionized hydrogen column: sum_cells n_HII * dx  [cm^-2 in 1D].
-auto compute_ionized_column(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> amrex::Real
+// Ionized hydrogen column: sum_cells n_HII * dx  [cm^-2]. The slab is uniform across y and z, so in more than
+// one dimension the domain sum counts the same column once per transverse cell; transverse_cells divides that
+// back out and makes the result the per-unit-area column in any dimensionality.
+auto compute_ionized_column(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+			    amrex::Real transverse_cells) -> amrex::Real
 {
 	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
 	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
@@ -240,11 +243,13 @@ auto compute_ionized_column(amrex::MultiFab const &state_mf, amrex::GpuArray<amr
 	auto const &hv = reduce_data.value(reduce_op);
 	amrex::Real column = amrex::get<0>(hv);
 	amrex::ParallelAllReduce::Sum(column, amrex::ParallelContext::CommunicatorSub());
-	return column;
+	return column / transverse_cells;
 }
 
-// Domain-integrated radiation energy of group g: sum_cells Erad_g * dx  [erg cm^-2 in 1D].
-auto compute_group_total_erad(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int g) -> amrex::Real
+// Domain-integrated radiation energy of group g: sum_cells Erad_g * dx  [erg cm^-2], per unit area; see
+// compute_ionized_column for transverse_cells.
+auto compute_group_total_erad(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int g,
+			      amrex::Real transverse_cells) -> amrex::Real
 {
 	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
 	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
@@ -259,14 +264,15 @@ auto compute_group_total_erad(amrex::MultiFab const &state_mf, amrex::GpuArray<a
 	auto const &hv = reduce_data.value(reduce_op);
 	amrex::Real total = amrex::get<0>(hv);
 	amrex::ParallelAllReduce::Sum(total, amrex::ParallelContext::CommunicatorSub());
-	return total;
+	return total / transverse_cells;
 }
 
 // Domain-integrated x-momentum of the gas [g cm^-1 s^-1 in 1D]. With outward set, each cell is signed by
 // sgn(x - x_source) so the result measures momentum directed away from the source; without it the plain
 // signed sum is returned, which the mirror symmetry of the problem forces to zero.
 auto compute_gas_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real x_source, bool outward) -> amrex::Real
+			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real x_source, bool outward,
+			  amrex::Real transverse_cells) -> amrex::Real
 {
 	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
 	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
@@ -283,7 +289,7 @@ auto compute_gas_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex
 	auto const &hv = reduce_data.value(reduce_op);
 	amrex::Real momentum = amrex::get<0>(hv);
 	amrex::ParallelAllReduce::Sum(momentum, amrex::ParallelContext::CommunicatorSub());
-	return momentum;
+	return momentum / transverse_cells;
 }
 
 // Domain-integrated x-momentum of the radiation field: sum_cells sign * w_g * F_x,g * dx for group g, with the same sign convention as compute_gas_momentum.
@@ -294,7 +300,8 @@ auto compute_gas_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex
 // an injected photon flux Phi carries the physical momentum flux Phi * E_photon / c, which is what makes the single budget below meaningful across both kinds
 // of band.
 auto compute_group_rad_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real x_source, bool outward, int g) -> amrex::Real
+				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real x_source, bool outward, int g,
+				amrex::Real transverse_cells) -> amrex::Real
 {
 	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
 	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
@@ -313,7 +320,7 @@ auto compute_group_rad_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray
 	auto const &hv = reduce_data.value(reduce_op);
 	amrex::Real momentum = amrex::get<0>(hv);
 	amrex::ParallelAllReduce::Sum(momentum, amrex::ParallelContext::CommunicatorSub());
-	return momentum;
+	return momentum / transverse_cells;
 }
 
 // Largest reduced flux |F| / (c E) of group g anywhere in the domain. The M1 closure admits no state with
@@ -589,6 +596,11 @@ auto problem_main() -> int
 	// The source sits at the middle of the domain and radiates both ways, so each front has Lx / 2 to travel.
 	const double x_source = 0.5 * (prob_lo[0] + sim.geom[0].ProbHiArray()[0]);
 	const double half_Lx = 0.5 * Lx;
+	// The slab is uniform across y and z, so in 2D/3D every transverse column repeats the 1D solution. The
+	// domain sums below would then count it once per transverse cell; dividing by that count keeps every
+	// budget a per-unit-area quantity and lets the same tolerances apply in any dimensionality.
+	const amrex::Box &domain_box = sim.geom[0].Domain();
+	const double transverse_cells = static_cast<double>(AMREX_D_TERM(1, *domain_box.length(1), *domain_box.length(2)));
 
 	// Analytic free-streaming solution: a pair of top-hats of height F * E_photon / c reaching
 	// |x - x_source| = chat * t.
@@ -603,7 +615,7 @@ auto problem_main() -> int
 	{
 		double E_thermal = 0.0;
 		for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
-			const double E_g = compute_group_total_erad(sim.state_new_cc_[0], dx, g);
+			const double E_g = compute_group_total_erad(sim.state_new_cc_[0], dx, g, transverse_cells);
 			amrex::Print() << "Group " << g << " integrated Erad: " << E_g << "\n";
 			if (g != group_ionizing) {
 				E_thermal += E_g;
@@ -667,15 +679,15 @@ auto problem_main() -> int
 			double p_out_beamed = 0.0;
 			double p_signed_total = 0.0;
 			for (int g = 0; g < Physics_Traits<DTypeFront1D>::nGroups; ++g) {
-				const double p_out = compute_group_rad_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, true, g);
-				p_signed_total += compute_group_rad_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, false, g);
+				const double p_out = compute_group_rad_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, true, g, transverse_cells);
+				p_signed_total += compute_group_rad_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, false, g, transverse_cells);
 				amrex::Print() << "Group " << g << " outward momentum: " << p_out << "\n";
 				if (g != group_ir) {
 					p_out_beamed += p_out;
 				}
 			}
-			const double p_gas_out = compute_gas_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, true);
-			p_signed_total += compute_gas_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, false);
+			const double p_gas_out = compute_gas_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, true, transverse_cells);
+			p_signed_total += compute_gas_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, false, transverse_cells);
 			const double p_injected = 2.0 * (F + F_ion) * E_photon * t_end / C::c_light;
 			const double p_frac = (p_gas_out + p_out_beamed) / p_injected;
 			const double tol_p = 0.01;
@@ -736,8 +748,8 @@ auto problem_main() -> int
 	// |x - x_source|), because the ~130 K dust emits nothing back into the optical; integrating that out to
 	// both fronts gives a closed form for what should be left unprocessed, hence the factor of two.
 	{
-		const double E_ir = compute_group_total_erad(sim.state_new_cc_[0], dx, group_ir);
-		const double E_opt = compute_group_total_erad(sim.state_new_cc_[0], dx, group_optical);
+		const double E_ir = compute_group_total_erad(sim.state_new_cc_[0], dx, group_ir, transverse_cells);
+		const double E_opt = compute_group_total_erad(sim.state_new_cc_[0], dx, group_optical, transverse_cells);
 		const double rho_0 = sim.userData_.primary_species_2 * spmasses[1]; // initial neutral-H mass density
 		const double alpha_opt = rho_0 * kappa2;			    // optical absorption coefficient [cm^-1]
 		const double tau_front = alpha_opt * x_analytic(t_end);
@@ -784,13 +796,13 @@ auto problem_main() -> int
 	// in flight; mis-scaling the source by c/chat = 1000 collapses the surviving fraction from 0.20 to
 	// 8e-5. Hence the lower bound as well as the upper one.
 	{
-		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, group_ionizing);
+		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, group_ionizing, transverse_cells);
 		// As in the energy budget above, the slab feeds both sides, hence the factor of two.
 		const double injected_ion = 2.0 * F_ion * E_photon * t_end + Erad_floor_ * Lx;
 		const double ion_frac = E_ion / injected_ion;
 		const double n_injected = injected_ion / E_photon;
 		const double n_absorbed = (injected_ion - E_ion) / E_photon;
-		const double column_HII = compute_ionized_column(sim.state_new_cc_[0], dx);
+		const double column_HII = compute_ionized_column(sim.state_new_cc_[0], dx, transverse_cells);
 
 		amrex::Print() << "Ionizing band integrated Erad: " << E_ion << " (injected " << injected_ion << ", surviving fraction " << ion_frac << ")\n";
 		amrex::Print() << "Ionizing photons: " << n_injected << " injected, " << n_absorbed << " absorbed; ionized column " << column_HII

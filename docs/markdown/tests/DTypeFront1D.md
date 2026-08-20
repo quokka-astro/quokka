@@ -90,6 +90,12 @@ p_{\text{inj}} = \frac{2 \, (F_{\text{opt}} + F_{\text{ion}}) \, E_\gamma \, t}{
 
 Because the source is mirror-symmetric the signed total momentum is zero and says nothing on its own; the informative quantity is the *outward* momentum, each cell signed by \\(\text{sgn}(x - x_c)\\). Note the absence of any \\(\hat c\\) factor here, whereas the energy budget carries \\(\hat c / c\\), so the two are independent statements.
 
+## Running in 3D
+
+The problem is planar, so it runs unchanged in 3D and is registered there as `DTypeFront1D3D`. The slab is uniform across `y` and `z` and the source is a plane at the middle of the `x` domain, so every transverse column repeats the one-dimensional solution; the point of the 3D variant is to check that the radiation, dust and photochemistry paths behave identically there. `inputs/DTypeFront1D3D.toml` keeps the `x` resolution and `stop_time` of the 1D test and adds four transverse cells, sized to keep the cells cubic, so every tolerance below carries over unchanged.
+
+The domain sums the checks rely on are per unit area, so in more than one dimension they are divided by the number of transverse cells; otherwise each column would be counted once per transverse cell. With that normalization the 3D run reproduces the 1D answers to six or seven significant figures -- momentum ratio 1.0038444 against 1.0038441, reprocessed fraction 0.3667441 against 0.3667438, and an identical front position -- and takes a few seconds.
+
 ## Answer check
 
 The test passes if all of the following hold. Measured values at the reference resolution are given in the last column.

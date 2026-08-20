@@ -1,4 +1,7 @@
-if(AMReX_SPACEDIM EQUAL 1)
+# The problem is planar, so it runs unchanged in 3D: the slab is uniform across y and z and every transverse
+# column repeats the 1D solution, which is what makes it a useful check that the radiation, dust and
+# photochemistry paths behave identically in 3D. 2D is skipped only to keep CI time down.
+if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
   set(microphysics_network_name "photoionization") # this will override
                                                   # network_name to
                                                   # photoionization for this
@@ -98,5 +101,11 @@ if(AMReX_SPACEDIM EQUAL 1)
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  if(AMReX_SPACEDIM EQUAL 1)
+    add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  else()
+    # Same problem on a coarser grid and a shorter run, so the 3D variant stays cheap enough for CI while
+    # still exercising every check.
+    add_test(NAME ${JOB_NAME}3D COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}3D.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  endif()
 endif()
