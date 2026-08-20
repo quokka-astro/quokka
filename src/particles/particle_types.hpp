@@ -561,6 +561,10 @@ inline amrex::Real scalar_yield_per_SN = 1.0; // NOLINT
 inline constexpr amrex::Real SN_p_term_Msunkmps_canonical = 2.8e5;    // [M_sun km/s]
 inline amrex::Real SN_p_term_Msunkmps = SN_p_term_Msunkmps_canonical; // NOLINT
 
+// Power-law index of the ambient-density dependence of the SN terminal momentum, p_snr = p_snr_0 * n_H^SN_p_term_exponent.
+// Default: canonical value from Kim & Ostriker 2015.
+inline amrex::Real SN_p_term_exponent = -0.17; // NOLINT
+
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -603,6 +607,9 @@ inline void particleParmParse()
 
 	// SN terminal momentum (overrides canonical value if set)
 	pp.query("SN_p_term_Msunkmps", SN_p_term_Msunkmps);
+
+	// SN terminal momentum density scaling exponent (overrides canonical value if set)
+	pp.query("SN_p_term_exponent", SN_p_term_exponent);
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);
