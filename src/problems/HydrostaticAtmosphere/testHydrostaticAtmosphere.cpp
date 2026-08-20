@@ -30,6 +30,7 @@ template <> struct quokka::EOS_Traits<HydrostaticAtmosphereProblem> {
 };
 
 template <> struct Physics_Traits<HydrostaticAtmosphereProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 };
 

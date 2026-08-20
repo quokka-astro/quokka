@@ -235,7 +235,13 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
-	amrex::Real tempFloor_ = 0.0;	     // default
+	// Default temperature floor: the CMB temperature, 2.7 K, for problems in CGS units, where the
+	// literal value below is unambiguously in kelvin. It defaults to 0 for the CONSTANTS and CUSTOM
+	// unit systems, because there the value would be interpreted in code units rather than kelvin:
+	// CONSTANTS fixes the physical constants without defining a temperature scale, and CUSTOM
+	// rescales temperature by Physics_Traits::unit_temperature. Such problems should set
+	// temperature_floor explicitly.
+	amrex::Real tempFloor_ = (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) ? 2.7 : 0.0; // K (CGS only)
 	bool useDensityFloorParser_ = false;
 	std::string densityFloorExpr_;
 	std::optional<amrex::Parser> densityFloorParser_;

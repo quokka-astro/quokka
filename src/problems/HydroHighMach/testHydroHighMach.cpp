@@ -40,6 +40,7 @@ template <> struct quokka::EOS_Traits<HighMachProblem> {
 };
 
 template <> struct Physics_Traits<HighMachProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 };

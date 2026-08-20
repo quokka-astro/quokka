@@ -26,6 +26,7 @@ template <> struct quokka::EOS_Traits<ShearWaveProblem> {
 };
 
 template <> struct Physics_Traits<ShearWaveProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear defaults to 0; no-op unless set
