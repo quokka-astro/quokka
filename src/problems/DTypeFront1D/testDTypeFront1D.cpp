@@ -227,8 +227,8 @@ auto compute_front_position(amrex::MultiFab const &state_mf, amrex::GpuArray<amr
 // Ionized hydrogen column: sum_cells n_HII * dx  [cm^-2]. The slab is uniform across y and z, so in more than
 // one dimension the domain sum counts the same column once per transverse cell; transverse_cells divides that
 // back out and makes the result the per-unit-area column in any dimensionality.
-auto compute_ionized_column(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			    amrex::Real transverse_cells) -> amrex::Real
+auto compute_ionized_column(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real transverse_cells)
+    -> amrex::Real
 {
 	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
 	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
@@ -248,8 +248,8 @@ auto compute_ionized_column(amrex::MultiFab const &state_mf, amrex::GpuArray<amr
 
 // Domain-integrated radiation energy of group g: sum_cells Erad_g * dx  [erg cm^-2], per unit area; see
 // compute_ionized_column for transverse_cells.
-auto compute_group_total_erad(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int g,
-			      amrex::Real transverse_cells) -> amrex::Real
+auto compute_group_total_erad(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int g, amrex::Real transverse_cells)
+    -> amrex::Real
 {
 	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
 	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
@@ -271,8 +271,8 @@ auto compute_group_total_erad(amrex::MultiFab const &state_mf, amrex::GpuArray<a
 // sgn(x - x_source) so the result measures momentum directed away from the source; without it the plain
 // signed sum is returned, which the mirror symmetry of the problem forces to zero.
 auto compute_gas_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real x_source, bool outward,
-			  amrex::Real transverse_cells) -> amrex::Real
+			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real x_source, bool outward, amrex::Real transverse_cells)
+    -> amrex::Real
 {
 	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
 	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
