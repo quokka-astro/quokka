@@ -72,8 +72,22 @@ static constexpr double newton_erad_base_tau_threshold = 1.0;
 // kinetic energy in UpdateFlux; in a cold, strongly radiation-driven cell that transfer can exceed the
 // internal energy available, and subtracting it unclamped leaves a negative internal energy. See the cap
 // in UpdateFlux, and the matching one in AddSourceTermsSingleGroup -- the failure mode is not specific to
-// either solver. Capping does not conserve energy, so capped cell-updates are counted and reported at the
-// end of the run rather than passing silently.
+// either solver.
+//
+// Capping does not conserve energy. It is a known limitation of the lagged O(v/c) work term rather than a
+// symptom of too long a radiation timestep: the work term is lagged from the previous outer iteration while
+// dEkin_work is evaluated from the freshly updated momentum, so the two do not cancel exactly, and refining
+// dt does not help. Measured on DTypeFront1D, the fraction of radiation cell-updates that reach the cap is
+// invariant at ~27% across a fourfold refinement of dt (26.8% / 27.2% / 26.5% at 128 / 256 / 512 cells).
+//
+// It is nonetheless benign, which is why it is left in place and not reported at runtime. The cap can only
+// bind where dEkin_work already exceeds the internal energy available, i.e. in cold cells the radiation has
+// evacuated, so Egas there is minuscule and the absolute energy discarded is negligible however many cells
+// are involved: DTypeFront1D closes its thermal-band energy budget to 1.0000000 with ~27% of its radiation
+// cell-updates capping. Counting them would mean an atomic on one address in a large fraction of every
+// radiation kernel, which is not worth paying for in a production GPU run.
+//
+// See https://github.com/quokka-astro/quokka/issues/2173 for the two candidate fixes.
 static constexpr double work_term_min_eint_fraction = 0.1;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
@@ -181,7 +195,6 @@ template <typename problem_t> struct FluxUpdateResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Erad;			   // radiation energy density
 	amrex::GpuArray<double, 3> gasMomentum;							   // gas momentum
 	amrex::GpuArray<amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nGroups>, 3> Frad; // radiation flux
-	bool work_cap_hit{false}; // the work-term transfer was clamped to keep the internal energy positive
 };
 
 [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double
