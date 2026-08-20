@@ -40,7 +40,7 @@ const double Efloor = 5.674216387016754e-11; // equivalent to T = 2.e6 K
 const double rho0 = 0.1;		     // 1/cm^3
 const double D = 4.396303164750053e+28;	     // diffusion coefficient, in units of cm^2/s
 const double sigma = 2.410685615625e+17;     // width of the Gaussian, in units of cm
-const double Lref = 7.714e+17;		     // half box length
+const double Lref = 7.714e+17;		     // quarter box length
 struct ThermalConductionProblem {
 };
 
