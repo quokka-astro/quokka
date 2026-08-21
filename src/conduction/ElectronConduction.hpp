@@ -30,6 +30,8 @@ struct ElectronConductionParams {
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
 	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
+	bool spitzer_scaling = true;	      // if true, kappa(T) = conductivity_prefactor * T^2.5 (Spitzer);
+					      // if false, kappa(T) = conductivity_prefactor (constant, isotropic)
 };
 
 template <typename problem_t> class ElectronConduction
@@ -58,6 +60,7 @@ template <typename problem_t> class ElectronConduction
 		const amrex::Real flux_limiter_phi = params.flux_limiter_phi;
 		const amrex::Real saturation_factor = params.saturation_factor;
 		const amrex::Real t_min = params.min_temperature;
+		const bool spitzer_scaling = params.spitzer_scaling;
 		const amrex::Real small = std::numeric_limits<amrex::Real>::min();
 
 		amrex::MultiFab temperature(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
@@ -109,7 +112,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * cs * cs * cs, small);
 
 			temperature_arr[bx](i, j, k) = Tuse;
-			conductivity_arr[bx](i, j, k) = kappa * std::pow(Tuse, 2.5);
+			conductivity_arr[bx](i, j, k) = spitzer_scaling ? (kappa * std::pow(Tuse, 2.5)) : kappa;
 			saturated_flux_arr[bx](i, j, k) = qsat;
 		});
 
