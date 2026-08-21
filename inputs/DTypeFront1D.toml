@@ -33,9 +33,9 @@ suppress_output = 0
 stop_time = 2.0e11
 
 # Uniform neutral hydrogen slab: n_0 = 100 cm^-3, cold (100 K).
-photoionize.primary_species_1 = 1.0e-10   # e
-photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
-photoionize.primary_species_3 = 1.0e-10   # H+
+photoionize.n_e_init = 1.0e-10    # e
+photoionize.n_HI_init = 1.0e2     # H  (neutral, n_0)
+photoionize.n_HII_init = 1.0e-10  # H+
 photoionize.temperature = 1.0e2
 # Photon flux injected into the optical band, per side [photons cm^-2 s^-1]. The source sits at the middle of
 # the domain and emits twice this, half to each side, so each side receives this flux. It sets the dust
