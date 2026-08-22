@@ -82,6 +82,7 @@ else:
 
 
 DATA_FILE = "dust_gyromotion_diagnostics.csv"
+PHASE_DATA_FILE = "dust_gyromotion_phase_diagnostics.csv"
 THEORY_DATA_FILE = "dust_gyromotion_diagnostics_theory.csv"
 OUTPUT_FILE = "dust_gyromotion_diagnostics_panels.pdf"
 ENERGY_OUTPUT_FILE = "dust_gyromotion_energy_error.pdf"
@@ -171,6 +172,7 @@ def plot_panel(
 
 def make_figure(
     numerical_grouped: dict[str, list[dict[str, float | str]]],
+    phase_grouped: dict[str, list[dict[str, float | str]]],
     theory_grouped: dict[str, list[dict[str, float | str]]],
     output_dir: Path,
 ) -> Path:
@@ -188,7 +190,7 @@ def make_figure(
     )
     plot_panel(
         axes[1],
-        numerical_grouped,
+        phase_grouped,
         theory_grouped,
         "abs_delta_phase",
         "theory_delta_phase",
@@ -276,8 +278,9 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     numerical_grouped = group_by_scheme(read_rows(data_dir / DATA_FILE))
+    phase_grouped = group_by_scheme(read_rows(data_dir / PHASE_DATA_FILE))
     theory_grouped = group_by_scheme(read_rows(data_dir / THEORY_DATA_FILE))
-    diagnostics_output = make_figure(numerical_grouped, theory_grouped, output_dir)
+    diagnostics_output = make_figure(numerical_grouped, phase_grouped, theory_grouped, output_dir)
     energy_output = make_energy_figure(numerical_grouped, output_dir)
     print(diagnostics_output)
     print(energy_output)

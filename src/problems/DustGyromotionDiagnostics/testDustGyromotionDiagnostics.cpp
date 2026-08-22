@@ -50,6 +50,9 @@ constexpr int theory_sample_count = 401;
 constexpr double theory_dt_max = third_decade_factor * 1.0e1;
 constexpr double stiff_phase_step = std::numbers::pi / 4.0;
 constexpr double stiff_phase_zero_offset = std::numbers::pi / 64.0;
+constexpr double stiff_numerical_phase_step = std::numbers::pi;
+constexpr double stiff_numerical_dense_dt_max = 10.0;
+constexpr int stiff_numerical_sparse_phase_stride = 3;
 constexpr double conservative_dt_factor = 1.333521432163324; // 10^(1/8)
 constexpr double plot_floor = std::numeric_limits<double>::epsilon();
 
@@ -72,6 +75,17 @@ struct GyroSample {
 struct SchemeSweepResult {
 	ResolvedRkScheme scheme;
 	std::vector<GyroSample> samples;
+};
+
+struct GyroPhaseSample {
+	double requested_dt;
+	double abs_delta_phase;
+	bool used_resolved_branch;
+};
+
+struct SchemePhaseSweepResult {
+	ResolvedRkScheme scheme;
+	std::vector<GyroPhaseSample> samples;
 };
 
 auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
@@ -124,8 +138,8 @@ template <> struct Physics_Traits<DustPureGyromotion> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustSources<DustPureGyromotion>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustPureGyromotion>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> alpha{};
 	alpha[0] = 0.0;
@@ -133,8 +147,8 @@ DustSources<DustPureGyromotion>::ComputeReciprocalStoppingTime(DustCoefficientSt
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustSources<DustPureGyromotion>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustPureGyromotion>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> dimensionless_charge_to_mass_ratio_array{};
 	dimensionless_charge_to_mass_ratio_array[0] = dimensionless_charge_to_mass_ratio;
@@ -227,12 +241,12 @@ auto resolvedBranchThresholdDt() -> double { return 1.0 / std::abs(omega_L); }
 
 auto usesResolvedBranch(double effective_dt) -> bool { return effective_dt < resolvedBranchThresholdDt(); }
 
-auto runGyroSimulation(ResolvedRkScheme scheme, double constant_dt, double omega_gyro_residual) -> SimulationData<DustPureGyromotion>
+auto runGyroSimulation(ResolvedRkScheme scheme, double constant_dt, double omega_gyro_residual, int steps) -> SimulationData<DustPureGyromotion>
 {
 	amrex::ParmParse pp;
 	pp.add("constant_dt", constant_dt);
-	pp.add("stop_time", energy_diagnostic_steps * constant_dt);
-	pp.add("max_timesteps", energy_diagnostic_steps);
+	pp.add("stop_time", steps * constant_dt);
+	pp.add("max_timesteps", steps);
 	pp.add("suppress_output", 1);
 	pp.add("show_performance_hints", 0);
 
@@ -246,8 +260,8 @@ auto runGyroSimulation(ResolvedRkScheme scheme, double constant_dt, double omega
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 1000000.0;
 	sim.constantDt_ = constant_dt;
-	sim.stopTime_ = energy_diagnostic_steps * constant_dt;
-	sim.maxTimesteps_ = energy_diagnostic_steps;
+	sim.stopTime_ = steps * constant_dt;
+	sim.maxTimesteps_ = steps;
 	sim.dustResolvedRkScheme_ = scheme;
 	sim.dust_omega_gyro_res_ = omega_gyro_residual;
 	sim.print_dust_counter_ = false;
@@ -260,6 +274,8 @@ auto runGyroSimulation(ResolvedRkScheme scheme, double constant_dt, double omega
 }
 
 auto phaseFromRelativeState(double wx, double wy) -> double { return std::atan2(-wy, wx); }
+
+auto phaseError(double wx, double wy, double theta) -> double { return std::remainder(phaseFromRelativeState(wx, wy) - theta, 2.0 * std::numbers::pi); }
 
 auto maxMomentumConservationError(SimulationData<DustPureGyromotion> const &data) -> double
 {
@@ -358,19 +374,43 @@ auto stiffTheoryTimesteps() -> std::vector<double>
 	return timesteps;
 }
 
+auto stiffNumericalTimesteps() -> std::vector<double>
+{
+	const double dt_min = resolvedBranchThresholdDt();
+	const double phase_max = unwrappedTheoryStiffDeltaPhase(omega_rel * dt_min);
+	const double phase_min = unwrappedTheoryStiffDeltaPhase(omega_rel * theory_dt_max);
+	const int first_phase_index = static_cast<int>(std::ceil(phase_min / stiff_numerical_phase_step));
+	const int last_phase_index = static_cast<int>(std::floor(phase_max / stiff_numerical_phase_step));
+
+	std::vector<double> timesteps = {dt_min};
+	for (int index = last_phase_index; index >= first_phase_index; --index) {
+		double target_phase = static_cast<double>(index) * stiff_numerical_phase_step;
+		if (index % 2 == 0) {
+			target_phase += stiff_phase_zero_offset;
+		}
+		if (target_phase < phase_max && target_phase > phase_min) {
+			const double timestep = timestepAtStiffPhase(target_phase);
+			if (timestep <= stiff_numerical_dense_dt_max || index % stiff_numerical_sparse_phase_stride == 0) {
+				timesteps.push_back(timestep);
+			}
+		}
+	}
+	timesteps.push_back(theory_dt_max);
+	return timesteps;
+}
+
 auto computeGyroSample(ResolvedRkScheme scheme, double requested_dt) -> GyroSample
 {
-	SimulationData<DustPureGyromotion> const data = runGyroSimulation(scheme, requested_dt, 0.0);
+	SimulationData<DustPureGyromotion> const data = runGyroSimulation(scheme, requested_dt, 0.0, energy_diagnostic_steps);
 	const double conservative_requested_dt = conservative_dt_factor * requested_dt;
-	SimulationData<DustPureGyromotion> const conservative_data = runGyroSimulation(scheme, conservative_requested_dt, 1.0);
+	SimulationData<DustPureGyromotion> const conservative_data = runGyroSimulation(scheme, conservative_requested_dt, 1.0, energy_diagnostic_steps);
 	const double effective_dt = data.t_vec_[1] - data.t_vec_[0];
 	const double wx = data.wx_vec_[1];
 	const double wy = data.wy_vec_[1];
 	const double amplitude_ratio = std::sqrt(wx * wx + wy * wy) / initial_relative_drift;
 	const double delta_log_amplitude = std::log(amplitude_ratio);
 	const double theta = omega_rel * effective_dt;
-	const double numerical_phase = phaseFromRelativeState(wx, wy);
-	const double delta_phase = std::remainder(numerical_phase - theta, 2.0 * std::numbers::pi);
+	const double delta_phase = phaseError(wx, wy, theta);
 	return GyroSample{
 	    .requested_dt = requested_dt,
 	    .conservative_requested_dt = conservative_requested_dt,
@@ -388,12 +428,42 @@ auto computeGyroSample(ResolvedRkScheme scheme, double requested_dt) -> GyroSamp
 	};
 }
 
+auto computeGyroPhaseSample(ResolvedRkScheme scheme, double requested_dt) -> GyroPhaseSample
+{
+	SimulationData<DustPureGyromotion> const data = runGyroSimulation(scheme, requested_dt, 0.0, 1);
+	const double effective_dt = data.t_vec_[1] - data.t_vec_[0];
+	const double delta_phase = phaseError(data.wx_vec_[1], data.wy_vec_[1], omega_rel * effective_dt);
+	return {
+	    .requested_dt = requested_dt,
+	    .abs_delta_phase = std::max(std::abs(delta_phase), plot_floor),
+	    .used_resolved_branch = usesResolvedBranch(effective_dt),
+	};
+}
+
 auto runSchemeSweep(ResolvedRkScheme scheme) -> SchemeSweepResult
 {
 	SchemeSweepResult result{.scheme = scheme, .samples = {}};
 	result.samples.reserve(requested_dt_values.size());
 	for (double const requested_dt : requested_dt_values) {
 		result.samples.push_back(computeGyroSample(scheme, requested_dt));
+	}
+	return result;
+}
+
+auto runPhaseSweep(SchemeSweepResult const &base_run) -> SchemePhaseSweepResult
+{
+	SchemePhaseSweepResult result{.scheme = base_run.scheme, .samples = {}};
+	for (GyroSample const &sample : base_run.samples) {
+		if (sample.used_resolved_branch) {
+			result.samples.push_back({
+			    .requested_dt = sample.requested_dt,
+			    .abs_delta_phase = sample.abs_delta_phase,
+			    .used_resolved_branch = true,
+			});
+		}
+	}
+	for (double const requested_dt : stiffNumericalTimesteps()) {
+		result.samples.push_back(computeGyroPhaseSample(base_run.scheme, requested_dt));
 	}
 	return result;
 }
@@ -417,14 +487,27 @@ void writeSweepCsv(std::vector<SchemeSweepResult> const &runs)
 	}
 }
 
+void writePhaseSweepCsv(std::vector<SchemePhaseSweepResult> const &runs)
+{
+	std::ofstream file("dust_gyromotion_phase_diagnostics.csv");
+	file << std::setprecision(17);
+	file << "scheme,requested_dt,abs_delta_phase,used_resolved_branch,resolved_stiff_boundary_dt,plot_floor\n";
+	for (auto const &run : runs) {
+		for (auto const &sample : run.samples) {
+			file << resolvedRkSchemeSlug(run.scheme) << "," << sample.requested_dt << "," << sample.abs_delta_phase << ","
+			     << (sample.used_resolved_branch ? 1 : 0) << "," << resolvedBranchThresholdDt() << "," << plot_floor << "\n";
+		}
+	}
+}
+
 void writeTheoryRow(std::ofstream &file, ResolvedRkScheme scheme, double requested_dt)
 {
 	const double theta = omega_rel * requested_dt;
 	const bool used_resolved_branch = usesResolvedBranch(requested_dt);
 	const double delta_log_amplitude = used_resolved_branch ? theoryResolvedDeltaLogAmplitude(scheme, theta) : theoryStiffDeltaLogAmplitude(theta);
 	const double delta_phase = used_resolved_branch ? theoryResolvedDeltaPhase(scheme, theta) : theoryStiffDeltaPhase(theta);
-	file << resolvedRkSchemeSlug(scheme) << "," << requested_dt << "," << delta_log_amplitude << "," << delta_phase << ","
-	     << (used_resolved_branch ? 1 : 0) << "\n";
+	file << resolvedRkSchemeSlug(scheme) << "," << requested_dt << "," << delta_log_amplitude << "," << delta_phase << "," << (used_resolved_branch ? 1 : 0)
+	     << "\n";
 }
 
 void writeTheoryCsv()
@@ -460,6 +543,11 @@ auto problem_main() -> int
 	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
 		runs.push_back(runSchemeSweep(scheme));
 	}
+	std::vector<SchemePhaseSweepResult> phase_runs;
+	phase_runs.reserve(runs.size());
+	for (SchemeSweepResult const &run : runs) {
+		phase_runs.push_back(runPhaseSweep(run));
+	}
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -484,14 +572,23 @@ auto problem_main() -> int
 					       << ", amplitude ratio = " << sample.amplitude_ratio << ", delta log amplitude = " << sample.delta_log_amplitude
 					       << ", delta phase = " << sample.delta_phase
 					       << ", mean absolute relative energy error = " << sample.mean_absolute_relative_energy_error
-					       << ", conservative mean absolute relative energy error = " << sample.conservative_mean_absolute_relative_energy_error
+					       << ", conservative mean absolute relative energy error = "
+					       << sample.conservative_mean_absolute_relative_energy_error
 					       << ", momentum conservation error = " << sample.momentum_conservation_error << "\n";
 
 				if (!std::isfinite(sample.delta_log_amplitude) || !std::isfinite(sample.delta_phase) ||
-				    !std::isfinite(sample.mean_absolute_relative_energy_error) || !std::isfinite(sample.conservative_mean_absolute_relative_energy_error) ||
+				    !std::isfinite(sample.mean_absolute_relative_energy_error) ||
+				    !std::isfinite(sample.conservative_mean_absolute_relative_energy_error) ||
 				    !std::isfinite(sample.momentum_conservation_error) ||
 				    (sample.conservative_mean_absolute_relative_energy_error > conservation_tol) ||
 				    (sample.momentum_conservation_error > conservation_tol)) {
+					passed = false;
+				}
+			}
+		}
+		for (auto const &run : phase_runs) {
+			for (auto const &sample : run.samples) {
+				if (!std::isfinite(sample.abs_delta_phase)) {
 					passed = false;
 				}
 			}
@@ -505,6 +602,7 @@ auto problem_main() -> int
 		}
 		if (write_csv) {
 			writeSweepCsv(runs);
+			writePhaseSweepCsv(phase_runs);
 			writeTheoryCsv();
 		}
 	}
