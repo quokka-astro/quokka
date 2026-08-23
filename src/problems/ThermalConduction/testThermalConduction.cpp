@@ -204,7 +204,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 {
 	// Read problem parameters
-	const double max_time = 46905.40075444166; // 1 conduction time
+	const double max_time = 4690.540075444166; // 1 conduction time
 
 	const double CFL_number = 0.3;
 	const int max_timesteps = std::max(2000, nx * 100);
