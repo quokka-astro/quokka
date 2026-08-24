@@ -291,6 +291,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				    "Physical resistivity requires use_dual_energy = 0: Ohmic heating is not yet added to the auxiliary energy equation.");
 			}
 		}
+		if (enableElectronConduction_) {
+			// TODO (av): add support for subcycling with conduction
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0, "AMR subcycling is not supported with conduction. Set do_subcycle = 0.");
+		}
 		if constexpr (Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
 			const bool viscosity_active = (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) ||
 						      (shearViscosity_ != 0.0) || (bulkViscosity_ != 0.0);
@@ -403,8 +407,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	template <SourceOrder Order>
-	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev, amrex::Real time,
-					      amrex::Real dt_lev) -> bool;
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc,
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> *recal_fluxes, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 	template <SourceOrder Order, typename... Fs> static auto callInOrder(Fs &&...fs) -> void
 	{
 		auto funcs = std::forward_as_tuple(std::forward<Fs>(fs)...);
@@ -1148,8 +1152,9 @@ auto QuokkaSimulation<problem_t>::makeExternalHeatingRate(int lev, amrex::Real c
 
 template <typename problem_t>
 template <typename QuokkaSimulation<problem_t>::SourceOrder Order>
-auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev,
-								   amrex::Real time, amrex::Real dt) -> bool
+auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc,
+								   std::array<amrex::MultiFab, AMREX_SPACEDIM> *recal_fluxes, int lev, amrex::Real time,
+								   amrex::Real dt) -> bool
 {
 	auto const applyDust = [&]() {
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1194,10 +1199,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 
 	auto const applyConduction = [&]() {
 		if (enableElectronConduction_ == 1) {
-			if (max_level > 0) {
-				amrex::Abort("Electron conduction not implemented for > 0 levels.");
-			}
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
+			// NOTE: heat_flux is defined (with 1 component) inside ElectronConduction::ComputeExplicit,
+			// so it only needs to be declared here.
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
+
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					fillBoundaryConditions(state_fc[idim], state_fc[idim], lev, time, quokka::centering::fc,
@@ -1209,7 +1215,20 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 											     .saturation_factor = electronConductionSaturationFactor_,
 											     .min_temperature = tempFloor_};
-			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params);
+			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
+			if ((do_reflux != 0) && (recal_fluxes != nullptr)) {
+				// heat_flux has a single component, so accumulate it into the energy components of the
+				// multi-component reflux array (which the caller defines, zeroes and hands to the flux
+				// registers with the full time step). Each Strang half-step covers dt = 0.5 * dt_lev,
+				// hence the 0.5 weight here.
+				const amrex::Real reflux_weight = 0.5;
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					amrex::MultiFab::Saxpy((*recal_fluxes)[idim], reflux_weight, heat_flux[idim], 0, HydroSystem<problem_t>::energy_index,
+							       1, 0);
+					amrex::MultiFab::Saxpy((*recal_fluxes)[idim], reflux_weight, heat_flux[idim], 0,
+							       HydroSystem<problem_t>::internalEnergy_index, 1, 0);
+				}
+			}
 		}
 	};
 
@@ -2322,6 +2341,20 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
 		amrex::ignore_unused(emf_as_crse, emf_as_fine);
 	}
+	std::optional<std::array<amrex::MultiFab, AMREX_SPACEDIM>> recal_fluxes;
+
+	if (enableElectronConduction_ == 1) {
+		// Construct the array of MultiFabs using emplace
+		recal_fluxes.emplace();
+		for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
+			amrex::BoxArray ba = boxArray(lev);
+			ba.surroundingNodes(dim); // nodal in direction dim
+			(*recal_fluxes)[dim].define(ba, DistributionMap(lev), Physics_Indices<problem_t>::nvarTotal_cc, 0);
+			(*recal_fluxes)[dim].setVal(0.0);
+		}
+	}
+
+	auto *recal_fluxes_ptr = recal_fluxes.has_value() ? &recal_fluxes.value() : nullptr;
 
 	const amrex::Real stage1Weight = (integratorOrder_ == 2) ? 0.5 : 1.0;
 	const int nghost_Riemann =
@@ -2332,7 +2365,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	auto burn_success_first = addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
+	auto burn_success_first =
+	    addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, recal_fluxes_ptr, lev, time, 0.5 * dt_lev);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
@@ -2648,7 +2682,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// do Strang split source terms (second half-step)
 	auto burn_success_second =
-	    addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	    addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], recal_fluxes_ptr, lev, time + dt_lev, 0.5 * dt_lev);
 	if (burn_success_second) {
 		ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
 	}
@@ -2657,6 +2691,14 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	bool const final_success = (cfl_ok && burn_success_second);
 
 	if (do_reflux == 1 && final_success) {
+		if (enableElectronConduction_ == 1) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				amrex::MultiFab::Saxpy(flux_rk2[idim], 1.0, (*recal_fluxes)[idim], HydroSystem<problem_t>::energy_index,
+						       HydroSystem<problem_t>::energy_index, 1, 0);
+				amrex::MultiFab::Saxpy(flux_rk2[idim], 1.0, (*recal_fluxes)[idim], HydroSystem<problem_t>::internalEnergy_index,
+						       HydroSystem<problem_t>::internalEnergy_index, 1, 0);
+			}
+		}
 		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux_rk2, lev, dt_lev);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			// E = -v x B, our emf is v x B, so we need to pass -dt
