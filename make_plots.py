@@ -136,14 +136,14 @@ BFIELD_MAG_VMAX  = 2e-7
 
 # Bphi 2-way comparison: XY (midplane) panels get a wider range than the
 # XZ / YZ (edge-on) panels, since Bphi is concentrated near the midplane.
-BPHI_XY_VMAX    = 1e-7
-BPHI_EDGE_VMAX  = 1e-8
+BPHI_XY_VMAX    = 1e-6
+BPHI_EDGE_VMAX  = 1e-7
 BPHI_LINTHRESH_FRACTION = 1e-2   # linthresh = VMAX * this fraction
 
 # Density slices: floor is the simulation's density floor, ceiling is
 # roughly the disk midplane peak.
-DENS_LOG_VMIN = -34.0            # log10(rho_floor [g/cm^3])
-DENS_LOG_VMAX = -22.0            # log10(rho_max   [g/cm^3])
+DENS_LOG_VMIN = -32.0            # log10(rho_floor [g/cm^3])
+DENS_LOG_VMAX = -20.0            # log10(rho_max   [g/cm^3])
 
 # div B slices: symmetric linear range (NOT log)
 DIVB_VMAX = 5e-31
@@ -236,7 +236,7 @@ extent_kpc = [-width_kpc/2, width_kpc/2, -width_kpc/2, width_kpc/2]
 
 # ── Aphi table metadata ───────────────────────────────────────────────────────
 meta = {}
-with open("Aphi_2d_meta.txt") as f:
+with open("tests/input/Aphi_2d_meta.txt") as f:
     for line in f:
         line = line.strip()
         if not line or line.startswith("#"):
