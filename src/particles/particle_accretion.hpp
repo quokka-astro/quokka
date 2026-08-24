@@ -251,7 +251,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 // equal to the Jeans density.
 template <typename problem_t>
 void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Geometry &geom,
-		      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc)
+		      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, amrex::Real density_floor)
 {
 	const BL_PROFILE("SinkAccretionUtils::ComputeScaleDown()");
 	const auto &local_state_arr = state.arrays();
@@ -271,21 +271,18 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 	}
 
 	amrex::ParallelFor(accretion_rate, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
-		const double accretion_rate_floor = -0.25;
-		if (accretion_rate_cell < accretion_rate_floor) {
-			// scale down the accretion rate to the minimum allowed value
-			local_accretion_rate_arr[bx](i, j, k) = accretion_rate_floor;
-			local_scale_down_arr[bx](i, j, k) = accretion_rate_floor / accretion_rate_cell;
-		}
-		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
-		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
+		const double requested_accretion_rate = local_accretion_rate_arr[bx](i, j, k);
+		AMREX_ASSERT(requested_accretion_rate <= 0.0);
 
 		// In the accretion zone, if (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1 to bring the
 		// density down to the Jeans density.
 		// The condition "accretion_rate_cell < 0.0" is to skip the clause for the cells not in accretion zone. Note that accretion_rate_cell
 		// is always negative or zero, and negative means the cell is in a accretion zone.
-		if (accretion_rate_cell < 0.0) {
+		if (requested_accretion_rate < 0.0) {
+			// First limit removal to at most 25% of the cell mass in one update.
+			constexpr double accretion_rate_floor = -0.25;
+			double limited_accretion_rate = std::max(requested_accretion_rate, accretion_rate_floor);
+
 			// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
 
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{};
@@ -308,13 +305,38 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 			// (For non-MHD, beta=inf, so cs_eff^2 = cs^2)
 			const double rho_J = ParticleUtils::computeJeansDensity(cs_cell, dx_max, plasma_beta);
 			const double rho_cell = local_state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index);
-			if ((1.0 + accretion_rate_cell) * rho_cell > rho_J) {
-				const double accretion_rate_cell_new = rho_J / rho_cell - 1.0;
-				local_accretion_rate_arr[bx](i, j, k) = accretion_rate_cell_new;
-				local_scale_down_arr[bx](i, j, k) = accretion_rate_cell_new / accretion_rate_cell;
+			AMREX_ASSERT(rho_cell > 0.0);
+
+			// Preserve the existing behavior that removes gas down to rho_J when the
+			// Bondi-Hoyle request would otherwise leave a Jeans-unstable cell.
+			double rho_end = (1.0 + limited_accretion_rate) * rho_cell;
+			if (rho_end > rho_J) {
+				rho_end = rho_J;
 			}
-			AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
-			AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
+
+			// Set the density floor before applying accretion. For Quokka's stored
+			// B' = B/sqrt(4*pi), v_A^2 = B'^2/rho = 2 E_B/rho, hence
+			// rho_A,min = 2 E_B / v_A,max^2.
+			double accretion_density_floor = density_floor;
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				if (sink_max_alfven_speed > 0.0) {
+					AMREX_ASSERT(fab_fc_ptr != nullptr);
+					const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc_ptr);
+					const double rho_alfven_floor = 2.0 * magnetic_energy /
+									(sink_max_alfven_speed * sink_max_alfven_speed);
+					accretion_density_floor = std::max(accretion_density_floor, rho_alfven_floor);
+				}
+			}
+
+			// Accretion cannot increase the gas density. If the current density is
+			// already at or below the requested floor, stop accretion in this cell.
+			rho_end = std::max(rho_end, std::min(accretion_density_floor, rho_cell));
+			limited_accretion_rate = rho_end / rho_cell - 1.0;
+
+			local_accretion_rate_arr[bx](i, j, k) = limited_accretion_rate;
+			local_scale_down_arr[bx](i, j, k) = limited_accretion_rate / requested_accretion_rate;
+			AMREX_ASSERT(limited_accretion_rate <= 0.0);
+			AMREX_ASSERT(limited_accretion_rate > -1.0);
 		}
 	});
 
@@ -566,7 +588,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 template <typename ContainerType, typename problem_t>
 void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 		    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt,
-		    int mass_index, int mdot_index = -1, int ang_mom_index = -1)
+		    int mass_index, amrex::Real density_floor, int mdot_index = -1, int ang_mom_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::applyAccretion()");
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
@@ -574,7 +596,7 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
 	scale_down.setVal(1.0);
 	// Update accretion_rate and compute scale_down
-	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, geom, state_fc);
+	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, geom, state_fc, density_floor);
 
 	// Step 3: Update particle mass, momentum, accretion rate, and angular momentum
 	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt, mdot_index, ang_mom_index);

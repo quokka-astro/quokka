@@ -2163,7 +2163,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	quokka::ParticleUtils::roundoffMultiFab(accretion_rate_at_level);
 
 	// Sink accretion, stage 2: update the particle states -- compute scale_down, apply to particle, apply to cells
-	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, geom[lev], lev, time, dt);
+	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, geom[lev], lev, time, dt, densityFloor_);
 
 	// Only create particles when the AMR hierarchy has fully refined to max_level.
 	// Creating a ForceFinestLevel particle at a sub-max level violates the invariant
