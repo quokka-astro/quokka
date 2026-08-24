@@ -134,8 +134,7 @@ void QuokkaSimulation<HydrostaticAtmosphereProblem>::computeReferenceSolution(am
 			});
 		}
 	} else {
-		auto const density_floor_func = [] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-									   amrex::Real base_floor) -> amrex::Real {
+		auto const density_floor_func = [] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_floor) -> amrex::Real {
 			return QuokkaSimulation<HydrostaticAtmosphereProblem>::densityFloor(x, y, z, base_floor);
 		};
 		for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
