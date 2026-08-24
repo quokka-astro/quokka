@@ -223,21 +223,18 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 
 	sim.evolve();
-	amrex::Real estimated_error;
 
-	if (AMREX_SPACEDIM == 1) {
-		estimated_error = 9.2430e-04;
-	} else if (AMREX_SPACEDIM == 3) {
-		estimated_error = 1.0318e-03;
-	}
+	// Error from full convergence study. The reference solution is a 1D Gaussian that is flat in y and
+	// z, so the error norm depends on the dimensionality of the run.
+	constexpr amrex::Real estimated_error = (AMREX_SPACEDIM == 1) ? 9.2430e-04 : 1.0318e-03;
 
 	amrex::Real const error_norm = sim.computeErrorNorm();
-	amrex::Real const delta = std::abs(error_norm - estimated_error) / estimated_error; // Error from full convergence study
+	amrex::Real const delta = std::abs(error_norm - estimated_error) / estimated_error;
 
 	if (delta <= 1.e-04) {
-		amrex::Print() << "\n✓ Thermal conduction test PASSED (error norm " << error_norm << ", expected = 1.0318e-03)\n";
+		amrex::Print() << "\n✓ Thermal conduction test PASSED (error norm " << error_norm << ", expected = " << estimated_error << ")\n";
 		return 0;
 	}
-	amrex::Print() << "\n✗ Thermal conduction test FAILED (error norm " << error_norm << ", expected = 1.0318e-03)\n";
+	amrex::Print() << "\n✗ Thermal conduction test FAILED (error norm " << error_norm << ", expected = " << estimated_error << ")\n";
 	return 1;
 }
