@@ -353,7 +353,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 			       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const override;
-	void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const override;
+	void ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
 
@@ -1236,7 +1236,7 @@ void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &
 	(void)state_fc;
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
+template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const
 {
 	auto const ncomp_out = ncomp;
 	auto const prob_lo = geom[lev].ProbLoArray();

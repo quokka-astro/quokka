@@ -251,10 +251,11 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 // equal to the Jeans density.
 template <typename problem_t>
 void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Geometry &geom,
-		      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, amrex::Real density_floor)
+		      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, amrex::MultiFab const &density_floor)
 {
 	const BL_PROFILE("SinkAccretionUtils::ComputeScaleDown()");
 	const auto &local_state_arr = state.arrays();
+	const auto &local_density_floor_arr = density_floor.const_arrays();
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &local_scale_down_arr = scale_down.arrays();
 	const auto &dx = geom.CellSizeArray();
@@ -317,7 +318,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 			// Set the density floor before applying accretion. For Quokka's stored
 			// B' = B/sqrt(4*pi), v_A^2 = B'^2/rho = 2 E_B/rho, hence
 			// rho_A,min = 2 E_B / v_A,max^2.
-			double accretion_density_floor = density_floor;
+			double accretion_density_floor = local_density_floor_arr[bx](i, j, k);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				if (sink_max_alfven_speed > 0.0) {
 					AMREX_ASSERT(fab_fc_ptr != nullptr);
@@ -587,7 +588,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 template <typename ContainerType, typename problem_t>
 void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 		    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt,
-		    int mass_index, amrex::Real density_floor, int mdot_index = -1, int ang_mom_index = -1)
+		    int mass_index, amrex::MultiFab const &density_floor, int mdot_index = -1, int ang_mom_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::applyAccretion()");
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%

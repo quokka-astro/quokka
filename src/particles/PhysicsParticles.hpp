@@ -248,7 +248,7 @@ class PhysicsParticleDescriptorBase
 
 	virtual void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 					std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time,
-					amrex::Real dt, amrex::Real density_floor)
+					amrex::Real dt, amrex::MultiFab const &density_floor)
 	{ /* Default empty implementation */
 	}
 
@@ -863,7 +863,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// apply accretion
 	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
-				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt, amrex::Real density_floor) override
+				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt, amrex::MultiFab const &density_floor) override
 	{
 		SinkAccretionUtils::applyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, state_fc, geom, lev, time, dt,
 									     this->getMassIndex(), density_floor, this->getMdotIndex(), this->getAngMomIndex());
@@ -1079,7 +1079,7 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Implementation of applySinkAccretion
 	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
-				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt, amrex::Real density_floor)
+				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt, amrex::MultiFab const &density_floor)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::applySinkAccretion()");
 		for (const auto &[type, descriptor] : particleRegistry_) {

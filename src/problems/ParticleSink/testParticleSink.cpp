@@ -537,10 +537,47 @@ auto problem_main() -> int
 			amrex::Print() << "Phase 3 passed: mass conservation satisfied\n";
 		}
 
-		if (status == 0) {
-			amrex::Print() << "\n=== All phases passed ===\n";
+	}
+
+	// ============================================================
+	// Phase 4: Verify that sink accretion respects a parser-derived density floor
+	// ============================================================
+	amrex::Print() << "\n=== Phase 4: Parser-derived density floor test ===\n";
+	const double base_density_floor = 0.5 * rho0;
+	const double parser_density_floor = 1.9 * base_density_floor;
+	{
+		amrex::ParmParse pp_all;
+		pp_all.add("density_floor", base_density_floor);
+		pp_all.add("density_floor_expr", "1.9 * base_density_floor");
+	}
+
+	QuokkaSimulation<SinkProblem> sim3;
+	sim3.reconstructionOrder_ = 3;
+	sim3.cflNumber_ = 0.3;
+	sim3.tempFloor_ = 10.0;
+	sim3.setInitialConditions();
+
+	// Apply only the particle-mesh interaction. Without the per-cell floor field,
+	// the overlapping sink kernels reduce the minimum density below the parser floor.
+	sim3.particleMeshInteraction(0.0, dt_init);
+	const amrex::Real min_density = sim3.state_new_cc_[0].min(HydroSystem<SinkProblem>::density_index);
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::Print() << "Base density floor = " << base_density_floor << "\n";
+		amrex::Print() << "Parser density floor = " << parser_density_floor << "\n";
+		amrex::Print() << "Minimum density after sink accretion = " << min_density << "\n";
+		const double floor_rel_error = std::abs(min_density - parser_density_floor) / parser_density_floor;
+		if (!(floor_rel_error < 1.0e-12)) {
+			status = 1;
+			amrex::Print() << "Test failed: sink accretion did not respect the parser-derived density floor\n";
 		} else {
-			amrex::Print() << "\n=== One of the 3 phases failed ===\n";
+			amrex::Print() << "Phase 4 passed: sink accretion respected the parser-derived density floor\n";
+		}
+
+		if (status == 0) {
+			amrex::Print() << "\n=== All 4 phases passed ===\n";
+		} else {
+			amrex::Print() << "\n=== One of the 4 phases failed ===\n";
 		}
 	}
 
