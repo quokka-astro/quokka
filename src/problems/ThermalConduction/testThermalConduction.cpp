@@ -223,8 +223,8 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 
 	sim.evolve();
-	const amrex::Real error_norm = sim.computeErrorNorm();
-	const amrex::Real delta = std::abs(error_norm - 1.0318e-03) / 1.0318e-03; // Error from full convergence study
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	amrex::Real const delta = std::abs(error_norm - 1.0318e-03)/1.0318e-03;	//Error from full convergence study
 
 	if (delta <= 1.e-04) {
 		amrex::Print() << "\n✓ Thermal conduction test PASSED (error norm " << error_norm << ", expected = 1.0318e-03)\n";
