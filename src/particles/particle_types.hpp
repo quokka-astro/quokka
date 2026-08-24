@@ -1,11 +1,16 @@
 #ifndef PARTICLE_TYPES_HPP_
 #define PARTICLE_TYPES_HPP_
 
+#include <cmath>
+#include <cstdint>
+
 #include "AMReX_AmrParticles.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
 #include "particles/stellar_models.hpp"
 #include "physics_info.hpp"
+#include "util/time_units.hpp"
 
 // Function to create bit flags: bitflag(position) = 2^(position - 1)
 // Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
@@ -24,7 +29,8 @@ enum class ParticleSwitch : unsigned int {
 	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
 	Sink = bitflag<5>(),		     // Sink particles, = 0b10000
 	Test = bitflag<6>(),		     // Test particles with all features enabled, = 0b100000
-	Star = bitflag<7>()		     // Star particles, = 0b1000000
+	Star = bitflag<7>(),		     // Star particles, = 0b1000000
+	IMFAveragedStellarPop = bitflag<8>() // Fully sampled IMF stellar population particles, = 0b10000000
 };
 
 // Enable bitwise operations on the enum class
@@ -84,7 +90,8 @@ enum class ParticleType {
 	StochasticStellarPop, // Stellar population particles
 	Sink,		      // Sink particles
 	Test,		      // Test particles with all features enabled
-	Star		      // Star particles
+	Star,		      // Star particles
+	IMFAveragedStellarPop // Fully sampled IMF stellar population particles
 };
 
 // Compile-time particle metadata.
@@ -271,6 +278,31 @@ using StochasticStellarPopParticleContainer =
 template <typename problem_t>
 using StochasticStellarPopParticleIterator = amrex::ParIter<StochasticStellarPopParticleRealComps<problem_t>, StochasticStellarPopParticleIntComps>;
 
+//-------------------- IMF-averaged stellar population particles --------------------
+
+AMREX_ENUM(IMFAveragedStellarPopParticleRealIdx, // NOLINT
+	   mass, vx, vy, vz, birth_time, mass_at_birth, next_sn_intensity);
+
+AMREX_ENUM(IMFAveragedStellarPopParticleIntIdx, // NOLINT
+	   rng_key_lo, rng_key_hi, sn_draw_index_lo, sn_draw_index_hi);
+
+constexpr int IMFAveragedStellarPopParticleMassIdx = static_cast<int>(IMFAveragedStellarPopParticleRealIdx::mass);
+constexpr int IMFAveragedStellarPopParticleVxIdx = static_cast<int>(IMFAveragedStellarPopParticleRealIdx::vx);
+constexpr int IMFAveragedStellarPopParticleVyIdx = static_cast<int>(IMFAveragedStellarPopParticleRealIdx::vy);
+constexpr int IMFAveragedStellarPopParticleVzIdx = static_cast<int>(IMFAveragedStellarPopParticleRealIdx::vz);
+constexpr int IMFAveragedStellarPopParticleBirthTimeIdx = static_cast<int>(IMFAveragedStellarPopParticleRealIdx::birth_time);
+constexpr int IMFAveragedStellarPopParticleMassAtBirthIdx = static_cast<int>(IMFAveragedStellarPopParticleRealIdx::mass_at_birth);
+constexpr int IMFAveragedStellarPopParticleNextSNIntensityIdx = static_cast<int>(IMFAveragedStellarPopParticleRealIdx::next_sn_intensity);
+constexpr int IMFAveragedStellarPopParticleRNGKeyLoIdx = static_cast<int>(IMFAveragedStellarPopParticleIntIdx::rng_key_lo);
+constexpr int IMFAveragedStellarPopParticleRNGKeyHiIdx = static_cast<int>(IMFAveragedStellarPopParticleIntIdx::rng_key_hi);
+constexpr int IMFAveragedStellarPopParticleSNDrawIndexLoIdx = static_cast<int>(IMFAveragedStellarPopParticleIntIdx::sn_draw_index_lo);
+constexpr int IMFAveragedStellarPopParticleSNDrawIndexHiIdx = static_cast<int>(IMFAveragedStellarPopParticleIntIdx::sn_draw_index_hi);
+
+constexpr int IMFAveragedStellarPopParticleRealComps = 7;
+constexpr int IMFAveragedStellarPopParticleIntComps = 4;
+using IMFAveragedStellarPopParticleContainer = amrex::AmrParticleContainer<IMFAveragedStellarPopParticleRealComps, IMFAveragedStellarPopParticleIntComps>;
+using IMFAveragedStellarPopParticleIterator = amrex::ParIter<IMFAveragedStellarPopParticleRealComps, IMFAveragedStellarPopParticleIntComps>;
+
 //-------------------- Test particles --------------------
 
 // Indices for test particles (Test_particles) using AMREX_ENUM for automatic string conversion
@@ -410,6 +442,8 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 		return expandEnumNames<CICRadParticleRealIdx, CICRadParticleRealComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 		return expandEnumNames<StochasticStellarPopParticleRealIdx, StochasticStellarPopParticleRealComps<problem_t>, true>();
+	} else if constexpr (particleType == ParticleType::IMFAveragedStellarPop) {
+		return expandEnumNames<IMFAveragedStellarPopParticleRealIdx, IMFAveragedStellarPopParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Star) {
 		return expandEnumNames<StarParticleDataIdx, StarParticleRealComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::Sink) {
@@ -437,6 +471,9 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 		return expandEnumNames<StarParticleIntIdx, StarParticleIntegerComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+	} else if constexpr (particleType == ParticleType::IMFAveragedStellarPop) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<IMFAveragedStellarPopParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
 	} else if constexpr (particleType == ParticleType::Sink) { // NOLINT
 								   // No integer components
@@ -481,6 +518,14 @@ inline auto get_units_data() -> const auto &
 	       {"death_density", {1, -3, 0, 0}},
 	       {"mass_at_birth", {1, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
+	    {ParticleType::IMFAveragedStellarPop,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"birth_time", {0, 0, 1, 0}},
+	       {"mass_at_birth", {1, 0, 0, 0}},
+	       {"next_sn_intensity", {0, 0, 0, 0}}}}},
 	    {ParticleType::Star,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
@@ -512,7 +557,7 @@ inline auto get_units_data() -> const auto &
 
 // Assumptions for any particle type:
 // 1. For massive particles, velocity components start after mass
-// 2. Birth time, if existing, is always followed by death time
+// 2. Types using the legacy one-shot SN path store death time immediately after birth time
 
 // Global particle parameters
 // The 'inline' keyword is used here to avoid multiple definition errors when this header
@@ -523,12 +568,26 @@ inline auto get_units_data() -> const auto &
 // Disable SN feedback when a particle evolves from SNProgenitor to SNRemnant
 inline bool disable_SN_feedback = false; // NOLINT
 
+// Empirically motivated early feedback for StochasticStellarPop particles.
+inline bool EMF_enabled = false;			     // NOLINT
+inline amrex::Real EMF_p0_kmps = 377.0;			     // NOLINT [km/s]
+inline amrex::Real EMF_tFB_Myr = 3.3;			     // NOLINT [Myr]
+inline amrex::Real EMF_alpha = 1.0;			     // NOLINT
+inline amrex::Real EMF_p0 = EMF_p0_kmps * 1.0e5;	     // NOLINT [cm/s]
+inline amrex::Real EMF_tFB = EMF_tFB_Myr * quokka::Myr_in_s; // NOLINT [s]
+
 // Placeholder parameters for particles. Used in gravity_3d.cpp tests
 inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
 
 inline amrex::Real particle_param3 = -1.0; // NOLINT
 inline amrex::Real eps_ff = 0.01;	   // NOLINT
+
+// IMF-averaged stellar population formation and deterministic event streams.
+inline amrex::Real imf_particle_mass_msun = 1.0e3; // NOLINT
+inline amrex::Real imf_min_nH = 100.0;		   // NOLINT [cm^-3]
+inline amrex::Real imf_max_temperature = 1.0e4;	   // NOLINT [K]
+inline std::uint64_t imf_random_seed = 0U;	   // NOLINT
 
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
@@ -576,6 +635,17 @@ inline void particleParmParse()
 	// Parse particle parameters
 	const amrex::ParmParse pp("particles");
 	pp.query("disable_SN_feedback", disable_SN_feedback);
+	pp.query("EMF_enabled", EMF_enabled);
+	pp.query("EMF_p0_kmps", EMF_p0_kmps);
+	pp.query("EMF_tFB_Myr", EMF_tFB_Myr);
+	pp.query("EMF_alpha", EMF_alpha);
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMF_p0_kmps) && EMF_p0_kmps >= 0.0, "particles.EMF_p0_kmps must be finite and non-negative.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMF_tFB_Myr) && EMF_tFB_Myr > 0.0, "particles.EMF_tFB_Myr must be finite and positive.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMF_alpha) && EMF_alpha >= 0.5 && EMF_alpha <= 1.0,
+					 "particles.EMF_alpha must be finite and lie in [0.5, 1.0].");
+	EMF_p0 = EMF_p0_kmps * 1.0e5;
+	EMF_tFB = EMF_tFB_Myr * quokka::Myr_in_s;
 	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
 
 	// Handle SNScheme enum
@@ -586,6 +656,16 @@ inline void particleParmParse()
 
 	// Stochastic SF parameters
 	pp.query("eps_ff", eps_ff);
+	pp.query("imf_particle_mass_msun", imf_particle_mass_msun);
+	pp.query("imf_min_nH", imf_min_nH);
+	pp.query("imf_max_temperature", imf_max_temperature);
+	auto imf_seed_input = static_cast<long long>(imf_random_seed); // NOLINT(google-runtime-int)
+	pp.query("imf_random_seed", imf_seed_input);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(imf_seed_input >= 0, "particles.imf_random_seed must be non-negative.");
+	imf_random_seed = static_cast<std::uint64_t>(imf_seed_input);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(imf_particle_mass_msun > 0.0, "particles.imf_particle_mass_msun must be positive.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(imf_min_nH > 0.0, "particles.imf_min_nH must be positive.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(imf_max_temperature > 0.0, "particles.imf_max_temperature must be positive.");
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);

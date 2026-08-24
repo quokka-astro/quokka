@@ -215,6 +215,72 @@ A few implementation notes help interpret corner cases and limitations of the cu
 - Star formation is operator-split from the hydrodynamics. When \\(t_{ff}\\) is unresolved (\\(\Delta t \gtrsim t_{ff}\\)), the true star formation rate is not captured, and this scheme provides one possible approximation; no explicit limiter is enforced beyond the CFL-controlled hydro step.
 - All spawned particles are inserted at the cell centre. Other physics modules are responsible for any subsequent repositioning or feedback coupling.
 
+## IMF-averaged stellar populations
+
+`ParticleSwitch::IMFAveragedStellarPop` enables a population-level star-formation mode. Each particle represents one coeval, fully sampled Kroupa IMF rather than an individual massive star plus a low-mass composite. Its checkpointed state contains current mass, velocity, birth time, birth mass, a Philox random key, the next SN arrival threshold, and a 64-bit draw index.
+
+Following the star-formation prescription used by Keller, Kruijssen & Chevance (2022), gas is eligible at nH >= 100 cm^-3 and T < 10^4 K. Set `particles.eps_ff=0.1` to use the paper's efficiency. In an eligible fixed-grid cell, the expected particle count is epsilon_ff M_cell dt / (t_ff M_particle). A Poisson draw sets the count, limited so formation removes at most 90 per cent of the parent cell mass. Each new particle has mass `particles.imf_particle_mass_msun` and inherits the cell velocity.
+
+Core-collapse SNe form a non-homogeneous Poisson process with cumulative intensity Lambda(t) = (M_birth / M_solar) eta_SN(<t). The tabulated eta_SN integrates a Kroupa (2001) IMF over 0.08--100 solar masses, takes 8--100 solar masses as core-collapse progenitors, and uses Quokka's stellar-lifetime table. The integrated yield is 1.093e-2 SN per solar mass. Arrival thresholds are sums of unit exponential variates. A step emits every event whose threshold is below Lambda(t + dt), then stores the next threshold and draw index. The realization is therefore independent of timestep partitioning and restart boundaries.
+
+Random draws use Quokka's integer-only Philox4x32-10 implementation. The key is derived from `particles.imf_random_seed` and the immutable AMReX particle ID/creation CPU; separate counter domains are reserved for core-collapse SN, Type Ia SN, and star formation. Equal-mass particles born at the same time therefore have independent Poisson realizations. There is deliberately no finite-mass event cap: every scheduled event deposits 10 solar masses and 1e51 erg, even if cumulative ejecta exceed the available particle mass. Current particle mass is clamped at zero, but the event process is never truncated or renormalized.
+
+Each event is passed through the existing Quokka SN feedback buffer and selected `particles.SN_scheme`; the IMF mode does not implement a second momentum/energy coupling algorithm. Setting `particles.disable_SN_feedback=1` still advances the checkpointed event stream without depositing ejecta.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `particles.imf_particle_mass_msun` | Float | `1.0e3` | Birth mass of each IMF-averaged particle in solar masses |
+| `particles.imf_min_nH` | Float | `100` | Formation density threshold in cm^-3 |
+| `particles.imf_max_temperature` | Float | `1.0e4` | Formation temperature ceiling in K |
+| `particles.imf_random_seed` | Integer | `0` | Global seed used to derive per-particle Philox keys |
+| `particles.eps_ff` | Float | `0.01` | Star-formation efficiency per free-fall time |
+
+## Empirically motivated early feedback
+
+The optional empirically motivated early-feedback (EMF) model follows Keller, Kruijssen & Chevance (2022). For a `StochasticStellarPop` or `IMFAveragedStellarPop` particle with birth mass \\(M_{\\rm birth}\\), birth time \\(t_{\\rm birth}\\), step start \\(t\\), and timestep \\(\\Delta t\\), it requests the finite momentum increment
+
+<script type="math/tex; mode=display">
+\Delta p = \alpha p_0 M_{\rm birth}\left[x_1^{4\alpha-1}-x_0^{4\alpha-1}\right],
+\qquad
+x_0 = {\rm clamp}\!\left(\frac{t-t_{\rm birth}}{t_{\rm FB}},0,1\right),
+\qquad
+x_1 = {\rm clamp}\!\left(\frac{t+\Delta t-t_{\rm birth}}{t_{\rm FB}},0,1\right).
+</script>
+
+This is already a timestep-integrated impulse and is not multiplied by \\(\\Delta t\\) again. At \\(t=t_{\\rm birth}+t_{\\rm FB}\\), the integrated momentum is \\(\\alpha p_0 M_{\\rm birth}\\). The default values are \\(p_0=377\\) km s\\(^{-1}\\), \\(t_{\\rm FB}=3.3\\) Myr, and \\(\\alpha=1\\).
+
+All valid stellar-population representations participate while their age interval overlaps \\([0,t_{\\rm FB}]\\): `LowMassComposite`, `SNProgenitor`, `HighMassNonExploding`, and `SNRemnant`. This stage-independent rule makes a formation event's EMF budget proportional to the sum of its represented birth masses; later SN mass loss does not reduce the budget. Particle splitting divides both current mass and `mass_at_birth` among the children.
+
+EMF uses the same normalized three-cell spherical weights and four-ghost-cell requirement as SN feedback, but it constructs corrected radial vectors for each particle. Subtracting the weighted mean direction and renormalizing the vector magnitudes enforces, to deposition roundoff,
+
+<script type="math/tex; mode=display">
+\sum_j \Delta \boldsymbol{p}_j = 0,
+\qquad
+\sum_j \left|\Delta \boldsymbol{p}_j\right| = \Delta p.
+</script>
+
+It injects no mass, metals, passive scalars, or radiation energy. After all particle events have been accumulated, each cell's total energy receives the exact kinetic-energy change associated with its net momentum change, leaving internal energy unchanged. For each individual event, negative work \\(\\sum_j \\boldsymbol{v}_j\\!\\cdot\\!\\Delta\\boldsymbol{p}_j\\) is added as thermal energy to the particle's host cell. Cancellation between separate particle events is represented by the aggregated kinetic-energy update; it does not receive an additional inter-event thermalization term.
+
+### Deliberate differences from the published deposition algorithm
+
+Quokka adopts equation 10 and the observational parameters of Keller, Kruijssen & Chevance (2022), but its mesh coupling is an accepted numerical adaptation rather than an exact reproduction of the paper's AREPO implementation:
+
+- The paper distributes an event over the host cell's face-sharing neighbours, weighted by shared face area and directed along the face normals. Quokka instead reuses its normalized three-cell spherical feedback kernel. For an off-centre particle this kernel can deposit into the host cell and into cells that do not share a face with it, so the coupling radius and angular distribution differ from the published algorithm.
+- The paper's face-area vectors have zero sum by the divergence theorem. Quokka obtains the same zero-net-vector and prescribed-scalar-momentum invariants by subtracting the kernel's weighted mean direction and renormalizing the corrected vectors. The corrected vectors therefore need not coincide with Cartesian face normals or exact cell-centre radial directions.
+- Quokka evaluates \\(\\sum_j \\boldsymbol{v}_j\\!\\cdot\\!\\Delta\\boldsymbol{p}_j\\) once per particle and thermalizes it in the host cell only when this event-wide sum is negative. Negative work in one recipient cell can therefore be offset by positive work in another. Momentum increments from different particles are buffered together, and cancellation between those increments is not separately thermalized. The paper does not specify simultaneous-event ordering in enough detail to establish a unique inter-event convention.
+
+These choices are intentional: they retain Quokka's existing feedback support scale and GPU-friendly buffered deposition while enforcing the paper's total scalar- and vector-momentum constraints. They can nevertheless change small-scale coupling and heating relative to the published face-weighted scheme. The focused `ParticleEarlyFeedback` tests validate equation 10, the two global momentum invariants, energy-state consistency, uniform-boost invariance, and the adopted event-wide negative-work convention; they do not claim cell-by-cell equivalence with the paper's deposition geometry or cancellation treatment.
+
+The operation occurs after end-of-step particle drift and star formation, and before SN deposition. A newborn particle therefore receives the clipped increment for the current \\([t,t+\\Delta t]\\) interval at its end-of-step position. This is a first-order operator split.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `particles.EMF_enabled` | Boolean | `0` | Enable early feedback for stochastic and/or IMF-averaged stellar-population particles |
+| `particles.EMF_p0_kmps` | Real | `377.0` | Momentum normalization \\(p_0\\) in km s\\(^{-1}\\) |
+| `particles.EMF_tFB_Myr` | Real | `3.3` | Feedback duration in Myr |
+| `particles.EMF_alpha` | Real | `1.0` | Expansion exponent; must lie in \\([0.5,1.0]\\) |
+
+On a multilevel hierarchy, EMF follows the existing SN-feedback AMR policy: feedback is deposited only from particles stored on the finest AMR level, and particles stored on coarser levels are ignored. Both paths use a same-level feedback buffer without explicit coarse-fine source synchronization, so deposition can be inconsistent when a stencil crosses a coarse-fine boundary. An active particle whose stencil is not representable inside its particle grid or the physical domain still causes an abort. EMF is independent of `particles.disable_SN_feedback` and `particles.SN_scheme`, so EMF-only and SN-only controls are both available.
 
 ## Supernova Feedback
 

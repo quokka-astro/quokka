@@ -336,6 +336,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
+	void createInitialIMFAveragedStellarPopParticles() override;
 	void createInitialSinkParticles() override;
 	void createInitialStarParticles() override;
 	void createInitialTestParticles() override;
@@ -1062,6 +1063,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSto
 	// StochasticStellarPop particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
 	// beginning of the simulation.
 	// note: an implementation is only effective if StochasticStellarPop_particles are used
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialIMFAveragedStellarPopParticles()
+{
+	const BL_PROFILE("QuokkaSimulation::createInitialIMFAveragedStellarPopParticles()");
+	// Optional implementation. IMF-averaged particles normally form on the fly.
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSinkParticles()
