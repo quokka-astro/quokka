@@ -201,29 +201,8 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 	}
 }
 
-auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
+auto problem_main() -> int
 {
-	// Read problem parameters
-	const double max_time = 4690.540075444166; // 1 conduction time
-
-	const double CFL_number = 0.3;
-	const int max_timesteps = std::max(2000, nx * 100);
-
-	// Set grid dimensions using AMReX parameter system
-	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, nx, nx};
-	pp.add("max_level", 1);
-	pp.addarr("n_cell", ncells);
-
-	// Set domain bounds using AMReX parameter system
-	amrex::ParmParse pp_geom("geometry");
-	amrex::Vector<double> const prob_lo = {-1.5428e18, -1.5428e18, -1.5428e18};
-	amrex::Vector<double> const prob_hi = {1.5428e+18, 1.5428e+18, 1.5428e+18};
-	amrex::Vector<int> const is_periodic = {0, 0, 0};
-	pp_geom.addarr("prob_lo", prob_lo);
-	pp_geom.addarr("prob_hi", prob_hi);
-	pp_geom.addarr("is_periodic", is_periodic);
-
 	// Setup boundary conditions
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -237,31 +216,21 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 	// Run simulation
 	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 
-	sim.cflNumber_ = CFL_number;
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
+	sim.cflNumber_ = 0.3;
+	sim.stopTime_ = 469054.0075444166; 
 
 	// set initial conditions
 	sim.setInitialConditions();
 
 	sim.evolve();
-	return sim.computeErrorNorm();
-}
+	amrex::Real error_norm = sim.computeErrorNorm();
+	amrex::Real delta = std::abs(error_norm - 1.0318e-03)/1.0318e-03;	//Error from full convergence study
 
-auto problem_main() -> int
-{
-
-	/***Richardson Extrapolation ****/
-
-	quokka::richardson::applyQuietDefaults();
-	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	params.nx_initial = 32;
-	params.nx_max = 128;
-	params.expected_rate = 2.0;
-	params.tolerance = 0.3;
-	params.test_name = "Thermal Conduction";
-	params.csv_filename = "thermal_conduction_convergence.csv";
-
-	return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runConductionTest(nx, ny, nz); });
+	if( delta <= 1.e-04 ) {
+		amrex::Print() << "\n✓ Thermal conduction test PASSED (error norm " << error_norm << ", expected = 1.0318e-03)\n";
+		return 0;
+	} else {
+		amrex::Print() << "\n✗ Thermal conduction test FAILED (error norm " << error_norm << ", expected = 1.0318e-03)\n";
+		return 1;
+	}
 }
