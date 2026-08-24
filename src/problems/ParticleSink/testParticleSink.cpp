@@ -536,7 +536,6 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "Phase 3 passed: mass conservation satisfied\n";
 		}
-
 	}
 
 	// ============================================================
