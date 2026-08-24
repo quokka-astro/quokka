@@ -322,8 +322,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 				if (sink_max_alfven_speed > 0.0) {
 					AMREX_ASSERT(fab_fc_ptr != nullptr);
 					const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc_ptr);
-					const double rho_alfven_floor = 2.0 * magnetic_energy /
-									(sink_max_alfven_speed * sink_max_alfven_speed);
+					const double rho_alfven_floor = 2.0 * magnetic_energy / (sink_max_alfven_speed * sink_max_alfven_speed);
 					accretion_density_floor = std::max(accretion_density_floor, rho_alfven_floor);
 				}
 			}

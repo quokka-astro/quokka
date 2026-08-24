@@ -580,8 +580,7 @@ inline void particleParmParse()
 	pp.query("disable_SN_feedback", disable_SN_feedback);
 	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
 	pp.query("sink_max_alfven_speed", sink_max_alfven_speed);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sink_max_alfven_speed != 0.0,
-					 "particles.sink_max_alfven_speed must be negative (disabled) or positive (cm/s).");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sink_max_alfven_speed != 0.0, "particles.sink_max_alfven_speed must be negative (disabled) or positive (cm/s).");
 
 	// Handle SNScheme enum
 	pp.query("SN_scheme", SN_scheme);
