@@ -1278,9 +1278,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	if (enableElectronConduction_ == 1) {
 		double c_v = C::k_B / (::quokka::EOS_Traits<problem_t>::mean_molecular_weight * (::quokka::EOS_Traits<problem_t>::gamma - 1.0));
 		double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
-		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient;
+		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient / AMREX_SPACEDIM;
 		conduction_dt.index = domain_signal_maxloc;
-
 		if (verbose) {
 			amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
 			amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
@@ -2422,10 +2421,20 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterC
 	if (amrInterpMethod_ == 1) { // slope-limited linear interpolation
 		//  It has the following important properties:
 		// 1. should NOT produce new extrema
-		//    (will revert to piecewise constant if any component has a local min/max)
+		//    (will revert to piecewise constant if any component has a local min/max
+		//     -- including in directions where the field is exactly flat, e.g. y/z for a 1D-in-3D problem)
 		// 2. should be conservative
 		// 3. preserves linear combinations of variables in each cell
 		return &amrex::mf_linear_slope_minmax_interp;
+	}
+	if (amrInterpMethod_ == 2) { // linear conservative interpolation (gentler limiter, no min/max reversion)
+		// preserves linear combinations of variables in each cell, without the no-new-extrema
+		// reversion to piecewise-constant that mf_linear_slope_minmax_interp applies whenever
+		// any direction (including an exactly-flat one) contains a local extremum.
+		return &amrex::mf_lincc_interp;
+	}
+	if (amrInterpMethod_ == 3) { // pure linear conservative interpolation, no limiting at all
+		return &amrex::mf_cell_cons_interp;
 	}
 
 	amrex::Abort("Invalid AMR interpolation method specified!");
