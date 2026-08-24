@@ -183,7 +183,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						}
 					}
 
-					fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
+					// A single chemical (ionizing) band emits no blackbody radiation (nGroupsThermal_ == 0);
+					// its source is injected directly via the negligible-optical-depth branch below.
+					fourPiBoverC = (nGroupsThermal_ == 0) ? 0.0 : ComputeThermalRadiationSingleGroup(T_d);
 
 					kappaP = ComputePlanckOpacity(rho, T_d);
 					kappaE = ComputeEnergyMeanOpacity(rho, T_d);
@@ -507,7 +509,14 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				if constexpr (include_work_term_in_source) {
 					// New scheme: the work term is included in the source terms. The work done by radiation went to internal energy, but it
 					// should go to the kinetic energy. Remove the work term from internal energy.
-					Egas_guess -= dEkin_work;
+					// Cap the transfer exactly as the multigroup solver does: in a cold, strongly driven cell
+					// dEkin_work can exceed the internal energy available, and subtracting it unclamped leaves
+					// Egas negative, which the EOS rejects. The failure mode is not multigroup-specific, so the
+					// guard is not either. The cap does not conserve energy; see
+					// work_term_min_eint_fraction and issue #2173 for why that is acceptable and what the
+					// real fix would be.
+					const double max_eint_transfer = (1.0 - work_term_min_eint_fraction) * Egas_guess;
+					Egas_guess -= std::min(dEkin_work, max_eint_transfer);
 				} else {
 					// Old scheme: since the source term does not include work term, add the work term to radiation energy.
 
