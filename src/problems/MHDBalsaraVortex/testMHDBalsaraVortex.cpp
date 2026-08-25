@@ -32,6 +32,7 @@ template <> struct quokka::EOS_Traits<MHDBalsaraVortex> {
 };
 
 template <> struct Physics_Traits<MHDBalsaraVortex> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };

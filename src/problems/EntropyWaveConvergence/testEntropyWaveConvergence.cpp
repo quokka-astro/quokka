@@ -43,6 +43,7 @@ template <> struct quokka::EOS_Traits<EntropyWaveLinear> {
 };
 
 template <> struct Physics_Traits<EntropyWaveLinear> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };

@@ -35,6 +35,7 @@ template <> struct quokka::EOS_Traits<ScalarProblem> {
 };
 
 template <> struct Physics_Traits<ScalarProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
