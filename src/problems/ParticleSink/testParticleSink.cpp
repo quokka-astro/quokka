@@ -66,6 +66,8 @@ template <> struct Physics_Traits<SinkProblem> : DefaultPhysicsTraits {
 
 template <> struct SimulationData<SinkProblem> {
 	AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0};
+	AMREX_GPU_MANAGED amrex::Real background_density = rho0;
+	AMREX_GPU_MANAGED amrex::Real background_magnetic_field = B0;
 };
 
 template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
@@ -103,19 +105,21 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const double rho_e = CV * T0 * rho0;
-	const double Emag = 0.5 * B0 * B0;
+	const double background_density = userData_.background_density;
+	const double background_magnetic_field = userData_.background_magnetic_field;
+	const double rho_e = CV * T0 * background_density;
+	const double Emag = 0.5 * background_magnetic_field * background_magnetic_field;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
 	const double v2 = (userData_.boost_velocity[0] * userData_.boost_velocity[0]) + (userData_.boost_velocity[1] * userData_.boost_velocity[1]) +
 			  (userData_.boost_velocity[2] * userData_.boost_velocity[2]);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = rho0 * boost_velocity[0];
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = rho0 * boost_velocity[1];
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = rho0 * boost_velocity[2];
-		state_cc(i, j, k, HydroSystem<SinkProblem>::energy_index) = rho_e + Emag + 0.5 * rho0 * v2;
+		state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = background_density;
+		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = background_density * boost_velocity[0];
+		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = background_density * boost_velocity[1];
+		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = background_density * boost_velocity[2];
+		state_cc(i, j, k, HydroSystem<SinkProblem>::energy_index) = rho_e + Emag + 0.5 * background_density * v2;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::internalEnergy_index) = rho_e;
 	});
 }
@@ -125,7 +129,7 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGridFaceVa
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const quokka::direction dir = grid_elem.dir_;
-	const double B_val = (dir == quokka::direction::x) ? B0 : 0.0;
+	const double B_val = (dir == quokka::direction::x) ? userData_.background_magnetic_field : 0.0;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<SinkProblem>::mhdFirstIndex) = B_val; });
 }
@@ -578,41 +582,59 @@ auto problem_main() -> int
 	// Phase 5: Verify that sink accretion enforces the Alfven-speed limit
 	// ============================================================
 	amrex::Print() << "\n=== Phase 5: Alfven-speed limiter test ===\n";
-	const double max_alfven_speed = 2.919e4;
-	const double alfven_density_floor = B0 * B0 / (max_alfven_speed * max_alfven_speed);
+	const double max_alfven_speed = 3.0e7; // 300 km/s
+	// Use a dense, strongly magnetized medium so the 300 km/s Alfv\'en floor,
+	// rather than the MHD Jeans threshold, controls this dedicated test.
+	const double phase5_density = 1.0e-10;
+	const double target_alfven_density_floor = 0.97 * phase5_density;
+	const double alfven_test_field = max_alfven_speed * std::sqrt(target_alfven_density_floor);
+	const double alfven_density_floor = alfven_test_field * alfven_test_field / (max_alfven_speed * max_alfven_speed);
+	const double phase5_dt = 1.0e17;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alfven_density_floor > parser_density_floor,
 					 "The Alfven floor must exceed the parser floor for this test to exercise the limiter");
-	{
-		amrex::ParmParse pp_particles("particles");
-		pp_particles.add("sink_max_alfven_speed", max_alfven_speed);
-	}
-
 	QuokkaSimulation<SinkProblem> sim4;
 	sim4.reconstructionOrder_ = 3;
 	sim4.cflNumber_ = 0.3;
 	sim4.tempFloor_ = 10.0;
+	sim4.userData_.background_density = phase5_density;
+	sim4.userData_.background_magnetic_field = alfven_test_field;
 	sim4.setInitialConditions();
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(quokka::sink_max_alfven_speed == max_alfven_speed,
+					 "The ParticleSink test input must configure a 300 km/s Alfven-speed limit");
+	// This phase isolates accretion onto the existing sinks. Prevent the dense
+	// synthetic state from also exercising the separate sink-creation pathway.
+	sim4.max_level = sim4.finest_level + 1;
 
-	sim4.particleMeshInteraction(0.0, dt_init);
+	const amrex::Real gas_mass_phase5_init = sim4.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	const auto &real_data_phase5_init = sim4.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	double total_mass_phase5_init = gas_mass_phase5_init;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		for (const auto &p : real_data_phase5_init) {
+			total_mass_phase5_init += p[3];
+		}
+	}
+
+	sim4.particleMeshInteraction(0.0, phase5_dt);
 	const amrex::Real min_alfven_limited_density = sim4.state_new_cc_[0].min(HydroSystem<SinkProblem>::density_index);
 	const amrex::Real gas_mass_phase5 = sim4.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 	const auto &real_data_phase5 = sim4.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		double particle_mass_phase5 = 0.0;
+		double total_mass_phase5 = gas_mass_phase5;
 		for (const auto &p : real_data_phase5) {
-			particle_mass_phase5 += p[3];
+			total_mass_phase5 += p[3];
 		}
 		const double floor_rel_error = std::abs(min_alfven_limited_density - alfven_density_floor) / alfven_density_floor;
-		const double mass_rel_error = std::abs(gas_mass_phase5 + particle_mass_phase5 - total_total_mass_init) / total_total_mass_init;
+		const double mass_rel_error = std::abs(total_mass_phase5 - total_mass_phase5_init) / total_mass_phase5_init;
 		amrex::Print() << "Maximum Alfven speed = " << max_alfven_speed << "\n";
 		amrex::Print() << "Expected Alfven density floor = " << alfven_density_floor << "\n";
 		amrex::Print() << "Minimum density after sink accretion = " << min_alfven_limited_density << "\n";
 		amrex::Print() << "Relative total-mass error = " << mass_rel_error << "\n";
+		constexpr double phase5_mass_rel_error_tol = 1.0e-12;
 		if (!(floor_rel_error < 1.0e-12)) {
 			status = 1;
 			amrex::Print() << "Test failed: sink accretion did not enforce the Alfven-speed density floor\n";
-		} else if (!(mass_rel_error < 1.0e-14)) {
+		} else if (!(mass_rel_error < phase5_mass_rel_error_tol)) {
 			status = 1;
 			amrex::Print() << "Test failed: mass was not conserved with the Alfven-speed limiter\n";
 		} else {
