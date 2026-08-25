@@ -34,13 +34,7 @@ struct TheProblem {
 
 template <> struct SimulationData<TheProblem> {
 	// turbulent velocity fields
-	amrex::TableData<Real, 3> dvx;
-	amrex::TableData<Real, 3> dvy;
-	amrex::TableData<Real, 3> dvz;
-	Real dv_rms_generated{};
-	Real turbulent_amplitude = 1500.0; // cm/s,  0.05 * cs at 10K (~0.3 km/s)
-	int turbulent_size = 128;
-	Real initial_scalar_per_cell = 0.0; // the actual density is initial_scalar_per_cell / cell_volume
+	Real initial_scalar_density = NAN; // scalar density in cgs units
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
 	std::string stars_file;	     // default: no stars
@@ -53,9 +47,14 @@ template <> struct SimulationData<TheProblem> {
 	Real rho01 = 4.320441e-24; // 2.58 m_p/cm^3
 	Real sigma1 = 700000.0;
 
+	// Magnetic field: Bx = B_0 * exp(-|z|/z_d), By = 0, Bz = 0 (parsed once in problem_main)
+	Real B_0 = NAN;	 // code units (Lorentz-Heaviside)
+	Real z_d = NAN;	 // cm
+
 	// hot and warm gas definitions
 	Real hot_T = 1.0e6;  // K
 	Real warm_T = 2.0e4; // K
+	Real cold_T = 200.0; // K
 };
 
 template <> struct Particle_Traits<TheProblem> : DefaultParticleTraits {
@@ -152,42 +151,6 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 {
 	static bool isSamplingDone = false;
 	if (!isSamplingDone) {
-		// read perturbations from file
-		turb_data turbData;
-		amrex::ParmParse const pp("perturb");
-		std::string turbdata_filename = "zdrv.hdf5";
-		pp.query("filename", turbdata_filename);
-		initialize_turbdata(turbData, turbdata_filename);
-
-		pp.query("amplitude", userData_.turbulent_amplitude); // amplitude in cm/s, default is 0.05 * 0.3 km/s = 1,500 cm/s
-
-		// copy to pinned memory
-		auto pinned_dvx = get_tabledata(turbData.dvx);
-		auto pinned_dvy = get_tabledata(turbData.dvy);
-		auto pinned_dvz = get_tabledata(turbData.dvz);
-
-		// compute normalisation
-		userData_.dv_rms_generated = computeRms(pinned_dvx, pinned_dvy, pinned_dvz);
-		amrex::Print() << "rms dv = " << userData_.dv_rms_generated << "\n";
-
-		amrex::Print() << "turbulent amplitude = " << userData_.turbulent_amplitude << " cm/s\n";
-
-		userData_.turbulent_size = turbData.dvx.end[0] - turbData.dvx.begin[0];
-		const int nturb_y = turbData.dvx.end[1] - turbData.dvx.begin[1];
-		const int nturb_z = turbData.dvx.end[2] - turbData.dvx.begin[2];
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.turbulent_size == nturb_y && nturb_y == nturb_z, "Turbulence data must be a cube");
-		amrex::Print() << "turbulence data size is: " << userData_.turbulent_size << "^3\n";
-
-		// copy to GPU
-		userData_.dvx.resize(pinned_dvx.lo(), pinned_dvx.hi());
-		userData_.dvx.copy(pinned_dvx);
-
-		userData_.dvy.resize(pinned_dvy.lo(), pinned_dvy.hi());
-		userData_.dvy.copy(pinned_dvy);
-
-		userData_.dvz.resize(pinned_dvz.lo(), pinned_dvz.hi());
-		userData_.dvz.copy(pinned_dvz);
-
 		// Read initial conditions from file if specified
 		if (!userData_.IC_file.empty()) {
 			amrex::Print() << "Reading initial conditions from: " << userData_.IC_file << "\n";
@@ -211,42 +174,20 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	// turbulence parameters
-	const Real turb_amp = userData_.turbulent_amplitude;
-	const Real dv_rms = userData_.dv_rms_generated;
-	const Real renorm_factor = (dv_rms > 0.0) ? turb_amp / dv_rms : 0.0;
-
-	auto const &dvx = userData_.dvx.const_table();
-	auto const &dvy = userData_.dvy.const_table();
-	auto const &dvz = userData_.dvz.const_table();
-
-	// get turbulence data bounds
-	amrex::Array<int, 3> turb_lo = userData_.dvx.lo();
-	amrex::Array<int, 3> turb_hi = userData_.dvx.hi();
-
-	// get simulation box dimensions
-	const int nx = indexRange.length(0);
-	const int ny = indexRange.length(1);
-	const int nz = indexRange.length(2);
-	const int nturb = turb_hi[0] - turb_lo[0] + 1;
-
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= nturb, "nx must be less than or equal to turbulent_size (128)");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ny >= nx && nz >= nx, "ny and nz must be greater than or equal to nx");
-
 	// Capture galaxy parameters from userData_ for GPU kernel
 	const Real sigma1_ic = userData_.sigma1;
 	const Real sigma2_ic = 10.0 * sigma1_ic;
 	const Real rho01_ic = userData_.rho01;
 	const Real rho02_ic = 1.0e-5 * rho01_ic;
 
+	// Magnetic field parameters (parsed once in problem_main; must match setInitialConditionsOnGridFaceVars)
+	const Real B_0_ic = userData_.B_0;
+	const Real z_d_ic = userData_.z_d;
+
 	// Create GPU const tables for initial conditions if available
 	const auto &ic_table = userData_.ic_table.const_tables();
 
-	amrex::Real initial_scalar_density = 0.0;
-	if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
-		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-		initial_scalar_density = userData_.initial_scalar_per_cell / cell_vol;
-	}
+	const amrex::Real initial_scalar_density = userData_.initial_scalar_density;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
@@ -270,20 +211,17 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 		const auto gamma = quokka::EOS_Traits<TheProblem>::gamma;
 
-		// add turbulent velocities
-		const int turb_i = turb_lo[0] + (i % nturb);
-		const int turb_j = turb_lo[1] + (j % nturb);
-		const int turb_k = turb_lo[2] + (k % nturb);
-		const double vx = dvx(turb_i, turb_j, turb_k) * renorm_factor;
-		const double vy = dvy(turb_i, turb_j, turb_k) * renorm_factor;
-		const double vz = dvz(turb_i, turb_j, turb_k) * renorm_factor;
+		// Magnetic field (must match setInitialConditionsOnGridFaceVars): Bx = B_0 * exp(-|z|/z_d), By = 0, Bz = 0
+		const double Bx_ic = B_0_ic * std::exp(-std::abs(z) / z_d_ic);
+		const double Emag = 0.5 * Bx_ic * Bx_ic;
+		const double Eint = P / (gamma - 1.);
 
 		state_cc(i, j, k, HydroSystem<TheProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = rho * vx;
-		state_cc(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = rho * vy;
-		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
-		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+		state_cc(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = Eint + Emag;
 
 		const auto initial_scalar_density_d = initial_scalar_density;
 
@@ -293,19 +231,13 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		}
 	});
 }
-
 //Add magnetic field initial conditions
 
 template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
-    double magnetic_field_microgauss = 5.0; // default value in Gauss
-    double disk_zscale_kpc = 1.0;
-    amrex::ParmParse const pp("magnetic_field");
-    pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
-    pp.query("disk_zscale_kpc", disk_zscale_kpc);
-     
-    const double z_d = disk_zscale_kpc * (1.0e3 * C::parsec);
-    const double B_0 = magnetic_field_microgauss * 1.0e-6 / std::sqrt(4.0 * M_PI);
+    // Magnetic field parameters (parsed once in problem_main; must match setInitialConditionsOnGrid)
+    const Real B_0 = userData_.B_0;
+    const Real z_d = userData_.z_d;
 
     const amrex::Array4<double> &state_fc = grid_elem.array_;
     const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -322,8 +254,8 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGridFaceVar
         amrex::Real const y = prob_lo[1] + (j * dx[1]) + dy_cen;
         amrex::Real const z = prob_lo[2] + (k * dx[2]) + dz_cen;
 
-        amrex::Real Bx = 0.0;
-        amrex::Real By = B_0 *  std::exp(-std::abs(z) / z_d);
+        amrex::Real Bx = B_0 * std::exp(-std::abs(z) / z_d);
+        amrex::Real By = 0.0;
         amrex::Real Bz = 0.0;
 
         constexpr int mhd_index = Physics_Indices<TheProblem>::mhdFirstIndex;
@@ -339,7 +271,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGridFaceVar
 
 template <>
 void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
-						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & state_fc) const
 {
 	const int ncomp = ncomp_in;
 	auto const &output = mf.arrays();
@@ -351,60 +283,66 @@ void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const 
 		amrex::Gpu::streamSynchronize();
 	} else if (dname == "temperature") {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-			output[bx](i, j, k, ncomp) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
-		});
-	} else if (dname == "c_s") {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
-		auto tables = resampledTables_.const_tables();
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-			output[bx](i, j, k, ncomp) = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables) / 1.0e5; // km/s
-		});
-	} else if (dname == "scalar0_z_outflow_rate") {
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-			Real const vz = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
-			Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
-			output[bx](i, j, k, ncomp) = scalar0 * vz;
-		});
-	} else {
-		Real const hot_T = userData_.hot_T;
-		Real const warm_T = userData_.warm_T;
-		if (dname == "hot_gas_z_outflow_rate") {
-			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
-				output[bx](i, j, k, ncomp) = (Tgas > hot_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state = state_cc.const_array(iter);
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
+				output(i, j, k, ncomp) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
 			});
-		} else if (dname == "warm_gas_z_outflow_rate") {
-			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
-				output[bx](i, j, k, ncomp) = (Tgas < warm_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
+		}
+	} else if (dname == "bfield_strength") {
+		static_assert(Physics_Traits<TheProblem>::is_mhd_enabled, "bfield_strength requires MHD to be enabled.");
+		const int ncomp = ncomp_in;
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &bx_fc = state_fc[0].const_array(iter);
+			auto const &by_fc = state_fc[1].const_array(iter);
+			auto const &bz_fc = state_fc[2].const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::Real bx_cc = 0.5 * (bx_fc(i, j, k, 0) + bx_fc(i + 1, j, k, 0));
+				const amrex::Real by_cc = 0.5 * (by_fc(i, j, k, 0) + by_fc(i, j + 1, k, 0));
+				const amrex::Real bz_cc = 0.5 * (bz_fc(i, j, k, 0) + bz_fc(i, j, k + 1, 0));
+				const amrex::Real b_code = std::sqrt(bx_cc * bx_cc + by_cc * by_cc + bz_cc * bz_cc);
+				output(i, j, k, ncomp) = b_code * std::sqrt(4.0 * M_PI) * 1.0e6;
 			});
-		} else if (dname == "hot_scalar0_z_outflow_rate") {
-			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
-				Real const vz = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
-				Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
-				output[bx](i, j, k, ncomp) = (Tgas > hot_T) ? scalar0 * vz : 0.0;
+		}
+	} else if (dname == "Bx") {
+		static_assert(Physics_Traits<TheProblem>::is_mhd_enabled, "Bx requires MHD to be enabled.");
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &bx_fc = state_fc[0].const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::Real bx_cc = 0.5 * (bx_fc(i, j, k, 0) + bx_fc(i + 1, j, k, 0));
+				output(i, j, k, ncomp) = bx_cc * std::sqrt(4.0 * M_PI) * 1.0e6;
 			});
-		} else if (dname == "warm_scalar0_z_outflow_rate") {
-			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
-				Real const vz = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
-				Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
-				output[bx](i, j, k, ncomp) = (Tgas < warm_T) ? scalar0 * vz : 0.0;
+		}
+	} else if (dname == "By") {
+		static_assert(Physics_Traits<TheProblem>::is_mhd_enabled, "By requires MHD to be enabled.");
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &by_fc = state_fc[1].const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::Real by_cc = 0.5 * (by_fc(i, j, k, 0) + by_fc(i, j + 1, k, 0));
+				output(i, j, k, ncomp) = by_cc * std::sqrt(4.0 * M_PI) * 1.0e6;
+			});
+		}
+	} else if (dname == "Bz") {
+		static_assert(Physics_Traits<TheProblem>::is_mhd_enabled, "Bz requires MHD to be enabled.");
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &bz_fc = state_fc[2].const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::Real bz_cc = 0.5 * (bz_fc(i, j, k, 0) + bz_fc(i, j, k + 1, 0));
+				output(i, j, k, ncomp) = bz_cc * std::sqrt(4.0 * M_PI) * 1.0e6;
 			});
 		}
 	}
@@ -496,40 +434,10 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 	}
 }
 
-// Implement User-defined diode BC
-// Diode BC: allows outflow, prevents inflow by reflecting the z-momentum
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-												const Real /*time*/, const amrex::BCRec * /*bcr*/,
-												int /*bcomp*/, int /*orig_comp*/)
-{
-	// Apply diode boundary conditions in z-direction (direction 2)
-	setDiodeBCLo<2>(iv, consVar, geom);
-	setDiodeBCHi<2>(iv, consVar, geom);
-}
-
-template <>
-template <quokka::direction dir>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<TheProblem>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, int /*dcomp*/,
-								       int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-								       const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
-{
-	// Prepare boundary values for each face direction: {x-face, y-face, z-face}
-	// For low boundary (left side)
-	// const amrex::GpuArray<amrex::Real, 3> low_bdr_values = {Bx, By, Bz};
-
-	// For high boundary (right side)
-	// const amrex::GpuArray<amrex::Real, 3> high_bdr_values = {Bx, By, Bz};
-
-	// Apply boundary conditions using helper functions (boundary_dim 0 = x-axis)
-	// The helper functions will internally select the appropriate value based on face_dir
-	// setConstantDirichletBCFaceVarLo<0, dir, 3>(iv, consVar_fc, geom, low_bdr_values);
-	// setConstantDirichletBCFaceVarHi<0, dir, 3>(iv, consVar_fc, geom, high_bdr_values);
-	setDiodeBCLo<2>(iv, consVar_fc, geom);
-	setDiodeBCHi<2>(iv, consVar_fc, geom);
-}
+// Outflow boundary conditions in z (direction 2) are implemented via the native AMReX
+// "foextrap" BCType (zero-gradient extrapolation), set at runtime through quokka.bc for both
+// cell-centered and face-centered variables. No custom device function is required for foextrap,
+// so no setCustomBoundaryConditions/setCustomBoundaryConditionsFaceVar specialization is needed here.
 
 auto problem_main() -> int
 {
@@ -546,9 +454,31 @@ auto problem_main() -> int
 	pp.query("IC_file", sim.userData_.IC_file);
 	pp.query("rho01", sim.userData_.rho01);
 	pp.query("sigma1", sim.userData_.sigma1);
-	pp.query("initial_scalar_per_cell", sim.userData_.initial_scalar_per_cell);
+	pp.query("initial_scalar_density", sim.userData_.initial_scalar_density);
 	pp.query("hot_T", sim.userData_.hot_T);
 	pp.query("warm_T", sim.userData_.warm_T);
+	if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
+		AMREX_ALWAYS_ASSERT(!std::isnan(sim.userData_.initial_scalar_density));
+	}
+	// particles.scalar_yield_per_SN must be set as well, and it should be greater than (initial_scalar_density * (128 pc)^3),
+	// so that the SN ejected metal density in SN remnant is greater than the background density.
+	amrex::ParmParse const pp_particles("particles");
+	double scalar_yield_per_SN = NAN;
+	pp_particles.query("scalar_yield_per_SN", scalar_yield_per_SN);
+	AMREX_ALWAYS_ASSERT(!std::isnan(scalar_yield_per_SN));
+	const Real SNR_volume = std::pow(128.0 * C::parsec, 3);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_yield_per_SN > sim.userData_.initial_scalar_density * SNR_volume,
+					 "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
+
+	// Magnetic field: Bx = B_0 * exp(-|z|/z_d), By = 0, Bz = 0.
+	// Parsed once here (rather than in each IC-setting function) and shared via userData_.
+	double magnetic_field_microgauss = 5.0; // default value in microGauss
+	double disk_zscale_kpc = 1.0;
+	amrex::ParmParse const pp_bfield("magnetic_field");
+	pp_bfield.query("magnetic_field_microgauss", magnetic_field_microgauss);
+	pp_bfield.query("disk_zscale_kpc", disk_zscale_kpc);
+	sim.userData_.B_0 = magnetic_field_microgauss * 1.0e-6 / std::sqrt(4.0 * M_PI);
+	sim.userData_.z_d = disk_zscale_kpc * (1.0e3 * C::parsec);
 
 	// preCalculate must be explicitly called here to ensure
 	// ic_table is initialized even when restarting from checkpoint
