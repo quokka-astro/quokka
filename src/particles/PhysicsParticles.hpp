@@ -529,6 +529,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	void splitParticles(int const lev, int const splitFactor) override
 	{
+		if constexpr (particleType_ == ParticleType::IMFAveragedStellarPop) {
+			// Splitting is disabled for IMF-averaged particles: copying the parent's
+			// Philox key to every child would make their core-collapse SN event
+			// streams perfectly correlated, breaking the independent Poisson
+			// realizations assumption (see docs/markdown/particles.md).
+			amrex::Abort("splitParticles is not supported for IMFAveragedStellarPop particles.");
+		}
+
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
 						 "The current implementation of velocity kick in particle splitting assumes cgs units."
 						 "Please implement the appropriate scaling for other unit systems.");
