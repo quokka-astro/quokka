@@ -677,8 +677,8 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 	auto get_Aphi_physical = [=] AMREX_GPU_DEVICE(double x_val, double y_val, double z_val) -> double {
 		const double R_val = std::sqrt(x_val * x_val + y_val * y_val);
 		double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
-		const double beta_taper = get_beta_taper_factor(R_val, z_val, Sigma0, vc, cs_disk, cs_cgm, rho_cgm, rho_mid_local); // use local, not userData_.rho_mid
-		return aphi_nd * B0_scale * beta_taper;
+		//const double beta_taper = get_beta_taper_factor(R_val, z_val, Sigma0, vc, cs_disk, cs_cgm, rho_cgm, rho_mid_local); // use local, not userData_.rho_mid
+		return aphi_nd * B0_scale;// * beta_taper;
 	};
     auto get_Ax = [=] AMREX_GPU_DEVICE(double x_e, double y_e, double z_e) -> double {
         const double R_e = std::sqrt(x_e * x_e + y_e * y_e);
@@ -839,8 +839,8 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
 	auto get_Aphi_physical = [=] AMREX_GPU_DEVICE(double x_val, double y_val, double z_val) -> double {
 		const double R_val = std::sqrt(x_val * x_val + y_val * y_val);
 		double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
-		const double beta_taper = get_beta_taper_factor(R_val, z_val, Sigma0, vc, cs_disk, cs_cgm, rho_cgm, rho_mid_local); // use local, not userData_.rho_mid
-		return aphi_nd * B0_scale * beta_taper;
+		//const double beta_taper = get_beta_taper_factor(R_val, z_val, Sigma0, vc, cs_disk, cs_cgm, rho_cgm, rho_mid_local); // use local, not userData_.rho_mid
+		return aphi_nd * B0_scale;// * beta_taper;
 	};
     // cartesian mapping with deadzone
     auto get_Ax_node = [=] AMREX_GPU_DEVICE(double x_n, double y_n, double z_n) -> double {
@@ -1286,6 +1286,14 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				s(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index)     = pz_new;
 				s(i, j, k, HydroSystem<MHDGalaxy>::internalEnergy_index) = Eint_new;
 				s(i, j, k, HydroSystem<MHDGalaxy>::energy_index)         = Etot_new;
+				printf("SN injection at lev %d, cell (%d,%d,%d): dpx=%g, dpy=%g, dpz=%g\n",
+					lev, i, j, k, dpx, dpy, dpz);
+
+				printf("  rho=%g, px_old=%g, py_old=%g, pz_old=%g, Eint_old=%g, Etot_old=%g\n",
+					rho, px_old, py_old, pz_old, Eint_old, Etot_old);
+
+				printf("  px_new=%g, py_new=%g, pz_new=%g, Eint_new=%g, Etot_new=%g\n",
+					px_new, py_new, pz_new, Eint_new, Etot_new);
 			});
 		}
 		amrex::Gpu::streamSynchronize();
