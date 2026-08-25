@@ -1343,8 +1343,8 @@ AMREX_GPU_HOST_DEVICE auto QuokkaSimulation<problem_t>::densityFloor(amrex::Real
 }
 
 template <typename problem_t> struct QuokkaDensityFloorFunctor {
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(amrex::Real x, amrex::Real y, amrex::Real z,
-								amrex::Real base_density_floor) const -> amrex::Real
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_density_floor) const
+	    -> amrex::Real
 	{
 		return QuokkaSimulation<problem_t>::densityFloor(x, y, z, base_density_floor);
 	}

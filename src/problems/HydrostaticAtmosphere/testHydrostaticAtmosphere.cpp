@@ -151,8 +151,7 @@ void QuokkaSimulation<HydrostaticAtmosphereProblem>::computeReferenceSolution(am
 				amrex::Real const z = 0.0;
 #endif
 				amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
-				amrex::Real const rho_floor =
-				    QuokkaSimulation<HydrostaticAtmosphereProblem>::densityFloor(x, y, z, base_density_floor);
+				amrex::Real const rho_floor = QuokkaSimulation<HydrostaticAtmosphereProblem>::densityFloor(x, y, z, base_density_floor);
 				amrex::Real const rho_init = kRhoInitFactor * rho_atm;
 				amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
 
