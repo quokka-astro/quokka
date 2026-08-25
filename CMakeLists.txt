@@ -60,7 +60,7 @@ endif(AMReX_GPU_BACKEND STREQUAL "CUDA")
 
 if(AMReX_GPU_BACKEND STREQUAL "HIP")
   find_package(
-    hip 6.3 CONFIG REQUIRED
+    hip CONFIG REQUIRED
     HINTS
       "${ROCM_PATH}"
       "${HIP_PATH}"
@@ -69,6 +69,10 @@ if(AMReX_GPU_BACKEND STREQUAL "HIP")
       "/opt/rocm"
       "/opt/rocm/hip"
   )
+
+  if(hip_VERSION VERSION_LESS 6.3)
+    message(FATAL_ERROR "You must use ROCm version >= 6.3 to compile Quokka. All previous ROCm versions have compiler bugs that may cause Quokka to produce incorrect results.")
+  endif()
 endif(AMReX_GPU_BACKEND STREQUAL "HIP")
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
