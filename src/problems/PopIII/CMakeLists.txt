@@ -26,7 +26,7 @@ if(AMReX_SPACEDIM EQUAL 3)
   target_compile_definitions(${JOB_NAME} PUBLIC CHEMISTRY) # this will add
                                                            # #define CHEMISTRY
 
-  if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  if(AMReX_GPU_BACKEND STREQUAL "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif()
 

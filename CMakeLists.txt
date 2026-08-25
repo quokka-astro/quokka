@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.25)
 project(QuokkaCode VERSION 1.0
   DESCRIPTION "Radiation hydrodynamics with structured AMR"
   LANGUAGES CXX C)
@@ -49,37 +49,27 @@ option(ENABLE_HWASAN "Enable HWAddressSanitizer" OFF)
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
 
-if(AMReX_GPU_BACKEND MATCHES "CUDA")
+if(AMReX_GPU_BACKEND STREQUAL "CUDA")
   enable_language(CUDA)
   
   if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0)
     message(FATAL_ERROR "You must use CUDA version 12.0 or newer to compile Quokka because C++20 support is needed.")
   endif()
   
-  if(CMAKE_VERSION VERSION_LESS 3.20)
-    include(AMReX_SetupCUDA)
-  endif(CMAKE_VERSION VERSION_LESS 3.20)
-endif(AMReX_GPU_BACKEND MATCHES "CUDA")
+endif(AMReX_GPU_BACKEND STREQUAL "CUDA")
 
-if(AMReX_GPU_BACKEND MATCHES "HIP")
-  execute_process(
-      COMMAND hipcc --version
-      RESULT_VARIABLE hipcc_result
-      OUTPUT_VARIABLE hipcc_version
-      ERROR_VARIABLE hipcc_error
-      OUTPUT_STRIP_TRAILING_WHITESPACE
+if(AMReX_GPU_BACKEND STREQUAL "HIP")
+  find_package(
+    hip 6.3 CONFIG REQUIRED
+    HINTS
+      "${ROCM_PATH}"
+      "${HIP_PATH}"
+      "$ENV{ROCM_PATH}"
+      "$ENV{HIP_PATH}"
+      "/opt/rocm"
+      "/opt/rocm/hip"
   )
-  if(NOT hipcc_result EQUAL 0)
-      message(FATAL_ERROR "Failed to detect HIP compiler version: ${hipcc_error}")
-  endif()
-
-  string(REPLACE "HIP version: " "" hipcc_version ${hipcc_version})
-  message(STATUS "HIP compiler version: ${hipcc_version}")
-
-  if(hipcc_version VERSION_LESS 6.3)
-    message(FATAL_ERROR "You must use ROCm version >= 6.3 to compile Quokka. All previous ROCm versions have compiler bugs that may cause Quokka to produce incorrect results.")
-  endif()
-endif(AMReX_GPU_BACKEND MATCHES "HIP")
+endif(AMReX_GPU_BACKEND STREQUAL "HIP")
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
   # abort! Intel Compiler Classic cannot compile Quokka!

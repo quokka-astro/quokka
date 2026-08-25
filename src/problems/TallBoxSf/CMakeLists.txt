@@ -1,6 +1,6 @@
 if (AMReX_SPACEDIM EQUAL 3)
     add_executable(TallBoxSf testTallBoxSf.cpp ../../turbulence/TurbDataReader.cpp ${QuokkaObjSources})
-    if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    if(AMReX_GPU_BACKEND STREQUAL "CUDA")
         setup_target_for_cuda_compilation(TallBoxSf)
     endif()
 

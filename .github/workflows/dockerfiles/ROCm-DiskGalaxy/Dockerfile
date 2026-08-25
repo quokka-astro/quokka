@@ -75,7 +75,7 @@ RUN set -euo pipefail && \
       -DAMReX_SPACEDIM="${AMREX_SPACEDIM}" \
       -DAMReX_GPU_BACKEND=HIP \
       -DAMReX_MPI="${AMREX_MPI}" \
-      -DAMReX_GPU_ARCH="${AMREX_AMD_ARCH}" \
+      -DAMReX_AMD_ARCH="${AMREX_AMD_ARCH}" \
       -DCMAKE_C_COMPILER="${CC}" \
       -DCMAKE_CXX_COMPILER="${CXX}" \
       -DQUOKKA_PYTHON=OFF && \

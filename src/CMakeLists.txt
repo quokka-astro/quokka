@@ -90,7 +90,7 @@ if(DISABLE_FMAD)
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-gpu=nofma>)
   endif()
 
-  if(AMReX_GPU_BACKEND MATCHES "HIP")
+  if(AMReX_GPU_BACKEND STREQUAL "HIP")
     # HIP device code compiles through the CXX/C language (hipcc/amdclang++), not a separate CUDA-like
     # language, so disabling FMA contraction here (as for the CUDA-Clang branch above) covers device code too.
     add_compile_options($<$<COMPILE_LANGUAGE:C>:-ffp-contract=off>)

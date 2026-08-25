@@ -94,9 +94,9 @@ if(AMReX_SPACEDIM EQUAL 3)
   # this will add #define CHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
 
-  if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  if(AMReX_GPU_BACKEND STREQUAL "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
-  endif(AMReX_GPU_BACKEND MATCHES "CUDA")
+  endif(AMReX_GPU_BACKEND STREQUAL "CUDA")
 
   add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

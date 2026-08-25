@@ -21,9 +21,9 @@ add_executable(
 # this will add #define CHEMISTRY
 target_compile_definitions(${JOB_NAME} PUBLIC CHEMISTRY)
 
-if(AMReX_GPU_BACKEND MATCHES "CUDA")
+if(AMReX_GPU_BACKEND STREQUAL "CUDA")
   setup_target_for_cuda_compilation(${JOB_NAME})
-endif(AMReX_GPU_BACKEND MATCHES "CUDA")
+endif(AMReX_GPU_BACKEND STREQUAL "CUDA")
 
 add_test(
   NAME ${JOB_NAME}

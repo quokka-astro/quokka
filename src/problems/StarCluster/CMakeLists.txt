@@ -7,7 +7,7 @@ if(AMReX_SPACEDIM EQUAL 3)
   add_executable(
     ${JOB_NAME} testStarCluster.cpp ../../turbulence/TurbDataReader.cpp
                 ${QuokkaObjSources})
-  if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  if(AMReX_GPU_BACKEND STREQUAL "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif()
 

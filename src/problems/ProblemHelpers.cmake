@@ -51,7 +51,7 @@ function(quokka_add_problem)
     test${QUOKKA_PROBLEM_JOB_NAME}.cpp ${QuokkaObjSources})
 
   # Setup CUDA compilation if needed
-  if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  if(AMReX_GPU_BACKEND STREQUAL "CUDA")
     setup_target_for_cuda_compilation(${QUOKKA_PROBLEM_JOB_NAME})
   endif()
 
