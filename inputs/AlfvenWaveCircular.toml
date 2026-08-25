@@ -27,7 +27,6 @@ plotfile_interval = -1
 plotfile_prefix = "alfven_wave_circular_plt"
 checkpoint_interval = -1
 cfl = 0.3
-stop_time = 5.0
 max_timesteps = 8000
 
 hydro.rk_integrator_order = 2
@@ -37,6 +36,7 @@ hydro.use_dual_energy = 0
 setup.run_convergence = false
 setup.run_sim = true
 setup.error_tol = 0.003
+setup.num_periods = 5
 
 mhd.emf_compute_scheme = "Balsara2025"
 mhd.emf_averaging_scheme = "Balsara2025"

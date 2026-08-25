@@ -29,7 +29,6 @@ do_subcycle = 0
 plotfile_interval = -1
 checkpoint_interval = -1
 cfl = 0.3
-stop_time = 0.7071068
 max_timesteps = 2000
 
 hydro.rk_integrator_order = 2
@@ -39,6 +38,7 @@ hydro.use_dual_energy = 0
 setup.run_convergence = false
 setup.run_sim = true
 setup.error_tol = 0.002
+setup.num_periods = 1
 setup.num_modes_x = 1
 setup.num_modes_y = 0
 setup.num_modes_z = 0
