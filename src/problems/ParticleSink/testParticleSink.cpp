@@ -572,11 +572,57 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "Phase 4 passed: sink accretion respected the parser-derived density floor\n";
 		}
+	}
+
+	// ============================================================
+	// Phase 5: Verify that sink accretion enforces the Alfven-speed limit
+	// ============================================================
+	amrex::Print() << "\n=== Phase 5: Alfven-speed limiter test ===\n";
+	const double max_alfven_speed = 2.919e4;
+	const double alfven_density_floor = B0 * B0 / (max_alfven_speed * max_alfven_speed);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alfven_density_floor > parser_density_floor,
+					 "The Alfven floor must exceed the parser floor for this test to exercise the limiter");
+	{
+		amrex::ParmParse pp_particles("particles");
+		pp_particles.add("sink_max_alfven_speed", max_alfven_speed);
+	}
+
+	QuokkaSimulation<SinkProblem> sim4;
+	sim4.reconstructionOrder_ = 3;
+	sim4.cflNumber_ = 0.3;
+	sim4.tempFloor_ = 10.0;
+	sim4.setInitialConditions();
+
+	sim4.particleMeshInteraction(0.0, dt_init);
+	const amrex::Real min_alfven_limited_density = sim4.state_new_cc_[0].min(HydroSystem<SinkProblem>::density_index);
+	const amrex::Real gas_mass_phase5 = sim4.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	const auto &real_data_phase5 = sim4.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		double particle_mass_phase5 = 0.0;
+		for (const auto &p : real_data_phase5) {
+			particle_mass_phase5 += p[3];
+		}
+		const double floor_rel_error = std::abs(min_alfven_limited_density - alfven_density_floor) / alfven_density_floor;
+		const double mass_rel_error = std::abs(gas_mass_phase5 + particle_mass_phase5 - total_total_mass_init) / total_total_mass_init;
+		amrex::Print() << "Maximum Alfven speed = " << max_alfven_speed << "\n";
+		amrex::Print() << "Expected Alfven density floor = " << alfven_density_floor << "\n";
+		amrex::Print() << "Minimum density after sink accretion = " << min_alfven_limited_density << "\n";
+		amrex::Print() << "Relative total-mass error = " << mass_rel_error << "\n";
+		if (!(floor_rel_error < 1.0e-12)) {
+			status = 1;
+			amrex::Print() << "Test failed: sink accretion did not enforce the Alfven-speed density floor\n";
+		} else if (!(mass_rel_error < 1.0e-14)) {
+			status = 1;
+			amrex::Print() << "Test failed: mass was not conserved with the Alfven-speed limiter\n";
+		} else {
+			amrex::Print() << "Phase 5 passed: Alfven-speed limiter enforced with mass conservation\n";
+		}
 
 		if (status == 0) {
-			amrex::Print() << "\n=== All 4 phases passed ===\n";
+			amrex::Print() << "\n=== All 5 phases passed ===\n";
 		} else {
-			amrex::Print() << "\n=== One of the 4 phases failed ===\n";
+			amrex::Print() << "\n=== One of the 5 phases failed ===\n";
 		}
 	}
 

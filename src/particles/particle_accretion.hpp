@@ -260,6 +260,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 	const auto &local_scale_down_arr = scale_down.arrays();
 	const auto &dx = geom.CellSizeArray();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
+	const amrex::Real max_alfven_speed = sink_max_alfven_speed;
 
 	std::remove_reference_t<decltype((*state_fc)[0].const_arrays())> state_fc_x0{};
 	std::remove_reference_t<decltype((*state_fc)[1].const_arrays())> state_fc_x1{};
@@ -308,10 +309,10 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 			const double rho_cell = local_state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index);
 			AMREX_ASSERT(rho_cell > 0.0);
 
-			// Preserve the existing behavior that removes gas down to rho_J when the
-			// Bondi-Hoyle request would otherwise leave a Jeans-unstable cell.
+			// Preserve the existing Jeans-clamp behavior: test the raw Bondi-Hoyle
+			// request, rather than the rate after applying the 25% removal cap.
 			double rho_end = (1.0 + limited_accretion_rate) * rho_cell;
-			if (rho_end > rho_J) {
+			if ((1.0 + requested_accretion_rate) * rho_cell > rho_J) {
 				rho_end = rho_J;
 			}
 
@@ -320,10 +321,10 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 			// rho_A,min = 2 E_B / v_A,max^2.
 			double accretion_density_floor = local_density_floor_arr[bx](i, j, k);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				if (sink_max_alfven_speed > 0.0) {
+				if (max_alfven_speed > 0.0) {
 					AMREX_ASSERT(fab_fc_ptr != nullptr);
 					const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc_ptr);
-					const double rho_alfven_floor = 2.0 * magnetic_energy / (sink_max_alfven_speed * sink_max_alfven_speed);
+					const double rho_alfven_floor = 2.0 * magnetic_energy / (max_alfven_speed * max_alfven_speed);
 					accretion_density_floor = std::max(accretion_density_floor, rho_alfven_floor);
 				}
 			}
