@@ -248,7 +248,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 
 // Compute the scale down factor for the accretion rate. We first prevent the gas density from dropping below 75% of its initial value.
 // Then, if the density in the end state is above the Jeans density, we increase the accretion rate so that the density in the end state is
-// equal to the Jeans density.
+// equal to the Jeans density. Finally, we prevent the density in the end state from dropping below the accretion-zone density floor
+// (`sink_accretion_density_floor`, which defaults to the global `density_floor`).
 template <typename problem_t>
 void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Geometry &geom,
 		      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc)
@@ -259,6 +260,8 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 	const auto &local_scale_down_arr = scale_down.arrays();
 	const auto &dx = geom.CellSizeArray();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
+
+	const double density_floor = sink_accretion_density_floor;
 
 	std::remove_reference_t<decltype((*state_fc)[0].const_arrays())> state_fc_x0{};
 	std::remove_reference_t<decltype((*state_fc)[1].const_arrays())> state_fc_x1{};
@@ -310,6 +313,21 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 			const double rho_cell = local_state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index);
 			if ((1.0 + accretion_rate_cell) * rho_cell > rho_J) {
 				const double accretion_rate_cell_new = rho_J / rho_cell - 1.0;
+				local_accretion_rate_arr[bx](i, j, k) = accretion_rate_cell_new;
+				local_scale_down_arr[bx](i, j, k) = accretion_rate_cell_new / accretion_rate_cell;
+			}
+			AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
+			AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
+
+			// Enforce the accretion-zone density floor. This is checked last, against the current (possibly
+			// Jeans-adjusted) accretion rate, so the resulting density never drops below the floor regardless of
+			// what the earlier caps computed. scale_down is still expressed relative to the original
+			// accretion_rate_cell (the pre-cap value used to compute M_dot_cell in ComputeAccretionRateInBox), so
+			// that UpdateParticleMassAndMomentumInBox removes exactly the mass that UpdateHydroState removes from
+			// the cell, i.e. mass is conserved exactly.
+			const double current_rate = local_accretion_rate_arr[bx](i, j, k);
+			if ((1.0 + current_rate) * rho_cell < density_floor) {
+				const double accretion_rate_cell_new = std::min(0.0, density_floor / rho_cell - 1.0);
 				local_accretion_rate_arr[bx](i, j, k) = accretion_rate_cell_new;
 				local_scale_down_arr[bx](i, j, k) = accretion_rate_cell_new / accretion_rate_cell;
 			}

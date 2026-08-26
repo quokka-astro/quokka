@@ -3579,7 +3579,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 	detail::verify_particle_switch_type<problem_t>();
 
 	// Read particle parameters from input file
-	quokka::particleParmParse();
+	quokka::particleParmParse(densityFloor_);
 
 	// Sink and Star both accrete via the same accretion-rate buffer (see particleMeshInteraction).
 	// Enabling both would double-apply gas removal: computeSinkAccretion accumulates into the shared
