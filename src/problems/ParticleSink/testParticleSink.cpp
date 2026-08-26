@@ -592,9 +592,12 @@ auto problem_main() -> int
 	const double phase5_dt = 1.0e17;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alfven_density_floor > parser_density_floor,
 					 "The Alfven floor must exceed the parser floor for this test to exercise the limiter");
-	// The limiter is a runtime global rather than a QuokkaSimulation member. Set it
-	// immediately before constructing sim4 so Phases 1--4 run with it disabled.
-	quokka::sink_max_alfven_speed = max_alfven_speed;
+	// Add the runtime parameter only after Phases 1--4 have initialized, so this
+	// phase exercises particleParmParse without enabling the limiter earlier.
+	{
+		amrex::ParmParse pp_particles("particles");
+		pp_particles.add("sink_max_alfven_speed", max_alfven_speed);
+	}
 	QuokkaSimulation<SinkProblem> sim4;
 	sim4.reconstructionOrder_ = 3;
 	sim4.cflNumber_ = 0.3;

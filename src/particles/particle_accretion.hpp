@@ -274,6 +274,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 
 	amrex::ParallelFor(accretion_rate, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double requested_accretion_rate = local_accretion_rate_arr[bx](i, j, k);
+		const amrex::Real max_alfven_speed_capture = max_alfven_speed;
 		AMREX_ASSERT(requested_accretion_rate <= 0.0);
 
 		// In the accretion zone, if (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1 to bring the
@@ -311,9 +312,8 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 
 			// Preserve the existing Jeans-clamp behavior: test the raw Bondi-Hoyle
 			// request, rather than the rate after applying the 25% removal cap.
-			double rho_end = (1.0 + limited_accretion_rate) * rho_cell;
 			if ((1.0 + requested_accretion_rate) * rho_cell > rho_J) {
-				rho_end = rho_J;
+				limited_accretion_rate = rho_J / rho_cell - 1.0;
 			}
 
 			// Set the density floor before applying accretion. For Quokka's stored
@@ -321,18 +321,21 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 			// rho_A,min = 2 E_B / v_A,max^2.
 			double accretion_density_floor = local_density_floor_arr[bx](i, j, k);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				if (max_alfven_speed > 0.0) {
+				if (max_alfven_speed_capture > 0.0) {
 					AMREX_ASSERT(fab_fc_ptr != nullptr);
 					const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc_ptr);
-					const double rho_alfven_floor = 2.0 * magnetic_energy / (max_alfven_speed * max_alfven_speed);
+					const double rho_alfven_floor = 2.0 * magnetic_energy / (max_alfven_speed_capture * max_alfven_speed_capture);
 					accretion_density_floor = std::max(accretion_density_floor, rho_alfven_floor);
 				}
 			}
 
 			// Accretion cannot increase the gas density. If the current density is
 			// already at or below the requested floor, stop accretion in this cell.
-			rho_end = std::max(rho_end, std::min(accretion_density_floor, rho_cell));
-			limited_accretion_rate = rho_end / rho_cell - 1.0;
+			const double rho_end = (1.0 + limited_accretion_rate) * rho_cell;
+			const double effective_density_floor = std::min(accretion_density_floor, rho_cell);
+			if (rho_end < effective_density_floor) {
+				limited_accretion_rate = effective_density_floor / rho_cell - 1.0;
+			}
 
 			local_accretion_rate_arr[bx](i, j, k) = limited_accretion_rate;
 			local_scale_down_arr[bx](i, j, k) = limited_accretion_rate / requested_accretion_rate;
