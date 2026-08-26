@@ -602,8 +602,7 @@ auto problem_main() -> int
 	sim4.userData_.background_density = phase5_density;
 	sim4.userData_.background_magnetic_field = alfven_test_field;
 	sim4.setInitialConditions();
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(quokka::sink_max_alfven_speed == max_alfven_speed,
-					 "Phase 5 must configure a 300 km/s Alfven-speed limit");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(quokka::sink_max_alfven_speed == max_alfven_speed, "Phase 5 must configure a 300 km/s Alfven-speed limit");
 	// This phase isolates accretion onto the existing sinks. Prevent the dense
 	// synthetic state from also exercising the separate sink-creation pathway.
 	sim4.max_level = sim4.finest_level + 1;
