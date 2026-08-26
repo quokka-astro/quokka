@@ -106,7 +106,8 @@ AMREX_ENUM(SNScheme,				   // NOLINT
 	   SN_thermal_only,			   // pure thermal
 	   SN_thermal_or_thermal_momentum,	   // pure thermal (RM<1) or thermal+momentum (RM>=1)
 	   SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
-	   SN_pure_kinetic_or_thermal_momentum	   // pure kinetic (RM<1) or thermal+momentum (RM>=1)
+	   SN_pure_kinetic_or_thermal_momentum,	   // pure kinetic (RM<1) or thermal+momentum (RM>=1)
+	   SN_osaka_II_local_mechanical		   // local mechanical approximation to Oku et al. (2022), assuming solar metallicity
 );
 
 //-------------------- Radiation particles --------------------

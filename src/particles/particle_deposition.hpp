@@ -380,6 +380,110 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 	}
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto osakaIILocalMomentum(const amrex::Real n_H_amb) -> amrex::Real
+{
+	// Oku et al. (2022), eqs. (10) and (32), evaluated at Z = Z_solar:
+	//   p_hat = 1.75e5 M_solar km/s n_0^-0.05 Lambda_6,-22^-0.17.
+	constexpr amrex::Real solar_cooling_function = 1.05 + 0.046773514128719815; // 1.05 + 10^-1.33
+	constexpr amrex::Real momentum_normalization = 1.75e5 * C::M_solar * 1.0e5;
+	return momentum_normalization * std::pow(n_H_amb, -0.05) * std::pow(solar_cooling_function, -0.17);
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto osakaIILocalMomentumCap(const amrex::Real receiving_mass, const amrex::Real kinetic_energy_weight,
+								      const amrex::Real E_blast) -> amrex::Real
+{
+	constexpr amrex::Real kinetic_energy_fraction = 0.3;
+	return std::sqrt(2.0 * receiving_mass * kinetic_energy_fraction * E_blast * kinetic_energy_weight);
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositOsakaIILocalMechanicalSNR(
+    amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz,
+    const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z, const amrex::Real m_ej, const amrex::Real E_blast, const amrex::Real vol_inverse,
+    const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
+	&stencil_weights_gpu,
+    const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
+    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const amrex::Real pvx, const amrex::Real pvy, const amrex::Real pvz,
+    const amrex::Real scalar_yield_per_SN_d)
+{
+	const amrex::Real n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
+	const amrex::Real p_osaka = osakaIILocalMomentum(n_H_amb);
+
+	// The fixed Cartesian stencil is not exactly isotropic when the star is off-center. Apply the
+	// solid-angle correction of Oku et al. (2022), eq. (44), to make the requested radial kick sum to zero.
+	amrex::Real radial_weight_sum_x = 0.0;
+	amrex::Real radial_weight_sum_y = 0.0;
+	amrex::Real radial_weight_sum_z = 0.0;
+	for (int ii = ix - SN_stencil_size; ii <= ix + SN_stencil_size; ++ii) {
+		for (int jj = iy - SN_stencil_size; jj <= iy + SN_stencil_size; ++jj) {
+			for (int kk = iz - SN_stencil_size; kk <= iz + SN_stencil_size; ++kk) {
+				const int iii = std::abs(ii - ix);
+				const int jjj = std::abs(jj - iy);
+				const int kkk = std::abs(kk - iz);
+				const amrex::Real weight = stencil_weights_gpu[iii][jjj][kkk];
+				const amrex::Real delta_x = (ii + 0.5) * dx[0] + plo[0] - pos_x;
+				const amrex::Real delta_y = (jj + 0.5) * dx[1] + plo[1] - pos_y;
+				const amrex::Real delta_z = (kk + 0.5) * dx[2] + plo[2] - pos_z;
+				const amrex::Real r = std::sqrt((delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z));
+				const amrex::Real inv_r = (r > 0.0) ? 1.0 / r : 0.0;
+				radial_weight_sum_x += weight * delta_x * inv_r;
+				radial_weight_sum_y += weight * delta_y * inv_r;
+				radial_weight_sum_z += weight * delta_z * inv_r;
+			}
+		}
+	}
+
+	for (int ii = ix - SN_stencil_size; ii <= ix + SN_stencil_size; ++ii) {
+		for (int jj = iy - SN_stencil_size; jj <= iy + SN_stencil_size; ++jj) {
+			for (int kk = iz - SN_stencil_size; kk <= iz + SN_stencil_size; ++kk) {
+				const int iii = std::abs(ii - ix);
+				const int jjj = std::abs(jj - iy);
+				const int kkk = std::abs(kk - iz);
+				const amrex::Real weight = stencil_weights_gpu[iii][jjj][kkk];
+				const amrex::Real kernel_times_vol_inverse = weight * vol_inverse;
+				const amrex::Real delta_x = (ii + 0.5) * dx[0] + plo[0] - pos_x;
+				const amrex::Real delta_y = (jj + 0.5) * dx[1] + plo[1] - pos_y;
+				const amrex::Real delta_z = (kk + 0.5) * dx[2] + plo[2] - pos_z;
+				const amrex::Real r = std::sqrt((delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z));
+				const amrex::Real inv_r = (r > 0.0) ? 1.0 / r : 0.0;
+
+				amrex::Real target_dp_x = weight * p_osaka * ((delta_x * inv_r) - radial_weight_sum_x);
+				amrex::Real target_dp_y = weight * p_osaka * ((delta_y * inv_r) - radial_weight_sum_y);
+				amrex::Real target_dp_z = weight * p_osaka * ((delta_z * inv_r) - radial_weight_sum_z);
+				const amrex::Real target_dp =
+				    std::sqrt((target_dp_x * target_dp_x) + (target_dp_y * target_dp_y) + (target_dp_z * target_dp_z));
+
+				// Oku et al. (2022), eqs. (45)-(46): limit the mechanical kick by the
+				// solid-angle-weighted kinetic-energy allocation (f_kin = 0.3).
+				const amrex::Real receiving_mass = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index) * vol + weight * m_ej;
+				const amrex::Real momentum_cap = osakaIILocalMomentumCap(receiving_mass, weight, E_blast);
+				const amrex::Real cap_factor = (target_dp > momentum_cap) ? momentum_cap / target_dp : 1.0;
+				target_dp_x *= cap_factor;
+				target_dp_y *= cap_factor;
+				target_dp_z *= cap_factor;
+
+				const amrex::Real delta_rho = m_ej * kernel_times_vol_inverse;
+				const amrex::Real dpx = target_dp_x * vol_inverse + delta_rho * pvx;
+				const amrex::Real dpy = target_dp_y * vol_inverse + delta_rho * pvy;
+				const amrex::Real dpz = target_dp_z * vol_inverse + delta_rho * pvz;
+
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index), delta_rho);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index), dpx);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index), dpy);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
+
+				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
+					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::scalar0_index), scalar_per_cell);
+				}
+
+				const int count_comp = HydroSystem<problem_t>::nHydroScalars_;
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, count_comp), 1.0);
+			}
+		}
+	}
+}
+
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
     amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz,
@@ -665,6 +769,10 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz, vol_inverse,
 								     stencil_weights_gpu, scalar_yield_per_SN_d);
+				} else if (SN_scheme_d == SNScheme::SN_osaka_II_local_mechanical) {
+					depositOsakaIILocalMechanicalSNR<problem_t>(local_state, local_buffer, ix, iy, iz, pos_x, pos_y, pos_z, m_ej, E_blast,
+										    vol_inverse, stencil_weights_gpu, avg_density, vol, dx, plo, p_vx, p_vy,
+										    p_vz, scalar_yield_per_SN_d);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					// (SN kinetic energy computed inside function using COM frame for Galilean invariance)
@@ -676,6 +784,57 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 			}
 		});
 	}
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addOsakaIILocalMechanicalBufferToState(amrex::Array4<amrex::Real> const &local_state,
+										amrex::Array4<amrex::Real> const &local_buffer,
+										std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc,
+										int i, int j, int k, amrex::Real *p_max_velocity)
+{
+	const amrex::Real d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+	if (d_rho == 0.0) {
+		return;
+	}
+
+	const amrex::Real rho = local_state(i, j, k, HydroSystem<problem_t>::density_index);
+	const amrex::Real px = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const amrex::Real py = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const amrex::Real pz = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	const amrex::Real rho_new = rho + d_rho;
+	const amrex::Real px_new = px + local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const amrex::Real py_new = py + local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const amrex::Real pz_new = pz + local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+
+	const amrex::Real kinetic_energy = 0.5 * ((px * px) + (py * py) + (pz * pz)) / rho;
+	const amrex::Real kinetic_energy_new = 0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new;
+	const amrex::Real total_energy_new = local_state(i, j, k, HydroSystem<problem_t>::energy_index) + kinetic_energy_new - kinetic_energy;
+
+	// Mechanical-only Osaka-II deliberately adds no SN thermal energy. The gas internal-energy
+	// density is unchanged; total energy changes only by the exact lab-frame kinetic-energy increment.
+	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz_new;
+	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = total_energy_new;
+
+	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+		for (int n = 0; n < Physics_Traits<problem_t>::numPassiveScalars; ++n) {
+			local_state(i, j, k, HydroSystem<problem_t>::scalar0_index + n) += local_buffer(i, j, k, HydroSystem<problem_t>::scalar0_index + n);
+		}
+	}
+
+	amrex::Real cs = NAN;
+	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+		cs = ::quokka::EOS_Traits<problem_t>::cs_isothermal;
+	} else {
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, fab_fc);
+	}
+	const amrex::Real vx = px_new / rho_new;
+	const amrex::Real vy = py_new / rho_new;
+	const amrex::Real vz = pz_new / rho_new;
+	const amrex::Real velocity_magnitude = std::sqrt((vx * vx) + (vy * vy) + (vz * vz));
+	amrex::Gpu::Atomic::Max(&p_max_velocity[0], velocity_magnitude + cs);
 }
 
 template <typename problem_t>
@@ -898,6 +1057,8 @@ void addBufferToState(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_
 			const auto *const fab_fc_ptr = has_fab_fc ? &fab_fc : nullptr;
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
 				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, fab_fc_ptr, i, j, k, p_max_velocity_local);
+			} else if (SN_scheme_d == SNScheme::SN_osaka_II_local_mechanical) {
+				addOsakaIILocalMechanicalBufferToState<problem_t>(local_state, local_buffer, fab_fc_ptr, i, j, k, p_max_velocity_local);
 			} else {
 				addCompositeBufferToState<problem_t>(local_state, local_buffer, fab_fc_ptr, i, j, k, p_max_velocity_local);
 			}
