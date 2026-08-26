@@ -592,6 +592,9 @@ auto problem_main() -> int
 	const double phase5_dt = 1.0e17;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alfven_density_floor > parser_density_floor,
 					 "The Alfven floor must exceed the parser floor for this test to exercise the limiter");
+	// The limiter is a runtime global rather than a QuokkaSimulation member. Set it
+	// immediately before constructing sim4 so Phases 1--4 run with it disabled.
+	quokka::sink_max_alfven_speed = max_alfven_speed;
 	QuokkaSimulation<SinkProblem> sim4;
 	sim4.reconstructionOrder_ = 3;
 	sim4.cflNumber_ = 0.3;
@@ -600,7 +603,7 @@ auto problem_main() -> int
 	sim4.userData_.background_magnetic_field = alfven_test_field;
 	sim4.setInitialConditions();
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(quokka::sink_max_alfven_speed == max_alfven_speed,
-					 "The ParticleSink test input must configure a 300 km/s Alfven-speed limit");
+					 "Phase 5 must configure a 300 km/s Alfven-speed limit");
 	// This phase isolates accretion onto the existing sinks. Prevent the dense
 	// synthetic state from also exercising the separate sink-creation pathway.
 	sim4.max_level = sim4.finest_level + 1;

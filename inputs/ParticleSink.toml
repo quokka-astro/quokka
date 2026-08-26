@@ -29,7 +29,6 @@ problem.boost_vel_x = 1.0e7
 
 particles.verbose = 0
 particles.sink_particle_use_uniform_kernel = true
-particles.sink_max_alfven_speed = 3.0e7  # cm/s (300 km/s)
 
 tiny_profiler.enabled = 0
 suppress_output = 1
