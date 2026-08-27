@@ -76,6 +76,7 @@ Notes:
 - `Cooling + particles` is exercised by `ParticleSF`, `TallBoxSf`, `RandomBlast`, and `DiskGalaxy` through their input files.
 - `Hydro + dust` is exercised by the dust dynamics problems `DustAdvection*`, `DustDamping*`, `DustSoundwave`, and `DustyShock`.
 - `MHD + dust` is exercised by charged-dust and dust-MHD problems including `DustDampedGyromotion`, `DustDampingMHDZeroB`, `DustHallPedersenDrift`, `DustLorentzShock`, `DustMagnetizedRDI`, `DustyAlfvenWave`, and `DustyOrszagTang`.
+- `Self-gravity + particles` with **no** hyperbolic module is supported: a problem may set `is_hydro_enabled = false` and `is_radiation_enabled = false` while keeping `is_self_gravity_enabled = true`, in which case the timestep is set by the particle CFL condition alone. This is tested by `BinaryOrbitCICGravityOnly`, which reproduces the `BinaryOrbitCIC` orbit without any gas.
 
 
 ## Cell-centred state vector layout
@@ -102,7 +103,7 @@ Defined in `src/physics_info.hpp`. Computes starting indices and total component
 
 **`nvarTotal_cc` calculation:**
 
-- If neither hydro nor radiation is enabled: `nvarTotal_cc = nvarTotal_cc_adv` (= 1, for pure advection).
+- If neither hydro nor radiation is enabled: `nvarTotal_cc = nvarTotal_cc_adv` (= 1). In `AdvectionSimulation` this single component is the advected density; in `QuokkaSimulation` (e.g. a gravity-only problem with particles) nothing evolves it, and it is named `placeholder` in plotfiles and conservation sums.
 - Otherwise: `nvarTotal_cc = numHydroVars + numPassiveScalars + numDustVarsPerGroup * nDustGroups * is_dust_enabled + numRadVarsPerGroup * nGroups * is_radiation_enabled`.
 
 ## Cell-centred component map
