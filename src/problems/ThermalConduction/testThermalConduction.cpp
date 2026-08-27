@@ -30,12 +30,16 @@ physics modes (see ElectronConduction.hpp) just by changing that one parameter:
   - "isotropic": kappa = const. Initial condition is a smooth Gaussian temperature profile
     (cell-averaged in x via the erf antiderivative). Reference solution is the exact Gaussian
     diffusion solution (sigma_t^2 = sigma^2 + 2*D*t) -- identical to the original amr2-branch test.
-  - "spitzer": kappa = kappa0*T^2.5. Initial condition is an instantaneous point source: only the
-    cell(s) at x=0 start above the floor, everywhere else at Efloor. Reference solution is the
-    Pattle (1959) self-similar nonlinear-diffusion solution. The total excess energy deposited (M0,
-    see below) is fixed across resolutions, not the peak amplitude, so the deposit converges to a
-    true Dirac-delta source and the same analytic solution is valid at every resolution (needed for
-    the Richardson convergence test in problem_main/runConductionTest).
+  - "spitzer": kappa = kappa0*T^2.5 (pattle_q below; the physical Spitzer value -- see
+    ElectronConduction.hpp and simulation.hpp, which must be kept in sync manually since this
+    exponent isn't (yet) a runtime parameter). Initial condition is the Pattle (1959) self-similar
+    nonlinear-diffusion solution evaluated at t=spitzer_t_start_frac*stopTime_ (physical time since
+    a notional Dirac-delta release), not a true point source deposited on the grid -- a delta-like
+    IC is badly under-resolved at every resolution for this nonlinear conductivity (see the comment
+    on spitzer_t_start_frac below). Reference solution is the same Pattle profile evaluated at
+    t=tNew_[0]+spitzer_t_start_frac*stopTime_. The total excess energy (M0, see below) is fixed
+    across resolutions, so the same analytic solution is valid at every resolution (needed for the
+    Richardson convergence test in problem_main/runConductionTest).
 Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
 and the energy evolution is purely due to conduction. */
 
@@ -46,8 +50,13 @@ constexpr double Lref = 7.714e+17;		  // quarter box length
 constexpr double sigma = 2.410685615625e+17;	  // "isotropic" only: width of the initial Gaussian, in cm (amr2-branch value)
 constexpr double D = 4.396303164750053e+28;	  // "isotropic" only: fixed diffusion coefficient for the Gaussian solution, in cm^2/s (amr2-branch value)
 constexpr int nx_ref = 128;			  // "spitzer" only: resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConduction.toml)
-constexpr double dx0_ref = 4.0 * Lref / nx_ref;  
+constexpr double dx0_ref = 4.0 * Lref / nx_ref;
 constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref;
+// "spitzer" only: the IC is the analytic solution at physical time t_start = spitzer_t_start_frac *
+// stopTime_ (time since the notional Dirac-delta release), not a delta function -- see the comment
+// on computeExactSolutionParams() below. Used by both setInitialConditionsOnGrid and
+// computeReferenceSolution so they can't drift out of sync with each other.
+constexpr double spitzer_t_start_frac = 0.5;
 struct ThermalConductionProblem {
 };
 
@@ -66,6 +75,86 @@ template <> struct Physics_Traits<ThermalConductionProblem> : DefaultPhysicsTrai
 	static constexpr bool is_mhd_enabled = false;
 };
 
+namespace {
+// The exact solution for either conduction_type is a function of (x, t); evaluating it requires a
+// few scalars precomputed once per t (an EOS lookup and Gamma-function evaluations for "spitzer" --
+// too expensive, and not GPU-portable, to redo per cell). computeExactSolutionParams() is that
+// one-time setup; evalExactEint() is the actual per-cell "type + position -> Eint" evaluator, used
+// identically by setInitialConditionsOnGrid and computeReferenceSolution. The only difference
+// between "initial condition" and "reference solution" is which t goes into the setup call:
+//   - "isotropic": t=0 for the IC (the smooth Gaussian) is a valid special case of the same
+//     sigma_t^2 = sigma^2 + 2*D*t formula used for the reference at t=tNew_[0].
+//   - "spitzer": t=stopTime_ for the IC (see header comment); t=tNew_[0]+stopTime_ for the
+//     reference.
+constexpr amrex::Real pattle_q = 2.5; // conductivity exponent: kappa(T) = kappa0 * T^pattle_q (2.0 for
+				       // this experiment, not the physical Spitzer value of 2.5 -- must
+				       // match ElectronConduction.hpp and simulation.hpp, kept in sync
+				       // manually since this isn't yet a runtime parameter)
+
+struct ExactSolutionParams {
+	bool isSpitzer = false;
+	amrex::Real sigma2_t = 0.0; // "isotropic" only
+	amrex::Real A = 0.0;	     // "spitzer" only: dEint/dT for this EOS
+	amrex::Real r1 = 0.0;	     // "spitzer" only: front position at time t
+	amrex::Real Tscale = 0.0;   // "spitzer" only: amplitude scale at time t
+};
+
+auto computeExactSolutionParams(bool isSpitzer, amrex::Real rho, amrex::Real kappa0, amrex::Real t) -> ExactSolutionParams
+{
+	ExactSolutionParams p;
+	p.isSpitzer = isSpitzer;
+	if (isSpitzer) {
+		// Pattle (1959) self-similar solution for nonlinear diffusion with D(T) ~ T^pattle_q;
+		// compactly supported, front at r1. Assumes a zero background; the sim's floor (Efloor)
+		// is added back in evalExactEint(), exact (not approximate) since Eint=A*T has no
+		// additive offset. M0 (fixed across resolutions, see above) is what makes this same
+		// analytic solution valid at every resolution.
+		const amrex::Real A = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, 1.0); // A = mu * mp/rho/kb
+		const amrex::Real D0 = kappa0 / A;							      // D(T) = D0 * T^pattle_q
+		const amrex::Real Q0 = M0 / A;								      // excess-T quantity released
+		const amrex::Real Gamma_num = std::tgamma(1.0 / pattle_q + 1.5);
+		const amrex::Real Gamma_den = std::tgamma(1.0 / pattle_q + 1.0);
+		const amrex::Real r0 = (Q0 / std::sqrt(M_PI)) * Gamma_num / Gamma_den;
+		const amrex::Real t0 = pattle_q * r0 * r0 / (2.0 * (pattle_q + 2.0) * D0);
+		p.A = A;
+		p.r1 = r0 * std::pow(t / t0, 1.0 / (pattle_q + 2.0));
+		p.Tscale = std::pow(t / t0, -1.0 / (pattle_q + 2.0));
+	} else {
+		// Exact Gaussian diffusion solution -- identical to the original amr2-branch reference
+		// solution, using the fixed sigma/D above (not derived from conductivity_prefactor).
+		p.sigma2_t = sigma * sigma + 2.0 * D * t;
+	}
+	return p;
+}
+
+// The one function: given the precomputed exact-solution parameters (which encode conduction_type
+// and the evaluation time t) and a cell's location, returns the cell's Eint.
+AMREX_GPU_HOST_DEVICE auto evalExactEint(ExactSolutionParams const &p, amrex::Real rho, amrex::Real xlow, amrex::Real xhigh, amrex::Real dx) -> amrex::Real
+{
+	amrex::Real Eint = Efloor;
+	if (p.isSpitzer) {
+		// Cell-centre evaluation: Pattle's compactly-supported profile has no simple closed-form
+		// cell average. Estimate the physical temperature first (floor + excess, zero excess
+		// outside the front), then convert the total via the EOS -- rather than converting the
+		// excess alone and adding Efloor separately -- as a cross-check that the two routes agree.
+		const amrex::Real x = 0.5 * (xlow + xhigh);
+		const amrex::Real Tfloor = Efloor / p.A;
+		amrex::Real T = Tfloor;
+		if (std::abs(x) <= p.r1) {
+			const amrex::Real base = 1.0 - (x / p.r1) * (x / p.r1);
+			T += std::pow(base, 1.0 / pattle_q) * p.Tscale;
+		}
+		Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
+	} else {
+		// Gaussian temperature profile, cell-averaged in x via the erf antiderivative.
+		const amrex::Real erfx_low = std::erf(xlow / std::sqrt(2.0 * p.sigma2_t));
+		const amrex::Real erfx_high = std::erf(xhigh / std::sqrt(2.0 * p.sigma2_t));
+		Eint += Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx;
+	}
+	return Eint;
+}
+} // namespace
+
 template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// initialize a ThermalConduction test problem using parameters from
@@ -75,29 +164,31 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const bool isIsotropic = (conductionType_ == "isotropic");
 	const bool isSpitzer = (conductionType_ == "spitzer");
+	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
+
+	// "spitzer": deposit the analytic Pattle profile at t=spitzer_t_start_frac*stopTime_ (physical
+	// time since the notional Dirac-delta release) instead of a true point source. A delta-like IC
+	// concentrated in 1-2 cells is badly under-resolved regardless of grid resolution (the local
+	// temperature contrast across the source cell's face actually grows with resolution, since the
+	// deposited amplitude scales as 1/dx to keep the total energy fixed), which biases the
+	// conduction flux there and prevents clean convergence. Starting from an already-smooth profile
+	// avoids that. computeReferenceSolution correspondingly evaluates the reference at
+	// t=tNew_[0]+spitzer_t_start_frac*stopTime_, so the run advances physical time from
+	// spitzer_t_start_frac*stopTime_ to (1+spitzer_t_start_frac)*stopTime_ -- i.e. stop_time in the
+	// input file must be set to the desired comparison time divided by (1+spitzer_t_start_frac).
+	// "isotropic": deposit at t=0, which reduces exactly to the smooth Gaussian IC.
+	const ExactSolutionParams params =
+	    computeExactSolutionParams(isSpitzer, rho, electronConductionKappa0_, isSpitzer ? spitzer_t_start_frac * stopTime_ : 0.0);
+	if (isSpitzer) {
+		amrex::Print() << "A (dEint/dT) at initialization: " << params.A << std::endl;
+	}
+
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real xlow = prob_lo[0] + i * dx[0];
 		const amrex::Real xhigh = prob_lo[0] + (i + 1) * dx[0];
-		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
-		/*-------------------------------*/
-		const amrex::Real rho = rho0 * C::m_p; // g/cm^3
-		amrex::Real Eint = Efloor;
-		if (isIsotropic) {
-			// Gaussian temperature profile, cell-averaged in x via the erf antiderivative.
-			const amrex::Real sigma2 = sigma * sigma;
-			const amrex::Real erfx_low = std::erf(xlow / std::sqrt(2.0 * sigma2));
-			const amrex::Real erfx_high = std::erf(xhigh / std::sqrt(2.0 * sigma2));
-			Eint = Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx[0] + Efloor;
-		} else if (isSpitzer) {
-			// Instantaneous point source: only the cell(s) at x=0 start above the floor,
-			// everywhere else starts at the floor. The deposited amplitude is set so the total
-			// excess energy (M0) is the same at every resolution -- see the comment on M0 above.
-			Eint = (std::abs(x) < dx[0]) ? (Efloor + M0 / (2.0 * dx[0])) : Efloor;
-		}
-		/*-------------------------------*/
+		const amrex::Real Eint = evalExactEint(params, rho, xlow, xhigh, dx[0]);
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
@@ -188,43 +279,14 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 {
 	const amrex::Real t = tNew_[0];
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
-
-	const bool isIsotropic = (conductionType_ == "isotropic");
 	const bool isSpitzer = (conductionType_ == "spitzer");
 
-	amrex::Real sigma2_t = 0.0;
-	amrex::Real A = 0.0;
-	amrex::Real q = 0.0;
-	amrex::Real r1 = 0.0;
-	amrex::Real Tscale = 0.0;
-
-	if (isIsotropic) {
-		// Exact Gaussian diffusion solution, cell-averaged in x via the erf antiderivative --
-		// identical to the original amr2-branch reference solution, using the fixed sigma/D
-		// above (not derived from conductivity_prefactor).
-		const amrex::Real sigma2_0 = sigma * sigma;
-		sigma2_t = sigma2_0 + 2.0 * D * t;
-	} else if (isSpitzer) {
-		// Pattle (1959) self-similar solution for nonlinear diffusion with D(T) ~ T^q
-		// (q = 5/2 for Spitzer conduction); compactly supported, front at r1. Works in
-		// temperature space and converts to Eint at the end: Eint = A*T exactly for this EOS
-		// (gamma=2 => (gamma-1)=1, mean_molecular_weight=m_u => mu=1), with A taken from the
-		// EOS itself (Eint at T=1 K) rather than hand-derived, so this stays correct even if
-		// the EOS backend's internal conventions change. Assumes a zero background; the sim's
-		// floor (Efloor) is added back onto the final profile, exact (not approximate) since
-		// Eint=A*T has no additive offset. M0 (fixed across resolutions, see above) is what
-		// makes this same analytic solution valid at every resolution.
-		A = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, 1.0); // dEint/dT
-		const amrex::Real D0 = electronConductionKappa0_ / A;			    // D(T) = D0 * T^q
-		const amrex::Real Q0 = M0 / A;						    // excess-T quantity released
-		q = 2.5;
-		const amrex::Real Gamma_num = std::tgamma(1.0 / q + 1.5);
-		const amrex::Real Gamma_den = std::tgamma(1.0 / q + 1.0);
-		const amrex::Real r0 = (Q0 / std::sqrt(M_PI)) * Gamma_num / Gamma_den;
-		const amrex::Real t0 = q * r0 * r0 / (2.0 * (q + 2.0) * D0);
-		r1 = r0 * std::pow(t / t0, 1.0 / (q + 2.0));
-		Tscale = std::pow(t / t0, -1.0 / (q + 2.0));
-	}
+	// "spitzer": the IC (setInitialConditionsOnGrid) deposits the Pattle profile at
+	// t=spitzer_t_start_frac*stopTime_ instead of a delta function, so physical
+	// time-since-the-notional-delta is tNew_[0]+spitzer_t_start_frac*stopTime_, not tNew_[0].
+	// "isotropic": unaffected, t=tNew_[0] directly as always.
+	const ExactSolutionParams params =
+	    computeExactSolutionParams(isSpitzer, rho, electronConductionKappa0_, isSpitzer ? (t + spitzer_t_start_frac * stopTime_) : t);
 
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -234,21 +296,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const xlow = prob_lo[0] + i * dx[0];
 			amrex::Real const xhigh = prob_lo[0] + (i + 1) * dx[0];
-			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-
-			amrex::Real Eint_exact = Efloor;
-			if (isIsotropic) {
-				amrex::Real const erfx_low = std::erf(xlow / std::sqrt(2.0 * sigma2_t));
-				amrex::Real const erfx_high = std::erf(xhigh / std::sqrt(2.0 * sigma2_t));
-				Eint_exact += Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx[0];
-			} else if (isSpitzer) {
-				// Cell-centre evaluation: Pattle's compactly-supported profile has no simple
-				// closed-form cell average.
-				if (std::abs(x) <= r1) {
-					amrex::Real const base = 1.0 - (x / r1) * (x / r1);
-					Eint_exact += A * std::pow(base, 1.0 / q) * Tscale;
-				}
-			}
+			amrex::Real const Eint_exact = evalExactEint(params, rho, xlow, xhigh, dx[0]);
 
 			// clear all components
 			for (int n = 0; n < ncomp; ++n) {
