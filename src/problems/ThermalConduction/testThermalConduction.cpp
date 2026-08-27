@@ -30,7 +30,7 @@ The initial condition for the test problem for running a wind-cloud problem. */
 const double Twind = 2.e6;
 const double Tcloud  = 1.e4;
 const double rho_cloud = C::m_p; // g/cm^3
-const double Mach = 4.0; // Mach number of the wind
+AMREX_GPU_MANAGED double Mach = 4.0; // Mach number of the wind; overridden via ParmParse in problem_main()
 const double R0 = 0.2 * C::parsec; // radius of the cloud
 const double TracerPerCell = 1.e3; // tracer content per cell inside the cloud
 
@@ -203,6 +203,10 @@ AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex
 
 auto problem_main() -> int
 {
+	// read problem-specific parameters
+	amrex::ParmParse const pp("windcloud");
+	pp.query("mach", ::Mach);
+
 	// boundary conditions
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
