@@ -7,6 +7,8 @@ description: "Review a Quokka pull request or GitHub issue — build and run the
 
 Analyse and report. Never change source.
 
+The argument is the target: a bare number is a pull request (`2158`), a number prefixed with `issue` is an issue (`issue 2110`). With no argument, ask which.
+
 ## Comments
 
 Post every PR and issue comment with `--body-file`, never inline `--body "…"` — backticks and `$` in a review comment get command-substituted out of an inline body. End every comment with the fixed line `🤖 AI-assisted review`.
