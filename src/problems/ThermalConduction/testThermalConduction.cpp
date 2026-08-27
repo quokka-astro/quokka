@@ -142,37 +142,20 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 
 template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// geometrical refinement
-	// tag cells within one-sigma of the initial Gaussian profile for refinement
-	const double refine_Lmax = 1.1 * R0 ; // 0.2 pc
-	
-	const auto prob_lo = geom[lev].ProbLoArray();
+	// tracer-based refinement: tag cells that are less than 50% cloud AND less than 50% wind,
+	// i.e. cells in the cloud-wind mixing/interface region
 	const auto dx = geom[lev].CellSizeArray();
-	const auto tag = tags.arrays();
+	const amrex::Real cellVolume = dx[0] * dx[1] * dx[2];
+	const amrex::Real refine_threshold = 0.5 * TracerPerCell / cellVolume;
+
+	auto const &state = state_new_cc_[lev].const_arrays();
+	auto const tag = tags.arrays();
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// NOTE: must check all nodes of the cell!
-		// Otherwise, cells that are too big can completely prevent refinement.
-		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
-		amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
-		amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
-
-		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
-		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
-		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
-
-		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
-			if ((std::abs(x) < refine_Lmax)) {
-				tag[bx](i, j, k) = amrex::TagBox::SET;
-			}
-		};
-
-		for (auto const &x : {x0, x1}) {
-			for (auto const &y : {y0, y1}) {
-				for (auto const &z : {z0, z1}) {
-					tagIfPointInRegion(x, y, z);
-				}
-			}
+		amrex::Real const cloudTracer = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index);
+		amrex::Real const windTracer = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1);
+		if (cloudTracer < refine_threshold && windTracer < refine_threshold) {
+			tag[bx](i, j, k) = amrex::TagBox::SET;
 		}
 	});
 	amrex::Gpu::streamSynchronize();
@@ -214,7 +197,7 @@ AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex
 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = etot_edge;
 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = eint_edge;
 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) = 0.0; // wind boundary carries no cloud tracer
-	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = windTracerPerCell / cellVolume; // wind boundary carries wind tracer
+	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = TracerPerCell / cellVolume; // wind boundary carries wind tracer
 
 }
 
