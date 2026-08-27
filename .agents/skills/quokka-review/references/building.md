@@ -2,18 +2,14 @@
 
 ## Setup (once per session, from the repo root)
 
-```bash
-# Tooling — bootstrap.sh SKIPS an install already on PATH, so check for staleness
-command -v quokka >/dev/null || ./scripts/bash/bootstrap.sh
-cmp -s scripts/bash/quokka "$(command -v quokka)" \
-    && echo 'quokka up to date' \
-    || echo 'STALE: run  install -m755 scripts/bash/quokka ~/.local/bin/quokka'
+Install `quokka` and confirm it is not stale — see **Build & Test Commands** in `CLAUDE.md`.
 
+```bash
 # Repo root — record it; substitute literally below, never as a shell variable
 git rev-parse --show-toplevel
 ```
 
-Every `quokka` command carries `--root <repo-root>` and `--source default`. Keep both. `--source default` sources `~/.config/quokka/quokka.rc`, the per-machine place for `module load` or a CUDA `bin` on `PATH`; when that file is absent it warns and continues, which is not a failure.
+Every `quokka` command below carries `--root <repo-root>` and `--source default`. Keep both.
 
 ## Choosing the preset
 
