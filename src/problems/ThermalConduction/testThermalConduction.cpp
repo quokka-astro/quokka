@@ -30,8 +30,9 @@ The initial condition for the test problem for running a wind-cloud problem. */
 const double Twind = 3.e6;
 const double Tcloud  = 1.e4;
 const double rho_cloud = 0.006 * C::m_p; // g/cm^3
-const double Mach = 4.0; // Mach number of the wind
-const double R0 = 545 * C::parsec; // radius of the cloud		
+AMREX_GPU_MANAGED double Mach = 4.0; // Mach number of the wind; overridden via ParmParse in problem_main()
+const double R0 = 545 * C::parsec; // radius of the cloud
+const double TracerPerCell = 1.e3; // tracer content per cell inside the cloud/wind; divided by cell volume below so refinement doesn't change the tracer content per cell
 
 struct ThermalConductionProblem {
 };
@@ -49,6 +50,8 @@ template <> struct Physics_Traits<ThermalConductionProblem> : DefaultPhysicsTrai
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 2; // cloud tracer + wind tracer
 };
 
 template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -70,14 +73,21 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		amrex::Real T;
 		amrex::Real vz;
 		amrex::Real cs_wind;
+		amrex::Real cloudTracer;
+		amrex::Real windTracer;
+		const amrex::Real cellVolume = dx[0] * dx[1] * dx[2];
 		double R = std::sqrt((x)*(x) + (y)*(y) + (z-R0)*(z-R0));
 		if(R < R0){
 			T = Tcloud;
 			rho = rho_cloud; // g/cm^3
 			vz = 0.0; // cloud is stationary
+			cloudTracer = TracerPerCell / cellVolume; // 1/vol, so each cell contributes TracerPerCell regardless of resolution
+			windTracer = 0.0; // outside the wind
 		}
 		else{
 			T = Twind;
+			cloudTracer = 0.0; // outside the cloud
+			windTracer = TracerPerCell / cellVolume; // 1/vol, so each cell contributes TracerPerCell regardless of resolution
 			rho = rho_cloud * Tcloud / Twind; // g/cm^3
 			amrex::Real pressure = rho * T * C::k_B / C::m_u;
 			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
@@ -100,6 +110,8 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint + 0.5 * (rho * vz * vz);
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) = cloudTracer; // 1/vol
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = windTracer; // 1/vol
 	});
 }
 
@@ -128,36 +140,20 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 
 template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// geometrical refinement
-	// tag cells within one-sigma of the initial Gaussian profile for refinement
-	const double refine_Lmax = 1.5 * R0; 
-
-	const auto prob_lo = geom[lev].ProbLoArray();
+	// tracer-based refinement: tag cells that are less than 50% cloud AND less than 50% wind,
+	// i.e. cells in the cloud-wind mixing/interface region
 	const auto dx = geom[lev].CellSizeArray();
-	const auto tag = tags.arrays();
+	const amrex::Real cellVolume = dx[0] * dx[1] * dx[2];
+	const amrex::Real refine_threshold = 0.5 * TracerPerCell / cellVolume;
+
+	auto const &state = state_new_cc_[lev].const_arrays();
+	auto const tag = tags.arrays();
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// NOTE: must check all nodes of the cell!
-		// Otherwise, cells that are too big can completely prevent refinement.
-		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
-		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
-		amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
-		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
-		amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
-		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
-
-		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real /*z*/) {
-			if ((std::abs(x) < refine_Lmax) && (std::abs(y) < refine_Lmax) ) {
-				tag[bx](i, j, k) = amrex::TagBox::SET;
-			}
-		};
-
-		for (auto const &x : {x0, x1}) {
-			for (auto const &y : {y0, y1}) {
-				for (auto const &z : {z0, z1}) {
-					tagIfPointInRegion(x, y, z);
-				}
-			}
+		amrex::Real const cloudTracer = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index);
+		amrex::Real const windTracer = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1);
+		if (cloudTracer < refine_threshold && windTracer > refine_threshold) {
+			tag[bx](i, j, k) = amrex::TagBox::SET;
 		}
 	});
 	amrex::Gpu::streamSynchronize();
@@ -183,6 +179,8 @@ AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex
     double eint_edge = NAN;
 
 
+    const double cellVolume = geom.CellSize(0) * geom.CellSize(1) * geom.CellSize(2);
+
     rho_edge = rho_cloud * Tcloud / Twind; // g/cm^3
     const double cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho_edge, rho_edge * Twind * C::k_B / C::m_u);
     x3Mom_edge = rho_edge * Mach * cs_wind; // 100 km/s
@@ -195,12 +193,17 @@ AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex
     consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = x3Mom_edge;
     consVar(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = etot_edge;
     consVar(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = eint_edge;
-    
+    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) = 0.0; // wind boundary carries no cloud tracer
+    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = TracerPerCell / cellVolume; // wind boundary carries wind tracer
 }
 
 
 auto problem_main() -> int
 {
+	// read problem-specific parameters
+	amrex::ParmParse const pp("thermal_conduction");
+	pp.query("mach", ::Mach);
+
 	// boundary conditions
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
