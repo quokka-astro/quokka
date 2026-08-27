@@ -33,15 +33,21 @@ cmp -s scripts/bash/quokka "$(command -v quokka)" \
 # 2. GitHub — which repo does `gh` resolve to?
 gh repo set-default --view
 
-# 3. Review directory — where report files go
-echo "$(git rev-parse --path-format=absolute --git-common-dir)/quokka-review"
+# 3. Paths — record both
+echo "repo-root:  $(git rev-parse --show-toplevel)"
+echo "review-dir: $(git rev-parse --path-format=absolute --git-common-dir)/quokka-review"
 ```
 
 **On step 1:** a stale `quokka` mis-handles `--source default` — either rejecting the word outright or aborting when the rc is absent instead of warning. Refresh it before going on.
 
 **On step 2:** no `gh` command in this skill passes `--repo`, so they all work in a fork. A clone with a single `origin` needs nothing here. A clone with **several** remotes and no default set makes `gh` prompt for the base repo, which hangs a non-interactive session — if step 2 errors instead of naming a repo, run `gh repo set-default quokka-astro/quokka` once and move on.
 
-**On step 3:** this result is `<review-dir>` throughout. Record it and substitute it literally — shell state does not survive between commands, so it cannot be carried in a variable. It sits inside the clone's shared `.git`, so reports are never committed, never appear in `git status`, need no `.gitignore` entry, and stay reachable from every worktree of the clone.
+**On step 3:** substitute both literally wherever `<repo-root>` and `<review-dir>` appear below — shell state does not survive between commands, so neither can be carried in a variable.
+
+- **`<repo-root>`** goes on every `quokka` command as `--root <repo-root>`. **Keep it there.** It is what makes each command independent of the current directory, so nothing breaks when you `cd` into `tests/` to run a binary or into a build directory to inspect output. Drop it and `quokka` falls back to the cwd, then aborts with `tests directory not found: … (use --root to specify the quokka root)`.
+- **`<review-dir>`** is where report files go. It sits inside the clone's shared `.git`, so reports are never committed, never appear in `git status`, need no `.gitignore` entry, and stay reachable from every worktree of the clone.
+
+**Running a binary directly.** `quokka run` already executes from `<repo-root>/tests`. When you bypass it to pass bug-exposing parameters by hand, `cd <repo-root>/tests` first. That whole directory is gitignored, so plotfiles, checkpoints, slices and CSVs land somewhere harmless. Run from the repo root instead and `slice*` and `*.csv` are **not** covered by the root `.gitignore` — they show up as untracked files and trip the clean-tree check above on the next review.
 
 **Build environment.** Every `quokka` command below passes `--source default`, which sources `~/.config/quokka/quokka.rc` — the per-machine place for `module load`, or a CUDA `bin` prepended to `PATH` so cmake finds `nvcc`. Machines needing none of that simply leave the file absent; `--source default` then prints `Warning: default environment file ... not found` and carries on. **That warning is expected, not a failure** — pass the flag unconditionally.
 
@@ -137,9 +143,13 @@ git submodule update --init --recursive
 `quokka config` must be run after every branch checkout or submodule update.
 
 ```bash
-quokka config -d <preset> --delete --source default --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <preset> <Target> --source default --root <REPO_ROOT>
-# run with the parameters that expose the bug
+quokka config -d <preset> --delete --source default --root <repo-root> -DQUOKKA_PYTHON=OFF
+quokka build -d <preset> <Target> --source default --root <repo-root>
+# then run with the parameters that expose the bug, from the gitignored tests dir.
+# Both paths must be absolute — the binary resolves nothing relative to tests/:
+#   cd <repo-root>/tests
+#   <repo-root>/build/<preset>/src/problems/<Target>/<Target> \
+#       <repo-root>/inputs/<Target>.toml <param>=<value>
 ```
 
 **Confirm the wrong behavior manifests.** Document exactly what you observe (file count, error message, incorrect value, etc.).
@@ -155,8 +165,8 @@ Use `gh pr checkout`, **not** `git fetch origin <pr-branch>` — most community 
 ```bash
 gh pr checkout NNNN --branch pr-<slug> --force
 git submodule update --init --recursive
-quokka config -d <preset> --delete --source default --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <preset> <Target> --source default --root <REPO_ROOT>
+quokka config -d <preset> --delete --source default --root <repo-root> -DQUOKKA_PYTHON=OFF
+quokka build -d <preset> <Target> --source default --root <repo-root>
 # run the identical scenario from Step 2
 ```
 
@@ -170,8 +180,8 @@ Confirm:
 Take the dimensionality preset (e.g. `3d`) and append the detected suffix:
 
 ```bash
-quokka config -d <Nd>-<suffix> --delete --source default --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <Nd>-<suffix> <Target> --source default --root <REPO_ROOT>
+quokka config -d <Nd>-<suffix> --delete --source default --root <repo-root> -DQUOKKA_PYTHON=OFF
+quokka build -d <Nd>-<suffix> <Target> --source default --root <repo-root>
 ```
 
 This catches device-code restrictions and GPU lambda capture errors that only surface during GPU compilation. A CPU build that passes does not clear the PR if the PR touches GPU kernels.
@@ -207,8 +217,8 @@ This becomes your explicit test checklist. If the PR description is vague, infer
 ```bash
 gh pr checkout NNNN --branch pr-<slug> --force
 git submodule update --init --recursive
-quokka config -d <preset> --delete --source default --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <preset> <Target> --source default --root <REPO_ROOT>
+quokka config -d <preset> --delete --source default --root <repo-root> -DQUOKKA_PYTHON=OFF
+quokka build -d <preset> <Target> --source default --root <repo-root>
 ```
 
 Work through each item in your SPEC checklist:
