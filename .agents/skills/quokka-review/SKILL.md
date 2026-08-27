@@ -143,9 +143,10 @@ If the bug does **not** reproduce, stop — note this to the user and explain wh
 
 ### Step 3 — GREEN: Check out the PR branch and validate the fix
 
+Use `gh pr checkout`, **not** `git fetch origin <pr-branch>` — most community PRs come from forks, whose head branch does not exist on `origin` (`fatal: couldn't find remote ref …`). `gh` resolves the upstream repo itself, so this also works when the developer's `origin` is their own fork. `--force` resets the branch a previous review round left behind.
+
 ```bash
-git fetch origin <pr-branch>
-git checkout -B pr-<slug> FETCH_HEAD
+gh pr checkout NNNN --branch pr-<slug> --force
 git submodule update --init --recursive
 quokka config -d <preset> --delete --source default --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
 quokka build -d <preset> <Target> --source default --root <REPO_ROOT>
@@ -197,8 +198,7 @@ This becomes your explicit test checklist. If the PR description is vague, infer
 ### Step 3 — VERIFY: Check out the PR branch and exercise the feature
 
 ```bash
-git fetch origin <pr-branch>
-git checkout -B pr-<slug> FETCH_HEAD
+gh pr checkout NNNN --branch pr-<slug> --force
 git submodule update --init --recursive
 quokka config -d <preset> --delete --source default --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
 quokka build -d <preset> <Target> --source default --root <REPO_ROOT>
