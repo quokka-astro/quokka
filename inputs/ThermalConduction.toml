@@ -26,7 +26,7 @@ amr_interpolation_method = 3
 do_reflux = 1
 do_subcycle = 0
 
-stop_time = 469054.0075444166 # 1 conduction time
+stop_time = 375243.20603553328 # "1 conduction time" / 1.25 -- see NOTE above
 cfl = 0.3
 
 conduction.enabled = 1
