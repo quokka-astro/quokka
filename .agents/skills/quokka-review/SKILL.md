@@ -18,25 +18,46 @@ description: "Use when reviewing a Quokka pull request or GitHub issue — class
 
 ## Environment Setup (once per session)
 
-Run the bootstrap script to refresh `quokka` and `quokka-pre-commit.sh` in `~/superpowers/bin/` (already on PATH):
+Run these three from the repo root and **record the answers**. Shell state does not survive between commands, so substitute the results literally into every command below — never as a variable.
 
 ```bash
-~/superpowers/bin/bootstrape
+# 1. Tooling — `quokka` must match the repo copy. bootstrap.sh installs it into
+#    ~/.local/bin, but SKIPS an install that is already on PATH, so check for staleness.
+command -v quokka >/dev/null || ./scripts/bash/bootstrap.sh
+cmp -s scripts/bash/quokka "$(command -v quokka)" \
+    && echo 'quokka up to date' \
+    || echo 'STALE: run  install -m755 scripts/bash/quokka ~/.local/bin/quokka'
+
+# 2. Build environment — does this machine need an rc sourced?
+[ -f ~/.config/quokka/quokka.rc ] && echo 'use: --source --' || echo 'use: omit --source'
+
+# 3. Review directory — where report files go
+echo "$(git rev-parse --path-format=absolute --git-common-dir)/quokka-review"
 ```
 
-If this fails with `Read-only file system` it is **not fatal** — the script also copies into `~/.local/bin/`, which is not writable in every environment. Check with `which quokka`: the tools ship in `~/superpowers/bin/`, which is already on PATH, so carry on.
+**On step 1:** a stale `quokka` predating the `--source --` spelling will reject step 2's flag with `environment file '--' not found`. Refresh it before going on.
 
-**Every `quokka config` / `quokka build` below must pass `--source ~/superpowers/bin/quokka.rc`** — that rc sets up the build environment, including prepending the CUDA bin directory to PATH so cmake finds `nvcc` where a CUDA toolkit is installed. Do **not** use `--source --` or `--source default`: both resolve to `~/.config/quokka/quokka.rc`, which does not exist in these environments.
+**On step 2:** machines needing `module load`, or a CUDA `bin` prepended to `PATH` so cmake finds `nvcc`, put that in `~/.config/quokka/quokka.rc`; `--source --` resolves to exactly that file. Machines needing nothing omit the flag. Every `quokka` command below is written with `--source --` — **drop it** if step 2 said to.
 
-**Where review builds run** — the conversation already starts inside a per-task worktree at `<repo>/.claude/worktrees/<slug>` (created by `claude --worktree "<slug>"`); `pwd` is your repo root. Build only under `$(pwd)`. Build both the PR and its base from **uniquely-named throwaway branches** so you never disturb the checked-out ref: `git checkout -B dev-<slug> origin/development` for the base, and `git checkout -B pr-<slug> <pr-ref>` for the PR. Key the names to this review's `<slug>` — **not** a commit hash — so concurrent reviews building the same development tip don't collide. Run `git submodule update --init --recursive` after each checkout so submodule pins match, and delete the throwaway branches when done (`git branch -D dev-<slug> pr-<slug>`).
+**On step 3:** this is `<review-dir>` throughout. It sits inside the clone's shared `.git`, so reports are never committed, never appear in `git status`, need no `.gitignore` entry, and stay reachable from every worktree of the clone.
+
+**Isolation.** Reviewing checks out other refs, so it must not disturb the developer's working tree. Confirm the tree is clean before starting:
+
+```bash
+git status --porcelain
+```
+
+Non-empty output → stop and ask the user to commit, or to run the review in a separate worktree (`git worktree add ../review-<slug>`). Never stash their work.
+
+Then build both the PR and its base from **uniquely-named throwaway branches**, keyed to this review's `<slug>` — **not** a commit hash — so concurrent reviews of the same base don't collide. Run `git submodule update --init --recursive` after each checkout so submodule pins match, and delete the branches when done (`git branch -D dev-<slug> pr-<slug>`).
 
 ## Reviewing a Pull Request
 
 ### Step 1 — Read the PR and classify
 
 ```bash
-gh pr view NNNN --repo quokka-astro/quokka
-gh pr diff NNNN --repo quokka-astro/quokka
+gh pr view NNNN
+gh pr diff NNNN
 ```
 
 Derive a short kebab-case slug from the PR title (e.g., `fix-amr-regrid` from "Fix AMR regrid bug") — used for the artifact folder name when no prior folder exists.
@@ -111,8 +132,8 @@ git submodule update --init --recursive
 `quokka config` must be run after every branch checkout or submodule update.
 
 ```bash
-quokka config -d <preset> --delete --source ~/superpowers/bin/quokka.rc --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <preset> <Target> --source ~/superpowers/bin/quokka.rc --root <REPO_ROOT>
+quokka config -d <preset> --delete --source -- --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
+quokka build -d <preset> <Target> --source -- --root <REPO_ROOT>
 # run with the parameters that expose the bug
 ```
 
@@ -128,8 +149,8 @@ If the bug does **not** reproduce, stop — note this to the user and explain wh
 git fetch origin <pr-branch>
 git checkout -B pr-<slug> FETCH_HEAD
 git submodule update --init --recursive
-quokka config -d <preset> --delete --source ~/superpowers/bin/quokka.rc --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <preset> <Target> --source ~/superpowers/bin/quokka.rc --root <REPO_ROOT>
+quokka config -d <preset> --delete --source -- --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
+quokka build -d <preset> <Target> --source -- --root <REPO_ROOT>
 # run the identical scenario from Step 2
 ```
 
@@ -143,8 +164,8 @@ Confirm:
 Take the dimensionality preset (e.g. `3d`) and append the detected suffix:
 
 ```bash
-quokka config -d <Nd>-<suffix> --delete --source ~/superpowers/bin/quokka.rc --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <Nd>-<suffix> <Target> --source ~/superpowers/bin/quokka.rc --root <REPO_ROOT>
+quokka config -d <Nd>-<suffix> --delete --source -- --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
+quokka build -d <Nd>-<suffix> <Target> --source -- --root <REPO_ROOT>
 ```
 
 This catches device-code restrictions and GPU lambda capture errors that only surface during GPU compilation. A CPU build that passes does not clear the PR if the PR touches GPU kernels.
@@ -181,8 +202,8 @@ This becomes your explicit test checklist. If the PR description is vague, infer
 git fetch origin <pr-branch>
 git checkout -B pr-<slug> FETCH_HEAD
 git submodule update --init --recursive
-quokka config -d <preset> --delete --source ~/superpowers/bin/quokka.rc --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <preset> <Target> --source ~/superpowers/bin/quokka.rc --root <REPO_ROOT>
+quokka config -d <preset> --delete --source -- --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
+quokka build -d <preset> <Target> --source -- --root <REPO_ROOT>
 ```
 
 Work through each item in your SPEC checklist:
@@ -206,17 +227,17 @@ Then go to **Reporting** below.
 
 **Two artifacts, two audiences.** The report file is the durable record — keep it as detailed as the work warrants. The PR comment is read by a busy maintainer on a phone — it is short by construction. **Never post the report file as the comment.** That is what makes review comments unreadable.
 
-**Sync rule:** Any write to `~/superpowers/` (reports, skills, configs) must be committed, pulled, and pushed immediately so the repo stays synchronized across machines. Always pull --rebase just before pushing to avoid conflicts from concurrent sessions.
-
 ### 1. Write the report file (full detail)
 
+Substitute `<review-dir>` (Environment Setup step 3) and the real PR number for `NNNN` before running:
+
 ```bash
-cd ~/superpowers && git pull --rebase
-# Use existing prNNNN-* folder if present; otherwise create prNNNN-<slug>
-ls ~/superpowers/quokka/ | grep "^prNNNN-" || echo "none"
+# Reuse the folder a prior review round created, if there is one
+ls <review-dir>/ 2>/dev/null | grep "^prNNNN-" || echo "none"
+mkdir -p <review-dir>/prNNNN-<slug>
 ```
 
-If a `prNNNN-*` folder already exists, write the report inside it. Otherwise create `~/superpowers/quokka/prNNNN-<slug>/`. The report filename is `<folder>-REVIEW.md` (e.g. `pr2020-migrate-datatable-hdf5-REVIEW.md`). Follow-up reviews append `-v2`, `-v3`, etc.
+If a `prNNNN-*` folder already exists, write the report inside it rather than creating a second one. The report filename is `<folder>-REVIEW.md` (e.g. `pr2020-migrate-datatable-hdf5-REVIEW.md`). Follow-up reviews append `-v2`, `-v3`, etc.
 
 Contents — evidence table (one row per phase), analysis (root cause + `file:line` for bug fixes; design match for features), PR-introduced concerns, pre-existing issues. Long derivations, parameter sweeps, and raw numbers belong **here**, not in the comment.
 
@@ -279,13 +300,12 @@ Then verify: reading **only** the Verdict line, does a maintainer know whether t
 
 **Follow-up reviews (v2, v3, …):** Before listing findings carried over from a prior round, re-read the code at each cited `file:line` to confirm the issue still exists — commits between rounds may have already fixed it. Drop any finding whose code is gone. A follow-up where everything was fixed is *three lines*: verdict, what you re-ran, what still stands.
 
-### 3. Post and commit
+### 3. Post
 
-Post the **comment** file; commit **both** files.
+Post the **comment** file. The report file stays local — it is the working record for follow-up rounds, not a publication.
 
 ```bash
-gh pr comment NNNN --repo quokka-astro/quokka --body-file ~/superpowers/quokka/<folder>/<folder>-COMMENT.md
-cd ~/superpowers && git add quokka/prNNNN-*/ && git commit -m "Add PR NNNN review" && git pull --rebase && git push
+gh pr comment NNNN --body-file <review-dir>/<folder>/<folder>-COMMENT.md
 ```
 
 Give a **1-2 sentence summary in chat** — full detail is in the report file.
@@ -316,7 +336,7 @@ Use when the user says "review issue NNNN" (analysis only, no fix).
 ### 1. Read the issue
 
 ```bash
-gh issue view NNNN --repo quokka-astro/quokka
+gh issue view NNNN
 ```
 
 Derive a short kebab-case slug from the issue title (e.g., `amr-level-drop` from "AMR level drops to 0") — use it in all artifact filenames for this review.
@@ -340,7 +360,7 @@ git submodule update --init --recursive
 
 Same two-file split as a PR review — the report holds the detail, the comment is short.
 
-Write findings to `~/superpowers/quokka/issueNNNN-<slug>/issueNNNN-<slug>.md`: root cause, fix location(s), latent concerns, and whether the issue is resolved or still open.
+Write findings to `<review-dir>/issueNNNN-<slug>/issueNNNN-<slug>.md`: root cause, fix location(s), latent concerns, and whether the issue is resolved or still open.
 
 Then write `issueNNNN-<slug>-COMMENT.md` and post **that**. All the comment rules from **Reporting** apply — verdict first, ≤ 300 words, one line per finding, evidence in `<details>`:
 
@@ -357,8 +377,7 @@ Then write `issueNNNN-<slug>-COMMENT.md` and post **that**. All the comment rule
 For AI-generated audit issues, one line per claimed finding: `**Finding N** — valid / invalid because X`. Do not restate the finding text back at the issue.
 
 ```bash
-gh issue comment NNNN --repo quokka-astro/quokka --body-file ~/superpowers/quokka/issueNNNN-<slug>/issueNNNN-<slug>-COMMENT.md
-cd ~/superpowers && git add quokka/issueNNNN-*/ && git commit -m "Add issue NNNN review" && git pull --rebase && git push
+gh issue comment NNNN --body-file <review-dir>/issueNNNN-<slug>/issueNNNN-<slug>-COMMENT.md
 ```
 
 Give a **1-2 sentence summary in chat** — the full detail is in the report file.
