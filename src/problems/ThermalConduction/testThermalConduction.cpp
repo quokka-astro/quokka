@@ -201,7 +201,7 @@ AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex
 auto problem_main() -> int
 {
 	// read problem-specific parameters
-	amrex::ParmParse const pp("thermal_conduction");
+	amrex::ParmParse const pp("windcloud");
 	pp.query("mach", ::Mach);
 
 	// boundary conditions
