@@ -7,18 +7,20 @@ description: "Use when reviewing a Quokka pull request or GitHub issue — class
 
 ## When NOT to Use
 
-- Implementing a fix for a GitHub issue → use [[quokka-feature]]
+- Implementing a fix for a GitHub issue — this skill analyses and reports only
 - Making any source code change
 
 ## PR Comment Attribution
 
-**REQUIRED:** All PR and issue comments must follow [[quokka-github-workflows]]: use `--body-file` with a quoted heredoc, and end every comment with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. The file you post is the short **comment** file, never the full report — see **Reporting** below.
+**REQUIRED:** Post every PR and issue comment with `--body-file`, **never** inline `--body "…"`. Review comments are dense with backticked `file.cpp:NN` citations and `$` in error norms, and the shell command-substitutes both out of an inline body. If you build the file with a heredoc rather than a file-write tool, quote the delimiter (`<< 'EOF'`) to stop the same expansion inside it.
+
+End every comment with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. The file you post is the short **comment** file, never the full report — see **Reporting** below.
 
 **Exception:** CI trigger comments (`/azp run rocm-quick`) must be posted raw with no attribution footer — Azure Pipelines matches on exact command text and will fail if the body contains anything else.
 
 ## Environment Setup (once per session)
 
-Run both from the repo root:
+Run all three from the repo root:
 
 ```bash
 # 1. Tooling — `quokka` must match the repo copy. bootstrap.sh installs it into
@@ -28,13 +30,18 @@ cmp -s scripts/bash/quokka "$(command -v quokka)" \
     && echo 'quokka up to date' \
     || echo 'STALE: run  install -m755 scripts/bash/quokka ~/.local/bin/quokka'
 
-# 2. Review directory — where report files go
+# 2. GitHub — which repo does `gh` resolve to?
+gh repo set-default --view
+
+# 3. Review directory — where report files go
 echo "$(git rev-parse --path-format=absolute --git-common-dir)/quokka-review"
 ```
 
 **On step 1:** a stale `quokka` mis-handles `--source default` — either rejecting the word outright or aborting when the rc is absent instead of warning. Refresh it before going on.
 
-**On step 2:** this result is `<review-dir>` throughout. Record it and substitute it literally — shell state does not survive between commands, so it cannot be carried in a variable. It sits inside the clone's shared `.git`, so reports are never committed, never appear in `git status`, need no `.gitignore` entry, and stay reachable from every worktree of the clone.
+**On step 2:** no `gh` command in this skill passes `--repo`, so they all work in a fork. A clone with a single `origin` needs nothing here. A clone with **several** remotes and no default set makes `gh` prompt for the base repo, which hangs a non-interactive session — if step 2 errors instead of naming a repo, run `gh repo set-default quokka-astro/quokka` once and move on.
+
+**On step 3:** this result is `<review-dir>` throughout. Record it and substitute it literally — shell state does not survive between commands, so it cannot be carried in a variable. It sits inside the clone's shared `.git`, so reports are never committed, never appear in `git status`, need no `.gitignore` entry, and stay reachable from every worktree of the clone.
 
 **Build environment.** Every `quokka` command below passes `--source default`, which sources `~/.config/quokka/quokka.rc` — the per-machine place for `module load`, or a CUDA `bin` prepended to `PATH` so cmake finds `nvcc`. Machines needing none of that simply leave the file absent; `--source default` then prints `Warning: default environment file ... not found` and carries on. **That warning is expected, not a failure** — pass the flag unconditionally.
 
