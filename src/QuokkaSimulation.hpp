@@ -309,8 +309,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		}
 	}
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto densityFloor(amrex::Real x, amrex::Real y, amrex::Real z,
-										 amrex::Real base_density_floor) const -> amrex::Real;
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto densityFloor(amrex::Real x, amrex::Real y, amrex::Real z,
+											amrex::Real base_density_floor) -> amrex::Real;
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
 	void defineComponentNames();
 	void defineDefaultPlotfileVariables();
@@ -357,7 +357,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 			       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const override;
-	void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const override;
+	void ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
 
@@ -1272,7 +1272,7 @@ void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &
 	(void)state_fc;
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
+template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const
 {
 	auto const ncomp_out = ncomp;
 	auto const prob_lo = geom[lev].ProbLoArray();
@@ -1301,10 +1301,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFl
 			});
 		}
 	} else {
-		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-									     amrex::Real base_density_floor) -> amrex::Real {
-			return densityFloor(x, y, z, base_density_floor);
-		};
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			amrex::Box const &box = iter.growntilebox(ngrow);
 			auto const &arr = mf.array(iter);
@@ -1320,7 +1316,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFl
 #else
 				amrex::Real const z = 0.0;
 #endif
-				arr(i, j, k, ncomp_out) = density_floor_func(x, y, z, density_floor);
+				arr(i, j, k, ncomp_out) = QuokkaSimulation<problem_t>::densityFloor(x, y, z, density_floor);
 			});
 		}
 	}
@@ -1376,12 +1372,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_f
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto QuokkaSimulation<problem_t>::densityFloor(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_density_floor) const
-    -> amrex::Real
+AMREX_GPU_HOST_DEVICE auto QuokkaSimulation<problem_t>::densityFloor(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_density_floor) -> amrex::Real
 {
 	amrex::ignore_unused(x, y, z);
 	return base_density_floor;
 }
+
+template <typename problem_t> struct QuokkaDensityFloorFunctor {
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_density_floor) const
+	    -> amrex::Real
+	{
+		return QuokkaSimulation<problem_t>::densityFloor(x, y, z, base_density_floor);
+	}
+};
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real, amrex::Real>>
@@ -2050,10 +2053,7 @@ void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc
 		};
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
 	} else {
-		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-									     amrex::Real base_density_floor) -> amrex::Real {
-			return densityFloor(x, y, z, base_density_floor);
-		};
+		auto const density_floor_func = QuokkaDensityFloorFunctor<problem_t>{};
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
 	}
 
