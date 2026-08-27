@@ -1323,7 +1323,13 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	std::vector<dtloc_t *> dts = {&hydro_dt, &conduction_dt, &particle_dt};
 	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end(), [](dtloc_t *const p1, dtloc_t *const p2) { return p1->value < p2->value; });
 
-	if (verbose) {
+	// N.B. this must be checked here: computeTimestep() clips dt to 1.1 * dt_[lev], which turns an
+	// unconstrained timestep into a large-but-finite one that no later check can recognise
+	const bool timestep_is_constrained = dt_min_ptr->value < std::numeric_limits<amrex::Real>::max();
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(timestep_is_constrained || constantDt_ > 0.0 || maxDt_ < std::numeric_limits<amrex::Real>::max(),
+					 "No enabled physics module constrains the timestep! Set constant_dt or max_dt in the inputs file.");
+
+	if (verbose && timestep_is_constrained) {
 		// print the physics that limits the timestep
 		if (dt_min_ptr == &hydro_dt) {
 			amrex::Print() << std::format("...[level {}] timestep limited by HYDRO\n", lev);
@@ -1391,9 +1397,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 			dt_0 = constantDt_;
 		}
 	}
-
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dt_0 < std::numeric_limits<amrex::Real>::max(),
-					 "No enabled physics module constrains the timestep! Set constant_dt or max_dt in the inputs file.");
 
 	if (tNew_[0] == 0.0) { // shrink the initial timestep if requested
 		dt_0 *= initShrink_;
