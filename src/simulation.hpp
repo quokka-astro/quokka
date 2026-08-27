@@ -1302,7 +1302,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 				    amrex::Real Eint = state_mf[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
 				    amrex::Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
 
-				    // Spitzer diffusion coefficient: (kappa_0 * T^2.5) / (rho * c_v)
+				    // Spitzer diffusion coefficient: (kappa_0 * T^2.0) / (rho * c_v) -- 2.0 for
+				    // this experiment, not the physical Spitzer value of 2.5; must match
+				    // ElectronConduction.hpp and testThermalConduction.cpp's pattle_q
 				    amrex::Real kappa_spitzer = electronConductionKappa0_ * std::pow(T, 2.5);
 				    amrex::Real diffusion_coefficient = kappa_spitzer / (rho * c_v);
 
