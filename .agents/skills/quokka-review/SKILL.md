@@ -18,7 +18,7 @@ description: "Use when reviewing a Quokka pull request or GitHub issue — class
 
 ## Environment Setup (once per session)
 
-Run these three from the repo root and **record the answers**. Shell state does not survive between commands, so substitute the results literally into every command below — never as a variable.
+Run both from the repo root:
 
 ```bash
 # 1. Tooling — `quokka` must match the repo copy. bootstrap.sh installs it into
@@ -28,18 +28,15 @@ cmp -s scripts/bash/quokka "$(command -v quokka)" \
     && echo 'quokka up to date' \
     || echo 'STALE: run  install -m755 scripts/bash/quokka ~/.local/bin/quokka'
 
-# 2. Build environment — does this machine need an rc sourced?
-[ -f ~/.config/quokka/quokka.rc ] && echo 'use: --source --' || echo 'use: omit --source'
-
-# 3. Review directory — where report files go
+# 2. Review directory — where report files go
 echo "$(git rev-parse --path-format=absolute --git-common-dir)/quokka-review"
 ```
 
-**On step 1:** a stale `quokka` predating the `--source --` spelling will reject step 2's flag with `environment file '--' not found`. Refresh it before going on.
+**On step 1:** a stale `quokka` mis-handles `--source default` — either rejecting the word outright or aborting when the rc is absent instead of warning. Refresh it before going on.
 
-**On step 2:** machines needing `module load`, or a CUDA `bin` prepended to `PATH` so cmake finds `nvcc`, put that in `~/.config/quokka/quokka.rc`; `--source --` resolves to exactly that file. Machines needing nothing omit the flag. Every `quokka` command below is written with `--source --` — **drop it** if step 2 said to.
+**On step 2:** this result is `<review-dir>` throughout. Record it and substitute it literally — shell state does not survive between commands, so it cannot be carried in a variable. It sits inside the clone's shared `.git`, so reports are never committed, never appear in `git status`, need no `.gitignore` entry, and stay reachable from every worktree of the clone.
 
-**On step 3:** this is `<review-dir>` throughout. It sits inside the clone's shared `.git`, so reports are never committed, never appear in `git status`, need no `.gitignore` entry, and stay reachable from every worktree of the clone.
+**Build environment.** Every `quokka` command below passes `--source default`, which sources `~/.config/quokka/quokka.rc` — the per-machine place for `module load`, or a CUDA `bin` prepended to `PATH` so cmake finds `nvcc`. Machines needing none of that simply leave the file absent; `--source default` then prints `Warning: default environment file ... not found` and carries on. **That warning is expected, not a failure** — pass the flag unconditionally.
 
 **Isolation.** Reviewing checks out other refs, so it must not disturb the developer's working tree. Confirm the tree is clean before starting:
 
@@ -85,6 +82,7 @@ When in doubt, use the **bug fix** cycle (stricter).
 Detect what is actually present, then decide using these rules:
 
 - **Dimensionality** — run the test at the **lowest** dimensionality the problem allows. Only move up to `2d` / `3d` when the problem genuinely requires it.
+- **On macOS, use the `-apple` suffix** (`1d-apple`, `2d-apple`, `3d-apple`). Build settings are identical to the bare preset; the only difference is a separate `build/<Nd>-apple` directory, which keeps an Apple-clang build from clobbering the `nvcc` build tree when a container shares the same repo.
 - **Use the GPU when it pays** — if a GPU **device** is available and the test is slow on CPU, run it with the GPU preset.
 - **GPU correctness is mandatory for GPU-touching changes** — if the change touches GPU functions or variables, **always** build the problem with the GPU preset when a toolchain is available. Where there is a toolchain but no device, the compile alone is the check (it is exactly what catches device-lambda capture errors) and runtime behavior is CI's job.
 
@@ -132,8 +130,8 @@ git submodule update --init --recursive
 `quokka config` must be run after every branch checkout or submodule update.
 
 ```bash
-quokka config -d <preset> --delete --source -- --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <preset> <Target> --source -- --root <REPO_ROOT>
+quokka config -d <preset> --delete --source default --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
+quokka build -d <preset> <Target> --source default --root <REPO_ROOT>
 # run with the parameters that expose the bug
 ```
 
@@ -149,8 +147,8 @@ If the bug does **not** reproduce, stop — note this to the user and explain wh
 git fetch origin <pr-branch>
 git checkout -B pr-<slug> FETCH_HEAD
 git submodule update --init --recursive
-quokka config -d <preset> --delete --source -- --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <preset> <Target> --source -- --root <REPO_ROOT>
+quokka config -d <preset> --delete --source default --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
+quokka build -d <preset> <Target> --source default --root <REPO_ROOT>
 # run the identical scenario from Step 2
 ```
 
@@ -164,8 +162,8 @@ Confirm:
 Take the dimensionality preset (e.g. `3d`) and append the detected suffix:
 
 ```bash
-quokka config -d <Nd>-<suffix> --delete --source -- --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <Nd>-<suffix> <Target> --source -- --root <REPO_ROOT>
+quokka config -d <Nd>-<suffix> --delete --source default --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
+quokka build -d <Nd>-<suffix> <Target> --source default --root <REPO_ROOT>
 ```
 
 This catches device-code restrictions and GPU lambda capture errors that only surface during GPU compilation. A CPU build that passes does not clear the PR if the PR touches GPU kernels.
@@ -202,8 +200,8 @@ This becomes your explicit test checklist. If the PR description is vague, infer
 git fetch origin <pr-branch>
 git checkout -B pr-<slug> FETCH_HEAD
 git submodule update --init --recursive
-quokka config -d <preset> --delete --source -- --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
-quokka build -d <preset> <Target> --source -- --root <REPO_ROOT>
+quokka config -d <preset> --delete --source default --root <REPO_ROOT> -DQUOKKA_PYTHON=OFF
+quokka build -d <preset> <Target> --source default --root <REPO_ROOT>
 ```
 
 Work through each item in your SPEC checklist:
