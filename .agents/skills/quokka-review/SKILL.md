@@ -14,7 +14,9 @@ description: "Use when reviewing a Quokka pull request or GitHub issue — class
 
 **REQUIRED:** Post every PR and issue comment with `--body-file`, **never** inline `--body "…"`. Review comments are dense with backticked `file.cpp:NN` citations and `$` in error norms, and the shell command-substitutes both out of an inline body. If you build the file with a heredoc rather than a file-write tool, quote the delimiter (`<< 'EOF'`) to stop the same expansion inside it.
 
-End every comment with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. The file you post is the short **comment** file, never the full report — see **Reporting** below.
+End every comment with the fixed line `🤖 AI-assisted review` — verbatim, whichever agent is running this skill. Do not substitute a tool or model name: no agent CLI exposes its model to the shell, and a model asked to name its own version gets it wrong often enough that the footer would be misinformation. The accountable human is already the GitHub account posting the comment; the footer only has to say that a machine helped write it.
+
+The file you post is the short **comment** file, never the full report — see **Reporting** below.
 
 **Exception:** CI trigger comments (`/azp run rocm-quick`) must be posted raw with no attribution footer — Azure Pipelines matches on exact command text and will fail if the body contains anything else.
 
@@ -278,7 +280,7 @@ Write a **separate** file `<folder>-COMMENT.md`. Fill this template and delete e
 
 </details>
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 AI-assisted review
 ```
 
 **Hard rules:**
@@ -386,7 +388,7 @@ Then write `issueNNNN-<slug>-COMMENT.md` and post **that**. All the comment rule
 **Also worth knowing**
 - <one line each, at most 3>
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 AI-assisted review
 ```
 
 For AI-generated audit issues, one line per claimed finding: `**Finding N** — valid / invalid because X`. Do not restate the finding text back at the issue.
