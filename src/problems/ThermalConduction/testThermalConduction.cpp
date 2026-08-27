@@ -31,7 +31,9 @@ const double Twind = 2.e6;
 const double Tcloud  = 1.e4;
 const double rho_cloud = C::m_p; // g/cm^3
 const double Mach = 4.0; // Mach number of the wind
-const double R0 = 0.2 * C::parsec; // radius of the cloud		
+const double R0 = 0.2 * C::parsec; // radius of the cloud
+const double TracerPerCell = 1.e3; // tracer content per cell inside the cloud
+
 
 struct ThermalConductionProblem {
 };
@@ -50,7 +52,7 @@ template <> struct Physics_Traits<ThermalConductionProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr int numPassiveScalars = numMassScalars + 2; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
@@ -87,14 +89,21 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		amrex::Real T;
 		amrex::Real vz;
 		amrex::Real cs_wind = 0.0;
+		amrex::Real cloudTracer;
+		amrex::Real windTracer;
+		const amrex::Real cellVolume = dx[0] * dx[1] * dx[2];
 		double R = std::sqrt(x*x + y*y + z*z);
 		if(R < R0){
 			T = Tcloud;
 			rho = rho_cloud; // g/cm^3
 			vz = 0.0; // cloud is stationary
+			cloudTracer = TracerPerCell / cellVolume; // 1/vol, so each cell contributes cloudTracerPerCell regardless of resolution
+			windTracer = 0.0; // outside the wind
 		}
 		else{
 			T = Twind;
+			cloudTracer = 0.0; // outside the cloud
+			windTracer = TracerPerCell / cellVolume; // 1/vol, so each cell contributes windTracerPerCell regardless of resolution
 			rho = rho_cloud * Tcloud / Twind; // g/cm^3
 			amrex::Real pressure = rho * T * C::k_B / C::m_u;
 			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
@@ -124,6 +133,8 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint + 0.5 * (rho * vz * vz);
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) = cloudTracer; // 1/vol
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = windTracer; // 1/vol
 	});
 }
 
@@ -188,6 +199,8 @@ AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex
 	double eint_edge = NAN;
 
 
+	const double cellVolume = geom.CellSize(0) * geom.CellSize(1) * geom.CellSize(2);
+
 	rho_edge = rho_cloud * Tcloud / Twind; // g/cm^3
 	const double cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho_edge, rho_edge * Twind * C::k_B / C::m_u);
 	x3Mom_edge = rho_edge * Mach * cs_wind; // 100 km/s
@@ -200,7 +213,9 @@ AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex
 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = x3Mom_edge;
 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = etot_edge;
 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = eint_edge;
-	
+	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) = 0.0; // wind boundary carries no cloud tracer
+	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = windTracerPerCell / cellVolume; // wind boundary carries wind tracer
+
 }
 
 auto problem_main() -> int
