@@ -21,6 +21,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 #include "hydro/hydro_system.hpp"
+#include "hyperbolic_system.hpp"
 
 namespace quokka::conduction
 {
@@ -32,11 +33,37 @@ struct ElectronConductionParams {
 	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
 	bool spitzer_scaling = true;	      // if true, kappa(T) = conductivity_prefactor * T^2.5 (Spitzer);
 					      // if false, kappa(T) = conductivity_prefactor (constant, isotropic)
+	int reconstruction_order = 3;	      // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM;
+					      // mirrors the hydro solver's reconstruction_order/plm_limiter so that the
+					      // (rho, T) states used to evaluate the face conductivity come from the
+					      // same reconstruction as the rest of the hydro update.
+	SlopeLimiter plm_limiter = SlopeLimiter::sweby;
 };
 
 template <typename problem_t> class ElectronConduction
 {
       public:
+	// Dispatches to the reconstruction scheme selected by params.reconstruction_order/plm_limiter
+	// (mirroring HyperbolicSystem's dispatch used for the hydro fluxes), reconstructing the 2-component
+	// (rho, T) MultiFab primVar to left/right interface states in the DIR direction.
+	template <FluxDir DIR>
+	static void ReconstructPrimVar(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int ng_reconstruct,
+					ElectronConductionParams const &params)
+	{
+		constexpr int nvars = 2;
+		if (params.reconstruction_order == 5) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		} else if (params.reconstruction_order == 3) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		} else if (params.reconstruction_order == 2) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars, params.plm_limiter);
+		} else if (params.reconstruction_order == 1) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		} else {
+			amrex::Abort("Invalid reconstruction order specified for electron conduction!");
+		}
+	}
+
 	// Sound speed always comes from quokka::EOS (the fixed-mu ideal-gas formula, even for the
 	// EOSTabulated backend), matching how hydro itself computes pressure/sound speed for every
 	// problem — only temperature is actually table-driven. See EOSTabulated in hydro/EOS.hpp.
@@ -61,14 +88,16 @@ template <typename problem_t> class ElectronConduction
 		const amrex::Real saturation_factor = params.saturation_factor;
 		const amrex::Real t_min = params.min_temperature;
 		const bool spitzer_scaling = params.spitzer_scaling;
+		const amrex::Real kappa0 = params.conductivity_prefactor;
 		const amrex::Real small = std::numeric_limits<amrex::Real>::min();
+		constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 
-		amrex::MultiFab temperature(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
-		temperature.setVal(0.0);
-		amrex::MultiFab conductivity(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
-		conductivity.setVal(0.0);
-		amrex::MultiFab saturated_flux(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
-		saturated_flux.setVal(0.0);
+		// Cell-centered (density, temperature); component 0 = rho, component 1 = T.
+		// This is reconstructed to interfaces below (using the same reconstruction order/limiter
+		// as the hydro solver) so that the face conductivity is evaluated from interface states
+		// rather than from an average of the two neighboring cell-centered values.
+		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2, state.nGrow());
+		primVar.setVal(0.0);
 
 		auto const &state_x0 = state.const_arrays();
 		auto const &state_fc_x0 = state_fc[0].const_arrays();
@@ -78,9 +107,7 @@ template <typename problem_t> class ElectronConduction
 #if AMREX_SPACEDIM == 3
 		auto const &state_fc_x2 = state_fc[2].const_arrays();
 #endif
-		auto temperature_arr = temperature.arrays();
-		auto conductivity_arr = conductivity.arrays();
-		auto saturated_flux_arr = saturated_flux.arrays();
+		auto primVar_arr = primVar.arrays();
 		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
 
 		amrex::ParallelFor(state, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -99,61 +126,84 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
 			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
 			// Temperature always from EOS
-			const int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {};
 			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 
-			// Sound speed always from EOS (see comment on ComputeExplicit above)
-			amrex::Real const Pgas = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
-			amrex::Real const cs = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas, massScalars);
-
-			const amrex::Real Tuse = amrex::max(Tgas, t_min);
-			const amrex::Real kappa = params.conductivity_prefactor;
-			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * cs * cs * cs, small);
-
-			temperature_arr[bx](i, j, k) = Tuse;
-			conductivity_arr[bx](i, j, k) = spitzer_scaling ? (kappa * std::pow(Tuse, 2.5)) : kappa;
-			saturated_flux_arr[bx](i, j, k) = qsat;
+			primVar_arr[bx](i, j, k, 0) = rho;
+			primVar_arr[bx](i, j, k, 1) = amrex::max(Tgas, t_min);
 		});
 
+		// Reconstruct (rho, T) to the interfaces
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			leftState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2, 0);
+			rightState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2, 0);
 			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
 			heat_flux[idim].setVal(0.0);
 		}
 
-		auto const &temp = temperature.const_arrays();
-		auto const &kappa = conductivity.const_arrays();
-		auto const &qsat = saturated_flux.const_arrays();
+		AMREX_D_TERM(ReconstructPrimVar<FluxDir::X1>(primVar, leftState[0], rightState[0], 0, params);
+			     , ReconstructPrimVar<FluxDir::X2>(primVar, leftState[1], rightState[1], 0, params);
+			     , ReconstructPrimVar<FluxDir::X3>(primVar, leftState[2], rightState[2], 0, params);)
+
+		// Given left/right interface (rho, T) states, evaluate a single consistent face conductivity
+		// and saturated flux: average rho and T across the interface first, then evaluate kappa(T),
+		// P(rho, T), c_s(rho, P) at that single face state.
+		auto const evaluateFace = [=] AMREX_GPU_DEVICE(amrex::Real rho_L, amrex::Real T_L, amrex::Real rho_R, amrex::Real T_R,
+								amrex::Real &kappa_face, amrex::Real &qsat_face) noexcept {
+			const amrex::Real rho_face = 0.5 * (rho_L + rho_R);
+			const amrex::Real T_face = amrex::max(0.5 * (T_L + T_R), t_min);
+			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {};
+			const amrex::Real Eint_face = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_face, T_face, massScalars);
+			// Sound speed always from EOS (see comment on ComputeExplicit above)
+			const amrex::Real Pgas_face = ::quokka::EOS<problem_t>::ComputePressure(rho_face, Eint_face, massScalars);
+			const amrex::Real cs_face = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_face, Pgas_face, massScalars);
+
+			kappa_face = spitzer_scaling ? (kappa0 * std::pow(T_face, 2.5)) : kappa0;
+			qsat_face = amrex::max(saturation_factor * flux_limiter_phi * rho_face * cs_face * cs_face * cs_face, small);
+		};
+
+		auto const &temp = primVar.const_arrays();
+		auto const &left_x = leftState[0].const_arrays();
+		auto const &right_x = rightState[0].const_arrays();
 		auto flux_x = heat_flux[0].arrays();
 		amrex::ParallelFor(heat_flux[0], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			const amrex::Real gradT = (temp[bx](i, j, k) - temp[bx](i - 1, j, k)) / dx[0];
-			const amrex::Real kappa_face = 0.5 * (kappa[bx](i, j, k) + kappa[bx](i - 1, j, k));
+			const amrex::Real gradT = (temp[bx](i, j, k, 1) - temp[bx](i - 1, j, k, 1)) / dx[0];
+			amrex::Real kappa_face = 0.0;
+			amrex::Real q_sat_face = 0.0;
+			evaluateFace(left_x[bx](i, j, k, 0), left_x[bx](i, j, k, 1), right_x[bx](i, j, k, 0), right_x[bx](i, j, k, 1), kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
-			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i - 1, j, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_x[bx](i, j, k) = q_classical / limiter;
 		});
 
 #if AMREX_SPACEDIM >= 2
+		auto const &left_y = leftState[1].const_arrays();
+		auto const &right_y = rightState[1].const_arrays();
 		auto flux_y = heat_flux[1].arrays();
 		amrex::ParallelFor(heat_flux[1], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			const amrex::Real gradT = (temp[bx](i, j, k) - temp[bx](i, j - 1, k)) / dx[1];
-			const amrex::Real kappa_face = 0.5 * (kappa[bx](i, j, k) + kappa[bx](i, j - 1, k));
+			const amrex::Real gradT = (temp[bx](i, j, k, 1) - temp[bx](i, j - 1, k, 1)) / dx[1];
+			amrex::Real kappa_face = 0.0;
+			amrex::Real q_sat_face = 0.0;
+			evaluateFace(left_y[bx](i, j, k, 0), left_y[bx](i, j, k, 1), right_y[bx](i, j, k, 0), right_y[bx](i, j, k, 1), kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
-			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i, j - 1, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_y[bx](i, j, k) = q_classical / limiter;
 		});
 #endif
 
 #if AMREX_SPACEDIM == 3
+		auto const &left_z = leftState[2].const_arrays();
+		auto const &right_z = rightState[2].const_arrays();
 		auto flux_z = heat_flux[2].arrays();
 		amrex::ParallelFor(heat_flux[2], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			const amrex::Real gradT = (temp[bx](i, j, k) - temp[bx](i, j, k - 1)) / dx[2];
-			const amrex::Real kappa_face = 0.5 * (kappa[bx](i, j, k) + kappa[bx](i, j, k - 1));
+			const amrex::Real gradT = (temp[bx](i, j, k, 1) - temp[bx](i, j, k - 1, 1)) / dx[2];
+			amrex::Real kappa_face = 0.0;
+			amrex::Real q_sat_face = 0.0;
+			evaluateFace(left_z[bx](i, j, k, 0), left_z[bx](i, j, k, 1), right_z[bx](i, j, k, 0), right_z[bx](i, j, k, 1), kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
-			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i, j, k - 1));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_z[bx](i, j, k) = q_classical / limiter;
 		});
