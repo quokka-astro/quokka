@@ -7,7 +7,17 @@ description: "Review a Quokka pull request or GitHub issue — build and run the
 
 Analyse and report. Never change source.
 
-The argument is the target: a bare number is a pull request (`2158`), a number prefixed with `issue` is an issue (`issue 2110`). With no argument, ask which.
+## The argument
+
+A target, plus an optional instruction:
+
+- `pr 2158`, or a bare `2158` — a pull request
+- `issue 2110` — an issue
+- text after the target — a specific instruction: `pr 2158. suggest a fix for the nvcc error`
+
+With no argument, ask which target.
+
+An instruction sets the scope: it decides what you build, what you run, and what the report covers, and the comment must answer it directly — in the **Verdict** line when it is the whole point of the review. It never waives the Iron Law, and a request to fix something is answered with a suggested fix in the comment, never an edit.
 
 ## Comments
 
