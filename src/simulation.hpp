@@ -342,7 +342,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	 */
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 				       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const = 0;
-	virtual void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const;
+	virtual void ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const;
 
 	// compute statistics
 	virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
@@ -1302,9 +1302,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 				    amrex::Real Eint = state_mf[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
 				    amrex::Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
 
-				    // Spitzer diffusion coefficient: (kappa_0 * T^2.0) / (rho * c_v) -- 2.0 for
-				    // this experiment, not the physical Spitzer value of 2.5; must match
-				    // ElectronConduction.hpp and testThermalConduction.cpp's pattle_q
 				    amrex::Real kappa_spitzer = electronConductionKappa0_ * std::pow(T, 2.5);
 				    amrex::Real diffusion_coefficient = kappa_spitzer / (rho * c_v);
 
@@ -2194,6 +2191,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// The extra component is for the particle counts in cells
 	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars + 1, nghost);
 
+	// Evaluate the configured density floor cell-by-cell so sink accretion uses
+	// the same spatially varying floor as the hydro state fixup.
+	amrex::MultiFab density_floor_at_level(grids[lev], dmap[lev], 1, 0);
+	ComputeDensityFloor(lev, density_floor_at_level, 0);
+
 	accretion_rate_at_level.setVal(0.0);
 
 	// Sink accretion, stage 1: compute the accretion rate
@@ -2204,7 +2206,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	quokka::ParticleUtils::roundoffMultiFab(accretion_rate_at_level);
 
 	// Sink accretion, stage 2: update the particle states -- compute scale_down, apply to particle, apply to cells
-	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, geom[lev], lev, time, dt);
+	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, geom[lev], lev, time, dt, density_floor_at_level);
 
 	// Only create particles when the AMR hierarchy has fully refined to max_level.
 	// Creating a ForceFinestLevel particle at a sub-max level violates the invariant
@@ -3956,7 +3958,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 		if (deriv_it != derivedNames_.end()) {
 			static constexpr char const *kDensityFloorDbgName = "density_floor_dbg";
 			if (varname == kDensityFloorDbgName) {
-				ComputeDensityFloorDebug(lev, plotMF, comp);
+				ComputeDensityFloor(lev, plotMF, comp);
 				comp++;
 				continue;
 			}
@@ -3976,7 +3978,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 	return plotMF;
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
+template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const
 {
 	auto const ncomp_out = ncomp;
 	auto const prob_lo = geom[lev].ProbLoArray();

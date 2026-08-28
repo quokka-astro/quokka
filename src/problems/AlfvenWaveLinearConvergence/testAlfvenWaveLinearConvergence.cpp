@@ -400,6 +400,15 @@ void configureResistiveParameters()
 	}
 }
 
+// one wave period for the current k_magn/angle_between_k_b0_rad; shared by runWaveTest() (always exactly
+// one period) and problem_main()'s run_sim path (num_periods * this)
+auto computeWavePeriod() -> double
+{
+	const double wavelength = 2.0 * M_PI / k_magn;
+	const double cA = alfven_speed * std::abs(std::cos(angle_between_k_b0_rad));
+	return wavelength / cA;
+}
+
 auto runWaveTest(int nx, int ny, int nz) -> double
 {
 	// Read problem parameters
@@ -408,7 +417,6 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
 	constexpr double deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
-	const double cA = alfven_speed * std::abs(std::cos(angle_between_k_b0_rad));
 	const int max_timesteps = std::max(20000, nx * 100);
 
 	int num_modes_x = 0;
@@ -433,8 +441,7 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
-	const double wavelength = 2.0 * M_PI / k_magn;
-	const double max_time = wavelength / cA;
+	const double max_time = computeWavePeriod();
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
 	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
@@ -514,6 +521,13 @@ auto problem_main() -> int
 		pp.query("run_convergence", run_convergence);
 		pp.query("run_sim", run_sim);
 		pp.query("error_tol", error_tol);
+
+		double unused_num_periods = 0.0;
+		if (run_convergence && !run_sim && (pp.query("num_periods", unused_num_periods) != 0)) {
+			amrex::Abort("setup.num_periods has no effect when setup.run_convergence=true and setup.run_sim=false; the "
+				     "convergence sweep always uses a fixed one-period run length. Remove setup.num_periods or set "
+				     "setup.run_sim=true.");
+		}
 	}
 
 	int status = 0;
@@ -568,6 +582,24 @@ auto problem_main() -> int
 		}
 
 		QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
+
+		double num_periods = 1.0;
+		{
+			amrex::ParmParse const pp("setup");
+			pp.query("num_periods", num_periods);
+		}
+		if (!std::isfinite(num_periods) || num_periods <= 0.0) {
+			amrex::Abort("setup.num_periods must be finite and > 0.");
+		}
+		{
+			double unused_stop_time = 0.0;
+			if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
+				amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
+					     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
+			}
+		}
+		sim.stopTime_ = num_periods * computeWavePeriod();
+
 		sim.setInitialConditions();
 		sim.evolve();
 

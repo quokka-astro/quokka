@@ -358,9 +358,8 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 	// Problem initialization
 	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc, BCs_fc);
 
-	sim.cflNumber_ = CFL_number;
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
+	sim.cflNumber_ = 0.3;
+	sim.stopTime_ = 469054.0075444166;
 
 	// set initial conditions
 	sim.setInitialConditions();
@@ -398,11 +397,26 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	amrex::Print() << "Error norm: " << sim.computeErrorNorm() << '\n';
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	amrex::Print() << "Error norm: " << error_norm << '\n';
 
-	// Cleanup and exit
-	amrex::Print() << "Finished." << '\n';
-	return 0;
+	if (sim.conductionType_ == "spitzer") {
+		// Cleanup and exit
+		amrex::Print() << "Finished." << '\n';
+		return 0;
+	}
+
+	// "isotropic": compare against the full convergence-study estimate. The reference solution is a
+	// 1D Gaussian that is flat in y and z, so the error norm depends on the dimensionality of the run.
+	constexpr amrex::Real estimated_error = (AMREX_SPACEDIM == 1) ? 9.2430e-04 : 1.0318e-03;
+	amrex::Real const delta = std::abs(error_norm - estimated_error) / estimated_error;
+
+	if (delta <= 1.e-04) {
+		amrex::Print() << "\n✓ Thermal conduction test PASSED (error norm " << error_norm << ", expected = " << estimated_error << ")\n";
+		return 0;
+	}
+	amrex::Print() << "\n✗ Thermal conduction test FAILED (error norm " << error_norm << ", expected = " << estimated_error << ")\n";
+	return 1;
 
 	/***Richardson Extrapolation ****/
 
