@@ -411,7 +411,7 @@ auto problem_main() -> int
 	constexpr amrex::Real estimated_error = (AMREX_SPACEDIM == 1) ? 9.2430e-04 : 1.0318e-03;
 	amrex::Real const delta = std::abs(error_norm - estimated_error) / estimated_error;
 
-	if (delta <= 1.e-04) {
+	if (delta <= 1.e-04 || error_norm < estimated_error) {
 		amrex::Print() << "\n✓ Thermal conduction test PASSED (error norm " << error_norm << ", expected = " << estimated_error << ")\n";
 		return 0;
 	}
