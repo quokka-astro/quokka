@@ -801,6 +801,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 		dpp.query("enable_coefficient_iteration", dustCoefficientIteration_.enabled);
 		dpp.query("picard_alpha_rtol", dustCoefficientIteration_.alphaRelativeTolerance);
+		dpp.query("picard_charge_atol", dustCoefficientIteration_.chargeAbsoluteTolerance);
 		dpp.query("picard_charge_rtol", dustCoefficientIteration_.chargeRelativeTolerance);
 		dpp.query("picard_max_iterations", dustCoefficientIteration_.maxIterations);
 		dpp.query("print_iteration_counts", print_dust_counter_);

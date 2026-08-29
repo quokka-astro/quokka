@@ -183,9 +183,18 @@ For each active dust species and stage, both source paths check the reciprocal s
 \qquad a=1,2.
 </script>
 
-`DustSources::computeDustDragAndLorentz` also checks \\(\xi_{a,n}\\) at both stages when the magnetic field is nonzero, using its own relative tolerance. A change of charge sign or a change between zero and nonzero always triggers another iteration. Both source paths also require the updated stage coefficients to select the same resolved or stiff branch as the coefficients used by the current iterate.
+`DustSources::computeDustDragAndLorentz` also checks \\(\xi_{a,n}\\) at both stages when the magnetic field is nonzero:
 
-The default relative tolerances are \\(\epsilon_\alpha=\epsilon_\xi=10^{-6}\\), and the default maximum is 20 iterations. If a cell does not converge, Quokka prints a warning and uses the final iterate. See [Runtime parameters](parameters.md) for the corresponding controls.
+<script type="math/tex; mode=display">
+\left|\xi_{a,n}^{(k+1)}-\xi_{a,n}^{(k)}\right|
+\leq \epsilon_{\xi,\mathrm{abs}}
++\epsilon_{\xi,\mathrm{rel}}\left|\xi_{a,n}^{(k)}\right|,
+\qquad a=1,2.
+</script>
+
+Both source paths also require the updated stage coefficients to select the same resolved or stiff branch as the coefficients used by the current iterate.
+
+The defaults are \\(\epsilon_\alpha=\epsilon_{\xi,\mathrm{rel}}=10^{-6}\\) and \\(\epsilon_{\xi,\mathrm{abs}}=10^{-12}\\), and the default maximum is 20 iterations. If a cell does not converge, Quokka prints a warning and uses the final iterate. See [Runtime parameters](parameters.md) for the corresponding controls.
 
 ### User-defined dust stopping time and charge
 
@@ -225,6 +234,7 @@ The following input parameters tune the dust module and are documented in more d
 
 - `dust.enable_coefficient_iteration` – enables Picard iteration for state-dependent stopping-time and charge coefficients.
 - `dust.picard_alpha_rtol` – relative convergence tolerance for the reciprocal stopping time.
+- `dust.picard_charge_atol` – absolute convergence tolerance for the dimensionless charge-to-mass ratio.
 - `dust.picard_charge_rtol` – relative convergence tolerance for the dimensionless charge-to-mass ratio.
 - `dust.picard_max_iterations` – maximum number of coefficient iterations per source update.
 - `dust.omega_drag_heating` – controls deposition of the drag-like heating contribution in the dust source update.
