@@ -82,7 +82,7 @@ jobs:
         echo "MHD test executables to build:"
         cat mhd_executables.txt
 
-    - name: Build
+    - name: Build MHD wave test executables
       working-directory: ${{runner.workspace}}/build
       shell: bash
       # Build all MHD test targets
@@ -99,8 +99,8 @@ jobs:
       working-directory: ${{github.workspace}}/tests
       shell: bash
       run: |
-        ${{runner.workspace}}/build/src/problems/FastWaveConvergence/FastWaveConvergence \
-          ../inputs/FastWave.toml \
+        ${{runner.workspace}}/build/src/problems/MHDFastWaveConvergence/MHDFastWaveConvergence \
+          ../inputs/MHDFastWave.toml \
           amr.max_grid_size_x=32 \
           amr.blocking_factor_x=16 \
           mhd.emf_compute_scheme=FelkerStone2017 \
@@ -111,7 +111,7 @@ jobs:
           amrex.fpe_trap_zero=1 \
           max_timesteps=3
 
-    - name: Test
+    - name: Run MHD wave tests
       working-directory: ${{runner.workspace}}/build
       shell: bash
       # Execute the MHD tests while skipping the slow HydroWaveConvergence case
