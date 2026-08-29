@@ -2,7 +2,7 @@
 // Copyright 2022 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testAlfvenWaveCircularConvergence.cpp
+/// \file testMHDAlfvenWaveCircularConvergence.cpp
 /// \brief Defines a Richardson convergence test for the circularly-polarized Alfven wave, and
 ///        makes sure face-centred quantities are created correctly.
 ///
@@ -300,14 +300,14 @@ auto problem_main() -> int
 		}
 	}
 
-	// AlfvenWaveCircularConvergence does not model resistivity; abort early rather than silently
+	// MHDAlfvenWaveCircularConvergence does not model resistivity; abort early rather than silently
 	// producing a wrong reference solution if mhd.resistivity is set (applies to both modes).
 	{
 		double eta = 0.0;
 		amrex::ParmParse const mhd_pp("mhd");
 		mhd_pp.query("resistivity", eta);
 		if (eta != 0.0) {
-			amrex::Abort("AlfvenWaveCircularConvergence does not support mhd.resistivity != 0; use AlfvenWaveLinearConvergence "
+			amrex::Abort("MHDAlfvenWaveCircularConvergence does not support mhd.resistivity != 0; use MHDAlfvenWaveLinearConvergence "
 				     "for resistivity validation.");
 		}
 	}
