@@ -25,22 +25,22 @@
 #include "util/BC.hpp"
 #include "util/richardson.hpp"
 
-struct FastWaveConvergence {
+struct MHDFastWaveConvergence {
 };
 
-template <> struct quokka::EOS_Traits<FastWaveConvergence> {
+template <> struct quokka::EOS_Traits<MHDFastWaveConvergence> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<FastWaveConvergence> : DefaultPhysicsTraits {
+template <> struct Physics_Traits<MHDFastWaveConvergence> : DefaultPhysicsTraits {
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };
 
 constexpr double sound_speed = 1.0;
-constexpr double gamma_gas = quokka::EOS_Traits<FastWaveConvergence>::gamma;
+constexpr double gamma_gas = quokka::EOS_Traits<MHDFastWaveConvergence>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;
@@ -305,12 +305,12 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double Etot = Ekin + Emag + Eint;
 
 		// write state
-		state(i, j, k, HydroSystem<FastWaveConvergence>::density_index) = density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::x1Momentum_index) = v_prf[0] * density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::x2Momentum_index) = v_prf[1] * density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::x3Momentum_index) = v_prf[2] * density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::energy_index) = Etot;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
+		state(i, j, k, HydroSystem<MHDFastWaveConvergence>::density_index) = density;
+		state(i, j, k, HydroSystem<MHDFastWaveConvergence>::x1Momentum_index) = v_prf[0] * density;
+		state(i, j, k, HydroSystem<MHDFastWaveConvergence>::x2Momentum_index) = v_prf[1] * density;
+		state(i, j, k, HydroSystem<MHDFastWaveConvergence>::x3Momentum_index) = v_prf[2] * density;
+		state(i, j, k, HydroSystem<MHDFastWaveConvergence>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<MHDFastWaveConvergence>::internalEnergy_index) = Eint;
 
 	} else if (cen == quokka::centering::fc) {
 		// compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
@@ -320,26 +320,26 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 				dx[1] -
 			    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) /
 				dx[2];
-			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x1;
+			state(i, j, k, MHDSystem<MHDFastWaveConvergence>::bfield_index) = b_x1;
 		} else if (dir == quokka::direction::y) {
 			const double b_x2 =
 			    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) /
 				dx[2] -
 			    (Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) /
 				dx[0];
-			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x2;
+			state(i, j, k, MHDSystem<MHDFastWaveConvergence>::bfield_index) = b_x2;
 		} else if (dir == quokka::direction::z) {
 			const double b_x3 =
 			    (Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) /
 				dx[0] -
 			    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) /
 				dx[1];
-			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x3;
+			state(i, j, k, MHDSystem<MHDFastWaveConvergence>::bfield_index) = b_x3;
 		}
 	}
 }
 
-template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDFastWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -348,7 +348,7 @@ template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGr
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_cc = Physics_Indices<FastWaveConvergence>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<MHDFastWaveConvergence>::nvarTotal_cc;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0;
@@ -357,7 +357,7 @@ template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGr
 	});
 }
 
-template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDFastWaveConvergence>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -366,7 +366,7 @@ template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGr
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_fc = Physics_Indices<FastWaveConvergence>::nvarPerDim_fc;
+	const int ncomp_fc = Physics_Indices<MHDFastWaveConvergence>::nvarPerDim_fc;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp_fc; ++n) {
 			state_fc(i, j, k, n) = 0;
@@ -376,8 +376,8 @@ template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGr
 }
 
 template <>
-void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+void QuokkaSimulation<MHDFastWaveConvergence>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+									amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -394,9 +394,9 @@ void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution(amrex::Mult
 }
 
 template <>
-void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-									amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-									quokka::direction const dir)
+void QuokkaSimulation<MHDFastWaveConvergence>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+									   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+									   quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -501,9 +501,9 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	pp_geom.addarr("is_periodic", is_periodic);
 
 	// Setup boundary conditions
-	auto BCs_cc = quokka::BC<FastWaveConvergence>(quokka::BCType::int_dir);
+	auto BCs_cc = quokka::BC<MHDFastWaveConvergence>(quokka::BCType::int_dir);
 
-	const int nvars_fc = Physics_Indices<FastWaveConvergence>::nvarTotal_fc;
+	const int nvars_fc = Physics_Indices<MHDFastWaveConvergence>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -513,7 +513,7 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	}
 
 	// Run simulation
-	QuokkaSimulation<FastWaveConvergence> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDFastWaveConvergence> sim(BCs_cc, BCs_fc);
 
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
@@ -595,8 +595,8 @@ auto problem_main() -> int
 			normalizeVector(outofplane_dir_prf);
 		}
 
-		auto BCs_cc = quokka::BC<FastWaveConvergence>(quokka::BCType::int_dir);
-		const int nvars_fc = Physics_Indices<FastWaveConvergence>::nvarTotal_fc;
+		auto BCs_cc = quokka::BC<MHDFastWaveConvergence>(quokka::BCType::int_dir);
+		const int nvars_fc = Physics_Indices<MHDFastWaveConvergence>::nvarTotal_fc;
 		amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 		for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -605,7 +605,7 @@ auto problem_main() -> int
 			}
 		}
 
-		QuokkaSimulation<FastWaveConvergence> sim(BCs_cc, BCs_fc);
+		QuokkaSimulation<MHDFastWaveConvergence> sim(BCs_cc, BCs_fc);
 
 		double num_periods = 1.0;
 		{
