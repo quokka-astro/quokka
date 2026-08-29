@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testSlowWaveConvergence.cpp
+/// \file testMHDSlowWaveConvergence.cpp
 /// \brief Defines a Richardson convergence test for the slow MHD wave.
 ///
 
@@ -553,14 +553,14 @@ auto problem_main() -> int
 		}
 	}
 
-	// SlowWaveConvergence does not model resistivity; abort early rather than silently
+	// MHDSlowWaveConvergence does not model resistivity; abort early rather than silently
 	// producing a wrong reference solution if mhd.resistivity is set (applies to both modes).
 	{
 		double eta = 0.0;
 		amrex::ParmParse const mhd_pp("mhd");
 		mhd_pp.query("resistivity", eta);
 		if (eta != 0.0) {
-			amrex::Abort("SlowWaveConvergence does not support mhd.resistivity != 0; use AlfvenWaveLinearConvergence "
+			amrex::Abort("MHDSlowWaveConvergence does not support mhd.resistivity != 0; use MHDAlfvenWaveLinearConvergence "
 				     "for resistivity validation.");
 		}
 	}
