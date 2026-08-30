@@ -1634,13 +1634,20 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	const double rel_change_tol = 1.0e-6;
 	const int max_iter_td = 100;
 
-	// Tolerance scale. The caller passes the physical scale its residual should be measured against, but for
-	// the dust temperature that scale is the gas-dust collisional term, which vanishes identically when the
-	// coupling coefficient is set to zero. The tolerance would then be zero and could never be met. Fall
-	// back to the size of the initial residual so the criterion degrades to a relative reduction instead of
-	// something unsatisfiable.
+	// The caller supplies the physical scale against which its residual must be measured. Preserve every
+	// positive scale, however small: weak but non-zero gas-dust coupling relies on a correspondingly tight
+	// inner tolerance because the outer solve reconstructs T_d with a factor inversely proportional to that
+	// coupling. Scaling instead by a larger initial residual can therefore amplify the accepted inner error
+	// enough to drive the outer temperature negative.
+	//
+	// Exactly decoupled dust has a zero physical scale. Only in that case, fall back to the initial residual
+	// so the criterion requests a relative residual reduction rather than an impossible strict zero.
 	const double f0 = rhs(x0);
-	const double scale = std::max(compare, std::abs(f0));
+	AMREX_ASSERT(compare >= 0.0);
+	if (f0 == 0.0) {
+		return x0;
+	}
+	const double scale = (compare > 0.0) ? compare : std::abs(f0);
 	if (std::abs(f0) < rel_tol * scale) {
 		return x0;
 	}

@@ -5,6 +5,7 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
+#include "AMReX_GpuAsyncArray.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -96,6 +97,30 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRad
 	return radiation_constant_;
 }
 
+auto testWeakNonzeroResidualScale() -> bool
+{
+	constexpr double x0 = 1.0;
+	constexpr double expected_root = 1.0e-2;
+	constexpr double physical_scale = 1.0e-16;
+	constexpr double relative_tolerance = 1.0e-8;
+
+	auto const rhs = [] AMREX_GPU_HOST_DEVICE(double x) noexcept -> double { return x * x * x * x - 1.0e-8; };
+	auto const jac = [] AMREX_GPU_HOST_DEVICE(double x) noexcept -> double { return 4.0 * x * x * x; };
+
+	double solution = NAN;
+	amrex::AsyncArray solution_async(&solution, 1);
+	double *solution_device = solution_async.data();
+	amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int /*i*/) noexcept {
+		solution_device[0] = RadSystem<DustProblem>::BackwardEulerOneVariable(rhs, jac, x0, physical_scale);
+	});
+	solution_async.copyToHost(&solution, 1);
+
+	const double residual = std::abs(rhs(solution));
+	const bool converged = (solution > 0.0) && (std::abs(solution - expected_root) < 1.0e-12) && (residual < 10.0 * relative_tolerance * physical_scale);
+	amrex::Print() << "Weak non-zero residual-scale test: solution = " << solution << ", residual = " << residual << '\n';
+	return converged;
+}
+
 template <> void QuokkaSimulation<DustProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
@@ -162,8 +187,14 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
+	const bool weak_nonzero_scale_test_passed = testWeakNonzeroResidualScale();
+
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		if (!weak_nonzero_scale_test_passed) {
+			status = 1;
+		}
+
 		// read in exact solution
 		std::vector<double> ts_exact{};
 		std::vector<double> Trad_exact{};
