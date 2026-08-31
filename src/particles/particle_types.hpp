@@ -598,6 +598,8 @@ inline bool SN_smooth_gas_velocity = true; // NOLINT
 
 // Sink particle accretion
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
+// Maximum allowed Alfv\'en speed after sink accretion in cm/s. A negative value disables the limiter.
+inline amrex::Real sink_max_alfven_speed = -1.0; // NOLINT
 
 // Verbosity for particle operations
 inline int particle_verbose = 0; // NOLINT print particle logistics
@@ -647,6 +649,8 @@ inline void particleParmParse()
 	EMF_p0 = EMF_p0_kmps * 1.0e5;
 	EMF_tFB = EMF_tFB_Myr * quokka::Myr_in_s;
 	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
+	pp.query("sink_max_alfven_speed", sink_max_alfven_speed);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sink_max_alfven_speed != 0.0, "particles.sink_max_alfven_speed must be negative (disabled) or positive (cm/s).");
 
 	// Handle SNScheme enum
 	pp.query("SN_scheme", SN_scheme);
