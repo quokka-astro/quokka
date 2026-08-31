@@ -14,8 +14,7 @@
 #include <string>
 #include <vector>
 
-struct DustyOrszagTang {
-};
+struct DustyOrszagTang {};
 
 namespace
 {
@@ -375,8 +374,7 @@ struct DustyOrszagTangHistory {
 
 } // namespace
 
-template <> struct SimulationData<DustyOrszagTang> : DustyOrszagTangHistory {
-};
+template <> struct SimulationData<DustyOrszagTang> : DustyOrszagTangHistory {};
 
 namespace
 {

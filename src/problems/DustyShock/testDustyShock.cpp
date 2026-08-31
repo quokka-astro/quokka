@@ -25,8 +25,7 @@ constexpr double vel_dust_left = 2.0;
 constexpr double cs_isothermal = 1.0;
 constexpr double drag_coefficient = 1.0; // K1 in the analytic solution
 
-struct DustyShock {
-};
+struct DustyShock {};
 
 template <> struct quokka::EOS_Traits<DustyShock> {
 	static constexpr double mean_molecular_weight = 1.0;

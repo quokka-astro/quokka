@@ -25,8 +25,7 @@
 #include "util/BC.hpp"
 #include "util/richardson.hpp"
 
-struct AlfvenWaveCircular {
-};
+struct AlfvenWaveCircular {};
 
 template <> struct quokka::EOS_Traits<AlfvenWaveCircular> {
 	static constexpr double gamma = 5. / 3.;

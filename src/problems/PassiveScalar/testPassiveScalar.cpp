@@ -26,8 +26,7 @@
 
 using amrex::Real;
 
-struct ScalarProblem {
-};
+struct ScalarProblem {};
 
 template <> struct quokka::EOS_Traits<ScalarProblem> {
 	static constexpr double gamma = 1.4;

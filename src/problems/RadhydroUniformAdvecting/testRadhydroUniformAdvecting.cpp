@@ -16,8 +16,7 @@
 #include <format>
 #include <fstream>
 
-struct PulseProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct PulseProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double c = 1.0e8;
 // model 0

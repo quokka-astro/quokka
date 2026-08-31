@@ -33,8 +33,7 @@
 
 using Real = amrex::Real;
 
-struct MHDQuirk {
-};
+struct MHDQuirk {};
 
 template <> struct quokka::EOS_Traits<MHDQuirk> {
 	static constexpr double gamma = 5. / 3.;
