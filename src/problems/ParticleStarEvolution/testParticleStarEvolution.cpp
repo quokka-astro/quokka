@@ -94,6 +94,13 @@ template <> void QuokkaSimulation<StarEvolutionProblem>::createInitialStarPartic
 				p.pos(2) = 0.5 * dx[2];
 				p.rdata(quokka::StarParticleMassIdx) = M0_in_Msun * C::M_solar;
 				p.rdata(quokka::StarParticleBirthTimeIdx) = 0.0;
+				// InitFromAsciiFile leaves the components not present in the file indeterminate.
+				// mdot and the stellar model's extra reals (the ionizing photon rate) are read
+				// before they are first written, and the extra reals use a zero sentinel to detect
+				// "not yet assigned", so everything past birth_time must be zeroed explicitly here.
+				for (int c = quokka::StarParticleMdotIdx; c < quokka::StarParticleRealComps<StarEvolutionProblem>; ++c) {
+					p.rdata(c) = 0.0;
+				}
 			});
 		}
 	}
