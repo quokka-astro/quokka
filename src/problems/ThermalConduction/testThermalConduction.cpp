@@ -77,21 +77,7 @@ template <> struct Physics_Traits<ThermalConductionProblem> : DefaultPhysicsTrai
 
 namespace
 {
-// The exact solution for either conduction_type is a function of (x, t); evaluating it requires a
-// few scalars precomputed once per t (an EOS lookup and Gamma-function evaluations for "spitzer" --
-// too expensive, and not GPU-portable, to redo per cell). computeExactSolutionParams() is that
-// one-time setup; evalExactEint() is the actual per-cell "type + position -> Eint" evaluator, used
-// identically by setInitialConditionsOnGrid and computeReferenceSolution. The only difference
-// between "initial condition" and "reference solution" is which t goes into the setup call:
-//   - "constant": t=0 for the IC (the smooth Gaussian) is a valid special case of the same
-//     sigma_t^2 = sigma^2 + 2*D*t formula used for the reference at t=tNew_[0].
-//   - "spitzer": t=stopTime_ for the IC (see header comment); t=tNew_[0]+stopTime_ for the
-//     reference.
-constexpr amrex::Real pattle_q = 2.5; // conductivity exponent: kappa(T) = kappa0 * T^pattle_q (2.0 for
-				      // this experiment, not the physical Spitzer value of 2.5 -- must
-				      // match ElectronConduction.hpp and simulation.hpp, kept in sync
-				      // manually since this isn't yet a runtime parameter)
-
+constexpr amrex::Real pattle_q = 2.5; // conductivity exponent: kappa(T) = kappa0 * T^pattle_q (2.5 for Spitzer)
 struct ExactSolutionParams {
 	bool isSpitzer = false;
 	amrex::Real sigma2_t = 0.0; // "constant" only
@@ -105,11 +91,6 @@ auto computeExactSolutionParams(bool isSpitzer, amrex::Real rho, amrex::Real kap
 	ExactSolutionParams p;
 	p.isSpitzer = isSpitzer;
 	if (isSpitzer) {
-		// Pattle (1959) self-similar solution for nonlinear diffusion with D(T) ~ T^pattle_q;
-		// compactly supported, front at r1. Assumes a zero background; the sim's floor (Efloor)
-		// is added back in evalExactEint(), exact (not approximate) since Eint=A*T has no
-		// additive offset. M0 (fixed across resolutions, see above) is what makes this same
-		// analytic solution valid at every resolution.
 		const amrex::Real A = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, 1.0); // A = mu * mp/rho/kb
 		const amrex::Real D0 = kappa0 / A;							    // D(T) = D0 * T^pattle_q
 		const amrex::Real Q0 = M0 / A;								    // excess-T quantity released
