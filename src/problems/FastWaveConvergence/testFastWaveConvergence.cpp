@@ -25,8 +25,7 @@
 #include "util/BC.hpp"
 #include "util/richardson.hpp"
 
-struct FastWaveConvergence {
-};
+struct FastWaveConvergence {};
 
 template <> struct quokka::EOS_Traits<FastWaveConvergence> {
 	static constexpr double gamma = 5. / 3.;

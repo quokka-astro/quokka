@@ -24,8 +24,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct ContactProblem {
-};
+struct ContactProblem {};
 
 template <> struct quokka::EOS_Traits<ContactProblem> {
 	static constexpr double gamma = 1.4;

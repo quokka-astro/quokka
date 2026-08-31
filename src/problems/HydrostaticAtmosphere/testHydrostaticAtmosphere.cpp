@@ -17,8 +17,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 
-struct HydrostaticAtmosphereProblem {
-};
+struct HydrostaticAtmosphereProblem {};
 
 template <> struct SimulationData<HydrostaticAtmosphereProblem> {
 	amrex::Real atmosphere_scale_height = NAN;

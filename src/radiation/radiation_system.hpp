@@ -203,19 +203,15 @@ template <typename problem_t> struct FluxUpdateResult {
 }
 
 // Use SFINAE (Substitution Failure Is Not An Error) to check if opacity_model is defined in RadSystem_Traits<problem_t>
-template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Model : std::false_type {
-};
+template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Model : std::false_type {};
 
 template <typename problem_t>
-struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {
-};
+struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {};
 
 // Use SFINAE to check if ChemBands() is defined in RadSystem_Traits<problem_t> (indicates photoionization group)
-template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {
-};
+template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {};
 
-template <typename problem_t> struct RadSystem_Has_ChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> : std::true_type {
-};
+template <typename problem_t> struct RadSystem_Has_ChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> : std::true_type {};
 
 // Get NChemBands (number of chemistry frequency bands) from RadSystem_Traits<problem_t>.
 // Returns 0 if ChemBands() is not defined (no photoionization groups).

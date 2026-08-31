@@ -16,8 +16,7 @@
 #include <tuple>
 #include <vector>
 
-struct DustyAlfvenWave {
-};
+struct DustyAlfvenWave {};
 
 namespace
 {
@@ -74,8 +73,7 @@ struct CaseHistory {
 
 } // namespace
 
-template <> struct SimulationData<DustyAlfvenWave> : CaseHistory {
-};
+template <> struct SimulationData<DustyAlfvenWave> : CaseHistory {};
 
 template <> struct quokka::EOS_Traits<DustyAlfvenWave> {
 	static constexpr double mean_molecular_weight = 1.0;

@@ -34,8 +34,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct EntropyWaveLinear {
-};
+struct EntropyWaveLinear {};
 
 template <> struct quokka::EOS_Traits<EntropyWaveLinear> {
 	static constexpr double gamma = 5. / 3.;

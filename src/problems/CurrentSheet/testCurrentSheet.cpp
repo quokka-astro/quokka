@@ -21,8 +21,7 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct CurrentSheet {
-};
+struct CurrentSheet {};
 
 template <> struct quokka::EOS_Traits<CurrentSheet> {
 	static constexpr double gamma = 5. / 3.;

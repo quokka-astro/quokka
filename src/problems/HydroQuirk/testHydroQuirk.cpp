@@ -33,8 +33,7 @@
 
 using Real = amrex::Real;
 
-struct QuirkProblem {
-};
+struct QuirkProblem {};
 
 template <> struct quokka::EOS_Traits<QuirkProblem> {
 	static constexpr double gamma = 5. / 3.;

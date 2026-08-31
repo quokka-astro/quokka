@@ -27,8 +27,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct MHDBitwiseICs {
-};
+struct MHDBitwiseICs {};
 
 template <> struct quokka::EOS_Traits<MHDBitwiseICs> {
 	static constexpr amrex::Real gamma = 5. / 3.;

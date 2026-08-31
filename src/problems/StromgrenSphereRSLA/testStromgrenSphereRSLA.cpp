@@ -29,8 +29,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct StromgrenSphere {
-};
+struct StromgrenSphere {};
 
 constexpr double c_hat = C::c_light / 100.0;
 constexpr double sigma_star_coeff = 1.5 / 16.0;
