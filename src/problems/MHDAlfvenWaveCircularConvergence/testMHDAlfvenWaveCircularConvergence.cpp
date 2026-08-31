@@ -25,15 +25,15 @@
 #include "util/BC.hpp"
 #include "util/richardson.hpp"
 
-struct AlfvenWaveCircular {
+struct MHDAlfvenWaveCircular {
 };
 
-template <> struct quokka::EOS_Traits<AlfvenWaveCircular> {
+template <> struct quokka::EOS_Traits<MHDAlfvenWaveCircular> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<AlfvenWaveCircular> : DefaultPhysicsTraits {
+template <> struct Physics_Traits<MHDAlfvenWaveCircular> : DefaultPhysicsTraits {
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
@@ -41,7 +41,7 @@ template <> struct Physics_Traits<AlfvenWaveCircular> : DefaultPhysicsTraits {
 
 // constants
 constexpr double sound_speed = 1.0;
-constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveCircular>::gamma;
+constexpr double gamma_gas = quokka::EOS_Traits<MHDAlfvenWaveCircular>::gamma;
 
 // we have set up the problem so that the direction of wave propagation, vec(k), is aligned with the x1-direction, and the background magnetic field sits in the
 // x1-x2 plane
@@ -106,12 +106,12 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 		const double Eint = pressure / (gamma_gas - 1);
 		const double Etot = Ekin + Emag + Eint;
 
-		state(i, j, k, HydroSystem<AlfvenWaveCircular>::density_index) = density;
-		state(i, j, k, HydroSystem<AlfvenWaveCircular>::x1Momentum_index) = x1vel * density;
-		state(i, j, k, HydroSystem<AlfvenWaveCircular>::x2Momentum_index) = x2vel * density;
-		state(i, j, k, HydroSystem<AlfvenWaveCircular>::x3Momentum_index) = x3vel * density;
-		state(i, j, k, HydroSystem<AlfvenWaveCircular>::energy_index) = Etot;
-		state(i, j, k, HydroSystem<AlfvenWaveCircular>::internalEnergy_index) = Eint;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveCircular>::density_index) = density;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveCircular>::x1Momentum_index) = x1vel * density;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveCircular>::x2Momentum_index) = x2vel * density;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveCircular>::x3Momentum_index) = x3vel * density;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveCircular>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveCircular>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
 		const double x1mag = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) -
 				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) /
@@ -132,16 +132,16 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 				      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) /
 					 dx[1];
 		if (dir == quokka::direction::x) {
-			state(i, j, k, MHDSystem<AlfvenWaveCircular>::bfield_index) = x1mag;
+			state(i, j, k, MHDSystem<MHDAlfvenWaveCircular>::bfield_index) = x1mag;
 		} else if (dir == quokka::direction::y) {
-			state(i, j, k, MHDSystem<AlfvenWaveCircular>::bfield_index) = x2mag;
+			state(i, j, k, MHDSystem<MHDAlfvenWaveCircular>::bfield_index) = x2mag;
 		} else if (dir == quokka::direction::z) {
-			state(i, j, k, MHDSystem<AlfvenWaveCircular>::bfield_index) = x3mag;
+			state(i, j, k, MHDSystem<MHDAlfvenWaveCircular>::bfield_index) = x3mag;
 		}
 	}
 }
 
-template <> void QuokkaSimulation<AlfvenWaveCircular>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDAlfvenWaveCircular>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -151,7 +151,7 @@ template <> void QuokkaSimulation<AlfvenWaveCircular>::setInitialConditionsOnGri
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_cc = Physics_Indices<AlfvenWaveCircular>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<MHDAlfvenWaveCircular>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
@@ -161,7 +161,7 @@ template <> void QuokkaSimulation<AlfvenWaveCircular>::setInitialConditionsOnGri
 	});
 }
 
-template <> void QuokkaSimulation<AlfvenWaveCircular>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDAlfvenWaveCircular>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -171,7 +171,7 @@ template <> void QuokkaSimulation<AlfvenWaveCircular>::setInitialConditionsOnGri
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_fc = Physics_Indices<AlfvenWaveCircular>::nvarPerDim_fc;
+	const int ncomp_fc = Physics_Indices<MHDAlfvenWaveCircular>::nvarPerDim_fc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_fc; ++n) {
@@ -182,8 +182,8 @@ template <> void QuokkaSimulation<AlfvenWaveCircular>::setInitialConditionsOnGri
 }
 
 template <>
-void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+void QuokkaSimulation<MHDAlfvenWaveCircular>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const amrex::Real time = tNew_[0];
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -201,8 +201,9 @@ void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution(amrex::Multi
 }
 
 template <>
-void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+void QuokkaSimulation<MHDAlfvenWaveCircular>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+									  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+									  quokka::direction const dir)
 {
 	const amrex::Real time = tNew_[0];
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -257,9 +258,9 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	pp_geom.addarr("is_periodic", is_periodic);
 
 	// Setup boundary conditions
-	auto BCs_cc = quokka::BC<AlfvenWaveCircular>(quokka::BCType::int_dir);
+	auto BCs_cc = quokka::BC<MHDAlfvenWaveCircular>(quokka::BCType::int_dir);
 
-	const int nvars_fc = Physics_Indices<AlfvenWaveCircular>::nvarTotal_fc;
+	const int nvars_fc = Physics_Indices<MHDAlfvenWaveCircular>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -269,7 +270,7 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	}
 
 	// Run simulation
-	QuokkaSimulation<AlfvenWaveCircular> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDAlfvenWaveCircular> sim(BCs_cc, BCs_fc);
 
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
@@ -315,8 +316,8 @@ auto problem_main() -> int
 	int status = 0;
 
 	if (run_sim) {
-		auto BCs_cc = quokka::BC<AlfvenWaveCircular>(quokka::BCType::int_dir);
-		const int nvars_fc = Physics_Indices<AlfvenWaveCircular>::nvarTotal_fc;
+		auto BCs_cc = quokka::BC<MHDAlfvenWaveCircular>(quokka::BCType::int_dir);
+		const int nvars_fc = Physics_Indices<MHDAlfvenWaveCircular>::nvarTotal_fc;
 		amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 		for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -325,7 +326,7 @@ auto problem_main() -> int
 			}
 		}
 
-		QuokkaSimulation<AlfvenWaveCircular> sim(BCs_cc, BCs_fc);
+		QuokkaSimulation<MHDAlfvenWaveCircular> sim(BCs_cc, BCs_fc);
 
 		double num_periods = 1.0;
 		{
