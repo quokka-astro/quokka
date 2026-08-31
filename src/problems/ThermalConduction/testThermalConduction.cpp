@@ -355,8 +355,7 @@ auto problem_main() -> int
 		BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
 		}
 	}
-	// Problem initialization (only used to read conductionType_ from the input file; the actual
-	// test runs below each construct their own QuokkaSimulation via runConductionTest()).
+	// Problem initialization 
 	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 
 	bool passed = false;
@@ -390,16 +389,11 @@ auto problem_main() -> int
 		double const intercept = mean_y - slope * mean_x;
 		amrex::Print() << std::format("\nBest-fit line: log(error) = {:.4f} * log(Nx) + {:.4f}\n", slope, intercept);
 
-		// error ~ Nx^slope, so unity convergence order corresponds to |slope| = 1. Converging faster
-		// than first order is fine (no upper bound); only flag it if |slope| is shallower than unity
-		// by more than 10%.
+		// error ~ Nx^slope for Pattle IC
 		amrex::Print() << std::format("Spitzer conduction convergence: |slope| = {:.4f} (unity expected, converging faster is fine)\n", std::abs(slope));
 		passed = std::abs(slope) >= 0.9;
 	} else if (sim.conductionType_ == "constant") {
-		// Single-resolution check against the amr2-branch convergence-study estimate (calibrated
-		// at nx=32, matching inputs/ThermalConduction.toml's amr.n_cell for this test). The
-		// reference solution is a 1D Gaussian that is flat in y and z, so the error norm depends
-		// on the dimensionality of the run.
+		// Single-resolution check against the full resolution study
 		constexpr int nx = 32;
 		double const error_norm = runConductionTest(nx, nx, nx);
 		constexpr amrex::Real estimated_error = (AMREX_SPACEDIM == 1) ? 9.2430e-04 : 1.0318e-03;
