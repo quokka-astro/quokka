@@ -292,7 +292,15 @@ The module follows the Strömgren-volume technique of Kessel-Deynet & Burkert (2
 
 FIRE-2 sorts the cells near a star by distance and walks outward consuming the budget. Because cells are consumed in order of increasing distance, the consumed set is always a distance-prefix, which is exactly a ball. The walk is therefore equivalent to finding the single radius $R_{\rm St}$ at which the enclosed recombination rate equals $Q$, and that equivalence is exact for an arbitrary, non-uniform density field. Quokka uses this to replace the cross-rank cell sort with a radial-bin histogram and one small MPI reduction per source, which parallelizes cleanly over AMReX boxes and ranks.
 
-The ionizing photon rate is a per-particle property assigned once at birth from the stellar mass, using the Vacca, Garmany & Shull (1996) fitting formula $Q(m) = 3.12\times10^{41}\,m^{4.91}\ \mathrm{s}^{-1}$ with $m$ in solar masses. It is stored in a dedicated particle component by `ToyStellarModel` and is deliberately not refreshed as the particle accretes.
+The ionizing photon rate is a per-particle property assigned once at birth from the stellar mass. `ToyStellarModel` takes it from the Sternberg, Hoffmann & Pauldrach (2003) grid as recalibrated by Martins, Schaerer & Hillier (2005). Over the O-star main sequence, roughly $15$--$60\,M_\odot$ at $Z \approx Z_\odot$, the rate is well represented by a cubic in $x \equiv \log_{10}(m/M_\odot)$:
+
+$$\log_{10} Q_0\ [\mathrm{s}^{-1}] = c_0 + c_1 x + c_2 x^2 + c_3 x^3,$$
+
+with $c_0 = 40.0765$, $c_1 = 10.7952$, $c_2 = -4.0785$, $c_3 = 0.5822$. These reproduce the published anchor points $\log_{10} Q_0 = 48.5$, $49.0$ and $49.5$ at $20$, $30$ and $50\,M_\odot$ respectively. The cubic is monotonic in mass everywhere, so it cannot produce the non-physical inversion in which a more massive star ionizes less.
+
+Below $15\,M_\odot$ -- the lower edge of the fit, around spectral type B0 -- the rate is set to zero rather than extrapolating the polynomial. Extrapolation is badly behaved there: it would credit a $5\,M_\odot$ star with $\sim10^{46}$ photons per second against a true value near $10^{38}$, and in a sampled IMF low-mass stars vastly outnumber O stars, so the spurious contribution would dominate the budget.
+
+The rate is stored in a dedicated particle component and is not refreshed as the particle accretes. The one exception is a star born below the cutoff, which carries $Q = 0$ and is re-evaluated until accretion carries it into the O-star range; at that point $Q$ is assigned from the mass it has then and frozen.
 
 **Important:** the stellar model assigns $Q$ on the first update, and detects the "not yet assigned" state by the component still being zero. `amrex::ParticleContainer::InitFromAsciiFile` only fills the components present in the file and leaves the rest indeterminate, so a problem that creates star particles that way must explicitly zero the remaining real components. See `src/problems/StromgrenVolumeFeedback/` and `src/problems/ParticleStarEvolution/` for worked examples.
 

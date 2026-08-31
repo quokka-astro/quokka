@@ -9,9 +9,10 @@
 ///
 ///   R_St = (3 Q / (4 pi alpha_B n_H^2))^(1/3).
 ///
-/// The particle mass is chosen so that the Vacca, Garmany & Shull (1996) fitting formula in
-/// ToyStellarModel yields exactly the target Q. That way the test exercises the real birth-assignment
-/// path rather than the Q override, while still knowing Q exactly.
+/// The particle is a 30 M_sun star, one of the published anchor points of the Martins, Schaerer &
+/// Hillier (2005) calibration used by ToyStellarModel, for which log Q0 = 49.0. The test therefore
+/// exercises the real birth-assignment path rather than the Q override, while still knowing Q. It
+/// also checks the calibration directly at all three anchors and at the low-mass cutoff.
 ///
 /// The run is deliberately only a few steps long: with hydro enabled the gas would eventually expand,
 /// but the analytic comparison is only valid while the density is still uniform.
@@ -31,6 +32,7 @@
 #include "particles/particle_types.hpp"
 #include "particles/stellar_models.hpp"
 
+#include <array>
 #include <cmath>
 #include <string>
 
@@ -39,8 +41,9 @@ using amrex::Real;
 struct StromgrenVolumeProblem {
 };
 
-// Target ionizing photon rate. The particle mass below is solved from this.
-constexpr double Q_target = 1.0e49; // 1/s
+// Mass of the ionizing source. 30 M_sun is a Martins et al. (2005) anchor point (log Q0 = 49.0),
+// so the photon rate is known independently of the code under test.
+constexpr double M_star_in_Msun = 30.0;
 // Case-B recombination coefficient at 1e4 K. Must match stromgren.alpha_B in the inputs file.
 constexpr double alpha_B = 2.59e-13; // cm^3/s
 // Uniform ambient hydrogen number density. Must be consistent with stromgren.hydrogen_mass_fraction=1.
@@ -48,8 +51,6 @@ constexpr double n_H = 1.0e3;	      // 1/cm^3
 constexpr double rho0 = n_H * C::m_p; // g/cm^3, pure hydrogen
 constexpr double T0 = 100.0;	      // K, cold neutral ambient medium
 
-// Mass whose Vacca, Garmany & Shull rate equals Q_target:
-//   Q(m) = Q_ion_coeff * (m / M_sun)^Q_ion_exponent  =>  m = M_sun * (Q_target / Q_ion_coeff)^(1/exponent)
 AMREX_GPU_MANAGED double M_star = 0.0; // NOLINT, set in problem_main
 
 // Optional non-uniform ambient medium. The density varies linearly across the box as
@@ -166,6 +167,12 @@ auto problem_main() -> int
 		pp.query("n_sources", n_sources);
 	}
 
+	using Model = quokka::ToyStellarModel;
+	M_star = M_star_in_Msun * C::M_solar;
+	// The cubic Q(m) calibration has no closed-form inverse, so the source rate is taken from the
+	// model at the chosen mass rather than the mass being solved from a target rate.
+	const double Q_target = Model::ionizingPhotonRate(M_star);
+
 	// The module may be given an explicit Q that overrides the stellar model. The analytic radius
 	// must then be built from that rate instead of the one implied by the particle mass.
 	double Q_override = -1.0;
@@ -175,10 +182,6 @@ auto problem_main() -> int
 	}
 	const double Q_per_source = (Q_override > 0.0) ? Q_override : Q_target;
 	const double Q_total = static_cast<double>(n_sources) * Q_per_source;
-
-	// Solve for the stellar mass that yields exactly Q_target under the toy model's Q(m) law.
-	using Model = quokka::ToyStellarModel;
-	M_star = C::M_solar * std::pow(Q_target / Model::Q_ion_coeff, 1.0 / Model::Q_ion_exponent);
 
 	const int ncomp_cc = Physics_Indices<StromgrenVolumeProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -235,9 +238,7 @@ auto problem_main() -> int
 	const double R_St = std::cbrt(3.0 * Q_total / (4.0 * M_PI * alpha_B * n_H * n_H));
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
-	// Check that Q was assigned at birth from the stellar mass, independently of the volume check.
 	const double Q_from_model = Model::ionizingPhotonRate(M_star);
-	const double Q_err = std::abs(Q_from_model - Q_target) / Q_target;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::Print() << "\n=== Stromgren-volume photoionization validation ===\n";
@@ -248,9 +249,27 @@ auto problem_main() -> int
 		amrex::Print() << "R_eff       = " << R_eff << " cm (" << R_eff / dx_max << " cells)\n";
 		amrex::Print() << "|R_eff - R_St| = " << std::abs(R_eff - R_St) / dx_max << " cells\n";
 
-		if (Q_err > 1.0e-10) {
+		// Validate the Martins, Schaerer & Hillier (2005) calibration at its published anchor points,
+		// independently of anything the feedback module does with the result.
+		struct Anchor {
+			double mass_in_Msun;
+			double log_Q;
+		};
+		const std::array<Anchor, 3> anchors = {{{20.0, 48.5}, {30.0, 49.0}, {50.0, 49.5}}};
+		for (Anchor const &a : anchors) {
+			const double log_Q_model = std::log10(Model::ionizingPhotonRate(a.mass_in_Msun * C::M_solar));
+			const double dex_err = std::abs(log_Q_model - a.log_Q);
+			amrex::Print() << "  anchor M = " << a.mass_in_Msun << " M_sun: log Q0 = " << log_Q_model << " (expected " << a.log_Q << ")\n";
+			if (dex_err > 1.0e-3) {
+				status += 1;
+				amrex::Print() << "  FAIL: Q(m) misses the Martins+2005 anchor by " << dex_err << " dex\n";
+			}
+		}
+
+		// Below the fit range the cubic must not be extrapolated: a B star contributes nothing.
+		if (Model::ionizingPhotonRate(10.0 * C::M_solar) != 0.0) {
 			status += 1;
-			amrex::Print() << "  FAIL: Q(m) does not reproduce the target rate, rel_err=" << Q_err << "\n";
+			amrex::Print() << "  FAIL: a 10 M_sun star was credited with ionizing photons\n";
 		}
 		if (V_ion <= 0.0) {
 			status += 1;

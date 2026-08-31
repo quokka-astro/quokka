@@ -124,17 +124,23 @@ The consequence is that the ionized region is only applied to cells covered by t
 
 ### 4.7 Obtaining the ionizing photon rate
 
-The ionizing photon rate is a **per-particle property assigned once at birth** from the stellar mass, using the Vacca, Garmany & Shull (1996) fitting formula
+The ionizing photon rate is a **per-particle property assigned once at birth** from the stellar mass, taken from the Sternberg, Hoffmann & Pauldrach (2003) grid as recalibrated by Martins, Schaerer & Hillier (2005). Over the O-star main sequence, roughly $15$--$60\,M_\odot$ at $Z \approx Z_\odot$, the rate is well represented by a cubic in $x \equiv \log_{10}(m/M_\odot)$:
 
-$$\log_{10} Q\ (\mathrm{s}^{-1}) = 49 + \log_{10}\!\left(3.12\times10^{-8}\right) + 4.91 \log_{10} m,$$
+$$\log_{10} Q_0\ (\mathrm{s}^{-1}) = c_0 + c_1 x + c_2 x^2 + c_3 x^3,$$
 
-equivalently $Q(m) = 3.12\times10^{41}\,m^{4.91}\ \mathrm{s}^{-1}$, with $m$ the stellar mass in solar masses. The fit was derived for $20 \le m \le 30\,M_\odot$; we apply it at all masses as a toy model, which is adequate because the ionizing budget is dominated by the most massive stars. As a sanity check it gives $\log_{10} Q \approx 47.9$ at $20\,M_\odot$ and $\approx 48.8$ at $30\,M_\odot$, both consistent with tabulated O-star values.
+with $c_0 = 40.0765$, $c_1 = 10.7952$, $c_2 = -4.0785$, $c_3 = 0.5822$. These reproduce the published anchors $\log_{10} Q_0 = 48.5$, $49.0$, $49.5$ at $20$, $30$, $50\,M_\odot$, together with $49.65$ at $60\,M_\odot$ (Martins et al. give $\approx 49.6$ for an O3V star of $\approx 58\,M_\odot$), which is the fourth constraint needed to determine a cubic from three published points.
+
+The polynomial is monotonic in mass everywhere: its derivative $3c_3 x^2 + 2c_2 x + c_1$ has discriminant $-8.9 < 0$ and positive leading coefficient, so it has no real roots. A more massive star can therefore never be assigned a smaller $Q$, which would be a non-physical inversion in a feedback module.
+
+Below $15\,M_\odot$ the rate is set to zero rather than extrapolating. This matters: the cubic extrapolated to $5\,M_\odot$ gives $10^{45.8}$ photons per second against a true value near $10^{38}$, and because low-mass stars vastly outnumber O stars in a sampled IMF, the spurious contribution would dominate the total ionizing budget. The cutoff also keeps $\log_{10}$ away from zero mass, where it would raise a floating-point trap.
+
+An earlier draft of this module used the Vacca, Garmany & Shull (1996) power law $Q \propto m^{4.91}$. That form is steeper than the Martins calibration: it under-predicts at the low-mass end ($10^{47.9}$ against $10^{48.5}$ at $20\,M_\odot$) and over-predicts at the high-mass end ($10^{49.8}$ against $10^{49.5}$ at $50\,M_\odot$).
 
 Because $Q$ is fixed at birth, it does not change as the particle accretes. It is therefore stored in a dedicated per-particle real component rather than recomputed each step. We add it to `ToyStellarModel` by setting `nExtraReal = 1`, which places the slot immediately after the luminosity slots at index `StarParticleLumIdx + nGroups`. The stellar model assigns it on the first `evolve` call, detected by the slot still holding its zero-initialized value; thereafter the value is left untouched.
 
 Putting $Q$ in the stellar model is the right home for it — $Q(m)$ is a stellar-evolution fitting formula, exactly the kind of relation the model already supplies for radius and luminosity. `ToyStellarModel` is the default for all problems, but only `ParticleStarEvolution` currently uses `Star` particles, so the layout change has a very small blast radius.
 
-The test problem needs an exact $Q$ to compare against the analytic radius, so it sets the particle mass such that the formula yields the desired rate, and additionally supports an override via `stromgren.Q_ion` (a non-positive value, the default, means "use the stellar model").
+The test problem needs an exact $Q$ to compare against the analytic radius. The cubic has no closed-form inverse, so rather than solving for a mass that yields a target rate, the test uses a $30\,M_\odot$ star — a published anchor, $\log_{10} Q_0 = 49.0$ — and takes $Q$ from the model. It additionally supports an override via `stromgren.Q_ion` (a non-positive value, the default, means "use the stellar model"), which the subgrid variant uses to reach a rate far below anything a real star produces.
 
 ## 5. Code Layout
 
@@ -179,7 +185,7 @@ These are deliberate and should be stated in the user-facing documentation.
 
 Both questions raised at review were settled by the user:
 
-1. **Ionizing photon rate** — assign $Q$ at birth from the stellar mass using the Vacca, Garmany & Shull toy formula, rather than deriving it from the luminosity each step. Implemented as described in Section 4.7.
+1. **Ionizing photon rate** — assign $Q$ at birth from the stellar mass, rather than deriving it from the luminosity each step. Implemented as described in Section 4.7, which now uses the Martins, Schaerer & Hillier (2005) recalibration of the Sternberg et al. (2003) grid in place of the original Vacca, Garmany & Shull toy formula.
 2. **Finest-level-only** — accepted for v1. The intended production runs use static mesh refinement with essentially all star particles on the finest level, so the truncation described in limitation 2 does not bite in practice.
 
 ## 9. References

@@ -31,12 +31,28 @@ struct ToyStellarModel {
 	static constexpr amrex::Real radius_exponent = 0.4;
 	static constexpr amrex::Real luminosity_exponent = 3.5;
 
-	// Vacca, Garmany & Shull (1996) fitting formula for the hydrogen-ionizing photon rate:
-	//   log10 Q [1/s] = 49 + log10(3.12e-8) + 4.91 * log10(m / M_sun)
-	// The fit was derived for 20 <= m/M_sun <= 30; we apply it at all masses as a toy model,
-	// which is adequate because the ionizing budget is dominated by the most massive stars.
-	static constexpr amrex::Real Q_ion_coeff = 3.12e-8 * 1.0e49; // 1/s, Q at m = 1 M_sun
-	static constexpr amrex::Real Q_ion_exponent = 4.91;
+	// Hydrogen-ionizing photon rate from the Sternberg, Hoffmann & Pauldrach (2003) grid, as
+	// recalibrated by Martins, Schaerer & Hillier (2005). Over the O-star main sequence
+	// (roughly 15-60 M_sun at Z ~ Z_sun), log10 Q0 is well represented by a cubic in
+	// x = log10(m / M_sun):
+	//
+	//   log10 Q0 [1/s] = c0 + c1 x + c2 x^2 + c3 x^3
+	//
+	// The coefficients below reproduce the published Martins et al. anchor points exactly:
+	//   20 M_sun -> log Q0 = 48.5,  30 -> 49.0,  50 -> 49.5,  60 -> 49.65.
+	// The cubic is monotonic in mass everywhere (its derivative has no real roots), so it cannot
+	// produce a non-physical inversion where a more massive star ionizes less.
+	static constexpr amrex::Real Q_ion_c0 = 40.076466;
+	static constexpr amrex::Real Q_ion_c1 = 10.795187;
+	static constexpr amrex::Real Q_ion_c2 = -4.078483;
+	static constexpr amrex::Real Q_ion_c3 = 0.582245;
+
+	// Lower edge of the fit range, in solar masses. Stars below this are later than about B0 and
+	// their ionizing output is negligible, so Q is set to zero rather than extrapolating the cubic
+	// downward -- extrapolation would credit a 5 M_sun star with ~1e46 photons/s against a true
+	// value near 1e38, and low-mass stars vastly outnumber O stars in a sampled IMF. Returning
+	// early here also keeps log10 away from zero mass, where it would raise a floating-point trap.
+	static constexpr amrex::Real Q_ion_min_mass = 15.0;
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto radius(amrex::Real mass) -> amrex::Real
 	{
@@ -54,13 +70,16 @@ struct ToyStellarModel {
 		return L_solar * std::pow(mass / C::M_solar, luminosity_exponent);
 	}
 
-	// Hydrogen-ionizing photon rate (1/s) for a star of the given mass. See Q_ion_coeff above.
+	// Hydrogen-ionizing photon rate (1/s) for a star of the given mass. See the coefficients above.
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto ionizingPhotonRate(amrex::Real mass) -> amrex::Real
 	{
-		if (mass <= 0.0) {
+		const amrex::Real mass_in_solar = mass / C::M_solar;
+		if (mass_in_solar < Q_ion_min_mass) {
 			return 0.0;
 		}
-		return Q_ion_coeff * std::pow(mass / C::M_solar, Q_ion_exponent);
+		const amrex::Real x = std::log10(mass_in_solar);
+		const amrex::Real log_Q = Q_ion_c0 + (x * (Q_ion_c1 + (x * (Q_ion_c2 + (x * Q_ion_c3)))));
+		return std::pow(10.0, log_Q);
 	}
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto luminosityAcc(amrex::Real mass, amrex::Real mdot, amrex::Real radius_val) -> amrex::Real
@@ -93,8 +112,12 @@ struct ToyStellarModel {
 		}
 
 		// Assign the ionizing photon rate once, at birth: a non-positive value marks a slot that has
-		// not been set yet. Q is deliberately NOT refreshed on later calls, because it is fixed at
-		// the birth mass and must not drift as the particle accretes.
+		// not been set yet. Q is deliberately NOT refreshed once it is positive, because it is fixed
+		// at the birth mass and must not drift as the particle accretes.
+		//
+		// A star born below Q_ion_min_mass gets Q = 0 and is therefore re-evaluated on later calls.
+		// That is intended: such a star contributes no ionizing photons until accretion carries it
+		// into the O-star range, at which point Q is assigned from the mass it has then and frozen.
 		//
 		// IMPORTANT: this sentinel requires the slot to be zero before the first call. Particle real
 		// components are NOT zero-initialized by amrex::ParticleContainer::InitFromAsciiFile, which
