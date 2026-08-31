@@ -28,11 +28,6 @@ do_subcycle = 0
 
 cfl = 0.3
 
-cooling.enabled = 0
-cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = "resampled"
-cooling.hdf5_data_file = "CloudyData_UVB=HM2012_resampled.h5"
-
 conduction.enabled = 1
 conduction.flux_limiter_phi = 1
 conduction.saturation_factor = 1.2e20
