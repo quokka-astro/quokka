@@ -139,8 +139,8 @@ template <typename problem_t> class ElectronConduction
 			     , ReconstructPrimVar<FluxDir::X2>(primVar, leftState[1], rightState[1], ng_reconstruct, params);
 			     , ReconstructPrimVar<FluxDir::X3>(primVar, leftState[2], rightState[2], ng_reconstruct, params);)
 
-		auto const evaluateFace = [=] AMREX_GPU_DEVICE(amrex::Real rho_L, amrex::Real T_L, amrex::Real rho_R, amrex::Real T_R, amrex::Real & kappa_face,
-							       amrex::Real & qsat_face) noexcept {
+		auto const evaluateFace = [=] AMREX_GPU_DEVICE(amrex::Real rho_L, amrex::Real T_L, amrex::Real rho_R, amrex::Real T_R, amrex::Real &kappa_face,
+							       amrex::Real &qsat_face) noexcept {
 			const amrex::Real rho_face = 0.5 * (rho_L + rho_R);
 			const amrex::Real T_face = amrex::max(0.5 * (T_L + T_R), t_min);
 			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {};

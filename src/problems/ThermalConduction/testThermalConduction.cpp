@@ -55,8 +55,7 @@ constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref;
 // on computeExactSolutionParams() below. Used by both setInitialConditionsOnGrid and
 // computeReferenceSolution so they can't drift out of sync with each other.
 constexpr double spitzer_t_start_frac = 0.5;
-struct ThermalConductionProblem {
-};
+struct ThermalConductionProblem {};
 
 template <> struct quokka::EOS_Traits<ThermalConductionProblem> {
 	static constexpr double gamma = 2.0;
