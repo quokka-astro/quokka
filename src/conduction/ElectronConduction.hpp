@@ -34,22 +34,14 @@ struct ElectronConductionParams {
 	bool spitzer_scaling = true;	      // if true, kappa(T) = conductivity_prefactor * T^2.5 (Spitzer);
 					      // if false, kappa(T) = conductivity_prefactor (constant, isotropic)
 	int reconstruction_order = 3;	      // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM;
-					      // mirrors the hydro solver's reconstruction_order/plm_limiter so that the
-					      // (rho, T) states used to evaluate the face conductivity come from the
-					      // same reconstruction as the rest of the hydro update.
 	SlopeLimiter plm_limiter = SlopeLimiter::sweby;
-	int ng_reconstruct = 2;	      // number of ghost faces to reconstruct beyond the valid box; must match
-					      // the hydro solver's own reconstructGhost (nghost_Riemann + 1, see
-					      // QuokkaSimulation::computeHydroFluxes) so the (rho, T) reconstruction gets
-					      // the same stencil robustness as the hydro reconstruction it mirrors.
+	int ng_reconstruct = 2;	      // number of ghost faces to reconstruct beyond the valid box
 };
 
 template <typename problem_t> class ElectronConduction
 {
       public:
-	// Dispatches to the reconstruction scheme selected by params.reconstruction_order/plm_limiter
-	// (mirroring HyperbolicSystem's dispatch used for the hydro fluxes), reconstructing the 2-component
-	// (rho, T) MultiFab primVar to left/right interface states in the DIR direction.
+	//Reconstruct rho and T at the interfaces
 	template <FluxDir DIR>
 	static void ReconstructPrimVar(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int ng_reconstruct,
 					ElectronConductionParams const &params)
@@ -68,9 +60,6 @@ template <typename problem_t> class ElectronConduction
 		}
 	}
 
-	// Sound speed always comes from quokka::EOS (the fixed-mu ideal-gas formula, even for the
-	// EOSTabulated backend), matching how hydro itself computes pressure/sound speed for every
-	// problem — only temperature is actually table-driven. See EOSTabulated in hydro/EOS.hpp.
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
 				    amrex::Real dt, ElectronConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
@@ -96,10 +85,6 @@ template <typename problem_t> class ElectronConduction
 		const amrex::Real small = std::numeric_limits<amrex::Real>::min();
 		constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 
-		// Cell-centered (density, temperature); component 0 = rho, component 1 = T.
-		// This is reconstructed to interfaces below (using the same reconstruction order/limiter
-		// as the hydro solver) so that the face conductivity is evaluated from interface states
-		// rather than from an average of the two neighboring cell-centered values.
 		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2, state.nGrow());
 		primVar.setVal(0.0);
 
@@ -153,16 +138,12 @@ template <typename problem_t> class ElectronConduction
 			     , ReconstructPrimVar<FluxDir::X2>(primVar, leftState[1], rightState[1], ng_reconstruct, params);
 			     , ReconstructPrimVar<FluxDir::X3>(primVar, leftState[2], rightState[2], ng_reconstruct, params);)
 
-		// Given left/right interface (rho, T) states, evaluate a single consistent face conductivity
-		// and saturated flux: average rho and T across the interface first, then evaluate kappa(T),
-		// P(rho, T), c_s(rho, P) at that single face state.
 		auto const evaluateFace = [=] AMREX_GPU_DEVICE(amrex::Real rho_L, amrex::Real T_L, amrex::Real rho_R, amrex::Real T_R,
 								amrex::Real &kappa_face, amrex::Real &qsat_face) noexcept {
 			const amrex::Real rho_face = 0.5 * (rho_L + rho_R);
 			const amrex::Real T_face = amrex::max(0.5 * (T_L + T_R), t_min);
 			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {};
 			const amrex::Real Eint_face = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_face, T_face, massScalars);
-			// Sound speed always from EOS (see comment on ComputeExplicit above)
 			const amrex::Real Pgas_face = ::quokka::EOS<problem_t>::ComputePressure(rho_face, Eint_face, massScalars);
 			const amrex::Real cs_face = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_face, Pgas_face, massScalars);
 
