@@ -232,7 +232,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
 	amrex::Real conductionCFL = 0.2;	      // default
 	int enableElectronConduction_ = 0;	      // default
-	std::string conductionType_ = "isotropic";    // "isotropic" or "spitzer"; controls the conduction timestep estimate
+	std::string conductionType_ = "constant";    // "constant" or "spitzer"; controls the conduction timestep estimate
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
@@ -1277,7 +1277,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	if (enableElectronConduction_ == 1) {
-		if (conductionType_ == "isotropic") {
+		if (conductionType_ == "constant") {
 			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
 			double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
 			conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
