@@ -602,7 +602,16 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 			auto const local_state_capture = local_state;
 			auto const plo_capture = plo;
 			auto const dxi_capture = dxi;
-			amrex::ignore_unused(local_state_capture, plo_capture, dxi_capture);
+			const auto step_end_time_capture = step_end_time;
+			const auto birth_time_index_capture = birthTimeIndex;
+			const auto deposit_feedback_capture = deposit_feedback;
+			const auto evolution_stage_index_capture = evolutionStageIndex;
+			const auto mass_index_capture = mass_index;
+			const auto ejecta_mass_capture = m_ej;
+			const auto minimum_dead_star_mass_capture = m_dead_min;
+			amrex::ignore_unused(local_state_capture, plo_capture, dxi_capture, step_end_time_capture, birth_time_index_capture,
+					     deposit_feedback_capture, evolution_stage_index_capture, mass_index_capture, ejecta_mass_capture,
+					     minimum_dead_star_mass_capture);
 
 			int event_count = 0;
 			if constexpr (particleType == ParticleType::IMFAveragedStellarPop) {

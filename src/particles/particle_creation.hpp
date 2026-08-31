@@ -11,6 +11,7 @@
 #include "stellarpop_data.hpp"
 #include <array>
 #include <cmath>
+#include <gcem.hpp>
 #include <limits>
 #include <numbers>
 

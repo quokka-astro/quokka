@@ -27,9 +27,15 @@ auto problem_main() -> int
 	};
 	// Random123's published Philox4x32-10 known-answer vectors.
 	constexpr std::array<KnownAnswer, 3> known_answers{{
-	    {{0x00000000U, 0x00000000U, 0x00000000U, 0x00000000U}, {0x00000000U, 0x00000000U}, {0x6627e8d5U, 0xe169c58dU, 0xbc57ac4cU, 0x9b00dbd8U}},
-	    {{0xffffffffU, 0xffffffffU, 0xffffffffU, 0xffffffffU}, {0xffffffffU, 0xffffffffU}, {0x408f276dU, 0x41c83b0eU, 0xa20bc7c6U, 0x6d5451fdU}},
-	    {{0x243f6a88U, 0x85a308d3U, 0x13198a2eU, 0x03707344U}, {0xa4093822U, 0x299f31d0U}, {0xd16cfe09U, 0x94fdccebU, 0x5001e420U, 0x24126ea1U}},
+	    {.counter = {0x00000000U, 0x00000000U, 0x00000000U, 0x00000000U},
+	     .key = {0x00000000U, 0x00000000U},
+	     .expected = {0x6627e8d5U, 0xe169c58dU, 0xbc57ac4cU, 0x9b00dbd8U}},
+	    {.counter = {0xffffffffU, 0xffffffffU, 0xffffffffU, 0xffffffffU},
+	     .key = {0xffffffffU, 0xffffffffU},
+	     .expected = {0x408f276dU, 0x41c83b0eU, 0xa20bc7c6U, 0x6d5451fdU}},
+	    {.counter = {0x243f6a88U, 0x85a308d3U, 0x13198a2eU, 0x03707344U},
+	     .key = {0xa4093822U, 0x299f31d0U},
+	     .expected = {0xd16cfe09U, 0x94fdccebU, 0x5001e420U, 0x24126ea1U}},
 	}};
 
 	bool passed = true;
@@ -74,7 +80,7 @@ auto problem_main() -> int
 	for (int particle_id = 0; particle_id < ensemble_size; ++particle_id) {
 		const auto ensemble_key = quokka::math::random::makeParticleKey(17U, static_cast<std::uint64_t>(particle_id), 0U);
 		auto schedule = quokka::particles::initializeSupernovaSchedule(ensemble_key);
-		const double count = static_cast<double>(quokka::particles::advanceSupernovaSchedule(schedule, ensemble_intensity));
+		const auto count = static_cast<double>(quokka::particles::advanceSupernovaSchedule(schedule, ensemble_intensity));
 		count_sum += count;
 		count_squared_sum += count * count;
 	}

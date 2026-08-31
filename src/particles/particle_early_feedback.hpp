@@ -59,6 +59,7 @@ namespace EarlyFeedbackUtils
 {
 
 constexpr int stencil_size = ParticleUtils::stencil_size;
+template <typename> inline constexpr bool dependent_false = false;
 
 template <typename ContainerType, typename problem_t>
 void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
@@ -66,7 +67,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		     amrex::Real *scalar_momentum, int *invalid_source_count)
 {
 	const BL_PROFILE("EarlyFeedbackUtils::depositToBuffer()");
-	static_assert(AMREX_SPACEDIM == 3, "Empirically motivated early feedback is currently implemented only in 3D.");
+	static_assert(AMREX_SPACEDIM == 3 || dependent_false<problem_t>, "Empirically motivated early feedback is currently implemented only in 3D.");
 	constexpr auto stencil_weights = ParticleUtils::kernel_spherical_3_weights_normalized;
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {

@@ -58,7 +58,9 @@ struct SupernovaScheduleState {
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto initializeSupernovaSchedule(const quokka::math::random::ParticleKey key) -> SupernovaScheduleState
 {
-	return {key, 1U, quokka::math::random::exponential(key, quokka::math::random::Stream::CoreCollapseSN, 0U)};
+	return {.key = key,
+		.next_draw_index = 1U,
+		.next_event_intensity = quokka::math::random::exponential(key, quokka::math::random::Stream::CoreCollapseSN, 0U)};
 }
 
 /// Consume every Poisson arrival whose cumulative-intensity threshold has
