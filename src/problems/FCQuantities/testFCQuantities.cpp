@@ -35,8 +35,7 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct FCQuantities {
-};
+struct FCQuantities {};
 
 template <> struct quokka::EOS_Traits<FCQuantities> {
 	static constexpr double gamma = 5. / 3.;

@@ -32,8 +32,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct AlfvenWaveLinear {
-};
+struct AlfvenWaveLinear {};
 
 template <> struct quokka::EOS_Traits<AlfvenWaveLinear> {
 	static constexpr double gamma = 5. / 3.;

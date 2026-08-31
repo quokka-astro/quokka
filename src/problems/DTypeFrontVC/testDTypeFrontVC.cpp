@@ -27,8 +27,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct DTypeFrontVC {
-};
+struct DTypeFrontVC {};
 
 namespace
 {

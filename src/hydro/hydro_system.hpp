@@ -50,8 +50,7 @@ template <typename problem_t> struct HydroSystem_Traits {
 
 // Helper for dependent static_assert that always evaluates to false
 // This is needed to make static_assert work inside constexpr if blocks
-template <typename T> struct dependent_false : std::false_type {
-};
+template <typename T> struct dependent_false : std::false_type {};
 template <typename T> inline constexpr bool dependent_false_v = dependent_false<T>::value;
 
 enum class RiemannSolver { HLLC, LLF, LLF_MHD, HLLD };

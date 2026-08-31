@@ -29,8 +29,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct ShocktubeProblem {
-};
+struct ShocktubeProblem {};
 
 bool consv_test_passes = true; // if mass scalar conservation check fails, set to false. NOLINT
 

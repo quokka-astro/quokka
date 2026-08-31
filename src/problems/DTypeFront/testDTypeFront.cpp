@@ -33,8 +33,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct DTypeFront {
-};
+struct DTypeFront {};
 
 constexpr double c_hat = C::c_light / 1000.0;
 

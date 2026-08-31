@@ -28,8 +28,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct RyuJones2aShockTubeProblem {
-};
+struct RyuJones2aShockTubeProblem {};
 
 template <> struct quokka::EOS_Traits<RyuJones2aShockTubeProblem> {
 	static constexpr double gamma = 5. / 3.;

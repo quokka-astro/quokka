@@ -30,9 +30,7 @@ physics modes (see ElectronConduction.hpp) just by changing that one parameter:
   - "constant": kappa = const. Initial condition is a smooth Gaussian temperature profile
     (cell-averaged in x via the erf antiderivative). Reference solution is the exact Gaussian
     diffusion solution (sigma_t^2 = sigma^2 + 2*D*t) -- identical to the original amr2-branch test.
-  - "spitzer": kappa = kappa0*T^2.5 (pattle_q below; the physical Spitzer value -- see
-    ElectronConduction.hpp and simulation.hpp, which must be kept in sync manually since this
-    exponent isn't (yet) a runtime parameter). Initial condition is the Pattle (1959) self-similar
+  - "spitzer": kappa = kappa0*T^2.5. Initial condition is the Pattle (1959) self-similar
     nonlinear-diffusion solution evaluated at t=spitzer_t_start_frac*stopTime_ (physical time since
     a notional Dirac-delta release), not a true point source deposited on the grid -- a delta-like
     IC is badly under-resolved at every resolution for this nonlinear conductivity (see the comment

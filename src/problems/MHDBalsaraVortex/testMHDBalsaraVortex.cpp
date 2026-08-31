@@ -23,8 +23,7 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct MHDBalsaraVortex {
-};
+struct MHDBalsaraVortex {};
 
 template <> struct quokka::EOS_Traits<MHDBalsaraVortex> {
 	static constexpr double gamma = 5.0 / 3.0;
