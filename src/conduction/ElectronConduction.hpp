@@ -38,6 +38,10 @@ struct ElectronConductionParams {
 					      // (rho, T) states used to evaluate the face conductivity come from the
 					      // same reconstruction as the rest of the hydro update.
 	SlopeLimiter plm_limiter = SlopeLimiter::sweby;
+	int ng_reconstruct = 2;	      // number of ghost faces to reconstruct beyond the valid box; must match
+					      // the hydro solver's own reconstructGhost (nghost_Riemann + 1, see
+					      // QuokkaSimulation::computeHydroFluxes) so the (rho, T) reconstruction gets
+					      // the same stencil robustness as the hydro reconstruction it mirrors.
 };
 
 template <typename problem_t> class ElectronConduction
@@ -136,17 +140,18 @@ template <typename problem_t> class ElectronConduction
 		// Reconstruct (rho, T) to the interfaces
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
+		const int ng_reconstruct = params.ng_reconstruct;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			leftState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2, 0);
-			rightState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2, 0);
+			leftState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2, ng_reconstruct);
+			rightState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2, ng_reconstruct);
 			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
 			heat_flux[idim].setVal(0.0);
 		}
 
-		AMREX_D_TERM(ReconstructPrimVar<FluxDir::X1>(primVar, leftState[0], rightState[0], 0, params);
-			     , ReconstructPrimVar<FluxDir::X2>(primVar, leftState[1], rightState[1], 0, params);
-			     , ReconstructPrimVar<FluxDir::X3>(primVar, leftState[2], rightState[2], 0, params);)
+		AMREX_D_TERM(ReconstructPrimVar<FluxDir::X1>(primVar, leftState[0], rightState[0], ng_reconstruct, params);
+			     , ReconstructPrimVar<FluxDir::X2>(primVar, leftState[1], rightState[1], ng_reconstruct, params);
+			     , ReconstructPrimVar<FluxDir::X3>(primVar, leftState[2], rightState[2], ng_reconstruct, params);)
 
 		// Given left/right interface (rho, T) states, evaluate a single consistent face conductivity
 		// and saturated flux: average rho and T across the interface first, then evaluate kappa(T),
