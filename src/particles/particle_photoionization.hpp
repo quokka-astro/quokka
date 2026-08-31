@@ -335,12 +335,25 @@ void applyStromgrenFeedback(amrex::MultiFab &state, amrex::Vector<amrex::Real> c
 	// --- Heat the ionized gas toward T_HII ---
 	const amrex::Real T_HII = par.T_HII;
 	constexpr int nscalars = Hydro::nscalars_;
+	constexpr int nmscalars = Hydro::nmscalars_;
+
+	// Validate the requested output slot loudly, in both directions. The passive-scalar block begins
+	// with the mass scalars (see RadSystem::ComputeMassScalars), so writing x_ion into one of those
+	// slots would overwrite a species partial density, which EnforceLimits then renormalizes back
+	// into the composition -- corrupting the chemistry silently. An out-of-range index would just as
+	// silently produce no output at all.
+	if (par.x_ion_scalar_index >= 0) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(par.x_ion_scalar_index >= nmscalars,
+						 "stromgren.x_ion_scalar_index aliases a mass scalar and would corrupt the composition; "
+						 "it must be >= Physics_Traits::numMassScalars.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(par.x_ion_scalar_index < nscalars,
+						 "stromgren.x_ion_scalar_index is out of range; it must be < Physics_Traits::numPassiveScalars.");
+	}
+
 	// Resolve the x_ion output component on the host, as a plain runtime index that is negative when
-	// the output is disabled or unavailable. An `if constexpr` inside the device lambda below would
-	// first-capture these variables in a constexpr-if context, which nvcc rejects for extended
-	// __device__ lambdas.
-	const int x_ion_comp =
-	    ((nscalars > 0) && (par.x_ion_scalar_index >= 0) && (par.x_ion_scalar_index < nscalars)) ? (Hydro::scalar0_index + par.x_ion_scalar_index) : -1;
+	// the output is disabled. An `if constexpr` inside the device lambda below would first-capture
+	// these variables in a constexpr-if context, which nvcc rejects for extended __device__ lambdas.
+	const int x_ion_comp = ((nscalars > 0) && (par.x_ion_scalar_index >= 0)) ? (Hydro::scalar0_index + par.x_ion_scalar_index) : -1;
 
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &bx = mfi.tilebox();
@@ -349,9 +362,9 @@ void applyStromgrenFeedback(amrex::MultiFab &state, amrex::Vector<amrex::Real> c
 
 		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const amrex::Real x_ion = xi(i, j, k);
+			const amrex::Real rho = cons(i, j, k, Hydro::density_index);
 
 			if (x_ion > 0.0) {
-				const amrex::Real rho = cons(i, j, k, Hydro::density_index);
 				const amrex::Real px = cons(i, j, k, Hydro::x1Momentum_index);
 				const amrex::Real py = cons(i, j, k, Hydro::x2Momentum_index);
 				const amrex::Real pz = cons(i, j, k, Hydro::x3Momentum_index);
@@ -364,13 +377,18 @@ void applyStromgrenFeedback(amrex::MultiFab &state, amrex::Vector<amrex::Real> c
 				// Heat only: gas already hotter than T_HII (shocked or supernova-heated) is left
 				// alone rather than being artificially cooled. Reapplying this every step is what
 				// makes the H II region hold its temperature, so no separate cooling switch is needed.
-				const amrex::Real dEint = x_ion * amrex::max(0.0, Eint_target - Eint_old);
-				cons(i, j, k, Hydro::energy_index) += dEint;
-				cons(i, j, k, Hydro::internalEnergy_index) += dEint;
+				const amrex::Real Eint_new = Eint_old + (x_ion * amrex::max(0.0, Eint_target - Eint_old));
+				// Set both energy variables from the same internal energy, as the supernova
+				// deposition does, rather than adding the increment to each independently: the
+				// auxiliary internal energy can drift from (e_tot - e_kin), and adding the same
+				// delta to both would preserve that drift instead of landing on T_HII.
+				cons(i, j, k, Hydro::energy_index) = Ekin + Eint_new;
+				cons(i, j, k, Hydro::internalEnergy_index) = Eint_new;
 			}
 
+			// Passive scalars are stored as conserved densities (rho * s), so write rho * x_ion.
 			if (x_ion_comp >= 0) {
-				cons(i, j, k, x_ion_comp) = x_ion;
+				cons(i, j, k, x_ion_comp) = rho * x_ion;
 			}
 		});
 	}

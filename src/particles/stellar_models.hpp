@@ -92,10 +92,15 @@ struct ToyStellarModel {
 			}
 		}
 
-		// Assign the ionizing photon rate once, at birth. AMReX zero-initializes particle real
-		// components on creation, so a non-positive value marks a slot that has not been set yet.
-		// Q is deliberately NOT refreshed on later calls: it is fixed at the birth mass and must
-		// not drift as the particle accretes.
+		// Assign the ionizing photon rate once, at birth: a non-positive value marks a slot that has
+		// not been set yet. Q is deliberately NOT refreshed on later calls, because it is fixed at
+		// the birth mass and must not drift as the particle accretes.
+		//
+		// IMPORTANT: this sentinel requires the slot to be zero before the first call. Particle real
+		// components are NOT zero-initialized by amrex::ParticleContainer::InitFromAsciiFile, which
+		// fills only the components present in the file and leaves the rest indeterminate. Any
+		// problem that creates Star particles that way must explicitly zero the components it does
+		// not set -- see src/problems/StromgrenVolumeFeedback/ and src/problems/ParticleStarEvolution/.
 		const int q_ion_idx = StarParticleLumIdx + n_groups + QIonExtraOffset;
 		if (rdata[q_ion_idx] <= 0.0) {
 			rdata[q_ion_idx] = ionizingPhotonRate(mass);

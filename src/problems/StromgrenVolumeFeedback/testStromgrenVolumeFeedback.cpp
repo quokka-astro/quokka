@@ -60,6 +60,11 @@ AMREX_GPU_MANAGED double M_star = 0.0; // NOLINT, set in problem_main
 AMREX_GPU_MANAGED double density_gradient = 0.0;   // NOLINT
 AMREX_GPU_MANAGED double source_offset_frac = 0.0; // NOLINT
 
+// Particle file to read. A file containing several co-located particles exercises the overlapping
+// -source path, where each source must consume only the recombinations the earlier ones left unpaid.
+std::string star_file = "../inputs/star.txt"; // NOLINT
+int n_sources = 1;			      // NOLINT, number of particles in star_file
+
 template <> struct Particle_Traits<StromgrenVolumeProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
 };
@@ -87,7 +92,6 @@ template <> void QuokkaSimulation<StromgrenVolumeProblem>::createInitialStarPart
 	// InitFromAsciiFile handles MPI correctly: only rank 0 reads the file, so exactly one particle
 	// is created regardless of the number of ranks.
 	constexpr int nreal_extra = 5; // mass, vx, vy, vz, birth_time
-	const std::string star_file = "../inputs/star.txt";
 	StarParticles->InitFromAsciiFile(star_file, nreal_extra, nullptr);
 
 	const int lev = 0;
@@ -158,7 +162,19 @@ auto problem_main() -> int
 		amrex::ParmParse const pp("problem");
 		pp.query("density_gradient", density_gradient);
 		pp.query("source_offset_frac", source_offset_frac);
+		pp.query("star_file", star_file);
+		pp.query("n_sources", n_sources);
 	}
+
+	// The module may be given an explicit Q that overrides the stellar model. The analytic radius
+	// must then be built from that rate instead of the one implied by the particle mass.
+	double Q_override = -1.0;
+	{
+		amrex::ParmParse const pp_s("stromgren");
+		pp_s.query("Q_ion", Q_override);
+	}
+	const double Q_per_source = (Q_override > 0.0) ? Q_override : Q_target;
+	const double Q_total = static_cast<double>(n_sources) * Q_per_source;
 
 	// Solve for the stellar mass that yields exactly Q_target under the toy model's Q(m) law.
 	using Model = quokka::ToyStellarModel;
@@ -180,10 +196,21 @@ auto problem_main() -> int
 	// --- Validation ---
 	int status = 0;
 
-	// The module writes x_ion into passive scalar 0 at the end of every step, so the field is fresh.
+	// The module writes the ionized fraction into passive scalar 0 at the end of every step, so the
+	// field is fresh. Passive scalars are stored as conserved densities, so the slot holds
+	// rho * x_ion and must be divided by rho to recover the fraction.
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.Geom(0).CellSizeArray();
 	const double cell_volume = dx[0] * dx[1] * dx[2];
-	const double x_ion_sum = sim.state_new_cc_[0].sum(HydroSystem<StromgrenVolumeProblem>::scalar0_index);
+	double x_ion_sum = amrex::ReduceSum(
+	    sim.state_new_cc_[0], 0, [=] AMREX_GPU_HOST_DEVICE(amrex::Box const &bx, amrex::Array4<const amrex::Real> const &arr) -> amrex::Real {
+		    amrex::Real local_sum = 0.0;
+		    amrex::Loop(bx, [&](int i, int j, int k) noexcept {
+			    const amrex::Real rho = arr(i, j, k, HydroSystem<StromgrenVolumeProblem>::density_index);
+			    local_sum += arr(i, j, k, HydroSystem<StromgrenVolumeProblem>::scalar0_index) / rho;
+		    });
+		    return local_sum;
+	    });
+	amrex::ParallelDescriptor::ReduceRealSum(x_ion_sum);
 	const double V_ion = x_ion_sum * cell_volume;
 
 	// Total recombination rate inside the flagged region. In a uniform medium this is redundant with
@@ -195,7 +222,7 @@ auto problem_main() -> int
 		    amrex::Real local_sum = 0.0;
 		    amrex::Loop(bx, [&](int i, int j, int k) noexcept {
 			    const amrex::Real rho = arr(i, j, k, HydroSystem<StromgrenVolumeProblem>::density_index);
-			    const amrex::Real x_ion = arr(i, j, k, HydroSystem<StromgrenVolumeProblem>::scalar0_index);
+			    const amrex::Real x_ion = arr(i, j, k, HydroSystem<StromgrenVolumeProblem>::scalar0_index) / rho;
 			    const amrex::Real n_H_cell = rho / C::m_p;
 			    local_sum += x_ion * alpha_B_local * n_H_cell * n_H_cell;
 		    });
@@ -205,7 +232,7 @@ auto problem_main() -> int
 	const double recomb_total = recomb_density_sum * cell_volume;
 
 	const double R_eff = std::cbrt(3.0 * V_ion / (4.0 * M_PI));
-	const double R_St = std::cbrt(3.0 * Q_target / (4.0 * M_PI * alpha_B * n_H * n_H));
+	const double R_St = std::cbrt(3.0 * Q_total / (4.0 * M_PI * alpha_B * n_H * n_H));
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
 	// Check that Q was assigned at birth from the stellar mass, independently of the volume check.
@@ -216,6 +243,7 @@ auto problem_main() -> int
 		amrex::Print() << "\n=== Stromgren-volume photoionization validation ===\n";
 		amrex::Print() << "M_star      = " << M_star / C::M_solar << " M_sun\n";
 		amrex::Print() << "Q(M_star)   = " << Q_from_model << " 1/s (target " << Q_target << ")\n";
+		amrex::Print() << "sources     = " << n_sources << ", Q_total = " << Q_total << " 1/s\n";
 		amrex::Print() << "R_St        = " << R_St << " cm (" << R_St / dx_max << " cells)\n";
 		amrex::Print() << "R_eff       = " << R_eff << " cm (" << R_eff / dx_max << " cells)\n";
 		amrex::Print() << "|R_eff - R_St| = " << std::abs(R_eff - R_St) / dx_max << " cells\n";
@@ -233,11 +261,29 @@ auto problem_main() -> int
 				status += 1;
 				amrex::Print() << "  FAIL: ionized volume radius differs from the analytic Stromgren radius by more than one cell\n";
 			}
+			// When the region is smaller than a cell, a one-cell tolerance is vacuous. This is the
+			// subgrid regime the module exists for, so require relative agreement instead.
+			if (R_St < dx_max) {
+				const double R_rel_err = std::abs(R_eff - R_St) / R_St;
+				amrex::Print() << "Subgrid regime (R_St < dx): relative radius error = " << R_rel_err << "\n";
+				if (R_rel_err > 1.0e-3) {
+					status += 1;
+					amrex::Print() << "  FAIL: subgrid ionized volume is wrong, rel_err=" << R_rel_err << "\n";
+				}
+			}
+			// Photon conservation must hold here too, and it is the check that catches a second
+			// source being charged for recombinations an earlier source already paid for.
+			const double recomb_err = std::abs(recomb_total - Q_total) / Q_total;
+			amrex::Print() << "Total recombination rate in ionized region = " << recomb_total << " 1/s (Q_total = " << Q_total << ")\n";
+			if (recomb_err > 1.0e-6) {
+				status += 1;
+				amrex::Print() << "  FAIL: photons are not conserved, rel_err=" << recomb_err << "\n";
+			}
 		} else {
 			// Non-uniform medium: the analytic radius no longer applies, but every ionizing photon
 			// must still be accounted for by a recombination inside the flagged region.
-			const double recomb_err = std::abs(recomb_total - Q_target) / Q_target;
-			amrex::Print() << "Total recombination rate in ionized region = " << recomb_total << " 1/s (Q = " << Q_target << ")\n";
+			const double recomb_err = std::abs(recomb_total - Q_total) / Q_total;
+			amrex::Print() << "Total recombination rate in ionized region = " << recomb_total << " 1/s (Q = " << Q_total << ")\n";
 			if (recomb_err > 1.0e-6) {
 				status += 1;
 				amrex::Print() << "  FAIL: photons are not conserved, rel_err=" << recomb_err << "\n";
