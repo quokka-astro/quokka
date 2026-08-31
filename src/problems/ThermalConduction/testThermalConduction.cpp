@@ -75,8 +75,9 @@ template <> struct Physics_Traits<ThermalConductionProblem> : DefaultPhysicsTrai
 	static constexpr bool is_mhd_enabled = false;
 };
 
-namespace {
-//Note that even in 3D the reference solution is for dimension =1 because of the set up
+namespace
+{
+// Note that even in 3D the reference solution is for dimension =1 because of the set up
 constexpr amrex::Real pattle_q = 2.5; // conductivity exponent: kappa(T) = kappa0 * T^pattle_q (2.5 for Spitzer)
 struct ExactSolutionParams {
 	bool isSpitzer = false;

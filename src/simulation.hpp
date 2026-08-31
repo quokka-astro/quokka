@@ -1302,8 +1302,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 							  amrex::Real Eint = state_mf[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
 							  amrex::Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
 
-				    amrex::Real kappa_spitzer = electronConductionKappa0_ * std::pow(T, 2.5);
-				    amrex::Real const diffusion_coefficient = kappa_spitzer / (rho * c_v);
+							  amrex::Real kappa_spitzer = electronConductionKappa0_ * std::pow(T, 2.5);
+							  amrex::Real const diffusion_coefficient = kappa_spitzer / (rho * c_v);
 
 							  // Avoid division by zero for unphysical states
 							  amrex::Real cell_dt = std::numeric_limits<amrex::Real>::max();
@@ -1311,8 +1311,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 								  cell_dt = cfl * (dx_min * dx_min) / diffusion_coefficient;
 							  }
 
-				    return {.value = cell_dt, .index = amrex::IntVect{AMREX_D_DECL(i, j, k)}};
-			    });
+							  return {.value = cell_dt, .index = amrex::IntVect{AMREX_D_DECL(i, j, k)}};
+						  });
 
 			// Extract the global reduction results
 			conduction_dt = r;
