@@ -27,7 +27,7 @@
 The runtime parameter conduction.conduction_type selects between two independent test setups, each
 with its own initial condition and analytic reference solution, so a single build can validate both
 physics modes (see ElectronConduction.hpp) just by changing that one parameter:
-  - "isotropic": kappa = const. Initial condition is a smooth Gaussian temperature profile
+  - "constant": kappa = const. Initial condition is a smooth Gaussian temperature profile
     (cell-averaged in x via the erf antiderivative). Reference solution is the exact Gaussian
     diffusion solution (sigma_t^2 = sigma^2 + 2*D*t) -- identical to the original amr2-branch test.
   - "spitzer": kappa = kappa0*T^2.5 (pattle_q below; the physical Spitzer value -- see
@@ -43,12 +43,12 @@ physics modes (see ElectronConduction.hpp) just by changing that one parameter:
 Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
 and the energy evolution is purely due to conduction. */
 
-constexpr double Eint0 = 2.505e-8;		  // "isotropic": Gaussian peak. "spitzer": peak at the reference resolution nx_ref (both equivalent to T = 2.e8 K)
+constexpr double Eint0 = 2.505e-8;		  // "constant": Gaussian peak. "spitzer": peak at the reference resolution nx_ref (both equivalent to T = 2.e8 K)
 constexpr double Efloor = 5.674216387016754e-11; // equivalent to T = 2.e6 K
 const double rho0 = 0.1;			  // 1/cm^3
 constexpr double Lref = 7.714e+17;		  // quarter box length
-constexpr double sigma = 2.410685615625e+17;	  // "isotropic" only: width of the initial Gaussian, in cm (amr2-branch value)
-constexpr double D = 4.396303164750053e+28;	  // "isotropic" only: fixed diffusion coefficient for the Gaussian solution, in cm^2/s (amr2-branch value)
+constexpr double sigma = 2.410685615625e+17;	  // "constant" only: width of the initial Gaussian, in cm (amr2-branch value)
+constexpr double D = 4.396303164750053e+28;	  // "constant" only: fixed diffusion coefficient for the Gaussian solution, in cm^2/s (amr2-branch value)
 constexpr int nx_ref = 128;			  // "spitzer" only: resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConduction.toml)
 constexpr double dx0_ref = 4.0 * Lref / nx_ref;
 constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref;
@@ -82,7 +82,7 @@ namespace {
 // one-time setup; evalExactEint() is the actual per-cell "type + position -> Eint" evaluator, used
 // identically by setInitialConditionsOnGrid and computeReferenceSolution. The only difference
 // between "initial condition" and "reference solution" is which t goes into the setup call:
-//   - "isotropic": t=0 for the IC (the smooth Gaussian) is a valid special case of the same
+//   - "constant": t=0 for the IC (the smooth Gaussian) is a valid special case of the same
 //     sigma_t^2 = sigma^2 + 2*D*t formula used for the reference at t=tNew_[0].
 //   - "spitzer": t=stopTime_ for the IC (see header comment); t=tNew_[0]+stopTime_ for the
 //     reference.
@@ -93,7 +93,7 @@ constexpr amrex::Real pattle_q = 2.5; // conductivity exponent: kappa(T) = kappa
 
 struct ExactSolutionParams {
 	bool isSpitzer = false;
-	amrex::Real sigma2_t = 0.0; // "isotropic" only
+	amrex::Real sigma2_t = 0.0; // "constant" only
 	amrex::Real A = 0.0;	     // "spitzer" only: dEint/dT for this EOS
 	amrex::Real r1 = 0.0;	     // "spitzer" only: front position at time t
 	amrex::Real Tscale = 0.0;   // "spitzer" only: amplitude scale at time t
@@ -167,23 +167,9 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	const bool isSpitzer = (conductionType_ == "spitzer");
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 
-	// "spitzer": deposit the analytic Pattle profile at t=spitzer_t_start_frac*stopTime_ (physical
-	// time since the notional Dirac-delta release) instead of a true point source. A delta-like IC
-	// concentrated in 1-2 cells is badly under-resolved regardless of grid resolution (the local
-	// temperature contrast across the source cell's face actually grows with resolution, since the
-	// deposited amplitude scales as 1/dx to keep the total energy fixed), which biases the
-	// conduction flux there and prevents clean convergence. Starting from an already-smooth profile
-	// avoids that. computeReferenceSolution correspondingly evaluates the reference at
-	// t=tNew_[0]+spitzer_t_start_frac*stopTime_, so the run advances physical time from
-	// spitzer_t_start_frac*stopTime_ to (1+spitzer_t_start_frac)*stopTime_ -- i.e. stop_time in the
-	// input file must be set to the desired comparison time divided by (1+spitzer_t_start_frac).
-	// "isotropic": deposit at t=0, which reduces exactly to the smooth Gaussian IC.
 	const ExactSolutionParams params =
 	    computeExactSolutionParams(isSpitzer, rho, electronConductionKappa0_, isSpitzer ? spitzer_t_start_frac * stopTime_ : 0.0);
-	if (isSpitzer) {
-		amrex::Print() << "A (dEint/dT) at initialization: " << params.A << std::endl;
-	}
-
+	
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real xlow = prob_lo[0] + i * dx[0];
@@ -193,11 +179,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
-		if(i==64 ){
-			amrex::Print() << "Initial conditions at the center of the domain: " << std::endl;
-			amrex::Print() << "Density: " << rho << std::endl;
-			amrex::Print() << "Internal Energy: " << Eint << std::endl;
-		}
+
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
@@ -281,10 +263,6 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 	const bool isSpitzer = (conductionType_ == "spitzer");
 
-	// "spitzer": the IC (setInitialConditionsOnGrid) deposits the Pattle profile at
-	// t=spitzer_t_start_frac*stopTime_ instead of a delta function, so physical
-	// time-since-the-notional-delta is tNew_[0]+spitzer_t_start_frac*stopTime_, not tNew_[0].
-	// "isotropic": unaffected, t=tNew_[0] directly as always.
 	const ExactSolutionParams params =
 	    computeExactSolutionParams(isSpitzer, rho, electronConductionKappa0_, isSpitzer ? (t + spitzer_t_start_frac * stopTime_) : t);
 
@@ -316,8 +294,14 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 
 auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 {
-	// Read problem parameters
-	const double max_time = 469054.0075444166; // 1 conduction time
+	// Read stop_time from the input file (e.g. inputs/ThermalConduction.toml) instead of hardcoding it here.
+	double max_time = 0.0;
+	{
+		amrex::ParmParse const pp_root;
+		if (pp_root.query("stop_time", max_time) == 0) {
+			amrex::Abort("runConductionTest requires stop_time to be set in the input file.");
+		}
+	}
 
 	const double CFL_number = 0.3;
 	const int max_timesteps = std::max(2000, nx * 100);
@@ -325,7 +309,7 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, nx, nx};
-	pp.add("max_level", 1);
+	pp.add("max_level", 0);
 	pp.addarr("n_cell", ncells);
 
 	// Set domain bounds using AMReX parameter system
@@ -347,19 +331,11 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 		}
 	}
 
-	const int nvars_fc = Physics_Indices<ThermalConductionProblem>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::foextrap); // periodic
-			BCs_fc[icomp].setHi(idim, amrex::BCType::foextrap);
-		}
-	}
 	// Problem initialization
-	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 
 	sim.cflNumber_ = 0.3;
-	sim.stopTime_ = 469054.0075444166;
+	sim.stopTime_ = max_time;
 
 	// set initial conditions
 	sim.setInitialConditions();
@@ -379,56 +355,67 @@ auto problem_main() -> int
 		BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
 		}
 	}
-	const int nvars_fc = Physics_Indices<ThermalConductionProblem>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::foextrap); // periodic
-			BCs_fc[icomp].setHi(idim, amrex::BCType::foextrap);
-		}
-	}
-	// Problem initialization
-	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc, BCs_fc);
+	// Problem initialization (only used to read conductionType_ from the input file; the actual
+	// test runs below each construct their own QuokkaSimulation via runConductionTest()).
+	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 
-
-	// initialize
-	sim.setInitialConditions();
-
-	// evolve
-	sim.evolve();
-
-	amrex::Real const error_norm = sim.computeErrorNorm();
-	amrex::Print() << "Error norm: " << error_norm << '\n';
+	bool passed = false;
 
 	if (sim.conductionType_ == "spitzer") {
-		// Cleanup and exit
-		amrex::Print() << "Finished." << '\n';
-		return 0;
+		amrex::Vector<int> const resolutions = {32, 64, 128};
+		amrex::Vector<double> errors;
+		for (int nx : resolutions) {
+			double const error = runConductionTest(nx, nx, nx);
+			errors.push_back(error);
+			amrex::Print() << std::format("nx = {:4d}  error norm = {:.6e}\n", nx, error);
+		}
+
+		// Best-fit slope of log(error) vs log(Nx) via ordinary least squares.
+		double sum_x = 0.0;
+		double sum_y = 0.0;
+		double sum_xx = 0.0;
+		double sum_xy = 0.0;
+		int const n = static_cast<int>(resolutions.size());
+		for (int i = 0; i < n; ++i) {
+			double const log_nx = std::log(static_cast<double>(resolutions[i]));
+			double const log_err = std::log(errors[i]);
+			sum_x += log_nx;
+			sum_y += log_err;
+			sum_xx += log_nx * log_nx;
+			sum_xy += log_nx * log_err;
+		}
+		double const mean_x = sum_x / n;
+		double const mean_y = sum_y / n;
+		double const slope = (sum_xy - n * mean_x * mean_y) / (sum_xx - n * mean_x * mean_x);
+		double const intercept = mean_y - slope * mean_x;
+		amrex::Print() << std::format("\nBest-fit line: log(error) = {:.4f} * log(Nx) + {:.4f}\n", slope, intercept);
+
+		// error ~ Nx^slope, so unity convergence order corresponds to |slope| = 1. Converging faster
+		// than first order is fine (no upper bound); only flag it if |slope| is shallower than unity
+		// by more than 10%.
+		amrex::Print() << std::format("Spitzer conduction convergence: |slope| = {:.4f} (unity expected, converging faster is fine)\n", std::abs(slope));
+		passed = std::abs(slope) >= 0.9;
+	} else if (sim.conductionType_ == "constant") {
+		// Single-resolution check against the amr2-branch convergence-study estimate (calibrated
+		// at nx=32, matching inputs/ThermalConduction.toml's amr.n_cell for this test). The
+		// reference solution is a 1D Gaussian that is flat in y and z, so the error norm depends
+		// on the dimensionality of the run.
+		constexpr int nx = 32;
+		double const error_norm = runConductionTest(nx, nx, nx);
+		constexpr amrex::Real estimated_error = (AMREX_SPACEDIM == 1) ? 9.2430e-04 : 1.0318e-03;
+		amrex::Real const delta = std::abs(error_norm - estimated_error) / estimated_error;
+
+		amrex::Print() << std::format("nx = {:4d}  error norm = {:.6e} (expected = {:.6e})\n", nx, error_norm, estimated_error);
+		passed = (delta <= 1.e-04 || error_norm < estimated_error);
+	} else {
+		amrex::Print() << "\nconduction.conduction_type must be \"spitzer\" or \"constant\"\n";
+		return 1;
 	}
 
-	// "isotropic": compare against the full convergence-study estimate. The reference solution is a
-	// 1D Gaussian that is flat in y and z, so the error norm depends on the dimensionality of the run.
-	constexpr amrex::Real estimated_error = (AMREX_SPACEDIM == 1) ? 9.2430e-04 : 1.0318e-03;
-	amrex::Real const delta = std::abs(error_norm - estimated_error) / estimated_error;
-
-	if (delta <= 1.e-04 || error_norm < estimated_error) {
-		amrex::Print() << "\n✓ Thermal conduction test PASSED (error norm " << error_norm << ", expected = " << estimated_error << ")\n";
+	if (passed) {
+		amrex::Print() << "\n✓ Thermal conduction test PASSED\n";
 		return 0;
 	}
-	amrex::Print() << "\n✗ Thermal conduction test FAILED (error norm " << error_norm << ", expected = " << estimated_error << ")\n";
+	amrex::Print() << "\n✗ Thermal conduction test FAILED\n";
 	return 1;
-
-	/***Richardson Extrapolation ****/
-
-	// quokka::richardson::applyQuietDefaults();
-	// quokka::richardson::Parameters params{};
-	// params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	// params.nx_initial = 128;
-	// params.nx_max = 512;
-	// params.expected_rate = 2.0;
-	// params.tolerance = 0.3;
-	// params.test_name = "Thermal Conduction";
-	// params.csv_filename = "thermal_conduction_convergence.csv";
-
-	// return quokka::richardson::run(params, [](int nx) { return runConductionTest(nx); });
 }
