@@ -292,15 +292,22 @@ The module follows the Strömgren-volume technique of Kessel-Deynet & Burkert (2
 
 FIRE-2 sorts the cells near a star by distance and walks outward consuming the budget. Because cells are consumed in order of increasing distance, the consumed set is always a distance-prefix, which is exactly a ball. The walk is therefore equivalent to finding the single radius $R_{\rm St}$ at which the enclosed recombination rate equals $Q$, and that equivalence is exact for an arbitrary, non-uniform density field. Quokka uses this to replace the cross-rank cell sort with a radial-bin histogram and one small MPI reduction per source, which parallelizes cleanly over AMReX boxes and ranks.
 
-The ionizing photon rate is a per-particle property assigned once at birth from the stellar mass. `ToyStellarModel` takes it from the Sternberg, Hoffmann & Pauldrach (2003) grid as recalibrated by Martins, Schaerer & Hillier (2005). Over the O-star main sequence, roughly $15$--$60\,M_\odot$ at $Z \approx Z_\odot$, the rate is well represented by a cubic in $x \equiv \log_{10}(m/M_\odot)$:
+The ionizing photon rate is a per-particle property assigned once at birth from the stellar mass. `ToyStellarModel` takes it from the Sternberg, Hoffmann & Pauldrach (2003) grid as recalibrated by Martins, Schaerer & Hillier (2005). The coefficients are a least-squares fit to all twelve luminosity-class-V rows of their Table 1 (theoretical $T_{\rm eff}$ scale), regressing the tabulated $\log_{10} Q_0$ on $x \equiv \log_{10}(M_{\rm spec}/M_\odot)$:
 
-$$\log_{10} Q_0\ [\mathrm{s}^{-1}] = c_0 + c_1 x + c_2 x^2 + c_3 x^3,$$
+$$\log_{10} Q_0\ [\mathrm{s}^{-1}] = c_0 + c_1 x + c_2 x^2,$$
 
-with $c_0 = 40.0765$, $c_1 = 10.7952$, $c_2 = -4.0785$, $c_3 = 0.5822$. These reproduce the published anchor points $\log_{10} Q_0 = 48.5$, $49.0$ and $49.5$ at $20$, $30$ and $50\,M_\odot$ respectively. The cubic is monotonic in mass everywhere, so it cannot produce the non-physical inversion in which a more massive star ionizes less.
+with $c_0 = 34.3149$, $c_1 = 15.8931$, $c_2 = -4.0825$. The fit spans O9.5V ($16.46\,M_\odot$, $\log_{10} Q_0 = 47.56$) to O3V ($58.34\,M_\odot$, $\log_{10} Q_0 = 49.63$), with an rms residual of $0.036$ dex and a maximum residual of $0.064$ dex.
 
-Below $15\,M_\odot$ -- the lower edge of the fit, around spectral type B0 -- the rate is set to zero rather than extrapolating the polynomial. Extrapolation is badly behaved there: it would credit a $5\,M_\odot$ star with $\sim10^{46}$ photons per second against a true value near $10^{38}$, and in a sampled IMF low-mass stars vastly outnumber O stars, so the spurious contribution would dominate the budget.
+A quadratic is used rather than a cubic deliberately. Fitting a cubic to the same twelve points lowers the rms only from $0.036$ to $0.035$ dex, which is no real gain, but its leading coefficient comes out negative: the cubic peaks at $71\,M_\odot$ and falls thereafter, so it would assign a $150\,M_\odot$ star less ionizing flux than a $37\,M_\odot$ one. The quadratic has the same qualitative flaw only beyond $88\,M_\odot$, outside the tabulated range, and the clamp below removes it entirely.
+
+Outside the tabulated mass range the fit is not extrapolated:
+
+- **Below $16.46\,M_\odot$** the star is later than O9.5V and its ionizing output falls off a cliff, so $Q$ is set to zero. Extrapolating instead would return $\sim10^{43}$ photons per second for a $5\,M_\odot$ star against a true value near $10^{38}$, and because low-mass stars outnumber O stars by orders of magnitude in a sampled IMF, that spurious contribution would dominate the total budget.
+- **Above $58.34\,M_\odot$** the mass is clamped, so $Q$ saturates at the O3V value. This under-predicts genuinely very massive stars — a $100\,M_\odot$ star is given the $58\,M_\odot$ rate, low by roughly a factor of two — which is the conservative direction for a feedback module and is preferable to following the polynomial into its turnover.
 
 The rate is stored in a dedicated particle component and is not refreshed as the particle accretes. The one exception is a star born below the cutoff, which carries $Q = 0$ and is re-evaluated until accretion carries it into the O-star range; at that point $Q$ is assigned from the mass it has then and frozen.
+
+The fit and a figure of $Q(M)$ can be regenerated from the source table with `make_qm_figure.sh`, which re-derives the coefficients rather than hardcoding them.
 
 **Important:** the stellar model assigns $Q$ on the first update, and detects the "not yet assigned" state by the component still being zero. `amrex::ParticleContainer::InitFromAsciiFile` only fills the components present in the file and leaves the rest indeterminate, so a problem that creates star particles that way must explicitly zero the remaining real components. See `src/problems/StromgrenVolumeFeedback/` and `src/problems/ParticleStarEvolution/` for worked examples.
 

@@ -9,10 +9,10 @@
 ///
 ///   R_St = (3 Q / (4 pi alpha_B n_H^2))^(1/3).
 ///
-/// The particle is a 30 M_sun star, one of the published anchor points of the Martins, Schaerer &
-/// Hillier (2005) calibration used by ToyStellarModel, for which log Q0 = 49.0. The test therefore
-/// exercises the real birth-assignment path rather than the Q override, while still knowing Q. It
-/// also checks the calibration directly at all three anchors and at the low-mass cutoff.
+/// The particle is a 30 M_sun star and its ionizing rate comes from the Martins, Schaerer & Hillier
+/// (2005) calibration in ToyStellarModel, so the test exercises the real birth-assignment path rather
+/// than the Q override. It additionally checks that calibration directly against rows of Martins et
+/// al. Table 1, and checks the behaviour outside the tabulated mass range.
 ///
 /// The run is deliberately only a few steps long: with hydro enabled the gas would eventually expand,
 /// but the analytic comparison is only valid while the density is still uniform.
@@ -249,27 +249,40 @@ auto problem_main() -> int
 		amrex::Print() << "R_eff       = " << R_eff << " cm (" << R_eff / dx_max << " cells)\n";
 		amrex::Print() << "|R_eff - R_St| = " << std::abs(R_eff - R_St) / dx_max << " cells\n";
 
-		// Validate the Martins, Schaerer & Hillier (2005) calibration at its published anchor points,
-		// independently of anything the feedback module does with the result.
-		struct Anchor {
+		// Validate the Martins, Schaerer & Hillier (2005) calibration directly against rows of their
+		// Table 1 (luminosity class V, theoretical Teff scale), independently of anything the feedback
+		// module does with the result. The tolerance is the maximum residual of the fit over all twelve
+		// tabulated rows, so this catches a wrong or mistyped coefficient but not the fit's own scatter.
+		struct TableRow {
 			double mass_in_Msun;
 			double log_Q;
 		};
-		const std::array<Anchor, 3> anchors = {{{20.0, 48.5}, {30.0, 49.0}, {50.0, 49.5}}};
-		for (Anchor const &a : anchors) {
-			const double log_Q_model = std::log10(Model::ionizingPhotonRate(a.mass_in_Msun * C::M_solar));
-			const double dex_err = std::abs(log_Q_model - a.log_Q);
-			amrex::Print() << "  anchor M = " << a.mass_in_Msun << " M_sun: log Q0 = " << log_Q_model << " (expected " << a.log_Q << ")\n";
-			if (dex_err > 1.0e-3) {
+		constexpr double fit_tolerance_dex = 0.07;
+		const std::array<TableRow, 5> table = {{{58.34, 49.63}, {37.28, 49.26}, {26.52, 48.63}, {19.82, 48.10}, {16.46, 47.56}}};
+		for (TableRow const &row : table) {
+			const double log_Q_model = std::log10(Model::ionizingPhotonRate(row.mass_in_Msun * C::M_solar));
+			const double dex_err = std::abs(log_Q_model - row.log_Q);
+			amrex::Print() << "  Martins+05 M = " << row.mass_in_Msun << " M_sun: log Q0 = " << log_Q_model << " (table " << row.log_Q << ", "
+				       << dex_err << " dex)\n";
+			if (dex_err > fit_tolerance_dex) {
 				status += 1;
-				amrex::Print() << "  FAIL: Q(m) misses the Martins+2005 anchor by " << dex_err << " dex\n";
+				amrex::Print() << "  FAIL: Q(m) departs from Martins+2005 Table 1 by " << dex_err << " dex\n";
 			}
 		}
 
-		// Below the fit range the cubic must not be extrapolated: a B star contributes nothing.
+		// Below the tabulated range the fit must not be extrapolated: a B star contributes nothing.
 		if (Model::ionizingPhotonRate(10.0 * C::M_solar) != 0.0) {
 			status += 1;
 			amrex::Print() << "  FAIL: a 10 M_sun star was credited with ionizing photons\n";
+		}
+
+		// Above the tabulated range the mass is clamped, so Q saturates rather than turning over. Check
+		// both that the clamp holds and that the function is non-decreasing across it.
+		const double Q_at_top = Model::ionizingPhotonRate(58.34 * C::M_solar);
+		const double Q_above = Model::ionizingPhotonRate(150.0 * C::M_solar);
+		if (Q_above != Q_at_top) {
+			status += 1;
+			amrex::Print() << "  FAIL: Q is not clamped above the tabulated mass range (" << Q_above << " vs " << Q_at_top << ")\n";
 		}
 		if (V_ion <= 0.0) {
 			status += 1;

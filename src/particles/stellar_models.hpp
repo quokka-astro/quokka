@@ -32,27 +32,38 @@ struct ToyStellarModel {
 	static constexpr amrex::Real luminosity_exponent = 3.5;
 
 	// Hydrogen-ionizing photon rate from the Sternberg, Hoffmann & Pauldrach (2003) grid, as
-	// recalibrated by Martins, Schaerer & Hillier (2005). Over the O-star main sequence
-	// (roughly 15-60 M_sun at Z ~ Z_sun), log10 Q0 is well represented by a cubic in
-	// x = log10(m / M_sun):
+	// recalibrated by Martins, Schaerer & Hillier (2005). The coefficients below are a least-squares
+	// fit to all twelve luminosity-class-V rows of their Table 1 (theoretical Teff scale), regressing
+	// the tabulated log10 Q0 on x = log10(M_spec / M_sun):
 	//
-	//   log10 Q0 [1/s] = c0 + c1 x + c2 x^2 + c3 x^3
+	//   log10 Q0 [1/s] = c0 + c1 x + c2 x^2
 	//
-	// The coefficients below reproduce the published Martins et al. anchor points exactly:
-	//   20 M_sun -> log Q0 = 48.5,  30 -> 49.0,  50 -> 49.5,  60 -> 49.65.
-	// The cubic is monotonic in mass everywhere (its derivative has no real roots), so it cannot
-	// produce a non-physical inversion where a more massive star ionizes less.
-	static constexpr amrex::Real Q_ion_c0 = 40.076466;
-	static constexpr amrex::Real Q_ion_c1 = 10.795187;
-	static constexpr amrex::Real Q_ion_c2 = -4.078483;
-	static constexpr amrex::Real Q_ion_c3 = 0.582245;
+	// The fit spans O9.5V (16.46 M_sun, log Q0 = 47.56) to O3V (58.34 M_sun, log Q0 = 49.63), with
+	// an rms residual of 0.036 dex and a maximum residual of 0.064 dex.
+	//
+	// A quadratic is used rather than a cubic deliberately. Fitting a cubic to the same twelve points
+	// lowers the rms only from 0.036 to 0.035 dex -- no real gain -- but its leading coefficient comes
+	// out negative, so it peaks at 71 M_sun and then falls: it would assign a 150 M_sun star less
+	// ionizing flux than a 37 M_sun one. The quadratic has the same qualitative flaw but only beyond
+	// 88 M_sun, well outside the tabulated range, and the clamp below removes it entirely.
+	static constexpr amrex::Real Q_ion_c0 = 34.314866;
+	static constexpr amrex::Real Q_ion_c1 = 15.893125;
+	static constexpr amrex::Real Q_ion_c2 = -4.082487;
 
-	// Lower edge of the fit range, in solar masses. Stars below this are later than about B0 and
-	// their ionizing output is negligible, so Q is set to zero rather than extrapolating the cubic
-	// downward -- extrapolation would credit a 5 M_sun star with ~1e46 photons/s against a true
-	// value near 1e38, and low-mass stars vastly outnumber O stars in a sampled IMF. Returning
-	// early here also keeps log10 away from zero mass, where it would raise a floating-point trap.
-	static constexpr amrex::Real Q_ion_min_mass = 15.0;
+	// Mass range of the Martins et al. table, in solar masses.
+	//
+	// Below the lower edge the star is later than O9.5V and its ionizing output falls off a cliff, so
+	// Q is set to zero rather than extrapolating: the fit continued down to 5 M_sun would return
+	// ~1e43 photons/s against a true value near 1e38, and low-mass stars outnumber O stars by orders
+	// of magnitude in a sampled IMF. The early return also keeps log10 away from zero mass, where it
+	// would raise a floating-point trap.
+	//
+	// Above the upper edge the mass is clamped, so Q saturates at the O3V value instead of running off
+	// into the fit's unphysical turnover. This under-predicts genuinely very massive stars (a 100
+	// M_sun star gets the 58 M_sun rate, low by roughly a factor of two), which is the conservative
+	// direction for a feedback module and is preferable to extrapolating a polynomial past its data.
+	static constexpr amrex::Real Q_ion_min_mass = 16.46;
+	static constexpr amrex::Real Q_ion_max_mass = 58.34;
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto radius(amrex::Real mass) -> amrex::Real
 	{
@@ -77,8 +88,9 @@ struct ToyStellarModel {
 		if (mass_in_solar < Q_ion_min_mass) {
 			return 0.0;
 		}
-		const amrex::Real x = std::log10(mass_in_solar);
-		const amrex::Real log_Q = Q_ion_c0 + (x * (Q_ion_c1 + (x * (Q_ion_c2 + (x * Q_ion_c3)))));
+		const amrex::Real m_eff = (mass_in_solar > Q_ion_max_mass) ? Q_ion_max_mass : mass_in_solar;
+		const amrex::Real x = std::log10(m_eff);
+		const amrex::Real log_Q = Q_ion_c0 + (x * (Q_ion_c1 + (x * Q_ion_c2)));
 		return std::pow(10.0, log_Q);
 	}
 
