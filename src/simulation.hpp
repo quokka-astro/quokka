@@ -1303,7 +1303,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 							  amrex::Real Eint = state_mf[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
 							  amrex::Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
 
-							  amrex::Real kappa_spitzer = kappa0 * std::pow(T, 2.5);
+							  amrex::Real const kappa_spitzer = kappa0 * std::pow(T, 2.5);
 							  amrex::Real const diffusion_coefficient = kappa_spitzer / (rho * c_v);
 
 							  // Avoid division by zero for unphysical states
