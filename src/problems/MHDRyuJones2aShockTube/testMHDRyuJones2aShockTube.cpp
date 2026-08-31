@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testRyuJones2aShockTube.cpp
+/// \file testMHDRyuJones2aShockTube.cpp
 /// \brief Defines the RJ2a MHD Riemann problem (Figure 2a of Ryu & Jones 1995, ApJ 442, 228).
 ///
 
