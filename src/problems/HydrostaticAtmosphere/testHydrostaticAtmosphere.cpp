@@ -30,6 +30,7 @@ template <> struct quokka::EOS_Traits<HydrostaticAtmosphereProblem> {
 };
 
 template <> struct Physics_Traits<HydrostaticAtmosphereProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 };
 
@@ -133,10 +134,6 @@ void QuokkaSimulation<HydrostaticAtmosphereProblem>::computeReferenceSolution(am
 			});
 		}
 	} else {
-		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-									     amrex::Real base_floor) -> amrex::Real {
-			return densityFloor(x, y, z, base_floor);
-		};
 		for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &state_ref = ref.array(iter);
@@ -154,7 +151,7 @@ void QuokkaSimulation<HydrostaticAtmosphereProblem>::computeReferenceSolution(am
 				amrex::Real const z = 0.0;
 #endif
 				amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
-				amrex::Real const rho_floor = density_floor_func(x, y, z, base_density_floor);
+				amrex::Real const rho_floor = QuokkaSimulation<HydrostaticAtmosphereProblem>::densityFloor(x, y, z, base_density_floor);
 				amrex::Real const rho_init = kRhoInitFactor * rho_atm;
 				amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
 

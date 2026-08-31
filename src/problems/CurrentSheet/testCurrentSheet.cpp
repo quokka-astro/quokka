@@ -30,8 +30,10 @@ template <> struct quokka::EOS_Traits<CurrentSheet> {
 };
 
 template <> struct Physics_Traits<CurrentSheet> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::constant; // eta defaults to 0; no-op unless set
 };
 
 // constants
