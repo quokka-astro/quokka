@@ -75,8 +75,8 @@ template <> struct Physics_Traits<ThermalConductionProblem> : DefaultPhysicsTrai
 	static constexpr bool is_mhd_enabled = false;
 };
 
-namespace
-{
+namespace {
+//Note that even in 3D the reference solution is for dimension =1 because of the set up
 constexpr amrex::Real pattle_q = 2.5; // conductivity exponent: kappa(T) = kappa0 * T^pattle_q (2.5 for Spitzer)
 struct ExactSolutionParams {
 	bool isSpitzer = false;
@@ -284,9 +284,6 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/, int max_level = 0) -> dou
 			amrex::Abort("runConductionTest requires stop_time to be set in the input file.");
 		}
 	}
-
-	const double CFL_number = 0.3;
-	const int max_timesteps = std::max(2000, nx * 100);
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
