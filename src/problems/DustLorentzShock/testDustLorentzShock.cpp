@@ -31,14 +31,11 @@ struct ShockProfile {
 
 template <typename problem_t> struct ShockCaseParams;
 
-struct DustLorentzShockRefNeutral {
-};
+struct DustLorentzShockRefNeutral {};
 
-struct DustLorentzShockChargedDilute {
-};
+struct DustLorentzShockChargedDilute {};
 
-struct DustLorentzShockChargedBackreacting {
-};
+struct DustLorentzShockChargedBackreacting {};
 
 template <> struct ShockCaseParams<DustLorentzShockRefNeutral> {
 	static constexpr double sound_speed = 1.0;
@@ -417,19 +414,13 @@ auto runLowMachRegression(bool write_csv) -> int
 }
 } // namespace
 
-template <> struct quokka::EOS_Traits<DustLorentzShockRefNeutral> : ShockEOSTraits<DustLorentzShockRefNeutral> {
-};
-template <> struct quokka::EOS_Traits<DustLorentzShockChargedDilute> : ShockEOSTraits<DustLorentzShockChargedDilute> {
-};
-template <> struct quokka::EOS_Traits<DustLorentzShockChargedBackreacting> : ShockEOSTraits<DustLorentzShockChargedBackreacting> {
-};
+template <> struct quokka::EOS_Traits<DustLorentzShockRefNeutral> : ShockEOSTraits<DustLorentzShockRefNeutral> {};
+template <> struct quokka::EOS_Traits<DustLorentzShockChargedDilute> : ShockEOSTraits<DustLorentzShockChargedDilute> {};
+template <> struct quokka::EOS_Traits<DustLorentzShockChargedBackreacting> : ShockEOSTraits<DustLorentzShockChargedBackreacting> {};
 
-template <> struct Physics_Traits<DustLorentzShockRefNeutral> : ShockPhysicsTraits {
-};
-template <> struct Physics_Traits<DustLorentzShockChargedDilute> : ShockPhysicsTraits {
-};
-template <> struct Physics_Traits<DustLorentzShockChargedBackreacting> : ShockPhysicsTraits {
-};
+template <> struct Physics_Traits<DustLorentzShockRefNeutral> : ShockPhysicsTraits {};
+template <> struct Physics_Traits<DustLorentzShockChargedDilute> : ShockPhysicsTraits {};
+template <> struct Physics_Traits<DustLorentzShockChargedBackreacting> : ShockPhysicsTraits {};
 
 template <>
 AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockRefNeutral>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,

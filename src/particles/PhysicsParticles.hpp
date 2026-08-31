@@ -492,7 +492,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
 							    return acc(i, j, k, comp); // no weighting
 						    },
-						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
+						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType &p, int comp, amrex::Real acc_comp) {
 							    // kick particle by updating its velocity
 							    if (comp < ContainerType::ParticleType::NReal) {
 								    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);

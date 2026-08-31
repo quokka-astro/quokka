@@ -31,11 +31,9 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_density = {1.0, 1
 constexpr bool enable_supersonic_correction = true;
 } // namespace
 
-struct DustDampingDragReference {
-};
+struct DustDampingDragReference {};
 
-struct DustDampingMHDZeroCharge {
-};
+struct DustDampingMHDZeroCharge {};
 
 struct DustDampingHistory {
 	std::vector<double> t_vec_;
@@ -51,11 +49,9 @@ struct DustDampingHistory {
 	std::vector<double> E_gas_vec_;
 };
 
-template <> struct SimulationData<DustDampingDragReference> : DustDampingHistory {
-};
+template <> struct SimulationData<DustDampingDragReference> : DustDampingHistory {};
 
-template <> struct SimulationData<DustDampingMHDZeroCharge> : DustDampingHistory {
-};
+template <> struct SimulationData<DustDampingMHDZeroCharge> : DustDampingHistory {};
 
 template <> struct quokka::EOS_Traits<DustDampingDragReference> {
 	static constexpr double mean_molecular_weight = 1.0;

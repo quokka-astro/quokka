@@ -58,8 +58,7 @@ struct DefaultParticleTraits {
 
 // This struct should be specialized by the user application code to configure particle behavior.
 // Inherits from DefaultParticleTraits so that new parameters added to it don't require updating every problem.
-template <typename problem_t> struct Particle_Traits : DefaultParticleTraits {
-};
+template <typename problem_t> struct Particle_Traits : DefaultParticleTraits {};
 
 // Static assertion helper to verify that particle_switch is of the correct type
 namespace detail

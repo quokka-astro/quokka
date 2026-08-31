@@ -25,8 +25,7 @@
 #include "util/BC.hpp"
 #include "util/richardson.hpp"
 
-struct SlowWaveConvergence {
-};
+struct SlowWaveConvergence {};
 
 template <> struct quokka::EOS_Traits<SlowWaveConvergence> {
 	static constexpr double gamma = 5. / 3.;

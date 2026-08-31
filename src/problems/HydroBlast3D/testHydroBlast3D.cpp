@@ -20,8 +20,7 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
-struct SedovProblem {
-};
+struct SedovProblem {};
 
 // if false, use octant symmetry instead
 constexpr bool simulate_full_box = false;

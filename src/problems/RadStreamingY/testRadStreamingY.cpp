@@ -19,8 +19,7 @@
 #include "util/fextract.hpp"
 #include <format>
 
-struct StreamingProblem {
-};
+struct StreamingProblem {};
 
 constexpr double initial_Erad = 1.0e-5;
 constexpr double initial_Egas = 1.0e-5;

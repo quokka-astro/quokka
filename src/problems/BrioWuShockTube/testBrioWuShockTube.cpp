@@ -28,8 +28,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct MHDShocktubeProblem {
-};
+struct MHDShocktubeProblem {};
 
 template <> struct quokka::EOS_Traits<MHDShocktubeProblem> {
 	static constexpr double gamma = 2.0;

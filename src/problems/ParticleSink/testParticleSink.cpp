@@ -25,8 +25,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct SinkProblem {
-};
+struct SinkProblem {};
 
 static bool refine_half_domain = false; // NOLINT
 

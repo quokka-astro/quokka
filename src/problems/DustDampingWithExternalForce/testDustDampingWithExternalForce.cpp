@@ -50,8 +50,7 @@ auto v_dust1_analytic(double t) -> double;
 auto v_dust2_analytic(double t) -> double;
 auto E_gas_analytic(double t) -> double;
 
-struct DustDampingWithExternalForce {
-};
+struct DustDampingWithExternalForce {};
 
 template <> struct SimulationData<DustDampingWithExternalForce> {
 	std::vector<double> t_vec_;
