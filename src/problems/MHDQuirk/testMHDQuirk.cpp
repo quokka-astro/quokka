@@ -282,10 +282,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<MHDQuirk> sim(BCs_cc, BCs_fc);
 
-	sim.stopTime_ = 0.4;
-	sim.cflNumber_ = 0.4;
-	sim.maxTimesteps_ = 2000;
-
 	// initialize
 	sim.setInitialConditions();
 
