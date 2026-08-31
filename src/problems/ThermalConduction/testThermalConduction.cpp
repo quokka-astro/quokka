@@ -292,7 +292,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 	}
 }
 
-auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
+auto runConductionTest(int nx, int /*ny*/, int /*nz*/, int max_level = 0) -> double
 {
 	// Read stop_time from the input file (e.g. inputs/ThermalConduction.toml) instead of hardcoding it here.
 	double max_time = 0.0;
@@ -309,8 +309,16 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, nx, nx};
-	pp.add("max_level", 0);
+	pp.add("max_level", max_level);
 	pp.addarr("n_cell", ncells);
+	if (max_level > 0) {
+		// The default ghost-cell interpolation at the coarse-fine AMR boundary (method=1) over-limits
+		// for this problem and breaks second-order convergence; method=3 (unlimited linear
+		// conservative interpolation) restores it. Root-level parameter, matching
+		// inputs/ThermalConduction.toml.
+		amrex::ParmParse pp_root;
+		pp_root.add("amr_interpolation_method", 3);
+	}
 
 	// Set domain bounds using AMReX parameter system
 	amrex::ParmParse pp_geom("geometry");
@@ -393,9 +401,11 @@ auto problem_main() -> int
 		amrex::Print() << std::format("Spitzer conduction convergence: |slope| = {:.4f} (unity expected, converging faster is fine)\n", std::abs(slope));
 		passed = std::abs(slope) >= 0.9;
 	} else if (sim.conductionType_ == "constant") {
-		// Single-resolution check against the full resolution study
+		// Single-resolution check against the full resolution study. max_level=1 (matching
+		// inputs/ThermalConduction.toml) so this actually exercises AMR refinement.
 		constexpr int nx = 32;
-		double const error_norm = runConductionTest(nx, nx, nx);
+		constexpr int max_level = 1;
+		double const error_norm = runConductionTest(nx, nx, nx, max_level);
 		constexpr amrex::Real estimated_error = (AMREX_SPACEDIM == 1) ? 9.2430e-04 : 1.0318e-03;
 		amrex::Real const delta = std::abs(error_norm - estimated_error) / estimated_error;
 
