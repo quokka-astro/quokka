@@ -201,15 +201,15 @@ auto problem_main() -> int
 	// rho * x_ion and must be divided by rho to recover the fraction.
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.Geom(0).CellSizeArray();
 	const double cell_volume = dx[0] * dx[1] * dx[2];
-	double x_ion_sum = amrex::ReduceSum(
-	    sim.state_new_cc_[0], 0, [=] AMREX_GPU_HOST_DEVICE(amrex::Box const &bx, amrex::Array4<const amrex::Real> const &arr) -> amrex::Real {
-		    amrex::Real local_sum = 0.0;
-		    amrex::Loop(bx, [&](int i, int j, int k) noexcept {
-			    const amrex::Real rho = arr(i, j, k, HydroSystem<StromgrenVolumeProblem>::density_index);
-			    local_sum += arr(i, j, k, HydroSystem<StromgrenVolumeProblem>::scalar0_index) / rho;
-		    });
-		    return local_sum;
-	    });
+	double x_ion_sum = amrex::ReduceSum(sim.state_new_cc_[0], 0,
+					    [=] AMREX_GPU_HOST_DEVICE(amrex::Box const &bx, amrex::Array4<const amrex::Real> const &arr) -> amrex::Real {
+						    amrex::Real local_sum = 0.0;
+						    amrex::Loop(bx, [&](int i, int j, int k) noexcept {
+							    const amrex::Real rho = arr(i, j, k, HydroSystem<StromgrenVolumeProblem>::density_index);
+							    local_sum += arr(i, j, k, HydroSystem<StromgrenVolumeProblem>::scalar0_index) / rho;
+						    });
+						    return local_sum;
+					    });
 	amrex::ParallelDescriptor::ReduceRealSum(x_ion_sum);
 	const double V_ion = x_ion_sum * cell_volume;
 
