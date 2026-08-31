@@ -43,13 +43,13 @@ physics modes (see ElectronConduction.hpp) just by changing that one parameter:
 Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
 and the energy evolution is purely due to conduction. */
 
-constexpr double Eint0 = 2.505e-8;		  // "constant": Gaussian peak. "spitzer": peak at the reference resolution nx_ref (both equivalent to T = 2.e8 K)
+constexpr double Eint0 = 2.505e-8; // "constant": Gaussian peak. "spitzer": peak at the reference resolution nx_ref (both equivalent to T = 2.e8 K)
 constexpr double Efloor = 5.674216387016754e-11; // equivalent to T = 2.e6 K
-const double rho0 = 0.1;			  // 1/cm^3
-constexpr double Lref = 7.714e+17;		  // quarter box length
-constexpr double sigma = 2.410685615625e+17;	  // "constant" only: width of the initial Gaussian, in cm (amr2-branch value)
-constexpr double D = 4.396303164750053e+28;	  // "constant" only: fixed diffusion coefficient for the Gaussian solution, in cm^2/s (amr2-branch value)
-constexpr int nx_ref = 128;			  // "spitzer" only: resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConduction.toml)
+const double rho0 = 0.1;			 // 1/cm^3
+constexpr double Lref = 7.714e+17;		 // quarter box length
+constexpr double sigma = 2.410685615625e+17;	 // "constant" only: width of the initial Gaussian, in cm (amr2-branch value)
+constexpr double D = 4.396303164750053e+28;	 // "constant" only: fixed diffusion coefficient for the Gaussian solution, in cm^2/s (amr2-branch value)
+constexpr int nx_ref = 128; // "spitzer" only: resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConduction.toml)
 constexpr double dx0_ref = 4.0 * Lref / nx_ref;
 constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref;
 // "spitzer" only: the IC is the analytic solution at physical time t_start = spitzer_t_start_frac *
@@ -75,7 +75,8 @@ template <> struct Physics_Traits<ThermalConductionProblem> : DefaultPhysicsTrai
 	static constexpr bool is_mhd_enabled = false;
 };
 
-namespace {
+namespace
+{
 // The exact solution for either conduction_type is a function of (x, t); evaluating it requires a
 // few scalars precomputed once per t (an EOS lookup and Gamma-function evaluations for "spitzer" --
 // too expensive, and not GPU-portable, to redo per cell). computeExactSolutionParams() is that
@@ -87,15 +88,15 @@ namespace {
 //   - "spitzer": t=stopTime_ for the IC (see header comment); t=tNew_[0]+stopTime_ for the
 //     reference.
 constexpr amrex::Real pattle_q = 2.5; // conductivity exponent: kappa(T) = kappa0 * T^pattle_q (2.0 for
-				       // this experiment, not the physical Spitzer value of 2.5 -- must
-				       // match ElectronConduction.hpp and simulation.hpp, kept in sync
-				       // manually since this isn't yet a runtime parameter)
+				      // this experiment, not the physical Spitzer value of 2.5 -- must
+				      // match ElectronConduction.hpp and simulation.hpp, kept in sync
+				      // manually since this isn't yet a runtime parameter)
 
 struct ExactSolutionParams {
 	bool isSpitzer = false;
 	amrex::Real sigma2_t = 0.0; // "constant" only
-	amrex::Real A = 0.0;	     // "spitzer" only: dEint/dT for this EOS
-	amrex::Real r1 = 0.0;	     // "spitzer" only: front position at time t
+	amrex::Real A = 0.0;	    // "spitzer" only: dEint/dT for this EOS
+	amrex::Real r1 = 0.0;	    // "spitzer" only: front position at time t
 	amrex::Real Tscale = 0.0;   // "spitzer" only: amplitude scale at time t
 };
 
@@ -110,8 +111,8 @@ auto computeExactSolutionParams(bool isSpitzer, amrex::Real rho, amrex::Real kap
 		// additive offset. M0 (fixed across resolutions, see above) is what makes this same
 		// analytic solution valid at every resolution.
 		const amrex::Real A = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, 1.0); // A = mu * mp/rho/kb
-		const amrex::Real D0 = kappa0 / A;							      // D(T) = D0 * T^pattle_q
-		const amrex::Real Q0 = M0 / A;								      // excess-T quantity released
+		const amrex::Real D0 = kappa0 / A;							    // D(T) = D0 * T^pattle_q
+		const amrex::Real Q0 = M0 / A;								    // excess-T quantity released
 		const amrex::Real Gamma_num = std::tgamma(1.0 / pattle_q + 1.5);
 		const amrex::Real Gamma_den = std::tgamma(1.0 / pattle_q + 1.0);
 		const amrex::Real r0 = (Q0 / std::sqrt(M_PI)) * Gamma_num / Gamma_den;
@@ -169,7 +170,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 
 	const ExactSolutionParams params =
 	    computeExactSolutionParams(isSpitzer, rho, electronConductionKappa0_, isSpitzer ? spitzer_t_start_frac * stopTime_ : 0.0);
-	
+
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real xlow = prob_lo[0] + i * dx[0];
@@ -359,11 +360,11 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-		BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
-		BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
+			BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
+			BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
 		}
 	}
-	// Problem initialization 
+	// Problem initialization
 	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 
 	bool passed = false;
@@ -398,7 +399,8 @@ auto problem_main() -> int
 		amrex::Print() << std::format("\nBest-fit line: log(error) = {:.4f} * log(Nx) + {:.4f}\n", slope, intercept);
 
 		// error ~ Nx^slope for Pattle IC
-		amrex::Print() << std::format("Spitzer conduction convergence: |slope| = {:.4f} (unity expected, converging faster is fine)\n", std::abs(slope));
+		amrex::Print() << std::format("Spitzer conduction convergence: |slope| = {:.4f} (unity expected, converging faster is fine)\n",
+					      std::abs(slope));
 		passed = std::abs(slope) >= 0.9;
 	} else if (sim.conductionType_ == "constant") {
 		// Single-resolution check against the full resolution study. max_level=1 (matching

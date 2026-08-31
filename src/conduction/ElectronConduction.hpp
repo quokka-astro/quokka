@@ -31,20 +31,20 @@ struct ElectronConductionParams {
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
 	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
-	bool spitzer_scaling = true;	      // if true, kappa(T) = conductivity_prefactor * T^2.5 (Spitzer);
-					      // if false, kappa(T) = conductivity_prefactor (constant, isotropic)
-	int reconstruction_order = 3;	      // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM;
+	bool spitzer_scaling = true;	     // if true, kappa(T) = conductivity_prefactor * T^2.5 (Spitzer);
+					     // if false, kappa(T) = conductivity_prefactor (constant, isotropic)
+	int reconstruction_order = 3;	     // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM;
 	SlopeLimiter plm_limiter = SlopeLimiter::sweby;
-	int ng_reconstruct = 2;	      // number of ghost faces to reconstruct beyond the valid box
+	int ng_reconstruct = 2; // number of ghost faces to reconstruct beyond the valid box
 };
 
 template <typename problem_t> class ElectronConduction
 {
       public:
-	//Reconstruct rho and T at the interfaces
+	// Reconstruct rho and T at the interfaces
 	template <FluxDir DIR>
 	static void ReconstructPrimVar(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int ng_reconstruct,
-					ElectronConductionParams const &params)
+				       ElectronConductionParams const &params)
 	{
 		constexpr int nvars = 2;
 		if (params.reconstruction_order == 5) {
@@ -52,7 +52,8 @@ template <typename problem_t> class ElectronConduction
 		} else if (params.reconstruction_order == 3) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 		} else if (params.reconstruction_order == 2) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars, params.plm_limiter);
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars,
+											params.plm_limiter);
 		} else if (params.reconstruction_order == 1) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 		} else {
@@ -138,8 +139,8 @@ template <typename problem_t> class ElectronConduction
 			     , ReconstructPrimVar<FluxDir::X2>(primVar, leftState[1], rightState[1], ng_reconstruct, params);
 			     , ReconstructPrimVar<FluxDir::X3>(primVar, leftState[2], rightState[2], ng_reconstruct, params);)
 
-		auto const evaluateFace = [=] AMREX_GPU_DEVICE(amrex::Real rho_L, amrex::Real T_L, amrex::Real rho_R, amrex::Real T_R,
-								amrex::Real &kappa_face, amrex::Real &qsat_face) noexcept {
+		auto const evaluateFace = [=] AMREX_GPU_DEVICE(amrex::Real rho_L, amrex::Real T_L, amrex::Real rho_R, amrex::Real T_R, amrex::Real & kappa_face,
+							       amrex::Real & qsat_face) noexcept {
 			const amrex::Real rho_face = 0.5 * (rho_L + rho_R);
 			const amrex::Real T_face = amrex::max(0.5 * (T_L + T_R), t_min);
 			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {};
