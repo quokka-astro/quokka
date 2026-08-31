@@ -344,7 +344,7 @@ auto problem_main() -> int
 		}
 	}
 	// Problem initialization
-	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
+	const QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 
 	bool passed = false;
 
