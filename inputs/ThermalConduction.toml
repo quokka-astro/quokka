@@ -26,12 +26,25 @@ amr_interpolation_method = 3
 do_reflux = 1
 do_subcycle = 0
 
-stop_time = 375243.20603553328 # "1 conduction time" / 1.25 -- see NOTE above
 cfl = 0.3
 
+cooling.enabled = 0
+cooling.read_tables_even_if_disabled = 1
+cooling.cooling_table_type = "resampled"
+cooling.hdf5_data_file = "CloudyData_UVB=HM2012_resampled.h5"
+
 conduction.enabled = 1
-conduction.conductivity_prefactor = 0.6113916490935586e12
 conduction.flux_limiter_phi = 1
 conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
+suppress_output = 0
+
+#Spitzer IC
 conduction.conduction_type = "spitzer"
+conduction.conductivity_prefactor = 5.40e-10
+stop_time = 660942.2643981476
+
+#Constant IC
+#conduction.conduction_type = "constant"
+#conduction.conductivity_prefactor = 0.6113916490935586e12
+#stop_time = 469054.0075444166
