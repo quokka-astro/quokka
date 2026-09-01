@@ -99,11 +99,13 @@ The accretion rate deposited in each cell is \\(-\dot{M} \, w_i / \sum_i w_i\\) 
 
 ### Accretion limiters
 
-Two corrections are applied to the per-cell accretion rate, in the following order:
+The following corrections are applied to the per-cell accretion rate, in order:
 
 1. **Mass removal cap**: No more than 25% of a cell's mass may be removed in a single timestep (Krumholz et al. 2004). This prevents artificial sound waves from being launched by rapid density changes.
 
 2. **Jeans density floor**: If the post-accretion cell density would still exceed the Jeans density \\(\rho_J\\), the accretion rate is increased so that the final density equals \\(\rho_J\\). This is safe because such cells are at the centre of highly supersonic convergence and are causally disconnected from their surroundings.
+
+3. **Configured density and Alfvén-speed floors**: Accretion cannot reduce a cell below its configured local density floor. For MHD runs with a positive `particles.sink_max_alfven_speed`, the final density is also constrained by \\(\rho \geq B'^2/v_{A,\max}^2 = 2E_B/v_{A,\max}^2\\), where Quokka stores \\(B'=B/\sqrt{4\pi}\\). A negative value disables the Alfvén limiter.
 
 ### Momentum accretion
 
@@ -124,6 +126,7 @@ The accretion rate is computed using gas velocities in the particle frame (\\(\v
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `particles.sink_particle_use_uniform_kernel` | Boolean | `0` | Use uniform accretion kernel (for testing) |
+| `particles.sink_max_alfven_speed` | Float | `-1.0` | Maximum post-accretion Alfvén speed in cm/s. A negative value disables the limiter; zero is invalid. |
 
 ### Examples
 
@@ -137,11 +140,13 @@ The `ParticleSinkFormation` test validates combined sink particle formation and 
 
 #### ParticleSink Test
 
-The `ParticleSink` test validates Bondi-Hoyle accretion and Galilean invariance. It runs in three phases:
+The `ParticleSink` test validates Bondi-Hoyle accretion, Galilean invariance, density floors, and the Alfvén-speed limiter. It runs in five phases:
 
 1. **Base simulation**: Runs with zero boost velocity and validates the density profile against an analytical solution.
 2. **Boosted simulation**: Runs with a boost velocity of \\(10^8\\) cm/s and verifies that the density profile matches the analytical solution, demonstrating Galilean invariance.
 3. **Multi-timestep evolution**: Continues the boosted simulation for additional timesteps and validates total mass conservation to machine precision.
+4. **Parser-derived density floor**: Applies sink accretion and verifies that the minimum density equals the spatially configured floor.
+5. **Alfvén-speed limiter**: Enables a limiting speed whose implied density floor exceeds the parser floor, then validates both the final minimum density and total mass conservation.
 
 ## StochasticStellarPop Particle Type
 
@@ -285,10 +290,10 @@ When a progenitor star reaches its death time, it explodes as a Type II supernov
 The terminal momentum is density-dependent and scales as:
 
 <script type="math/tex; mode=display">
-p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{-0.17}
+p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{\alpha_p}
 </script>
 
-where \\(n_{\text{H}}\\) is the ambient hydrogen number density averaged over the deposition kernel.
+where \\(n_{\text{H}}\\) is the ambient hydrogen number density averaged over the deposition kernel and \\(\alpha_p = -0.17\\) by default (configurable via `particles.SN_p_term_exponent`).
 
 #### Deposition Kernel
 
@@ -372,6 +377,7 @@ The cross term <script type="math/tex">\vec{v}_{\text{COM}} \cdot \vec{p}_{\text
 |-----------|------|---------|-------------|
 | `particles.SN_scheme` | String | `SN_thermal_or_thermal_momentum` | Feedback scheme (see above) |
 | `particles.SN_p_term_Msunkmps` | Float | `2.8e5` | Terminal momentum \\(p_{\text{snr},0}\\) in units of \\(M_\odot\,\mathrm{km\,s}^{-1}\\). The shell-formation mass \\(M_\mathrm{sf}\\) is scaled as \\((p/p_\mathrm{canonical})^2\\) to preserve the kinetic energy \\(p^2/(2M_\mathrm{sf})\\). |
+| `particles.SN_p_term_exponent` | Float | `-0.17` | Exponent \\(\alpha_p\\) of the ambient-density scaling of the terminal momentum, \\(p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{\alpha_p}\\). |
 | `particles.disable_SN_feedback` | Boolean | `0` | Disable SN feedback entirely |
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
 | `particles.stellar_velocity_limit` | Float | \\(10^8\\) cm/s | Maximum allowed stellar velocity (aborts if exceeded) |

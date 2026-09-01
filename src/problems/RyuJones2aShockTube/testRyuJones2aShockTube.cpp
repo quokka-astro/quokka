@@ -28,8 +28,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct RyuJones2aShockTubeProblem {
-};
+struct RyuJones2aShockTubeProblem {};
 
 template <> struct quokka::EOS_Traits<RyuJones2aShockTubeProblem> {
 	static constexpr double gamma = 5. / 3.;
@@ -37,6 +36,7 @@ template <> struct quokka::EOS_Traits<RyuJones2aShockTubeProblem> {
 };
 
 template <> struct Physics_Traits<RyuJones2aShockTubeProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };

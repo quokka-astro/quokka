@@ -11,8 +11,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct DustHallPedersenDrift {
-};
+struct DustHallPedersenDrift {};
 
 namespace
 {
