@@ -113,7 +113,8 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real seed_Rmax{};
 	amrex::Real seed_Lz{};
 	amrex::Real seed_B0_HL{};
-	amrex::Real seed{};
+	std::string seed_str;                 // magnetic seed, kept as exact text (too large for double/int64)
+	amrex::Vector<long long> turb_seeds;   // per-MPI-rank turbulence RNG seeds, index = rank
 
 	// Vector allocation on the GPU
 	amrex::Gpu::DeviceVector<amrex::Real> Aphi_device;
@@ -123,8 +124,15 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real sn_momentum{2.8e5};  // in units of M_sun * km/s
 	amrex::Real star_formation_efficiency{0.5}; // fraction of stellar mass that remains as a compact remnant
 	amrex::Real sn_ejecta_mass_msun{10.0};   // Mej, solar masses
-	amrex::Real sn_cluster_momentum_exponent{0.75};
+	amrex::Real sn_cluster_momentum_exponent{0.0};  // exponent for scaling momentum injection with cluster mass
 	amrex::Real sn_mass_per_event_msun{100.0};
+	// NOTE: the cumulative *N_SN event* count is NOT tracked here anymore -- it uses the
+	// base AMRSimulation::sn_count_/sn_count_cumulative_ members instead, since those are
+	// already round-tripped through checkpoint/plotfile metadata (writeSFHToMetadata/readSFH)
+	// and therefore survive chained restarts. A userData_ field would silently reset to 0
+	// at the start of every chained job segment.
+	amrex::Long sn_trigger_count_cumulative{0};  // cumulative # of cells that crossed the Jeans trigger
+	                                              // (secondary diagnostic only; not checkpoint-persistent)
 
 	// turbulence parameters
 	// Owning GPU storage for the vx/vy/vz turbulence cubes loaded from binary files.
@@ -357,6 +365,23 @@ load_bin_to_device(const std::string &path, std::size_t n_expect) -> amrex::Gpu:
     return dev;
 }
 
+inline auto load_turb_seeds(const std::string &path) -> amrex::Vector<long long>
+{
+	amrex::Vector<long long> seeds;
+	std::ifstream f(path);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f, ("Cannot open turbulence seed file " + path).c_str());
+	std::string line;
+	while (std::getline(f, line)) {
+		std::size_t start = line.find_first_not_of(" \t\r\n");
+		if (start == std::string::npos) { continue; }
+		std::size_t end = line.find_last_not_of(" \t\r\n");
+		line = line.substr(start, end - start + 1);
+		if (line.empty() || line[0] == '#') { continue; }
+		seeds.push_back(std::stoll(line));
+	}
+	return seeds;
+}
+
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE
 auto cellSphereOverlapFraction(double di, double dj, double dk,
                                 double dxu, double dyu, double dzu,
@@ -494,14 +519,18 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 					userData_.seed_Lz = std::stod(val_str);
 				} else if (key == "seed_B0_HL") {
 					userData_.seed_B0_HL = std::stod(val_str);
-				} else if (key == "seed") {
-    				userData_.seed = std::stod(val_str);
+				} else if (key == "seed_seed") {
+					userData_.seed_str = val_str;   // store raw digits verbatim, no numeric conversion
 				}
 			} catch (const std::exception& e) {
 				continue;
 			}
 		}
 		meta_file.close();
+
+		if (userData_.seed_str.empty()) {
+			amrex::Print() << "WARNING: no 'seed_seed' key found while parsing " << aphi_meta_file << "\n";
+		}
 
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_nR > 0 && userData_.seed_nz > 0,
 			"Error parsing cylindrical vector potential meta variables from init_seed_pot_field.");
@@ -565,6 +594,28 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		    load_bin_to_device(turb_vz_file, n_turb);
 
 
+		std::string turb_seed_file;
+		pp.query("turb_seed_file", turb_seed_file);   // add this key to your inputs file
+		if (!turb_seed_file.empty()) {
+			userData_.turb_seeds = load_turb_seeds(turb_seed_file);
+			const int nprocs = amrex::ParallelDescriptor::NProcs();
+
+			amrex::Print() << "Turbulence seed file: " << turb_seed_file << "\n"
+							<< "  NProcs = " << nprocs
+							<< ", seeds read = " << userData_.turb_seeds.size() << "\n";
+
+			if (static_cast<int>(userData_.turb_seeds.size()) != nprocs) {
+				amrex::Print() << "  WARNING: seed count (" << userData_.turb_seeds.size()
+								<< ") != NProcs (" << nprocs << ")\n";
+			}
+
+			amrex::Print() << "  per-rank seeds:";
+			for (std::size_t r = 0; r < userData_.turb_seeds.size(); ++r) {
+				amrex::Print() << " [" << r << "]=" << userData_.turb_seeds[r];
+			}
+			amrex::Print() << "\n";
+		}
+
 		// perturbations.py produces unit RMS velocity fields
 		constexpr double turb_rescale = turb_target_Mach * quokka::EOS_Traits<MHDGalaxy>::cs_disk;
 		userData_.turb_rescale_factor = turb_rescale;
@@ -590,11 +641,11 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		<< "MHDGalaxy init complete\n"
 		<< "Mc=" << userData_.Mc
 		<< " Q=" << userData_.Q_mean
-		<< " Sigma0=" << userData_.Sigma0 
-		<< " Seed=" << userData_.seed << "\n"
+		<< " Sigma0=" << userData_.Sigma0
+		<< " Seed=" << (userData_.seed_str.empty() ? std::string("<not found>") : userData_.seed_str) << "\n"
 		<< "sn_mass_per_event_msun=" << userData_.sn_mass_per_event_msun
 		<< " sn_cluster_momentum_exponent=" << userData_.sn_cluster_momentum_exponent << "\n"
-		<< "M_solar=" <<  C::M_solar << "\n";
+		<< "M_solar=" << C::M_solar << "\n";
 }
 
 // Set initial conditions on the grid by evaluating the analytic disk density and velocity profiles at cell centers, 
@@ -1073,6 +1124,13 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 	const double cluster_exponent = userData_.sn_cluster_momentum_exponent;
 	const double M_cluster_per_SN = amrex::max(userData_.sn_mass_per_event_msun, 1.0e-3) * MSUN;
 	const double sfe = userData_.star_formation_efficiency;
+
+	// Accumulated across all AMR levels for this coarse step. Fed into the base
+	// AMRSimulation::sn_count_/sn_count_cumulative_ members after the level loop
+	// below, rather than into a userData_ field, so the cumulative count survives
+	// checkpoint/restart (see the note on sn_trigger_count_cumulative in
+	// SimulationData<MHDGalaxy> for why the trigger count does NOT get this treatment).
+	amrex::Long total_sn_events_this_step = 0;
  
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		auto &state          = state_new_cc_[lev];
@@ -1111,6 +1169,11 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 		delta.setVal(0.0);
  
 		// --- Pass 1: gather kernel sums + deposit momentum (direct, unlimited) ---
+		amrex::Gpu::DeviceScalar<int> d_sn_events_lev(0);
+		amrex::Gpu::DeviceScalar<int> d_triggered_lev(0);
+		int* p_sn_events_lev = d_sn_events_lev.dataPtr();
+		int* p_triggered_lev = d_triggered_lev.dataPtr();
+
 		for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 			const amrex::Box &box = mfi.validbox();
 			auto const &s = state.const_array(mfi);
@@ -1143,6 +1206,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				const double M_cell  = rho * vol;
 				const double M_stars = sfe * M_cell;
 				const int N_SN = amrex::max(1, static_cast<int>(std::floor(M_stars / M_cluster_per_SN)));
+				amrex::Gpu::Atomic::Add(p_triggered_lev, 1);
+				amrex::Gpu::Atomic::Add(p_sn_events_lev, N_SN);
  
 				// --- Gather kernel sums: fractional-overlap-weighted mass + momentum ---
 				double omega_sum = 0.0;
@@ -1247,6 +1312,20 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 			});
 		}
 		amrex::Gpu::streamSynchronize();
+
+		int n_sn_events_lev = d_sn_events_lev.dataValue();
+		int n_triggered_lev = d_triggered_lev.dataValue();
+		amrex::ParallelAllReduce::Sum(n_sn_events_lev, amrex::ParallelContext::CommunicatorSub());
+		amrex::ParallelAllReduce::Sum(n_triggered_lev, amrex::ParallelContext::CommunicatorSub());
+
+		total_sn_events_this_step             += n_sn_events_lev;
+		userData_.sn_trigger_count_cumulative += static_cast<amrex::Long>(n_triggered_lev);
+
+		if (n_sn_events_lev > 0) {
+			amrex::Print() << "  [lev " << lev << "] SN events this step: " << n_sn_events_lev
+			                << " (" << n_triggered_lev << " triggered cells)\n";
+		}
+
 		delta.SumBoundary(geom[lev].periodicity());
  
 		// --- Pass 2: apply directly. Eint (and therefore temperature) held fixed;
@@ -1286,18 +1365,25 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				s(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index)     = pz_new;
 				s(i, j, k, HydroSystem<MHDGalaxy>::internalEnergy_index) = Eint_new;
 				s(i, j, k, HydroSystem<MHDGalaxy>::energy_index)         = Etot_new;
-				printf("SN injection at lev %d, cell (%d,%d,%d): dpx=%g, dpy=%g, dpz=%g\n",
-					lev, i, j, k, dpx, dpy, dpz);
-
-				printf("  rho=%g, px_old=%g, py_old=%g, pz_old=%g, Eint_old=%g, Etot_old=%g\n",
-					rho, px_old, py_old, pz_old, Eint_old, Etot_old);
-
-				printf("  px_new=%g, py_new=%g, pz_new=%g, Eint_new=%g, Etot_new=%g\n",
-					px_new, py_new, pz_new, Eint_new, Etot_new);
 			});
 		}
 		amrex::Gpu::streamSynchronize();
 	}
+
+	// Feed the framework's own checkpoint-persistent counters (defined in
+	// AMRSimulation<problem_t>, base class of QuokkaSimulation<problem_t>) instead of
+	// a userData_ field, so sn_count_cumulative_ survives chained checkpoint/restart via
+	// the existing writeSFHToMetadata()/readSFH() round-trip -- see WriteCheckpointFile(),
+	// WritePlotFile(), and ReadCheckpointFile() in simulation.hpp.
+	sn_count_ = static_cast<int>(total_sn_events_this_step);
+	sn_count_cumulative_ += static_cast<int>(total_sn_events_this_step);
+
+	if (sn_count_ > 0) {
+		amrex::Print() << "SN events this step: " << sn_count_
+		                << " | cumulative: " << sn_count_cumulative_
+		                << " (trigger cells, cumulative: " << userData_.sn_trigger_count_cumulative << ")\n";
+	}
+
 	AverageDown();
 }
 
@@ -1649,6 +1735,12 @@ auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics()
     stats["divB_rms_normalized"] = (divB_sums[2] > 0.0)
         ? std::sqrt(divB_sums[1] / divB_sums[2])
         : static_cast<amrex::Real>(0.0);
+	// sn_count_cumulative_ is the base-class (AMRSimulation<problem_t>) member -- it is
+	// round-tripped through checkpoint/plotfile metadata (writeSFHToMetadata/readSFH), so
+	// this stays correct across chained restarts. sn_trigger_count_cumulative is a
+	// userData_ field and is NOT checkpoint-persistent (resets to 0 each job segment).
+	stats["sn_count_cumulative"]         = static_cast<amrex::Real>(sn_count_cumulative_);
+    stats["sn_trigger_count_cumulative"] = static_cast<amrex::Real>(userData_.sn_trigger_count_cumulative);
     return stats;
 }
 
