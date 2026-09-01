@@ -27,12 +27,22 @@ The initial condition for the test problem for running a wind-cloud problem. */
 
 
 
+using amrex::Real;
+
+constexpr double seconds_in_year = 3.1536e7;
+
 const double Twind = 3.e6;
 const double Tcloud  = 1.e4;
 const double rho_cloud = 0.006 * C::m_p; // g/cm^3
 AMREX_GPU_MANAGED double Mach = 4.0; // Mach number of the wind; overridden via ParmParse in problem_main()
 const double R0 = 545 * C::parsec; // radius of the cloud
 const double TracerPerVolume = 1.e3; // tracer content per volume
+
+// frame-tracking globals (set inside problem_main() / computeAfterTimestep())
+bool do_frame_shift = true;			      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real v_wind = NAN;		      // wind speed (z direction)
+AMREX_GPU_MANAGED Real cloud_crushing_time = NAN;    // t_cc, estimated from R0 and v_wind
+AMREX_GPU_MANAGED Real delta_vz = 0;		      // cumulative center-of-mass frame velocity offset
 
 struct ThermalConductionProblem {
 };
@@ -91,7 +101,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 			rho = rho_cloud * Tcloud / Twind; // g/cm^3
 			amrex::Real pressure = rho * T * C::k_B / C::m_u;
 			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
-			vz = Mach * cs_wind; // 100 km/s
+			vz = ::v_wind; // set in problem_main(), so it stays consistent with the frame-shift BC
 		}
 		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 		/*-------------------------------------------------*/
@@ -158,6 +168,80 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 	});
 	amrex::Gpu::streamSynchronize();
 }
+
+
+template <> void QuokkaSimulation<ThermalConductionProblem>::computeAfterTimestep()
+{
+	const Real dt_coarse = dt_[0];
+	const Real time = tNew_[0];
+
+	// perform Galilean transformation (velocity shift to center-of-mass frame)
+	// N.B. the wind flows along z here, so we track/shift the z-momentum (cf. testShockCloud.cpp,
+	// which tracks x-momentum). t_cc is only used for diagnostics below, not to gate the shift,
+	// since (unlike ShockCloud) the wind is already interacting with the cloud from t=0.
+	if (::do_frame_shift) {
+
+		// N.B. must weight by the cloud tracer, since the wind also carries momentum!
+		int const nc = 1; // number of components in temporary MF
+		int const ng = 0; // number of ghost cells in temporary MF
+		amrex::MultiFab temp_mf(boxArray(0), DistributionMap(0), nc, ng);
+
+		// compute z-momentum weighted by cloud tracer
+		amrex::MultiFab::Copy(temp_mf, state_new_cc_[0], HydroSystem<ThermalConductionProblem>::x3Momentum_index, 0, nc, ng);
+		amrex::MultiFab::Multiply(temp_mf, state_new_cc_[0], HydroSystem<ThermalConductionProblem>::scalar0_index, 0, nc, ng);
+		const Real zmom = temp_mf.sum(0);
+
+		// compute cloud mass (weighted by cloud tracer) within simulation box
+		amrex::MultiFab::Copy(temp_mf, state_new_cc_[0], HydroSystem<ThermalConductionProblem>::density_index, 0, nc, ng);
+		amrex::MultiFab::Multiply(temp_mf, state_new_cc_[0], HydroSystem<ThermalConductionProblem>::scalar0_index, 0, nc, ng);
+		const Real cloud_mass = temp_mf.sum(0);
+
+		// compute center-of-mass velocity of the cloud
+		const Real vz_cm = zmom / cloud_mass;
+
+		// save cumulative position, velocity offsets in simulationMetadata_
+		const Real delta_x_prev = simulationMetadata_["delta_x"].as<Real>();
+		const Real delta_vz_prev = simulationMetadata_["delta_vz"].as<Real>();
+		const Real delta_x = delta_x_prev + dt_coarse * delta_vz_prev;
+		const Real delta_vz = delta_vz_prev + vz_cm;
+		simulationMetadata_["delta_x"] = delta_x;
+		simulationMetadata_["delta_vz"] = delta_vz;
+		::delta_vz = delta_vz;
+
+		amrex::Print() << "[Cloud Tracking] Delta z = " << (delta_x / C::parsec) << " pc,"
+			       << " Delta vz = " << (delta_vz / 1.0e5) << " km/s,"
+			       << " Inflow velocity = " << ((::v_wind - delta_vz) / 1.0e5) << " km/s,"
+			       << " t/t_cc = " << (time / ::cloud_crushing_time) << "\n";
+
+		// If we are moving faster than the wind, we should abort the simulation.
+		// (otherwise, the boundary conditions become inconsistent.)
+		AMREX_ALWAYS_ASSERT(delta_vz < ::v_wind);
+
+		// subtract center-of-mass z-velocity on each level
+		// N.B. must update both z-momentum *and* energy!
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			auto const &mf = state_new_cc_[lev];
+			auto const &state = state_new_cc_[lev].arrays();
+			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept {
+				Real const rho = state[box](i, j, k, HydroSystem<ThermalConductionProblem>::density_index);
+				Real const xmom = state[box](i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index);
+				Real const ymom = state[box](i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index);
+				Real const zmom = state[box](i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index);
+				Real const E = state[box](i, j, k, HydroSystem<ThermalConductionProblem>::energy_index);
+				Real const KE = 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
+				Real const Eint = E - KE;
+				Real const new_zmom = zmom - rho * vz_cm;
+				Real const new_KE = 0.5 * (xmom * xmom + ymom * ymom + new_zmom * new_zmom) / rho;
+
+				state[box](i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = new_zmom;
+				state[box](i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint + new_KE;
+			});
+		}
+		amrex::Gpu::streamSynchronizeAll();
+	}
+}
+
+
 // Implement User-defined diode BC
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
@@ -181,9 +265,11 @@ AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex
 
     const double cellVolume = geom.CellSize(0) * geom.CellSize(1) * geom.CellSize(2);
 
+    // N.B. subtract the accumulated center-of-mass frame velocity offset (::delta_vz), so the
+    // injected wind stays consistent with the shifted frame (cf. testShockCloud.cpp's use of ::delta_vx).
     rho_edge = rho_cloud * Tcloud / Twind; // g/cm^3
-    const double cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho_edge, rho_edge * Twind * C::k_B / C::m_u);
-    x3Mom_edge = rho_edge * Mach * cs_wind; // 100 km/s
+    const double vz_edge = ::v_wind - ::delta_vz;
+    x3Mom_edge = rho_edge * vz_edge;
     eint_edge = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho_edge, Twind);
     etot_edge = eint_edge + 0.5 * (x3Mom_edge * x3Mom_edge) / rho_edge;
     
@@ -204,38 +290,48 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("windcloud");
 	pp.query("mach", ::Mach);
 
+	// do frame shifting to follow cloud center-of-mass?
+	int do_frame_shift = 1;
+	pp.query("do_frame_shift", do_frame_shift);
+	::do_frame_shift = do_frame_shift == 1;
+
+	// compute wind speed (pressure equilibrium with the cloud sets the wind density)
+	const Real rho_wind = rho_cloud * Tcloud / Twind; // g/cm^3
+	const Real P_wind = rho_wind * Twind * C::k_B / C::m_u;
+	const Real cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho_wind, P_wind);
+	::v_wind = ::Mach * cs_wind;
+	amrex::Print() << "rho_wind = " << rho_wind << " g/cm^3" << std::endl;
+	amrex::Print() << "v_wind = " << (::v_wind / 1.0e5) << " km/s" << std::endl;
+
+	// estimate cloud-crushing time: t_cc = sqrt(chi) * R_cloud / v_wind, chi = rho_cloud / rho_wind
+	const Real chi = rho_cloud / rho_wind;
+	::cloud_crushing_time = std::sqrt(chi) * R0 / ::v_wind;
+	amrex::Print() << "t_cc = " << (::cloud_crushing_time / (1.0e6 * seconds_in_year)) << " Myr" << std::endl;
+
 	// boundary conditions
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	// for (int n = 0; n < ncomp_cc; ++n) {
-	// 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-	// 	BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
-	// 	BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
-	// 	}
-	// }
-    	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// diode boundary conditions
-			if (i == 2) {
-				BCs_cc[n].setLo(i, amrex::BCType::ext_dir); // inflow
-				BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::foextrap); // periodic
-				BCs_cc[n].setHi(i, amrex::BCType::foextrap); // periodic
-			}
+
+	for (int n = 0; n < ncomp_cc; ++n) {
+	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+		// diode boundary conditions
+		if (i == 2) {
+			BCs_cc[n].setLo(i, amrex::BCType::ext_dir); // inflow
+			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+		} else {
+			BCs_cc[n].setLo(i, amrex::BCType::foextrap); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::foextrap); // periodic
 		}
+	}
 	} 
-	// const int nvars_fc = Physics_Indices<ThermalConductionProblem>::nvarTotal_fc;
-	// amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	// for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-	// 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-	// 		BCs_fc[icomp].setLo(idim, amrex::BCType::foextrap); // periodic
-	// 		BCs_fc[icomp].setHi(idim, amrex::BCType::foextrap);
-	// 	}
-	// }
+
 	// Problem initialization
 	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 
+	// set metadata used by computeAfterTimestep() for center-of-mass frame tracking
+	sim.simulationMetadata_["delta_x"] = 0._rt;
+	sim.simulationMetadata_["delta_vz"] = 0._rt;
+	sim.simulationMetadata_["t_cc"] = ::cloud_crushing_time;
 
 	// initialize
 	sim.setInitialConditions();
@@ -246,18 +342,4 @@ auto problem_main() -> int
 	// Cleanup and exit
 	amrex::Print() << "Finished." << '\n';
 	return 0;
-
-	/***Richardson Extrapolation ****/
-
-	// quokka::richardson::applyQuietDefaults();
-	// quokka::richardson::Parameters params{};
-	// params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	// params.nx_initial = 128;
-	// params.nx_max = 512;
-	// params.expected_rate = 2.0;
-	// params.tolerance = 0.3;
-	// params.test_name = "Thermal Conduction";
-	// params.csv_filename = "thermal_conduction_convergence.csv";
-
-	// return quokka::richardson::run(params, [](int nx) { return runConductionTest(nx); });
 }
