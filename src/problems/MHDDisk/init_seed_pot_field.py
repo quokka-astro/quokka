@@ -8,7 +8,10 @@ import matplotlib.pyplot as plt
 
 nR_coarse, nz_coarse = 128 , 256
 levels               = 0
-SEED                 = 4100
+SEED = np.random.SeedSequence().entropy
+print(f"Using random seed: {SEED}")
+
+rng = np.random.default_rng(SEED)
 padding              = 2    # ghost cells added beyond domain on each side
 
 # Physical constants
@@ -76,7 +79,7 @@ def physical_kmax(nR, nz, Rmax_nd, Lz_nd, n_cells=4):
 #  Spectral modes  (all dimensionless)
 # ══════════════════════════════════════════════════════════════════
 
-def init_modes(nR_coarse, nz_coarse, Rmax_nd, Lz_nd, seed=0):
+def init_modes(nR_coarse, nz_coarse, Rmax_nd, Lz_nd):
     M      = nR_coarse // 2
     N      = nz_coarse // 2
 
@@ -99,26 +102,28 @@ def init_modes(nR_coarse, nz_coarse, Rmax_nd, Lz_nd, seed=0):
 #  Random coefficients with Kolmogorov power law
 # ══════════════════════════════════════════════════════════════════
 
-def init_coeffs(k, kmin, kmax, seed):
-    rng = np.random.default_rng(seed)
+def init_coeffs(k, kmin, kmax, rng):
     coeff = np.zeros_like(k, dtype=np.complex128)
 
     mask = (k >= kmin) & (k < kmax)
-    # 1. Generate Gaussian random variables
-    rand = rng.standard_normal(mask.sum()) + 1j * rng.standard_normal(mask.sum())
-    
-    # 2. Apply power law
+
+    # Generate Gaussian random variables
+    rand = (
+        rng.standard_normal(mask.sum())
+        + 1j * rng.standard_normal(mask.sum())
+    )
+
+    # Apply power law
     alpha = 11.0 / 6.0
     power_law = k[mask] ** (-alpha)
     rand *= power_law
 
-    # 3. CRITICAL: Normalize by the expected power, not the realized mean
-    # The total power is the sum of (amplitude^2).
-    # We want sum(|coeff|^2) to represent the physical energy.
+    # Normalize by the realized total power
     total_power = np.sum(np.abs(rand)**2)
     rand /= np.sqrt(total_power)
-    
+
     coeff[mask] = rand
+
     return coeff
 
 def plot_coeff_spectrum(k, coeff, kmin_nd, kmax_nd, H_phys, kpc, out="Bspectrum_coeffs.png"):
@@ -447,7 +452,7 @@ if __name__ == "__main__":
     Lz_padded   = Lz   + 2 * padding * dz
 
     # ── spectral modes ────────────────────────────────────────────
-    kR, kz, k = init_modes(nR_coarse * factor, nz_coarse * factor, Rmax_nd, Lz_nd, seed=SEED)
+    kR, kz, k = init_modes(nR_coarse * factor, nz_coarse * factor, Rmax_nd, Lz_nd)
 
     kmin_nd = physical_kmin(H_nd)
     kmax_nd = physical_kmax(nR_sim, nz_sim, Rmax_nd, Lz_nd, n_cells=n_grid_cells)
@@ -458,7 +463,7 @@ if __name__ == "__main__":
     print(f"kmax/kmin   = {kmax_nd/kmin_nd:.1f}")
 
     # ── spectral coefficients ─────────────────────────────────────
-    coeff = init_coeffs(k, kmin_nd, kmax_nd, SEED)
+    coeff = init_coeffs(k, kmin_nd, kmax_nd, rng)
     coeff[k < kmin_nd] = 0
     plot_coeff_spectrum(k, coeff, kmin_nd, kmax_nd, H_phys, kpc)
 

@@ -25,18 +25,18 @@ checkpoint_prefix = "tests/chk/mhddisk_1_chk"
 statistics_file = "tests/mhddiskstats_1.txt"
 statistics_interval = 1
 density_floor = 1.0e-32
-restartfile = "tests/chk/mhddisk_Q1_snf2_chk0070000"
+restartfile = "tests/chk/mhddisk_Q1_snf2_chk0056000"
 # *****************************************************************
 # Time integration
 # *****************************************************************
 cfl                 = 0.3
-max_timesteps       = 70003
+max_timesteps       = 63000
 stop_time           = 1.18608e16   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s, 4 rotations
 # *****************************************************************
 # Output
 # *****************************************************************
 checkpoint_interval = 700
-plottime_interval   = 1.4826e14
+plottime_interval   = 1.4826e12
 derived_vars        = gpot pressure radius_sph radial_velocity circular_velocity mach plasma_beta divB Bphi
 # *****************************************************************
 # Problem parameters (Table 1, Q1_M29)
@@ -45,9 +45,9 @@ mhd_galaxy.Q_mean    = 0.96
 mhd_galaxy.Mc        = 28.6
 mhd_galaxy.sn_jeans_J              = 4.0 #value from Truelove et al. 1997
 mhd_galaxy.star_formation_efficiency    = 0.5
-mhd_galaxy.sn_momentum             = 2.8e5
+mhd_galaxy.sn_momentum             = 6e5 #2.8e5
 mhd_galaxy.sn_mass_per_event_msun = 100.0
-mhd_galaxy.sn_cluster_momentum_exponent = 1.0       # change to fine tune momentum
+mhd_galaxy.sn_cluster_momentum_exponent = 0.0 #1.0       # change to fine tune momentum
 
 mhd.project_initial_b_field = true
 mhd.update_initial_b_energy = true
@@ -62,20 +62,20 @@ mhd_galaxy.aphi_data_file = tests/input/Aphi_2d_Aphi.bin
 quokka.diagnostics = slice_z slice_x proj_z        # Space-separated name(s) of diagnostics (arbitrary)
 
 quokka.proj_z.type = ProjectionPlot
-quokka.proj_z.file = tests/projz/projz2_test_plt
+quokka.proj_z.file = tests/projz/projz2_snf3_plt
 quokka.proj_z.time_int = 2.9652e13
 quokka.proj_z.normal = 2
 quokka.proj_z.field_names = Bphi gasDensity x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum 
 
 quokka.slice_z.type = DiagFramePlane
-quokka.slice_z.file = tests/slicez/slicez2_test_plt
+quokka.slice_z.file = tests/slicez/slicez2_snf3_plt
 quokka.slice_z.normal = 2
 quokka.slice_z.center = 0.0
 quokka.slice_z.time_int = 2.9652e12
 quokka.slice_z.field_names = Bphi x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum plasma_beta gasDensity
 
 quokka.slice_x.type = DiagFramePlane
-quokka.slice_x.file = tests/slicex/slicex2_test_plt
+quokka.slice_x.file = tests/slicex/slicex2_snf3_plt
 quokka.slice_x.normal = 0
 quokka.slice_x.center = 0.0
 quokka.slice_x.time_int = 2.9652e12
