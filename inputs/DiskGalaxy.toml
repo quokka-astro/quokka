@@ -97,3 +97,11 @@ disk_galaxy.initial_scalar_density = 1.67e-35 # 1e-11 mH/cm^3
 
 particles.scalar_yield_per_SN = 1.99e33       # 1 Msun
 particles.SN_p_term_Msunkmps = 5.0e5	      # 500,000 Msun km/s
+
+# Strömgren-volume photoionization feedback
+stromgren.enabled = 1
+stromgren.T_HII = 1.0e4
+stromgren.alpha_B = 2.59e-13
+stromgren.hydrogen_mass_fraction = 1.0
+stromgren.R_max_cells = 4.0
+stromgren.x_ion_scalar_index = 0
