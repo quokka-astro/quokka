@@ -1294,6 +1294,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
 			amrex::Real cfl = conductionCFL;
 			const amrex::Real kappa0 = electronConductionKappa0_;
+			const amrex::Real t_min = tempFloor_;
 
 			// Use amrex::ParReduce to find the minimum dt and its location across all GPU threads
 			auto r = amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{},
@@ -1301,7 +1302,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 						  [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
 							  amrex::Real rho = state_mf[bx](i, j, k, HydroSystem<problem_t>::density_index);
 							  amrex::Real Eint = state_mf[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-							  amrex::Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
+							  amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint));
 
 							  amrex::Real const kappa_spitzer = kappa0 * std::pow(T, 2.5);
 							  amrex::Real const diffusion_coefficient = kappa_spitzer / (rho * c_v);
