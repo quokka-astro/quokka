@@ -291,8 +291,9 @@ auto problem_main() -> int
 	pp.query("mach", ::Mach);
 
 	// do frame shifting to follow cloud center-of-mass?
+	amrex::ParmParse const pp_global; // top-level, unprefixed
 	int do_frame_shift = 1;
-	pp.query("do_frame_shift", do_frame_shift);
+	pp_global.query("do_frame_shift", do_frame_shift);
 	::do_frame_shift = do_frame_shift == 1;
 
 	// compute wind speed (pressure equilibrium with the cloud sets the wind density)
