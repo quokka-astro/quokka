@@ -21,8 +21,7 @@
 
 namespace
 {
-struct ParticleEarlyFeedback {
-};
+struct ParticleEarlyFeedback {};
 
 constexpr amrex::Real gamma_gas = 5.0 / 3.0;
 constexpr amrex::Real mean_molecular_weight = C::m_p;

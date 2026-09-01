@@ -35,8 +35,7 @@ constexpr amrex::Real hydrogen_mass = C::m_p + C::m_e;
 constexpr amrex::Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 constexpr amrex::Real sn_ejecta_mass = 10.0 * C::M_solar;
 
-struct MolecularCloudDisruption {
-};
+struct MolecularCloudDisruption {};
 
 struct CloudProblemParameters {
 	amrex::Real cloudMassMsun = 1.0e5;
