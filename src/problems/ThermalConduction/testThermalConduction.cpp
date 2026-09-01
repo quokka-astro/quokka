@@ -296,19 +296,6 @@ auto problem_main() -> int
 	pp_global.query("do_frame_shift", do_frame_shift);
 	::do_frame_shift = do_frame_shift == 1;
 
-	// compute wind speed (pressure equilibrium with the cloud sets the wind density)
-	const Real rho_wind = rho_cloud * Tcloud / Twind; // g/cm^3
-	const Real P_wind = rho_wind * Twind * C::k_B / C::m_u;
-	const Real cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho_wind, P_wind);
-	::v_wind = ::Mach * cs_wind;
-	amrex::Print() << "rho_wind = " << rho_wind << " g/cm^3" << std::endl;
-	amrex::Print() << "v_wind = " << (::v_wind / 1.0e5) << " km/s" << std::endl;
-
-	// estimate cloud-crushing time: t_cc = sqrt(chi) * R_cloud / v_wind, chi = rho_cloud / rho_wind
-	const Real chi = rho_cloud / rho_wind;
-	::cloud_crushing_time = std::sqrt(chi) * R0 / ::v_wind;
-	amrex::Print() << "t_cc = " << (::cloud_crushing_time / (1.0e6 * seconds_in_year)) << " Myr" << std::endl;
-
 	// boundary conditions
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -328,6 +315,19 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
+
+	// compute wind speed (pressure equilibrium with the cloud sets the wind density)
+	const Real rho_wind = rho_cloud * Tcloud / Twind; // g/cm^3
+	const Real P_wind = rho_wind * Twind * C::k_B / C::m_u;
+	const Real cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho_wind, P_wind);
+	::v_wind = ::Mach * cs_wind;
+	amrex::Print() << "rho_wind = " << rho_wind << " g/cm^3" << std::endl;
+	amrex::Print() << "v_wind = " << (::v_wind / 1.0e5) << " km/s" << std::endl;
+
+	// estimate cloud-crushing time: t_cc = sqrt(chi) * R_cloud / v_wind, chi = rho_cloud / rho_wind
+	const Real chi = rho_cloud / rho_wind;
+	::cloud_crushing_time = std::sqrt(chi) * R0 / ::v_wind;
+	amrex::Print() << "t_cc = " << (::cloud_crushing_time / (1.0e6 * seconds_in_year)) << " Myr" << std::endl;
 
 	// set metadata used by computeAfterTimestep() for center-of-mass frame tracking
 	sim.simulationMetadata_["delta_x"] = 0._rt;
