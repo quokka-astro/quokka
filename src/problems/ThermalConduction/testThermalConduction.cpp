@@ -24,10 +24,10 @@
 #include "util/richardson.hpp"
 
 /** Thermal conduction test problem
-The problem set up tests two types of conduction- spitzer and constant, both of which use different test problems. 
+The problem set up tests two types of conduction- spitzer and constant, both of which use different test problems.
 These test problems have their own initial condition and analytic reference solutions. The conduction types are:
-  - "constant": kappa = const. Initial condition is a smooth Gaussian temperature profile and so is the reference solution 
-  	which has a diffusion constant that increases with time. The problem has also been set up to test AMR.
+  - "constant": kappa = const. Initial condition is a smooth Gaussian temperature profile and so is the reference solution
+	which has a diffusion constant that increases with time. The problem has also been set up to test AMR.
   - "spitzer": kappa = kappa0*T^2.5. Initial condition is the Pattle (1959) self-similar
     solution evaluated at t=spitzer_t_start_frac*stopTime_. The reference solution is the same Pattle profile evaluated at
     t=tNew_[0]+spitzer_t_start_frac*stopTime_. This test estimates the error across different resolutions and compares the slopes against
@@ -43,7 +43,7 @@ constexpr double sigma = 2.410685615625e+17;	 // "constant" only: width of the i
 constexpr double D = 4.396303164750053e+28;	 // "constant" only: fixed diffusion coefficient for the Gaussian solution, in cm^2/s (amr2-branch value)
 constexpr int nx_ref = 128; // "spitzer" only: resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConduction.toml)
 constexpr double dx0_ref = 4.0 * Lref / nx_ref;
-constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref; //Normalization
+constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref; // Normalization
 constexpr double spitzer_t_start_frac = 0.5;
 struct ThermalConductionProblem {};
 
@@ -81,7 +81,7 @@ auto computeExactSolutionParams(bool isSpitzer, amrex::Real rho, amrex::Real kap
 	if (isSpitzer) {
 		const amrex::Real A = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, 1.0); // A = mu * mp/rho/kb
 		const amrex::Real D0 = kappa0 / A;							    // D(T) = D0 * T^pattle_q
-		const amrex::Real Q0 = M0 / A;								   
+		const amrex::Real Q0 = M0 / A;
 		const amrex::Real Gamma_num = std::tgamma(1.0 / pattle_q + 1.5);
 		const amrex::Real Gamma_den = std::tgamma(1.0 / pattle_q + 1.0);
 		const amrex::Real r0 = (Q0 / std::sqrt(M_PI)) * Gamma_num / Gamma_den;
@@ -90,7 +90,7 @@ auto computeExactSolutionParams(bool isSpitzer, amrex::Real rho, amrex::Real kap
 		p.r1 = r0 * std::pow(t / t0, 1.0 / (pattle_q + 2.0));
 		p.Tscale = std::pow(t / t0, -1.0 / (pattle_q + 2.0));
 	} else {
-		// Exact Gaussian diffusion solution 
+		// Exact Gaussian diffusion solution
 		p.sigma2_t = sigma * sigma + 2.0 * D * t;
 	}
 	return p;
@@ -150,7 +150,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 
 template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	//tag cells for testing AMR on Gaussian problem
+	// tag cells for testing AMR on Gaussian problem
 	const double refine_Lmax = Lref;
 
 	const auto prob_lo = geom[lev].ProbLoArray();
@@ -177,7 +177,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
 			bool const in_region = (std::abs(x) < refine_Lmax);
 
-			amrex::ignore_unused(y, z); 
+			amrex::ignore_unused(y, z);
 
 			if (in_region) {
 				tag[bx](i, j, k) = amrex::TagBox::SET;
@@ -233,10 +233,9 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 auto runConductionTest(int nx, int /*ny*/, int /*nz*/, int max_level = 0) -> double
 {
 	double max_time = 0.0;
-	
+
 	amrex::ParmParse pp_root;
 	pp_root.query("stop_time", max_time);
-	
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
