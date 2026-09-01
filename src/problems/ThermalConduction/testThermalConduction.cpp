@@ -24,36 +24,26 @@
 #include "util/richardson.hpp"
 
 /** Thermal conduction test problem
-The runtime parameter conduction.conduction_type selects between two independent test setups, each
-with its own initial condition and analytic reference solution, so a single build can validate both
-physics modes (see ElectronConduction.hpp) just by changing that one parameter:
-  - "constant": kappa = const. Initial condition is a smooth Gaussian temperature profile
-    (cell-averaged in x via the erf antiderivative). Reference solution is the exact Gaussian
-    diffusion solution (sigma_t^2 = sigma^2 + 2*D*t) -- identical to the original amr2-branch test.
+The problem set up tests two types of conduction- spitzer and constant, both of which use different test problems. 
+These test problems have their own initial condition and analytic reference solutions. The conduction types are:
+  - "constant": kappa = const. Initial condition is a smooth Gaussian temperature profile and so is the reference solution 
+  	which has a diffusion constant that increases with time. The problem has also been set up to test AMR.
   - "spitzer": kappa = kappa0*T^2.5. Initial condition is the Pattle (1959) self-similar
-    nonlinear-diffusion solution evaluated at t=spitzer_t_start_frac*stopTime_ (physical time since
-    a notional Dirac-delta release), not a true point source deposited on the grid -- a delta-like
-    IC is badly under-resolved at every resolution for this nonlinear conductivity (see the comment
-    on spitzer_t_start_frac below). Reference solution is the same Pattle profile evaluated at
-    t=tNew_[0]+spitzer_t_start_frac*stopTime_. The total excess energy (M0, see below) is fixed
-    across resolutions, so the same analytic solution is valid at every resolution (needed for the
-    Richardson convergence test in problem_main/runConductionTest).
+    solution evaluated at t=spitzer_t_start_frac*stopTime_. The reference solution is the same Pattle profile evaluated at
+    t=tNew_[0]+spitzer_t_start_frac*stopTime_. This test estimates the error across different resolutions and compares the slopes against
+	unity. Most of the error comes from around the edges of the smooth solution which drop to 0 at a certain radius.
 Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
 and the energy evolution is purely due to conduction. */
 
 constexpr double Eint0 = 2.505e-8; // "constant": Gaussian peak. "spitzer": peak at the reference resolution nx_ref (both equivalent to T = 2.e8 K)
 constexpr double Efloor = 5.674216387016754e-11; // equivalent to T = 2.e6 K
 const double rho0 = 0.1;			 // 1/cm^3
-constexpr double Lref = 7.714e+17;		 // quarter box length
+constexpr double Lref = 7.714e+17;		 // quarter box length, fixes region of refinement
 constexpr double sigma = 2.410685615625e+17;	 // "constant" only: width of the initial Gaussian, in cm (amr2-branch value)
 constexpr double D = 4.396303164750053e+28;	 // "constant" only: fixed diffusion coefficient for the Gaussian solution, in cm^2/s (amr2-branch value)
 constexpr int nx_ref = 128; // "spitzer" only: resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConduction.toml)
 constexpr double dx0_ref = 4.0 * Lref / nx_ref;
-constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref;
-// "spitzer" only: the IC is the analytic solution at physical time t_start = spitzer_t_start_frac *
-// stopTime_ (time since the notional Dirac-delta release), not a delta function -- see the comment
-// on computeExactSolutionParams() below. Used by both setInitialConditionsOnGrid and
-// computeReferenceSolution so they can't drift out of sync with each other.
+constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref; //Normalization
 constexpr double spitzer_t_start_frac = 0.5;
 struct ThermalConductionProblem {};
 
@@ -91,7 +81,7 @@ auto computeExactSolutionParams(bool isSpitzer, amrex::Real rho, amrex::Real kap
 	if (isSpitzer) {
 		const amrex::Real A = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, 1.0); // A = mu * mp/rho/kb
 		const amrex::Real D0 = kappa0 / A;							    // D(T) = D0 * T^pattle_q
-		const amrex::Real Q0 = M0 / A;								    // excess-T quantity released
+		const amrex::Real Q0 = M0 / A;								   
 		const amrex::Real Gamma_num = std::tgamma(1.0 / pattle_q + 1.5);
 		const amrex::Real Gamma_den = std::tgamma(1.0 / pattle_q + 1.0);
 		const amrex::Real r0 = (Q0 / std::sqrt(M_PI)) * Gamma_num / Gamma_den;
@@ -100,23 +90,17 @@ auto computeExactSolutionParams(bool isSpitzer, amrex::Real rho, amrex::Real kap
 		p.r1 = r0 * std::pow(t / t0, 1.0 / (pattle_q + 2.0));
 		p.Tscale = std::pow(t / t0, -1.0 / (pattle_q + 2.0));
 	} else {
-		// Exact Gaussian diffusion solution -- identical to the original amr2-branch reference
-		// solution, using the fixed sigma/D above (not derived from conductivity_prefactor).
+		// Exact Gaussian diffusion solution 
 		p.sigma2_t = sigma * sigma + 2.0 * D * t;
 	}
 	return p;
 }
 
-// The one function: given the precomputed exact-solution parameters (which encode conduction_type
-// and the evaluation time t) and a cell's location, returns the cell's Eint.
 AMREX_GPU_HOST_DEVICE auto evalExactEint(ExactSolutionParams const &p, amrex::Real rho, amrex::Real xlow, amrex::Real xhigh, amrex::Real dx) -> amrex::Real
 {
 	amrex::Real Eint = Efloor;
 	if (p.isSpitzer) {
-		// Cell-centre evaluation: Pattle's compactly-supported profile has no simple closed-form
-		// cell average. Estimate the physical temperature first (floor + excess, zero excess
-		// outside the front), then convert the total via the EOS -- rather than converting the
-		// excess alone and adding Efloor separately -- as a cross-check that the two routes agree.
+		// Estimate Pattle solution
 		const amrex::Real x = 0.5 * (xlow + xhigh);
 		const amrex::Real Tfloor = Efloor / p.A;
 		amrex::Real T = Tfloor;
@@ -126,7 +110,7 @@ AMREX_GPU_HOST_DEVICE auto evalExactEint(ExactSolutionParams const &p, amrex::Re
 		}
 		Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 	} else {
-		// Gaussian temperature profile, cell-averaged in x via the erf antiderivative.
+		// Gaussian temperature profile
 		const amrex::Real erfx_low = std::erf(xlow / std::sqrt(2.0 * p.sigma2_t));
 		const amrex::Real erfx_high = std::erf(xhigh / std::sqrt(2.0 * p.sigma2_t));
 		Eint += Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx;
@@ -137,8 +121,6 @@ AMREX_GPU_HOST_DEVICE auto evalExactEint(ExactSolutionParams const &p, amrex::Re
 
 template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	// initialize a ThermalConduction test problem using parameters from
-
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -168,8 +150,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 
 template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// geometrical refinement
-	// tag cells within one-sigma of the initial Gaussian profile for refinement
+	//tag cells for testing AMR on Gaussian problem
 	const double refine_Lmax = Lref;
 
 	const auto prob_lo = geom[lev].ProbLoArray();
@@ -177,8 +158,6 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 	const auto tag = tags.arrays();
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// NOTE: must check all nodes of the cell!
-		// Otherwise, cells that are too big can completely prevent refinement.
 		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
 		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
 		amrex::Real y0 = 0.0;
@@ -198,7 +177,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
 			bool const in_region = (std::abs(x) < refine_Lmax);
 
-			amrex::ignore_unused(y, z); // avoids unused-variable warnings in 1D
+			amrex::ignore_unused(y, z); 
 
 			if (in_region) {
 				tag[bx](i, j, k) = amrex::TagBox::SET;
@@ -214,25 +193,6 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 		}
 	});
 	amrex::Gpu::streamSynchronize();
-}
-
-template <>
-void QuokkaSimulation<ThermalConductionProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
-								   amrex::MultiFab const &state_cc,
-								   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
-{
-	const int ncomp = ncomp_in;
-	auto const &output = mf.arrays();
-	auto const &state = state_cc.const_arrays();
-	if (dname == "temperature") {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::density_index);
-			Real const Eint = HydroSystem<ThermalConductionProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-			output[bx](i, j, k, ncomp) = quokka::EOS<ThermalConductionProblem>::ComputeTgasFromEint(rho, Eint);
-		});
-	}
-	amrex::Gpu::streamSynchronizeAll();
 }
 
 template <>
@@ -256,12 +216,10 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 			amrex::Real const xhigh = prob_lo[0] + (i + 1) * dx[0];
 			amrex::Real const Eint_exact = evalExactEint(params, rho, xlow, xhigh, dx[0]);
 
-			// clear all components
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
 			}
 
-			// fill gas components
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint_exact;
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint_exact;
@@ -274,14 +232,11 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 
 auto runConductionTest(int nx, int /*ny*/, int /*nz*/, int max_level = 0) -> double
 {
-	// Read stop_time from the input file (e.g. inputs/ThermalConduction.toml) instead of hardcoding it here.
 	double max_time = 0.0;
-	{
-		amrex::ParmParse const pp_root;
-		if (pp_root.query("stop_time", max_time) == 0) {
-			amrex::Abort("runConductionTest requires stop_time to be set in the input file.");
-		}
-	}
+	
+	amrex::ParmParse pp_root;
+	pp_root.query("stop_time", max_time);
+	
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
@@ -289,11 +244,6 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/, int max_level = 0) -> dou
 	pp.add("max_level", max_level);
 	pp.addarr("n_cell", ncells);
 	if (max_level > 0) {
-		// The default ghost-cell interpolation at the coarse-fine AMR boundary (method=1) over-limits
-		// for this problem and breaks second-order convergence; method=3 (unlimited linear
-		// conservative interpolation) restores it. Root-level parameter, matching
-		// inputs/ThermalConduction.toml.
-		amrex::ParmParse pp_root;
 		pp_root.add("amr_interpolation_method", 3);
 	}
 
@@ -379,8 +329,7 @@ auto problem_main() -> int
 					      std::abs(slope));
 		passed = std::abs(slope) >= 0.9;
 	} else if (sim.conductionType_ == "constant") {
-		// Single-resolution check against the full resolution study. max_level=1 (matching
-		// inputs/ThermalConduction.toml) so this actually exercises AMR refinement.
+		// Single-resolution check against the full resolution study
 		constexpr int nx = 32;
 		constexpr int max_level = 1;
 		double const error_norm = runConductionTest(nx, nx, nx, max_level);
