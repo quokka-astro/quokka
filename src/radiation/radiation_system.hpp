@@ -1637,9 +1637,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	// The caller supplies the physical scale against which its residual must be measured. Preserve every
 	// positive scale, however small: weak but non-zero gas-dust coupling relies on a correspondingly tight
 	// inner tolerance because the outer solve reconstructs T_d with a factor inversely proportional to that
-	// coupling. Clamp a non-positive scale to zero, which accepts only an exact-zero initial residual.
+	// coupling. When no positive physical scale exists, fall back to the initial residual so the solver
+	// requests a relative residual reduction instead of an impossible strict zero.
 	const double f0 = rhs(x0);
-	const double scale = std::max(0.0, compare);
+	const double scale = (compare > 0.0) ? compare : std::abs(f0);
 	if (std::abs(f0) <= rel_tol * scale) {
 		return x0;
 	}
