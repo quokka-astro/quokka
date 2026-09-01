@@ -1365,17 +1365,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				s(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index)     = pz_new;
 				s(i, j, k, HydroSystem<MHDGalaxy>::internalEnergy_index) = Eint_new;
 				s(i, j, k, HydroSystem<MHDGalaxy>::energy_index)         = Etot_new;
-<<<<<<< HEAD
-=======
-				// printf("SN injection at lev %d, cell (%d,%d,%d): dpx=%g, dpy=%g, dpz=%g\n",
-				// 	lev, i, j, k, dpx, dpy, dpz);
-
-				// printf("  rho=%g, px_old=%g, py_old=%g, pz_old=%g, Eint_old=%g, Etot_old=%g\n",
-				// 	rho, px_old, py_old, pz_old, Eint_old, Etot_old);
-
-				// printf("  px_new=%g, py_new=%g, pz_new=%g, Eint_new=%g, Etot_new=%g\n",
-				// 	px_new, py_new, pz_new, Eint_new, Etot_new);
->>>>>>> ac12b169b6ec3a043a8b834dcedf251b130bfc5a
 			});
 		}
 		amrex::Gpu::streamSynchronize();
