@@ -2188,12 +2188,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 					      early_feedback_stats.active_particles, early_feedback_stats.scalar_momentum, lev);
 	}
 	if (early_feedback_stats.clipped_cells > 0) {
-		amrex::Print() << std::format("[PARTICLES] Early feedback limited in {} cells at level {} (minimum momentum scale = {}).\n",
-					      early_feedback_stats.clipped_cells, lev, early_feedback_stats.min_momentum_scale);
+		amrex::Print() << std::format("[PARTICLES] Early feedback limited in {} cells at level {} (minimum velocity scale = {}).\n",
+					      early_feedback_stats.clipped_cells, lev, early_feedback_stats.min_velocity_scale);
 	}
 	constexpr amrex::Real v_over_c_threshold = 0.03;
-	if (early_feedback_stats.max_signal_speed > v_over_c_threshold * C::c_light) {
-		amrex::Print() << "[WARNING] Early-feedback net signal speed (" << early_feedback_stats.max_signal_speed / C::c_light << " c) greater than "
+	if (early_feedback_stats.max_velocity > v_over_c_threshold * C::c_light) {
+		amrex::Print() << "[WARNING] Early-feedback net velocity (" << early_feedback_stats.max_velocity / C::c_light << " c) greater than "
 			       << v_over_c_threshold << " c threshold!\n";
 	}
 

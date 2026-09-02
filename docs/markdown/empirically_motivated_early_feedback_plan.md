@@ -138,7 +138,7 @@ Return a small statistics object containing at least:
 
 - number of active source particles;
 - total scalar momentum requested by equation 10;
-- maximum post-deposition signal speed.
+- maximum post-deposition velocity in affected cells.
 
 Use the last quantity in the same warning path as SN deposition. The first two quantities are useful for tests and verbose diagnostics; they need not be checkpointed.
 
@@ -210,7 +210,7 @@ The particle-mesh interaction deposits SN feedback only at `finest_level`. EMF f
 | `src/particles/particle_types.hpp` | Add EMF parameters, parsing, validation, and unit conversion inputs. |
 | `src/particles/particle_early_feedback.hpp` | Add equation-10 helper, corrected radial stencil deposition, buffer exchange, energy application, and statistics. |
 | `src/particles/PhysicsParticles.hpp` | Add descriptor/registry dispatch; pass `birth_time` and `mass_at_birth`; split `mass_at_birth` correctly when particles split. |
-| `src/simulation.hpp` | Invoke EMF after particle creation and before SN; add signal-speed warning and AMR support checks. |
+| `src/simulation.hpp` | Invoke EMF after particle creation and before SN; add velocity warning and AMR support checks. |
 | `docs/markdown/particles.md` | Document the physics, equation, parameters, operator order, energy convention, and AMR boundary. |
 | `src/problems/ParticleEarlyFeedback/` | Add a focused 3D CTest problem and CMake registration. |
 | `inputs/ParticleEarlyFeedback.toml` | Provide the deterministic uniform-medium test input. |

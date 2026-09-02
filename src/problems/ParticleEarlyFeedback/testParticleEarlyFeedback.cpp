@@ -230,13 +230,13 @@ auto problem_main() -> int
 	amrex::Print() << "EMF requested scalar momentum = " << stats.scalar_momentum << " g cm/s (expected " << expected_momentum << ")\n"
 		       << "EMF deposited scalar impulse = " << scalar_impulse << " g cm/s\n"
 		       << "EMF net vector momentum = (" << momentum_x << ", " << momentum_y << ", " << momentum_z << ") g cm/s\n"
-		       << "EMF clipped cells = " << stats.clipped_cells << ", minimum scale = " << stats.min_momentum_scale
-		       << ", maximum signal speed = " << stats.max_signal_speed << " cm/s\n";
+		       << "EMF clipped cells = " << stats.clipped_cells << ", minimum velocity scale = " << stats.min_velocity_scale
+		       << ", maximum velocity = " << stats.max_velocity << " cm/s\n";
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.active_particles == 6, "EMF must include split composite, individual high-mass, and remnant particles.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(stats.scalar_momentum, expected_momentum),
 					 "Equation-10 requested momentum does not use the summed birth mass.");
 	if (!simulation.userData_.expectClipping) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.clipped_cells == 0, "Nominal EMF test unexpectedly activated the signal-speed limiter.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.clipped_cells == 0, "Nominal EMF test unexpectedly activated the velocity limiter.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(scalar_impulse, expected_momentum, deposition_tolerance),
 						 "Deposited scalar impulse does not equal the Equation-10 request.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(momentum_x) <= deposition_tolerance * expected_momentum &&
@@ -244,10 +244,10 @@ auto problem_main() -> int
 						     std::abs(momentum_z) <= deposition_tolerance * expected_momentum,
 						 "Unclipped early-feedback stencil does not have zero net vector momentum.");
 	} else {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.clipped_cells > 0, "Extreme EMF test did not activate the signal-speed limiter.");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.min_momentum_scale < 1.0, "Clipped EMF cells did not report a reduced momentum scale.");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.max_signal_speed <= quokka::EMF_max_signal_speed * (1.0 + 2.0e-12),
-						 "EMF cell-by-cell limiter exceeded its signal-speed cap.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.clipped_cells > 0, "Extreme EMF test did not activate the velocity limiter.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.min_velocity_scale < 1.0, "Clipped EMF cells did not report a reduced velocity scale.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.max_velocity <= quokka::EMF_max_velocity * (1.0 + 2.0e-12),
+						 "EMF cell-by-cell limiter exceeded its velocity limit.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_impulse < expected_momentum, "Clipped EMF did not reduce the deposited scalar impulse.");
 	}
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_gas_mass, initial_gas_mass), "EMF changed gas mass.");
