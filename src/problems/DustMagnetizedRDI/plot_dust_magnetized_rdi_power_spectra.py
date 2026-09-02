@@ -90,9 +90,16 @@ def load_stage_fields(data_dir: Path, summary: dict[str, str]) -> tuple[dict[str
     import yt
 
     yt.set_log_level(40)
-    dust_density = {}
+    dust_density: dict[str, np.ndarray] = {}
+    gas_velocity: np.ndarray | None = None
     for stage in STAGES:
-        plotfile = data_dir / summary[f"stage_{stage}_plotfile"]
+        reached_key = f"stage_{stage}_reached"
+        if int(summary[reached_key]) != 1:
+            raise RuntimeError(f"Stage '{stage}' was not reached according to summary key '{reached_key}'.")
+        plotfile_key = f"stage_{stage}_plotfile"
+        if plotfile_key not in summary or not summary[plotfile_key]:
+            raise KeyError(f"Summary CSV is missing a plotfile path for stage '{stage}'.")
+        plotfile = data_dir / summary[plotfile_key]
         dataset = yt.load(str(plotfile))
         grid = dataset.covering_grid(level=0, left_edge=dataset.domain_left_edge, dims=dataset.domain_dimensions)
         dust_density[stage] = np.asarray(grid[("boxlib", "dustDensity-Group0")], dtype=float)
@@ -104,6 +111,8 @@ def load_stage_fields(data_dir: Path, summary: dict[str, str]) -> tuple[dict[str
                     for component in ("x", "y", "z")
                 ]
             )
+    if gas_velocity is None:
+        raise RuntimeError("Stage 'saturation' was not loaded.")
     return dust_density, gas_velocity
 
 
