@@ -275,9 +275,26 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeMomentumScale(amrex::Array4<cons
 		return 0.0;
 	}
 
-	// Both the feedback impulse and its negative-work thermalization are linear in this scale. The zero-scale state is below the cap and the full
-	// deposition is above it, so bisection finds the largest allowed contribution while including the cell's pre-existing velocity.
-	amrex::Real lower = 0.0;
+	const amrex::Real px = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const amrex::Real py = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const amrex::Real pz = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	const amrex::Real delta_px = buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const amrex::Real delta_py = buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const amrex::Real delta_pz = buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	const amrex::Real delta_momentum_squared = (delta_px * delta_px) + (delta_py * delta_py) + (delta_pz * delta_pz);
+	amrex::Real closest_approach_scale = 0.0;
+	if (delta_momentum_squared > 0.0) {
+		const amrex::Real momentum_dot_increment = (px * delta_px) + (py * delta_py) + (pz * delta_pz);
+		closest_approach_scale =
+		    amrex::min(amrex::max(-momentum_dot_increment / delta_momentum_squared, static_cast<amrex::Real>(0.0)), static_cast<amrex::Real>(1.0));
+	}
+
+	// Beyond the closest approach of p + scale * delta_p to zero momentum, its magnitude is nondecreasing. Thermalization is also nondecreasing
+	// with scale, so this interval contains the rightmost allowed contribution and is suitable for bisection.
+	if (computeSignalSpeed<problem_t>(state, buffer, state_fc, i, j, k, closest_approach_scale, count_component) > signal_speed_cap) {
+		return 0.0;
+	}
+	amrex::Real lower = closest_approach_scale;
 	amrex::Real upper = 1.0;
 	for (int iteration = 0; iteration < 40; ++iteration) {
 		const amrex::Real midpoint = 0.5 * (lower + upper);
