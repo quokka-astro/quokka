@@ -145,8 +145,7 @@ auto E_gas_analytic(double t) -> double
 }
 } // namespace
 
-struct DustDampingMHDZeroBMixedStiff {
-};
+struct DustDampingMHDZeroBMixedStiff {};
 
 template <> struct SimulationData<DustDampingMHDZeroBMixedStiff> {
 	std::vector<double> t_vec_;
