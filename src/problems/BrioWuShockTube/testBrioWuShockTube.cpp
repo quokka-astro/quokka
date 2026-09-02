@@ -28,8 +28,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct MHDShocktubeProblem {
-};
+struct MHDShocktubeProblem {};
 
 template <> struct quokka::EOS_Traits<MHDShocktubeProblem> {
 	static constexpr double gamma = 2.0;
@@ -37,6 +36,7 @@ template <> struct quokka::EOS_Traits<MHDShocktubeProblem> {
 };
 
 template <> struct Physics_Traits<MHDShocktubeProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };

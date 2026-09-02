@@ -20,8 +20,7 @@
 #include <string>
 #include <vector>
 
-struct DustMagnetizedRDI {
-};
+struct DustMagnetizedRDI {};
 
 namespace
 {
@@ -676,8 +675,7 @@ template <typename problem_t> void recordHistory(QuokkaSimulation<problem_t> &si
 }
 } // namespace
 
-template <> struct SimulationData<DustMagnetizedRDI> : DustMagnetizedRDIHistory {
-};
+template <> struct SimulationData<DustMagnetizedRDI> : DustMagnetizedRDIHistory {};
 
 template <> struct quokka::EOS_Traits<DustMagnetizedRDI> {
 	static constexpr double mean_molecular_weight = 1.0;

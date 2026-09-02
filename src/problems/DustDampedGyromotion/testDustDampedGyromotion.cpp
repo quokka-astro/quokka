@@ -64,17 +64,13 @@ AMREX_GPU_HOST_DEVICE auto dynamicChargeFromDrift(amrex::Real drift) -> amrex::R
 }
 } // namespace
 
-struct DustGyroEpsteinNoB {
-};
+struct DustGyroEpsteinNoB {};
 
-struct DustGyroNoDrag {
-};
+struct DustGyroNoDrag {};
 
-struct DustGyroEpsteinWithB {
-};
+struct DustGyroEpsteinWithB {};
 
-struct DustGyroDynamicCharge {
-};
+struct DustGyroDynamicCharge {};
 
 namespace
 {
@@ -133,6 +129,7 @@ struct DustGyroPhysicsTraits {
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::none;
 };
 
 using ResolvedRkScheme = quokka::dust::ResolvedRkScheme;
@@ -161,41 +158,29 @@ auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
 }
 } // namespace
 
-template <> struct SimulationData<DustGyroEpsteinNoB> : DustGyroHistory {
-};
+template <> struct SimulationData<DustGyroEpsteinNoB> : DustGyroHistory {};
 
-template <> struct SimulationData<DustGyroNoDrag> : DustGyroHistory {
-};
+template <> struct SimulationData<DustGyroNoDrag> : DustGyroHistory {};
 
-template <> struct SimulationData<DustGyroEpsteinWithB> : DustGyroHistory {
-};
+template <> struct SimulationData<DustGyroEpsteinWithB> : DustGyroHistory {};
 
-template <> struct SimulationData<DustGyroDynamicCharge> : DustGyroHistory {
-};
+template <> struct SimulationData<DustGyroDynamicCharge> : DustGyroHistory {};
 
-template <> struct quokka::EOS_Traits<DustGyroEpsteinNoB> : DustGyroEOSTraits {
-};
+template <> struct quokka::EOS_Traits<DustGyroEpsteinNoB> : DustGyroEOSTraits {};
 
-template <> struct quokka::EOS_Traits<DustGyroNoDrag> : DustGyroEOSTraits {
-};
+template <> struct quokka::EOS_Traits<DustGyroNoDrag> : DustGyroEOSTraits {};
 
-template <> struct quokka::EOS_Traits<DustGyroEpsteinWithB> : DustGyroEOSTraits {
-};
+template <> struct quokka::EOS_Traits<DustGyroEpsteinWithB> : DustGyroEOSTraits {};
 
-template <> struct quokka::EOS_Traits<DustGyroDynamicCharge> : DustGyroEOSTraits {
-};
+template <> struct quokka::EOS_Traits<DustGyroDynamicCharge> : DustGyroEOSTraits {};
 
-template <> struct Physics_Traits<DustGyroEpsteinNoB> : DustGyroPhysicsTraits {
-};
+template <> struct Physics_Traits<DustGyroEpsteinNoB> : DustGyroPhysicsTraits {};
 
-template <> struct Physics_Traits<DustGyroNoDrag> : DustGyroPhysicsTraits {
-};
+template <> struct Physics_Traits<DustGyroNoDrag> : DustGyroPhysicsTraits {};
 
-template <> struct Physics_Traits<DustGyroEpsteinWithB> : DustGyroPhysicsTraits {
-};
+template <> struct Physics_Traits<DustGyroEpsteinWithB> : DustGyroPhysicsTraits {};
 
-template <> struct Physics_Traits<DustGyroDynamicCharge> : DustGyroPhysicsTraits {
-};
+template <> struct Physics_Traits<DustGyroDynamicCharge> : DustGyroPhysicsTraits {};
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto computeDustGyroReciprocalStoppingTime(typename DustSources<problem_t>::DustCoefficientState const &state)

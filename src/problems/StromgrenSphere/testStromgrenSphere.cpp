@@ -28,8 +28,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct StromgrenSphere {
-};
+struct StromgrenSphere {};
 
 constexpr double c_hat = C::c_light / 1.0;
 constexpr double sigma_star_coeff = 1.5 / 16.0;
@@ -61,9 +60,10 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 };
 
 template <>
-void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+void RadSystem<StromgrenSphere>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;

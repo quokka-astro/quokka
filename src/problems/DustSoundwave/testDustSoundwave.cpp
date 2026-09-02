@@ -12,8 +12,7 @@
 #include <cmath>
 #include <complex>
 
-struct DustSoundwave {
-};
+struct DustSoundwave {};
 
 // parameters for soundwave damping test
 constexpr double A = 1e-4;
