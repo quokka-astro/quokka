@@ -98,6 +98,7 @@ namespace filesystem = experimental::filesystem;
 #include "hydro/mhd_system.hpp"
 #include "io/DerivedFieldBase.H"
 #include "io/DiagBase.H"
+#include "io/DiagFlux.H"
 #include "io/DiagFramePlane.H"
 #include "io/DiagPDF.H"
 #include "io/DiagParticleTxt.H"
@@ -4385,6 +4386,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 			auto *pdfDiag = dynamic_cast<DiagPDF *>(diag);
 			if (pdfDiag != nullptr) {
 				pdfDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
+			auto *fluxDiag = dynamic_cast<DiagFlux *>(diag);
+			if (fluxDiag != nullptr) {
+				fluxDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
