@@ -1253,6 +1253,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				// Radial momentum magnitude -- plain calibration, no ambient-density scaling.
 				const double p_terminal = sn_momentum_ref * MSUN * KM_S * std::pow(static_cast<double>(N_SN), cluster_exponent);
 				const double p_radial_mag = p_terminal / vol;
+
+				constexpr double KM_S = 1.0e5;
+				constexpr double v_terminal_max = 1000.0 * KM_S;   // cap on radial kick velocity, cm/s
  
 				// --- Deposit pass: recenter each kernel cell's momentum onto vCOM and
 				// add the outward radial kick, both directly in the simulation frame. ---
@@ -1279,7 +1282,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 							const double pz_nb  = s(ii, jj, kk, HydroSystem<MHDGalaxy>::x3Momentum_index);
  
 							const double w_mom = omega * rho_nb / mass_sum;
- 
 							double pradx = 0.0;
 							double prady = 0.0;
 							double pradz = 0.0;
@@ -1291,7 +1293,18 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 								const double ex = rx / r;
 								const double ey = ry / r;
 								const double ez = rz / r;
-								const double dp = p_radial_mag * w_mom;
+
+								double dp = p_radial_mag * w_mom;
+
+								// Cap the velocity kick imparted to THIS cell at v_terminal_max.
+								// dp/rho_nb is the velocity change this deposit would cause; if it
+								// exceeds the cap, clamp dp to the momentum that yields exactly
+								// v_terminal_max for this cell's density.
+								const double v_kick = dp / rho_nb;
+								if (v_kick > v_terminal_max) {
+									dp = rho_nb * v_terminal_max;
+								}
+
 								pradx = dp * ex;
 								prady = dp * ey;
 								pradz = dp * ez;

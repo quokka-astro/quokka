@@ -20,12 +20,12 @@ amr.grid_eff        = 0.75
 regrid_interval     = -1
 do_reflux           = 1
 do_subcycle         = 0
-plotfile_prefix = "$MYSCRATCH/quokka/tests/plt/mhddisk_1_plt"
-checkpoint_prefix = "$MYSCRATCH/quokka/tests/chk/mhddisk_1_chk"
-statistics_file = "$MYSCRATCH/quokka/tests/mhddiskstats_1.txt"
+plotfile_prefix = "/scratch/pawsey0807/ecolekodikara/quokka/tests/plt/mhddisk_1_plt"
+checkpoint_prefix = "/scratch/pawsey0807/ecolekodikara/quokka/tests/chk/mhddisk_1_chk"
+statistics_file = "/scratch/pawsey0807/ecolekodikara/quokka/tests/mhddiskstats_1.txt"
 statistics_interval = 1
 density_floor = 1.0e-32
-restartfile = "$MYSCRATCH/quokka/tests/chk/mhddisk_1_chk0006000"
+restartfile = "/scratch/pawsey0807/ecolekodikara/quokka/tests/chk/mhddisk_1_chk0006000"
 # *****************************************************************
 # Time integration
 # *****************************************************************
@@ -52,31 +52,31 @@ mhd_galaxy.sn_cluster_momentum_exponent = 0.0 #1.0       # change to fine tune m
 mhd.project_initial_b_field = true
 mhd.update_initial_b_energy = true
 
-mhd_galaxy.turb_vx_file = $MYSCRATCH/quokka/tests/input/vx_1.bin
-mhd_galaxy.turb_vy_file = $MYSCRATCH/quokka/tests/input/vy_1.bin
-mhd_galaxy.turb_vz_file = $MYSCRATCH/quokka/tests/input/vz_1.bin
-mhd_galaxy.aphi_meta_file = $MYSCRATCH/quokka/tests/input/Aphi_2d_meta_1.txt
-mhd_galaxy.aphi_data_file = $MYSCRATCH/quokka/tests/input/Aphi_2d_Aphi_1.bin
-mhd_galaxy.turb_seed_file = $MYSCRATCH/quokka/tests/input/seed_1.txt
+mhd_galaxy.turb_vx_file = /scratch/pawsey0807/ecolekodikara/quokka/tests/input/vx_1.bin
+mhd_galaxy.turb_vy_file = /scratch/pawsey0807/ecolekodikara/quokka/tests/input/vy_1.bin
+mhd_galaxy.turb_vz_file = /scratch/pawsey0807/ecolekodikara/quokkatests/input/vz_1.bin
+mhd_galaxy.aphi_meta_file = /scratch/pawsey0807/ecolekodikara/quokka/tests/input/Aphi_2d_meta_1.txt
+mhd_galaxy.aphi_data_file = /scratch/pawsey0807/ecolekodikara/quokka/tests/input/Aphi_2d_Aphi_1.bin
+mhd_galaxy.turb_seed_file = /scratch/pawsey0807/ecolekodikara/quokka/tests/input/seed_1.txt
 
 
 quokka.diagnostics = slice_z slice_x proj_z        # Space-separated name(s) of diagnostics (arbitrary)
 
 quokka.proj_z.type = ProjectionPlot
-quokka.proj_z.file = $MYSCRATCH/quokka/tests/projz/projz_1_plt
+quokka.proj_z.file = /scratch/pawsey0807/ecolekodikara/quokka/tests/projz/projz_1_plt
 quokka.proj_z.time_int = 2.9652e13
 quokka.proj_z.normal = 2
 quokka.proj_z.field_names = Bphi gasDensity x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum 
 
 quokka.slice_z.type = DiagFramePlane
-quokka.slice_z.file = $MYSCRATCH/quokka/tests/slicez/slicez_1_plt
+quokka.slice_z.file = /scratch/pawsey0807/ecolekodikara/quokka/tests/slicez/slicez_1_plt
 quokka.slice_z.normal = 2
 quokka.slice_z.center = 0.0
 quokka.slice_z.time_int = 2.9652e12
 quokka.slice_z.field_names = Bphi x-BField y-BField z-BField x-GasMomentum y-GasMomentum z-GasMomentum plasma_beta gasDensity
 
 quokka.slice_x.type = DiagFramePlane
-quokka.slice_x.file = $MYSCRATCH/quokka/tests/slicex/slicex_1_plt
+quokka.slice_x.file = /scratch/pawsey0807/ecolekodikara/quokka/tests/slicex/slicex_1_plt
 quokka.slice_x.normal = 0
 quokka.slice_x.center = 0.0
 quokka.slice_x.time_int = 2.9652e12
