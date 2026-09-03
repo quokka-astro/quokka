@@ -33,8 +33,7 @@ auto v_dust1_analytic(double t) -> double;
 auto v_dust2_analytic(double t) -> double;
 auto E_gas_analytic(double t) -> double;
 
-struct DustDampingMHDZeroB {
-};
+struct DustDampingMHDZeroB {};
 
 template <> struct SimulationData<DustDampingMHDZeroB> {
 	std::vector<double> t_vec_;

@@ -10,8 +10,7 @@
 #include <iomanip>
 #include <vector>
 
-struct DustHallPedersenDrift {
-};
+struct DustHallPedersenDrift {};
 
 namespace
 {

@@ -1780,8 +1780,7 @@ template <typename T> struct is_callable_impl<true, T> {
 	struct Fallback {
 		void operator()();
 	};
-	struct Derived : T, Fallback {
-	};
+	struct Derived : T, Fallback {};
 
 	template <typename U, U> struct Check;
 
@@ -1801,8 +1800,7 @@ template <typename T> struct is_callable {
 	typedef typename is_callable_impl<std::is_class<T>::value, T>::type type;
 };
 
-template <typename IsYDataCallable> struct plot_impl {
-};
+template <typename IsYDataCallable> struct plot_impl {};
 
 template <> struct plot_impl<std::false_type> {
 	template <typename IterableX, typename IterableY> bool operator()(const IterableX &x, const IterableY &y, const std::string &format)

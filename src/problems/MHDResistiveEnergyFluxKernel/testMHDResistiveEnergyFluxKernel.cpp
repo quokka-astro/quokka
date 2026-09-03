@@ -21,8 +21,7 @@
 #include "hydro/mhd_system.hpp"
 #include "physics_info.hpp"
 
-struct MHDResistiveEnergyFluxKernel {
-};
+struct MHDResistiveEnergyFluxKernel {};
 
 template <> struct quokka::EOS_Traits<MHDResistiveEnergyFluxKernel> {
 	static constexpr double gamma = 5. / 3.;

@@ -436,6 +436,7 @@ void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, s
 	amrex::Real const omega_gyro_res = dust_omega_gyro_res_;
 	bool const iteration_enabled = iteration_config.enabled;
 	amrex::Real const alpha_relative_tolerance = iteration_config.alphaRelativeTolerance;
+	amrex::Real const charge_absolute_tolerance = iteration_config.chargeAbsoluteTolerance;
 	amrex::Real const charge_relative_tolerance = iteration_config.chargeRelativeTolerance;
 	int const configured_max_iterations = iteration_config.maxIterations;
 
@@ -637,9 +638,8 @@ void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, s
 				    0.5 * dt * dt * (m11 * inner_drag_11 + 2.0 * m12 * inner_drag_12 + m22 * inner_drag_22);
 				delta_E_res_gyro = delta_E_res - delta_E_res_drag_only;
 			}
-			amrex::Real const delta_E_heat_effective = delta_E_cons - delta_E_res_gyro;
-			E_tot_iter_new = E_tot + delta_E_g_work + omega_drag * delta_E_heat_effective + omega_gyro_res * delta_E_res_gyro;
-			E_int_iter_new = E_int + omega_drag * delta_E_heat_effective + omega_gyro_res * delta_E_res_gyro;
+			E_tot_iter_new = E_tot + delta_E_g_work + omega_drag * (delta_E_cons - delta_E_res_gyro) + omega_gyro_res * delta_E_res_gyro;
+			E_int_iter_new = E_int + omega_drag * (delta_E_cons - delta_E_res_gyro) + omega_gyro_res * delta_E_res_gyro;
 
 			if (!iteration_enabled) {
 				break;
@@ -672,15 +672,11 @@ void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, s
 				alpha_converged = alpha_converged && (std::abs(alpha1_new[g] - alpha1[g]) <= alpha_relative_tolerance * alpha1[g]) &&
 						  (std::abs(alpha2_new[g] - alpha2[g]) <= alpha_relative_tolerance * alpha2[g]);
 				if (include_lorentz_force && B_mag > 0.0) {
-					bool const charge1_sign_changed = (charge1[g] < 0.0 && charge1_new[g] >= 0.0) ||
-									  (charge1[g] > 0.0 && charge1_new[g] <= 0.0) ||
-									  (charge1[g] == 0.0 && charge1_new[g] != 0.0);
-					bool const charge2_sign_changed = (charge2[g] < 0.0 && charge2_new[g] >= 0.0) ||
-									  (charge2[g] > 0.0 && charge2_new[g] <= 0.0) ||
-									  (charge2[g] == 0.0 && charge2_new[g] != 0.0);
-					charge_converged = charge_converged && !charge1_sign_changed && !charge2_sign_changed &&
-							   (std::abs(charge1_new[g] - charge1[g]) <= charge_relative_tolerance * std::abs(charge1[g])) &&
-							   (std::abs(charge2_new[g] - charge2[g]) <= charge_relative_tolerance * std::abs(charge2[g]));
+					charge_converged = charge_converged &&
+							   (std::abs(charge1_new[g] - charge1[g]) <=
+							    charge_absolute_tolerance + charge_relative_tolerance * std::abs(charge1[g])) &&
+							   (std::abs(charge2_new[g] - charge2[g]) <=
+							    charge_absolute_tolerance + charge_relative_tolerance * std::abs(charge2[g]));
 				}
 			}
 			amrex::Real const maximum_source_timescale_new =

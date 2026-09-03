@@ -32,14 +32,11 @@ struct ShockProfile {
 
 template <typename problem_t> struct ShockCaseParams;
 
-struct DustLorentzShockEps001OmegaTs0 {
-};
+struct DustLorentzShockEps001OmegaTs0 {};
 
-struct DustLorentzShockEps001OmegaTs20 {
-};
+struct DustLorentzShockEps001OmegaTs20 {};
 
-struct DustLorentzShockEps010OmegaTs20 {
-};
+struct DustLorentzShockEps010OmegaTs20 {};
 
 template <> struct ShockCaseParams<DustLorentzShockEps001OmegaTs0> {
 	static constexpr double sound_speed = 1.0;
@@ -102,6 +99,7 @@ struct ShockPhysicsTraits {
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::none;
 };
 
 AMREX_GPU_DEVICE auto computeGasEnergy(double rho, double vx, double bz) -> double
@@ -411,19 +409,13 @@ auto runShockRegression(bool write_csv) -> int
 }
 } // namespace
 
-template <> struct quokka::EOS_Traits<DustLorentzShockEps001OmegaTs0> : ShockEOSTraits<DustLorentzShockEps001OmegaTs0> {
-};
-template <> struct quokka::EOS_Traits<DustLorentzShockEps001OmegaTs20> : ShockEOSTraits<DustLorentzShockEps001OmegaTs20> {
-};
-template <> struct quokka::EOS_Traits<DustLorentzShockEps010OmegaTs20> : ShockEOSTraits<DustLorentzShockEps010OmegaTs20> {
-};
+template <> struct quokka::EOS_Traits<DustLorentzShockEps001OmegaTs0> : ShockEOSTraits<DustLorentzShockEps001OmegaTs0> {};
+template <> struct quokka::EOS_Traits<DustLorentzShockEps001OmegaTs20> : ShockEOSTraits<DustLorentzShockEps001OmegaTs20> {};
+template <> struct quokka::EOS_Traits<DustLorentzShockEps010OmegaTs20> : ShockEOSTraits<DustLorentzShockEps010OmegaTs20> {};
 
-template <> struct Physics_Traits<DustLorentzShockEps001OmegaTs0> : ShockPhysicsTraits {
-};
-template <> struct Physics_Traits<DustLorentzShockEps001OmegaTs20> : ShockPhysicsTraits {
-};
-template <> struct Physics_Traits<DustLorentzShockEps010OmegaTs20> : ShockPhysicsTraits {
-};
+template <> struct Physics_Traits<DustLorentzShockEps001OmegaTs0> : ShockPhysicsTraits {};
+template <> struct Physics_Traits<DustLorentzShockEps001OmegaTs20> : ShockPhysicsTraits {};
+template <> struct Physics_Traits<DustLorentzShockEps010OmegaTs20> : ShockPhysicsTraits {};
 
 template <>
 AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps001OmegaTs0>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
