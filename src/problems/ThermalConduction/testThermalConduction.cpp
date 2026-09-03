@@ -100,15 +100,14 @@ AMREX_GPU_HOST_DEVICE auto evalExactEint(ExactSolutionParams const &p, amrex::Re
 {
 	amrex::Real Eint = Efloor;
 	if (p.isSpitzer) {
-		// Estimate Pattle solution
+		// Pattle solution: zero-background self-similar profile, compactly supported within |x| <= r1.
+		// Efloor is only a numerical representability floor outside the front, not part of the analytic solution.
 		const amrex::Real x = 0.5 * (xlow + xhigh);
-		const amrex::Real Tfloor = Efloor / p.A;
-		amrex::Real T = Tfloor;
 		if (std::abs(x) <= p.r1) {
 			const amrex::Real base = 1.0 - (x / p.r1) * (x / p.r1);
-			T += std::pow(base, 1.0 / pattle_q) * p.Tscale;
+			const amrex::Real T = std::pow(base, 1.0 / pattle_q) * p.Tscale;
+			Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 		}
-		Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 	} else {
 		// Gaussian temperature profile
 		const amrex::Real erfx_low = std::erf(xlow / std::sqrt(2.0 * p.sigma2_t));
@@ -324,9 +323,8 @@ auto problem_main() -> int
 		amrex::Print() << std::format("\nBest-fit line: log(error) = {:.4f} * log(Nx) + {:.4f}\n", slope, intercept);
 
 		// error ~ Nx^slope for Pattle IC
-		amrex::Print() << std::format("Spitzer conduction convergence: |slope| = {:.4f} (unity expected, converging faster is fine)\n",
-					      std::abs(slope));
-		passed = std::abs(slope) >= 0.9;
+		amrex::Print() << std::format("Spitzer conduction convergence: slope = {:.4f} (-1 expected, converging faster is fine)\n", slope);
+		passed = slope <= -0.9;
 	} else if (sim.conductionType_ == "constant") {
 		// Single-resolution check against the full resolution study
 		constexpr int nx = 32;
