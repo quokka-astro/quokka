@@ -839,6 +839,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		dpp.query("picard_charge_atol", dustCoefficientIteration_.chargeAbsoluteTolerance);
 		dpp.query("picard_charge_rtol", dustCoefficientIteration_.chargeRelativeTolerance);
 		dpp.query("picard_max_iterations", dustCoefficientIteration_.maxIterations);
+		if (dustCoefficientIteration_.alphaRelativeTolerance <= 0.0) {
+			amrex::Abort("dust.picard_alpha_rtol must be positive.");
+		}
+		if (dustCoefficientIteration_.chargeAbsoluteTolerance <= 0.0) {
+			amrex::Abort("dust.picard_charge_atol must be positive.");
+		}
+		if (dustCoefficientIteration_.chargeRelativeTolerance <= 0.0) {
+			amrex::Abort("dust.picard_charge_rtol must be positive.");
+		}
 		if (dustCoefficientIteration_.maxIterations <= 0) {
 			amrex::Abort("dust.picard_max_iterations must be positive.");
 		}
