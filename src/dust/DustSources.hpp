@@ -638,9 +638,8 @@ void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, s
 				    0.5 * dt * dt * (m11 * inner_drag_11 + 2.0 * m12 * inner_drag_12 + m22 * inner_drag_22);
 				delta_E_res_gyro = delta_E_res - delta_E_res_drag_only;
 			}
-			amrex::Real const delta_E_heat_effective = delta_E_cons - delta_E_res_gyro;
-			E_tot_iter_new = E_tot + delta_E_g_work + omega_drag * delta_E_heat_effective + omega_gyro_res * delta_E_res_gyro;
-			E_int_iter_new = E_int + omega_drag * delta_E_heat_effective + omega_gyro_res * delta_E_res_gyro;
+			E_tot_iter_new = E_tot + delta_E_g_work + omega_drag * (delta_E_cons - delta_E_res_gyro) + omega_gyro_res * delta_E_res_gyro;
+			E_int_iter_new = E_int + omega_drag * (delta_E_cons - delta_E_res_gyro) + omega_gyro_res * delta_E_res_gyro;
 
 			if (!iteration_enabled) {
 				break;
