@@ -385,8 +385,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	auto getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *;
 	auto getAmrInterpolaterFaceCentered() -> amrex::Interpolater *;
-	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering cen,
-			     quokka::direction dir);
+	virtual void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
+				     quokka::centering cen, quokka::direction dir);
+	template <typename PreInterpHook, typename PostInterpHook>
+	void FillCoarsePatchWithHooks(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
+				      quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp, PostInterpHook const &post_interp);
 	void FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
 				      amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array);
 	void GetData(int lev, amrex::Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime, quokka::centering cen,
@@ -1821,6 +1824,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 		}
 
+		std::string poisson_bc = "hydro";
+		amrex::ParmParse const pp_gravity("gravity");
+		pp_gravity.query("poisson_bc", poisson_bc);
+		if (poisson_bc != "hydro" && poisson_bc != "open") {
+			amrex::Abort("gravity.poisson_bc must be either 'hydro' or 'open'.");
+		}
+		bool const use_open_poisson = (poisson_bc == "open");
+
 		// Analyze boundary conditions for each dimension
 		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
 		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
@@ -1837,11 +1848,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				dim_name = "z";
 			}
 
-			if (geom[0].isPeriodic(idim)) {
+			if (!use_open_poisson && geom[0].isPeriodic(idim)) {
 				bc_lo[idim] = amrex::LinOpBCType::Periodic;
 				bc_hi[idim] = amrex::LinOpBCType::Periodic;
 				num_periodic_dims++;
 				bc_description += dim_name + ":periodic ";
+			} else if (use_open_poisson) {
+				bc_lo[idim] = amrex::LinOpBCType::Dirichlet;
+				bc_hi[idim] = amrex::LinOpBCType::Dirichlet;
+				bc_description += dim_name + ":open ";
 			} else {
 				// Use homogeneous Dirichlet (phi = 0) for non-periodic dimensions
 				bc_lo[idim] = amrex::LinOpBCType::Dirichlet;
@@ -1855,7 +1870,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		}
 
 		// Determine solver type: use MLMG if any dimension is periodic, otherwise OpenBCSolver
-		const bool use_mlmg_solver = (num_periodic_dims > 0);
+		const bool use_mlmg_solver = (!use_open_poisson && num_periodic_dims > 0);
 
 		if (use_mlmg_solver) {
 			// Use MLMG solver with mixed/periodic boundary conditions
@@ -1934,7 +1949,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 			amrex::LPInfo openbc_info;
 			openbc_info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
-			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), openbc_info);
+			amrex::Vector<amrex::Geometry> open_geom = Geom(0, finest_level);
+			if (use_open_poisson) {
+				constexpr amrex::Array<int, AMREX_SPACEDIM> nonperiodic = {AMREX_D_DECL(0, 0, 0)};
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					open_geom[lev] =
+					    amrex::Geometry(open_geom[lev].Domain(), open_geom[lev].ProbDomain(), open_geom[lev].Coord(), nonperiodic);
+				}
+			}
+			amrex::OpenBCSolver poissonSolver(open_geom, boxArray(0, finest_level), DistributionMap(0, finest_level), openbc_info);
 			if (verbose) {
 				poissonSolver.setVerbose(1);
 				poissonSolver.setBottomVerbose(0);
@@ -3377,8 +3400,23 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
 					       quokka::centering cen, quokka::direction dir)
-{							// here neco
+{
 	BL_PROFILE("AMRSimulation::FillCoarsePatch()"); // NOLINT(misc-const-correctness)
+
+	struct CoarsePatchNoInterpHook {
+		void operator()(amrex::FArrayBox & /*fab*/, amrex::Box const & /*box*/, int /*scomp*/, int /*ncomp*/) const {}
+	};
+
+	FillCoarsePatchWithHooks(lev, time, mf, icomp, ncomp, BCs, cen, dir, CoarsePatchNoInterpHook{}, CoarsePatchNoInterpHook{});
+}
+
+template <typename problem_t>
+template <typename PreInterpHook, typename PostInterpHook>
+void AMRSimulation<problem_t>::FillCoarsePatchWithHooks(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
+							quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp,
+							PostInterpHook const &post_interp)
+{
+	BL_PROFILE("AMRSimulation::FillCoarsePatchWithHooks()"); // NOLINT(misc-const-correctness)
 
 	AMREX_ASSERT(lev > 0);
 
@@ -3396,11 +3434,12 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 
 	if (cen == quokka::centering::cc) {
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
-					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0);
+					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0, pre_interp,
+					     post_interp);
 	} else if (cen == quokka::centering::fc) {
 		amrex::Interpolater *face_mapper = &amrex::face_divfree_interp;
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
-					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), face_mapper, BCs, 0);
+					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), face_mapper, BCs, 0, pre_interp, post_interp);
 	} else {
 		amrex::Abort("AMR interpolation is not implemented for this zone centering!");
 	}
