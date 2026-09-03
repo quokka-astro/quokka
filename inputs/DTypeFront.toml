@@ -23,9 +23,9 @@ suppress_output = 0
 
 stop_time = 1.93e13 # = 20 t_s
 
-stromgen.primary_species_1 = 1.0e-10
-stromgen.primary_species_2 = 139.9
-stromgen.primary_species_3 = 1.0e-10
+stromgen.n_e_init = 1.0e-10
+stromgen.n_HI_init = 139.9
+stromgen.n_HII_init = 1.0e-10
 stromgen.Q = 4e46
 stromgen.temperature = 37.11
 
@@ -40,9 +40,6 @@ integrator.ode_max_steps = 50000
 
 plotfile_interval = -1
 plotfile_prefix = "DType"
-
-network.allow_mixed_cell_cooling = 0
-
 
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 

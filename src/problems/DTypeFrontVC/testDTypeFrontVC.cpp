@@ -66,15 +66,16 @@ template <> struct RadSystem_Traits<DTypeFrontVC> {
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	static constexpr int beta_order = 1;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
 };
 
 template <> struct SimulationData<DTypeFrontVC> {
 	amrex::Real small_temp{};
 	amrex::Real small_dens{};
 	amrex::Real temperature{};
-	amrex::Real primary_species_1{};
-	amrex::Real primary_species_2{};
-	amrex::Real primary_species_3{};
+	amrex::Real n_e_init{};
+	amrex::Real n_HI_init{};
+	amrex::Real n_HII_init{};
 };
 
 template <>
@@ -94,15 +95,15 @@ template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 	userData_.small_temp = 1.0e-2;
 	userData_.small_dens = 1.0e-60;
 	userData_.temperature = 1.0e3;
-	userData_.primary_species_1 = 1.0e-10;
-	userData_.primary_species_2 = 1.0e2;
-	userData_.primary_species_3 = 1.0e-10;
+	userData_.n_e_init = 1.0e-10;
+	userData_.n_HI_init = 1.0e2;
+	userData_.n_HII_init = 1.0e-10;
 	pp.query("small_temp", userData_.small_temp);
 	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
-	pp.query("primary_species_1", userData_.primary_species_1);
-	pp.query("primary_species_2", userData_.primary_species_2);
-	pp.query("primary_species_3", userData_.primary_species_3);
+	pp.query("n_e_init", userData_.n_e_init);
+	pp.query("n_HI_init", userData_.n_HI_init);
+	pp.query("n_HII_init", userData_.n_HII_init);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
@@ -124,7 +125,10 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	burn_t state;
-	std::array<Real, NumSpec> numdens = {userData_.primary_species_1, userData_.primary_species_2, userData_.primary_species_3};
+	std::array<Real, NumSpec> numdens = {-1.0};
+	numdens[Species::e] = userData_.n_e_init;
+	numdens[Species::H] = userData_.n_HI_init;
+	numdens[Species::Hp] = userData_.n_HII_init;
 	state.T = userData_.temperature;
 
 	Real rhotot = 0.0_rt;

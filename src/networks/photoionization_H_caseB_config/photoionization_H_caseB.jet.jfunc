@@ -1,0 +1,33 @@
+@var kB = 1.380649e-16   # Boltzmann's constant, erg/K
+
+# Reaction 2: H + e- -> H+ + e- + e- (collisional ionization)
+# Arrhenius fit: A * sqrt(T) * exp(-2.18e-11 erg / (kB * T))
+@function chemRate2(tgas)
+    A = 5.84e-11
+    x = A * sqrt(tgas) * exp(-2.18e-11 / (kB * tgas))
+    return x
+
+# Reaction 0: H -> H+ + e- (photoionization)
+# Fixed photoheating energy per ionization event.
+@function deltaE0()
+    x = 6.4e-12
+    return x
+
+# Standalone (non-reaction-tied) heating/cooling. These do not scale with any
+# reaction's own rate coefficient, so they live here rather than in a deltaE
+# function (dEdt_chem = deltaE_i * rate_i * reactant densities would otherwise
+# multiply them by that reaction's own T-dependence):
+#   + KI heating (constant rate per unit H density)
+#   - KI cooling (Vazquez-Semadeni et al. 2007 functional form)
+#   - recombination cooling, T-dependent, no cooling below 100 K, tied to n_e * n_Hp
+#   - ion free-free (Bremsstrahlung) cooling, tied to n_e * n_Hp
+@function heatingCoolingRate(tgas, n_H0, n_e, n_Hp)
+    heating_KI = 2.0e-26 * n_H0
+
+    cooling_KI = 2.0e-26 * (1.0e7 * exp(-118400.0 / (tgas + 1.0e3)) + 1.4e-2 * sqrt(tgas) * exp(-92.0 / tgas)) * n_H0 * n_H0
+
+    cooling_recombination = Piecewise((0.0, tgas < 100.0), (6.1e-10 * kB * tgas * tgas**(-0.89), True)) * n_e * n_Hp
+
+    cooling_ff = (1.4e-27 * sqrt(tgas) + 1.0e-19 * exp(-118348.0 / tgas)) * n_e * n_Hp
+
+    return heating_KI - cooling_KI - cooling_recombination - cooling_ff

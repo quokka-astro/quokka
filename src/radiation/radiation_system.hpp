@@ -836,10 +836,35 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 #ifdef PHOTOCHEMISTRY
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
 {
-	auto const freq_bounds = RadSystem_Traits<problem_t>::ChemBands();
-	amrex::Real freq_low = freq_bounds[group_index];
-	amrex::Real freq_high = freq_bounds[group_index + 1];
-	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
+	// ChemBands() is in eV (jaff's native unit for radiation band edges);
+	// convert to erg here rather than have every problem's CMakeLists
+	// convert to Hz by hand.
+	// The choice of the radiation bounds is an arbitrary choice and does
+	// not affect the results. This function is only meant for providing a
+	// way to convert photon energy density to number densities, the former
+	// being the quantity used by the radiation solver, while the latter is
+	// used by the chemistry solver.
+	auto const ev_bounds = RadSystem_Traits<problem_t>::ChemBands();
+	amrex::Real const ev_low = ev_bounds[group_index];
+	amrex::Real const ev_high = ev_bounds[group_index + 1];
+
+	amrex::Real const alpha = RadSystem_Traits<problem_t>::ChemBandsPowerLawIndex();
+
+	amrex::Real ev_avg = NAN;
+	if (std::isinf(ev_high)) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alpha < 0.0, "GetChemBandQuanta: an open-topped chemistry band only has a "
+							      "finite average photon energy for power_law_index < 0");
+		ev_avg = ev_low * (1.0 - 1.0 / alpha);
+	} else if (alpha == 0.0) {
+		ev_avg = ev_low * ev_high * std::log(ev_high / ev_low) / (ev_high - ev_low);
+	} else if (alpha == 1.0) {
+		ev_avg = (ev_high - ev_low) / std::log(ev_high / ev_low);
+	} else {
+		ev_avg = ((alpha - 1.0) / alpha) * (std::pow(ev_high, alpha) - std::pow(ev_low, alpha)) /
+			 (std::pow(ev_high, alpha - 1.0) - std::pow(ev_low, alpha - 1.0));
+	}
+
+	return ev_avg * C::ev2erg;
 }
 #endif
 
