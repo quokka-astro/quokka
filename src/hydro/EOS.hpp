@@ -418,11 +418,13 @@ template <typename problem_t> struct EOSMicrophysics {
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Real rho, amrex::Real Pressure) -> amrex::Real
 	{
-		static_assert(gamma_ == 1.0, "ComputeIsothermalSoundSpeed does not support general EOS");
-		static_assert(EOS_Traits<problem_t>::cs_isothermal > 0.0, "EOS_Traits<problem_t>::cs_isothermal must be set when gamma=1.");
-		amrex::ignore_unused(rho);
-		amrex::ignore_unused(Pressure);
-		return EOS_Traits<problem_t>::cs_isothermal;
+		if constexpr (gamma_ == 1.0) {
+			static_assert(EOS_Traits<problem_t>::cs_isothermal > 0.0, "EOS_Traits<problem_t>::cs_isothermal must be set when gamma=1.");
+			amrex::ignore_unused(rho);
+			amrex::ignore_unused(Pressure);
+			return EOS_Traits<problem_t>::cs_isothermal;
+		}
+		return std::sqrt(Pressure / rho);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
