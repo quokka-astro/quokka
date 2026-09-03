@@ -217,8 +217,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int restartRefineFactor_ = 1;				     // 1 == don't refine, >1 == refine by this factor on restart
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
-	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
-	bool splitParticlesOnRestartRefine_ = true;		     // whether to split particles when restarting with refinement
+	// Order of the polynomial used to fill fine-level ghost cells at coarse/fine boundaries
+	// in the Poisson solve. AMReX's default is 3 (a quadratic through the interpolated coarse
+	// value and two fine interior values), whose truncation error is O(h^3 d^3phi/dn^3). That
+	// error acts as a spurious Dirichlet perturbation on the refinement boundary and produces
+	// a gravitational self-force ~ G M h^3 / d^5 on a source at distance d from the boundary.
+	int gravityCoarseFineOrder_ = 3;
+	int poissonSupercycleInterval_ = 1;	    // number of coarse steps between Poisson solves (default: 1)
+	bool splitParticlesOnRestartRefine_ = true; // whether to split particles when restarting with refinement
 	amrex::Vector<amrex::MultiFab> phi;
 
 	// SFH parameters
@@ -996,6 +1002,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default Poisson solver tolerances
 	pp.query("poisson_reltol", reltolPoisson_);
 	pp.query("poisson_abstol", abstolPoisson_);
+	pp.query("gravity_coarse_fine_order", gravityCoarseFineOrder_);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(gravityCoarseFineOrder_ >= 2 && gravityCoarseFineOrder_ <= 4, "quokka.gravity_coarse_fine_order must be 2, 3 or 4");
 
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
@@ -1880,6 +1888,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 			// Set the mixed boundary conditions (already computed above)
 			mlpoisson.setDomainBC(bc_lo, bc_hi);
+
+			// Order of the coarse/fine ghost-cell extrapolation (see gravityCoarseFineOrder_).
+			mlpoisson.setMaxOrder(gravityCoarseFineOrder_);
 
 			// Set level boundary conditions for each AMR level
 			for (int lev = 0; lev <= finest_level; ++lev) {

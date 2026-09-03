@@ -35,6 +35,23 @@ static bool do_split_particles = false;	    // NOLINT
 static int split_factor = 8;		    // NOLINT
 static bool verify_particle_layout = false; // NOLINT
 
+// Static mesh refinement: when finite, every cell with x >= refine_x_min is tagged for
+// refinement, producing a planar coarse/fine boundary at x = refine_x_min. This is the
+// geometry used by Zhu & Gnedin (2021) to expose gravitational self-force errors.
+static double refine_x_min = std::numeric_limits<double>::quiet_NaN(); // NOLINT
+
+// ASCII file holding the initial particle positions/velocities.
+static std::string particles_file = "../inputs/BinaryOrbit_particles.txt"; // NOLINT
+
+// When false, refinement does not follow the particles, so a refine_x_min-based tagging
+// criterion alone determines the (static) mesh hierarchy.
+static bool force_finest_level = true; // NOLINT
+
+// Diagnostic: print the final position and velocity of every particle. With a single
+// stationary particle this measures the gravitational self-force directly, since
+// v = a_self * t.
+static bool print_particle_state = false; // NOLINT
+
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	       // isothermal
 	static constexpr double cs_isothermal = 1.3e7; // cm s^{-1}
@@ -80,7 +97,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
-	CICParticles->InitFromAsciiFile("../inputs/BinaryOrbit_particles.txt", nreal_extra, nullptr);
+	CICParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
 
 	// test particle splitting
 	// (this is intended to only be used when restarting at a higher resolution)
@@ -88,6 +105,31 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 		amrex::Print() << "Splitting CICParticles using split_factor = " << split_factor << "\n";
 		int const lev = 0; // all CICParticles are on level 0
 		particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->splitParticles(lev, split_factor);
+	}
+}
+
+template <> void QuokkaSimulation<BinaryOrbit>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// Static mesh refinement: tag the x >= refine_x_min half of the domain, so that the
+	// binary orbits next to a fixed planar coarse/fine boundary at x = refine_x_min.
+	if (!std::isfinite(refine_x_min)) {
+		return;
+	}
+
+	auto const &dx = geom[lev].CellSizeArray();
+	auto const &plo = geom[lev].ProbLoArray();
+	const amrex::Real x_boundary = refine_x_min;
+
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const amrex::Real x = plo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+			if (x >= x_boundary) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
 	}
 }
 
@@ -105,6 +147,21 @@ void QuokkaSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::string const
 	}
 }
 
+// Gather particle data from every AMR level onto the IO rank. With static mesh refinement the
+// two binary members can straddle a refinement boundary and end up on different levels, so
+// looking only at the finest level would silently drop one of them. This is a collective call
+// and must be made on every rank.
+static auto gatherParticleDataAllLevels(QuokkaSimulation<BinaryOrbit> &sim) -> std::vector<std::vector<double>>
+{
+	std::vector<std::vector<double>> all_data;
+	auto *descriptor = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC);
+	for (int lev = 0; lev <= sim.finestLevel(); ++lev) {
+		const auto level_data = descriptor->getParticleDataAtLevel(lev).first;
+		all_data.insert(all_data.end(), level_data.begin(), level_data.end());
+	}
+	return all_data;
+}
+
 template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 {
 	if (verify_particle_layout) {
@@ -119,13 +176,17 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 	// every N cycles, save particle statistics at the finest level
 	static int cycle = 1;
 	if (cycle % 10 == 0) {
-		// get the finest level
-		const int finest_level = finestLevel();
-
-		// Get particle data using the physics particle descriptor
-		const auto [real_data, int_data] = particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(finest_level);
+		// Get particle data from all levels using the physics particle descriptor
+		const auto real_data = gatherParticleDataAllLevels(*this);
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
+			if (print_particle_state) {
+				for (const auto &p : real_data) {
+					amrex::Print() << std::format("[TRAJ] t = {:.8e} pos = ({:.10e}, {:.10e}, {:.10e}) vel = ({:.10e}, {:.10e}, {:.10e})\n",
+								      tNew_[0], p[0], p[1], p[2], p[4], p[5], p[6]);
+				}
+			}
+
 			if (real_data.size() >= 2) {
 				amrex::Print() << "Computing particle statistics...\n";
 
@@ -165,6 +226,10 @@ auto problem_main() -> int
 	pp.query("do_split_particles", do_split_particles);
 	pp.query("split_factor", split_factor);
 	pp.query("verify_particle_layout", verify_particle_layout);
+	pp.query("refine_x_min", refine_x_min);
+	pp.query("particles_file", particles_file);
+	pp.query("force_finest_level", force_finest_level);
+	pp.query("print_particle_state", print_particle_state);
 
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim;
@@ -172,7 +237,7 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->setForceFinestLevel(true);
+	sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->setForceFinestLevel(force_finest_level);
 
 	// evolve
 	sim.evolve();
@@ -186,13 +251,21 @@ auto problem_main() -> int
 	// get the number of particles
 	const int n_particles = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
 
-	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(0).first;
+	const auto real_data = gatherParticleDataAllLevels(sim);
 
 	int status = 0;
 	// check max abs particle distance
 	double max_deviation = 0.0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::Print() << "Number of particles: " << n_particles << "\n";
+
+		if (print_particle_state) {
+			amrex::Print() << "[STATE] t = " << sim.tNew_[0] << "\n";
+			for (const auto &p : real_data) {
+				amrex::Print() << std::format("[STATE] pos = ({:.14e}, {:.14e}, {:.14e}) vel = ({:.14e}, {:.14e}, {:.14e})\n", p[0], p[1], p[2],
+							      p[4], p[5], p[6]);
+			}
+		}
 
 		// compute total particle mass and error
 		double max_part_mass = 0.0;
@@ -238,7 +311,8 @@ auto problem_main() -> int
 			if (max_deviation < max_err_tol) {
 				amrex::Print() << "Test passed\n";
 			} else {
-				amrex::Print() << "Test failed\n";
+				status += 1;
+				amrex::Print() << "Test failed (max deviation " << max_deviation << " >= tolerance " << max_err_tol << ")\n";
 			}
 		} else {
 			double max_err_tol = 0.05;
@@ -250,7 +324,8 @@ auto problem_main() -> int
 			if (max_deviation < max_err_tol) {
 				amrex::Print() << "Test passed\n";
 			} else {
-				amrex::Print() << "Test failed\n";
+				status += 1;
+				amrex::Print() << "Test failed (max deviation " << max_deviation << " >= tolerance " << max_err_tol << ")\n";
 			}
 			if (n_particles != n_particles_expected) {
 				status += 1;
