@@ -145,8 +145,7 @@ auto E_gas_analytic(double t) -> double
 }
 } // namespace
 
-struct DustDampingMHDZeroBMixedStiff {
-};
+struct DustDampingMHDZeroBMixedStiff {};
 
 template <> struct SimulationData<DustDampingMHDZeroBMixedStiff> {
 	std::vector<double> t_vec_;
@@ -529,9 +528,12 @@ auto problem_main() -> int
 			}
 		}
 
-		auto const &tp2025 = runs[0];
-		auto const &gl4 = runs[1];
-		auto const &midpoint = runs[2];
+		auto const findRun = [&runs](ResolvedRkScheme scheme) -> SchemeRunResult const & {
+			return *std::ranges::find(runs, scheme, &SchemeRunResult::scheme);
+		};
+		auto const &tp2025 = findRun(ResolvedRkScheme::TP2025);
+		auto const &gl4 = findRun(ResolvedRkScheme::GL4);
+		auto const &midpoint = findRun(ResolvedRkScheme::Midpoint);
 		bool const gas_order_ok = (tp2025.rel_err_gas_vx < gl4.rel_err_gas_vx) && (gl4.rel_err_gas_vx < midpoint.rel_err_gas_vx);
 		bool const dust2_order_ok = (tp2025.rel_err_dust2_vx < gl4.rel_err_dust2_vx) && (gl4.rel_err_dust2_vx < midpoint.rel_err_dust2_vx);
 		bool const energy_order_ok = (tp2025.rel_err_gas_E < gl4.rel_err_gas_E) && (gl4.rel_err_gas_E < midpoint.rel_err_gas_E);

@@ -23,8 +23,7 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct MHDBalsaraVortex {
-};
+struct MHDBalsaraVortex {};
 
 template <> struct quokka::EOS_Traits<MHDBalsaraVortex> {
 	static constexpr double gamma = 5.0 / 3.0;
@@ -32,6 +31,7 @@ template <> struct quokka::EOS_Traits<MHDBalsaraVortex> {
 };
 
 template <> struct Physics_Traits<MHDBalsaraVortex> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };
@@ -218,15 +218,25 @@ auto problem_main() -> int
 	amrex::ParmParse const hpp("setup");
 
 	int advection_int = 0;
-	int num_orbits = 1;
+	double num_periods = 1.0;
 	hpp.query("vortex_Mach", vortex_Mach);
 	hpp.query("vortex_b_magn", vortex_b_magn);
 	hpp.query("advection", advection_int);
-	hpp.query("num_orbits", num_orbits);
+	hpp.query("num_periods", num_periods);
 	const double vortex_u_magn = vortex_Mach * sound_speed;
 	const bool is_advection_enabled = (advection_int != 0);
 	if (vortex_radius <= 0.0) {
 		amrex::Abort("vortex_radius must be > 0.");
+	}
+	if (!std::isfinite(num_periods) || num_periods <= 0.0) {
+		amrex::Abort("setup.num_periods must be finite and > 0.");
+	}
+	{
+		double unused_stop_time = 0.0;
+		if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
+			amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
+				     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
+		}
 	}
 
 	auto BCs_cc = quokka::BC<MHDBalsaraVortex>(quokka::BCType::int_dir);
@@ -253,11 +263,11 @@ auto problem_main() -> int
 		}
 		const double advection_distance = std::sqrt(length_x1 * length_x1 + length_x2 * length_x2);
 		const double advection_duration = advection_distance / vortex_u_magn;
-		stop_time = static_cast<double>(num_orbits) * advection_duration;
+		stop_time = num_periods * advection_duration;
 	} else {
 		vortex_drift_x1 = vortex_drift_x2 = 0.0;
 		const double orbital_duration = 2.0 * std::numbers::pi / vortex_u_magn;
-		stop_time = static_cast<double>(num_orbits) * orbital_duration;
+		stop_time = num_periods * orbital_duration;
 	}
 
 	sim.stopTime_ = stop_time;
