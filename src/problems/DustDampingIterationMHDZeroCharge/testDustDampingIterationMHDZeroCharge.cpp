@@ -31,11 +31,9 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_density = {1.0, 1
 constexpr bool enable_supersonic_correction = true;
 } // namespace
 
-struct DustDampingDragReference {
-};
+struct DustDampingDragReference {};
 
-struct DustDampingMHDZeroCharge {
-};
+struct DustDampingMHDZeroCharge {};
 
 struct DustDampingHistory {
 	std::vector<double> t_vec_;
@@ -51,11 +49,9 @@ struct DustDampingHistory {
 	std::vector<double> E_gas_vec_;
 };
 
-template <> struct SimulationData<DustDampingDragReference> : DustDampingHistory {
-};
+template <> struct SimulationData<DustDampingDragReference> : DustDampingHistory {};
 
-template <> struct SimulationData<DustDampingMHDZeroCharge> : DustDampingHistory {
-};
+template <> struct SimulationData<DustDampingMHDZeroCharge> : DustDampingHistory {};
 
 template <> struct quokka::EOS_Traits<DustDampingDragReference> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -94,28 +90,28 @@ template <> struct Physics_Traits<DustDampingMHDZeroCharge> : DefaultPhysicsTrai
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingDragReference>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
-												amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-												amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
-												double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingDragReference>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density, enable_supersonic_correction);
+	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, g_dust_grain_radius,
+						 g_dust_grain_density, enable_supersonic_correction);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroCharge>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
-												amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-												amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
-												double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroCharge>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density, enable_supersonic_correction);
+	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, g_dust_grain_radius,
+						 g_dust_grain_density, enable_supersonic_correction);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroCharge>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroCharge>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, nDustGroups_> charge_to_mass_ratio{};
-	charge_to_mass_ratio.fill(0.0);
-	return charge_to_mass_ratio;
+	amrex::GpuArray<amrex::Real, nDustGroups_> dimensionless_charge_to_mass_ratio{};
+	dimensionless_charge_to_mass_ratio.fill(0.0);
+	return dimensionless_charge_to_mass_ratio;
 }
 
 template <typename problem_t> void setDustDampingInitialConditions(quokka::grid const &grid_elem)
@@ -229,7 +225,7 @@ auto run_reference_simulation() -> SimulationData<DustDampingDragReference>
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 1000000.0; // large CFL number to avoid CFL violation
 	sim.constantDt_ = 0.00005;  // fixed small timestep for reference solution
-	sim.enableIterDustStoptime_ = 0;
+	sim.dustCoefficientIteration_.enabled = false;
 	sim.print_dust_counter_ = false;
 
 	sim.setInitialConditions();
@@ -263,8 +259,8 @@ auto run_mhd_zero_charge_simulation() -> SimulationData<DustDampingMHDZeroCharge
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 0.3;
 	sim.constantDt_ = -1.0;
-	sim.enableIterDustStoptime_ = 1;
-	sim.dust_omega_res_ = 1.0; // make the energy calculation method in computeDustDragAndLorentz() the same as the reference solution
+	sim.dustCoefficientIteration_.enabled = true;
+	sim.dustResolvedRkScheme_ = quokka::dust::ResolvedRkScheme::TP2025;
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();

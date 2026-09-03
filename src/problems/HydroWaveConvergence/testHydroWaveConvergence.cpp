@@ -21,8 +21,7 @@
 #include "util/fextract.hpp"
 #include "util/richardson.hpp"
 
-struct WaveProblem {
-};
+struct WaveProblem {};
 
 template <> struct quokka::EOS_Traits<WaveProblem> {
 	static constexpr double gamma = 5. / 3.;
@@ -30,6 +29,7 @@ template <> struct quokka::EOS_Traits<WaveProblem> {
 };
 
 template <> struct Physics_Traits<WaveProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear/bulk default to 0; no-op unless set

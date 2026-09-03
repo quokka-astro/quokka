@@ -235,7 +235,13 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
-	amrex::Real tempFloor_ = 0.0;	     // default
+	// Default temperature floor: the CMB temperature, 2.7 K, for problems in CGS units, where the
+	// literal value below is unambiguously in kelvin. It defaults to 0 for the CONSTANTS and CUSTOM
+	// unit systems, because there the value would be interpreted in code units rather than kelvin:
+	// CONSTANTS fixes the physical constants without defining a temperature scale, and CUSTOM
+	// rescales temperature by Physics_Traits::unit_temperature. Such problems should set
+	// temperature_floor explicitly.
+	amrex::Real tempFloor_ = (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) ? 2.7 : 0.0; // K (CGS only)
 	bool useDensityFloorParser_ = false;
 	std::string densityFloorExpr_;
 	std::optional<amrex::Parser> densityFloorParser_;
@@ -335,7 +341,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	 */
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 				       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const = 0;
-	virtual void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const;
+	virtual void ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const;
 
 	// compute statistics
 	virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
@@ -1272,9 +1278,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	if (enableElectronConduction_ == 1) {
 		double c_v = C::k_B / (::quokka::EOS_Traits<problem_t>::mean_molecular_weight * (::quokka::EOS_Traits<problem_t>::gamma - 1.0));
 		double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
-		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient;
+		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient / AMREX_SPACEDIM;
 		conduction_dt.index = domain_signal_maxloc;
-
 		if (verbose) {
 			amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
 			amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
@@ -2147,6 +2152,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// The extra component is for the particle counts in cells
 	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars + 1, nghost);
 
+	// Evaluate the configured density floor cell-by-cell so sink accretion uses
+	// the same spatially varying floor as the hydro state fixup.
+	amrex::MultiFab density_floor_at_level(grids[lev], dmap[lev], 1, 0);
+	ComputeDensityFloor(lev, density_floor_at_level, 0);
+
 	accretion_rate_at_level.setVal(0.0);
 
 	// Sink accretion, stage 1: compute the accretion rate
@@ -2157,7 +2167,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	quokka::ParticleUtils::roundoffMultiFab(accretion_rate_at_level);
 
 	// Sink accretion, stage 2: update the particle states -- compute scale_down, apply to particle, apply to cells
-	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, geom[lev], lev, time, dt);
+	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, geom[lev], lev, time, dt, density_floor_at_level);
 
 	// Only create particles when the AMR hierarchy has fully refined to max_level.
 	// Creating a ForceFinestLevel particle at a sub-max level violates the invariant
@@ -2416,10 +2426,20 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterC
 	if (amrInterpMethod_ == 1) { // slope-limited linear interpolation
 		//  It has the following important properties:
 		// 1. should NOT produce new extrema
-		//    (will revert to piecewise constant if any component has a local min/max)
+		//    (will revert to piecewise constant if any component has a local min/max
+		//     -- including in directions where the field is exactly flat, e.g. y/z for a 1D-in-3D problem)
 		// 2. should be conservative
 		// 3. preserves linear combinations of variables in each cell
 		return &amrex::mf_linear_slope_minmax_interp;
+	}
+	if (amrInterpMethod_ == 2) { // linear conservative interpolation (gentler limiter, no min/max reversion)
+		// preserves linear combinations of variables in each cell, without the no-new-extrema
+		// reversion to piecewise-constant that mf_linear_slope_minmax_interp applies whenever
+		// any direction (including an exactly-flat one) contains a local extremum.
+		return &amrex::mf_lincc_interp;
+	}
+	if (amrInterpMethod_ == 3) { // pure linear conservative interpolation, no limiting at all
+		return &amrex::mf_cell_cons_interp;
 	}
 
 	amrex::Abort("Invalid AMR interpolation method specified!");
@@ -3900,7 +3920,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 		if (deriv_it != derivedNames_.end()) {
 			static constexpr char const *kDensityFloorDbgName = "density_floor_dbg";
 			if (varname == kDensityFloorDbgName) {
-				ComputeDensityFloorDebug(lev, plotMF, comp);
+				ComputeDensityFloor(lev, plotMF, comp);
 				comp++;
 				continue;
 			}
@@ -3920,7 +3940,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 	return plotMF;
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
+template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const
 {
 	auto const ncomp_out = ncomp;
 	auto const prob_lo = geom[lev].ProbLoArray();

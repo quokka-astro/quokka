@@ -1,5 +1,5 @@
 /// \file testDustMagnetizedRDI.cpp
-/// \brief Magnetized RDI analogue inspired by Moseley et al. (2022), Section 3.5.
+/// \brief Magnetized RDI test inspired by Moseley et al. (2023), Section 3.5.
 
 #include "AMReX_Gpu.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -14,13 +14,13 @@
 #include <cstdint>
 #include <format>
 #include <fstream>
+#include <iomanip>
 #include <limits>
 #include <numbers>
 #include <string>
 #include <vector>
 
-struct DustMagnetizedRDI {
-};
+struct DustMagnetizedRDI {};
 
 namespace
 {
@@ -31,44 +31,43 @@ constexpr double rho_gas0 = 1.0;
 constexpr double sound_speed = 1.0;
 constexpr double gamma_iso = 1.0;
 constexpr double tiny_number = 1.0e-14;
-constexpr double dust_density_floor = 1.0e-12;
 constexpr double supersonic_eta = 9.0 * pi * gamma_iso / 128.0;
 constexpr double time_tolerance = 1.0e-10;
 constexpr double bar_a = 5.0;
-constexpr double grain_radius_density_param = 5.0;
-constexpr double xi_param = 10.0;
-constexpr double mu_param = 0.01;
+constexpr double grain_radius_default = 5.0;
+constexpr double grain_density_default = 1.0;
+constexpr double dimensionless_charge_to_mass_ratio = -10.0;
+constexpr double dust_to_gas_mass_ratio = 0.01;
 constexpr double beta_param = 2.0;
 constexpr double theta_Ba_deg = 87.0;
-constexpr double grain_density0 = 1.0;
-constexpr double noise_amplitude_param = 1.0e-7;
+constexpr double noise_amplitude_default = 1.0e-7;
+constexpr int noise_seed_default = 20250305;
 
-constexpr std::array<char const *, 3> snapshot_tags = {"t6p2ts0", "t8p3ts0", "t17p0ts0"};
-constexpr std::array<char const *, 3> face_tags = {"xface", "yface", "zface"};
-constexpr std::array<double, 3> snapshot_times_over_ts0_default = {6.2, 8.3, 17.0};
+constexpr std::array<char const *, 3> stage_labels = {"linear", "nonlinear", "saturation"};
+constexpr std::array<char const *, 3> slice_tags = {"xmax_slice", "ymin_slice", "zmax_slice"};
+constexpr std::array<double, 3> stage_times_over_ts0_default = {5.8, 7.5, 17.0};
 constexpr double history_dt_over_ts0_default = 0.1;
 
-double g_history_dt_over_ts0 = history_dt_over_ts0_default;			   // NOLINT
-double g_history_dt_code = history_dt_over_ts0_default;				   // NOLINT
-int g_slice_thickness_cells = 1;						   // NOLINT
-bool g_write_csv = true;							   // NOLINT
-std::array<double, 3> g_snapshot_times_over_ts0 = snapshot_times_over_ts0_default; // NOLINT
-std::array<double, 3> g_snapshot_target_times = {0.0, 0.0, 0.0};		   // NOLINT
-double g_equilibrium_ts = 0.0;							   // NOLINT
+double g_history_dt_over_ts0 = history_dt_over_ts0_default;		     // NOLINT
+double g_history_dt_code = history_dt_over_ts0_default;			     // NOLINT
+bool g_write_csv = true;						     // NOLINT
+std::array<double, 3> g_stage_times_over_ts0 = stage_times_over_ts0_default; // NOLINT
+std::array<double, 3> g_stage_target_times = {0.0, 0.0, 0.0};		     // NOLINT
+double g_equilibrium_ts = 0.0;						     // NOLINT
 
-AMREX_GPU_MANAGED double g_grain_radius = grain_radius_density_param / grain_density0; // NOLINT
-AMREX_GPU_MANAGED double g_grain_density = grain_density0;			       // NOLINT
-AMREX_GPU_MANAGED double g_charge_to_mass = xi_param;				       // NOLINT
-AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_param;		       // NOLINT
-AMREX_GPU_MANAGED double g_Bx0 = 0.0;						       // NOLINT
-AMREX_GPU_MANAGED double g_By0 = 0.0;						       // NOLINT
-AMREX_GPU_MANAGED double g_Bz0 = 1.0;						       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_grain_radius = grain_radius_default;	      // NOLINT
+AMREX_GPU_MANAGED double g_grain_density = grain_density_default;     // NOLINT
+AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_default; // NOLINT
+AMREX_GPU_MANAGED int g_noise_seed = noise_seed_default;	      // NOLINT
+AMREX_GPU_MANAGED double g_Bx0 = 0.0;				      // NOLINT
+AMREX_GPU_MANAGED double g_By0 = 0.0;				      // NOLINT
+AMREX_GPU_MANAGED double g_Bz0 = 1.0;				      // NOLINT
+AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;			      // NOLINT
+AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;			      // NOLINT
+AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;			      // NOLINT
+AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;			      // NOLINT
+AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;			      // NOLINT
+AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;			      // NOLINT
 
 struct EquilibriumState {
 	Vec3 drift_{};
@@ -98,11 +97,11 @@ struct DiagnosticsRecord {
 	bool finite_ = true;
 };
 
-struct FaceProjection {
+struct OuterSlice {
 	std::vector<double> u_;
 	std::vector<double> v_;
-	std::vector<double> bvec_minus_b0_norm_;
-	std::vector<double> dust_overdensity_;
+	std::vector<double> magnetic_perturbation_magnitude_;
+	std::vector<double> dust_density_ratio_;
 };
 
 struct DustMagnetizedRDIHistory {
@@ -120,9 +119,10 @@ struct DustMagnetizedRDIHistory {
 	std::vector<double> sigma_by_;
 	std::vector<double> sigma_bz_;
 	std::vector<double> sigma_bmag_;
-	std::array<bool, 3> snapshot_written_ = {false, false, false};
-	std::array<double, 3> snapshot_times_ = {-1.0, -1.0, -1.0};
-	std::array<double, 3> snapshot_sigmas_ = {0.0, 0.0, 0.0};
+	std::array<bool, 3> stage_written_ = {false, false, false};
+	std::array<double, 3> stage_times_ = {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(),
+					      std::numeric_limits<double>::quiet_NaN()};
+	std::array<std::string, 3> stage_plotfiles_;
 };
 
 template <typename T> auto square(T value) -> T { return value * value; }
@@ -165,12 +165,9 @@ auto makeBackgroundMagneticField(double beta, double theta_Ba_deg) -> Vec3
 	return {Bmag * std::cos(theta), 0.0, Bmag * std::sin(theta)};
 }
 
-auto grainRadiusDensityProduct() -> double { return g_grain_radius * g_grain_density; }
+auto grainSizeParameter() -> double { return g_grain_radius * g_grain_density; }
 
-auto computeSubsonicStoppingTime() -> double
-{
-	return std::sqrt(pi * gamma_iso) * grainRadiusDensityProduct() / (2.0 * std::numbers::sqrt2 * rho_gas0 * sound_speed);
-}
+auto computeSubsonicStoppingTime() -> double { return std::sqrt(pi * gamma_iso) * grainSizeParameter() / (2.0 * std::numbers::sqrt2 * rho_gas0 * sound_speed); }
 
 auto solveDriftEquilibrium() -> EquilibriumState
 {
@@ -182,15 +179,15 @@ auto solveDriftEquilibrium() -> EquilibriumState
 	Vec3 const acceleration = {bar_a, 0.0, 0.0};
 	Vec3 const b_hat = result.magnetic_field_ / magnetic_field_norm;
 	double const ts_sub = computeSubsonicStoppingTime();
-	double const omega_L = xi_param * magnetic_field_norm;
+	double const omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_norm;
 
-	Vec3 drift = {(ts_sub / (1.0 + mu_param)) * bar_a, 0.0, 0.0};
+	Vec3 drift = {(ts_sub / (1.0 + dust_to_gas_mass_ratio)) * bar_a, 0.0, 0.0};
 	for (int iter = 0; iter < 64; ++iter) {
 		double const drift_speed = norm(drift);
 		double const stop_time = ts_sub / std::sqrt(1.0 + supersonic_eta * square(drift_speed / sound_speed));
 		double const tau_local = omega_L * stop_time;
 
-		Vec3 const rhs = (stop_time / (1.0 + mu_param)) * acceleration;
+		Vec3 const rhs = (stop_time / (1.0 + dust_to_gas_mass_ratio)) * acceleration;
 		Vec3 const rhs_parallel = dot(rhs, b_hat) * b_hat;
 		Vec3 const rhs_perp = rhs - rhs_parallel;
 		Vec3 const hall = cross(rhs, b_hat);
@@ -204,11 +201,11 @@ auto solveDriftEquilibrium() -> EquilibriumState
 
 	result.drift_ = drift;
 	result.stop_time_ = ts_sub / std::sqrt(1.0 + supersonic_eta * square(norm(drift) / sound_speed));
-	result.tau_ = omega_L * result.stop_time_;
+	result.tau_ = std::abs(omega_L) * result.stop_time_;
 	result.drift_speed_ = norm(drift);
 	result.drift_angle_to_b_deg_ = angleDegrees(drift, result.magnetic_field_);
-	result.gas_velocity_ = (-mu_param / (1.0 + mu_param)) * drift;
-	result.dust_velocity_ = (1.0 / (1.0 + mu_param)) * drift;
+	result.gas_velocity_ = (-dust_to_gas_mass_ratio / (1.0 + dust_to_gas_mass_ratio)) * drift;
+	result.dust_velocity_ = (1.0 / (1.0 + dust_to_gas_mass_ratio)) * drift;
 	return result;
 }
 
@@ -223,25 +220,28 @@ void loadProblemParameters()
 	amrex::ParmParse const pp("problem");
 	pp.query("write_csv", g_write_csv);
 	pp.query("history_dt_over_ts0", g_history_dt_over_ts0);
-	pp.query("slice_thickness_cells", g_slice_thickness_cells);
-	amrex::Vector<double> snapshot_times_over_ts0_vec;
-	if (pp.queryarr("snapshot_times_over_ts0", snapshot_times_over_ts0_vec) != 0) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<amrex::Long>(snapshot_times_over_ts0_vec.size()) ==
-						     static_cast<amrex::Long>(g_snapshot_times_over_ts0.size()),
-						 "problem.snapshot_times_over_ts0 must contain exactly 3 values.");
-		for (std::size_t i = 0; i < g_snapshot_times_over_ts0.size(); ++i) {
-			g_snapshot_times_over_ts0[i] = snapshot_times_over_ts0_vec[i];
+	pp.query("noise_amplitude", g_noise_amplitude);
+	pp.query("noise_seed", g_noise_seed);
+	amrex::Vector<double> stage_times_over_ts0;
+	if (pp.queryarr("stage_times_over_ts0", stage_times_over_ts0) != 0) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stage_times_over_ts0.size() == static_cast<amrex::Long>(g_stage_times_over_ts0.size()),
+						 "problem.stage_times_over_ts0 must contain exactly 3 values.");
+		for (std::size_t i = 0; i < g_stage_times_over_ts0.size(); ++i) {
+			g_stage_times_over_ts0[i] = stage_times_over_ts0[i];
 		}
 	}
 
-	if (g_history_dt_over_ts0 <= 0.0) {
-		g_history_dt_over_ts0 = history_dt_over_ts0_default;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(g_history_dt_over_ts0) && g_history_dt_over_ts0 > 0.0,
+					 "problem.history_dt_over_ts0 must be finite and positive.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(g_noise_amplitude) && g_noise_amplitude >= 0.0,
+					 "problem.noise_amplitude must be finite and non-negative.");
+	for (double const stage_time : g_stage_times_over_ts0) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(stage_time) && stage_time > 0.0,
+						 "problem.stage_times_over_ts0 values must all be finite and positive.");
 	}
-	if (g_slice_thickness_cells <= 0) {
-		g_slice_thickness_cells = 1;
-	}
-	for (double const snapshot_time_over_ts0 : g_snapshot_times_over_ts0) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(snapshot_time_over_ts0 > 0.0, "problem.snapshot_times_over_ts0 values must all be positive.");
+	for (std::size_t i = 1; i < g_stage_times_over_ts0.size(); ++i) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(g_stage_times_over_ts0[i] > g_stage_times_over_ts0[i - 1],
+						 "problem.stage_times_over_ts0 values must be strictly increasing.");
 	}
 }
 
@@ -260,8 +260,8 @@ void applyEquilibriumState(EquilibriumState const &equilibrium)
 
 	g_equilibrium_ts = equilibrium.stop_time_;
 	g_history_dt_code = g_history_dt_over_ts0 * equilibrium.stop_time_;
-	for (std::size_t i = 0; i < g_snapshot_target_times.size(); ++i) {
-		g_snapshot_target_times[i] = g_snapshot_times_over_ts0[i] * equilibrium.stop_time_;
+	for (std::size_t i = 0; i < g_stage_target_times.size(); ++i) {
+		g_stage_target_times[i] = g_stage_times_over_ts0[i] * equilibrium.stop_time_;
 	}
 }
 
@@ -277,10 +277,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto mixBits(std::uint64_t key) -> std::uint
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto deterministicNoise(int i, int j, int k, int component) -> double
 {
-	auto key = static_cast<std::uint64_t>(static_cast<std::uint32_t>(i)) + 0x9e3779b9ULL;
-	key = (key << 21U) ^ (static_cast<std::uint64_t>(static_cast<std::uint32_t>(j)) + 0x7f4a7c15ULL);
-	key = (key << 17U) ^ (static_cast<std::uint64_t>(static_cast<std::uint32_t>(k)) + 0x94d049bbULL);
-	key = (key << 13U) ^ (static_cast<std::uint64_t>(static_cast<std::uint32_t>(component)) + 0x27d4eb2dULL);
+	auto key = static_cast<std::uint64_t>(static_cast<std::uint32_t>(g_noise_seed)) * 0xd6e8feb86659fd93ULL;
+	key ^= static_cast<std::uint64_t>(static_cast<std::uint32_t>(i)) * 0x9e3779b185ebca87ULL;
+	key ^= static_cast<std::uint64_t>(static_cast<std::uint32_t>(j)) * 0xc2b2ae3d27d4eb4fULL;
+	key ^= static_cast<std::uint64_t>(static_cast<std::uint32_t>(k)) * 0x165667b19e3779f9ULL;
+	key ^= static_cast<std::uint64_t>(static_cast<std::uint32_t>(component)) * 0x85ebca77c2b2ae63ULL;
 	std::uint64_t const mixed = mixBits(key);
 	double const unit = static_cast<double>(mixed & 0xffffffffULL) / static_cast<double>(0xffffffffULL);
 	return 2.0 * unit - 1.0;
@@ -338,7 +339,7 @@ template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t
 			    amrex::Real const bz = 0.5_rt * (bz_fc(i, j, k, mhd_idx) + bz_fc(i, j, k + 1, mhd_idx));
 			    amrex::Real const bmag = std::sqrt(bx * bx + by * by + bz * bz);
 			    amrex::Real const log_rho_g = std::log(amrex::max(rho_g, static_cast<amrex::Real>(tiny_number)));
-			    amrex::Real const log_rho_d = std::log(amrex::max(rho_d, static_cast<amrex::Real>(dust_density_floor)));
+			    amrex::Real const log_rho_d = std::log(rho_d);
 
 			    return {1.0_rt,
 				    log_rho_g,
@@ -401,6 +402,7 @@ template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t
 void writeGrowthHistoryCsv(DustMagnetizedRDIHistory const &history)
 {
 	std::ofstream file("dust_magnetized_rdi_growth.csv");
+	file << std::setprecision(17);
 	file << "t,sigma_log_rho_g,sigma_log_rho_d,sigma_vgx,sigma_vgy,sigma_vgz,sigma_vdx,sigma_vdy,sigma_vdz,sigma_bx,sigma_by,sigma_bz,sigma_bmag\n";
 	for (size_t i = 0; i < history.t_.size(); ++i) {
 		file << history.t_[i] << "," << history.sigma_log_rho_g_[i] << "," << history.sigma_log_rho_d_[i] << "," << history.sigma_vgx_[i] << ","
@@ -410,19 +412,38 @@ void writeGrowthHistoryCsv(DustMagnetizedRDIHistory const &history)
 	}
 }
 
-void writeSummaryCsv(EquilibriumState const &equilibrium, DustMagnetizedRDIHistory const &history)
+template <typename problem_t>
+void writeSummaryCsv(QuokkaSimulation<problem_t> const &sim, EquilibriumState const &equilibrium, DustMagnetizedRDIHistory const &history)
 {
+	auto const domain = sim.Geom(0).Domain();
+	auto const prob_lo = sim.Geom(0).ProbLoArray();
+	auto const prob_hi = sim.Geom(0).ProbHiArray();
+	double const B0 = norm(equilibrium.magnetic_field_);
+	double const rho_d0 = dust_to_gas_mass_ratio * rho_gas0;
+	double const gas_accel_x = -dust_to_gas_mass_ratio * bar_a / (1.0 + dust_to_gas_mass_ratio);
+	double const dust_accel_x = bar_a / (1.0 + dust_to_gas_mass_ratio);
+
 	std::ofstream file("dust_magnetized_rdi_summary.csv");
+	file << std::setprecision(17);
 	file << "key,value\n";
 	file << "bar_a," << bar_a << "\n";
-	file << "epsilon," << grainRadiusDensityProduct() << "\n";
-	file << "xi," << xi_param << "\n";
-	file << "mu," << mu_param << "\n";
+	file << "grain_size_parameter," << grainSizeParameter() << "\n";
+	file << "xi," << dimensionless_charge_to_mass_ratio << "\n";
+	file << "bar_phi_d," << grainSizeParameter() * std::abs(dimensionless_charge_to_mass_ratio) << "\n";
+	file << "dust_to_gas_mass_ratio," << dust_to_gas_mass_ratio << "\n";
 	file << "beta," << beta_param << "\n";
+	file << "gamma," << gamma_iso << "\n";
 	file << "theta_Ba_deg," << theta_Ba_deg << "\n";
 	file << "grain_radius," << g_grain_radius << "\n";
 	file << "grain_density," << g_grain_density << "\n";
-	file << "noise_amplitude," << noise_amplitude_param << "\n";
+	file << "drag_law,Epstein-Baines\n";
+	file << "frame,zero-center-of-mass\n";
+	file << "gas_acceleration_x," << gas_accel_x << "\n";
+	file << "dust_acceleration_x," << dust_accel_x << "\n";
+	file << "relative_acceleration_x," << dust_accel_x - gas_accel_x << "\n";
+	file << "noise_amplitude," << g_noise_amplitude << "\n";
+	file << "noise_seed," << g_noise_seed << "\n";
+	file << "noise_distribution,\"uniform[-A,A]\"\n";
 	file << "equilibrium_stop_time," << equilibrium.stop_time_ << "\n";
 	file << "equilibrium_tau," << equilibrium.tau_ << "\n";
 	file << "equilibrium_drift_speed," << equilibrium.drift_speed_ << "\n";
@@ -438,30 +459,48 @@ void writeSummaryCsv(EquilibriumState const &equilibrium, DustMagnetizedRDIHisto
 	file << "Bx0," << equilibrium.magnetic_field_[0] << "\n";
 	file << "By0," << equilibrium.magnetic_field_[1] << "\n";
 	file << "Bz0," << equilibrium.magnetic_field_[2] << "\n";
+	file << "B0," << B0 << "\n";
 	file << "rho_g0," << rho_gas0 << "\n";
+	file << "rho_d0," << rho_d0 << "\n";
 	file << "cs0," << sound_speed << "\n";
+	file << "dust_density_floor," << sim.dustDensityFloor_ << "\n";
+	file << "grid_nx," << domain.length(0) << "\n";
+	file << "grid_ny," << domain.length(1) << "\n";
+	file << "grid_nz," << domain.length(2) << "\n";
+	file << "actual_resolution," << domain.length(0) << "x" << domain.length(1) << "x" << domain.length(2) << "\n";
+	file << "box_xlo," << prob_lo[0] << "\n";
+	file << "box_ylo," << prob_lo[1] << "\n";
+	file << "box_zlo," << prob_lo[2] << "\n";
+	file << "box_xhi," << prob_hi[0] << "\n";
+	file << "box_yhi," << prob_hi[1] << "\n";
+	file << "box_zhi," << prob_hi[2] << "\n";
+	file << "box_length_x," << prob_hi[0] - prob_lo[0] << "\n";
+	file << "box_length_y," << prob_hi[1] - prob_lo[1] << "\n";
+	file << "box_length_z," << prob_hi[2] - prob_lo[2] << "\n";
+	file << "slice_sampling,outermost_cell_centers\n";
 	for (int i = 0; i < 3; ++i) {
-		file << std::format("snapshot_{}_target_time_ts0,{}\n", snapshot_tags[i], g_snapshot_times_over_ts0[i]);
-		file << std::format("snapshot_{}_target_time_code,{}\n", snapshot_tags[i], g_snapshot_target_times[i]);
-		file << std::format("snapshot_{}_time,{}\n", snapshot_tags[i], history.snapshot_times_[i]);
-		file << std::format("snapshot_{}_time_ts0,{}\n", snapshot_tags[i], history.snapshot_times_[i] / std::max(equilibrium.stop_time_, tiny_number));
-		file << std::format("snapshot_{}_sigma_bmag,{}\n", snapshot_tags[i], history.snapshot_sigmas_[i]);
+		file << "stage_" << stage_labels[i] << "_target_time_over_ts0," << g_stage_times_over_ts0[i] << "\n";
+		file << "stage_" << stage_labels[i] << "_target_time_code," << g_stage_target_times[i] << "\n";
+		file << "stage_" << stage_labels[i] << "_actual_time_code," << history.stage_times_[i] << "\n";
+		file << "stage_" << stage_labels[i] << "_actual_time_over_ts0," << history.stage_times_[i] / equilibrium.stop_time_ << "\n";
+		file << "stage_" << stage_labels[i] << "_reached," << static_cast<int>(history.stage_written_[i]) << "\n";
+		file << "stage_" << stage_labels[i] << "_plotfile," << history.stage_plotfiles_[i] << "\n";
 	}
 }
 
-void writeFaceProjectionCsv(std::string const &snapshot_tag, std::string const &face_tag, FaceProjection const &projection)
+void writeOuterSliceCsv(std::string const &stage_label, std::string const &slice_tag, OuterSlice const &slice)
 {
-	std::ofstream file(std::format("dust_magnetized_rdi_{}_{}.csv", snapshot_tag, face_tag));
-	file << "u,v,bvec_minus_b0_norm,dust_overdensity\n";
-	for (size_t i = 0; i < projection.u_.size(); ++i) {
-		file << projection.u_[i] << "," << projection.v_[i] << "," << projection.bvec_minus_b0_norm_[i] << "," << projection.dust_overdensity_[i]
-		     << "\n";
+	std::ofstream file(std::format("dust_magnetized_rdi_{}_{}.csv", stage_label, slice_tag));
+	file << std::setprecision(17);
+	file << "u,v,magnetic_perturbation_magnitude,dust_density_ratio\n";
+	for (size_t i = 0; i < slice.u_.size(); ++i) {
+		file << slice.u_[i] << "," << slice.v_[i] << "," << slice.magnetic_perturbation_magnitude_[i] << "," << slice.dust_density_ratio_[i] << "\n";
 	}
 }
 
-template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<problem_t> &sim, int normal_dir) -> FaceProjection
+template <typename problem_t> auto extractOuterSlice(QuokkaSimulation<problem_t> &sim, int normal_dir) -> OuterSlice
 {
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.finest_level == 0, "DustMagnetizedRDI face extraction only supports single-level runs.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.finest_level == 0, "DustMagnetizedRDI slice extraction only supports single-level runs.");
 
 	auto const &state_mf = sim.state_new_cc_[0];
 	const auto domain = sim.Geom(0).Domain();
@@ -471,8 +510,7 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 	const int nx = domain.length(0);
 	const int ny = domain.length(1);
 	const int nz = domain.length(2);
-	const int slab_cells = std::clamp(g_slice_thickness_cells, 1, domain.length(normal_dir));
-	const double mean_dust_density = std::max(mu_param * rho_gas0, dust_density_floor);
+	const double dust_density0 = dust_to_gas_mass_ratio * rho_gas0;
 	const double bx0 = g_Bx0;
 	const double by0 = g_By0;
 	const double bz0 = g_Bz0;
@@ -491,30 +529,28 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 		nv = ny;
 	}
 
-	amrex::Box slab = domain;
+	amrex::Box slice_box = domain;
 	if (normal_dir == 0) {
 		int const hi_x = lo.x + nx - 1;
-		slab.setSmall(0, hi_x - slab_cells + 1);
-		slab.setBig(0, hi_x);
+		slice_box.setSmall(0, hi_x);
+		slice_box.setBig(0, hi_x);
 	} else if (normal_dir == 1) {
-		slab.setSmall(1, lo.y);
-		slab.setBig(1, lo.y + slab_cells - 1);
+		slice_box.setSmall(1, lo.y);
+		slice_box.setBig(1, lo.y);
 	} else {
 		int const hi_z = lo.z + nz - 1;
-		slab.setSmall(2, hi_z - slab_cells + 1);
-		slab.setBig(2, hi_z);
+		slice_box.setSmall(2, hi_z);
+		slice_box.setBig(2, hi_z);
 	}
 
 	const int npts = nu * nv;
-	amrex::Gpu::DeviceVector<amrex::Real> bvec_minus_b0_norm_sum_d(npts, 0.0);
-	amrex::Gpu::DeviceVector<amrex::Real> dust_sum_d(npts, 0.0);
-	amrex::Gpu::DeviceVector<amrex::Real> count_sum_d(npts, 0.0);
-	auto *bvec_minus_b0_norm_ptr = bvec_minus_b0_norm_sum_d.data();
-	auto *dust_ptr = dust_sum_d.data();
-	auto *count_ptr = count_sum_d.data();
+	amrex::Gpu::DeviceVector<amrex::Real> magnetic_perturbation_magnitude_d(npts, 0.0);
+	amrex::Gpu::DeviceVector<amrex::Real> dust_density_ratio_d(npts, 0.0);
+	auto *magnetic_perturbation_magnitude_ptr = magnetic_perturbation_magnitude_d.data();
+	auto *dust_density_ratio_ptr = dust_density_ratio_d.data();
 
 	for (amrex::MFIter mfi(state_mf); mfi.isValid(); ++mfi) {
-		amrex::Box const box = mfi.validbox() & slab;
+		amrex::Box const box = mfi.validbox() & slice_box;
 		if (!box.ok()) {
 			continue;
 		}
@@ -540,89 +576,73 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 			amrex::Real const dbx = bx - bx0;
 			amrex::Real const dby = by - by0;
 			amrex::Real const dbz = bz - bz0;
-			amrex::Real const bvec_minus_b0_norm = std::sqrt(dbx * dbx + dby * dby + dbz * dbz);
-			amrex::Real const dust_overdensity = state(i, j, k, HydroSystem<problem_t>::dustDensity_index) / mean_dust_density;
+			amrex::Real const magnetic_perturbation_magnitude = std::sqrt(dbx * dbx + dby * dby + dbz * dbz);
+			amrex::Real const dust_density_ratio = state(i, j, k, HydroSystem<problem_t>::dustDensity_index) / dust_density0;
 
-			amrex::Gpu::Atomic::Add(&bvec_minus_b0_norm_ptr[idx], bvec_minus_b0_norm);
-			amrex::Gpu::Atomic::Add(&dust_ptr[idx], dust_overdensity);
-			amrex::Gpu::Atomic::Add(&count_ptr[idx], 1.0_rt);
+			magnetic_perturbation_magnitude_ptr[idx] = magnetic_perturbation_magnitude;
+			dust_density_ratio_ptr[idx] = dust_density_ratio;
 		});
 	}
 	amrex::Gpu::streamSynchronize();
-	amrex::Gpu::HostVector<amrex::Real> bvec_minus_b0_norm_sum(npts);
-	amrex::Gpu::HostVector<amrex::Real> dust_sum(npts);
-	amrex::Gpu::HostVector<amrex::Real> count_sum(npts);
-	amrex::Gpu::copy(amrex::Gpu::deviceToHost, bvec_minus_b0_norm_sum_d.begin(), bvec_minus_b0_norm_sum_d.end(), bvec_minus_b0_norm_sum.begin());
-	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dust_sum_d.begin(), dust_sum_d.end(), dust_sum.begin());
-	amrex::Gpu::copy(amrex::Gpu::deviceToHost, count_sum_d.begin(), count_sum_d.end(), count_sum.begin());
-	amrex::ParallelDescriptor::ReduceRealSum(bvec_minus_b0_norm_sum.data(), npts);
-	amrex::ParallelDescriptor::ReduceRealSum(dust_sum.data(), npts);
-	amrex::ParallelDescriptor::ReduceRealSum(count_sum.data(), npts);
+	amrex::Gpu::HostVector<amrex::Real> magnetic_perturbation_magnitude(npts);
+	amrex::Gpu::HostVector<amrex::Real> dust_density_ratio(npts);
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, magnetic_perturbation_magnitude_d.begin(), magnetic_perturbation_magnitude_d.end(),
+			 magnetic_perturbation_magnitude.begin());
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dust_density_ratio_d.begin(), dust_density_ratio_d.end(), dust_density_ratio.begin());
+	amrex::ParallelDescriptor::ReduceRealSum(magnetic_perturbation_magnitude.data(), npts);
+	amrex::ParallelDescriptor::ReduceRealSum(dust_density_ratio.data(), npts);
 
-	FaceProjection projection;
-	projection.u_.resize(npts);
-	projection.v_.resize(npts);
-	projection.bvec_minus_b0_norm_.resize(npts);
-	projection.dust_overdensity_.resize(npts);
+	OuterSlice slice;
+	slice.u_.resize(npts);
+	slice.v_.resize(npts);
+	slice.magnetic_perturbation_magnitude_.resize(npts);
+	slice.dust_density_ratio_.resize(npts);
 
 	for (int iv = 0; iv < nv; ++iv) {
 		for (int iu = 0; iu < nu; ++iu) {
 			int const idx = iv * nu + iu;
-			double const count = std::max(static_cast<double>(count_sum[idx]), 1.0);
 			double u = 0.0;
 			double v = 0.0;
 			if (normal_dir == 0) {
-				u = prob_lo[1] + (lo.y + iu + 0.5) * dx[1];
-				v = prob_lo[2] + (lo.z + iv + 0.5) * dx[2];
+				u = prob_lo[1] + (iu + 0.5) * dx[1];
+				v = prob_lo[2] + (iv + 0.5) * dx[2];
 			} else if (normal_dir == 1) {
-				u = prob_lo[0] + (lo.x + iu + 0.5) * dx[0];
-				v = prob_lo[2] + (lo.z + iv + 0.5) * dx[2];
+				u = prob_lo[0] + (iu + 0.5) * dx[0];
+				v = prob_lo[2] + (iv + 0.5) * dx[2];
 			} else {
-				u = prob_lo[0] + (lo.x + iu + 0.5) * dx[0];
-				v = prob_lo[1] + (lo.y + iv + 0.5) * dx[1];
+				u = prob_lo[0] + (iu + 0.5) * dx[0];
+				v = prob_lo[1] + (iv + 0.5) * dx[1];
 			}
-			projection.u_[idx] = u;
-			projection.v_[idx] = v;
-			projection.bvec_minus_b0_norm_[idx] = bvec_minus_b0_norm_sum[idx] / count;
-			projection.dust_overdensity_[idx] = dust_sum[idx] / count;
+			slice.u_[idx] = u;
+			slice.v_[idx] = v;
+			slice.magnetic_perturbation_magnitude_[idx] = magnetic_perturbation_magnitude[idx];
+			slice.dust_density_ratio_[idx] = dust_density_ratio[idx];
 		}
 	}
 
-	return projection;
+	return slice;
 }
 
-template <typename problem_t> void captureSnapshot(QuokkaSimulation<problem_t> &sim, int snapshot_index, DiagnosticsRecord const &diagnostics)
+template <typename problem_t> void captureStage(QuokkaSimulation<problem_t> &sim, int stage_index, double time, std::string const &plotfile)
 {
-	sim.userData_.snapshot_written_[snapshot_index] = true;
-	sim.userData_.snapshot_times_[snapshot_index] = diagnostics.time_;
-	sim.userData_.snapshot_sigmas_[snapshot_index] = diagnostics.sigma_bmag_;
-
 	if (g_write_csv) {
-		for (int face = 0; face < 3; ++face) {
-			FaceProjection const projection = extractFaceProjection(sim, face);
+		for (int normal_dir = 0; normal_dir < 3; ++normal_dir) {
+			OuterSlice const slice = extractOuterSlice(sim, normal_dir);
 			if (amrex::ParallelDescriptor::IOProcessor()) {
-				writeFaceProjectionCsv(snapshot_tags[snapshot_index], face_tags[face], projection);
+				writeOuterSliceCsv(stage_labels[stage_index], slice_tags[normal_dir], slice);
 			}
 		}
 	}
-	amrex::Print() << std::format("Captured DustMagnetizedRDI snapshot '{}' at t = {:.6f} = {:.3f} t_s^0\n", snapshot_tags[snapshot_index],
-				      diagnostics.time_, diagnostics.time_ / std::max(g_equilibrium_ts, tiny_number));
+
+	sim.userData_.stage_written_[stage_index] = true;
+	sim.userData_.stage_times_[stage_index] = time;
+	sim.userData_.stage_plotfiles_[stage_index] = plotfile;
+	amrex::Print() << std::format("Captured DustMagnetizedRDI stage '{}' at t = {:.6f} = {:.3f} t_s^0\n", stage_labels[stage_index], time,
+				      time / std::max(g_equilibrium_ts, tiny_number));
 }
 
-template <typename problem_t> void maybeCaptureSnapshots(QuokkaSimulation<problem_t> &sim, DiagnosticsRecord const &diagnostics)
+template <typename problem_t> void recordHistory(QuokkaSimulation<problem_t> &sim, DiagnosticsRecord const &diagnostics, bool force = false)
 {
-	for (int i = 0; i < 3; ++i) {
-		if (!sim.userData_.snapshot_written_[i] && diagnostics.time_ + time_tolerance >= g_snapshot_target_times[i]) {
-			captureSnapshot(sim, i, diagnostics);
-		}
-	}
-}
-
-template <typename problem_t> void recordHistory(QuokkaSimulation<problem_t> &sim, bool force = false)
-{
-	DiagnosticsRecord const diagnostics = computeDiagnostics(sim);
-	maybeCaptureSnapshots(sim, diagnostics);
-
 	bool const should_record = force || (diagnostics.time_ + time_tolerance >= sim.userData_.next_history_time_);
 	if (!should_record) {
 		return;
@@ -655,8 +675,7 @@ template <typename problem_t> void recordHistory(QuokkaSimulation<problem_t> &si
 }
 } // namespace
 
-template <> struct SimulationData<DustMagnetizedRDI> : DustMagnetizedRDIHistory {
-};
+template <> struct SimulationData<DustMagnetizedRDI> : DustMagnetizedRDIHistory {};
 
 template <> struct quokka::EOS_Traits<DustMagnetizedRDI> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -677,20 +696,22 @@ template <> struct Physics_Traits<DustMagnetizedRDI> : DefaultPhysicsTraits {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-											 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> const grain_radius = {g_grain_radius};
 	amrex::GpuArray<amrex::Real, nDustGroups_> const grain_density = {g_grain_density};
-	return DustSources<DustMagnetizedRDI>::ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, grain_radius, grain_density, true);
+	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, grain_radius, grain_density,
+						 true);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, nDustGroups_> q_over_m{};
-	q_over_m[0] = g_charge_to_mass;
-	return q_over_m;
+	amrex::GpuArray<amrex::Real, nDustGroups_> dimensionless_charge_to_mass_ratio_array{};
+	dimensionless_charge_to_mass_ratio_array[0] = dimensionless_charge_to_mass_ratio;
+	return dimensionless_charge_to_mass_ratio_array;
 }
 
 template <> void QuokkaSimulation<DustMagnetizedRDI>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -698,7 +719,7 @@ template <> void QuokkaSimulation<DustMagnetizedRDI>::setInitialConditionsOnGrid
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const int ncomp_cc = Physics_Indices<DustMagnetizedRDI>::nvarTotal_cc;
-	const double dust_density0 = std::max(mu_param * rho_gas0, dust_density_floor);
+	const double dust_density0 = dust_to_gas_mass_ratio * rho_gas0;
 	const double magnetic_energy = 0.5 * (g_Bx0 * g_Bx0 + g_By0 * g_By0 + g_Bz0 * g_Bz0);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -760,15 +781,46 @@ template <> void QuokkaSimulation<DustMagnetizedRDI>::setInitialConditionsOnGrid
 	});
 }
 
-template <> void QuokkaSimulation<DustMagnetizedRDI>::computeAfterTimestep() { recordHistory(*this); }
+template <> void QuokkaSimulation<DustMagnetizedRDI>::computeBeforeTimestep()
+{
+	for (int i = 0; i < 3; ++i) {
+		if (!userData_.stage_written_[i]) {
+			double const time_to_stage = g_stage_target_times[i] - tNew_[0];
+			if (time_to_stage > time_tolerance) {
+				dt_[0] = std::min(dt_[0], time_to_stage);
+			}
+			break;
+		}
+	}
+}
+
+template <> void QuokkaSimulation<DustMagnetizedRDI>::computeAfterTimestep()
+{
+	double const time = tNew_[0];
+	for (int i = 0; i < 3; ++i) {
+		if (!userData_.stage_written_[i] && time + time_tolerance >= g_stage_target_times[i]) {
+			std::string const original_prefix = plot_file;
+			plot_file = std::format("dust_magnetized_rdi_{}_plt", stage_labels[i]);
+			std::string const plotfile = PlotFileName(istep[0]);
+			WritePlotFile();
+			plot_file = original_prefix;
+			captureStage(*this, i, time, plotfile);
+		}
+	}
+
+	if (time + time_tolerance >= userData_.next_history_time_) {
+		DiagnosticsRecord const diagnostics = computeDiagnostics(*this);
+		recordHistory(*this, diagnostics);
+	}
+}
 
 template <> void QuokkaSimulation<DustMagnetizedRDI>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
 {
 	amrex::ignore_unused(lev);
 	amrex::ignore_unused(time);
 
-	double const gas_accel_x = -mu_param * bar_a / (1.0 + mu_param);
-	double const dust_accel_x = bar_a / (1.0 + mu_param);
+	double const gas_accel_x = -dust_to_gas_mass_ratio * bar_a / (1.0 + dust_to_gas_mass_ratio);
+	double const dust_accel_x = bar_a / (1.0 + dust_to_gas_mass_ratio);
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -804,9 +856,9 @@ auto problem_main() -> int
 	amrex::Print() << std::format("  bar_a              = {:.6f}\n", bar_a);
 	amrex::Print() << std::format("  grain radius       = {:.6f}\n", g_grain_radius);
 	amrex::Print() << std::format("  grain density      = {:.6f}\n", g_grain_density);
-	amrex::Print() << std::format("  a * rho_gr         = {:.6f}\n", grainRadiusDensityProduct());
-	amrex::Print() << std::format("  xi                 = {:.6f}\n", xi_param);
-	amrex::Print() << std::format("  mu                 = {:.6f}\n", mu_param);
+	amrex::Print() << std::format("  grain size param.  = {:.6f}\n", grainSizeParameter());
+	amrex::Print() << std::format("  xi                 = {:.6f}\n", dimensionless_charge_to_mass_ratio);
+	amrex::Print() << std::format("  dust-to-gas ratio  = {:.6f}\n", dust_to_gas_mass_ratio);
 	amrex::Print() << std::format("  beta               = {:.6f}\n", beta_param);
 	amrex::Print() << std::format("  theta_Ba [deg]     = {:.6f}\n", theta_Ba_deg);
 	amrex::Print() << std::format("  equilibrium t_s    = {:.6f}\n", equilibrium.stop_time_);
@@ -814,6 +866,8 @@ auto problem_main() -> int
 	amrex::Print() << std::format("  |w_s| / c_s        = {:.6f}\n", equilibrium.drift_speed_);
 	amrex::Print() << std::format("  angle(w_s, B) [deg]= {:.6f}\n", equilibrium.drift_angle_to_b_deg_);
 	amrex::Print() << std::format("  history dt / t_s^0 = {:.6f}\n", g_history_dt_over_ts0);
+	amrex::Print() << std::format("  noise amplitude    = {:.6e}\n", g_noise_amplitude);
+	amrex::Print() << std::format("  noise seed         = {}\n", g_noise_seed);
 
 	auto BCs_cc = quokka::BC<DustMagnetizedRDI>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 	auto BCs_fc = quokka::BC_fc<DustMagnetizedRDI>(quokka::BCType::mathematicalBndryTypes::periodic, quokka::BCType::mathematicalBndryTypes::periodic,
@@ -821,28 +875,26 @@ auto problem_main() -> int
 	QuokkaSimulation<DustMagnetizedRDI> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 2;
-	sim.plotfileInterval_ = -1;
-	sim.enableIterDustStoptime_ = 1;
-	sim.print_dust_counter_ = false;
-	sim.dust_omega_res_ = 1.0;
 
 	sim.setInitialConditions();
-	recordHistory(sim, true);
+	DiagnosticsRecord const initial_diagnostics = computeDiagnostics(sim);
+	recordHistory(sim, initial_diagnostics, true);
 	sim.evolve();
-	recordHistory(sim, true);
 
 	DiagnosticsRecord const final_diagnostics = computeDiagnostics(sim);
+	recordHistory(sim, final_diagnostics, true);
 	for (int i = 0; i < 3; ++i) {
-		if (!sim.userData_.snapshot_written_[i] && final_diagnostics.finite_) {
-			amrex::Print() << std::format("Warning: snapshot '{}' was not reached by the end of the run; writing the final state instead.\n",
-						      snapshot_tags[i]);
-			captureSnapshot(sim, i, final_diagnostics);
+		if (!sim.userData_.stage_written_[i]) {
+			amrex::Print() << std::format("Warning: DustMagnetizedRDI stage '{}' was not reached: target t = {:.6f} ({:.3f} t_s^0), final t = "
+						      "{:.6f} ({:.3f} t_s^0). No stage output was written.\n",
+						      stage_labels[i], g_stage_target_times[i], g_stage_times_over_ts0[i], final_diagnostics.time_,
+						      final_diagnostics.time_ / equilibrium.stop_time_);
 		}
 	}
 
 	if (amrex::ParallelDescriptor::IOProcessor() && g_write_csv) {
 		writeGrowthHistoryCsv(sim.userData_);
-		writeSummaryCsv(equilibrium, sim.userData_);
+		writeSummaryCsv(sim, equilibrium, sim.userData_);
 	}
 
 	double max_sigma_b = 0.0;
@@ -857,20 +909,16 @@ auto problem_main() -> int
 	bool const finite = final_diagnostics.finite_;
 	bool const magnetic_growth_visible = max_sigma_b > 1.0e-4;
 	bool const dust_growth_visible = max_sigma_log_rho_d > 1.0e-4;
-	bool const all_snapshot_targets_reached = [&]() {
-		for (std::size_t i = 0; i < sim.userData_.snapshot_times_.size(); ++i) {
-			if (sim.userData_.snapshot_times_[i] + time_tolerance < g_snapshot_target_times[i]) {
-				return false;
-			}
-		}
-		return true;
-	}();
+	bool const all_stages_reached = std::ranges::all_of(sim.userData_.stage_written_, [](bool reached) { return reached; });
 
 	amrex::Print() << std::format("  max sigma(|B|)         = {:.6e}\n", max_sigma_b);
 	amrex::Print() << std::format("  max sigma(log rho_d)   = {:.6e}\n", max_sigma_log_rho_d);
-	amrex::Print() << std::format("  all target snapshots   = {}\n", all_snapshot_targets_reached ? "yes" : "no");
+	amrex::Print() << std::format("  all target stages      = {}\n", all_stages_reached ? "yes" : "no");
+	if (!(magnetic_growth_visible && dust_growth_visible)) {
+		amrex::Print() << "Warning: physical RDI growth is not visible at this resolution or run time.\n";
+	}
 
-	if (!(finite && magnetic_growth_visible && dust_growth_visible && all_snapshot_targets_reached)) {
+	if (!(finite && all_stages_reached)) {
 		amrex::Print() << "DustMagnetizedRDI FAILED.\n";
 		return 1;
 	}

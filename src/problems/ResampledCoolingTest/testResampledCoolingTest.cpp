@@ -32,8 +32,7 @@
 #include "hydro/hydro_system.hpp"
 #include "util/fextract.hpp"
 
-struct ResampledCoolingTest {
-}; // dummy type to allow compile-time polymorphism via template specialization
+struct ResampledCoolingTest {}; // dummy type to allow compile-time polymorphism via template specialization
 
 // Function to read CSV reference solution
 auto readReferenceCSV(const std::string &filename) -> std::pair<std::vector<double>, std::vector<double>>

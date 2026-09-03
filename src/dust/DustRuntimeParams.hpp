@@ -10,6 +10,45 @@
 namespace quokka::dust
 {
 
+enum class ResolvedRkScheme { TP2025, GL4, Midpoint };
+
+struct CoefficientIterationConfig {
+	bool enabled = false;
+	amrex::Real alphaRelativeTolerance = 1.0e-6;
+	amrex::Real chargeRelativeTolerance = 1.0e-6;
+	int maxIterations = 20;
+};
+
+inline auto resolvedRkSchemeName(ResolvedRkScheme scheme) -> char const *
+{
+	switch (scheme) {
+		case ResolvedRkScheme::TP2025:
+			return "TP2025";
+		case ResolvedRkScheme::GL4:
+			return "GL4";
+		case ResolvedRkScheme::Midpoint:
+			return "Midpoint";
+	}
+
+	return "unknown";
+}
+
+inline auto parseResolvedRkScheme(std::string const &scheme_name) -> ResolvedRkScheme
+{
+	if (scheme_name == "TP2025") {
+		return ResolvedRkScheme::TP2025;
+	}
+	if (scheme_name == "GL4") {
+		return ResolvedRkScheme::GL4;
+	}
+	if (scheme_name == "Midpoint") {
+		return ResolvedRkScheme::Midpoint;
+	}
+
+	amrex::Abort("dust.resolved_rk_scheme must be one of: TP2025, GL4, Midpoint.");
+	return ResolvedRkScheme::GL4;
+}
+
 template <unsigned int nDustGroups> void queryPositiveArray(amrex::ParmParse const &pp, char const *name, amrex::GpuArray<amrex::Real, nDustGroups> &values)
 {
 	static_assert(nDustGroups > 0);

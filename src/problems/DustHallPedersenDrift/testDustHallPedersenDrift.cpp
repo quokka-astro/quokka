@@ -11,8 +11,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct DustHallPedersenDrift {
-};
+struct DustHallPedersenDrift {};
 
 namespace
 {
@@ -21,29 +20,29 @@ constexpr double epsilon = 1.0;
 constexpr double rho_dust = epsilon * rho_gas;
 constexpr double sound_speed = 1.0;
 constexpr double alpha_d = 1.0;
-constexpr double charge_to_mass_ratio = 1.0;
+constexpr double dimensionless_charge_to_mass_ratio = 1.0;
 constexpr double magnetic_field_z = 1.0;
 constexpr double external_force = 1.0;
 
 constexpr double constant_dt = 5.0;
 constexpr double stop_time = 20.0;
 
-constexpr double omega_L = charge_to_mass_ratio * magnetic_field_z;
+constexpr double omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_z;
 constexpr double alpha_rel = (1.0 + epsilon) * alpha_d;
 constexpr double omega_rel = (1.0 + epsilon) * omega_L;
 constexpr double g_rel_x = -external_force / rho_gas;
 
 struct DriftState {
-	double ux;
-	double uy;
+	double wx;
+	double wy;
 };
 } // namespace
 
 template <> struct SimulationData<DustHallPedersenDrift> {
 	std::vector<double> t_vec_;
-	std::vector<double> ux_vec_;
-	std::vector<double> uy_vec_;
-	std::vector<double> uz_vec_;
+	std::vector<double> wx_vec_;
+	std::vector<double> wy_vec_;
+	std::vector<double> wz_vec_;
 	std::vector<double> center_momentum_x_vec_;
 	std::vector<double> center_momentum_y_vec_;
 	std::vector<double> center_momentum_z_vec_;
@@ -67,21 +66,21 @@ template <> struct Physics_Traits<DustHallPedersenDrift> : DefaultPhysicsTraits 
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
-											     amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-											     amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-											     double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> alpha{};
 	alpha[0] = alpha_d;
 	return alpha;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, 1> q_over_m{};
-	q_over_m[0] = charge_to_mass_ratio;
-	return q_over_m;
+	amrex::GpuArray<amrex::Real, 1> dimensionless_charge_to_mass_ratio_array{};
+	dimensionless_charge_to_mass_ratio_array[0] = dimensionless_charge_to_mass_ratio;
+	return dimensionless_charge_to_mass_ratio_array;
 }
 
 template <> void QuokkaSimulation<DustHallPedersenDrift>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -152,9 +151,9 @@ void recordHistory(QuokkaSimulation<DustHallPedersenDrift> &sim)
 	const double dust_vy = dust_momentum_y / dust_density;
 	const double dust_vz = dust_momentum_z / dust_density;
 
-	data.ux_vec_.push_back(dust_vx - gas_vx);
-	data.uy_vec_.push_back(dust_vy - gas_vy);
-	data.uz_vec_.push_back(dust_vz - gas_vz);
+	data.wx_vec_.push_back(dust_vx - gas_vx);
+	data.wy_vec_.push_back(dust_vy - gas_vy);
+	data.wz_vec_.push_back(dust_vz - gas_vz);
 	data.center_momentum_x_vec_.push_back(gas_momentum_x + dust_momentum_x);
 	data.center_momentum_y_vec_.push_back(gas_momentum_y + dust_momentum_y);
 	data.center_momentum_z_vec_.push_back(gas_momentum_z + dust_momentum_z);
@@ -218,20 +217,20 @@ auto runHallPedersenSimulation() -> SimulationData<DustHallPedersenDrift>
 auto steadyRelativeDrift() -> DriftState
 {
 	const double denom = alpha_rel * alpha_rel + omega_rel * omega_rel;
-	return {.ux = alpha_rel * g_rel_x / denom, .uy = -omega_rel * g_rel_x / denom};
+	return {.wx = alpha_rel * g_rel_x / denom, .wy = -omega_rel * g_rel_x / denom};
 }
 
 auto analyticRelativeDrift(double t) -> DriftState
 {
 	const DriftState steady = steadyRelativeDrift();
-	const double delta_ux0 = -steady.ux;
-	const double delta_uy0 = -steady.uy;
+	const double delta_wx0 = -steady.wx;
+	const double delta_wy0 = -steady.wy;
 	const double decay = std::exp(-alpha_rel * t);
 	const double cos_term = std::cos(omega_rel * t);
 	const double sin_term = std::sin(omega_rel * t);
 
-	return {.ux = steady.ux + decay * (delta_ux0 * cos_term + delta_uy0 * sin_term),
-		.uy = steady.uy + decay * (-delta_ux0 * sin_term + delta_uy0 * cos_term)};
+	return {.wx = steady.wx + decay * (delta_wx0 * cos_term + delta_wy0 * sin_term),
+		.wy = steady.wy + decay * (-delta_wx0 * sin_term + delta_wy0 * cos_term)};
 }
 
 auto relativeDriftL2Error(SimulationData<DustHallPedersenDrift> const &data) -> double
@@ -240,10 +239,10 @@ auto relativeDriftL2Error(SimulationData<DustHallPedersenDrift> const &data) -> 
 	double ref_sq = 0.0;
 	for (size_t i = 0; i < data.t_vec_.size(); ++i) {
 		DriftState const exact = analyticRelativeDrift(data.t_vec_[i]);
-		const double dux = data.ux_vec_[i] - exact.ux;
-		const double duy = data.uy_vec_[i] - exact.uy;
-		err_sq += dux * dux + duy * duy;
-		ref_sq += exact.ux * exact.ux + exact.uy * exact.uy;
+		const double dwx = data.wx_vec_[i] - exact.wx;
+		const double dwy = data.wy_vec_[i] - exact.wy;
+		err_sq += dwx * dwx + dwy * dwy;
+		ref_sq += exact.wx * exact.wx + exact.wy * exact.wy;
 	}
 	return (ref_sq > 0.0) ? std::sqrt(err_sq / ref_sq) : 1.0;
 }
@@ -256,9 +255,9 @@ auto finalRelativeDriftError(SimulationData<DustHallPedersenDrift> const &data) 
 
 	const size_t i = data.t_vec_.size() - 1;
 	DriftState const exact = analyticRelativeDrift(data.t_vec_[i]);
-	const double dux = data.ux_vec_[i] - exact.ux;
-	const double duy = data.uy_vec_[i] - exact.uy;
-	return std::sqrt(dux * dux + duy * duy);
+	const double dwx = data.wx_vec_[i] - exact.wx;
+	const double dwy = data.wy_vec_[i] - exact.wy;
+	return std::sqrt(dwx * dwx + dwy * dwy);
 }
 
 auto maxMomentumResidual(SimulationData<DustHallPedersenDrift> const &data) -> double
@@ -269,7 +268,7 @@ auto maxMomentumResidual(SimulationData<DustHallPedersenDrift> const &data) -> d
 		max_residual = std::max(max_residual, std::abs(data.center_momentum_x_vec_[i] - px_exact));
 		max_residual = std::max(max_residual, std::abs(data.center_momentum_y_vec_[i]));
 		max_residual = std::max(max_residual, std::abs(data.center_momentum_z_vec_[i]));
-		max_residual = std::max(max_residual, std::abs(data.uz_vec_[i]));
+		max_residual = std::max(max_residual, std::abs(data.wz_vec_[i]));
 	}
 	return max_residual;
 }
@@ -278,35 +277,32 @@ auto maxMomentumResidual(SimulationData<DustHallPedersenDrift> const &data) -> d
 void plotRelativeDrift(SimulationData<DustHallPedersenDrift> const &data)
 {
 	const size_t n_dense = 1000;
-	std::vector<double> t_dense;
-	std::vector<double> ux_dense;
-	std::vector<double> uy_dense;
+	std::vector<double> t_dense(n_dense);
+	std::vector<double> wx_dense(n_dense);
+	std::vector<double> wy_dense(n_dense);
 	const double t_max = data.t_vec_.empty() ? 0.0 : data.t_vec_.back();
-	t_dense.resize(n_dense);
-	ux_dense.resize(n_dense);
-	uy_dense.resize(n_dense);
 
 	for (size_t i = 0; i < n_dense; ++i) {
 		const double t = t_max * static_cast<double>(i) / static_cast<double>(n_dense - 1);
 		DriftState const exact = analyticRelativeDrift(t);
 		t_dense[i] = t;
-		ux_dense[i] = exact.ux;
-		uy_dense[i] = exact.uy;
+		wx_dense[i] = exact.wx;
+		wy_dense[i] = exact.wy;
 	}
 
 	matplotlibcpp::clf();
-	matplotlibcpp::plot(t_dense, ux_dense, {{"label", "u_x analytic"}, {"color", "C0"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
-	matplotlibcpp::plot(data.t_vec_, data.ux_vec_,
-			    {{"label", "u_x numerical"}, {"color", "C0"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
-	matplotlibcpp::plot(t_dense, uy_dense, {{"label", "u_y analytic"}, {"color", "C1"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
-	matplotlibcpp::plot(data.t_vec_, data.uy_vec_,
-			    {{"label", "u_y numerical"}, {"color", "C1"}, {"linestyle", "None"}, {"marker", "s"}, {"markersize", "4"}});
+	matplotlibcpp::plot(t_dense, wx_dense, {{"label", R"(analytic $w_x$)"}, {"color", "C0"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
+	matplotlibcpp::plot(data.t_vec_, data.wx_vec_,
+			    {{"label", R"(numerical $w_x$)"}, {"color", "C0"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
+	matplotlibcpp::plot(t_dense, wy_dense, {{"label", R"(analytic $w_y$)"}, {"color", "C1"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
+	matplotlibcpp::plot(data.t_vec_, data.wy_vec_,
+			    {{"label", R"(numerical $w_y$)"}, {"color", "C1"}, {"linestyle", "None"}, {"marker", "s"}, {"markersize", "4"}});
 	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("t");
-	matplotlibcpp::ylabel(R"($u = v_d - v_g$)");
-	matplotlibcpp::title("Stiff Hall/Pedersen Drift");
+	matplotlibcpp::tick_params({{"labelsize", "13"}});
+	matplotlibcpp::xlabel("t", {{"fontsize", "15"}});
+	matplotlibcpp::ylabel(R"($w_x,\ w_y$)", {{"fontsize", "15"}});
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./dust_hall_pedersen_stiff.pdf");
+	matplotlibcpp::save("./dust_hall_pedersen_drift.pdf");
 }
 #endif
 
@@ -322,8 +318,8 @@ auto problem_main() -> int
 		const double momentum_residual = maxMomentumResidual(data);
 
 		amrex::Print() << "\nHall/Pedersen drift analytic steady state:\n";
-		amrex::Print() << "  u_x* = " << steady.ux << "\n";
-		amrex::Print() << "  u_y* = " << steady.uy << "\n";
+		amrex::Print() << "  w_x* = " << steady.wx << "\n";
+		amrex::Print() << "  w_y* = " << steady.wy << "\n";
 		amrex::Print() << "\nStiff-case diagnostics:\n";
 		amrex::Print() << "  relative drift L2 error = " << rel_error << "\n";
 		amrex::Print() << "  final drift error       = " << final_error << "\n";
@@ -341,7 +337,6 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "\nTest PASSED: stiff Hall/Pedersen drift matches the analytic solution.\n";
 		}
-
 #ifdef HAVE_PYTHON
 		plotRelativeDrift(data);
 #endif
