@@ -1704,7 +1704,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// *add* density to rhs_mf
 		// (N.B. particles **will not work** if you overwrite the density here!)
-		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		// add dust density contributions to the Poisson source term
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				rho += state[bx](i, j, k, HydroSystem<problem_t>::dustDensity_index + g * HydroSystem<problem_t>::numDustVars_);
+			}
+		}
+		rhs[bx](i, j, k) += 4.0 * M_PI * G * rho;
 	});
 	amrex::Gpu::streamSynchronizeAll();
 }
@@ -1740,6 +1747,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 		state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
 		state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
 		state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
+
+		// apply gravitational acceleration to each dust group
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				const int stride = g * HydroSystem<problem_t>::numDustVars_;
+				const amrex::Real rho_d = state[bx](i, j, k, HydroSystem<problem_t>::dustDensity_index + stride);
+				state[bx](i, j, k, HydroSystem<problem_t>::x1DustMomentum_index + stride) += dt * rho_d * gx;
+				state[bx](i, j, k, HydroSystem<problem_t>::x2DustMomentum_index + stride) += dt * rho_d * gy;
+				state[bx](i, j, k, HydroSystem<problem_t>::x3DustMomentum_index + stride) += dt * rho_d * gz;
+			}
+		}
 	});
 #else
 	amrex::ignore_unused(phi_mf, lev, dt);
