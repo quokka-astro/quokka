@@ -2192,6 +2192,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 		amrex::Print() << "[WARNING] SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
 			       << " c threshold!" << "\n";
 	}
+
+	// Stromgren-volume photoionization feedback from star particles. Like the SN deposition above,
+	// this acts on the finest level only, which is where star particles are assumed to live.
+	static const auto photoionization_par = quokka::photoionization::readParameters();
+	if (photoionization_par.enabled) {
+		// Every rank must take this branch: the gather and the per-source reductions below are
+		// collective, and all ranks end up with the same ordered source list.
+		amrex::Vector<amrex::Real> ionizing_sources;
+		particleRegister_.collectIonizingSources(ionizing_sources, lev, photoionization_par);
+		quokka::photoionization::gatherAndOrderSources(ionizing_sources);
+		quokka::photoionization::applyStromgrenFeedback<problem_t>(state_new_cc_[lev], ionizing_sources, geom[lev], photoionization_par);
+	}
 }
 #endif // AMREX_SPACEDIM == 3
 

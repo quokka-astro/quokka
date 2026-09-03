@@ -1,0 +1,35 @@
+# Strömgren-volume photoionization feedback in the subgrid regime.
+# Same binary as StromgrenVolumeFeedback, but with a photon rate so low that the Strömgren radius is
+# far smaller than one cell (R_St ~ 0.005 cells). This is the regime the module exists for -- an H II
+# region the M1 solver could not resolve -- so the test requires relative, not one-cell, accuracy.
+# stop_time is tiny so the gas is still frozen at the uniform initial density when the check runs.
+
+geometry.prob_lo = [-6.1714e18, -6.1714e18, -6.1714e18]
+geometry.prob_hi = [ 6.1714e18,  6.1714e18,  6.1714e18]
+quokka.bc = ["foextrap", "foextrap", "foextrap"]
+
+amr.n_cell = [32, 32, 32]
+amr.max_level = 0
+amr.blocking_factor = 16
+amr.max_grid_size = 32
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 0
+
+stop_time = 1.0e6 # s -- gas frozen
+max_timesteps = 3
+
+particles.verbose = 1
+
+stromgren.enabled = 1
+stromgren.Q_ion = 1.0e40 # overrides the stellar model; R_St << dx
+stromgren.T_HII = 1.0e4
+stromgren.alpha_B = 2.59e-13
+stromgren.hydrogen_mass_fraction = 1.0
+stromgren.R_max_cells = 32.0
+stromgren.x_ion_scalar_index = 0
+
+plotfile_interval = -1
+checkpoint_interval = -1
+tiny_profiler.enabled = 0
