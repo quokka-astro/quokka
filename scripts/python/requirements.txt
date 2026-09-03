@@ -1,0 +1,13 @@
+# Third-party packages used by the scripts in this directory.
+# Install with:  pip install -r scripts/python/requirements.txt
+# Scripts not listed here (e.g. prune_checkpoints.py) need only the standard library.
+
+numpy         # create_particles, convert_cooling_table_hdf5, plot_*, quick_plot
+matplotlib    # hydro_wave_convergence_analysis, plot_*, quick_plot
+h5py          # convert_cooling_table_hdf5
+yt            # plot_fcquantities_bfield_lines, quick_plot
+unyt          # quick_plot
+scienceplots  # quick_plot (optional: falls back to the default matplotlib style)
+
+# check_inputs_toml, convert_inputs_to_toml; tomllib is in the standard library from 3.11
+tomli; python_version < "3.11"
