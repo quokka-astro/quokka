@@ -916,10 +916,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 					maxSignal(i, j, k) = std::max(maxSignalRadiation, maxSignalHydro(i, j, k));
 				});
 			}
-		} else {
-			// no physics modules enabled, why are we running?
-			amrex::Abort("At least one of hydro or radiation must be enabled! Cannot "
-				     "compute a time step.");
+		} else { 
+			// if no hydro or radiation modules (pure particle simulation), vanishing fluid signal velocity
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				maxSignal(i, j, k) = 0.0;
+			});
 		}
 	}
 

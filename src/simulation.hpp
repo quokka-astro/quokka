@@ -1263,8 +1263,12 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	}
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-	dtloc_t hydro_dt{.value = cflNumber_ * (dx_min / domain_signal_max), .index = domain_signal_maxloc};
-
+	// hydro dt max value as default to use particle timestep in particle-only simulations
+	dtloc_t hydro_dt{.value = std::numeric_limits<amrex::Real>::max(), .index = domain_signal_maxloc};
+	if (domain_signal_max > 0.0) { // when one of hydro or rad active
+		hydro_dt.value = cflNumber_ * (dx_min / domain_signal_max); 
+	}
+	
 	if (verbose) {
 		amrex::Print() << std::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
 		amrex::Print() << std::format("...[level {}] \thydro timestep limited at cell {} with signal speed = {:e}\n", lev,
