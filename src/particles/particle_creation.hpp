@@ -496,8 +496,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
 		amrex::Real eps_ff_ = eps_ff;
-		amrex::Real stellar_velocity_limit_ = stellar_velocity_limit;
 		amrex::Real low_mass_composite_max_mass_ = low_mass_composite_max_mass;
+		amrex::Real kick_velocity_min_ = stochastic_stellar_pop_kick_velocity_min;
+		amrex::Real kick_velocity_max_ = stochastic_stellar_pop_kick_velocity_max;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
@@ -606,11 +607,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						// Set particle velocity
 						{
 							double constexpr km_per_s = 1.e5; // convert km/s to cm/s
-							double constexpr v_min = 3.0;	  // Minimum velocity from the distribution
-							double constexpr v_max = 385.0;	  // Maximum velocity from the distribution
 							double constexpr beta = 1.8;	  // Slope of the velocity distribution
-							double constexpr vmin_pow = gcem::pow(v_min, 1. - beta);
-							double constexpr vmax_pow = gcem::pow(v_max, 1. - beta);
+							const double vmin_pow = std::pow(kick_velocity_min_, 1. - beta);
+							const double vmax_pow = std::pow(kick_velocity_max_, 1. - beta);
 
 							// Draw velocity from the power-law distribution with inverse transform sampling
 							double v_mag = amrex::Random(engine) * (vmax_pow - vmin_pow) + vmin_pow;

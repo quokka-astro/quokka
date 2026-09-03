@@ -334,7 +334,6 @@ The cross term <script type="math/tex">\vec{v}_{\text{COM}} \cdot \vec{p}_{\text
 | `particles.SN_p_term_exponent` | Float | `-0.17` | Exponent \\(\alpha_p\\) of the ambient-density scaling of the terminal momentum, \\(p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{\alpha_p}\\). |
 | `particles.disable_SN_feedback` | Boolean | `0` | Disable SN feedback entirely |
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
-| `particles.stellar_velocity_limit` | Float | \\(10^8\\) cm/s | Maximum allowed stellar velocity (aborts if exceeded) |
 | `particles.SN_smooth_gas_velocity` | Integer | `1` | Smooth gas velocity in the stencil to enforce energy conservation |
 
 ### 	Implementation Notes
