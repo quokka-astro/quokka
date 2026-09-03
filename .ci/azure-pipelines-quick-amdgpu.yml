@@ -59,6 +59,7 @@ jobs:
           echo "##vso[task.setvariable variable=hasProblems]true"
           echo "##vso[task.setvariable variable=cmakeTargetArgs]$CMAKE_TARGETS"
           echo "##vso[task.setvariable variable=ctestRegex]$CTEST_REGEX"
+          echo "##vso[task.setvariable variable=changedProblems]$(echo $PROBLEMS | tr '\n' ' ' | sed 's/ $//')"
         fi
       displayName: 'Detect changed problems'
 
@@ -71,6 +72,36 @@ jobs:
         CCACHE_NOHASHDIR: 1
       inputs:
         cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=HIP -DCMAKE_CXX_FLAGS=-ffp-exception-behavior=strict $(cmakeLauncherArgs)'
+
+    - script: |
+        # A problem's CMakeLists may be wrapped in a dimensionality guard -- DTypeFront1D and the
+        # RadhydroPulse family are 1D-only -- so a changed problem does not necessarily define a target in
+        # this 3D configuration, and asking the generated build system for a target it does not define is a
+        # hard error rather than a no-op. Intersect the changed problems with the targets that exist.
+        AVAILABLE=$(cmake --build build --target help 2>/dev/null | sed 's/^\.\.\. *//' | awk '{print $1}')
+        if [ -z "$AVAILABLE" ]; then
+          echo "##[warning]Could not list build targets; building all changed problems unfiltered."
+          AVAILABLE=$(echo $(changedProblems) | tr ' ' '\n')
+        fi
+        KEPT=""
+        for p in $(changedProblems); do
+          if echo "$AVAILABLE" | grep -qx -- "$p"; then
+            KEPT="$KEPT $p"
+          else
+            echo "##[warning]Changed problem '$p' defines no target in this configuration (probably a dimensionality guard); skipping."
+          fi
+        done
+        KEPT=$(echo $KEPT | tr ' ' '\n' | sort -u | sed '/^$/d')
+        if [ -z "$KEPT" ]; then
+          echo "##[section]None of the changed problems build in this configuration; nothing to do."
+          echo "##vso[task.setvariable variable=hasProblems]false"
+          exit 0
+        fi
+        echo "Building targets: $(echo $KEPT | tr '\n' ' ')"
+        echo "##vso[task.setvariable variable=cmakeTargetArgs]$(echo "$KEPT" | awk '{printf "--target %s ", $0}' | sed 's/ $//')"
+        echo "##vso[task.setvariable variable=ctestRegex]^($(echo "$KEPT" | tr '\n' '|' | sed 's/|$//'))($|-)"
+      displayName: 'Filter changed problems to targets in this configuration'
+      condition: eq(variables['hasProblems'], 'true')
 
     - task: CMake@1
       displayName: 'Build Quokka (targeted)'
@@ -97,12 +128,8 @@ jobs:
       condition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
       displayName: Publish test results
 
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: build/Testing/Temporary
-        ArtifactName: ctest-temporary-logs
-        publishLocation: Container
-      condition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
-      displayName: Publish CTest temporary logs artifact
+    - template: templates/publish-ctest-logs.yml
+      parameters:
+        stepCondition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
 
     - template: templates/ccache-stats.yml

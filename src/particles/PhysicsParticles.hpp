@@ -248,7 +248,7 @@ class PhysicsParticleDescriptorBase
 
 	virtual void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 					std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time,
-					amrex::Real dt)
+					amrex::Real dt, amrex::MultiFab const &density_floor)
 	{ /* Default empty implementation */
 	}
 
@@ -492,7 +492,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
 							    return acc(i, j, k, comp); // no weighting
 						    },
-						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
+						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType &p, int comp, amrex::Real acc_comp) {
 							    // kick particle by updating its velocity
 							    if (comp < ContainerType::ParticleType::NReal) {
 								    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
@@ -863,10 +863,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// apply accretion
 	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
-				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt) override
+				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt, amrex::MultiFab const &density_floor) override
 	{
 		SinkAccretionUtils::applyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, state_fc, geom, lev, time, dt,
-									     this->getMassIndex(), this->getMdotIndex(), this->getAngMomIndex());
+									     this->getMassIndex(), density_floor, this->getMdotIndex(), this->getAngMomIndex());
 	}
 
 	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
@@ -1079,12 +1079,12 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Implementation of applySinkAccretion
 	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
-				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt)
+				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt, amrex::MultiFab const &density_floor)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::applySinkAccretion()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getAllowsAccretion()) {
-				descriptor->applySinkAccretion(state, state_accretion_rate, state_fc, geom, lev, time, dt);
+				descriptor->applySinkAccretion(state, state_accretion_rate, state_fc, geom, lev, time, dt, density_floor);
 			}
 		}
 	}

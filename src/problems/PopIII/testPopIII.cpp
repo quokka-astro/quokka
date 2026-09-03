@@ -35,8 +35,7 @@
 
 using amrex::Real;
 
-struct PopIII {
-};
+struct PopIII {};
 
 template <> struct HydroSystem_Traits<PopIII> {
 	static constexpr bool reconstruct_eint = true;

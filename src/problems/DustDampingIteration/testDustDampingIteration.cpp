@@ -16,11 +16,9 @@ constexpr double rho_dust1 = 1.0;
 constexpr double rho_dust2 = 1.0;
 constexpr double P_INITIAL = 1.0;
 
-struct DustDampingWithCorrection {
-};
+struct DustDampingWithCorrection {};
 
-struct DustDampingWithoutCorrection {
-};
+struct DustDampingWithoutCorrection {};
 
 template <> struct SimulationData<DustDampingWithCorrection> {
 	std::vector<double> t_vec_;

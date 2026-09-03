@@ -22,8 +22,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct SinkProblem {
-};
+struct SinkProblem {};
 
 constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
