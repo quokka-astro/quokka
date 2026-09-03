@@ -1263,9 +1263,14 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	}
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-	dtloc_t hydro_dt{.value = cflNumber_ * (dx_min / domain_signal_max), .index = domain_signal_maxloc};
+	// the signal speed is zero when no hyperbolic physics is enabled (e.g. self-gravity acting on
+	// particles only), in which case the hydro timestep does not constrain the simulation
+	dtloc_t hydro_dt{.value = std::numeric_limits<amrex::Real>::max(), .index = domain_signal_maxloc};
+	if (domain_signal_max > 0.0) {
+		hydro_dt.value = cflNumber_ * (dx_min / domain_signal_max);
+	}
 
-	if (verbose) {
+	if (verbose && domain_signal_max > 0.0) {
 		amrex::Print() << std::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
 		amrex::Print() << std::format("...[level {}] \thydro timestep limited at cell {} with signal speed = {:e}\n", lev,
 					      formatIntVect(hydro_dt.index), domain_signal_max);
@@ -1301,6 +1306,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			amrex::Abort(abort_msg.c_str());
 		}
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
+		// (when no hyperbolic physics is enabled, hydro_dt is unconstrained and the cutoff is zero)
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {
 			particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
 		}
@@ -1317,7 +1323,13 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	std::vector<dtloc_t *> dts = {&hydro_dt, &conduction_dt, &particle_dt};
 	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end(), [](dtloc_t *const p1, dtloc_t *const p2) { return p1->value < p2->value; });
 
-	if (verbose) {
+	// N.B. this must be checked here: computeTimestep() clips dt to 1.1 * dt_[lev], which turns an
+	// unconstrained timestep into a large-but-finite one that no later check can recognise
+	const bool timestep_is_constrained = dt_min_ptr->value < std::numeric_limits<amrex::Real>::max();
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(timestep_is_constrained || constantDt_ > 0.0 || maxDt_ < std::numeric_limits<amrex::Real>::max(),
+					 "No enabled physics module constrains the timestep! Set constant_dt or max_dt in the inputs file.");
+
+	if (verbose && timestep_is_constrained) {
 		// print the physics that limits the timestep
 		if (dt_min_ptr == &hydro_dt) {
 			amrex::Print() << std::format("...[level {}] timestep limited by HYDRO\n", lev);
