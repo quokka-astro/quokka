@@ -147,6 +147,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::enableElectronConduction_;
 	using AMRSimulation<problem_t>::electronConductionKappa0_;
 	using AMRSimulation<problem_t>::conductionCFL;
+	using AMRSimulation<problem_t>::conductionType_;
 
 #if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
@@ -731,6 +732,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("conduction_cfl", conductionCFL);
 		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
 		hpp.query("saturation_factor", electronConductionSaturationFactor_);
+		hpp.query("conduction_type", conductionType_);
+		if (conductionType_ != "constant" && conductionType_ != "spitzer") {
+			amrex::Abort("Invalid conduction.conduction_type! Must be 'constant' or 'spitzer'.");
+		}
 	}
 
 	// set turbulence runtime parameters
@@ -1228,10 +1233,20 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 							       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 				}
 			}
+			// Match the hydro solver's own reconstruction ghost width (QuokkaSimulation::computeHydroFluxes)
+			// so the (rho, T) reconstruction used for the conduction flux has the same stencil robustness
+			// as the hydro reconstruction it mirrors.
+			const int conduction_nghost_Riemann =
+			    MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emfComputingScheme_, emfAveragingScheme_, do_tracers != 0);
+			const int conduction_reconstructGhost = conduction_nghost_Riemann + 1;
 			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 											     .saturation_factor = electronConductionSaturationFactor_,
-											     .min_temperature = tempFloor_};
+											     .min_temperature = tempFloor_,
+											     .spitzer_scaling = (conductionType_ == "spitzer"),
+											     .reconstruction_order = reconstructionOrder_,
+											     .plm_limiter = plmLimiter_,
+											     .ng_reconstruct = conduction_reconstructGhost};
 			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
 			if ((do_reflux != 0) && (recal_fluxes != nullptr)) {
 				// heat_flux has a single component, so accumulate it into the energy components of the

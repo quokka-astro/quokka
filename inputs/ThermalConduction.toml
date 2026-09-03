@@ -26,11 +26,20 @@ amr_interpolation_method = 3
 do_reflux = 1
 do_subcycle = 0
 
-stop_time = 469054.0075444166 # 1 conduction time
 cfl = 0.3
 
 conduction.enabled = 1
-conduction.conductivity_prefactor = 0.6113916490935586e12
 conduction.flux_limiter_phi = 1
 conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
+suppress_output = 0
+
+#Spitzer IC
+conduction.conduction_type = "spitzer"
+conduction.conductivity_prefactor = 5.40e-10
+stop_time = 660942.2643981476
+
+#Constant IC
+#conduction.conduction_type = "constant"
+#conduction.conductivity_prefactor = 0.6113916490935586e12
+#stop_time = 469054.0075444166
