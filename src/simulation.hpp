@@ -227,6 +227,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real last_sfh_time_ = 0.0;
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
+	int emf_active_particle_count_ = 0;
+	amrex::Real emf_momentum_requested_ = 0.0;
 
 	// Conduction parameters
 	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
@@ -310,6 +312,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void createInitialCICParticles() = 0;
 	virtual void createInitialCICRadParticles() = 0;
 	virtual void createInitialStochasticStellarPopParticles() = 0;
+	virtual void createInitialIMFAveragedStellarPopParticles() = 0;
 	virtual void createInitialSinkParticles() = 0;
 	virtual void createInitialStarParticles() = 0;
 	virtual void createInitialTestParticles() = 0;
@@ -700,6 +703,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
 	std::unique_ptr<quokka::StochasticStellarPopParticleContainer<problem_t>> StochasticStellarPopParticles;
+	std::unique_ptr<quokka::IMFAveragedStellarPopParticleContainer> IMFAveragedStellarPopParticles;
 	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
 	std::unique_ptr<quokka::StarParticleContainer<problem_t>> StarParticles;
 	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
@@ -2176,6 +2180,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 		particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 	}
 
+	// Match the existing SN feedback AMR policy: deposit only particles stored on the finest level. There is no explicit coarse-fine source
+	// synchronization when a feedback stencil crosses a refinement boundary.
+	const auto early_feedback_stats = particleRegister_.depositEarlyFeedback(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+	emf_active_particle_count_ = early_feedback_stats.active_particles;
+	emf_momentum_requested_ = early_feedback_stats.scalar_momentum;
+	if (verbose && early_feedback_stats.active_particles > 0) {
+		amrex::Print() << std::format("[PARTICLES] Early feedback: Time: {} - {} active particles requested {} g cm/s at level {}\n", time,
+					      early_feedback_stats.active_particles, early_feedback_stats.scalar_momentum, lev);
+	}
+	constexpr amrex::Real v_over_c_threshold = 0.03;
+	if (early_feedback_stats.max_signal_speed > v_over_c_threshold * C::c_light) {
+		amrex::Print() << "[WARNING] Early-feedback net signal speed (" << early_feedback_stats.max_signal_speed / C::c_light << " c) greater than "
+			       << v_over_c_threshold << " c threshold!\n";
+	}
+
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
 	sn_count_ = num_sn_explosions;
@@ -2187,7 +2206,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	}
 
 	// Check if the maximum velocity is greater than the threshold
-	constexpr amrex::Real v_over_c_threshold = 0.03;
 	if (max_velocity > v_over_c_threshold * C::c_light) {
 		amrex::Print() << "[WARNING] SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
 			       << " c threshold!" << "\n";
@@ -3672,6 +3690,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 
 			// Initialize particles through user-defined function
 			createInitialStochasticStellarPopParticles();
+		}
+	}
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::IMFAveragedStellarPop) {
+		if (is_restart) {
+			initializeParticleContainerFromCheckpoint<quokka::ParticleType::IMFAveragedStellarPop>(IMFAveragedStellarPopParticles,
+													       *header_box_arrays);
+		} else {
+			AMREX_ASSERT(IMFAveragedStellarPopParticles == nullptr);
+			static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for IMFAveragedStellarPop particles");
+			IMFAveragedStellarPopParticles = std::make_unique<quokka::IMFAveragedStellarPopParticleContainer>(this);
+			IMFAveragedStellarPopParticles->SetVerbose(0);
+			particleRegister_.template registerParticleType<quokka::ParticleType::IMFAveragedStellarPop>(IMFAveragedStellarPopParticles.get());
+			createInitialIMFAveragedStellarPopParticles();
 		}
 	}
 

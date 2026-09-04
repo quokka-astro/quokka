@@ -36,6 +36,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE" &&
           git config --global --add safe.directory "$GITHUB_WORKSPACE/extern/amrex"
         cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON -DQUOKKA_OPENPMD=ON -DopenPMD_USE_ADIOS2=OFF -DAMReX_SPACEDIM=3
+        extra_arguments: --extra-arg=-I/github/workspace/src --extra-arg=-I/github/workspace/extern/amrex/Src/Base --extra-arg=-I/github/workspace/build/amrex
         split_workflow: true
 
     # Uploads an artefact containing clang_fixes.json

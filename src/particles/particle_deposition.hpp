@@ -16,6 +16,7 @@
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
 #include "math/quadrature.hpp"
+#include "particles/imf_supernova.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 
@@ -539,7 +540,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 
 template <ParticleType particleType, typename ContainerType, typename problem_t>
 void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		     int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d, int *p_sn_count = nullptr)
+		     int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d, int *p_sn_count = nullptr, bool deposit_feedback = true)
 {
 	const BL_PROFILE("SNFeedbackUtils::depositToBuffer()");
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
@@ -601,24 +602,56 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 			auto const local_state_capture = local_state;
 			auto const plo_capture = plo;
 			auto const dxi_capture = dxi;
-			amrex::ignore_unused(local_state_capture, plo_capture, dxi_capture);
+			const auto step_end_time_capture = step_end_time;
+			const auto birth_time_index_capture = birthTimeIndex;
+			const auto deposit_feedback_capture = deposit_feedback;
+			const auto evolution_stage_index_capture = evolutionStageIndex;
+			const auto mass_index_capture = mass_index;
+			const auto ejecta_mass_capture = m_ej;
+			const auto minimum_dead_star_mass_capture = m_dead_min;
+			amrex::ignore_unused(local_state_capture, plo_capture, dxi_capture, step_end_time_capture, birth_time_index_capture,
+					     deposit_feedback_capture, evolution_stage_index_capture, mass_index_capture, ejecta_mass_capture,
+					     minimum_dead_star_mass_capture);
 
-			// Check if this is a supernova progenitor
-			const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+			int event_count = 0;
+			if constexpr (particleType == ParticleType::IMFAveragedStellarPop) {
+				const std::uint64_t key =
+				    static_cast<std::uint64_t>(static_cast<std::uint32_t>(p.idata(IMFAveragedStellarPopParticleRNGKeyLoIdx))) |
+				    (static_cast<std::uint64_t>(static_cast<std::uint32_t>(p.idata(IMFAveragedStellarPopParticleRNGKeyHiIdx))) << 32U);
+				const std::uint64_t draw_index =
+				    static_cast<std::uint64_t>(static_cast<std::uint32_t>(p.idata(IMFAveragedStellarPopParticleSNDrawIndexLoIdx))) |
+				    (static_cast<std::uint64_t>(static_cast<std::uint32_t>(p.idata(IMFAveragedStellarPopParticleSNDrawIndexHiIdx))) << 32U);
+				quokka::particles::SupernovaScheduleState schedule{{key}, draw_index, p.rdata(IMFAveragedStellarPopParticleNextSNIntensityIdx)};
+				const double age_myr = std::max(0.0, (step_end_time - p.rdata(birthTimeIndex)) / quokka::Myr_in_s);
+				const double birth_mass_msun = p.rdata(IMFAveragedStellarPopParticleMassAtBirthIdx) / C::M_solar;
+				const double cumulative_intensity = birth_mass_msun * quokka::particles::cumulativeCoreCollapseSNPerSolarMass(age_myr);
+				const int scheduled_event_count = quokka::particles::advanceSupernovaSchedule(schedule, cumulative_intensity);
+				event_count = deposit_feedback ? scheduled_event_count : 0;
+				p.rdata(IMFAveragedStellarPopParticleNextSNIntensityIdx) = schedule.next_event_intensity;
+				p.idata(IMFAveragedStellarPopParticleSNDrawIndexLoIdx) = static_cast<int>(static_cast<std::uint32_t>(schedule.next_draw_index));
+				p.idata(IMFAveragedStellarPopParticleSNDrawIndexHiIdx) =
+				    static_cast<int>(static_cast<std::uint32_t>(schedule.next_draw_index >> 32U));
+			} else {
+				const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+				if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
+					event_count = 1;
+					p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+				}
+			}
 
-			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
+			if (event_count > 0) {
 				// Count this SN explosion
 				if (p_sn_count != nullptr) {
-					amrex::Gpu::Atomic::AddNoRet(p_sn_count, 1);
+					amrex::Gpu::Atomic::AddNoRet(p_sn_count, event_count);
 				}
 
-				// Update the particle's evolution stage to SNRemnant
-				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
-
-				// update the particle's mass: subtract ejecta mass
-				const amrex::Real mass_dead_star = p.rdata(mass_index) - m_ej;
-				// AMREX_ASSERT_WITH_MESSAGE(mass_dead_star > 0.0, "SN progenitor mass should be greater than ejecta mass (10 M_sun)");
-				p.rdata(mass_index) = std::max(m_dead_min, mass_dead_star);
+				if constexpr (particleType == ParticleType::IMFAveragedStellarPop) {
+					// Do not truncate a valid Poisson event to enforce a finite-mass budget.
+					p.rdata(mass_index) = std::max(0.0, p.rdata(mass_index) - static_cast<double>(event_count) * m_ej);
+				} else {
+					const amrex::Real mass_dead_star = p.rdata(mass_index) - m_ej;
+					p.rdata(mass_index) = std::max(m_dead_min, mass_dead_star);
+				}
 
 				// get particle velocity
 				const amrex::Real p_vx = p.rdata(mass_index + 1);
@@ -659,19 +692,17 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 					}
 				}
 
-				if (SN_scheme_d == SNScheme::SN_thermal_only) {
-					// For thermal-only scheme, compute lab-frame kinetic energy
-					const amrex::Real SN_kin_energy = 0.5 * m_ej * (p_vx * p_vx + p_vy * p_vy + p_vz * p_vz);
-					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz, vol_inverse,
-								     stencil_weights_gpu, scalar_yield_per_SN_d);
-				} else {
-					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					// (SN kinetic energy computed inside function using COM frame for Galilean invariance)
-					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z,
-										    m_ej, E_blast, p_snr_0, p_term_exponent, vol_inverse, stencil_weights_gpu,
-										    avg_density, vol, dx, plo, SN_scheme_d, p_vx, p_vy, p_vz,
-										    SN_smooth_gas_velocity_d, scalar_yield_per_SN_d);
+				for (int event = 0; event < event_count; ++event) {
+					if (SN_scheme_d == SNScheme::SN_thermal_only) {
+						const amrex::Real SN_kin_energy = 0.5 * m_ej * (p_vx * p_vx + p_vy * p_vy + p_vz * p_vz);
+						depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz,
+									     vol_inverse, stencil_weights_gpu, scalar_yield_per_SN_d);
+					} else {
+						depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y,
+											    pos_z, m_ej, E_blast, p_snr_0, p_term_exponent, vol_inverse,
+											    stencil_weights_gpu, avg_density, vol, dx, plo, SN_scheme_d, p_vx,
+											    p_vy, p_vz, SN_smooth_gas_velocity_d, scalar_yield_per_SN_d);
+					}
 				}
 			}
 		});
@@ -995,7 +1026,7 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 
 template <ParticleType particleType, typename ContainerType, typename problem_t>
 auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time,
-		  amrex::Real dt, int mass_index, int evolutionStageIndex, int birthTimeIndex) -> std::pair<int, Real>
+		  amrex::Real dt, int mass_index, int evolutionStageIndex, int birthTimeIndex, bool deposit_feedback = true) -> std::pair<int, Real>
 {
 	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,
@@ -1018,7 +1049,7 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 
 	// Step 1: Local deposition within each box
 	SNFeedbackUtils::depositToBuffer<particleType, ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex,
-										 birthTimeIndex, SN_scheme_d, p_sn_count);
+										 birthTimeIndex, SN_scheme_d, p_sn_count, deposit_feedback);
 
 	// Step 2: Sum boundary values
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
