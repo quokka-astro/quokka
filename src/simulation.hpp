@@ -227,6 +227,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real last_sfh_time_ = 0.0;
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
+	int emf_active_particle_count_ = 0;
+	amrex::Real emf_momentum_requested_ = 0.0;
 
 	// Conduction parameters
 	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
@@ -2176,6 +2178,31 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 		particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 	}
 
+	// Match the existing SN feedback AMR policy: deposit only particles stored on the finest level. There is no explicit coarse-fine source
+	// synchronization when a feedback stencil crosses a refinement boundary.
+	const auto early_feedback_stats = particleRegister_.depositEarlyFeedback(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+	emf_active_particle_count_ = early_feedback_stats.active_particles;
+	emf_momentum_requested_ = early_feedback_stats.scalar_momentum;
+	if (verbose && early_feedback_stats.active_particles > 0) {
+		amrex::Print() << std::format("[PARTICLES] Early feedback: Time: {} - {} active particles requested {} g cm/s at level {}\n", time,
+					      early_feedback_stats.active_particles, early_feedback_stats.scalar_momentum, lev);
+	}
+	if (early_feedback_stats.clipped_cells > 0) {
+		amrex::Print() << std::format("[PARTICLES] Early feedback limited in {} cells at level {} (minimum velocity scale = {}).\n",
+					      early_feedback_stats.clipped_cells, lev, early_feedback_stats.min_velocity_scale);
+	}
+	constexpr amrex::Real v_over_c_threshold = 0.03;
+	if (early_feedback_stats.max_velocity > v_over_c_threshold * C::c_light) {
+		amrex::Print() << "[WARNING] Early-feedback net velocity (" << early_feedback_stats.max_velocity / C::c_light << " c) greater than "
+			       << v_over_c_threshold << " c threshold!\n";
+	}
+
+	// Early feedback updates valid cells only; SN deposition reads stencil momenta from ghost cells.
+	if (early_feedback_stats.active_particles > 0) {
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, InterpHookNone,
+				       InterpHookNone, FillPatchType::fillpatch_function);
+	}
+
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
 	sn_count_ = num_sn_explosions;
@@ -2187,7 +2214,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	}
 
 	// Check if the maximum velocity is greater than the threshold
-	constexpr amrex::Real v_over_c_threshold = 0.03;
 	if (max_velocity > v_over_c_threshold * C::c_light) {
 		amrex::Print() << "[WARNING] SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
 			       << " c threshold!" << "\n";

@@ -51,9 +51,7 @@ jobs:
       run: cmake -E make_directory ${{runner.workspace}}/build
 
     - name: Install Homebrew dependencies
-      run: |
-        brew install ccache openmpi hdf5@1.10 || true
-        brew link --force hdf5@1.10
+      run: brew install ccache openmpi hdf5
 
     - name: Output HDF5 configuration (verbose)
       run: h5cc -showconfig
@@ -76,6 +74,7 @@ jobs:
              ccache-${{ github.workflow }}-${{ github.job }}-git-
 
     - name: Initialize ccache
+      id: initialize_ccache
       run: |
         ccache --version
         ccache -z
@@ -105,7 +104,7 @@ jobs:
         canary run --output-on-failure --workers=3 -k 'not HydroWaveConvergence' .
 
     - name: ccache stats
-      if: always()
+      if: always() && steps.initialize_ccache.outcome == 'success'
       run: |
         du -hs ~/Library/Caches/ccache
         ccache -s
