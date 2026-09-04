@@ -386,6 +386,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// fill rhs for Poisson solve
 	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) override;
 
+	// add a problem-defined contribution to the gravitational potential, optionally only in physical ghost cells
+	void addProblemPotentialAtLevel(amrex::MultiFab &phi, int lev, bool physical_ghosts_only) override;
+
 	void print_multifab_fc(amrex::MultiFab &mf, std::string const &name, int lev, int idim);
 
 	// add gravitational acceleration to hydro state
@@ -1707,6 +1710,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 	});
 	amrex::Gpu::streamSynchronizeAll();
+}
+
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::addProblemPotentialAtLevel(amrex::MultiFab & /*phi_mf*/, const int /*lev*/, const bool /*physical_ghosts_only*/)
+{
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf, const int lev, const amrex::Real dt)

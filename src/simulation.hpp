@@ -321,6 +321,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void computeAfterTimestep() = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
+	// Add a problem-defined potential after the Poisson solve. During particle
+	// acceleration, physical_ghosts_only is true so the same potential can be
+	// restored outside non-periodic boundaries after FillPatch.
+	virtual void addProblemPotentialAtLevel(amrex::MultiFab & /*phi*/, int /*lev*/, bool /*physical_ghosts_only*/) {}
 	virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
 	virtual void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf,
 							const amrex::Vector<std::string> &compNames, int lev, int interval) = 0;
@@ -1944,6 +1948,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 		}
 
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			addProblemPotentialAtLevel(phi[lev], lev, false);
+		}
+
 		if (verbose) {
 			amrex::Print() << "\n";
 		}
@@ -2090,6 +2098,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
 						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
 		}
+		addProblemPotentialAtLevel(phi_extended, lev, true);
 
 		// check for NaN
 		AMREX_ALWAYS_ASSERT(!phi_extended.contains_nan());
