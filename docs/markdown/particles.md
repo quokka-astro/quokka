@@ -246,7 +246,7 @@ EMF uses the same normalized three-cell spherical weights and four-ghost-cell re
 
 It injects no mass, metals, passive scalars, or radiation energy. After all particle events have been accumulated, each cell's total energy receives the exact kinetic-energy change associated with its net momentum change, leaving internal energy unchanged. For each individual event, negative work \\(\\sum_j \\boldsymbol{v}_j\\!\\cdot\\!\\Delta\\boldsymbol{p}_j\\) is added as thermal energy to the particle's host cell. Cancellation between separate particle events is represented by the aggregated kinetic-energy update; it does not receive an additional inter-event thermalization term.
 
-After simultaneous particle contributions have been accumulated, each affected cell independently caps its post-deposition bulk velocity at `particles.EMF_max_velocity_kmps`. The default limit is 5000 km s\\(^{-1}\\). This post-hoc operation rescales the cell's total momentum, including any pre-existing momentum, and removes the corresponding kinetic energy while leaving internal energy unchanged. Because different cells generally receive different scale factors, this limiter deliberately gives up the uncapped stencil's exact zero-net-vector-momentum and uniform-boost invariants in exchange for preventing isolated low-density cells from controlling the hydrodynamic timestep. The limit is defined in the simulation frame.
+After simultaneous particle contributions have been accumulated, each affected cell independently caps its post-deposition bulk velocity at `particles.EMF_max_velocity_kmps`. The default limit is 3000 km s\\(^{-1}\\). This post-hoc operation rescales the cell's total momentum, including any pre-existing momentum, and removes the corresponding kinetic energy while leaving internal energy unchanged. Because different cells generally receive different scale factors, this limiter deliberately gives up the uncapped stencil's exact zero-net-vector-momentum and uniform-boost invariants in exchange for preventing isolated low-density cells from controlling the hydrodynamic timestep. The limit is defined in the simulation frame.
 
 ### Deliberate differences from the published deposition algorithm
 
@@ -266,7 +266,7 @@ The operation occurs after end-of-step particle drift and star formation, and be
 | `particles.EMF_p0_kmps` | Real | `377.0` | Momentum normalization \\(p_0\\) in km s\\(^{-1}\\) |
 | `particles.EMF_tFB_Myr` | Real | `3.3` | Feedback duration in Myr |
 | `particles.EMF_alpha` | Real | `1.0` | Expansion exponent; must lie in \\([0.5,1.0]\\) |
-| `particles.EMF_max_velocity_kmps` | Real | `5000.0` | Maximum post-deposition bulk velocity in an affected cell, in km s\\(^{-1}\\) |
+| `particles.EMF_max_velocity_kmps` | Real | `3000.0` | Maximum post-deposition bulk velocity in an affected cell, in km s\\(^{-1}\\) |
 
 On a multilevel hierarchy, EMF follows the existing SN-feedback AMR policy: feedback is deposited only from particles stored on the finest AMR level, and particles stored on coarser levels are ignored. Both paths use a same-level feedback buffer without explicit coarse-fine source synchronization, so deposition can be inconsistent when a stencil crosses a coarse-fine boundary. An active particle whose stencil is not representable inside its particle grid or the physical domain still causes an abort. EMF is independent of `particles.disable_SN_feedback` and `particles.SN_scheme`, so EMF-only and SN-only controls are both available.
 
