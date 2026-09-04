@@ -433,7 +433,7 @@ def make_stage_cubes(
 ) -> Path:
     magnetic_norms = stage_norms(slices, 2, logarithmic=False)
     dust_norms = stage_norms(slices, 3, logarithmic=True)
-    fig = plt.figure(figsize=(DOUBLE_COLUMN_WIDTH, 5.0))
+    fig = plt.figure(figsize=(DOUBLE_COLUMN_WIDTH, 4.2))
     grid = fig.add_gridspec(
         2,
         6,
@@ -442,7 +442,7 @@ def make_stage_cubes(
         right=0.90,
         bottom=0.04,
         top=0.88,
-        hspace=0.08,
+        hspace=0.0,
         wspace=0.20,
     )
 

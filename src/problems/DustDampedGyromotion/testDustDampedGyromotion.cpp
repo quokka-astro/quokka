@@ -29,6 +29,8 @@ constexpr double default_grain_density = 1.0;
 constexpr double default_grain_radius = 1.5957691216057308; // sqrt(8 / pi) gives alpha0 = 1 for gamma = rho_g = c_s = rho_gr = 1.
 constexpr double dimensionless_charge_to_mass_ratio = 1.0;
 constexpr double dynamic_charge_offset = 0.95;
+constexpr double default_coefficient_tolerance = 1.0e-6;
+constexpr double convergence_coefficient_tolerance = 1.0e-12;
 
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_radius = {default_grain_radius};	  // NOLINT
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_density = {default_grain_density}; // NOLINT
@@ -142,6 +144,16 @@ struct SchemeRunResult {
 	double conservation_error;
 };
 
+struct CoefficientTreatmentConvergencePoint {
+	ResolvedRkScheme scheme{};
+	int steps = 0;
+	double dt = 0.0;
+	double frozen_error = 0.0;
+	double frozen_order = 0.0;
+	double picard_error = 0.0;
+	double picard_order = 0.0;
+};
+
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
 
 auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
@@ -156,6 +168,7 @@ auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
 	}
 	return "unknown";
 }
+
 } // namespace
 
 template <> struct SimulationData<DustGyroEpsteinNoB> : DustGyroHistory {};
@@ -361,7 +374,6 @@ template <typename problem_t> void appendDustGyroHistory(QuokkaSimulation<proble
 		const double gas_vx = gas_momentum_x / density;
 		const double gas_vy = gas_momentum_y / density;
 		const double gas_vz = gas_momentum_z / density;
-
 		const double dust_density = values.at(HydroSystem<problem_t>::dustDensity_index)[0];
 		const double dust_momentum_x = values.at(HydroSystem<problem_t>::x1DustMomentum_index)[0];
 		const double dust_momentum_y = values.at(HydroSystem<problem_t>::x2DustMomentum_index)[0];
@@ -400,7 +412,9 @@ template <typename problem_t> auto makePeriodicFaceBCs() -> amrex::Vector<amrex:
 	return BCs_fc;
 }
 
-template <typename problem_t> auto runDustGyroSimulation(ResolvedRkScheme scheme, bool enable_coefficient_iteration = true) -> SimulationData<problem_t>
+template <typename problem_t>
+auto runDustGyroSimulation(ResolvedRkScheme scheme, double constant_dt, double stop_time, bool enable_coefficient_iteration, double coefficient_tolerance)
+    -> SimulationData<problem_t>
 {
 	auto BCs_cc = quokka::BC<problem_t>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 	auto BCs_fc = makePeriodicFaceBCs<problem_t>();
@@ -410,10 +424,12 @@ template <typename problem_t> auto runDustGyroSimulation(ResolvedRkScheme scheme
 	sim.radiationReconstructionOrder_ = 3;
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 1000000.0; // large CFL number to avoid CFL violation
-	sim.constantDt_ = GyroCaseParams<problem_t>::constant_dt;
-	sim.stopTime_ = GyroCaseParams<problem_t>::stop_time;
+	sim.constantDt_ = constant_dt;
+	sim.stopTime_ = stop_time;
 	sim.maxTimesteps_ = 10000000;
 	sim.dustCoefficientIteration_.enabled = GyroCaseParams<problem_t>::enable_epstein_drag && enable_coefficient_iteration;
+	sim.dustCoefficientIteration_.alphaRelativeTolerance = coefficient_tolerance;
+	sim.dustCoefficientIteration_.chargeRelativeTolerance = coefficient_tolerance;
 	sim.dustResolvedRkScheme_ = scheme;
 	sim.print_dust_counter_ = false;
 
@@ -473,6 +489,24 @@ template <typename AnalyticFn> auto relativeDriftL2Error(const DustGyroHistory &
 	}
 	return (ref_sq > 0.0) ? std::sqrt(err_sq / ref_sq) : 1.0;
 }
+
+template <typename AnalyticFn>
+auto meanRelativeDriftError(const std::vector<double> &time, const std::vector<double> &wx, const std::vector<double> &wy, AnalyticFn analytic) -> double
+{
+	double error_sum = 0.0;
+	for (size_t i = 1; i < time.size(); ++i) {
+		DriftState const exact = analytic(time[i]);
+		error_sum += std::hypot(wx[i] - exact.wx, wy[i] - exact.wy);
+	}
+	return error_sum / (static_cast<double>(time.size() - 1) * initial_drift);
+}
+
+template <typename AnalyticFn> auto meanRelativeDriftError(const DustGyroHistory &data, AnalyticFn analytic) -> double
+{
+	return meanRelativeDriftError(data.t_vec_, data.wx_vec_, data.wy_vec_, analytic);
+}
+
+auto observedOrder(double coarse_error, double fine_error) -> double { return std::log2(coarse_error / fine_error); }
 
 auto maxRelativeAmplitudeError(const DustGyroHistory &data) -> double
 {
@@ -599,18 +633,18 @@ void writeSummaryCsv(const std::string_view case_tag, const std::vector<SchemeRu
 	}
 }
 
-void writeDynamicChargeHistoryCsv(const DustGyroHistory &iterated_run, const DustGyroHistory &frozen_run)
+void writeDynamicChargeHistoryCsv(const DustGyroHistory &frozen_run, const DustGyroHistory &picard_run)
 {
-	size_t const n_samples = std::min(iterated_run.t_vec_.size(), frozen_run.t_vec_.size());
+	size_t const n_samples = picard_run.t_vec_.size();
 	std::ofstream file("dust_dynamic_charge_iteration_history.csv");
 	file << std::setprecision(17);
-	file << "t,wx_iterated_norm,wy_iterated_norm,xi_iterated,wx_frozen_norm,wy_frozen_norm,xi_frozen\n";
+	file << "t,wx_frozen_norm,wy_frozen_norm,xi_frozen,wx_picard_norm,wy_picard_norm,xi_picard\n";
 	for (size_t i = 0; i < n_samples; ++i) {
-		double const iterated_drift = std::hypot(iterated_run.wx_vec_[i], iterated_run.wy_vec_[i]);
 		double const frozen_drift = std::hypot(frozen_run.wx_vec_[i], frozen_run.wy_vec_[i]);
-		file << iterated_run.t_vec_[i] << "," << iterated_run.wx_vec_[i] / initial_drift << "," << iterated_run.wy_vec_[i] / initial_drift << ","
-		     << dynamicChargeFromDrift(iterated_drift) << "," << frozen_run.wx_vec_[i] / initial_drift << "," << frozen_run.wy_vec_[i] / initial_drift
-		     << "," << dynamicChargeFromDrift(frozen_drift) << "\n";
+		double const picard_drift = std::hypot(picard_run.wx_vec_[i], picard_run.wy_vec_[i]);
+		file << picard_run.t_vec_[i] << "," << frozen_run.wx_vec_[i] / initial_drift << "," << frozen_run.wy_vec_[i] / initial_drift << ","
+		     << dynamicChargeFromDrift(frozen_drift) << "," << picard_run.wx_vec_[i] / initial_drift << "," << picard_run.wy_vec_[i] / initial_drift
+		     << "," << dynamicChargeFromDrift(picard_drift) << "\n";
 	}
 }
 
@@ -629,6 +663,54 @@ void writeDynamicChargeExactCsv(const DustGyroHistory &data)
 	}
 }
 
+void writeDynamicChargeConvergenceCsv(const std::vector<CoefficientTreatmentConvergencePoint> &points)
+{
+	std::ofstream file("dust_dynamic_charge_convergence.csv");
+	file << std::setprecision(17);
+	file << "steps,dt,frozen_error,frozen_order,picard_error,picard_order\n";
+	for (auto const &point : points) {
+		file << point.steps << "," << point.dt << "," << point.frozen_error << "," << point.frozen_order << "," << point.picard_error << ","
+		     << point.picard_order << "\n";
+	}
+}
+
+template <typename AnalyticFn>
+void writeDynamicEpsteinHistoryCsv(const std::vector<SchemeRunResult> &frozen_runs, const std::vector<SchemeRunResult> &picard_runs, AnalyticFn analytic)
+{
+	size_t const n_samples = picard_runs.front().data.t_vec_.size();
+
+	std::ofstream file("dust_dynamic_epstein_iteration_history.csv");
+	file << std::setprecision(17);
+	file << "t,wx_exact_norm,wy_exact_norm";
+	for (auto const &run : picard_runs) {
+		std::string_view const slug = resolvedRkSchemeSlug(run.scheme);
+		file << ",wx_" << slug << "_frozen_norm,wx_" << slug << "_picard_norm,wy_" << slug << "_frozen_norm,wy_" << slug << "_picard_norm";
+	}
+	file << "\n";
+
+	for (size_t i = 0; i < n_samples; ++i) {
+		double const t = picard_runs.front().data.t_vec_[i];
+		DriftState const exact = analytic(t);
+		file << t << "," << exact.wx / initial_drift << "," << exact.wy / initial_drift;
+		for (size_t j = 0; j < picard_runs.size(); ++j) {
+			file << "," << frozen_runs[j].data.wx_vec_[i] / initial_drift << "," << picard_runs[j].data.wx_vec_[i] / initial_drift << ","
+			     << frozen_runs[j].data.wy_vec_[i] / initial_drift << "," << picard_runs[j].data.wy_vec_[i] / initial_drift;
+		}
+		file << "\n";
+	}
+}
+
+void writeDynamicEpsteinConvergenceCsv(const std::vector<CoefficientTreatmentConvergencePoint> &points)
+{
+	std::ofstream file("dust_dynamic_epstein_iteration_convergence.csv");
+	file << std::setprecision(17);
+	file << "scheme,steps,dt,frozen_error,frozen_order,picard_error,picard_order\n";
+	for (auto const &point : points) {
+		file << resolvedRkSchemeSlug(point.scheme) << "," << point.steps << "," << point.dt << "," << point.frozen_error << "," << point.frozen_order
+		     << "," << point.picard_error << "," << point.picard_order << "\n";
+	}
+}
+
 auto problem_main() -> int
 {
 	bool write_csv = true;
@@ -644,18 +726,88 @@ auto problem_main() -> int
 
 	std::vector<SchemeRunResult> epstein_no_b_runs;
 	std::vector<SchemeRunResult> gyro_no_drag_runs;
-	std::vector<SchemeRunResult> epstein_with_b_runs;
+	std::vector<SchemeRunResult> epstein_with_b_frozen_runs;
+	std::vector<SchemeRunResult> epstein_with_b_picard_runs;
 	epstein_no_b_runs.reserve(resolved_rk_schemes.size());
 	gyro_no_drag_runs.reserve(resolved_rk_schemes.size());
-	epstein_with_b_runs.reserve(resolved_rk_schemes.size());
+	epstein_with_b_frozen_runs.reserve(resolved_rk_schemes.size());
+	epstein_with_b_picard_runs.reserve(resolved_rk_schemes.size());
 
 	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
-		epstein_no_b_runs.push_back(computeRunResult(scheme, runDustGyroSimulation<DustGyroEpsteinNoB>(scheme), epstein_no_b_exact));
-		gyro_no_drag_runs.push_back(computeRunResult(scheme, runDustGyroSimulation<DustGyroNoDrag>(scheme), gyro_no_drag_exact));
-		epstein_with_b_runs.push_back(computeRunResult(scheme, runDustGyroSimulation<DustGyroEpsteinWithB>(scheme), epstein_with_b_exact));
+		epstein_no_b_runs.push_back(computeRunResult(scheme,
+							     runDustGyroSimulation<DustGyroEpsteinNoB>(scheme, GyroCaseParams<DustGyroEpsteinNoB>::constant_dt,
+												       GyroCaseParams<DustGyroEpsteinNoB>::stop_time, true,
+												       default_coefficient_tolerance),
+							     epstein_no_b_exact));
+		gyro_no_drag_runs.push_back(
+		    computeRunResult(scheme,
+				     runDustGyroSimulation<DustGyroNoDrag>(scheme, GyroCaseParams<DustGyroNoDrag>::constant_dt,
+									   GyroCaseParams<DustGyroNoDrag>::stop_time, true, default_coefficient_tolerance),
+				     gyro_no_drag_exact));
+		epstein_with_b_picard_runs.push_back(computeRunResult(
+		    scheme,
+		    runDustGyroSimulation<DustGyroEpsteinWithB>(scheme, GyroCaseParams<DustGyroEpsteinWithB>::constant_dt,
+								GyroCaseParams<DustGyroEpsteinWithB>::stop_time, true, default_coefficient_tolerance),
+		    epstein_with_b_exact));
+		epstein_with_b_frozen_runs.push_back(computeRunResult(
+		    scheme,
+		    runDustGyroSimulation<DustGyroEpsteinWithB>(scheme, GyroCaseParams<DustGyroEpsteinWithB>::constant_dt,
+								GyroCaseParams<DustGyroEpsteinWithB>::stop_time, false, default_coefficient_tolerance),
+		    epstein_with_b_exact));
 	}
-	auto dynamic_charge_iterated_run = runDustGyroSimulation<DustGyroDynamicCharge>(ResolvedRkScheme::GL4);
-	auto dynamic_charge_frozen_run = runDustGyroSimulation<DustGyroDynamicCharge>(ResolvedRkScheme::GL4, false);
+	auto dynamic_charge_picard_run =
+	    runDustGyroSimulation<DustGyroDynamicCharge>(ResolvedRkScheme::GL4, GyroCaseParams<DustGyroDynamicCharge>::constant_dt,
+							 GyroCaseParams<DustGyroDynamicCharge>::stop_time, true, default_coefficient_tolerance);
+	auto dynamic_charge_frozen_run =
+	    runDustGyroSimulation<DustGyroDynamicCharge>(ResolvedRkScheme::GL4, GyroCaseParams<DustGyroDynamicCharge>::constant_dt,
+							 GyroCaseParams<DustGyroDynamicCharge>::stop_time, false, default_coefficient_tolerance);
+
+	constexpr std::array<int, 5> convergence_step_counts = {20, 40, 80, 160, 320};
+	constexpr double convergence_stop_time = 2.0;
+	std::vector<CoefficientTreatmentConvergencePoint> dynamic_charge_convergence;
+	dynamic_charge_convergence.reserve(convergence_step_counts.size());
+	for (int const steps : convergence_step_counts) {
+		double const dt = convergence_stop_time / static_cast<double>(steps);
+		auto const picard_run =
+		    runDustGyroSimulation<DustGyroDynamicCharge>(ResolvedRkScheme::GL4, dt, convergence_stop_time, true, convergence_coefficient_tolerance);
+		auto const frozen_run =
+		    runDustGyroSimulation<DustGyroDynamicCharge>(ResolvedRkScheme::GL4, dt, convergence_stop_time, false, convergence_coefficient_tolerance);
+		CoefficientTreatmentConvergencePoint point{.scheme = ResolvedRkScheme::GL4, .steps = steps, .dt = dt};
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			point.frozen_error = meanRelativeDriftError(frozen_run, dynamic_charge_exact);
+			point.picard_error = meanRelativeDriftError(picard_run, dynamic_charge_exact);
+			if (!dynamic_charge_convergence.empty()) {
+				auto const &previous = dynamic_charge_convergence.back();
+				point.frozen_order = observedOrder(previous.frozen_error, point.frozen_error);
+				point.picard_order = observedOrder(previous.picard_error, point.picard_error);
+			}
+		}
+		dynamic_charge_convergence.push_back(point);
+	}
+
+	std::vector<CoefficientTreatmentConvergencePoint> dynamic_epstein_convergence;
+	dynamic_epstein_convergence.reserve(resolved_rk_schemes.size() * convergence_step_counts.size());
+	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
+		CoefficientTreatmentConvergencePoint previous{.scheme = scheme};
+		for (int const steps : convergence_step_counts) {
+			double const dt = convergence_stop_time / static_cast<double>(steps);
+			auto const picard_run =
+			    runDustGyroSimulation<DustGyroEpsteinWithB>(scheme, dt, convergence_stop_time, true, convergence_coefficient_tolerance);
+			auto const frozen_run =
+			    runDustGyroSimulation<DustGyroEpsteinWithB>(scheme, dt, convergence_stop_time, false, convergence_coefficient_tolerance);
+			CoefficientTreatmentConvergencePoint point{.scheme = scheme, .steps = steps, .dt = dt};
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				point.frozen_error = meanRelativeDriftError(frozen_run, epstein_with_b_exact);
+				point.picard_error = meanRelativeDriftError(picard_run, epstein_with_b_exact);
+				if (previous.steps > 0) {
+					point.frozen_order = observedOrder(previous.frozen_error, point.frozen_error);
+					point.picard_order = observedOrder(previous.picard_error, point.picard_error);
+				}
+			}
+			dynamic_epstein_convergence.push_back(point);
+			previous = point;
+		}
+	}
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -665,8 +817,9 @@ auto problem_main() -> int
 		const double gyro_amplitude_tol = 0.1;
 		const double epstein_with_b_tol = 8.0e-2;
 		const double conservation_tol = 1.0e-10;
-		const double dynamic_charge_drift_tol = 8.0e-2;
+		const double dynamic_charge_drift_tol = 1.0e-3;
 		const double dynamic_charge_minimum_change = 1.0e-2;
+		const double dynamic_charge_minimum_order = 3.8;
 
 		bool passed = true;
 		for (auto const &run : epstein_no_b_runs) {
@@ -692,7 +845,7 @@ auto problem_main() -> int
 			}
 		}
 
-		for (auto const &run : epstein_with_b_runs) {
+		for (auto const &run : epstein_with_b_picard_runs) {
 			amrex::Print() << "[Damped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
 				       << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
 			amrex::Print() << "[Damped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
@@ -701,26 +854,48 @@ auto problem_main() -> int
 				passed = false;
 			}
 		}
+		for (auto const &run : epstein_with_b_frozen_runs) {
+			if (run.conservation_error > conservation_tol) {
+				passed = false;
+			}
+		}
+		for (auto const &point : dynamic_epstein_convergence) {
+			amrex::Print() << "[Dynamic Epstein Convergence][" << quokka::dust::resolvedRkSchemeName(point.scheme) << "] steps = " << point.steps
+				       << ", frozen error/order = " << point.frozen_error << "/" << point.frozen_order
+				       << ", Picard error/order = " << point.picard_error << "/" << point.picard_order << "\n";
+			if (point.steps == convergence_step_counts.back()) {
+				double const minimum_picard_order = (point.scheme == ResolvedRkScheme::GL4) ? 3.8 : 1.8;
+				if ((point.picard_order < minimum_picard_order) || (point.picard_error >= point.frozen_error)) {
+					passed = false;
+				}
+			}
+		}
 
-		double const dynamic_charge_drift_error = relativeDriftL2Error(dynamic_charge_iterated_run, dynamic_charge_exact);
+		double const dynamic_charge_drift_error = relativeDriftL2Error(dynamic_charge_picard_run, dynamic_charge_exact);
 		double const dynamic_charge_frozen_drift_error = relativeDriftL2Error(dynamic_charge_frozen_run, dynamic_charge_exact);
-		double const dynamic_charge_difference = maxRelativeHistoryDifference(dynamic_charge_iterated_run, dynamic_charge_frozen_run);
-		double const final_drift = std::hypot(dynamic_charge_iterated_run.wx_vec_.back(), dynamic_charge_iterated_run.wy_vec_.back());
+		double const dynamic_charge_difference = maxRelativeHistoryDifference(dynamic_charge_picard_run, dynamic_charge_frozen_run);
+		double const final_drift = std::hypot(dynamic_charge_picard_run.wx_vec_.back(), dynamic_charge_picard_run.wy_vec_.back());
 		double const initial_charge = dynamicChargeFromDrift(initial_drift);
 		double const final_charge = dynamicChargeFromDrift(final_drift);
 		double const dynamic_charge_change = std::abs(final_charge - initial_charge);
 		bool const dynamic_charge_sign_changed = initial_charge * final_charge < 0.0;
-		double const dynamic_charge_conservation_error = maxConservationError(dynamic_charge_iterated_run);
+		double const dynamic_charge_conservation_error = maxConservationError(dynamic_charge_picard_run);
 		double const dynamic_charge_frozen_conservation_error = maxConservationError(dynamic_charge_frozen_run);
-		amrex::Print() << "[Dynamic Charge] Iterated analytic drift error      = " << dynamic_charge_drift_error << "\n";
+		amrex::Print() << "[Dynamic Charge] Picard analytic drift error          = " << dynamic_charge_drift_error << "\n";
 		amrex::Print() << "[Dynamic Charge] Frozen-coefficient drift error    = " << dynamic_charge_frozen_drift_error << "\n";
-		amrex::Print() << "[Dynamic Charge] Iterated/frozen solution difference = " << dynamic_charge_difference << "\n";
+		amrex::Print() << "[Dynamic Charge] Picard/frozen solution difference = " << dynamic_charge_difference << "\n";
 		amrex::Print() << "[Dynamic Charge] Initial/final charge-to-mass ratio = " << initial_charge << ", " << final_charge << "\n";
 		amrex::Print() << "[Dynamic Charge] Charge-to-mass ratio change      = " << dynamic_charge_change << "\n";
 		amrex::Print() << "[Dynamic Charge] Conservation error               = " << dynamic_charge_conservation_error << "\n";
 		amrex::Print() << "[Dynamic Charge] Frozen-coefficient conservation error = " << dynamic_charge_frozen_conservation_error << "\n";
+		for (auto const &point : dynamic_charge_convergence) {
+			amrex::Print() << "[Dynamic Charge Convergence] steps = " << point.steps << ", frozen error/order = " << point.frozen_error << "/"
+				       << point.frozen_order << ", Picard error/order = " << point.picard_error << "/" << point.picard_order << "\n";
+		}
 		if (!dynamic_charge_sign_changed || (dynamic_charge_drift_error > dynamic_charge_drift_tol) ||
-		    (dynamic_charge_change < dynamic_charge_minimum_change) || (dynamic_charge_conservation_error > conservation_tol)) {
+		    (dynamic_charge_change < dynamic_charge_minimum_change) || (dynamic_charge_conservation_error > conservation_tol) ||
+		    (dynamic_charge_convergence.back().picard_order < dynamic_charge_minimum_order) ||
+		    (dynamic_charge_convergence.back().picard_error >= dynamic_charge_convergence.back().frozen_error)) {
 			passed = false;
 		}
 
@@ -734,16 +909,18 @@ auto problem_main() -> int
 			const double alpha0 = computeInitialReciprocalStoppingTime();
 			writeCaseOutputs(epstein_no_b_runs, epstein_no_b_exact, "pure_damping", alpha0);
 			writeCaseOutputs(gyro_no_drag_runs, gyro_no_drag_exact, "undamped_gyromotion", GyroCaseParams<DustGyroNoDrag>::omega_L);
-			writeCaseOutputs(epstein_with_b_runs, epstein_with_b_exact, "damped_gyromotion", alpha0);
-			writeDynamicChargeHistoryCsv(dynamic_charge_iterated_run, dynamic_charge_frozen_run);
-			writeDynamicChargeExactCsv(dynamic_charge_iterated_run);
-
+			writeCaseOutputs(epstein_with_b_picard_runs, epstein_with_b_exact, "damped_gyromotion", alpha0);
+			writeDynamicChargeHistoryCsv(dynamic_charge_frozen_run, dynamic_charge_picard_run);
+			writeDynamicChargeExactCsv(dynamic_charge_picard_run);
+			writeDynamicChargeConvergenceCsv(dynamic_charge_convergence);
+			writeDynamicEpsteinHistoryCsv(epstein_with_b_frozen_runs, epstein_with_b_picard_runs, epstein_with_b_exact);
+			writeDynamicEpsteinConvergenceCsv(dynamic_epstein_convergence);
 			std::ofstream summary_file("dust_damped_gyromotion_summary.csv");
 			summary_file << std::setprecision(17);
 			summary_file << "case,scheme,drift_l2_error,amplitude_error,conservation_error\n";
 			writeSummaryCsv("pure_damping", epstein_no_b_runs, summary_file);
 			writeSummaryCsv("undamped_gyromotion", gyro_no_drag_runs, summary_file);
-			writeSummaryCsv("damped_gyromotion", epstein_with_b_runs, summary_file);
+			writeSummaryCsv("damped_gyromotion", epstein_with_b_picard_runs, summary_file);
 		}
 	}
 
