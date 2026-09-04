@@ -44,7 +44,6 @@ template <> void QuokkaSimulation<BinaryCICTimestep>::createInitialCICParticles(
 	CICParticles->InitFromAsciiFile("../inputs/BinaryCICTimestep_particles.txt", nreal_extra, nullptr);
 }
 
-
 auto problem_main() -> int {
 	int status = 0;
 	QuokkaSimulation<BinaryCICTimestep> sim;
@@ -55,4 +54,5 @@ auto problem_main() -> int {
 
 	return status;
 }
+
 
