@@ -403,6 +403,14 @@ auto problem_main() -> int
 
 	QuokkaSimulation<MolecularCloudDisruption> sim;
 	sim.userData_.params = params;
+	std::string restartfile;
+	amrex::ParmParse const simulation_params;
+	simulation_params.query("restartfile", restartfile);
+	const bool is_restart = !restartfile.empty();
+	if (is_restart) {
+		// Checkpoint loading skips the fresh-start hook, but diagnostics still need these parameter-derived normalizations.
+		sim.preCalculateInitialConditions();
+	}
 	sim.setInitialConditions();
 
 	auto *stellar_descriptor = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop);
@@ -412,8 +420,10 @@ auto problem_main() -> int
 	const amrex::Real stellar_mass_at_birth = stellar_descriptor->computeStellarMassAtBirth();
 	const amrex::Real requested_stellar_mass = params.stellarMassMsun * C::M_solar;
 	amrex::Print() << "Loaded stellar birth mass = " << stellar_mass_at_birth / C::M_solar << " Msun (requested " << params.stellarMassMsun << " Msun)\n";
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(stellar_mass_at_birth - requested_stellar_mass) / requested_stellar_mass < 1.0e-12,
-					 "The stellar particle file birth mass does not equal problem.stellar_mass_Msun.");
+	if (!is_restart) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(stellar_mass_at_birth - requested_stellar_mass) / requested_stellar_mass < 1.0e-12,
+						 "The stellar particle file birth mass does not equal problem.stellar_mass_Msun.");
+	}
 
 	using FaceStateArray = std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM>;
 	const amrex::Real gas_mass = sim.computeVolumeIntegral(
@@ -425,8 +435,10 @@ auto problem_main() -> int
 		    return state(i, j, k, HydroSystem<MolecularCloudDisruption>::scalar0_index);
 	    });
 	const amrex::Real requested_cloud_mass = params.cloudMassMsun * C::M_solar;
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(cloud_mass - requested_cloud_mass) / requested_cloud_mass < 0.05,
-					 "The mesh-integrated initial cloud mass differs from problem.cloud_mass_Msun by more than 5 percent.");
+	if (!is_restart) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(cloud_mass - requested_cloud_mass) / requested_cloud_mass < 0.05,
+						 "The mesh-integrated initial cloud mass differs from problem.cloud_mass_Msun by more than 5 percent.");
+	}
 
 	const amrex::Real closure_error = sim.computeVolumeIntegral(
 	    [] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {

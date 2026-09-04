@@ -2197,6 +2197,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 			       << v_over_c_threshold << " c threshold!\n";
 	}
 
+	// Early feedback updates valid cells only; SN deposition reads stencil momenta from ghost cells.
+	if (early_feedback_stats.active_particles > 0) {
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, InterpHookNone,
+				       InterpHookNone, FillPatchType::fillpatch_function);
+	}
+
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
 	sn_count_ = num_sn_explosions;
