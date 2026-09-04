@@ -1118,6 +1118,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 	constexpr double KM_S = 1.0e5;
 	constexpr int stencil_radius = 2;       // rK in units of dx
 	constexpr int kernel_ghost   = stencil_radius + 1;
+	constexpr double v_terminal_max = 1000.0 * KM_S;   // cap on radial kick velocity, cm/s
  
 	const double sn_jeans_J = userData_.sn_jeans_J;
 	const double sn_momentum_ref = userData_.sn_momentum;          // calibration coefficient
@@ -1171,8 +1172,16 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 		// --- Pass 1: gather kernel sums + deposit momentum (direct, unlimited) ---
 		amrex::Gpu::DeviceScalar<int> d_sn_events_lev(0);
 		amrex::Gpu::DeviceScalar<int> d_triggered_lev(0);
+		amrex::Gpu::DeviceScalar<int> d_capped_lev(0);
+		amrex::Gpu::DeviceScalar<double> d_resid_x(0.0);
+		amrex::Gpu::DeviceScalar<double> d_resid_y(0.0);
+		amrex::Gpu::DeviceScalar<double> d_resid_z(0.0);
 		int* p_sn_events_lev = d_sn_events_lev.dataPtr();
 		int* p_triggered_lev = d_triggered_lev.dataPtr();
+		int* p_capped_lev    = d_capped_lev.dataPtr();
+		double* p_resid_x    = d_resid_x.dataPtr();
+		double* p_resid_y    = d_resid_y.dataPtr();
+		double* p_resid_z    = d_resid_z.dataPtr();
 
 		for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 			const amrex::Box &box = mfi.validbox();
@@ -1253,9 +1262,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				// Radial momentum magnitude -- plain calibration, no ambient-density scaling.
 				const double p_terminal = sn_momentum_ref * MSUN * KM_S * std::pow(static_cast<double>(N_SN), cluster_exponent);
 				const double p_radial_mag = p_terminal / vol;
-
-				constexpr double KM_S = 1.0e5;
-				constexpr double v_terminal_max = 1000.0 * KM_S;   // cap on radial kick velocity, cm/s
  
 				// --- Deposit pass: recenter each kernel cell's momentum onto vCOM and
 				// add the outward radial kick, both directly in the simulation frame. ---
@@ -1282,6 +1288,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 							const double pz_nb  = s(ii, jj, kk, HydroSystem<MHDGalaxy>::x3Momentum_index);
  
 							const double w_mom = omega * rho_nb / mass_sum;
+ 
 							double pradx = 0.0;
 							double prady = 0.0;
 							double pradz = 0.0;
@@ -1296,13 +1303,28 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 
 								double dp = p_radial_mag * w_mom;
 
-								// Cap the velocity kick imparted to THIS cell at v_terminal_max.
-								// dp/rho_nb is the velocity change this deposit would cause; if it
-								// exceeds the cap, clamp dp to the momentum that yields exactly
-								// v_terminal_max for this cell's density.
+								// Terminal-velocity cap: prevents low-density kernel
+								// cells from receiving an unphysically large velocity
+								// kick (and tanking the CFL timestep) relative to
+								// dense/trigger cells. NOTE: this cap is applied
+								// per-cell, independently of the rest of the kernel,
+								// so it is NOT exactly momentum-conserving -- the
+								// clipped momentum is not redistributed elsewhere.
+								// The residual below tracks how much is being lost.
 								const double v_kick = dp / rho_nb;
 								if (v_kick > v_terminal_max) {
+									const double dp_uncapped = dp;
 									dp = rho_nb * v_terminal_max;
+									amrex::Gpu::Atomic::Add(p_capped_lev, 1);
+
+									// Residual = what the cap removed, in vector form,
+									// accumulated over the whole level/step so a
+									// systematic (non-cancelling) net kick can be
+									// detected rather than just counted.
+									const double dresid = dp_uncapped - dp;
+									amrex::Gpu::Atomic::Add(p_resid_x, dresid * ex);
+									amrex::Gpu::Atomic::Add(p_resid_y, dresid * ey);
+									amrex::Gpu::Atomic::Add(p_resid_z, dresid * ez);
 								}
 
 								pradx = dp * ex;
@@ -1328,15 +1350,27 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 
 		int n_sn_events_lev = d_sn_events_lev.dataValue();
 		int n_triggered_lev = d_triggered_lev.dataValue();
+		int n_capped_lev    = d_capped_lev.dataValue();
+		double resid_x_lev  = d_resid_x.dataValue();
+		double resid_y_lev  = d_resid_y.dataValue();
+		double resid_z_lev  = d_resid_z.dataValue();
 		amrex::ParallelAllReduce::Sum(n_sn_events_lev, amrex::ParallelContext::CommunicatorSub());
 		amrex::ParallelAllReduce::Sum(n_triggered_lev, amrex::ParallelContext::CommunicatorSub());
+		amrex::ParallelAllReduce::Sum(n_capped_lev, amrex::ParallelContext::CommunicatorSub());
+		amrex::ParallelAllReduce::Sum(resid_x_lev, amrex::ParallelContext::CommunicatorSub());
+		amrex::ParallelAllReduce::Sum(resid_y_lev, amrex::ParallelContext::CommunicatorSub());
+		amrex::ParallelAllReduce::Sum(resid_z_lev, amrex::ParallelContext::CommunicatorSub());
 
 		total_sn_events_this_step             += n_sn_events_lev;
 		userData_.sn_trigger_count_cumulative += static_cast<amrex::Long>(n_triggered_lev);
 
 		if (n_sn_events_lev > 0) {
+			const double resid_mag = std::sqrt(resid_x_lev*resid_x_lev + resid_y_lev*resid_y_lev + resid_z_lev*resid_z_lev);
 			amrex::Print() << "  [lev " << lev << "] SN events this step: " << n_sn_events_lev
-			                << " (" << n_triggered_lev << " triggered cells)\n";
+			                << " (" << n_triggered_lev << " triggered cells, "
+			                << n_capped_lev << " kernel-cell kicks capped, "
+			                << "residual |p| = " << resid_mag << " g cm/s"
+			                << " [" << resid_x_lev << ", " << resid_y_lev << ", " << resid_z_lev << "])\n";
 		}
 
 		delta.SumBoundary(geom[lev].periodicity());
@@ -1383,11 +1417,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 		amrex::Gpu::streamSynchronize();
 	}
 
-	// Feed the framework's own checkpoint-persistent counters (defined in
-	// AMRSimulation<problem_t>, base class of QuokkaSimulation<problem_t>) instead of
-	// a userData_ field, so sn_count_cumulative_ survives chained checkpoint/restart via
-	// the existing writeSFHToMetadata()/readSFH() round-trip -- see WriteCheckpointFile(),
-	// WritePlotFile(), and ReadCheckpointFile() in simulation.hpp.
 	sn_count_ = static_cast<int>(total_sn_events_this_step);
 	sn_count_cumulative_ += static_cast<int>(total_sn_events_this_step);
 
