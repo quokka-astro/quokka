@@ -16,14 +16,17 @@ matches the ``log`` coordinate spacing written into the CSV header.
 
 Bands may be given either as photon-energy ranges (``--eV``) or as wavelength
 ranges in Angstroms (``--lambda``); both options may be repeated, and the bands
-appear in the table in the order the options are given.
+appear in the table in the order the options are given. Quokka stores radiation
+groups as a single strictly increasing list of energy edges, so the bands must
+be given in order of increasing photon energy and adjacent bands must share a
+boundary.
 
 The location of the slug2 installation is taken from ``--slug-path``, or from the
 ``slug2_path`` or ``SLUG_DIR`` environment variables.
 
 Usage:
     export slug2_path="/path/to/slug2"
-    slug_luminosity_table_for_quokka.py PE-and-LW.csv --eV 6 11 --eV 11.2 13.6
+    slug_luminosity_table_for_quokka.py PE-and-LW.csv --eV 6 11.2 --eV 11.2 13.6
     slug_luminosity_table_for_quokka.py single-band.csv --lambda 1000 1200
     slug_luminosity_table_for_quokka.py FUV-and-LyC.csv --eV 6 13.6 --eV 13.6 54.4 \
         --m0 2.1 --m1 120 --nm 21 --t0 1e5 --t1 1e8 --nt 31
@@ -33,10 +36,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 
 import numpy as np
 
@@ -106,6 +111,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     if not args.bands:
         parser.error("at least one band is required; use --eV or --lambda")
+    check_quokka_band_sequence(args.bands, parser.error)
     if args.slug_path is None:
         parser.error("slug2 path is unknown; set $slug2_path or pass --slug-path")
     if args.nm < 2 or args.nt < 2:
@@ -116,6 +122,35 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--t0 and --t1 must be positive with --t1 > --t0")
 
     return args
+
+
+def band_energy_eV(option: str, lo: float, hi: float) -> tuple[float, float]:
+    """Return the photon-energy interval (E_min, E_max) in eV for one band."""
+    if option == "--eV":
+        return lo, hi
+    return HC_EV_ANGSTROM / hi, HC_EV_ANGSTROM / lo
+
+
+def check_quokka_band_sequence(bands: list[tuple[str, float, float]], error: Callable[[str], None]) -> None:
+    """Abort unless the bands match Quokka's radiation-group energy edges.
+
+    Quokka stores ``nGroups + 1`` strictly increasing boundaries, so later groups
+    must have higher photon energy and adjacent groups must share an edge.
+    """
+    energies = [band_energy_eV(option, lo, hi) for option, lo, hi in bands]
+    for i in range(len(energies) - 1):
+        e_lo, e_hi = energies[i]
+        next_lo, next_hi = energies[i + 1]
+        if next_lo < e_lo or next_hi < e_hi:
+            error(
+                "band sequence must go with increasing energy: "
+                f"group {i} is {e_lo:g}-{e_hi:g} eV but group {i + 1} is {next_lo:g}-{next_hi:g} eV"
+            )
+        if not math.isclose(e_hi, next_lo, rel_tol=1.0e-9, abs_tol=0.0):
+            error(
+                "band boundaries must be connected: "
+                f"group {i} ends at {e_hi:g} eV but group {i + 1} starts at {next_lo:g} eV"
+            )
 
 
 def bands_to_wavelengths(bands: list[tuple[str, float, float]]) -> list[tuple[float, float]]:

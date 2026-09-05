@@ -176,7 +176,7 @@ The script `scripts/python/slug_luminosity_table_for_quokka.py` builds such a ta
 export slug2_path="/path/to/slug2"
 
 # two bands, given as photon-energy ranges in eV
-scripts/python/slug_luminosity_table_for_quokka.py PE-and-LW.csv --eV 6 11 --eV 11.2 13.6
+scripts/python/slug_luminosity_table_for_quokka.py PE-and-LW.csv --eV 6 11.2 --eV 11.2 13.6
 
 # one band, given as a wavelength range in Angstroms
 scripts/python/slug_luminosity_table_for_quokka.py single-band.csv --lambda 1000 1200
@@ -186,7 +186,7 @@ scripts/python/slug_luminosity_table_for_quokka.py FUV-and-LyC.csv --eV 6 13.6 -
     --m0 2.1 --m1 120 --nm 21 --t0 1e5 --t1 1e8 --nt 31
 ```
 
-Bands appear in the table in the order the `--eV` and `--lambda` options are given, so the first option becomes radiation group 0. The defaults cover ages from \\(10^5\\) to \\(2 \times 10^8\\) yr and masses from 2.1 to 120 \\(M\_\odot\\) on the `mist_2016_vvcrit_40` track set. Earlier ages are not useful: the tracks do not extend there, and the properties of a star that young depend on its accretion history rather than on its mass alone.
+Bands appear in the table in the order the `--eV` and `--lambda` options are given, so the first option becomes radiation group 0. They must be given in order of increasing photon energy, and adjacent bands must share a boundary: that is the layout of Quokka's radiation-group energy edges. A gap such as `--eV 6 11 --eV 11.2 13.6`, or a sequence that goes to lower energy, is rejected. The defaults cover ages from \\(10^5\\) to \\(2 \times 10^8\\) yr and masses from 2.1 to 120 \\(M\_\odot\\) on the `mist_2016_vvcrit_40` track set. Earlier ages are not useful: the tracks do not extend there, and the properties of a star that young depend on its accretion history rather than on its mass alone.
 
 `write_isochrone` samples both axes logarithmically, which is why the generated table declares `log` spacing for both inputs. Two features of its output are handled by the script. A star that no longer exists at a given age is printed as `--`, and is written to the table as zero luminosity. A band with essentially no flux can integrate to a small negative number, which is zero to within the tolerance of the numerical integration, and is also floored. Because a table produced this way contains zeros, use `particles.rad_table_output_transform = "linear"`. For a log transform, pass `--floor` with a small positive value instead.
 
