@@ -166,6 +166,32 @@ Each particle also stores an integer **evolution stage** that tracks its lifecyc
 - `LowMassStar`: Low-mass star that will not explode (not used in the current star formation implementation)
 - `LowMassComposite`: Composite particle representing a population of low-mass stars
 
+### Stellar luminosity table
+
+When radiation is enabled, the luminosity of a StochasticStellarPop particle is read from a table instead of being computed from a closed-form law. The table is a [DataTable](data_table.md) with two inputs and one output per radiation group: the first input is the stellar age in years, the second is the stellar mass in solar masses, and each output is a band luminosity in erg/s. Quokka checks these names and units when it loads the file, so they must be written exactly as `age`, `mass`, `year`, `Msun`, and `erg/s`. Set the file with `particles.rad_table` and the interpolation of the outputs with `particles.rad_table_output_transform`; see [Runtime parameters](parameters.md).
+
+The script `scripts/python/slug_luminosity_table_for_quokka.py` builds such a table from the [slug2](https://bitbucket.org/krumholz/slug2) stellar population synthesis code. It runs slug2's `write_isochrone` utility with one top-hat filter per radiation group, then converts the output to the CSV format read by `CSVReader`. Point the script at a slug2 installation with `--slug-path`, or with the `slug2_path` environment variable:
+
+```bash
+export slug2_path="/path/to/slug2"
+
+# two bands, given as photon-energy ranges in eV
+scripts/python/slug_luminosity_table_for_quokka.py PE-and-LW.csv --eV 6 11.2 --eV 11.2 13.6
+
+# one band, given as a wavelength range in Angstroms
+scripts/python/slug_luminosity_table_for_quokka.py single-band.csv --lambda 1000 1200
+
+# a coarse FUV + Lyman continuum table on an explicit grid
+scripts/python/slug_luminosity_table_for_quokka.py FUV-and-LyC.csv --eV 6 13.6 --eV 13.6 54.4 \
+    --m0 2.1 --m1 120 --nm 21 --t0 1e5 --t1 1e8 --nt 31
+```
+
+Bands appear in the table in the order the `--eV` and `--lambda` options are given, so the first option becomes radiation group 0. They must be given in order of increasing photon energy, and adjacent bands must share a boundary: that is the layout of Quokka's radiation-group energy edges. A gap such as `--eV 6 11 --eV 11.2 13.6`, or a sequence that goes to lower energy, is rejected. The defaults cover ages from \\(10^5\\) to \\(2 \times 10^8\\) yr and masses from 2.1 to 120 \\(M\_\odot\\) on the `mist_2016_vvcrit_40` track set. Earlier ages are not useful: the tracks do not extend there, and the properties of a star that young depend on its accretion history rather than on its mass alone.
+
+`write_isochrone` samples both axes logarithmically, which is why the generated table declares `log` spacing for both inputs. Two features of its output are handled by the script. A star that no longer exists at a given age is printed as `--`, and is written to the table as zero luminosity. A band with essentially no flux can integrate to a small negative number, which is zero to within the tolerance of the numerical integration, and is also floored. Because a table produced this way contains zeros, use `particles.rad_table_output_transform = "linear"`. For a log transform, pass `--floor` with a small positive value instead.
+
+The `ParticleRadiationSlug` test validates this path end to end. A single 120 \\(M\_\odot\\) star of age 1 Myr, placed exactly on a node of both table axes, radiates into an FUV band (6 to 13.6 eV) and a Lyman continuum band (13.6 to 54.4 eV); the test checks that the radiation energy deposited on the grid equals the luminosity that slug2 prints for that star multiplied by the timestep.
+
 ## Star Formation
 
 ### Overview
