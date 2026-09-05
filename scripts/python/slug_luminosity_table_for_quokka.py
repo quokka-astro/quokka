@@ -120,6 +120,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--m0 and --m1 must be positive with --m1 > --m0")
     if not args.t1 > args.t0 > 0.0:
         parser.error("--t0 and --t1 must be positive with --t1 > --t0")
+    if not math.isfinite(args.floor) or args.floor < 0.0:
+        parser.error("--floor must be a non-negative finite value")
 
     return args
 
