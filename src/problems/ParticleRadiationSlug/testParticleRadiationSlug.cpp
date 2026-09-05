@@ -81,7 +81,8 @@ template <> struct RadSystem_Traits<ParticleRadiationSlugProblem> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<ParticleRadiationSlugProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-									     const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+									      const double /*Tgas*/)
+    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -171,7 +172,8 @@ auto problem_main() -> int
 
 	amrex::Real total_Erad = 0.0;
 	for (int g = 0; g < Physics_Traits<ParticleRadiationSlugProblem>::nGroups; ++g) {
-		total_Erad += sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationSlugProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
+		total_Erad +=
+		    sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationSlugProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
 	}
 	const amrex::Real total_gas_energy = sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationSlugProblem>::gasEnergy_index) * vol;
 
