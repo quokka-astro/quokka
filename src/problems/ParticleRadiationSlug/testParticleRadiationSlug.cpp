@@ -38,8 +38,8 @@ constexpr double stellar_age = 1.0e6 * quokka::seconds_per_year; // s
 constexpr double stellar_mass = 120.0 * C::M_solar;		 // g
 
 // Luminosities of a 120 Msun star at an age of 1 Myr, in erg/s, taken directly from slug2:
-//   SLUG_DIR=<slug2> write_isochrone -m0 60 -m1 120 -nm 2 \
-//       -tf 911.6485178911784 2066.403307220004 -tf 227.9121294727946 911.6485178911784 \
+//   SLUG_DIR=<slug2> write_isochrone -m0 60 -m1 120 -nm 2
+//       -tf 911.6485178911784 2066.403307220004 -tf 227.9121294727946 911.6485178911784
 //       mist_2016_vvcrit_40 1e6
 // The two top-hat filters are the FUV band (6-13.6 eV) and the Lyman continuum (13.6-54.4 eV).
 constexpr double L_FUV = 2.44698e+39;
