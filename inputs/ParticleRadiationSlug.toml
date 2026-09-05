@@ -1,0 +1,43 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [-3.0e18, -3.0e18, -3.0e18]
+geometry.prob_hi = [3.0e18, 3.0e18, 3.0e18]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 0  # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [32, 32, 32]
+amr.max_level = 0  # number of levels = max_level + 1
+amr.blocking_factor = 32  # grid size must be divisible by this
+amr.max_grid_size = 32  # at least 128 for GPUs
+amr.n_error_buf = 3  # minimum 3 cell buffer around tagged cells
+amr.grid_eff = 0.7
+
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+problem.particles_filename = "../inputs/TestParticleSlugStar.txt"
+
+particles.verbose = 0
+particles.disable_SN_feedback = true
+# Generated with scripts/python/slug_luminosity_table_for_quokka.py:
+#   slug_luminosity_table_for_quokka.py slug_FUV_LyC.csv --eV 6 13.6 --eV 13.6 54.4 \
+#       --m0 2.1 --m1 120 --nm 21 --t0 1e5 --t1 1e8 --nt 31
+particles.rad_table = "../inputs/slug_FUV_LyC.csv"
+particles.rad_table_output_transform = "linear"
+
+stop_time = 8.0e20
+initial_dt = 3.15576e6
+max_timesteps = 2
+plotfile_interval = -1
+checkpoint_interval = -1
+
+tiny_profiler.enabled = 0
