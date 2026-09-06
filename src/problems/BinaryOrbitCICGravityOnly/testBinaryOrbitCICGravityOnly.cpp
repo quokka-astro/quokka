@@ -21,8 +21,7 @@
 
 #include "QuokkaSimulation.hpp"
 
-struct BinaryOrbitGravityOnly {
-};
+struct BinaryOrbitGravityOnly {};
 
 template <> struct Particle_Traits<BinaryOrbitGravityOnly> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
