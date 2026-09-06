@@ -292,6 +292,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			}
 		}
 		if (enableElectronConduction_) {
+			// conduction.enabled is a runtime option, but conduction operates on the hydro state. Without
+			// hydro or radiation there is no such state (only the unused placeholder component), and
+			// computeTimestepAtLevel() would derive a conduction timestep from it.
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled,
+							 "Electron conduction requires hydro or radiation to be enabled.");
 			// TODO (av): add support for subcycling with conduction
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0, "AMR subcycling is not supported with conduction. Set do_subcycle = 0.");
 		}
