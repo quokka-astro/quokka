@@ -498,6 +498,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 				     amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &scratch_fc);
 	void FillPlotFileScratchFaceData(int finest_lev_to_fill, int nghost_fc_, int idim, amrex::Vector<amrex::MultiFab> &scratch_fc);
 	void AverageDownDerived(const amrex::Vector<amrex::MultiFab *> &mfs, const amrex::Vector<std::string> &varnames) const;
+	void FillDiagnosticGhostCells(const amrex::Vector<amrex::MultiFab *> &mfs);
 	void createDiagnostics();
 	void createRuntimeDerivedFields();
 	void updateRuntimeDerivedFields();
@@ -4036,6 +4037,43 @@ void AMRSimulation<problem_t>::AverageDownDerived(const amrex::Vector<amrex::Mul
 	}
 }
 
+template <typename problem_t> void AMRSimulation<problem_t>::FillDiagnosticGhostCells(const amrex::Vector<amrex::MultiFab *> &mfs)
+{
+	if (mfs.empty() || mfs[0]->nGrowVect().allLE(0)) {
+		return;
+	}
+
+	int const ncomp = mfs[0]->nComp();
+	amrex::Vector<amrex::BCRec> bcs(ncomp);
+	for (int n = 0; n < ncomp; ++n) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			int const bc_type = geom[0].isPeriodic(idim) ? amrex::BCType::int_dir : amrex::BCType::foextrap;
+			bcs[n].setLo(idim, bc_type);
+			bcs[n].setHi(idim, bc_type);
+		}
+	}
+
+	using BndryFunc = amrex::GpuBndryFuncFab<amrex::FabFillNoOp>;
+	BndryFunc boundaryFunctor(amrex::FabFillNoOp{});
+
+	for (int lev = 0; lev < static_cast<int>(mfs.size()); ++lev) {
+		amrex::Vector<amrex::MultiFab *> fineData{mfs[lev]};
+		amrex::Vector<amrex::Real> fineTime{tNew_[lev]};
+		amrex::PhysBCFunct<BndryFunc> finePhysicalBoundaryFunctor(geom[lev], bcs, boundaryFunctor);
+
+		if (lev == 0) {
+			amrex::FillPatchSingleLevel(*mfs[lev], tNew_[lev], fineData, fineTime, 0, 0, ncomp, geom[lev], finePhysicalBoundaryFunctor, 0);
+		} else {
+			amrex::Vector<amrex::MultiFab *> coarseData{mfs[lev - 1]};
+			amrex::Vector<amrex::Real> coarseTime{tNew_[lev - 1]};
+			amrex::PhysBCFunct<BndryFunc> coarsePhysicalBoundaryFunctor(geom[lev - 1], bcs, boundaryFunctor);
+			amrex::FillPatchTwoLevels(*mfs[lev], tNew_[lev], coarseData, coarseTime, fineData, fineTime, 0, 0, ncomp, geom[lev - 1], geom[lev],
+						  coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, refRatio(lev - 1),
+						  getAmrInterpolaterCellCentered(), bcs, 0);
+		}
+	}
+}
+
 // put together an array of multifabs for writing
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_cc(const int included_ghosts) -> amrex::Vector<amrex::MultiFab>
 {
@@ -4342,11 +4380,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 			diagMFVec_raw.push_back(mf.get());
 		}
 		AverageDownDerived(diagMFVec_raw, m_diagVars);
-		for (int lev = 0; lev <= finestLevel(); ++lev) {
-			if (diagMFVec[lev]->nGrow() > 0) {
-				diagMFVec[lev]->FillBoundary(geom[lev].periodicity());
-			}
-		}
+		FillDiagnosticGhostCells(diagMFVec_raw);
 		diagMFVec_ptr = GetVecOfConstPtrs(diagMFVec);
 	}
 
