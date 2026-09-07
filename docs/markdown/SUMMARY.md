@@ -58,8 +58,12 @@
 - [How to use clang-tidy](howto_clang_tidy.md)
 - [DataTable](data_table.md)
 
+# Architecture Decision Records
+
+- [ADR process and index](adrs.md)
+    - [ADR-0001: Runtime problem definitions and Python-driven solvers](adrs/ADR-0001-runtime-problem-architecture.md)
+
 # Maintainer Guide
 
 - [Maintainer Guidelines](maintainer_guidelines.md)
-- [Architecture Decision Records](adrs.md)
 - [PR Revert Policy](pr_revert_policy.md)
