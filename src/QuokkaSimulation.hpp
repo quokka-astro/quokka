@@ -2963,9 +2963,9 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 		// write flattening coefficients
 		amrex::Vector<std::string> flatCompNames{"chi"};
-		WriteSingleLevelPlotfileSimplified("debug_flattening_x", flatCoefs[0], flatCompNames, lev, 1);
-		WriteSingleLevelPlotfileSimplified("debug_flattening_y", flatCoefs[1], flatCompNames, lev, 1);
-		WriteSingleLevelPlotfileSimplified("debug_flattening_z", flatCoefs[2], flatCompNames, lev, 1);
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			WriteSingleLevelPlotfileSimplified("debug_flattening_" + quokka::face_dir_str[idim], flatCoefs[idim], flatCompNames, lev, 1);
+		}
 
 		// write L interface states
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
