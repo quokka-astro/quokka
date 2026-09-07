@@ -457,20 +457,7 @@ auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf,
 						cons_fc[2] = cons_fc_x2[bx];
 #endif
 					}
-					const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
-					const auto px = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-					const auto py = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-					const auto pz = cons[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-					const auto kinetic_energy = (px * px + py * py + pz * pz) / (2.0 * rho);
-					const double abs_vel = std::sqrt(2.0 * kinetic_energy / rho);
-					double cs = NAN;
-
-					if constexpr (is_eos_isothermal()) {
-						cs = cs_iso_;
-					} else {
-						cs = ComputeSoundSpeed(cons[bx], i, j, k, &cons_fc);
-					}
-					return {cs + abs_vel};
+					return {ComputeCellSignalSpeed(cons[bx], i, j, k, &cons_fc)};
 				});
 }
 
