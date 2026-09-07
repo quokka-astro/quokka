@@ -372,10 +372,13 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// implement FillPatch function
 	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
 		       FillPatchType fptype) override;
+	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering cen,
+			     quokka::direction dir) override;
 
 	// functions to operate on state vector before/after interpolating between levels
 	static void PreInterpState(amrex::MultiFab &mf, int scomp, int ncomp);
 	static void PostInterpState(amrex::MultiFab &mf, int scomp, int ncomp);
+	static void PostInterpStateFab(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
 
 	// compute axis-aligned 1D profile of user_f(x, y, z)
 	template <typename F> auto computeAxisAlignedProfile(int axis, F const &user_f) -> amrex::Gpu::HostVector<amrex::Real>;
@@ -2110,15 +2113,73 @@ void QuokkaSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::Mu
 
 	if (cen == quokka::centering::cc) {
 		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, dir, fptype, PreInterpState, PostInterpState);
+		if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
+			constexpr int mass_scalar_end = HydroSystem<problem_t>::scalar0_index + HydroSystem<problem_t>::nmscalars_;
+			if (icomp == 0 && ncomp >= mass_scalar_end) {
+				HydroSystem<problem_t>::EnforceMassScalarLimits(mf, mf.nGrowVect());
+			}
+		}
 	} else if (cen == quokka::centering::fc) {
 		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, dir, fptype, PreInterpState, PostInterpState);
 	}
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
+						  quokka::centering cen, quokka::direction dir)
+{
+	const BL_PROFILE("QuokkaSimulation::FillCoarsePatch()");
+
+	if (cen == quokka::centering::cc) {
+		this->FillCoarsePatchWithHooks(lev, time, mf, icomp, ncomp, BCs, cen, dir, PreInterpState, PostInterpStateFab);
+		if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
+			constexpr int mass_scalar_end = HydroSystem<problem_t>::scalar0_index + HydroSystem<problem_t>::nmscalars_;
+			if (icomp == 0 && ncomp >= mass_scalar_end) {
+				HydroSystem<problem_t>::EnforceMassScalarLimits(mf, mf.nGrowVect());
+			}
+		}
+	} else {
+		AMRSimulation<problem_t>::FillCoarsePatch(lev, time, mf, icomp, ncomp, BCs, cen, dir);
+	}
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpStateFab(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp)
+{
+	const BL_PROFILE("QuokkaSimulation::PostInterpStateFab()");
+
+	constexpr int mass_scalar_end = HydroSystem<problem_t>::scalar0_index + HydroSystem<problem_t>::nmscalars_;
+	const bool includes_mass_scalars = (scomp == 0) && (ncomp >= mass_scalar_end);
+	auto const cons = fab.array();
+	amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const auto rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+		const auto px = cons(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+		const auto py = cons(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+		const auto pz = cons(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+		const auto e = cons(i, j, k, HydroSystem<problem_t>::energy_index);
+		const auto Eint = rho * e;
+		const auto kinetic_energy = (px * px + py * py + pz * pz) / (2.0 * rho);
+
+		// recompute hydro total energy from Eint + KE
+		const auto Etot = Eint + kinetic_energy;
+		cons(i, j, k, HydroSystem<problem_t>::energy_index) = Etot;
+
+		if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
+			if (includes_mass_scalars) {
+				for (int idx = 0; idx < HydroSystem<problem_t>::nmscalars_; ++idx) {
+					cons(i, j, k, HydroSystem<problem_t>::scalar0_index + idx) *= rho;
+				}
+				HydroSystem<problem_t>::EnforceMassScalarLimits(cons, i, j, k);
+			}
+		}
+	});
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int scomp, int ncomp)
 {
 	const BL_PROFILE("QuokkaSimulation::PreInterpState()");
 
+	constexpr int mass_scalar_end = HydroSystem<problem_t>::scalar0_index + HydroSystem<problem_t>::nmscalars_;
+	const bool includes_mass_scalars = (scomp == 0) && (ncomp >= mass_scalar_end);
 	auto const &cons = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
@@ -2131,13 +2192,24 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PreInterpState(a
 		// replace hydro total energy with specific internal energy (SIE)
 		const auto e = (Etot - kinetic_energy) / rho;
 		cons[bx](i, j, k, HydroSystem<problem_t>::energy_index) = e;
+
+		if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
+			if (includes_mass_scalars) {
+				HydroSystem<problem_t>::EnforceMassScalarLimits(cons[bx], i, j, k);
+				for (int idx = 0; idx < HydroSystem<problem_t>::nmscalars_; ++idx) {
+					cons[bx](i, j, k, HydroSystem<problem_t>::scalar0_index + idx) /= rho;
+				}
+			}
+		}
 	});
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
+template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int scomp, int ncomp)
 {
 	const BL_PROFILE("QuokkaSimulation::PostInterpState()");
 
+	constexpr int mass_scalar_end = HydroSystem<problem_t>::scalar0_index + HydroSystem<problem_t>::nmscalars_;
+	const bool includes_mass_scalars = (scomp == 0) && (ncomp >= mass_scalar_end);
 	auto const &cons = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
@@ -2151,6 +2223,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpState(
 		// recompute hydro total energy from Eint + KE
 		const auto Etot = Eint + kinetic_energy;
 		cons[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot;
+
+		if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
+			if (includes_mass_scalars) {
+				for (int idx = 0; idx < HydroSystem<problem_t>::nmscalars_; ++idx) {
+					cons[bx](i, j, k, HydroSystem<problem_t>::scalar0_index + idx) *= rho;
+				}
+				HydroSystem<problem_t>::EnforceMassScalarLimits(cons[bx], i, j, k);
+			}
+		}
 	});
 }
 

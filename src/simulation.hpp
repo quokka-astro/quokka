@@ -385,8 +385,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	auto getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *;
 	auto getAmrInterpolaterFaceCentered() -> amrex::Interpolater *;
-	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering cen,
-			     quokka::direction dir);
+	virtual void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
+				     quokka::centering cen, quokka::direction dir);
+	template <typename PreInterpHook, typename PostInterpHook>
+	void FillCoarsePatchWithHooks(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
+				      quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp, PostInterpHook const &post_interp);
 	void FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
 				      amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array);
 	void GetData(int lev, amrex::Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime, quokka::centering cen,
@@ -3377,8 +3380,23 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
 					       quokka::centering cen, quokka::direction dir)
-{							// here neco
+{
 	BL_PROFILE("AMRSimulation::FillCoarsePatch()"); // NOLINT(misc-const-correctness)
+
+	struct CoarsePatchNoInterpHook {
+		void operator()(amrex::FArrayBox & /*fab*/, amrex::Box const & /*box*/, int /*scomp*/, int /*ncomp*/) const {}
+	};
+
+	FillCoarsePatchWithHooks(lev, time, mf, icomp, ncomp, BCs, cen, dir, CoarsePatchNoInterpHook{}, CoarsePatchNoInterpHook{});
+}
+
+template <typename problem_t>
+template <typename PreInterpHook, typename PostInterpHook>
+void AMRSimulation<problem_t>::FillCoarsePatchWithHooks(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
+							quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp,
+							PostInterpHook const &post_interp)
+{
+	BL_PROFILE("AMRSimulation::FillCoarsePatchWithHooks()"); // NOLINT(misc-const-correctness)
 
 	AMREX_ASSERT(lev > 0);
 
@@ -3396,11 +3414,12 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 
 	if (cen == quokka::centering::cc) {
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
-					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0);
+					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0, pre_interp,
+					     post_interp);
 	} else if (cen == quokka::centering::fc) {
 		amrex::Interpolater *face_mapper = &amrex::face_divfree_interp;
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
-					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), face_mapper, BCs, 0);
+					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), face_mapper, BCs, 0, pre_interp, post_interp);
 	} else {
 		amrex::Abort("AMR interpolation is not implemented for this zone centering!");
 	}
