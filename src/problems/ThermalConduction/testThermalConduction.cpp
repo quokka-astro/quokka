@@ -29,14 +29,14 @@ These test problems have their own initial condition and analytic reference solu
   - "constant": kappa = const. Initial condition is a smooth Gaussian temperature profile and so is the reference solution
 	which has a diffusion constant that increases with time. The problem has also been set up to test AMR.
   - "spitzer": kappa = kappa0*T^2.5. Initial condition is the Pattle (1959) self-similar
-    solution evaluated at t=spitzer_t_start_frac*stopTime_. The reference solution is the same Pattle profile evaluated at
-    t=tNew_[0]+spitzer_t_start_frac*stopTime_. This test estimates the error across different resolutions and compares the slopes against
+    solution evaluated at t=spitzer_t_start. The reference solution is the same Pattle profile evaluated at
+    t=tNew_[0]+spitzer_t_start. This test estimates the error across different resolutions and compares the slopes against
 	unity. Most of the error comes from around the edges of the smooth solution which drop to 0 at a certain radius.
 Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
 and the energy evolution is purely due to conduction. */
 
 constexpr double Eint0 = 2.505e-8; // "constant": Gaussian peak. "spitzer": peak at the reference resolution nx_ref (both equivalent to T = 2.e8 K)
-constexpr double Efloor = 5.674216387016754e-11; // equivalent to T = 2.e6 K
+constexpr double Efloor = 1.674216387016754e-23; // equivalent to T = 2.e6 K
 const double rho0 = 0.1;			 // 1/cm^3
 constexpr double Lref = 7.714e+17;		 // quarter box length, fixes region of refinement
 constexpr double sigma = 2.410685615625e+17;	 // "constant" only: width of the initial Gaussian, in cm (amr2-branch value)
@@ -44,7 +44,7 @@ constexpr double D = 4.396303164750053e+28;	 // "constant" only: fixed diffusion
 constexpr int nx_ref = 128; // "spitzer" only: resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConduction.toml)
 constexpr double dx0_ref = 4.0 * Lref / nx_ref;
 constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref; // Normalization
-constexpr double spitzer_t_start_frac = 0.5;
+constexpr double spitzer_t_start = 330471.1321990738; // "spitzer" only: initial time at which the IC/reference Pattle solution is evaluated
 struct ThermalConductionProblem {};
 
 template <> struct quokka::EOS_Traits<ThermalConductionProblem> {
@@ -129,13 +129,16 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 
 	const ExactSolutionParams params =
-	    computeExactSolutionParams(isSpitzer, rho, electronConductionKappa0_, isSpitzer ? spitzer_t_start_frac * stopTime_ : 0.0);
+	    computeExactSolutionParams(isSpitzer, rho, electronConductionKappa0_, isSpitzer ? spitzer_t_start : 0.0);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real xlow = prob_lo[0] + i * dx[0];
 		const amrex::Real xhigh = prob_lo[0] + (i + 1) * dx[0];
-		const amrex::Real Eint = evalExactEint(params, rho, xlow, xhigh, dx[0]);
+		amrex::Real Eint; // = evalExactEint(params, rho, xlow, xhigh, dx[0]);
+		const amrex::Real erfx_low = std::erf(xlow / std::sqrt(2.0 * sigma * sigma));
+		const amrex::Real erfx_high = std::erf(xhigh / std::sqrt(2.0 * sigma * sigma));
+		Eint = Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx[0] + Efloor; 
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
@@ -203,7 +206,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 	const bool isSpitzer = (conductionType_ == "spitzer");
 
 	const ExactSolutionParams params =
-	    computeExactSolutionParams(isSpitzer, rho, electronConductionKappa0_, isSpitzer ? (t + spitzer_t_start_frac * stopTime_) : t);
+	    computeExactSolutionParams(isSpitzer, rho, electronConductionKappa0_, isSpitzer ? (t + spitzer_t_start) : t);
 
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -277,6 +280,28 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/, int max_level = 0) -> dou
 	return sim.computeErrorNorm();
 }
 
+template <>
+void QuokkaSimulation<ThermalConductionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+{
+	if (dname == "temperature") {
+		const int ncomp = ncomp_cc_in;
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state = state_cc.const_array(iter);
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				Real const rho = state(i, j, k, HydroSystem<ThermalConductionProblem>::density_index);
+				Real const Eint = HydroSystem<ThermalConductionProblem>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
+				Real const Tgas = quokka::EOS<ThermalConductionProblem>::ComputeTgasFromEint(rho, Eint);
+				output(i, j, k, ncomp) = Tgas;
+			});
+		}
+	}
+}	
+
 auto problem_main() -> int
 {
 	// boundary conditions
@@ -294,7 +319,8 @@ auto problem_main() -> int
 	bool passed = false;
 
 	if (sim.conductionType_ == "spitzer") {
-		amrex::Vector<int> const resolutions = {32, 64, 128};
+		amrex::Vector<int> const resolutions = {32, 64, 128, 256, 512, 1024, 2048, 4096};
+		// amrex::Vector<int> const resolutions = {8192};
 		amrex::Vector<double> errors;
 		for (int nx : resolutions) {
 			double const error = runConductionTest(nx, nx, nx);
