@@ -1062,7 +1062,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 				if (nscalars_ > 0) {
 					for (int n = 0; n < nscalars_; ++n) {
-						if (rho == 0.0) {
+						if (rho <= 0.0) {
 							state[bx](i, j, k, scalar0_index + n) = 0.0;
 						} else {
 							state[bx](i, j, k, scalar0_index + n) *= rho_new / rho;
