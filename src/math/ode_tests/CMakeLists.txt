@@ -1,0 +1,8 @@
+add_executable(ODERegressionTest testODERegression.cpp)
+target_link_libraries(ODERegressionTest PRIVATE AMReX::amrex)
+target_include_directories(ODERegressionTest PRIVATE ../..)
+target_compile_features(ODERegressionTest PRIVATE cxx_std_20)
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  setup_target_for_cuda_compilation(ODERegressionTest)
+endif()
+add_test(NAME ODERegressionTest COMMAND ODERegressionTest)
