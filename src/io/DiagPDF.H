@@ -44,19 +44,28 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 	// helper functions
 	static auto getIdxVec(int linidx, std::vector<int> const &nBins) -> std::vector<int>;
 
-	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto getBinIndex1D(const amrex::Real &realInputVal, const amrex::Real &transformedLowBnd,
-								     const amrex::Real &transformedBinWidth, bool doLog) -> int;
+	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto getBinIndex1D(amrex::Real value, amrex::Real low, amrex::Real high, amrex::Real transformedLow,
+								     amrex::Real width, int nBins, bool doLog) -> int;
 
 	AMREX_GPU_HOST_DEVICE AMREX_INLINE auto getTotalBinCount() -> amrex::Long;
 };
 
 // Inline member function implementations
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto DiagPDF::getBinIndex1D(const amrex::Real &realInputVal, const amrex::Real &transformedLowBnd,
-							       const amrex::Real &transformedBinWidth, const bool doLog) -> int
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto DiagPDF::getBinIndex1D(amrex::Real value, amrex::Real low, amrex::Real high, amrex::Real transformedLow,
+							       amrex::Real width, int nBins, bool doLog) -> int
 {
-	amrex::Real const val = doLog ? std::log10(realInputVal) : realInputVal;
-	int const cbin = static_cast<int>(std::floor((val - transformedLowBnd) / transformedBinWidth));
-	return cbin;
+	// Check physical bounds before transforming or converting to an integer.
+	if (!std::isfinite(value) || value < low || value > high) {
+		return -1;
+	}
+	// The last bin includes its upper endpoint for both automatic and explicit ranges.
+	if (value == high) {
+		return nBins - 1;
+	}
+	const amrex::Real transformed = doLog ? std::log10(value) : value;
+	const amrex::Real index = std::floor((transformed - transformedLow) / width);
+	// Roundoff in the transform can put an in-range value just beyond an edge.
+	return static_cast<int>(amrex::Clamp(index, amrex::Real(0), static_cast<amrex::Real>(nBins - 1)));
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto DiagPDF::getTotalBinCount() -> amrex::Long
@@ -158,8 +167,12 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 		amrex::Gpu::AsyncVector<int> doLog_d(nvars);
 		amrex::Gpu::AsyncVector<amrex::Real> lowBnd_d(nvars);
 		amrex::Gpu::AsyncVector<amrex::Real> binWidth_d(nvars);
+		amrex::Gpu::AsyncVector<amrex::Real> realLow_d(nvars);
+		amrex::Gpu::AsyncVector<amrex::Real> realHigh_d(nvars);
 
 		// copy arrays to device
+		amrex::Gpu::copy(amrex::Gpu::hostToDevice, m_lowBnd.begin(), m_lowBnd.end(), realLow_d.begin());
+		amrex::Gpu::copy(amrex::Gpu::hostToDevice, m_highBnd.begin(), m_highBnd.end(), realHigh_d.begin());
 		amrex::Gpu::copy(amrex::Gpu::hostToDevice, fieldIdx.begin(), fieldIdx.end(), idx_d.begin());
 		amrex::Gpu::copy(amrex::Gpu::hostToDevice, m_nBins.begin(), m_nBins.end(), nbins_d.begin());
 		amrex::Gpu::copy(amrex::Gpu::hostToDevice, m_useLogSpacedBins.begin(), m_useLogSpacedBins.end(), doLog_d.begin());
@@ -174,6 +187,8 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 		auto const *lowBnd_p = lowBnd_d.data();
 		auto const *binWidth_p = binWidth_d.data();
 		auto const *doLog_p = doLog_d.data();
+		auto const *realLow_p = realLow_d.data();
+		auto const *realHigh_p = realHigh_d.data();
 
 		// compute histogram
 		amrex::ParallelFor(*a_state[lev], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
@@ -184,8 +199,9 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 
 				for (int n = 0; n < nvars; ++n) {
 					// compute 1D index
-					const int bin = getBinIndex1D(sarrs[box_no](i, j, k, idx_p[n]), lowBnd_p[n], binWidth_p[n], doLog_p[n]); // NOLINT
-					if (bin < 0 || bin >= nbins_p[n]) {									 // NOLINT
+					const int bin = getBinIndex1D(sarrs[box_no](i, j, k, idx_p[n]), realLow_p[n], realHigh_p[n], lowBnd_p[n], binWidth_p[n],
+								      nbins_p[n], doLog_p[n]); // NOLINT
+					if (bin < 0 || bin >= nbins_p[n]) {		       // NOLINT
 						within_range = false;
 					}
 					// compute linear index in N-D histogram
