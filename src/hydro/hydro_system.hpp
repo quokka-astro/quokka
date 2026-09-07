@@ -356,7 +356,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
 HydroSystem<problem_t>::ComputeCellSignalSpeed(amrex::Array4<const amrex::Real> const &cons_cc, int i, int j, int k,
-					      std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
+					       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
 {
 	// First-capture by early access
 	const auto rho = cons_cc(i, j, k, density_index);
@@ -466,8 +466,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 						   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, array_t &maxSignal,
 						   amrex::Box const &indexRange)
 {
-	amrex::ParallelFor(indexRange,
-			   [=] AMREX_GPU_DEVICE(int i, int j, int k) { maxSignal(i, j, k) = ComputeCellSignalSpeed(cons_cc, i, j, k, &cons_fc); });
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { maxSignal(i, j, k) = ComputeCellSignalSpeed(cons_cc, i, j, k, &cons_fc); });
 }
 
 template <typename problem_t>
