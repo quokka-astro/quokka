@@ -1,0 +1,24 @@
+# Regression test for issue #2210: RemakeLevel discards the existing fine mhd face
+# field on regrid instead of preserving it. Level 1 covers the full domain (refineGrid
+# tags everything) so that a decomposition-only remake (see testMHDRemakeFaceField.cpp,
+# triggered via SetMaxGridSize + regrid()) gives 100% overlap between the old and new
+# level-1 BoxArray: any change to the fine field can only come from RemakeLevel.
+
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+amr.n_cell = [16, 16, 16]
+amr.max_level = 1
+amr.max_grid_size = 32
+amr.blocking_factor = 8
+amr.n_error_buf = 0
+amr.grid_eff = 0.9
+
+do_reflux = 1
+do_subcycle = 1
+do_tracers = 0
+
+stop_time = 1.0
+max_timesteps = 0
+tiny_profiler.enabled = 0
