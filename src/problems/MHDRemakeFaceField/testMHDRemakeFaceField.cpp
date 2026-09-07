@@ -1,22 +1,7 @@
 /// \file testMHDRemakeFaceField.cpp
-/// \brief Regression test for issue #2210: RemakeLevel discards a level's existing
-///        fine mhd face field, replacing it with coarse-interpolated data even when
-///        the remake is a pure re-decomposition (same physical coverage).
+/// \brief Regression test verifying RemakeLevel preserves a level's fine mhd face
+///        field on regrid instead of discarding it.
 ///
-/// Setup: level 1 covers the entire domain (refineGrid tags everything), and Bx
-/// alternates sign by fine y-face index so it is exactly divergence-free (Bx depends
-/// only on j) but its coarse restriction discards the alternation entirely. After
-/// setInitialConditions(), SetMaxGridSize() + regrid() forces AMReX to re-chop level 1's
-/// BoxArray with unchanged tags, so the new BoxArray retains 100% overlap with the old
-/// one: FillPatchTwoLevels' coarse-interpolation branch never even triggers, so any
-/// change to the retained Bx values can only come from RemakeLevel discarding the
-/// level's own prior fine data instead of copying it forward.
-///
-/// Development (no fix): RemakeLevel's face-centred path calls FillCoarsePatchFaceArray,
-///   which only ever reads GetDataFaceArray(lev - 1, ...) and interpolates from coarse,
-///   so the alternating fine structure is replaced by the coarse-restricted mean.
-/// Fix: RemakeLevel now calls FillPatchFaceArray for the new-time state, which merges in
-///   the level's own existing fine data on overlapping coverage.
 
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
