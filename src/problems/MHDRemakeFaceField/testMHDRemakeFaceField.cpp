@@ -91,7 +91,7 @@ auto problem_main() -> int
 	amrex::MultiFab Bx_before(Bx_new_before.boxArray(), Bx_new_before.DistributionMap(), ncomp, 0);
 	amrex::MultiFab::Copy(Bx_before, Bx_new_before, 0, 0, ncomp, 0);
 	const amrex::Real energy_before = amrex::MultiFab::Dot(Bx_before, 0, ncomp, 0);
-	const auto old_num_boxes = static_cast<long>(Bx_before.boxArray().size());
+	const amrex::Long old_num_boxes = Bx_before.boxArray().size();
 
 	// force a decomposition-only remake of level 1: identical tags, different box chopping
 	sim.SetMaxGridSize(8);
@@ -99,7 +99,7 @@ auto problem_main() -> int
 	AMREX_ALWAYS_ASSERT(sim.finestLevel() == 1);
 
 	const auto &Bx_new_after = sim.getNewMF_fc()[1][0];
-	const auto new_num_boxes = static_cast<long>(Bx_new_after.boxArray().size());
+	const amrex::Long new_num_boxes = Bx_new_after.boxArray().size();
 	amrex::Print() << "level-1 box count: " << old_num_boxes << " -> " << new_num_boxes << "\n";
 	AMREX_ALWAYS_ASSERT(new_num_boxes != old_num_boxes); // sanity check: the remake actually re-chopped the level
 
