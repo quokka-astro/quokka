@@ -1275,7 +1275,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	// compute timestep based on conduction parameters
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
-	if (enableElectronConduction_ == 1 && electronConductionKappa0_ > 0.0) {
+	if (enableElectronConduction_ == 1) {
 		double c_v = C::k_B / (::quokka::EOS_Traits<problem_t>::mean_molecular_weight * (::quokka::EOS_Traits<problem_t>::gamma - 1.0));
 		double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
 		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient / AMREX_SPACEDIM;
