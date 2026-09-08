@@ -4510,8 +4510,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(s
 
 template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(std::string const &chkfilename)
 {
-	fenv_t orig_feenv;
-	feholdexcept(&orig_feenv); // disable FPE for YAML reading
+	struct ScopedFEnvHold {
+		std::fenv_t environment{};
+		ScopedFEnvHold()
+		{
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::feholdexcept(&environment) == 0,
+							 "Could not hold floating-point environment for metadata reading");
+		}
+		~ScopedFEnvHold() { std::fesetenv(&environment); }
+		ScopedFEnvHold(const ScopedFEnvHold &) = delete;
+		auto operator=(const ScopedFEnvHold &) -> ScopedFEnvHold & = delete;
+		ScopedFEnvHold(ScopedFEnvHold &&) = delete;
+		auto operator=(ScopedFEnvHold &&) -> ScopedFEnvHold & = delete;
+	};
+	const ScopedFEnvHold environment_hold{}; // Disable FPE for YAML reading; restore on normal and exceptional exits.
 
 	// read metadata file in on all ranks (needed when restarting from checkpoint)
 	const std::string MetadataFileName(chkfilename + "/metadata.yaml");
@@ -4537,8 +4549,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 			amrex::Print() << std::format("\t{} = (complex type)\n", key);
 		}
 	}
-
-	fesetenv(&orig_feenv); // restore FPE
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteStatisticsFile()
