@@ -7,7 +7,11 @@
 struct CopyLimited {
 	static inline int copies = 0;
 	CopyLimited() = default;
-	CopyLimited(const CopyLimited &)
+	~CopyLimited() = default;
+	CopyLimited(CopyLimited &&) = default;
+	auto operator=(const CopyLimited &) -> CopyLimited & = default;
+	auto operator=(CopyLimited &&) -> CopyLimited & = default;
+	CopyLimited(const CopyLimited & /*other*/)
 	{
 		if (++copies > 20) {
 			throw std::runtime_error("Zero stride repeatedly copies the first element");
@@ -29,10 +33,10 @@ auto main() -> int
 	check(strided_vector_from(values, 2) == std::vector<int>({0, 2, 4}), "Stride two must preserve selected values and order");
 	check(strided_vector_from(values, 10) == std::vector<int>({0}), "Large stride must select first value");
 	check(strided_vector_from(values, std::numeric_limits<int>::max()) == std::vector<int>({0}), "Maximum stride must select first value");
-	std::vector<int> empty;
+	const std::vector<int> empty;
 	check(strided_vector_from(empty, 1).empty(), "Empty input must return empty output");
 	for (const int stride : {0, -1, std::numeric_limits<int>::min()}) {
-		std::vector<CopyLimited> bounded(1);
+		const std::vector<CopyLimited> bounded(1);
 		CopyLimited::copies = 0;
 		bool rejected = false;
 		try {
