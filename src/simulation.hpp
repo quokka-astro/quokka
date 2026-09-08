@@ -1290,6 +1290,13 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			}
 		} else {							  // conductionType_ == "spitzer"
 			auto const &state_mf = state_new_cc_[lev].const_arrays(); // MultiFab containing the cell-centered state
+			auto const &state_fc_x0 = state_new_fc_[lev][0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+			auto const &state_fc_x1 = state_new_fc_[lev][1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+			auto const &state_fc_x2 = state_new_fc_[lev][2].const_arrays();
+#endif
 
 			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
 			amrex::Real cfl = conductionCFL;
@@ -1297,24 +1304,37 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			const amrex::Real t_min = tempFloor_;
 
 			// Use amrex::ParReduce to find the minimum dt and its location across all GPU threads
-			auto r = amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{},
-						  state_new_cc_[lev], amrex::IntVect(0),
-						  [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
-							  amrex::Real rho = state_mf[bx](i, j, k, HydroSystem<problem_t>::density_index);
-							  amrex::Real Eint = state_mf[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-							  amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint));
+			auto r = amrex::ParReduce(
+			    amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{}, state_new_cc_[lev],
+			    amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
+				    auto const &cons = state_mf[bx];
+				    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
+				    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					    local_state_fc[0] = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+					    local_state_fc[1] = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+					    local_state_fc[2] = state_fc_x2[bx];
+#endif
+				    }
 
-							  amrex::Real const kappa_spitzer = kappa0 * std::pow(T, 2.5);
-							  amrex::Real const diffusion_coefficient = kappa_spitzer / (rho * c_v);
+				    amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+				    amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
+				    auto const massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+				    amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars));
 
-							  // Avoid division by zero for unphysical states
-							  amrex::Real cell_dt = std::numeric_limits<amrex::Real>::max();
-							  if (diffusion_coefficient > 0.0) {
-								  cell_dt = cfl * (dx_min * dx_min) / diffusion_coefficient;
-							  }
+				    amrex::Real const kappa_spitzer = kappa0 * std::pow(T, 2.5);
+				    amrex::Real const diffusion_coefficient = kappa_spitzer / (rho * c_v);
 
-							  return {.value = cell_dt, .index = amrex::IntVect{AMREX_D_DECL(i, j, k)}};
-						  });
+				    // Avoid division by zero for unphysical states
+				    amrex::Real cell_dt = std::numeric_limits<amrex::Real>::max();
+				    if (diffusion_coefficient > 0.0) {
+					    cell_dt = cfl * (dx_min * dx_min) / diffusion_coefficient;
+				    }
+
+				    return {.value = cell_dt, .index = amrex::IntVect{AMREX_D_DECL(i, j, k)}};
+			    });
 
 			// Extract the global reduction results
 			conduction_dt = r;
