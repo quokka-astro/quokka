@@ -31,8 +31,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate2d(double x, double y, 
 	y = amrex::Clamp(y, yi, yf);
 
 	// compute indices
-	int ix = amrex::Clamp(xv.begin + static_cast<int>(std::floor((x - xi) / dx)), xv.begin, xv.end - 1);
-	int iy = amrex::Clamp(yv.begin + static_cast<int>(std::floor((y - yi) / dy)), yv.begin, yv.end - 1);
+	const int ix = amrex::Clamp(xv.begin + static_cast<int>(std::floor((x - xi) / dx)), xv.begin, xv.end - 1);
+	const int iy = amrex::Clamp(yv.begin + static_cast<int>(std::floor((y - yi) / dy)), yv.begin, yv.end - 1);
 	int iix = (ix == xv.end - 1) ? ix : ix + 1;
 	int iiy = (iy == yv.end - 1) ? iy : iy + 1;
 
