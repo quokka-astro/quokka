@@ -36,7 +36,7 @@ const double Tcloud  = 1.e4;
 const double rho_cloud = 0.006 * C::m_p; // g/cm^3
 AMREX_GPU_MANAGED double Mach = 4.0; // Mach number of the wind; overridden via ParmParse in problem_main()
 const double R0 = 545 * C::parsec; // radius of the cloud
-const double TracerPerVolume = 1.e3; // tracer content per volume
+const double Tracer = 1.; // tracer content per volume
 
 // frame-tracking globals (set inside problem_main() / computeAfterTimestep())
 bool do_frame_shift = true;			      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -91,14 +91,14 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 			T = Tcloud;
 			rho = rho_cloud; // g/cm^3
 			vz = 0.0; // cloud is stationary
-			cloudTracer = TracerPerVolume; // 1/vol, so each cell contributes TracerPerCell regardless of resolution
-			windTracer = 1.e-6 *  TracerPerVolume; ; // outside the wind
+			cloudTracer = Tracer; // dimensionless concentration, independent of rho
+			windTracer  = 0.0; // outside the wind
 		}
 		else{
 			T = Twind;
-			cloudTracer = 1.e-6 *  TracerPerVolume ; // outside the cloud
-			windTracer = TracerPerVolume; // 1/vol, so each cell contributes TracerPerCell regardless of resolution
 			rho = rho_cloud * Tcloud / Twind; // g/cm^3
+			cloudTracer = 0.0 ; // outside the cloud
+			windTracer = Tracer; // dimensionless concentration, independent of rho
 			amrex::Real pressure = rho * T * C::k_B / C::m_u;
 			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
 			vz = ::v_wind; // set in problem_main(), so it stays consistent with the frame-shift BC
@@ -154,7 +154,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 	// i.e. cells in the cloud-wind mixing/interface region
 	const auto dx = geom[lev].CellSizeArray();
 	const amrex::Real cellVolume = dx[0] * dx[1] * dx[2];
-	const amrex::Real refine_threshold = 0.5 * TracerPerVolume;
+	const amrex::Real refine_threshold = 0.5 * Tracer;
 
 	auto const &state = state_new_cc_[lev].const_arrays();
 	auto const tag = tags.arrays();
@@ -280,7 +280,7 @@ AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex
     consVar(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = etot_edge;
     consVar(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = eint_edge;
     consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) = 0.0; // wind boundary carries no cloud tracer
-    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = TracerPerVolume; // wind boundary carries wind tracer
+    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = Tracer; // wind boundary carries wind tracer
 }
 
 
