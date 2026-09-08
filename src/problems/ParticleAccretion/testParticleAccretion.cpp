@@ -14,7 +14,6 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
-#include "particles/particle_utils.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <format>
@@ -84,7 +83,6 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
 	SinkParticles->InitFromAsciiFile(sink_file, nreal_extra, nullptr);
-	quokka::ParticleUtils::zeroRealComponentsFrom(SinkParticles.get(), nreal_extra);
 
 	const int max_lev = max_level;
 
