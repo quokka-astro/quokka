@@ -102,8 +102,19 @@ template <typename problem_t> class ElectronConduction
 
 		amrex::ParallelFor(state, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			auto const &cons = state_x0[bx];
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				local_state_fc[0] = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+				local_state_fc[1] = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+				local_state_fc[2] = state_fc_x2[bx];
+#endif
+			}
+
 			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
-			const amrex::Real Eint = cons(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
 			// Temperature always from EOS
 			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
