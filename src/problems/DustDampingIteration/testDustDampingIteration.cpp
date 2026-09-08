@@ -90,22 +90,19 @@ template <> struct Physics_Traits<DustDampingWithoutCorrection> : DefaultPhysics
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
-												 amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-												 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
-												 double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithCorrection>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density, enable_supersonic_correction_with);
+	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, g_dust_grain_radius,
+						 g_dust_grain_density, enable_supersonic_correction_with);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithoutCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
-												    amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-												    amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
-												    double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithoutCorrection>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density,
-						 enable_supersonic_correction_without);
+	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, g_dust_grain_radius,
+						 g_dust_grain_density, enable_supersonic_correction_without);
 }
 
 template <> void QuokkaSimulation<DustDampingWithCorrection>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -261,7 +258,7 @@ auto run_reference_simulation() -> SimulationData<DustDampingWithCorrection>
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 1000000.0; // large CFL number to avoid CFL violation
 	sim.constantDt_ = 0.00005;  // fixed small timestep for reference solution
-	sim.enableIterDustStoptime_ = 0;
+	sim.dustCoefficientIteration_.enabled = false;
 	sim.print_dust_counter_ = false;
 
 	sim.setInitialConditions();
@@ -304,7 +301,7 @@ auto run_iterative_with_correction() -> SimulationData<DustDampingWithCorrection
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 0.3;
 	sim.constantDt_ = -1.0;
-	sim.enableIterDustStoptime_ = 1;
+	sim.dustCoefficientIteration_.enabled = true;
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
@@ -346,7 +343,7 @@ auto run_iterative_without_correction() -> SimulationData<DustDampingWithoutCorr
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 0.3;
 	sim.constantDt_ = -1.0;
-	sim.enableIterDustStoptime_ = 1;
+	sim.dustCoefficientIteration_.enabled = true;
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
