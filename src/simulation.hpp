@@ -2497,7 +2497,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			new_mf_array[idim] = &state_new_fc_[level][idim];
 			old_mf_array[idim] = &state_old_fc_[level][idim];
-			BCs_array[idim] = BCs_fc_;
+			BCs_array[idim].assign(BCs_fc_.begin() + idim * ncomp_per_dim_fc, BCs_fc_.begin() + (idim + 1) * ncomp_per_dim_fc);
 		}
 		FillCoarsePatchFaceArray(level, time, new_mf_array, 0, ncomp_per_dim_fc, BCs_array);
 		FillCoarsePatchFaceArray(level, time, old_mf_array, 0, ncomp_per_dim_fc, BCs_array);
@@ -2546,7 +2546,7 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			int_state_new_fc[idim] = amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
 			int_state_old_fc[idim] = amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
-			BCs_array[idim] = BCs_fc_;
+			BCs_array[idim].assign(BCs_fc_.begin() + idim * ncomp_per_dim_fc, BCs_fc_.begin() + (idim + 1) * ncomp_per_dim_fc);
 		}
 		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> int_state_new_fc_ptr;
 		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> int_state_old_fc_ptr;
