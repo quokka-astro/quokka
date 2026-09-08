@@ -36,7 +36,7 @@ Physical parameters for the test problem are chosen to satisfy t_hydro / t_condu
 and the energy evolution is purely due to conduction. */
 
 constexpr double Eint0 = 2.505e-8; // "constant": Gaussian peak. "spitzer": peak at the reference resolution nx_ref (both equivalent to T = 2.e8 K)
-constexpr double Efloor = 1.674216387016754e-23; // equivalent to T = 2.e6 K
+constexpr double Efloor = 2.505e-9; // equivalent to T = 2.e6 K
 const double rho0 = 0.1;			 // 1/cm^3
 constexpr double Lref = 7.714e+17;		 // quarter box length, fixes region of refinement
 constexpr double sigma = 2.410685615625e+17;	 // "constant" only: width of the initial Gaussian, in cm (amr2-branch value)
