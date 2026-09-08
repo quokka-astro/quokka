@@ -200,7 +200,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real co
 	if (dx <= 0.0 || dy <= 0.0 || dz <= 0.0) {
 		return 0.0;
 	}
-	const amrex::Real scale = std::max(dx, std::max(dy, dz));
+	const amrex::Real scale = std::max({dx, dy, dz});
 	const amrex::Real xc = x0 + 0.5 * dx;
 	const amrex::Real yc = y0 + 0.5 * dy;
 	const amrex::Real zc = z0 + 0.5 * dz;
