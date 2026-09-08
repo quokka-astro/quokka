@@ -62,9 +62,18 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	const amrex::Real dP_dz = dQ_dz_data[4];
 
 	const amrex::Real c = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
+	const amrex::Real outward_velocity = (SIDE == BoundarySide::Upper) ? u : -u;
+	if (outward_velocity >= c) {
+		// No incoming normal acoustic characteristic remains at sonic/supersonic outflow.
+		// Extrapolate the interior derivatives instead of imposing the target pressure.
+		return dQ_dx_data;
+	}
 	const amrex::Real M = amrex::Clamp(std::sqrt(u * u + v * v + w * w) / c, 0., 1.);
 	const amrex::Real beta = M;
-	const amrex::Real K = 0.25 * c * (1 - M * M) / L_x; // must be non-zero for well-posedness
+	// Below sonic outflow, retain the pressure relaxation without a denominator floor.
+	// Since M >= outward_velocity/c, both K and (beta-1) vanish at least as fast as
+	// the incoming characteristic speed c-outward_velocity. Factor K near M=1.
+	const amrex::Real K = 0.25 * c * (1 - M) * (1 + M) / L_x;
 
 	// see SymPy notebook for derivation of dQ_dx
 	quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> dQ_dx{};
