@@ -3381,6 +3381,10 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 	BL_PROFILE("AMRSimulation::FillCoarsePatch()"); // NOLINT(misc-const-correctness)
 
 	AMREX_ASSERT(lev > 0);
+	if (cen == quokka::centering::fc) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(dir) >= 0 && static_cast<int>(dir) < AMREX_SPACEDIM,
+						 "FillCoarsePatch requires a valid face direction");
+	}
 
 	amrex::Vector<amrex::MultiFab *> cmf;
 	amrex::Vector<amrex::Real> ctime;
@@ -3390,15 +3394,19 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 		amrex::Abort("FillCoarsePatch: how did this happen?");
 	}
 
-	amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});
-	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
-	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
-
 	if (cen == quokka::centering::cc) {
+		amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
 					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0);
 	} else if (cen == quokka::centering::fc) {
-		amrex::Interpolater *face_mapper = &amrex::face_divfree_interp;
+		using FaceBoundary = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+		FaceBoundary boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
+		amrex::PhysBCFunct<FaceBoundary> finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
+		amrex::PhysBCFunct<FaceBoundary> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
+		// A single face field needs the generic face interpolator; divergence-free interpolation requires all directions.
+		amrex::Interpolater *face_mapper = getAmrInterpolaterFaceCentered();
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
 					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), face_mapper, BCs, 0);
 	} else {
