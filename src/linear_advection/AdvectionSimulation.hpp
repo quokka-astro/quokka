@@ -98,6 +98,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
+	void createInitialIMFAveragedStellarPopParticles() override;
 	void createInitialSinkParticles() override;
 	void createInitialStarParticles() override;
 	void createInitialTestParticles() override;
@@ -217,6 +218,11 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 {
 	// Optional implementation
 	// note: an implementation is only effective if StochasticStellarPop particles are used
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialIMFAveragedStellarPopParticles()
+{
+	// no-op
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialSinkParticles()

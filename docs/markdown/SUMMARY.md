@@ -14,6 +14,7 @@
 
 - [Magnetohydrodynamics (beta)](mhd_module.md)
 - [Star Formation and Feedback (beta)](particles.md)
+  - [Empirically Motivated Early Feedback Plan](empirically_motivated_early_feedback_plan.md)
 - [Photoionization](photoionization.md)
 - [Dust Module (beta)](dust_module.md)
 - [Cooling Module](cooling_module.md)
