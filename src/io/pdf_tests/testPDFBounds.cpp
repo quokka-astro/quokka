@@ -68,7 +68,8 @@ auto main(int argc, char **argv) -> int
 									continue;
 								}
 								std::stringstream row(line);
-								amrex::Real value = 0., last = 0.;
+								amrex::Real value = 0.;
+								amrex::Real last = 0.;
 								int columns = 0;
 								while (row >> value) {
 									last = value;
@@ -91,7 +92,7 @@ auto main(int argc, char **argv) -> int
 							if (rangeMode != 0) {
 								expected *= rangeMode == 1 ? .75 : .5;
 							}
-							if (rows != (1 << axes) || std::abs(total - expected) > 1.e-12) {
+							if (rows != static_cast<int>(1U << axes) || std::abs(total - expected) > 1.e-12) {
 								std::cerr << prefix << " total=" << total << " expected=" << expected << '\n';
 								++failures;
 							}
