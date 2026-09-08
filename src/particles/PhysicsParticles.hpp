@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -514,6 +515,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	void splitParticles(int const lev, int const splitFactor) override
 	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(splitFactor > 0, "splitParticles requires splitFactor > 0");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
 						 "The current implementation of velocity kick in particle splitting assumes cgs units."
 						 "Please implement the appropriate scaling for other unit systems.");
@@ -522,8 +524,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
 				// Update NextID to include particles that will be created
 				const amrex::Long npart_old = pIter.numParticles();
-				const unsigned int max_new_particles = splitFactor * npart_old;
+				// Check the total tile size before multiplying, then retain the full particle-count width.
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(npart_old <=
+								     std::numeric_limits<amrex::Long>::max() / (static_cast<amrex::Long>(splitFactor) + 1),
+								 "splitParticles particle count overflow");
+				const amrex::Long max_new_particles = static_cast<amrex::Long>(splitFactor) * npart_old;
 				const amrex::Long pid = ContainerType::ParticleType::NextID();
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_new_particles <= amrex::LongParticleIds::LastParticleID - pid,
+								 "splitParticles particle ID overflow");
 				ContainerType::ParticleType::NextID(pid + max_new_particles);
 
 				// Resize particle tile
@@ -569,6 +577,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						p_new.cpu() = cpu_id;
 						p_new.id() = pid + idx * splitFactor + idx_new;
 						p_new.rdata(mass_idx) = old_mass / static_cast<amrex::Real>(splitFactor);
+						if constexpr (particleType_ == ParticleType::CICRad) {
+							// CICRad stores extensive luminosities after its mass, velocity, and activation times.
+							// Divide every group among children; positions and activation times remain intensive.
+							for (int comp = CICRadParticleLumIdx; comp < ContainerType::ParticleType::NReal; ++comp) {
+								p_new.rdata(comp) /= static_cast<amrex::Real>(splitFactor);
+							}
+						}
 
 						if (has_velocity_components) {
 							// Sample a velocity kick uniformly in the volume of a sphere in velocity space.
