@@ -30,11 +30,14 @@ auto main(int argc, char **argv) -> int
 				if (shifted) {
 					fineBox.shift(0, 8);
 				} // Represent the fine patch by its periodic image.
-				amrex::BoxArray coarseBoxes(domain), fineBoxes(fineBox);
+				amrex::BoxArray coarseBoxes(domain);
+				amrex::BoxArray fineBoxes(fineBox);
 				coarseBoxes.maxSize(2);
 				fineBoxes.maxSize(4);
-				const amrex::DistributionMapping coarseMap(coarseBoxes), fineMap(fineBoxes);
-				amrex::MultiFab coarse(coarseBoxes, coarseMap, 1, 0), fine(fineBoxes, fineMap, 1, 0);
+				const amrex::DistributionMapping coarseMap(coarseBoxes);
+				const amrex::DistributionMapping fineMap(fineBoxes);
+				amrex::MultiFab coarse(coarseBoxes, coarseMap, 1, 0);
+				amrex::MultiFab fine(fineBoxes, fineMap, 1, 0);
 				coarse.setVal(1.);
 				fine.setVal(1.);
 				const amrex::Vector<const amrex::MultiFab *> states{&coarse, &fine};
@@ -62,8 +65,10 @@ auto main(int argc, char **argv) -> int
 						int rows = 0;
 						while (std::getline(file, line)) {
 							std::stringstream row(line);
-							int bin;
-							amrex::Real lo, hi, value;
+							int bin = 0;
+							amrex::Real lo = 0.;
+							amrex::Real hi = 0.;
+							amrex::Real value = 0.;
 							if (row >> bin >> lo >> hi >> value) {
 								total += value;
 								++rows;
