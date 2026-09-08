@@ -9,12 +9,12 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 #include "QuokkaSimulation.hpp"
-#include "particles/particle_utils.hpp"
 #include "SimulationData.hpp"
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "particles/particle_utils.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <format>
