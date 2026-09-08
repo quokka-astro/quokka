@@ -273,7 +273,7 @@ def make_sigma_evolution(
         framealpha=0.9,
         borderpad=0.35,
     )
-    ax.set_xlabel(r"$t/t_s^0$")
+    ax.set_xlabel(r"$t/t_{{\rm s},{\rm eq}}$")
     ax.set_ylabel("standard deviation")
     ax.set_xlim(boundaries[0], boundaries[-1])
 
@@ -362,7 +362,7 @@ def decorate_cube(ax: plt.Axes) -> None:
         ("001", "101", "111", "011", "001"),
     ):
         polygon = np.array([vertices[name] for name in outline])
-        ax.plot(polygon[:, 0], polygon[:, 1], color="0.12", linewidth=0.8)
+        ax.plot(polygon[:, 0], polygon[:, 1], color="0.12", linewidth=1.0)
 
     for start, end, label, offset in (
         ("000", "100", r"$+x$", np.array([0.05, -0.06])),
@@ -457,7 +457,7 @@ def make_stage_cubes(
 
         magnetic_mesh = draw_cube(top_ax, summary, stage, slices, 2, "viridis", magnetic_norms[stage])
         top_ax.set_title(
-            rf"$t={float(stages[stage]['time_over_ts0']):.4g}\,t_s^0$",
+            rf"$t={float(stages[stage]['time_over_ts0']):.4g}\,t_{{{{\rm s}},{{\rm eq}}}}$",
             fontsize=8.2,
             y=0.98,
         )
@@ -473,7 +473,7 @@ def make_stage_cubes(
             dust_cbar.set_label(r"$\rho_{\rm d}/\rho_{{\rm d},0}$")
 
     output = output_dir / "dust_magnetized_rdi_stage_cubes.pdf"
-    fig.savefig(output)
+    fig.savefig(output, dpi=300)
     plt.close(fig)
     return output
 
