@@ -37,6 +37,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "particles/particle_utils.hpp"
 #include "util/BC.hpp"
 
 struct SubcycleProblem {};
@@ -94,6 +95,7 @@ template <> void QuokkaSimulation<SubcycleProblem>::createInitialSinkParticles()
 	const int nreal_extra = 4;
 	SinkParticles->SetVerbose(0);
 	SinkParticles->InitFromAsciiFile("../inputs/ParticleSinkSubcycle.txt", nreal_extra, nullptr);
+	quokka::ParticleUtils::zeroRealComponentsFrom(SinkParticles.get(), nreal_extra);
 }
 
 template <> void QuokkaSimulation<SubcycleProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)

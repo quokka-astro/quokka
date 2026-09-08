@@ -9,6 +9,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 #include "QuokkaSimulation.hpp"
+#include "particles/particle_utils.hpp"
 #include "SimulationData.hpp"
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
@@ -83,6 +84,7 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
 	SinkParticles->InitFromAsciiFile(sink_file, nreal_extra, nullptr);
+	quokka::ParticleUtils::zeroRealComponentsFrom(SinkParticles.get(), nreal_extra);
 
 	const int max_lev = max_level;
 

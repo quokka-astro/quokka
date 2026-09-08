@@ -75,6 +75,7 @@ template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
 	SinkParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
+	quokka::ParticleUtils::zeroRealComponentsFrom(SinkParticles.get(), nreal_extra);
 
 	// Apply boost velocity to particles if needed
 	for (int lev = 0; lev <= SinkParticles->finestLevel(); ++lev) {
