@@ -2418,6 +2418,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux_rk2;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> avgFaceVel;
 	const int nghost_vel = 2; // 2 ghost faces are needed for tracer particles
+	const int nghost_vel_average = (do_tracers != 0) ? nghost_vel : 0;
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
@@ -2585,7 +2586,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab::Saxpy(flux_rk2[idim], stage1Weight, fluxArrays[idim], 0, 0, nvars_, 0);
-			amrex::MultiFab::Saxpy(avgFaceVel[idim], stage1Weight, faceVel[idim], 0, 0, 1, 0);
+			amrex::MultiFab::Saxpy(avgFaceVel[idim], stage1Weight, faceVel[idim], 0, 0, 1, nghost_vel_average);
 		}
 
 		ApplyHydroStateFixup(stateNew_cc, stateNew_fc, lev);
@@ -2633,7 +2634,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, nvars_, 0);
-			amrex::MultiFab::Saxpy(avgFaceVel[idim], 0.5, faceVel[idim], 0, 0, 1, 0);
+			amrex::MultiFab::Saxpy(avgFaceVel[idim], 0.5, faceVel[idim], 0, 0, 1, nghost_vel_average);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				amrex::MultiFab::Saxpy(ec_emf_components_rk_ave[idim], 0.5, ec_emf_components_rk_stage2[idim], 0, 0, 1, 0);
 			}
@@ -2735,6 +2736,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 
 	if (do_tracers != 0 && final_success) {
+		// Riemann solves on stage-filled state ghosts supply physical and coarse-fine boundary velocities.
+		// Refresh patch/periodic overlaps from the accepted valid faces, including any FOFC replacements.
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			avgFaceVel[idim].OverrideSync(geom[lev].periodicity());
+			avgFaceVel[idim].FillBoundary(geom[lev].periodicity());
+		}
 		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
 	}
 
