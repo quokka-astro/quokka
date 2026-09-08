@@ -6,7 +6,7 @@ template <int N> auto readAndCheck(const std::string &path) -> int
 	const auto table = quokka::DataTable<N, 2>::CSVReader(path, quokka::TransformType::linear);
 	const auto view = table.const_tables_host();
 	for (int out = 0; out < 2; ++out) {
-		for (int flat = 0; flat < (1 << N); ++flat) {
+		for (int flat = 0; flat < static_cast<int>(1U << N); ++flat) {
 			amrex::Real value = 0.;
 			if constexpr (N == 1) {
 				value = view.dataViewArrays[out](flat);
