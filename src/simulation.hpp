@@ -1550,11 +1550,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			// Update particle properties (e.g., luminosity) before particle-mesh interaction
 			particleRegister_.updateParticleProperties(cur_time, dt_[0]);
 
-			// TODO(cch): Need to take care of AMR subcycling
+			// Particle operators use the coarse interval once, after the recursive fluid advance.
 			particleMeshInteraction(cur_time, dt_[0]);
 
 			// Use the new type-aware particle destruction method
-			// TODO(cch): Need to take care of AMR subcycling
 			particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 		}
 #endif
