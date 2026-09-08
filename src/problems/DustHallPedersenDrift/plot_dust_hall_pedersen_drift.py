@@ -138,7 +138,7 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
     )
 
     ax.set_xlabel("t")
-    ax.set_ylabel(r"$w_x,\ w_y$")
+    ax.set_ylabel("relative velocity")
     ax.set_xlim(0.0, 20.0)
     ax.legend(handles=legend_handles(), loc="center right")
     fig.tight_layout()
