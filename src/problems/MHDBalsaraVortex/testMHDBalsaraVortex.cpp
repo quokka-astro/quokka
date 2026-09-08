@@ -219,6 +219,7 @@ auto problem_main() -> int
 
 	int advection_int = 0;
 	double num_periods = 1.0;
+	hpp.query("vortex_radius", vortex_radius);
 	hpp.query("vortex_Mach", vortex_Mach);
 	hpp.query("vortex_b_magn", vortex_b_magn);
 	hpp.query("advection", advection_int);

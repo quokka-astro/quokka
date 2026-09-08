@@ -24,3 +24,7 @@ do_subcycle = 0
 plotfile_interval = -1
 
 hydro.reconstruction_order = 2
+
+cfl = 0.4
+stop_time = 0.4
+max_timesteps = 2000
