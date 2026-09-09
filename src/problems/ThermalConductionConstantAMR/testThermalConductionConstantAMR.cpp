@@ -50,29 +50,6 @@ template <> struct Physics_Traits<ThermalConductionConstantAMRProblem> : Default
 	static constexpr bool is_mhd_enabled = false;
 };
 
-namespace
-{
-struct ExactSolutionParams {
-	amrex::Real sigma2_t = 0.0;
-};
-
-auto computeExactSolutionParams(amrex::Real t) -> ExactSolutionParams
-{
-	ExactSolutionParams p;
-	p.sigma2_t = sigma * sigma + 2.0 * D * t;
-	return p;
-}
-
-AMREX_GPU_HOST_DEVICE auto evalExactEint(ExactSolutionParams const &p, amrex::Real xlow, amrex::Real xhigh, amrex::Real dx) -> amrex::Real
-{
-	amrex::Real Eint = Efloor;
-	const amrex::Real erfx_low = std::erf(xlow / std::sqrt(2.0 * p.sigma2_t));
-	const amrex::Real erfx_high = std::erf(xhigh / std::sqrt(2.0 * p.sigma2_t));
-	Eint += Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx;
-	return Eint;
-}
-} // namespace
-
 template <> void QuokkaSimulation<ThermalConductionConstantAMRProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -81,14 +58,15 @@ template <> void QuokkaSimulation<ThermalConductionConstantAMRProblem>::setIniti
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
-
-	const ExactSolutionParams params = computeExactSolutionParams(/*t=*/0.0);
+	const amrex::Real sigma2_t = sigma * sigma; // t = 0
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real xlow = prob_lo[0] + i * dx[0];
 		const amrex::Real xhigh = prob_lo[0] + (i + 1) * dx[0];
-		const amrex::Real Eint = evalExactEint(params, xlow, xhigh, dx[0]);
+		const amrex::Real erfx_low = std::erf(xlow / std::sqrt(2.0 * sigma2_t));
+		const amrex::Real erfx_high = std::erf(xhigh / std::sqrt(2.0 * sigma2_t));
+		const amrex::Real Eint = Efloor + Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx[0];
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
@@ -154,8 +132,7 @@ void QuokkaSimulation<ThermalConductionConstantAMRProblem>::computeReferenceSolu
 {
 	const amrex::Real t = tNew_[0];
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
-
-	const ExactSolutionParams params = computeExactSolutionParams(t);
+	const amrex::Real sigma2_t = sigma * sigma + 2.0 * D * t;
 
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -165,7 +142,9 @@ void QuokkaSimulation<ThermalConductionConstantAMRProblem>::computeReferenceSolu
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const xlow = prob_lo[0] + i * dx[0];
 			amrex::Real const xhigh = prob_lo[0] + (i + 1) * dx[0];
-			amrex::Real const Eint_exact = evalExactEint(params, xlow, xhigh, dx[0]);
+			amrex::Real const erfx_low = std::erf(xlow / std::sqrt(2.0 * sigma2_t));
+			amrex::Real const erfx_high = std::erf(xhigh / std::sqrt(2.0 * sigma2_t));
+			amrex::Real const Eint_exact = Efloor + Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx[0];
 
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
