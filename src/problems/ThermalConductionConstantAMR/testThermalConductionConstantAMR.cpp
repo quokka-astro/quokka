@@ -20,7 +20,7 @@
 #include "util/BC.hpp"
 
 /* Identical to ThermalConductionConstant problem but now we are checking for AMR.
-Lref has been chosen to be an intger of the box size to remove dependence on box size.
+Lref has been chosen to be an integer of the box size to remove dependence on box size.
 */
 
 constexpr double Eint0 = 2.505e-8;	     // Gaussian peak (equivalent to T = 2.e8 K)
