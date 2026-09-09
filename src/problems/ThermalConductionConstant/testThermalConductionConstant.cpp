@@ -174,7 +174,7 @@ void QuokkaSimulation<ThermalConductionConstantProblem>::ComputeDerivedVar(int l
 auto problem_main() -> int
 {
 	// Single-resolution check, with one level of refinement active, against a pre-computed reference error norm.
-	constexpr int nx = 32;
+	constexpr int nx = 64;
 	constexpr int max_level = 1;
 	double const error_norm = runConductionTest(nx, max_level);
 	constexpr amrex::Real estimated_error = (AMREX_SPACEDIM == 1) ? 9.2430e-04 : 1.0318e-03;
