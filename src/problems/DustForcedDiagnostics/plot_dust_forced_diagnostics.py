@@ -192,7 +192,7 @@ def make_figure(data_dir: Path, output_dir: Path) -> tuple[Path, Path]:
         output_dir / OUTPUT_FILE,
         "final_data_error",
         "terminal_error",
-        r"distance to $\boldsymbol{w}_*$",
+        "terminal drift error",
     )
     reference_output_path = make_panel_figure(
         numerical_grouped,
@@ -200,7 +200,7 @@ def make_figure(data_dir: Path, output_dir: Path) -> tuple[Path, Path]:
         output_dir / REFERENCE_OUTPUT_FILE,
         "final_to_fixed_point_error",
         "predicted_final_to_fixed_point_error",
-        r"distance to $\boldsymbol{w}_{\rm fp}$",
+        "fixed-point convergence error",
     )
     return output_path, reference_output_path
 
