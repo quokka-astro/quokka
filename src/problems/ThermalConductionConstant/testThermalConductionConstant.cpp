@@ -110,7 +110,7 @@ void QuokkaSimulation<ThermalConductionConstantProblem>::computeReferenceSolutio
 	amrex::Gpu::streamSynchronize();
 }
 
-auto runConductionTest(int nx, int max_level) -> double
+auto runConductionTest(int nx, int /*max_level*/) -> double
 {
 	constexpr double max_time = 469054.0075444166;
 
@@ -149,7 +149,7 @@ auto runConductionTest(int nx, int max_level) -> double
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionConstantProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+void QuokkaSimulation<ThermalConductionConstantProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
 									   amrex::MultiFab const &state_cc,
 									   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {

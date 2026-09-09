@@ -131,7 +131,7 @@ void QuokkaSimulation<ThermalConductionSpitzerGaussianProblem>::computeReference
 		auto const ncomp = ref.nComp();
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+			amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 
 			if (std::abs(x) < error_mask_radius) {
 				// clamp queries outside the tabulated x-range to the nearest tabulated edge value
@@ -203,7 +203,7 @@ auto runConductionTest(int nx) -> double
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionSpitzerGaussianProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+void QuokkaSimulation<ThermalConductionSpitzerGaussianProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
 										  amrex::MultiFab const &state_cc,
 										  amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {

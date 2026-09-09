@@ -232,7 +232,7 @@ auto runConductionTest(int nx) -> double
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionPattleProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+void QuokkaSimulation<ThermalConductionPattleProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
 									 amrex::MultiFab const &state_cc,
 									 amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
