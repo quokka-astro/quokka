@@ -29,13 +29,13 @@ not have time to move and the energy evolution is purely due to conduction. */
 
 constexpr double Eint0 = 2.505e-8;   // peak Eint at the reference resolution nx_ref (equivalent to T = 2.e8 K)
 constexpr double Efloor = 2.505e-11; // numerical representability floor outside the front, equivalent to T = 2.e6 K
-const double rho0 = 0.1;	      // 1/cm^3
+const double rho0 = 0.1;	     // 1/cm^3
 constexpr double Lref = 7.714e+17;   // quarter box length, fixes region of refinement
-constexpr int nx_ref = 128;	      // resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConductionPattle.toml)
+constexpr int nx_ref = 128;	     // resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConductionPattle.toml)
 constexpr double dx0_ref = 4.0 * Lref / nx_ref;
-constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref;    // Normalization
-constexpr double spitzer_t_start = 330471.1321990738;	    // initial time at which the IC/reference Pattle solution is evaluated
-constexpr amrex::Real pattle_q = 2.5;			    // conductivity exponent: kappa(T) = kappa0 * T^pattle_q (2.5 for Spitzer)
+constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref; // Normalization
+constexpr double spitzer_t_start = 330471.1321990738;	// initial time at which the IC/reference Pattle solution is evaluated
+constexpr amrex::Real pattle_q = 2.5;			// conductivity exponent: kappa(T) = kappa0 * T^pattle_q (2.5 for Spitzer)
 struct ThermalConductionPattleProblem {};
 
 template <> struct quokka::EOS_Traits<ThermalConductionPattleProblem> {
@@ -60,7 +60,7 @@ namespace
 AMREX_GPU_HOST_DEVICE auto computePattleSolution(amrex::Real rho, amrex::Real kappa0, amrex::Real t, amrex::Real xlow, amrex::Real xhigh) -> amrex::Real
 {
 	const amrex::Real A = quokka::EOS<ThermalConductionPattleProblem>::ComputeEintFromTgas(rho, 1.0); // A = mu * mp/rho/kb
-	const amrex::Real D0 = kappa0 / A;								       // D(T) = D0 * T^pattle_q
+	const amrex::Real D0 = kappa0 / A;								  // D(T) = D0 * T^pattle_q
 	const amrex::Real Q0 = M0 / A;
 	const amrex::Real Gamma_num = std::tgamma(1.0 / pattle_q + 1.5);
 	const amrex::Real Gamma_den = std::tgamma(1.0 / pattle_q + 1.0);
@@ -156,9 +156,8 @@ template <> void QuokkaSimulation<ThermalConductionPattleProblem>::refineGrid(in
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionPattleProblem>::computeReferenceSolution(amrex::MultiFab &ref,
-											amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-											amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+void QuokkaSimulation<ThermalConductionPattleProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+										amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 	const amrex::Real kappa0 = electronConductionKappa0_;
@@ -233,9 +232,9 @@ auto runConductionTest(int nx) -> double
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionPattleProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf,
-										 const int ncomp_cc_in, amrex::MultiFab const &state_cc,
-										 amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+void QuokkaSimulation<ThermalConductionPattleProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+									 amrex::MultiFab const &state_cc,
+									 amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;

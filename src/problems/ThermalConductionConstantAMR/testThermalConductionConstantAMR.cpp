@@ -23,10 +23,10 @@
 Lref has been chosen to be an intger of the box size to remove dependence on box size.
 */
 
-constexpr double Eint0 = 2.505e-8;   // Gaussian peak (equivalent to T = 2.e8 K)
-constexpr double Efloor = 2.505e-11; // equivalent to T = 2.e6 K
-const double rho0 = 0.1;	      // 1/cm^3
-constexpr double Lref = 7.714e+17;   // quarter box length, fixes region of refinement
+constexpr double Eint0 = 2.505e-8;	     // Gaussian peak (equivalent to T = 2.e8 K)
+constexpr double Efloor = 2.505e-11;	     // equivalent to T = 2.e6 K
+const double rho0 = 0.1;		     // 1/cm^3
+constexpr double Lref = 7.714e+17;	     // quarter box length, fixes region of refinement
 constexpr double sigma = 2.410685615625e+17; // width of the initial Gaussian, in cm (amr2-branch value)
 constexpr double D = 4.396303164750053e+28;  // fixed diffusion coefficient for the Gaussian solution, in cm^2/s (amr2-branch value)
 struct ThermalConductionConstantAMRProblem {};
@@ -53,7 +53,7 @@ template <> void QuokkaSimulation<ThermalConductionConstantAMRProblem>::setIniti
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
+	const amrex::Real rho = rho0 * C::m_p;	    // g/cm^3
 	const amrex::Real sigma2_t = sigma * sigma; // t = 0
 
 	// loop over the grid and set the initial condition
@@ -123,8 +123,8 @@ template <> void QuokkaSimulation<ThermalConductionConstantAMRProblem>::refineGr
 
 template <>
 void QuokkaSimulation<ThermalConductionConstantAMRProblem>::computeReferenceSolution(amrex::MultiFab &ref,
-										      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-										      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+										     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+										     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const amrex::Real t = tNew_[0];
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
@@ -160,7 +160,7 @@ void QuokkaSimulation<ThermalConductionConstantAMRProblem>::computeReferenceSolu
 auto runConductionTest(int nx) -> double
 {
 	constexpr double max_time = 469054.0075444166;
-	constexpr int max_level = 1; 
+	constexpr int max_level = 1;
 
 	// Set grid dimensions and refinement level using AMReX parameter system
 	amrex::ParmParse pp("amr");
@@ -208,8 +208,8 @@ auto runConductionTest(int nx) -> double
 
 template <>
 void QuokkaSimulation<ThermalConductionConstantAMRProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-									       amrex::MultiFab const &state_cc,
-									       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+									      amrex::MultiFab const &state_cc,
+									      amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
