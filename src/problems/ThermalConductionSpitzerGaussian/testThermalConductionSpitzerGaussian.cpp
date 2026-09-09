@@ -22,14 +22,14 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
-/** Spitzer thermal conduction test problem (Gaussian IC)
-kappa = kappa0*T^2.5. Initial condition is a smooth Gaussian temperature profile. There is no closed-form
-solution for a Gaussian evolving under this nonlinear conductivity, so the reference solution is a tabulated
-high-resolution numerical profile (gaussian_spitzer_highres.csv), interpolated onto the test grid and compared
-only within |x| < 0.2 pc (most of the error away from the core is dominated by edge/floor effects). This test
-estimates the error across different resolutions and compares the convergence slope against second order.
-Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does
-not have time to move and the energy evolution is purely due to conduction. */
+/** Spitzer thermal conduction test problem with Gaussian IC--
+While there is no analytic solution for a Gaussian evolving under Spitzer conduction, we can compare against a
+ high-resolution numerical reference solution. The reference solution was generated using nx=256 in 1D and compared
+ agains this the convergence rate should be close to -2.0. For higher convergence rates go upto nx=4096. Also note 
+ that since there is a natural discontinuity in the solution the convergence rate is expected to be -1.0 for the whole domain, 
+ but inside the discontinuity the convergence rate is expected to be -2.0. This test proves that the code is
+ converges as expected for Spitzer thermal conduction.
+ */
 
 constexpr double Eint0 = 2.505e-8; // Gaussian peak (equivalent to T = 2.e8 K)
 // gaussian_spitzer_highres.csv was generated with this floor; keep the IC consistent with that table.
