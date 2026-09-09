@@ -651,7 +651,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real temperature,
-																							 amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+												 amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
 	quokka::valarray<amrex::Real, nGroups_> d_fourpiboverc_d_t{};

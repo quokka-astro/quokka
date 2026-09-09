@@ -207,7 +207,7 @@ auto checkBlackbodyEmission() -> bool
 		const double frac_err = std::abs(fractions[g] - frac_exact[g]) / frac_exact[g];
 		const double deriv_err = std::abs(deriv[g] - a_T3 * deriv_exact[g]) / (a_T3 * deriv_exact[g]);
 		amrex::Print() << "group " << g << ": Planck fraction = " << fractions[g] << " (rel. error " << frac_err << "), d(4 pi B / c)/dT = " << deriv[g]
-				       << " (rel. error " << deriv_err << ")\n";
+			       << " (rel. error " << deriv_err << ")\n";
 		if (frac_err > tol || deriv_err > tol) {
 			amrex::Print() << "FAILED: group " << g << " does not emit the Planck function integrated over its own band only.\n";
 			success = false;
@@ -227,7 +227,7 @@ auto checkBlackbodyEmission() -> bool
 	const double full_deriv_sum = sum(RadSystem<PulseProblem>::ComputeThermalRadiationTempDerivativeMultiGroup(T_test, full_bounds));
 	if (std::abs(full_frac_sum - 1.0) > 1.0e-10 || std::abs(full_deriv_sum - 4.0 * a_T3) > 1.0e-10 * a_T3) {
 		amrex::Print() << "FAILED: groups spanning the whole spectrum give total fraction " << full_frac_sum << " (expected 1) and total derivative "
-				       << full_deriv_sum << " (expected " << 4.0 * a_T3 << ").\n";
+			       << full_deriv_sum << " (expected " << 4.0 * a_T3 << ").\n";
 		success = false;
 	}
 
