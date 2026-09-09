@@ -87,6 +87,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		}
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			// dustHeatingSource_arr is only read inside the `if constexpr (dust_chemical_band_absorption_)`
+			// block below; nvcc can't first-capture a variable from inside constexpr-if, so touch it
+			// unconditionally here first (same restriction that dMomX/dMomY/dMomZ are computed outside
+			// their `if constexpr` block to avoid; see comment above their declaration).
+			amrex::ignore_unused(dustHeatingSource_arr);
+
 			const Real rho = state(i, j, k, RadSystem<problem_t>::gasDensity_index);
 			// dont do photochemistry in cells with densities below the minimum density specified
 			if (rho < min_density_allowed) {
