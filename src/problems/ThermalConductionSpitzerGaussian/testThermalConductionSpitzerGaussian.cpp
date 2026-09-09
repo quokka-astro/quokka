@@ -90,7 +90,7 @@ void QuokkaSimulation<ThermalConductionSpitzerGaussianProblem>::computeReference
 
 	// There is no analytic solution for a Gaussian evolving under Spitzer conduction, so compare against a
 	// tabulated high-resolution numerical reference instead.
-	std::string const filename = "extern/problems/ThermalConductionSpitzerGaussian/gaussian_spitzer_highres.csv";
+	std::string const filename = "../extern/problems/ThermalConductionSpitzerGaussian/gaussian_spitzer_highres.csv";
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(fstream.is_open(), "Could not open gaussian_spitzer_highres.csv");
 
