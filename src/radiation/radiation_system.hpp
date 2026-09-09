@@ -579,35 +579,25 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
 };
 
-// Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
-// This function enforces that the total fraction is 1.0, no matter what are the group boundaries
+// Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature.
+// The fraction of group g is P(x_{g+1}) - P(x_g), where P is the Planck integral from 0 to x normalized to unity and x = energy_unit * nu / (k T).
+// The group boundaries need not span the whole spectrum: blackbody emission below boundaries[0], above boundaries[nGroupsThermal_], or inside a chemical
+// band is simply dropped rather than folded into the nearest group, so the fractions sum to <= 1.
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
 	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
+		// a single group always spans the whole spectrum; see radBoundaries_
 		radEnergyFractions[0] = 1.0;
 		return radEnergyFractions;
 	} else {
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		amrex::Real y = NAN;
-		amrex::Real previous = 0.0;
-		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission. When
-		// chemical bands are present the thermal fractions are NOT renormalized: the blackbody radiation
-		// above the first chemical-band boundary is simply dropped, so the fractions sum to < 1.
+		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission, and their fractions are NOT renormalized.
+		amrex::Real previous = integrate_planck_from_0_to_x(boundaries[0] * energy_unit_over_kT);
 		for (int g = 0; g < nGroupsThermal_; ++g) {
-			if (g == nGroups_ - 1) {
-				// no chemical bands: the last group carries all remaining blackbody, total fraction = 1.0
-				y = 1.0;
-			} else {
-				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-				if (x >= 100.) { // 100. is the upper limit of x in the table
-					y = 1.0;
-				} else {
-					y = integrate_planck_from_0_to_x(x);
-				}
-			}
+			const amrex::Real y = integrate_planck_from_0_to_x(boundaries[g + 1] * energy_unit_over_kT);
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
@@ -661,7 +651,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real temperature,
-												 amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+																							 amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
 	quokka::valarray<amrex::Real, nGroups_> d_fourpiboverc_d_t{};
@@ -679,21 +669,11 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 		// where P is the same normalized Planck integral used for the energy fractions, so the exact
 		// derivative costs one extra term per group boundary. D(inf) = 4 recovers d(a T^4)/dT.
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		amrex::Real y = NAN;
-		amrex::Real previous = 0.0;
-		// Only the thermal groups emit; the chemical bands are left at 0, as in ComputePlanckEnergyFractions.
+		// As in ComputePlanckEnergyFractions, only the thermal groups emit, the group boundaries need not span the
+		// whole spectrum, and no renormalization is applied; the chemical bands are left at 0.
+		amrex::Real previous = integrate_planck_derivative_from_0_to_x(boundaries[0] * energy_unit_over_kT);
 		for (int g = 0; g < nGroupsThermal_; ++g) {
-			if (g == nGroups_ - 1) {
-				// no chemical bands: the last group carries all remaining blackbody, so D = D(inf) = 4
-				y = 4.0;
-			} else {
-				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-				if (x >= 100.) { // 100. is the upper limit of x in the table
-					y = 4.0;
-				} else {
-					y = 4. * integrate_planck_from_0_to_x(x) - (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
-				}
-			}
+			const amrex::Real y = integrate_planck_derivative_from_0_to_x(boundaries[g + 1] * energy_unit_over_kT);
 			d_fourpiboverc_d_t[g] = a_T3 * (y - previous);
 			previous = y;
 		}
