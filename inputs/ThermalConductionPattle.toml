@@ -33,4 +33,3 @@ suppress_output = 0
 
 conduction.conduction_type = "spitzer"
 conduction.conductivity_prefactor = 5.40e-10
-stop_time = 660942.2643981476  # informational only; runConductionTest() hardcodes this value

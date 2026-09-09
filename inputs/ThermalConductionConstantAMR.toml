@@ -36,4 +36,3 @@ suppress_output = 0
 
 conduction.conduction_type = "constant"
 conduction.conductivity_prefactor = 0.6113916490935586e12
-stop_time = 469054.0075444166
