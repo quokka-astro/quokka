@@ -37,7 +37,9 @@ constexpr int MicrophysicsNumRadVarsPerGroup = 1;
 #else
 constexpr int MicrophysicsNumRadVarsPerGroup = 2;
 #endif
-constexpr int NumRadEqs = NumChemBands * MicrophysicsNumRadVarsPerGroup;
+constexpr int NumChemRadEqs = NumChemBands * MicrophysicsNumRadVarsPerGroup;
+constexpr int NumThermalBands = @NUM_THERMAL_BANDS@;
+constexpr int NumRadEqs = NumChemRadEqs + NumThermalBands;
 constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBandsHeader_{ @CHEM_BANDS@ };
 #endif
 

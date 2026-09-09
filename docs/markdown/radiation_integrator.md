@@ -5,7 +5,7 @@ The radiation integrator advances the coupled radiation–matter system using th
 ## High-level workflow
 
 - **Substep count:** `computeNumberOfRadiationSubsteps` determines the integer number of radiation substeps needed to cover the hydro timestep at the radiation CFL number. When hydro is disabled or a constant timestep is in use, a single substep is taken.
-- **State management:** At the start of each substep after the first, `swapRadiationState` copies the radiation hyperbolic variables from `state_new_cc_` back into `state_old_cc_`, so that the integrator always has a clean "old" radiation state to advance from while the hydro variables remain in `state_new_cc_`.
+- **State management:** At the start of each substep after the first, `copyRadiationState` copies the radiation hyperbolic variables from `state_new_cc_` back into `state_old_cc_`, so that the integrator always has a clean "old" radiation state to advance from while the hydro variables remain in `state_new_cc_`.
 - **IMEX stages per substep:** Each substep applies the 3-stage IMEX PD-ARS scheme — one explicit Forward Euler stage and one explicit RK2 corrector stage, each followed by an implicit Newton–Raphson solve for the stiff matter–radiation coupling.
 - **Particle source injection:** In 3D, stellar particles deposit their luminosity into `radEnergySource` before each implicit solve, giving a cell-centred luminosity density (erg s⁻¹ cm⁻³).
 - **User source injection:** `RadSystem<problem_t>::AddRadSource` is called before each implicit solve and lets a problem add its own radiation source. It writes two scratch buffers of its own, zeroed beforehand: `radEnergySource`, a luminosity volume density per group, and `reducedFluxSource`, the *reduced* flux \\(f = F/(cE)\\) of the injected radiation in component \\(3g + n\\) for group \\(g\\) along direction \\(n\\). `MergeUserRadSource` then converts the pair into a real flux source and adds both to the solver's buffers. Asking for a reduced flux rather than a flux makes \\(|F| > cE\\) unrepresentable: a reduced flux of unit magnitude injects fully beamed, free-streaming radiation for either kind of band, and leaving it at zero injects isotropically. The energy source is scaled internally by \\(\hat c / c\\) for a thermal group and not at all for a chemistry band, and the derived flux source inherits the same scaling.
@@ -157,7 +157,7 @@ AddSourceTerms(state_new_cc_, dt_implicit = Aim_33 * dt, gas_update_factor = 1.0
 | `RadSystem::AddFluxesRK2`              | GPU kernel: `(1-alpha)*U0 + alpha*U1 + Aex_s1_coeff*F0 + Aex_s2_coeff*F1` for radiation |
 | `RadSystem::AddSourceTermsSingleGroup` | GPU kernel: Newton-Raphson implicit solve for single-group coupling                     |
 | `RadSystem::AddSourceTermsMultiGroup`  | GPU kernel: Newton-Raphson implicit solve for multi-group coupling                      |
-| `swapRadiationState`                   | Copies radiation hyperbolic vars from `state_new` → `state_old` for next substep        |
+| `copyRadiationState`                   | Copies radiation hyperbolic vars from `state_new` → `state_old` for next substep        |
 
 
 ### Source term interface

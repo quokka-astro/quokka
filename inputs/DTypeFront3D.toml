@@ -1,0 +1,82 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+# A 24 pc cube with the source at the true centre, so the front has 12 pc of clearance in every axis
+# direction. The thin-shell ODE puts the front at ~9.4 pc at stop_time, comfortably inside that, and the
+# radial binning in testDTypeFront3D.cpp only bins out to the largest fully enclosed radius (12 pc) so the
+# corners never bias the profile.
+geometry.prob_lo     =  [-3.7028e19, -3.7028e19, -3.7028e19]
+geometry.prob_hi     =  [ 3.7028e19,  3.7028e19,  3.7028e19]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+# dx = 0.375 pc, so the ~9.4 pc front is resolved by ~25 cells and the Stromgren radius (1.47 pc) by ~4.
+amr.n_cell          = [16, 16, 16]
+amr.max_level       = 0     # number of levels = max_level + 1
+#amr.blocking_factor = 32    # grid size must be divisible by this
+#amr.max_grid_size   = 128   # at least 128 for GPUs
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+temperature_floor = 10.0
+
+stop_time = 3.15576e13   # 1 Myr
+max_timesteps = 1000000  # stop_time governs; no artificial step cap
+
+plotfile_interval = -1
+plotfile_prefix = "DType3D"
+
+photochemistry.enabled = 1
+network.energy_switch = 1
+network.recombination_temperature_dependent = 1
+network.allow_mixed_cell_cooling = 0
+network.dust_kappa = 1000.0   # cm^2/g; dust opacity to ionizing radiation, only used when ISM_Traits::dust_chemical_band_absorption is true
+
+photoionize.primary_species_1 = 1.0e-10   # e
+photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
+photoionize.primary_species_3 = 1.0e-10   # H+
+photoionize.temperature = 42.0   # K; close to the KI equilibrium (41.77 K) so the ambient gas relaxes within stop_time
+
+# Photon rates of the central source [photons s^-1]. The optical rate is 300x the ionizing one, giving
+# L_opt ~ 8.8e5 Lsun against L_ion ~ 6.1e4 Lsun. That ratio is what makes the dust-absorbed optical momentum
+# visible: it lifts the thin-shell radius ~28% above the gas-only Spitzer curve, which is far more than the
+# 4-cell tolerance of the radius check, so the two reference curves separate cleanly on the plot.
+photoionize.flux_ion = 1.0e48
+photoionize.flux_optical = 3.0e50
+
+# Gray dust opacities of the two thermal bands [cm^2 g^-1]. Same split as DTypeFront1D: the optical band is
+# very opaque, so the shell absorbs essentially all the optical light and takes up its momentum, while the IR
+# is left nearly transparent so the reprocessed light streams out instead of being trapped. That keeps the
+# problem in the single-scattering limit the front ODE assumes (see compute_absorbed_luminosity).
+photoionize.kappa_ir = 1.0e-2
+photoionize.kappa_optical = 3.0e+2
+
+radiation.iteration_tolerance = 1e-10
+radiation.dust_gas_interaction_coeff = 0.0   # thermally decouple dust from gas; dust sits at radiative equilibrium
+
+integrator.rosenbrock_tableau = 3
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2
+
+integrator.atol_spec                     = 1.0e-3   # cm^-3
+integrator.atol_enuc                     = 1.24e8   # erg/g; c_v * 1 K temperature accuracy
+integrator.atol_rad_num                  = 1.0e-6   # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3   # cm^-3; = atol_spec
+integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at the front

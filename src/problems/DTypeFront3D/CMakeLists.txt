@@ -1,7 +1,5 @@
-# The problem is planar, so it runs unchanged in 3D: the slab is uniform across y and z and every transverse
-# column repeats the 1D solution, which is what makes it a useful check that the radiation, dust and
-# photochemistry paths behave identically in 3D. 2D is skipped only to keep CI time down.
-if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
+# The problem is a spherical H II region around a central point source, so it is meaningful only in 3D.
+if(AMReX_SPACEDIM EQUAL 3)
   set(microphysics_network_name "photoionization") # this will override
                                                   # network_name to
                                                   # photoionization for this
@@ -17,7 +15,7 @@ if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
     BEFORE ${photoionization_dirs} "${CMAKE_CURRENT_BINARY_DIR}/"
     "includes/extern_parameters.H" "includes/network_properties.H")
 
-  set(JOB_NAME DTypeFront1D)
+  set(JOB_NAME DTypeFront3D)
 
   # Number of species
   set(NSPEC 3)
@@ -81,7 +79,7 @@ if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
   # Set photoionisation properties
   set(NUM_CHEM_BANDS 1)
   set(CHEM_BANDS "3.29e15, 8.0e15") # Hz
-  set(NUM_THERMAL_BANDS 2) # index 0 = IR, index 1 = optical, matching group_ir/group_optical in testDTypeFront1D.cpp
+  set(NUM_THERMAL_BANDS 2) # index 0 = IR, index 1 = optical, matching group_ir/group_optical in testDTypeFront3D.cpp
 
   # Configure the header
   configure_file(
@@ -102,6 +100,5 @@ if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  # One input serves both dimensionalities; only the x entries matter in 1D.
   add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

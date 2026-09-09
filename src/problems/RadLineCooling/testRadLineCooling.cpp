@@ -86,6 +86,7 @@ template <> struct ISM_Traits<CoolingProblem> {
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr bool enable_linear_cooling_heating = true;
+	static constexpr bool dust_chemical_band_absorption = false; // no chemical bands in this problem
 };
 
 template <>

@@ -126,22 +126,59 @@ auto lambda_rec(double T) -> double
 	return 6.1e-10 * 1.380649e-16 * T * std::pow(T, -0.89);
 }
 
-auto lambda_ion_ff(double T) -> double { return 1.4e-27 * std::sqrt(T) + 1.0e-19 * std::exp(-118348.0 / T); }
+// Ion free-free (+ CLE) cooling, per (electron, ion) pair [erg cm^3 s^-1]. Matches
+// get_ion_ff_cooling_coefficient in actual_rhs.H (Frazer & Heitsch 2019).
+auto get_cle_term(double T) -> double
+{
+	if (T < 1.0e2) {
+		return 3.47e-29 * std::pow(T, 1.915);
+	}
+	if (T < std::pow(10.0, 2.8)) {
+		return 2.34e-26 * std::pow(T, 0.500);
+	}
+	if (T < std::pow(10.0, 3.6)) {
+		return 1.11e-24 * std::pow(T, -0.099);
+	}
+	if (T < 1.0e4) {
+		return 1.08e-32 * std::pow(T, 2.127);
+	}
+	if (T < std::pow(10.0, 4.5)) {
+		return 2.67e-30 * std::pow(T, 1.529);
+	}
+	if (T < 1.0e5) {
+		return 1.74e-24 * std::pow(T, 0.237);
+	}
+	if (T < 1.0e6) {
+		return 1.10e-21 * std::pow(T, -0.323);
+	}
+	return 7.49e-21 * std::pow(T, -0.462);
+}
+
+auto lambda_ff(double T) -> double { return 1.3 * 1.427e-27 * std::sqrt(T) + get_cle_term(T); }
 
 auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * std::sqrt(T) * std::exp(-92.0 / T)); }
 
+// Collisional ionization is not included in this balance: k_coll/alpha_B ~ 5e-5 at the cavity's equilibrium
+// temperature (~8000 K), and the cavity is highly ionized (n_HI tiny), so its contribution to both the
+// ionization and energy balance is negligible here -- adding it would also break the density-independence
+// this function relies on (every remaining term scales as n_e^2; collisional ionization scales as n_e*n_HI
+// instead).
 auto net_energy_ionized(double T, double n_e) -> double
 {
 	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
-	const double epsilon = 6.4e-12;
+	// Photoheating per photoionization = mean ionizing chem-band photon energy minus the Rydberg energy,
+	// matching get_ionization_heating_coefficient in actual_rhs.H. Band edges are 3.29e15 and 8.0e15 Hz
+	// (CHEM_BANDS in CMakeLists.txt), so the mean photon energy is 0.5*(3.29e15+8.0e15)*h.
+	const double mean_photon_energy = RadSystem<DTypeFront>::GetChemBandQuanta(0);
+	const double epsilon = std::max(mean_photon_energy - 13.6 * C::ev2erg, 0.0);
 	// alpha_B * n_e^2 = n_gamma
 	const double photoheating = alpha_B * n_e * n_e * epsilon;
 	const double recombination_cooling = n_e * n_e * lambda_rec(T);
-	const double ion_ff_cooling = n_e * n_e * lambda_ion_ff(T);
+	const double ff_cooling = n_e * n_e * lambda_ff(T);
 	// Assume KI heating and cooling are negligible in the cavity since the neutral fraction is low.
 	const double KI_heating = 0.0;
 	const double KI_cooling = 0.0;
-	return photoheating - recombination_cooling - ion_ff_cooling + KI_heating - KI_cooling;
+	return photoheating - recombination_cooling - ff_cooling + KI_heating - KI_cooling;
 }
 
 auto net_energy_neutral(double T, double n_HI) -> double

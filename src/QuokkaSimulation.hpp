@@ -423,7 +423,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
 	// radiation subcycle
-	void swapRadiationState(amrex::MultiFab &stateOld_cc, amrex::MultiFab const &stateNew_cc);
+	void copyRadiationState(amrex::MultiFab &stateOld_cc, amrex::MultiFab const &stateNew_cc);
+	void copyHydroState(amrex::MultiFab &stateOld_cc, amrex::MultiFab const &stateNew_cc);
 	auto computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int;
 	void advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::FluxRegister *fr_as_crse,
 					  amrex::FluxRegister *fr_as_fine, amrex::MultiFab &state_out);
@@ -1609,6 +1610,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	std::swap(state_old_cc_[lev], state_new_cc_[lev]);
 	if (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		std::swap(state_old_fc_[lev], state_new_fc_[lev]);
+	}
+
+	// The swap leaves state_new_cc_ holding the buffer the previous timestep finished with before its
+	// last transport stage, so its radiation components are stale. The hydro advance below refreshes the
+	// hydro components from state_old_cc_ but not these, so restore them here and keep "state_new_cc_ is
+	// the state being advanced" true for both halves of the state. Anything reading state_new_cc_ before
+	// the radiation subcycle rebuilds it -- operator-split photochemistry, for one -- otherwise consumes
+	// a radiation field one subcycle out of date, silently discarding that subcycle's evolution.
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+		copyRadiationState(state_new_cc_[lev], state_old_cc_[lev]);
 	}
 
 	// check hydro states before update (this can be caused by the flux register!)
@@ -3108,10 +3119,16 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 	}
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
+template <typename problem_t> void QuokkaSimulation<problem_t>::copyRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
 {
 	// copy radiation state variables from stateNew_cc to stateOld_cc
 	amrex::MultiFab::Copy(stateOld, stateNew, nstartHyperbolic_, nstartHyperbolic_, ncompHyperbolic_, 0);
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::copyHydroState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
+{
+	// copy hydro state variables from stateNew_cc to stateOld_cc
+	amrex::MultiFab::Copy(stateOld, stateNew, 0, 0, nvars_, 0);
 }
 
 template <typename problem_t>
@@ -3144,18 +3161,16 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	// Temporary state for IMEX stage 2 result (avoids gas_update_factor trick)
 	amrex::MultiFab state_tmp1_cc(grids[lev], dmap[lev], state_new_cc_[lev].nComp(), nghost_cc_);
 
+	amrex::MultiFab dustHeatingSource;
+	if constexpr (ISM_Traits<problem_t>::dust_chemical_band_absorption) {
+		dustHeatingSource.define(grids[lev], dmap[lev], 1, 0);
+		dustHeatingSource.setVal(0.0);
+	}
+
 	// perform subcycle
 	auto const &dx = geom[lev].CellSizeArray();
 	amrex::Real time_subcycle = time;
 	for (int i = 0; i < nsubSteps; ++i) {
-		if (i > 0) {
-			// since we are starting a new substep, we need to copy radiation state from
-			//     new state vector to old state vector
-			// (this is not necessary for the i=0 substep because we have already swapped
-			//  the full hydro+radiation state vectors at the beginning of the level advance)
-			swapRadiationState(state_old_cc_[lev], state_new_cc_[lev]);
-		}
-
 		// We use the three-stage IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
 
 		// failure counter for: matter-radiation coupling, dust temperature, outer iteration
@@ -3179,16 +3194,33 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		amrex::MultiFab userEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
 		amrex::MultiFab userReducedFlux(grids[lev], dmap[lev], 3 * Physics_Traits<problem_t>::nGroups, nghost);
 
+#ifdef PHOTOCHEMISTRY
+		if (enablePhotoChemistry_ == 1) {
+			std::array<amrex::MultiFab const *, AMREX_SPACEDIM> fc_ptrs{};
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				fc_ptrs[0] = &state_new_fc_[lev][0];
+#if (AMREX_SPACEDIM >= 2)
+				fc_ptrs[1] = &state_new_fc_[lev][1];
+#endif
+#if (AMREX_SPACEDIM == 3)
+				fc_ptrs[2] = &state_new_fc_[lev][2];
+#endif
+			}
+			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
+										 min_density_allowed, dustHeatingSource);
+		}
+#endif
+
 		// === Stage 1: trivial U^(1) = U^n; skipped ===
 
 		// === Stage 2: explicit Forward Euler + implicit source terms on state_tmp1 ===
 
 		if constexpr (IMEX_Aim_22 > 0.0) {
 			// Copy state_new (hydro-updated) -> state_tmp1 (to preserve gas state)
-			amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], 0, 0, state_tmp1_cc.nComp(), 0);
+			copyHydroState(state_tmp1_cc, state_new_cc_[lev]);
 
-			// Forward Euler: overwrites radiation vars in state_tmp1 from state_old
-			//   state_tmp1_rad = state_old_rad + dt * Aex_21 * s(state_old_rad)
+			// Forward Euler: overwrites radiation vars in state_tmp1 from state_new
+			//   state_tmp1_rad = state_new_rad + dt * Aex_21 * s(state_new_rad)
 			//   state_tmp1_gas = gas_n (unchanged by PredictStep)
 			advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine, state_tmp1_cc);
 
@@ -3217,6 +3249,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				auto const &radFluxSource_arr = radFluxSource.array(iter);
 				auto const &userEnergySource_arr = userEnergySource.array(iter);
 				auto const &userReducedFlux_arr = userReducedFlux.array(iter);
+				auto const dustHeatingSource_arr = ISM_Traits<problem_t>::dust_chemical_band_absorption ? dustHeatingSource.const_array(iter)
+															: amrex::Array4<const amrex::Real>{};
 				RadSystem<problem_t>::AddRadSource(userEnergySource_arr, userReducedFlux_arr, indexRange, dx, prob_lo, prob_hi,
 								   time_subcycle + dt_radiation);
 				RadSystem<problem_t>::MergeUserRadSource(radEnergySource_arr, radFluxSource_arr, userEnergySource_arr, userReducedFlux_arr,
@@ -3238,9 +3272,10 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					    stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage2_implicit, 1.0, dustGasInteractionCoeff_,
 					    rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 				} else {
-					RadSystem<problem_t>::AddSourceTermsMultiGroup(
-					    stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage2_implicit, 1.0, dustGasInteractionCoeff_,
-					    rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
+					RadSystem<problem_t>::AddSourceTermsMultiGroup(stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange,
+										       dt_stage2_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
+										       tempFloor, p_iteration_counter, p_iteration_failure_counter,
+										       dustHeatingSource_arr, cons_fc_arr);
 				}
 			}
 		}
@@ -3326,6 +3361,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			auto const &radFluxSource_arr = radFluxSource.array(iter);
 			auto const &userEnergySource_arr = userEnergySource.array(iter);
 			auto const &userReducedFlux_arr = userReducedFlux.array(iter);
+			auto const dustHeatingSource_arr =
+			    ISM_Traits<problem_t>::dust_chemical_band_absorption ? dustHeatingSource.const_array(iter) : amrex::Array4<const amrex::Real>{};
 			RadSystem<problem_t>::AddRadSource(userEnergySource_arr, userReducedFlux_arr, indexRange, dx, prob_lo, prob_hi,
 							   time_subcycle + dt_radiation);
 			RadSystem<problem_t>::MergeUserRadSource(radEnergySource_arr, radFluxSource_arr, userEnergySource_arr, userReducedFlux_arr, indexRange);
@@ -3346,27 +3383,11 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 										dt_stage3_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
 										tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 			} else {
-				RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, radFluxSource_arr, indexRange,
-									       dt_stage3_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
-									       tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
+				RadSystem<problem_t>::AddSourceTermsMultiGroup(
+				    stateNew_cc, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage3_implicit, 1.0, dustGasInteractionCoeff_, rad_tol,
+				    rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter, dustHeatingSource_arr, cons_fc_arr);
 			}
 		}
-#ifdef PHOTOCHEMISTRY
-		if (enablePhotoChemistry_ == 1) {
-			std::array<amrex::MultiFab const *, AMREX_SPACEDIM> fc_ptrs{};
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				fc_ptrs[0] = &state_new_fc_[lev][0];
-#if (AMREX_SPACEDIM >= 2)
-				fc_ptrs[1] = &state_new_fc_[lev][1];
-#endif
-#if (AMREX_SPACEDIM == 3)
-				fc_ptrs[2] = &state_new_fc_[lev][2];
-#endif
-			}
-			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, 1, max_density_allowed,
-										 min_density_allowed);
-		}
-#endif
 
 		if (print_rad_counter_) {
 			auto *h_iteration_counter = iteration_counter.copyToHost();
@@ -3455,20 +3476,20 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 	}
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
+	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
 			       PostInterpState);
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_out); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld_cc = state_old_cc_[lev].const_array(iter);
+		auto const &stateOld_cc = state_new_cc_[lev].const_array(iter);
 		auto const &stateNew_cc = state_out.array(iter);
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			cons_fc_arr[0] = state_old_fc_[lev][0].const_array(iter);
-			cons_fc_arr[1] = state_old_fc_[lev][1].const_array(iter);
+			cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
+			cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
 #if (AMREX_SPACEDIM == 3)
-			cons_fc_arr[2] = state_old_fc_[lev][2].const_array(iter);
+			cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
 #endif
 		}
 		auto [fluxArrays, fluxDiffusiveArrays] = computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx, cons_fc_arr);
@@ -3520,15 +3541,15 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld_cc = state_old_cc_[lev].const_array(iter);
+		auto const &stateOld_cc = state_new_cc_[lev].const_array(iter);
 		auto const &stateInter_cc = state_inter.const_array(iter);
 		auto const &stateNew_cc = state_new_cc_[lev].array(iter);
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			cons_fc_arr[0] = state_old_fc_[lev][0].const_array(iter);
-			cons_fc_arr[1] = state_old_fc_[lev][1].const_array(iter);
+			cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
+			cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
 #if (AMREX_SPACEDIM == 3)
-			cons_fc_arr[2] = state_old_fc_[lev][2].const_array(iter);
+			cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
 #endif
 		}
 		auto [fluxArraysOld, fluxDiffusiveArraysOld] = computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx, cons_fc_arr);

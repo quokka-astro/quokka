@@ -669,7 +669,8 @@ template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
 						    amrex::Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double const tol_h,
 						    double const tol_rel_h, double const tempFloor_local, int *p_iteration_counter,
-						    int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
+						    int *p_iteration_failure_counter, amrex::Array4<const amrex::Real> const &dustHeatingSource,
+						    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
@@ -698,6 +699,10 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		const double c = c_light_;
 		const double chat = c_hat_;
 		const double dustGasCoeff_local = dustGasCoeff;
+
+		// subcycleRadiationAtLevel leaves the source fab undefined -- and so this handle empty -- unless the
+		// problem absorbs chemical-band photons onto dust, so the condition guards the load, not just its value.
+		const double Q_dust = dust_chemical_band_absorption_ ? dustHeatingSource(i, j, k) * dt : 0.0;
 
 		// load fluid properties
 		const double rho = consPrev(i, j, k, gasDensity_index);
@@ -833,13 +838,13 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					if constexpr (!enable_photoelectric_heating_) {
 						// gas + radiation + dust
 						updated_energy = SolveGasDustRadiationEnergyExchange(
-						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy, tol,
-						    tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
+						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, Q_dust, radBoundaries_g_copy,
+						    tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 					} else {
 						// gas + radiation + dust + photoelectric heating
 						updated_energy = SolveGasDustRadiationEnergyExchangeWithPE(
-						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy, tol,
-						    tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
+						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, Q_dust, radBoundaries_g_copy,
+						    tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 					}
 				}
 
