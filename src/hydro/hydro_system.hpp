@@ -1400,6 +1400,13 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 			cs_L = cs_iso_;
 			cs_R = cs_iso_;
+
+			// total and auxiliary internal energy are not evolved under an isothermal EOS;
+			// zero them here so the Riemann solvers never see NaN placeholders
+			E_L = 0.0;
+			E_R = 0.0;
+			Eint_L = 0.0;
+			Eint_R = 0.0;
 		} else {
 			if constexpr (reconstruct_eint) {
 				// compute pressure from specific internal energy
