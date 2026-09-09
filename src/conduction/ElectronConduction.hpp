@@ -105,12 +105,12 @@ template <typename problem_t> class ElectronConduction
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
 			amrex::ignore_unused(state_fc_x0
 #if AMREX_SPACEDIM >= 2
-					      ,
-					      state_fc_x1
+					     ,
+					     state_fc_x1
 #endif
 #if AMREX_SPACEDIM == 3
-					      ,
-					      state_fc_x2
+					     ,
+					     state_fc_x2
 #endif
 			);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
