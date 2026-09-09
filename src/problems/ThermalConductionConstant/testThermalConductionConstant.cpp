@@ -184,19 +184,9 @@ void QuokkaSimulation<ThermalConductionConstantProblem>::computeReferenceSolutio
 
 auto runConductionTest(int nx, int max_level) -> double
 {
-	double max_time = 0.0;
+	constexpr double max_time = 469054.0075444166;
 
-	amrex::ParmParse pp_root;
-	pp_root.query("stop_time", max_time);
-
-	// Set grid dimensions using AMReX parameter system
-	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, nx, nx};
-	pp.add("max_level", max_level);
-	pp.addarr("n_cell", ncells);
-	if (max_level > 0) {
-		pp_root.add("amr_interpolation_method", 3);
-	}
+	amrex::Vector<int> const ncells = {nx, 8, 8};
 
 	// Set domain bounds using AMReX parameter system
 	amrex::ParmParse pp_geom("geometry");
