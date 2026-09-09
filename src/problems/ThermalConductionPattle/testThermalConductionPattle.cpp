@@ -19,7 +19,7 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
-/** Spitzer thermal conduction test problem (Pattle IC)
+/** Spitzer thermal conduction test problem  with Pattle IC
 kappa = kappa0*T^2.5. Initial condition is the Pattle (1959) self-similar solution evaluated at
 t = spitzer_t_start. The reference solution is the same Pattle profile evaluated at t = tNew_[0] + spitzer_t_start.
 This test estimates the error across different resolutions and compares the convergence slope against unity.
