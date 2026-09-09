@@ -21,16 +21,13 @@
 
 /** Constant-conductivity thermal conduction test problem
 kappa = const. Initial condition is a smooth Gaussian temperature profile, and the reference solution is the
-same Gaussian profile with a diffusion width that grows with time (exact linear-diffusion solution). This test
-runs at a single resolution, with one level of refinement active (tests AMR), and compares the resulting error
-norm against a pre-computed reference value.
+same Gaussian profile with a diffusion width that grows with time. 
 Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does
 not have time to move and the energy evolution is purely due to conduction. */
 
 constexpr double Eint0 = 2.505e-8;   // Gaussian peak (equivalent to T = 2.e8 K)
 constexpr double Efloor = 2.505e-11; // equivalent to T = 2.e6 K
 const double rho0 = 0.1;	      // 1/cm^3
-constexpr double Lref = 7.714e+17;   // quarter box length, fixes region of refinement
 constexpr double sigma = 2.410685615625e+17; // width of the initial Gaussian, in cm (amr2-branch value)
 constexpr double D = 4.396303164750053e+28;  // fixed diffusion coefficient for the Gaussian solution, in cm^2/s (amr2-branch value)
 struct ThermalConductionConstantProblem {};
@@ -50,29 +47,6 @@ template <> struct Physics_Traits<ThermalConductionConstantProblem> : DefaultPhy
 	static constexpr bool is_mhd_enabled = false;
 };
 
-namespace
-{
-struct ExactSolutionParams {
-	amrex::Real sigma2_t = 0.0;
-};
-
-auto computeExactSolutionParams(amrex::Real t) -> ExactSolutionParams
-{
-	ExactSolutionParams p;
-	p.sigma2_t = sigma * sigma + 2.0 * D * t;
-	return p;
-}
-
-AMREX_GPU_HOST_DEVICE auto evalExactEint(ExactSolutionParams const &p, amrex::Real xlow, amrex::Real xhigh, amrex::Real dx) -> amrex::Real
-{
-	amrex::Real Eint = Efloor;
-	const amrex::Real erfx_low = std::erf(xlow / std::sqrt(2.0 * p.sigma2_t));
-	const amrex::Real erfx_high = std::erf(xhigh / std::sqrt(2.0 * p.sigma2_t));
-	Eint += Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx;
-	return Eint;
-}
-} // namespace
-
 template <> void QuokkaSimulation<ThermalConductionConstantProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -81,14 +55,15 @@ template <> void QuokkaSimulation<ThermalConductionConstantProblem>::setInitialC
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
-
-	const ExactSolutionParams params = computeExactSolutionParams(/*t=*/0.0);
+	const amrex::Real sigma2_t = sigma * sigma; // t = 0
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real xlow = prob_lo[0] + i * dx[0];
 		const amrex::Real xhigh = prob_lo[0] + (i + 1) * dx[0];
-		const amrex::Real Eint = evalExactEint(params, xlow, xhigh, dx[0]);
+		const amrex::Real erfx_low = std::erf(xlow / std::sqrt(2.0 * sigma2_t));
+		const amrex::Real erfx_high = std::erf(xhigh / std::sqrt(2.0 * sigma2_t));
+		const amrex::Real Eint = Efloor + Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx[0];
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
@@ -100,52 +75,6 @@ template <> void QuokkaSimulation<ThermalConductionConstantProblem>::setInitialC
 	});
 }
 
-template <> void QuokkaSimulation<ThermalConductionConstantProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
-{
-	// tag cells for testing AMR on the Gaussian problem
-	const double refine_Lmax = Lref;
-
-	const auto prob_lo = geom[lev].ProbLoArray();
-	const auto dx = geom[lev].CellSizeArray();
-	const auto tag = tags.arrays();
-
-	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
-		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
-		amrex::Real y0 = 0.0;
-		amrex::Real y1 = 1.0;
-		amrex::Real z0 = 0.0;
-		amrex::Real z1 = 1.0;
-
-#if AMREX_SPACEDIM >= 2
-		y0 = prob_lo[1] + (j * dx[1]);
-		y1 = prob_lo[1] + ((j + 1) * dx[1]);
-#endif
-#if AMREX_SPACEDIM == 3
-		z0 = prob_lo[2] + (k * dx[2]);
-		z1 = prob_lo[2] + ((k + 1) * dx[2]);
-#endif
-
-		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
-			bool const in_region = (std::abs(x) < refine_Lmax);
-
-			amrex::ignore_unused(y, z);
-
-			if (in_region) {
-				tag[bx](i, j, k) = amrex::TagBox::SET;
-			}
-		};
-
-		for (auto const &x : {x0, x1}) {
-			for (auto const &y : {y0, y1}) {
-				for (auto const &z : {z0, z1}) {
-					tagIfPointInRegion(x, y, z);
-				}
-			}
-		}
-	});
-	amrex::Gpu::streamSynchronize();
-}
 
 template <>
 void QuokkaSimulation<ThermalConductionConstantProblem>::computeReferenceSolution(amrex::MultiFab &ref,
@@ -154,8 +83,7 @@ void QuokkaSimulation<ThermalConductionConstantProblem>::computeReferenceSolutio
 {
 	const amrex::Real t = tNew_[0];
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
-
-	const ExactSolutionParams params = computeExactSolutionParams(t);
+	const amrex::Real sigma2_t = sigma * sigma + 2.0 * D * t;
 
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -165,7 +93,9 @@ void QuokkaSimulation<ThermalConductionConstantProblem>::computeReferenceSolutio
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const xlow = prob_lo[0] + i * dx[0];
 			amrex::Real const xhigh = prob_lo[0] + (i + 1) * dx[0];
-			amrex::Real const Eint_exact = evalExactEint(params, xlow, xhigh, dx[0]);
+			amrex::Real const erfx_low = std::erf(xlow / std::sqrt(2.0 * sigma2_t));
+			amrex::Real const erfx_high = std::erf(xhigh / std::sqrt(2.0 * sigma2_t));
+			amrex::Real const Eint_exact = Efloor + Eint0 * (sigma * std::sqrt(M_PI / 2.0)) * (erfx_high - erfx_low) / dx[0];
 
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
