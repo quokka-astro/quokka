@@ -25,7 +25,7 @@
 /** Spitzer thermal conduction test problem with Gaussian IC--
 While there is no analytic solution for a Gaussian evolving under Spitzer conduction, we can compare against a
  high-resolution numerical reference solution. The reference solution was generated using nx=256 in 1D and compared
- agains this the convergence rate should be close to -2.0. For higher convergence rates go upto nx=4096. Also note
+ against this the convergence rate should be close to -2.0. For higher convergence rates go upto nx=4096. Also note
  that since there is a natural discontinuity in the solution the convergence rate is expected to be -1.0 for the whole domain,
  but inside the discontinuity the convergence rate is expected to be -2.0. This test proves that the code is
  converges as expected for Spitzer thermal conduction.
