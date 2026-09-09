@@ -19,13 +19,9 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
-/** Constant-conductivity thermal conduction test problem (AMR)
-kappa = const. Initial condition is a smooth Gaussian temperature profile, and the reference solution is the
-same Gaussian profile with a diffusion width that grows with time (exact linear-diffusion solution). This test
-runs at a single resolution, with one level of refinement active (tests AMR), and compares the resulting error
-norm against a pre-computed reference value.
-Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does
-not have time to move and the energy evolution is purely due to conduction. */
+/* Identical to ThermalConductionConstant problem but now we are checking for AMR.
+Lref has been chosen to be an intger of the box size to remove dependence on box size.
+*/
 
 constexpr double Eint0 = 2.505e-8;   // Gaussian peak (equivalent to T = 2.e8 K)
 constexpr double Efloor = 2.505e-11; // equivalent to T = 2.e6 K
