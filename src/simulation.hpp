@@ -90,6 +90,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
 #include "particles/particle_deposition.hpp"
+#include "particles/particle_utils.hpp"
 #endif // AMREX_SPACEDIM == 3
 
 // internal headers
@@ -3705,6 +3706,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 
 			// Initialize particles through user-defined function
 			createInitialSinkParticles();
+
+			// The accretion accumulators (mdot, Lx, Ly, Lz) belong to the accretion machinery, not to
+			// the problem generator: ComputeAccretionInBox() updates the angular momentum with +=, so it
+			// must start from zero. Problem generators typically seed sinks with InitFromAsciiFile(),
+			// which only writes the components present in the file and leaves the rest indeterminate.
+			// Zero them here so every problem gets this for free. Not needed on restart, where the
+			// checkpoint restores every component.
+			quokka::ParticleUtils::zeroRealComponentsFrom(SinkParticles.get(), quokka::SinkParticleMdotIdx);
 		}
 	}
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
