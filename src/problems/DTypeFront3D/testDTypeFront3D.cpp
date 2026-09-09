@@ -697,13 +697,17 @@ auto integrate_front(amrex::Real dt_target, amrex::Real R0, amrex::Real v0, amre
 		const amrex::Real area = 4.0_rt * M_PI * R * R;
 		// Fraction of the swept-up gas that has been left behind inside the cavity as ionized gas, from
 		// integrating n_i = n_0 (R_s/r)^{3/2} out to R. See the derivation above.
-		const amrex::Real ionized_frac = 2.0_rt * std::pow(R_s / R, 1.5_rt);
+		// const amrex::Real ionized_frac = 2.0_rt * std::pow(R_s / R, 1.5_rt);
 		// Shell mass and its radial derivative, from the one expression, so they stay consistent.
-		const amrex::Real mass = (4.0_rt / 3.0_rt) * M_PI * R * R * R * rho_0 * (1.0_rt - ionized_frac);
-		const amrex::Real dmass_dR = area * rho_0 * (1.0_rt - 0.5_rt * ionized_frac);
+		// const amrex::Real mass = (4.0_rt / 3.0_rt) * M_PI * R * R * R * rho_0 * (1.0_rt - ionized_frac);
+		// const amrex::Real dmass_dR = area * rho_0 * (1.0_rt - 0.5_rt * ionized_frac);
+		// All the swept-up gas is held in the shell, with no allowance for the mass retained in the cavity as
+		// ionized gas. This double-counts that gas against the n_i used for P_i below, but it keeps M(R) > 0 at
+		// R = R_s so the integration can start there.
+		const amrex::Real mass = (4.0_rt / 3.0_rt) * M_PI * R * R * R * rho_0;
+		const amrex::Real dmass_dR = area * rho_0;
 		const amrex::Real P_i = rho_0 * std::pow(R_s / R, 1.5_rt) * c_s * c_s;
-		// Column density of the shell, and the fraction of the optical band it absorbs. Only the mass actually
-		// in the shell attenuates, so this uses the corrected M(R) rather than the full swept-up mass.
+		// Column density of the shell, and the fraction of the optical band it absorbs.
 		const amrex::Real Sigma = mass / area;
 		const amrex::Real f_absorbed = -std::expm1(-kappa_opt * Sigma); // = 1 - exp(-tau), accurate for small tau
 		const amrex::Real L_abs = L_ion + L_optical * f_absorbed;
