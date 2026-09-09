@@ -161,7 +161,7 @@ void QuokkaSimulation<ThermalConductionSpitzerGaussianProblem>::computeReference
 
 auto runConductionTest(int nx) -> double
 {
-	constexpr double max_time = 660942.2643981476;
+	constexpr double max_time =  330471.1321990738;
 	constexpr int max_level = 0;
 
 	// Set grid dimensions using AMReX parameter system
