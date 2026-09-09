@@ -14,8 +14,8 @@ amr.v = 1      # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell = [32, 32, 32]
-amr.max_level = 1  # number of levels = max_level + 1
+amr.n_cell = [64, 64, 64]
+amr.max_level = 0  # number of levels = max_level + 1
 amr.blocking_factor = 16  # grid size must be divisible by this
 
 # ghost-cell interpolation at the coarse-fine AMR boundary: the default
