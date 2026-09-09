@@ -1,0 +1,1 @@
+quokka_add_problem(JOB_NAME ThermalConductionSpitzerPattle PRIORITY 100)
