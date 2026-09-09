@@ -390,6 +390,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 			     quokka::direction dir);
 	void FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
 				      amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array);
+	void FillPatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
+				amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array);
 	void GetData(int lev, amrex::Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime, quokka::centering cen,
 		     quokka::direction dir);
 	void GetDataFaceArray(int lev, amrex::Real time, amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> &data_array,
@@ -2555,7 +2557,9 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 			int_state_new_fc_ptr[idim] = &int_state_new_fc[idim];
 			int_state_old_fc_ptr[idim] = &int_state_old_fc[idim];
 		}
-		FillCoarsePatchFaceArray(level, time, int_state_new_fc_ptr, 0, ncomp_per_dim_fc, BCs_array);
+		// preserves the existing fine field on overlapping coverage; see FillPatchFaceArray
+		FillPatchFaceArray(level, time, int_state_new_fc_ptr, 0, ncomp_per_dim_fc, BCs_array);
+		// old-time data is invalidated by the tOld_ sentinel set above, so a coarse-only fill suffices
 		FillCoarsePatchFaceArray(level, time, int_state_old_fc_ptr, 0, ncomp_per_dim_fc, BCs_array);
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			std::swap(int_state_new_fc[idim], state_new_fc_[level][idim]);
@@ -3445,6 +3449,55 @@ void AMRSimulation<problem_t>::FillCoarsePatchFaceArray(int lev, amrex::Real tim
 
 	amrex::InterpFromCoarseLevel(mf_array, time, cmf_ptrs, 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
 				     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0);
+}
+
+// Fill face-centred data for all directions simultaneously, preserving existing fine data on
+// overlapping coverage and divergence-preservingly interpolating from coarse elsewhere.
+template <typename problem_t>
+void AMRSimulation<problem_t>::FillPatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
+						  amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array)
+{
+	BL_PROFILE("AMRSimulation::FillPatchFaceArray()"); // NOLINT(misc-const-correctness)
+
+	AMREX_ASSERT(lev > 0);
+
+	amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> cmf_array;
+	amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> fmf_array;
+	amrex::Vector<amrex::Real> ctime;
+	amrex::Vector<amrex::Real> ftime;
+	GetDataFaceArray(lev - 1, time, cmf_array, ctime);
+	GetDataFaceArray(lev, time, fmf_array, ftime);
+
+	amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> cmf;
+	for (int itime = 0; itime < static_cast<int>(ctime.size()); ++itime) {
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> level_mfs;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			level_mfs[idim] = cmf_array[idim][itime];
+		}
+		cmf.push_back(level_mfs);
+	}
+	amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> fmf;
+	for (int itime = 0; itime < static_cast<int>(ftime.size()); ++itime) {
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> level_mfs;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			level_mfs[idim] = fmf_array[idim][itime];
+		}
+		fmf.push_back(level_mfs);
+	}
+
+	using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> finePhysicalBoundaryFunctor;
+	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarsePhysicalBoundaryFunctor;
+
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		const auto dir = static_cast<quokka::direction>(idim);
+		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
+		finePhysicalBoundaryFunctor[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev], BCs_array[idim], boundaryFunctor);
+		coarsePhysicalBoundaryFunctor[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev - 1], BCs_array[idim], boundaryFunctor);
+	}
+
+	amrex::FillPatchTwoLevels(mf_array, time, cmf, ctime, fmf, ftime, 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
+				  finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0);
 }
 
 // utility to copy in data from state_old_cc_[lev] and/or state_new_cc_[lev]
