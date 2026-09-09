@@ -19,12 +19,15 @@ set(_pi_hand_written_species_args
   POWER_LAW_INDEX 0 # jaff network.radiation.power_law_index
 )
 
-foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten)
-  set(_pi_is_jaff FALSE)
+# All of these share EOS/photoionization (a generic multi-gamma EOS) and differ
+# only in their network. 'helium' is the H + He network of RAMSES-RT (Rosdahl
+# et al. 2013) sect. 3.3 / appendix E: 6 species and 3 radiation bands, all
+# derived from its generated _parameters + jaffgen.toml because IS_JAFF is TRUE.
+foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten helium)
+  set(_pi_is_jaff TRUE)
   set(_pi_species_args "")
-  if (_pi_name STREQUAL "photoionization_H_caseB")
-    set(_pi_is_jaff TRUE)
-  else()
+  if (_pi_name STREQUAL "photoionization_H_caseB_handwritten")
+    set(_pi_is_jaff FALSE)
     set(_pi_species_args ${_pi_hand_written_species_args})
   endif()
 

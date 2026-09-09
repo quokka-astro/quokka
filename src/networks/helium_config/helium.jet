@@ -1,0 +1,39 @@
+! Hydrogen + helium photoionization network, following the non-equilibrium
+! thermochemistry of RAMSES-RT (Rosdahl et al. 2013), section 3.3 and appendix E.
+!
+! Species (6): H, H+, He, He+, He++, e-
+!
+! Three radiation bands bordered by the H/He ionization energies (their eq. 44):
+!     ]13.6, 24.59]   ]24.59, 54.42]   ]54.42, 61.0]  eV
+! (see jaffgen.toml; the top band is capped at a finite 61.0 eV)
+!
+! Photoionization cross sections are NOT taken from the paper's appendix E4
+! Verner (1996) analytic fits. They come from jaff's own tabulated cross
+! sections, band-averaged over the bands above with the configured power-law
+! photon spectrum. The energy after "PHOTO," is the ionization threshold in eV;
+! with radiation bands enabled jaff overwrites the placeholder rate with the
+! band-averaged coefficient, so that number is documentation of the threshold.
+!
+! Recombination uses the case B rates of Hui & Gnedin (1997) (appendix E2),
+! consistent with the on-the-spot approximation (their section 3.3.2) and with
+! the existing photoionization_H_caseB network. Collisional ionization uses
+! Cen (1992) (appendix E1). Both are supplied as chemRate<N> functions in the
+! companion .jfunc file, since they are too long for the rate column here.
+!
+! IMPORTANT: reaction order below fixes the chemRate<N>/deltaE<N> indices used
+! in helium.jet.jfunc. Renumber those functions if lines are inserted or moved.
+
+! --- Photoionization (indices 0-2) -------------------------------------------
+H   -> H+ + E                  []         PHOTO, 13.60
+He  -> He+ + E                 []         PHOTO, 24.59
+He+ -> He++ + E                []         PHOTO, 54.42
+
+! --- Case B recombination (indices 3-5) --------------------------------------
+H+ + E -> H                    []         chemRate3(tgas)
+He+ + E -> He                  []         chemRate4(tgas)
+He++ + E -> He+                []         chemRate5(tgas)
+
+! --- Collisional ionization by electrons (indices 6-8) -----------------------
+H + E -> H+ + E + E            []         chemRate6(tgas)
+He + E -> He+ + E + E          []         chemRate7(tgas)
+He+ + E -> He++ + E + E        []         chemRate8(tgas)

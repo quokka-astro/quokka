@@ -1,0 +1,171 @@
+# Auxiliary functions for the hydrogen + helium photoionization network.
+# Rate coefficients and cooling terms follow RAMSES-RT (Rosdahl et al. 2013),
+# appendix E. Temperature is 'tgas' in Kelvin (lower case is required here;
+# unlike the .jet rate column, .jfunc bodies are not case-normalized).
+#
+# Function index N in chemRate<N>/deltaE<N> is the 0-based position of the
+# reaction in helium.jet. Renumber if that file's reaction order changes.
+
+# All @var declarations must precede the first @function.
+@var kB = 1.380649e-16     # Boltzmann's constant, erg/K
+@var eV = 1.602176634e-12  # electron volt, erg
+
+# Dimensionless temperature ratios of appendix E2, T_ion / T.
+@var T_HI = 315614.0
+@var T_HeI = 570670.0
+@var T_HeII = 1263030.0
+
+# ---------------------------------------------------------------------------
+# Case B recombination, appendix E2 (Hui & Gnedin 1997), cm^3/s.
+# Case B (not A) is the on-the-spot approximation of their section 3.3.2:
+# recombinations directly to the ground state emit a photon that is assumed
+# to be reabsorbed locally, so they are not counted.
+# ---------------------------------------------------------------------------
+
+# Reaction 3: H+ + e- -> H
+@function chemRate3(tgas)
+    lam = T_HI / tgas
+    x = 2.753e-14 * lam**1.5 / (1.0 + (lam / 2.74)**0.407)**2.242
+    return x
+
+# Reaction 4: He+ + e- -> He
+@function chemRate4(tgas)
+    lam = T_HeI / tgas
+    x = 1.26e-14 * lam**0.75
+    return x
+
+# Reaction 5: He++ + e- -> He+
+@function chemRate5(tgas)
+    lam = T_HeII / tgas
+    x = 5.506e-14 * lam**1.5 / (1.0 + (lam / 2.74)**0.407)**2.242
+    return x
+
+# ---------------------------------------------------------------------------
+# Collisional ionization by electrons, appendix E1 (Cen 1992), cm^3/s.
+# Common form: A * sqrt(T) * (1 + sqrt(T/1e5))**-1 * exp(-T_exc/T).
+# ---------------------------------------------------------------------------
+
+# Reaction 6: H + e- -> H+ + e- + e-
+@function chemRate6(tgas)
+    x = 5.85e-11 * sqrt(tgas) / (1.0 + sqrt(tgas / 1.0e5)) * exp(-157809.1 / tgas)
+    return x
+
+# Reaction 7: He + e- -> He+ + e- + e-
+@function chemRate7(tgas)
+    x = 2.38e-11 * sqrt(tgas) / (1.0 + sqrt(tgas / 1.0e5)) * exp(-285335.4 / tgas)
+    return x
+
+# Reaction 8: He+ + e- -> He++ + e- + e-
+@function chemRate8(tgas)
+    x = 5.68e-12 * sqrt(tgas) / (1.0 + sqrt(tgas / 1.0e5)) * exp(-631515.0 / tgas)
+    return x
+
+# ---------------------------------------------------------------------------
+# Photoheating, erg deposited per ionization event (positive = heating).
+#
+# Appendix E eq. A16 gives the photoheating rate as a sum over bands of
+# n_j * c * N_i * (eavg_i * sigmaE_ij - eps_j * sigmaN_ij), i.e. each
+# ionization deposits the photon energy in excess of the ionization
+# threshold. The per-event energy is therefore <E>_band - E_threshold.
+#
+# jaff computes the band-average photon energy internally but does not expose
+# it to this layer, so these are hand-set constants. They were evaluated for
+# the configured spectrum (power_law_index = 0, so photon number n(E) ~ E^-2)
+# over the bands in jaffgen.toml:
+#
+#   band 0 [13.60, 24.59] eV  ->  <E> = 18.023 eV
+#   band 1 [24.59, 54.42] eV  ->  <E> = 35.637 eV
+#   band 2 [54.42, 61.00] eV  ->  <E> = 57.585 eV
+#
+# A single deltaE<N> cannot depend on which band did the ionizing, so each
+# value below is the band-averaged excess for the LOWEST band that can ionize
+# that species, i.e. the band that dominates its photoionization rate:
+#
+#   reaction 0  H    band 0:  18.023 - 13.60 =  4.423 eV
+#   reaction 1  He   band 1:  35.637 - 24.59 = 11.047 eV
+#   reaction 2  He+  band 2:  57.585 - 54.42 =  3.165 eV
+#
+# This underestimates the heating from harder photons absorbed by H and He
+# (e.g. band 2 on H would give 43.98 eV). Recomputing these if the band edges
+# or power_law_index in jaffgen.toml change is required for consistency.
+# ---------------------------------------------------------------------------
+
+# Reaction 0: H -> H+ + e-,  4.423 eV
+@function deltaE0()
+    x = 7.0859e-12
+    return x
+
+# Reaction 1: He -> He+ + e-,  11.047 eV
+@function deltaE1()
+    x = 1.7699e-11
+    return x
+
+# Reaction 2: He+ -> He++ + e-,  3.165 eV
+@function deltaE2()
+    x = 5.0707e-12
+    return x
+
+# ---------------------------------------------------------------------------
+# Radiative cooling, appendix E3 / eq. A17, in erg s^-1 cm^-3.
+#
+# This is the total of the standalone (non-reaction-tied) heating and cooling
+# terms. It is NOT scaled by any reaction rate or density by jaff, so every
+# term carries its own density factors explicitly.
+#
+# Terms, all from appendix E3:
+#   collisional ionization cooling  zeta   (Cen 1992)
+#   collisional excitation cooling  psi    (Cen 1992)
+#   case B recombination cooling    etaB   (Hui & Gnedin 1997)
+#   dielectronic recombination      omega  (Black 1981)
+#   bremsstrahlung                  theta  (Osterbrock & Ferland 2006)
+#
+# The Compton term of appendix E3 is omitted: it depends on the cosmological
+# expansion factor and the CMB temperature, which are not meaningful for the
+# idealized test problems this network targets.
+#
+# Sign convention: the return value is added to the gas energy, so cooling
+# terms are subtracted. Case B eta/alpha are used to stay consistent with the
+# on-the-spot approximation and the recombination rates above.
+# ---------------------------------------------------------------------------
+@function heatingCoolingRate(tgas, n_H0, n_Hp, n_He0, n_Hep, n_He, n_e)
+    # jaff's density-symbol resolver maps the suffix 'p' to a single '+' and
+    # strips only one trailing character, so there is no n_* spelling that
+    # resolves to the doubly-ionized He++ ('n_Hepp' silently stays a free
+    # symbol, 'n_He++' is not parseable). Recover it from the He element sum,
+    # which n_He does resolve to: n_He = n_He0 + n_Hep + n_Hepp.
+    n_Hepp = n_He - n_He0 - n_Hep
+
+    sq = 1.0 + sqrt(tgas / 1.0e5)
+
+    lam_HI = T_HI / tgas
+    lam_HeI = T_HeI / tgas
+    lam_HeII = T_HeII / tgas
+
+    # Collisional ionization cooling
+    zeta_HI = 1.27e-21 * sqrt(tgas) / sq * exp(-157809.1 / tgas)
+    zeta_HeI = 9.38e-22 * sqrt(tgas) / sq * exp(-285335.4 / tgas)
+    zeta_HeII = 4.95e-22 * sqrt(tgas) / sq * exp(-631515.0 / tgas)
+
+    # Collisional excitation cooling
+    psi_HI = 7.5e-19 / sq * exp(-118348.0 / tgas)
+    psi_HeII = 5.54e-17 * tgas**(-0.397) / sq * exp(-473638.0 / tgas)
+
+    # Case B recombination cooling
+    eta_HII = 3.435e-30 * tgas * lam_HI**1.97 / (1.0 + (lam_HI / 2.25)**0.376)**3.72
+    eta_HeII = kB * tgas * 1.26e-14 * lam_HeI**0.75
+    eta_HeIII = 8.0 * 3.435e-30 * tgas * lam_HeII**1.97 / (1.0 + (lam_HeII / 2.25)**0.376)**3.72
+
+    # Dielectronic recombination of He+
+    omega_HeII = 1.24e-13 * tgas**(-1.5) * exp(-470000.0 / tgas) * (1.0 + 0.3 * exp(-94000.0 / tgas))
+
+    # Bremsstrahlung, weighted by charge^2 of each ion
+    theta = 1.42e-27 * sqrt(tgas)
+
+    cooling = (zeta_HI + psi_HI) * n_e * n_H0 \
+        + zeta_HeI * n_e * n_He0 \
+        + (zeta_HeII + psi_HeII + eta_HeII + omega_HeII) * n_e * n_Hep \
+        + eta_HII * n_e * n_Hp \
+        + eta_HeIII * n_e * n_Hepp \
+        + theta * n_e * (n_Hp + n_Hep + 4.0 * n_Hepp)
+
+    return -cooling
