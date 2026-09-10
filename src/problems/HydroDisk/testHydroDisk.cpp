@@ -8,12 +8,16 @@
 ///
 
 #include <cmath>
+#include <fstream>
 #include <optional>
+#include <string>
+#include <vector>
 
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArrayBase.H"
 
+#include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_Print.H"
@@ -47,6 +51,12 @@ namespace
 	constexpr double refine_Hcyl_pc  = 600.0;
 	constexpr double refine_Rcyl     = refine_Rcyl_kpc * 1.0e3 * C::parsec;
 	constexpr double refine_Hcyl     = refine_Hcyl_pc  * C::parsec;
+
+	// Turbulent velocity perturbations (matches MHDDisk's convention)
+	constexpr double turb_target_Mach = 0.5;
+	constexpr int turb_nx = 512;
+	constexpr int turb_ny = 512;
+	constexpr int turb_nz = 512;
 }
 
 struct HDGalaxy {
@@ -96,6 +106,19 @@ template <> struct SimulationData<HDGalaxy> {
 	amrex::Real sn_momentum;
 	amrex::Real sn_remnant_fraction;
 	amrex::Real sn_ejecta_mass{};   // Mej, grams
+
+	// Owning GPU storage for the vx/vy/vz turbulence cubes loaded from binary files.
+	// The generator writes double-precision arrays with dimensions
+	// turb_nx x turb_ny x turb_nz. These device vectors are wrapped in
+	// Array4/Table views during initialization sampling.
+	amrex::Gpu::DeviceVector<amrex::Real> turb_vx_device;
+	amrex::Gpu::DeviceVector<amrex::Real> turb_vy_device;
+	amrex::Gpu::DeviceVector<amrex::Real> turb_vz_device;
+	amrex::Real turb_rescale_factor{};
+
+	int turb_nx{};
+	int turb_ny{};
+	int turb_nz{};
 };
 
 
@@ -138,6 +161,73 @@ double diskDensityAnalytic(double R, double z,
         );
 
     return rho0 * disk_factor * halo_factor;
+}
+
+AMREX_GPU_HOST_DEVICE
+inline auto interpolate_turbulence(
+    const amrex::Array4<const amrex::Real>& table,
+    int nx, int ny, int nz,
+    amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
+{
+    x = amrex::max(0.0, amrex::min(x, static_cast<amrex::Real>(nx-1)));
+    y = amrex::max(0.0, amrex::min(y, static_cast<amrex::Real>(ny-1)));
+    z = amrex::max(0.0, amrex::min(z, static_cast<amrex::Real>(nz-1)));
+
+    int i0 = static_cast<int>(x);
+    int j0 = static_cast<int>(y);
+    int k0 = static_cast<int>(z);
+
+    int i1 = amrex::min(i0+1, nx-1);
+    int j1 = amrex::min(j0+1, ny-1);
+    int k1 = amrex::min(k0+1, nz-1);
+
+    amrex::Real fx = x-i0;
+    amrex::Real fy = y-j0;
+    amrex::Real fz = z-k0;
+
+    auto c000 = table(i0,j0,k0);
+    auto c100 = table(i1,j0,k0);
+    auto c010 = table(i0,j1,k0);
+    auto c110 = table(i1,j1,k0);
+    auto c001 = table(i0,j0,k1);
+    auto c101 = table(i1,j0,k1);
+    auto c011 = table(i0,j1,k1);
+    auto c111 = table(i1,j1,k1);
+
+    return
+        c000*(1-fx)*(1-fy)*(1-fz) +
+        c100*fx*(1-fy)*(1-fz) +
+        c010*(1-fx)*fy*(1-fz) +
+        c110*fx*fy*(1-fz) +
+        c001*(1-fx)*(1-fy)*fz +
+        c101*fx*(1-fy)*fz +
+        c011*(1-fx)*fy*fz +
+        c111*fx*fy*fz;
+}
+
+inline auto
+load_bin_to_device(const std::string &path, std::size_t n_expect) -> amrex::Gpu::DeviceVector<amrex::Real>
+{
+    // Use amrex::Real so this remains compatible if you change precision
+    std::vector<amrex::Real> host(n_expect);
+    std::ifstream f(path, std::ios::binary);
+
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f, ("Cannot open " + path).c_str());
+    const std::size_t total_bytes = n_expect * sizeof(amrex::Real);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-narrowing-conversions)
+    f.read(reinterpret_cast<char*>(host.data()), static_cast<std::streamsize>(total_bytes));
+
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f, ("Error reading " + path).c_str());
+
+    // Allocate on device and copy
+    amrex::Gpu::DeviceVector<amrex::Real> dev(n_expect);
+    amrex::Gpu::copy(amrex::Gpu::hostToDevice, host.begin(), host.end(), dev.begin());
+
+    // Synchronize to ensure data is ready before proceeding
+    amrex::Gpu::synchronize();
+
+    amrex::Print() << "Loaded " << path << " (" << n_expect << " elements)\n";
+    return dev;
 }
 
 template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
@@ -189,6 +279,47 @@ template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
     // Pressure matching: P = cs_disk^2 * rho_transition = cs_cgm^2 * rho_cgm
     userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
 
+    // Load turbulent velocity cubes (once only) and compute the velocity rescale factor
+    static bool isTurbSamplingDone = false;
+    if (!isTurbSamplingDone) {
+
+        userData_.turb_nx = turb_nx;
+        userData_.turb_ny = turb_ny;
+        userData_.turb_nz = turb_nz;
+
+        amrex::ParmParse pp_turb("hd_galaxy");
+
+        std::string turb_vx_file;
+        std::string turb_vy_file;
+        std::string turb_vz_file;
+
+        pp_turb.get("turb_vx_file", turb_vx_file);
+        pp_turb.get("turb_vy_file", turb_vy_file);
+        pp_turb.get("turb_vz_file", turb_vz_file);
+
+        const std::size_t n_turb =
+            static_cast<std::size_t>(turb_nx) *
+            static_cast<std::size_t>(turb_ny) *
+            static_cast<std::size_t>(turb_nz);
+
+        userData_.turb_vx_device = load_bin_to_device(turb_vx_file, n_turb);
+        userData_.turb_vy_device = load_bin_to_device(turb_vy_file, n_turb);
+        userData_.turb_vz_device = load_bin_to_device(turb_vz_file, n_turb);
+
+        constexpr double turb_rescale = turb_target_Mach * quokka::EOS_Traits<HDGalaxy>::cs_disk;
+        userData_.turb_rescale_factor = turb_rescale;
+
+        amrex::Print()
+            << "Turbulence loaded from binary files:\n"
+            << " vx = " << turb_vx_file << "\n"
+            << " vy = " << turb_vy_file << "\n"
+            << " vz = " << turb_vz_file << "\n"
+            << " cube size = " << turb_nx << " x " << turb_ny << " x " << turb_nz << "\n"
+            << "Velocity scale = " << turb_rescale / 1.0e5 << " km/s\n";
+
+        isTurbSamplingDone = true;
+    }
+
     // amrex::Print() << "HDGalaxy:"
                 //    << " Q_mean = "    << userData_.Q_mean
                 //    << ", Mc = "       << userData_.Mc
@@ -212,6 +343,32 @@ template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx       = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_cc                        = grid_elem.array_;
+
+	const int turb_nx = userData_.turb_nx;
+	const int turb_ny = userData_.turb_ny;
+	const int turb_nz = userData_.turb_nz;
+
+	// Array4 views over the device buffers loaded in preCalculateInitialConditions
+	// (indices run [0,turb_nx-1] x [0,turb_ny-1] x [0,turb_nz-1], ncomp=1).
+	const amrex::Dim3 turb_arr_lo{.x=0, .y=0, .z=0};
+	const amrex::Dim3 turb_arr_hi{.x=turb_nx, .y=turb_ny, .z=turb_nz};
+	const amrex::Array4<const amrex::Real> turb_vx_tab(userData_.turb_vx_device.data(), turb_arr_lo, turb_arr_hi, 1);
+	const amrex::Array4<const amrex::Real> turb_vy_tab(userData_.turb_vy_device.data(), turb_arr_lo, turb_arr_hi, 1);
+	const amrex::Array4<const amrex::Real> turb_vz_tab(userData_.turb_vz_device.data(), turb_arr_lo, turb_arr_hi, 1);
+
+	const double turb_rescale = userData_.turb_rescale_factor;
+
+	const double turb_xmin = geom[0].ProbLoArray()[0];
+	const double turb_ymin = geom[0].ProbLoArray()[1];
+	const double turb_zmin = geom[0].ProbLoArray()[2];
+
+	const double turb_Lx = geom[0].ProbHiArray()[0] - geom[0].ProbLoArray()[0];
+	const double turb_Ly = geom[0].ProbHiArray()[1] - geom[0].ProbLoArray()[1];
+	const double turb_Lz = geom[0].ProbHiArray()[2] - geom[0].ProbLoArray()[2];
+
+	const double turb_dx = turb_Lx / static_cast<double>(turb_nx - 1);
+	const double turb_dy = turb_Ly / static_cast<double>(turb_ny - 1);
+	const double turb_dz = turb_Lz / static_cast<double>(turb_nz - 1);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double x = prob_lo[0] + (i + 0.5) * dx[0];
@@ -248,15 +405,41 @@ template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::
 			vy =  vrot * x / R;
 		}
 
+		// 7b. Turbulent velocity perturbations, sampled from the same binary
+		// cubes used by MHDDisk, only added within the disk.
+		double dvx_pert = 0.0;
+		double dvy_pert = 0.0;
+		double dvz_pert = 0.0;
+
+		if (in_disk) {
+			const double tx = (x - turb_xmin) / turb_dx;
+			const double ty = (y - turb_ymin) / turb_dy;
+			const double tz = (z - turb_zmin) / turb_dz;
+
+			const double tx_c = amrex::min(amrex::max(tx,0.0),static_cast<double>(turb_nx-1));
+			const double ty_c = amrex::min(amrex::max(ty,0.0),static_cast<double>(turb_ny-1));
+			const double tz_c = amrex::min(amrex::max(tz,0.0),static_cast<double>(turb_nz-1));
+
+			dvx_pert = interpolate_turbulence(turb_vx_tab,turb_nx,turb_ny,turb_nz,
+										tx_c,ty_c,tz_c) * turb_rescale;
+			dvy_pert = interpolate_turbulence(turb_vy_tab,turb_nx,turb_ny,turb_nz,
+										tx_c,ty_c,tz_c) * turb_rescale;
+			dvz_pert = interpolate_turbulence(turb_vz_tab,turb_nx,turb_ny,turb_nz,
+										tx_c,ty_c,tz_c) * turb_rescale;
+		}
+		vx += dvx_pert;
+		vy += dvy_pert;
+		const double vz = dvz_pert;
+
 		// 8. Conserved variables
 		const double pressure = rho * cs * cs;
 		const double Eint     = pressure / (gamma - 1.0);
-		const double Ekin     = 0.5 * rho * (vx * vx + vy * vy);
-		
+		const double Ekin     = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+
 		state_cc(i, j, k, HydroSystem<HDGalaxy>::density_index)        = rho;
 		state_cc(i, j, k, HydroSystem<HDGalaxy>::x1Momentum_index)     = rho * vx;
 		state_cc(i, j, k, HydroSystem<HDGalaxy>::x2Momentum_index)     = rho * vy;
-		state_cc(i, j, k, HydroSystem<HDGalaxy>::x3Momentum_index)     = 0.0;
+		state_cc(i, j, k, HydroSystem<HDGalaxy>::x3Momentum_index)     = rho * vz;
 		state_cc(i, j, k, HydroSystem<HDGalaxy>::energy_index)         = Ekin + Eint;
 		state_cc(i, j, k, HydroSystem<HDGalaxy>::internalEnergy_index) = Eint;
 	});
