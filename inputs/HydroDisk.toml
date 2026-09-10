@@ -50,6 +50,10 @@ hd_galaxy.sn_jeans_J              = 4.0
 hd_galaxy.sn_remnant_fraction     = 0.5
 hd_galaxy.sn_momentum             = 3.0e3
 
+hd_galaxy.turb_vx_file = tests/input/vx_1.bin
+hd_galaxy.turb_vy_file = tests/input/vy_1.bin
+hd_galaxy.turb_vz_file = tests/input/vz_1.bin
+
 quokka.diagnostics = proj_z proj_x proj_y        # Space-separated name(s) of diagnostics (arbitrary)
 
 quokka.proj_z.type = ProjectionPlot

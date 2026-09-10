@@ -8,12 +8,9 @@
 ///
 
 #include <cmath>
-#include <cstring>
 #include <fstream>
-#include <iostream>
 #include <string>
 #include <vector>
-#include <hdf5.h>
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArrayBase.H"
@@ -96,7 +93,6 @@ template <> struct Physics_Traits<MHDGalaxy> : DefaultPhysicsTraits {
 	static constexpr int nGroups = 1;
 };
 
-
 template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real Q_mean{};
 	amrex::Real Mc{};
@@ -104,37 +100,27 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real Sigma0{};
 	amrex::Real rho_cgm{};
 	amrex::Real rho_mid{};
-	amrex::Real n_cell{};
-	amrex::Real max_level{};
-	
+
 	// 2D Cylindrical potential field variables, read from metadata file 
 	std::size_t seed_nR{};
 	std::size_t seed_nz{};
 	amrex::Real seed_Rmax{};
 	amrex::Real seed_Lz{};
 	amrex::Real seed_B0_HL{};
-	std::string seed_str;                 // magnetic seed, kept as exact text (too large for double/int64)
-	amrex::Vector<long long> turb_seeds;   // per-MPI-rank turbulence RNG seeds, index = rank
+	std::string seed_str;                 // magnetic seed
+	amrex::Vector<long long> turb_seeds;   // seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
 
-	// Vector allocation on the GPU
 	amrex::Gpu::DeviceVector<amrex::Real> Aphi_device;
 
 	// Supernova feedback parameters
 	amrex::Real sn_jeans_J{4.0};
-	amrex::Real sn_momentum{2.8e5};  // in units of M_sun * km/s
+	amrex::Real sn_momentum{1.0e8};  // in units of M_sun * km/s
 	amrex::Real star_formation_efficiency{0.5}; // fraction of stellar mass that remains as a compact remnant
-	amrex::Real sn_ejecta_mass_msun{10.0};   // Mej, solar masses
 	amrex::Real sn_cluster_momentum_exponent{0.0};  // exponent for scaling momentum injection with cluster mass
 	amrex::Real sn_mass_per_event_msun{100.0};
-	// NOTE: the cumulative *N_SN event* count is NOT tracked here anymore -- it uses the
-	// base AMRSimulation::sn_count_/sn_count_cumulative_ members instead, since those are
-	// already round-tripped through checkpoint/plotfile metadata (writeSFHToMetadata/readSFH)
-	// and therefore survive chained restarts. A userData_ field would silently reset to 0
-	// at the start of every chained job segment.
 	amrex::Long sn_trigger_count_cumulative{0};  // cumulative # of cells that crossed the Jeans trigger
 	                                              // (secondary diagnostic only; not checkpoint-persistent)
 
-	// turbulence parameters
 	// Owning GPU storage for the vx/vy/vz turbulence cubes loaded from binary files.
 	// The generator writes double-precision arrays with dimensions
 	// turb_nx x turb_ny x turb_nz. These device vectors are wrapped in
@@ -148,9 +134,6 @@ template <> struct SimulationData<MHDGalaxy> {
 	int turb_ny{};
 	int turb_nz{};
 };
-
-// for Initializing Gas Densities & Surface Densities
-
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 auto surfaceDensityProfile(double R, double Sigma0) -> double
@@ -180,19 +163,6 @@ auto diskDensityAnalytic(double R, double z,
 		-vc*vc / (2.0 * cs*cs));
 
 	return rho0 * disk_factor * halo_factor;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto get_beta_taper_factor(double R, double z,
-                           double Sigma0, double vc,
-                           double cs_disk, double cs_cgm,
-                           double rho_cgm, double rho_mid) -> double
-{
-    const double rho_disc_raw = diskDensityAnalytic(R, z, Sigma0, vc, cs_disk);
-    const bool   in_disk      = (rho_disc_raw > rho_transition);
-    const double rho          = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
-    const double cs           = in_disk ? cs_disk : cs_cgm;
-    return std::sqrt((rho * cs * cs) / (rho_mid * cs_disk * cs_disk));
 }
 
 // 1D and 2D Interpolation Operators for Cylindrical A_phi Evaluation
@@ -382,6 +352,8 @@ inline auto load_turb_seeds(const std::string &path) -> amrex::Vector<long long>
 	return seeds;
 }
 
+// Fraction of the cell offset (di,dj,dk) from the trigger cell that overlaps a sphere
+// of radius rK centred on the trigger cell, used to weight the SN kernel deposit.
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE
 auto cellSphereOverlapFraction(double di, double dj, double dk,
                                 double dxu, double dyu, double dzu,
@@ -396,12 +368,15 @@ auto cellSphereOverlapFraction(double di, double dj, double dk,
     const double cx = amrex::max(x0, amrex::min(0.0, x1));
     const double cy = amrex::max(y0, amrex::min(0.0, y1));
     const double cz = amrex::max(z0, amrex::min(0.0, z1));
+    // Fast path: nearest point of the cell box to the origin is already outside rK,
+    // so the cell can't overlap the sphere at all.
     if (cx*cx + cy*cy + cz*cz > rK*rK) { return 0.0; }
 
-    // CHANGED: std::abs instead of amrex::abs
     const double fx = amrex::max(std::abs(x0), std::abs(x1));
     const double fy = amrex::max(std::abs(y0), std::abs(y1));
     const double fz = amrex::max(std::abs(z0), std::abs(z1));
+    // Fast path: farthest point of the cell box from the origin is still inside rK,
+    // so the cell is fully covered -- skip the subsampled quadrature below.
     if (fx*fx + fy*fy + fz*fz <= rK*rK) { return 1.0; }
 
     constexpr int n_sub = omega_subsamples;
@@ -418,8 +393,6 @@ auto cellSphereOverlapFraction(double di, double dj, double dk,
     }
     return static_cast<double>(count) / static_cast<double>(n_sub*n_sub*n_sub);
 }
-// preCalculateInitialConditions: loads parameters and the 2D cylindrical A_phi potential table from disk, 
-// and calculates Sigma0 via Simpson integration of the Toomre Q condition.
 
 template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 {
@@ -428,17 +401,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.get("Q_mean", userData_.Q_mean);
 	pp.query("sn_jeans_J", userData_.sn_jeans_J);
 	pp.query("sn_momentum", userData_.sn_momentum);	
-	pp.query("star_formation_efficiency", userData_.star_formation_efficiency);  // default should be set, e.g. 0.5
-	pp.query("sn_ejecta_mass_msun", userData_.sn_ejecta_mass_msun);
-	pp.query("sn_mass_per_event_msun", userData_.sn_mass_per_event_msun);  // default should be set, e.g. 100.0
-	pp.query("sn_cluster_momentum_exponent", userData_.sn_cluster_momentum_exponent);  // default e.g. 0.75
-
-	amrex::ParmParse const pp_amr("amr");
-	amrex::Vector<int> n_cell_vec(3);
-	pp_amr.getarr("n_cell", n_cell_vec);
-	userData_.n_cell = static_cast<amrex::Real>(
-		*std::max_element(n_cell_vec.begin(), n_cell_vec.end()));
-	pp_amr.get("max_level", userData_.max_level);
+	pp.query("star_formation_efficiency", userData_.star_formation_efficiency);  
+	pp.query("sn_mass_per_event_msun", userData_.sn_mass_per_event_msun);  
+	pp.query("sn_cluster_momentum_exponent", userData_.sn_cluster_momentum_exponent);  
 
 	constexpr double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
 	constexpr double cs_cgm  = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
@@ -508,7 +473,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			}
 
 			try {
-				// Strictly mapping keys generated by init_seed_pot_field.py
 				if (key == "seed_nR") {
 					userData_.seed_nR = std::stoul(val_str);
 				} else if (key == "seed_nz") {
@@ -517,10 +481,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 					userData_.seed_Rmax = std::stod(val_str);
 				} else if (key == "seed_Lz") {
 					userData_.seed_Lz = std::stod(val_str);
-				} else if (key == "seed_B0_HL") {
-					userData_.seed_B0_HL = std::stod(val_str);
 				} else if (key == "seed_seed") {
-					userData_.seed_str = val_str;   // store raw digits verbatim, no numeric conversion
+					userData_.seed_str = val_str;   
 				}
 			} catch (const std::exception& e) {
 				continue;
@@ -593,33 +555,21 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		userData_.turb_vz_device =
 		    load_bin_to_device(turb_vz_file, n_turb);
 
-
 		std::string turb_seed_file;
-		pp.query("turb_seed_file", turb_seed_file);   // add this key to your inputs file
+		pp.query("turb_seed_file", turb_seed_file);  
 		if (!turb_seed_file.empty()) {
 			userData_.turb_seeds = load_turb_seeds(turb_seed_file);
-			const int nprocs = amrex::ParallelDescriptor::NProcs();
 
-			amrex::Print() << "Turbulence seed file: " << turb_seed_file << "\n"
-							<< "  NProcs = " << nprocs
-							<< ", seeds read = " << userData_.turb_seeds.size() << "\n";
-
-			if (static_cast<int>(userData_.turb_seeds.size()) != nprocs) {
-				amrex::Print() << "  WARNING: seed count (" << userData_.turb_seeds.size()
-								<< ") != NProcs (" << nprocs << ")\n";
-			}
-
-			amrex::Print() << "  per-rank seeds:";
+			amrex::Print() << "Turbulence seed file: " << turb_seed_file
+							<< " (seeds read = " << userData_.turb_seeds.size() << "):";
 			for (std::size_t r = 0; r < userData_.turb_seeds.size(); ++r) {
-				amrex::Print() << " [" << r << "]=" << userData_.turb_seeds[r];
+				amrex::Print() << " " << userData_.turb_seeds[r];
 			}
 			amrex::Print() << "\n";
 		}
 
-		// perturbations.py produces unit RMS velocity fields
 		constexpr double turb_rescale = turb_target_Mach * quokka::EOS_Traits<MHDGalaxy>::cs_disk;
 		userData_.turb_rescale_factor = turb_rescale;
-
 
 		amrex::Print()
 			<< "Turbulence loaded from binary files:\n"
@@ -634,18 +584,18 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			<< turb_rescale / 1.0e5
 			<< " km/s\n";
 
+		amrex::Print()
+			<< "MHDGalaxy init complete\n"
+			<< "Mc=" << userData_.Mc
+			<< " Q=" << userData_.Q_mean
+			<< " Sigma0=" << userData_.Sigma0
+			<< " Seed=" << (userData_.seed_str.empty() ? std::string("<not found>") : userData_.seed_str) << "\n"
+			<< "sn_mass_per_event_msun=" << userData_.sn_mass_per_event_msun
+			<< " sn_cluster_momentum_exponent=" << userData_.sn_cluster_momentum_exponent << "\n"
+			<< "M_solar=" << C::M_solar << "\n";
+
 		isTurbSamplingDone = true;
 	}
-
-	amrex::Print()
-		<< "MHDGalaxy init complete\n"
-		<< "Mc=" << userData_.Mc
-		<< " Q=" << userData_.Q_mean
-		<< " Sigma0=" << userData_.Sigma0
-		<< " Seed=" << (userData_.seed_str.empty() ? std::string("<not found>") : userData_.seed_str) << "\n"
-		<< "sn_mass_per_event_msun=" << userData_.sn_mass_per_event_msun
-		<< " sn_cluster_momentum_exponent=" << userData_.sn_cluster_momentum_exponent << "\n"
-		<< "M_solar=" << C::M_solar << "\n";
 }
 
 // Set initial conditions on the grid by evaluating the analytic disk density and velocity profiles at cell centers, 
@@ -664,14 +614,13 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 	constexpr double gamma = quokka::EOS_Traits<MHDGalaxy>::gamma;
 	
 	const double B0_scale = userData_.seed_B0_HL;
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(B0_scale > 0.0, "Seed field strength must be positive.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(B0_scale > 0.0, "Beta-derived seed field strength must be positive.");
 
 	const amrex::Box            &indexRange = grid_elem.indexRange_;
 	const auto                  dx        = grid_elem.dx_;
 	const auto                  prob_lo   = grid_elem.prob_lo_;
 	const amrex::Array4<amrex::Real> &state_cc = grid_elem.array_;
 
-	// -- turbulent velocity perturbations from zdrv.hdf5 --
 	const int turb_nx = userData_.turb_nx;
 	const int turb_ny = userData_.turb_ny;
 	const int turb_nz = userData_.turb_nz;
@@ -690,24 +639,13 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 	const double turb_ymin = geom[0].ProbLoArray()[1];
 	const double turb_zmin = geom[0].ProbLoArray()[2];
 
-	const double turb_Lx =
-		geom[0].ProbHiArray()[0] - geom[0].ProbLoArray()[0];
+	const double turb_Lx = geom[0].ProbHiArray()[0] - geom[0].ProbLoArray()[0];
+	const double turb_Ly = geom[0].ProbHiArray()[1] - geom[0].ProbLoArray()[1];
+	const double turb_Lz = geom[0].ProbHiArray()[2] - geom[0].ProbLoArray()[2];
 
-	const double turb_Ly =
-		geom[0].ProbHiArray()[1] - geom[0].ProbLoArray()[1];
-
-	const double turb_Lz =
-		geom[0].ProbHiArray()[2] - geom[0].ProbLoArray()[2];
-
-	const double turb_dx =
-		turb_Lx / static_cast<double>(turb_nx - 1);
-
-	const double turb_dy =
-		turb_Ly / static_cast<double>(turb_ny - 1);
-
-	const double turb_dz =
-		turb_Lz / static_cast<double>(turb_nz - 1);
-
+	const double turb_dx = turb_Lx / static_cast<double>(turb_nx - 1);
+	const double turb_dy = turb_Ly / static_cast<double>(turb_ny - 1);
+	const double turb_dz = turb_Lz / static_cast<double>(turb_nz - 1);
 
 	// Cylindrical Potential Table Pointers & Parameters for GPU Lambdas
 	const amrex::Real* aphi_ptr = userData_.Aphi_device.data();
@@ -719,36 +657,33 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
     const double dR_table = Rmax_table / static_cast<double>(nR_table);
     const double axis_dead_zone = axis_fallback_cells * dR_table;
 
+	// True physical domain extents (level-independent), used to force exact B=0
+	// at the real simulation boundary regardless of whether seed_Rmax/seed_Lz
+	// (the table's taper calibration) are matched to the actual domain size.
+	const auto prob_lo_dom = geom[0].ProbLoArray();
+	const auto prob_hi_dom = geom[0].ProbHiArray();
+	constexpr double boundary_tol = 1.0e-6; // relative tolerance, scaled by dx below
 
-
-    // physical potential with hard boundary guard and smooth tapering, sampled directly in the node lambdas 
+    // physical potential with hard boundary guard and smooth tapering, sampled directly in the node lambdas
 	// to ensure consistency with the interpolated values used for curl calculation.
-	const double rho_mid_local = userData_.rho_mid;   // add this line before the lambda
-
 	auto get_Aphi_physical = [=] AMREX_GPU_DEVICE(double x_val, double y_val, double z_val) -> double {
 		const double R_val = std::sqrt(x_val * x_val + y_val * y_val);
-		double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
-		//const double beta_taper = get_beta_taper_factor(R_val, z_val, Sigma0, vc, cs_disk, cs_cgm, rho_cgm, rho_mid_local); // use local, not userData_.rho_mid
-		return aphi_nd * B0_scale;// * beta_taper;
+		const double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
+		return aphi_nd * B0_scale;
 	};
     auto get_Ax = [=] AMREX_GPU_DEVICE(double x_e, double y_e, double z_e) -> double {
-        const double R_e = std::sqrt(x_e * x_e + y_e * y_e);
-        
+        const double R_e = std::sqrt(x_e * x_e + y_e * y_e);        
         // Force zero within 2.0*dx to prevent 1/R amplification of interpolation noise near the axis.
-        if (R_e < axis_dead_zone) { return 0.0; }
-        
-        const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx[0], dx[1], dx[2]);
-		
+        if (R_e < axis_dead_zone) { return 0.0; }        
+        const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx[0], dx[1], dx[2]);		
         const double Aphi  = get_Aphi_physical(x_e, y_e, z_e);
         return -Aphi * (y_e / R_e) * taper;
     };
 
     auto get_Ay = [=] AMREX_GPU_DEVICE(double x_e, double y_e, double z_e) -> double {
-        const double R_e = std::sqrt(x_e * x_e + y_e * y_e);
-        
+        const double R_e = std::sqrt(x_e * x_e + y_e * y_e);        
         // Force zero within 2.0*dx to prevent 1/R amplification of interpolation noise near the axis.
-        if (R_e < axis_dead_zone) { return 0.0; }
-        
+        if (R_e < axis_dead_zone) { return 0.0; }        
         const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx[0], dx[1], dx[2]);
         const double Aphi  = get_Aphi_physical(x_e, y_e, z_e);
         return Aphi * (x_e / R_e) * taper;
@@ -762,7 +697,6 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 		const double z = prob_lo[2] + (k + 0.5) * dx[2];
 		const double R = std::sqrt(x*x + y*y);
 
-		// Hydrodynamic quantities: density, velocity, pressure, internal energy
 		const double rho_disc_raw = diskDensityAnalytic(R, z, Sigma0, vc, cs_disk);
 		const bool   in_disk      = (rho_disc_raw > rho_transition);
 		const double rho          = in_disk
@@ -807,9 +741,6 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 		const double Eint     = pressure / (gamma - 1.0);
 		const double Ekin = 0.5 * rho * (vx*vx + vy*vy + vz*vz);
 
-		// Cell-Centered Magnetic Energy Calculation 
-		// define local total energy at cell centers by calculating the analytic differences
-		// of the surrounding staggered Yee mesh nodes directly at the cell center location.
 		const double x_node_lo = prob_lo[0] + i * dx[0];
 		const double x_node_hi = prob_lo[0] + (i + 1) * dx[0];
 		const double y_node_lo = prob_lo[1] + j * dx[1];
@@ -817,21 +748,38 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 		const double z_node_lo = prob_lo[2] + k * dx[2];
 		const double z_node_hi = prob_lo[2] + (k + 1) * dx[2];
 
-		// Analytical Bx at cell center via averaged face stencils
 		double Ay_hi_left  = get_Ay(x_node_lo, y, z_node_hi);
 		double Ay_lo_left  = get_Ay(x_node_lo, y, z_node_lo);
 		double Ay_hi_right = get_Ay(x_node_hi, y, z_node_hi);
 		double Ay_lo_right = get_Ay(x_node_hi, y, z_node_lo);
-		double Bx_cc = -0.5 * ((Ay_hi_left - Ay_lo_left) + (Ay_hi_right - Ay_lo_right)) / dx[2];
+		double Bx_face_left  = -(Ay_hi_left - Ay_lo_left) / dx[2];
+		double Bx_face_right = -(Ay_hi_right - Ay_lo_right) / dx[2];
+		if (std::abs(x_node_lo - prob_lo_dom[0]) < boundary_tol * dx[0] ||
+		    std::abs(x_node_lo - prob_hi_dom[0]) < boundary_tol * dx[0]) {
+			Bx_face_left = 0.0;
+		}
+		if (std::abs(x_node_hi - prob_lo_dom[0]) < boundary_tol * dx[0] ||
+		    std::abs(x_node_hi - prob_hi_dom[0]) < boundary_tol * dx[0]) {
+			Bx_face_right = 0.0;
+		}
+		double Bx_cc = 0.5 * (Bx_face_left + Bx_face_right);
 
-		// Analytical By at cell center via averaged face stencils
 		double Ax_hi_bot = get_Ax(x, y_node_lo, z_node_hi);
 		double Ax_lo_bot = get_Ax(x, y_node_lo, z_node_lo);
 		double Ax_hi_top = get_Ax(x, y_node_hi, z_node_hi);
 		double Ax_lo_top = get_Ax(x, y_node_hi, z_node_lo);
-		double By_cc = 0.5 * ((Ax_hi_bot - Ax_lo_bot) + (Ax_hi_top - Ax_lo_top)) / dx[2];
+		double By_face_bot = (Ax_hi_bot - Ax_lo_bot) / dx[2];
+		double By_face_top = (Ax_hi_top - Ax_lo_top) / dx[2];
+		if (std::abs(y_node_lo - prob_lo_dom[1]) < boundary_tol * dx[1] ||
+		    std::abs(y_node_lo - prob_hi_dom[1]) < boundary_tol * dx[1]) {
+			By_face_bot = 0.0;
+		}
+		if (std::abs(y_node_hi - prob_lo_dom[1]) < boundary_tol * dx[1] ||
+		    std::abs(y_node_hi - prob_hi_dom[1]) < boundary_tol * dx[1]) {
+			By_face_top = 0.0;
+		}
+		double By_cc = 0.5 * (By_face_bot + By_face_top);
 
-		// Analytical Bz at cell center via averaged face stencils
 		double Ay_r_cc = get_Ay(x_node_hi, y, z);
 		double Ay_l_cc = get_Ay(x_node_lo, y, z);
 		double Ax_t_cc = get_Ax(x, y_node_hi, z);
@@ -840,7 +788,6 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 
 		const double Emag = 0.5 * (Bx_cc * Bx_cc + By_cc * By_cc + Bz_cc * Bz_cc);
 
-		// State vector update 
 		state_cc(i,j,k,HydroSystem<MHDGalaxy>::density_index)        = rho;
 		state_cc(i,j,k,HydroSystem<MHDGalaxy>::x1Momentum_index)     = rho * vx;
 		state_cc(i,j,k,HydroSystem<MHDGalaxy>::x2Momentum_index)     = rho * vy;
@@ -862,13 +809,7 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
 
 	const double B0_scale = userData_.seed_B0_HL;
 
-	const double vc      = userData_.vc;
-	const double Sigma0  = userData_.Sigma0;
-	const double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-	const double cs_cgm  = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
-	const double rho_cgm = userData_.rho_cgm;
-
-	// Cylindrical Potential Table Pointers & Parameters 
+	// Cylindrical Potential Table Pointers & Parameters
 	const amrex::Real* aphi_ptr = userData_.Aphi_device.data();
 	const int nR_table = static_cast<int>(userData_.seed_nR);
 	const int nz_table = static_cast<int>(userData_.seed_nz);
@@ -885,32 +826,25 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
 	constexpr double boundary_tol = 1.0e-6; // relative tolerance, scaled by dx below
 
 	// magnetic potential with hard boundary guard
-	const double rho_mid_local = userData_.rho_mid;   // add this line before the lambda
-
 	auto get_Aphi_physical = [=] AMREX_GPU_DEVICE(double x_val, double y_val, double z_val) -> double {
 		const double R_val = std::sqrt(x_val * x_val + y_val * y_val);
-		double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
-		//const double beta_taper = get_beta_taper_factor(R_val, z_val, Sigma0, vc, cs_disk, cs_cgm, rho_cgm, rho_mid_local); // use local, not userData_.rho_mid
-		return aphi_nd * B0_scale;// * beta_taper;
+		const double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
+		return aphi_nd * B0_scale;
 	};
     // cartesian mapping with deadzone
     auto get_Ax_node = [=] AMREX_GPU_DEVICE(double x_n, double y_n, double z_n) -> double {
-        const double R = std::sqrt(x_n * x_n + y_n * y_n);
-        
-        // axis deadzone matched to sample_bicubic bilinear fallback (i < 2 → R < 2*dR_table)
-        if (R < axis_dead_zone) { return 0.0; }
-        
+        const double R = std::sqrt(x_n * x_n + y_n * y_n);        
+        // axis deadzone: R < axis_fallback_cells * dR_table (currently 1*dR_table)
+        if (R < axis_dead_zone) { return 0.0; }        
         const double taper = get_taper_factor(x_n, y_n, z_n, Rmax_table, Lz_table, dx[0], dx[1], dx[2]);
         const double Aphi  = get_Aphi_physical(x_n, y_n, z_n);
         return -Aphi * (y_n / R) * taper;
     };
 
     auto get_Ay_node = [=] AMREX_GPU_DEVICE(double x_n, double y_n, double z_n) -> double {
-        const double R = std::sqrt(x_n * x_n + y_n * y_n);
-        
-        // axis deadzone matched to sample_bicubic bilinear fallback (i < 2 → R < 2*dR_table)
-        if (R < axis_dead_zone) { return 0.0; }
-        
+        const double R = std::sqrt(x_n * x_n + y_n * y_n);        
+        // axis deadzone: R < axis_fallback_cells * dR_table (currently 1*dR_table)
+        if (R < axis_dead_zone) { return 0.0; }        
         const double taper = get_taper_factor(x_n, y_n, z_n, Rmax_table, Lz_table, dx[0], dx[1], dx[2]);
         const double Aphi  = get_Aphi_physical(x_n, y_n, z_n);
         return Aphi * (x_n / R) * taper;
@@ -1076,6 +1010,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(
 	pp.query("refine_shrink_per_level_kpc", shrink_kpc);
 	pp.query("refine_shrink_per_level_pc",  shrink_pc);
 
+	// Shrink the refinement cylinder at each successive level, floored at 30% of the
+	// base size, so finer levels progressively focus on the disk core instead of all
+	// sharing the same footprint out to refine_Rcyl/refine_Hcyl.
 	const amrex::Real margin_R = static_cast<amrex::Real>(lev) * shrink_kpc * 1.0e3 * C::parsec;
 	const amrex::Real margin_H = static_cast<amrex::Real>(lev) * shrink_pc  * C::parsec;
 
@@ -1097,6 +1034,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(
 				tag[bx](i, j, k) = amrex::TagBox::SET;
 			}
 		};
+		// Test all 8 corners, not just the cell center, so cells straddling the
+		// refinement-region boundary still get tagged.
 		for (auto const &x : {x0, x1}) {
 			for (auto const &y : {y0, y1}) {
 				for (auto const &z : {z0, z1}) {
@@ -1117,20 +1056,22 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 	constexpr double MSUN = C::M_solar;
 	constexpr double KM_S = 1.0e5;
 	constexpr int stencil_radius = 2;       // rK in units of dx
-	constexpr int kernel_ghost   = stencil_radius + 1;
+	constexpr int kernel_ghost   = stencil_radius + 1;   // +1 cell of margin beyond rK's reach,
+	                                                      // for both the deposit loop bound and
+	                                                      // the mask/delta MultiFab ghost width
 	constexpr double v_terminal_max = 1000.0 * KM_S;   // cap on radial kick velocity, cm/s
  
 	const double sn_jeans_J = userData_.sn_jeans_J;
 	const double sn_momentum_ref = userData_.sn_momentum;          // calibration coefficient
 	const double cluster_exponent = userData_.sn_cluster_momentum_exponent;
+	// Floor guards against divide-by-zero / a runaway N_SN if sn_mass_per_event_msun
+	// is misconfigured to (near) zero.
 	const double M_cluster_per_SN = amrex::max(userData_.sn_mass_per_event_msun, 1.0e-3) * MSUN;
 	const double sfe = userData_.star_formation_efficiency;
 
-	// Accumulated across all AMR levels for this coarse step. Fed into the base
-	// AMRSimulation::sn_count_/sn_count_cumulative_ members after the level loop
-	// below, rather than into a userData_ field, so the cumulative count survives
-	// checkpoint/restart (see the note on sn_trigger_count_cumulative in
-	// SimulationData<MHDGalaxy> for why the trigger count does NOT get this treatment).
+	// Summed into the base AMRSimulation::sn_count_/sn_count_cumulative_ (not a
+	// userData_ field) so it survives checkpoint/restart; see sn_trigger_count_cumulative
+	// in SimulationData<MHDGalaxy> for why that counter isn't treated the same way.
 	amrex::Long total_sn_events_this_step = 0;
  
 	for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1197,7 +1138,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 			const auto dlo = delta[mfi].box().smallEnd();
 			const auto dhi = delta[mfi].box().bigEnd();
  
-			amrex::ParallelFor(box, [=, this] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				// Skip cells covered by a finer level
 				if (mask_arr(i, j, k) == 0) { return; }
  
@@ -1303,24 +1244,15 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 
 								double dp = p_radial_mag * w_mom;
 
-								// Terminal-velocity cap: prevents low-density kernel
-								// cells from receiving an unphysically large velocity
-								// kick (and tanking the CFL timestep) relative to
-								// dense/trigger cells. NOTE: this cap is applied
-								// per-cell, independently of the rest of the kernel,
-								// so it is NOT exactly momentum-conserving -- the
-								// clipped momentum is not redistributed elsewhere.
-								// The residual below tracks how much is being lost.
+								// Caps the kick velocity so low-density kernel cells don't tank the
+								// CFL timestep; applied per-cell, so it's not momentum-conserving.
+								// The residual (below) tracks how much momentum this discards.
 								const double v_kick = dp / rho_nb;
 								if (v_kick > v_terminal_max) {
 									const double dp_uncapped = dp;
 									dp = rho_nb * v_terminal_max;
 									amrex::Gpu::Atomic::Add(p_capped_lev, 1);
 
-									// Residual = what the cap removed, in vector form,
-									// accumulated over the whole level/step so a
-									// systematic (non-cancelling) net kick can be
-									// detected rather than just counted.
 									const double dresid = dp_uncapped - dp;
 									amrex::Gpu::Atomic::Add(p_resid_x, dresid * ex);
 									amrex::Gpu::Atomic::Add(p_resid_y, dresid * ey);
@@ -1382,7 +1314,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 			auto s = state.array(mfi);
 			auto const &d = delta.const_array(mfi);
  
-			amrex::ParallelFor(box, [=, this] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const double dpx = d(i, j, k, 0);
 				const double dpy = d(i, j, k, 1);
 				const double dpz = d(i, j, k, 2);
@@ -1756,7 +1688,6 @@ auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics()
         divB_norm_ncells_global += amrex::get<6>(level_result);
     }
 
-    // Combine energy sums across all MPI ranks
     std::array<amrex::Real, 3> global_sums = {total_E_tot, total_E_tor, total_E_pol};
     amrex::ParallelAllReduce::Sum(global_sums.data(), 3, amrex::ParallelContext::CommunicatorSub());
 
@@ -1764,7 +1695,6 @@ auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics()
     stats["energy_Btor_annulus"] = global_sums[1];
     stats["energy_Bpol_annulus"] = global_sums[2];
 
-    // Combine divB diagnostics across all MPI ranks
     amrex::Real divB_max_reduced = divB_max_global;
     amrex::ParallelAllReduce::Max(divB_max_reduced, amrex::ParallelContext::CommunicatorSub());
 
@@ -1777,10 +1707,6 @@ auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics()
     stats["divB_rms_normalized"] = (divB_sums[2] > 0.0)
         ? std::sqrt(divB_sums[1] / divB_sums[2])
         : static_cast<amrex::Real>(0.0);
-	// sn_count_cumulative_ is the base-class (AMRSimulation<problem_t>) member -- it is
-	// round-tripped through checkpoint/plotfile metadata (writeSFHToMetadata/readSFH), so
-	// this stays correct across chained restarts. sn_trigger_count_cumulative is a
-	// userData_ field and is NOT checkpoint-persistent (resets to 0 each job segment).
 	stats["sn_count_cumulative"]         = static_cast<amrex::Real>(sn_count_cumulative_);
     stats["sn_trigger_count_cumulative"] = static_cast<amrex::Real>(userData_.sn_trigger_count_cumulative);
     return stats;
