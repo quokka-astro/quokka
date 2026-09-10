@@ -90,6 +90,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
 #include "particles/particle_deposition.hpp"
+#include "particles/particle_utils.hpp"
 #endif // AMREX_SPACEDIM == 3
 
 // internal headers
@@ -390,6 +391,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 			     quokka::direction dir);
 	void FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
 				      amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array);
+	void FillPatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
+				amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array);
 	void GetData(int lev, amrex::Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime, quokka::centering cen,
 		     quokka::direction dir);
 	void GetDataFaceArray(int lev, amrex::Real time, amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> &data_array,
@@ -1264,9 +1267,14 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	}
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-	dtloc_t hydro_dt{.value = cflNumber_ * (dx_min / domain_signal_max), .index = domain_signal_maxloc};
+	// the signal speed is zero when no hyperbolic physics is enabled (e.g. self-gravity acting on
+	// particles only), in which case the hydro timestep does not constrain the simulation
+	dtloc_t hydro_dt{.value = std::numeric_limits<amrex::Real>::max(), .index = domain_signal_maxloc};
+	if (domain_signal_max > 0.0) {
+		hydro_dt.value = cflNumber_ * (dx_min / domain_signal_max);
+	}
 
-	if (verbose) {
+	if (verbose && domain_signal_max > 0.0) {
 		amrex::Print() << std::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
 		amrex::Print() << std::format("...[level {}] \thydro timestep limited at cell {} with signal speed = {:e}\n", lev,
 					      formatIntVect(hydro_dt.index), domain_signal_max);
@@ -1373,6 +1381,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			amrex::Abort(abort_msg.c_str());
 		}
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
+		// (when no hyperbolic physics is enabled, hydro_dt is unconstrained and the cutoff is zero)
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {
 			particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
 		}
@@ -1389,7 +1398,13 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	std::vector<dtloc_t *> dts = {&hydro_dt, &conduction_dt, &particle_dt};
 	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end(), [](dtloc_t *const p1, dtloc_t *const p2) { return p1->value < p2->value; });
 
-	if (verbose) {
+	// N.B. this must be checked here: computeTimestep() clips dt to 1.1 * dt_[lev], which turns an
+	// unconstrained timestep into a large-but-finite one that no later check can recognise
+	const bool timestep_is_constrained = dt_min_ptr->value < std::numeric_limits<amrex::Real>::max();
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(timestep_is_constrained || constantDt_ > 0.0 || maxDt_ < std::numeric_limits<amrex::Real>::max(),
+					 "No enabled physics module constrains the timestep! Set constant_dt or max_dt in the inputs file.");
+
+	if (verbose && timestep_is_constrained) {
 		// print the physics that limits the timestep
 		if (dt_min_ptr == &hydro_dt) {
 			amrex::Print() << std::format("...[level {}] timestep limited by HYDRO\n", lev);
@@ -2625,7 +2640,9 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 			int_state_new_fc_ptr[idim] = &int_state_new_fc[idim];
 			int_state_old_fc_ptr[idim] = &int_state_old_fc[idim];
 		}
-		FillCoarsePatchFaceArray(level, time, int_state_new_fc_ptr, 0, ncomp_per_dim_fc, BCs_array);
+		// preserves the existing fine field on overlapping coverage; see FillPatchFaceArray
+		FillPatchFaceArray(level, time, int_state_new_fc_ptr, 0, ncomp_per_dim_fc, BCs_array);
+		// old-time data is invalidated by the tOld_ sentinel set above, so a coarse-only fill suffices
 		FillCoarsePatchFaceArray(level, time, int_state_old_fc_ptr, 0, ncomp_per_dim_fc, BCs_array);
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			std::swap(int_state_new_fc[idim], state_new_fc_[level][idim]);
@@ -3517,6 +3534,55 @@ void AMRSimulation<problem_t>::FillCoarsePatchFaceArray(int lev, amrex::Real tim
 				     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0);
 }
 
+// Fill face-centred data for all directions simultaneously, preserving existing fine data on
+// overlapping coverage and divergence-preservingly interpolating from coarse elsewhere.
+template <typename problem_t>
+void AMRSimulation<problem_t>::FillPatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
+						  amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array)
+{
+	BL_PROFILE("AMRSimulation::FillPatchFaceArray()"); // NOLINT(misc-const-correctness)
+
+	AMREX_ASSERT(lev > 0);
+
+	amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> cmf_array;
+	amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> fmf_array;
+	amrex::Vector<amrex::Real> ctime;
+	amrex::Vector<amrex::Real> ftime;
+	GetDataFaceArray(lev - 1, time, cmf_array, ctime);
+	GetDataFaceArray(lev, time, fmf_array, ftime);
+
+	amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> cmf;
+	for (int itime = 0; itime < static_cast<int>(ctime.size()); ++itime) {
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> level_mfs;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			level_mfs[idim] = cmf_array[idim][itime];
+		}
+		cmf.push_back(level_mfs);
+	}
+	amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> fmf;
+	for (int itime = 0; itime < static_cast<int>(ftime.size()); ++itime) {
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> level_mfs;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			level_mfs[idim] = fmf_array[idim][itime];
+		}
+		fmf.push_back(level_mfs);
+	}
+
+	using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> finePhysicalBoundaryFunctor;
+	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarsePhysicalBoundaryFunctor;
+
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		const auto dir = static_cast<quokka::direction>(idim);
+		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
+		finePhysicalBoundaryFunctor[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev], BCs_array[idim], boundaryFunctor);
+		coarsePhysicalBoundaryFunctor[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev - 1], BCs_array[idim], boundaryFunctor);
+	}
+
+	amrex::FillPatchTwoLevels(mf_array, time, cmf, ctime, fmf, ftime, 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
+				  finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0);
+}
+
 // utility to copy in data from state_old_cc_[lev] and/or state_new_cc_[lev]
 // into another multifab
 template <typename problem_t>
@@ -3776,6 +3842,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 
 			// Initialize particles through user-defined function
 			createInitialSinkParticles();
+
+			// The accretion accumulators (mdot, Lx, Ly, Lz) belong to the accretion machinery, not to
+			// the problem generator: ComputeAccretionInBox() updates the angular momentum with +=, so it
+			// must start from zero. Problem generators typically seed sinks with InitFromAsciiFile(),
+			// which only writes the components present in the file and leaves the rest indeterminate.
+			// Zero them here so every problem gets this for free. Not needed on restart, where the
+			// checkpoint restores every component.
+			quokka::ParticleUtils::zeroRealComponentsFrom(SinkParticles.get(), quokka::SinkParticleMdotIdx);
 		}
 	}
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {

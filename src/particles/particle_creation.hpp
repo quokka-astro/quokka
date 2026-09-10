@@ -310,6 +310,13 @@ AMREX_GPU_DEVICE inline void initializeSinkLikeParticles(PType *particles, int n
 			p.rdata(mass_idx + 2) = vy;
 			p.rdata(mass_idx + 3) = vz;
 		}
+
+		// Zero the remaining real components (mdot, Lx, Ly, Lz for sinks). Angular momentum is
+		// accumulated with += in ComputeAccretionInBox(), so these must start at zero rather than
+		// at whatever the recycled arena block happened to contain.
+		for (int n = mass_idx + 4; n < PType::NReal; ++n) {
+			p.rdata(n) = 0.0;
+		}
 	}
 
 	// update cell density to be the threshold density
