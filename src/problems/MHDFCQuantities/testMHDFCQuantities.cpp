@@ -2,7 +2,7 @@
 // Copyright 2022 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testFCQuantities.cpp
+/// \file testMHDFCQuantities.cpp
 /// \brief Defines a test problem to make sure face-centred quantities are created correctly.
 ///
 
@@ -35,24 +35,24 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct FCQuantities {};
+struct MHDFCQuantities {};
 
-template <> struct quokka::EOS_Traits<FCQuantities> {
+template <> struct quokka::EOS_Traits<MHDFCQuantities> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<FCQuantities> : DefaultPhysicsTraits {
+template <> struct Physics_Traits<MHDFCQuantities> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = true;
 };
 
-constexpr double rho0 = 1.0;					     // background density
-constexpr double P0 = 1.0 / quokka::EOS_Traits<FCQuantities>::gamma; // background pressure
-constexpr double v0 = 0.;					     // background velocity
-constexpr double amp = 1.0e-6;					     // perturbation amplitude
+constexpr double rho0 = 1.0;						// background density
+constexpr double P0 = 1.0 / quokka::EOS_Traits<MHDFCQuantities>::gamma; // background pressure
+constexpr double v0 = 0.;						// background velocity
+constexpr double amp = 1.0e-6;						// perturbation amplitude
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
@@ -62,7 +62,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real A = amp;
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
-	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<FCQuantities>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
+	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<MHDFCQuantities>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
 	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
 	double const rho = U_0[0] + dU[0];
@@ -70,15 +70,15 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	double const Etot = U_0[2] + dU[2];
 	double const Eint = Etot - 0.5 * (xmom * xmom) / rho;
 
-	state(i, j, k, HydroSystem<FCQuantities>::density_index) = rho;
-	state(i, j, k, HydroSystem<FCQuantities>::x1Momentum_index) = xmom;
-	state(i, j, k, HydroSystem<FCQuantities>::x2Momentum_index) = 0;
-	state(i, j, k, HydroSystem<FCQuantities>::x3Momentum_index) = 0;
-	state(i, j, k, HydroSystem<FCQuantities>::energy_index) = Etot;
-	state(i, j, k, HydroSystem<FCQuantities>::internalEnergy_index) = Eint;
+	state(i, j, k, HydroSystem<MHDFCQuantities>::density_index) = rho;
+	state(i, j, k, HydroSystem<MHDFCQuantities>::x1Momentum_index) = xmom;
+	state(i, j, k, HydroSystem<MHDFCQuantities>::x2Momentum_index) = 0;
+	state(i, j, k, HydroSystem<MHDFCQuantities>::x3Momentum_index) = 0;
+	state(i, j, k, HydroSystem<MHDFCQuantities>::energy_index) = Etot;
+	state(i, j, k, HydroSystem<MHDFCQuantities>::internalEnergy_index) = Eint;
 }
 
-template <> void QuokkaSimulation<FCQuantities>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDFCQuantities>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -86,7 +86,7 @@ template <> void QuokkaSimulation<FCQuantities>::setInitialConditionsOnGrid(quok
 	const amrex::Array4<double> &state = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
-	const int ncomp_cc = Physics_Indices<FCQuantities>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<MHDFCQuantities>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
@@ -96,7 +96,7 @@ template <> void QuokkaSimulation<FCQuantities>::setInitialConditionsOnGrid(quok
 	});
 }
 
-template <> void QuokkaSimulation<FCQuantities>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDFCQuantities>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::Array4<double> &state = grid_elem.array_;
@@ -116,7 +116,7 @@ template <> void QuokkaSimulation<FCQuantities>::setInitialConditionsOnGridFaceV
 			amrex::Real const y_lo = prob_lo[1] + static_cast<amrex::Real>(j) * dx[1];
 			amrex::Real const y_hi = prob_lo[1] + static_cast<amrex::Real>(j + 1) * dx[1];
 			amrex::Real const z = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
-			state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = (psi(x, y_hi, z) - psi(x, y_lo, z)) / dx[1];
+			state(i, j, k, MHDSystem<MHDFCQuantities>::bfield_index) = (psi(x, y_hi, z) - psi(x, y_lo, z)) / dx[1];
 		});
 	} else if (dir == quokka::direction::y) {
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -124,11 +124,11 @@ template <> void QuokkaSimulation<FCQuantities>::setInitialConditionsOnGridFaceV
 			amrex::Real const x_hi = prob_lo[0] + static_cast<amrex::Real>(i + 1) * dx[0];
 			amrex::Real const y = prob_lo[1] + static_cast<amrex::Real>(j) * dx[1];
 			amrex::Real const z = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
-			state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = -(psi(x_hi, y, z) - psi(x_lo, y, z)) / dx[0];
+			state(i, j, k, MHDSystem<MHDFCQuantities>::bfield_index) = -(psi(x_hi, y, z) - psi(x_lo, y, z)) / dx[0];
 		});
 	} else if (dir == quokka::direction::z) {
 		amrex::ParallelFor(indexRange,
-				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 0.0; });
+				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<MHDFCQuantities>::bfield_index) = 0.0; });
 	}
 }
 
@@ -159,13 +159,13 @@ void checkEnforceLimitsPreservesMagneticEnergy()
 	amrex::Geometry const geom(domain, &real_box, amrex::CoordSys::cartesian, is_periodic.data());
 
 	// create state_cc
-	amrex::MultiFab state_cc(ba, dm, Physics_Indices<FCQuantities>::nvarTotal_cc, 0);
+	amrex::MultiFab state_cc(ba, dm, Physics_Indices<MHDFCQuantities>::nvarTotal_cc, 0);
 	state_cc.setVal(0.0);
 
 	// create state_fc
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> state_fc;
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-		state_fc[dir].define(amrex::convert(ba, amrex::IntVect::TheDimensionVector(dir)), dm, Physics_Indices<FCQuantities>::nvarPerDim_fc, 0);
+		state_fc[dir].define(amrex::convert(ba, amrex::IntVect::TheDimensionVector(dir)), dm, Physics_Indices<MHDFCQuantities>::nvarPerDim_fc, 0);
 		state_fc[dir].setVal(0.0);
 	}
 
@@ -173,37 +173,37 @@ void checkEnforceLimitsPreservesMagneticEnergy()
 	constexpr amrex::Real rho = 1.0;
 	constexpr amrex::Real temp_cold = 1.0;
 	constexpr amrex::Real temp_floor = 10.0;
-	amrex::Real const Eint_cold = quokka::EOS<FCQuantities>::ComputeEintFromTgas(rho, temp_cold);
-	amrex::Real const Eint_floor = quokka::EOS<FCQuantities>::ComputeEintFromTgas(rho, temp_floor);
+	amrex::Real const Eint_cold = quokka::EOS<MHDFCQuantities>::ComputeEintFromTgas(rho, temp_cold);
+	amrex::Real const Eint_floor = quokka::EOS<MHDFCQuantities>::ComputeEintFromTgas(rho, temp_floor);
 	amrex::Real const Emag = 10.0 * Eint_floor;
 	amrex::Real const Bx = std::sqrt(2.0 * Emag); // By, Bz are zero
 
-	state_cc.setVal(rho, HydroSystem<FCQuantities>::density_index, 1, 0);
-	state_cc.setVal(Eint_cold + Emag, HydroSystem<FCQuantities>::energy_index, 1, 0);
-	state_cc.setVal(Eint_cold, HydroSystem<FCQuantities>::internalEnergy_index, 1, 0);
-	state_fc[0].setVal(Bx, Physics_Indices<FCQuantities>::mhdFirstIndex, 1, 0);
+	state_cc.setVal(rho, HydroSystem<MHDFCQuantities>::density_index, 1, 0);
+	state_cc.setVal(Eint_cold + Emag, HydroSystem<MHDFCQuantities>::energy_index, 1, 0);
+	state_cc.setVal(Eint_cold, HydroSystem<MHDFCQuantities>::internalEnergy_index, 1, 0);
+	state_fc[0].setVal(Bx, Physics_Indices<MHDFCQuantities>::mhdFirstIndex, 1, 0);
 
 	// Enforce temperature floor:
 	// this should raise the temperature from temp_cold to temp_floor,
 	// while leaving the magnetic energy unchanged
-	HydroSystem<FCQuantities>::EnforceLimits(0.0, 0.0, temp_floor, state_cc, state_fc, geom,
-						 [] AMREX_GPU_DEVICE(amrex::Real /*x*/, amrex::Real /*y*/, amrex::Real /*z*/,
-								     amrex::Real base_density_floor) noexcept -> amrex::Real { return base_density_floor; });
+	HydroSystem<MHDFCQuantities>::EnforceLimits(0.0, 0.0, temp_floor, state_cc, state_fc, geom,
+						    [] AMREX_GPU_DEVICE(amrex::Real /*x*/, amrex::Real /*y*/, amrex::Real /*z*/,
+									amrex::Real base_density_floor) noexcept -> amrex::Real { return base_density_floor; });
 	amrex::Gpu::streamSynchronizeAll();
 
 	amrex::Real const expected_Etot = Eint_floor + Emag;
-	amrex::Real const actual_Etot = state_cc.min(HydroSystem<FCQuantities>::energy_index);
+	amrex::Real const actual_Etot = state_cc.min(HydroSystem<MHDFCQuantities>::energy_index);
 	amrex::Real const Etot_rel_error = std::abs(actual_Etot - expected_Etot) / std::max(std::abs(expected_Etot), 1.0);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Etot_rel_error <= 1000.0 * std::numeric_limits<amrex::Real>::epsilon(),
 					 std::format("MHD temperature floor total energy mismatch: got {}, expected {}", actual_Etot, expected_Etot));
 
-	amrex::Real const actual_aux_eint = state_cc.min(HydroSystem<FCQuantities>::internalEnergy_index);
+	amrex::Real const actual_aux_eint = state_cc.min(HydroSystem<MHDFCQuantities>::internalEnergy_index);
 	amrex::Real const aux_rel_error = std::abs(actual_aux_eint - Eint_floor) / std::max(std::abs(Eint_floor), 1.0);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(aux_rel_error <= 1000.0 * std::numeric_limits<amrex::Real>::epsilon(),
 					 std::format("MHD auxiliary internal energy floor mismatch: got {}, expected {}", actual_aux_eint, Eint_floor));
 }
 
-void checkDivFreeRestart(QuokkaSimulation<FCQuantities> const &sim)
+void checkDivFreeRestart(QuokkaSimulation<MHDFCQuantities> const &sim)
 {
 	auto const &state_fc = sim.getNewMF_fc();
 	auto const &state_cc = sim.getNewMF_cc();
@@ -221,7 +221,7 @@ void checkDivFreeRestart(QuokkaSimulation<FCQuantities> const &sim)
 
 		amrex::Real max_b = 0.0;
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			max_b = std::max(max_b, state_fc[lev][dir].norm0(MHDSystem<FCQuantities>::bfield_index, 0, false));
+			max_b = std::max(max_b, state_fc[lev][dir].norm0(MHDSystem<MHDFCQuantities>::bfield_index, 0, false));
 		}
 
 		auto const &dx = sim.geom[lev].CellSizeArray();
@@ -243,14 +243,14 @@ auto problem_main() -> int
 
 	setAmrNCell(coarse_ncells);
 	setPlotfileParams("fcq_pre");
-	QuokkaSimulation<FCQuantities> sim_write;
+	QuokkaSimulation<MHDFCQuantities> sim_write;
 	checkEnforceLimitsPreservesMagneticEnergy();
 	sim_write.setInitialConditions();
 	amrex::Print() << "\n";
 
 	setAmrNCell(fine_ncells);
 	setPlotfileParams("fcq_post");
-	QuokkaSimulation<FCQuantities> sim_restart;
+	QuokkaSimulation<MHDFCQuantities> sim_restart;
 	sim_restart.setChkFile("chk0000000");
 	sim_restart.setInitialConditions();
 	amrex::Print() << "\n";
