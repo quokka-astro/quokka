@@ -168,7 +168,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
 	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
-	int enableIterDustStoptime_ = 0;
+	quokka::dust::CoefficientIterationConfig dustCoefficientIteration_;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
@@ -205,7 +205,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
 	amrex::Real dust_omega_drag_ = 1.0;
-	amrex::Real dust_omega_res_ = 0.0;
+	amrex::Real dust_omega_gyro_res_ = 0.0;
+	quokka::dust::ResolvedRkScheme dustResolvedRkScheme_ = quokka::dust::ResolvedRkScheme::GL4;
 	bool print_dust_counter_ = false;
 
 	amrex::Real radiationCflNumber_ = 0.3;
@@ -292,6 +293,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			}
 		}
 		if (enableElectronConduction_) {
+			// conduction.enabled is a runtime option, but conduction operates on the hydro state. Without
+			// hydro or radiation there is no such state (only the unused placeholder component), and
+			// computeTimestepAtLevel() would derive a conduction timestep from it.
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled,
+							 "Electron conduction requires hydro or radiation to be enabled.");
 			// TODO (av): add support for subcycling with conduction
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0, "AMR subcycling is not supported with conduction. Set do_subcycle = 0.");
 		}
@@ -487,6 +493,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
 		std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
 		componentNames_cc_.insert(componentNames_cc_.end(), hydroNames.begin(), hydroNames.end());
+	} else {
+		// Physics_Indices::nvarTotal_cc still allocates one cell-centred component when there is no
+		// hyperbolic state; name it so that plotfiles and conservation sums stay consistent
+		componentNames_cc_.emplace_back("placeholder");
 	}
 	// add passive scalar variables
 	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
@@ -828,8 +838,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const dpp("dust");
 		dpp.query("omega_drag_heating", dust_omega_drag_);
-		dpp.query("omega_rk_residual", dust_omega_res_);
-		dpp.query("enable_iter_stoptime", enableIterDustStoptime_);
+		dpp.query("omega_gyro_residual", dust_omega_gyro_res_);
+		std::string resolved_rk_scheme_name;
+		if (dpp.query("resolved_rk_scheme", resolved_rk_scheme_name) != 0) {
+			dustResolvedRkScheme_ = quokka::dust::parseResolvedRkScheme(resolved_rk_scheme_name);
+		}
+		dpp.query("enable_coefficient_iteration", dustCoefficientIteration_.enabled);
+		dpp.query("picard_alpha_rtol", dustCoefficientIteration_.alphaRelativeTolerance);
+		dpp.query("picard_charge_rtol", dustCoefficientIteration_.chargeRelativeTolerance);
+		dpp.query("picard_max_iterations", dustCoefficientIteration_.maxIterations);
+		if (dustCoefficientIteration_.maxIterations <= 0) {
+			amrex::Abort("dust.picard_max_iterations must be positive.");
+		}
 		dpp.query("print_iteration_counts", print_dust_counter_);
 		dpp.query("density_floor", dustDensityFloor_);
 	}
@@ -906,9 +926,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 				});
 			}
 		} else {
-			// no physics modules enabled, why are we running?
-			amrex::Abort("At least one of hydro or radiation must be enabled! Cannot "
-				     "compute a time step.");
+			// no hyperbolic physics is enabled (e.g. self-gravity acting on particles only),
+			// so there is no signal speed and the timestep is set by the other physics modules
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { maxSignal(i, j, k) = 0.0; });
 		}
 	}
 
@@ -1002,7 +1022,9 @@ void QuokkaSimulation<problem_t>::CheckHydroStates(amrex::MultiFab &mf, std::arr
 						   std::source_location const &location)
 {
 #ifndef NDEBUG
-	checkHydroStates(mf, mf_fc, location.file_name(), static_cast<int>(location.line()));
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+		checkHydroStates(mf, mf_fc, location.file_name(), static_cast<int>(location.line()));
+	}
 #else
 	static_cast<void>(mf);
 	static_cast<void>(mf_fc);
@@ -1175,10 +1197,10 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 {
 	auto const applyDust = [&]() {
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
-			DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega_drag_, dust_omega_res_, enableIterDustStoptime_,
-									  print_dust_counter_);
+			DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega_drag_, dust_omega_gyro_res_, dustResolvedRkScheme_,
+									  dustCoefficientIteration_, print_dust_counter_);
 		} else if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-			DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_drag_, enableIterDustStoptime_, print_dust_counter_);
+			DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_drag_, dustCoefficientIteration_, print_dust_counter_);
 		}
 	};
 
@@ -1560,6 +1582,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
+	// there is no gas or radiation energy to report when neither hydro nor radiation is enabled
+	if constexpr (!(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled)) {
+		amrex::ignore_unused(initSumCons);
+		return;
+	}
+
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 
@@ -1656,10 +1684,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	// advance hydro
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
 		advanceHydroAtLevelWithRetries(lev, time, dt_lev, fr_as_crse, fr_as_fine, emf_as_crse, emf_as_fine);
-	} else {
+	} else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		// copy hydro vars from state_old_cc_ to state_new_cc_
 		// (otherwise radiation update will be wrong!)
 		amrex::MultiFab::Copy(state_new_cc_[lev], state_old_cc_[lev], 0, 0, nvars_, 0);
+	} else {
+		// no hyperbolic state: the cell-centred state holds only the unused placeholder component
+		amrex::MultiFab::Copy(state_new_cc_[lev], state_old_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
 	}
 
 	// check hydro states after hydro update
@@ -1685,22 +1716,35 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs_mf, const int lev)
 {
-	// add hydro density to Poisson rhs
-	auto const &state = state_new_cc_[lev].const_arrays();
-	auto rhs = rhs_mf.arrays();
-	const Real G = Gconst_;
+	// there is no gas density to add when neither hydro nor radiation is enabled
+	if constexpr (!(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled)) {
+		amrex::ignore_unused(rhs_mf, lev);
+		return;
+	} else {
+		// add hydro density to Poisson rhs
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto rhs = rhs_mf.arrays();
+		const Real G = Gconst_;
 
-	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// *add* density to rhs_mf
-		// (N.B. particles **will not work** if you overwrite the density here!)
-		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
-	});
-	amrex::Gpu::streamSynchronizeAll();
+		amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			// *add* density to rhs_mf
+			// (N.B. particles **will not work** if you overwrite the density here!)
+			rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		});
+		amrex::Gpu::streamSynchronizeAll();
+	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf, const int lev, const amrex::Real dt)
 {
 #if (AMREX_SPACEDIM == 3)
+	// there is no gas to accelerate when neither hydro nor radiation is enabled
+	// (the cell-centred state does not even hold the hydro variables in that case)
+	if constexpr (!(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled)) {
+		amrex::ignore_unused(phi_mf, lev, dt);
+		return;
+	}
+
 	// apply Poisson gravity operator on level 'lev'
 	auto const &dx = geom[lev].CellSizeArray();
 	auto const &phi = phi_mf.const_arrays();
@@ -2044,6 +2088,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::postInitializati
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev)
 {
+	// there is no hydro state to fix up when neither hydro nor radiation is enabled
+	if constexpr (!(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled)) {
+		amrex::ignore_unused(state_cc, state_fc, lev);
+		return;
+	}
+
 	// Apply the hydro floors after any operator-split state update before the next operator consumes the state.
 	if (this->useDensityFloorParser_) {
 		auto const density_floor_parser = this->densityFloorParserExe_.value();
