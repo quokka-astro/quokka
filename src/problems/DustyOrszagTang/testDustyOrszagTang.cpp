@@ -135,8 +135,8 @@ void writeProfileCsv(const ProfileData &profile)
 	std::ofstream file(std::format("dusty_orszag_tang_{}_{}_profile.csv", profile.case_tag_, profile.snapshot_tag_));
 	file << "y,rho_g,rho_d,v_gx,v_gy,v_dx,v_dy\n";
 	for (size_t idx = 0; idx < profile.y_.size(); ++idx) {
-		file << profile.y_[idx] << "," << profile.rho_g_[idx] << "," << profile.rho_d_[idx] << "," << profile.v_gx_[idx] << ","
-		     << profile.v_gy_[idx] << "," << profile.v_dx_[idx] << "," << profile.v_dy_[idx] << "\n";
+		file << profile.y_[idx] << "," << profile.rho_g_[idx] << "," << profile.rho_d_[idx] << "," << profile.v_gx_[idx] << "," << profile.v_gy_[idx]
+		     << "," << profile.v_dx_[idx] << "," << profile.v_dy_[idx] << "\n";
 	}
 }
 
@@ -145,8 +145,7 @@ auto profileIsFinite(const ProfileData &profile) -> bool
 	auto const check = [](const std::vector<double> &values) {
 		return std::all_of(values.begin(), values.end(), [](double value) { return std::isfinite(value); });
 	};
-	return check(profile.rho_g_) && check(profile.rho_d_) && check(profile.v_gx_) && check(profile.v_gy_) && check(profile.v_dx_) &&
-	       check(profile.v_dy_);
+	return check(profile.rho_g_) && check(profile.rho_d_) && check(profile.v_gx_) && check(profile.v_gy_) && check(profile.v_dx_) && check(profile.v_dy_);
 }
 
 auto sliceIsFinite(const SliceData &slice) -> bool
