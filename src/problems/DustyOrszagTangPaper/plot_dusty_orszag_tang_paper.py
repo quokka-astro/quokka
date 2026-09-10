@@ -208,7 +208,7 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
     trim_shared_edge_ticks(axes[1, 0], axis="y", drop_last=True)
     cbar = fig.colorbar(mesh, cax=cax)
     cbar.set_label(r"$\rho_g$")
-    output_path = output_dir / "dusty_orszag_tang_paper_fig6_analog.pdf"
+    output_path = output_dir / "dusty_orszag_tang_gas_density_dust_overdensity.pdf"
     fig.savefig(output_path)
     plt.close(fig)
     return output_path
@@ -224,14 +224,14 @@ def make_fig7(data_dir: Path, output_dir: Path, prefix: str, case_tag: str, reso
         mask = y <= 0.3 + 1.0e-12
         y = y[mask]
         rho_g = np.array([row["rho_g"] for row in rows])[mask]
-        rho_d_scaled = np.array([row["rho_d_scaled"] for row in rows])[mask]
+        rho_d = np.array([row["rho_d"] for row in rows])[mask]
         v_gy = np.array([row["v_gy"] for row in rows])[mask]
         v_dy = np.array([row["v_dy"] for row in rows])[mask]
         linestyle = LINE_STYLES[resolution]
 
         axes[0].plot(y, v_dy, color="black", linestyle=linestyle)
         axes[0].plot(y, v_gy, color="red", linestyle=linestyle)
-        axes[1].plot(y, rho_d_scaled, color="black", linestyle=linestyle)
+        axes[1].plot(y, rho_d, color="black", linestyle=linestyle)
         axes[1].plot(y, rho_g, color="red", linestyle=linestyle)
 
     axes[0].set_title(CASE_LABELS[case_tag])
@@ -263,7 +263,7 @@ def make_fig7(data_dir: Path, output_dir: Path, prefix: str, case_tag: str, reso
     axes[0].set_xlim(0.0, 0.3)
 
     axes[0].tick_params(labelbottom=False)
-    output_path = output_dir / "dusty_orszag_tang_paper_fig7_analog.pdf"
+    output_path = output_dir / "dusty_orszag_tang_gas_dust_velocity_density_profiles.pdf"
     fig.savefig(output_path)
     plt.close(fig)
     return output_path
