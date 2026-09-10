@@ -114,7 +114,16 @@ auto runConductionTest(int nx, int /*max_level*/) -> double
 {
 	constexpr double max_time = 469054.0075444166;
 
+	// Set grid dimensions using AMReX parameter system (ny = nz = 8 for 3D)
+	amrex::ParmParse pp("amr");
+#if AMREX_SPACEDIM == 3
 	amrex::Vector<int> const ncells = {nx, 8, 8};
+	pp.add("blocking_factor_y", 8);
+	pp.add("blocking_factor_z", 8);
+#else
+	amrex::Vector<int> const ncells = {nx, nx, nx};
+#endif
+	pp.addarr("n_cell", ncells);
 
 	// Set domain bounds using AMReX parameter system
 	amrex::ParmParse pp_geom("geometry");
