@@ -1,0 +1,22 @@
+# Hydro-only steady annulus. GM=1, ring radius=1, orbital period=2*pi.
+# The optional third direction is a uniform periodic slab, not a stratified disk.
+geometry.prob_lo = [-2.0, -2.0, -0.125]
+geometry.prob_hi = [2.0, 2.0, 0.125]
+quokka.bc = ["ext_dir", "ext_dir", "periodic"]
+amr.n_cell = [128, 128, 8]
+amr.max_level = 0
+amr.max_grid_size = 128
+amr.blocking_factor = 8
+amr.v = 0
+do_reflux = 0
+do_subcycle = 0
+stop_time = 6.283185307179586*10
+cfl = 0.3
+hydro.artificial_viscosity_coefficient = 0.1
+hydro.use_dual_energy = 1
+hydro.reconstruction_order = 5
+plotfile_interval = -1
+checkpoint_interval = -1
+suppress_output = 1
+disk.history_file = "keplerian_disk_history.txt"
+disk.transport_file = "keplerian_disk_transport.txt"
