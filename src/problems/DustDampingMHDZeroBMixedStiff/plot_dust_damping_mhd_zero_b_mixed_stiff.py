@@ -142,7 +142,7 @@ def plot_panel(ax: plt.Axes, history: dict[str, list[float]], exact: dict[str, l
             zorder=2,
             label="TP2025 (no residual correction)",
         )
-        ax.legend(loc="best", fontsize=7.5)
+        ax.legend(loc="best", fontsize=7.5, handlelength=1.4)
 
     ax.set_ylabel(ylabel)
     ax.set_xlim(0.0, T_MAX)
