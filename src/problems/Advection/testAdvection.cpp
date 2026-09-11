@@ -27,8 +27,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct SawtoothProblem {
-};
+struct SawtoothProblem {};
 
 template <> struct Physics_Traits<SawtoothProblem> : DefaultPhysicsTraits {
 	// cell-centred

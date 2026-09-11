@@ -41,8 +41,7 @@
 
 using amrex::Real;
 
-struct PrimordialChemTest {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct PrimordialChemTest {}; // dummy type to allow compile-type polymorphism via template specialization
 
 template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 	// cell-centred

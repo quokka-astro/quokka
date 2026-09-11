@@ -19,8 +19,7 @@
 #include "util/valarray.hpp"
 #include <format>
 
-struct MarshakProblem {
-};
+struct MarshakProblem {};
 
 AMREX_GPU_MANAGED double kappa1 = 1.0e10; // dust opacity at IR. NOLINT
 AMREX_GPU_MANAGED double kappa2 = 1.0;	  // dust opacity at FUV. NOLINT

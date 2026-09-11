@@ -21,8 +21,7 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
-struct ParticleProblem {
-};
+struct ParticleProblem {};
 
 constexpr int nGroups_ = 1;
 

@@ -29,8 +29,7 @@
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
 
-struct BinaryOrbit {
-};
+struct BinaryOrbit {};
 
 static bool do_split_particles = false;	    // NOLINT
 static int split_factor = 8;		    // NOLINT

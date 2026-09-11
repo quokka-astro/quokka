@@ -34,8 +34,7 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct OrszagTang {
-};
+struct OrszagTang {};
 
 template <> struct quokka::EOS_Traits<OrszagTang> {
 	static constexpr double gamma = 5. / 3.;
@@ -43,6 +42,7 @@ template <> struct quokka::EOS_Traits<OrszagTang> {
 };
 
 template <> struct Physics_Traits<OrszagTang> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };

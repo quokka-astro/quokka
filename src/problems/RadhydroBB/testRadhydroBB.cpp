@@ -27,8 +27,7 @@
 
 static constexpr bool export_csv = true;
 
-struct PulseProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct PulseProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int n_groups_ = 4;
 // constexpr int n_groups_ = 8;

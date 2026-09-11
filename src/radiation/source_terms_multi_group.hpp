@@ -304,12 +304,19 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 					}
 				}
 			}
-		} else { // in the second and later loops, calculate tau and E (given R)
+		} else { // in the second and later loops, calculate tau, then recover whichever of E and R is not
+			 // the unknown for that group (see newton_erad_base_tau_threshold)
 			tau = dt * rho * opacity_terms.kappaP * chat;
 			for (int g = 0; g < nGroups_; ++g) {
 				// If tau = 0.0, Erad_guess shouldn't change
 				if (tau[g] > 0.0) {
-					EradVec_guess[g] = opacity_terms.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
+					if (!use_D_as_base && (tau[g] < newton_erad_base_tau_threshold)) {
+						// Erad_g is the unknown for this thin group; R_g follows from it without
+						// cancellation
+						Rvec[g] = (fourPiBoverC[g] - EradVec_guess[g] / opacity_terms.kappaPoverE[g]) * tau[g] + work_local[g];
+					} else {
+						EradVec_guess[g] = opacity_terms.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
+					}
 					if constexpr (force_rad_floor_in_iteration) {
 						if (EradVec_guess[g] < 0.0) {
 							Egas_guess -= cscale * (Erad_floor_ - EradVec_guess[g]);
@@ -333,37 +340,71 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		if constexpr (use_D_as_base) {
 			jacobian.J0g = jacobian.J0g * tau0;
 			jacobian.Jgg = jacobian.Jgg * tau0;
+		} else {
+			RebaseThinGroupsOntoErad(jacobian, tau, opacity_terms.kappaPoverE);
 		}
 
-		// check relative convergence of the residuals
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
+		// Round-off floor on the radiation residual. A group whose unknown is R_g has its energy recovered
+		// as Erad_g = kappaPoverE_g * (4 pi B_g / c - R_g / tau_g). Where that subtraction cancels, the
+		// result is orders of magnitude smaller than either operand, so Erad_g -- and hence Fg_g -- cannot
+		// be resolved to better than the double-precision round-off of the larger operand. Without this
+		// floor the purely relative test below is unreachable in that regime and the iteration spins until
+		// maxIter and aborts, even though it reached its fixed point in a handful of steps.
+		double Fg_roundoff = 0.0;
+		for (int g = 0; g < nGroups_; ++g) {
+			if (tau[g] > 0.0) {
+				// A group rebased onto Erad_g reaches its residual without that cancellation, so its floor
+				// is just the round-off of the terms of the residual itself.
+				const double operand =
+				    (!use_D_as_base && (tau[g] < newton_erad_base_tau_threshold))
+					? std::max(std::max(std::abs(EradVec_guess[g]), std::abs(Rvec[g])), std::max(std::abs(Erad0Vec[g]), std::abs(Src[g])))
+					: std::max(fourPiBoverC[g], EradVec_guess[g]);
+				Fg_roundoff += std::numeric_limits<double>::epsilon() * operand;
+			}
+		}
+
+		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
+		// the round-off floor and cannot be reduced any further
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) &&
+		    ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) || (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
 #if 0 // NOLINT
-      // For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
-		if (n == 0) {
-			std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = [";
-			for (int g = 0; g < nGroups_; ++g) {
-				std::cout << Erad0Vec[g] << ", ";
+      // For debugging: print the Newton-Raphson iterates for each cell.
+		if (n >= 0) {
+			if (n == 0) {
+				std::cout << "NRDBG initial: Egas0 = " << Egas0 << ", Erad0Vec = [";
+				for (int g = 0; g < nGroups_; ++g) {
+					std::cout << Erad0Vec[g] << ", ";
+				}
+				std::cout << "], Src = [";
+				for (int g = 0; g < nGroups_; ++g) {
+					std::cout << Src[g] << ", ";
+				}
+				std::cout << "], tau0 = [";
+				for (int g = 0; g < nGroups_; ++g) {
+					std::cout << tau0[g] << ", ";
+				}
+				std::cout << "], c_v = " << c_v << ", Etot0 = " << Etot0 << "\n";
 			}
-			std::cout << "], tau0 = [";
-			for (int g = 0; g < nGroups_; ++g) {
-				std::cout << tau0[g] << ", ";
-			}
-			std::cout << "]";
-			std::cout << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << ", coeff_n = " << coeff_n << "\n";
-		} else if (n >= 0) {
-			std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = [";
+			std::cout << "NRDBG n = " << n << ", T_gas = " << T_gas << ", Egas = " << Egas_guess << ", Erad = [";
 			for (int g = 0; g < nGroups_; ++g) {
 				std::cout << EradVec_guess[g] << ", ";
+			}
+			std::cout << "], Rvec = [";
+			for (int g = 0; g < nGroups_; ++g) {
+				std::cout << Rvec[g] << ", ";
+			}
+			std::cout << "], 4piB/c = [";
+			for (int g = 0; g < nGroups_; ++g) {
+				std::cout << fourPiBoverC[g] << ", ";
 			}
 			std::cout << "], tau = [";
 			for (int g = 0; g < nGroups_; ++g) {
 				std::cout << tau[g] << ", ";
 			}
-			std::cout << "]";
-			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
+			std::cout << "], F0/Etot0 = " << jacobian.F0 / Etot0 << ", cscale*Fg/Etot0 = " << cscale * jacobian.Fg_abs_sum / Etot0 << "\n";
 		}
 #endif
 
@@ -384,7 +425,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			if constexpr (use_D_as_base) {
 				Rvec += tau0 * delta_R;
 			} else {
-				Rvec += delta_R;
+				for (int g = 0; g < nGroups_; ++g) {
+					if ((tau[g] > 0.0) && (tau[g] < newton_erad_base_tau_threshold)) {
+						// delta_R holds delta_Erad for a rebased group. Rvec is advanced to first
+						// order as well, so that it stays usable if the group leaves the thin
+						// regime; when it does not, Rvec is recovered exactly at the top of the
+						// next iteration.
+						EradVec_guess[g] += delta_R[g];
+						Rvec[g] += -tau[g] / opacity_terms.kappaPoverE[g] * delta_R[g];
+					} else {
+						Rvec[g] += delta_R[g];
+					}
+				}
 			}
 		}
 
@@ -393,6 +445,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		// 	break;
 		// }
 	} // END NEWTON-RAPHSON LOOP
+
+	// Inject the source directly into transparent groups (tau ~ 0). The Newton solve above excludes such
+	// groups from its residual and Jacobian (Fg_abs_sum and Jgg skip tau <= 0) and leaves their radiation
+	// energy at Erad0, so an injected source in a transparent group would otherwise be silently dropped.
+	// This mirrors the single-group negligible-optical-depth branch. Transparent groups do not couple to
+	// the gas (their Rvec contribution is zero), so this is energy-consistent: Src is already counted in
+	// Etot0. Groups with tau > 0 (the usual case) and groups without a source are unaffected.
+	for (int g = 0; g < nGroups_; ++g) {
+		if (!(tau[g] > 0.0)) {
+			EradVec_guess[g] = Erad0Vec[g] + Src[g];
+		}
+	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
 	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
@@ -426,7 +490,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 // Update radiation flux and gas momentum. Returns FluxUpdateResult struct. The function also updates energy.Egas and energy.work.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arrayconst_t &consPrev, NewtonIterationResult<problem_t> &energy,
-						       double const dt, double const gas_update_factor, double const Ekin0, double Emag)
+						       double const dt, double const gas_update_factor, double const Ekin0,
+						       amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> const &Src_flux, double Emag)
     -> FluxUpdateResult<problem_t>
 {
 	amrex::GpuArray<amrex::Real, 3> Frad_t0{};
@@ -448,9 +513,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 	const double chat = c_hat_;
 
 	for (int g = 0; g < nGroups_; ++g) {
-		Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-		Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-		Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+		// The user-defined flux source is added to the old-time flux, so the implicit absorption below acts on
+		// the freshly injected radiation as well.
+		Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g) + Src_flux[0][g];
+		Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g) + Src_flux[1][g];
+		Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g) + Src_flux[2][g];
 
 		if constexpr ((gamma_ == 1.0) || (beta_order_ == 0)) {
 			for (int n = 0; n < 3; ++n) {
@@ -526,7 +593,19 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 		if constexpr (include_work_term_in_source) {
 			// New scheme: the work term is included in the source terms. The work done by radiation went to internal energy, but it
 			// should go to the kinetic energy. Remove the work term from internal energy.
-			energy.Egas -= dEkin_work;
+			// Cap the transfer at the internal energy actually available. In a cold cell that the beam is
+			// driving hard, dEkin_work can exceed Egas -- the momentum deposited over one radiation step buys
+			// more kinetic energy than the gas holds internally, a mismatch the reduced speed of light widens
+			// because the momentum and energy exchanges carry different powers of chat/c. Subtracting it
+			// unclamped leaves a negative internal energy, which the EOS rejects outright (debug) and which
+			// otherwise flows on silently: it flips the sign of the gas-dust branch test and NaNs the solve.
+			// The cap is not energy conserving. It is a known limitation of the lagged work term, not a
+			// timestep problem -- the capped fraction of cell-updates does not fall as dt is refined -- but
+			// it can only bind where the transfer already exceeds the internal energy available, i.e. in
+			// cold cells the radiation has evacuated, where Egas and hence the discarded energy are
+			// minuscule. See work_term_min_eint_fraction and issue #2173.
+			const double max_eint_transfer = (1.0 - work_term_min_eint_fraction) * energy.Egas;
+			energy.Egas -= std::min(dEkin_work, max_eint_transfer);
 			// The work term is included in the source term, but it is lagged. We update the work term here.
 			for (int g = 0; g < nGroups_; ++g) {
 				// compute new work term from the updated radiation flux and velocity
@@ -587,10 +666,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
-						    double gas_update_factor_in, double dustGasCoeff, double const tol_h, double const tol_rel_h,
-						    double const tempFloor_local, int *p_iteration_counter, int *p_iteration_failure_counter,
-						    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
+void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
+						    amrex::Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double const tol_h,
+						    double const tol_rel_h, double const tempFloor_local, int *p_iteration_counter,
+						    int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
@@ -642,14 +721,29 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// load radiation energy source term
 		// plus advection source term (for well-balanced/SDC integrators)
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
+		// The radiation flux source is scaled exactly like the energy source; unit: erg cm^-2 s^-2.
 		quokka::valarray<double, nGroups_> Src;
+		amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> Src_flux{};
 		for (int g = 0; g < nGroups_; ++g) {
 			// The last NChemBands groups are ionizing photon groups (no cscale).
 			// All other (thermal) groups require scaling by chat/c (= 1/cscale).
 			// Avoid if constexpr here: NVCC rejects first-captures inside constexpr-if in device lambdas.
-			Src[g] = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroups_ - RadSystem_NChemBands<problem_t>::value)
-				     ? dt * radEnergySource(i, j, k, g)
-				     : dt * (chat / c * radEnergySource(i, j, k, g));
+			const double src_scale = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_) ? dt : dt * (chat / c);
+			Src[g] = src_scale * radEnergySource(i, j, k, g);
+			for (int n = 0; n < 3; ++n) {
+				Src_flux[n][g] = src_scale * radFluxSource(i, j, k, 3 * g + n);
+			}
+		}
+
+		// Chemical (ionizing) bands are decoupled from the thermal gas-radiation energy exchange. Their
+		// source is injected directly into the radiation energy after the Newton solve (see the store
+		// below), so it is not subject to the thermal opacity coupling (which would drop it at zero
+		// opacity) and does not pollute the gas energy balance. Remove the chem-band source from the
+		// thermal solve here. When NChemBands == 0 this loop is empty and behaviour is unchanged.
+		quokka::valarray<double, nGroups_> Src_chem{};
+		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
+			Src_chem[g] = Src[g];
+			Src[g] = 0.0;
 		}
 
 		double Egas0 = NAN;
@@ -775,7 +869,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			// 2. Compute radiation flux update
 
 			// 2.1. Update flux and gas momentum
-			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0, Emag);
+			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0, Src_flux, Emag);
 
 			// 2.2. Check for convergence of the work term
 			bool work_converged = true;
@@ -803,7 +897,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				consNew(i, j, k, x2GasMomentum_index) = updated_flux.gasMomentum[1];
 				consNew(i, j, k, x3GasMomentum_index) = updated_flux.gasMomentum[2];
 				for (int g = 0; g < nGroups_; ++g) {
-					consNew(i, j, k, radEnergy_index + numRadVars_ * g) = updated_flux.Erad[g];
+					// For chemical bands, Src_chem[g] injects the ionizing source directly (the thermal
+					// solve left updated_flux.Erad[g] == Erad0[g]); for thermal groups Src_chem[g] == 0.
+					consNew(i, j, k, radEnergy_index + numRadVars_ * g) = updated_flux.Erad[g] + Src_chem[g];
 					consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = updated_flux.Frad[0][g];
 					consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = updated_flux.Frad[1][g];
 					consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = updated_flux.Frad[2][g];

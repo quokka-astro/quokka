@@ -30,8 +30,7 @@ constexpr bool particle_in_cell_center = true; // NOLINT
 bool return_1_at_fail = false;		       // NOLINT
 std::string sink_file = "../inputs/sink.txt";  // NOLINT
 
-struct AccretionProblem {
-};
+struct AccretionProblem {};
 
 // In this test, r_B = 0.1214 pc. Ball radius is R = 32 r_B, box half-size is 2 R = 64 r_B = 7.7696 pc = 2.397448054e+19 cm
 

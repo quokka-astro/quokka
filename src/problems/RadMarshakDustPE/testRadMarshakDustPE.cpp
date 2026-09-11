@@ -19,8 +19,7 @@
 #include "util/valarray.hpp"
 #include <format>
 
-struct MarshakProblem {
-};
+struct MarshakProblem {};
 
 constexpr double PE_rate = 1.0;	       // photoelectric heating rate in s^-1 (actual rate is PE_rate * E_FUV)
 AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR. NOLINT

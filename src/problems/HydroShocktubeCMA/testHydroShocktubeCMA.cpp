@@ -29,8 +29,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct ShocktubeProblem {
-};
+struct ShocktubeProblem {};
 
 bool consv_test_passes = true; // if mass scalar conservation check fails, set to false. NOLINT
 
@@ -45,6 +44,7 @@ template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 3;		     // number of mass scalars

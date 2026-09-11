@@ -27,7 +27,6 @@ do_subcycle = 0
 plotfile_interval = -1
 checkpoint_interval = -1
 cfl = 0.2
-stop_time = 3.0
 max_timesteps = 3e4
 
 hydro.rk_integrator_order = 2
@@ -41,6 +40,7 @@ mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
 # *****************************************************************
 # Field loop setup
 # *****************************************************************
+setup.num_periods = 1
 setup.loop_radius = 0.3
 setup.loop_center_x = 0.0
 setup.loop_center_y = 0.0

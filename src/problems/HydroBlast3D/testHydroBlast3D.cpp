@@ -20,8 +20,7 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
-struct SedovProblem {
-};
+struct SedovProblem {};
 
 // if false, use octant symmetry instead
 constexpr bool simulate_full_box = false;
@@ -38,6 +37,7 @@ template <> struct HydroSystem_Traits<SedovProblem> {
 };
 
 template <> struct Physics_Traits<SedovProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear/bulk default to 0; no-op unless set

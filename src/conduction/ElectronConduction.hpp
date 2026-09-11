@@ -39,7 +39,7 @@ template <typename problem_t> class ElectronConduction
 	// EOSTabulated backend), matching how hydro itself computes pressure/sound speed for every
 	// problem — only temperature is actually table-driven. See EOSTabulated in hydro/EOS.hpp.
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
-				    amrex::Real dt, ElectronConductionParams const &params)
+				    amrex::Real dt, ElectronConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
 		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Electron conduction requires hydro to be enabled.");
 
@@ -116,7 +116,6 @@ template <typename problem_t> class ElectronConduction
 			saturated_flux_arr[bx](i, j, k) = qsat;
 		});
 
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
 			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);

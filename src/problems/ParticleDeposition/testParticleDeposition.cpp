@@ -16,8 +16,7 @@
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
 
-struct ParticleDepositionProblem {
-};
+struct ParticleDepositionProblem {};
 
 template <> struct Particle_Traits<ParticleDepositionProblem> : DefaultParticleTraits {
 #if AMREX_SPACEDIM == 3
