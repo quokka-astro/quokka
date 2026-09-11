@@ -7,9 +7,11 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file AnisoConduction.hpp
-/// \brief Explicit thermal conduction update. Flux at each face is currently just -bhat . gradT
-///        (the field-projected temperature gradient, unscaled); kappa_parallel/kappa_perp are not
-///        yet folded into the flux calculation.
+/// \brief Explicit anisotropic thermal conduction update. At each face, gradT is decomposed into
+///        components parallel/perpendicular to the local unit B-field (bhat) and scaled by
+///        kappa_parallel/kappa_perp respectively, then flux-limited/saturated as in
+///        ElectronConduction::ComputeExplicit. The saturation flux itself is not yet computed
+///        (a large sentinel is used, making the limiter a no-op).
 
 #include <array>
 #include <cmath>
@@ -208,6 +210,67 @@ void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &tempe
 	});
 }
 
+// Compute the number density at the DIR-faces from a cell-centered mass-density field (e.g.
+// primVar component 0): the average of the two cells bounding each face, divided by the mean
+// molecular weight (already in mass units, e.g. EOS_Traits<problem_t>::mean_molecular_weight).
+template <FluxDir DIR>
+void ComputeFaceNumberDensity(amrex::MultiFab &n_fc_mf, amrex::MultiFab const &density, amrex::Real mean_molecular_weight, int comp)
+{
+	auto const &rho_in = density.const_arrays();
+	auto n_out = n_fc_mf.arrays();
+
+	amrex::ParallelFor(n_fc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::Real rho_face = 0.0;
+		if constexpr (DIR == FluxDir::X1) {
+			rho_face = 0.5 * (rho_in[bx](i, j, k, comp) + rho_in[bx](i - 1, j, k, comp));
+		} else if constexpr (DIR == FluxDir::X2) {
+			rho_face = 0.5 * (rho_in[bx](i, j, k, comp) + rho_in[bx](i, j - 1, k, comp));
+		} else { // FluxDir::X3
+			rho_face = 0.5 * (rho_in[bx](i, j, k, comp) + rho_in[bx](i, j, k - 1, comp));
+		}
+		n_out[bx](i, j, k) = rho_face / mean_molecular_weight;
+	});
+}
+
+// Compute the anisotropic heat flux crossing the DIR-faces, given the unit B-field (bhat_fc, from
+// ComputeFaceUnitBField) and the temperature gradient (gradT_fc, from ComputeFaceGradT) already
+// estimated at those faces. Number density at the face is computed internally via
+// ComputeFaceNumberDensity, from primVar (component 0 is rho) and mean_molecular_weight. For now
+// this only applies the field-aligned term:
+//   q . nhat = -kappa_parallel * (bhat . gradT) * (bhat . nhat) * n
+// (kappa_perp is accepted but not yet used -- the perpendicular term and q_sat are still to be
+// fixed), then flux-limited/saturated exactly as in ElectronConduction::ComputeExplicit:
+//   flux = q_classical / (1 + |q_classical| / max(q_sat, small)).
+// q_sat_fc is the (precomputed) saturation flux at each face -- this function does not compute it.
+template <FluxDir DIR>
+void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &bhat_fc, amrex::MultiFab const &gradT_fc, amrex::MultiFab const &primVar,
+			    amrex::Real mean_molecular_weight, amrex::Real kappa_parallel, amrex::Real kappa_perp, amrex::MultiFab const &q_sat_fc)
+{
+	amrex::MultiFab n_fc(heat_flux_fc.boxArray(), heat_flux_fc.DistributionMap(), 1, 0);
+	ComputeFaceNumberDensity<DIR>(n_fc, primVar, mean_molecular_weight, 0);
+
+	constexpr int normal_comp = static_cast<int>(DIR);
+	const amrex::Real small = std::numeric_limits<amrex::Real>::min();
+
+	auto const &bhat_in = bhat_fc.const_arrays();
+	auto const &gradT_in = gradT_fc.const_arrays();
+	auto const &qsat_in = q_sat_fc.const_arrays();
+	auto const &n_in = n_fc.const_arrays();
+	auto flux_out = heat_flux_fc.arrays();
+
+	amrex::ParallelFor(heat_flux_fc, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		const amrex::Real bdotgradT = bhat_in[bx](i, j, k, 0) * gradT_in[bx](i, j, k, 0) + bhat_in[bx](i, j, k, 1) * gradT_in[bx](i, j, k, 1) +
+					      bhat_in[bx](i, j, k, 2) * gradT_in[bx](i, j, k, 2);
+		const amrex::Real bn = bhat_in[bx](i, j, k, normal_comp);
+		const amrex::Real n = n_in[bx](i, j, k);
+
+		const amrex::Real q_classical = -kappa_parallel * bdotgradT * bn * n;
+		const amrex::Real q_sat = qsat_in[bx](i, j, k);
+		const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat, small);
+		flux_out[bx](i, j, k) = q_classical / limiter;
+	});
+}
+
 template <typename problem_t> class AnisoConduction
 {
       public:
@@ -236,7 +299,7 @@ template <typename problem_t> class AnisoConduction
 	{
 		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Anisotropic conduction requires hydro to be enabled.");
 
-		if (dt <= 0.0) {
+		if ((dt <= 0.0) || ((params.kappa_parallel <= 0.0) && (params.kappa_perp <= 0.0))) {
 			return;
 		}
 
@@ -330,34 +393,27 @@ template <typename problem_t> class AnisoConduction
 		AMREX_D_TERM(ComputeFaceGradT<FluxDir::X1>(gradT_fc[0], primVar, dx, 1);, ComputeFaceGradT<FluxDir::X2>(gradT_fc[1], primVar, dx, 1);
 			     , ComputeFaceGradT<FluxDir::X3>(gradT_fc[2], primVar, dx, 1);)
 
-		// Heat flux at each face = -bhat . gradT (kappa_parallel/kappa_perp are not folded in yet).
-		auto const &bhat_x = bhat_fc[0].const_arrays();
-		auto const &gradT_x = gradT_fc[0].const_arrays();
-		auto flux_x = heat_flux[0].arrays();
-		amrex::ParallelFor(heat_flux[0], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			flux_x[bx](i, j, k) = -(bhat_x[bx](i, j, k, 0) * gradT_x[bx](i, j, k, 0) + bhat_x[bx](i, j, k, 1) * gradT_x[bx](i, j, k, 1) +
-						bhat_x[bx](i, j, k, 2) * gradT_x[bx](i, j, k, 2));
-		});
+		// Saturation flux at each face (Cowie & McKee 1977) -- NOT computed yet, since that needs
+		// (rho, T) reconstructed to the interfaces via EOS calls, which isn't wired up in this file
+		// right now. Filled with a large sentinel so the limiter below is a no-op (q_classical
+		// unmodified) until that piece is added.
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> q_sat_fc;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			q_sat_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 1, 0);
+			q_sat_fc[idim].setVal(std::numeric_limits<amrex::Real>::max());
+		}
 
-#if AMREX_SPACEDIM >= 2
-		auto const &bhat_y = bhat_fc[1].const_arrays();
-		auto const &gradT_y = gradT_fc[1].const_arrays();
-		auto flux_y = heat_flux[1].arrays();
-		amrex::ParallelFor(heat_flux[1], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			flux_y[bx](i, j, k) = -(bhat_y[bx](i, j, k, 0) * gradT_y[bx](i, j, k, 0) + bhat_y[bx](i, j, k, 1) * gradT_y[bx](i, j, k, 1) +
-						bhat_y[bx](i, j, k, 2) * gradT_y[bx](i, j, k, 2));
-		});
-#endif
-
-#if AMREX_SPACEDIM == 3
-		auto const &bhat_z = bhat_fc[2].const_arrays();
-		auto const &gradT_z = gradT_fc[2].const_arrays();
-		auto flux_z = heat_flux[2].arrays();
-		amrex::ParallelFor(heat_flux[2], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			flux_z[bx](i, j, k) = -(bhat_z[bx](i, j, k, 0) * gradT_z[bx](i, j, k, 0) + bhat_z[bx](i, j, k, 1) * gradT_z[bx](i, j, k, 1) +
-						bhat_z[bx](i, j, k, 2) * gradT_z[bx](i, j, k, 2));
-		});
-#endif
+		// Heat flux at each face: full parallel/perpendicular decomposition of gradT relative to
+		// bhat, projected onto the face normal -- see ComputeAnisotropicFlux (which computes number
+		// density internally via ComputeFaceNumberDensity).
+		const amrex::Real mmw = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+		AMREX_D_TERM(ComputeAnisotropicFlux<FluxDir::X1>(heat_flux[0], bhat_fc[0], gradT_fc[0], primVar, mmw, params.kappa_parallel,
+								  params.kappa_perp, q_sat_fc[0]);
+			     , ComputeAnisotropicFlux<FluxDir::X2>(heat_flux[1], bhat_fc[1], gradT_fc[1], primVar, mmw, params.kappa_parallel,
+								    params.kappa_perp, q_sat_fc[1]);
+			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], bhat_fc[2], gradT_fc[2], primVar, mmw, params.kappa_parallel,
+								    params.kappa_perp, q_sat_fc[2]);)
 
 		auto state_out = state.arrays();
 		auto const &flux_x_const = heat_flux[0].const_arrays();
