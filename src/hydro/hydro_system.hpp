@@ -107,6 +107,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 					  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, array_t &maxSignal,
 					  amrex::Box const &indexRange);
 
+	// per-cell characteristic speed shared by maxSignalSpeedLocal and ComputeMaxSignalSpeed; includes gas, MHD fast
+	// magnetosonic, and dust contributions so both callers agree on what limits the timestep
+	AMREX_GPU_DEVICE static auto ComputeCellSignalSpeed(amrex::Array4<const amrex::Real> const &cons_cc, int i, int j, int k,
+							    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
+	    -> amrex::Real;
+
 	static auto CheckStatesValid(amrex::MultiFab const &cons_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> bool;
 
 	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
@@ -348,6 +354,84 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 }
 
 template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+HydroSystem<problem_t>::ComputeCellSignalSpeed(amrex::Array4<const amrex::Real> const &cons_cc, int i, int j, int k,
+					       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
+{
+	// First-capture by early access
+	const auto rho = cons_cc(i, j, k, density_index);
+	const auto px = cons_cc(i, j, k, x1Momentum_index);
+	const auto py = cons_cc(i, j, k, x2Momentum_index);
+	const auto pz = cons_cc(i, j, k, x3Momentum_index);
+	AMREX_ASSERT(!std::isnan(rho));
+	AMREX_ASSERT(!std::isnan(px));
+	AMREX_ASSERT(!std::isnan(py));
+	AMREX_ASSERT(!std::isnan(pz));
+
+	const auto vx = px / rho;
+	const auto vy = py / rho;
+	const auto vz = pz / rho;
+	const double vel_magnitude = std::sqrt(vx * vx + vy * vy + vz * vz);
+	double fastest_wavespeed = NAN;
+
+	if (Physics_Traits<problem_t>::is_mhd_enabled) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(cons_fc != nullptr, "ComputeCellSignalSpeed called without face-centered fields for MHD problem");
+		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons_cc, i, j, k);
+		const auto total_energy = cons_cc(i, j, k, energy_index); // *total* gas energy per unit volume
+		const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+		const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
+		const auto thermal_energy = total_energy - kinetic_energy - magnetic_energy;
+		const auto bx1_m = (*cons_fc)[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx1_p = (*cons_fc)[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx2_m = (*cons_fc)[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx2_p = (*cons_fc)[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx3_m = (*cons_fc)[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx3_p = (*cons_fc)[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx1 = 0.5 * (bx1_m + bx1_p);
+		const auto bx2 = 0.5 * (bx2_m + bx2_p);
+		const auto bx3 = 0.5 * (bx3_m + bx3_p);
+		double b_sq = bx1 * bx1 + bx2 * bx2 + bx3 * bx3;
+		const auto pressure = ::quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+		double gp = ::quokka::EOS<problem_t>::gamma_ * pressure;
+
+		double bgp_p = b_sq + gp;
+		double const bgp_m = b_sq - gp;
+		fastest_wavespeed = std::max({std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * (bx2 * bx2 + bx3 * bx3))) / rho),
+					      std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * (bx1 * bx1 + bx3 * bx3))) / rho),
+					      std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * (bx1 * bx1 + bx2 * bx2))) / rho)});
+	} else {
+		if constexpr (is_eos_isothermal()) {
+			fastest_wavespeed = cs_iso_;
+		} else {
+			fastest_wavespeed = ComputeSoundSpeed(cons_cc, i, j, k, cons_fc);
+		}
+		AMREX_ASSERT(fastest_wavespeed > 0.);
+	}
+
+	double signal_max = fastest_wavespeed + vel_magnitude;
+
+	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+		for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+			const amrex::Real dust_rho = cons_cc(i, j, k, dustDensity_index + g * numDustVars_);
+			const amrex::Real dust_px = cons_cc(i, j, k, x1DustMomentum_index + g * numDustVars_);
+			const amrex::Real dust_py = cons_cc(i, j, k, x2DustMomentum_index + g * numDustVars_);
+			const amrex::Real dust_pz = cons_cc(i, j, k, x3DustMomentum_index + g * numDustVars_);
+			AMREX_ASSERT(!std::isnan(dust_rho));
+			AMREX_ASSERT(!std::isnan(dust_px));
+			AMREX_ASSERT(!std::isnan(dust_py));
+			AMREX_ASSERT(!std::isnan(dust_pz));
+
+			const amrex::Real dust_vx = dust_px / dust_rho;
+			const amrex::Real dust_vy = dust_py / dust_rho;
+			const amrex::Real dust_vz = dust_pz / dust_rho;
+			const amrex::Real dust_vel_mag = std::sqrt(dust_vx * dust_vx + dust_vy * dust_vy + dust_vz * dust_vz);
+			signal_max = std::max(signal_max, dust_vel_mag + fastest_wavespeed);
+		}
+	}
+	return signal_max;
+}
+
+template <typename problem_t>
 auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> amrex::Real
 {
 	// return maximum signal speed on local grids
@@ -373,20 +457,7 @@ auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf,
 						cons_fc[2] = cons_fc_x2[bx];
 #endif
 					}
-					const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
-					const auto px = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-					const auto py = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-					const auto pz = cons[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-					const auto kinetic_energy = (px * px + py * py + pz * pz) / (2.0 * rho);
-					const double abs_vel = std::sqrt(2.0 * kinetic_energy / rho);
-					double cs = NAN;
-
-					if constexpr (is_eos_isothermal()) {
-						cs = cs_iso_;
-					} else {
-						cs = ComputeSoundSpeed(cons[bx], i, j, k, &cons_fc);
-					}
-					return {cs + abs_vel};
+					return {ComputeCellSignalSpeed(cons[bx], i, j, k, &cons_fc)};
 				});
 }
 
@@ -395,78 +466,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 						   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, array_t &maxSignal,
 						   amrex::Box const &indexRange)
 {
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// First-capture by early access
-		const auto rho = cons_cc(i, j, k, density_index);
-		const auto px = cons_cc(i, j, k, x1Momentum_index);
-		const auto py = cons_cc(i, j, k, x2Momentum_index);
-		const auto pz = cons_cc(i, j, k, x3Momentum_index);
-		AMREX_ASSERT(!std::isnan(rho));
-		AMREX_ASSERT(!std::isnan(px));
-		AMREX_ASSERT(!std::isnan(py));
-		AMREX_ASSERT(!std::isnan(pz));
-
-		const auto vx = px / rho;
-		const auto vy = py / rho;
-		const auto vz = pz / rho;
-		const double vel_magnitude = std::sqrt(vx * vx + vy * vy + vz * vz);
-		double fastest_wavespeed = NAN;
-
-		if (Physics_Traits<problem_t>::is_mhd_enabled) {
-			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons_cc, i, j, k);
-			const auto total_energy = cons_cc(i, j, k, energy_index); // *total* gas energy per unit volume
-			const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-			const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, &cons_fc);
-			const auto thermal_energy = total_energy - kinetic_energy - magnetic_energy;
-			const auto bx1_m = cons_fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx1_p = cons_fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx2_m = cons_fc[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx2_p = cons_fc[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx3_m = cons_fc[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx3_p = cons_fc[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx1 = 0.5 * (bx1_m + bx1_p);
-			const auto bx2 = 0.5 * (bx2_m + bx2_p);
-			const auto bx3 = 0.5 * (bx3_m + bx3_p);
-			double b_sq = bx1 * bx1 + bx2 * bx2 + bx3 * bx3;
-			const auto pressure = ::quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
-			double gp = ::quokka::EOS<problem_t>::gamma_ * pressure;
-
-			double bgp_p = b_sq + gp;
-			double const bgp_m = b_sq - gp;
-			fastest_wavespeed = std::max({std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * (bx2 * bx2 + bx3 * bx3))) / rho),
-						      std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * (bx1 * bx1 + bx3 * bx3))) / rho),
-						      std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * (bx1 * bx1 + bx2 * bx2))) / rho)});
-		} else {
-			if constexpr (is_eos_isothermal()) {
-				fastest_wavespeed = cs_iso_;
-			} else {
-				fastest_wavespeed = ComputeSoundSpeed(cons_cc, i, j, k, &cons_fc);
-			}
-			AMREX_ASSERT(fastest_wavespeed > 0.);
-		}
-
-		double signal_max = fastest_wavespeed + vel_magnitude;
-
-		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-				const amrex::Real dust_rho = cons_cc(i, j, k, dustDensity_index + g * numDustVars_);
-				const amrex::Real dust_px = cons_cc(i, j, k, x1DustMomentum_index + g * numDustVars_);
-				const amrex::Real dust_py = cons_cc(i, j, k, x2DustMomentum_index + g * numDustVars_);
-				const amrex::Real dust_pz = cons_cc(i, j, k, x3DustMomentum_index + g * numDustVars_);
-				AMREX_ASSERT(!std::isnan(dust_rho));
-				AMREX_ASSERT(!std::isnan(dust_px));
-				AMREX_ASSERT(!std::isnan(dust_py));
-				AMREX_ASSERT(!std::isnan(dust_pz));
-
-				const amrex::Real dust_vx = dust_px / dust_rho;
-				const amrex::Real dust_vy = dust_py / dust_rho;
-				const amrex::Real dust_vz = dust_pz / dust_rho;
-				const amrex::Real dust_vel_mag = std::sqrt(dust_vx * dust_vx + dust_vy * dust_vy + dust_vz * dust_vz);
-				signal_max = std::max(signal_max, dust_vel_mag + fastest_wavespeed);
-			}
-		}
-		maxSignal(i, j, k) = signal_max;
-	});
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { maxSignal(i, j, k) = ComputeCellSignalSpeed(cons_cc, i, j, k, &cons_fc); });
 }
 
 template <typename problem_t>
@@ -1400,6 +1400,13 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 			cs_L = cs_iso_;
 			cs_R = cs_iso_;
+
+			// total and auxiliary internal energy are not evolved under an isothermal EOS;
+			// zero them here so the Riemann solvers never see NaN placeholders
+			E_L = 0.0;
+			E_R = 0.0;
+			Eint_L = 0.0;
+			Eint_R = 0.0;
 		} else {
 			if constexpr (reconstruct_eint) {
 				// compute pressure from specific internal energy
