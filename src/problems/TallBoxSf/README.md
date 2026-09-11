@@ -1,25 +1,107 @@
-We solve the following equations for the density profile:
+# TallBoxSf density-profile scripts
+
+Python helpers that solve the hydrostatic vertical density profile used as the initial condition for the TallBoxSf problem. The C++ driver (`testTallBoxSf.cpp`) reads the DataTable CSV produced here via `problem.IC_file`.
+
+## Equations
+
+We solve for the gas density $\rho_1$ and the gravitational acceleration due to gas $g_1$:
 
 $$
-\sigma_1^2 \frac{d \rho_1}{d z}=\rho_1\left(g_1+g_{\mathrm{ext}}\right) \\
+\sigma_1^2 \frac{d \rho_1}{d z}=\rho_1\left(g_1+g_{\mathrm{ext}}\right), \qquad
 \frac{d g_1}{d z}=4 \pi G \rho_1,
 $$
 
-where $\sigma_1 = 7$ km/s is the velocity dispersion, and $\rho_1$ and $g_1$ are the density and gravitational acceleration due to gas component, and $g_{\mathrm{ext}}=-d \Phi_{\mathrm{ext}} / \mathrm{dz}$ is the gravitational acceleration due to external potential (from stars plus dark matter). We solve these equations subject to the constraints that $g_1(z=0)=0$ and that $\Sigma_{\text {gas }}= 2 \int_0^{\infty} \rho_1 \mathrm{dz}$. The second constraint requires an iterative approach, so we take an initial guess value for $\rho_1(z=0) \equiv \rho_{1,0} = 1 m_H~\mathrm{cm}^{-3}$, solve the equations and integrate to find $\boldsymbol{\Sigma}_{\text {gas }}$, and then iteratively adjust the guess until we find the value of $\rho_{1,0}$ that yields the desired value of $\Sigma_{\text {gas }}$.
+with $\sigma_1 = 7$ km/s (default). Boundary conditions: $g_1(z=0)=0$ and $\Sigma_{\mathrm{gas}} = 2 \int_0^{\infty} \rho_1\, dz$. The second constraint is enforced by iterating on the midplane density $\rho_{1,0} \equiv \rho_1(z=0)$ until the integrated surface density matches the target $\Sigma_{\mathrm{gas}}$.
 
-The external gravitational potential, $\Phi_{\rm ext}$, is set by the dark matter halo potential and a stellar disc. The dark matter potential is adapted from Kuijken \& Gilmore (1989), and the total potential from the dark matter halo and the stellar disc (reproduced from Kim \& Ostriker 2017) is,
+The external potential (stars + dark matter; Kim & Ostriker 2017, after Kuijken & Gilmore 1989) is
 
 $$
-\begin{aligned}
-\Phi_{\mathrm{ext}} & =2 \pi G \Sigma_* z_*\left[\left(1+\frac{z^2}{z_*^2}\right)^{1 / 2}-1\right] \\
-& +2 \pi G \rho_{\mathrm{dm}} R_0^2 \ln \left(1+\frac{\mathrm{z}^2}{\mathrm{R}_0^2}\right) .
-\end{aligned}
+\Phi_{\mathrm{ext}}
+= 2\pi G \Sigma_* z_* \Bigl[\bigl(1 + z^2/z_*^2\bigr)^{1/2} - 1\Bigr]
++ 2\pi G \rho_{\mathrm{dm}} R_0^2 \ln\bigl(1 + z^2/R_0^2\bigr),
 $$
 
-Here, $\Sigma_*=42 \mathrm{M}_{\odot} \mathrm{pc}^{-2}, z_*=245 \mathrm{pc}, \rho_{\mathrm{dm}}=6.4 \times 10^{-3} \mathrm{M}_{\odot} \mathrm{pc}^{-3}$ and $R_0$ is the Galactocentric radius of our simulation box, which we set to be 8 kpc. $g_{\mathrm{ext}}=-d \Phi_{\mathrm{ext}} / d \mathrm{z}$
+and $g_{\mathrm{ext}} = -d\Phi_{\mathrm{ext}}/dz$. Default solar-neighborhood values: $\Sigma_* = 42\,\mathrm{M}_\odot\,\mathrm{pc}^{-2}$, $z_* = 245$ pc, $\rho_{\mathrm{dm}} = 6.4\times 10^{-3}\,\mathrm{M}_\odot\,\mathrm{pc}^{-3}$, $R_0 = 8$ kpc.
 
-Requirement:
+The tabulated solution is written in dimensionless form $\xi = \xi(\theta)$ with $\xi \equiv \rho / \rho_{1,0}$ and $\theta \equiv z/z_*$ on $\theta \in [0, 20]$, plus physical columns (density, $g$, $\Phi$).
 
-1. Keep all the variables as free parameters that I can change later.
-2. Write a final solution in a CSV file, expressed with dimensionless parameters: $\xi = \xi(\theta)$, where $\xi \equiv \rho / \rho_{1,0}$ and $\theta \equiv z/z_*$, $\theta \in [0, 20]$.
-3. Validate the code by first running `source ~/rc/yt.rc` to load the yt environment, then executing the python script in its folder.
+## Scripts
+
+| File | Role |
+| --- | --- |
+| `solve_density_profile.py` | ODE solver, root find on $\rho_{1,0}$, CSV + plot output |
+| `datatable.py` | Writer for the Quokka `DataTable` CSV format (imported, not run directly) |
+| `run.sh` | Default solar-neighborhood case (`Sigma13-Z1`) |
+
+## How to run
+
+Install:
+
+```bash
+pip install numpy scipy astropy pandas matplotlib
+```
+
+Then from this directory:
+
+```bash
+cd src/problems/TallBoxSf
+```
+
+### Default case (solar neighborhood)
+
+$\Sigma_{\mathrm{gas}} = 13\,\mathrm{M}_\odot\,\mathrm{pc}^{-2}$, $\Sigma_* = 42\,\mathrm{M}_\odot\,\mathrm{pc}^{-2}$, $\sigma_1 = 7$ km/s, $\rho_{\mathrm{dm}} = 6.4\times 10^{-3}\,\mathrm{M}_\odot\,\mathrm{pc}^{-3}$, $R_0 = 8000$ pc:
+
+```bash
+./run.sh
+```
+
+Equivalent direct call:
+
+```bash
+python solve_density_profile.py \
+  --Sigma_gas 13.0 \
+  --Sigma_star 42.0 \
+  --sigma_1 7.0 \
+  --rho_dm 6.4e-3 \
+  --R0 8000.0 \
+  --output_suffix "Sigma13-Z1"
+```
+
+Stdout from `run.sh` is written to `output/log_Sigma13-Z1.txt`.
+
+### Custom parameters
+
+All physical parameters are CLI flags (defaults match the solar neighborhood):
+
+```bash
+python solve_density_profile.py --help
+```
+
+| Flag | Units | Default |
+| --- | --- | --- |
+| `--Sigma_gas` | $\mathrm{M}_\odot\,\mathrm{pc}^{-2}$ | 13 |
+| `--Sigma_star` | $\mathrm{M}_\odot\,\mathrm{pc}^{-2}$ | 42 |
+| `--sigma_1` | km/s | 7 |
+| `--rho_dm` | $\mathrm{M}_\odot\,\mathrm{pc}^{-3}$ | $6.4\times 10^{-3}$ |
+| `--R0` | pc | 8000 |
+| `--z_star` | pc | 245 |
+| `--output_suffix` | string | (empty) |
+
+Example with a different gas surface density:
+
+```bash
+python solve_density_profile.py --Sigma_gas 20.0 --output_suffix "Sigma20-Z1"
+```
+
+## Output
+
+Files land in `output/` (created automatically by the Python script):
+
+| File | Contents |
+| --- | --- |
+| `disk_solution_all_vars_<suffix>.csv` | Full solution: $\theta$, $\xi$, $z$, $\rho$, $g_1$, $g_{\mathrm{ext}}$, $g_{\mathrm{tot}}$, $\Phi$ |
+| `disk_solution_datatable_<suffix>.csv` | Quokka DataTable: $z \rightarrow (g_1, g_{\mathrm{ext}}, \Phi_{\mathrm{tot}})$ |
+| `profile_dimensionless_<suffix>.png` | $\xi(\theta)$ |
+| `profile_physical_<suffix>.png` | $n_{\mathrm{H}}(z)$ |
+
+The DataTable file is what the simulation consumes (`problem.IC_file` in `inputs/TallBoxSf.toml`).
