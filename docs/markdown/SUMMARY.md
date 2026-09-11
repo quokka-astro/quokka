@@ -36,6 +36,8 @@
     - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md)
     - [Advecting radiation pulse test](tests/radhydro_pulse.md)
     - [1D H II region and dust reprocessing test](tests/DTypeFront1D.md)
+    - [Nonlinear reconstruction failure in 2D shear](tests/shear_reconstruction.md)
+    - [Diagnosis of the 32 × 32 xPPM shear failure](tests/shear_reconstruction_diagnosis.md)
 - [Runtime parameters](parameters.md)
 - [In-situ analysis](insitu_analysis.md)
 - [Postprocessing](postprocessing.md)
