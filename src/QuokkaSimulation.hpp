@@ -68,6 +68,7 @@ namespace filesystem = experimental::filesystem;
 
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
+#include "conduction/AnisoConduction.hpp"
 #include "conduction/ElectronConduction.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
@@ -146,6 +147,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	using AMRSimulation<problem_t>::enableElectronConduction_;
 	using AMRSimulation<problem_t>::electronConductionKappa0_;
+	using AMRSimulation<problem_t>::conductionKappaParallel_;
+	using AMRSimulation<problem_t>::conductionKappaPerp_;
 	using AMRSimulation<problem_t>::conductionCFL;
 	using AMRSimulation<problem_t>::conductionType_;
 
@@ -743,8 +746,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
 		hpp.query("saturation_factor", electronConductionSaturationFactor_);
 		hpp.query("conduction_type", conductionType_);
-		if (conductionType_ != "constant" && conductionType_ != "spitzer") {
-			amrex::Abort("Invalid conduction.conduction_type! Must be 'constant' or 'spitzer'.");
+		if (conductionType_ == "aniso"){
+		hpp.query("kappaPar", conductionKappaParallel_);
+		hpp.query("kappaPerp", conductionKappaPerp_);
+		}
+		if (conductionType_ != "constant" && conductionType_ != "spitzer" && conductionType_ != "aniso") {
+			amrex::Abort("Invalid conduction.conduction_type! Must be 'constant', 'spitzer', or 'aniso'.");
 		}
 	}
 
@@ -1261,15 +1268,21 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			const int conduction_nghost_Riemann =
 			    MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emfComputingScheme_, emfAveragingScheme_, do_tracers != 0);
 			const int conduction_reconstructGhost = conduction_nghost_Riemann + 1;
-			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
-											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
-											     .saturation_factor = electronConductionSaturationFactor_,
-											     .min_temperature = tempFloor_,
-											     .spitzer_scaling = (conductionType_ == "spitzer"),
-											     .reconstruction_order = reconstructionOrder_,
-											     .plm_limiter = plmLimiter_,
-											     .ng_reconstruct = conduction_reconstructGhost};
-			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
+			if (conductionType_ == "aniso") {
+				const quokka::conduction::AnisoConductionParams aniso_params{
+				    .kappa_parallel = conductionKappaParallel_, .kappa_perp = conductionKappaPerp_, .min_temperature = tempFloor_};
+				quokka::conduction::AnisoConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, aniso_params, heat_flux);
+			} else {
+				const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
+												     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
+												     .saturation_factor = electronConductionSaturationFactor_,
+												     .min_temperature = tempFloor_,
+												     .spitzer_scaling = (conductionType_ == "spitzer"),
+												     .reconstruction_order = reconstructionOrder_,
+												     .plm_limiter = plmLimiter_,
+												     .ng_reconstruct = conduction_reconstructGhost};
+				quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
+			}
 			if ((do_reflux != 0) && (recal_fluxes != nullptr)) {
 				// heat_flux has a single component, so accumulate it into the energy components of the
 				// multi-component reflux array (which the caller defines, zeroes and hands to the flux
