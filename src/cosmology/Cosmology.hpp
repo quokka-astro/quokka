@@ -21,9 +21,9 @@
 /// ### Comoving coordinate conventions
 /// We work with COMOVING conserved variables stored in the state MultiFab:
 ///   rho_c   = rho_phys * a^3                (comoving mass density  -- constant in uniform expansion)
-///   p_c     = rho_c * v_pec                 (comoving momentum      -- peculiar velocity)
+///   p_c     = rho_c * v_pec                 (comoving momentum due to the peculiar velocity)
 ///   eint_c  = eint_phys * a^3               (comoving internal energy density)
-///   etot_c  = eint_c + |p_c|^2 / (2 rho_c) (comoving total energy density)
+///   etot_c  = eint_c + |p_c|^2 / (2 rho_c)  (comoving total energy density)
 ///
 /// ### Source terms from the comoving Euler equations
 /// 1. Momentum decay (Hubble drag):
@@ -58,7 +58,7 @@ namespace quokka::cosmology
 
 /// @brief Parameters for the cosmological model (LCDM by default)
 struct CosmologyParams {
-	amrex::Real H0{C::Hubble_const};      ///< Hubble constant at z=0: 32.407764868e-19 s^-1, from quokka//extern/Microphysics/constants/fundamental_constants.H
+	amrex::Real H0{C::Hubble_const};      ///< Hubble constant at z=0: 32.407764868e-19 s^-1 (assuming h=1), from quokka//extern/Microphysics/constants/fundamental_constants.H
 	amrex::Real Omega_m{0.30966};	      ///< Matter density parameter
 	amrex::Real Omega_r{9.13896e-05};	  ///< Radiation density parameter
 	amrex::Real Omega_L{0.68885};	      ///< Dark energy (Lambda) density parameter
