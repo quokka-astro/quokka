@@ -185,10 +185,15 @@ template <typename problem_t> class AnisoConduction
 		const auto dx = geom.CellSizeArray();
 
 		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2, state.nGrow());
+		auto const &state_x0 = state.const_arrays();
 		primVar.setVal(0.0);
 
+		auto primVar_arr = primVar.arrays();
+		constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+		const amrex::Real t_min = params.min_temperature;
+
 		// Per-box face-centered B, gathered into an array so it can be handed to
-		// HydroSystem<problem_t>::ComputeMagneticEnergy in the final energy-update loop below.
+		// HydroSystem<problem_t>::ComputeInternalEnergy/ComputeMagneticEnergy below.
 		auto const &state_fc_x0 = state_fc[0].const_arrays();
 #if AMREX_SPACEDIM >= 2
 		auto const &state_fc_x1 = state_fc[1].const_arrays();
@@ -196,6 +201,41 @@ template <typename problem_t> class AnisoConduction
 #if AMREX_SPACEDIM == 3
 		auto const &state_fc_x2 = state_fc[2].const_arrays();
 #endif
+
+		amrex::IntVect const ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
+
+		amrex::ParallelFor(state, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			auto const &cons = state_x0[bx];
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
+			amrex::ignore_unused(state_fc_x0
+#if AMREX_SPACEDIM >= 2
+					     ,
+					     state_fc_x1
+#endif
+#if AMREX_SPACEDIM == 3
+					     ,
+					     state_fc_x2
+#endif
+			);
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				local_state_fc[0] = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+				local_state_fc[1] = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+				local_state_fc[2] = state_fc_x2[bx];
+#endif
+			}
+
+			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
+			// Temperature always from EOS
+			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
+
+			primVar_arr[bx](i, j, k, 0) = rho;
+			primVar_arr[bx](i, j, k, 1) = amrex::max(Tgas, t_min);
+		});
 
 		// Unit B-field at each face (bx, by, bz), populated only when MHD is enabled (zeroed
 		// otherwise, so a non-MHD build gets zero flux rather than reading uninitialized data).
