@@ -481,8 +481,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			amrex::Print() << "WARNING: no 'seed_seed' key found while parsing " << aphi_meta_file << "\n";
 		}
 
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_nR > 0 && userData_.seed_nz > 0 && userData_.seed_Rmax > 0.0 &&
-						  userData_.seed_Lz > 0.0,
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_nR > 0 && userData_.seed_nz > 0 && userData_.seed_Rmax > 0.0 && userData_.seed_Lz > 0.0,
 						 "Error parsing cylindrical vector potential meta variables from init_seed_pot_field "
 						 "(seed_nR/seed_nz/seed_Rmax/seed_Lz must all be present and positive).");
 
