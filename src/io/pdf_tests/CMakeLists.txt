@@ -1,0 +1,8 @@
+add_executable(PDFBoundsTest testPDFBounds.cpp ../DiagPDF.cpp ../DiagBase.cpp ../DiagFilter.cpp)
+target_link_libraries(PDFBoundsTest PRIVATE AMReX::amrex yaml-cpp::yaml-cpp)
+target_include_directories(PDFBoundsTest PRIVATE .. ../..)
+target_compile_features(PDFBoundsTest PRIVATE cxx_std_20)
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  setup_target_for_cuda_compilation(PDFBoundsTest)
+endif()
+add_test(NAME PDFBoundsTest COMMAND PDFBoundsTest)
