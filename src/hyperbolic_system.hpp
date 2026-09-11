@@ -38,7 +38,7 @@ enum redoFlag { none = 0, redo = 1 };
 } // namespace quokka
 
 // Define enum for slope limiter type
-AMREX_ENUM(SlopeLimiter, minmod, sweby, mc); // NOLINT
+AMREX_ENUM(SlopeLimiter, minmod, sweby, mc, vanleer); // NOLINT
 
 using array_t = amrex::Array4<amrex::Real> const;
 using arrayconst_t = amrex::Array4<const amrex::Real> const;
@@ -49,8 +49,17 @@ template <typename problem_t> class HyperbolicSystem
       public:
 	template <SlopeLimiter limiter> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real
 	{
-		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::sweby || limiter == SlopeLimiter::mc,
+		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::sweby || limiter == SlopeLimiter::mc ||
+				  limiter == SlopeLimiter::vanleer,
 			      "Invalid slope limiter specified.");
+		if constexpr (limiter == SlopeLimiter::vanleer) {
+			if ((x > 0. && y > 0.) || (x < 0. && y < 0.)) {
+				const double small = std::min(std::abs(x), std::abs(y));
+				const double large = std::max(std::abs(x), std::abs(y));
+				return std::copysign(small * (2. / (1. + small / large)), x);
+			}
+			return 0.;
+		}
 		if constexpr (limiter == SlopeLimiter::minmod) {
 			return Sweby(x, y, 1.0);
 		}
@@ -286,6 +295,11 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::mc>(q_mf, leftState_mf, rightState_mf, nghost, nvars);
 			break;
 		}
+		case SlopeLimiter::vanleer: {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::vanleer>(q_mf, leftState_mf, rightState_mf, nghost,
+													       nvars);
+			break;
+		}
 		default: {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Invalid PLM limiter specified.");
 			break;
@@ -329,6 +343,11 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array
 		case SlopeLimiter::mc: {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::mc>(q_in, leftState_in, rightState_in, cellRange,
 													  interfaceRange, nvars);
+			break;
+		}
+		case SlopeLimiter::vanleer: {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::vanleer>(q_in, leftState_in, rightState_in, cellRange,
+													       interfaceRange, nvars);
 			break;
 		}
 		default: {
