@@ -210,10 +210,13 @@ class PhysicsParticleDescriptorBase
 	virtual void depositParticleMassDensity(amrex::MultiFab &deposition_field, int lev, int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max,
 						bool use_age_filter, amrex::Real current_time, amrex::Real age_max, bool deposit_birth_mass) const = 0;
 
-	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
+	// Drift particles on [lev_min, lev_max] through the same time interval dt.
+	// The evolution driver calls this once per coarse step, after fluid levels synchronize.
+	// Do not call it recursively with per-level substeps: redistribution could skip or repeat a drift.
 	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
 
-	// Kick particles at level lev_min and above for time dt. Note that subcycling is not supported.
+	// Kick particles at level lev using its acceleration field. The gravity driver visits
+	// all levels at a synchronized time; self-gravity currently requires do_subcycle=0.
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) = 0;
 
 	// Destroy particles at level lev_min and above
