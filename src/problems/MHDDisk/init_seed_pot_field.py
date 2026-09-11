@@ -3,6 +3,11 @@ import numpy as np
 from scipy.special import j1, jn_zeros
 import matplotlib.pyplot as plt
 
+# np.trapezoid was only added in NumPy 2.0 (np.trapz is deprecated there but
+# still the only option on NumPy 1.x), so fall back to np.trapz when running
+# under an unpinned NumPy 1.x install.
+trapezoid = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
+
 # ══════════════════════════════════════════════════════════════════
 #  Parameters
 # ══════════════════════════════════════════════════════════════════
@@ -555,7 +560,7 @@ if __name__ == "__main__":
     Br_nd, Bz_nd = curl_Aphi(RA, R_nd, dR_nd, dz_nd)
 
     # ── verify net flux ───────────────────────────────────────────
-    net_flux_raw = np.mean(np.trapezoid(Bz_nd * R_nd[:, None], R_nd, axis=0))
+    net_flux_raw = np.mean(trapezoid(Bz_nd * R_nd[:, None], R_nd, axis=0))
     print(f"  Net flux (raw, nd):  {net_flux_raw:.3e}  (target: 0)")
 
     # ── normalise by curl rms so that rms(B_nd) = 1 ──────────────
@@ -763,7 +768,7 @@ if __name__ == "__main__":
     plt.show()
 
     # ── net flux per z-slice ──────────────────────────────────────
-    flux_per_z = 2 * np.pi * np.trapezoid(Bz_nd * R_nd[:, None], R_nd, axis=0)
+    flux_per_z = 2 * np.pi * trapezoid(Bz_nd * R_nd[:, None], R_nd, axis=0)
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(z_nd * Rmax / kpc, flux_per_z)
     ax.axhline(0, color='k', lw=0.5)
