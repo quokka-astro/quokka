@@ -1,22 +1,32 @@
-# Hydro-only steady annulus. GM=1, ring radius=1, orbital period=2*pi.
-# The optional third direction is a uniform periodic slab, not a stratified disk.
-geometry.prob_lo = [-2.0, -2.0, -0.125]
-geometry.prob_hi = [2.0, 2.0, 0.125]
+# Krumholz, McKee & Klein (2004), section 3.4.2, hydro-only ring variant.
+# Length unit = 1.85 AU (one cell); GM = 1; T = 10 K; mu = 2.33 m_p.
+# Keep dx = dy = 1 when changing the domain or resolution.
+# The optional third direction remains a uniform periodic slab.
+geometry.prob_lo = [-128.0, -128.0, -4.0]
+geometry.prob_hi = [128.0, 128.0, 4.0]
 quokka.bc = ["ext_dir", "ext_dir", "periodic"]
-amr.n_cell = [128, 128, 8]
+amr.n_cell = [256, 256, 8]
 amr.max_level = 0
 amr.max_grid_size = 128
 amr.blocking_factor = 8
 amr.v = 0
 do_reflux = 0
 do_subcycle = 0
-stop_time = 6.283185307179586*10
+# Runs span the paper's 0.09--0.9 orbital-period averaging interval.
+disk.ring_radius_cells = 20
+disk.orbits = 0.9
 cfl = 0.3
 hydro.artificial_viscosity_coefficient = 0.1
-hydro.use_dual_energy = 1
+hydro.use_dual_energy = 0
 hydro.reconstruction_order = 5
+density_floor = 1.0e-10
 plotfile_interval = -1
 checkpoint_interval = -1
 suppress_output = 1
 disk.history_file = "keplerian_disk_history.txt"
 disk.transport_file = "keplerian_disk_transport.txt"
+
+# In-situ Pringle-profile fit (paper eq. 23) and alpha conversion (eq. 20).
+disk.measure_alpha = true
+disk.alpha_interval_orbits = 0.01
+disk.alpha_file = "keplerian_disk_alpha.txt"

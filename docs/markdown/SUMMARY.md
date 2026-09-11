@@ -29,6 +29,8 @@
 - [Grid refinement (AMR)](amr_grid_refinement.md)
 - [Test problems](tests/index.md)
     - [Table of all test problems](tests/table_of_all_problems.md)
+    - [Keplerian disk and artificial viscosity](tests/keplerian_disk.md)
+    - [Nonlinear reconstruction failure in 2D shear](tests/shear_reconstruction.md)
     - [Radiative shock test](tests/radshock.md)
     - [Shu-Osher shock test](tests/shu_osher.md)
     - [Slow-moving shock test](tests/sms.md)
