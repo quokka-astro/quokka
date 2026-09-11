@@ -7,11 +7,11 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file AnisoConduction.hpp
-/// \brief Explicit anisotropic thermal conduction update. At each face, gradT is decomposed into
-///        components parallel/perpendicular to the local unit B-field (bhat) and scaled by
-///        kappa_parallel/kappa_perp respectively, then flux-limited/saturated as in
-///        ElectronConduction::ComputeExplicit. The saturation flux itself is not yet computed
-///        (a large sentinel is used, making the limiter a no-op).
+/// \brief Explicit anisotropic thermal conduction update. At each face, gradT is projected onto
+///        the local unit B-field (bhat) and scaled by kappa_parallel (kappa_perp is not yet
+///        folded in), then flux-limited/saturated exactly as in ElectronConduction::ComputeExplicit,
+///        using a saturation flux computed from (rho, T) averaged from the two cells bounding the
+///        face (see ComputeFaceNumberDensityAndSaturationFlux).
 
 #include <array>
 #include <cmath>
@@ -40,6 +40,15 @@ struct AnisoConductionParams {
 	int ng_reconstruct = 2; // number of ghost faces to reconstruct beyond the valid box
 };
 
+template <FluxDir DIR>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE
+amrex::IntVect FaceMinusOne(int i, int j, int k)
+{
+	if constexpr (DIR == FluxDir::X1) { return {i - 1, j, k}; }
+	else if constexpr (DIR == FluxDir::X2) { return {i, j - 1, k}; }
+	else { return {i, j, k - 1}; }
+}
+
 // Declarations only -- see the definitions below AnisoConduction for what each of these actually
 // does. Declared here so that AnisoConduction::ComputeExplicit (which calls all four) can be read
 // first; scroll down past the class for the bodies.
@@ -51,34 +60,19 @@ template <FluxDir DIR>
 void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &temperature, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int comp);
 
 template <FluxDir DIR>
-void ComputeFaceNumberDensity(amrex::MultiFab &n_fc_mf, amrex::MultiFab const &density, amrex::Real mean_molecular_weight, int comp);
+void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &bhat_fc, amrex::MultiFab const &gradT_fc, amrex::MultiFab const &n_fc,
+			    amrex::Real kappa_parallel, amrex::Real kappa_perp, amrex::MultiFab const &q_sat_fc);
 
-template <FluxDir DIR>
-void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &bhat_fc, amrex::MultiFab const &gradT_fc, amrex::MultiFab const &primVar,
-			    amrex::Real mean_molecular_weight, amrex::Real kappa_parallel, amrex::Real kappa_perp, amrex::MultiFab const &q_sat_fc);
+// Computes both the face number density and the saturation flux in a single pass, since both are
+// derived from the same (rho, T) face average -- see the definition below for details.
+template <typename problem_t, FluxDir DIR>
+void ComputeFaceNumberDensityAndSaturationFlux(amrex::MultiFab &n_fc_mf, amrex::MultiFab &qsat_fc_mf, amrex::MultiFab const &primVar,
+					       amrex::MultiFab const &state, amrex::Real mean_molecular_weight, amrex::Real saturation_factor,
+					       amrex::Real flux_limiter_phi);
 
 template <typename problem_t> class AnisoConduction
 {
       public:
-	// Reconstruct rho and T at the interfaces (identical to ElectronConduction::ReconstructPrimVar)
-	template <FluxDir DIR>
-	static void ReconstructPrimVar(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int ng_reconstruct,
-				       AnisoConductionParams const &params)
-	{
-		constexpr int nvars = 2;
-		if (params.reconstruction_order == 5) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
-		} else if (params.reconstruction_order == 3) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
-		} else if (params.reconstruction_order == 2) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars,
-											params.plm_limiter);
-		} else if (params.reconstruction_order == 1) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
-		} else {
-			amrex::Abort("Invalid reconstruction order specified for anisotropic conduction!");
-		}
-	}
 
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
 				    amrex::Real dt, AnisoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
@@ -167,39 +161,43 @@ template <typename problem_t> class AnisoConduction
 		}
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			AMREX_D_TERM(ComputeFaceUnitBField<problem_t, FluxDir::X1>(bhat_fc[0], state_fc, params.reconstruction_order, params.plm_limiter,
-										    ng_reconstruct);
-				     , ComputeFaceUnitBField<problem_t, FluxDir::X2>(bhat_fc[1], state_fc, params.reconstruction_order, params.plm_limiter,
-										      ng_reconstruct);
-				     , ComputeFaceUnitBField<problem_t, FluxDir::X3>(bhat_fc[2], state_fc, params.reconstruction_order, params.plm_limiter,
-										      ng_reconstruct);)
+			ComputeFaceUnitBField<problem_t, FluxDir::X1>(bhat_fc[0], state_fc, params.reconstruction_order, params.plm_limiter, ng_reconstruct);
+#if AMREX_SPACEDIM >= 2
+			ComputeFaceUnitBField<problem_t, FluxDir::X2>(bhat_fc[1], state_fc, params.reconstruction_order, params.plm_limiter, ng_reconstruct);
+#endif
+#if AMREX_SPACEDIM == 3
+			ComputeFaceUnitBField<problem_t, FluxDir::X3>(bhat_fc[2], state_fc, params.reconstruction_order, params.plm_limiter, ng_reconstruct);
+#endif
 		}
-
-		// primVar component 1 holds T.
 		AMREX_D_TERM(ComputeFaceGradT<FluxDir::X1>(gradT_fc[0], primVar, dx, 1);, ComputeFaceGradT<FluxDir::X2>(gradT_fc[1], primVar, dx, 1);
 			     , ComputeFaceGradT<FluxDir::X3>(gradT_fc[2], primVar, dx, 1);)
 
-		// Saturation flux at each face (Cowie & McKee 1977) -- NOT computed yet, since that needs
-		// (rho, T) reconstructed to the interfaces via EOS calls, which isn't wired up in this file
-		// right now. Filled with a large sentinel so the limiter below is a no-op (q_classical
-		// unmodified) until that piece is added.
+		// Number density and saturation flux at each face (Cowie & McKee 1977), both derived from
+		// the same (rho, T) averaged from the two bounding cells -- see
+		// ComputeFaceNumberDensityAndSaturationFlux.
+		const amrex::Real mmw = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> n_fc;
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> q_sat_fc;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			n_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 1, 0);
 			q_sat_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 1, 0);
-			q_sat_fc[idim].setVal(std::numeric_limits<amrex::Real>::max());
 		}
+		AMREX_D_TERM((ComputeFaceNumberDensityAndSaturationFlux<problem_t, FluxDir::X1>(n_fc[0], q_sat_fc[0], primVar, state, mmw,
+												params.saturation_factor, params.flux_limiter_phi));
+			     , (ComputeFaceNumberDensityAndSaturationFlux<problem_t, FluxDir::X2>(n_fc[1], q_sat_fc[1], primVar, state, mmw,
+													    params.saturation_factor, params.flux_limiter_phi));
+			     , (ComputeFaceNumberDensityAndSaturationFlux<problem_t, FluxDir::X3>(n_fc[2], q_sat_fc[2], primVar, state, mmw,
+													    params.saturation_factor, params.flux_limiter_phi));)
 
-		// Heat flux at each face: full parallel/perpendicular decomposition of gradT relative to
-		// bhat, projected onto the face normal -- see ComputeAnisotropicFlux (which computes number
-		// density internally via ComputeFaceNumberDensity).
-		const amrex::Real mmw = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-		AMREX_D_TERM(ComputeAnisotropicFlux<FluxDir::X1>(heat_flux[0], bhat_fc[0], gradT_fc[0], primVar, mmw, params.kappa_parallel,
-								  params.kappa_perp, q_sat_fc[0]);
-			     , ComputeAnisotropicFlux<FluxDir::X2>(heat_flux[1], bhat_fc[1], gradT_fc[1], primVar, mmw, params.kappa_parallel,
-								    params.kappa_perp, q_sat_fc[1]);
-			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], bhat_fc[2], gradT_fc[2], primVar, mmw, params.kappa_parallel,
-								    params.kappa_perp, q_sat_fc[2]);)
+		// Heat flux at each face: full parallel/perpendicular decomposition of gradT relative to bhat,
+		// projected onto the face normal -- see ComputeAnisotropicFlux.
+		AMREX_D_TERM(ComputeAnisotropicFlux<FluxDir::X1>(heat_flux[0], bhat_fc[0], gradT_fc[0], n_fc[0], params.kappa_parallel, params.kappa_perp,
+								  q_sat_fc[0]);
+			     , ComputeAnisotropicFlux<FluxDir::X2>(heat_flux[1], bhat_fc[1], gradT_fc[1], n_fc[1], params.kappa_parallel, params.kappa_perp,
+								    q_sat_fc[1]);
+			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], bhat_fc[2], gradT_fc[2], n_fc[2], params.kappa_parallel, params.kappa_perp,
+								    q_sat_fc[2]);)
 
 		auto state_out = state.arrays();
 		auto const &flux_x_const = heat_flux[0].const_arrays();
@@ -371,9 +369,10 @@ void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &tempe
 		amrex::Real gradT_x = 0.0;
 		amrex::Real gradT_y = 0.0;
 		amrex::Real gradT_z = 0.0;
+		amrex::IntVect const ivm = FaceMinusOne<DIR>(i, j, k);
 
 		if constexpr (DIR == FluxDir::X1) {
-			gradT_x = (temp[bx](i, j, k, comp) - temp[bx](i - 1, j, k, comp)) / dx[0];
+			gradT_x = (temp[bx](i, j, k, comp) - temp[bx](ivm, comp)) / dx[0];
 #if AMREX_SPACEDIM >= 2
 			gradT_y = 0.5 *
 				  ((temp[bx](i - 1, j + 1, k, comp) - temp[bx](i - 1, j - 1, k, comp)) +
@@ -387,7 +386,7 @@ void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &tempe
 				  (2.0 * dx[2]);
 #endif
 		} else if constexpr (DIR == FluxDir::X2) {
-			gradT_y = (temp[bx](i, j, k, comp) - temp[bx](i, j - 1, k, comp)) / dx[1];
+			gradT_y = (temp[bx](i, j, k, comp) - temp[bx](ivm, comp)) / dx[1];
 			gradT_x = 0.5 *
 				  ((temp[bx](i + 1, j - 1, k, comp) - temp[bx](i - 1, j - 1, k, comp)) +
 				   (temp[bx](i + 1, j, k, comp) - temp[bx](i - 1, j, k, comp))) /
@@ -399,7 +398,7 @@ void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &tempe
 				  (2.0 * dx[2]);
 #endif
 		} else { // FluxDir::X3
-			gradT_z = (temp[bx](i, j, k, comp) - temp[bx](i, j, k - 1, comp)) / dx[2];
+			gradT_z = (temp[bx](i, j, k, comp) - temp[bx](ivm, comp)) / dx[2];
 			gradT_x = 0.5 *
 				  ((temp[bx](i + 1, j, k - 1, comp) - temp[bx](i - 1, j, k - 1, comp)) +
 				   (temp[bx](i + 1, j, k, comp) - temp[bx](i - 1, j, k, comp))) /
@@ -416,45 +415,19 @@ void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &tempe
 	});
 }
 
-// Compute the number density at the DIR-faces from a cell-centered mass-density field (e.g.
-// primVar component 0): the average of the two cells bounding each face, divided by the mean
-// molecular weight (already in mass units, e.g. EOS_Traits<problem_t>::mean_molecular_weight).
-template <FluxDir DIR>
-void ComputeFaceNumberDensity(amrex::MultiFab &n_fc_mf, amrex::MultiFab const &density, amrex::Real mean_molecular_weight, int comp)
-{
-	auto const &rho_in = density.const_arrays();
-	auto n_out = n_fc_mf.arrays();
-
-	amrex::ParallelFor(n_fc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		amrex::Real rho_face = 0.0;
-		if constexpr (DIR == FluxDir::X1) {
-			rho_face = 0.5 * (rho_in[bx](i, j, k, comp) + rho_in[bx](i - 1, j, k, comp));
-		} else if constexpr (DIR == FluxDir::X2) {
-			rho_face = 0.5 * (rho_in[bx](i, j, k, comp) + rho_in[bx](i, j - 1, k, comp));
-		} else { // FluxDir::X3
-			rho_face = 0.5 * (rho_in[bx](i, j, k, comp) + rho_in[bx](i, j, k - 1, comp));
-		}
-		n_out[bx](i, j, k) = rho_face / mean_molecular_weight;
-	});
-}
-
 // Compute the anisotropic heat flux crossing the DIR-faces, given the unit B-field (bhat_fc, from
-// ComputeFaceUnitBField) and the temperature gradient (gradT_fc, from ComputeFaceGradT) already
-// estimated at those faces. Number density at the face is computed internally via
-// ComputeFaceNumberDensity, from primVar (component 0 is rho) and mean_molecular_weight. For now
-// this only applies the field-aligned term:
+// ComputeFaceUnitBField), the temperature gradient (gradT_fc, from ComputeFaceGradT), and the
+// number density (n_fc, from ComputeFaceNumberDensityAndSaturationFlux) already estimated at those
+// faces. For now this only applies the field-aligned term:
 //   q . nhat = -kappa_parallel * (bhat . gradT) * (bhat . nhat) * n
 // (kappa_perp is accepted but not yet used -- the perpendicular term and q_sat are still to be
 // fixed), then flux-limited/saturated exactly as in ElectronConduction::ComputeExplicit:
 //   flux = q_classical / (1 + |q_classical| / max(q_sat, small)).
 // q_sat_fc is the (precomputed) saturation flux at each face -- this function does not compute it.
 template <FluxDir DIR>
-void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &bhat_fc, amrex::MultiFab const &gradT_fc, amrex::MultiFab const &primVar,
-			    amrex::Real mean_molecular_weight, amrex::Real kappa_parallel, amrex::Real kappa_perp, amrex::MultiFab const &q_sat_fc)
+void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &bhat_fc, amrex::MultiFab const &gradT_fc, amrex::MultiFab const &n_fc,
+			    amrex::Real kappa_parallel, amrex::Real kappa_perp, amrex::MultiFab const &q_sat_fc)
 {
-	amrex::MultiFab n_fc(heat_flux_fc.boxArray(), heat_flux_fc.DistributionMap(), 1, 0);
-	ComputeFaceNumberDensity<DIR>(n_fc, primVar, mean_molecular_weight, 0);
-
 	constexpr int normal_comp = static_cast<int>(DIR);
 	const amrex::Real small = std::numeric_limits<amrex::Real>::min();
 
@@ -474,6 +447,48 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 		const amrex::Real q_sat = qsat_in[bx](i, j, k);
 		const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat, small);
 		flux_out[bx](i, j, k) = q_classical / limiter;
+	});
+}
+
+// Compute the face number density and the saturation flux (Cowie & McKee 1977) at the DIR-faces in
+// a single pass, since both derive from the same (rho, T) average of primVar over the two cells
+// bounding each face (mass scalars are likewise averaged from state over the same two cells). n_fc
+// is (rho_face / mean_molecular_weight); q_sat_fc is the saturation flux used to limit/saturate the
+// classical flux in ComputeAnisotropicFlux.
+template <typename problem_t, FluxDir DIR>
+void ComputeFaceNumberDensityAndSaturationFlux(amrex::MultiFab &n_fc_mf, amrex::MultiFab &qsat_fc_mf, amrex::MultiFab const &primVar,
+					       amrex::MultiFab const &state, amrex::Real mean_molecular_weight, amrex::Real saturation_factor,
+					       amrex::Real flux_limiter_phi)
+{
+	constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	const amrex::Real small = std::numeric_limits<amrex::Real>::min();
+
+	auto const &primVar_in = primVar.const_arrays();
+	auto const &state_in = state.const_arrays();
+	auto n_out = n_fc_mf.arrays();
+	auto qsat_out = qsat_fc_mf.arrays();
+
+	amrex::ParallelFor(qsat_fc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::IntVect const ivm = FaceMinusOne<DIR>(i, j, k);
+		auto const face_avg = [=](int comp) { return 0.5 * (primVar_in[bx](i, j, k, comp) + primVar_in[bx](ivm, comp)); };
+		const amrex::Real rho_face = face_avg(0);
+		const amrex::Real T_face = face_avg(1);
+
+		n_out[bx](i, j, k) = rho_face / mean_molecular_weight;
+
+		auto const massScalars_L = RadSystem<problem_t>::ComputeMassScalars(state_in[bx], ivm[0], ivm[1], ivm[2]);
+		auto const massScalars_R = RadSystem<problem_t>::ComputeMassScalars(state_in[bx], i, j, k);
+		amrex::GpuArray<amrex::Real, nmscalars_> massArray_face{};
+		for (int n = 0; n < nmscalars_; ++n) {
+			massArray_face[n] = 0.5 * (massScalars_L[n] + massScalars_R[n]);
+		}
+		quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massArray_face;
+
+		const amrex::Real Eint_face = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_face, T_face, massScalars);
+		const amrex::Real Pgas_face = ::quokka::EOS<problem_t>::ComputePressure(rho_face, Eint_face, massScalars);
+		const amrex::Real cs_face = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_face, Pgas_face, massScalars);
+
+		qsat_out[bx](i, j, k) = amrex::max(saturation_factor * flux_limiter_phi * rho_face * cs_face * cs_face * cs_face, small);
 	});
 }
 
