@@ -43,9 +43,9 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "io/projection.hpp"
+#include "math/interpolate.hpp"
 #include "radiation/radiation_dust_system.hpp" // for the separate dust-temperature solver (see ISM_Traits below)
 #include "radiation/radiation_system.hpp"
-#include "math/interpolate.hpp"
 #include "util/DataTable.hpp"
 
 constexpr double mu = 1.0 * C::m_p;
@@ -134,7 +134,7 @@ template <> struct ISM_Traits<TheProblem> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<TheProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-							   const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+							    const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	// Gray dust opacity of each group [cm^2 g^-1]: IR, FUV, LW. Declared inside the function so that
 	// the device code does not have to reach for a host-side namespace-scope object.
@@ -558,8 +558,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 // ghost cell, and setDiodeBCLo/Hi only write the hydro ones. Radiation is copied from the nearest
 // interior cell (first-order extrapolation) and the normal flux is clipped so that it can only point
 // out of the domain: light leaves the tall box and never comes back in.
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setRadiationOutflowBCz(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-								amrex::GeometryData const &geom)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setRadiationOutflowBCz(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, amrex::GeometryData const &geom)
 {
 	auto const [i, j, k] = iv.dim3();
 	const amrex::Box &box = geom.Domain();
