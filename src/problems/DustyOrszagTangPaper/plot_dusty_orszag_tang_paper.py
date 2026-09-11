@@ -208,7 +208,7 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
     trim_shared_edge_ticks(axes[1, 0], axis="y", drop_last=True)
     cbar = fig.colorbar(mesh, cax=cax)
     cbar.set_label(r"$\rho_g$")
-    output_path = output_dir / "dusty_orszag_tang_gas_density_dust_overdensity.pdf"
+    output_path = output_dir / "dusty_orszag_tang_paper_gas_density_dust_overdensity.pdf"
     fig.savefig(output_path)
     plt.close(fig)
     return output_path
@@ -263,7 +263,7 @@ def make_fig7(data_dir: Path, output_dir: Path, prefix: str, case_tag: str, reso
     axes[0].set_xlim(0.0, 0.3)
 
     axes[0].tick_params(labelbottom=False)
-    output_path = output_dir / "dusty_orszag_tang_gas_dust_velocity_density_profiles.pdf"
+    output_path = output_dir / "dusty_orszag_tang_paper_gas_dust_velocity_density_profiles.pdf"
     fig.savefig(output_path)
     plt.close(fig)
     return output_path
