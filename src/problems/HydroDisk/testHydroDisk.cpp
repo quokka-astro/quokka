@@ -949,7 +949,7 @@ void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::string const &d
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const double rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
 				const double cs = (rho > rho_transition) ? cs_disk : cs_cgm;
@@ -976,7 +976,7 @@ void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::string const &d
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const double rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
 				const double vx = state(i, j, k, HydroSystem<HDGalaxy>::x1Momentum_index) / rho;
@@ -995,7 +995,7 @@ void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::string const &d
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const double rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
 				const double vx = state(i, j, k, HydroSystem<HDGalaxy>::x1Momentum_index) / rho;
@@ -1012,7 +1012,7 @@ void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::string const &d
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const double rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
 				const double momx = state(i, j, k, HydroSystem<HDGalaxy>::x1Momentum_index);
