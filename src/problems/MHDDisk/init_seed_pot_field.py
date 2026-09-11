@@ -71,18 +71,18 @@ def disk_scale_height(Sigma0, cs, R_kpc, Rd_kpc, alpha_p, beta_p):
 #  Physical k helpers  (operate in dimensionless units: Rmax=1)
 # ══════════════════════════════════════════════════════════════════
 
-def physical_kmin(H_nd):
+def physical_kmin(H_dl):
     """
     Largest turbulent scale = full disk thickness = 2H
     (one scale height above and below midplane).
     lambda_max = 2H  =>  kmin = 2*pi / lambda_max = pi / H
     """
-    return np.pi / H_nd
+    return np.pi / H_dl
 
 
-def physical_kmax(nR, nz, Rmax_nd, Lz_nd, n_cells=4):
-    dR_fine = Rmax_nd / nR
-    dz_fine = Lz_nd   / nz
+def physical_kmax(nR, nz, Rmax_dl, Lz_dl, n_cells=4):
+    dR_fine = Rmax_dl / nR
+    dz_fine = Lz_dl   / nz
     return np.sqrt((2*np.pi / (n_cells * dR_fine))**2 +
                    (2*np.pi / (n_cells * dz_fine))**2)
 
@@ -91,19 +91,19 @@ def physical_kmax(nR, nz, Rmax_nd, Lz_nd, n_cells=4):
 #  Spectral modes  (all dimensionless)
 # ══════════════════════════════════════════════════════════════════
 
-def init_modes(nR_coarse, nz_coarse, Rmax_nd, Lz_nd):
+def init_modes(nR_coarse, nz_coarse, Rmax_dl, Lz_dl):
     M      = nR_coarse // 2
     N      = nz_coarse // 2
 
     # Radial: zeros of J1 → kR such that J1(kR*Rmax)=0 exactly
     jzeros = jn_zeros(1, M)
-    kR     = jzeros / Rmax_nd          # dimensionless
+    kR     = jzeros / Rmax_dl          # dimensionless
 
     # Axial: integer Fourier modes (no jitter — jitter breaks orthogonality
     # and can produce kz*z values that overflow float64 for large z)
     n_idx = np.arange(-N, N + 1)
     n_idx = n_idx[n_idx != 0]
-    kz    = 2 * np.pi * n_idx / Lz_nd
+    kz    = 2 * np.pi * n_idx / Lz_dl
 
     kR_grid, kz_grid = np.meshgrid(kR, kz, indexing='ij')
     k = np.sqrt(kR_grid**2 + kz_grid**2)
@@ -138,7 +138,7 @@ def init_coeffs(k, kmin, kmax, rng):
 
     return coeff
 
-def plot_coeff_spectrum(k, coeff, kmin_nd, kmax_nd, H_phys, kpc, out="Bspectrum_coeffs.png"):
+def plot_coeff_spectrum(k, coeff, kmin_dl, kmax_dl, H_phys, kpc, out="Bspectrum_coeffs.png"):
     """
     Plot |B_k|^2 ~ k^2 |A_k|^2 directly from spectral coefficients.
     This is the ground-truth spectrum, unaffected by resampling.
@@ -147,7 +147,7 @@ def plot_coeff_spectrum(k, coeff, kmin_nd, kmax_nd, H_phys, kpc, out="Bspectrum_
     # B spectrum: k^2 * |A_k|^2
     EB_flat = (k_flat**2) * np.abs(coeff.ravel())**2
 
-    bins   = np.geomspace(kmin_nd * 0.99, kmax_nd * 1.01, 50)
+    bins   = np.geomspace(kmin_dl * 0.99, kmax_dl * 1.01, 50)
     k_mid, E_bin = [], []
     for i in range(len(bins)-1):
         m = (k_flat >= bins[i]) & (k_flat < bins[i+1]) & (EB_flat > 0)
@@ -171,8 +171,8 @@ def plot_coeff_spectrum(k, coeff, kmin_nd, kmax_nd, H_phys, kpc, out="Bspectrum_
         ax.loglog(k_mid, norm * k_mid**(-5/3), '--',
                   label=rf"$k^{{-5/3}}$ (slope: {slope:.2f})")
 
-    ax.axvline(kmin_nd, color='g', ls=':', label=f"kmin (2H={2*H_phys/kpc*1e3:.0f} pc)")
-    ax.axvline(kmax_nd, color='r', ls=':', label="kmax (Nyquist)")
+    ax.axvline(kmin_dl, color='g', ls=':', label=f"kmin (2H={2*H_phys/kpc*1e3:.0f} pc)")
+    ax.axvline(kmax_dl, color='r', ls=':', label="kmax (Nyquist)")
     ax.set_xlabel("k (dimensionless)")
     ax.set_ylabel(r"$E_B(k)$ [arb.]")
     ax.set_title("Magnetic energy spectrum from spectral coefficients")
@@ -186,8 +186,8 @@ def plot_coeff_spectrum(k, coeff, kmin_nd, kmax_nd, H_phys, kpc, out="Bspectrum_
 #  Field construction  (dimensionless grid)
 # ══════════════════════════════════════════════════════════════════
 
-def evaluate_Aphi(R_nd, z_nd, kR, kz, coeff, batch_size=500):
-    Aphi = np.zeros((len(R_nd), len(z_nd)))
+def evaluate_Aphi(R_dl, z_dl, kR, kz, coeff, batch_size=500):
+    Aphi = np.zeros((len(R_dl), len(z_dl)))
 
     kR_flat    = np.repeat(kR, len(kz))
     kz_flat    = np.tile(kz, len(kR))
@@ -206,16 +206,16 @@ def evaluate_Aphi(R_nd, z_nd, kR, kz, coeff, batch_size=500):
         kz_b = kz_flat[sl]
         c_b  = coeff_flat[sl]
 
-        J = j1(kR_b[None, :] * R_nd[:, None])   # (nR, batch)
+        J = j1(kR_b[None, :] * R_dl[:, None])   # (nR, batch)
 
         # Normalise each Bessel column by its cylindrical L2 norm
         # ||J1(kR*R)||^2 = int_0^1 J1(kR*R)^2 R dR  (discrete sum)
-        J_norm = np.sqrt(np.sum(J**2 * R_nd[:, None], axis=0) * (R_nd[1] - R_nd[0]))
+        J_norm = np.sqrt(np.sum(J**2 * R_dl[:, None], axis=0) * (R_dl[1] - R_dl[0]))
         J_norm = np.where(J_norm > 0, J_norm, 1.0)
         J /= J_norm[None, :]                         # (nR, batch), now unit cylindrical norm
 
-        cos_z = np.cos(kz_b[:, None] * z_nd[None, :])
-        sin_z = np.sin(kz_b[:, None] * z_nd[None, :])
+        cos_z = np.cos(kz_b[:, None] * z_dl[None, :])
+        sin_z = np.sin(kz_b[:, None] * z_dl[None, :])
         Z     = np.real(c_b)[:, None] * cos_z - np.imag(c_b)[:, None] * sin_z
         Aphi += J @ Z
 
@@ -226,41 +226,41 @@ def evaluate_Aphi(R_nd, z_nd, kR, kz, coeff, batch_size=500):
 #  Tapers
 # ══════════════════════════════════════════════════════════════════
 
-def apply_axis_taper(Aphi, R_nd, dR_nd, n_cells=8):
+def apply_axis_taper(Aphi, R_dl, dR_dl, n_cells=8):
     """
     Smooth cubic ramp from 0 at R=0 to 1 at R = n_cells*dR.
     Enforces A_phi -> 0 at the axis so that R*A_phi -> 0 there.
     """
-    x     = R_nd / (n_cells * dR_nd)
+    x     = R_dl / (n_cells * dR_dl)
     taper = np.where(x < 1.0, 3*x**2 - 2*x**3, 1.0)
     return Aphi * taper[:, np.newaxis]
 
-def apply_outer_taper(Aphi, R_nd, Rmax_nd, width_cells=8):
+def apply_outer_taper(Aphi, R_dl, Rmax_dl, width_cells=8):
     """
     Cosine roll-off to zero over the outer width_cells cells.
     Enforces A_phi -> 0 at R=Rmax so that R*A_phi -> 0 there.
     """
     if width_cells == 0:
         return Aphi
-    dR    = R_nd[1] - R_nd[0]
+    dR    = R_dl[1] - R_dl[0]
     width = width_cells * dR
-    x     = (Rmax_nd - R_nd) / width
+    x     = (Rmax_dl - R_dl) / width
     taper = np.where(x >= 1.0, 1.0,
             np.where(x <= 0.0, 0.0,
                      0.5 * (1.0 - np.cos(np.pi * x))))
     return Aphi * taper[:, np.newaxis]
 
-def apply_z_taper(Aphi, z_nd, Lz_nd, width_cells=8):
+def apply_z_taper(Aphi, z_dl, Lz_dl, width_cells=8):
     """
     Cosine roll-off to zero over the top and bottom width_cells.
     """
-    dz = z_nd[1] - z_nd[0]
+    dz = z_dl[1] - z_dl[0]
     width = width_cells * dz
-    z_max = Lz_nd / 2.0
+    z_max = Lz_dl / 2.0
     
     # Distance from top and bottom boundaries
-    dist_top = z_max - z_nd
-    dist_bot = z_nd + z_max
+    dist_top = z_max - z_dl
+    dist_bot = z_dl + z_max
     
     # Taper function
     def taper_func(dist):
@@ -319,7 +319,7 @@ def curl_Aphi(RA, R, dR, dz):
 
 def save_outputs(Aphi_phys,
                  nR, nz, nR_coarse, nz_coarse, levels, oversample, SEED,
-                 Rmax, Lz, dR, dz, kmin_nd, kmax_nd, Rmax_nd,
+                 Rmax, Lz, dR, dz, kmin_dl, kmax_dl, Rmax_dl,
                  H_phys_cm, B0_gauss=1e-9, stem="Aphi_2d", suffix=""):
     import os
 
@@ -356,19 +356,19 @@ def save_outputs(Aphi_phys,
         f"seed_Lz           = {Lz:e}",
         f"seed_B0_HL        = {B0_HL:e}",
         f"seed_H_disk_cm    = {H_phys_cm:e}",
-        f"seed_kmin_nd      = {kmin_nd:e}",
-        f"seed_kmax_nd      = {kmax_nd:e}",
+        f"seed_kmin_dl      = {kmin_dl:e}",
+        f"seed_kmax_dl      = {kmax_dl:e}",
         f"Rmax_kpc          = {Rmax/kpc:.6f}",
         f"Lz_kpc            = {Lz/kpc:.6f}",
         f"dR_fine_cm        = {dR:e}",
         f"dz_fine_cm        = {dz:e}",
         f"H_disk_cm         = {H_phys_cm:e}  [scale height at R=Rd, used for kmin]",
         f"H_disk_pc         = {H_phys_cm/kpc*1e3:.1f}",
-        f"kmin_nd           = {kmin_nd:e}  [dimensionless, Rmax=1]",
-        f"kmax_nd           = {kmax_nd:e}  [dimensionless, Rmax=1]",
-        f"kmin_phys_cm-1    = {kmin_nd/Rmax:e}",
-        f"kmax_phys_cm-1    = {kmax_nd/Rmax:e}",
-        f"kmax_over_kmin    = {kmax_nd/kmin_nd:.2f}",
+        f"kmin_dl           = {kmin_dl:e}  [dimensionless, Rmax=1]",
+        f"kmax_dl           = {kmax_dl:e}  [dimensionless, Rmax=1]",
+        f"kmin_phys_cm-1    = {kmin_dl/Rmax:e}",
+        f"kmax_phys_cm-1    = {kmax_dl/Rmax:e}",
+        f"kmax_over_kmin    = {kmax_dl/kmin_dl:.2f}",
         f"alpha_Aphi        = {11/6:.6f}  (|A_k| ~ k^-alpha, dimensionless k)",
         f"spectrum          = E_B(k) ~ k^(-5/3)  [Kolmogorov]",
         f"B0_gauss          = {B0_gauss:e}  [Gaussian; multiply normalised B to get physical]",
@@ -426,9 +426,9 @@ if __name__ == "__main__":
     print(f"Surface density at R=Rd: {Sigma_Rd:.4e} g/cm^2")
 
     # ── work in dimensionless units: length scale = Rmax ─────────
-    Rmax_nd = 1.0
-    Lz_nd   = Lz / Rmax
-    H_nd    = H_phys / Rmax
+    Rmax_dl = 1.0
+    Lz_dl   = Lz / Rmax
+    H_dl    = H_phys / Rmax
 
     # ── fine physical grid ────────────────────────────────────────
     # nR_sim/nz_sim are the simulation domain cell counts.
@@ -446,17 +446,17 @@ if __name__ == "__main__":
     dR = Rmax / nR_sim
     dz = Lz   / nz_sim
 
-    dR_nd = Rmax_nd / nR_sim
-    dz_nd = Lz_nd   / nz_sim
+    dR_dl = Rmax_dl / nR_sim
+    dz_dl = Lz_dl   / nz_sim
 
     # Coordinate arrays: padding cells sit outside [0, Rmax] x [-Lz/2, Lz/2]
     # so they are naturally zero after the ghost-cell zeroing step below.
-    R_nd = (np.arange(nR) - padding + 0.5) * dR_nd
-    z_nd = (np.arange(nz) - padding + 0.5) * dz_nd - Lz_nd / 2.0
+    R_dl = (np.arange(nR) - padding + 0.5) * dR_dl
+    z_dl = (np.arange(nz) - padding + 0.5) * dz_dl - Lz_dl / 2.0
 
     # Physical grids
-    R = R_nd * Rmax
-    z = z_nd * Rmax
+    R = R_dl * Rmax
+    z = z_dl * Rmax
 
     # Padded Rmax/Lz: extend domain by padding cells on each side so that
     # sample_bicubic's  dR = Rmax_table / nR_table  recovers the correct dR.
@@ -464,24 +464,24 @@ if __name__ == "__main__":
     Lz_padded   = Lz   + 2 * padding * dz
 
     # ── spectral modes ────────────────────────────────────────────
-    kR, kz, k = init_modes(nR_coarse * factor, nz_coarse * factor, Rmax_nd, Lz_nd)
+    kR, kz, k = init_modes(nR_coarse * factor, nz_coarse * factor, Rmax_dl, Lz_dl)
 
-    kmin_nd = physical_kmin(H_nd)
-    kmax_nd = physical_kmax(nR_sim, nz_sim, Rmax_nd, Lz_nd, n_cells=n_grid_cells)
+    kmin_dl = physical_kmin(H_dl)
+    kmax_dl = physical_kmax(nR_sim, nz_sim, Rmax_dl, Lz_dl, n_cells=n_grid_cells)
 
-    print(f"k range (nd): [{k.min():.3e}, {k.max():.3e}]")
-    print(f"kmin (nd)   = {kmin_nd:.3e}  (lambda_max = 2H = {2*H_phys/kpc*1e3:.0f} pc)")
-    print(f"kmax (nd)   = {kmax_nd:.3e}  (fine Nyquist diagonal)")
-    print(f"kmax/kmin   = {kmax_nd/kmin_nd:.1f}")
+    print(f"k range (dl): [{k.min():.3e}, {k.max():.3e}]")
+    print(f"kmin (dl)   = {kmin_dl:.3e}  (lambda_max = 2H = {2*H_phys/kpc*1e3:.0f} pc)")
+    print(f"kmax (dl)   = {kmax_dl:.3e}  (fine Nyquist diagonal)")
+    print(f"kmax/kmin   = {kmax_dl/kmin_dl:.1f}")
 
     # ── spectral coefficients ─────────────────────────────────────
-    coeff = init_coeffs(k, kmin_nd, kmax_nd, rng)
-    coeff[k < kmin_nd] = 0
-    plot_coeff_spectrum(k, coeff, kmin_nd, kmax_nd, H_phys, kpc)
+    coeff = init_coeffs(k, kmin_dl, kmax_dl, rng)
+    coeff[k < kmin_dl] = 0
+    plot_coeff_spectrum(k, coeff, kmin_dl, kmax_dl, H_phys, kpc)
 
     # ── evaluate A_phi ────────────────────────────────────────────
     print("Evaluating A_phi...")
-    Aphi = evaluate_Aphi(R_nd, z_nd, kR, kz, coeff)
+    Aphi = evaluate_Aphi(R_dl, z_dl, kR, kz, coeff)
 
     Aphi /= np.sqrt(np.mean(Aphi**2))
     print(f"  Aphi rms after normalisation: {np.sqrt(np.mean(Aphi**2)):.3f}  (should be 1)")
@@ -495,16 +495,16 @@ if __name__ == "__main__":
     print(f"  outer taper: {outer_taper_cells} cells = {outer_taper_cells*dR/kpc:.3f} kpc")
     #print(f"  z taper: {z_taper_cells} cells = {z_taper_cells*dz/kpc:.3f} kpc")
 
-    Aphi = apply_axis_taper(Aphi, R_nd, dR_nd, n_cells=inner_taper_cells)
-    Aphi = apply_outer_taper(Aphi, R_nd, Rmax_nd, width_cells=outer_taper_cells)
+    Aphi = apply_axis_taper(Aphi, R_dl, dR_dl, n_cells=inner_taper_cells)
+    Aphi = apply_outer_taper(Aphi, R_dl, Rmax_dl, width_cells=outer_taper_cells)
 
     # Zero padding cells that lie outside the physical domain.
     # The tapers drive Aphi to zero at the domain edges; this makes
     # the ghost cells explicitly zero so the C++ stencil sees a clean
     # roll-off rather than whatever the spectral basis left there.
-    Aphi[R_nd < 0, :]                   = 0.0
-    Aphi[R_nd > Rmax_nd, :]             = 0.0
-    Aphi[:, np.abs(z_nd) > Lz_nd / 2]  = 0.0
+    Aphi[R_dl < 0, :]                   = 0.0
+    Aphi[R_dl > Rmax_dl, :]             = 0.0
+    Aphi[:, np.abs(z_dl) > Lz_dl / 2]  = 0.0
 
     #print(f"  Aphi[0]  mean |.|: {np.mean(np.abs(Aphi[0,  :])):.3e}  (should be 0)")
     #print(f"  Aphi[-1] mean |.|: {np.mean(np.abs(Aphi[-1, :])):.3e}  (should be ~0)")
@@ -514,12 +514,12 @@ if __name__ == "__main__":
     # directly gives rms_B(R) ~ sqrt(Sigma(R)) after the curl.
     # A linear ramp over the axis taper zone forces Aphi->0 at R=0
     # (Sigma is finite at the axis for this profile, so it can't do it alone).
-    # x_env      = R_nd * Rmax / kpc / Rd_kpc
+    # x_env      = R_dl * Rmax / kpc / Rd_kpc
     # Sigma_env  = np.exp(-x_env - beta_p * np.exp(-alpha_p * x_env))
     # Sigma_Rd_v = np.exp(-1.0 - beta_p * np.exp(-alpha_p))
-    # ramp_env   = np.minimum(R_nd / (inner_taper_cells * dR_nd), 1.0)
+    # ramp_env   = np.minimum(R_dl / (inner_taper_cells * dR_dl), 1.0)
     # Aphi_env   = np.sqrt(Sigma_env / Sigma_Rd_v) * ramp_env
-    # Aphi_env  /= Aphi_env[np.argmin(np.abs(R_nd - Rd_kpc * kpc / Rmax))]  # =1 at Rd
+    # Aphi_env  /= Aphi_env[np.argmin(np.abs(R_dl - Rd_kpc * kpc / Rmax))]  # =1 at Rd
     # Aphi      *= Aphi_env[:, None]
 
     #Aphi[0, :]   = 0.0
@@ -548,45 +548,45 @@ if __name__ == "__main__":
     rms_profile = uniform_filter1d(rms_profile, size=max(1, len(rms_profile)//50))
     rms_profile = np.maximum(rms_profile, 0.1 * rms_profile[len(rms_profile)//4:].mean())
     Aphi /= rms_profile[:, None]
-    Aphi[R_nd <= 0, :] = 0.0
+    Aphi[R_dl <= 0, :] = 0.0
 
     # ── form RA = R * A_phi ───────────────────────────────────────
-    RA = R_nd[:, None] * Aphi
+    RA = R_dl[:, None] * Aphi
 
     print(f"  RA at R=0:    {np.mean(np.abs(RA[0,  :])):.3e}  (should be 0)")
     print(f"  RA at Rmax:   {np.mean(np.abs(RA[-1, :])):.3e}  (should be ~0)")
 
     # ── curl ──────────────────────────────────────────────────────
-    Br_nd, Bz_nd = curl_Aphi(RA, R_nd, dR_nd, dz_nd)
+    Br_dl, Bz_dl = curl_Aphi(RA, R_dl, dR_dl, dz_dl)
 
     # ── verify net flux ───────────────────────────────────────────
-    net_flux_raw = np.mean(trapezoid(Bz_nd * R_nd[:, None], R_nd, axis=0))
-    print(f"  Net flux (raw, nd):  {net_flux_raw:.3e}  (target: 0)")
+    net_flux_raw = np.mean(trapezoid(Bz_dl * R_dl[:, None], R_dl, axis=0))
+    print(f"  Net flux (raw, dl):  {net_flux_raw:.3e}  (target: 0)")
 
-    # ── normalise by curl rms so that rms(B_nd) = 1 ──────────────
+    # ── normalise by curl rms so that rms(B_dl) = 1 ──────────────
     # This is the contract the C++ beta formula relies on: B_phys_rms = B0_scale.
     # Must be done AFTER equalization so both steps are self-consistent.
-    rms_nd = np.sqrt(np.mean(Br_nd**2 + Bz_nd**2))
-    print(f"  curl rms before normalisation: {rms_nd:.4f}")
-    Aphi  /= rms_nd
-    Br_nd /= rms_nd
-    Bz_nd /= rms_nd
+    rms_dl = np.sqrt(np.mean(Br_dl**2 + Bz_dl**2))
+    print(f"  curl rms before normalisation: {rms_dl:.4f}")
+    Aphi  /= rms_dl
+    Br_dl /= rms_dl
+    Bz_dl /= rms_dl
 
     Aphi_norm                    = Aphi
-    Aphi_norm[R_nd <= 0, :]     = 0.0
+    Aphi_norm[R_dl <= 0, :]     = 0.0
 
     # RA_norm derived from the clean Aphi_norm (not the other way around)
-    RA_norm         = R_nd[:, None] * Aphi_norm
+    RA_norm         = R_dl[:, None] * Aphi_norm
     print(f"  RA_norm   rms: {np.sqrt(np.mean(RA_norm**2)):.4f}")
     print(f"  Aphi_norm rms: {np.sqrt(np.mean(Aphi_norm**2)):.4f}  (should be O(1))")
     print(f"  Aphi_norm[0]  mean |.|: {np.mean(np.abs(Aphi_norm[0,:])):.3e}  (should be 0)")
 
     # Verify curl recovers unit-rms B
-    Br_check, Bz_check = curl_Aphi(RA_norm, R_nd, dR_nd, dz_nd)
+    Br_check, Bz_check = curl_Aphi(RA_norm, R_dl, dR_dl, dz_dl)
     print(f"  curl(RA_norm) rms: {np.sqrt(np.mean(Br_check**2+Bz_check**2)):.4f}  (should be 1.0)")
 
-    grad_rms = np.sqrt(np.mean(np.diff(Aphi_norm, axis=0)**2)) / dR_nd
-    print(f"  grad rms of Aphi_norm (nd): {grad_rms:.4f}  (should be ~1)")
+    grad_rms = np.sqrt(np.mean(np.diff(Aphi_norm, axis=0)**2)) / dR_dl
+    print(f"  grad rms of Aphi_norm (dl): {grad_rms:.4f}  (should be ~1)")
 
     # Radial Gaussian smooth (sigma=1 table cell) to suppress Bessel-mode
     # ringing that imprints as concentric Bphi rings in the XY plane.
@@ -598,15 +598,15 @@ if __name__ == "__main__":
     Aphi_phys = gaussian_filter1d(Aphi_norm, sigma=1.0, axis=0)
 
     # Re-zero ghost cells and axis after smoothing.
-    Aphi_phys[R_nd <= 0, :]                  = 0.0
-    Aphi_phys[R_nd >= Rmax_nd, :]            = 0.0
-    Aphi_phys[:, np.abs(z_nd) >= Lz_nd / 2] = 0.0
+    Aphi_phys[R_dl <= 0, :]                  = 0.0
+    Aphi_phys[R_dl >= Rmax_dl, :]            = 0.0
+    Aphi_phys[:, np.abs(z_dl) >= Lz_dl / 2] = 0.0
 
     # Recompute the curl from the smoothed+re-zeroed field (the one that
     # actually gets saved by save_outputs below) and renormalise so that
     # rms(Br^2+Bz^2)=1 holds for it, not just for the pre-smoothing Aphi_norm.
-    RA_phys = R_nd[:, None] * Aphi_phys
-    Br, Bz = curl_Aphi(RA_phys, R_nd, dR_nd, dz_nd)
+    RA_phys = R_dl[:, None] * Aphi_phys
+    Br, Bz = curl_Aphi(RA_phys, R_dl, dR_dl, dz_dl)
     rms_final = np.sqrt(np.mean(Br**2 + Bz**2))
     print(f"  curl rms after smoothing (pre-renorm): {rms_final:.4f}")
     Aphi_phys /= rms_final
@@ -622,8 +622,8 @@ if __name__ == "__main__":
     print(f"  Total rms B: {np.sqrt(np.mean(Br**2 + Bz**2)):.4f}")
 
     # consistency check
-    max_err = np.max(np.abs(R_nd[:, None] * Aphi_norm - RA_norm))
-    print(f"  Consistency check R_nd*Aphi_norm == RA_norm: max error = {max_err:.3e}  (should be ~0 except row 0)")
+    max_err = np.max(np.abs(R_dl[:, None] * Aphi_norm - RA_norm))
+    print(f"  Consistency check R_dl*Aphi_norm == RA_norm: max error = {max_err:.3e}  (should be ~0 except row 0)")
     print(np.percentile(np.abs(Aphi_phys), [50, 95, 99, 99.9, 100]))
 
     Bz_rms_profile = np.sqrt(np.mean(Bz[:80]**2, axis=1))
@@ -638,7 +638,7 @@ if __name__ == "__main__":
         nR_coarse=nR_coarse, nz_coarse=nz_coarse,
         levels=levels, oversample=oversample, SEED=SEED,
         Rmax=Rmax_padded, Lz=Lz_padded, dR=dR, dz=dz,
-        kmin_nd=kmin_nd, kmax_nd=kmax_nd, Rmax_nd=Rmax_nd,
+        kmin_dl=kmin_dl, kmax_dl=kmax_dl, Rmax_dl=Rmax_dl,
         H_phys_cm=H_phys,
         B0_gauss=B0, stem="Aphi_2d", suffix=OUT_SUFFIX,
     )
@@ -700,7 +700,7 @@ if __name__ == "__main__":
     k_flat = k.ravel()
     P_flat = np.abs(coeff.ravel())**2
 
-    bins  = np.geomspace(kmin_nd, kmax_nd, 40)
+    bins  = np.geomspace(kmin_dl, kmax_dl, 40)
     k_mid = 0.5 * (bins[:-1] + bins[1:])
     P     = np.array([
         np.mean(P_flat[(k_flat >= bins[i]) & (k_flat < bins[i+1])])
@@ -717,7 +717,7 @@ if __name__ == "__main__":
         norm = P_plot[mid] / k_plot[mid]**(-11/3)
         axes[1].loglog(k_plot, P_plot,              'o-', label="Measured")
         axes[1].loglog(k_plot, norm * k_plot**(-11/3), '--', label=r"$k^{-11/3}$")
-        axes[1].axvline(kmin_nd, color='g', ls=':', label=f"kmin (λ=2H={2*H_phys/kpc*1e3:.0f} pc)")
+        axes[1].axvline(kmin_dl, color='g', ls=':', label=f"kmin (λ=2H={2*H_phys/kpc*1e3:.0f} pc)")
         axes[1].set_xlabel("k (dimensionless)")
         axes[1].set_ylabel(r"$|A_k|^2$")
         axes[1].legend()
@@ -732,7 +732,7 @@ if __name__ == "__main__":
     k_flat2 = np.sqrt(kR_grid**2 + kz_grid**2).ravel()
     E_flat  = E_mode.ravel()
 
-    k_bins  = np.geomspace(kmin_nd, kmax_nd, 50)
+    k_bins  = np.geomspace(kmin_dl, kmax_dl, 50)
     kB_plot, EB_plot = [], []
     for i in range(len(k_bins)-1):
         mask = (k_flat2 >= k_bins[i]) & (k_flat2 < k_bins[i+1])
@@ -749,7 +749,7 @@ if __name__ == "__main__":
         norm = EB_plot[mid] / kB_plot[mid]**(-5/3)
         ax.loglog(kB_plot, EB_plot,                'o-', label="Measured")
         ax.loglog(kB_plot, norm * kB_plot**(-5/3), '--', label=r"$k^{-5/3}$")
-        ax.axvline(kmin_nd, color='g', ls=':', label=f"kmin (λ=2H={2*H_phys/kpc*1e3:.0f} pc)")
+        ax.axvline(kmin_dl, color='g', ls=':', label=f"kmin (λ=2H={2*H_phys/kpc*1e3:.0f} pc)")
     ax.set_xlabel("k (dimensionless)")
     ax.set_ylabel(r"$E_B(k)$")
     ax.set_title("Magnetic Energy Spectrum")
@@ -779,9 +779,9 @@ if __name__ == "__main__":
     plt.show()
 
     # ── net flux per z-slice ──────────────────────────────────────
-    flux_per_z = 2 * np.pi * trapezoid(Bz_nd * R_nd[:, None], R_nd, axis=0)
+    flux_per_z = 2 * np.pi * trapezoid(Bz_dl * R_dl[:, None], R_dl, axis=0)
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.plot(z_nd * Rmax / kpc, flux_per_z)
+    ax.plot(z_dl * Rmax / kpc, flux_per_z)
     ax.axhline(0, color='k', lw=0.5)
     ax.set_xlabel("z [kpc]")
     ax.set_ylabel(r"$\Phi_z(z)$ [dimensionless]")
@@ -793,9 +793,9 @@ if __name__ == "__main__":
     print(f"\nFinal summary:")
     print(f"  Scale height at R=Rd: {H_phys/kpc*1e3:.0f} pc")
     print(f"  lambda_max = 2H:      {2*H_phys/kpc*1e3:.0f} pc")
-    print(f"  kmin (nd):            {kmin_nd:.3e}")
-    print(f"  kmax (nd):            {kmax_nd:.3e}")
-    print(f"  kmax/kmin:            {kmax_nd/kmin_nd:.1f}")
+    print(f"  kmin (dl):            {kmin_dl:.3e}")
+    print(f"  kmax (dl):            {kmax_dl:.3e}")
+    print(f"  kmax/kmin:            {kmax_dl/kmin_dl:.1f}")
     print(f"  Br rms  = {np.sqrt(np.mean(Br**2)):.4f}")
     print(f"  Bz rms  = {np.sqrt(np.mean(Bz**2)):.4f}")
     print(f"  |B| rms = {np.sqrt(np.mean(Br**2+Bz**2)):.4f}")
