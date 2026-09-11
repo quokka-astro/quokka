@@ -265,8 +265,12 @@ void writeData(char *outname, double *grid, int n)
 
 	/* Proc 0 opens output file */
 	if (myrank == 0) {
-		sprintf(outname1, "%s.%d", outname, n + 1);
+		snprintf(outname1, sizeof(outname1), "%s.%d", outname, n + 1);
 		fp = fopen(outname1, "w");
+		if (fp == NULL) {
+			fprintf(stderr, "cannot open %s for writing\n", outname1);
+			MPI_Abort(MPI_COMM_WORLD, 1);
+		}
 	}
 
 	/* Figure out how much memory we need to store the largest block */

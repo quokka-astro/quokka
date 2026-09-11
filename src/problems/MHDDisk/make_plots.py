@@ -620,7 +620,7 @@ if not IS_HYDRO:
     max_level = ds.index.max_level
     dims_full = ds.domain_dimensions * (2 ** max_level)
     n_slabs   = max(128, size)
-    slab_nz   = max(1, dims_full[2] // n_slabs)
+    slab_nz   = max(1, -(-dims_full[2] // n_slabs))  # ceiling division so the last slab isn't dropped
 
     rho_transition = 1e-28
     dead_zone_cm   = 2.0 * (Rmax_cm / nR)
