@@ -40,6 +40,212 @@ struct AnisoConductionParams {
 	int ng_reconstruct = 2; // number of ghost faces to reconstruct beyond the valid box
 };
 
+// Declarations only -- see the definitions below AnisoConduction for what each of these actually
+// does. Declared here so that AnisoConduction::ComputeExplicit (which calls all four) can be read
+// first; scroll down past the class for the bodies.
+template <typename problem_t, FluxDir DIR>
+void ComputeFaceUnitBField(amrex::MultiFab &bhat_fc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int reconstructionOrder,
+			   SlopeLimiter plmLimiter, int nghost);
+
+template <FluxDir DIR>
+void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &temperature, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int comp);
+
+template <FluxDir DIR>
+void ComputeFaceNumberDensity(amrex::MultiFab &n_fc_mf, amrex::MultiFab const &density, amrex::Real mean_molecular_weight, int comp);
+
+template <FluxDir DIR>
+void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &bhat_fc, amrex::MultiFab const &gradT_fc, amrex::MultiFab const &primVar,
+			    amrex::Real mean_molecular_weight, amrex::Real kappa_parallel, amrex::Real kappa_perp, amrex::MultiFab const &q_sat_fc);
+
+template <typename problem_t> class AnisoConduction
+{
+      public:
+	// Reconstruct rho and T at the interfaces (identical to ElectronConduction::ReconstructPrimVar)
+	template <FluxDir DIR>
+	static void ReconstructPrimVar(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int ng_reconstruct,
+				       AnisoConductionParams const &params)
+	{
+		constexpr int nvars = 2;
+		if (params.reconstruction_order == 5) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		} else if (params.reconstruction_order == 3) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		} else if (params.reconstruction_order == 2) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars,
+											params.plm_limiter);
+		} else if (params.reconstruction_order == 1) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		} else {
+			amrex::Abort("Invalid reconstruction order specified for anisotropic conduction!");
+		}
+	}
+
+	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
+				    amrex::Real dt, AnisoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
+	{
+		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Anisotropic conduction requires hydro to be enabled.");
+
+		if ((dt <= 0.0) || ((params.kappa_parallel <= 0.0) && (params.kappa_perp <= 0.0))) {
+			return;
+		}
+
+		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+			amrex::ignore_unused(geom, params);
+			return;
+		}
+
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state.nGrow() >= 1, "Anisotropic conduction requires at least 1 ghost cell.");
+
+		const auto dx = geom.CellSizeArray();
+
+		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2, state.nGrow());
+		auto const &state_x0 = state.const_arrays();
+		primVar.setVal(0.0);
+
+		auto primVar_arr = primVar.arrays();
+		constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+		const amrex::Real t_min = params.min_temperature;
+
+		// Per-box face-centered B, gathered into an array so it can be handed to
+		// HydroSystem<problem_t>::ComputeInternalEnergy/ComputeMagneticEnergy below.
+		auto const &state_fc_x0 = state_fc[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+		auto const &state_fc_x1 = state_fc[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+		auto const &state_fc_x2 = state_fc[2].const_arrays();
+#endif
+
+		amrex::IntVect const ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
+
+		amrex::ParallelFor(state, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			auto const &cons = state_x0[bx];
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
+			amrex::ignore_unused(state_fc_x0
+#if AMREX_SPACEDIM >= 2
+					     ,
+					     state_fc_x1
+#endif
+#if AMREX_SPACEDIM == 3
+					     ,
+					     state_fc_x2
+#endif
+			);
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				local_state_fc[0] = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+				local_state_fc[1] = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+				local_state_fc[2] = state_fc_x2[bx];
+#endif
+			}
+
+			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
+			// Temperature always from EOS
+			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
+
+			primVar_arr[bx](i, j, k, 0) = rho;
+			primVar_arr[bx](i, j, k, 1) = amrex::max(Tgas, t_min);
+		});
+
+		// Unit B-field at each face (bx, by, bz), populated only when MHD is enabled (zeroed
+		// otherwise, so a non-MHD build gets zero flux rather than reading uninitialized data).
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> bhat_fc;
+		// gradT at each face (dT/dx, dT/dy, dT/dz), fixed physical (x,y,z) order -- see ComputeFaceGradT.
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> gradT_fc;
+		const int ng_reconstruct = params.ng_reconstruct;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			bhat_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 3, 0);
+			bhat_fc[idim].setVal(0.0);
+			gradT_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 3, 0);
+			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
+			heat_flux[idim].setVal(0.0);
+		}
+
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			AMREX_D_TERM(ComputeFaceUnitBField<problem_t, FluxDir::X1>(bhat_fc[0], state_fc, params.reconstruction_order, params.plm_limiter,
+										    ng_reconstruct);
+				     , ComputeFaceUnitBField<problem_t, FluxDir::X2>(bhat_fc[1], state_fc, params.reconstruction_order, params.plm_limiter,
+										      ng_reconstruct);
+				     , ComputeFaceUnitBField<problem_t, FluxDir::X3>(bhat_fc[2], state_fc, params.reconstruction_order, params.plm_limiter,
+										      ng_reconstruct);)
+		}
+
+		// primVar component 1 holds T.
+		AMREX_D_TERM(ComputeFaceGradT<FluxDir::X1>(gradT_fc[0], primVar, dx, 1);, ComputeFaceGradT<FluxDir::X2>(gradT_fc[1], primVar, dx, 1);
+			     , ComputeFaceGradT<FluxDir::X3>(gradT_fc[2], primVar, dx, 1);)
+
+		// Saturation flux at each face (Cowie & McKee 1977) -- NOT computed yet, since that needs
+		// (rho, T) reconstructed to the interfaces via EOS calls, which isn't wired up in this file
+		// right now. Filled with a large sentinel so the limiter below is a no-op (q_classical
+		// unmodified) until that piece is added.
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> q_sat_fc;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			q_sat_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 1, 0);
+			q_sat_fc[idim].setVal(std::numeric_limits<amrex::Real>::max());
+		}
+
+		// Heat flux at each face: full parallel/perpendicular decomposition of gradT relative to
+		// bhat, projected onto the face normal -- see ComputeAnisotropicFlux (which computes number
+		// density internally via ComputeFaceNumberDensity).
+		const amrex::Real mmw = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+		AMREX_D_TERM(ComputeAnisotropicFlux<FluxDir::X1>(heat_flux[0], bhat_fc[0], gradT_fc[0], primVar, mmw, params.kappa_parallel,
+								  params.kappa_perp, q_sat_fc[0]);
+			     , ComputeAnisotropicFlux<FluxDir::X2>(heat_flux[1], bhat_fc[1], gradT_fc[1], primVar, mmw, params.kappa_parallel,
+								    params.kappa_perp, q_sat_fc[1]);
+			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], bhat_fc[2], gradT_fc[2], primVar, mmw, params.kappa_parallel,
+								    params.kappa_perp, q_sat_fc[2]);)
+
+		auto state_out = state.arrays();
+		auto const &flux_x_const = heat_flux[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+		auto const &flux_y_const = heat_flux[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+		auto const &flux_z_const = heat_flux[2].const_arrays();
+#endif
+
+		amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				local_state_fc[0] = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+				local_state_fc[1] = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+				local_state_fc[2] = state_fc_x2[bx];
+#endif
+			}
+
+			const amrex::Real rho = state_out[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			const amrex::Real px = state_out[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			const amrex::Real py = state_out[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			const amrex::Real pz = state_out[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+
+			const amrex::Real Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
+			const amrex::Real Eint_old = state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+			const amrex::Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &local_state_fc);
+			amrex::Real div_flux = (flux_x_const[bx](i + 1, j, k) - flux_x_const[bx](i, j, k)) / dx[0];
+#if AMREX_SPACEDIM >= 2
+			div_flux += (flux_y_const[bx](i, j + 1, k) - flux_y_const[bx](i, j, k)) / dx[1];
+#endif
+#if AMREX_SPACEDIM == 3
+			div_flux += (flux_z_const[bx](i, j, k + 1) - flux_z_const[bx](i, j, k)) / dx[2];
+#endif
+
+			amrex::Real const Eint_new = Eint_old - dt * div_flux;
+
+			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin + Emag;
+			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
+		});
+	}
+};
+
 // Estimate the unit vector of B at the DIR-faces: bhat_fc_mf (output) is a 3-component (bx,by,bz)
 // MultiFab on the DIR-face grid. The face-normal component comes directly from the staggered
 // state_fc representation (exact); the two transverse components are averaged to cell centers from
@@ -270,195 +476,6 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 		flux_out[bx](i, j, k) = q_classical / limiter;
 	});
 }
-
-template <typename problem_t> class AnisoConduction
-{
-      public:
-	// Reconstruct rho and T at the interfaces (identical to ElectronConduction::ReconstructPrimVar)
-	template <FluxDir DIR>
-	static void ReconstructPrimVar(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int ng_reconstruct,
-				       AnisoConductionParams const &params)
-	{
-		constexpr int nvars = 2;
-		if (params.reconstruction_order == 5) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
-		} else if (params.reconstruction_order == 3) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
-		} else if (params.reconstruction_order == 2) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars,
-											params.plm_limiter);
-		} else if (params.reconstruction_order == 1) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
-		} else {
-			amrex::Abort("Invalid reconstruction order specified for anisotropic conduction!");
-		}
-	}
-
-	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
-				    amrex::Real dt, AnisoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
-	{
-		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Anisotropic conduction requires hydro to be enabled.");
-
-		if ((dt <= 0.0) || ((params.kappa_parallel <= 0.0) && (params.kappa_perp <= 0.0))) {
-			return;
-		}
-
-		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-			amrex::ignore_unused(geom, params);
-			return;
-		}
-
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state.nGrow() >= 1, "Anisotropic conduction requires at least 1 ghost cell.");
-
-		const auto dx = geom.CellSizeArray();
-
-		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2, state.nGrow());
-		auto const &state_x0 = state.const_arrays();
-		primVar.setVal(0.0);
-
-		auto primVar_arr = primVar.arrays();
-		constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-		const amrex::Real t_min = params.min_temperature;
-
-		// Per-box face-centered B, gathered into an array so it can be handed to
-		// HydroSystem<problem_t>::ComputeInternalEnergy/ComputeMagneticEnergy below.
-		auto const &state_fc_x0 = state_fc[0].const_arrays();
-#if AMREX_SPACEDIM >= 2
-		auto const &state_fc_x1 = state_fc[1].const_arrays();
-#endif
-#if AMREX_SPACEDIM == 3
-		auto const &state_fc_x2 = state_fc[2].const_arrays();
-#endif
-
-		amrex::IntVect const ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
-
-		amrex::ParallelFor(state, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			auto const &cons = state_x0[bx];
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
-			amrex::ignore_unused(state_fc_x0
-#if AMREX_SPACEDIM >= 2
-					     ,
-					     state_fc_x1
-#endif
-#if AMREX_SPACEDIM == 3
-					     ,
-					     state_fc_x2
-#endif
-			);
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				local_state_fc[0] = state_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-				local_state_fc[1] = state_fc_x1[bx];
-#endif
-#if AMREX_SPACEDIM == 3
-				local_state_fc[2] = state_fc_x2[bx];
-#endif
-			}
-
-			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
-			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
-			// Temperature always from EOS
-			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
-
-			primVar_arr[bx](i, j, k, 0) = rho;
-			primVar_arr[bx](i, j, k, 1) = amrex::max(Tgas, t_min);
-		});
-
-		// Unit B-field at each face (bx, by, bz), populated only when MHD is enabled (zeroed
-		// otherwise, so a non-MHD build gets zero flux rather than reading uninitialized data).
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> bhat_fc;
-		// gradT at each face (dT/dx, dT/dy, dT/dz), fixed physical (x,y,z) order -- see ComputeFaceGradT.
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> gradT_fc;
-		const int ng_reconstruct = params.ng_reconstruct;
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			bhat_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 3, 0);
-			bhat_fc[idim].setVal(0.0);
-			gradT_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 3, 0);
-			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
-			heat_flux[idim].setVal(0.0);
-		}
-
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			AMREX_D_TERM(ComputeFaceUnitBField<problem_t, FluxDir::X1>(bhat_fc[0], state_fc, params.reconstruction_order, params.plm_limiter,
-										    ng_reconstruct);
-				     , ComputeFaceUnitBField<problem_t, FluxDir::X2>(bhat_fc[1], state_fc, params.reconstruction_order, params.plm_limiter,
-										      ng_reconstruct);
-				     , ComputeFaceUnitBField<problem_t, FluxDir::X3>(bhat_fc[2], state_fc, params.reconstruction_order, params.plm_limiter,
-										      ng_reconstruct);)
-		}
-
-		// primVar component 1 holds T.
-		AMREX_D_TERM(ComputeFaceGradT<FluxDir::X1>(gradT_fc[0], primVar, dx, 1);, ComputeFaceGradT<FluxDir::X2>(gradT_fc[1], primVar, dx, 1);
-			     , ComputeFaceGradT<FluxDir::X3>(gradT_fc[2], primVar, dx, 1);)
-
-		// Saturation flux at each face (Cowie & McKee 1977) -- NOT computed yet, since that needs
-		// (rho, T) reconstructed to the interfaces via EOS calls, which isn't wired up in this file
-		// right now. Filled with a large sentinel so the limiter below is a no-op (q_classical
-		// unmodified) until that piece is added.
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> q_sat_fc;
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			q_sat_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 1, 0);
-			q_sat_fc[idim].setVal(std::numeric_limits<amrex::Real>::max());
-		}
-
-		// Heat flux at each face: full parallel/perpendicular decomposition of gradT relative to
-		// bhat, projected onto the face normal -- see ComputeAnisotropicFlux (which computes number
-		// density internally via ComputeFaceNumberDensity).
-		const amrex::Real mmw = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-		AMREX_D_TERM(ComputeAnisotropicFlux<FluxDir::X1>(heat_flux[0], bhat_fc[0], gradT_fc[0], primVar, mmw, params.kappa_parallel,
-								  params.kappa_perp, q_sat_fc[0]);
-			     , ComputeAnisotropicFlux<FluxDir::X2>(heat_flux[1], bhat_fc[1], gradT_fc[1], primVar, mmw, params.kappa_parallel,
-								    params.kappa_perp, q_sat_fc[1]);
-			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], bhat_fc[2], gradT_fc[2], primVar, mmw, params.kappa_parallel,
-								    params.kappa_perp, q_sat_fc[2]);)
-
-		auto state_out = state.arrays();
-		auto const &flux_x_const = heat_flux[0].const_arrays();
-#if AMREX_SPACEDIM >= 2
-		auto const &flux_y_const = heat_flux[1].const_arrays();
-#endif
-#if AMREX_SPACEDIM == 3
-		auto const &flux_z_const = heat_flux[2].const_arrays();
-#endif
-
-		amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				local_state_fc[0] = state_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-				local_state_fc[1] = state_fc_x1[bx];
-#endif
-#if AMREX_SPACEDIM == 3
-				local_state_fc[2] = state_fc_x2[bx];
-#endif
-			}
-
-			const amrex::Real rho = state_out[bx](i, j, k, HydroSystem<problem_t>::density_index);
-			const amrex::Real px = state_out[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-			const amrex::Real py = state_out[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-			const amrex::Real pz = state_out[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-
-			const amrex::Real Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
-			const amrex::Real Eint_old = state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-			const amrex::Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &local_state_fc);
-			amrex::Real div_flux = (flux_x_const[bx](i + 1, j, k) - flux_x_const[bx](i, j, k)) / dx[0];
-#if AMREX_SPACEDIM >= 2
-			div_flux += (flux_y_const[bx](i, j + 1, k) - flux_y_const[bx](i, j, k)) / dx[1];
-#endif
-#if AMREX_SPACEDIM == 3
-			div_flux += (flux_z_const[bx](i, j, k + 1) - flux_z_const[bx](i, j, k)) / dx[2];
-#endif
-
-			amrex::Real const Eint_new = Eint_old - dt * div_flux;
-
-			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin + Emag;
-			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
-		});
-	}
-};
 
 } // namespace quokka::conduction
 
