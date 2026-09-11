@@ -576,9 +576,7 @@ if __name__ == "__main__":
     Aphi_norm[R_nd <= 0, :]     = 0.0
 
     # RA_norm derived from the clean Aphi_norm (not the other way around)
-    RA_norm         = R_nd[:, None] * Aphi_norm    
-    Br = Br_nd
-    Bz = Bz_nd    
+    RA_norm         = R_nd[:, None] * Aphi_norm
     print(f"  RA_norm   rms: {np.sqrt(np.mean(RA_norm**2)):.4f}")
     print(f"  Aphi_norm rms: {np.sqrt(np.mean(Aphi_norm**2)):.4f}  (should be O(1))")
     print(f"  Aphi_norm[0]  mean |.|: {np.mean(np.abs(Aphi_norm[0,:])):.3e}  (should be 0)")
@@ -590,21 +588,34 @@ if __name__ == "__main__":
     grad_rms = np.sqrt(np.mean(np.diff(Aphi_norm, axis=0)**2)) / dR_nd
     print(f"  grad rms of Aphi_norm (nd): {grad_rms:.4f}  (should be ~1)")
 
-    Aphi_phys = Aphi_norm
-    RA_phys   = RA_norm * Rmax
-
     # Radial Gaussian smooth (sigma=1 table cell) to suppress Bessel-mode
     # ringing that imprints as concentric Bphi rings in the XY plane.
-    # Applied in R only so the z-structure and curl normalisation are unaffected.
+    # NOTE: smoothing in R changes d(RA)/dR (and therefore Bz), so it does
+    # NOT leave the curl normalisation unaffected -- the curl must be
+    # recomputed and renormalised afterwards (below) to preserve the
+    # rms(Br^2+Bz^2)=1 contract the C++ plasma-beta formula relies on.
     from scipy.ndimage import gaussian_filter1d
-    Aphi_phys = gaussian_filter1d(Aphi_phys, sigma=1.0, axis=0)
+    Aphi_phys = gaussian_filter1d(Aphi_norm, sigma=1.0, axis=0)
 
     # Re-zero ghost cells and axis after smoothing.
     Aphi_phys[R_nd <= 0, :]                  = 0.0
     Aphi_phys[R_nd >= Rmax_nd, :]            = 0.0
     Aphi_phys[:, np.abs(z_nd) >= Lz_nd / 2] = 0.0
 
+    # Recompute the curl from the smoothed+re-zeroed field (the one that
+    # actually gets saved by save_outputs below) and renormalise so that
+    # rms(Br^2+Bz^2)=1 holds for it, not just for the pre-smoothing Aphi_norm.
+    RA_phys = R_nd[:, None] * Aphi_phys
+    Br, Bz = curl_Aphi(RA_phys, R_nd, dR_nd, dz_nd)
+    rms_final = np.sqrt(np.mean(Br**2 + Bz**2))
+    print(f"  curl rms after smoothing (pre-renorm): {rms_final:.4f}")
+    Aphi_phys /= rms_final
+    RA_phys   /= rms_final
+    Br        /= rms_final
+    Bz        /= rms_final
+
     print(f"  Aphi_phys rms: {np.sqrt(np.mean(Aphi_phys**2)):.4e} cm  (should be ~Rmax/nR ~ {Rmax/nR:.3e} cm)")
+    print(f"  curl(final Aphi_phys) rms: {np.sqrt(np.mean(Br**2+Bz**2)):.4f}  (should be 1.0)")
 
     print(f"  Br rms: {np.sqrt(np.mean(Br**2)):.4f}")
     print(f"  Bz rms: {np.sqrt(np.mean(Bz**2)):.4f}")
