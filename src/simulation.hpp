@@ -231,9 +231,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// Conduction parameters
 	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
+	amrex::Real conductionKappaParallel_ = 0.0;   // anisotropic conduction, units erg cm^-1 s^-1 K^-1
+	amrex::Real conductionKappaPerp_ = 0.0;       // anisotropic conduction, units erg cm^-1 s^-1 K^-1
 	amrex::Real conductionCFL = 0.2;	      // default
 	int enableElectronConduction_ = 0;	      // default
-	std::string conductionType_ = "constant";     // "constant" or "spitzer"; controls the conduction timestep estimate
+	std::string conductionType_ = "constant";     // "constant", "spitzer", or "aniso"; controls the conduction timestep estimate
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
@@ -1293,6 +1295,25 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 
 			if (verbose) {
 				amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
+				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
+							      formatIntVect(conduction_dt.index));
+			}
+		} else if (conductionType_ == "aniso") {
+			// Diffusive timescale set by the harmonic mean of kappa_parallel and kappa_perp, which is
+			// dominated by whichever of the two is smaller (i.e. the slower/stiffer diffusion direction).
+			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+			const amrex::Real kappa_par = conductionKappaParallel_;
+			const amrex::Real kappa_perp = conductionKappaPerp_;
+			amrex::Real kappa_harmonic = 0.0;
+			if ((kappa_par + kappa_perp) > 0.0) {
+				kappa_harmonic = 2.0 * kappa_par * kappa_perp / (kappa_par + kappa_perp);
+			}
+			double diffusion_coefficient = kappa_harmonic / (state_new_cc_[lev].min(0) * c_v);
+			conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
+			conduction_dt.index = domain_signal_maxloc;
+
+			if (verbose) {
+				amrex::Print() << std::format("...[level {}] \testimated anisotropic conduction timestep: {:e}\n", lev, conduction_dt.value);
 				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
 							      formatIntVect(conduction_dt.index));
 			}
