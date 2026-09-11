@@ -262,4 +262,33 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	return y;
 }
 
+// Compute x * d/dx of integrate_planck_from_0_to_x(x), i.e. (15 / pi^4) * x^4 / (exp(x) - 1). This is the boundary term that appears when the normalized
+// Planck integral is differentiated with respect to temperature at fixed group edges, since x = h nu / (k T) is proportional to 1 / T.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto planck_integral_edge_term(const Real x) -> Real
+{
+	AMREX_ASSERT(!std::isnan(x));
+	AMREX_ASSERT(x >= 0.);
+
+	if (x <= 0.) {
+		return 0.;
+	}
+	if (x > 100.) {
+		// exp(-100) < 1e-43, so this term is negligible. This branch also covers x = infinity.
+		return 0.;
+	}
+	if (x < 1.0e-10) {
+		// Taylor series: x^4 / (exp(x) - 1) = x^3 - x^4 / 2 + ...
+		return x * x * x / gInf;
+	}
+	return x * x * x * x / (std::exp(x) - 1.0) / gInf;
+}
+
+// Cumulative form of the temperature derivative of the Planck spectrum, D(x) = (15 / pi^4) \int_0^x s^4 e^s / (e^s - 1)^2 ds, obtained by integrating the
+// exact kernel by parts. The emission of a group [nu_L, nu_R] then has d/dT (a T^4 f_g) = a T^3 [D(x_R) - D(x_L)], and D(infinity) = 4 recovers
+// d(a T^4)/dT for a set of groups that spans the whole spectrum.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_derivative_from_0_to_x(const Real x) -> Real
+{
+	return 4. * integrate_planck_from_0_to_x(x) - planck_integral_edge_term(x);
+}
+
 #endif // PLANCKINTEGRAL_HPP_

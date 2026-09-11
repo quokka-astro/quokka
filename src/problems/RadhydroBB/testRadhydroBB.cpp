@@ -10,6 +10,7 @@
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
+#include <array>
 #include <cmath>
 #include <format>
 #include <fstream>
@@ -179,6 +180,58 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
 	});
+}
+
+// Check the multigroup blackbody emission and its temperature derivative for group boundaries that do NOT span the whole spectrum. The energy fractions must
+// then integrate the Planck function over [boundaries[0], boundaries[n_groups_]] only -- neither renormalized to 1, nor with the emission outside the bands
+// folded into the first and last groups -- and likewise for the temperature derivative. This problem uses k_B = a_rad = nu_unit = 1, so x = h nu / (k T) is
+// just nu / T. The reference values below are high-precision quadratures of the Planck integral and of its temperature-derivative kernel,
+//     P(x) = (15/pi^4) \int_0^x s^3 / (e^s - 1) ds ,   D(x) = (15/pi^4) \int_0^x s^4 e^s / (e^s - 1)^2 ds ,
+// over the bands [0.5, 1], [1, 2], [2, 4], [4, 6], which straddle the peak of the Planck function.
+auto checkBlackbodyEmission() -> bool
+{
+	bool success = true;
+	const double T_test = 1.0;
+	const double a_T3 = a_rad * T_test * T_test * T_test;
+	// the tolerance is set by the accuracy of the tabulated Planck integral, which is far tighter than the errors of order 10 to 100 per cent that folding
+	// the out-of-band emission into the first and last groups would produce
+	const double tol = 1.0e-3;
+
+	const amrex::GpuArray<double, n_groups_ + 1> narrow_bounds{0.5, 1.0, 2.0, 4.0, 6.0};
+	const std::array<double, n_groups_> frac_exact{0.029324531565, 0.146526992267, 0.415881855008, 0.263137844912};
+	const std::array<double, n_groups_> deriv_exact{0.0425155795, 0.2900926449, 1.3136624416, 1.2921345740};
+
+	const auto fractions = RadSystem<PulseProblem>::ComputePlanckEnergyFractions(narrow_bounds, T_test);
+	const auto deriv = RadSystem<PulseProblem>::ComputeThermalRadiationTempDerivativeMultiGroup(T_test, narrow_bounds);
+	for (int g = 0; g < n_groups_; ++g) {
+		const double frac_err = std::abs(fractions[g] - frac_exact[g]) / frac_exact[g];
+		const double deriv_err = std::abs(deriv[g] - a_T3 * deriv_exact[g]) / (a_T3 * deriv_exact[g]);
+		amrex::Print() << "group " << g << ": Planck fraction = " << fractions[g] << " (rel. error " << frac_err << "), d(4 pi B / c)/dT = " << deriv[g]
+			       << " (rel. error " << deriv_err << ")\n";
+		if (frac_err > tol || deriv_err > tol) {
+			amrex::Print() << "FAILED: group " << g << " does not emit the Planck function integrated over its own band only.\n";
+			success = false;
+		}
+	}
+	// the bands cover only part of the spectrum, so they must emit strictly less than a_rad T^4
+	const double frac_sum = sum(fractions);
+	amrex::Print() << "Planck energy fraction inside x = [0.5, 6]: " << frac_sum << " (expected 0.85487)\n";
+	if (frac_sum > 0.99) {
+		amrex::Print() << "FAILED: a set of groups covering only part of the spectrum emits the full a_rad T^4.\n";
+		success = false;
+	}
+
+	// groups that DO span the whole spectrum must still emit exactly a_rad T^4 in total, with total derivative 4 a_rad T^3
+	const amrex::GpuArray<double, n_groups_ + 1> full_bounds{0.0, 1.0, 3.0, 10.0, inf};
+	const double full_frac_sum = sum(RadSystem<PulseProblem>::ComputePlanckEnergyFractions(full_bounds, T_test));
+	const double full_deriv_sum = sum(RadSystem<PulseProblem>::ComputeThermalRadiationTempDerivativeMultiGroup(T_test, full_bounds));
+	if (std::abs(full_frac_sum - 1.0) > 1.0e-10 || std::abs(full_deriv_sum - 4.0 * a_T3) > 1.0e-10 * a_T3) {
+		amrex::Print() << "FAILED: groups spanning the whole spectrum give total fraction " << full_frac_sum << " (expected 1) and total derivative "
+			       << full_deriv_sum << " (expected " << 4.0 * a_T3 << ").\n";
+		success = false;
+	}
+
+	return success;
 }
 
 auto problem_main() -> int
@@ -458,6 +511,9 @@ auto problem_main() -> int
 	// Cleanup and exit
 	int status = 0;
 	if ((rel_error > error_tol) || std::isnan(rel_error) || (rel_error_T > error_tol) || std::isnan(rel_error_T)) {
+		status = 1;
+	}
+	if (!checkBlackbodyEmission()) {
 		status = 1;
 	}
 	return status;
