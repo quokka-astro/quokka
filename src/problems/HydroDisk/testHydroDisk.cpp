@@ -150,8 +150,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double diskDensityAnalytic(double R, do
 }
 
 AMREX_GPU_HOST_DEVICE
-inline auto interpolate_turbulence(const amrex::Array4<const amrex::Real> &table, int nx, int ny, int nz, amrex::Real x, amrex::Real y, amrex::Real z)
-    -> amrex::Real
+inline auto interpolate_turbulence(const amrex::Real *table, int nx, int ny, int nz, amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
 {
 	x = amrex::max(0.0, amrex::min(x, static_cast<amrex::Real>(nx - 1)));
 	y = amrex::max(0.0, amrex::min(y, static_cast<amrex::Real>(ny - 1)));
@@ -169,14 +168,21 @@ inline auto interpolate_turbulence(const amrex::Array4<const amrex::Real> &table
 	amrex::Real fy = y - j0;
 	amrex::Real fz = z - k0;
 
-	auto c000 = table(i0, j0, k0);
-	auto c100 = table(i1, j0, k0);
-	auto c010 = table(i0, j1, k0);
-	auto c110 = table(i1, j1, k0);
-	auto c001 = table(i0, j0, k1);
-	auto c101 = table(i1, j0, k1);
-	auto c011 = table(i0, j1, k1);
-	auto c111 = table(i1, j1, k1);
+	// Row-major (C-order) with k fastest-varying, matching fieldgen_mpi/fieldgen3.c's
+	// writeData(): the loop nest is i (outer) -> j -> k (contiguous fwrite of `ngrid`
+	// doubles), so the on-disk/flat-buffer layout is [i][j][k], not AMReX's Array4
+	// convention (i fastest). Indexing this buffer via amrex::Array4 -- as earlier
+	// code here did -- silently transposes the i and k axes on read.
+	auto idx = [ny, nz](int i, int j, int k) -> std::size_t { return (static_cast<std::size_t>(i) * ny + j) * nz + k; };
+
+	auto c000 = table[idx(i0, j0, k0)];
+	auto c100 = table[idx(i1, j0, k0)];
+	auto c010 = table[idx(i0, j1, k0)];
+	auto c110 = table[idx(i1, j1, k0)];
+	auto c001 = table[idx(i0, j0, k1)];
+	auto c101 = table[idx(i1, j0, k1)];
+	auto c011 = table[idx(i0, j1, k1)];
+	auto c111 = table[idx(i1, j1, k1)];
 
 	return c000 * (1 - fx) * (1 - fy) * (1 - fz) + c100 * fx * (1 - fy) * (1 - fz) + c010 * (1 - fx) * fy * (1 - fz) + c110 * fx * fy * (1 - fz) +
 	       c001 * (1 - fx) * (1 - fy) * fz + c101 * fx * (1 - fy) * fz + c011 * (1 - fx) * fy * fz + c111 * fx * fy * fz;
@@ -318,13 +324,11 @@ template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::
 	const int turb_ny = userData_.turb_ny;
 	const int turb_nz = userData_.turb_nz;
 
-	// Array4 views over the device buffers loaded in preCalculateInitialConditions
-	// (indices run [0,turb_nx-1] x [0,turb_ny-1] x [0,turb_nz-1], ncomp=1).
-	const amrex::Dim3 turb_arr_lo{.x = 0, .y = 0, .z = 0};
-	const amrex::Dim3 turb_arr_hi{.x = turb_nx, .y = turb_ny, .z = turb_nz};
-	const amrex::Array4<const amrex::Real> turb_vx_tab(userData_.turb_vx_device.data(), turb_arr_lo, turb_arr_hi, 1);
-	const amrex::Array4<const amrex::Real> turb_vy_tab(userData_.turb_vy_device.data(), turb_arr_lo, turb_arr_hi, 1);
-	const amrex::Array4<const amrex::Real> turb_vz_tab(userData_.turb_vz_device.data(), turb_arr_lo, turb_arr_hi, 1);
+	// Raw pointers to the device buffers loaded in preCalculateInitialConditions
+	// (row-major [turb_nx][turb_ny][turb_nz], k fastest -- see interpolate_turbulence).
+	const amrex::Real *turb_vx_tab = userData_.turb_vx_device.data();
+	const amrex::Real *turb_vy_tab = userData_.turb_vy_device.data();
+	const amrex::Real *turb_vz_tab = userData_.turb_vz_device.data();
 
 	const double turb_rescale = userData_.turb_rescale_factor;
 

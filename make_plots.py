@@ -236,7 +236,7 @@ extent_kpc = [-width_kpc/2, width_kpc/2, -width_kpc/2, width_kpc/2]
 
 # ── Aphi table metadata ───────────────────────────────────────────────────────
 meta = {}
-with open("tests/input/Aphi_2d_meta.txt") as f:
+with open("tests/input/Aphi_2d_meta_1.txt") as f:
     for line in f:
         line = line.strip()
         if not line or line.startswith("#"):

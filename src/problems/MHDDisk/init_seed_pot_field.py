@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 from scipy.special import j1, jn_zeros
 import matplotlib.pyplot as plt
@@ -6,7 +7,13 @@ import matplotlib.pyplot as plt
 #  Parameters
 # ══════════════════════════════════════════════════════════════════
 
-nR_coarse, nz_coarse = 128 , 256
+# Optional run tag from the command line, e.g. `python init_seed_pot_field.py 1`
+# appends "_1" to the output filenames (Aphi_2d_Aphi_1.bin, Aphi_2d_meta_1.txt),
+# matching the tests/input/*_1.* naming convention used in the .toml inputs.
+RUN_TAG = sys.argv[1] if len(sys.argv) > 1 else ""
+OUT_SUFFIX = f"_{RUN_TAG}" if RUN_TAG else ""
+
+nR_coarse, nz_coarse = int(round(128 * np.sqrt(2))), int(round(256 * np.sqrt(2)))
 levels               = 0
 SEED = np.random.SeedSequence().entropy
 print(f"Using random seed: {SEED}")
@@ -308,11 +315,11 @@ def curl_Aphi(RA, R, dR, dz):
 def save_outputs(Aphi_phys,
                  nR, nz, nR_coarse, nz_coarse, levels, oversample, SEED,
                  Rmax, Lz, dR, dz, kmin_nd, kmax_nd, Rmax_nd,
-                 H_phys_cm, B0_gauss=1e-9, stem="Aphi_2d"):
+                 H_phys_cm, B0_gauss=1e-9, stem="Aphi_2d", suffix=""):
     import os
 
-    aphi_bin_path = stem + "_Aphi.bin"
-    meta_path     = stem + "_meta.txt"
+    aphi_bin_path = f"{stem}_Aphi{suffix}.bin"
+    meta_path     = f"{stem}_meta{suffix}.txt"
 
     # ── write Aphi table (used for face-centred B initialisation) ────────
     # Aphi_phys has units of [cm * normalised_A_phi / cm] = [normalised_A_phi]
@@ -403,8 +410,8 @@ def save_outputs(Aphi_phys,
 # ══════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    Lz   = 20.0 * kpc              # physical box height
-    Rmax = 10.0 * kpc #* np.sqrt(2)             # physical outer radius — box diagonal / 2
+    Lz   = 20.0 * kpc * np.sqrt(2)  # physical box height
+    Rmax = 10.0 * kpc * np.sqrt(2)  # physical outer radius — box diagonal / 2
 
     # ── Disk scale height at R=Rd ─────────────────────────────────
     H_phys, Sigma_Rd = disk_scale_height(
@@ -617,7 +624,7 @@ if __name__ == "__main__":
         Rmax=Rmax_padded, Lz=Lz_padded, dR=dR, dz=dz,
         kmin_nd=kmin_nd, kmax_nd=kmax_nd, Rmax_nd=Rmax_nd,
         H_phys_cm=H_phys,
-        B0_gauss=B0, stem="Aphi_2d",
+        B0_gauss=B0, stem="Aphi_2d", suffix=OUT_SUFFIX,
     )
 
     # Save Br and Bz tables directly instead of/in addition to Aphi
