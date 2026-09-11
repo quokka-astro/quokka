@@ -424,10 +424,10 @@ void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &tempe
 // Compute the anisotropic heat flux crossing the DIR-faces, given the unit B-field (bhat_fc, from
 // ComputeFaceUnitBField), the temperature gradient (gradT_fc, from ComputeFaceGradT), and the
 // number density (n_fc, from ComputeFaceNumberDensityAndSaturationFlux) already estimated at those
-// faces. For now this only applies the field-aligned term:
-//   q . nhat = -kappa_parallel * (bhat . gradT) * (bhat . nhat) * n
-// (kappa_perp is accepted but not yet used -- the perpendicular term and q_sat are still to be
-// fixed), then flux-limited/saturated exactly as in ElectronConduction::ComputeExplicit:
+// faces. This applies the full parallel + perpendicular decomposition:
+//   q_vec = -(kappa_parallel - kappa_perp) * (bhat . gradT) * n * bhat  -  n * kappa_perp * gradT
+// and stores the face-normal component q . nhat, then flux-limited/saturated exactly as in
+// ElectronConduction::ComputeExplicit:
 //   flux = q_classical / (1 + |q_classical| / max(q_sat, small)).
 // q_sat_fc is the (precomputed) saturation flux at each face -- this function does not compute it.
 template <FluxDir DIR>
@@ -449,7 +449,7 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 		const amrex::Real bn = bhat_in[bx](i, j, k, normal_comp);
 		const amrex::Real n = n_in[bx](i, j, k);
 
-		const amrex::Real q_classical = -kappa_parallel * bdotgradT * bn * n;
+		const amrex::Real q_classical = -(kappa_parallel - kappa_perp) * bdotgradT * bn * n - n * kappa_perp * gradT_in[bx](i, j, k, normal_comp);
 		const amrex::Real q_sat = qsat_in[bx](i, j, k);
 		const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat, small);
 		flux_out[bx](i, j, k) = q_classical / limiter;
