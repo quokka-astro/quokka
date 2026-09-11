@@ -318,14 +318,14 @@ void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const 
 				Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
 				output[bx](i, j, k, ncomp) = (Tgas <= cold_T) ? scalar0 : 0.0;
 			});
-		} else if (dname == "true_hot_gas_z_outflow_rate") {
+		} else if (dname == "true_hot_gas_z_outflow_rate" || dname == "hot_gas_z_outflow_rate") {
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
 				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
 				output[bx](i, j, k, ncomp) = (Tgas > hot_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
 			});
-		} else if (dname == "true_warm_gas_z_outflow_rate") {
+		} else if (dname == "true_warm_gas_z_outflow_rate" || dname == "warm_gas_z_outflow_rate") {
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
@@ -348,7 +348,7 @@ void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const 
 				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
 				output[bx](i, j, k, ncomp) = (Tgas <= cold_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
 			});
-		} else if (dname == "true_hot_scalar0_z_outflow_rate") {
+		} else if (dname == "true_hot_scalar0_z_outflow_rate" || dname == "hot_scalar0_z_outflow_rate") {
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
@@ -357,7 +357,7 @@ void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const 
 				Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
 				output[bx](i, j, k, ncomp) = (Tgas > hot_T) ? scalar0 * vz : 0.0;
 			});
-		} else if (dname == "true_warm_scalar0_z_outflow_rate") {
+		} else if (dname == "true_warm_scalar0_z_outflow_rate" || dname == "warm_scalar0_z_outflow_rate") {
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
