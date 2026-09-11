@@ -143,6 +143,71 @@ void ComputeFaceUnitBField(amrex::MultiFab &bhat_fc_mf, std::array<amrex::MultiF
 	});
 }
 
+// Compute the temperature gradient vector (dT/dx, dT/dy, dT/dz) at the DIR-faces of a cell-centered
+// temperature field: gradT_fc_mf (output) is a 3-component MultiFab on the DIR-face grid, in fixed
+// physical (x,y,z) order. `temperature` is a (possibly multi-component) cell-centered MultiFab;
+// `comp` selects which component holds T (e.g. component 1 of the (rho, T) primVar used elsewhere
+// in this file). The face-normal component is the usual two-point difference across the face; each
+// transverse component is the average of the centered difference computed in the two cells bounding
+// the face -- the same diamond-averaging used for the transverse B components in
+// ComputeFaceUnitBField.
+// NOTE: this transverse estimate is the step flagged earlier as needing a Sharma & Hammett-style
+// limiter, to avoid an unphysical flux direction near sharp field bends -- not yet applied here.
+template <FluxDir DIR>
+void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &temperature, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int comp)
+{
+	auto const &temp = temperature.const_arrays();
+	auto gradT_out = gradT_fc_mf.arrays();
+
+	amrex::ParallelFor(gradT_fc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::Real gradT_x = 0.0;
+		amrex::Real gradT_y = 0.0;
+		amrex::Real gradT_z = 0.0;
+
+		if constexpr (DIR == FluxDir::X1) {
+			gradT_x = (temp[bx](i, j, k, comp) - temp[bx](i - 1, j, k, comp)) / dx[0];
+#if AMREX_SPACEDIM >= 2
+			gradT_y = 0.5 *
+				  ((temp[bx](i - 1, j + 1, k, comp) - temp[bx](i - 1, j - 1, k, comp)) +
+				   (temp[bx](i, j + 1, k, comp) - temp[bx](i, j - 1, k, comp))) /
+				  (2.0 * dx[1]);
+#endif
+#if AMREX_SPACEDIM == 3
+			gradT_z = 0.5 *
+				  ((temp[bx](i - 1, j, k + 1, comp) - temp[bx](i - 1, j, k - 1, comp)) +
+				   (temp[bx](i, j, k + 1, comp) - temp[bx](i, j, k - 1, comp))) /
+				  (2.0 * dx[2]);
+#endif
+		} else if constexpr (DIR == FluxDir::X2) {
+			gradT_y = (temp[bx](i, j, k, comp) - temp[bx](i, j - 1, k, comp)) / dx[1];
+			gradT_x = 0.5 *
+				  ((temp[bx](i + 1, j - 1, k, comp) - temp[bx](i - 1, j - 1, k, comp)) +
+				   (temp[bx](i + 1, j, k, comp) - temp[bx](i - 1, j, k, comp))) /
+				  (2.0 * dx[0]);
+#if AMREX_SPACEDIM == 3
+			gradT_z = 0.5 *
+				  ((temp[bx](i, j - 1, k + 1, comp) - temp[bx](i, j - 1, k - 1, comp)) +
+				   (temp[bx](i, j, k + 1, comp) - temp[bx](i, j, k - 1, comp))) /
+				  (2.0 * dx[2]);
+#endif
+		} else { // FluxDir::X3
+			gradT_z = (temp[bx](i, j, k, comp) - temp[bx](i, j, k - 1, comp)) / dx[2];
+			gradT_x = 0.5 *
+				  ((temp[bx](i + 1, j, k - 1, comp) - temp[bx](i - 1, j, k - 1, comp)) +
+				   (temp[bx](i + 1, j, k, comp) - temp[bx](i - 1, j, k, comp))) /
+				  (2.0 * dx[0]);
+			gradT_y = 0.5 *
+				  ((temp[bx](i, j + 1, k - 1, comp) - temp[bx](i, j - 1, k - 1, comp)) +
+				   (temp[bx](i, j + 1, k, comp) - temp[bx](i, j - 1, k, comp))) /
+				  (2.0 * dx[1]);
+		}
+
+		gradT_out[bx](i, j, k, 0) = gradT_x;
+		gradT_out[bx](i, j, k, 1) = gradT_y;
+		gradT_out[bx](i, j, k, 2) = gradT_z;
+	});
+}
+
 template <typename problem_t> class AnisoConduction
 {
       public:
@@ -240,11 +305,14 @@ template <typename problem_t> class AnisoConduction
 		// Unit B-field at each face (bx, by, bz), populated only when MHD is enabled (zeroed
 		// otherwise, so a non-MHD build gets zero flux rather than reading uninitialized data).
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> bhat_fc;
+		// gradT at each face (dT/dx, dT/dy, dT/dz), fixed physical (x,y,z) order -- see ComputeFaceGradT.
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> gradT_fc;
 		const int ng_reconstruct = params.ng_reconstruct;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
 			bhat_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 3, 0);
 			bhat_fc[idim].setVal(0.0);
+			gradT_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 3, 0);
 			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
 			heat_flux[idim].setVal(0.0);
 		}
@@ -258,61 +326,36 @@ template <typename problem_t> class AnisoConduction
 										      ng_reconstruct);)
 		}
 
-		// Heat flux at each face = -bhat . gradT (kappa_parallel/kappa_perp are not folded in yet).
-		// gradT's normal component comes from the usual two-point difference across the face; the
-		// two tangential components are the same diamond-averaged estimate used before (each kept
-		// separate now, rather than summed, so each can be dotted against its own bhat component).
-		auto const &temp = primVar.const_arrays();
+		// primVar component 1 holds T.
+		AMREX_D_TERM(ComputeFaceGradT<FluxDir::X1>(gradT_fc[0], primVar, dx, 1);, ComputeFaceGradT<FluxDir::X2>(gradT_fc[1], primVar, dx, 1);
+			     , ComputeFaceGradT<FluxDir::X3>(gradT_fc[2], primVar, dx, 1);)
 
+		// Heat flux at each face = -bhat . gradT (kappa_parallel/kappa_perp are not folded in yet).
 		auto const &bhat_x = bhat_fc[0].const_arrays();
+		auto const &gradT_x = gradT_fc[0].const_arrays();
 		auto flux_x = heat_flux[0].arrays();
 		amrex::ParallelFor(heat_flux[0], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			const amrex::Real gradT_x = (temp[bx](i, j, k, 1) - temp[bx](i - 1, j, k, 1)) / dx[0];
-			amrex::Real gradT_y = 0.0;
-			amrex::Real gradT_z = 0.0;
-#if AMREX_SPACEDIM >= 2
-			gradT_y = 0.5 *
-				  ((temp[bx](i - 1, j + 1, k, 1) - temp[bx](i - 1, j - 1, k, 1)) + (temp[bx](i, j + 1, k, 1) - temp[bx](i, j - 1, k, 1))) /
-				  (2.0 * dx[1]);
-#endif
-#if AMREX_SPACEDIM == 3
-			gradT_z = 0.5 *
-				  ((temp[bx](i - 1, j, k + 1, 1) - temp[bx](i - 1, j, k - 1, 1)) + (temp[bx](i, j, k + 1, 1) - temp[bx](i, j, k - 1, 1))) /
-				  (2.0 * dx[2]);
-#endif
-			flux_x[bx](i, j, k) = -(bhat_x[bx](i, j, k, 0) * gradT_x + bhat_x[bx](i, j, k, 1) * gradT_y + bhat_x[bx](i, j, k, 2) * gradT_z);
+			flux_x[bx](i, j, k) = -(bhat_x[bx](i, j, k, 0) * gradT_x[bx](i, j, k, 0) + bhat_x[bx](i, j, k, 1) * gradT_x[bx](i, j, k, 1) +
+						bhat_x[bx](i, j, k, 2) * gradT_x[bx](i, j, k, 2));
 		});
 
 #if AMREX_SPACEDIM >= 2
 		auto const &bhat_y = bhat_fc[1].const_arrays();
+		auto const &gradT_y = gradT_fc[1].const_arrays();
 		auto flux_y = heat_flux[1].arrays();
 		amrex::ParallelFor(heat_flux[1], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			const amrex::Real gradT_y = (temp[bx](i, j, k, 1) - temp[bx](i, j - 1, k, 1)) / dx[1];
-			amrex::Real gradT_x = 0.5 *
-					       ((temp[bx](i + 1, j - 1, k, 1) - temp[bx](i - 1, j - 1, k, 1)) + (temp[bx](i + 1, j, k, 1) - temp[bx](i - 1, j, k, 1))) /
-					       (2.0 * dx[0]);
-			amrex::Real gradT_z = 0.0;
-#if AMREX_SPACEDIM == 3
-			gradT_z = 0.5 *
-				  ((temp[bx](i, j - 1, k + 1, 1) - temp[bx](i, j - 1, k - 1, 1)) + (temp[bx](i, j, k + 1, 1) - temp[bx](i, j, k - 1, 1))) /
-				  (2.0 * dx[2]);
-#endif
-			flux_y[bx](i, j, k) = -(bhat_y[bx](i, j, k, 0) * gradT_x + bhat_y[bx](i, j, k, 1) * gradT_y + bhat_y[bx](i, j, k, 2) * gradT_z);
+			flux_y[bx](i, j, k) = -(bhat_y[bx](i, j, k, 0) * gradT_y[bx](i, j, k, 0) + bhat_y[bx](i, j, k, 1) * gradT_y[bx](i, j, k, 1) +
+						bhat_y[bx](i, j, k, 2) * gradT_y[bx](i, j, k, 2));
 		});
 #endif
 
 #if AMREX_SPACEDIM == 3
 		auto const &bhat_z = bhat_fc[2].const_arrays();
+		auto const &gradT_z = gradT_fc[2].const_arrays();
 		auto flux_z = heat_flux[2].arrays();
 		amrex::ParallelFor(heat_flux[2], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			const amrex::Real gradT_z = (temp[bx](i, j, k, 1) - temp[bx](i, j, k - 1, 1)) / dx[2];
-			const amrex::Real gradT_x = 0.5 *
-						    ((temp[bx](i + 1, j, k - 1, 1) - temp[bx](i - 1, j, k - 1, 1)) + (temp[bx](i + 1, j, k, 1) - temp[bx](i - 1, j, k, 1))) /
-						    (2.0 * dx[0]);
-			const amrex::Real gradT_y = 0.5 *
-						    ((temp[bx](i, j + 1, k - 1, 1) - temp[bx](i, j - 1, k - 1, 1)) + (temp[bx](i, j + 1, k, 1) - temp[bx](i, j - 1, k, 1))) /
-						    (2.0 * dx[1]);
-			flux_z[bx](i, j, k) = -(bhat_z[bx](i, j, k, 0) * gradT_x + bhat_z[bx](i, j, k, 1) * gradT_y + bhat_z[bx](i, j, k, 2) * gradT_z);
+			flux_z[bx](i, j, k) = -(bhat_z[bx](i, j, k, 0) * gradT_z[bx](i, j, k, 0) + bhat_z[bx](i, j, k, 1) * gradT_z[bx](i, j, k, 1) +
+						bhat_z[bx](i, j, k, 2) * gradT_z[bx](i, j, k, 2));
 		});
 #endif
 
