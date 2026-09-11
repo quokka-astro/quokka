@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SBATCH -A ast146
+#SBATCH -A ast236
 #SBATCH -J amrex_quokka
 #SBATCH -o 1node_%x-%j.out
 #SBATCH -t 00:10:00
@@ -16,4 +16,5 @@
 # GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
 
-srun build/src/problems/HydroBlast3D/test_hydro3d_blast tests/benchmark_unigrid_512.toml
+srun build/3d-hip/src/problems/HydroBlast3D/HydroBlast3D inputs/benchmark_unigrid_512.toml
+
