@@ -17,21 +17,30 @@ using namespace C;
 
 void actual_rhs_init();
 
-// Species 0 (Index 0 in the state)         = electron
-// Species 1 (Index 1 in the state)         = neutral hydrogen
-// Species 2 (Index 2 in the state)         = ionized hydrogen
-// Index net_ienuc(=3)                      = specific internal energy
-// Radiation index 0 (Index 4 in the state) = number density of photons
-// Radiation index 1 (Index 5 in the state) = flux of photons normalized by the flux magnitude before the burn (therefore, it is 1.0 at the beginning of burn)
+// Species indices (0-indexed, xn[]/spmasses[]) come from the SPECIES_ENUM
+// set in this problem's CMakeLists.txt, via Species::NetworkSpecies.
+// ydot()/jac() are 1-indexed, so the same species use index+1 there.
+// net_ienuc (= NumSpec + 1) is the specific internal energy row/column.
+// Radiation rows/columns follow net_ienuc: photon number density, then
+// (unless SKIP_PHOTOCHEMFLUX) photon flux.
+constexpr int e_idx = static_cast<int>(Species::e);
+constexpr int H_idx = static_cast<int>(Species::H);
+constexpr int Hp_idx = static_cast<int>(Species::Hp);
+constexpr int ie = e_idx + 1;
+constexpr int iH = H_idx + 1;
+constexpr int iHp = Hp_idx + 1;
+constexpr int i_ngamma = net_ienuc + 1;
+constexpr int i_ngamma_flux = net_ienuc + 2;
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) -> Real { return 1.5e-18_rt; }
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) -> Real { return 2.1596876715103067e-18_rt; }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) -> Real
 {
+	const amrex::Real coeff = 2.63e-13_rt;
 	if (recombination_temperature_dependent == 0) {
-		return 2.6e-13_rt;
+		return coeff;
 	}
-	return 2.6e-13 * (1.0 + std::pow(T / 1.0e4, -0.7) - 1.0);
+	return coeff * std::pow(T / 1.0e4, -0.69999999999999996);
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) -> Real
@@ -39,7 +48,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) ->
 	if (recombination_temperature_dependent == 0) {
 		return 0.0_rt;
 	}
-	return -2.6e-13 * 0.7 * std::pow(T / 1.0e4, -1.7) / 1.0e4;
+	return -2.63e-13 * 0.7 * std::pow(T / 1.0e4, -1.69999999999999996) / 1.0e4;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_collisional_ionization_coefficient(Real T) -> Real
@@ -97,9 +106,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
 
-	const amrex::Real n_e = state.xn[0];
-	const amrex::Real n_HI = state.xn[1];
-	const amrex::Real n_HII = state.xn[2];
+	const amrex::Real n_e = state.xn[e_idx];
+	const amrex::Real n_HI = state.xn[H_idx];
+	const amrex::Real n_HII = state.xn[Hp_idx];
 	const amrex::Real n_gamma =
 	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
 #ifndef SKIP_PHOTOCHEMFLUX
@@ -118,9 +127,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	    (collisional_ionization_switch != 0) ? n_e * n_HI * get_collisional_ionization_coefficient(state.T) : 0.0_rt;
 	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T) * n_e * n_HII : 0.0_rt;
 
-	ydot(1) = photoionization_term + collisional_ionization_term - recombination_term;
-	ydot(2) = -ydot(1);
-	ydot(3) = ydot(1);
+	ydot(ie) = photoionization_term + collisional_ionization_term - recombination_term;
+	ydot(iH) = -ydot(ie);
+	ydot(iHp) = ydot(ie);
 	ydot(net_ienuc) = 0.0_rt;
 	if (energy_switch != 0) {
 		amrex::Real energy_source = 0.0_rt;
@@ -143,9 +152,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 		}
 		ydot(net_ienuc) = energy_source / state.rho;
 	}
-	ydot(5) = -photoionization_term;
+	ydot(i_ngamma) = -photoionization_term;
 #ifndef SKIP_PHOTOCHEMFLUX
-	ydot(6) = -chat_sigma_photo * n_HI * n_gamma_flux;
+	ydot(i_ngamma_flux) = -chat_sigma_photo * n_HI * n_gamma_flux;
 #endif
 }
 
@@ -176,9 +185,9 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	const amrex::Real Lambda_ion_ff = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? get_ion_ff_cooling_coefficient(state.T) : 0.0_rt;
 	const amrex::Real d_Lambda_ion_ff_dT = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? d_ion_ff_cooling_coefficient_dT(state.T) : 0.0_rt;
 
-	const amrex::Real n_e = state.xn[0];
-	const amrex::Real n_HI = state.xn[1];
-	const amrex::Real n_HII = state.xn[2];
+	const amrex::Real n_e = state.xn[e_idx];
+	const amrex::Real n_HI = state.xn[H_idx];
+	const amrex::Real n_HII = state.xn[Hp_idx];
 	const amrex::Real n_gamma =
 	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
 	// Gate for column-5 Jacobian entries: when rn[0] < 0 the clamp makes the RHS
@@ -205,50 +214,50 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 
 	jac.zero();
 
-	jac(1, 1) = (collisional_ionization_switch * n_HI * sigma_coll - recombination_switch * alpha_rec * n_HII);
-	jac(1, 2) = (chat_sigma_photo * n_gamma + collisional_ionization_switch * n_e * sigma_coll);
-	jac(1, 3) = -recombination_switch * alpha_rec * n_e;
-	jac(1, net_ienuc) = (d_collisional_ionization_term_dT - d_recombination_term_dT) * dTde;
-	jac(1, 5) = n_gamma_active * chat_sigma_photo * n_HI;
+	jac(ie, ie) = (collisional_ionization_switch * n_HI * sigma_coll - recombination_switch * alpha_rec * n_HII);
+	jac(ie, iH) = (chat_sigma_photo * n_gamma + collisional_ionization_switch * n_e * sigma_coll);
+	jac(ie, iHp) = -recombination_switch * alpha_rec * n_e;
+	jac(ie, net_ienuc) = (d_collisional_ionization_term_dT - d_recombination_term_dT) * dTde;
+	jac(ie, i_ngamma) = n_gamma_active * chat_sigma_photo * n_HI;
 
-	jac(2, 1) = -jac(1, 1);
-	jac(2, 2) = -jac(1, 2);
-	jac(2, 3) = -jac(1, 3);
-	jac(2, net_ienuc) = -jac(1, net_ienuc);
-	jac(2, 5) = -jac(1, 5);
-	jac(3, 1) = jac(1, 1);
-	jac(3, 2) = jac(1, 2);
-	jac(3, 3) = jac(1, 3);
-	jac(3, net_ienuc) = jac(1, net_ienuc);
-	jac(3, 5) = jac(1, 5);
+	jac(iH, ie) = -jac(ie, ie);
+	jac(iH, iH) = -jac(ie, iH);
+	jac(iH, iHp) = -jac(ie, iHp);
+	jac(iH, net_ienuc) = -jac(ie, net_ienuc);
+	jac(iH, i_ngamma) = -jac(ie, i_ngamma);
+	jac(iHp, ie) = jac(ie, ie);
+	jac(iHp, iH) = jac(ie, iH);
+	jac(iHp, iHp) = jac(ie, iHp);
+	jac(iHp, net_ienuc) = jac(ie, net_ienuc);
+	jac(iHp, i_ngamma) = jac(ie, i_ngamma);
 
-	jac(net_ienuc, 1) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_HII - ion_ff_cooling_switch * Lambda_ion_ff * n_HII) / state.rho;
-	jac(net_ienuc, 2) = energy_switch *
-			    (photoheating_switch * Gamma_photo * chat_sigma_photo * n_gamma + molecular_process_switch * KI_heating_switch * Gamma_KI -
-			     2.0_rt * molecular_process_switch * KI_cooling_switch * Lambda_KI * n_HI) /
-			    state.rho;
-	jac(net_ienuc, 3) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_e - ion_ff_cooling_switch * Lambda_ion_ff * n_e) / state.rho;
+	jac(net_ienuc, ie) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_HII - ion_ff_cooling_switch * Lambda_ion_ff * n_HII) / state.rho;
+	jac(net_ienuc, iH) = energy_switch *
+			     (photoheating_switch * Gamma_photo * chat_sigma_photo * n_gamma + molecular_process_switch * KI_heating_switch * Gamma_KI -
+			      2.0_rt * molecular_process_switch * KI_cooling_switch * Lambda_KI * n_HI) /
+			     state.rho;
+	jac(net_ienuc, iHp) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_e - ion_ff_cooling_switch * Lambda_ion_ff * n_e) / state.rho;
 	jac(net_ienuc, net_ienuc) = energy_switch * (-d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT) * dTde / state.rho;
-	jac(net_ienuc, 5) = energy_switch * (photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) * n_gamma_active / state.rho;
+	jac(net_ienuc, i_ngamma) = energy_switch * (photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) * n_gamma_active / state.rho;
 
-	jac(5, 1) = 0.0_rt;
-	jac(5, 2) = -chat_sigma_photo * n_gamma;
-	jac(5, 3) = 0.0_rt;
-	jac(5, net_ienuc) = 0.0_rt;
-	jac(5, 5) = -n_gamma_active * chat_sigma_photo * n_HI;
+	jac(i_ngamma, ie) = 0.0_rt;
+	jac(i_ngamma, iH) = -chat_sigma_photo * n_gamma;
+	jac(i_ngamma, iHp) = 0.0_rt;
+	jac(i_ngamma, net_ienuc) = 0.0_rt;
+	jac(i_ngamma, i_ngamma) = -n_gamma_active * chat_sigma_photo * n_HI;
 
 #ifndef SKIP_PHOTOCHEMFLUX
-	jac(1, 6) = 0.0_rt;
-	jac(2, 6) = -jac(1, 6);
-	jac(3, 6) = jac(1, 6);
-	jac(net_ienuc, 6) = 0.0_rt;
-	jac(5, 6) = 0.0_rt;
-	jac(6, 1) = 0.0_rt;
-	jac(6, 2) = -chat_sigma_photo * n_gamma_flux;
-	jac(6, 3) = 0.0_rt;
-	jac(6, net_ienuc) = 0.0_rt;
-	jac(6, 5) = 0.0_rt;
-	jac(6, 6) = -n_HI * chat_sigma_photo;
+	jac(ie, i_ngamma_flux) = 0.0_rt;
+	jac(iH, i_ngamma_flux) = -jac(ie, i_ngamma_flux);
+	jac(iHp, i_ngamma_flux) = jac(ie, i_ngamma_flux);
+	jac(net_ienuc, i_ngamma_flux) = 0.0_rt;
+	jac(i_ngamma, i_ngamma_flux) = 0.0_rt;
+	jac(i_ngamma_flux, ie) = 0.0_rt;
+	jac(i_ngamma_flux, iH) = -chat_sigma_photo * n_gamma_flux;
+	jac(i_ngamma_flux, iHp) = 0.0_rt;
+	jac(i_ngamma_flux, net_ienuc) = 0.0_rt;
+	jac(i_ngamma_flux, i_ngamma) = 0.0_rt;
+	jac(i_ngamma_flux, i_ngamma_flux) = -n_HI * chat_sigma_photo;
 #endif
 }
 

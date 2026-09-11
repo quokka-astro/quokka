@@ -20,9 +20,9 @@ stop_time = 0.0
 max_timesteps = 0
 plotfile_interval = -1
 
-photoionization_momentum.primary_species_1 = 1.0e-10
-photoionization_momentum.primary_species_2 = 1.0e2
-photoionization_momentum.primary_species_3 = 1.0e-10
+photoionization_momentum.n_e_init = 1.0e-10
+photoionization_momentum.n_HI_init = 1.0e2
+photoionization_momentum.n_HII_init = 1.0e-10
 photoionization_momentum.temperature = 1.0e3
 
 integrator.use_number_densities = 1
