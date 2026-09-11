@@ -31,7 +31,7 @@ Options:
   --fpe            Enable floating-point exception traps for direct problem runs (ignored for ctest-based runs)
   --filter <pattern> For run: ctest regex; for build: shell glob over problem names; exclusive with <problem>
                      Quote patterns to avoid expansion by your shell (e.g. --filter 'Rad*')
-  --source --      Source ~/.config/quokka/quokka.rc (the default rc).
+  --source default Source ~/.config/quokka/quokka.rc (the default rc).
   --source <file>  Source the specified environment file instead of the default rc.
                    Omitting --source entirely skips all sourcing (avoids slow 'module load' in active shells).
   --delete         For config only: delete existing preset build directory before reconfiguring
@@ -54,6 +54,9 @@ Presets:
   1d-cuda         1D Release build with CUDA GPU backend
   2d-cuda         2D Release build with CUDA GPU backend
   3d-cuda         3D Release build with CUDA GPU backend
+  1d-apple        1D Release build with Apple clang
+  2d-apple        2D Release build with Apple clang
+  3d-apple        3D Release build with Apple clang
 EOF
 }
 
@@ -118,6 +121,10 @@ load_environment() {
 		return
 	fi
 	if [ ! -f "$SOURCE_FILE" ]; then
+		if [ "$SOURCE_IS_DEFAULT" -eq 1 ]; then
+			echo -e "${YELLOW}${BOLD}Warning:${RESET} default environment file '${SOURCE_FILE}' not found; skipping --source (run bootstrap to install it, or pass an explicit path to --source)" >&2
+			return
+		fi
 		die "environment file '${SOURCE_FILE}' not found"
 	fi
 	if ! source "$SOURCE_FILE"; then
@@ -149,6 +156,9 @@ parse_preset() {
 	1d-cuda)  DIM=1; BUILD_TYPE=Release; GPU_BACKEND=CUDA ;;
 	2d-cuda)  DIM=2; BUILD_TYPE=Release; GPU_BACKEND=CUDA ;;
 	3d-cuda)  DIM=3; BUILD_TYPE=Release; GPU_BACKEND=CUDA ;;
+	1d-apple) DIM=1; BUILD_TYPE=Release ;;
+	2d-apple) DIM=2; BUILD_TYPE=Release ;;
+	3d-apple) DIM=3; BUILD_TYPE=Release ;;
 	*)
 		die "unsupported preset '${preset}'"
 		;;
@@ -533,6 +543,7 @@ INPUT_FILE=""
 ENABLE_FPE=0
 FILTER_REGEX=""
 SOURCE_FILE=""
+SOURCE_IS_DEFAULT=0
 DELETE_BUILD_DIR=0
 JOBS=8
 CMAKE_DEFINES=()
@@ -574,10 +585,12 @@ while [ "$#" -gt 0 ]; do
 		;;
 	--source)
 		require_arg "$1" "${2:-}"
-		if [ "$2" = "--" ]; then
+		if [ "$2" = "default" ]; then
 			SOURCE_FILE="${HOME}/.config/quokka/quokka.rc"
+			SOURCE_IS_DEFAULT=1
 		else
 			SOURCE_FILE="$2"
+			SOURCE_IS_DEFAULT=0
 		fi
 		shift 2
 		;;
