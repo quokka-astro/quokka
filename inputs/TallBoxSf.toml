@@ -102,13 +102,9 @@ derived_vars = [
 	"true_cold_scalar0_z_outflow_rate"
 ]
 
-quokka.diagnostics = ["plt", "slice_x", "slice_z", "proj"]
+plottime_interval = "10*Myr"
 
-quokka.plt.type = "PlotFile"  # pltfile for the whole box
-quokka.plt.file = "plt"  # Output file prefix (default "plt", must end in "plt")
-quokka.plt.time_int = "10*Myr"
-# quokka.plt.particles = []  # Default to all particle types
-quokka.plt.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "scalar_0", "temperature", "gpot"]
+quokka.diagnostics = ["slice_x", "slice_z", "proj"]
 
 quokka.slice_x.type = "DiagFramePlane"
 quokka.slice_x.file = "slicex_plt"
