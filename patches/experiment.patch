@@ -1,0 +1,49 @@
+--- a/src/hydro_system.hpp
++++ b/src/hydro_system.hpp
+@@ -300,7 +300,7 @@
+ 		P = rho * cs_iso_ * cs_iso_;
+ 	} else {
+ 		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+-		P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
++		P = thermal_energy * (gamma_ - 1.0);
+ 	}
+ 	return P;
+ }
+@@ -321,8 +321,8 @@
+ 	const auto thermal_energy = E - kinetic_energy;
+ 
+ 	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+-	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+-	amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
++	amrex::Real P = thermal_energy * (gamma_ - 1.0);
++	amrex::Real cs = std::sqrt(gamma_ * P / rho);
+ 
+ 	return cs;
+ }
+@@ -532,8 +532,7 @@
+ 
+ 		// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
+ 		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
+-		const double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(primVar(i, j, k, primDensity_index), P, massScalars), 2) *
+-				   primVar(i, j, k, primDensity_index);
++		const double K_S = gamma_ * P;
+ 		const double Z = std::abs(Pplus1 - Pminus1) / K_S;
+ 
+ 		// check for converging flow along the normal direction DIR (Eq. 77)
+@@ -880,12 +879,12 @@
+ 			}
+ 
+ 			amrex::GpuArray<Real, nmscalars_> massScalars_L = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
+-			cs_L = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_L, P_L, massScalars_L);
+-			E_L = quokka::EOS<problem_t>::ComputeEintFromPres(rho_L, P_L, massScalars_L) + ke_L;
++			cs_L = std::sqrt(gamma_ * P_L / rho_L);
++			E_L = P_L / (gamma_ - 1.0) + ke_L;
+ 
+ 			amrex::GpuArray<Real, nmscalars_> massScalars_R = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
+-			cs_R = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_R, P_R, massScalars_R);
+-			E_R = quokka::EOS<problem_t>::ComputeEintFromPres(rho_R, P_R, massScalars_R) + ke_R;
++			cs_R = std::sqrt(gamma_ * P_R / rho_R);
++			E_R = P_R / (gamma_ - 1.0) + ke_R;
+ 		}
+ 
+ 		AMREX_ASSERT(cs_L > 0.0);
