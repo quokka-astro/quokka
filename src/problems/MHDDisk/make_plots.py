@@ -60,6 +60,7 @@ Positional command-line arguments (all optional, positional, in order):
 """
 
 import gc
+import os
 import re
 import sys
 import time
@@ -235,8 +236,11 @@ width_kpc = width_cm / kpc
 extent_kpc = [-width_kpc/2, width_kpc/2, -width_kpc/2, width_kpc/2]
 
 # ── Aphi table metadata ───────────────────────────────────────────────────────
+# Override via $APHI_META_FILE if your run uses a different seed/tag than the
+# hardcoded default (positional argv slots 1-6 are already taken above).
+aphi_meta_path = os.environ.get("APHI_META_FILE", "tests/input/Aphi_2d_meta_1.txt")
 meta = {}
-with open("tests/input/Aphi_2d_meta_1.txt") as f:
+with open(aphi_meta_path) as f:
     for line in f:
         line = line.strip()
         if not line or line.startswith("#"):
@@ -623,11 +627,6 @@ if not IS_HYDRO:
     slab_nz   = max(1, -(-dims_full[2] // n_slabs))  # ceiling division so the last slab isn't dropped
 
     rho_transition = 1e-28
-    dead_zone_cm   = 2.0 * (Rmax_cm / nR)
-
-    acc = {k: {"sum_bv": 0.0, "sum_v": 0.0, "sum_brhov": 0.0, "sum_rhov": 0.0}
-           for k in ("all", "disk", "disk_clean")}
-    acc_inner = {"sum_brhov": 0.0, "sum_rhov": 0.0}
 
     rng            = np.random.default_rng(42 + rank)
     RESERVOIR_N    = 1_000_000 # Reduced slightly to ensure memory safety
@@ -652,27 +651,12 @@ if not IS_HYDRO:
         slab_right = [LE[0] + dims_full[0]*dx[0], LE[1] + dims_full[1]*dx[1], LE[2] + z1_cell * dx[2]]
         region = ds.box(slab_left, slab_right)
 
-        for chunk in region.chunks([("boxlib", "plasma_beta"), ("boxlib", "gasDensity"), 
-                                    ("index", "x"), ("index", "y"), ("index", "cell_volume")], "io"):
-            
+        for chunk in region.chunks([("boxlib", "plasma_beta"), ("boxlib", "gasDensity")], "io"):
+
             beta  = chunk[("boxlib", "plasma_beta")].v.ravel()
             rho   = chunk[("boxlib", "gasDensity")].v.ravel()
-            x     = chunk[("index", "x")].v.ravel()
-            y     = chunk[("index", "y")].v.ravel()
-            vol   = chunk[("index", "cell_volume")].v.ravel()
-            R     = np.sqrt(x**2 + y**2)
 
             mask_disk = rho > rho_transition
-            mask_disk_clean = mask_disk & (R > dead_zone_cm)
-            mask_inner = mask_disk & (R < 5.0 * kpc)
-
-            for key, mask in [("all", np.ones(len(beta), dtype=bool)), 
-                              ("disk", mask_disk), ("disk_clean", mask_disk_clean)]:
-                b, v, r = beta[mask], vol[mask], rho[mask]
-                acc[key]["sum_bv"]    += np.sum(b * v)
-                acc[key]["sum_v"]     += np.sum(v)
-                acc[key]["sum_brhov"] += np.sum(b * r * v)
-                acc[key]["sum_rhov"]  += np.sum(r * v)
 
             # Reservoir sampling
             disk_beta = beta[mask_disk].astype(np.float32)
@@ -688,7 +672,7 @@ if not IS_HYDRO:
                     idx = rng.integers(0, RESERVOIR_N, size=n_new)
                     beta_reservoir[idx] = disk_beta
 
-            del beta, rho, x, y, vol, R, mask_disk, mask_disk_clean, mask_inner
+            del beta, rho, mask_disk
         gc.collect()
 
     comm.Barrier()

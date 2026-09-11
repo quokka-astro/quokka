@@ -472,7 +472,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 					userData_.seed_str = val_str;
 				}
 			} catch (const std::exception &e) {
-				continue;
+				amrex::Abort("Error parsing '" + key + "' = '" + val_str + "' in " + aphi_meta_file + ": " + e.what());
 			}
 		}
 		meta_file.close();
@@ -481,8 +481,10 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			amrex::Print() << "WARNING: no 'seed_seed' key found while parsing " << aphi_meta_file << "\n";
 		}
 
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_nR > 0 && userData_.seed_nz > 0,
-						 "Error parsing cylindrical vector potential meta variables from init_seed_pot_field.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_nR > 0 && userData_.seed_nz > 0 && userData_.seed_Rmax > 0.0 &&
+						  userData_.seed_Lz > 0.0,
+						 "Error parsing cylindrical vector potential meta variables from init_seed_pot_field "
+						 "(seed_nR/seed_nz/seed_Rmax/seed_Lz must all be present and positive).");
 
 		std::size_t total_elements = userData_.seed_nR * userData_.seed_nz;
 		userData_.Aphi_device = load_bin_to_device(aphi_data_file, total_elements);
@@ -709,10 +711,10 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double z_node_lo = prob_lo[2] + k * dx[2];
 		const double z_node_hi = prob_lo[2] + (k + 1) * dx[2];
 
-		double Ay_hi_left = get_Ay(x_node_lo, y, z_node_hi);
-		double Ay_lo_left = get_Ay(x_node_lo, y, z_node_lo);
-		double Ay_hi_right = get_Ay(x_node_hi, y, z_node_hi);
-		double Ay_lo_right = get_Ay(x_node_hi, y, z_node_lo);
+		const double Ay_hi_left = get_Ay(x_node_lo, y, z_node_hi);
+		const double Ay_lo_left = get_Ay(x_node_lo, y, z_node_lo);
+		const double Ay_hi_right = get_Ay(x_node_hi, y, z_node_hi);
+		const double Ay_lo_right = get_Ay(x_node_hi, y, z_node_lo);
 		double Bx_face_left = -(Ay_hi_left - Ay_lo_left) / dx[2];
 		double Bx_face_right = -(Ay_hi_right - Ay_lo_right) / dx[2];
 		if (std::abs(x_node_lo - prob_lo_dom[0]) < boundary_tol * dx[0] || std::abs(x_node_lo - prob_hi_dom[0]) < boundary_tol * dx[0]) {
@@ -721,12 +723,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		if (std::abs(x_node_hi - prob_lo_dom[0]) < boundary_tol * dx[0] || std::abs(x_node_hi - prob_hi_dom[0]) < boundary_tol * dx[0]) {
 			Bx_face_right = 0.0;
 		}
-		double Bx_cc = 0.5 * (Bx_face_left + Bx_face_right);
+		const double Bx_cc = 0.5 * (Bx_face_left + Bx_face_right);
 
-		double Ax_hi_bot = get_Ax(x, y_node_lo, z_node_hi);
-		double Ax_lo_bot = get_Ax(x, y_node_lo, z_node_lo);
-		double Ax_hi_top = get_Ax(x, y_node_hi, z_node_hi);
-		double Ax_lo_top = get_Ax(x, y_node_hi, z_node_lo);
+		const double Ax_hi_bot = get_Ax(x, y_node_lo, z_node_hi);
+		const double Ax_lo_bot = get_Ax(x, y_node_lo, z_node_lo);
+		const double Ax_hi_top = get_Ax(x, y_node_hi, z_node_hi);
+		const double Ax_lo_top = get_Ax(x, y_node_hi, z_node_lo);
 		double By_face_bot = (Ax_hi_bot - Ax_lo_bot) / dx[2];
 		double By_face_top = (Ax_hi_top - Ax_lo_top) / dx[2];
 		if (std::abs(y_node_lo - prob_lo_dom[1]) < boundary_tol * dx[1] || std::abs(y_node_lo - prob_hi_dom[1]) < boundary_tol * dx[1]) {
@@ -735,13 +737,13 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		if (std::abs(y_node_hi - prob_lo_dom[1]) < boundary_tol * dx[1] || std::abs(y_node_hi - prob_hi_dom[1]) < boundary_tol * dx[1]) {
 			By_face_top = 0.0;
 		}
-		double By_cc = 0.5 * (By_face_bot + By_face_top);
+		const double By_cc = 0.5 * (By_face_bot + By_face_top);
 
-		double Ay_r_cc = get_Ay(x_node_hi, y, z);
-		double Ay_l_cc = get_Ay(x_node_lo, y, z);
-		double Ax_t_cc = get_Ax(x, y_node_hi, z);
-		double Ax_b_cc = get_Ax(x, y_node_lo, z);
-		double Bz_cc = ((Ay_r_cc - Ay_l_cc) / dx[0]) - ((Ax_t_cc - Ax_b_cc) / dx[1]);
+		const double Ay_r_cc = get_Ay(x_node_hi, y, z);
+		const double Ay_l_cc = get_Ay(x_node_lo, y, z);
+		const double Ax_t_cc = get_Ax(x, y_node_hi, z);
+		const double Ax_b_cc = get_Ax(x, y_node_lo, z);
+		const double Bz_cc = ((Ay_r_cc - Ay_l_cc) / dx[0]) - ((Ax_t_cc - Ax_b_cc) / dx[1]);
 
 		const double Emag = 0.5 * (Bx_cc * Bx_cc + By_cc * By_cc + Bz_cc * Bz_cc);
 

@@ -46,7 +46,16 @@ def parse_stats_file(path):
                 continue
             if line.startswith("#"):
                 # header line, e.g. "# cycle time disk_mass divB_max ..."
-                columns = line.lstrip("#").split()
+                new_columns = line.lstrip("#").split()
+                if columns is not None and new_columns != columns:
+                    raise ValueError(
+                        f"Header changed partway through {path!r}: "
+                        f"expected {columns!r}, got {new_columns!r}. "
+                        "A restarted run with a different set/order of stats "
+                        "columns can't be safely concatenated with rows "
+                        "collected under the original header."
+                    )
+                columns = new_columns
                 continue
             # data row
             values = line.split()

@@ -100,9 +100,9 @@ template <> struct SimulationData<HDGalaxy> {
 	amrex::Real Sigma0{}; // surface density normalisation [g/cm^2]
 	amrex::Real rho_cgm{};
 
-	amrex::Real sn_jeans_J;
-	amrex::Real sn_momentum;
-	amrex::Real sn_remnant_fraction;
+	amrex::Real sn_jeans_J{};
+	amrex::Real sn_momentum{};
+	amrex::Real sn_remnant_fraction{};
 	amrex::Real sn_ejecta_mass{}; // Mej, grams
 
 	// Owning GPU storage for the vx/vy/vz turbulence cubes loaded from binary files.
@@ -125,7 +125,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, do
 	return Sigma0 * std::exp(-x - beta_profile * std::exp(-alpha_profile * x));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double diskDensityAnalytic(double R, double z, double Sigma0, double vc, double cs)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Sigma0, double vc, double cs) -> double
 {
 	const double Sigma = surfaceDensityProfile(R, Sigma0);
 	if (Sigma <= 0.0) {
@@ -486,7 +486,7 @@ template <> void QuokkaSimulation<HDGalaxy>::refineGrid(int lev, amrex::TagBoxAr
 	const auto dx = geom[lev].CellSizeArray();
 	const auto tag = tags.arrays();
 
-	amrex::ParmParse pp("mhd_galaxy");
+	amrex::ParmParse pp("hd_galaxy");
 	amrex::Real shrink_kpc = 1.0;
 	amrex::Real shrink_pc = 50.0;
 	pp.query("refine_shrink_per_level_kpc", shrink_kpc);

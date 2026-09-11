@@ -42,11 +42,11 @@ void readSeedPar()
 	if (myrank == 0) {
 		if ((fp = fopen("seed.txt", "r"))) {
 			val = fscanf(fp, "%ld", &seed);
-			if (val == EOF)
+			if (val != 1)
 				seed = nproc;
 			for (n = 1; n < nproc; n++) {
 				val = fscanf(fp, "%ld", &procseed);
-				if (val == EOF)
+				if (val != 1)
 					procseed = n + nproc + 1;
 				MPI_Send(&procseed, 1, MPI_LONG, n, n, MPI_COMM_WORLD);
 			}
@@ -75,6 +75,13 @@ void writeSeedPar()
 
 	if (myrank == 0) {
 		fp = fopen("seed.txt", "w");
+		if (fp == NULL) {
+			fprintf(stderr, "cannot open seed.txt for writing\n");
+			/* Other ranks are about to MPI_Send to rank 0 in the loop below;
+			   a plain exit() here would leave them blocked forever, so abort
+			   the whole job instead. */
+			MPI_Abort(MPI_COMM_WORLD, 1);
+		}
 		fprintf(fp, "%ld\n", seed);
 	}
 	for (i = 1; i < nproc; i++) {
@@ -231,6 +238,8 @@ void fftinit(fftw_plan *plan, double **grid, double **work)
 	alloc_local = fftw_mpi_local_size_3d(ngrid, ngrid, ngridft, MPI_COMM_WORLD, &nxloc, &xlocstart);
 	locsize = 2 * alloc_local;
 	*grid = fftw_alloc_real(3 * locsize);
+	if (*grid == NULL)
+		err_exit("fftw_alloc_real failed (out of memory?)\n");
 	*work = NULL; /* FFTW3-MPI handles its own transpose scratch space */
 
 	/* Single plan, reused for all three field components via
@@ -389,6 +398,10 @@ int main(int argc, char **argv)
 	kmax = atof(argv[4]);
 	kidx = atof(argv[5]);
 	stddev = atof(argv[6]);
+	if (ngrid <= 0)
+		err_exit("ngrid must be a positive integer\n");
+	if (kmin > kmax)
+		err_exit("kmin must not exceed kmax\n");
 	ngridft = ngrid / 2 + 1;
 
 	/* Set up random seed */

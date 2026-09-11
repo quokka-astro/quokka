@@ -1,3 +1,4 @@
+import os
 import sys
 import numpy as np
 from scipy.special import j1, jn_zeros
@@ -20,8 +21,9 @@ OUT_SUFFIX = f"_{RUN_TAG}" if RUN_TAG else ""
 
 nR_coarse, nz_coarse = int(round(128 * np.sqrt(2))), int(round(256 * np.sqrt(2)))
 levels               = 0
-SEED = np.random.SeedSequence().entropy
-print(f"Using random seed: {SEED}")
+_seed_override = os.environ.get("FIELDGEN_SEED")
+SEED = int(_seed_override) if _seed_override else np.random.SeedSequence().entropy
+print(f"Using random seed: {SEED}" + (" (from $FIELDGEN_SEED)" if _seed_override else ""))
 
 rng = np.random.default_rng(SEED)
 padding              = 2    # ghost cells added beyond domain on each side
@@ -460,7 +462,9 @@ if __name__ == "__main__":
 
     # Padded Rmax/Lz: extend domain by padding cells on each side so that
     # sample_bicubic's  dR = Rmax_table / nR_table  recovers the correct dR.
-    Rmax_padded = Rmax + padding * dR
+    # R_dl has `padding` ghost cells on BOTH sides (below R=0 and above Rmax),
+    # same as z_dl, so this needs the same factor of 2 as Lz_padded below.
+    Rmax_padded = Rmax + 2 * padding * dR
     Lz_padded   = Lz   + 2 * padding * dz
 
     # ── spectral modes ────────────────────────────────────────────
