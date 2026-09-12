@@ -1,0 +1,39 @@
+# Strömgren-volume photoionization feedback in a non-uniform medium.
+# Same binary as StromgrenVolumeFeedback, but with a linear density gradient across the box and the
+# source displaced from the centre. The analytic Strömgren radius does not apply here, so the test
+# instead checks that the recombination rate inside the ionized region equals the photon budget --
+# i.e. that photons are conserved exactly on the non-uniform path.
+
+geometry.prob_lo = [-6.1714e18, -6.1714e18, -6.1714e18]
+geometry.prob_hi = [ 6.1714e18,  6.1714e18,  6.1714e18]
+quokka.bc = ["foextrap", "foextrap", "foextrap"]
+
+amr.n_cell = [64, 64, 64]
+amr.max_level = 0
+amr.blocking_factor = 16
+amr.max_grid_size = 32
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 0
+
+stop_time = 1.0e11 # s
+max_timesteps = 3
+
+particles.verbose = 1
+
+# Density varies by +/-60% across the box; the source sits 15% of the box width off centre.
+problem.density_gradient = 0.6
+problem.source_offset_frac = 0.15
+
+# Strömgren-volume photoionization feedback
+stromgren.enabled = 1
+stromgren.T_HII = 1.0e4
+stromgren.alpha_B = 2.59e-13
+stromgren.hydrogen_mass_fraction = 1.0
+stromgren.R_max_cells = 32.0
+stromgren.x_ion_scalar_index = 0
+
+plotfile_interval = -1
+checkpoint_interval = -1
+tiny_profiler.enabled = 0

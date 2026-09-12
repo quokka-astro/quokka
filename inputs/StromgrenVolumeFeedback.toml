@@ -1,0 +1,36 @@
+# Strömgren-volume photoionization feedback: single star particle in a uniform medium.
+# Domain is a 4 pc box; with n_H = 1e3 cm^-3 and Q = 1e49 s^-1 the analytic Strömgren radius is
+# R_St ~ 2.10e18 cm ~ 0.68 pc, which is about 11 cells at 64^3.
+
+geometry.prob_lo = [-6.1714e18, -6.1714e18, -6.1714e18]
+geometry.prob_hi = [ 6.1714e18,  6.1714e18,  6.1714e18]
+quokka.bc = ["foextrap", "foextrap", "foextrap"]
+
+amr.n_cell = [64, 64, 64]
+amr.max_level = 0
+amr.blocking_factor = 16
+amr.max_grid_size = 32
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 0
+
+# Only a few steps: the analytic comparison is valid while the density is still uniform.
+# At T_HII = 1e4 K the sound crossing time of R_St is ~1.8e12 s, so 1e11 s leaves the gas
+# essentially static while still exercising the feedback module.
+stop_time = 1.0e11 # s
+max_timesteps = 3
+
+particles.verbose = 1
+
+# Strömgren-volume photoionization feedback
+stromgren.enabled = 1
+stromgren.T_HII = 1.0e4
+stromgren.alpha_B = 2.59e-13
+stromgren.hydrogen_mass_fraction = 1.0
+stromgren.R_max_cells = 32.0
+stromgren.x_ion_scalar_index = 0
+
+plotfile_interval = -1
+checkpoint_interval = -1
+tiny_profiler.enabled = 0
