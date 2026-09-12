@@ -47,6 +47,14 @@ density_floor_expr = "scaleheight=3.018e21; max(1.67e-28, base_density_floor * e
 temperature_floor = 10.0  # K
 
 particles.eps_ff = 0.01
+
+# Sample individual stars down to 3 Msun rather than the 9 Msun default. Only individually sampled
+# stars radiate (LowMassComposite particles are given zero luminosity in every group), so this sets
+# which part of the stellar population contributes to the IR/FUV/LW field. The derived Chabrier IMF
+# quantities are recomputed from this threshold at startup: the mass fraction in individual stars
+# rises from 0.2055 to 0.3671 and their mean mass falls from 21.34 to 8.45 Msun, so about 4.5x more
+# star particles form per star-formation event than at the 9 Msun default.
+particles.min_mass_individual_stars = 3.0  # Msun
 problem.stars_file = ""
 problem.IC_file = "../extern/problems/TallBoxSf/disk_solution_datatable_Sigma13-Z1.csv"
 problem.rho01 = 4.320441e-24
