@@ -58,54 +58,54 @@ template <typename problem_t> class DustSources
 	using Vec3 = amrex::SmallVector<amrex::Real, 3>;
 
 	struct ReducedOperator {
-		amrex::Real coeffIdentity;
+		amrex::Real coeffPerpendicular;
 		amrex::Real coeffCross;
 		amrex::Real coeffParallel;
 
 		AMREX_GPU_HOST_DEVICE auto operator+(ReducedOperator const &rhs) const -> ReducedOperator
 		{
-			return {coeffIdentity + rhs.coeffIdentity, coeffCross + rhs.coeffCross, coeffParallel + rhs.coeffParallel};
+			return {coeffPerpendicular + rhs.coeffPerpendicular, coeffCross + rhs.coeffCross, coeffParallel + rhs.coeffParallel};
 		}
 
 		AMREX_GPU_HOST_DEVICE auto operator-(ReducedOperator const &rhs) const -> ReducedOperator
 		{
-			return {coeffIdentity - rhs.coeffIdentity, coeffCross - rhs.coeffCross, coeffParallel - rhs.coeffParallel};
+			return {coeffPerpendicular - rhs.coeffPerpendicular, coeffCross - rhs.coeffCross, coeffParallel - rhs.coeffParallel};
 		}
 
 		AMREX_GPU_HOST_DEVICE auto operator*(ReducedOperator const &rhs) const -> ReducedOperator
 		{
 			ReducedOperator result{};
-			result.coeffIdentity = coeffIdentity * rhs.coeffIdentity - coeffCross * rhs.coeffCross;
-			result.coeffCross = coeffIdentity * rhs.coeffCross + coeffCross * rhs.coeffIdentity;
-			result.coeffParallel = coeffIdentity * rhs.coeffParallel + coeffParallel * rhs.coeffIdentity + coeffParallel * rhs.coeffParallel +
-					       coeffCross * rhs.coeffCross;
+			result.coeffPerpendicular = coeffPerpendicular * rhs.coeffPerpendicular - coeffCross * rhs.coeffCross;
+			result.coeffCross = coeffPerpendicular * rhs.coeffCross + coeffCross * rhs.coeffPerpendicular;
+			result.coeffParallel = coeffParallel * rhs.coeffParallel;
 			return result;
 		}
 
 		AMREX_GPU_HOST_DEVICE auto operator*(amrex::Real scale) const -> ReducedOperator
 		{
-			return {scale * coeffIdentity, scale * coeffCross, scale * coeffParallel};
+			return {scale * coeffPerpendicular, scale * coeffCross, scale * coeffParallel};
 		}
 
 		friend AMREX_GPU_HOST_DEVICE auto operator*(amrex::Real scale, ReducedOperator const &op) -> ReducedOperator { return op * scale; }
 
 		[[nodiscard]] AMREX_GPU_HOST_DEVICE auto inverse() const -> ReducedOperator
 		{
-			amrex::Real const denom_perp = coeffIdentity * coeffIdentity + coeffCross * coeffCross;
-			amrex::Real const parallel_denom = coeffIdentity + coeffParallel;
+			amrex::Real const denom_perp = coeffPerpendicular * coeffPerpendicular + coeffCross * coeffCross;
 			AMREX_ASSERT(denom_perp > 0.0);
-			AMREX_ASSERT(std::abs(parallel_denom) > 0.0);
-			amrex::Real const inv_parallel = 1.0 / parallel_denom;
-			return {coeffIdentity / denom_perp, -coeffCross / denom_perp, inv_parallel - coeffIdentity / denom_perp};
+			AMREX_ASSERT(std::abs(coeffParallel) > 0.0);
+			return {coeffPerpendicular / denom_perp, -coeffCross / denom_perp, 1.0 / coeffParallel};
 		}
 
 		[[nodiscard]] AMREX_GPU_HOST_DEVICE auto apply(Vec3 const &x, Vec3 const &b_hat) const -> Vec3
 		{
 			amrex::Real const x_parallel = b_hat.dot(x);
 			Vec3 result = Vec3::Zero();
-			result[0] = coeffIdentity * x[0] + coeffCross * (x[1] * b_hat[2] - x[2] * b_hat[1]) + coeffParallel * x_parallel * b_hat[0];
-			result[1] = coeffIdentity * x[1] + coeffCross * (x[2] * b_hat[0] - x[0] * b_hat[2]) + coeffParallel * x_parallel * b_hat[1];
-			result[2] = coeffIdentity * x[2] + coeffCross * (x[0] * b_hat[1] - x[1] * b_hat[0]) + coeffParallel * x_parallel * b_hat[2];
+			result[0] = coeffPerpendicular * (x[0] - x_parallel * b_hat[0]) + coeffCross * (x[1] * b_hat[2] - x[2] * b_hat[1]) +
+				    coeffParallel * x_parallel * b_hat[0];
+			result[1] = coeffPerpendicular * (x[1] - x_parallel * b_hat[1]) + coeffCross * (x[2] * b_hat[0] - x[0] * b_hat[2]) +
+				    coeffParallel * x_parallel * b_hat[1];
+			result[2] = coeffPerpendicular * (x[2] - x_parallel * b_hat[2]) + coeffCross * (x[0] * b_hat[1] - x[1] * b_hat[0]) +
+				    coeffParallel * x_parallel * b_hat[2];
 			return result;
 		}
 	};
@@ -300,9 +300,9 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustStageAffineOperato
     -> DustStageAffineOperators
 {
 	DustStageAffineOperators ops{};
-	ReducedOperator const identity{1.0, 0.0, 0.0};
-	ReducedOperator const T1 = {-alpha1, omega_L1, 0.0};
-	ReducedOperator const T2 = {-alpha2, omega_L2, 0.0};
+	ReducedOperator const identity{1.0, 0.0, 1.0};
+	ReducedOperator const T1 = {-alpha1, omega_L1, -alpha1};
+	ReducedOperator const T2 = {-alpha2, omega_L2, -alpha2};
 	ReducedOperator const L1 = dt * T1;
 	ReducedOperator const L2 = dt * T2;
 
@@ -331,10 +331,10 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::SolveGasStageRates(amrex::Gpu
 								      amrex::GpuArray<Vec3, nDustGroups_> const &q_n, Vec3 const &b_hat) -> GasStageRates
 {
 	GasStageRates rates{Vec3::Zero(), Vec3::Zero()};
-	ReducedOperator lambda11{1.0, 0.0, 0.0};
+	ReducedOperator lambda11{1.0, 0.0, 1.0};
 	ReducedOperator lambda12{0.0, 0.0, 0.0};
 	ReducedOperator lambda21{0.0, 0.0, 0.0};
-	ReducedOperator lambda22{1.0, 0.0, 0.0};
+	ReducedOperator lambda22{1.0, 0.0, 1.0};
 	Vec3 r1 = Vec3::Zero();
 	Vec3 r2 = Vec3::Zero();
 
