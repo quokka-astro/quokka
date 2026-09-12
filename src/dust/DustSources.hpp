@@ -25,6 +25,7 @@ template <typename problem_t> class DustSources
 	static constexpr int nHydroScalars_ = Physics_NumVars::numHydroVars + nscalars_;
 	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup; // number of dust variables for each dust group
 	static constexpr int nDustGroups_ = Physics_Traits<problem_t>::nDustGroups;
+	static constexpr int nMomentumComponents_ = 3;
 
 	enum consVarIndex { // NOLINT
 		density_index = Physics_Indices<problem_t>::hydroFirstIndex,
@@ -55,7 +56,7 @@ template <typename problem_t> class DustSources
 
 	static constexpr int primDustFirstIndex = primScalar0_index + nscalars_;
 	enum primDustVarIndex { primDustDensity_index = primDustFirstIndex, x1DustVelocity_index, x2DustVelocity_index, x3DustVelocity_index }; // NOLINT
-	using Vec3 = amrex::SmallVector<amrex::Real, 3>;
+	using Vec3 = amrex::SmallVector<amrex::Real, nMomentumComponents_>;
 
 	struct ReducedOperator {
 		amrex::Real coeffIdentity;
@@ -468,7 +469,7 @@ void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, s
 		for (int g = 0; g < nDustGroups_; ++g) {
 			p_d_old[g] = Vec3::Zero();
 		}
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		for (int dir = 0; dir < nMomentumComponents_; ++dir) {
 			p_g_old[dir] = consVar_cc[bx](i, j, k, x1Momentum_index + dir);
 			for (int g = 0; g < nDustGroups_; ++g) {
 				p_d_old[g][dir] = consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars);
@@ -695,7 +696,7 @@ void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, s
 			E_g_stage2_old = E_g_stage2_new;
 		}
 
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		for (int dir = 0; dir < nMomentumComponents_; ++dir) {
 			consVar_cc[bx](i, j, k, x1Momentum_index + dir) = p_g_iter_new[dir];
 			for (int g = 0; g < nDustGroups_; ++g) {
 				consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars) = p_d_iter_new[g][dir];
