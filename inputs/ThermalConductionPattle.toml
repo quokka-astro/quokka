@@ -13,15 +13,12 @@ amr.v = 1      # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
+# (nx/max_level are actually set programmatically in problem_main's resolution sweep;
+# these are just placeholder defaults)
 # *****************************************************************
-amr.n_cell = [32, 32, 32]
-amr.max_level = 1  # number of levels = max_level + 1
+amr.n_cell = [128, 128, 128]
+amr.max_level = 0
 amr.blocking_factor = 16  # grid size must be divisible by this
-
-# ghost-cell interpolation at the coarse-fine AMR boundary: the default
-# (method=1) over-limits for this problem and breaks second-order convergence;
-# method=3 (unlimited linear conservative interpolation) restores it
-amr_interpolation_method = 3
 
 do_reflux = 1
 do_subcycle = 0
@@ -34,12 +31,5 @@ conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
 suppress_output = 0
 
-#Spitzer IC
 conduction.conduction_type = "spitzer"
 conduction.conductivity_prefactor = 5.40e-10
-stop_time = 660942.2643981476
-
-#Constant IC
-#conduction.conduction_type = "constant"
-#conduction.conductivity_prefactor = 0.6113916490935586e12
-#stop_time = 469054.0075444166
