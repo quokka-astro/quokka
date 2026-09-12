@@ -711,6 +711,32 @@ void writeDynamicEpsteinConvergenceCsv(const std::vector<CoefficientTreatmentCon
 	}
 }
 
+auto stronglyUnresolvedGyromotionOperatorPasses() -> bool
+{
+	using DustSystem = DustSources<DustGyroNoDrag>;
+	constexpr double omega_dt = 1.0e8;
+	auto const ops = DustSystem::ComputeDustStageAffineOperators(0.0, omega_dt, 0.0, omega_dt, epsilon, 1.0, 1.0, 1.0, 1.0, -1.0);
+	amrex::GpuArray<DustSystem::DustStageAffineOperators, 1> const group_ops{ops};
+	amrex::GpuArray<DustSystem::Vec3, 1> q_n{};
+	q_n[0][0] = 1.0;
+	q_n[0][1] = -2.0;
+	q_n[0][2] = 3.0;
+	DustSystem::Vec3 const b_hat{0.0, 0.0, 1.0};
+	auto const gas_stage = DustSystem::SolveGasStageRates(group_ops, q_n, b_hat);
+	auto const dust_stage1 = ops.P1.apply(q_n[0], b_hat) + ops.X1.apply(gas_stage.k1, b_hat) + ops.Y1.apply(gas_stage.k2, b_hat);
+	auto const dust_stage2 = ops.P2.apply(q_n[0], b_hat) + ops.X2.apply(gas_stage.k1, b_hat) + ops.Y2.apply(gas_stage.k2, b_hat);
+
+	auto const finite_operator = [](DustSystem::ReducedOperator const &op) {
+		return std::isfinite(op.coeffPerpendicular) && std::isfinite(op.coeffCross) && std::isfinite(op.coeffParallel);
+	};
+	auto const finite_vector = [](DustSystem::Vec3 const &vec) { return std::isfinite(vec[0]) && std::isfinite(vec[1]) && std::isfinite(vec[2]); };
+	bool const finite = finite_operator(ops.P1) && finite_operator(ops.P2) && finite_operator(ops.X1) && finite_operator(ops.X2) &&
+			    finite_operator(ops.Y1) && finite_operator(ops.Y2) && finite_vector(gas_stage.k1) && finite_vector(gas_stage.k2) &&
+			    finite_vector(dust_stage1) && finite_vector(dust_stage2);
+	double const parallel_rate = std::max({std::abs(gas_stage.k1[2]), std::abs(gas_stage.k2[2]), std::abs(dust_stage1[2]), std::abs(dust_stage2[2])});
+	return finite && (parallel_rate < 1.0e-14);
+}
+
 auto problem_main() -> int
 {
 	bool write_csv = true;
@@ -821,7 +847,7 @@ auto problem_main() -> int
 		const double dynamic_charge_minimum_change = 1.0e-2;
 		const double dynamic_charge_minimum_order = 3.8;
 
-		bool passed = true;
+		bool passed = stronglyUnresolvedGyromotionOperatorPasses();
 		for (auto const &run : epstein_no_b_runs) {
 			amrex::Print() << "[Pure Damping][" << quokka::dust::resolvedRkSchemeName(run.scheme)
 				       << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
