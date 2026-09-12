@@ -564,7 +564,7 @@ inline amrex::Real min_mass_individual_stars = 9.0; // NOLINT
 // particleParmParse() whenever the threshold changes; they are never independent inputs.
 //   imf_mass_fraction_individual: fraction of a stellar population's mass in individually sampled stars
 //   imf_mean_mass_individual:     mean mass of one such star [g], which sets how many of them to draw
-inline amrex::Real imf_mass_fraction_individual = quokka::ChabrierIMF::massFractionAbove(min_mass_individual_stars);		    // NOLINT
+inline amrex::Real imf_mass_fraction_individual = quokka::ChabrierIMF::massFractionAbove(min_mass_individual_stars);	  // NOLINT
 inline amrex::Real imf_mean_mass_individual = quokka::ChabrierIMF::meanMassAbove(min_mass_individual_stars) * C::M_solar; // NOLINT
 
 inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
