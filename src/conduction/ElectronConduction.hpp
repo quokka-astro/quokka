@@ -43,6 +43,11 @@ template <typename problem_t> class ElectronConduction
 	{
 		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Electron conduction requires hydro to be enabled.");
 
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
+			heat_flux[idim].setVal(0.0);
+		}
 		if ((dt <= 0.0) || (params.conductivity_prefactor <= 0.0)) {
 			return;
 		}
@@ -115,12 +120,6 @@ template <typename problem_t> class ElectronConduction
 			conductivity_arr[bx](i, j, k) = kappa;
 			saturated_flux_arr[bx](i, j, k) = qsat;
 		});
-
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
-			heat_flux[idim].setVal(0.0);
-		}
 
 		auto const &temp = temperature.const_arrays();
 		auto const &kappa = conductivity.const_arrays();
