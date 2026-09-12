@@ -423,19 +423,19 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static constexpr amrex::Real J_truncate = 0.01 * J; // Jeans number for guaranteed star formation
 
 	// Constants for the Chabrier IMF
-	// These are the parameters used in extern/ChabrierIMGCalculation.nb
-	static constexpr amrex::Real m_star_high = 9.0 * C::M_solar; // all stars above this mass are considered high mass stars
+	// These are the parameters used in extern/ChabrierIMFCalculations.nb
 	static constexpr amrex::Real m_imf_max = 120.0 * C::M_solar; // high mass limit of the IMF
 	static constexpr amrex::Real alpha = 2.35;		     // slope of the powerlaw
 
-	// fstar_high sets the mass of the high mass stars in a cell (=particle mass * fstar_high)
-	// m_star_high_avg is the average mass of the high mass stars in a cell
-	// Checkout docs/star_formation for more details on the physics and ChabrierIMGCalculation.nb for the derivation
-	// of fstar_high and m_star_high_avg
-
-	// // fstar is the fraction of number of high mass stars from the IMF
-	static constexpr double fstar_high = 0.2055;
-	static constexpr double m_star_high_avg = 19.39 * C::M_solar; // average mass of high mass stars
+	// The threshold above which stars are sampled individually is the runtime parameter
+	// particles.min_mass_individual_stars, and the two quantities derived from it are
+	//   imf_mass_fraction_individual ("fstar_high"): the fraction of a population's mass in those stars,
+	//                                                so their total mass in a cell is particle_mass * fstar_high
+	//   imf_mean_mass_individual ("m_star_high_avg"): the mean mass of one of them, which turns that mass
+	//                                                 budget into an expected number of stars
+	// All three are read from quokka:: namespace-scope variables and captured by value below, so device
+	// code never touches host state. See src/particles/chabrier_imf.hpp for the integrals and
+	// docs/star_formation for the physics.
 
 	ParticleCreationTraits() = default;
 
@@ -446,6 +446,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real param2 = particle_param2;
 		amrex::Real eps_ff_ = eps_ff;
 		amrex::Real low_mass_composite_max_mass_ = low_mass_composite_max_mass;
+		amrex::Real fstar_high_ = imf_mass_fraction_individual;
+		amrex::Real m_star_high_avg_ = imf_mean_mass_individual;
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
@@ -475,9 +477,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			if ((LambdaJ < J * dx[0]) &&
 			    random_draw < actual_prob_star_formation) { // Create a particle only if LambdaJ < J*dx and actual_prob_star_formation > random draw
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
-				const amrex::Real m_high_tot = particle_mass * fstar_high;
-				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
-				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
+				const amrex::Real m_high_tot = particle_mass * fstar_high_;
+				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high_);
+				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg_;
 				const int num_high = static_cast<int>(amrex::RandomPoisson(num_high_mass_stars_exp, engine));
 				int num_low = 1;
 				if ((low_mass_composite_max_mass_ > 0.0) && (mass_low_mass_star > low_mass_composite_max_mass_)) {
@@ -505,6 +507,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real eps_ff_ = eps_ff;
 		amrex::Real stellar_velocity_limit_ = stellar_velocity_limit;
 		amrex::Real low_mass_composite_max_mass_ = low_mass_composite_max_mass;
+		amrex::Real fstar_high_ = imf_mass_fraction_individual;
+		amrex::Real m_star_high_ = min_mass_individual_stars * C::M_solar;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
@@ -533,7 +537,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
 				constexpr int nscalars = Physics_Traits<problem_t>::numPassiveScalars;
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
-				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
+				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high_);
 
 				const int num_low = static_cast<int>(std::ceil(mass_low_mass_star / low_mass_composite_max_mass_));
 				const int num_high = num_particles - num_low;
@@ -640,9 +644,12 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 						// Set particle mass
 						{
-							// Sample mass from the IMF between m_star_high and m_imf_max using inverse transform sampling
+							// Sample mass from the IMF between m_star_high_ and m_imf_max using inverse transform
+							// sampling. The lower limit is a runtime parameter, so its power is no longer a
+							// compile-time constant; the IMF is a pure power law over this range (guaranteed by
+							// the >= 1 Msun check in ChabrierIMF::massFractionAbove).
 							constexpr double mimf_max_pow = gcem::pow(m_imf_max, 1.0 - alpha);
-							constexpr double mstar_high_pow = gcem::pow(m_star_high, 1.0 - alpha);
+							const double mstar_high_pow = std::pow(m_star_high_, 1.0 - alpha);
 							double mass_of_star = amrex::Random(engine) * (mimf_max_pow - mstar_high_pow) + mstar_high_pow;
 							mass_of_star = std::pow(mass_of_star, 1. / (1. - alpha));
 							p.rdata(mass_idx) = mass_of_star;
