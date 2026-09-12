@@ -58,6 +58,20 @@ class LuminosityUpdate
 		const int mass_idx = StochasticStellarPopParticleMassIdx;
 		const int birth_time_idx = StochasticStellarPopParticleBirthTimeIdx;
 		const int lum_idx = StochasticStellarPopParticleLumIdx;
+
+		// Only individually sampled stars radiate. A LowMassComposite particle stands for the whole
+		// sub-threshold population of a cell and carries ~1e5-1e6 Msun, which is far off the top of the
+		// table's mass axis; with the clamp policy it would otherwise be assigned the luminosity of a
+		// single star at the maximum tabulated mass. Its luminosity is zeroed in every group instead.
+		const bool is_low_mass_composite = p.idata(StochasticStellarPopParticleStageIdx) == static_cast<int>(StellarEvolutionStage::LowMassComposite);
+		if (is_low_mass_composite) {
+			if (lum_idx + nGroups <= ParticleType::NReal) {
+				for (int g = 0; g < nGroups; ++g) {
+					p.rdata(lum_idx + g) = 0.0;
+				}
+			}
+			return;
+		}
 		const amrex::Real age_in_seconds = current_time - p.rdata(birth_time_idx);
 		const amrex::Real mass = p.rdata(mass_idx);
 

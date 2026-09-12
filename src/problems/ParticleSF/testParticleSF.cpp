@@ -113,8 +113,12 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 		int status = 0;
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
-			const double exp_Mstar_high_mean = 19.39; // Msun
-			const double exp_fstar_high = 0.220;	  // fraction of mass in high mass stars
+			// Expectations follow from the Chabrier IMF at whatever threshold is in use, so this test
+			// stays valid when particles.min_mass_individual_stars is changed from its default. These are
+			// analytic integrals of the IMF; the statistics they are compared against come from the
+			// inverse-transform sampler, so the two sides are computed independently.
+			const double exp_Mstar_high_mean = quokka::ChabrierIMF::meanMassAbove(quokka::min_mass_individual_stars); // Msun
+			const double exp_fstar_high = quokka::ChabrierIMF::massFractionAbove(quokka::min_mass_individual_stars);  // fraction of mass in high mass stars
 
 			const amrex::Real exp_m_star_per_cell = rho0 * cell_volume * eps_star;
 			const amrex::Real exp_m_star_high_per_cell = exp_m_star_per_cell * exp_fstar_high;
