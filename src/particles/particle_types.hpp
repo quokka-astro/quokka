@@ -4,6 +4,8 @@
 #include "AMReX_AmrParticles.H"
 #include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
+#include "fundamental_constants.H"
+#include "particles/chabrier_imf.hpp"
 #include "particles/stellar_models.hpp"
 #include "physics_info.hpp"
 
@@ -553,6 +555,18 @@ inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
 // Maximum mass for LowMassComposite particles. Default is set to max(), so no splitting is performed.
 inline amrex::Real low_mass_composite_max_mass = std::numeric_limits<amrex::Real>::max(); // NOLINT
 
+// Minimum initial mass [Msun] above which stars are sampled individually from the IMF. Stars below this
+// mass are lumped into the LowMassComposite particle, which does not explode and does not radiate.
+// Lowering it resolves more of the stellar population at the cost of more particles.
+inline amrex::Real min_mass_individual_stars = 9.0; // NOLINT
+
+// Derived from min_mass_individual_stars by integrating the Chabrier IMF. Both are recomputed in
+// particleParmParse() whenever the threshold changes; they are never independent inputs.
+//   imf_mass_fraction_individual: fraction of a stellar population's mass in individually sampled stars
+//   imf_mean_mass_individual:     mean mass of one such star [g], which sets how many of them to draw
+inline amrex::Real imf_mass_fraction_individual = quokka::ChabrierIMF::massFractionAbove(min_mass_individual_stars);		    // NOLINT
+inline amrex::Real imf_mean_mass_individual = quokka::ChabrierIMF::meanMassAbove(min_mass_individual_stars) * C::M_solar; // NOLINT
+
 inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
 
 // Scalar yield per supernova (total amount, not density)
@@ -601,6 +615,14 @@ inline void particleParmParse()
 
 	// Low-mass composite particle mass cap (split into multiple particles if exceeded)
 	pp.query("low_mass_composite_max_mass", low_mass_composite_max_mass);
+
+	// Threshold above which stars are sampled individually. The two IMF-derived quantities must be
+	// recomputed together with it: pairing a mass fraction from one threshold with a mean mass from
+	// another silently rescales the number of massive stars formed.
+	pp.query("min_mass_individual_stars", min_mass_individual_stars);
+	quokka::ChabrierIMF::validateAgainstReferenceValues();
+	imf_mass_fraction_individual = quokka::ChabrierIMF::massFractionAbove(min_mass_individual_stars);
+	imf_mean_mass_individual = quokka::ChabrierIMF::meanMassAbove(min_mass_individual_stars) * C::M_solar;
 
 	// Roundoff factor for particles
 	pp.query("reproducibility_roundoff_redundancy", reproducibility_roundoff_redundancy);
