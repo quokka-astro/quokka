@@ -157,9 +157,10 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 | Parameter Name                     | Type          | Default        | Description                                                                                                                                       |
 |------------------------------------|---------------|----------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
-| dust.enable_coefficient_iteration  | Boolean (0/1) | `0` (Disabled) | If set to 1, iterates state-dependent stopping-time and charge coefficients during each dust source update.                                      |
-| dust.picard_alpha_rtol             | Float         | `1e-6`         | Relative convergence tolerance for the reciprocal stopping time \\(\alpha=1/T_{\mathrm{s}}\\).                                                   |
-| dust.picard_charge_rtol            | Float         | `1e-6`         | Relative convergence tolerance for the dimensionless charge-to-mass ratio \\(\xi\\); used only when the magnetic field is nonzero.                |
+| dust.enable_coefficient_iteration  | Boolean (0/1) | `0` (Disabled) | If set to 1, iterates state-dependent stopping-time and charge coefficients at both GIRK stages.                                                  |
+| dust.picard_alpha_rtol             | Float         | `1e-6`         | Relative convergence tolerance for the reciprocal stopping time \\(\alpha=1/T_{\mathrm{s}}\\) at each GIRK stage. Must be positive.              |
+| dust.picard_charge_atol            | Float         | `1e-12`        | Absolute convergence tolerance for \\(\xi\\) at each GIRK stage; used only when the magnetic field is nonzero. Must be positive.                |
+| dust.picard_charge_rtol            | Float         | `1e-6`         | Relative convergence tolerance for \\(\xi\\), scaled by its value from the current Picard iterate. Must be positive.                             |
 | dust.picard_max_iterations         | Integer       | `20`           | Maximum number of coefficient iterations per dust source update. Must be a positive integer. A nonconverged cell emits a warning and uses the final iterate. |
 | dust.omega_drag_heating            | Float         | `1.0`          | Controls the fraction of aerodynamic drag dissipation deposited as gas internal energy in the dust source update.                              |
 | dust.omega_gyro_residual           | Float         | `0.0`          | Controls deposition of the gyrofrequency-dependent part of the discrete RK energy residual in `computeDustDragAndLorentz`.                       |
