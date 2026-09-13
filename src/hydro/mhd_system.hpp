@@ -86,10 +86,10 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					       amrex::Real resistivity = 0.0);
 
 	static void ComputeEMF_Balsara2025a(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
-					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
-					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, int reconstruction_order,
-					   SlopeLimiter plm_limiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp,
-					   amrex::Real resistivity = 0.0);
+					    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
+					    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, int reconstruction_order,
+					    SlopeLimiter plm_limiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp,
+					    amrex::Real resistivity = 0.0);
 
 	static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_vs_wcomp,
@@ -111,11 +111,11 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 						     amrex::Real resistivity);
 
 	static void EMFAverage_Balsara2025b(amrex::Array4<amrex::Real> ec_a4_emf_ave_wcomp2, std::array<amrex::FArrayBox, 4> const &ec_fabs_emfs_iquad,
-					   amrex::Box const &box_ec, std::array<int, 2> const &reconstruct_dirs,
-					   std::array<amrex::Array4<const amrex::Real>, 3> const &fcw_fspds_wcomp,
-					   std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bs_icomp_jeside,
-					   amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0, amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1,
-					   amrex::Real dx_wcomp0, amrex::Real dx_wcomp1, amrex::Real resistivity);
+					    amrex::Box const &box_ec, std::array<int, 2> const &reconstruct_dirs,
+					    std::array<amrex::Array4<const amrex::Real>, 3> const &fcw_fspds_wcomp,
+					    std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bs_icomp_jeside,
+					    amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0, amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1,
+					    amrex::Real dx_wcomp0, amrex::Real dx_wcomp1, amrex::Real resistivity);
 
 	// resistive corrections
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto computeResistiveEMF(amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0,
@@ -163,7 +163,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 								 plm_limiter, emf_ave_scheme, dx_wcomp, resistivity);
 	} else if (emf_compute_scheme == EMFComputeScheme::Balsara2025a) {
 		MHDSystem<problem_t>::ComputeEMF_Balsara2025a(ec_mf_emfs_wcomp, cc_mf_cVars, fcw_mf_cVars_wcomp, fcw_mf_fspds_wcomp, reconstruction_order,
-							     plm_limiter, emf_ave_scheme, dx_wcomp, resistivity);
+							      plm_limiter, emf_ave_scheme, dx_wcomp, resistivity);
 	} else if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
 		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emfs_wcomp, fcw_mf_vs_wcomp, fcw_mf_cVars_wcomp, fcw_mf_fspds_wcomp, reconstruction_order,
 							    plm_limiter, emf_ave_scheme, dx_wcomp, resistivity);
@@ -185,7 +185,7 @@ void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &ec_a4_em
 						 fc_a4_b_wcomp0, fc_a4_b_wcomp1, dx_wcomp0, dx_wcomp1, resistivity);
 	} else if (emf_ave_scheme == EMFAvgScheme::Balsara2025b) {
 		EMFAverage_Balsara2025b(ec_a4_emf_ave_wcomp2, ec_fabs_emfs_iquad, box_ec, reconstruct_dirs, fcw_fspds_wcomp, ec_fabs_bs_icomp_jeside,
-				       fc_a4_b_wcomp0, fc_a4_b_wcomp1, dx_wcomp0, dx_wcomp1, resistivity);
+					fc_a4_b_wcomp0, fc_a4_b_wcomp1, dx_wcomp0, dx_wcomp1, resistivity);
 	} else {
 		amrex::Abort("Unknown EMF averaging type");
 	}
@@ -564,10 +564,10 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Balsara2025a(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
-						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
-						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, int reconstruction_order,
-						  SlopeLimiter plm_limiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp,
-						  amrex::Real resistivity)
+						   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
+						   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, int reconstruction_order,
+						   SlopeLimiter plm_limiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp,
+						   amrex::Real resistivity)
 {
 
 	const BL_PROFILE("MHDSystem::ComputeEMF_Balsara2025a()");
@@ -871,12 +871,12 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFAverage_Balsara2025b(amrex::Array4<amrex::Real> ec_a4_emf_ave_wcomp2, std::array<amrex::FArrayBox, 4> const &ec_fabs_emfs_iquad,
-						  amrex::Box const &box_ec, std::array<int, 2> const &reconstruct_dirs,
-						  std::array<amrex::Array4<const amrex::Real>, 3> const &fcw_fspds_wcomp,
-						  std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bs_icomp_jeside,
-						  amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0,
-						  amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1, amrex::Real dx_wcomp0, amrex::Real dx_wcomp1,
-						  amrex::Real resistivity)
+						   amrex::Box const &box_ec, std::array<int, 2> const &reconstruct_dirs,
+						   std::array<amrex::Array4<const amrex::Real>, 3> const &fcw_fspds_wcomp,
+						   std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bs_icomp_jeside,
+						   amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0,
+						   amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1, amrex::Real dx_wcomp0, amrex::Real dx_wcomp1,
+						   amrex::Real resistivity)
 {
 	const BL_PROFILE("MHDSystem::EMFAverage_Balsara2025b()");
 	const auto &ec_a4_emf_iquad0_wcomp2 = ec_fabs_emfs_iquad[0].const_array();
