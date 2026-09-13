@@ -20,12 +20,12 @@
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 
-AMREX_ENUM(EMFComputeScheme, FelkerStone2017, Balsara2025, Quokka2026); // NOLINT
-// FelkerStone2017: Felker & Stone (2018), JCP 375:1365; uses cc v-field.
+AMREX_ENUM(EMFComputeScheme, FelkerStone2018, Balsara2025a, Quokka2026); // NOLINT
+// FelkerStone2018: Felker & Stone (2018), JCP 375:1365; uses cc v-field.
 // Balsara2025a: Balsara et al. (2025a), ApJ 988:134; EMF reconstructed from cc->ec.
 // Quokka2026: work in preparation; variant of Mignone21a: Mignone & Del Zanna (2021), JCP 424:109748.
 
-AMREX_ENUM(EMFAvgScheme, LondrilloDelZanna2004, Balsara2025); // NOLINT
+AMREX_ENUM(EMFAvgScheme, LondrilloDelZanna2004, Balsara2025b); // NOLINT
 // LondrilloDelZanna2004: Londrillo & Del Zanna (2004), JCP 195:17; wave-speed-weighted quadrant average.
 // Balsara2025b: Balsara et al. (2025b), CAMC 7; higher-order averaging via 2D Riemann solver.
 
@@ -45,7 +45,7 @@ AMREX_FORCE_INLINE constexpr auto MinimumHydroRiemannGhost(bool is_mhd_enabled, 
 				case EMFAvgScheme::LondrilloDelZanna2004:
 					nghost = std::max(nghost, 1);
 					break;
-				case EMFAvgScheme::Balsara2025:
+				case EMFAvgScheme::Balsara2025b:
 					nghost = std::max(nghost, 2);
 					break;
 			}
@@ -79,13 +79,13 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 			       amrex::Real dx_wcomp0, amrex::Real dx_wcomp1, amrex::Real resistivity);
 
 	// EMF compute schemes
-	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
+	static void ComputeEMF_FelkerStone2018(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, int reconstruction_order,
 					       SlopeLimiter plm_limiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp,
 					       amrex::Real resistivity = 0.0);
 
-	static void ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
+	static void ComputeEMF_Balsara2025a(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, int reconstruction_order,
 					   SlopeLimiter plm_limiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp,
@@ -110,7 +110,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 						     amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1, amrex::Real dx_wcomp0, amrex::Real dx_wcomp1,
 						     amrex::Real resistivity);
 
-	static void EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_a4_emf_ave_wcomp2, std::array<amrex::FArrayBox, 4> const &ec_fabs_emfs_iquad,
+	static void EMFAverage_Balsara2025b(amrex::Array4<amrex::Real> ec_a4_emf_ave_wcomp2, std::array<amrex::FArrayBox, 4> const &ec_fabs_emfs_iquad,
 					   amrex::Box const &box_ec, std::array<int, 2> const &reconstruct_dirs,
 					   std::array<amrex::Array4<const amrex::Real>, 3> const &fcw_fspds_wcomp,
 					   std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bs_icomp_jeside,
@@ -158,17 +158,17 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      EMFAvgScheme emf_ave_scheme, SlopeLimiter plm_limiter, EMFComputeScheme emf_compute_scheme,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp, amrex::Real resistivity)
 {
-	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2017) {
-		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emfs_wcomp, cc_mf_cVars, fcw_mf_cVars_wcomp, fcw_mf_fspds_wcomp, reconstruction_order,
+	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2018) {
+		MHDSystem<problem_t>::ComputeEMF_FelkerStone2018(ec_mf_emfs_wcomp, cc_mf_cVars, fcw_mf_cVars_wcomp, fcw_mf_fspds_wcomp, reconstruction_order,
 								 plm_limiter, emf_ave_scheme, dx_wcomp, resistivity);
-	} else if (emf_compute_scheme == EMFComputeScheme::Balsara2025) {
-		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emfs_wcomp, cc_mf_cVars, fcw_mf_cVars_wcomp, fcw_mf_fspds_wcomp, reconstruction_order,
+	} else if (emf_compute_scheme == EMFComputeScheme::Balsara2025a) {
+		MHDSystem<problem_t>::ComputeEMF_Balsara2025a(ec_mf_emfs_wcomp, cc_mf_cVars, fcw_mf_cVars_wcomp, fcw_mf_fspds_wcomp, reconstruction_order,
 							     plm_limiter, emf_ave_scheme, dx_wcomp, resistivity);
 	} else if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
 		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emfs_wcomp, fcw_mf_vs_wcomp, fcw_mf_cVars_wcomp, fcw_mf_fspds_wcomp, reconstruction_order,
 							    plm_limiter, emf_ave_scheme, dx_wcomp, resistivity);
 	} else {
-		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2017, Balsara2025, or Quokka2026.");
+		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2018, Balsara2025a, or Quokka2026.");
 	}
 }
 
@@ -183,25 +183,25 @@ void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &ec_a4_em
 	if (emf_ave_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
 		EMFAverage_LondrilloDelZanna2004(ec_a4_emf_ave_wcomp2, ec_fabs_emfs_iquad, box_ec, reconstruct_dirs, fcw_fspds_wcomp, ec_fabs_bs_icomp_jeside,
 						 fc_a4_b_wcomp0, fc_a4_b_wcomp1, dx_wcomp0, dx_wcomp1, resistivity);
-	} else if (emf_ave_scheme == EMFAvgScheme::Balsara2025) {
-		EMFAverage_Balsara2025(ec_a4_emf_ave_wcomp2, ec_fabs_emfs_iquad, box_ec, reconstruct_dirs, fcw_fspds_wcomp, ec_fabs_bs_icomp_jeside,
+	} else if (emf_ave_scheme == EMFAvgScheme::Balsara2025b) {
+		EMFAverage_Balsara2025b(ec_a4_emf_ave_wcomp2, ec_fabs_emfs_iquad, box_ec, reconstruct_dirs, fcw_fspds_wcomp, ec_fabs_bs_icomp_jeside,
 				       fc_a4_b_wcomp0, fc_a4_b_wcomp1, dx_wcomp0, dx_wcomp1, resistivity);
 	} else {
 		amrex::Abort("Unknown EMF averaging type");
 	}
 }
 
-// compute emf components; FelkerStone2017.
+// compute emf components; FelkerStone2018.
 // uses cc v-field and fc b-field reconstructed to ec.
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
+void MHDSystem<problem_t>::ComputeEMF_FelkerStone2018(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, int reconstruction_order,
 						      SlopeLimiter plm_limiter, EMFAvgScheme emf_ave_scheme,
 						      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp, amrex::Real resistivity)
 {
-	const BL_PROFILE("MHDSystem::ComputeEMF_FelkerStone2017()");
+	const BL_PROFILE("MHDSystem::ComputeEMF_FelkerStone2018()");
 	const int nghost_cc = 4; // 4 cc ghost cells needed for cc->fc->ec PPM reconstruction
 	// note: all centerings share the same distribution mapping; looping over cc MFIter is valid
 	// note: cc, fc, and ec data have different cell counts
@@ -284,7 +284,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				}
 			}
 
-			// FelkerStone2017 sec. 4.1.1 (step 3): reconstruct the two cc v-field components that are required
+			// FelkerStone2018 sec. 4.1.1 (step 3): reconstruct the two cc v-field components that are required
 			// (to compute the emf at the edge) to ec. there are two possible permutations for doing this:
 			//   1. cc->fc[dir-0]->ec
 			//   2. cc->fc[dir-1]->ec
@@ -358,7 +358,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				}
 			}
 
-			// FelkerStone2017 sec. 4.1.1 (steps 1 and 2): reconstruct the two required fc b-field components to ec.
+			// FelkerStone2018 sec. 4.1.1 (steps 1 and 2): reconstruct the two required fc b-field components to ec.
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				const int reconstruct_dir2edge = reconstruct_dirs[(icomp + 1) % 2];
 				const auto dir2edge = static_cast<FluxDir>(reconstruct_dir2edge);
@@ -402,7 +402,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 						const amrex::Real v_wcomp1 = ec_vs_wcomp1_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp0 = ec_bs_wcomp0_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp1 = ec_bs_wcomp1_iquad[iquad](i, j, k);
-						// FelkerStone2017 eqns. 36-37: cross(v, b) at each corner
+						// FelkerStone2018 eqns. 36-37: cross(v, b) at each corner
 						ec_emfs_wcomp2_iquad[iquad](i, j, k) = v_wcomp0 * b_wcomp1 - v_wcomp1 * b_wcomp0;
 					}
 				});
@@ -563,14 +563,14 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 // b-field fc->cc, then cc->ec procedure; the following instead follows Balsara2025a's simpler approach.
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
+void MHDSystem<problem_t>::ComputeEMF_Balsara2025a(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, int reconstruction_order,
 						  SlopeLimiter plm_limiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp,
 						  amrex::Real resistivity)
 {
 
-	const BL_PROFILE("MHDSystem::ComputeEMF_Balsara2025()");
+	const BL_PROFILE("MHDSystem::ComputeEMF_Balsara2025a()");
 	const int nghost_cc = 4;
 	// note: all centerings share the same distribution mapping; looping over cc MFIter is valid
 	// note: cc, fc, and ec data have different cell counts
@@ -778,7 +778,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 
 // average emf components; LondrilloDelZanna2004, eqn. 56.
 // uses fast MHD wave speeds to weight the quadrant average.
-// note FelkerStone2017 implements this as their eqn. 41
+// note FelkerStone2018 implements this as their eqn. 41
 
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
@@ -858,7 +858,7 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 		const double term2 = ((max_fspd_wcomp1_m * max_fspd_wcomp1_p) / (max_fspd_wcomp1_m + max_fspd_wcomp1_p)) * (b_T_wcomp0 - b_B_wcomp0) +
 				     ((max_fspd_wcomp0_m * max_fspd_wcomp0_p) / (max_fspd_wcomp0_m + max_fspd_wcomp0_p)) * (b_L_wcomp1 - b_R_wcomp1);
 
-		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41)
+		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2018 eqn. 41)
 		ec_a4_emf_ave_wcomp2(i, j, k) = (numerator / denominator) + term2;
 		MHDSystem<problem_t>::ApplyResistiveCorrection(ec_a4_emf_ave_wcomp2, i, j, k, fc_a4_b_wcomp0, fc_a4_b_wcomp1, delta_wcomp0, delta_wcomp1,
 							       dx_wcomp0, dx_wcomp1, resistivity);
@@ -870,7 +870,7 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 // note Balsara2025a sec. 3 recounts the same derivation (eqns. 3.2-3.10).
 
 template <typename problem_t>
-void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_a4_emf_ave_wcomp2, std::array<amrex::FArrayBox, 4> const &ec_fabs_emfs_iquad,
+void MHDSystem<problem_t>::EMFAverage_Balsara2025b(amrex::Array4<amrex::Real> ec_a4_emf_ave_wcomp2, std::array<amrex::FArrayBox, 4> const &ec_fabs_emfs_iquad,
 						  amrex::Box const &box_ec, std::array<int, 2> const &reconstruct_dirs,
 						  std::array<amrex::Array4<const amrex::Real>, 3> const &fcw_fspds_wcomp,
 						  std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bs_icomp_jeside,
@@ -878,7 +878,7 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 						  amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1, amrex::Real dx_wcomp0, amrex::Real dx_wcomp1,
 						  amrex::Real resistivity)
 {
-	const BL_PROFILE("MHDSystem::EMFAverage_Balsara2025()");
+	const BL_PROFILE("MHDSystem::EMFAverage_Balsara2025b()");
 	const auto &ec_a4_emf_iquad0_wcomp2 = ec_fabs_emfs_iquad[0].const_array();
 	const auto &ec_a4_emf_iquad1_wcomp2 = ec_fabs_emfs_iquad[1].const_array();
 	const auto &ec_a4_emf_iquad2_wcomp2 = ec_fabs_emfs_iquad[2].const_array();
@@ -902,7 +902,7 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 	const auto &fc_a4_fspds_wcomp1 = fcw_fspds_wcomp[wcomp1_comp];
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		// Balsara2025b sec. 3.1 (Balsara2025a sec. 3); unlike in FelkerStone2017, these wave speeds are signed,
+		// Balsara2025b sec. 3.1 (Balsara2025a sec. 3); unlike in FelkerStone2018, these wave speeds are signed,
 		// so note the negation
 		const double max_fspd_wcomp0_m =
 		    -std::max(fc_a4_fspds_wcomp0(i, j, k, 0), fc_a4_fspds_wcomp0(i - delta_wcomp1[0], j - delta_wcomp1[1], k - delta_wcomp1[2], 0));
