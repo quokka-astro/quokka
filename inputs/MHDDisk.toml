@@ -1,0 +1,85 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+# Box is [-20 kpc, 20 kpc] x [-20 kpc, 20 kpc] x [-20 kpc, 20 kpc]
+geometry.prob_lo     = [-6.1713551629827348e22, -6.1713551629827348e22, -6.1713551629827348e22]
+geometry.prob_hi     = [6.1713551629827348e22, 6.1713551629827348e22, 6.1713551629827348e22]
+geometry.is_periodic = [0, 0, 0]
+amr.v = 2
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [256, 256, 256]
+amr.blocking_factor_x = 128
+amr.blocking_factor_y = 128
+amr.blocking_factor_z = 16
+amr.max_grid_size   = 128
+amr.n_error_buf     = 2
+amr.max_level       = 2
+amr.grid_eff        = 0.75
+regrid_interval     = -1
+do_reflux           = 1
+do_subcycle         = 0
+plotfile_prefix = "tests/plt/test_1_plt"
+checkpoint_prefix = "tests/chk/test_1_chk"
+statistics_file = "tests/teststats_1.txt"
+statistics_interval = 1
+density_floor = 1.0e-32
+#restartfile = "tests/chk/mhddisk_1_chk0004000"
+# *****************************************************************
+# Time integration
+# *****************************************************************
+cfl                 = 0.3
+max_timesteps       = 0
+stop_time           = 5.9304e15  # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s, 2 rotations
+# *****************************************************************
+# Output
+# *****************************************************************
+checkpoint_interval = 2000
+plottime_interval   = 1.4826e14
+derived_vars        = ["gpot", "pressure", "radius_sph", "radial_velocity", "circular_velocity", "mach", "plasma_beta", "divB", "Bphi"]
+# *****************************************************************
+# Problem parameters (Table 1, Q1_M29)
+# *****************************************************************
+mhd_galaxy.Q_mean    = 0.96 
+mhd_galaxy.Mc        = 28.6
+mhd_galaxy.sn_jeans_J              = 4.0 # value from Truelove et al. 1997
+mhd_galaxy.star_formation_efficiency    = 0.5  
+mhd_galaxy.sn_momentum             = 1.0e8  # SN bubble enhancement estimate
+mhd_galaxy.sn_mass_per_event_msun = 100.0
+mhd_galaxy.sn_cluster_momentum_exponent = 0.0  
+# optional fine tuning: change sn_momentum to 2.3e5, and make exponent ~1.1-1.3
+
+
+mhd.project_initial_b_field = true
+mhd.update_initial_b_energy = true
+
+mhd_galaxy.turb_vx_file = "tests/input/vx_1.bin"
+mhd_galaxy.turb_vy_file = "tests/input/vy_1.bin"
+mhd_galaxy.turb_vz_file = "tests/input/vz_1.bin"
+mhd_galaxy.aphi_meta_file = "tests/input/Aphi_2d_meta_1.txt"
+mhd_galaxy.aphi_data_file = "tests/input/Aphi_2d_Aphi_1.bin"
+mhd_galaxy.turb_seed_file = "tests/input/seed_1.txt"
+
+
+quokka.diagnostics = ["slice_z", "slice_x", "proj_z"]
+
+quokka.proj_z.type = "ProjectionPlot"
+quokka.proj_z.file = "tests/projz/test_1_plt"
+quokka.proj_z.time_int = 2.9652e13
+quokka.proj_z.normal = 2
+quokka.proj_z.field_names = ["Bphi", "gasDensity", "x-BField", "y-BField", "z-BField", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum"]
+
+quokka.slice_z.type = "DiagFramePlane"
+quokka.slice_z.file = "tests/slicez/test_1_plt"
+quokka.slice_z.normal = 2
+quokka.slice_z.center = 0.0
+quokka.slice_z.time_int = 2.9652e12
+quokka.slice_z.field_names = ["Bphi", "x-BField", "y-BField", "z-BField", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "plasma_beta", "gasDensity"]
+
+quokka.slice_x.type = "DiagFramePlane"
+quokka.slice_x.file = "tests/slicex/test_1_plt"
+quokka.slice_x.normal = 0
+quokka.slice_x.center = 0.0
+quokka.slice_x.time_int = 2.9652e12
+quokka.slice_x.field_names = ["Bphi", "x-BField", "y-BField", "z-BField", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "plasma_beta"]
