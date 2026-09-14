@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef NSCBC_OUTFLOW_HPP_ // NOLINT
 #define NSCBC_OUTFLOW_HPP_
-//==============================================================================
-// Quokka -- two-moment radiation hydrodynamics on GPUs for astrophysics
-// Copyright 2023 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file NSCBC_outflow.hpp
 /// \brief Implements the Navier-Stokes Characteristic Boundary Condition for
 /// subsonic outflows. (This also works trivially for _super_sonic outflows.)

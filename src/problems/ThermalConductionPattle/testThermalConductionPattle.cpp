@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testThermalConductionPattle.cpp
 /// \brief Defines a test problem for Spitzer thermal conduction (kappa = kappa0*T^2.5) with a Pattle IC.
 ///
