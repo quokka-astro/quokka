@@ -237,7 +237,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real shearViscosity_ = 0.0;	// shear viscosity coefficient; see viscous CFL limit below
 	amrex::Real bulkViscosity_ = 0.0;	// bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
 
-	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
+	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2018;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
 	amrex::Real mhdResistivity_ = 0.0;					// Ohmic resistivity eta; parabolic limit: dt < dx^2 / (2*eta)
 
