@@ -1,0 +1,60 @@
+# Isolated, pressure-confined molecular cloud for feedback-coupling studies.
+# Nominal cloud: Mgas=1e5 Msun, R=20 pc, T=100 K, alpha_vir=2.
+
+geometry.prob_lo = [-2.468542065193094e20, -2.468542065193094e20, -2.468542065193094e20]
+geometry.prob_hi = [ 2.468542065193094e20,  2.468542065193094e20,  2.468542065193094e20]
+quokka.bc = ["foextrap", "foextrap", "foextrap"]
+
+amr.n_cell = [64, 64, 64]
+amr.max_level = 0
+amr.blocking_factor = 32
+amr.max_grid_size = 64
+amr.n_error_buf = 3
+amr.v = 1
+
+do_reflux = 1
+do_subcycle = 0
+regrid_interval = -1
+cfl = 0.2
+hydro.reconstruction_order = 3
+hydro.artificial_viscosity_coefficient = 0.1
+
+initial_dt = "0.001 * Myr"
+stop_time = "10.0 * Myr"
+max_timesteps = 1000000
+temperature_floor = 10.0
+density_floor = 1.0e-28
+signal_speed_abort = 2.0e9
+
+cooling.enabled = 1
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
+
+particles.disable_SN_feedback = false
+particles.disable_particle_drift = false
+particles.SN_scheme = "SN_thermal_or_thermal_momentum"
+particles.SN_smooth_gas_velocity = true
+particles.scalar_yield_per_SN = 1.9884e34  # 10 Msun: label all ejecta as cloud-origin material
+particles.verbose = 1
+
+problem.cloud_mass_Msun = 1.0e5
+problem.cloud_radius_pc = 20.0
+problem.cloud_temperature = 100.0
+problem.density_contrast = 100.0
+problem.edge_width_pc = 1.0
+problem.virial_parameter = 2.0
+problem.stellar_mass_Msun = 2.0e3
+problem.stellar_particles_file = "../inputs/MolecularCloudDisruption_particles.txt"
+problem.allow_star_formation = false
+problem.dense_threshold_nH = 50.0
+problem.cold_threshold_temperature = 300.0
+problem.refine_cloud_fraction = 0.01
+
+statistics_interval = 10
+statistics_file = "MolecularCloudDisruption_history.txt"
+plottime_interval = "0.5 * Myr"
+checkpointtime_interval = "2.0 * Myr"
+plotfile_prefix = "MolecularCloudDisruption_plt"
+checkpoint_prefix = "MolecularCloudDisruption_chk"
+derived_vars = ["temperature", "nH", "cloud_fraction", "ambient_fraction", "radial_velocity", "gpot"]
+
+tiny_profiler.enabled = 1

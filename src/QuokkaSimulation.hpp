@@ -3087,7 +3087,8 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	}
 
 	if (reconstructionOrder_ == 5) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars, 0, 0,
+										   typename HydroSystem<problem_t>::PositivePrimitiveReconstruction{});
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
 											   ng_reconstruct, 2);

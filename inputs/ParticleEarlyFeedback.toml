@@ -1,0 +1,30 @@
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [9.874168260e19, 9.874168260e19, 9.874168260e19]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+amr.n_cell = [32, 32, 32]
+amr.max_level = 0
+amr.blocking_factor = 16
+amr.max_grid_size = 16
+amr.n_error_buf = 3
+amr.v = 0
+
+do_reflux = 0
+do_subcycle = 0
+initial_dt = "1.0 * Myr"
+max_timesteps = 0
+
+particles.disable_SN_feedback = true
+particles.disable_particle_drift = true
+particles.EMF_enabled = true
+particles.EMF_p0_kmps = 10.0
+particles.EMF_tFB_Myr = 4.0
+particles.EMF_alpha = 1.0
+particles.verbose = 0
+
+problem.particles_file = "../inputs/ParticleEarlyFeedback_particles.txt"
+
+plotfile_interval = -1
+checkpoint_interval = -1
+statistics_interval = -1
+tiny_profiler.enabled = 0
