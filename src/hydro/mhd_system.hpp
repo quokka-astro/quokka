@@ -1,9 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef MHD_SYSTEM_HPP_ // NOLINT
 #define MHD_SYSTEM_HPP_
-
-//==============================================================================
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file mhd_system.hpp
 /// \brief A class for solving the resistive MHD induction equation, including Ohmic heating for non-isothermal plasmas.
 ///
