@@ -20,14 +20,17 @@
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 
-AMREX_ENUM(EMFComputeScheme, FelkerStone2018, Balsara2025a, Quokka2026); // NOLINT
-// FelkerStone2018: Felker & Stone (2018), JCP 375:1365; uses cc v-field.
-// Balsara2025a: Balsara et al. (2025a), ApJ 988:134; EMF reconstructed from cc->ec.
+AMREX_ENUM(EMFComputeScheme, Quokka2026, Balsara2025a, Balsara2025 = Balsara2025a, FelkerStone2018, FelkerStone2017 = FelkerStone2018); // NOLINT
 // Quokka2026: work in preparation; variant of Mignone21a: Mignone & Del Zanna (2021), JCP 424:109748.
+// Balsara2025a: Balsara et al. (2025a), ApJ 988:134; EMF reconstructed from cc->ec.
+// Balsara2025: alias kept for backward compatibility with existing input decks.
+// FelkerStone2018: Felker & Stone (2018), JCP 375:1365; uses cc v-field.
+// FelkerStone2017: alias kept for backward compatibility with existing input decks.
 
-AMREX_ENUM(EMFAvgScheme, LondrilloDelZanna2004, Balsara2025b); // NOLINT
-// LondrilloDelZanna2004: Londrillo & Del Zanna (2004), JCP 195:17; wave-speed-weighted quadrant average.
+AMREX_ENUM(EMFAvgScheme, Balsara2025b, Balsara2025 = Balsara2025b, LondrilloDelZanna2004); // NOLINT
 // Balsara2025b: Balsara et al. (2025b), CAMC 7; higher-order averaging via 2D Riemann solver.
+// Balsara2025: alias kept for backward compatibility with existing input decks.
+// LondrilloDelZanna2004: Londrillo & Del Zanna (2004), JCP 195:17; wave-speed-weighted quadrant average.
 
 // sign convention: this module defines emf = cross(v, b), while the papers cited use Ohm's law as emf = -cross(v, b), instead.
 // every cited formula is transcribed with this sign flip baked in, so individual terms may look sign-flipped
