@@ -74,6 +74,12 @@ template <typename problem_t> struct Physics_Indices {
 		       Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups *
 			   static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled);
 	}();
+	// Passive scalars and dust live inside the hydro/radiation block of the state vector, so
+	// nvarTotal_cc silently collapses to nvarTotal_cc_adv (dropping them) if neither module is on.
+	static_assert(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled ||
+			  (Physics_Traits<problem_t>::numPassiveScalars == 0 && !Physics_Traits<problem_t>::is_dust_enabled),
+		      "Passive scalars and dust require hydro or radiation to be enabled.");
+
 	// cell-centered
 	static constexpr int hydroFirstIndex = 0;
 	static constexpr int pscalarFirstIndex = Physics_NumVars::numHydroVars;

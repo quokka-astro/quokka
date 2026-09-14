@@ -1,5 +1,5 @@
 /// \file testParticleSink.cpp
-/// \brief Defines a test problem for sink particles.
+/// \brief Defines a test problem for sink particles accretion.
 ///
 
 #include "AMReX.H"
