@@ -125,9 +125,9 @@ more detail in [Runtime parameters](parameters.md):
   3 = PPM).
 - `emf_reconstruction_order` – spatial order for the EMF reconstruction
   (default 5 = extrema-preserving PPM).
-- `emf_compute_scheme` – choose `FelkerStone2018`, `Balsara2025a`, or `Quokka2026` for computing the emf either at cell-center or at the edge (default `Balsara2025a`).
+- `emf_compute_scheme` – choose `FelkerStone2018`, `Balsara2025a`, or `Quokka2026` for computing the emf either at cell-center or at the edge (default `FelkerStone2018`).
 - `emf_averaging_scheme` – choose `LondrilloDelZanna2004` or `Balsara2025b` for edge averaging
-  (default `Balsara2025b`).
+  (default `LondrilloDelZanna2004`).
 - `artificial_viscosity_k` – optional scalar viscosity coefficient that adds a
   diffusive flux to the momentum equations and can damp post-shock oscillations.
 - `quokka.bc` – (required) choose `periodic` or `reflecting` for the boundary conditions. For reflecting boundaries, we use `amrex::BCType::reflect_even` for all magnetic field components. Support for properly reflecting magnetic field boundaries will be added in the future.
