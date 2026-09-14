@@ -219,8 +219,10 @@ void QuokkaSimulation<ThermalConductionSpitzerGaussianProblem>::ComputeDerivedVa
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
 			auto const &state = state_cc.const_array(iter);
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
-			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+        if (Physics_Traits<problem_t>::is_mhd_enabled) {
+            cons_fc = {AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
+        }
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const rho = state(i, j, k, HydroSystem<ThermalConductionSpitzerGaussianProblem>::density_index);
 				Real const Eint = HydroSystem<ThermalConductionSpitzerGaussianProblem>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
