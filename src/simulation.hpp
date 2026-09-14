@@ -1306,7 +1306,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			auto const &state_fc_x2 = state_new_fc_[lev][2].const_arrays();
 #endif
 
-			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+			double heat_capacity = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T, massScalars);
 			amrex::Real cfl = conductionCFL;
 			const amrex::Real kappa0 = electronConductionKappa0_;
 			const amrex::Real t_min = tempFloor_;
@@ -1343,7 +1343,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 				    amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars));
 
 				    amrex::Real const kappa_spitzer = kappa0 * std::pow(T, 2.5);
-				    amrex::Real const diffusion_coefficient = kappa_spitzer / (rho * c_v);
+				    amrex::Real const diffusion_coefficient = kappa_spitzer / heat_capacity;
 
 				    // Avoid division by zero for unphysical states
 				    amrex::Real cell_dt = std::numeric_limits<amrex::Real>::max();
