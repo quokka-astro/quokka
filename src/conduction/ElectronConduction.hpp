@@ -248,8 +248,10 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real pz = state_out[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 
 			const amrex::Real Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
-			const amrex::Real Eint_old = state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
 			const amrex::Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &local_state_fc);
+			// derive Eint from total energy rather than the auxiliary internalEnergy_index field,
+			// which is not kept in sync with total energy when hydro.use_dual_energy == 0
+			const amrex::Real Eint_old = HydroSystem<problem_t>::ComputeInternalEnergy(state_out[bx], i, j, k, &local_state_fc);
 			amrex::Real div_flux = (flux_x_const[bx](i + 1, j, k) - flux_x_const[bx](i, j, k)) / dx[0];
 #if AMREX_SPACEDIM >= 2
 			div_flux += (flux_y_const[bx](i, j + 1, k) - flux_y_const[bx](i, j, k)) / dx[1];
