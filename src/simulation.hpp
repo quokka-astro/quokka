@@ -1342,7 +1342,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 				    amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars));
 
 				    amrex::Real const kappa_spitzer = kappa0 * std::pow(T, 2.5);
-					double heat_capacity = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T, massScalars);
+				    double heat_capacity = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T, massScalars);
 				    amrex::Real const diffusion_coefficient = kappa_spitzer / heat_capacity;
 
 				    // Avoid division by zero for unphysical states
