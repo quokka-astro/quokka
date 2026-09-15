@@ -1301,14 +1301,11 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		} else if (conductionType_ == "aniso") {
 			// Diffusive timescale set by the harmonic mean of kappa_parallel and kappa_perp, which is
 			// dominated by whichever of the two is smaller (i.e. the slower/stiffer diffusion direction).
-			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+			double c_v = quokka::EOS<problem_t>::boltzmann_constant_  / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
 			const amrex::Real kappa_par = conductionKappaParallel_;
 			const amrex::Real kappa_perp = conductionKappaPerp_;
-			amrex::Real kappa_harmonic = 0.0;
-			if ((kappa_par + kappa_perp) > 0.0) {
-				kappa_harmonic = 2.0 * kappa_par * kappa_perp / (kappa_par + kappa_perp);
-			}
-			double diffusion_coefficient = kappa_harmonic / (state_new_cc_[lev].min(0) * c_v);
+			amrex::Real kappa_effective = 2.0 * (kappa_par + kappa_perp);
+			double diffusion_coefficient = kappa_effective / (state_new_cc_[lev].min(0) * c_v);
 			conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
 			conduction_dt.index = domain_signal_maxloc;
 
