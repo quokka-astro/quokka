@@ -3,6 +3,7 @@
 Bug fixes, questions, and contributions of new features are welcome!
 
 * Please report bugs using [GitHub Issues](https://github.com/quokka-astro/quokka/issues).
+  When reporting a bug, please include a complete, small, reliable reproducer; see [Writing high-quality bug report reproducers](bug_report_reproducers.md).
 * Ask questions using [GitHub Discussions](https://github.com/quokka-astro/quokka/discussions).
 * All code contributions should be done via [GitHub Pull Requests](https://github.com/quokka-astro/quokka/pulls):
     * *Continuous integration* (CI) testing is used to ensure that any new features or changes produce the right answer and follow all of the code style guidelines.
