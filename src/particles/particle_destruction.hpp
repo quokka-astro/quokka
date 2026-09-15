@@ -62,14 +62,11 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 					h_count.copyToHost(&destroyed_count, 1);
 					total_particles_destroyed += destroyed_count;
 				}
-
-				// Redistribute particles at this level to actually remove the invalid particles
-				// TODO(cch): This won't work when AMR subcycling is enabled. When a particle moves into the ghost cells in the first step of
-				// the subcycle, it may be moved from that level into a lower level. Then, in the second step of the subcycle, it will not be
-				// drifted.
 			}
 
-			// Redistribute particles at lev and above to actually remove the invalid particles
+			// Remove invalid particles and update level ownership only after visiting every level.
+			// The evolution driver invokes destruction once per coarse step, after the all-level drift;
+			// fluid subcycling has already finished, so no remaining particle substep can be skipped.
 			container->Redistribute(lev_min);
 
 			// Sum up total particles destroyed across all processors
