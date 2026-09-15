@@ -2533,6 +2533,8 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	amrex::MultiFab int_state_new_cc(ba, dm, ncomp_cc, nghost_cc);
 	amrex::MultiFab int_state_old_cc(ba, dm, ncomp_cc, nghost_cc);
 	FillPatch(level, time, int_state_new_cc, 0, ncomp_cc, quokka::centering::cc, quokka::direction::na, FillPatchType::fillpatch_function);
+	// Keep the spare buffer initialized, as in MakeNewLevelFromCoarse. Its timestamp remains invalid until the next advance.
+	amrex::MultiFab::Copy(int_state_old_cc, int_state_new_cc, 0, 0, ncomp_cc, nghost_cc);
 	std::swap(int_state_new_cc, state_new_cc_[level]);
 	std::swap(int_state_old_cc, state_old_cc_[level]);
 
