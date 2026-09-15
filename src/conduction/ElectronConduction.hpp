@@ -157,7 +157,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real T_face = amrex::max(0.5 * (T_L + T_R), t_min);
 			amrex::GpuArray<amrex::Real, nmscalars_> massArray_face{};
 			for (int n = 0; n < nmscalars_; ++n) {
-				massArray_face[n] = 0.5 * (massScalars_L[n]/rho_L + massScalars_R[n]/rho_R) * rho_face;
+				massArray_face[n] = 0.5 * (massScalars_L[n] / rho_L + massScalars_R[n] / rho_R) * rho_face;
 			}
 			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massArray_face;
 			const amrex::Real Eint_face = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_face, T_face, massScalars);
