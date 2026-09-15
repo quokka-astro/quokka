@@ -60,6 +60,20 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_whether_SN_explosion(R
 	const double mass_in_Msun = mass_star / C::M_solar;
 	AMREX_ASSERT(mass_in_Msun >= 0.0);
 
+	// Stars below the core-collapse limit never explode. This has to be tested before the interpolation:
+	// the table's first two nodes are the sentinel (0 Msun, fate 0) and the first real entry (9 Msun,
+	// fate 1), so linear interpolation between them crosses the 0.5 threshold at 4.5 Msun and would
+	// report every star above 4.5 Msun as a supernova progenitor. That was harmless while the lowest
+	// individually sampled star was 9 Msun, but particles.min_mass_individual_stars can now go lower.
+	//
+	// 8 Msun is the conventional lower limit for core collapse and is what the fate table's own
+	// coverage implies; stars in [8, 9) Msun still explode (the ramp puts them above 0.5), and every
+	// mass at or above 9 Msun is untouched by this branch, so the tabulated fates there are unchanged.
+	constexpr double min_SN_mass_Msun = 8.0;
+	if (mass_in_Msun < min_SN_mass_Msun) {
+		return false;
+	}
+
 	// Interpolate to find the fate of all masses, using clamp policy to return first/last element for out-of-bounds
 	amrex::Real fate_interp = interpolate_value<BoundaryPolicy::Clamp>(mass_in_Msun, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
 	return (fate_interp >= 0.5);
