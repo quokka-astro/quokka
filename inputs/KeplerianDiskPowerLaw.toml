@@ -1,0 +1,30 @@
+# Krumholz et al. (2004), section 3.4.1, stationary no-accretion disk.
+# Sigma = 0.1 (r0/r) g/cm^2 for r <= r0 = 2e15 cm; background = 1e-6 Sigma_0.
+# Retain length unit dx = 1.85 AU; GM = 1; T = 10 K; mu = 2.33 m_p.
+# The paper prints inconsistent cm/AU lengths; this uses the existing AU choice.
+geometry.prob_lo = [-128.0, -128.0, -4.0]
+geometry.prob_hi = [128.0, 128.0, 4.0]
+quokka.bc = ["ext_dir", "ext_dir", "periodic"]
+amr.n_cell = [256, 256, 8]
+amr.max_level = 0
+amr.max_grid_size = 128
+amr.blocking_factor = 8
+amr.v = 0
+do_reflux = 0
+do_subcycle = 0
+# Periods are measured at r = 4 dx for the continuous disk.
+disk.profile = "power_law"
+disk.orbits = 50.0
+cfl = 0.3
+hydro.artificial_viscosity_coefficient = 0.1
+hydro.use_dual_energy = 0
+hydro.reconstruction_order = 3
+density_floor = 1.0e-7
+plotfile_interval = 10
+checkpoint_interval = -1
+suppress_output = 1
+disk.history_file = "keplerian_disk_history.txt"
+disk.transport_file = "keplerian_disk_transport.txt"
+
+disk.measure_alpha = false
+disk.check_initial = true

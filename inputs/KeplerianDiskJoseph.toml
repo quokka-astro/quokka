@@ -1,0 +1,27 @@
+# Joseph et al. 2023, inviscid Cartesian ring. G=M_star=R0=Sigma_ref=1.
+# Appendix E thermal relaxation; h=.005, tau0=.018, density background=1e-7.
+geometry.prob_lo = [-2.0, -2.0]
+geometry.prob_hi = [2.0, 2.0]
+quokka.bc = ["foextrap", "foextrap", "foextrap"]
+amr.n_cell = [1024, 1024]
+amr.max_level = 0
+amr.max_grid_size = 128
+amr.blocking_factor = 16
+amr.v = 0
+do_reflux = 0
+do_subcycle = 0
+cfl = 0.4
+# Ramp up from a small first step while the central atmosphere adjusts.
+init_shrink = 0.01
+hydro.reconstruction_order = 2
+hydro.plm_limiter = "vanleer"
+hydro.artificial_viscosity_coefficient = 0.0
+hydro.use_dual_energy = 1
+density_floor = 1.0e-15
+temperature_floor = 0.0
+disk.orbits = 748.0
+disk.profile_interval_orbits = 1.0
+disk.damping_periods = 1.0
+plotfile_interval = -1
+checkpoint_interval = 10000
+suppress_output = 1
