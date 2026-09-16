@@ -589,6 +589,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
 
+	static void EnforceLimits(amrex::MultiFab &state_mf);
+
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
 	    -> RadPressureResult;
@@ -899,7 +901,7 @@ template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendR
 	for (int g = 0; g < nGroups_; ++g) {
 		auto E_r = cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_];
 		// If E_r is NaN or below floor, set to floor
-		if (E_r < Erad_floor_) {
+		if (!(E_r >= Erad_floor_)) {
 			cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_] = Erad_floor_;
 			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
 			cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
@@ -923,6 +925,26 @@ template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendR
 			}
 		}
 	}
+}
+
+template <typename problem_t> void RadSystem<problem_t>::EnforceLimits(amrex::MultiFab &state_mf)
+{
+	auto state = state_mf.arrays();
+
+	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		std::array<amrex::Real, nvarHyperbolic_> cons{};
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
+			cons[n] = state[bx](i, j, k, nstartHyperbolic_ + n);
+		}
+
+		if (!isStateValid(cons)) {
+			amendRadState(cons);
+		}
+
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
+			state[bx](i, j, k, nstartHyperbolic_ + n) = cons[n];
+		}
+	});
 }
 
 template <typename problem_t>

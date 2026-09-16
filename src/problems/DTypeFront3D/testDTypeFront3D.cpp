@@ -1006,6 +1006,40 @@ template <> void QuokkaSimulation<DTypeFront3D>::setInitialConditionsOnGrid(quok
 	});
 }
 
+template <> void QuokkaSimulation<DTypeFront3D>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// Refine wherever |grad(x_HI)| * dx > x_HI_grad_threshold.
+	const amrex::Real x_HI_grad_threshold = 0.3;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_cc_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			auto x_HI = [=] AMREX_GPU_DEVICE(int ii, int jj, int kk) noexcept -> amrex::Real {
+				const amrex::Real n_HI = state(ii, jj, kk, HydroSystem<DTypeFront3D>::scalar0_index + 1) / spmasses[1];
+				const amrex::Real n_HII = state(ii, jj, kk, HydroSystem<DTypeFront3D>::scalar0_index + 2) / spmasses[2];
+				const amrex::Real denom = n_HI + n_HII;
+				return (denom > 0.0_rt) ? (n_HI / denom) : 0.0_rt;
+			};
+
+			const amrex::Real x0 = x_HI(i, j, k);
+
+			const amrex::Real del_x = std::max(std::abs(x_HI(i + 1, j, k) - x0), std::abs(x0 - x_HI(i - 1, j, k)));
+			const amrex::Real del_y = std::max(std::abs(x_HI(i, j + 1, k) - x0), std::abs(x0 - x_HI(i, j - 1, k)));
+			const amrex::Real del_z = std::max(std::abs(x_HI(i, j, k + 1) - x0), std::abs(x0 - x_HI(i, j, k - 1)));
+
+			const amrex::Real grad_x_HI = std::max({del_x, del_y, del_z});
+
+			if (grad_x_HI > x_HI_grad_threshold) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
+
 template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 {
 	const int lev = 0;

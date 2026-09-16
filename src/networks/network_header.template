@@ -40,7 +40,6 @@ constexpr int MicrophysicsNumRadVarsPerGroup = 2;
 constexpr int NumChemRadEqs = NumChemBands * MicrophysicsNumRadVarsPerGroup;
 constexpr int NumThermalBands = @NUM_THERMAL_BANDS@;
 constexpr int NumRadEqs = NumChemRadEqs + NumThermalBands;
-constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBandsHeader_{ @CHEM_BANDS@ };
 #endif
 
 // filled via the preprocessor by including NAUX_NETWORK
@@ -49,6 +48,10 @@ constexpr int NumAux = NAUX_NET;
 @PROPERTIES@
 
 namespace {
+
+#ifdef PHOTOCHEMISTRY
+    MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::GpuArray<double, NumChemBands + 1> ChemBandsHeader_{ @CHEM_BANDS@ };
+#endif
 
     MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real aion[NumSpecTotal] = {
        @AION@

@@ -2045,6 +2045,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int l
 	const BL_PROFILE("QuokkaSimulation::FixupState()");
 
 	ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
+
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+		RadSystem<problem_t>::EnforceLimits(state_new_cc_[lev]);
+	}
 }
 
 // Compute a new multifab 'mf' by copying in state from valid region and filling
