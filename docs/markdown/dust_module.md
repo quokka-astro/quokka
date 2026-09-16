@@ -19,7 +19,7 @@ This module implements dust transport and dust-gas source terms. When dust is en
         + (P_{\mathrm{g}} + \tfrac{1}{2} B^2) \mathbf{I}
         - \mathbf{B} \otimes \mathbf{B})
     &= \sum_{n=1}^{N} \rho_{\mathrm{d},n} 
-        \frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{T_{\mathrm{s},n}}
+        \frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{t_{\mathrm{s},n}}
         - \sum_{n=1}^{N} \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
         \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}
         + \rho_{\mathrm{g}} \mathbf{a}_{\mathrm{ext},\mathrm{g}}, \\
@@ -28,14 +28,14 @@ This module implements dust transport and dust-gas source terms. When dust is en
         (E_{\mathrm{g}} + P_{\mathrm{g}} + \tfrac{1}{2} B^2) \mathbf{v}_{\mathrm{g}}
         - (\mathbf{v}_{\mathrm{g}} \cdot \mathbf{B}) \mathbf{B}\right]
     &= \sum_{n=1}^{N} \rho_{\mathrm{d},n}
-        \frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{T_{\mathrm{s},n}}
+        \frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{t_{\mathrm{s},n}}
         \cdot \mathbf{v}_{\mathrm{g}}
         - \sum_{n=1}^{N} \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
         \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
         \cdot \mathbf{v}_{\mathrm{g}}
         + \rho_{\mathrm{g}} \mathbf{a}_{\mathrm{ext},\mathrm{g}} \cdot \mathbf{v}_{\mathrm{g}}
         + \omega_{\rm drag} \sum_{n=1}^{N} \rho_{\mathrm{d},n}
-        \frac{\left|\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right|^{2}}{T_{\mathrm{s},n}}, \\
+        \frac{\left|\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right|^{2}}{t_{\mathrm{s},n}}, \\
 \frac{\partial \mathbf{B}}{\partial t}
     - \nabla \times (\mathbf{v}_{\mathrm{g}} \times \mathbf{B})
     &= 0, \\
@@ -46,7 +46,7 @@ This module implements dust transport and dust-gas source terms. When dust is en
     + \nabla \cdot (\rho_{\mathrm{d},n} 
         \mathbf{v}_{\mathrm{d},n} \otimes \mathbf{v}_{\mathrm{d},n})
     &= \rho_{\mathrm{d},n} 
-        \frac{\mathbf{v}_{\mathrm{g}} - \mathbf{v}_{\mathrm{d},n}}{T_{\mathrm{s},n}}
+        \frac{\mathbf{v}_{\mathrm{g}} - \mathbf{v}_{\mathrm{d},n}}{t_{\mathrm{s},n}}
         + \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
         \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}
         + \rho_{\mathrm{d},n} \mathbf{a}_{\mathrm{ext},\mathrm{d},n},
@@ -63,7 +63,7 @@ where
 -   \\(E_{\mathrm{g}}\\) is the gas total energy density, including magnetic energy when MHD is enabled,
 -   \\(\rho_{\mathrm{d},n}\\) is the dust mass density for dust species \\(n\\) (\\(n \in [1, N]\\)),
 -   \\(\mathbf{v}_{\mathrm{d},n}\\) is the dust velocity for dust species \\(n\\),
--   \\(T_{\mathrm{s},n}\\) is the aerodynamic stopping time for dust species \\(n\\),
+-   \\(t_{\mathrm{s},n}\\) is the aerodynamic stopping time for dust species \\(n\\),
 -   \\(\Omega_{\mathrm{L},n}=q_n|\vec{B}|/(m_n c)\\) is the signed angular gyrofrequency for dust species \\(n\\), where \\(q_n\\) is its signed Heaviside–Lorentz charge, \\(m_n\\) is its grain mass, and \\(c\\) is the speed of light,
 -   \\(\hat{\mathbf{b}}\\) is the unit vector along the magnetic field,
 -   \\(\mathbf{a}_{\mathrm{ext},\mathrm{g}}\\) is the external acceleration applied to the gas,
@@ -162,7 +162,7 @@ where \\(\mathcal{H}\\) is the explicit gas/MHD and dust transport update, and \
 
 `DustSources::computeDustDragAndLorentz` integrates drag and Lorentz forces in the same source solve; it does not operator-split the Lorentz force from drag. The method uses a two-stage generalized implicit Runge-Kutta (GIRK) update for the local gas and dust momenta, with a conservative momentum exchange between the gas and dust that preserves the total gas-dust momentum to roundoff. The magnetic field used by the local source update is obtained by arithmetically averaging each face-centered magnetic-field component to the cell center.
 
-For dust species \\(n\\) and GIRK stage \\(a\\), the relevant local rates in code units are the drag rate \\(\alpha_{a,n} = 1/T_{\mathrm{s},a,n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},a,n} = \xi_{a,n} |\mathbf{B}|\\). The branch timescale is
+For dust species \\(n\\) and GIRK stage \\(a\\), the relevant local rates in code units are the drag rate \\(\alpha_{a,n} = 1/t_{\mathrm{s},a,n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},a,n} = \xi_{a,n} |\mathbf{B}|\\). The branch timescale is
 
 <script type="math/tex; mode=display">
 \tau_{\mathrm{DL}} = \max_{a=1,2}\max_{n=1}^{N}
@@ -175,7 +175,7 @@ The resolved coefficients are used when the full transport timestep satisfies \\
 
 Picard iteration can be enabled with `dust.enable_coefficient_iteration` when the stopping time or dust charge depends on the state updated by \\(\mathcal{C}\\). If iteration is disabled, both stages use coefficients evaluated from the input state. If it is enabled, Quokka iterates the two GIRK stage states and evaluates the coefficients separately at each stage.
 
-For each active dust species and stage, both source paths check the reciprocal stopping time \\(\alpha_{a,n}=1/T_{\mathrm{s},a,n}\\):
+For each active dust species and stage, both source paths check the reciprocal stopping time \\(\alpha_{a,n}=1/t_{\mathrm{s},a,n}\\):
 
 <script type="math/tex; mode=display">
 \left|\alpha_{a,n}^{(k+1)}-\alpha_{a,n}^{(k)}\right|
