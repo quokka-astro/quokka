@@ -140,15 +140,18 @@ auto problem_main() -> int
 	constexpr double max_time = 200.0;
 
 	// Setup boundary conditions
-	auto BCs_cc = quokka::BC<ThermalConductionAnisoProblem>(quokka::BCType::reflect_even);
-		const int nvars_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarTotal_fc;
-		amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-		for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
-				BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
-			}
+	auto BCs_cc = quokka::BC<ThermalConductionAnisoProblem>(quokka::BCType::reflecting);
+	const int nvars_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarTotal_fc;
+	const int nvars_per_dim_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarPerDim_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		int const component_dir = (nvars_per_dim_fc > 0) ? (icomp / nvars_per_dim_fc) : 0;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			int const bc_type = (component_dir == idim) ? amrex::BCType::reflect_even : amrex::BCType::reflect_odd;
+			BCs_fc[icomp].setLo(idim, bc_type);
+			BCs_fc[icomp].setHi(idim, bc_type);
 		}
+	}
 
 	QuokkaSimulation<ThermalConductionAnisoProblem> sim(BCs_cc, BCs_fc);
 
