@@ -42,15 +42,23 @@ template <> struct Physics_Traits<ThermalConductionAnisoProblem> : DefaultPhysic
 	static constexpr double boltzmann_constant = 1.0;
 };
 
-// vector potential psi = -min(r, 1) (only a z-component, independent of z), so that the discrete
-// curl gives Bx = dpsi/dy and By = -dpsi/dx exactly. Clamping r at 1 makes dpsi/dr = 0 for r > 1,
-// so B is exactly zero outside the unit circle -- this keeps the field exactly discretely
-// divergence-free (unlike masking the field itself after computing it from the curl).
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeMagneticVectorPotential_z(amrex::Real x1, amrex::Real x2) -> amrex::Real
 {
+	// Regularization radius for the field-direction singularity at r=0 -- must be << 0.5
+	// (inner edge of the hot ring) and only needs to span a few cells at any resolution tested.
+	constexpr amrex::Real r_core = 0.1;
 	const amrex::Real rad = std::sqrt(x1 * x1 + x2 * x2);
+	if (rad < r_core) {
+		// Quadratic ("solid-body rotation") core: C^1-matched to -min(r,1) at r=r_core, so
+		// B = |dpsi/dr| ramps linearly from 0 at r=0 up to 1 at r=r_core, instead of jumping
+		// straight to |B|=1 with an undefined direction at the origin. Since psi is now a plain
+		// polynomial in x1,x2 near r=0 (no sqrt), the discrete curl is essentially exact there --
+		// no more curvature blowup for a finite-difference stencil to trip over.
+		return -0.5 * rad * rad / r_core - 0.5 * r_core;
+	}
 	return -std::min(rad, 1.0);
 }
+
 
 template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -66,7 +74,8 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 		const amrex::Real x = prob_lo[0] + i * dx[0];
 		const amrex::Real y = prob_lo[1] + j * dx[1];
 		const amrex::Real rad = std::sqrt(x * x + y * y);
-		const amrex::Real theta = std::atan2(y, x);
+		amrex::Real theta = std::atan2(y, x);
+		if (theta < 0.0){ theta += 2.0 * M_PI; }
 		amrex::Real temp = 10.0;
 		if(rad > 0.5 & rad < 0.7 & theta > 11.* M_PI/12.0 & theta < 13.* M_PI/12.0) {
 			temp = 12.0;
@@ -97,14 +106,19 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 		for (int n = 0; n < ncomp_fc; ++n) {
 			state_fc(i, j, k, n) = 0.0; // fill unused quantities with zeros
 		}
+		// x1_L, x2_L are already the corner (nodal) position appropriate to `dir`: for dir==x,
+		// i is nodal so x1_L is the exact x-face position; for dir==y, j is nodal so x2_L is
+		// the exact y-face position. The other (cell-centered) index gives the lower corner of
+		// that cell. No half-cell offset is needed -- see BxFace/ByFace in testDustyOrszagTang.cpp
+		// for the same curl-from-vector-potential pattern.
 		const amrex::Real x1_L = prob_lo[0] + i * dx[0];
 		const amrex::Real x2_L = prob_lo[1] + j * dx[1];
 
 		amrex::Real bval = 0.0;
 		if (dir == quokka::direction::x) {
-			bval = (computeMagneticVectorPotential_z(x1_L - 0.5 * dx[0], x2_L + 0.5 * dx[1]) - computeMagneticVectorPotential_z(x1_L - 0.5 * dx[0], x2_L - 0.5 * dx[1])) / dx[1];
+			bval = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1]) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dx[1];
 		} else if (dir == quokka::direction::y) {
-			bval = -(computeMagneticVectorPotential_z(x1_L + 0.5 * dx[0], x2_L + 0.5 * dx[1]) - computeMagneticVectorPotential_z(x1_L - 0.5 * dx[0], x2_L + 0.5 * dx[1])) / dx[0];
+			bval = -(computeMagneticVectorPotential_z(x1_L + dx[0], x2_L) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dx[0];
 		}
 		// dir == z: Bz = 0 (psi is independent of z), already zero-filled above
 		state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = bval;
