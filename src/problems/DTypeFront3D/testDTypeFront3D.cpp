@@ -76,6 +76,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -202,10 +203,13 @@ template <> struct SimulationData<DTypeFront3D> {
 	amrex::Real flux_ir{};	    // IR photon rate [photons s^-1]; mirrors AddRadSource's photoionize.flux_ir
 	amrex::Real T_ionized{};    // ionized-gas temperature of the analytic D-type solution [K]; computed, not read
 	amrex::Vector<amrex::Real> t_vec_;
-	amrex::Vector<amrex::Real> reff_vec_;	  // ionization-fraction-weighted effective ionized radius [cm]
-	amrex::Vector<amrex::Real> rshell_vec_;	  // measured max-density shell radius, by radial histogram binning [cm]
-	amrex::Vector<amrex::Real> rspitzer_vec_; // closed-form spherical D-type (gas pressure only) at the same times [cm]
-	amrex::Vector<amrex::Real> rode_vec_;	  // numerically integrated D-type front radius, incl. radiation pressure [cm]
+	amrex::Vector<amrex::Real> reff_vec_;	   // ionization-fraction-weighted effective ionized radius [cm]
+	amrex::Vector<amrex::Real> rshell_vec_;	   // measured max-density shell radius, by radial histogram binning [cm]
+	amrex::Vector<amrex::Real> rspitzer_vec_;  // closed-form spherical D-type (gas pressure only) at the same times [cm]
+	amrex::Vector<amrex::Real> rode_vec_;	   // numerically integrated D-type front radius, incl. radiation pressure [cm]
+	amrex::Vector<amrex::Real> dx_finest_vec_; // finest-level cell size at that timestep [cm]; the AMR hierarchy can
+						   // regrid between calls, so this is recorded once per entry rather than
+						   // assumed constant
 	// Running state of the front ODE, advanced one simulation timestep at a time in computeAfterTimestep.
 	// The integration variable is (R, v) with v = dR/dt; see integrate_front.
 	amrex::Real r_ode_last_t_{}; // time the stored ODE state corresponds to [s]
@@ -243,27 +247,29 @@ AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
 // The source sits at the centre of a full cube, so the whole sphere is on the grid and no octant factor is
 // applied -- unlike compute_effective_radius in testDTypeFront.cpp, whose corner source resolves one octant
 // and therefore multiplies the summed volume by 8.
-auto compute_effective_radius(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> amrex::Real
+//
+// Computed with computeVolumeIntegral (which evaluates the integrand at each level's own native cells and
+// combines levels without double-counting cells covered by finer patches) rather than by reading level 0
+// alone. x_HI = n_HI / (n_HI + n_HII) is a density-weighted ratio: n_HI and n_HII individually average down
+// exactly under AMR, but their ratio does not, since averaging them first and then dividing biases x_HI
+// toward whichever species has the higher density in a mixed cell. That is exactly the situation in the
+// transition shell refineGrid tags, where the rarefied ionized cavity and the compressed neutral shell have a
+// large density contrast, so evaluating x_HI from level-0-averaged data would systematically distort the
+// radius this function measures.
+auto compute_effective_radius(QuokkaSimulation<DTypeFront3D> &sim) -> amrex::Real
 {
-	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
-	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
-	auto const state = state_mf.const_arrays();
-	const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-
-	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-		const amrex::Real n_HI = state[box_no](i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + 1) / spmasses[1];
-		const amrex::Real n_HII = state[box_no](i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + 2) / spmasses[2];
-		const amrex::Real denom = n_HI + n_HII;
-		if (denom <= 0.0_rt) {
-			return 0.0_rt;
-		}
-		const amrex::Real x_HI = n_HI / denom;
-		return cell_volume * (1.0_rt - x_HI);
-	});
-
-	auto const &hv = reduce_data.value(reduce_op);
-	amrex::Real total_ionized_volume = amrex::get<0>(hv);
-	amrex::ParallelAllReduce::Sum(total_ionized_volume, amrex::ParallelContext::CommunicatorSub());
+	const amrex::Real total_ionized_volume = sim.computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
+				 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
+		    const amrex::Real n_HI = state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + 1) / spmasses[1];
+		    const amrex::Real n_HII = state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + 2) / spmasses[2];
+		    const amrex::Real denom = n_HI + n_HII;
+		    if (denom <= 0.0_rt) {
+			    return 0.0_rt;
+		    }
+		    const amrex::Real x_HI = n_HI / denom;
+		    return 1.0_rt - x_HI;
+	    });
 	return std::cbrt((3.0_rt * total_ionized_volume) / (4.0_rt * M_PI));
 }
 
@@ -444,25 +450,24 @@ auto compute_gas_plus_binding_energy(amrex::MultiFab const &state_mf, amrex::Gpu
 }
 
 // Domain-integrated gas kinetic energy, 0.5 * rho * v^2 [erg]. All three momentum components contribute in 3D.
-auto compute_kinetic_energy(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> amrex::Real
+//
+// Computed with computeVolumeIntegral, evaluating 0.5*|p|^2/rho at each level's own native cells, rather than
+// by reading level 0 alone. This integrand is a nonlinear (convex) function of the momentum and density
+// components: each of px, py, pz, rho individually averages down exactly under AMR, but 0.5*|p_avg|^2/rho_avg
+// is not generally equal to the volume average of 0.5*|p|^2/rho over the same cells. The two differ most
+// exactly where AMR refines -- across the shock the shell drives ahead of the ionization front -- so reading
+// level-0-averaged data would systematically bias this energy budget term.
+auto compute_kinetic_energy(QuokkaSimulation<DTypeFront3D> &sim) -> amrex::Real
 {
-	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
-	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
-	auto const state = state_mf.const_arrays();
-	const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-
-	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-		const amrex::Real rho = state[box_no](i, j, k, HydroSystem<DTypeFront3D>::density_index);
-		const amrex::Real px = state[box_no](i, j, k, HydroSystem<DTypeFront3D>::x1Momentum_index);
-		const amrex::Real py = state[box_no](i, j, k, HydroSystem<DTypeFront3D>::x2Momentum_index);
-		const amrex::Real pz = state[box_no](i, j, k, HydroSystem<DTypeFront3D>::x3Momentum_index);
-		return cell_volume * 0.5_rt * (px * px + py * py + pz * pz) / rho;
-	});
-
-	auto const &hv = reduce_data.value(reduce_op);
-	amrex::Real total = amrex::get<0>(hv);
-	amrex::ParallelAllReduce::Sum(total, amrex::ParallelContext::CommunicatorSub());
-	return total;
+	return sim.computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
+				 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
+		    const amrex::Real rho = state(i, j, k, HydroSystem<DTypeFront3D>::density_index);
+		    const amrex::Real px = state(i, j, k, HydroSystem<DTypeFront3D>::x1Momentum_index);
+		    const amrex::Real py = state(i, j, k, HydroSystem<DTypeFront3D>::x2Momentum_index);
+		    const amrex::Real pz = state(i, j, k, HydroSystem<DTypeFront3D>::x3Momentum_index);
+		    return 0.5_rt * (px * px + py * py + pz * pz) / rho;
+	    });
 }
 
 // Photoionization-equilibrium temperatures of the ionized and neutral gas, obtained from the same
@@ -1052,9 +1057,12 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 	// sphere rather than resolving the shell.
 	const int n_bins = geom[lev].Domain().length(0) / 2;
 
-	const amrex::Real r_effective = compute_effective_radius(state_new_cc_[lev], dx);
+	const amrex::Real r_effective = compute_effective_radius(*this);
 	const amrex::Real r_shell = compute_shell_radius(state_new_cc_[lev], dx, prob_lo, prob_hi, n_bins);
 	const amrex::Real r_spitzer = spitzer_radius(t, userData_.flux_ion, userData_.primary_species_2, userData_.T_ionized);
+	// Finest-level cell size, for plotting an effective-radius uncertainty band; the domain is cubic with equal
+	// cell counts on each axis, so dx is isotropic and any one component represents it.
+	const amrex::Real dx_finest = geom[finestLevel()].CellSizeArray()[0];
 
 	amrex::Real r_ode = std::numeric_limits<amrex::Real>::quiet_NaN();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -1087,6 +1095,7 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 	userData_.rshell_vec_.push_back(r_shell);
 	userData_.rspitzer_vec_.push_back(r_spitzer);
 	userData_.rode_vec_.push_back(r_ode);
+	userData_.dx_finest_vec_.push_back(dx_finest);
 
 	// ------------- Untested block of claude generated code -------------
 
@@ -1119,7 +1128,7 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 	// clocks run at different rates, so a snapshot total is not meaningful as an instantaneous energy budget.
 	if (RadSystem_Traits<DTypeFront3D>::c_hat_over_c == 1.0) {
 		const amrex::Real E_internal = compute_gas_internal_energy(state_new_cc_[lev], dx);
-		const amrex::Real E_kinetic = compute_kinetic_energy(state_new_cc_[lev], dx);
+		const amrex::Real E_kinetic = compute_kinetic_energy(*this);
 		const amrex::Real E_binding = compute_binding_energy(state_new_cc_[lev], dx);
 		const amrex::Real E_rad_ir = compute_group_total_erad(state_new_cc_[lev], dx, group_ir);
 		const amrex::Real E_rad_optical = compute_group_total_erad(state_new_cc_[lev], dx, group_optical);
@@ -1435,7 +1444,7 @@ auto problem_main() -> int
 	if (RadSystem_Traits<DTypeFront3D>::c_hat_over_c == 1.0) {
 		const amrex::Real E_rad_final = compute_total_erad(sim.state_new_cc_[0], dx);
 		const amrex::Real E_gas_final = compute_gas_plus_binding_energy(sim.state_new_cc_[0], dx);
-		const amrex::Real E_kin_final = compute_kinetic_energy(sim.state_new_cc_[0], dx);
+		const amrex::Real E_kin_final = compute_kinetic_energy(sim);
 		const amrex::Real E_final = E_rad_final + E_gas_final + E_kin_final;
 		const amrex::Real E_expected = sim.userData_.energy_initial_ + sim.userData_.energy_injected_;
 
@@ -1463,23 +1472,45 @@ auto problem_main() -> int
 		const auto n = static_cast<int>(sim.userData_.t_vec_.size());
 		std::vector<amrex::Real> t_Myr(n);
 		std::vector<amrex::Real> r_eff_pc(n);
-		std::vector<amrex::Real> r_shell_pc(n);
+		// std::vector<amrex::Real> r_shell_pc(n);
 		std::vector<amrex::Real> r_spitzer_pc(n);
 		std::vector<amrex::Real> r_ode_pc(n);
+		// Uncertainty band around the effective radius, +/- 3 cells of whatever level was finest at that
+		// timestep. dx_finest_vec_ is recorded per entry rather than assumed constant since the AMR hierarchy
+		// can regrid between calls to computeAfterTimestep.
+		std::vector<amrex::Real> r_eff_lower_pc(n);
+		std::vector<amrex::Real> r_eff_upper_pc(n);
 		for (int i = 0; i < n; ++i) {
 			t_Myr[i] = sim.userData_.t_vec_[i] / seconds_per_Myr;
 			r_eff_pc[i] = sim.userData_.reff_vec_[i] / cm_per_pc;
-			r_shell_pc[i] = sim.userData_.rshell_vec_[i] / cm_per_pc;
+			// r_shell_pc[i] = sim.userData_.rshell_vec_[i] / cm_per_pc;
 			r_spitzer_pc[i] = sim.userData_.rspitzer_vec_[i] / cm_per_pc;
 			r_ode_pc[i] = sim.userData_.rode_vec_[i] / cm_per_pc;
+			const amrex::Real band_pc = 3.0_rt * sim.userData_.dx_finest_vec_[i] / cm_per_pc;
+			r_eff_lower_pc[i] = r_eff_pc[i] - band_pc;
+			r_eff_upper_pc[i] = r_eff_pc[i] + band_pc;
 		}
 		matplotlibcpp::clf();
-		std::map<std::string, std::string> shell_args;
-		shell_args["label"] = "max-density shell";
-		shell_args["color"] = "C0";
+		// Max-density shell radius is still computed and written to the CSV above, but is left off this plot:
+		// it is a diagnostic only (see the comment on compute_shell_radius), and cluttered the front-radius
+		// comparison this plot is meant to show.
+		// std::map<std::string, std::string> shell_args;
+		// shell_args["label"] = "max-density shell";
+		// shell_args["color"] = "C0";
 		std::map<std::string, std::string> eff_args;
 		eff_args["label"] = "effective ionized radius";
 		eff_args["color"] = "C1";
+		std::map<std::string, std::string> eff_band_args;
+		eff_band_args["label"] = "effective radius +/- 3 dx (finest level)";
+		// matplotlibcpp's map-based kwargs interface passes every value through PyUnicode_FromString, with no
+		// numeric path (see src/util/matplotlibcpp.h fill_between/plot): a genuinely numeric kwarg like
+		// alpha=0.25 or linewidth=0 arrives in Python as the *string* "0.25", and Artist.set_alpha rejects a
+		// non-numeric alpha outright. That raises inside fill_between(), which (like plot()) does not check its
+		// own return value here, so the exception is swallowed -- but it leaves the embedded interpreter with a
+		// pending Python exception that poisons the next plot call (xlabel() then throws "Call to xlabel()
+		// failed." and crashes the whole run). Get translucency through the color string itself instead, via an
+		// 8-digit #RRGGBBAA hex code (matplotlib has parsed the trailing alpha channel since 2.0).
+		eff_band_args["color"] = "#ff7f0e40"; // matplotlib "C1" orange at ~25% alpha
 		std::map<std::string, std::string> spitzer_args;
 		spitzer_args["label"] = "Spitzer (gas pressure only, 4/7 law)";
 		spitzer_args["color"] = "k";
@@ -1488,7 +1519,8 @@ auto problem_main() -> int
 		ode_args["label"] = "ODE (gas + radiation pressure)";
 		ode_args["color"] = "k";
 		ode_args["linestyle"] = ":";
-		matplotlibcpp::plot(t_Myr, r_shell_pc, shell_args);
+		// matplotlibcpp::plot(t_Myr, r_shell_pc, shell_args);
+		matplotlibcpp::fill_between(t_Myr, r_eff_lower_pc, r_eff_upper_pc, eff_band_args);
 		matplotlibcpp::plot(t_Myr, r_eff_pc, eff_args);
 		matplotlibcpp::plot(t_Myr, r_spitzer_pc, spitzer_args);
 		matplotlibcpp::plot(t_Myr, r_ode_pc, ode_args);

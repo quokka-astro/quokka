@@ -1050,6 +1050,14 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 #endif
 
 		amrex::Real localDensityFloor = density_floor_func(x, y, z, densityFloor);
+		const amrex::Real px = state[bx](i, j, k, x1Momentum_index);
+		const amrex::Real py = state[bx](i, j, k, x2Momentum_index);
+		const amrex::Real pz = state[bx](i, j, k, x3Momentum_index);
+		const amrex::Real rho = state[bx](i, j, k, density_index);
+		const amrex::Real vel = std::sqrt(px * px + py * py + pz * pz) / rho;
+		// if (vel > C::c_light / 1000.0) {
+		//			amrex::Abort("EnforceLimits: Superluminal velocity.");
+		//			}
 
 		// Enforce density floor (do not adjust energies here!!)
 		amrex::Real rho_new = NAN;

@@ -50,7 +50,18 @@ constexpr int NumAux = NAUX_NET;
 namespace {
 
 #ifdef PHOTOCHEMISTRY
-    MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::GpuArray<double, NumChemBands + 1> ChemBandsHeader_{ @CHEM_BANDS@ };
+    // Plain constexpr, deliberately NOT AMREX_GPU_MANAGED: the band edges are compile-time constants, so
+    // this folds straight into device code. Combining the two qualifiers the way aion/zion below do is
+    // broken for a variable that host code only ever uses in constant expressions:
+    //   - HIP_CONSTEXPR (= constexpr under HIP) lets the *host* compiler fold every use, so it emits no
+    //     storage at all for this internal-linkage variable -- the host object has no symbol for it.
+    //   - AMREX_GPU_MANAGED (__managed__) stops the *device* compiler from folding; it emits a real managed
+    //     object plus a shadow pointer that __hipRegisterManagedVar is supposed to fill in at module load.
+    // With no host symbol that registration never happens, the shadow pointer stays null, and the first
+    // device read -- get_ionizing_band_photon_energy() in actual_rhs.H -- dies with
+    // "Memory access fault by GPU node-N ... on address (nil)". aion/zion are odr-used from host code, so
+    // they do get emitted and registered; these band edges are not.
+    MICROPHYSICS_UNUSED constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBandsHeader_{ @CHEM_BANDS@ };
 #endif
 
     MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real aion[NumSpecTotal] = {
