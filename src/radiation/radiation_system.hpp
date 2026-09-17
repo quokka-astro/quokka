@@ -1778,19 +1778,21 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		return dLHS_dTd;
 	};
 
-	// Scale for the convergence test. The residual balances the radiative term against the gas-dust collisional
-	// term, so the scale must contain both: the collisional term vanishes identically when the gas-dust coupling
-	// coefficient N_d is zero, and a scale of zero would make the convergence test unsatisfiable.
+	// Scale for the convergence test, which must be strictly positive and have the units of the residual, i.e.
+	// radiation energy density. The gas-dust collisional term vanishes when the coupling coefficient N_d is zero
+	// and the radiative terms vanish when the opacity is zero, so neither is enough on its own. sum(fourPiBoverC)
+	// is the blackbody energy density at the initial dust temperature; it is positive for any T_d_init > 0 and so
+	// keeps the scale non-zero in every degenerate case.
 	double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas;
 	if constexpr (nGroups_ == 1) {
 		const auto fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d_init);
 		const auto kappaE = ComputeEnergyMeanOpacity(rho, T_d_init);
 		const auto kappaP = ComputePlanckOpacity(rho, T_d_init);
-		Lambda_compare += c_hat_ * dt * rho * (kappaE * Erad[0] + kappaP * fourPiBoverC);
+		Lambda_compare += c_hat_ * dt * rho * (kappaE * Erad[0] + kappaP * fourPiBoverC) + fourPiBoverC;
 	} else {
 		const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d_init, rad_boundaries);
 		const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d_init, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
-		Lambda_compare += c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad + opacity_terms.kappaP * fourPiBoverC);
+		Lambda_compare += c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad + opacity_terms.kappaP * fourPiBoverC) + sum(fourPiBoverC);
 	}
 
 	const auto T_d = BackwardEulerOneVariable(rhs, jac, T_d_init, Lambda_compare);
