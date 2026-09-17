@@ -23,8 +23,7 @@
 #include "hydro/hydro_system.hpp"
 #include "util/BC.hpp"
 
-struct RTProblem {
-};
+struct RTProblem {};
 
 template <> struct quokka::EOS_Traits<RTProblem> {
 	static constexpr double gamma = 1.4;

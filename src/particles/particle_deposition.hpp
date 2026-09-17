@@ -705,6 +705,10 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 	const double d_pz = local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 	const double d_e = local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
 
+	// SN feedback does not change the magnetic field, so the magnetic energy is the same before and after.
+	// It is zero unless MHD is enabled, and must be excluded from the gas internal energy budget below.
+	const double Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
+
 	const double rho_new = rho + d_rho;
 	double px_new = px + d_px;
 	double py_new = py + d_py;
@@ -713,7 +717,8 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 
 	const double d_e_int_d_rho = e_int / rho;
 	const double e_int_new_tmp = d_e_int_d_rho * rho_new;
-	const double e_int_plus_kinetic = e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+	// total energy (internal + kinetic + magnetic) implied by holding the specific internal energy fixed
+	const double e_int_plus_kinetic = ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho_new, px_new, py_new, pz_new, e_int_new_tmp, Emag);
 
 	const Real uncertainty_tol = static_cast<Real>(5.) * std::numeric_limits<Real>::epsilon();
 
@@ -721,7 +726,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 		e_tot_new = std::max(e_int_plus_kinetic, e_tot_new);
 	} else {
 		// find the lambda such that e_int_plus_kinetic == e_tot_new
-		const double e_kinetic_max = e_tot_new - e_int_new_tmp;
+		const double e_kinetic_max = e_tot_new - e_int_new_tmp - Emag;
 		AMREX_ASSERT(e_kinetic_max >= 0.0);
 
 		// If e_kinetic_max < (0.5 * (px * px + py * py + pz * pz) / rho_new), it means the SN energy (10^51 erg) is not enough to accelerate
@@ -733,7 +738,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 			px_new = rho_new * (px / rho);
 			py_new = rho_new * (py / rho);
 			pz_new = rho_new * (pz / rho);
-			e_tot_new = e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+			e_tot_new = ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho_new, px_new, py_new, pz_new, e_int_new_tmp, Emag);
 		} else {
 
 			// Find analytical solution of the following equation:
@@ -775,7 +780,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 		}
 	}
 
-	const double e_int_new = e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+	const double e_int_new = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho_new, px_new, py_new, pz_new, e_tot_new, Emag);
 	AMREX_ASSERT(e_int_new > 0.0);
 	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
 	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
@@ -839,7 +844,9 @@ addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex
 	const double py_new = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 	const double pz_new = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 	const double e_new = local_state(i, j, k, HydroSystem<problem_t>::energy_index) + local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
-	const double e_int_new = e_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+	// SN feedback does not change the magnetic field; the magnetic energy is zero unless MHD is enabled
+	const double Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
+	const double e_int_new = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho_new, px_new, py_new, pz_new, e_new, Emag);
 
 	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
 	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;

@@ -636,7 +636,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 
 		const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
 
-		const double compare = Egas_guess + cscale * lambda_gd_times_dt + sum(abs(cooling_tend)) + CR_heating;
+		// Sum the magnitudes of the terms in the residual: lambda_gd_times_dt is signed, so the raw sum could
+		// cancel to zero and leave the convergence test unsatisfiable. Egas_guess > 0 keeps the scale positive.
+		const double compare = Egas_guess + std::abs(cscale * lambda_gd_times_dt) + sum(abs(cooling_tend)) + std::abs(CR_heating);
 
 		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
 		auto rhs = [=](double Egas_) -> double {
@@ -1037,7 +1039,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// compute cooling/heating terms; implicitly update Egas_guess
 
 		const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
-		const double compare = Egas_guess + cscale * lambda_gd_times_dt + sum(abs(cooling_tend)) + CR_heating;
+		// Sum the magnitudes of the terms in the residual: lambda_gd_times_dt is signed, so the raw sum could
+		// cancel to zero and leave the convergence test unsatisfiable. Egas_guess > 0 keeps the scale positive.
+		const double compare = Egas_guess + std::abs(cscale * lambda_gd_times_dt) + sum(abs(cooling_tend)) + std::abs(CR_heating);
 
 		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) - PE_heating_energy_derivative * EradVec_guess[nGroups_ -
 		// 1];

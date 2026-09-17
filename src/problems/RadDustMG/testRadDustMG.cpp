@@ -18,8 +18,7 @@
 #include <fstream>
 #include <vector>
 
-struct DustProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct DustProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 // In this test, the hydro time step is dt = CFL * dx / (chat / 10) = 0.8 * (1/8) / (1e7 / 10) = 1e-8
 

@@ -31,8 +31,7 @@
 
 using amrex::Real;
 
-struct HighMachProblem {
-};
+struct HighMachProblem {};
 
 template <> struct quokka::EOS_Traits<HighMachProblem> {
 	static constexpr double gamma = 5. / 3.;

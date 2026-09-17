@@ -33,8 +33,7 @@
 #endif
 #include "util/BC.hpp"
 
-struct ShocktubeProblem {
-};
+struct ShocktubeProblem {};
 
 template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = (5. / 3.);

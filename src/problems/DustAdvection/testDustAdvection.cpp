@@ -9,8 +9,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct DustAdvection {
-};
+struct DustAdvection {};
 
 constexpr double initial_Egas = 1.0e-9;
 constexpr double rho = 1.0;

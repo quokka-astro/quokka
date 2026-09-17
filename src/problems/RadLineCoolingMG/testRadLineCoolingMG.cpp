@@ -22,8 +22,7 @@
 
 static constexpr bool export_csv = true;
 
-struct CoolingProblemMG {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct CoolingProblemMG {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int n_groups_ = 4;
 constexpr amrex::GpuArray<double, 5> rad_boundaries_ = {1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};

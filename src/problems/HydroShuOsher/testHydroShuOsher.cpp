@@ -21,8 +21,7 @@
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
 
-struct ShocktubeProblem {
-};
+struct ShocktubeProblem {};
 
 template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
