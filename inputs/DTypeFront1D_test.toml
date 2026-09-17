@@ -1,0 +1,99 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  [-4.9371e19, -4.9371e19, -4.9371e19]
+geometry.prob_hi     =  [ 4.9371e19,  4.9371e19,  4.9371e19]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [32, 32, 32]
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 8     # grid size must be divisible by this
+amr.max_grid_size   = 128
+amr.n_error_buf     = 3
+amr.grid_eff        = 0.7
+regrid_interval     = 30
+
+do_reflux = 1
+do_subcycle = 1
+suppress_output = 0
+
+temperature_floor = 10.0
+
+
+
+
+
+density_floor = 1.0e-30
+
+stop_time = 3.15576e13
+max_timesteps = 2   # dust-solver smoke test: 2 steps only, nothing propagates
+
+checkpoint_interval = 25
+checkpoint_prefix = "ChkDType1D"
+plotfile_interval = -1
+plotfile_prefix = "DType1D"
+
+photochemistry.enabled = 1
+network.energy_switch = 1
+network.recombination_temperature_dependent = 1
+network.allow_mixed_cell_cooling = 0
+network.dust_kappa = 1000.0   # cm^2/g; dust opacity to ionizing radiation, only used when ISM_Traits::dust_chemical_band_absorption is true
+
+photoionize.primary_species_1 = 1.0e-10   # e
+photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
+photoionize.primary_species_3 = 1.0e-10   # H+
+photoionize.temperature = 42.0   # K; close to the KI equilibrium (41.77 K) so the ambient gas relaxes within stop_time
+
+# Per-side areal photon fluxes [photons cm^-2 s^-1], chosen so the volumetric photon injection
+# rate density in the central deposition cell equals that of DTypeFront3D_test.toml, which ships a
+# total photon RATE [photons s^-1] spread over a Wendland-C2 kernel instead.
+#
+#   3D (testDTypeFront3D.cpp:876,887):  n_dot = Q * w_hat / dx^3
+#   1D (testDTypeFront1D.cpp:679-681):  n_dot = F / dx        (source_cells = 1)
+#   => F = Q * w_hat / dx^2
+#
+# w_hat = W_peak / norm_sum = 0.1202995 is the kernel's dimensionless peak weight. The source centre
+# lands exactly on a cell corner ((x0-prob_lo)/dx = 16.0, so frac = 0), so the peak is 8-fold
+# degenerate and the kernel's effective volume is 1/w_hat = 8.3126 dx^3 -- NOT one cell. Omitting
+# w_hat (i.e. F = Q/dx^2) overshoots by that same 8.3126x.
+#
+# dx = 9.8742e19 / 32 = 3.0856875e18 cm, dx^2 = 9.5214673e36 cm^2.
+photoionize.flux_ion     = 1.26346e10   # = 1.0e48 * 0.1202995 / dx^2
+photoionize.flux_optical = 3.79037e12   # = 3.0e50 * 0.1202995 / dx^2
+
+
+
+photoionize.kappa_ir = 1.0e-2
+photoionize.kappa_optical = 1000
+photoionize.beamed = 0
+
+radiation.iteration_tolerance = 1e-10
+radiation.dust_gas_interaction_coeff = 0.0
+
+integrator.rosenbrock_tableau = 3
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2
+
+integrator.atol_spec                     = 1.0e-3   # cm^-3
+integrator.atol_enuc                     = 1.24e8   # erg/g; c_v * 1 K temperature accuracy
+integrator.atol_rad_num                  = 1.0e-6   # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3   # cm^-3; = atol_spec
+integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at the front
+

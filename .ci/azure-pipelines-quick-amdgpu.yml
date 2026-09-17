@@ -44,8 +44,8 @@ jobs:
         git fetch origin "$TARGET_BRANCH"
         MERGE_BASE=$(git merge-base FETCH_HEAD HEAD)
         CHANGED=$(git diff --name-only "$MERGE_BASE" HEAD)
-        # TEMPORARY: restrict quick CI to DTypeFront3D only. Revert this line before merging.
-        PROBLEMS=$(echo "$CHANGED" | grep '^src/problems/' | awk -F'/' '{print $3}' | sort -u | grep -v '^$' | grep -x 'DTypeFront3D')
+        # TEMPORARY: restrict quick CI to DTypeFront1D and DTypeFront3D only. Revert this line before merging.
+        PROBLEMS=$(echo "$CHANGED" | grep '^src/problems/' | awk -F'/' '{print $3}' | sort -u | grep -v '^$' | grep -E '^(DTypeFront1D|DTypeFront3D)$')
         if [ -z "$PROBLEMS" ]; then
           echo "##[section]No src/problems/ files changed in this PR."
           echo "This pipeline only builds and tests problems modified in the PR."
