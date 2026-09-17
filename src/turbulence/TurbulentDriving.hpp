@@ -97,14 +97,51 @@ template <typename problem_t> class turbulentDriving
 		update(time, state);
 		const amrex::Real dt = dt_in;
 
+		amrex::MultiFab forcing(state.boxArray(), state.DistributionMap(), AMREX_SPACEDIM, 0);
+
+		// mass-weighted totals needed to remove the net mean flow the forcing would otherwise inject
+		amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
+				 amrex::ReduceOpSum>
+		    reduce_op;
+		amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> reduce_data(reduce_op);
+
 		for (amrex::MFIter mf(state); mf.isValid(); ++mf) {
 			const amrex::Box &bx = mf.validbox();
 			auto const &data = state.array(mf);
 
-			amrex::FArrayBox axFab(bx, AMREX_SPACEDIM, amrex::The_Async_Arena());
-			amrex::Array4<amrex::Real> const ax = axFab.array();
-
+			amrex::FArrayBox &axFab = forcing[mf];
 			tg.get_turb_vector_unigrid(axFab, cellSizes, probLo);
+			auto const &ax = forcing.const_array(mf);
+
+			reduce_op.eval(bx, reduce_data,
+				       [=] AMREX_GPU_DEVICE(int i, int j, int k)
+					   -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+					       const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
+					       const amrex::Real px = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+					       const amrex::Real py = data(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+					       const amrex::Real pz = data(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+
+					       return {rho, px, py, pz, rho * ax(i, j, k, 0), rho * ax(i, j, k, 1), rho * ax(i, j, k, 2)};
+				       });
+		}
+
+		auto [sum_rho, sum_px, sum_py, sum_pz, sum_rax, sum_ray, sum_raz] = reduce_data.value();
+
+		amrex::GpuArray<amrex::Real, 7> reduce_vec = {sum_rho, sum_px, sum_py, sum_pz, sum_rax, sum_ray, sum_raz};
+		amrex::ParallelDescriptor::ReduceRealSum(reduce_vec.data(), 7);
+
+		// mean velocity the forcing would inject this step, plus any mean velocity already present;
+		// subtracting this from every cell keeps the domain-mean velocity pinned at zero every step
+		const amrex::GpuArray<amrex::Real, 3> mean_correction = {
+		    reduce_vec[1] / reduce_vec[0] + dt * reduce_vec[4] / reduce_vec[0],
+		    reduce_vec[2] / reduce_vec[0] + dt * reduce_vec[5] / reduce_vec[0],
+		    reduce_vec[3] / reduce_vec[0] + dt * reduce_vec[6] / reduce_vec[0],
+		};
+
+		for (amrex::MFIter mf(state); mf.isValid(); ++mf) {
+			const amrex::Box &bx = mf.validbox();
+			auto const &data = state.array(mf);
+			auto const &ax = forcing.const_array(mf);
 
 			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
@@ -113,7 +150,7 @@ template <typename problem_t> class turbulentDriving
 
 				for (int m = 0; m < AMREX_SPACEDIM; m++) {
 					const amrex::Real vel = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index + m) / rho;
-					const amrex::Real dMom = ax(i, j, k, m) * dt * rho;
+					const amrex::Real dMom = (ax(i, j, k, m) * dt - mean_correction[m]) * rho;
 
 					data(i, j, k, HydroSystem<problem_t>::x1Momentum_index + m) += dMom;
 					dE += vel * dMom + dMom * dMom / (2 * rho);
