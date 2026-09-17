@@ -43,7 +43,13 @@
 
 namespace quokka::turbulence
 {
-template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> amrex::GpuArray<amrex::Real, 3>;
+// mass-weighted mean velocity and velocity dispersion of the computational domain
+struct DispersionResult {
+	amrex::GpuArray<amrex::Real, 3> mean;
+	amrex::GpuArray<amrex::Real, 3> dispersion;
+};
+
+template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> DispersionResult;
 
 template <typename problem_t> class turbulentDriving
 {
@@ -52,13 +58,32 @@ template <typename problem_t> class turbulentDriving
 	bool updated = false;
 	amrex::GpuArray<amrex::Real, 3> disp = {-1.0, -1.0, -1.0};
 
+	// the forcing pattern is exactly zero-mean by construction, but the momentum source applied
+	// is density-weighted, so a net mean flow can still build up if the forcing correlates with
+	// density over time (see issue #2293); this stays small for weakly compressible turbulence,
+	// but can grow to a large fraction of the dispersion for strongly compressible turbulence
+	static constexpr amrex::Real mean_flow_to_dispersion_threshold = 0.1;
+
 	void update(const amrex::Real &time, amrex::MultiFab &state)
 	{
 		updated = tg.is_update_available(time);
 
 		if (updated) {
-			disp = quokka::turbulence::calculate_dispersion<problem_t>(state);
+			const DispersionResult result = quokka::turbulence::calculate_dispersion<problem_t>(state);
+			disp = result.dispersion;
 			tg.check_for_update(time, disp.data());
+
+			const amrex::Real mean_mag =
+			    std::sqrt(result.mean[0] * result.mean[0] + result.mean[1] * result.mean[1] + result.mean[2] * result.mean[2]);
+			const amrex::Real disp_mag = std::sqrt(disp[0] * disp[0] + disp[1] * disp[1] + disp[2] * disp[2]);
+
+			if (mean_mag > mean_flow_to_dispersion_threshold * disp_mag) {
+				const std::string abort_msg =
+				    std::format("[FATAL] TurbulentDriving: mean flow ({:.3e}) exceeds {:.0f}% of the velocity dispersion "
+						"({:.3e}) at time {:.3e}; the density-weighted forcing has built up a net bulk flow (see issue #2293).",
+						mean_mag, mean_flow_to_dispersion_threshold * 100.0, disp_mag, time);
+				amrex::Abort(abort_msg.c_str());
+			}
 		}
 	}
 
@@ -103,8 +128,8 @@ template <typename problem_t> class turbulentDriving
 	}
 };
 
-// Function to calculate the mass weighted velocity dispersion in the computational domain
-template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> amrex::GpuArray<amrex::Real, 3>
+// Function to calculate the mass weighted mean velocity and velocity dispersion in the computational domain
+template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> DispersionResult
 {
 	amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
 			 amrex::ReduceOpSum>
@@ -153,7 +178,7 @@ template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) 
 	const amrex::Real dispy = std::sqrt(std::max(0.0, (total_pvy / total_rho) - (v_avg_y * v_avg_y)));
 	const amrex::Real dispz = std::sqrt(std::max(0.0, (total_pvz / total_rho) - (v_avg_z * v_avg_z)));
 
-	return {dispx, dispy, dispz};
+	return DispersionResult{.mean = {v_avg_x, v_avg_y, v_avg_z}, .dispersion = {dispx, dispy, dispz}};
 }
 } // namespace quokka::turbulence
 
