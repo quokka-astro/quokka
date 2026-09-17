@@ -52,22 +52,25 @@ amrex::IntVect FaceMinusOne(int i, int j, int k)
 // Declarations only -- see the definitions below AnisoConduction for what each of these actually
 // does. Declared here so that AnisoConduction::ComputeExplicit (which calls all four) can be read
 // first; scroll down past the class for the bodies.
-template <typename problem_t, FluxDir DIR>
-void ComputeFaceUnitBField(amrex::MultiFab &bhat_fc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int reconstructionOrder,
-			   SlopeLimiter plmLimiter, int nghost);
 
-template <FluxDir DIR>
-void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &temperature, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int comp);
+// Unit B-field at mesh vertices ("corners"), built from FACE-CENTERED input data (state_fc), shared
+// by all three flux directions -- see the definition below for details. bhat_corner_mf must already
+// be defined by the caller on a fully-nodal box array, e.g.
+// amrex::convert(state.boxArray(), amrex::IntVect::TheUnitVector()).
+template <typename problem_t>
+void ComputeCornerFC(amrex::MultiFab &bhat_corner_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int nghost);
+
+// (dT/dx, dT/dy, dT/dz), n, and qsat at mesh vertices ("corners"), built from CELL-CENTERED input
+// data (primVar), on the same fully-nodal box array as ComputeCornerFC's bhat_corner_mf -- see the
+// definition below for details.
+template <typename problem_t>
+void ComputeCornerCC(amrex::MultiFab &gradT_corner_mf, amrex::MultiFab &n_corner_mf, amrex::MultiFab &qsat_corner_mf, amrex::MultiFab const &primVar,
+		     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real mean_molecular_weight, amrex::Real saturation_factor,
+		     amrex::Real flux_limiter_phi, int nghost);
 
 template <FluxDir DIR>
 void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &bhat_fc, amrex::MultiFab const &gradT_fc, amrex::MultiFab const &n_fc,
 			    amrex::Real kappa_parallel, amrex::Real kappa_perp, amrex::MultiFab const &q_sat_fc);
-
-// Computes both the face number density and the saturation flux in a single pass, since both are
-// derived from the same (rho, T) face average -- see the definition below for details.
-template <typename problem_t, FluxDir DIR>
-void ComputeFaceNumberDensityAndSaturationFlux(amrex::MultiFab &n_fc_mf, amrex::MultiFab &qsat_fc_mf, amrex::MultiFab const &primVar,
-					       amrex::Real mean_molecular_weight, amrex::Real saturation_factor, amrex::Real flux_limiter_phi);
 
 template <typename problem_t> class AnisoConduction
 {
@@ -151,59 +154,45 @@ template <typename problem_t> class AnisoConduction
 			}
 		});
 
-		// Unit B-field at each face (bx, by, bz), populated only when MHD is enabled (zeroed
-		// otherwise, so a non-MHD build gets zero flux rather than reading uninitialized data).
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> bhat_fc;
-		// gradT at each face (dT/dx, dT/dy, dT/dz), fixed physical (x,y,z) order -- see ComputeFaceGradT.
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> gradT_fc;
-		const int ng_reconstruct = params.ng_reconstruct;
+		// heat_flux at each face -- the actual per-direction output of this routine.
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			bhat_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 3, 0);
-			bhat_fc[idim].setVal(0.0);
-			gradT_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 3, 0);
 			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
 			heat_flux[idim].setVal(0.0);
 		}
 
+		// Unit B-field, gradT, n, and qsat at mesh vertices ("corners") -- direction-independent, so
+		// computed once (unlike the old per-face bhat_fc/gradT_fc/n_fc/q_sat_fc) and shared by all
+		// three DIR-face flux calculations below. Each box's own fully-nodal valid region already
+		// extends one node beyond its cell range in every direction, covering both the "lower" and
+		// "upper" transverse corners of every face in that box, so no ghost cells are needed on these
+		// corner MultiFabs themselves -- only the *inputs* (state_fc, primVar) need their own
+		// pre-existing ghost cells to fill a box's boundary corners.
+		amrex::BoxArray const ba_corner = amrex::convert(state.boxArray(), amrex::IntVect::TheUnitVector());
+		amrex::MultiFab bhat_corner(ba_corner, state.DistributionMap(), 3, 0);
+		amrex::MultiFab gradT_corner(ba_corner, state.DistributionMap(), 3, 0);
+		amrex::MultiFab n_corner(ba_corner, state.DistributionMap(), 1, 0);
+		amrex::MultiFab qsat_corner(ba_corner, state.DistributionMap(), 1, 0);
+		bhat_corner.setVal(0.0); // zeroed when MHD is disabled, so a non-MHD build gets zero flux rather than reading uninitialized data.
+
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			ComputeFaceUnitBField<problem_t, FluxDir::X1>(bhat_fc[0], state_fc, params.reconstruction_order, params.plm_limiter, ng_reconstruct);
-#if AMREX_SPACEDIM >= 2
-			ComputeFaceUnitBField<problem_t, FluxDir::X2>(bhat_fc[1], state_fc, params.reconstruction_order, params.plm_limiter, ng_reconstruct);
-#endif
-#if AMREX_SPACEDIM == 3
-			ComputeFaceUnitBField<problem_t, FluxDir::X3>(bhat_fc[2], state_fc, params.reconstruction_order, params.plm_limiter, ng_reconstruct);
-#endif
+			ComputeCornerFC<problem_t>(bhat_corner, state_fc, 0);
 		}
-		AMREX_D_TERM(ComputeFaceGradT<FluxDir::X1>(gradT_fc[0], primVar, dx, 1);, ComputeFaceGradT<FluxDir::X2>(gradT_fc[1], primVar, dx, 1);
-			     , ComputeFaceGradT<FluxDir::X3>(gradT_fc[2], primVar, dx, 1);)
 
-		// Number density and saturation flux at each face (Cowie & McKee 1977), both derived from
-		// the same (rho, T, massScalars...) averaged from the two bounding cells -- see
-		// ComputeFaceNumberDensityAndSaturationFlux.
 		const amrex::Real mmw = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> n_fc;
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> q_sat_fc;
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			n_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 1, 0);
-			q_sat_fc[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 1, 0);
-		}
-		AMREX_D_TERM((ComputeFaceNumberDensityAndSaturationFlux<problem_t, FluxDir::X1>(n_fc[0], q_sat_fc[0], primVar, mmw, params.saturation_factor,
-												params.flux_limiter_phi));
-			     , (ComputeFaceNumberDensityAndSaturationFlux<problem_t, FluxDir::X2>(n_fc[1], q_sat_fc[1], primVar, mmw,
-													    params.saturation_factor, params.flux_limiter_phi));
-			     , (ComputeFaceNumberDensityAndSaturationFlux<problem_t, FluxDir::X3>(n_fc[2], q_sat_fc[2], primVar, mmw,
-													    params.saturation_factor, params.flux_limiter_phi));)
+		ComputeCornerCC<problem_t>(gradT_corner, n_corner, qsat_corner, primVar, dx, mmw, params.saturation_factor, params.flux_limiter_phi, 0);
 
-		// Heat flux at each face: full parallel/perpendicular decomposition of gradT relative to bhat,
-		// projected onto the face normal -- see ComputeAnisotropicFlux.
-		AMREX_D_TERM(ComputeAnisotropicFlux<FluxDir::X1>(heat_flux[0], bhat_fc[0], gradT_fc[0], n_fc[0], params.kappa_parallel, params.kappa_perp,
-								  q_sat_fc[0]);
-			     , ComputeAnisotropicFlux<FluxDir::X2>(heat_flux[1], bhat_fc[1], gradT_fc[1], n_fc[1], params.kappa_parallel, params.kappa_perp,
-								    q_sat_fc[1]);
-			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], bhat_fc[2], gradT_fc[2], n_fc[2], params.kappa_parallel, params.kappa_perp,
-								    q_sat_fc[2]);)
+		// Heat flux at each face, from the LOWER bounding corner only: bhat_corner/gradT_corner/
+		// n_corner/qsat_corner are read at the face's own (i,j,k) index, which is that face's lower
+		// corner (see ComputeCornerCC's doc-comment).
+		// TODO: average with the UPPER corner (index+1 in the transverse direction) to complete the
+		// Sharma & Hammett symmetric scheme.
+		AMREX_D_TERM(ComputeAnisotropicFlux<FluxDir::X1>(heat_flux[0], bhat_corner, gradT_corner, n_corner, params.kappa_parallel, params.kappa_perp,
+								  qsat_corner);
+			     , ComputeAnisotropicFlux<FluxDir::X2>(heat_flux[1], bhat_corner, gradT_corner, n_corner, params.kappa_parallel, params.kappa_perp,
+								    qsat_corner);
+			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], bhat_corner, gradT_corner, n_corner, params.kappa_parallel, params.kappa_perp,
+								    qsat_corner);)
 
 		auto state_out = state.arrays();
 		auto const &flux_x_const = heat_flux[0].const_arrays();
@@ -250,186 +239,149 @@ template <typename problem_t> class AnisoConduction
 	}
 };
 
-// Estimate the unit vector of B at the DIR-faces: bhat_fc_mf (output) is a 3-component (bx,by,bz)
-// MultiFab on the DIR-face grid. The face-normal component comes directly from the staggered
-// state_fc representation (exact); the two transverse components are averaged to cell centers from
-// their own faces, reconstructed along DIR to the interface (same cyclic perp0/perp1 mapping as
-// QuokkaSimulation::computeCCPerpBfieldComps: X1->(perp0=y,perp1=z), X2->(z,x), X3->(x,y)), then
-// combined with the normal component and normalized.
-template <typename problem_t, FluxDir DIR>
-void ComputeFaceUnitBField(amrex::MultiFab &bhat_fc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int reconstructionOrder,
-			   SlopeLimiter plmLimiter, int nghost)
+template <typename problem_t>
+void ComputeCornerFC(amrex::MultiFab &bhat_corner_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int nghost)
 {
 	static_assert(Physics_Traits<problem_t>::is_mhd_enabled);
 	constexpr int b_comp = Physics_Indices<problem_t>::mhdFirstIndex;
 
-	// ------------------------------------------------------------------
-	// Step (a): cell-centered transverse-B, same cyclic mapping as computeCCPerpBfieldComps.
-	// ------------------------------------------------------------------
-	amrex::BoxArray const ba_cc = amrex::convert(bhat_fc_mf.boxArray(), amrex::IntVect::TheZeroVector());
-	amrex::MultiFab cc_bperp(ba_cc, bhat_fc_mf.DistributionMap(), 2, nghost);
+	auto const &bx_fc = state_fc[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+	auto const &by_fc = state_fc[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+	auto const &bz_fc = state_fc[2].const_arrays();
+#endif
+	auto bhat_out = bhat_corner_mf.arrays();
 
-	{
-		std::array<int, 3> delta_perp0{0, 0, 0};
-		std::array<int, 3> delta_perp1{0, 0, 0};
-		amrex::MultiArray4<const amrex::Real> perp0_fc;
-		amrex::MultiArray4<const amrex::Real> perp1_fc;
-		if constexpr (DIR == FluxDir::X1) {
-			perp0_fc = state_fc[1].const_arrays(); // y-faces
-			perp1_fc = state_fc[2].const_arrays(); // z-faces
-			delta_perp0[1] = 1;
-			delta_perp1[2] = 1;
-		} else if constexpr (DIR == FluxDir::X2) {
-			perp0_fc = state_fc[2].const_arrays(); // z-faces
-			perp1_fc = state_fc[0].const_arrays(); // x-faces
-			delta_perp0[2] = 1;
-			delta_perp1[0] = 1;
-		} else { // FluxDir::X3
-			perp0_fc = state_fc[0].const_arrays(); // x-faces
-			perp1_fc = state_fc[1].const_arrays(); // y-faces
-			delta_perp0[0] = 1;
-			delta_perp1[1] = 1;
-		}
+	amrex::IntVect const ng{AMREX_D_DECL(nghost, nghost, nghost)};
+	amrex::ParallelFor(bhat_corner_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::Real Bx = 0.0;
+		amrex::Real By = 0.0;
+		amrex::Real Bz = 0.0;
 
-		auto cc_out = cc_bperp.arrays();
-		amrex::IntVect const ng_cc{AMREX_D_DECL(nghost, nghost, nghost)};
-		amrex::ParallelFor(cc_bperp, ng_cc, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			const amrex::Real b_perp0_m = perp0_fc[bx](i, j, k, b_comp);
-			const amrex::Real b_perp0_p = perp0_fc[bx](i + delta_perp0[0], j + delta_perp0[1], k + delta_perp0[2], b_comp);
-			cc_out[bx](i, j, k, 0) = 0.5 * (b_perp0_m + b_perp0_p);
+#if AMREX_SPACEDIM == 3
+		Bx = 0.25 * (bx_fc[bx](i, j - 1, k - 1, b_comp) + bx_fc[bx](i, j, k - 1, b_comp) + bx_fc[bx](i, j - 1, k, b_comp) + bx_fc[bx](i, j, k, b_comp));
+		By = 0.25 * (by_fc[bx](i - 1, j, k - 1, b_comp) + by_fc[bx](i, j, k - 1, b_comp) + by_fc[bx](i - 1, j, k, b_comp) + by_fc[bx](i, j, k, b_comp));
+		Bz = 0.25 * (bz_fc[bx](i - 1, j - 1, k, b_comp) + bz_fc[bx](i, j - 1, k, b_comp) + bz_fc[bx](i - 1, j, k, b_comp) + bz_fc[bx](i, j, k, b_comp));
+#elif AMREX_SPACEDIM == 2
+		Bx = 0.5 * (bx_fc[bx](i, j - 1, k, b_comp) + bx_fc[bx](i, j, k, b_comp));
+		By = 0.5 * (by_fc[bx](i - 1, j, k, b_comp) + by_fc[bx](i, j, k, b_comp));
+#else
+		Bx = bx_fc[bx](i, j, k, b_comp);
+#endif
 
-			const amrex::Real b_perp1_m = perp1_fc[bx](i, j, k, b_comp);
-			const amrex::Real b_perp1_p = perp1_fc[bx](i + delta_perp1[0], j + delta_perp1[1], k + delta_perp1[2], b_comp);
-			cc_out[bx](i, j, k, 1) = 0.5 * (b_perp1_m + b_perp1_p);
-		});
-	}
-
-	// ------------------------------------------------------------------
-	// Step (b): reconstruct cc_bperp along DIR -> left/right at the face.
-	// ------------------------------------------------------------------
-	amrex::MultiFab leftState_b(bhat_fc_mf.boxArray(), bhat_fc_mf.DistributionMap(), 2, nghost);
-	amrex::MultiFab rightState_b(bhat_fc_mf.boxArray(), bhat_fc_mf.DistributionMap(), 2, nghost);
-
-	if (reconstructionOrder == 5) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(cc_bperp, leftState_b, rightState_b, nghost, 2);
-	} else if (reconstructionOrder == 3) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(cc_bperp, leftState_b, rightState_b, nghost, 2);
-	} else if (reconstructionOrder == 2) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(cc_bperp, leftState_b, rightState_b, nghost, 2, plmLimiter);
-	} else {
-		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bperp, leftState_b, rightState_b, nghost, 2);
-	}
-
-	// ------------------------------------------------------------------
-	// Step (c): average left/right, pull in the exact normal component, un-permute back into
-	// fixed physical (bx,by,bz) order, normalize.
-	// ------------------------------------------------------------------
-	auto const &left_in = leftState_b.const_arrays();
-	auto const &right_in = rightState_b.const_arrays();
-	auto const &bn_in = state_fc[static_cast<int>(DIR)].const_arrays();
-	auto bhat_out = bhat_fc_mf.arrays();
-
-	amrex::ParallelFor(bhat_fc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		const amrex::Real bn = bn_in[bx](i, j, k, b_comp);				       // exact, step (a)'s face data
-		const amrex::Real bt1 = 0.5 * (left_in[bx](i, j, k, 0) + right_in[bx](i, j, k, 0)); // averaged, step (b) result
-		const amrex::Real bt2 = 0.5 * (left_in[bx](i, j, k, 1) + right_in[bx](i, j, k, 1));
-
-		const amrex::Real bmag = std::sqrt(bn * bn + bt1 * bt1 + bt2 * bt2);
+		const amrex::Real bmag = std::sqrt(Bx * Bx + By * By + Bz * Bz);
 		const amrex::Real inv_b = (bmag > 0.0) ? (1.0 / bmag) : 0.0;
 
-		// un-permute: place (bn, bt1, bt2) back into fixed (x,y,z) slots, the exact inverse of
-		// the table used in step (a).
-		if constexpr (DIR == FluxDir::X1) {
-			bhat_out[bx](i, j, k, 0) = bn * inv_b;	 // x
-			bhat_out[bx](i, j, k, 1) = bt1 * inv_b; // y
-			bhat_out[bx](i, j, k, 2) = bt2 * inv_b; // z
-		} else if constexpr (DIR == FluxDir::X2) {
-			bhat_out[bx](i, j, k, 0) = bt2 * inv_b; // x (perp1 was x for X2)
-			bhat_out[bx](i, j, k, 1) = bn * inv_b;	 // y
-			bhat_out[bx](i, j, k, 2) = bt1 * inv_b; // z (perp0 was z for X2)
-		} else {					 // X3
-			bhat_out[bx](i, j, k, 0) = bt1 * inv_b; // x (perp0 was x for X3)
-			bhat_out[bx](i, j, k, 1) = bt2 * inv_b; // y (perp1 was y for X3)
-			bhat_out[bx](i, j, k, 2) = bn * inv_b;	 // z
-		}
+		bhat_out[bx](i, j, k, 0) = Bx * inv_b;
+		bhat_out[bx](i, j, k, 1) = By * inv_b;
+		bhat_out[bx](i, j, k, 2) = Bz * inv_b;
 	});
 }
 
-// Compute the temperature gradient vector (dT/dx, dT/dy, dT/dz) at the DIR-faces of a cell-centered
-// temperature field: gradT_fc_mf (output) is a 3-component MultiFab on the DIR-face grid, in fixed
-// physical (x,y,z) order. `temperature` is a (possibly multi-component) cell-centered MultiFab;
-// `comp` selects which component holds T (e.g. component 1 of the (rho, T) primVar used elsewhere
-// in this file). The face-normal component is the usual two-point difference across the face; each
-// transverse component is the average of the centered difference computed in the two cells bounding
-// the face -- the same diamond-averaging used for the transverse B components in
-// ComputeFaceUnitBField.
-// NOTE: this transverse estimate is the step flagged earlier as needing a Sharma & Hammett-style
-// limiter, to avoid an unphysical flux direction near sharp field bends -- not yet applied here.
-template <FluxDir DIR>
-void ComputeFaceGradT(amrex::MultiFab &gradT_fc_mf, amrex::MultiFab const &temperature, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, int comp)
+// Estimate (dT/dx, dT/dy, dT/dz), n, and qsat at mesh vertices ("corners") from CELL-CENTERED input
+// data (primVar), on the same fully-nodal box array and vertex-indexing convention as ComputeCornerFC
+// (vertex (i,j,k) draws from the 8 (3D) or 4 (2D) cells with indices in {i-1,i}x{j-1,j}x{k-1,k}).
+// gradT and (n, qsat) are computed together because they are derived from the very same surrounding
+// cells, just combined differently: gradT needs each cell's own (rho,T,massScalars) via the two-point
+// centered difference along its own axis, averaged over the neighboring-cell-pair combinations of the
+// OTHER axes -- e.g. in 3D, dT/dx at vertex (i,j,k) averages the x-difference
+// (T(i,*,*)-T(i-1,*,*))/dx over (j-1,j) x (k-1,k), the vertex generalization of the diamond-averaged
+// transverse gradient already used in ComputeFaceGradT -- while n and qsat need the plain average of
+// (rho,T,massScalars) over those same cells, then the same EOS chain as
+// ComputeFaceNumberDensityAndSaturationFlux (Cowie & McKee 1977).
+template <typename problem_t>
+void ComputeCornerCC(amrex::MultiFab &gradT_corner_mf, amrex::MultiFab &n_corner_mf, amrex::MultiFab &qsat_corner_mf, amrex::MultiFab const &primVar,
+		     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real mean_molecular_weight, amrex::Real saturation_factor,
+		     amrex::Real flux_limiter_phi, int nghost)
 {
-	auto const &temp = temperature.const_arrays();
-	auto gradT_out = gradT_fc_mf.arrays();
+	constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	constexpr int T_comp = 1;
+	const amrex::Real small = std::numeric_limits<amrex::Real>::min();
 
-	amrex::ParallelFor(gradT_fc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	auto const &primVar_in = primVar.const_arrays();
+	auto gradT_out = gradT_corner_mf.arrays();
+	auto n_out = n_corner_mf.arrays();
+	auto qsat_out = qsat_corner_mf.arrays();
+
+	amrex::IntVect const ng{AMREX_D_DECL(nghost, nghost, nghost)};
+	amrex::ParallelFor(gradT_corner_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		amrex::Real gradT_x = 0.0;
 		amrex::Real gradT_y = 0.0;
 		amrex::Real gradT_z = 0.0;
-		amrex::IntVect const ivm = FaceMinusOne<DIR>(i, j, k);
 
-		if constexpr (DIR == FluxDir::X1) {
-			gradT_x = (temp[bx](i, j, k, comp) - temp[bx](ivm, comp)) / dx[0];
-#if AMREX_SPACEDIM >= 2
-			gradT_y = 0.5 *
-				  ((temp[bx](i - 1, j + 1, k, comp) - temp[bx](i - 1, j - 1, k, comp)) +
-				   (temp[bx](i, j + 1, k, comp) - temp[bx](i, j - 1, k, comp))) /
-				  (2.0 * dx[1]);
-#endif
 #if AMREX_SPACEDIM == 3
-			gradT_z = 0.5 *
-				  ((temp[bx](i - 1, j, k + 1, comp) - temp[bx](i - 1, j, k - 1, comp)) +
-				   (temp[bx](i, j, k + 1, comp) - temp[bx](i, j, k - 1, comp))) /
-				  (2.0 * dx[2]);
+		gradT_x = 0.25 *
+			  ((primVar_in[bx](i, j - 1, k - 1, T_comp) - primVar_in[bx](i - 1, j - 1, k - 1, T_comp)) +
+			   (primVar_in[bx](i, j, k - 1, T_comp) - primVar_in[bx](i - 1, j, k - 1, T_comp)) +
+			   (primVar_in[bx](i, j - 1, k, T_comp) - primVar_in[bx](i - 1, j - 1, k, T_comp)) +
+			   (primVar_in[bx](i, j, k, T_comp) - primVar_in[bx](i - 1, j, k, T_comp))) /
+			  dx[0];
+		gradT_y = 0.25 *
+			  ((primVar_in[bx](i - 1, j, k - 1, T_comp) - primVar_in[bx](i - 1, j - 1, k - 1, T_comp)) +
+			   (primVar_in[bx](i, j, k - 1, T_comp) - primVar_in[bx](i, j - 1, k - 1, T_comp)) +
+			   (primVar_in[bx](i - 1, j, k, T_comp) - primVar_in[bx](i - 1, j - 1, k, T_comp)) +
+			   (primVar_in[bx](i, j, k, T_comp) - primVar_in[bx](i, j - 1, k, T_comp))) /
+			  dx[1];
+		gradT_z = 0.25 *
+			  ((primVar_in[bx](i - 1, j - 1, k, T_comp) - primVar_in[bx](i - 1, j - 1, k - 1, T_comp)) +
+			   (primVar_in[bx](i, j - 1, k, T_comp) - primVar_in[bx](i, j - 1, k - 1, T_comp)) +
+			   (primVar_in[bx](i - 1, j, k, T_comp) - primVar_in[bx](i - 1, j, k - 1, T_comp)) +
+			   (primVar_in[bx](i, j, k, T_comp) - primVar_in[bx](i, j, k - 1, T_comp))) /
+			  dx[2];
+#elif AMREX_SPACEDIM == 2
+		gradT_x = 0.5 *
+			  ((primVar_in[bx](i, j - 1, k, T_comp) - primVar_in[bx](i - 1, j - 1, k, T_comp)) +
+			   (primVar_in[bx](i, j, k, T_comp) - primVar_in[bx](i - 1, j, k, T_comp))) /
+			  dx[0];
+		gradT_y = 0.5 *
+			  ((primVar_in[bx](i - 1, j, k, T_comp) - primVar_in[bx](i - 1, j - 1, k, T_comp)) +
+			   (primVar_in[bx](i, j, k, T_comp) - primVar_in[bx](i, j - 1, k, T_comp))) /
+			  dx[1];
+#else
+		gradT_x = (primVar_in[bx](i, j, k, T_comp) - primVar_in[bx](i - 1, j, k, T_comp)) / dx[0];
 #endif
-		} else if constexpr (DIR == FluxDir::X2) {
-			gradT_y = (temp[bx](i, j, k, comp) - temp[bx](ivm, comp)) / dx[1];
-			gradT_x = 0.5 *
-				  ((temp[bx](i + 1, j - 1, k, comp) - temp[bx](i - 1, j - 1, k, comp)) +
-				   (temp[bx](i + 1, j, k, comp) - temp[bx](i - 1, j, k, comp))) /
-				  (2.0 * dx[0]);
-#if AMREX_SPACEDIM == 3
-			gradT_z = 0.5 *
-				  ((temp[bx](i, j - 1, k + 1, comp) - temp[bx](i, j - 1, k - 1, comp)) +
-				   (temp[bx](i, j, k + 1, comp) - temp[bx](i, j, k - 1, comp))) /
-				  (2.0 * dx[2]);
-#endif
-		} else { // FluxDir::X3
-			gradT_z = (temp[bx](i, j, k, comp) - temp[bx](ivm, comp)) / dx[2];
-			gradT_x = 0.5 *
-				  ((temp[bx](i + 1, j, k - 1, comp) - temp[bx](i - 1, j, k - 1, comp)) +
-				   (temp[bx](i + 1, j, k, comp) - temp[bx](i - 1, j, k, comp))) /
-				  (2.0 * dx[0]);
-			gradT_y = 0.5 *
-				  ((temp[bx](i, j + 1, k - 1, comp) - temp[bx](i, j - 1, k - 1, comp)) +
-				   (temp[bx](i, j + 1, k, comp) - temp[bx](i, j - 1, k, comp))) /
-				  (2.0 * dx[1]);
-		}
 
 		gradT_out[bx](i, j, k, 0) = gradT_x;
 		gradT_out[bx](i, j, k, 1) = gradT_y;
 		gradT_out[bx](i, j, k, 2) = gradT_z;
+
+		// n / qsat: plain average of (rho, T, massScalars) over the same {i-1,i}x{j-1,j}x{k-1,k}
+		// cells, then the same EOS chain ComputeFaceNumberDensityAndSaturationFlux uses.
+		auto const corner_avg = [=](int comp) {
+#if AMREX_SPACEDIM == 3
+			return 0.125 * (primVar_in[bx](i - 1, j - 1, k - 1, comp) + primVar_in[bx](i, j - 1, k - 1, comp) +
+					primVar_in[bx](i - 1, j, k - 1, comp) + primVar_in[bx](i, j, k - 1, comp) + primVar_in[bx](i - 1, j - 1, k, comp) +
+					primVar_in[bx](i, j - 1, k, comp) + primVar_in[bx](i - 1, j, k, comp) + primVar_in[bx](i, j, k, comp));
+#elif AMREX_SPACEDIM == 2
+			return 0.25 * (primVar_in[bx](i - 1, j - 1, k, comp) + primVar_in[bx](i, j - 1, k, comp) + primVar_in[bx](i - 1, j, k, comp) +
+				       primVar_in[bx](i, j, k, comp));
+#else
+			return 0.5 * (primVar_in[bx](i - 1, j, k, comp) + primVar_in[bx](i, j, k, comp));
+#endif
+		};
+		const amrex::Real rho_corner = corner_avg(0);
+		const amrex::Real T_corner = corner_avg(T_comp);
+
+		n_out[bx](i, j, k) = rho_corner / mean_molecular_weight;
+
+		amrex::GpuArray<amrex::Real, nmscalars_> massArray_corner{};
+		for (int n = 0; n < nmscalars_; ++n) {
+			massArray_corner[n] = corner_avg(2 + n);
+		}
+		quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const massScalars = massArray_corner;
+
+		const amrex::Real Eint_corner = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_corner, T_corner, massScalars);
+		const amrex::Real Pgas_corner = ::quokka::EOS<problem_t>::ComputePressure(rho_corner, Eint_corner, massScalars);
+		const amrex::Real cs_corner = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_corner, Pgas_corner, massScalars);
+
+		qsat_out[bx](i, j, k) = amrex::max(saturation_factor * flux_limiter_phi * rho_corner * cs_corner * cs_corner * cs_corner, small);
 	});
 }
 
 // Compute the anisotropic heat flux crossing the DIR-faces, given the unit B-field (bhat_fc, from
-// ComputeFaceUnitBField), the temperature gradient (gradT_fc, from ComputeFaceGradT), and the
-// number density (n_fc, from ComputeFaceNumberDensityAndSaturationFlux) already estimated at those
-// faces. This applies the full parallel + perpendicular decomposition:
-//   q_vec = -(kappa_parallel - kappa_perp) * (bhat . gradT) * n * bhat  -  n * kappa_perp * gradT
-// and stores the face-normal component q . nhat, then flux-limited/saturated exactly as in
-// ElectronConduction::ComputeExplicit:
-//   flux = q_classical / (1 + |q_classical| / max(q_sat, small)).
-// q_sat_fc is the (precomputed) saturation flux at each face -- this function does not compute it.
+// This algorithm implements equivalent of asymmetric scheme in Sharma & Hammett 2007 without any limiting.
 template <FluxDir DIR>
 void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &bhat_fc, amrex::MultiFab const &gradT_fc, amrex::MultiFab const &n_fc,
 			    amrex::Real kappa_parallel, amrex::Real kappa_perp, amrex::MultiFab const &q_sat_fc)
@@ -453,43 +405,6 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 		const amrex::Real q_sat = qsat_in[bx](i, j, k);
 		const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat, small);
 		flux_out[bx](i, j, k) = q_classical / limiter;
-	});
-}
-
-// Compute the face number density and the saturation flux (Cowie & McKee 1977) at the DIR-faces in
-// a single pass, since both derive from the same (rho, T, massScalars...) average of primVar over
-// the two cells bounding each face. n_fc is (rho_face / mean_molecular_weight); q_sat_fc is the
-// saturation flux used to limit/saturate the classical flux in ComputeAnisotropicFlux.
-template <typename problem_t, FluxDir DIR>
-void ComputeFaceNumberDensityAndSaturationFlux(amrex::MultiFab &n_fc_mf, amrex::MultiFab &qsat_fc_mf, amrex::MultiFab const &primVar,
-					       amrex::Real mean_molecular_weight, amrex::Real saturation_factor, amrex::Real flux_limiter_phi)
-{
-	constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-	const amrex::Real small = std::numeric_limits<amrex::Real>::min();
-
-	auto const &primVar_in = primVar.const_arrays();
-	auto n_out = n_fc_mf.arrays();
-	auto qsat_out = qsat_fc_mf.arrays();
-
-	amrex::ParallelFor(qsat_fc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		amrex::IntVect const ivm = FaceMinusOne<DIR>(i, j, k);
-		auto const face_avg = [=](int comp) { return 0.5 * (primVar_in[bx](i, j, k, comp) + primVar_in[bx](ivm, comp)); };
-		const amrex::Real rho_face = face_avg(0);
-		const amrex::Real T_face = face_avg(1);
-
-		n_out[bx](i, j, k) = rho_face / mean_molecular_weight;
-
-		amrex::GpuArray<amrex::Real, nmscalars_> massArray_face{};
-		for (int n = 0; n < nmscalars_; ++n) {
-			massArray_face[n] = face_avg(2 + n);
-		}
-		quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massArray_face;
-
-		const amrex::Real Eint_face = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_face, T_face, massScalars);
-		const amrex::Real Pgas_face = ::quokka::EOS<problem_t>::ComputePressure(rho_face, Eint_face, massScalars);
-		const amrex::Real cs_face = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_face, Pgas_face, massScalars);
-
-		qsat_out[bx](i, j, k) = amrex::max(saturation_factor * flux_limiter_phi * rho_face * cs_face * cs_face * cs_face, small);
 	});
 }
 
