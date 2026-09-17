@@ -60,8 +60,8 @@ template <typename problem_t> class turbulentDriving
 
 	// the forcing pattern is exactly zero-mean by construction, but the momentum source applied
 	// is density-weighted, so a net mean flow can still build up if the forcing correlates with
-	// density over time (see issue #2293); this stays small for weakly compressible turbulence,
-	// but can grow to a large fraction of the dispersion for strongly compressible turbulence
+	// density over time; this stays small for weakly compressible turbulence, but can grow to a
+	// large fraction of the dispersion for strongly compressible turbulence
 	static constexpr amrex::Real mean_flow_to_dispersion_threshold = 0.1;
 
 	void update(const amrex::Real &time, amrex::MultiFab &state)
@@ -80,7 +80,7 @@ template <typename problem_t> class turbulentDriving
 			if (mean_mag > mean_flow_to_dispersion_threshold * disp_mag) {
 				const std::string abort_msg =
 				    std::format("[FATAL] TurbulentDriving: mean flow ({:.3e}) exceeds {:.0f}% of the velocity dispersion "
-						"({:.3e}) at time {:.3e}; the density-weighted forcing has built up a net bulk flow (see issue #2293).",
+						"({:.3e}) at time {:.3e}; the density-weighted forcing has built up a net bulk flow.",
 						mean_mag, mean_flow_to_dispersion_threshold * 100.0, disp_mag, time);
 				amrex::Abort(abort_msg.c_str());
 			}
