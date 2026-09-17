@@ -91,8 +91,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct DTypeFront3D {
-};
+struct DTypeFront3D {};
 
 // reduced speed of light (the same choice as DTypeFront and DTypeFront1D)
 constexpr double c_hat = C::c_light / 1000.0;
