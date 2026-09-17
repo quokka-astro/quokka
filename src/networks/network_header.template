@@ -50,18 +50,27 @@ constexpr int NumAux = NAUX_NET;
 namespace {
 
 #ifdef PHOTOCHEMISTRY
-    // Plain constexpr, deliberately NOT AMREX_GPU_MANAGED: the band edges are compile-time constants, so
-    // this folds straight into device code. Combining the two qualifiers the way aion/zion below do is
-    // broken for a variable that host code only ever uses in constant expressions:
-    //   - HIP_CONSTEXPR (= constexpr under HIP) lets the *host* compiler fold every use, so it emits no
-    //     storage at all for this internal-linkage variable -- the host object has no symbol for it.
-    //   - AMREX_GPU_MANAGED (__managed__) stops the *device* compiler from folding; it emits a real managed
-    //     object plus a shadow pointer that __hipRegisterManagedVar is supposed to fill in at module load.
-    // With no host symbol that registration never happens, the shadow pointer stays null, and the first
-    // device read -- get_ionizing_band_photon_energy() in actual_rhs.H -- dies with
-    // "Memory access fault by GPU node-N ... on address (nil)". aion/zion are odr-used from host code, so
-    // they do get emitted and registered; these band edges are not.
-    MICROPHYSICS_UNUSED constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBandsHeader_{ @CHEM_BANDS@ };
+    // The band edges are returned by value from a constexpr function instead of being stored in a
+    // namespace-scope variable, because no storage class for such a variable works on both GPU backends.
+    // Both of the obvious spellings have already been tried and both fail, in opposite directions:
+    //   - AMREX_GPU_MANAGED (a real __managed__ object, the way aion/zion below are declared) breaks under
+    //     HIP at runtime. Device reads go through a compiler-generated shadow pointer that
+    //     __hipRegisterManagedVar fills in at module load, but with -fgpu-rdc this header's
+    //     anonymous-namespace copy is emitted once per translation unit and the copy the linked device code
+    //     reads is not the one the runtime initialises. The shadow pointer stays null and the first device
+    //     read -- get_ionizing_band_photon_energy() in actual_rhs.H -- dies with
+    //     "Memory access fault by GPU node-N ... on address (nil)". aion/zion are also odr-used from host
+    //     code, which is why they get emitted and registered and these band edges did not.
+    //   - A plain constexpr variable breaks under CUDA at compile time. nvcc only folds a const/constexpr
+    //     host variable into device code when it has scalar built-in type, so reading a GpuArray one gives
+    //     'identifier "ChemBandsHeader_" is undefined in device code'.
+    // A constexpr function has no static-storage object at all: every use materialises the literals in
+    // place, on host and on device, under both backends, so neither rule can bite. Keep it constexpr --
+    // the RadSystem_Traits<problem_t>::ChemBands() specialisations that wrap it are constexpr too.
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto ChemBandsHeader() -> amrex::GpuArray<double, NumChemBands + 1>
+    {
+        return {{ @CHEM_BANDS@ }};
+    }
 #endif
 
     MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real aion[NumSpecTotal] = {

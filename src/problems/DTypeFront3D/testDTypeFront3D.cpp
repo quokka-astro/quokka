@@ -162,7 +162,7 @@ template <> struct RadSystem_Traits<DTypeFront3D> {
 	// and none of it back into the optical one.
 	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront3D>::nGroups + 1> radBoundaries{1.0e8, 1.0e14, 3.29e15, 8.0e15};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBands() { return ChemBandsHeader(); }
 };
 
 template <> struct ISM_Traits<DTypeFront3D> {

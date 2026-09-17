@@ -26,7 +26,11 @@ constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) -> Real { return 1.5e-18_rt; }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Real { return 0.5_rt * (ChemBandsHeader_[0] + ChemBandsHeader_[1]) * C::hplanck; }
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Real
+{
+	auto const bands = ChemBandsHeader();
+	return 0.5_rt * (bands[0] + bands[1]) * C::hplanck;
+}
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) -> Real
 {
