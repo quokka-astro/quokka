@@ -68,6 +68,7 @@ Backtrace.*
 # Documentation build directory
 docs/api/
 docs/doxyoutput/
+docs/.mdbook-plantuml-cache/
 _build/
 
 # Include image and pdf files inside docs

@@ -20,8 +20,7 @@
 #include "AMReX_REAL.H"
 #include <cmath>
 
-struct MHDSmallScaleDynamo {
-};
+struct MHDSmallScaleDynamo {};
 
 // isothermal EOS: pressure = cs^2 * rho (no thermal energy equation)
 template <> struct quokka::EOS_Traits<MHDSmallScaleDynamo> {
