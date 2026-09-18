@@ -187,8 +187,8 @@ template <typename problem_t> class ElectronConduction
 				massFrac_L[n] = left_x[bx](i, j, k, 2 + n);
 				massFrac_R[n] = right_x[bx](i, j, k, 2 + n);
 			}
-			evaluateFace(left_x[bx](i, j, k, 0), left_x[bx](i, j, k, 1), right_x[bx](i, j, k, 0), right_x[bx](i, j, k, 1), massFrac_L,
-				     massFrac_R, kappa_face, q_sat_face);
+			evaluateFace(left_x[bx](i, j, k, 0), left_x[bx](i, j, k, 1), right_x[bx](i, j, k, 0), right_x[bx](i, j, k, 1), massFrac_L, massFrac_R,
+				     kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_x[bx](i, j, k) = q_classical / limiter;
@@ -208,8 +208,8 @@ template <typename problem_t> class ElectronConduction
 				massFrac_L[n] = left_y[bx](i, j, k, 2 + n);
 				massFrac_R[n] = right_y[bx](i, j, k, 2 + n);
 			}
-			evaluateFace(left_y[bx](i, j, k, 0), left_y[bx](i, j, k, 1), right_y[bx](i, j, k, 0), right_y[bx](i, j, k, 1), massFrac_L,
-				     massFrac_R, kappa_face, q_sat_face);
+			evaluateFace(left_y[bx](i, j, k, 0), left_y[bx](i, j, k, 1), right_y[bx](i, j, k, 0), right_y[bx](i, j, k, 1), massFrac_L, massFrac_R,
+				     kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_y[bx](i, j, k) = q_classical / limiter;
@@ -230,8 +230,8 @@ template <typename problem_t> class ElectronConduction
 				massFrac_L[n] = left_z[bx](i, j, k, 2 + n);
 				massFrac_R[n] = right_z[bx](i, j, k, 2 + n);
 			}
-			evaluateFace(left_z[bx](i, j, k, 0), left_z[bx](i, j, k, 1), right_z[bx](i, j, k, 0), right_z[bx](i, j, k, 1), massFrac_L,
-				     massFrac_R, kappa_face, q_sat_face);
+			evaluateFace(left_z[bx](i, j, k, 0), left_z[bx](i, j, k, 1), right_z[bx](i, j, k, 0), right_z[bx](i, j, k, 1), massFrac_L, massFrac_R,
+				     kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_z[bx](i, j, k) = q_classical / limiter;
