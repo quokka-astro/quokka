@@ -63,6 +63,8 @@ private:
       amrex::Gpu::copy(amrex::Gpu::hostToDevice, mode[dim].begin(),
                        mode[dim].end(), modes_gpu[dim].begin());
     }
+
+    sync_to_gpu();
   }
 
   void sync_to_gpu() {
@@ -106,6 +108,11 @@ public:
 
   int init_driving(const std::map<std::string, std::string> &params) override {
     TurbGen::init_driving(params);
+    if (static_cast<int>(ndim) != AMREX_SPACEDIM) {
+      amrex::Abort("TurbGenEx: requested ndim (" + std::to_string(ndim) +
+                   ") does not match AMREX_SPACEDIM (" +
+                   std::to_string(AMREX_SPACEDIM) + ").");
+    }
     initial_sync_to_gpu();
     return 0;
   }
@@ -134,7 +141,8 @@ public:
 
   void get_turb_vector_unigrid(
       amrex::FArrayBox &fab,
-      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes) {
+      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes,
+      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &probLo) {
     // ******************************************************
     // Compute physical turbulent vector field on a uniform grid. provided
     // Takes a FArrayBox which contains the index space of the uniform grid,
@@ -180,11 +188,10 @@ public:
          nmodes = this->nmodes] AMREX_GPU_DEVICE(int i, int j, int k, int m) {
           const int SIN_INDEX = m;
           const int COS_INDEX = m + nmodes;
+          const amrex::Real x = probLo[X] + (i + 0.5) * cellSizes[X];
 
-          xPrecomp(i, j, k, SIN_INDEX) =
-              sin(modesPointers[X][m] * (i * cellSizes[X]));
-          xPrecomp(i, j, k, COS_INDEX) =
-              cos(modesPointers[X][m] * (i * cellSizes[X]));
+          xPrecomp(i, j, k, SIN_INDEX) = sin(modesPointers[X][m] * x);
+          xPrecomp(i, j, k, COS_INDEX) = cos(modesPointers[X][m] * x);
         });
 
     amrex::ParallelFor(
@@ -194,10 +201,9 @@ public:
           const int SIN_INDEX = m;
           const int COS_INDEX = m + nmodes;
           if (AMREX_SPACEDIM > 1) {
-            yPrecomp(i, j, k, SIN_INDEX) =
-                sin(modesPointers[Y][m] * (j * cellSizes[Y]));
-            yPrecomp(i, j, k, COS_INDEX) =
-                cos(modesPointers[Y][m] * (j * cellSizes[Y]));
+            const amrex::Real y = probLo[Y] + (j + 0.5) * cellSizes[Y];
+            yPrecomp(i, j, k, SIN_INDEX) = sin(modesPointers[Y][m] * y);
+            yPrecomp(i, j, k, COS_INDEX) = cos(modesPointers[Y][m] * y);
           } else {
             yPrecomp(i, j, k, SIN_INDEX) = 0.0;
             yPrecomp(i, j, k, COS_INDEX) = 1.0;
@@ -210,13 +216,14 @@ public:
          nmodes = this->nmodes] AMREX_GPU_DEVICE(int i, int j, int k, int m) {
           const int SIN_INDEX = m;
           const int COS_INDEX = m + nmodes;
-
-          zPrecomp(i, j, k, SIN_INDEX) =
-              AMREX_SPACEDIM > 2 ? sin(modesPointers[Z][m] * (k * cellSizes[Z]))
-                                 : 0.0;
-          zPrecomp(i, j, k, COS_INDEX) =
-              AMREX_SPACEDIM > 2 ? cos(modesPointers[Z][m] * (k * cellSizes[Z]))
-                                 : 1.0;
+          if (AMREX_SPACEDIM > 2) {
+            const amrex::Real z = probLo[Z] + (k + 0.5) * cellSizes[Z];
+            zPrecomp(i, j, k, SIN_INDEX) = sin(modesPointers[Z][m] * z);
+            zPrecomp(i, j, k, COS_INDEX) = cos(modesPointers[Z][m] * z);
+          } else {
+            zPrecomp(i, j, k, SIN_INDEX) = 0.0;
+            zPrecomp(i, j, k, COS_INDEX) = 1.0;
+          }
         });
 
     // Get pointers to pass to parallelFor (Necessary for GPU)
