@@ -1108,7 +1108,7 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 		return;
 	}
 
-	if constexpr (Physics_Traits<problem_t>::numPassiveScalars <= 0) {
+	if constexpr (StochasticStellarPopParticleChemistryBlockSize<problem_t>() <= 0) {
 		return;
 	}
 
@@ -1173,13 +1173,15 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 				    death_time, agb_death, enable_snii_metal, snii_fallback_yield_fraction, agb_fallback_yield_fraction, z_agb_lookup);
 
 				const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
-				ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, total_comp, channel_yields.snii_mass, vol_inverse);
+				if (channel_yields.snii_mass > 0.0) {
+					ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, total_comp, channel_yields.snii_mass, vol_inverse);
+				}
 
 				if (channel_yields.agb_mass > 0.0) {
 					ChemicalFeedbackUtils::depositWendland(local_buffer, interp, total_comp, channel_yields.agb_mass, vol_inverse);
 				}
 
-				if (store_channel_fields_local && enable_snii_metal) {
+				if (store_channel_fields_local && enable_snii_metal && channel_yields.snii_mass > 0.0) {
 					const int sn_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + nchem + n;
 					if (sn_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
 						ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, sn_comp, channel_yields.snii_mass,

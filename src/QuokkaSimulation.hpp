@@ -823,7 +823,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::rereadRuntimePar
 	readParmParse();
 
 	// Re-read particle parameters
-	quokka::particleParmParse();
+	quokka::particleParmParse<problem_t>();
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int

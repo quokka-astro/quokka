@@ -664,7 +664,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						p.rdata(mass_at_birth_idx) = p.rdata(mass_idx);
 					}
 
-					if constexpr (nscalars > 0) {
+					if constexpr (StochasticStellarPopParticleChemistryBlockSize<problem_t>() > 0) {
 						const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
 						const int chem_block_size = StochasticStellarPopParticleChemistryBlockSize<problem_t>();
 						const int scalar_offset = std::max(0, chemical_scalar_offset_);

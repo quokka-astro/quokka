@@ -124,7 +124,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 			return;
 		}
 
-		if constexpr (Physics_Traits<problem_t>::numPassiveScalars <= 0) {
+		if constexpr (StochasticStellarPopParticleChemistryBlockSize<problem_t>() <= 0) {
 			return;
 		}
 

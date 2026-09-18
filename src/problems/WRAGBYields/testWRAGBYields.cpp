@@ -78,10 +78,10 @@ auto yieldFraction(const quokka::ChemicalYieldLookup::ChemicalYieldGpuConstTable
 
 void assertClose(const std::string &label, amrex::Real simulated, amrex::Real expected, amrex::Real tolerance = yield_validation_rtol)
 {
-	const amrex::Real error = (expected > 0.0) ? std::abs(simulated / expected - 1.0) : std::abs(simulated);
-	const amrex::Real ratio = (expected > 0.0) ? simulated / expected : 1.0;
-	amrex::Print() << label << ": simulated=" << simulated << " expected=" << expected << " sim/expected=" << ratio << "\n";
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(error <= tolerance, std::format("{} failed: error={} > {}", label, error, tolerance).c_str());
+	const amrex::Real error = std::abs(simulated - expected);
+	const amrex::Real allowed_error = tolerance * std::abs(expected);
+	amrex::Print() << label << ": simulated=" << simulated << " expected=" << expected << " absolute_error=" << error << "\n";
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(error <= allowed_error, std::format("{} failed: error={} > {}", label, error, allowed_error).c_str());
 }
 
 template <typename problem_t>
@@ -153,6 +153,7 @@ template <> struct quokka::EOS_Traits<WRAGBYields> {
 };
 
 template <> struct Particle_Traits<WRAGBYields> : DefaultParticleTraits {
+	static constexpr bool enable_chemical_feedback = true;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
@@ -234,6 +235,13 @@ template <> void QuokkaSimulation<WRAGBYields>::setInitialConditionsOnGrid(quokk
 
 auto problem_main() -> int
 {
+	const volatile amrex::Real zero_yield = 0.0;
+	assertClose("zero yield", zero_yield, zero_yield);
+	bool test_zero_yield_only = false;
+	amrex::ParmParse("problem").query("test_zero_yield_only", test_zero_yield_only);
+	if (test_zero_yield_only) {
+		return 0;
+	}
 	QuokkaSimulation<WRAGBYields> sim;
 
 	sim.reconstructionOrder_ = 3;

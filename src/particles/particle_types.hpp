@@ -58,6 +58,7 @@ constexpr auto operator&(ParticleSwitch flags, ParticleSwitch flag) -> bool
 // - static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
 // - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
 struct DefaultParticleTraits {
+	static constexpr bool enable_chemical_feedback = false;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None; // Determines which particle types are enabled using bitwise flags.
 	using stellar_model = quokka::ToyStellarModel;				// Default stellar-evolution model
 };
@@ -263,14 +264,17 @@ constexpr int StochasticStellarPopParticleMassAtBirthIdx = static_cast<int>(Stoc
 constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::luminosity); // Base index for luminosity components
 constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
 
-template <typename problem_t> constexpr auto StochasticStellarPopParticleChemistryBlockSize() -> int { return Physics_Traits<problem_t>::numPassiveScalars; }
+template <typename problem_t> constexpr auto StochasticStellarPopParticleChemistryBlockSize() -> int
+{
+	return Particle_Traits<problem_t>::enable_chemical_feedback ? Physics_Traits<problem_t>::numPassiveScalars : 0;
+}
 
 template <typename problem_t> constexpr auto StochasticStellarPopParticleChemistryBaseIdx() -> int
 {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 14 + Physics_Traits<problem_t>::nGroups;
+		return StochasticStellarPopParticleLumIdx + Physics_Traits<problem_t>::nGroups;
 	} else {
-		return 14;
+		return StochasticStellarPopParticleLumIdx;
 	}
 }
 
@@ -281,14 +285,8 @@ template <typename problem_t> constexpr auto StochasticStellarPopParticleChemist
 
 // Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + times + positions + death density + luminosity
 template <typename problem_t>
-constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
-	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 14 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth,
-								// lum[nGroups]
-	} else {
-		return 14; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth
-	}
-}() + 4 * Physics_Traits<problem_t>::numPassiveScalars;
+constexpr int StochasticStellarPopParticleRealComps =
+    StochasticStellarPopParticleChemistryBaseIdx<problem_t>() + 4 * StochasticStellarPopParticleChemistryBlockSize<problem_t>();
 
 // Number of integer components for StochasticStellarPop_particles
 constexpr int StochasticStellarPopParticleIntComps = 1; // evolution stage
@@ -458,7 +456,7 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 		};
 		const std::array<std::string, 3> channel_names = {"SNII", "WR", "AGB"};
 		for (int block = 0; block < 4; ++block) {
-			for (int n = 0; n < Physics_Traits<problem_t>::numPassiveScalars; ++n) {
+			for (int n = 0; n < StochasticStellarPopParticleChemistryBlockSize<problem_t>(); ++n) {
 				if (block == 0) {
 					names.push_back("chem_birth_total_" + isotopeName(n));
 				} else {
@@ -648,7 +646,7 @@ inline amrex::Real SN_p_term_Msunkmps = SN_p_term_Msunkmps_canonical; // NOLINT
 // It tells the linker that all instances of this function across different translation units
 // should be treated as the same function. This is a common pattern for small utility
 // functions defined in header files.
-inline void particleParmParse()
+template <typename problem_t> inline void particleParmParse()
 {
 	// Parse particle parameters
 	const amrex::ParmParse pp("particles");
@@ -683,6 +681,8 @@ inline void particleParmParse()
 	pp.query("scalar_yield_per_SN", scalar_yield_per_SN);
 
 	pp.query("enable_chemical_feedback", enable_chemical_feedback);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!enable_chemical_feedback || Particle_Traits<problem_t>::enable_chemical_feedback,
+					 "Chemical feedback requires Particle_Traits<problem_t>::enable_chemical_feedback = true at compile time.");
 	pp.query("enable_SNII_metal", enable_SNII_metal);
 	pp.query("enable_WR_metal", enable_WR_metal);
 	pp.query("enable_AGB_metal", enable_AGB_metal);
