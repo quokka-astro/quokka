@@ -15,10 +15,7 @@
 #include <utility>
 #include <vector>
 
-namespace quokka
-{
-
-namespace ChemicalYieldLookup
+namespace quokka::ChemicalYieldLookup
 {
 
 constexpr int max_tracked_isotopes = 32;
@@ -38,7 +35,7 @@ class ChemicalYieldTables
 {
       public:
 	std::array<SelectedChemicalYieldDataTable, max_tracked_channels> channels{};
-	WRMassLossDistributionDataTable wr_mass_loss_distribution{};
+	WRMassLossDistributionDataTable wr_mass_loss_distribution;
 
 	[[nodiscard]] auto const_tables() const -> ChemicalYieldGpuConstTables
 	{
@@ -79,7 +76,7 @@ inline auto resolveInputPath(const std::string &filename) -> std::filesystem::pa
 	}
 
 	std::string trimmed = filename;
-	while (trimmed.rfind("../", 0) == 0) {
+	while (trimmed.starts_with("../")) {
 		trimmed.erase(0, 3);
 		const std::filesystem::path alt(trimmed);
 		if (std::filesystem::exists(alt)) {
@@ -146,7 +143,7 @@ inline auto makeOutputNames(const std::vector<std::string> &tracked_isotopes) ->
 {
 	std::array<std::string, max_tracked_isotopes> names{};
 	for (int i = 0; i < max_tracked_isotopes; ++i) {
-		if (i < static_cast<int>(tracked_isotopes.size())) {
+		if (std::cmp_less(i, tracked_isotopes.size())) {
 			names[static_cast<std::size_t>(i)] = lowercase(tracked_isotopes[static_cast<std::size_t>(i)]);
 		} else {
 			names[static_cast<std::size_t>(i)] = "unused_" + std::to_string(i);
@@ -172,7 +169,7 @@ inline auto makeZeroTable() -> SelectedChemicalYieldDataTable
 	const std::array<std::string, 1> input_units{"Msun"};
 	const auto output_names = makeOutputNames({});
 	const auto output_units = makeOutputUnits();
-	amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(max_tracked_isotopes * n_xs[0]), 0.0);
+	const amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(max_tracked_isotopes) * static_cast<std::size_t>(n_xs[0]), 0.0);
 	return SelectedChemicalYieldDataTable::FromFlatData(x_mins, x_maxs, n_xs, spacing, flat_data, input_names, output_names, input_units, output_units,
 							    quokka::TransformType::linear);
 }
@@ -187,7 +184,7 @@ inline auto makeZeroWRMassLossDistributionTable() -> WRMassLossDistributionDataT
 	const std::array<std::string, 1> output_names{"cumulative_fraction"};
 	const std::array<std::string, 2> input_units{"s", "Msun"};
 	const std::array<std::string, 1> output_units{"fraction"};
-	amrex::Vector<amrex::Real> flat_data(4, 0.0);
+	const amrex::Vector<amrex::Real> flat_data(4, 0.0);
 	return WRMassLossDistributionDataTable::FromFlatData(x_mins, x_maxs, n_xs, spacing, flat_data, input_names, output_names, input_units, output_units,
 							     quokka::TransformType::linear);
 }
@@ -220,14 +217,15 @@ inline auto loadChannelTable(const std::filesystem::path &table_path, int channe
 	const auto output_names = makeOutputNames(tracked_isotopes);
 	const auto output_units = makeOutputUnits();
 
-	amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(max_tracked_isotopes * num_entries), 0.0);
+	amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(max_tracked_isotopes) * static_cast<std::size_t>(num_entries), 0.0);
 	for (int isotope_index = 0; isotope_index < num_tracked_isotopes; ++isotope_index) {
 		const int out_idx = outputIndex(full_table, tracked_isotopes[static_cast<std::size_t>(isotope_index)]);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 		    out_idx >= 0, ("chemical yield isotope not found in table: " + tracked_isotopes[static_cast<std::size_t>(isotope_index)]).c_str());
 		const auto data = full_const.dataViewArrays[static_cast<std::size_t>(out_idx)];
 		for (int i = 0; i < num_entries; ++i) {
-			flat_data[static_cast<std::size_t>(isotope_index * num_entries + i)] = std::max<amrex::Real>(data(i), 0.0);
+			flat_data[static_cast<std::size_t>(isotope_index) * static_cast<std::size_t>(num_entries) + static_cast<std::size_t>(i)] =
+			    std::max<amrex::Real>(data(i), 0.0);
 		}
 	}
 
@@ -338,8 +336,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryWRMassLossCumulativeFraction(
 	return std::min<amrex::Real>(1.0, std::max<amrex::Real>(0.0, values[0]));
 }
 
-} // namespace ChemicalYieldLookup
-
-} // namespace quokka
+} // namespace quokka::ChemicalYieldLookup
 
 #endif // PARTICLE_CHEMICAL_YIELD_HPP_

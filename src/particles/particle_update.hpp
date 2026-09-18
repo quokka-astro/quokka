@@ -161,7 +161,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 
 			constexpr int W_stencil_N = 2;
 			constexpr int W_stencil_width = 2 * W_stencil_N + 1;
-			constexpr amrex::Real W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
+			constexpr auto W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
 			constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
 			const bool enable_WR_metal_d = enable_WR_metal;
 			const bool store_channel_fields_d = store_channel_fields;

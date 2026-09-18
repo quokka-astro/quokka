@@ -1084,7 +1084,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositWendland(BufferArray const &loca
 	// AGB metals use the stellar-wind kernel; WR metals use the same kernel in particle_update.hpp.
 	constexpr int W_stencil_N = 2;
 	constexpr int W_stencil_width = 2 * W_stencil_N + 1;
-	constexpr amrex::Real W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
+	constexpr auto W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
 	constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
 	const int nz_loop = (AMREX_SPACEDIM >= 3) ? W_stencil_width : 1;
 	const int ny_loop = (AMREX_SPACEDIM >= 2) ? W_stencil_width : 1;

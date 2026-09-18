@@ -216,7 +216,6 @@ auto problem_main() -> int
 
 	const int seed = 42;
 	amrex::InitRandom(seed, 1);
-	// TODO: remove seed
 
 	amrex::ParmParse const ppp("problem");
 	ppp.query("Tamb", Tamb);
