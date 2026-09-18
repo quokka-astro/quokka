@@ -3,7 +3,8 @@ set(microphysics_network_name "photoionization") # this will override
                                                  # photoionization for this
                                                  # directory only
 setup_target_for_microphysics_compilation(${microphysics_network_name}
-                                          "${CMAKE_CURRENT_BINARY_DIR}/")
+                                          "${CMAKE_CURRENT_BINARY_DIR}/"
+                                          "Rosenbrock")
 
 # use the BEFORE keyword so that these files get priority in compilation for
 # targets in this directory this is critical to ensure the correct Microphysics

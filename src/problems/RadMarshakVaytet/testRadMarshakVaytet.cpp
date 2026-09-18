@@ -86,8 +86,7 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = []() constexpr {
 
 constexpr amrex::GpuArray<double, n_groups_> group_opacities_{};
 
-struct SuOlsonProblemCgs {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct SuOlsonProblemCgs {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int max_step_ = 1e6;
 constexpr double rho0 = 1.0e-3;	    // g cm^-3
@@ -107,18 +106,11 @@ template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
 };
 
 template <> struct Physics_Traits<SuOlsonProblemCgs> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = n_groups_; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct RadSystem_Traits<SuOlsonProblemCgs> {

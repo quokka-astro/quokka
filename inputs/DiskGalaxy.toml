@@ -43,10 +43,8 @@ mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
 mhd.project_initial_b_field = true
 mhd.update_initial_b_energy = true
 
-cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = "resampled"
-cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
 temperature_floor = 1e4
 density_floor = 1e-28
 density_floor_expr = "x1=x*1.0e-22; y1=y*1.0e-22; z1=z*1.0e-22; r2=x1*x1+y1*y1+z1*z1; rb2=3.08567758*3.08567758; base_density_floor * (rb2 / max(r2, rb2))"

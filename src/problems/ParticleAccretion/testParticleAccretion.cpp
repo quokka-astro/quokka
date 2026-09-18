@@ -30,8 +30,7 @@ constexpr bool particle_in_cell_center = true; // NOLINT
 bool return_1_at_fail = false;		       // NOLINT
 std::string sink_file = "../inputs/sink.txt";  // NOLINT
 
-struct AccretionProblem {
-};
+struct AccretionProblem {};
 
 // In this test, r_B = 0.1214 pc. Ball radius is R = 32 r_B, box half-size is 2 R = 64 r_B = 7.7696 pc = 2.397448054e+19 cm
 
@@ -50,7 +49,7 @@ bool refine_center = true;			 // NOLINT
 
 // constexpr double r_B = C::Gconst * C::M_solar / (cs0 * cs0);
 
-template <> struct Particle_Traits<AccretionProblem> {
+template <> struct Particle_Traits<AccretionProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };
@@ -68,16 +67,9 @@ template <> struct HydroSystem_Traits<AccretionProblem> {
 template <> struct Physics_Traits<AccretionProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_self_gravity_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct SimulationData<AccretionProblem> {

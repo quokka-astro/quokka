@@ -1,0 +1,30 @@
+# Test input for issue #1957 regression: sink particles + max_level=2 + do_subcycle=1
+# Domain: [-1.6e20, 1.6e20]^3, 32 cells, dx_0=1e19 cm
+# refineGrid(0) tags x < -1e20 => level-1 patch covers level-1 cells [0,15]
+#   (level-0 cells [0,7]). Particle at x=-5e18 (level-0 cell 15) is OUTSIDE level-1.
+# With blocking_factor=8, n_error_buf=2: the subcycled regrid holds level-1 FIXED
+# and cannot create properly-nested level-2 around the particle (the bug).
+# The fix (PR #1961) promotes subcycled regrids to full regrids so level-1 can expand.
+
+geometry.prob_lo = [-1.6e20, -1.6e20, -1.6e20]
+geometry.prob_hi = [1.6e20, 1.6e20, 1.6e20]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+amr.n_cell = [32, 32, 32]
+amr.max_level = 2
+amr.blocking_factor = 8
+amr.max_grid_size = 32
+amr.n_error_buf = 2
+amr.grid_eff = 0.7
+
+do_reflux = 1
+do_subcycle = 1
+do_tracers = 0
+regrid_interval = 1
+
+particles.verbose = 1
+
+stop_time = 3.0e14   # enough for 3 coarse steps at CFL dt ~8e13 s
+max_timesteps = 3
+tiny_profiler.enabled = 0
+density_refinement = 0

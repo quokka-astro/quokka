@@ -23,8 +23,7 @@
 #include "hydro/hydro_system.hpp"
 #include "util/BC.hpp"
 
-struct RTProblem {
-};
+struct RTProblem {};
 
 template <> struct quokka::EOS_Traits<RTProblem> {
 	static constexpr double gamma = 1.4;
@@ -36,18 +35,10 @@ template <> struct HydroSystem_Traits<RTProblem> {
 };
 
 template <> struct Physics_Traits<RTProblem> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 amrex::Real constexpr g_x = 0;

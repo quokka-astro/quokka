@@ -7,9 +7,10 @@
 #define LARGE 1.0e100
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_implicit,
-						     double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/,
-						     int *p_iteration_counter, int *p_iteration_failure_counter)
+void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
+						     Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/,
+						     double /*tempFloor*/, int *p_iteration_counter, int *p_iteration_failure_counter,
+						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -42,6 +43,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
+		// Compute cell-centered magnetic field
+		const double Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, cons_fc);
+
 		// load radiation energy
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
 		AMREX_ASSERT(Erad0 > 0.0);
@@ -53,9 +57,16 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
 		// Single-group: if ChemBands is defined the only group is an ionizing photon group (no cscale).
 		// For thermal groups, radEnergySource must be scaled by chat/c (= 1/cscale).
-		const double Src = RadSystem_Has_ChemBands<problem_t>::value ? radEnergySource(i, j, k, 0) * dt : radEnergySource(i, j, k, 0) * dt / cscale;
+		const double src_scale = RadSystem_Has_ChemBands<problem_t>::value ? dt : dt / cscale;
+		const double Src = src_scale * radEnergySource(i, j, k, 0);
 		if constexpr (gamma_ != 1.0) {
 			AMREX_ASSERT(Src >= 0.0);
+		}
+
+		// load the radiation flux source term, scaled exactly like the energy source above; unit: erg cm^-2 s^-2
+		amrex::GpuArray<amrex::Real, 3> Src_flux{};
+		for (int n = 0; n < 3; ++n) {
+			Src_flux[n] = src_scale * radFluxSource(i, j, k, n);
 		}
 
 		double Egas0 = NAN;
@@ -79,7 +90,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		amrex::GpuArray<Real, 3> Frad_t1{};
 
 		if constexpr (gamma_ != 1.0) {
-			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
+			Egas0 = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, Emag);
 			Etot0 = Egas0 + cscale * (Erad0 + Src);
 			AMREX_ASSERT(Egas0 > 0.0);
 		}
@@ -157,7 +168,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				const int maxIter = 100;
 				int n = 0;
 				for (; n < maxIter; ++n) {
-					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+					T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
 
 					// dust temperature
@@ -172,7 +183,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						}
 					}
 
-					fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
+					// A single chemical (ionizing) band emits no blackbody radiation (nGroupsThermal_ == 0);
+					// its source is injected directly via the negligible-optical-depth branch below.
+					fourPiBoverC = (nGroupsThermal_ == 0) ? 0.0 : ComputeThermalRadiationSingleGroup(T_d);
 
 					kappaP = ComputePlanckOpacity(rho, T_d);
 					kappaE = ComputeEnergyMeanOpacity(rho, T_d);
@@ -258,7 +271,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						break;
 					}
 
-					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+					const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
 #if 0
 					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
@@ -330,7 +343,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						AMREX_ASSERT(Erad_guess >= 0.0);
 						T_rad = std::sqrt(std::sqrt(Erad_guess / radiation_constant_));
 						if (deltaEgas / c_v > std::max(T_gas, T_rad)) {
-							Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+							Egas_guess = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
 							// R = 0.0;
 						} else {
 							Egas_guess += deltaEgas;
@@ -386,9 +399,11 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			amrex::GpuArray<amrex::Real, 3> Frad_t0{};
 			dMomentum = {0., 0., 0.};
 
-			Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index);
-			Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index);
-			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index);
+			// The user-defined flux source is added to the old-time flux, so the implicit absorption below acts
+			// on the freshly injected radiation as well.
+			Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index) + Src_flux[0];
+			Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index) + Src_flux[1];
+			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index) + Src_flux[2];
 
 			if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
 				auto erad = Erad_guess;
@@ -486,14 +501,22 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			// 3. Deal with the work term.
 			if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
 				// compute difference in gas kinetic energy before and after momentum update
-				amrex::Real const Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+				amrex::Real const Egastot1 =
+				    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 				amrex::Real const Ekin1 = Egastot1 - Egas_guess;
 				amrex::Real const dEkin_work = Ekin1 - Ekin0;
 
 				if constexpr (include_work_term_in_source) {
 					// New scheme: the work term is included in the source terms. The work done by radiation went to internal energy, but it
 					// should go to the kinetic energy. Remove the work term from internal energy.
-					Egas_guess -= dEkin_work;
+					// Cap the transfer exactly as the multigroup solver does: in a cold, strongly driven cell
+					// dEkin_work can exceed the internal energy available, and subtracting it unclamped leaves
+					// Egas negative, which the EOS rejects. The failure mode is not multigroup-specific, so the
+					// guard is not either. The cap does not conserve energy; see
+					// work_term_min_eint_fraction and issue #2173 for why that is acceptable and what the
+					// real fix would be.
+					const double max_eint_transfer = (1.0 - work_term_min_eint_fraction) * Egas_guess;
+					Egas_guess -= std::min(dEkin_work, max_eint_transfer);
 				} else {
 					// Old scheme: since the source term does not include work term, add the work term to radiation energy.
 
@@ -548,7 +571,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
-			consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+			consNew(i, j, k, gasEnergy_index) =
+			    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 			consNew(i, j, k, radEnergy_index) = Erad_guess;
 		} else {
 			amrex::ignore_unused(Erad_guess);

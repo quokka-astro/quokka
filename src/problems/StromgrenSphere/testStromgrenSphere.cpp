@@ -28,8 +28,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct StromgrenSphere {
-};
+struct StromgrenSphere {};
 
 constexpr double c_hat = C::c_light / 1.0;
 constexpr double sigma_star_coeff = 1.5 / 16.0;
@@ -41,18 +40,12 @@ template <> struct quokka::EOS_Traits<StromgrenSphere> {
 };
 
 template <> struct Physics_Traits<StromgrenSphere> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gravitational_constant = C::Gconst;
 	static constexpr double c_light = C::c_light;
@@ -67,9 +60,10 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 };
 
 template <>
-void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+void RadSystem<StromgrenSphere>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;

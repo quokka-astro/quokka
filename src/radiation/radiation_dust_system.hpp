@@ -2,6 +2,8 @@
 #ifndef RADIATION_DUST_SYSTEM_HPP_
 #define RADIATION_DUST_SYSTEM_HPP_
 
+#include <algorithm>
+
 #include "radiation/radiation_system.hpp"
 
 template <typename problem_t>
@@ -261,7 +263,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 	int dust_model = 1;
 	double T_d0 = NAN;
 	double lambda_gd_times_dt = NAN;
-	const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
+	const double T_gas0 = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 	AMREX_ASSERT(T_gas0 >= 0.);
 	T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, rad_boundaries);
 	AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
@@ -270,7 +272,12 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 	}
 
 	const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
-	if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
+	// A zero collisional coupling coefficient means the gas and the dust exchange no energy at all, which is
+	// exactly what the decoupled model describes, so select it on that ground alone. The comparison below
+	// cannot be relied on to do it: it flips sense once Egas0 is negative, and the coupled branch it then
+	// selects divides by coeff_n, filling the state with NaNs that surface later as a spurious
+	// "Newton-Raphson iteration failed to converge".
+	if (!(coeff_n > 0.0) || (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0)) {
 		dust_model = 2;
 		lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
 	}
@@ -336,10 +343,22 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 
 	const double H_num_den = ComputeNumberDensityH(rho, massScalars);
 
-	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+	T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
 	const int maxIter = 100;
+	// Rebasing an optically thin group onto Erad_g (see newton_erad_base_tau_threshold) is applied only in
+	// the decoupled branch. With dust_model == 1 the dust temperature is itself a function of sum(Rvec), and
+	// ComputeJacobianForGasAndDust has already eliminated that coupling in the R_g unknowns, so the columns
+	// are no longer a plain change of variable away from the Erad_g ones.
+	const bool rebase_thin = (dust_model == 2) && !use_D_as_base;
+	// Adaptive damping state. In the decoupled-dust branch the Newton iteration can oscillate with growing
+	// amplitude rather than converge, so the step is shortened whenever the radiation residual fails to
+	// decrease, and allowed to grow back towards a full step when it does. See newton_damping_* below.
+	double relax = 1.0;
+	double Fg_abs_sum_prev = std::numeric_limits<double>::max();
+	double delta_x_prev = 0.0;
+	quokka::valarray<double, nGroups_> delta_R_prev{};
 	int n = 0;
 	for (; n < maxIter; ++n) { // NOSONAR
 		// if relative change is within tol, break
@@ -360,7 +379,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
 		if (n > 0) {
-			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+			T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 			AMREX_ASSERT(T_gas >= 0.);
 		}
 
@@ -430,12 +449,19 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 					}
 				}
 			}
-		} else { // in the second and later loops, calculate tau and E (given R)
+		} else { // in the second and later loops, calculate tau, then recover whichever of E and R is not
+			 // the unknown for that group (see newton_erad_base_tau_threshold)
 			tau = dt * rho * opacity_terms.kappaP * chat;
 			for (int g = 0; g < nGroups_; ++g) {
 				// If tau = 0.0, Erad_guess shouldn't change
 				if (tau[g] > 0.0) {
-					EradVec_guess[g] = opacity_terms.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
+					if (rebase_thin && (tau[g] < newton_erad_base_tau_threshold)) {
+						// Erad_g is the unknown for this thin group; R_g follows from it without
+						// cancellation
+						Rvec[g] = (fourPiBoverC[g] - EradVec_guess[g] / opacity_terms.kappaPoverE[g]) * tau[g] + work_local[g];
+					} else {
+						EradVec_guess[g] = opacity_terms.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
+					}
 					if constexpr (force_rad_floor_in_iteration) {
 						if (EradVec_guess[g] < 0.0) {
 							Egas_guess -= cscale * (Erad_floor_ - EradVec_guess[g]);
@@ -448,7 +474,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 
 		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
 		AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
-		const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
 		const auto Egas_diff = Egas_guess - Egas0;
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
@@ -466,10 +492,30 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		if constexpr (use_D_as_base) {
 			jacobian.J0g = jacobian.J0g * tau0;
 			jacobian.Jgg = jacobian.Jgg * tau0;
+		} else if (rebase_thin) {
+			RebaseThinGroupsOntoErad(jacobian, tau, opacity_terms.kappaPoverE);
 		}
 
-		// check relative convergence of the residuals
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
+		// Round-off floor on the radiation residual, as in SolveGasRadiationEnergyExchange: a group whose
+		// unknown is R_g has its energy recovered from a cancelling difference, so |Fg| cannot fall below
+		// the double-precision round-off of the larger operand and a purely relative test is unreachable.
+		double Fg_roundoff = 0.0;
+		for (int g = 0; g < nGroups_; ++g) {
+			if (tau[g] > 0.0) {
+				// A group rebased onto Erad_g reaches its residual without that cancellation, so its floor
+				// is just the round-off of the terms of the residual itself.
+				const double operand =
+				    (rebase_thin && (tau[g] < newton_erad_base_tau_threshold))
+					? std::max(std::max(std::abs(EradVec_guess[g]), std::abs(Rvec[g])), std::max(std::abs(Erad0Vec[g]), std::abs(Src[g])))
+					: std::max(fourPiBoverC[g], EradVec_guess[g]);
+				Fg_roundoff += std::numeric_limits<double>::epsilon() * operand;
+			}
+		}
+
+		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
+		// the round-off floor and cannot be reduced any further
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) &&
+		    ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) || (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
@@ -509,12 +555,44 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		// enable_dE_constrain is used to prevent the gas temperature from dropping/increasing below/above the radiation
 		// temperature
 		if (dust_model == 2) {
-			T_d += delta_x;
-			Rvec += delta_R;
+			if (n > 0) {
+				// The bound is copied into a local first: std::max binds its argument by reference, and
+				// that would ODR-use the namespace-scope constexpr constant, which nvcc does not make
+				// available in device code.
+				const double damping_min = newton_damping_min;
+				relax *= (jacobian.Fg_abs_sum > Fg_abs_sum_prev) ? newton_damping_down : newton_damping_up;
+				relax = std::min(std::max(relax, damping_min), 1.0);
+			}
+			Fg_abs_sum_prev = jacobian.Fg_abs_sum;
+			// Oscillation catch. When the iteration cycles about the root rather than approaching it, the
+			// steps alternate in sign and each one overshoots past the root; the mean of two consecutive
+			// steps is what actually points at it (for a clean period-two cycle the mean lands on it).
+			// Advance by that mean instead of the raw Newton step, and let the usual convergence test
+			// below decide -- this damps the cycle without bypassing the criterion.
+			double step_x = delta_x;
+			auto step_R = delta_R;
+			if (n > 0 && delta_x * delta_x_prev < 0.0) {
+				step_x = 0.5 * (delta_x + delta_x_prev);
+				step_R = 0.5 * (delta_R + delta_R_prev);
+			}
+			delta_x_prev = delta_x;
+			delta_R_prev = delta_R;
+			T_d += relax * step_x;
+			for (int g = 0; g < nGroups_; ++g) {
+				if (rebase_thin && (tau[g] > 0.0) && (tau[g] < newton_erad_base_tau_threshold)) {
+					// step_R holds the Erad_g step for a rebased group. Rvec is advanced to first order
+					// as well, so that it stays usable if the group leaves the thin regime; when it does
+					// not, Rvec is recovered exactly at the top of the next iteration.
+					EradVec_guess[g] += relax * step_R[g];
+					Rvec[g] += -tau[g] / opacity_terms.kappaPoverE[g] * relax * step_R[g];
+				} else {
+					Rvec[g] += relax * step_R[g];
+				}
+			}
 		} else {
 			const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
 			if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {
-				Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+				Egas_guess = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
 				// Rvec.fillin(0.0);
 			} else {
 				Egas_guess += delta_x;
@@ -532,6 +610,19 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		// }
 	} // END NEWTON-RAPHSON LOOP
 
+	// Inject the source directly into transparent groups (tau ~ 0). The Newton solve above excludes such
+	// groups from its residual and Jacobian (Fg_abs_sum and Jgg skip tau <= 0) and leaves their radiation
+	// energy at Erad0, so an injected source in a transparent group would otherwise be silently dropped
+	// while UpdateFlux still applies the matching flux source, leaving |F| > c E. This mirrors the loop in
+	// the gas-only solver (source_terms_multi_group.hpp) and the single-group negligible-optical-depth
+	// branch; Src is already counted in Etot0, so it is energy-consistent. Groups with tau > 0 (the usual
+	// case) and groups without a source are unaffected.
+	for (int g = 0; g < nGroups_; ++g) {
+		if (!(tau[g] > 0.0)) {
+			EradVec_guess[g] = Erad0Vec[g] + Src[g];
+		}
+	}
+
 	const auto cooling_tend = DefineNetCoolingRate(T_gas, H_num_den) * dt;
 	if (dust_model == 2) {
 		// include line cooling/heating, cosmic ray heating terms; implicitly update Egas_guess
@@ -542,16 +633,18 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 
 		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
 		auto rhs = [=](double Egas_) -> double {
-			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto cooling_ = DefineNetCoolingRate(T_gas_, H_num_den) * dt;
 			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - CR_heating;
 		};
 
 		// Jacobian of the RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
 		auto jac = [=](double Egas_) -> double {
-			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, H_num_den) * dt;
-			return 1.0 + sum(d_cooling_d_Tgas_);
+			const double c_v_ = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas_, massScalars); // Egas = c_v * T
+			// The residual is a function of Egas_, so convert dCooling/dT to dCooling/dEgas via the chain rule (dT/dEgas = 1 / c_v).
+			return 1.0 + sum(d_cooling_d_Tgas_) / c_v_;
 		};
 
 		Egas_guess = BackwardEulerOneVariable(rhs, jac, Egas0, compare);
@@ -629,7 +722,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	int dust_model = 1;
 	double T_d0 = NAN;
 	double lambda_gd_times_dt = NAN;
-	const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
+	const double T_gas0 = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 	AMREX_ASSERT(T_gas0 >= 0.);
 	T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, rad_boundaries);
 	AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
@@ -638,7 +731,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	}
 
 	const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
-	if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
+	// A zero collisional coupling coefficient means the gas and the dust exchange no energy at all, which is
+	// exactly what the decoupled model describes, so select it on that ground alone. The comparison below
+	// cannot be relied on to do it: it flips sense once Egas0 is negative, and the coupled branch it then
+	// selects divides by coeff_n, filling the state with NaNs that surface later as a spurious
+	// "Newton-Raphson iteration failed to converge".
+	if (!(coeff_n > 0.0) || (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0)) {
 		dust_model = 2;
 		lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
 	}
@@ -701,7 +799,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	double Egas_guess_prev = Egas_guess;
 	auto EradVec_guess_prev = EradVec_guess;
 
-	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+	T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
 	// phtoelectric heating
@@ -729,7 +827,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
 		if (n > 0) {
-			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+			T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 			AMREX_ASSERT(T_gas >= 0.);
 		}
 
@@ -816,7 +914,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
 		AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
-		const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
 		const auto Egas_diff = Egas_guess - Egas0;
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
@@ -837,8 +935,21 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 			jacobian.Jgg = jacobian.Jgg * tau0;
 		}
 
-		// check relative convergence of the residuals
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
+		// Round-off floor on the radiation residual, as in SolveGasRadiationEnergyExchange: an optically
+		// thin group sitting far below its local blackbody has its energy reconstructed by a catastrophic
+		// cancellation, so |Fg| cannot fall below the double-precision round-off of the larger operand and a
+		// purely relative test is unreachable.
+		double Fg_roundoff = 0.0;
+		for (int g = 0; g < nGroups_; ++g) {
+			if (tau[g] > 0.0) {
+				Fg_roundoff += std::numeric_limits<double>::epsilon() * std::max(fourPiBoverC[g], EradVec_guess[g]);
+			}
+		}
+
+		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
+		// the round-off floor and cannot be reduced any further
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) &&
+		    ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) || (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
@@ -883,7 +994,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		} else {
 			const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
 			if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {
-				Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+				Egas_guess = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
 				// Rvec.fillin(0.0);
 			} else {
 				Egas_guess += delta_x;
@@ -901,6 +1012,19 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// }
 	} // END NEWTON-RAPHSON LOOP
 
+	// Inject the source directly into transparent groups (tau ~ 0). The Newton solve above excludes such
+	// groups from its residual and Jacobian (Fg_abs_sum and Jgg skip tau <= 0) and leaves their radiation
+	// energy at Erad0, so an injected source in a transparent group would otherwise be silently dropped
+	// while UpdateFlux still applies the matching flux source, leaving |F| > c E. This mirrors the loop in
+	// the gas-only solver (source_terms_multi_group.hpp) and the single-group negligible-optical-depth
+	// branch; Src is already counted in Etot0, so it is energy-consistent. Groups with tau > 0 (the usual
+	// case) and groups without a source are unaffected.
+	for (int g = 0; g < nGroups_; ++g) {
+		if (!(tau[g] > 0.0)) {
+			EradVec_guess[g] = Erad0Vec[g] + Src[g];
+		}
+	}
+
 	const auto cooling_tend = DefineNetCoolingRate(T_gas, H_num_den) * dt;
 	if (dust_model == 2) {
 		// compute cooling/heating terms; implicitly update Egas_guess
@@ -911,7 +1035,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) - PE_heating_energy_derivative * EradVec_guess[nGroups_ -
 		// 1];
 		auto rhs = [=](double Egas_) -> double {
-			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto cooling_ = DefineNetCoolingRate(T_gas_, H_num_den) * dt;
 			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1] -
 			       CR_heating;
@@ -920,9 +1044,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// Jacobian of the RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) + PE_heating_energy_derivative *
 		// EradVec_guess[nGroups_ - 1];
 		auto jac = [=](double Egas_) -> double {
-			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, H_num_den) * dt;
-			return 1.0 + sum(d_cooling_d_Tgas_);
+			const double c_v_ = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas_, massScalars); // Egas = c_v * T
+			// The residual is a function of Egas_, so convert dCooling/dT to dCooling/dEgas via the chain rule (dT/dEgas = 1 / c_v).
+			return 1.0 + sum(d_cooling_d_Tgas_) / c_v_;
 		};
 
 		Egas_guess = BackwardEulerOneVariable(rhs, jac, Egas0, compare);
