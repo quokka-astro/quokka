@@ -5,7 +5,7 @@
 > The radiation module has been verified against the test problems in [@Wibking_2022], [@He_2024], and [@He_2024b], but is still marked **beta** for science-use maturity. Please cite the relevant methods paper and record the exact commit hash used.
 >
 
-Quokka solves the equations of radiation hydrodynamics (RHD) with a two-moment (M1) method in the mixed-frame formulation, accurate to first order in \\(v/c\\). Radiation may be grey (a single frequency-integrated group) or multigroup, and the solver is *asymptotic-preserving*: it recovers the correct diffusion solution even when the photon mean free path is far smaller than a cell. This page summarises what is solved, how, and how to set it up. The stage-by-stage structure of the time integrator is documented separately in the [Radiation Integrator](radiation_integrator.md) page, and the full conservation-law system including MHD, dust, and gravity in [Equations](equations.md).
+Quokka solves the equations of radiation hydrodynamics (RHD) with a two-moment (M1) method in the mixed-frame formulation, accurate to first order in \\(v/c\\). Radiation may be grey (a single frequency-integrated group) or multigroup, and the solver is *asymptotic-preserving*: it recovers the correct diffusion solution even when the photon mean free path is far smaller than a cell. This page summarises what is solved, how, and how to set it up. The methods are presented in full in three papers, cited throughout below: the Godunov radiation solver in [@Wibking_2022], the grey time-integration scheme in [@He_2024], and the multigroup formulation in [@He_2024b]. The stage-by-stage structure of the time integrator is documented separately in the [Radiation Integrator](radiation_integrator.md) page, and the full conservation-law system including MHD, dust, and gravity in [Equations](equations.md).
 
 ## Equations solved
 
@@ -36,7 +36,7 @@ The system is closed with the [@Levermore_1984] M1 closure, which expresses \\(\
 
 ### Matter-radiation coupling
 
-The four-force is written in the *mixed-frame* form: the opacities and emissivities are evaluated in the comoving frame, where they are isotropic and simple, while all radiation moments stay in the lab frame. Assuming the gas is in local thermodynamic equilibrium and neglecting scattering, the frequency-integrated (grey) four-force to order \\(v/c\\) is
+The four-force is written in the *mixed-frame* form: the opacities and emissivities are evaluated in the comoving frame, where they are isotropic and simple, while all radiation moments stay in the lab frame. Assuming the gas is in local thermodynamic equilibrium and neglecting scattering, the frequency-integrated (grey) four-force to order \\(v/c\\) is, following [@MihalasMihalas] and [@Krumholz2007],
 
 <script type="math/tex; mode=display">
 \begin{aligned}
@@ -49,7 +49,7 @@ where \\(\chi\_{0P}\\), \\(\chi\_{0E}\\), and \\(\chi\_{0F}\\) are the comoving-
 
 ### The multigroup four-force
 
-For multigroup, the expressions above are integrated over each group, from \\(\nu\_{g-}\\) to \\(\nu\_{g+}\\). Quokka solves
+For multigroup, the expressions above are integrated over each group, from \\(\nu\_{g-}\\) to \\(\nu\_{g+}\\). Quokka solves the group-integrated four-force derived in [@He_2024b],
 
 <script type="math/tex; mode=display">
 \begin{aligned}
@@ -64,7 +64,7 @@ where \\(B\_g\\), \\(E\_g\\), \\(\boldsymbol{F}\_g\\), and \\(\mathsf{P}\_g\\) a
 \Delta_g(Q) \equiv Q(\nu_{g+}) - Q(\nu_{g-})
 </script>
 
-is the difference of a frequency-dependent quantity between the upper and lower edges of the group. How the three mean opacities and \\(\alpha\_{\chi\_0,g}\\) are evaluated is exactly what the [opacity model](#multigroup-opacity-models) specifies.
+is the difference of a frequency-dependent quantity between the upper and lower edges of the group. See [Multigroup opacity models](#multigroup-opacity-models) below for how the three mean opacities and \\(\alpha\_{\chi\_0,g}\\) are evaluated, and [Multigroup opacities](#multigroup-opacities) for how to supply them from a problem generator.
 
 Term by term:
 
@@ -85,7 +85,7 @@ Under the piecewise constant opacity model, \\(\alpha\_{\chi\_0,g} = 0\\) and th
 \end{aligned}
 </script>
 
-Summing either form over all groups recovers the grey four-force of the previous section.
+Summing either form over all groups recovers the grey four-force of [Matter-radiation coupling](#matter-radiation-coupling) above.
 
 ### Reduced speed of light
 
@@ -93,10 +93,10 @@ To relax the radiation timestep, the radiation subsystem may be solved with a re
 
 ## Numerical method
 
-A full timestep is operator-split into two parts.
+The scheme is developed and tested in [@He_2024] for grey radiation and extended to multigroup in [@He_2024b]; the underlying Godunov radiation solver is that of [@Wibking_2022]. A full timestep is operator-split into two parts.
 
 1. **Hydrodynamic transport**, advanced explicitly with the PPM + RK2-SSP Godunov scheme described in [@Wibking_2022].
-2. **Radiation transport and matter-radiation coupling**, advanced with an implicit-explicit (IMEX) scheme, subcycled with respect to the hydro step at `radiation.cfl`.
+2. **Radiation transport and matter-radiation coupling**, advanced with an implicit-explicit (IMEX) scheme, subcycled with respect to the hydro step at `radiation.cfl` (see [Runtime parameters](#runtime-parameters)).
 
 Within the radiation step, the transport terms \\(\nabla \cdot \boldsymbol{F}\_g\\) and \\(\nabla \cdot \mathsf{P}\_g\\) are treated **explicitly** and the four-force terms **implicitly**. This split is what keeps the method cheap on GPUs: the implicit part contains no spatial derivatives, so every cell is solved independently and the radiation update needs no more communication than a pure hydro update.
 
@@ -111,26 +111,26 @@ The two parts are combined with the asymptotic-preserving IMEX PD-ARS integrator
 \end{aligned}
 </script>
 
-with \\(\mathsf{T}\\) the transport terms and \\(\mathsf{S}\\) the source terms. Transport and source terms enter symmetrically at both stages, which is what allows the near-exact cancellation between them that the diffusion limit requires. The scheme is second-order accurate and reduces to RK2-SSP in the streaming limit.
+with \\(\mathsf{T}\\) the transport terms and \\(\mathsf{S}\\) the source terms. Transport and source terms enter symmetrically at both stages, which is what allows the near-exact cancellation between them that the diffusion limit requires. The scheme is second-order accurate and reduces to RK2-SSP in the streaming limit. [@He_2024] give the Butcher tableaux, the formal asymptotic analysis of the diffusion limit, and the numerical tests; the stage-by-stage mapping onto the code is in [Radiation Integrator](radiation_integrator.md).
 
-One practical consequence: because the scheme is asymptotic-preserving by construction, the *ad hoc* correction to the HLL wavespeeds that earlier explicit radiation schemes needed in order to recover the diffusion limit is no longer required. Quokka uses the uncorrected HLL fluxes with PPM reconstruction by default. The correction survives only as the diagnostic flag `use_wavespeed_correction_`, used by `RadMarshakAsymptotic` to demonstrate what it does.
+One practical consequence, demonstrated in [@He_2024]: because the scheme is asymptotic-preserving by construction, the *ad hoc* correction to the HLL wavespeeds that earlier explicit radiation schemes needed in order to recover the diffusion limit is no longer required. Quokka uses the uncorrected HLL fluxes with PPM reconstruction by default. The correction survives only as the diagnostic flag `use_wavespeed_correction_`, used by `RadMarshakAsymptotic` to demonstrate what it does.
 
 ### The implicit solve
 
-Each implicit stage solves, cell by cell, a system of \\(4 + 4 N\_g\\) equations for the gas energy, the gas momentum, and the energy and flux of every group. It is split into two nested iterations:
+Each implicit stage solves, cell by cell, a system of \\(4 + 4 N\_g\\) equations for the gas energy, the gas momentum, and the energy and flux of every group. Following [@Howell_2003] and [@Wibking_2022], and as generalised to multigroup in [@He_2024b], it is split into two nested iterations:
 
 - an **inner** Newton-Raphson iteration over the \\(1 + N\_g\\) energy variables (gas energy and the group exchange terms \\(R\_g\\)), with \\(\boldsymbol{v}\\) and \\(\boldsymbol{F}\_g\\) frozen;
 - an **outer** iteration that updates \\(\boldsymbol{F}\_g\\) and the gas momentum analytically, then returns to the inner solve if the velocity-dependent terms have changed.
 
-The inner Jacobian is sparse — groups couple to the gas but not directly to each other — so it is inverted by Gauss-Jordan elimination in \\(O(N\_g)\\) operations rather than \\(O(N\_g^3)\\). Outside the dynamic diffusion limit the outer loop almost always converges in one pass. The gas energy is recovered from the converged exchange terms rather than solved for independently, which is what makes the update conservative to machine precision regardless of how tightly the iteration converged. Convergence tolerances are set by `radiation.iteration_tolerance` and `radiation.iteration_tolerance_rel`; the choice of per-group unknown and the round-off floor on the residual are discussed in [Radiation Integrator](radiation_integrator.md).
+The inner Jacobian is sparse — groups couple to the gas but not directly to each other — so [@He_2024b] invert it by Gauss-Jordan elimination in \\(O(N\_g)\\) operations rather than \\(O(N\_g^3)\\). Outside the dynamic diffusion limit the outer loop almost always converges in one pass. The gas energy is recovered from the converged exchange terms rather than solved for independently, which is what makes the update conservative to machine precision regardless of how tightly the iteration converged. Convergence tolerances are set by `radiation.iteration_tolerance` and `radiation.iteration_tolerance_rel`; the choice of per-group unknown and the round-off floor on the residual are discussed in [Radiation Integrator](radiation_integrator.md).
 
 ## Multigroup opacity models
 
-The group-integrated four-force involves integrals of the opacity multiplied by a radiation quantity over each group, so a model for the frequency dependence of \\(\chi\_0\\) *within* a group is needed. Quokka offers two, selected with the `opacity_model` trait.
+The group-integrated four-force given in [The multigroup four-force](#the-multigroup-four-force) involves integrals of the opacity multiplied by a radiation quantity over each group, so a model for the frequency dependence of \\(\chi\_0\\) *within* a group is needed. Quokka offers two, both introduced in [@He_2024b] and selected with the `opacity_model` trait. [Multigroup opacities](#multigroup-opacities) below shows how to supply either from a problem generator.
 
 ### Piecewise constant (PC)
 
-The opacity is taken to be constant across each group, \\(\chi\_0(\nu) = \chi\_{0,g}\\). The Planck-, energy-, and flux-mean opacities of a group are then all equal to that one value, and the \\(\partial \chi\_0 / \partial \nu\\) terms vanish. This is the simplest model and the one used by most earlier multigroup codes. It is accurate when the frequency grid is fine enough to resolve the variation of the opacity, and inaccurate when it is not.
+The opacity is taken to be constant across each group, \\(\chi\_0(\nu) = \chi\_{0,g}\\). The Planck-, energy-, and flux-mean opacities of a group are then all equal to that one value, and the \\(\partial \chi\_0 / \partial \nu\\) terms vanish. This is the simplest model and the one used by most earlier multigroup codes. It is accurate when the frequency grid is fine enough to resolve the variation of the opacity, and inaccurate when it is not. It is the case for which the four-force reduces to the compact form at the end of [The multigroup four-force](#the-multigroup-four-force).
 
 ### Piecewise power law (PPL)
 
@@ -157,7 +157,7 @@ Note that \\(\alpha\_{Q,g}\\) matters only when \\(\alpha\_{\chi\_0,g} \ne 0\\):
 
 ### Flux-mean opacity
 
-The flux-mean opacity \\(\chi\_{0F,g}\\) is not supplied by the user. It is computed internally from \\(\chi\_{0E,g}\\), \\(\chi\_{0B,g}\\), and the gas temperature so that \\(\boldsymbol{G}\_g \to 0\\) in an optically thick moving medium. Enforcing this relation is what guarantees that the multigroup scheme reaches the correct diffusion limit; in the PC case it reduces to \\(\chi\_{0F,g} = \chi\_{0,g}\\), as expected.
+The flux-mean opacity \\(\chi\_{0F,g}\\) that appears in the four-force is not supplied by the user. It is computed internally from \\(\chi\_{0E,g}\\), \\(\chi\_{0B,g}\\), and the gas temperature so that \\(\boldsymbol{G}\_g \to 0\\) in an optically thick moving medium. As shown in [@He_2024b], enforcing this relation is what guarantees that the multigroup scheme reaches the correct diffusion limit; in the PC case it reduces to \\(\chi\_{0F,g} = \chi\_{0,g}\\), as expected.
 
 ## Setting up a problem
 
@@ -186,7 +186,7 @@ Then specialise `RadSystem_Traits`:
 
 ### Grey opacities
 
-For `nGroups = 1`, define the mean opacities as functions of density and gas temperature. Each returns a mass opacity in \\(\mathrm{cm^2\\,g^{-1}}\\). Only `ComputePlanckOpacity` is mandatory; the other two default to it.
+For `nGroups = 1`, define the mean opacities \\(\chi\_{0P}\\), \\(\chi\_{0F}\\), and \\(\chi\_{0E}\\) of [Matter-radiation coupling](#matter-radiation-coupling) as functions of density and gas temperature. Each returns a mass opacity in \\(\mathrm{cm^2\\,g^{-1}}\\). Only `ComputePlanckOpacity` is mandatory; the other two default to it.
 
 ```c++
 template <> struct RadSystem_Traits<MyProblem> {
@@ -212,7 +212,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<MyProblem>::ComputeFluxMeanOpacity(const do
 
 ### Multigroup opacities
 
-For `nGroups > 1` the grey hooks are not used. Instead specialise a single function, `DefineOpacityExponentsAndLowerValues`, which returns two arrays of length `nGroups + 1`: the power-law exponents \\(\alpha\_{\chi\_0,g}\\) in element `[0]`, and the opacity at the lower edge of each group, \\(\kappa\_{0,g-}\\), in element `[1]`. Under the PC model the exponents are ignored and `[1][g]` is used directly as the constant opacity of group `g`.
+For `nGroups > 1` the grey hooks are not used. Instead specialise a single function, `DefineOpacityExponentsAndLowerValues`, which returns two arrays of length `nGroups + 1`: the power-law exponents \\(\alpha\_{\chi\_0,g}\\) in element `[0]`, and the opacity at the lower edge of each group, \\(\kappa\_{0,g-}\\), in element `[1]`. These are the two quantities that define the power law in [Piecewise power law (PPL)](#piecewise-power-law-ppl); under the PC model the exponents are ignored and `[1][g]` is used directly as the constant opacity of group `g`. The three group means \\(\chi\_{0B,g}\\), \\(\chi\_{0E,g}\\), and \\(\chi\_{0F,g}\\) that enter the four-force are derived from them internally.
 
 A piecewise constant opacity, uniform across all groups:
 
@@ -288,4 +288,10 @@ The following test problems exercise the solver across the streaming, static dif
 
 ## References
 
-The methods on this page are described in full in [@Wibking_2022] (the Godunov radiation solver and the M1 closure), [@He_2024] (the IMEX PD-ARS scheme and its asymptotic-preserving properties), and [@He_2024b] (the multigroup formulation and the opacity models). The mixed-frame formulation follows [@Krumholz2007] and [@MihalasMihalas]; the inner Newton-Raphson scheme follows [@Howell_2003].
+Because the three Quokka methods papers share authors and year, the short citations above do not distinguish them on sight. They are, in the order a reader should approach them:
+
+- [@Wibking_2022] — the original Quokka paper: the Godunov radiation solver, PPM reconstruction and HLL fluxes for the radiation moments, and the M1 closure. Start here.
+- [@He_2024] — *An asymptotically correct implicit-explicit time integration scheme for finite volume radiation-hydrodynamics*. The IMEX PD-ARS scheme of [Numerical method](#numerical-method), its asymptotic analysis in the static and dynamic diffusion limits, and the removal of the wavespeed correction.
+- [@He_2024b] — *A novel numerical method for mixed-frame multigroup radiation-hydrodynamics with GPU acceleration implemented in the QUOKKA code*. Everything multigroup: the group-integrated four-force of [The multigroup four-force](#the-multigroup-four-force), the PC and PPL [opacity models](#multigroup-opacity-models), and the sparse Newton solve.
+
+The mixed-frame formulation itself follows [@MihalasMihalas] and [@Krumholz2007], and the inner Newton-Raphson iteration follows [@Howell_2003]. If you use the radiation module, please cite the papers that apply to your work — see [Citation](citation.md).
