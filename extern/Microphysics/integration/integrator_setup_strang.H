@@ -157,8 +157,6 @@ void integrator_cleanup (IntegratorT& int_state, BurnT& state,
     state.n_jac = int_state.n_jac;
     state.n_step = int_state.n_step;
 
-    state.error_code = static_cast<short>(istate);
-
     // The integrator may not always fail even though it can lead to
     // unphysical states.  Add some checks that indicate a burn fail
     // even if the integrator thinks the integration was successful.

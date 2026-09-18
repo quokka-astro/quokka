@@ -50,10 +50,6 @@ using  JacNetArray2D = ArrayUtil::MathArray2D<jac_t, 1, neqs, 1, neqs>;
 struct burn_t
 {
 
-  // on exit, this will be set to the integration time we achieved
-
-  amrex::Real time{};
-
   // this first group are the quantities the network RHS uses
 
   amrex::Real rho{};
@@ -92,9 +88,6 @@ struct burn_t
   // reaction Jacobian elements from T to e
   amrex::Real cv{};
 
-  // dx is useful for estimating timescales for equilibriation
-  amrex::Real dx{};
-
   amrex::Real mu{};
   amrex::Real mu_e{};
   amrex::Real y_e{};
@@ -108,9 +101,6 @@ struct burn_t
 
   // Was the burn successful?
   bool success{};
-
-  // integrator error code
-  short error_code{};
 
 };
 

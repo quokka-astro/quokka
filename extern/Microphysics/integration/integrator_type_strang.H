@@ -28,8 +28,6 @@ void integrator_to_burn (const I& int_state, BurnT& state)
     if (integrator_rp::scale_system) {
         state.e *= state.e_scale;
     }
-
-    state.time = int_state.t;
 }
 
 

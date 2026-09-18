@@ -29,7 +29,11 @@ codes are removed. The burn state omits unused SDC storage and its diagnostic
 output and initialization. Unused EOS structure variants, one-dimensional array
 and Jacobian helpers, radiation-flux tolerance settings and storage, and the
 unused diagnostic backup of `c_hat` are also removed. Flux evolution is retained;
-Rosenbrock excludes flux from its error norm.
+Rosenbrock excludes flux from its error norm. Uncalled EOS validation and empty
+finalization hooks, their unused composition bounds, auxiliary-species lookup,
+EOS iteration enum, and unused array methods are removed. Unused conductivity
+and cell-width fields and write-only burn time/error-code storage are omitted;
+active EOS input resets and integrator success checks are retained.
 
 `CMakeLists.txt` fixes the backend to Rosenbrock and removes unused metal chemistry,
 standalone AMReX fetching, upstream unit-test builds, unused thread/package helpers,

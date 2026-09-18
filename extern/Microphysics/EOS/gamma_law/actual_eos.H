@@ -294,9 +294,4 @@ void actual_eos (I input, T& state)
     }
 }
 
-inline
-void actual_eos_finalize() {
-
-}
-
 #endif

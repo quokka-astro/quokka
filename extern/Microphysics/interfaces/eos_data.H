@@ -14,10 +14,6 @@ namespace EOSData
   extern AMREX_GPU_MANAGED amrex::Real maxtemp;
   extern AMREX_GPU_MANAGED amrex::Real mindens;
   extern AMREX_GPU_MANAGED amrex::Real maxdens;
-  extern AMREX_GPU_MANAGED amrex::Real minx;
-  extern AMREX_GPU_MANAGED amrex::Real maxx;
-  extern AMREX_GPU_MANAGED amrex::Real minye;
-  extern AMREX_GPU_MANAGED amrex::Real maxye;
   extern AMREX_GPU_MANAGED amrex::Real mine;
   extern AMREX_GPU_MANAGED amrex::Real maxe;
   extern AMREX_GPU_MANAGED amrex::Real minp;

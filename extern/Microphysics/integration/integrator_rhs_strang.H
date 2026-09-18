@@ -52,8 +52,6 @@ void rhs (const amrex::Real time, BurnT& state, T& int_state, RArray1D& ydot, [[
 
     }
 
-    state.time = time;
-
     // at this point, the (burn_t) state is synchronized with the integrator
     // and is thermodynamically consistent.
 
