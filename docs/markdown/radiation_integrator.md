@@ -8,6 +8,7 @@ The radiation integrator advances the coupled radiation–matter system using th
 - **State management:** At the start of each substep after the first, `swapRadiationState` copies the radiation hyperbolic variables from `state_new_cc_` back into `state_old_cc_`, so that the integrator always has a clean "old" radiation state to advance from while the hydro variables remain in `state_new_cc_`.
 - **IMEX stages per substep:** Each substep applies the 3-stage IMEX PD-ARS scheme — one explicit Forward Euler stage and one explicit RK2 corrector stage, each followed by an implicit Newton–Raphson solve for the stiff matter–radiation coupling.
 - **Particle source injection:** In 3D, stellar particles deposit their luminosity into `radEnergySource` before each implicit solve, giving a cell-centred luminosity density (erg s⁻¹ cm⁻³).
+- **User source injection:** `RadSystem<problem_t>::AddRadSource` is called before each implicit solve and lets a problem add its own radiation source. It writes two scratch buffers of its own, zeroed beforehand: `radEnergySource`, a luminosity volume density per group, and `reducedFluxSource`, the *reduced* flux \\(f = F/(cE)\\) of the injected radiation in component \\(3g + n\\) for group \\(g\\) along direction \\(n\\). `MergeUserRadSource` then converts the pair into a real flux source and adds both to the solver's buffers. Asking for a reduced flux rather than a flux makes \\(|F| > cE\\) unrepresentable: a reduced flux of unit magnitude injects fully beamed, free-streaming radiation for either kind of band, and leaving it at zero injects isotropically. The energy source is scaled internally by \\(\hat c / c\\) for a thermal group and not at all for a chemistry band, and the derived flux source inherits the same scaling.
 - **Flux register coupling:** Radiation fluxes are accumulated into `FluxRegister`s for later refluxing across AMR coarse/fine interfaces.
 
 ## IMEX PD-ARS scheme
@@ -171,6 +172,53 @@ This makes the mapping from Butcher tableau entries to solver calls transparent.
 ### Temporary state storage
 
 `state_tmp1_cc` is allocated once per call to `subcycleRadiationAtLevel` (before the substep loop) and reused across substeps. It holds the complete U^(2) state after stage 2, enabling the Shu-Osher combination for gas variables in step 5 above without needing to store `g(U^(2))` separately.
+
+## Matter–radiation Newton solve
+
+Each implicit stage solves, cell by cell, a coupled system whose unknowns are one scalar for the matter (the gas internal energy, or the dust temperature when gas and dust are thermally decoupled) plus one per radiation group. The group residual is conservation,
+
+<script type="math/tex; mode=display">
+F_g = E_g - E_{0,g} - R_g - \mathrm{Src}_g \, ,
+</script>
+
+and the group unknown is tied to \\(E\_g\\) by the definition of the exchange term,
+
+<script type="math/tex; mode=display">
+R_g = \left( \frac{4 \pi B_g}{c} - \frac{E_g}{(\kappa_P/\kappa_E)_g} \right) \tau_g + w_g \, ,
+</script>
+
+with \\(\tau\_g = \Delta t\\, \rho\\, \kappa\_{P,g}\\, \hat c\\) the optical depth across the step and \\(w\_g\\) the work term. Two properties of this system are easy to get wrong and are worth stating.
+
+### Group Planck temperature derivative
+
+The Jacobian entry \\(\partial F\_g / \partial T\\) requires the temperature derivative of the group-integrated Planck function \\(a T^4 f\_g(T)\\), and **both** terms of the product rule matter:
+
+<script type="math/tex; mode=display">
+\frac{\mathrm{d}}{\mathrm{d}T} \left[ a T^4 f_g(T) \right] = 4 a T^3 f_g + a T^4 \frac{\mathrm{d} f_g}{\mathrm{d}T} \, .
+</script>
+
+The second term is negligible for the group that carries the spectral peak, where \\(f\_g\\) is close to constant, but it dominates for a group on the Wien tail, where \\(f\_g\\) can rise as steeply as \\(T^{20}\\). Dropping it does not change the converged answer, but it makes the Newton step too long by the same factor, and the iteration then overshoots and diverges.
+
+`ComputeThermalRadiationTempDerivativeMultiGroup` therefore evaluates the exact derivative. Integrating the kernel by parts gives a cumulative form built from the same normalized Planck integral \\(P\\) used for the energy fractions,
+
+<script type="math/tex; mode=display">
+D(x) \equiv \frac{15}{\pi^4} \int_0^x \frac{s^4 e^s}{(e^s - 1)^2} \, \mathrm{d}s = 4 P(x) - \frac{15}{\pi^4} \frac{x^4}{e^x - 1} \, ,
+</script>
+
+so that \\(\mathrm{d}(4 \pi B\_g / c) / \mathrm{d}T = a T^3 \left[ D(x\_{g+1}) - D(x\_g) \right]\\) with \\(x = h \nu / (k T)\\). The cost is one extra term per group boundary, and \\(D(\infty) = 4\\) recovers \\(\mathrm{d}(a T^4)/\mathrm{d}T\\).
+
+### Choice of per-group unknown
+
+\\(E\_g\\) and \\(R\_g\\) are affinely related, so either may serve as the unknown and Newton takes the same steps in exact arithmetic. Round-off is not invariant, however: whichever quantity is carried between iterations keeps full relative precision, and the other inherits the error of the map. The two directions fail in opposite regimes.
+
+- With \\(R\_g\\) as the unknown, \\(E\_g = (\kappa\_P/\kappa\_E)\_g \left( 4 \pi B\_g / c - (R\_g - w\_g)/\tau\_g \right)\\). For \\(\tau\_g \ll 1\\) the two terms agree to within a factor \\(\tau\_g\\), so an **optically thin** group loses its leading digits.
+- With \\(E\_g\\) as the unknown, \\(R\_g\\) comes from the definition above. That difference cancels when \\(E\_g / (\kappa\_P/\kappa\_E)\_g\\) approaches \\(4 \pi B\_g / c\\), which is the **optically thick**, near-equilibrium case.
+
+The solver therefore switches per group on \\(\tau\_g\\), at `newton_erad_base_tau_threshold` (currently 1): thin groups are based on \\(E\_g\\), thick groups on \\(R\_g\\). Rebasing a group scales its Jacobian column by \\(\mathrm{d}R\_g/\mathrm{d}E\_g = -\tau\_g / (\kappa\_P/\kappa\_E)\_g\\), changes \\(\partial F\_g / \partial x\\) (the partial derivative at fixed \\(E\_g\\) is not the one at fixed \\(R\_g\\)), and adds a term to \\(\partial F\_0 / \partial x\\), since \\(R\_g\\) now varies with the matter variable. This is done by `RebaseThinGroupsOntoErad`.
+
+Rebasing is applied in `SolveGasRadiationEnergyExchange` and in the decoupled branch of `SolveGasDustRadiationEnergyExchange`. It is **not** applied when gas and dust are thermally coupled, because there \\(T\_d\\) is itself a function of \\(\sum\_g R\_g\\) and `ComputeJacobianForGasAndDust` has already eliminated that coupling in the \\(R\_g\\) unknowns, so the columns are no longer a plain change of variable away from the \\(E\_g\\) ones.
+
+Groups that are still based on \\(R\_g\\) keep a round-off floor on the convergence test: their residual cannot be resolved below \\(\varepsilon \times 4 \pi B\_g / c\\), so a purely relative tolerance would be unreachable. Rebased groups use the round-off of the residual's own terms instead.
 
 ## Equivalence with the previous implementation (single-group)
 

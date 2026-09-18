@@ -104,8 +104,7 @@ void validateSNIIYields(const QuokkaSimulation<problem_t> &sim, const std::strin
 
 } // namespace
 
-struct test_SNII_Yields {
-};
+struct test_SNII_Yields {};
 
 constexpr Real gamma_ = 5. / 3.;
 constexpr Real year = 3.15576e+07;
@@ -134,11 +133,9 @@ template <> struct Physics_Traits<test_SNII_Yields> : DefaultPhysicsTraits {
 	static constexpr int nGroups = 1;
 };
 
-struct YieldStorageDisabled {
-};
+struct YieldStorageDisabled {};
 
-template <> struct Physics_Traits<YieldStorageDisabled> : Physics_Traits<test_SNII_Yields> {
-};
+template <> struct Physics_Traits<YieldStorageDisabled> : Physics_Traits<test_SNII_Yields> {};
 
 static_assert(quokka::StochasticStellarPopParticleChemistryBlockSize<YieldStorageDisabled>() == 0);
 static_assert(quokka::StochasticStellarPopParticleRealComps<YieldStorageDisabled> ==

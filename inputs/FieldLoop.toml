@@ -27,7 +27,6 @@ do_subcycle = 0
 plotfile_interval = -1
 checkpoint_interval = -1
 cfl = 0.2
-stop_time = 3.0
 max_timesteps = 3e4
 
 hydro.rk_integrator_order = 2
@@ -37,3 +36,18 @@ hydro.use_dual_energy = 0
 # MHD parameters
 mhd.emf_reconstruction_order = 5  # xPPM for EMF
 mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
+
+# *****************************************************************
+# Field loop setup
+# *****************************************************************
+setup.num_periods = 1
+setup.loop_radius = 0.3
+setup.loop_center_x = 0.0
+setup.loop_center_y = 0.0
+setup.advection_vz = 1.0  # out-of-plane drift; the loop is z-invariant, so this should not affect the solution
+
+setup.refine_based_on = "Region"  # "Region" or "MagneticEnergy"
+setup.region_lo_x = 0.4
+setup.region_hi_x = 0.6
+setup.region_lo_y = -0.23125
+setup.region_hi_y = 0.23125

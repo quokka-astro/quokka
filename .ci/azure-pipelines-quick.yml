@@ -139,16 +139,38 @@ jobs:
         # name (e.g. add_test(NAME ${JOB_NAME}Suffix ...)), so a name-derived regex can miss
         # tests. Instead read the literal, fully-resolved test names that CMake writes per
         # source directory after configure: build/src/problems/<Name>/CTestTestfile.cmake.
+        # The same guard also decides whether the directory contributes a build target at all, and asking
+        # the generated build system for a target it does not define is a hard error rather than a no-op,
+        # so intersect the changed problems with the targets that actually exist before building.
+        AVAILABLE=$(cmake --build build --target help 2>/dev/null | sed 's/^\.\.\. *//' | awk '{print $1}')
+        if [ -z "$AVAILABLE" ]; then
+          echo "##[warning]Could not list build targets; building all changed problems unfiltered."
+          AVAILABLE=$(echo $(changedProblems) | tr ' ' '\n')
+        fi
+        KEPT=""
         TEST_NAMES=""
         for p in $(changedProblems); do
+          if ! echo "$AVAILABLE" | grep -qx -- "$p"; then
+            echo "##[warning]Changed problem '$p' defines no target in this configuration (probably a dimensionality guard); skipping."
+            continue
+          fi
+          KEPT="$KEPT $p"
           TESTFILE="build/src/problems/${p}/CTestTestfile.cmake"
           if [ -f "$TESTFILE" ]; then
             NAMES=$(grep -oE '^add_test\([A-Za-z0-9_.-]+' "$TESTFILE" | sed 's/^add_test(//')
             TEST_NAMES="$TEST_NAMES $NAMES"
           else
-            echo "##[warning]No $TESTFILE found for changed problem '$p' (possibly excluded by a dimensionality guard); skipping."
+            echo "##[warning]No $TESTFILE found for changed problem '$p'; it will be built but not tested."
           fi
         done
+        KEPT=$(echo $KEPT | tr ' ' '\n' | sort -u | sed '/^$/d')
+        if [ -z "$KEPT" ]; then
+          echo "##[section]None of the changed problems build in this configuration; nothing to do."
+          echo "##vso[task.setvariable variable=hasProblems]false"
+          exit 0
+        fi
+        echo "Building targets: $(echo $KEPT | tr '\n' ' ')"
+        echo "##vso[task.setvariable variable=cmakeTargetArgs]$(echo "$KEPT" | awk '{printf "--target %s ", $0}' | sed 's/ $//')"
         TEST_NAMES=$(echo $TEST_NAMES | tr ' ' '\n' | sort -u | sed '/^$/d')
         if [ -z "$TEST_NAMES" ]; then
           echo "##[error]No ctest tests found for changed problems: $(changedProblems)"
@@ -188,12 +210,8 @@ jobs:
       condition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
       displayName: Publish test results
 
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: build/Testing/Temporary
-        ArtifactName: ctest-temporary-logs
-        publishLocation: Container
-      condition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
-      displayName: Publish CTest temporary logs artifact
+    - template: templates/publish-ctest-logs.yml
+      parameters:
+        stepCondition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
 
     - template: templates/ccache-stats.yml

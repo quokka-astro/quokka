@@ -1,0 +1,44 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+# The box is large enough that the sound crossing time is ~200x the stop time, so each half of the
+# domain cools (or is heated) at essentially constant density, as in the uniform ResampledCoolingTest.
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0e27, 1.0e27, 1.0e27]
+quokka.bc = ["foextrap", "foextrap", "foextrap"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 0  # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [8, 8, 8]
+amr.max_level = 0  # number of levels = max_level + 1
+amr.blocking_factor = 8  # grid size must be divisible by this
+
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+# *****************************************************************
+# Cooling parameters
+# *****************************************************************
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+
+# Position-dependent external heating: the upper half of the domain in x is heated, the lower half is not.
+heating_rate_external = "if(x > 5.0e26, 1.0e-25, 0.0)"  # unit: erg/s/H
+
+# *****************************************************************
+# Time stepping and run control
+# *****************************************************************
+cfl = 0.8
+stop_time = 1.0e17
+max_dt = 5.0e14  # the CFL condition is far weaker than this in such a large box
+
+# *****************************************************************
+# Check that the heated half stays much hotter than the cooled half
+# *****************************************************************
+cooling_test.min_spatial_heating_T_ratio = 10.0

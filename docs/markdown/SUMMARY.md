@@ -16,7 +16,7 @@
 - [Star Formation and Feedback (beta)](particles.md)
 - [Photoionization](photoionization.md)
 - [Dust Module (beta)](dust_module.md)
-- [Optically-Thin Radiative Cooling](cooling_module.md)
+- [Cooling Module](cooling_module.md)
 
 # Simulation Gallery
 
@@ -35,6 +35,7 @@
     - [Matter-radiation temperature equilibrium test](tests/energy_exchange.md)
     - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md)
     - [Advecting radiation pulse test](tests/radhydro_pulse.md)
+    - [1D H II region and dust reprocessing test](tests/DTypeFront1D.md)
 - [Runtime parameters](parameters.md)
 - [In-situ analysis](insitu_analysis.md)
 - [Postprocessing](postprocessing.md)

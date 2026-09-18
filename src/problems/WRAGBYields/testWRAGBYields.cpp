@@ -139,8 +139,7 @@ void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::stri
 
 } // namespace
 
-struct WRAGBYields {
-};
+struct WRAGBYields {};
 
 constexpr Real gamma_ = 5. / 3.;
 static Real n0 = 1.0e4;									  // NOLINT

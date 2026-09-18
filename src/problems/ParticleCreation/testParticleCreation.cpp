@@ -11,8 +11,7 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 
-struct TestParticle {
-};
+struct TestParticle {};
 
 constexpr double rho0 = 1.0e-5;
 constexpr double dt_ = 0.001;

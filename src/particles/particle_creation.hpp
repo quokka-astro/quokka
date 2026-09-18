@@ -311,15 +311,28 @@ AMREX_GPU_DEVICE inline void initializeSinkLikeParticles(PType *particles, int n
 			p.rdata(mass_idx + 2) = vy;
 			p.rdata(mass_idx + 3) = vz;
 		}
+
+		// Zero the remaining real components (mdot, Lx, Ly, Lz for sinks). Angular momentum is
+		// accumulated with += in ComputeAccretionInBox(), so these must start at zero rather than
+		// at whatever the recycled arena block happened to contain.
+		for (int n = mass_idx + 4; n < PType::NReal; ++n) {
+			p.rdata(n) = 0.0;
+		}
 	}
 
 	// update cell density to be the threshold density
 	const amrex::Real scale_factor = rho_J / cell_density;
+	// The magnetic energy density is unchanged when a particle forms, so the total energy is reduced only by the
+	// internal and kinetic energy carried away with the mass. Both are proportional to density at fixed
+	// temperature and velocity, so they shrink by (1 - scale_factor). This must be evaluated before the
+	// momentum and internal energy are rescaled below.
+	const amrex::Real removed_kinetic_energy = (1.0 - scale_factor) * 0.5 * cell_density * (vx * vx + vy * vy + vz * vz);
+	const amrex::Real removed_internal_energy = (1.0 - scale_factor) * state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+	state_arr(i, j, k, HydroSystem<problem_t>::energy_index) -= removed_kinetic_energy + removed_internal_energy;
 	state_arr(i, j, k, HydroSystem<problem_t>::density_index) = rho_J;
 	state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= scale_factor;
 	state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= scale_factor;
 	state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= scale_factor;
-	state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= scale_factor;
 	state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= scale_factor;
 	// scale passive scalars to conserve mass fractions
 	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
@@ -750,6 +763,16 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					// 	NOT the actual mass of the stochastically created particles, to update the hydro state.)
 					const double factor = (1. - particle_mass / cell_mass);
 
+					// Update the total energy. The magnetic energy density is unchanged when a particle
+					// forms, so the total energy is reduced only by the internal and kinetic energy carried
+					// away with the mass. Both are proportional to density at fixed temperature and velocity,
+					// so they shrink by (1 - factor). This must be evaluated before the density, momentum,
+					// and internal energy are rescaled below.
+					const amrex::Real removed_kinetic_energy = (1. - factor) * 0.5 * cell_density * (vx * vx + vy * vy + vz * vz);
+					const amrex::Real removed_internal_energy =
+					    (1. - factor) * state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+					state_arr(i, j, k, HydroSystem<problem_t>::energy_index) -= removed_kinetic_energy + removed_internal_energy;
+
 					// Update the cell density to reflect mass conversion into stars
 					state_arr(i, j, k, HydroSystem<problem_t>::density_index) *= factor;
 
@@ -760,9 +783,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 					// Update internal energy to reflect mass change
 					state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= factor;
-
-					// Update total energy
-					state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= factor;
 
 					// Update mass scalars including passive scalars
 					if (nscalars > 0) {
