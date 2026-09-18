@@ -126,7 +126,7 @@ The inner Jacobian is sparse — groups couple to the gas but not directly to ea
 
 ## Multigroup opacity models
 
-The group-integrated four-force given in [The multigroup four-force](#the-multigroup-four-force) involves integrals of the opacity multiplied by a radiation quantity over each group, so a model for the frequency dependence of \\(\chi\_0\\) *within* a group is needed. Quokka offers two, both introduced in [@He_2024b] and selected with the `opacity_model` trait. [Multigroup opacities](#multigroup-opacities) below shows how to supply either from a problem generator.
+The group-integrated four-force given in [The multigroup four-force](#the-multigroup-four-force) involves integrals of the opacity multiplied by a radiation quantity over each group, so a model for the frequency dependence of \\(\chi\_0\\) *within* a group is needed. Quokka offers two, both introduced in [@He_2024b] and selected with the `opacity_model` trait. [Which model to use](#which-model-to-use) gives the recommendation, and [Multigroup opacities](#multigroup-opacities) shows how to supply either from a problem generator.
 
 ### Piecewise constant (PC)
 
@@ -150,10 +150,23 @@ Evaluating the group means also requires the shape of the radiation spectrum wit
 
 with the bracketed factors replaced by \\(\ln r\_g\\) when the corresponding exponent is \\(-1\\). Two ways of choosing \\(\alpha\_{Q,g}\\) are implemented:
 
-- **Fixed slope** (`PPL_opacity_fixed_slope_spectrum`, recommended): assume \\(\nu Q\_\nu\\) is constant across each group, i.e. \\(\alpha\_{Q,g} = -1\\). This is not arbitrary — weighted by the spectrum itself, the mean power-law index of any spectrum that integrates to a finite energy is exactly \\(-1\\). It costs almost nothing and performs well even with a handful of groups.
-- **Full spectrum** (`PPL_opacity_full_spectrum`): fit \\(\alpha\_{E,g}\\) and \\(\alpha\_{B,g}\\) to the actual radiation and Planck spectra on the fly, refitting during the first few Newton iterations. This is significantly more expensive and, in the tests of [@He_2024b], no more accurate than the fixed-slope method. It is kept for testing and is not recommended for production.
+- **Fixed slope** (`PPL_opacity_fixed_slope_spectrum`): assume \\(\nu Q\_\nu\\) is constant across each group, i.e. \\(\alpha\_{Q,g} = -1\\). This is not arbitrary — weighted by the spectrum itself, the mean power-law index of any spectrum that integrates to a finite energy is exactly \\(-1\\). It costs almost nothing and performs well even with a handful of groups. This is the PPL variant to use.
+- **Full spectrum** (`PPL_opacity_full_spectrum`): fit \\(\alpha\_{E,g}\\) and \\(\alpha\_{B,g}\\) to the actual radiation and Planck spectra on the fly, refitting during the first few Newton iterations. This is significantly more expensive and, in the tests of [@He_2024b], never more accurate than the fixed-slope method at any number of groups. It is kept for testing and is **not recommended for production at any frequency resolution**.
 
 Note that \\(\alpha\_{Q,g}\\) matters only when \\(\alpha\_{\chi\_0,g} \ne 0\\): the spectrum shape within a group is relevant only if the opacity varies across that group. Setting all exponents to zero reduces PPL to PC.
+
+### Which model to use
+
+The choice is governed by frequency resolution, and the deciding comparison is between PC and PPL fixed slope — not between the two PPL variants. [@He_2024b] measure the convergence of all three models on a Marshak wave with a continuously varying opacity \\(\chi\_0 \propto \nu^{-2}\\) at 4, 8, and 16 groups, and recommend:
+
+| Frequency resolution | Recommended model | Why |
+| --- | --- | --- |
+| \\(N\_g \lesssim 10\\) | `PPL_opacity_fixed_slope_spectrum` | Best accuracy. With few groups the opacity varies strongly across each bin, which is exactly what PC cannot represent. |
+| \\(N\_g \gtrsim 10\\) | `piecewise_constant_opacity` | Bins are narrow enough that a constant opacity is a good approximation, so PPL buys no accuracy, and PC is slightly cheaper because no slopes are evaluated. |
+
+The sharper form of the criterion is stated in terms of bin width rather than group count: use PC whenever the bin width in logarithmic frequency is smaller than about \\(W/10\\), where \\(W\\) is the logarithmic width of the whole frequency range, and PPL fixed slope otherwise.
+
+Two things are worth knowing about the ends of this range. At high resolution PC is not merely adequate but marginally the *most* accurate of the three, because the flux-mean opacity relation of [Flux-mean opacity](#flux-mean-opacity) introduces a small error that the PPL group means do not cancel. At low resolution the advantage of PPL is large: in the advecting radiation pulse test of [@He_2024b], PPL fixed slope with 4 groups has errors two to three times smaller than PC with 4 groups — comparable to PC with 8 — and 4 groups with PPL fixed slope is already enough to keep every quantity accurate to better than 10 per cent. The full-spectrum variant is not recommended in either regime.
 
 ### Flux-mean opacity
 
@@ -182,7 +195,7 @@ Then specialise `RadSystem_Traits`:
 | `energy_unit`    | `double`                   | `C::ev2erg`      | Unit in which `radBoundaries` is expressed. Use `C::hplanck` to give group boundaries in Hz, `C::ev2erg` to give them in eV.    |
 | `radBoundaries`  | `GpuArray<double, nGroups+1>` | `{0., inf}`   | Group boundaries, monotonically increasing, in units of `energy_unit`. Must span the full range where \\(\nu B\_\nu\\) matters. |
 | `beta_order`     | `int`                      | `1`              | Highest order of \\(v/c\\) retained in the four-force. `0` drops all velocity terms; `1` is the documented scheme. The single-group solver also accepts `2` and `3`. |
-| `opacity_model`  | `OpacityModel`             | `single_group`   | `single_group` for grey radiation; one of the multigroup models above when `nGroups > 1`.                                       |
+| `opacity_model`  | `OpacityModel`             | `single_group`   | `single_group` for grey radiation; when `nGroups > 1`, one of the multigroup models — see [Which model to use](#which-model-to-use). |
 
 ### Grey opacities
 
