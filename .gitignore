@@ -38,9 +38,10 @@ Backtrace.*
 
 # agent files
 /.claude/*
-!/.claude/skills
-/.agents/*
-!/.agents/skills
+!/.claude/settings.json
+!/.claude/rules/
+/.agent
+/.agents
 
 # LaTeX files
 *.aux
