@@ -24,8 +24,7 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct FieldLoop {
-};
+struct FieldLoop {};
 
 AMREX_ENUM(RefineOn, Region, MagneticEnergy); // NOLINT
 

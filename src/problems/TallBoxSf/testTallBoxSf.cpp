@@ -27,8 +27,7 @@
 
 constexpr double mu = 1.0 * C::m_p;
 
-struct TheProblem {
-};
+struct TheProblem {};
 
 template <> struct SimulationData<TheProblem> {
 	// turbulent velocity fields

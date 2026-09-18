@@ -46,8 +46,7 @@
 
 using amrex::Real;
 
-struct Channel {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct Channel {}; // dummy type to allow compile-type polymorphism via template specialization
 
 template <> struct quokka::EOS_Traits<Channel> {
 	static constexpr double gamma = 1.1;

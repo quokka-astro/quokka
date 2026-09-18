@@ -39,8 +39,7 @@
 #include "particles/particle_types.hpp"
 #include "util/BC.hpp"
 
-struct SubcycleProblem {
-};
+struct SubcycleProblem {};
 namespace
 {
 bool density_refinement_enabled = true; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)

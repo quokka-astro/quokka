@@ -23,8 +23,7 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct MHDBalsaraVortex {
-};
+struct MHDBalsaraVortex {};
 
 template <> struct quokka::EOS_Traits<MHDBalsaraVortex> {
 	static constexpr double gamma = 5.0 / 3.0;
@@ -220,6 +219,7 @@ auto problem_main() -> int
 
 	int advection_int = 0;
 	double num_periods = 1.0;
+	hpp.query("vortex_radius", vortex_radius);
 	hpp.query("vortex_Mach", vortex_Mach);
 	hpp.query("vortex_b_magn", vortex_b_magn);
 	hpp.query("advection", advection_int);
