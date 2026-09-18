@@ -88,10 +88,11 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 		for (int n = 0; n < ncomp_fc; ++n) {
 			state_fc(i, j, k, n) = 0.0; // fill unused quantities with zeros
 		}
-		// By = 1 only inside the hot patch (|x|<half_side, |y|<half_side); Bx = Bz = 0
-		// everywhere, and By = 0 outside the patch as well.
-		if (dir == quokka::direction::y) {
-				state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = 1.0;
+		if (dir == quokka::direction::x) {
+				state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = 1.0 / std::sqrt(2.0);
+
+		} else if (dir == quokka::direction::y) {
+				state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = 1.0 / std::sqrt(2.0);
 
 		}
 	});
