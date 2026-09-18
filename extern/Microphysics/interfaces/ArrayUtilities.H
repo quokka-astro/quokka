@@ -8,32 +8,6 @@ namespace ArrayUtil
 {
     using namespace amrex::literals;
 
-    template <int XLO, int XHI>
-    struct MathArray1D
-    {
-        AMREX_GPU_HOST_DEVICE AMREX_INLINE
-        void zero()
-        {
-            for (int i = 0; i < (XHI-XLO+1); ++i) {
-                arr[i] = 0.0_rt;
-            }
-        }
-
-        AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-        const amrex::Real& operator() (int i) const noexcept {
-            AMREX_ASSERT(i >= XLO && i <= XHI);
-            return arr[i-XLO];
-        }
-
-        AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-        amrex::Real& operator() (int i) noexcept {
-            AMREX_ASSERT(i >= XLO && i <= XHI);
-            return arr[i-XLO];
-        }
-
-        amrex::Real arr[(XHI-XLO+1)];
-    };
-
     template <typename T, int XLO, int XHI, int YLO, int YHI>
     struct MathArray2D
     {

@@ -22,7 +22,6 @@ struct state_backup_t {
     amrex::Real xn_in[NumSpec]{};
 #ifdef PHOTOCHEMISTRY
     amrex::Real rn_in[NumRadEqs]{};
-    amrex::Real c_hat;
 #endif
 #endif
 };
@@ -45,10 +44,6 @@ IntegratorT integrator_setup (BurnT& state, amrex::Real dt, bool is_retry)
 #ifdef PHOTOCHEMISTRY
         int_state.atol_rad_num = integrator_rp::atol_rad_num; // radiation number density
         int_state.rtol_rad_num = integrator_rp::rtol_rad_num; // radiation number density
-#ifndef SKIP_PHOTOCHEMFLUX
-        int_state.atol_rad_flux = integrator_rp::atol_rad_flux; // radiation flux
-        int_state.rtol_rad_flux = integrator_rp::rtol_rad_flux; // radiation flux
-#endif
 #endif
     } else {
         int_state.atol_spec = integrator_rp::retry_atol_spec > 0 ?
@@ -65,12 +60,6 @@ IntegratorT integrator_setup (BurnT& state, amrex::Real dt, bool is_retry)
             integrator_rp::retry_atol_rad_num : integrator_rp::atol_rad_num; // radiation number density
         int_state.rtol_rad_num = integrator_rp::retry_rtol_rad_num > 0 ?
             integrator_rp::retry_rtol_rad_num : integrator_rp::rtol_rad_num; // radiation number density
-#ifndef SKIP_PHOTOCHEMFLUX
-        int_state.atol_rad_flux = integrator_rp::retry_atol_rad_flux > 0 ?
-            integrator_rp::retry_atol_rad_flux : integrator_rp::atol_rad_flux; // radiation flux
-        int_state.rtol_rad_flux = integrator_rp::retry_rtol_rad_flux > 0 ?
-            integrator_rp::retry_rtol_rad_flux : integrator_rp::rtol_rad_flux; // radiation flux
-#endif
 #endif
     }
 
@@ -129,7 +118,6 @@ state_backup_t integrator_backup (const BurnT& state) {
     for (int n = 0; n < NumRadEqs; ++n) {
         state_save.rn_in[n] = state.rn[n];
     }
-    state_save.c_hat = state.c_hat;
 #endif
 #endif
     state_save.T_in = state.T;

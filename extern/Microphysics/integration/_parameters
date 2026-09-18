@@ -37,14 +37,8 @@ atol_enuc                real      1.e-25
 # relative tolerance for radiation number density
 rtol_rad_num             real      1.e-10
 
-# relative tolerance for radiation flux
-rtol_rad_flux            real      1.e-10
-
 # absolute tolerance for radiation number density
 atol_rad_num             real      1.e-10
-
-# absolute tolerance for radiation flux
-atol_rad_flux            real      1.e-10
 
 # Whether to renormalize the mass fractions at each step in the evolution
 # so that they sum to unity.
@@ -94,14 +88,8 @@ retry_atol_enuc                real      -1
 # relative tolerance for radiation density on retry
 retry_rtol_rad_num             real      -1
 
-# relative tolerance for radiation flux on retry
-retry_rtol_rad_flux            real      -1
-
 # absolute tolerance for radiation density on retry
 retry_atol_rad_num             real      -1
-
-# absolute tolerance for radiation flux on retry
-retry_atol_rad_flux            real      -1
 
 # in the clean_state process, do we clip the species such that they
 # are in [0, 1]?

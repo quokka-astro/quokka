@@ -26,7 +26,10 @@ CPU/GPU, photochemistry/flux, auxiliary-species, and Jacobian-precision branches
 remain available. Uncalled EOS/burn conversion and composition-derivative helpers,
 empty network initialization hooks, unused charge balancing, and obsolete error
 codes are removed. The burn state omits unused SDC storage and its diagnostic
-output and initialization.
+output and initialization. Unused EOS structure variants, one-dimensional array
+and Jacobian helpers, radiation-flux tolerance settings and storage, and the
+unused diagnostic backup of `c_hat` are also removed. Flux evolution is retained;
+Rosenbrock excludes flux from its error norm.
 
 `CMakeLists.txt` fixes the backend to Rosenbrock and removes unused metal chemistry,
 standalone AMReX fetching, upstream unit-test builds, unused thread/package helpers,

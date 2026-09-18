@@ -36,10 +36,6 @@ struct rosenbrock_t {
     amrex::Real atol_rad_num;
     amrex::Real rtol_rad_num;
 
-#ifndef SKIP_PHOTOCHEMFLUX
-    amrex::Real atol_rad_flux;
-    amrex::Real rtol_rad_flux;
-#endif
 
     amrex::Real c_hat;
 #endif

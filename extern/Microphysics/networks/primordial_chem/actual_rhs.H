@@ -13,7 +13,6 @@
 #include <extern_parameters.H>
 #include <actual_network.H>
 #include <burn_type.H>
-#include <jacobian_utilities.H>
 #include <extern_parameters.H>
 
 using namespace amrex;

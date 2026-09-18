@@ -53,94 +53,6 @@ struct eos_t:eos_base_t {
 
 };
 
-struct eos_re_t:eos_base_t {
-    amrex::Real rho{};
-    amrex::Real T{};
-    amrex::Real e{};
-    amrex::Real xn[NumSpec]{};
-#ifdef PHOTOCHEMISTRY
-    amrex::Real rn[NumRadEqs]{};
-    amrex::Real c_hat{};
-#endif
-#if NAUX_NET > 0
-    amrex::Real aux[NumAux]{};
-#endif
-    amrex::Real dedT{};
-    amrex::Real dedr{};
-
-    amrex::Real cv{};
-
-    amrex::Real mu{};
-    amrex::Real mu_e{};
-    amrex::Real y_e{};
-    amrex::Real eta{};
-
-    amrex::Real abar{};
-    amrex::Real zbar{};
-
-};
-
-struct eos_rep_t:eos_base_t {
-    amrex::Real rho{};
-    amrex::Real T{};
-    amrex::Real e{};
-    amrex::Real p{};
-    amrex::Real xn[NumSpec]{};
-#if NAUX_NET > 0
-    amrex::Real aux[NumAux]{};
-#endif
-#ifdef PHOTOCHEMISTRY
-    amrex::Real rn[NumRadEqs]{};
-    amrex::Real c_hat{};
-#endif
-    amrex::Real dedT{};
-    amrex::Real dedr{};
-
-    amrex::Real dpdT{};
-    amrex::Real dpdr{};
-    amrex::Real dpdr_e{};
-    amrex::Real dpde{};
-
-    amrex::Real cv{};
-    amrex::Real cp{};
-    amrex::Real gam1{};
-    amrex::Real cs{};
-
-    amrex::Real mu{};
-    amrex::Real mu_e{};
-    amrex::Real y_e{};
-    amrex::Real eta{};
-
-    amrex::Real abar{};
-    amrex::Real zbar{};
-
-};
-
-struct eos_rh_t:eos_rep_t {
-    amrex::Real dhdr{};
-    amrex::Real dhdT{};
-    amrex::Real h{};
-};
-
-struct eos_extra_t:eos_t {
-    amrex::Real dpdA{};
-    amrex::Real dpdZ{};
-    amrex::Real dedA{};
-    amrex::Real dedZ{};
-};
-
-struct eos_re_extra_t:eos_re_t {
-    amrex::Real dedA{};
-    amrex::Real dedZ{};
-};
-
-struct eos_rep_extra_t:eos_rep_t {
-    amrex::Real dpdA{};
-    amrex::Real dpdZ{};
-    amrex::Real dedA{};
-    amrex::Real dedZ{};
-};
-
 struct chem_eos_t:eos_base_t {
     amrex::Real rho{};
     amrex::Real T{};
@@ -199,9 +111,6 @@ concept has_xne_xnp = requires { std::declval<T&>().xne; };
 
 template <typename T>
 concept has_eta = requires { std::declval<T&>().eta; };
-
-template <typename T>
-concept has_conductivity = requires { std::declval<T&>().conductivity; };
 
 template <typename T>
 concept has_xn = requires { std::declval<T&>().xn; };

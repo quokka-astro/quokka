@@ -8,7 +8,6 @@
 #include "integrator_data.H"
 #include <actual_network.H>
 #include <extern_parameters.H>
-#include <jacobian_utilities.H>
 
 using namespace amrex;
 using namespace network_rp;
