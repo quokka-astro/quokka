@@ -58,11 +58,8 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	//
 	// SetAtolFromPhysics() derives atol_rad_num = 1e-6 * a_rad * T_min^4 / E_photon, where
 	// T_min = typical_minimal_radiation_T.  With T_min = 10 K, atol_rad_num ~ 1.25e-6 cm^-3.
-	// The ratio atol_rad_num / N_gamma_floor ~ 1e4 ensures that VODE returns in one BDF step
-	// even in the darkest cells.
-	//
-	// The 1e-6 prefactor means radiation at T_min becomes numerically negligible after
-	// ~1e6 VODE steps (accumulated local error stays below the physically meaningful level).
+	// Keep the photon absolute tolerance well above this floor so that negligible
+	// radiation in dark cells does not control the ODE timestep.
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	// photochemistry momentum deposition is gated on beta_order == 1, so this test validates pure
 	// thermal-pressure D-type front expansion with radiation pressure.
@@ -195,7 +192,6 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 	return 0.5 * (T_lo + T_hi);
 }
 
-#ifdef DTYPEFRONT_USE_ROSENBROCK
 auto rosenbrock_tableau_name(int tableau) -> char const *
 {
 	switch (tableau) {
@@ -211,16 +207,11 @@ auto rosenbrock_tableau_name(int tableau) -> char const *
 			return "unknown";
 	}
 }
-#endif
 
 void print_microphysics_integrator()
 {
-#ifdef DTYPEFRONT_USE_ROSENBROCK
 	amrex::Print() << "DTypeFront microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
 		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
-#else
-	amrex::Print() << "DTypeFront microphysics integrator: VODE\n";
-#endif
 }
 
 } // namespace
@@ -316,7 +307,6 @@ template <> void QuokkaSimulation<DTypeFront>::preCalculateInitialConditions()
 	pp.query("Q", userData_.Q);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {

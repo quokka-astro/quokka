@@ -4,8 +4,7 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
                                                    # photoionization for this
                                                    # directory only
   setup_target_for_microphysics_compilation(${microphysics_network_name}
-                                            "${CMAKE_CURRENT_BINARY_DIR}/"
-                                            "Rosenbrock")
+                                            "${CMAKE_CURRENT_BINARY_DIR}/")
 
   # use the BEFORE keyword so that these files get priority in compilation for
   # targets in this directory this is critical to ensure the correct Microphysics

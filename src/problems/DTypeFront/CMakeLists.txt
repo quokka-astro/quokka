@@ -3,11 +3,8 @@ if(AMReX_SPACEDIM EQUAL 3)
                                                   # network_name to
                                                   # photoionization for this
                                                   # directory only
-  set(DTypeFront_INTEGRATOR "Rosenbrock" CACHE STRING "Microphysics integrator for DTypeFront")
-  set_property(CACHE DTypeFront_INTEGRATOR PROPERTY STRINGS VODE Rosenbrock)
   setup_target_for_microphysics_compilation(${microphysics_network_name}
-                                            "${CMAKE_CURRENT_BINARY_DIR}/"
-                                            "${DTypeFront_INTEGRATOR}")
+                                            "${CMAKE_CURRENT_BINARY_DIR}/")
 
   # use the BEFORE keyword so that these files get priority in compilation for
   # targets in this directory this is critical to ensure the correct Microphysics
@@ -95,11 +92,6 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   # this will add #define CHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX)
-  if(DTypeFront_INTEGRATOR STREQUAL "Rosenbrock")
-    target_compile_definitions(${JOB_NAME} PUBLIC DTYPEFRONT_USE_ROSENBROCK)
-  else()
-    target_compile_definitions(${JOB_NAME} PUBLIC DTYPEFRONT_USE_VODE)
-  endif()
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})

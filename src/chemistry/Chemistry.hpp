@@ -165,7 +165,6 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 	amrex::ParallelDescriptor::ReduceIntMin(burn_success);
 
 	if (!burn_success) {
-		// amrex::Abort("Burn failed in VODE. Aborting.");
 		amrex::Print() << "\t>> WARNING: Unsuccessful burn. Retrying hydro step."
 			       << "\n";
 	}

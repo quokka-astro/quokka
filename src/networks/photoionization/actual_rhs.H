@@ -101,7 +101,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	const amrex::Real n_HI = state.xn[1];
 	const amrex::Real n_HII = state.xn[2];
 	const amrex::Real n_gamma =
-	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
+	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if Rosenbrock steps rn[0] slightly negative within tolerance
 #ifndef SKIP_PHOTOCHEMFLUX
 	const amrex::Real n_gamma_flux = state.rn[1];
 #endif
@@ -180,7 +180,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	const amrex::Real n_HI = state.xn[1];
 	const amrex::Real n_HII = state.xn[2];
 	const amrex::Real n_gamma =
-	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
+	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if Rosenbrock steps rn[0] slightly negative within tolerance
 	// Gate for column-5 Jacobian entries: when rn[0] < 0 the clamp makes the RHS
 	// independent of rn[0], so all derivatives w.r.t. rn[0] are zero.
 	const amrex::Real n_gamma_active = (state.rn[0] >= 0.0_rt) ? 1.0_rt : 0.0_rt;

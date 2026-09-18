@@ -17,7 +17,8 @@ repos:
     rev: v23.1.1
     hooks:
     -   id: clang-format
-        exclude: '\.ipynb$'
+        # Preserve the vendored upstream sources byte-for-byte.
+        exclude: '\.ipynb$|^extern/Microphysics/'
 ci:
     autofix_commit_msg: |
         [pre-commit.ci] auto fixes from pre-commit.com hooks

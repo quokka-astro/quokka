@@ -1,0 +1,130 @@
+@namespace: integrator
+
+# these are the parameters for the integration module
+
+# Normally we update the temperature during a burn to be consistent with
+# the current internal energy. This is done with an EOS call, which can
+# be turned off if desired. This will freeze the temperature and specific heat
+# to the values at the beginning of the burn, which is inaccurate but cheaper.
+call_eos_in_rhs          bool   1
+
+# Allow the energy integration to be disabled by setting the RHS to zero.
+integrate_energy         bool   1
+
+# Whether to use an analytical or numerical Jacobian.
+# 1 == Analytical
+# 2 == Numerical
+jacobian                 int      1
+
+# Should we print out diagnostic output after the solve?
+burner_verbose           bool     0
+
+# Tolerances for the solver (relative and absolute), for the
+# species and energy equations.
+
+# relative tolerance for species
+rtol_spec                real      1.e-10
+
+# relative tolerance for energy
+rtol_enuc                real      1.e-10
+
+# absolute tolerance for species
+atol_spec                real      1.e-10
+
+# absolute tolerance for energy
+atol_enuc                real      1.e-25
+
+# relative tolerance for radiation number density
+rtol_rad_num             real      1.e-10
+
+# relative tolerance for radiation flux
+rtol_rad_flux            real      1.e-10
+
+# absolute tolerance for radiation number density
+atol_rad_num             real      1.e-10
+
+# absolute tolerance for radiation flux
+atol_rad_flux            real      1.e-10
+
+# Whether to renormalize the mass fractions at each step in the evolution
+# so that they sum to unity.
+renormalize_abundances   bool   0
+
+# The absolute cutoff for species -- note that this might be larger
+# than ``small_x``, but the issue is that we need to prevent underflow
+# issues and keep mass fractions positive in the integrator.  You may
+# have to increase the floor to, e.g. 1.e-20 if your rates are large.
+SMALL_X_SAFE                 real            1.0e-30
+
+# The maximum temperature for reactions in the integration.
+MAX_TEMP                     real            1.0e11
+
+# boost the reaction rates by a factor > 1
+react_boost                 real         -1.e0
+
+# maximum number of timesteps for the integrator
+ode_max_steps              int      150000
+
+# maximum timestep for the integrator
+ode_max_dt                 real         1.e30
+
+# do we retry a failed burn with different parameters?
+use_burn_retry            bool    0
+
+# do we swap the Jacobian (from analytic to numerical or vice versa) on
+# a retry?
+retry_swap_jacobian       bool    1
+
+# Tolerances for the solver (relative and absolute), for the
+# species and energy equations.  If set to < 0, then the same
+# value as the first attempt is used.
+
+# relative tolerance for species on retry
+retry_rtol_spec                real      -1
+
+# relative tolerance for energy on retry
+retry_rtol_enuc                real      -1
+
+# absolute tolerance for species on retry
+retry_atol_spec                real      -1
+
+# absolute tolerance for energy on retry
+retry_atol_enuc                real      -1
+
+# relative tolerance for radiation density on retry
+retry_rtol_rad_num             real      -1
+
+# relative tolerance for radiation flux on retry
+retry_rtol_rad_flux            real      -1
+
+# absolute tolerance for radiation density on retry
+retry_atol_rad_num             real      -1
+
+# absolute tolerance for radiation flux on retry
+retry_atol_rad_flux            real      -1
+
+# in the clean_state process, do we clip the species such that they
+# are in [0, 1]?
+do_species_clip              bool         0
+
+# flag for turning on the use of number densities for all species
+use_number_densities     bool     0
+
+# flag for tuning on the subtraction of internal energy
+subtract_internal_energy   bool     1
+
+# do we scale the ODE system we integrate to make it O(1)?
+# for Strang, this simply means scaling e by the initial energy?
+scale_system              bool         0
+
+# for the linear algebra, do we allow pivoting?
+linalg_do_pivoting         bool        1
+
+# We will use this parameter to determine if a given species
+# abundance is unreasonably small or large (each X must satisfy
+# -failure_tolerance <= X <= 1.0 + failure_tolerance).
+species_failure_tolerance  real       1.e-2_rt
+
+# We will use this parameter to determine if a radiation group
+# number density is unreasonably small
+radiation_failure_tolerance real      1.e-2_rt

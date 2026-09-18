@@ -118,15 +118,9 @@ else()
     set(AMREX_GIT_HASH "unknown")
 endif()
 
-if(EXISTS "${QuokkaCode_SOURCE_DIR}/extern/Microphysics/.git")
-    execute_process(COMMAND git rev-parse HEAD
-        WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/Microphysics
-        OUTPUT_VARIABLE MICROPHYSICS_GIT_HASH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-else()
-    set(MICROPHYSICS_GIT_HASH "unknown")
-endif()
+# The vendored subset records its upstream revision without a nested Git checkout.
+file(STRINGS "${QuokkaCode_SOURCE_DIR}/extern/Microphysics/UPSTREAM_REVISION"
+    MICROPHYSICS_GIT_HASH LIMIT_COUNT 1)
 
 if(EXISTS "${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro/.git")
     execute_process(COMMAND git rev-parse HEAD

@@ -101,18 +101,20 @@ The update is decomposed into three sequential operators per timestep, following
 ```
 1. Stellar source step     Particle injection -> radEnergySource
 2. Transport step           Explicit RK stages: advanceRadiation*
-3. Thermochemical step      VODE ODE integration over the coupled
+3. Thermochemical step      Rosenbrock ODE integration over the coupled
                             photoionization network
 ```
 
-### 2.1 Thermochemical Implicit Solve via VODE
+### 2.1 Thermochemical Implicit Solve via Rosenbrock
 
 The stiffest part is the coupled, non-linear evolution of the photoionization network
 in each cell. Quokka replaces the analytic cubic-polynomial solve used in ATON (which
-cannot generalize to more complex networks) with a call to **VODE**, a variable-order,
-variable-step stiff ODE integrator.
+cannot generalize to more complex networks) with a call to **Rosenbrock**, an
+adaptive-step, linearly implicit stiff ODE integrator.
+It is the only supported ODE backend. `integrator.rosenbrock_tableau` selects
+Rodas5P (0, the default), Rodas4P (1), Rodas3P (2), or ROS2S (3).
 
-Under OTSA, VODE integrates the following system over the implicit timestep \\(\Delta t\\):
+Under OTSA, Rosenbrock integrates the following system over the implicit timestep \\(\Delta t\\):
 
 <script type="math/tex; mode=display">
 \begin{aligned}
@@ -141,11 +143,11 @@ directions — they contribute to \\(N\_\gamma\\) but produce no net flux. Flux 
 integrated to track the attenuation of the directional radiation field across the
 timestep.
 
-## 3. VODE Tolerances
+## 3. Rosenbrock Tolerances
 
 ### 3.1 Overview
 
-Quokka uses VODE (via Microphysics) to integrate the chemistry and internal energy
+Quokka uses Rosenbrock (via Microphysics) to integrate the chemistry and internal energy
 source terms. The integrator requires absolute tolerances (`atol`) for each solution
 variable. These are hand-tuned for each problem and specified directly in the input
 file (see § 3.2). The `SetAtolFromPhysics` machinery (PR #1980) will derive tolerances
@@ -161,13 +163,13 @@ from physical scales automatically in a future PR.
 | `integrator.rtol_spec`                  | Relative tolerance for chemical species                           |
 | `integrator.rtol_enuc`                  | Relative tolerance for gas internal energy                        |
 | `integrator.rtol_rad_num`               | Relative tolerance for photon number density                      |
-| `integrator.species_failure_tolerance`  | VODE internal substep rejection threshold for negative species (\\(\mathrm{cm}^{-3}\\), see § 3.7) |
-| `integrator.radiation_failure_tolerance`| VODE internal substep rejection threshold for negative photon density (\\(\mathrm{cm}^{-3}\\), see § 3.5) |
+| `integrator.species_failure_tolerance`  | Final-state rejection threshold for negative species (\\(\mathrm{cm}^{-3}\\), see § 3.7) |
+| `integrator.radiation_failure_tolerance`| Final-state rejection threshold for negative photon density (\\(\mathrm{cm}^{-3}\\), see § 3.5) |
 
 ### 3.3 Why flux is excluded from convergence
 
 The radiation flux \\(F\_\gamma\\) (normalized to 1.0 before the ODE) is integrated alongside the
-other variables, but does not participate in any VODE convergence or error checks.
+other variables, but does not participate in any Rosenbrock convergence or error checks.
 
 **Why flux is in the ODE.** The flux ODE is \\(dF/dt = -(\hat{c}\sigma)\,n\_{\rm H^0} F\\).
 This is similar to the absorption term in \\(N\_\gamma\\), but \\(N\_\gamma\\) also has an
@@ -180,10 +182,9 @@ must be integrated separately to track the attenuation of the directional radiat
 on \\(n\_{\rm H^0}\\) but flux does *not* appear in any other equation (species, energy, or
 \\(N\_\gamma\\)). Convergence should be driven by the physically consequential quantities, not
 by a diagnostic variable. In dark cells where flux goes to 0, demanding 1% accuracy on a
-near-zero value wastes VODE steps with no physical benefit.
+near-zero value wastes Rosenbrock steps with no physical benefit.
 
-Excluding flux from convergence gave a **3.8× speedup** in photochemistry on CPU and a
-**2.2× speedup** on GPU for the DTypeFront test.
+Flux is excluded from the Rosenbrock error norm.
 
 ### 3.4 Physical constants
 
@@ -196,20 +197,13 @@ Excluding flux from convergence gave a **3.8× speedup** in photochemistry on CP
 
 ### 3.5 radiation_failure_tolerance
 
-VODE uses this threshold in two places:
+`radiation_failure_tolerance` controls the final-state check: a more negative
+photon number density marks the burn as failed. Rosenbrock's internal stage and
+step checks instead reject photon number densities below `-atol_rad_num` and
+retry with a smaller timestep. There is no final-state interpolation multiplier.
 
-1. **Internal substeps:** if the photon number density becomes more negative than
-   `radiation_failure_tolerance`, VODE rejects the substep and retries with a smaller
-   timestep. This is the primary use.
-2. **Final state:** after interpolating to the output time, if the photon number density
-   is more negative than \\(1.5 \times\\) `radiation_failure_tolerance`, the burn is
-   declared failed. The 1.5× factor (via `vode_final_state_radiation_failure_tolerance_factor`
-   in `vode_type.H`) accounts for VODE's non-monotonic interpolation, preventing false
-   failures from interpolation noise.
-
-Set `radiation_failure_tolerance` equal to `atol_rad_num` (the photon negligibility
-floor). The \\(1.5\times\\) final-state factor absorbs BDF interpolation overshoot without
-manual inflation.
+Set `radiation_failure_tolerance` equal to `atol_rad_num` to align the internal
+and final-state checks.
 
 Physically, the amount of spurious ionization that can be produced by a negative photon
 overshoot is at most `radiation_failure_tolerance` / \\(n\_{\rm H}\\). Whether this
@@ -228,37 +222,25 @@ with the physical ionization equilibrium — override it in the input file.
 
 `Erad_floor` is a compile-time `constexpr` in `RadSystem_Traits<problem_t>` that sets
 the M1 hyperbolic solver floor — it prevents the radiation moment solver from
-encountering zero energy density. It is **independent** of the VODE tolerances.
+encountering zero energy density. It is **independent** of the Rosenbrock tolerances.
 
 Define the equivalent floor temperature \\(T\_{\rm floor}\\) by \\(E\_{\rm rad, floor} \equiv a\_{\rm rad} T\_{\rm floor}^4\\).
 The photon number density at the floor is \\(N\_{\gamma,{\rm floor}} = E\_{\rm rad, floor} / E\_{\rm photon}\\).
 
-Dark cells (where \\(E\_{\rm rad} \approx E\_{\rm rad, floor}\\)) converge in one VODE step when
-\\(\texttt{atol\_rad\_num} \gg N\_{\gamma,{\rm floor}}\\). A ratio of \\(\geq 10^4\\) is sufficient:
-
-<script type="math/tex; mode=display">
-\frac{\texttt{atol\_rad\_num}}{N_{\gamma,{\rm floor}}} \geq 10^4.
-</script>
-
-For typical `Erad_floor` values corresponding to \\(T\_{\rm floor} = 0.01\\)–\\(1\\) K, an
-`atol_rad_num` on the order of \\(10^{-6}\\)–\\(10^{-2}\ \mathrm{cm}^{-3}\\) satisfies this constraint.
+Choose `atol_rad_num` well above the photon number density at the floor so
+that numerically negligible radiation does not control the adaptive timestep.
+The required tolerance and number of internal steps depend on the problem and
+the selected Rosenbrock tableau.
 
 ### 3.7 species_failure_tolerance
 
-VODE uses this threshold in two places:
+`species_failure_tolerance` controls the final-state check: a species number
+density below its negative value marks the burn as failed. Rosenbrock's internal
+stage and step checks instead reject species number densities below `-atol_spec`
+and retry with a smaller timestep. There is no final-state interpolation multiplier.
 
-1. **Internal substeps (primary):** if a species number density becomes more negative
-   than `species_failure_tolerance`, VODE rejects the substep and retries with a smaller
-   timestep.
-2. **Final state (secondary):** after interpolating to the output time, if a species is
-   more negative than \\(1.5 \times\\) `species_failure_tolerance`, the burn is declared
-   failed. The 1.5× factor (via `vode_final_state_species_failure_tolerance_factor` in
-   `vode_type.H`) accounts for VODE's non-monotonic interpolation, preventing false
-   failures from interpolation noise.
-
-Set `integrator.species_failure_tolerance` equal to `atol_spec` (the species
-negligibility floor). The \\(1.5\times\\) final-state factor absorbs BDF interpolation
-overshoot without manual inflation.
+Set `integrator.species_failure_tolerance` equal to `atol_spec` to align the
+internal and final-state checks.
 
 ## 4. Compatibility
 

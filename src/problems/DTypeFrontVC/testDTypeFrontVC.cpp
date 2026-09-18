@@ -105,7 +105,6 @@ template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 	pp.query("primary_species_3", userData_.primary_species_3);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontVC>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real

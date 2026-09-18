@@ -17,7 +17,6 @@ ROOT_DIR="${SLURM_SUBMIT_DIR:-$(pwd)}"
 INPUT_FILE="${ROOT_DIR}/inputs/DTypeFront.toml"
 LOG_DIR="${ROOT_DIR}/logs/dtypefront-frontier-${SLURM_JOB_ID:-manual}"
 ROS_BUILD_DIR="${ROOT_DIR}/build/slurm-dtypefront-frontier-rosenbrock"
-VODE_BUILD_DIR="${ROOT_DIR}/build/slurm-dtypefront-frontier-vode"
 BUILD_JOBS="${SLURM_CPUS_PER_TASK:-7}"
 
 . "${ROOT_DIR}/scripts/hpc_profiles/frontier.profile"
@@ -40,11 +39,9 @@ run_case() {
 
 configure_build() {
 	local build_dir="$1"
-	local integrator="$2"
 
 	cmake -S "${ROOT_DIR}" -B "${build_dir}" \
 		-DCMAKE_BUILD_TYPE=Release \
-		-DDTypeFront_INTEGRATOR="${integrator}" \
 		-DAMReX_GPU_BACKEND=HIP \
 		-DAMReX_AMD_ARCH="${GPU_ARCH}" \
 		-DAMReX_SPACEDIM=3
@@ -57,13 +54,10 @@ echo "Log dir: ${LOG_DIR}"
 echo "Build jobs: ${BUILD_JOBS}"
 echo "AMReX AMD arch: ${GPU_ARCH}"
 
-configure_build "${ROS_BUILD_DIR}" Rosenbrock
+configure_build "${ROS_BUILD_DIR}"
 run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" ros2s integrator.rosenbrock_tableau=3
 run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" rodas3p integrator.rosenbrock_tableau=2
 run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" rodas4p integrator.rosenbrock_tableau=1
 run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" rodas5p integrator.rosenbrock_tableau=0
-
-configure_build "${VODE_BUILD_DIR}" VODE
-run_case "${VODE_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" vode
 
 echo "Done."

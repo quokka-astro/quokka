@@ -63,6 +63,7 @@ def discover_logs(paths: list[Path]) -> list[Path]:
 
 
 def method_from_log(text: str, path: Path) -> str:
+    # Retain support for historical logs from before the Rosenbrock-only build.
     match = re.search(r"DTypeFront microphysics integrator: VODE", text)
     if match:
         return "VODE"
