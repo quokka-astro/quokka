@@ -30,6 +30,7 @@
 #include "particle_creation.hpp"
 #include "particle_deposition.hpp"
 #include "particle_destruction.hpp"
+#include "particle_photoionization.hpp"
 #include "particle_types.hpp"
 #include "particle_update.hpp"
 #include "physics_info.hpp"
@@ -232,6 +233,13 @@ class PhysicsParticleDescriptorBase
 	{
 		return {0, 0.0_rt};
 	}
+
+#if AMREX_SPACEDIM == 3
+	// Append this particle type's ionizing sources, as (x, y, z, Q) tuples, to the list.
+	// Only Star particles carry an ionizing photon rate, so every other type is a no-op.
+	virtual void collectIonizingSources(amrex::Vector<amrex::Real> & /*sources*/, int /*lev*/, quokka::photoionization::Parameters const & /*par*/) const
+	{ /* Default empty implementation */ }
+#endif
 
 	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
@@ -824,6 +832,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		ParticlePropertyUpdateTraits<particleType>::template updateParticleProperties<problem_t, ContainerType>(this->container_, current_time, dt);
 	}
 
+#if AMREX_SPACEDIM == 3
+	void collectIonizingSources(amrex::Vector<amrex::Real> &sources, int lev, quokka::photoionization::Parameters const &par) const override
+	{
+		if constexpr (particleType_ == ParticleType::Star) {
+			quokka::photoionization::collectSources<problem_t>(this->container_, sources, lev, par);
+		}
+	}
+#endif
+
 	// Implementation of supernova energy and momentum deposition from particles to grid
 	auto depositSN(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
 	    -> std::pair<int, amrex::Real> override
@@ -1064,6 +1081,17 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 		return {total_sn_explosions, max_velocity};
 	}
+
+#if AMREX_SPACEDIM == 3
+	// Gather the ionizing sources of every registered particle type at this level.
+	void collectIonizingSources(amrex::Vector<amrex::Real> &sources, int lev, quokka::photoionization::Parameters const &par) const
+	{
+		const BL_PROFILE("PhysicsParticleRegister::collectIonizingSources()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->collectIonizingSources(sources, lev, par);
+		}
+	}
+#endif
 
 	// Implementation of computeSinkAccretion
 	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
