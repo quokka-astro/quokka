@@ -57,6 +57,7 @@
 - [Performance tips](performance.md)
 - [How to use clang-tidy](howto_clang_tidy.md)
 - [DataTable](data_table.md)
+- [Early Feedback Implementation Plan](empirically_motivated_early_feedback_plan.md)
 
 # Maintainer Guide
 
