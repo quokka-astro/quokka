@@ -85,9 +85,10 @@ struct DTypeFront1D {};
 // reduced speed of light (same choice as the 3D DTypeFront problem)
 constexpr double c_hat = C::c_light / 1000.0;
 
-// Mean energy of a photon in the injected band. This is the mean energy of the single chemistry band
-// [3.29e15, 1.5e16] Hz (see CMakeLists.txt CHEM_BANDS), retained as the luminosity normalization so the
-// injected luminosity is unchanged from the photoionizing version of this problem.
+// Mean energy of a photon in the injected band. This is the mean
+// energy of the single chemistry band, retained as the luminosity
+// normalization so the injected luminosity is unchanged from the
+// photoionizing version of this problem.
 constexpr double E_photon = 0.5 * (3.29e15 + 1.50e16) * C::hplanck; // erg
 // Radiation energy-density floor. This is a physically meaningful, negligible photon-number density
 // (1e-10 cm^-3, vs the ~hundreds cm^-3 of the injected beam) converted to a radiation energy density. Dark
@@ -140,10 +141,7 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	// outward-momentum budget in problem_main is the check that needs them; with beta_order = 0 the radiation
 	// force is still applied, but the work done by that force on the moving gas is dropped.
 	static constexpr int beta_order = 1;
-	static constexpr double energy_unit = C::hplanck; // radBoundaries below are frequencies in Hz
-	// Group frequency boundaries [Hz]: group 0 = IR (below 1e14 Hz, i.e. longward of 3 um), group 1 =
-	// optical (1e14 Hz to the Lyman edge), group 2 = the ionizing chemistry band, which starts at the Lyman
-	// edge (3.29e15 Hz) to match ChemBands below.
+	static constexpr double energy_unit = C::ev2erg;
 	//
 	// The outermost two boundaries are deliberately set far outside the range that carries any energy, and
 	// should be read as 0 and infinity. They are not physical band edges: ComputePlanckEnergyFractions
@@ -151,12 +149,10 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	// radBoundaries[1] no matter what radBoundaries[0] says, and emission above radBoundaries[2] is dropped
 	// rather than assigned to the chemistry band, so radBoundaries[3] never enters the emission budget.
 	//
-	// The IR/optical split at 1e14 Hz is what makes the reprocessing clean. The dust settles at ~130 K here
-	// (see the header comment), where h*nu/(k*T) = 37 at the split, so the Planck function has nothing left
-	// above it: essentially all re-emission lands in the IR group and none of it back into the optical one.
-	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{1.0e8, 1.0e14, 3.29e15, 1.0e19};
+	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{1.0e-6, 0.413567, 13.6, 1.0e5};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
 };
 
 template <> struct ISM_Traits<DTypeFront1D> {
@@ -179,9 +175,9 @@ template <> struct SimulationData<DTypeFront1D> {
 	amrex::Real small_temp{};
 	amrex::Real small_dens{};
 	amrex::Real temperature{};
-	amrex::Real primary_species_1{};
-	amrex::Real primary_species_2{};
-	amrex::Real primary_species_3{};
+	amrex::Real n_e_init{};
+	amrex::Real n_HI_init{};
+	amrex::Real n_HII_init{};
 	amrex::Real flux{};	// optical photon flux [photons cm^-2 s^-1] injected at x = 0
 	amrex::Real flux_ion{}; // ionizing photon flux [photons cm^-2 s^-1] injected at x = 0
 	amrex::Vector<amrex::Real> t_vec_;
@@ -233,10 +229,10 @@ auto compute_ionized_column(amrex::MultiFab const &state_mf, amrex::GpuArray<amr
 	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
 	auto const state = state_mf.const_arrays();
 	const amrex::Real cell_length = dx[0];
-	const amrex::Real mass_HII = spmasses[2];
+	const amrex::Real mass_HII = spmasses[Species::Hp];
 
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-		return cell_length * state[box_no](i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + 2) / mass_HII;
+		return cell_length * state[box_no](i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::Hp)) / mass_HII;
 	});
 
 	auto const &hv = reduce_data.value(reduce_op);
@@ -437,9 +433,9 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	userData_.small_temp = 1e-2;
 	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e2;
-	userData_.primary_species_1 = 1.0e-10_rt;
-	userData_.primary_species_2 = 1.0e2_rt;
-	userData_.primary_species_3 = 1.0e-10_rt;
+	userData_.n_e_init = 1.0e-10_rt;
+	userData_.n_HI_init = 1.0e2_rt;
+	userData_.n_HII_init = 1.0e-10_rt;
 	userData_.flux = 1.0e11_rt;
 	userData_.flux_ion = 0.0_rt;
 	pp.query("kappa1", kappa1); // gray opacity of the thermal band, group 0 [cm^2 g^-1]
@@ -450,9 +446,9 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	pp.query("small_temp", userData_.small_temp);
 	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
-	pp.query("primary_species_1", userData_.primary_species_1);
-	pp.query("primary_species_2", userData_.primary_species_2);
-	pp.query("primary_species_3", userData_.primary_species_3);
+	pp.query("n_e_init", userData_.n_e_init);
+	pp.query("n_HI_init", userData_.n_HI_init);
+	pp.query("n_HII_init", userData_.n_HII_init);
 	pp.query("flux", userData_.flux);
 	pp.query("flux_ion", userData_.flux_ion);
 
@@ -507,9 +503,9 @@ template <> void QuokkaSimulation<DTypeFront1D>::setInitialConditionsOnGrid(quok
 
 	burn_t state;
 	std::array<Real, NumSpec> numdens = {-1.0};
-	numdens[0] = userData_.primary_species_1;
-	numdens[1] = userData_.primary_species_2;
-	numdens[2] = userData_.primary_species_3;
+	numdens[Species::e] = userData_.n_e_init;
+	numdens[Species::H] = userData_.n_HI_init;
+	numdens[Species::Hp] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 	// find the density in g/cm^3
@@ -749,8 +745,8 @@ auto problem_main() -> int
 	{
 		const double E_ir = compute_group_total_erad(sim.state_new_cc_[0], dx, group_ir, transverse_cells);
 		const double E_opt = compute_group_total_erad(sim.state_new_cc_[0], dx, group_optical, transverse_cells);
-		const double rho_0 = sim.userData_.primary_species_2 * spmasses[1]; // initial neutral-H mass density
-		const double alpha_opt = rho_0 * kappa2;			    // optical absorption coefficient [cm^-1]
+		const double rho_0 = sim.userData_.n_HI_init * spmasses[Species::H]; // initial neutral-H mass density
+		const double alpha_opt = rho_0 * kappa2;			     // optical absorption coefficient [cm^-1]
 		const double tau_front = alpha_opt * x_analytic(t_end);
 		const double E_opt_ref = 2.0 * compute_plateau_erad(F) * (1.0 - std::exp(-tau_front)) / alpha_opt;
 		const double reprocessed = E_ir / (E_ir + E_opt);
