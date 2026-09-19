@@ -117,7 +117,6 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 	pp.query("primary_species_14", userData_.primary_species_14);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 }
 
 template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

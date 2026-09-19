@@ -1,0 +1,19 @@
+@namespace: integrator
+
+# for the step rejection logic on mass fractions, we only consider
+# species that are > X_reject_buffer * atol_spec
+X_reject_buffer              real         1.0
+
+# Rosenbrock tableau selector:
+#   0 = Rodas5P 8-stage method from DifferentialEquations.jl
+#   1 = Rodas4P 6-stage method from DifferentialEquations.jl
+#   2 = Rodas3P 5-stage method from DifferentialEquations.jl
+#   3 = ROS2S   3-stage method from Hamkar et al. (2012)
+rosenbrock_tableau           int          0
+
+# H211b timestep controller parameters
+h211b_b                      real         4.0
+h211b_k                      real         2.5
+h211b_fac_min                real         0.2
+h211b_fac_max                real         6.0
+h211b_reduction_fac          real         0.5

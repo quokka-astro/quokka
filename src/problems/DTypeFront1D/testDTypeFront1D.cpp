@@ -457,7 +457,6 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	pp.query("flux_ion", userData_.flux_ion);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		userData_.output_file_.open("dtype_front_1d_front.csv");
 		userData_.output_file_ << "time,x_front\n";

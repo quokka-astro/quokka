@@ -90,8 +90,6 @@ integrator.do_species_clip = 0
 integrator.SMALL_X_SAFE = 1e-100
 integrator.burner_verbose = 0
 
-# do you want to use the jacobian calculated in a previous step?
-integrator.use_jacobian_caching = 0
 # integration will fail if the number density > X_reject_buffer*atol
 integrator.X_reject_buffer = 1e100
 # Set which jacobian to use

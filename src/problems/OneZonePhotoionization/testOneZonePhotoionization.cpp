@@ -101,7 +101,6 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	pp.query("n_photon", userData_.n_photon);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 
 	burn_t state;
 	state.T = userData_.temperature;

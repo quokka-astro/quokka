@@ -113,11 +113,11 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | chemistry.max_density_allowed | Float         | `1.0e300`               | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold.  |
 | chemistry.min_density_allowed | Float         | Smallest positive Value | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
 
-## Integrator (VODE)
+## Integrator (Rosenbrock)
 
-These parameters control the VODE ODE integrator used for chemistry and photochemistry source terms. The generated code reads them via `init_extern_parameters()` from the `integrator` prefix. See also `docs/markdown/photoionization.md`.
+These parameters control the Rosenbrock ODE integrator used for chemistry and photochemistry source terms. The generated code reads them via `init_extern_parameters()` from the `integrator` prefix. See also `docs/markdown/photoionization.md`.
 
-VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will cause the integrator to stall. Users must explicitly set the tolerances below.
+Rosenbrock is the only supported ODE backend. Select its tableau with `integrator.rosenbrock_tableau`. The built-in relative tolerances (`1e-10`) can be unnecessarily tight for photochemistry; set problem-appropriate tolerances explicitly.
 
 ### Tolerance parameters
 
@@ -129,16 +129,17 @@ VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will
 | `integrator.rtol_enuc` | Float | `1.e-10` | Relative tolerance for internal energy. |
 | `integrator.atol_rad_num` | Float | `1.e-10` | Absolute tolerance for radiation number density (cm⁻³). |
 | `integrator.rtol_rad_num` | Float | `1.e-10` | Relative tolerance for radiation number density. |
-| `integrator.species_failure_tolerance` | Float | `0.01` | Maximum allowed negative species number density (cm⁻³) at internal VODE nodes. When exceeded, VODE rejects the substep and retries with a smaller timestep. Should equal `atol_spec`. At the final interpolated state, the threshold is relaxed to 1.5× this value to account for VODE's non-monotonic interpolation. |
-| `integrator.radiation_failure_tolerance` | Float | `0.01` | Maximum allowed negative photon number density (cm⁻³) at internal VODE nodes. When exceeded, VODE rejects the substep and retries with a smaller timestep. Should equal `atol_rad_num`. At the final interpolated state, the threshold is relaxed to 1.5× this value. |
+| `integrator.species_failure_tolerance` | Float | `0.01` | Maximum allowed negative species number density (cm⁻³) in the final state. Internal stage and step checks instead use `atol_spec`. Setting this to `atol_spec` aligns the checks. |
+| `integrator.radiation_failure_tolerance` | Float | `0.01` | Maximum allowed negative photon number density (cm⁻³) in the final state. Internal stage and step checks instead use `atol_rad_num`. Setting this to `atol_rad_num` aligns the checks. |
 
 ### Other integrator parameters
 
 | Parameter Name | Type | Default | Description |
 |---|---|---|---|
+| `integrator.rosenbrock_tableau` | Integer | `0` | Rosenbrock method: `0` = Rodas5P, `1` = Rodas4P, `2` = Rodas3P, `3` = ROS2S. |
 | `integrator.jacobian` | Integer | `1` | Jacobian type: `1` = analytical, `2` = numerical. |
-| `integrator.ode_max_steps` | Integer | `150000` | Maximum number of VODE internal steps per burn call. |
-| `integrator.ode_max_dt` | Float | `1.e30` | Maximum internal timestep for VODE. |
+| `integrator.ode_max_steps` | Integer | `150000` | Maximum number of Rosenbrock internal steps per burn call. |
+| `integrator.ode_max_dt` | Float | `1.e30` | Maximum internal timestep for Rosenbrock. |
 | `integrator.use_number_densities` | Boolean (0/1) | `1` | If 1, evolve species as number densities instead of mass fractions. Must be `1` for Quokka. |
 | `integrator.subtract_internal_energy` | Boolean (0/1) | `1` | If 1, subtract internal energy before integration. Must be `0` for Quokka. |
 | `integrator.call_eos_in_rhs` | Boolean (0/1) | `1` | If 1, call EOS in the RHS to update temperature from internal energy. Must be `1` for Quokka. |

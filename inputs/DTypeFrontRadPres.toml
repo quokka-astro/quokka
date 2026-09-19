@@ -46,10 +46,10 @@ network.allow_mixed_cell_cooling = 0
 
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 
-# VODE absolute tolerances. NOTE: these were tuned for the original DTypeFront at n_H = 139.9
+# Rosenbrock absolute tolerances. NOTE: these were tuned for the original DTypeFront at n_H = 139.9
 # cm^-3. This problem runs at n_H = 1e4 cm^-3 (~70x denser), so several atol values that are
 # expressed as absolute number densities (atol_spec, atol_rad_num, species/radiation failure
-# tolerances) may need to be rescaled up by a similar factor. Start here and adjust if VODE
+# tolerances) may need to be rescaled up by a similar factor. Start here and adjust if Rosenbrock
 # spends excessive steps or the step-rejection loop triggers at the ionization front.
 #
 # atol_spec = 1e-5 * n_H = physical negligibility floor -> 1e-5 * 1e4 = 0.1 cm^-3.

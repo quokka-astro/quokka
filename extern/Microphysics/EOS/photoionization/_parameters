@@ -1,0 +1,16 @@
+@namespace: eos
+
+eos_gamma_default       real          1.4
+
+# define the specie names, and their masses and gammas
+species_1_name          string     "Electron"
+species_1_gamma         real          5./3.
+species_1_mass          real          9.10938291e-28
+
+species_2_name          string     "Hydrogen"
+species_2_gamma         real          5./3.
+species_2_mass          real          1.673532715291e-24
+
+species_3_name          string     "Hydrogen_Ion"
+species_3_gamma         real          5./3.
+species_3_mass          real          1.672621777e-24

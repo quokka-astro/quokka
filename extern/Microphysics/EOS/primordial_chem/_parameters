@@ -1,0 +1,60 @@
+@namespace: eos
+
+eos_gamma_default       real          1.4
+
+# define the specie names, and their masses and gammas
+species_1_name          string     "elec"
+species_1_gamma         real          5./3.
+species_1_mass          real          9.10938188e-28
+
+species_2_name          string     "hp"
+species_2_gamma         real          5./3.
+species_2_mass          real          1.67262158e-24
+
+species_3_name          string     "h"
+species_3_gamma         real          5./3.
+species_3_mass          real          1.67353251819e-24
+
+species_4_name          string     "hm"
+species_4_gamma         real          5./3.
+species_4_mass          real          1.67444345638e-24
+
+species_5_name          string     "dp"
+species_5_gamma         real          5./3.
+species_5_mass          real          3.34512158e-24
+
+species_6_name          string     "d"
+species_6_gamma         real          5./3.
+species_6_mass          real          3.34603251819e-24
+
+species_7_name          string     "h2p"
+species_7_gamma         real          1.4
+species_7_mass          real          3.34615409819e-24
+
+species_8_name          string     "dm"
+species_8_gamma         real          5./3.
+species_8_mass          real          3.34694345638e-24
+
+species_9_name          string     "h2"
+species_9_gamma         real          1.4
+species_9_mass          real          3.34706503638e-24
+
+species_10_name          string     "hdp"
+species_10_gamma         real          1.4
+species_10_mass          real          5.01865409819e-24
+
+species_11_name          string     "hd"
+species_11_gamma         real          1.4
+species_11_mass          real          5.01956503638e-24
+
+species_12_name          string     "hepp"
+species_12_gamma         real          5./3.
+species_12_mass          real          6.69024316e-24
+
+species_13_name          string     "hep"
+species_13_gamma         real          5./3.
+species_13_mass          real          6.69115409819e-24
+
+species_14_name          string     "he"
+species_14_gamma         real          5./3.
+species_14_mass          real          6.69206503638e-24

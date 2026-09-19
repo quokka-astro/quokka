@@ -208,7 +208,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	pp2.query("recombination_switch", userData_.recombination_switch);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;

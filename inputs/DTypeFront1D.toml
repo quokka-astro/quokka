@@ -92,7 +92,7 @@ network.energy_switch = 1
 network.recombination_temperature_dependent = 1
 network.allow_mixed_cell_cooling = 0
 
-# VODE / Rosenbrock tolerances scaled for n_0 = 100 cm^-3 (atol_spec = 1e-5 * n_H).
+# Rosenbrock tolerances scaled for n_0 = 100 cm^-3 (atol_spec = 1e-5 * n_H).
 integrator.atol_spec                     = 1.0e-3   # cm^-3
 integrator.atol_enuc                     = 1.24e8   # erg/g; c_v * 1 K temperature accuracy
 integrator.atol_rad_num                  = 5.0e-2   # cm^-3

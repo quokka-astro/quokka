@@ -1,0 +1,9 @@
+@namespace: eos
+
+# ratio of specific heats
+eos_gamma            real     5.e0/3.e0
+
+# when computing mu / Abar, do we assume that the composition is atoms
+# or ionized, and therefore include the electron contributions
+# separately?
+eos_assume_neutral bool 1
