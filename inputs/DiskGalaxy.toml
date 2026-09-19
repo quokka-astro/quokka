@@ -37,7 +37,7 @@ max_timesteps = 1000
 hydro.artificial_viscosity_coefficient = 0.1
 hydro.reconstruction_order = 3
 mhd.emf_reconstruction_order = 3
-mhd.emf_compute_scheme = "FelkerStone2017"
+mhd.emf_compute_scheme = "FelkerStone2018"
 mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
 
 mhd.project_initial_b_field = true
