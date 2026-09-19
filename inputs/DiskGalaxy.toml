@@ -43,8 +43,24 @@ mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
 mhd.project_initial_b_field = true
 mhd.update_initial_b_energy = true
 
-cooling.read_tables_even_if_disabled = 1
-cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
+cooling.enabled = 0
+photochemistry.enabled = 1
+photochemistry.min_density_allowed = 1e-28
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.atol_spec = 6e-5
+integrator.atol_enuc = 1.24e8
+integrator.atol_rad_num = 1.25e-6
+integrator.species_failure_tolerance = 6e-5
+integrator.radiation_failure_tolerance = 1.25e-6
+integrator.rtol_spec = 1e-2
+integrator.rtol_rad_num = 1e-2
+integrator.rtol_enuc = 1e-2
+integrator.rosenbrock_tableau = 3
 temperature_floor = 1e4
 density_floor = 1e-28
 density_floor_expr = "x1=x*1.0e-22; y1=y*1.0e-22; z1=z*1.0e-22; r2=x1*x1+y1*y1+z1*z1; rb2=3.08567758*3.08567758; base_density_floor * (rb2 / max(r2, rb2))"
@@ -72,6 +88,9 @@ quokka.stellarpop_particle_mass.normalization_expr = "1.0/(5.0e6*yr)"
 particles.eps_ff = 0.01
 particles.low_mass_composite_max_mass = 5.957650359245478e+35   # grams [= 299 Msun]
 particles.reproducibility_roundoff_redundancy = 36
+# DiskGalaxy now carries an ionizing radiation group. Supply particles.rad_table
+# and set this to true to enable stellar ionizing luminosities.
+particles.use_luminosity_table = false
 
 
 ###################################

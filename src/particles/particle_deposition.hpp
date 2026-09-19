@@ -364,12 +364,11 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
 							     SNR_energy_per_cell);
 
-				// Deposit passive scalar if enabled
-				// TODO(chongchonghe): Add support for multiple passive scalars (currently only deposits to scalar0)
-				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+				// Deposit the feedback tracer into the first non-chemistry scalar.
+				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > Physics_Traits<problem_t>::numMassScalars) {
 					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
-					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::scalar0_index),
-								     scalar_per_cell);
+					constexpr int feedback_scalar_index = HydroSystem<problem_t>::scalar0_index + Physics_Traits<problem_t>::numMassScalars;
+					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, feedback_scalar_index), scalar_per_cell);
 				}
 
 				// Deposit count into the last component for roundoff algorithm
@@ -522,11 +521,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), e_snr_per_cell);
 
-				// Deposit passive scalar if enabled
-				// TODO(chongchonghe): Add support for multiple passive scalars (currently only deposits to scalar0)
-				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+				// Deposit the feedback tracer into the first non-chemistry scalar.
+				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > Physics_Traits<problem_t>::numMassScalars) {
 					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
-					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::scalar0_index), scalar_per_cell);
+					constexpr int feedback_scalar_index = HydroSystem<problem_t>::scalar0_index + Physics_Traits<problem_t>::numMassScalars;
+					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, feedback_scalar_index), scalar_per_cell);
 				}
 
 				// Deposit count into the last component for roundoff algorithm
