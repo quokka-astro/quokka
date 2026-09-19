@@ -1,0 +1,12 @@
+# Raw yield data and extracted Quokka datatables are generated artifacts.
+AGB_Karakas16/
+SNII_Kobayashi0611/
+SNII_Sukhbold16/
+superAGB_Doherty14/
+chuhan_channel_yields.dat
+isotope_data.txt
+yields.tar.gz
+AGB_yield_table.csv
+SNII_yield_table.csv
+WR_yield_table.csv
+WR_mass_loss_distribution_table.csv

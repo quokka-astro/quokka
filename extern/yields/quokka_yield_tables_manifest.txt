@@ -1,0 +1,23 @@
+Quokka chemical yield datatables
+
+This archive contains generated Quokka DataTable CSV files, not the original
+stellar yield tables or MIST tracks.
+
+Files:
+- SNII_yield_table.csv
+  1D Quokka DataTable. Source: solar-metallicity Sukhbold et al. (2016)
+  massive-star yield tables, explosive ejecta column.
+
+- WR_yield_table.csv
+  1D Quokka DataTable. Source: solar-metallicity Sukhbold et al. (2016)
+  massive-star yield tables, wind column.
+
+- AGB_yield_table.csv
+  1D Quokka DataTable. Source: Karakas--Lugaro AGB yields plus Doherty et al.
+  super-AGB yields.
+
+- WR_mass_loss_distribution_table.csv
+  2D Quokka DataTable. Source: solar-metallicity MIST tracks. The table stores
+  cumulative WR mass-loss fraction versus stellar age and birth mass, with the
+  WR phase identified by surface_h1 < 0.4. It distributes the integrated WR
+  isotope budget in time; it is not itself an isotope yield table.

@@ -1564,6 +1564,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			// Stellar evolution and SN deposition; only apply to star particles
 			// Update particle properties (e.g., luminosity) before particle-mesh interaction
 			particleRegister_.updateParticleProperties(cur_time, dt_[0]);
+			particleRegister_.updateChemicalFeedback(state_new_cc_[finest_level], finest_level, cur_time, dt_[0]);
 
 			// TODO(cch): Need to take care of AMR subcycling
 			particleMeshInteraction(cur_time, dt_[0]);
@@ -2190,6 +2191,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	if (finest_level == max_level) {
 		particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 	}
+
+	// Continuous WR/AGB yields are injected during particle updates; SNII yields are injected here with the SN event.
+	particleRegister_.depositChemicalFeedback(state_new_cc_[lev], lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
@@ -3650,7 +3654,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 	detail::verify_particle_switch_type<problem_t>();
 
 	// Read particle parameters from input file
-	quokka::particleParmParse();
+	quokka::particleParmParse<problem_t>();
 
 	// Sink and Star both accrete via the same accretion-rate buffer (see particleMeshInteraction).
 	// Enabling both would double-apply gas removal: computeSinkAccretion accumulates into the shared
