@@ -62,7 +62,7 @@ partition "AMRSimulation::evolve() — main time loop" {
         :computeNumberOfRadiationSubsteps() → nsubSteps, dt_rad;
         repeat
           if (i > 0?) then (yes)
-            :swapRadiationState() //(copy rad vars new→old)//;
+            :copyRadiationState() //(copy rad vars new→old)//;
           endif
           note right
             IMEX Stage 1: trivial

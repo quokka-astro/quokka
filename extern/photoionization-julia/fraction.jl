@@ -17,7 +17,10 @@ const n_A = 6.02214129e23
 const h   = 6.62606957e-27
 const R   = k_B * n_A
 const σ_v = 1.5e-18
-const E_ion = 6.4e-12
+const eV_to_erg = 1.602176634e-12
+const Rydberg_energy = 13.6 * eV_to_erg
+const band_mid_freq = 0.5 * (3.29e15 + 1.50e16)
+const E_ion = max(band_mid_freq * h - Rydberg_energy, 0.0)
 
 struct State
     n_spec::Vector{Float64}
