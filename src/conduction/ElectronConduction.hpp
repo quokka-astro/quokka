@@ -161,8 +161,14 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real rho_face = 0.5 * (rho_L + rho_R);
 			const amrex::Real T_face = amrex::max(0.5 * (T_L + T_R), t_min);
 			amrex::GpuArray<amrex::Real, nmscalars_> massArray_face{};
+			amrex::Real sumFrac = 0.0;
 			for (int n = 0; n < nmscalars_; ++n) {
-				massArray_face[n] = 0.5 * (massFrac_L[n] + massFrac_R[n]) * rho_face;
+				massArray_face[n] = 0.5 * (massFrac_L[n] + massFrac_R[n]);
+				sumFrac += massArray_face[n];
+			}
+			const amrex::Real invSum = 1.0 / amrex::max(sumFrac, small);
+			for (int n = 0; n < nmscalars_; ++n) {
+				massArray_face[n] *= invSum * rho_face;
 			}
 			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massArray_face;
 			const amrex::Real Eint_face = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_face, T_face, massScalars);
