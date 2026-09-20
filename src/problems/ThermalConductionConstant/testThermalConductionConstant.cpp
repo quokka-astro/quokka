@@ -157,29 +157,6 @@ auto runConductionTest(int nx, int /*max_level*/) -> double
 	return sim.computeErrorNorm();
 }
 
-template <>
-void QuokkaSimulation<ThermalConductionConstantProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-									   amrex::MultiFab const &state_cc,
-									   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
-{
-	if (dname == "temperature") {
-		const int ncomp = ncomp_cc_in;
-		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &output = mf.array(iter);
-			auto const &state = state_cc.const_array(iter);
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
-			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				Real const rho = state(i, j, k, HydroSystem<ThermalConductionConstantProblem>::density_index);
-				Real const Eint = HydroSystem<ThermalConductionConstantProblem>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
-				Real const Tgas = quokka::EOS<ThermalConductionConstantProblem>::ComputeTgasFromEint(rho, Eint);
-				output(i, j, k, ncomp) = Tgas;
-			});
-		}
-	}
-}
-
 auto problem_main() -> int
 {
 	// Single-resolution check, with one level of refinement active, against a pre-computed reference error norm.
