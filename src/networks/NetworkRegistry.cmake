@@ -19,13 +19,17 @@ set(_pi_hand_written_species_args
   POWER_LAW_INDEX 0 # jaff network.radiation.power_law_index
 )
 
-foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten)
+foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten thermophotochemistry_handwritten)
   set(_pi_is_jaff FALSE)
   set(_pi_species_args "")
+  set(_pi_num_thermal_bands 0)
   if (_pi_name STREQUAL "photoionization_H_caseB")
     set(_pi_is_jaff TRUE)
   else()
     set(_pi_species_args ${_pi_hand_written_species_args})
+  endif()
+  if (_pi_name STREQUAL "thermophotochemistry_handwritten")
+    set(_pi_num_thermal_bands 2)
   endif()
 
   register_microphysics_network(${_pi_name}
@@ -44,6 +48,7 @@ foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten)
     USES_INTEGRATOR_DIRS TRUE
     NETWORK_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/src/networks/${_pi_name}"
                           "${CMAKE_SOURCE_DIR}/extern/Microphysics/networks"
+    NUM_THERMAL_BANDS ${_pi_num_thermal_bands}
     ${_pi_species_args}
   )
 endforeach()

@@ -76,6 +76,7 @@ template <> struct ISM_Traits<MarshakProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = dust_on;
 	static constexpr double gas_dust_coupling_threshold = gas_dust_coupling_threshold_;
 	static constexpr bool enable_photoelectric_heating = PE_on;
+	static constexpr bool thermal_band_photochemistry = false; // no photochemistry network in this problem
 };
 
 template <>

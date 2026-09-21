@@ -177,6 +177,13 @@ template <> struct ISM_Traits<DTypeFront1D> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool enable_photoelectric_heating = false;
+	// This is the one place the network's THERMAL_DUST_PHOTOCHEMISTRY macro is translated into a Quokka trait.
+	static constexpr bool thermal_band_photochemistry =
+#ifdef THERMAL_DUST_PHOTOCHEMISTRY
+	    true;
+#else
+	    false;
+#endif
 };
 
 template <> struct SimulationData<DTypeFront1D> {
