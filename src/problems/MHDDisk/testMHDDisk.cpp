@@ -53,9 +53,9 @@ constexpr double turb_target_Mach = 0.5;
 constexpr double r_K_factor = 2.0;  // physical kernel radius, in units of dx (paper default 3.0)
 constexpr int omega_subsamples = 4; // n_sub per dimension for boundary-cell overlap quadrature
 
-constexpr int turb_nx = 512;
-constexpr int turb_ny = 512;
-constexpr int turb_nz = 512;
+// constexpr int turb_nx = 512;
+// constexpr int turb_ny = 512;
+// constexpr int turb_nz = 512;
 } // namespace
 
 struct MHDGalaxy {};
@@ -512,10 +512,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	static bool isTurbSamplingDone = false;
 	if (!isTurbSamplingDone) {
 
-		userData_.turb_nx = turb_nx;
-		userData_.turb_ny = turb_ny;
-		userData_.turb_nz = turb_nz;
-
 		amrex::ParmParse pp("mhd_galaxy");
 
 		std::string turb_vx_file;
@@ -525,14 +521,25 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		pp.get("turb_vx_file", turb_vx_file);
 		pp.get("turb_vy_file", turb_vy_file);
 		pp.get("turb_vz_file", turb_vz_file);
+		
+		
+		// assume nturb is cubic, i.e. has equal x, y, and z dimensions
+		// get number of cells in file
+		const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
+		// take cube root to get sidelength
+		const std::size_t n_turb_side = int( std::cbrt(n_turb) + .5 );
+		
+		userData_.turb_nx = n_turb_side;
+		userData_.turb_ny = n_turb_side;
+		userData_.turb_nz = n_turb_side;
 
-		const std::size_t n_turb = static_cast<std::size_t>(turb_nx) * static_cast<std::size_t>(turb_ny) * static_cast<std::size_t>(turb_nz);
 
 		userData_.turb_vx_device = load_bin_to_device(turb_vx_file, n_turb);
 
 		userData_.turb_vy_device = load_bin_to_device(turb_vy_file, n_turb);
 
 		userData_.turb_vz_device = load_bin_to_device(turb_vz_file, n_turb);
+
 
 		std::string turb_seed_file;
 		pp.query("turb_seed_file", turb_seed_file);
@@ -553,7 +560,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			       << " vx = " << turb_vx_file << "\n"
 			       << " vy = " << turb_vy_file << "\n"
 			       << " vz = " << turb_vz_file << "\n"
-			       << " cube size = " << turb_nx << " x " << turb_ny << " x " << turb_nz << "\n"
+			       << " cube size = " << userData_.turb_nx << " x " << userData_.turb_ny << " x " << userData_.turb_nz << "\n"
 			       << "Velocity scale = " << turb_rescale / 1.0e5 << " km/s\n";
 
 		amrex::Print() << "MHDGalaxy init complete\n"
