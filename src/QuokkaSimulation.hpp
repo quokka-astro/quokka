@@ -1242,7 +1242,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	auto const applyTurbulence = [&]() {
 		if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
 			auto const &cellSizes = geom[lev].CellSizeArray();
-			td->applyDriving(state, time, dt, cellSizes);
+			auto const &probLo = geom[lev].ProbLoArray();
+			td->applyDriving(state, time, dt, cellSizes, probLo);
 		}
 	};
 
