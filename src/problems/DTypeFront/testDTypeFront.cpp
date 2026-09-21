@@ -159,9 +159,13 @@ auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.
 auto net_energy_ionized(double T, double n_e) -> double
 {
 	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
-	const double epsilon = 6.4e-12;
+	// mean photoheating energy per ionization: mean ionizing-band photon energy above the
+	// H ionization threshold, matching get_ionization_heating_coefficient() in actual_rhs.H
+	static const double RydbergEnergy = 13.6 * C::ev2erg;
+	const double eps = RadSystem<DTypeFront>::GetChemBandQuanta(0);
+	const double Gamma_photo = std::max(eps - RydbergEnergy, 0.0);
 	// alpha_B * n_e^2 = n_gamma
-	const double photoheating = alpha_B * n_e * n_e * epsilon;
+	const double photoheating = alpha_B * n_e * n_e * Gamma_photo;
 	const double recombination_cooling = n_e * n_e * lambda_rec(T);
 	const double ion_ff_cooling = n_e * n_e * lambda_ion_ff(T);
 	// Assume KI heating and cooling are negligible in the cavity since the neutral fraction is low.
