@@ -31,8 +31,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct PhotoionizationStreamingProblem {
-};
+struct PhotoionizationStreamingProblem {};
 
 constexpr double c = C::c_light;    // speed of light
 constexpr double chat = C::c_light; // reduced speed of light
@@ -55,8 +54,8 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBands() -> amrex::GpuArray<double, NumChemBands + 1> { return ChemBandsHeader_; }
 	static constexpr auto ChemBandsPowerLawIndex() -> double { return ChemBandsPowerLawIndex_; }
+	static constexpr auto ChemBands() -> amrex::GpuArray<double, NumChemBands + 1> { return ChemBandsHeader(); }
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {

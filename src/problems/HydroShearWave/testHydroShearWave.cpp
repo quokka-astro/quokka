@@ -17,8 +17,7 @@
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
 
-struct ShearWaveProblem {
-};
+struct ShearWaveProblem {};
 
 template <> struct quokka::EOS_Traits<ShearWaveProblem> {
 	static constexpr double gamma = 5. / 3.;

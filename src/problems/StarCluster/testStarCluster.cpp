@@ -33,8 +33,7 @@
 
 using amrex::Real;
 
-struct StarCluster {
-};
+struct StarCluster {};
 
 template <> struct quokka::EOS_Traits<StarCluster> {
 	static constexpr double gamma = 1.0;

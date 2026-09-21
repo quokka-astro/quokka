@@ -22,8 +22,7 @@
 
 static constexpr bool export_csv = true;
 
-struct CoolingProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct CoolingProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 const double cooling_rate = 0.1;
 const double CR_heating_rate = 0.03;

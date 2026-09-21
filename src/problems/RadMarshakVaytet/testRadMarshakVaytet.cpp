@@ -86,8 +86,7 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = []() constexpr {
 
 constexpr amrex::GpuArray<double, n_groups_> group_opacities_{};
 
-struct SuOlsonProblemCgs {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct SuOlsonProblemCgs {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int max_step_ = 1e6;
 constexpr double rho0 = 1.0e-3;	    // g cm^-3

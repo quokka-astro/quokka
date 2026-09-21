@@ -39,7 +39,6 @@ constexpr int MicrophysicsNumRadVarsPerGroup = 1;
 constexpr int MicrophysicsNumRadVarsPerGroup = 2;
 #endif
 constexpr int NumRadEqs = NumChemBands * MicrophysicsNumRadVarsPerGroup;
-constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBandsHeader_{ @CHEM_BANDS@ };
 // jaff network.radiation.power_law_index: photon-number spectrum index alpha in n(E) ~ E^(alpha-2)
 constexpr double ChemBandsPowerLawIndex_ = @POWER_LAW_INDEX@;
 #endif
@@ -50,6 +49,13 @@ constexpr int NumAux = NAUX_NET;
 @PROPERTIES@
 
 namespace {
+
+#ifdef PHOTOCHEMISTRY
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto ChemBandsHeader() -> amrex::GpuArray<double, NumChemBands + 1>
+    {
+        return {{ @CHEM_BANDS@ }};
+    }
+#endif
 
     MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real aion[NumSpecTotal] = {
        @AION@

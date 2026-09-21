@@ -80,8 +80,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct DTypeFront1D {
-};
+struct DTypeFront1D {};
 
 // reduced speed of light (same choice as the 3D DTypeFront problem)
 constexpr double c_hat = C::c_light / 1000.0;
@@ -152,8 +151,8 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	//
 	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{1.0e-6, 0.413567, 13.6, 1.0e5};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
+	static constexpr auto ChemBands() { return ChemBandsHeader(); }
 };
 
 template <> struct ISM_Traits<DTypeFront1D> {

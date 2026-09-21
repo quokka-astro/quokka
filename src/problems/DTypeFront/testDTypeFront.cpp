@@ -33,8 +33,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct DTypeFront {
-};
+struct DTypeFront {};
 
 constexpr double c_hat = C::c_light / 1000.0;
 
@@ -68,8 +67,8 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	// photochemistry momentum deposition is gated on beta_order == 1, so this test validates pure
 	// thermal-pressure D-type front expansion with radiation pressure.
 	static constexpr int beta_order = 1;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
+	static constexpr auto ChemBands() { return ChemBandsHeader(); }
 };
 
 template <> struct SimulationData<DTypeFront> {
@@ -125,19 +124,48 @@ auto lambda_rec(double T) -> double
 	if (T < 100.0) {
 		return 0.0;
 	}
-	return 6.1e-10 * 1.380649e-16 * T * std::pow(T, -0.89);
+	return 6.1e-10 * C::k_B * T * std::pow(T, -0.89);
 }
 
-auto lambda_ion_ff(double T) -> double { return 1.4e-27 * std::sqrt(T) + 1.0e-19 * std::exp(-118348.0 / T); }
+// Frazer and Heitsch 2019, matching get_cle_term() in actual_rhs.H
+auto cle_term(double T) -> double
+{
+	if (T < 1.0e2) {
+		return 3.47e-29 * std::pow(T, 1.915);
+	}
+	if (T < std::pow(10.0, 2.8)) {
+		return 2.34e-26 * std::pow(T, 0.500);
+	}
+	if (T < std::pow(10.0, 3.6)) {
+		return 1.11e-24 * std::pow(T, -0.099);
+	}
+	if (T < 1.0e4) {
+		return 1.08e-32 * std::pow(T, 2.127);
+	}
+	if (T < std::pow(10.0, 4.5)) {
+		return 2.67e-30 * std::pow(T, 1.529);
+	}
+	if (T < 1.0e5) {
+		return 1.74e-24 * std::pow(T, 0.237);
+	}
+	if (T < 1.0e6) {
+		return 1.10e-21 * std::pow(T, -0.323);
+	}
+	return 7.49e-21 * std::pow(T, -0.462);
+}
+
+auto lambda_ion_ff(double T) -> double { return 1.3 * 1.427e-27 * std::sqrt(T) + cle_term(T); }
 
 auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * std::sqrt(T) * std::exp(-92.0 / T)); }
 
 auto net_energy_ionized(double T, double n_e) -> double
 {
-	const double alpha_B = 2.63e-13 * std::pow(T / 1.0e4, -0.7);
-	const double epsilon = 6.4e-12;
+	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
+	static const double RydbergEnergy = 13.6 * C::ev2erg;
+	const double eps = RadSystem<DTypeFront>::GetChemBandQuanta(0);
+	const double Gamma_photo = std::max(eps - RydbergEnergy, 0.0);
 	// alpha_B * n_e^2 = n_gamma
-	const double photoheating = alpha_B * n_e * n_e * epsilon;
+	const double photoheating = alpha_B * n_e * n_e * Gamma_photo;
 	const double recombination_cooling = n_e * n_e * lambda_rec(T);
 	const double ion_ff_cooling = n_e * n_e * lambda_ion_ff(T);
 	// Assume KI heating and cooling are negligible in the cavity since the neutral fraction is low.

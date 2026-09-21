@@ -13,9 +13,16 @@ const m_e = 9.10938371e-28
 const m_HI = 1.673773e-24
 const m_HII = 1.6728620616289998e-24
 const c   = 2.99792458e10
-const k_B = 1.3806490000000002e-16
-const σ_v = 2.1596876715103067e-18
-const E_ion = 6.4e-12
+const k_B = 1.3806488e-16
+const n_A = 6.02214129e23
+const h   = 6.62606957e-27
+const R   = k_B * n_A
+const σ_v = 1.5e-18
+const ν_lo = 3.29e15
+const ν_hi = 1.50e16
+const ev2erg = 1.602176634e-12
+const RydbergEnergy = 13.6 * ev2erg
+const E_ion = max(0.5 * (ν_lo + ν_hi) * h - RydbergEnergy, 0.0)
 
 struct State
     n_spec::Vector{Float64}
@@ -78,13 +85,14 @@ function rhs!(df::Vector{Float64}, f::Vector{Float64}, params, t)
     α_rec = 2.63e-13 * (1 + energy_switch * ((T / 1.0e4)^(-0.69999999999999996) - 1.0))
     ionization_term = n_HI * c * σ_v * n_photon
     recombination_term = α_rec * n_e * n_HII
+    Λ_rec = T < 100.0 ? 0.0 : 6.1e-10 * k_B * T * T^(-0.89)
 
     df[1] =  ionization_term - recombination_term
     df[2] = -ionization_term + recombination_term
     df[3] =  ionization_term - recombination_term
     df[4] = -ionization_term
     df[5] = -ionization_term * flux_photon / n_photon
-    df[6] = energy_switch * (ionization_term * E_ion - recombination_term * k_B * T * (0.684 - 0.0416 * log(T / 1.0e4))) / ρ
+    df[6] = energy_switch * (ionization_term * E_ion - Λ_rec * n_e * n_HII) / ρ
 end
 
 function make_problem(state::State, tend::Float64, params::Tuple)

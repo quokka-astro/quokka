@@ -29,8 +29,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct StromgrenSphere {
-};
+struct StromgrenSphere {};
 
 constexpr double c_hat = C::c_light / 100.0;
 constexpr double sigma_star_coeff = 1.5 / 16.0;
@@ -53,8 +52,8 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
+	static constexpr auto ChemBands() { return ChemBandsHeader(); }
 };
 namespace
 {

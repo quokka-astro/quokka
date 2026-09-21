@@ -23,8 +23,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct SemiellipseProblem {
-};
+struct SemiellipseProblem {};
 
 template <> struct Physics_Traits<SemiellipseProblem> : DefaultPhysicsTraits {
 	// cell-centred
