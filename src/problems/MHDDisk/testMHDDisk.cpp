@@ -521,25 +521,22 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		pp.get("turb_vx_file", turb_vx_file);
 		pp.get("turb_vy_file", turb_vy_file);
 		pp.get("turb_vz_file", turb_vz_file);
-		
-		
+
 		// assume nturb is cubic, i.e. has equal x, y, and z dimensions
 		// get number of cells in file
 		const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
 		// take cube root to get sidelength
-		const std::size_t n_turb_side = int( std::cbrt(n_turb) + .5 );
-		
+		const std::size_t n_turb_side = int(std::cbrt(n_turb) + .5);
+
 		userData_.turb_nx = n_turb_side;
 		userData_.turb_ny = n_turb_side;
 		userData_.turb_nz = n_turb_side;
-
 
 		userData_.turb_vx_device = load_bin_to_device(turb_vx_file, n_turb);
 
 		userData_.turb_vy_device = load_bin_to_device(turb_vy_file, n_turb);
 
 		userData_.turb_vz_device = load_bin_to_device(turb_vz_file, n_turb);
-
 
 		std::string turb_seed_file;
 		pp.query("turb_seed_file", turb_seed_file);
