@@ -122,10 +122,37 @@ auto lambda_rec(double T) -> double
 	if (T < 100.0) {
 		return 0.0;
 	}
-	return 6.1e-10 * 1.380649e-16 * T * std::pow(T, -0.89);
+	return 6.1e-10 * C::k_B * T * std::pow(T, -0.89);
 }
 
-auto lambda_ion_ff(double T) -> double { return 1.4e-27 * std::sqrt(T) + 1.0e-19 * std::exp(-118348.0 / T); }
+// Frazer and Heitsch 2019, matching get_cle_term() in actual_rhs.H
+auto cle_term(double T) -> double
+{
+	if (T < 1.0e2) {
+		return 3.47e-29 * std::pow(T, 1.915);
+	}
+	if (T < std::pow(10.0, 2.8)) {
+		return 2.34e-26 * std::pow(T, 0.500);
+	}
+	if (T < std::pow(10.0, 3.6)) {
+		return 1.11e-24 * std::pow(T, -0.099);
+	}
+	if (T < 1.0e4) {
+		return 1.08e-32 * std::pow(T, 2.127);
+	}
+	if (T < std::pow(10.0, 4.5)) {
+		return 2.67e-30 * std::pow(T, 1.529);
+	}
+	if (T < 1.0e5) {
+		return 1.74e-24 * std::pow(T, 0.237);
+	}
+	if (T < 1.0e6) {
+		return 1.10e-21 * std::pow(T, -0.323);
+	}
+	return 7.49e-21 * std::pow(T, -0.462);
+}
+
+auto lambda_ion_ff(double T) -> double { return 1.3 * 1.427e-27 * std::sqrt(T) + cle_term(T); }
 
 auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * std::sqrt(T) * std::exp(-92.0 / T)); }
 
