@@ -237,10 +237,10 @@ auto compute_ionized_column(amrex::MultiFab const &state_mf, amrex::GpuArray<amr
 	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
 	auto const state = state_mf.const_arrays();
 	const amrex::Real cell_length = dx[0];
-	const amrex::Real mass_HII = spmasses[Species::Hp];
+	const amrex::Real mass_HII = spmasses[Species::H_p];
 
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-		return cell_length * state[box_no](i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::Hp)) / mass_HII;
+		return cell_length * state[box_no](i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H_p)) / mass_HII;
 	});
 
 	auto const &hv = reduce_data.value(reduce_op);
@@ -521,7 +521,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::setInitialConditionsOnGrid(quok
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::Hp] = userData_.n_HII_init;
+	numdens[Species::H_p] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 	// find the density in g/cm^3

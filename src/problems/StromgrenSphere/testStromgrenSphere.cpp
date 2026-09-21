@@ -239,7 +239,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::Hp] = userData_.n_HII_init;
+	numdens[Species::H_p] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 	// find the density in g/cm^3
@@ -303,7 +303,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 			const amrex::Real n_HI =
 			    state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
 			const amrex::Real n_HII =
-			    state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::Hp)) / spmasses[Species::Hp];
+			    state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
 			const amrex::Real denom = n_HI + n_HII;
 			if (denom <= 0.0_rt) {
 				return;

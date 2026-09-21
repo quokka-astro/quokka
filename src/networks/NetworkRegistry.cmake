@@ -5,15 +5,15 @@
 # setup_target_for_microphysics_compilation() substitutes '|' back to ';'
 set(_pi_hand_written_species_args
   NSPEC 3
-  SPECIES_ENUM "H = 0, Hp, e"
-  SPEC_NAMES "\"H\", \"Hp\", \"e\""
+  SPECIES_ENUM "H = 0, H_p, e"
+  SPEC_NAMES "\"H\", \"H_p\", \"e\""
   SHORT_SPEC_NAMES "\"H\", \"H+\", \"e-\""
   AION "1.0, 1.0, 5.4858e-4"
   AION_INV "1.0, 1.0, 1822.89"
   ZION "1.0, 1.0, 1.0"
   # constexpr switch bodies
-  AION_CONSTEXPR "case H:  a = 1.0| break| case Hp: a = 1.0| break| case e:  a = 1.0| break|"
-  ZION_CONSTEXPR "case H:  z = 1.0| break| case Hp: z = 1.0| break| case e:  z = 1.0| break|"
+  AION_CONSTEXPR "case H:  a = 1.0| break| case H_p: a = 1.0| break| case e:  a = 1.0| break|"
+  ZION_CONSTEXPR "case H:  z = 1.0| break| case H_p: z = 1.0| break| case e:  z = 1.0| break|"
   NUM_CHEM_BANDS 1
   CHEM_BANDS "13.6, 62.1" # eV
   POWER_LAW_INDEX 0 # jaff network.radiation.power_law_index

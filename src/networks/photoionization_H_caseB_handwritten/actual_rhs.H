@@ -25,7 +25,7 @@ void actual_rhs_init();
 // (unless SKIP_PHOTOCHEMFLUX) photon flux.
 constexpr int e_idx = static_cast<int>(Species::e);
 constexpr int H_idx = static_cast<int>(Species::H);
-constexpr int Hp_idx = static_cast<int>(Species::Hp);
+constexpr int Hp_idx = static_cast<int>(Species::H_p);
 constexpr int ie = e_idx + 1;
 constexpr int iH = H_idx + 1;
 constexpr int iHp = Hp_idx + 1;

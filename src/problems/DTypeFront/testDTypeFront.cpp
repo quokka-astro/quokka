@@ -104,7 +104,7 @@ auto compute_effective_radius(amrex::MultiFab const &state_mf, amrex::GpuArray<a
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
 		const amrex::Real n_HI = state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
 		const amrex::Real n_HII =
-		    state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + static_cast<int>(Species::Hp)) / spmasses[Species::Hp];
+		    state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
 		const amrex::Real denom = n_HI + n_HII;
 		if (denom <= 0.0_rt) {
 			return 0.0_rt;
@@ -376,7 +376,7 @@ template <> void QuokkaSimulation<DTypeFront>::setInitialConditionsOnGrid(quokka
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::Hp] = userData_.n_HII_init;
+	numdens[Species::H_p] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 	// find the density in g/cm^3
@@ -430,7 +430,7 @@ template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
 	const amrex::Real Q = userData_.Q;
 	const amrex::Real c_i = std::sqrt(C::k_B * T_eq / (mu * C::m_p));
 	const amrex::Real rho =
-	    userData_.n_e_init * spmasses[Species::e] + userData_.n_HI_init * spmasses[Species::H] + userData_.n_HII_init * spmasses[Species::Hp];
+	    userData_.n_e_init * spmasses[Species::e] + userData_.n_HI_init * spmasses[Species::H] + userData_.n_HII_init * spmasses[Species::H_p];
 	const amrex::Real eps = RadSystem<DTypeFront>::GetChemBandQuanta(0);
 
 	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_e * n_e), 1.0_rt / 3.0_rt);
@@ -549,7 +549,7 @@ auto problem_main() -> int
 				const amrex::Real n_HI_cell =
 				    state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
 				const amrex::Real n_HII_cell =
-				    state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + static_cast<int>(Species::Hp)) / spmasses[Species::Hp];
+				    state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
 				const amrex::Real denom = n_HI_cell + n_HII_cell;
 				if (denom <= 0.0_rt) {
 					return;

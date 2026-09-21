@@ -128,7 +128,7 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::Hp] = userData_.n_HII_init;
+	numdens[Species::H_p] = userData_.n_HII_init;
 	state.T = userData_.temperature;
 
 	Real rhotot = 0.0_rt;

@@ -109,8 +109,8 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	Real rhotot = 0.0_rt;
 	state.xn[Species::e] = userData_.n_e_init;
 	state.xn[Species::H] = userData_.n_HI_init;
-	state.xn[Species::Hp] = userData_.n_HII_init;
-	rhotot = state.xn[Species::e] * spmasses[Species::e] + state.xn[Species::H] * spmasses[Species::H] + state.xn[Species::Hp] * spmasses[Species::Hp];
+	state.xn[Species::H_p] = userData_.n_HII_init;
+	rhotot = state.xn[Species::e] * spmasses[Species::e] + state.xn[Species::H] * spmasses[Species::H] + state.xn[Species::H_p] * spmasses[Species::H_p];
 	state.rho = rhotot;
 	eos(eos_input_rt, state);
 
@@ -149,7 +149,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::Hp] = userData_.n_HII_init;
+	numdens[Species::H_p] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 
@@ -199,7 +199,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 		const amrex::Real n_HI =
 		    values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + static_cast<int>(Species::H))[0] / spmasses[Species::H];
 		const amrex::Real n_HII =
-		    values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + static_cast<int>(Species::Hp))[0] / spmasses[Species::Hp];
+		    values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + static_cast<int>(Species::H_p))[0] / spmasses[Species::H_p];
 		const amrex::Real n_gamma = Erad_i / RadSystem<PhotoionizationStreamingProblem>::GetChemBandQuanta(0);
 		const amrex::Real rho = values.at(RadSystem<PhotoionizationStreamingProblem>::gasDensity_index)[0];
 		const amrex::Real Egas_i = values.at(RadSystem<PhotoionizationStreamingProblem>::gasEnergy_index)[0];
@@ -208,7 +208,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 		amrex::GpuArray<amrex::Real, NumSpec> scalars{};
 		scalars[Species::e] = n_e * spmasses[Species::e];
 		scalars[Species::H] = n_HI * spmasses[Species::H];
-		scalars[Species::Hp] = n_HII * spmasses[Species::Hp];
+		scalars[Species::H_p] = n_HII * spmasses[Species::H_p];
 		massScalars = scalars;
 		const amrex::Real temp = quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Eint_i, massScalars);
 
