@@ -24,6 +24,13 @@
 /// deliver equal energy. The ionizing band is transparent to the dust opacity, so photoionization is the
 /// only process that removes it, and it ionizes the slab as it advances.
 ///
+/// The two bands also use different mean photon energies to convert a photon flux to an energy flux: the
+/// optical band uses E_photon, the fixed band-midpoint energy, while the ionizing band uses
+/// RadSystem<DTypeFront1D>::GetChemBandQuanta(0), the chemistry solver's own registered mean energy for the
+/// ionizing band (see AddRadSource). They must differ, because computePhotoChemistry (photochemistry.hpp)
+/// converts the ionizing band's energy density back to a photon count using GetChemBandQuanta(0); using
+/// E_photon there instead would inject the right photon ENERGY but the wrong photon COUNT.
+///
 /// A separate dust temperature is solved for, with the gas-dust collisional coupling switched off
 /// (radiation.dust_gas_interaction_coeff = 0), so the dust sits at radiative equilibrium and exchanges no
 /// energy with the gas. Radiation momentum is still deposited, so the radiation does accelerate the gas.
@@ -85,10 +92,11 @@ struct DTypeFront1D {};
 // reduced speed of light (same choice as the 3D DTypeFront problem)
 constexpr double c_hat = C::c_light / 1000.0;
 
-// Mean energy of a photon in the injected band. This is the mean
-// energy of the single chemistry band, retained as the luminosity
-// normalization so the injected luminosity is unchanged from the
-// photoionizing version of this problem.
+// Mean energy of a photon in the OPTICAL band. This is retained as the historical band-midpoint
+// normalization so the injected optical luminosity is unchanged from the photoionizing version of
+// this problem; it is deliberately NOT the ionizing chemistry band's registered mean energy (computed
+// separately in AddRadSource and problem_main via RadSystem<DTypeFront1D>::GetChemBandQuanta(0)),
+// because this constant normalizes a thermal group rather than the chemistry solver's photon count.
 constexpr double E_photon = 0.5 * (3.29e15 + 1.50e16) * C::hplanck; // erg
 // Radiation energy-density floor. This is a physically meaningful, negligible photon-number density
 // (1e-10 cm^-3, vs the ~hundreds cm^-3 of the injected beam) converted to a radiation energy density. Dark
@@ -377,6 +385,13 @@ void RadSystem<DTypeFront1D>::AddRadSource(array_t &radEnergy, array_t &reducedF
 	// The shipped fluxes differ by exactly that factor of c/chat = 1000, so the two bands receive the same
 	// injected energy and the energy budget in problem_main would be off by three orders of magnitude if
 	// either scaling were wrong.
+	//
+	// The ionizing band is normalized by GetChemBandQuanta(0), the chemistry solver's own registered mean
+	// photon energy for this band (26.4 eV here), NOT by E_photon (37.8 eV, the band-midpoint used for the
+	// optical group). photoionize.flux_ion is documented as a photon flux, and computePhotoChemistry
+	// (photochemistry.hpp) converts the ionizing band's energy density back to a photon number using
+	// GetChemBandQuanta(0); using E_photon here instead would inject the right ENERGY but the wrong photon
+	// COUNT, off by E_photon / GetChemBandQuanta(0) = 1.43.
 	amrex::ParmParse const pp("photoionize");
 	amrex::Real flux = 1.0e11_rt;
 	pp.query("flux", flux);
@@ -388,8 +403,9 @@ void RadSystem<DTypeFront1D>::AddRadSource(array_t &radEnergy, array_t &reducedF
 	pp.query("beamed", beamed); // 1 = each wing injected beamed outward, 0 = isotropic
 
 	const auto n_cells = static_cast<amrex::Real>(source_cells);
+	const amrex::Real E_photon_ion = RadSystem<DTypeFront1D>::GetChemBandQuanta(0);
 	const amrex::Real src_optical = flux * E_photon / (n_cells * dx[0]);
-	const amrex::Real src_ionizing = flux_ion * E_photon / (n_cells * dx[0]);
+	const amrex::Real src_ionizing = flux_ion * E_photon_ion / (n_cells * dx[0]);
 
 	// A cell belongs to the source slab when its centre lies within source_cells cell widths of the middle of
 	// the domain, which selects exactly source_cells cells per side and keeps the source symmetric at any
@@ -584,6 +600,9 @@ auto problem_main() -> int
 
 	const double F = sim.userData_.flux;
 	const double F_ion = sim.userData_.flux_ion;
+	// The ionizing band's own mean photon energy (see AddRadSource); NOT E_photon, which normalizes only the
+	// optical band.
+	const double E_photon_ion = RadSystem<DTypeFront1D>::GetChemBandQuanta(0);
 	const double t_end = sim.userData_.t_vec_.back();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
@@ -638,8 +657,10 @@ auto problem_main() -> int
 		// The source is mirror-symmetric, so the signed total momentum is zero and says nothing on its own;
 		// what carries the information is the OUTWARD momentum, each cell signed by sgn(x - x_source). Each
 		// wing is injected beamed (see AddRadSource), so it arrives already carrying F * E_photon / c per unit
-		// time and area, and the two together inject 2 * (F + F_ion) * E_photon / c. Note the absence of any
-		// chat factor. The energy budget above is scaled by chat / c and this one is not, so the two are
+		// time and area, and the two together inject 2 * (F * E_photon + F_ion * E_photon_ion) / c -- the two
+		// bands use different mean photon energies (see AddRadSource), so they no longer share a single
+		// E_photon factor here. Note the absence of any chat factor. The energy budget above is scaled by
+		// chat / c and this one is not, so the two are
 		// independent statements, and this is the only check that exercises the radiation force. The gas ends
 		// up carrying about a third of the injected momentum, so dropping the gas momentum kick, or mis-scaling
 		// it by c / chat, misses by far more than the tolerance.
@@ -683,7 +704,7 @@ auto problem_main() -> int
 			}
 			const double p_gas_out = compute_gas_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, true, transverse_cells);
 			p_signed_total += compute_gas_momentum(sim.state_new_cc_[0], dx, prob_lo, x_source, false, transverse_cells);
-			const double p_injected = 2.0 * (F + F_ion) * E_photon * t_end / C::c_light;
+			const double p_injected = 2.0 * (F * E_photon + F_ion * E_photon_ion) * t_end / C::c_light;
 			const double p_frac = (p_gas_out + p_out_beamed) / p_injected;
 			const double tol_p = 0.01;
 			// The signed total is a round-off quantity; it measures 1e-16 of the injected scale here.
@@ -792,11 +813,14 @@ auto problem_main() -> int
 	// 8e-5. Hence the lower bound as well as the upper one.
 	{
 		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, group_ionizing, transverse_cells);
-		// As in the energy budget above, the slab feeds both sides, hence the factor of two.
-		const double injected_ion = 2.0 * F_ion * E_photon * t_end + Erad_floor_ * Lx;
+		// As in the energy budget above, the slab feeds both sides, hence the factor of two. The photon
+		// counts below use E_photon_ion, the ionizing band's own mean photon energy (see AddRadSource) and the
+		// same quantity computePhotoChemistry uses to convert the band's energy density back to a photon
+		// count, not E_photon (which normalizes only the optical band).
+		const double injected_ion = 2.0 * F_ion * E_photon_ion * t_end + Erad_floor_ * Lx;
 		const double ion_frac = E_ion / injected_ion;
-		const double n_injected = injected_ion / E_photon;
-		const double n_absorbed = (injected_ion - E_ion) / E_photon;
+		const double n_injected = injected_ion / E_photon_ion;
+		const double n_absorbed = (injected_ion - E_ion) / E_photon_ion;
 		const double column_HII = compute_ionized_column(sim.state_new_cc_[0], dx, transverse_cells);
 
 		amrex::Print() << "Ionizing band integrated Erad: " << E_ion << " (injected " << injected_ion << ", surviving fraction " << ion_frac << ")\n";

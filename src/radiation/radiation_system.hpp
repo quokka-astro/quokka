@@ -223,6 +223,14 @@ template <typename problem_t> struct RadSystem_NChemBands<problem_t, std::void_t
 	static constexpr int value = static_cast<int>(decltype(RadSystem_Traits<problem_t>::ChemBands())::size()) - 1;
 };
 
+template <typename problem_t, typename = void> struct RadSystem_EnergyUnit {
+	static constexpr double value = C::ev2erg;
+};
+
+template <typename problem_t> struct RadSystem_EnergyUnit<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::energy_unit)>> {
+	static constexpr double value = RadSystem_Traits<problem_t>::energy_unit;
+};
+
 /// Class for the radiation moment equations
 ///
 template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
@@ -331,6 +339,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// therefore valid as long as there are no more chemical bands than groups.
 	static_assert(RadSystem_NChemBands<problem_t>::value >= 0 && RadSystem_NChemBands<problem_t>::value <= nGroups_,
 		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
+
+#ifdef PHOTOCHEMISTRY
+	static_assert(RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
+		      "ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg when PHOTOCHEMISTRY is enabled.");
+#endif
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -839,11 +852,6 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::G
 	// ChemBands() is in eV (jaff's native unit for radiation band edges);
 	// convert to erg here rather than have every problem's CMakeLists
 	// convert to Hz by hand.
-	// The choice of the radiation bounds is an arbitrary choice and does
-	// not affect the results. This function is only meant for providing a
-	// way to convert photon energy density to number densities, the former
-	// being the quantity used by the radiation solver, while the latter is
-	// used by the chemistry solver.
 	auto const ev_bounds = RadSystem_Traits<problem_t>::ChemBands();
 	amrex::Real const ev_low = ev_bounds[group_index];
 	amrex::Real const ev_high = ev_bounds[group_index + 1];
