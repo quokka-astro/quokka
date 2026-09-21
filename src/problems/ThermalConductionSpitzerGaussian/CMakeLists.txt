@@ -1,1 +1,1 @@
-quokka_add_problem(JOB_NAME ThermalConductionSpitzerGaussian PRIORITY 100)
+quokka_add_problem(JOB_NAME ThermalConductionSpitzerGaussian)
