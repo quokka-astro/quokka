@@ -156,7 +156,7 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	// above it: essentially all re-emission lands in the IR group and none of it back into the optical one.
 	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{1.0e8, 1.0e14, 3.29e15, 1.0e19};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBands() { return ChemBandsHeader(); }
 };
 
 template <> struct ISM_Traits<DTypeFront1D> {
