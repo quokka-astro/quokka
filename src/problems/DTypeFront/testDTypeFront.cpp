@@ -67,7 +67,7 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	// photochemistry momentum deposition is gated on beta_order == 1, so this test validates pure
 	// thermal-pressure D-type front expansion with radiation pressure.
 	static constexpr int beta_order = 1;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBands() { return ChemBandsHeader(); }
 };
 
 template <> struct SimulationData<DTypeFront> {
