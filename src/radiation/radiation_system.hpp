@@ -417,15 +417,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	// Assertion: the photoelectric yield is the fraction of the absorbed band energy returned to the gas,
 	// so it must lie in [0, 1]. A yield above 1 would return more energy than the band absorbed.
-	static_assert([]() constexpr {
-			      for (int g = 0; g < nGroups_; ++g) {
-				      if (!((pe_heating_efficiency_.arr[g] >= 0.0) && (pe_heating_efficiency_.arr[g] <= 1.0))) {
-					      return false;
-				      }
-			      }
-			      return true;
-		      }(), // NOLINT
-		      "Each entry of RadSystem_Traits::pe_heating_efficiency must lie between 0 and 1.");
+	static_assert(
+	    []() constexpr {
+		    for (int g = 0; g < nGroups_; ++g) {
+			    if (!((pe_heating_efficiency_.arr[g] >= 0.0) && (pe_heating_efficiency_.arr[g] <= 1.0))) {
+				    return false;
+			    }
+		    }
+		    return true;
+	    }(), // NOLINT
+	    "Each entry of RadSystem_Traits::pe_heating_efficiency must lie between 0 and 1.");
 
 	// Assertion: photoelectric heating from the radiation field is implemented for dust-absorption bands
 	// only. Thermal bands use the ISM_Traits::enable_photoelectric_heating path instead.
