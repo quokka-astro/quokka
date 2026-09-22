@@ -129,6 +129,31 @@ Two consequences are worth stating plainly.
 - **The gas is heated by a separate module, not by this band.** The physical heating channel for FUV photons is photoelectric heating off grains, whose efficiency depends on the grain charge and therefore on the local electron density and radiation field — not on the absorbed energy alone. A dust-absorption band delivers the radiation field \\(E\_g\\) to the cell; a chemistry and cooling module such as Grackle turns it into a heating rate. Adding the absorbed energy directly to the gas as well would double-count it.
 - **The mode assumes weak gas-dust thermal coupling.** Dust and gas exchange heat at a rate \\(\propto n^2\\), so the assumption that the dust returns none of the absorbed energy to the gas holds only at low density. For the \\(\gtrsim 1\\,\rm pc\\) resolution of a galaxy simulation, where the resolved gas density stays below \\(\sim 10^3\\,\rm cm^{-3}\\), the coupling is weak everywhere and the approximation is safe. At the densities reached in a resolved star-forming core it is not, and the full dust model (`ISM_Traits::enable_dust_gas_thermal_coupling_model`, see the [Dust module](dust_module.md)) with thermal bands should be used instead. The two are mutually exclusive, and combining them is a compile-time error.
 
+#### Photoelectric heating
+
+Setting a non-zero `pe_heating_efficiency` returns part of the absorbed energy to the gas as photoelectron kinetic energy. \\(\epsilon\_g\\) is the dimensionless *yield* of band \\(g\\) — the fraction of the energy that band absorbs which ends up heating the gas — so the heating rate per unit volume is
+
+<script type="math/tex; mode=display">
+\Gamma_{\rm PE} = \sum_g \epsilon_g \, c \, \chi_{0E,g} E_g \, .
+</script>
+
+This is the familiar ISM expression, not a departure from it. Writing the dust absorption coefficient as \\(\chi\_{0E} = n\_{\rm H} \sigma\_d\\) and noting that \\(E\_g\\) is proportional to the Habing field gives \\(\Gamma\_{\rm PE} \propto \epsilon\\, n\_{\rm H} G\_0\\), which is the standard form. The difference is that \\(G\_0\\) here is the attenuated field the solver actually transports, rather than a value inferred from a global star formation rate.
+
+Three properties follow from writing the heating as a fraction of the absorption rather than as an independent rate.
+
+- **It costs no iteration.** \\(\Gamma\_{\rm PE}\\) depends on \\(E\_g\\), \\(\rho\\) and \\(\chi\_{0E,g}\\), none of which depend on the gas energy, so the closed-form update above is evaluated once and the heating is added to it. Photoelectric heating does not reintroduce a solve.
+- **It improves conservation.** The energy delivered to the gas is a fraction of the energy this mode was already discarding to the dust. For \\(\epsilon\_g \le 1\\), enforced at compile time, switching photoelectric heating on strictly *reduces* the energy that leaves the simulation; it never adds any.
+- **The reduced speed of light does not enter.** In the discrete update the gas gain is \\((c/\hat{c}) \\, \epsilon\_g \tau\_g E\_g\\), and \\((c/\hat{c}) \\, \tau\_g\\) collapses to \\(c \rho \kappa\_{0E,g} \Delta t\\). The heating therefore carries the true \\(c\\), as a physical rate should, even when the transport runs with \\(\hat{c} < c\\).
+
+Two limitations are worth knowing before using this.
+
+- **The opacity is not updated for the heating.** The band solver evaluates \\(\kappa\\) once, at the gas temperature at the start of the step, and the outer iteration does not revise it — it converges the work term, not the temperature. Photoelectric heating can change the gas temperature materially within a step, so **this mode assumes the opacity does not depend on the gas temperature.** That holds for its intended use, since ultraviolet dust opacity is a property of the grains rather than of the gas, and it is exact whenever `DefineOpacityExponentsAndLowerValues` ignores its `Tgas` argument. If a problem does make \\(\kappa\\) depend on \\(T\_{\rm gas}\\), the opacity lags the heating by one step and the error is first order in \\(\Delta t\\).
+- **\\(\epsilon\_g\\) is a compile-time constant**, so it cannot depend on the local electron density or grain charge. A problem needing \\(\epsilon(n\_e, G\_0)\\) is not served by this interface.
+
+Because this deposits photoelectric heating inside Quokka, no other part of the calculation may do so as well. Two guards enforce that at startup: the Grackle cooling table must not itself include photoelectric heating, and `use_sfh_based_pe_heating` — which answers the same question from a global star formation rate instead of the local field — must be off.
+
+This is a separate mechanism from `ISM_Traits::enable_photoelectric_heating`, which applies to thermal bands in the gas-dust thermal coupling model. The two are mutually exclusive; unifying them is future work.
+
 ### Reduced speed of light
 
 To relax the radiation timestep, the radiation subsystem may be solved with a reduced speed of light \\(\hat{c} < c\\) (the RSLA), set through `c_hat_over_c`. This scales the transport term by \\(\hat{c}/c\\) and leaves the equations exact when \\(\hat{c} = c\\) (the default). \\(\hat{c}\\) must remain much larger than every hydrodynamic speed in the problem. Energy and momentum are conserved to machine precision only for \\(\hat{c} = c\\).
@@ -328,10 +353,14 @@ template <> struct RadSystem_Traits<MyProblem> {
 	static constexpr amrex::GpuArray<double, 3> radBoundaries = {6.0, 11.2, 13.6};
 	static constexpr bool dust_absorption_only = true;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	// photoelectric yield of each band; omit it entirely for no photoelectric heating
+	static constexpr amrex::GpuArray<double, 2> pe_heating_efficiency = {0.01, 0.01};
 };
 ```
 
 The flag defaults to `false`, requires `nGroups > 1`, and cannot be combined with `ISM_Traits::enable_dust_gas_thermal_coupling_model` or `ISM_Traits::enable_photoelectric_heating` — each of those assumes a thermal exchange this mode deliberately removes, so the combination is rejected at compile time. Chemical bands are declared separately with `ChemBands()`, which returns their boundaries because the photochemistry network needs them; see [Photoionization](photoionization.md).
+
+`pe_heating_efficiency` defaults to all zeros, in which case no photoelectric heating is applied; see [Photoelectric heating](#photoelectric-heating). Each entry must lie in \\([0, 1]\\) and a non-zero entry requires `dust_absorption_only`, both checked at compile time.
 
 The opacity hook is unchanged: `DefineOpacityExponentsAndLowerValues` supplies \\(\kappa\\) for every group as usual. Return the dust absorption opacity of each band; the solver uses it for the absorption sink, the radiation force, and the work term, and never asks for an emissivity.
 
@@ -362,6 +391,7 @@ The following test problems exercise the solver across the streaming, static dif
 - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md) — the \\(v/c\\) terms in the dynamic diffusion limit.
 - [1D H II region and dust reprocessing test](tests/DTypeFront1D.md) — multigroup radiation with dust.
 - `RadDustAbsorption` — dust-absorption-only bands: beam attenuation, radiation force, and no gas heating.
+- `RadDustAbsorptionPE` — the same slab with a non-zero photoelectric yield, against the analytic heating profile.
 
 ## References
 
