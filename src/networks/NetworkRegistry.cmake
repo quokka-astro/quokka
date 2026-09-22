@@ -15,7 +15,7 @@ set(_pi_hand_written_species_args
   AION_CONSTEXPR "case H:  a = 1.0| break| case H_p: a = 1.0| break| case e:  a = 1.0| break|"
   ZION_CONSTEXPR "case H:  z = 1.0| break| case H_p: z = 1.0| break| case e:  z = 1.0| break|"
   NUM_CHEM_BANDS 1
-  CHEM_BANDS "13.6, 62.1" # eV
+  CHEM_BANDS "13.6, 26.0" # eV
   POWER_LAW_INDEX 0 # jaff network.radiation.power_law_index
 )
 

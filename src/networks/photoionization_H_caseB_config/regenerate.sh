@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 JAFF_REPO="https://github.com/jaff-chemistry/jaff.git"
-JAFF_COMMIT="116ba9e1acaf42d56f04bb150f9034c8559921fb"
+JAFF_COMMIT="2b2e426e469357ae00376ff2a284443411dcdf1a"
 # Pin sympy version so that jaffgen's output is reproducible
 SYMPY_VERSION="1.14.0"
 

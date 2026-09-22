@@ -18,9 +18,9 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_rhs(const burn_t &state, amrex::A
 
 	using namespace Rates;
 
-	// $JAFF REPEAT idx, rhs, cse IN rhses $[REPLACE radeden\[\s*(\d+)\s*\] state.rn[\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[\1] REPLACE
+	// $JAFF REPEAT idx, rhs, cse IN rhses $[REPLACE radeden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE
 	// rflux\[\s*(\d+)\s*\] state.rn[2*\1+1] REPLACE nden\[\s*(\d+)\s*\] state.xn[\1] REPLACE tgas state.T REPLACE c_hat state.c_hat  RADIATION True]$
-	const amrex::Real cse0 = 2.1596876715103067e-18 * state.c_hat * state.xn[0] * state.rn[0];
+	const amrex::Real cse0 = 3.2467944898988799e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0];
 	const amrex::Real cse1 = std::sqrt(state.T);
 	const amrex::Real cse2 = 1.0 / state.T;
 	const amrex::Real cse3 = cse1 * std::exp(-157896.75724967025 * cse2) * state.xn[0] * state.xn[2];
@@ -32,7 +32,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_rhs(const burn_t &state, amrex::A
 	ydot(2) = cse4;
 	ydot(3) = cse4;
 	ydot(4) =
-	    4.4448471445392093e-29 * state.c_hat * state.xn[0] * state.rn[0] - 1.27251276978816e-21 * cse3 -
+	    2.5381371501267261e-29 * state.c_hat * state.xn[0] * state.rn[2 * 0] - 1.27251276978816e-21 * cse3 -
 	    cse6 * (1.8551e-27 * cse1 +
 		    ((cse5) ? (3.47e-29 * std::pow(state.T, 1.915))
 			    : ((state.T < 630.957344480193)
@@ -52,7 +52,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_rhs(const burn_t &state, amrex::A
 		std::pow(state.xn[0], 2) +
 	    2.0000000000000001e-26 * state.xn[0];
 	ydot(5) = -cse0;
-	ydot(6) = -2.1596876715103067e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0 + 1];
+	ydot(6) = -3.2467944898988799e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0 + 1];
 	// $JAFF END
 	// $JAFF SUB nspec
 	ydot(4) /= state.rho;
@@ -62,11 +62,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_rhs(const burn_t &state, amrex::A
 template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
 {
 
-	// $JAFF REPEAT idx, expr, cse IN jacobian $[REPLACE radeden\[\s*(\d+)\s*\] state.rn[\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[\1] REPLACE
+	// $JAFF REPEAT idx, expr, cse IN jacobian $[REPLACE radeden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE
 	// rflux\[\s*(\d+)\s*\] state.rn[2*\1+1] REPLACE nden\[\s*(\d+)\s*\] state.xn[\1] REPLACE tgas state.T REPLACE c_hat state.c_hat RADIATION True USE_DEDT
 	// True]$
-	const amrex::Real cse0 = 2.1596876715103067e-18 * state.c_hat;
-	const amrex::Real cse1 = cse0 * state.rn[0];
+	const amrex::Real cse0 = 3.2467944898988799e-18 * state.c_hat;
+	const amrex::Real cse1 = cse0 * state.rn[2 * 0];
 	const amrex::Real cse2 = std::sqrt(state.T);
 	const amrex::Real cse3 = 1.0 / state.T;
 	const amrex::Real cse4 = std::exp(-157896.75724967025 * cse3);
@@ -91,7 +91,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(c
 	const amrex::Real cse21 = -cse9;
 	const amrex::Real cse22 = -cse10;
 	const amrex::Real cse23 = cse17 * cse18;
-	const amrex::Real cse24 = 4.4448471445392093e-29 * state.c_hat;
+	const amrex::Real cse24 = 2.5381371501267261e-29 * state.c_hat;
 	const amrex::Real cse25 = 1.27251276978816e-21 * cse5;
 	const amrex::Real cse26 = state.T + 1000.0;
 	const amrex::Real cse27 = std::exp(-118400.0 / cse26);
@@ -132,7 +132,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(c
 	jac(3, 3) = cse22;
 	jac(3, 4) = cse23;
 	jac(3, 5) = cse19;
-	jac(4, 1) = cse24 * state.rn[0] - cse25 * state.xn[2] - 2 * state.xn[0] * (2.8000000000000002e-28 * cse2 * cse28 + 2.0000000000000002e-19 * cse27) +
+	jac(4, 1) = cse24 * state.rn[2 * 0] - cse25 * state.xn[2] - 2 * state.xn[0] * (2.8000000000000002e-28 * cse2 * cse28 + 2.0000000000000002e-19 * cse27) +
 		    2.0000000000000001e-26;
 	jac(4, 2) = -cse30 * state.xn[2] - cse38 * state.xn[2];
 	jac(4, 3) = -cse25 * state.xn[0] - cse30 * state.xn[1] - cse38 * state.xn[1];
