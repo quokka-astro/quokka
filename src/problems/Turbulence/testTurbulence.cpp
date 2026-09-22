@@ -17,8 +17,7 @@
 #include <string>
 #include <vector>
 
-struct TurbulentBox {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct TurbulentBox {}; // dummy type to allow compile-type polymorphism via template specialization
 
 template <> struct Physics_Traits<TurbulentBox> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;

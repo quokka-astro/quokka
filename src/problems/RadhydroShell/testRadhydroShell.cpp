@@ -26,8 +26,7 @@
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
 
-struct ShellProblem {
-};
+struct ShellProblem {};
 // if false, use octant symmetry
 constexpr bool simulate_full_box = false;
 

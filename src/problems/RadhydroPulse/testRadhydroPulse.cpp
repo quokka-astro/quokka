@@ -16,10 +16,8 @@
 #include <format>
 #include <fstream>
 
-struct PulseProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
-struct AdvPulseProblem {
-};
+struct PulseProblem {}; // dummy type to allow compile-type polymorphism via template specialization
+struct AdvPulseProblem {};
 
 constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 

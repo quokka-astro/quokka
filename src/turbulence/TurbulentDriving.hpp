@@ -67,7 +67,7 @@ template <typename problem_t> class turbulentDriving
 	explicit turbulentDriving(const std::map<std::string, std::string> &turb_params) { tg.init_driving(turb_params); }
 
 	auto applyDriving(amrex::MultiFab &state, const amrex::Real time, const amrex::Real dt_in,
-			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes) -> bool
+			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &probLo) -> bool
 	{
 		update(time, state);
 		const amrex::Real dt = dt_in;
@@ -79,7 +79,7 @@ template <typename problem_t> class turbulentDriving
 			amrex::FArrayBox axFab(bx, AMREX_SPACEDIM, amrex::The_Async_Arena());
 			amrex::Array4<amrex::Real> const ax = axFab.array();
 
-			tg.get_turb_vector_unigrid(axFab, cellSizes);
+			tg.get_turb_vector_unigrid(axFab, cellSizes, probLo);
 
 			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);

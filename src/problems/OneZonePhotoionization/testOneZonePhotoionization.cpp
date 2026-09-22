@@ -31,8 +31,7 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct PhotoionizationStreamingProblem {
-};
+struct PhotoionizationStreamingProblem {};
 
 constexpr double c = C::c_light;    // speed of light
 constexpr double chat = C::c_light; // reduced speed of light

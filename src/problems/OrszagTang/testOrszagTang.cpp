@@ -34,8 +34,7 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct OrszagTang {
-};
+struct OrszagTang {};
 
 template <> struct quokka::EOS_Traits<OrszagTang> {
 	static constexpr double gamma = 5. / 3.;

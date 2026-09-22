@@ -16,8 +16,7 @@
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 
-struct MHDBlast {
-};
+struct MHDBlast {};
 
 template <> struct quokka::EOS_Traits<MHDBlast> {
 	static constexpr double gamma = 5. / 3.;

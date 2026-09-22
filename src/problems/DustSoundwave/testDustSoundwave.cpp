@@ -12,8 +12,7 @@
 #include <cmath>
 #include <complex>
 
-struct DustSoundwave {
-};
+struct DustSoundwave {};
 
 // parameters for soundwave damping test
 constexpr double A = 1e-4;
@@ -76,9 +75,7 @@ template <> struct Physics_Traits<DustSoundwave> : DefaultPhysicsTraits {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustSoundwave>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
-										     amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-										     amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustSoundwave>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> alpha{};

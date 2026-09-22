@@ -23,8 +23,7 @@
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
 
-struct SuOlsonProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct SuOlsonProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 // Su & Olson (1997) parameters
 constexpr double eps_SuOlson = 1.0;

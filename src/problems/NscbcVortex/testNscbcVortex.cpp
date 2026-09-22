@@ -43,8 +43,7 @@
 
 using amrex::Real;
 
-struct Vortex {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct Vortex {}; // dummy type to allow compile-type polymorphism via template specialization
 
 template <> struct quokka::EOS_Traits<Vortex> {
 	static constexpr double gamma = 1.4;
