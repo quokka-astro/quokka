@@ -44,12 +44,12 @@
 namespace quokka::turbulence
 {
 // mass-weighted mean velocity and velocity dispersion of the computational domain
-struct DispersionResult {
+struct VelocityMoments {
 	amrex::GpuArray<amrex::Real, 3> mean;
 	amrex::GpuArray<amrex::Real, 3> dispersion;
 };
 
-template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> DispersionResult;
+template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> VelocityMoments;
 
 template <typename problem_t> class turbulentDriving
 {
@@ -69,7 +69,7 @@ template <typename problem_t> class turbulentDriving
 		updated = tg.is_update_available(time);
 
 		if (updated) {
-			const DispersionResult result = quokka::turbulence::calculate_dispersion<problem_t>(state);
+			const VelocityMoments result = quokka::turbulence::calculate_dispersion<problem_t>(state);
 			disp = result.dispersion;
 			tg.check_for_update(time, disp.data());
 
@@ -166,7 +166,7 @@ template <typename problem_t> class turbulentDriving
 };
 
 // Function to calculate the mass weighted mean velocity and velocity dispersion in the computational domain
-template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> DispersionResult
+template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> VelocityMoments
 {
 	amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
 			 amrex::ReduceOpSum>
@@ -215,7 +215,7 @@ template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) 
 	const amrex::Real dispy = std::sqrt(std::max(0.0, (total_pvy / total_rho) - (v_avg_y * v_avg_y)));
 	const amrex::Real dispz = std::sqrt(std::max(0.0, (total_pvz / total_rho) - (v_avg_z * v_avg_z)));
 
-	return DispersionResult{.mean = {v_avg_x, v_avg_y, v_avg_z}, .dispersion = {dispx, dispy, dispz}};
+	return VelocityMoments{.mean = {v_avg_x, v_avg_y, v_avg_z}, .dispersion = {dispx, dispy, dispz}};
 }
 } // namespace quokka::turbulence
 
