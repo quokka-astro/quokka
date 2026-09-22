@@ -86,9 +86,9 @@ struct DTypeFront1D {};
 constexpr double c_hat = C::c_light / 1000.0;
 
 // Mean energy of a photon in the injected band. This is the mean energy of the single chemistry band
-// [3.29e15, 1.5e16] Hz (see CMakeLists.txt CHEM_BANDS), retained as the luminosity normalization so the
+// [3.29e15, 6.29e15] Hz (see CMakeLists.txt CHEM_BANDS), retained as the luminosity normalization so the
 // injected luminosity is unchanged from the photoionizing version of this problem.
-constexpr double E_photon = 0.5 * (3.29e15 + 1.50e16) * C::hplanck; // erg
+constexpr double E_photon = 0.5 * (3.29e15 + 6.29e15) * C::hplanck; // erg
 // Radiation energy-density floor. This is a physically meaningful, negligible photon-number density
 // (1e-10 cm^-3, vs the ~hundreds cm^-3 of the injected beam) converted to a radiation energy density. Dark
 // cells are initialized to exactly this floor (see setInitialConditionsOnGrid), following the best practice
