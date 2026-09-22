@@ -34,7 +34,7 @@ constexpr int i_ngamma_flux = net_ienuc + 2;
 
 constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) -> Real { return 2.1596876715103067e-18_rt; }
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) -> Real { return 3.2467944898988799e-18_rt; }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Real
 {
