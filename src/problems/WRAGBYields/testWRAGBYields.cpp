@@ -11,52 +11,18 @@
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_chemical_yield.hpp"
 #include "particles/particle_types.hpp"
+#include "problems/InitialStellarParticles.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <format>
-#include <fstream>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace
 {
 
 constexpr amrex::Real yield_validation_rtol = 1.0e-10;
-
-struct InitialParticleRecord {
-	std::vector<amrex::Real> rdata;
-};
-
-auto readInitialParticleRecords(const std::string &filename, int nreal) -> std::vector<InitialParticleRecord>
-{
-	std::ifstream input(filename);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(input.is_open(), ("failed to open initial particle file: " + filename).c_str());
-
-	int count = 0;
-	input >> count;
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(count >= 0, ("invalid particle count in file: " + filename).c_str());
-
-	std::vector<InitialParticleRecord> records;
-	records.reserve(static_cast<std::size_t>(count));
-	for (int p = 0; p < count; ++p) {
-		amrex::Real pos = 0.0;
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			input >> pos;
-		}
-
-		InitialParticleRecord record{};
-		record.rdata.resize(static_cast<std::size_t>(nreal));
-		for (int n = 0; n < nreal; ++n) {
-			input >> record.rdata[static_cast<std::size_t>(n)];
-		}
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(input.good(), ("failed to read particle data from file: " + filename).c_str());
-		records.push_back(std::move(record));
-	}
-
-	return records;
-}
 
 template <typename problem_t> [[nodiscard]] auto cellVolume(const QuokkaSimulation<problem_t> &sim) -> amrex::Real
 {
@@ -85,17 +51,17 @@ void assertClose(const std::string &label, amrex::Real simulated, amrex::Real ex
 }
 
 template <typename problem_t>
-void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::string &initial_particles_file, const std::vector<std::string> &isotopes)
+void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::vector<std::vector<double>> &records, const std::vector<std::string> &isotopes)
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(quokka::ChemicalYieldLookup::isLoaded(), "chemical yield tables were not loaded");
-	const auto records = readInitialParticleRecords(initial_particles_file, quokka::StochasticStellarPopParticleRealComps<problem_t>);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(records.size() >= 2, "WRAGBYields requires at least two initial particles");
 
 	const auto tables = quokka::ChemicalYieldLookup::constTablesHost();
 	int wr_index = -1;
 	int agb_index = -1;
 	for (std::size_t i = 0; i < records.size(); ++i) {
-		const amrex::Real mass_msun = records[i].rdata[static_cast<std::size_t>(quokka::StochasticStellarPopParticleMassAtBirthIdx)] / C::M_solar;
+		const amrex::Real mass_msun =
+		    records[i][static_cast<std::size_t>(AMREX_SPACEDIM + quokka::StochasticStellarPopParticleMassAtBirthIdx)] / C::M_solar;
 		if (mass_msun >= 9.0 && wr_index < 0) {
 			wr_index = static_cast<int>(i);
 		}
@@ -106,12 +72,12 @@ void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::stri
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(wr_index >= 0, "WRAGBYields did not find a WR-mass particle");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(agb_index >= 0, "WRAGBYields did not find an AGB-mass particle");
 
-	const auto &wr_record = records[static_cast<std::size_t>(wr_index)].rdata;
-	const auto &agb_record = records[static_cast<std::size_t>(agb_index)].rdata;
-	const amrex::Real wr_mass = wr_record[static_cast<std::size_t>(quokka::StochasticStellarPopParticleMassAtBirthIdx)];
-	const amrex::Real agb_mass = agb_record[static_cast<std::size_t>(quokka::StochasticStellarPopParticleMassAtBirthIdx)];
-	const amrex::Real wr_birth_time = wr_record[static_cast<std::size_t>(quokka::StochasticStellarPopParticleBirthTimeIdx)];
-	const amrex::Real wr_death_time = wr_record[static_cast<std::size_t>(quokka::StochasticStellarPopParticleDeathTimeIdx)];
+	const auto &wr_record = records[static_cast<std::size_t>(wr_index)];
+	const auto &agb_record = records[static_cast<std::size_t>(agb_index)];
+	const amrex::Real wr_mass = wr_record[static_cast<std::size_t>(AMREX_SPACEDIM + quokka::StochasticStellarPopParticleMassAtBirthIdx)];
+	const amrex::Real agb_mass = agb_record[static_cast<std::size_t>(AMREX_SPACEDIM + quokka::StochasticStellarPopParticleMassAtBirthIdx)];
+	const amrex::Real wr_birth_time = wr_record[static_cast<std::size_t>(AMREX_SPACEDIM + quokka::StochasticStellarPopParticleBirthTimeIdx)];
+	const amrex::Real wr_death_time = wr_record[static_cast<std::size_t>(AMREX_SPACEDIM + quokka::StochasticStellarPopParticleDeathTimeIdx)];
 	const amrex::Real wr_lifetime = std::max<amrex::Real>(wr_death_time - wr_birth_time, 0.0);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(wr_lifetime > 0.0, "WR particle has non-positive lifetime");
 
@@ -244,9 +210,10 @@ auto problem_main() -> int
 	ppp.query("initial_particles_file", initial_particles_file);
 
 	sim.setInitialConditions();
+	const auto initial_particles = quokka::testing::initialStellarParticles(sim);
 
 	sim.evolve();
-	validateWRAGBYields(sim, initial_particles_file, {"C12", "O16", "Fe56"});
+	validateWRAGBYields(sim, initial_particles, {"C12", "O16", "Fe56"});
 	amrex::Print() << "WRAGBYields completed\n";
 	return 0;
 }
