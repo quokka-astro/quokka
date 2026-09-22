@@ -3,9 +3,9 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testThermalConductionConstant.cpp
-/// \brief Defines a test problem for constant-conductivity thermal conduction (kappa = const).
-///
+/// \file testThermalConductionAniso.cpp
+/// \brief Defines a test problem for anisotropic conduction
+/// Problem NAME: Hot wedge
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
@@ -42,9 +42,22 @@ template <> struct Physics_Traits<ThermalConductionAnisoProblem> : DefaultPhysic
 	static constexpr double boltzmann_constant = 1.0;
 };
 
-// hot patch is a square of side 0.5, centred on the origin -- shared by the cell-centred IC
-// and the face-centred B field, which is only nonzero inside the patch.
-constexpr amrex::Real half_side = 0.25;
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeMagneticVectorPotential_z(amrex::Real x1, amrex::Real x2) -> amrex::Real
+{
+	constexpr amrex::Real r_core = 0.1;
+	constexpr amrex::Real B0 = 1.0e-3;
+	const amrex::Real rad = std::sqrt(x1 * x1 + x2 * x2);
+	if (rad < r_core) {
+		// Quadratic ("solid-body rotation") core: C^1-matched to -min(r,1) at r=r_core, so
+		// B = |dpsi/dr| ramps linearly from 0 at r=0 up to 1 at r=r_core, instead of jumping
+		// straight to |B|=1 with an undefined direction at the origin. Since psi is now a plain
+		// polynomial in x1,x2 near r=0 (no sqrt), the discrete curl is essentially exact there --
+		// no more curvature blowup for a finite-difference stencil to trip over.
+		return B0 * (-0.5 * rad * rad / r_core - 0.5 * r_core);
+	}
+	return -B0 * std::min(rad, 1.0);
+}
+
 
 template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -53,15 +66,28 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const amrex::Real rho = 1.0;	    // dimensionless
-	constexpr amrex::Real Tbackground = 10.0;
-	constexpr amrex::Real Thot = 12.0;
+	const amrex::Real rho_bg = 1.0;	    // dimensionless background density
+	const amrex::Real T_bg = 10.0;
+	const amrex::Real T_wedge = 12.0;
+	// true: wedge density = rho_bg * T_bg / T_wedge, so P = rho*T is uniform (no initial pressure jump).
+	// false: uniform density, so the hot wedge starts overpressured and drives a flow.
+	constexpr bool isobaric_wedge = false;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
 		const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
-		const amrex::Real temp = (std::abs(x) < half_side && std::abs(y) < half_side) ? Thot : Tbackground;
+		const amrex::Real rad = std::sqrt(x * x + y * y);
+		amrex::Real theta = std::atan2(y, x);
+		if (theta < 0.0){ theta += 2.0 * M_PI; }
+		amrex::Real temp = T_bg;
+		amrex::Real rho = rho_bg;
+		if(rad > 0.5 & rad < 0.7 & theta > 11.* M_PI/12.0 & theta < 13.* M_PI/12.0) {
+			temp = T_wedge;
+			if (isobaric_wedge) {
+				rho = rho_bg * T_bg / T_wedge; // P = rho*T (mu = 1) uniform
+			}
+		}
 		const amrex::Real Eint = quokka::EOS<ThermalConductionAnisoProblem>::ComputeEintFromTgas(rho, temp);
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
@@ -88,13 +114,22 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 		for (int n = 0; n < ncomp_fc; ++n) {
 			state_fc(i, j, k, n) = 0.0; // fill unused quantities with zeros
 		}
+		// x1_L, x2_L are already the corner (nodal) position appropriate to `dir`: for dir==x,
+		// i is nodal so x1_L is the exact x-face position; for dir==y, j is nodal so x2_L is
+		// the exact y-face position. The other (cell-centered) index gives the lower corner of
+		// that cell. No half-cell offset is needed -- see BxFace/ByFace in testDustyOrszagTang.cpp
+		// for the same curl-from-vector-potential pattern.
+		const amrex::Real x1_L = prob_lo[0] + i * dx[0];
+		const amrex::Real x2_L = prob_lo[1] + j * dx[1];
+
+		amrex::Real bval = 0.0;
 		if (dir == quokka::direction::x) {
-				state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = 1.0 / std::sqrt(2.0);
-
+			bval = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1]) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dx[1];
 		} else if (dir == quokka::direction::y) {
-				state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = 1.0 / std::sqrt(2.0);
-
+			bval = -(computeMagneticVectorPotential_z(x1_L + dx[0], x2_L) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dx[0];
 		}
+		// dir == z: Bz = 0 (psi is independent of z), already zero-filled above
+		state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = bval;
 	});
 }
 
@@ -127,9 +162,18 @@ auto problem_main() -> int
 	constexpr double max_time = 200.0;
 
 	// Setup boundary conditions
-	auto BCs_cc = quokka::BC<ThermalConductionAnisoProblem>(quokka::BCType::int_dir);
-	auto BCs_fc = quokka::BC_fc<ThermalConductionAnisoProblem>(quokka::BCType::mathematicalBndryTypes::periodic, quokka::BCType::mathematicalBndryTypes::periodic,
-								    quokka::BCType::mathematicalBndryTypes::periodic);
+	auto BCs_cc = quokka::BC<ThermalConductionAnisoProblem>(quokka::BCType::reflecting);
+	const int nvars_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarTotal_fc;
+	const int nvars_per_dim_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarPerDim_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		int const component_dir = (nvars_per_dim_fc > 0) ? (icomp / nvars_per_dim_fc) : 0;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			int const bc_type = (component_dir == idim) ? amrex::BCType::reflect_even : amrex::BCType::reflect_odd;
+			BCs_fc[icomp].setLo(idim, bc_type);
+			BCs_fc[icomp].setHi(idim, bc_type);
+		}
+	}
 
 	QuokkaSimulation<ThermalConductionAnisoProblem> sim(BCs_cc, BCs_fc);
 
