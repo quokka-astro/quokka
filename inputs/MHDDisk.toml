@@ -79,7 +79,7 @@ quokka.diagnostics = ["slice_z", "slice_x", "proj_z"]
 
 quokka.proj_z.type = "ProjectionPlot"
 quokka.proj_z.file = "tests/projz/test_1_plt"
-quokka.proj_z.time_int = 2.9652e13  # 0.94My  ->  100 plotfiles per rotation
+quokka.proj_z.time_int = 2.9652e13  # 0.94My,  100 plotfiles per rotation
 quokka.proj_z.normal = 2
 quokka.proj_z.field_names = ["Bphi", "gasDensity", "x-BField", "y-BField", "z-BField", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum"]
 

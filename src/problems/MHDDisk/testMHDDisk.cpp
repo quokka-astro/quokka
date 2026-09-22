@@ -960,8 +960,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(int lev, amrex::TagBoxA
 	amrex::Real shrink_Hcyl_kpc = NAN;
 	pp.query("refine_Rcyl_kpc", refine_Rcyl_kpc);
 	pp.query("refine_Hcyl_kpc", refine_Hcyl_kpc);
-	pp.query("refine_Rcyl_shrink_per_level_pc", shrink_Rcyl_kpc);
-	pp.query("refine_Hcyl_shrink_per_level_pc", shrink_Hcyl_kpc);
+	pp.query("refine_Rcyl_shrink_per_level_kpc", shrink_Rcyl_kpc);
+	pp.query("refine_Hcyl_shrink_per_level_kpc", shrink_Hcyl_kpc);
 	AMREX_ALWAYS_ASSERT(!std::isnan(refine_Rcyl_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(refine_Hcyl_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(shrink_Rcyl_kpc));
