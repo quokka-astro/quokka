@@ -147,27 +147,28 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 		amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
 		state_buffer.setVal(0.0);
 
+		const auto &geom = container->Geom(lev);
+		const auto plo = geom.ProbLoArray();
+		const auto dxi = geom.InvCellSizeArray();
+		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
+		const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
+
+		constexpr int W_stencil_N = 2;
+		constexpr int W_stencil_width = 2 * W_stencil_N + 1;
+		constexpr auto W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
+		constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
+		const bool enable_WR_metal_d = enable_WR_metal;
+		const bool store_channel_fields_d = store_channel_fields;
+		const amrex::Real stellar_metallicity_fraction_d = stellar_metallicity_fraction;
+		const amrex::Real wr_age_start_d = wr_age_start;
+		const amrex::Real wr_metal_yield_rate_per_mass_d = wr_metal_yield_rate_per_mass;
+
 		for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 			auto &particles = pti.GetArrayOfStructs();
 			auto *pData = particles().data();
 			const amrex::Long np = pti.numParticles();
 
 			const auto &local_state = state_buffer.array(pti);
-			const auto &geom = container->Geom(lev);
-			const auto plo = geom.ProbLoArray();
-			const auto dxi = geom.InvCellSizeArray();
-			const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
-			const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
-
-			constexpr int W_stencil_N = 2;
-			constexpr int W_stencil_width = 2 * W_stencil_N + 1;
-			constexpr auto W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
-			constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
-			const bool enable_WR_metal_d = enable_WR_metal;
-			const bool store_channel_fields_d = store_channel_fields;
-			const amrex::Real stellar_metallicity_fraction_d = stellar_metallicity_fraction;
-			const amrex::Real wr_age_start_d = wr_age_start;
-			const amrex::Real wr_metal_yield_rate_per_mass_d = wr_metal_yield_rate_per_mass;
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
