@@ -54,6 +54,16 @@ struct DefaultPhysicsTraits {
 	static constexpr double unit_mass = 1.0;
 	static constexpr double unit_time = 1.0;
 	static constexpr double unit_temperature = 1.0;
+	// default values for cosmology
+	static constexpr bool is_cosmology_enabled = false;
+	static constexpr amrex::Real omega_m = 0.30966;
+	static constexpr amrex::Real omega_r = 9.13896e-05;
+	static constexpr amrex::Real omega_lambda = 0.68885;
+	static constexpr amrex::Real omega_b = 0.04897;        
+	static constexpr amrex::Real omega_dm = 0.26069;
+	static constexpr amrex::Real hubble_constant = 1.0;
+	static constexpr amrex::Real a_init = 1.0;
+	static constexpr amrex::Real cosmology_dt_limit = 0.01;
 };
 
 // this struct is specialized by the user application code.

@@ -45,10 +45,12 @@ module load ninja/1.12.1
 export OMPI_CC="$(which gcc)"
 export OMPI_CXX="$(which g++)"
 
-# Configure with CMake using Ninja generator and GCC 14.2.0 compiler
+# Configure with CMake using Ninja generator and GCC 14.2.0 compiler (isolate from Conda headers/libs)
 cmake "$REPO_DIR" \
   -DCMAKE_C_COMPILER="$(which gcc)" \
   -DCMAKE_CXX_COMPILER="$(which g++)" \
+  -DQUOKKA_PYTHON=OFF \
+  -DCMAKE_IGNORE_PATH="/data/mfulghieri/anaconda3/envs/quokka/lib;/data/mfulghieri/anaconda3/envs/quokka/include" \
   -DCMAKE_BUILD_TYPE=Release \
   -DAMReX_SPACEDIM=3 \
   -G Ninja "$@"

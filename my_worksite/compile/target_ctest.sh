@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=ctest
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=48
 #SBATCH --time=06:30:00
 #SBATCH -o /data/mfulghieri/ufficial_quokka/outputs/compilation/target_ctest.out
 #SBATCH -e /data/mfulghieri/ufficial_quokka/outputs/compilation/target_ctest.err

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=ctest
-#SBATCH --cpus-per-task=1
-#SBATCH --time=12:30:00
+#SBATCH --cpus-per-task=48
+#SBATCH --time=24:30:00
 #SBATCH -o /data/mfulghieri/ufficial_quokka/outputs/compilation/ctest.out
 #SBATCH -e /data/mfulghieri/ufficial_quokka/outputs/compilation/ctest.err
 
@@ -26,11 +26,12 @@ mkdir -p "$REPO_DIR/outputs/compilation"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR" || exit 1
 
-# Clean Conda from environment if active to avoid ABI/library conflicts
+# Clean Conda environment variables to prevent ABI/library and toolchain conflicts
 if [[ -n "${CONDA_PREFIX:-}" ]]; then
     export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v conda | grep -v anaconda | tr '\n' ':' | sed 's/:$//')
     unset CONDA_PREFIX CONDA_DEFAULT_ENV CONDA_EXE CONDA_PYTHON_EXE
 fi
+unset CC CXX CFLAGS CXXFLAGS LDFLAGS CMAKE_ARGS CMAKE_PREFIX_PATH
 
 # Load cluster HPC modules (MPI, HDF5, CMake), then override compiler with GCC 14.2.0 & Ninja
 module purge
@@ -56,8 +57,11 @@ echo "Assigned nodes:         $SLURM_JOB_NODELIST"
 env | grep -E "SLURM|OMPI|MPI"
 
 
-# Run tests via ctest with allocated Slurm threads (default 30 if run outside Slurm)
-# Additional arguments can be passed via command line thanks to "$@" (e.g. ./ctest.sh -R Hydro)
-ctest -j"${SLURM_CPUS_PER_TASK:-30}" --output-on-failure "$@"
+# Set OpenMP threads per test process to leverage Slurm allocated CPU cores
+export OMP_NUM_THREADS=6
+
+# Run 8 test jobs in parallel, each using 6 OpenMP threads (8 x 6 = 48 cores)
+# This prevents filesystem race conditions on shared plotfile/checkpoint directories (plt0000000, last_chk)
+ctest -j 8 --output-on-failure "$@"
 
 
