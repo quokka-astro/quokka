@@ -7,13 +7,5 @@ if(AMReX_SPACEDIM EQUAL 3)
         COMMAND ${JOB_NAME} ${CMAKE_SOURCE_DIR}/inputs/${JOB_NAME}.toml
             problem.test_zero_yield_only=1
             amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
-    add_test(
-        NAME ${JOB_NAME}_prepare_yields
-        COMMAND ${CMAKE_COMMAND}
-            -DQUOKKA_YIELD_ARCHIVE=${CMAKE_SOURCE_DIR}/extern/yields/quokka_yield_tables.tar.gz
-            -DQUOKKA_YIELD_DESTINATION=${CMAKE_SOURCE_DIR}/extern/yields
-            -DQUOKKA_YIELD_SENTINEL=${CMAKE_SOURCE_DIR}/extern/yields/WR_mass_loss_distribution_table.csv
-            -P ${CMAKE_SOURCE_DIR}/scripts/cmake/extract_chemical_yields.cmake)
-    set_tests_properties(${JOB_NAME}_prepare_yields PROPERTIES FIXTURES_SETUP ${JOB_NAME}_yields_fixture)
-    set_tests_properties(${JOB_NAME} PROPERTIES FIXTURES_REQUIRED ${JOB_NAME}_yields_fixture)
+    include(${CMAKE_SOURCE_DIR}/scripts/cmake/extract_chemical_yields.cmake)
 endif()
