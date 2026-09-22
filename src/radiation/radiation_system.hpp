@@ -115,6 +115,7 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
+	static constexpr bool dust_absorption_only = false;
 };
 
 // this struct is specialized by the user application code
@@ -208,6 +209,12 @@ template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Mode
 template <typename problem_t>
 struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {};
 
+// Use SFINAE to check if dust_absorption_only is defined in RadSystem_Traits<problem_t>
+template <typename problem_t, typename = void> struct RadSystem_Has_Dust_Absorption_Only : std::false_type {};
+
+template <typename problem_t>
+struct RadSystem_Has_Dust_Absorption_Only<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::dust_absorption_only)>> : std::true_type {};
+
 // Use SFINAE to check if ChemBands() is defined in RadSystem_Traits<problem_t> (indicates photoionization group)
 template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {};
 
@@ -299,6 +306,25 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// and photochemistry. When NChemBands == 0, nGroupsThermal_ == nGroups_ and all chem-specific code
 	// paths are inert.
 	static constexpr int nGroupsThermal_ = nGroups_ - RadSystem_NChemBands<problem_t>::value;
+
+	// When true, every thermal group is instead a dust-absorption-only band: it is transported, absorbed
+	// by dust, and exerts radiation force on the gas, but emits nothing and gives none of the absorbed
+	// energy to the gas. The absorbed energy leaves the simulation -- physically it heats the dust, which
+	// re-radiates it in the infrared, and neither the dust temperature nor that emission is followed, so
+	// total energy is deliberately not conserved. Gas heating (photoelectric, photodissociation) is left
+	// to an external chemistry and cooling module, which needs the radiation field rather than the
+	// absorbed energy. The motivating case is FUV + Lyman-Werner in a galaxy simulation.
+	static constexpr bool dust_absorption_only_ = []() constexpr {
+		if constexpr (RadSystem_Has_Dust_Absorption_Only<problem_t>::value) {
+			return RadSystem_Traits<problem_t>::dust_absorption_only;
+		} else {
+			return false;
+		}
+	}();
+
+	// Number of groups that emit blackbody radiation. Dust-absorption-only bands and chemical bands do
+	// not, so this is the range over which the Planck emission and its temperature derivative are built.
+	static constexpr int nGroupsEmitting_ = dust_absorption_only_ ? 0 : nGroupsThermal_;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
 			return RadSystem_Traits<problem_t>::radBoundaries;
@@ -331,6 +357,19 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// therefore valid as long as there are no more chemical bands than groups.
 	static_assert(RadSystem_NChemBands<problem_t>::value >= 0 && RadSystem_NChemBands<problem_t>::value <= nGroups_,
 		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
+
+	// Assertions: dust_absorption_only turns off thermal emission and the gas-radiation energy exchange
+	// for every thermal group, so it is incompatible with the models that rely on either.
+	static_assert(!(dust_absorption_only_ && nGroups_ == 1), // NOLINT
+		      "dust_absorption_only is implemented for multigroup radiation only; it requires nGroups > 1.");
+
+	static_assert(!(dust_absorption_only_ && enable_dust_gas_thermal_coupling_model_), // NOLINT
+		      "dust_absorption_only assumes the dust is thermally decoupled from the gas, so it cannot be combined with "
+		      "ISM_Traits::enable_dust_gas_thermal_coupling_model.");
+
+	static_assert(!(dust_absorption_only_ && enable_photoelectric_heating_), // NOLINT
+		      "dust_absorption_only leaves the gas heating to an external chemistry module, so it cannot be combined with "
+		      "ISM_Traits::enable_photoelectric_heating.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -536,6 +575,14 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
 	    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt) -> JacobianResult<problem_t>;
 
+	AMREX_GPU_DEVICE static auto SolveDustAbsorptionBands(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
+							      amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter,
+							      quokka::valarray<double, nGroups_> const &work,
+							      quokka::valarray<double, nGroups_> const &vel_times_F,
+							      quokka::valarray<double, nGroups_> const &Src,
+							      amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+							      int *p_iteration_counter) -> NewtonIterationResult<problem_t>;
+
 	AMREX_GPU_DEVICE static auto
 	SolveGasRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
 					amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
@@ -593,10 +640,11 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
 		amrex::Real y = NAN;
 		amrex::Real previous = 0.0;
-		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission. When
+		// Only the emitting groups (the leading nGroupsEmitting_ groups) receive blackbody emission. When
 		// chemical bands are present the thermal fractions are NOT renormalized: the blackbody radiation
-		// above the first chemical-band boundary is simply dropped, so the fractions sum to < 1.
-		for (int g = 0; g < nGroupsThermal_; ++g) {
+		// above the first chemical-band boundary is simply dropped, so the fractions sum to < 1. Under
+		// dust_absorption_only there are no emitting groups at all and every fraction is left at 0.
+		for (int g = 0; g < nGroupsEmitting_; ++g) {
 			if (g == nGroups_ - 1) {
 				// no chemical bands: the last group carries all remaining blackbody, total fraction = 1.0
 				y = 1.0;
@@ -611,7 +659,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
-		// chemical bands (g >= nGroupsThermal_) emit no blackbody radiation; left at 0.
+		// non-emitting bands (g >= nGroupsEmitting_) emit no blackbody radiation; left at 0.
 		AMREX_ASSERT(sum(radEnergyFractions) < 1.0 + 1.0e-10);
 
 		return radEnergyFractions;
@@ -644,8 +692,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 	const double power = radiation_constant_ * std::pow(temperature, 4);
 	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	auto Erad_g = power * radEnergyFractions;
-	// set floor on the thermal groups only; chemical bands emit no blackbody radiation and are left at 0.
-	for (int g = 0; g < nGroupsThermal_; ++g) {
+	// set floor on the emitting groups only; the other bands emit no blackbody radiation and are left at 0.
+	for (int g = 0; g < nGroupsEmitting_; ++g) {
 		if (Erad_g[g] < Erad_floor_) {
 			Erad_g[g] = Erad_floor_;
 		}
@@ -681,8 +729,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
 		amrex::Real y = NAN;
 		amrex::Real previous = 0.0;
-		// Only the thermal groups emit; the chemical bands are left at 0, as in ComputePlanckEnergyFractions.
-		for (int g = 0; g < nGroupsThermal_; ++g) {
+		// Only the emitting groups emit; the other bands are left at 0, as in ComputePlanckEnergyFractions.
+		for (int g = 0; g < nGroupsEmitting_; ++g) {
 			if (g == nGroups_ - 1) {
 				// no chemical bands: the last group carries all remaining blackbody, so D = D(inf) = 4
 				y = 4.0;

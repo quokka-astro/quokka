@@ -68,7 +68,16 @@ RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(double const T, d
 {
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
 	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
+	// A band that does not emit contributes nothing to the momentum of emission or to the group-coupling
+	// term, so both delta terms are left at zero there. Including them would break the telescoping
+	// cancellation that makes sum_g Delta_g(nu kappa B) vanish: the sum would terminate at the top of the
+	// emitting sub-grid and the residual would be injected as a spurious momentum source. See issue #2309.
 	for (int g = 0; g < nGroups_; ++g) {
+		if (g >= nGroupsEmitting_) {
+			opacity_terms.delta_nu_kappa_B_at_edge[g] = 0.0;
+			delta_nu_B_at_edge[g] = 0.0;
+			continue;
+		}
 		auto const nu_L = rad_boundaries[g];
 		auto const nu_R = rad_boundaries[g + 1];
 		auto const B_L = PlanckFunction(nu_L, T); // 4 pi B(nu) / c
@@ -143,6 +152,107 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/
 		}
 	}
 
+	return result;
+}
+
+// Solve the energy exchange for dust-absorption-only bands. These bands emit nothing and give none of
+// the absorbed energy to the gas, so nothing here depends on the gas temperature: the opacity is a
+// function of (rho, T) alone and the radiation equation of each group is linear in its own E_g. The
+// Newton-Raphson iteration of SolveGasRadiationEnergyExchange therefore has nothing to solve, and each
+// group reduces to a backward-Euler absorption sink,
+//
+//     E_g <- (E_g^0 + S_g + W_g) / (1 + chat * rho * kappa_{E,g} * dt) ,
+//
+// where W_g is the work term. The work term is the only quantity that reaches the gas; it is lagged
+// across the outer iteration of AddSourceTerms, which is the only iteration left in this path. The
+// absorbed energy c * kappa_{E,g} * E_g leaves the simulation: it heats the dust, which re-radiates it
+// in the infrared, and neither the dust temperature nor that emission is followed. Total energy is
+// therefore not conserved in this mode, by construction.
+template <typename problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho,
+								    double const dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
+								    int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+								    quokka::valarray<double, nGroups_> const &vel_times_F,
+								    quokka::valarray<double, nGroups_> const &Src,
+								    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+								    int *p_iteration_counter) -> NewtonIterationResult<problem_t>
+{
+	const double c = c_light_; // make a copy of c_light_ to avoid compiler error "undefined in device code"
+	const double chat = c_hat_;
+	const double cscale = c / chat;
+
+	const double H_num_den = ComputeNumberDensityH(rho, massScalars);
+
+	// The gas temperature is used only to evaluate the opacity, which does not depend on the radiation
+	// field, so the old-state value is all that is needed.
+	const double T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
+	AMREX_ASSERT(T_gas >= 0.);
+
+	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
+	if constexpr (!(opacity_model_ == OpacityModel::piecewise_constant_opacity)) {
+		for (int g = 0; g < nGroups_; ++g) {
+			rad_boundary_ratios[g] = rad_boundaries[g + 1] / rad_boundaries[g];
+		}
+	}
+
+	// There is no emission, so fourPiBoverC is zero throughout; it is passed to the opacity helpers only
+	// because they take it as the weight of the Planck-mean average, which is irrelevant here.
+	const quokka::valarray<double, nGroups_> fourPiBoverC = ComputeThermalRadiationMultiGroup(T_gas, rad_boundaries);
+
+	auto opacity_terms =
+	    ComputeModelDependentKappaEAndKappaP(T_gas, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad0Vec, 0, {}, {});
+	ComputeModelDependentKappaFAndDeltaTerms(T_gas, rho, rad_boundaries, fourPiBoverC, opacity_terms); // update opacity_terms in place
+
+	// Compute the work term. On the first outer iteration it is built from the old-state flux; afterwards
+	// the caller passes back the value from the previous outer iteration, which is what that loop
+	// converges.
+	quokka::valarray<double, nGroups_> work_local{};
+	if constexpr ((beta_order_ == 1) && (include_work_term_in_source)) {
+		if (n_outer_iter == 0) {
+			const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_gas);
+			for (int g = 0; g < nGroups_; ++g) {
+				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+					work_local[g] = vel_times_F[g] * opacity_terms.kappaF[g] * chat / (c * c) * dt;
+				} else {
+					work_local[g] = vel_times_F[g] * opacity_terms.kappaF[g] * chat / (c * c) * dt *
+							(1.0 + kappa_expo_and_lower_value[0][g]);
+				}
+			}
+		} else {
+			work_local = work;
+		}
+	} else {
+		work_local.fillin(0.0);
+	}
+
+	// The gas receives the work term and the cosmic-ray heating, and nothing else. In particular it does
+	// not receive the absorbed radiation energy, which is what distinguishes this path from the thermal
+	// solve.
+	const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
+	const double Egas_guess = Egas0 - cscale * sum(work_local) + CR_heating;
+	AMREX_ASSERT(Egas_guess > 0.0);
+
+	// Backward-Euler absorption, group by group. Chemical bands, if any, are treated the same way here:
+	// they too emit nothing and pass their absorbed energy to photochemistry rather than to the gas. The
+	// caller has already removed their source from Src and injects it after this solve.
+	auto EradVec_guess = Erad0Vec;
+	for (int g = 0; g < nGroups_; ++g) {
+		const double tau = dt * rho * opacity_terms.kappaE[g] * chat;
+		EradVec_guess[g] = (Erad0Vec[g] + Src[g] + work_local[g]) / (1.0 + tau);
+	}
+	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
+
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1); // total number of radiation updates. NOLINT
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], 1); // total number of (here, trivial) iterations. NOLINT
+	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], 1); // NOLINT
+
+	NewtonIterationResult<problem_t> result;
+	result.Egas = Egas_guess;
+	result.EradVec = EradVec_guess;
+	result.work = work_local;
+	result.T_gas = T_gas;
+	result.T_d = T_gas;
+	result.opacity_terms = opacity_terms;
 	return result;
 }
 
@@ -824,7 +934,12 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				// 1.3. Compute the gas and radiation energy update. This also updates the opacities. When iter == 0, this also computes
 				// the work term.
 
-				if constexpr (!enable_dust_gas_thermal_coupling_model_) {
+				if constexpr (dust_absorption_only_) {
+					// dust absorption and radiation force only, no thermal exchange with the gas.
+					// Solved analytically; no Newton-Raphson iteration is needed.
+					updated_energy = SolveDustAbsorptionBands(Egas0, Erad0Vec, rho, dt, massScalars, iter, work, vel_times_F, Src,
+										  radBoundaries_g_copy, p_iteration_counter_local);
+				} else if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 					// gas + radiation
 					updated_energy = SolveGasRadiationEnergyExchange(Egas0, Erad0Vec, rho, dt, massScalars, iter, work, vel_times_F, Src,
 											 radBoundaries_g_copy, tol, tol_rel, tempFloor,
