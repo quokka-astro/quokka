@@ -30,9 +30,12 @@ max_timesteps = 100000
 plotfile_interval = -1
 plotfile_prefix = "DType1D"
 
-# *****************************************************************
-# Temperature floor
-# *****************************************************************
+# Source geometry. beamed = 1 gives each half of the source slab a flux source of -c * E on the left and
+# +c * E on the right, so both wings are injected fully beamed outward; the outward-momentum budget in the
+# test is a conservation law only in that case.
+photoionize.beamed = 1
+photoionize.source_cells = 1
+photoionize.flux = 1.0e13
 
 temperature_floor = 10.0
 

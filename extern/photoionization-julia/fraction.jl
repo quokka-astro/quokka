@@ -18,10 +18,7 @@ const n_A = 6.02214129e23
 const h   = 6.62606957e-27
 const R   = k_B * n_A
 const σ_v = 2.1596876715103067e-18
-const ev2erg = 1.602176634e-12
-const RydbergEnergy = 13.6 * ev2erg
-const mean_photon_energy = 4.23705741989213e-11
-const E_ion = max(mean_photon_energy - RydbergEnergy, 0.0)
+const E_ion = 7.8173631192954724e-12
 
 struct State
     n_spec::Vector{Float64}
