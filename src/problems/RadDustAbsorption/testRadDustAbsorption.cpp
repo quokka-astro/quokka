@@ -31,12 +31,11 @@
 #include <cmath>
 #include <format>
 
-struct DustAbsorptionProblem {
-};
+struct DustAbsorptionProblem {};
 
-constexpr double c = 1.0;    // speed of light
+constexpr double c = 1.0;     // speed of light
 constexpr double rho0 = 10.0; // gas density; large enough that the gas stays effectively static (v/c ~ 1e-6)
-constexpr double Lx = 2.0;   // slab thickness
+constexpr double Lx = 2.0;    // slab thickness
 
 // Group 0 is absorbing, group 1 is transparent. The transparent band exercises the tau = 0 limit of the
 // analytic band update, where the backward-Euler denominator is exactly 1.
@@ -82,7 +81,7 @@ template <> struct RadSystem_Traits<DustAbsorptionProblem> {
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<DustAbsorptionProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, 3> /*rad_boundaries*/,
-											       const double /*rho*/, const double /*Tgas*/)
+												  const double /*rho*/, const double /*Tgas*/)
     -> amrex::GpuArray<amrex::GpuArray<double, 3>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, 3>, 2> exponents_and_values{};
@@ -118,9 +117,10 @@ template <> void QuokkaSimulation<DustAbsorptionProblem>::setInitialConditionsOn
 }
 
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustAbsorptionProblem>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<DustAbsorptionProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+								  int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+								  const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	constexpr int nvar = Physics_Indices<DustAbsorptionProblem>::nvarTotal_cc;
 
