@@ -1117,7 +1117,7 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 		return;
 	}
 
-	if constexpr (StochasticStellarPopParticleChemistryBlockSize<problem_t>() <= 0) {
+	if constexpr (StochasticStellarPopParticleChemistryBlockCapacity<problem_t>() <= 0) {
 		return;
 	}
 
@@ -1146,7 +1146,7 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 		const auto plo = geom.ProbLoArray();
 		const auto dxi = geom.InvCellSizeArray();
 		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
-		const int chem_block_size = StochasticStellarPopParticleChemistryBlockSize<problem_t>();
+		const int chem_block_size = StochasticStellarPopParticleChemistryBlockCapacity<problem_t>();
 		const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
 		const bool enable_snii_metal = enable_SNII_metal;
 		const bool enable_agb_metal = enable_AGB_metal;

@@ -263,7 +263,7 @@ constexpr int StochasticStellarPopParticleMassAtBirthIdx = static_cast<int>(Stoc
 constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::luminosity); // Base index for luminosity components
 constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
 
-template <typename problem_t> constexpr auto StochasticStellarPopParticleChemistryBlockSize() -> int
+template <typename problem_t> constexpr auto StochasticStellarPopParticleChemistryBlockCapacity() -> int
 {
 	return Particle_Traits<problem_t>::enable_chemical_feedback ? Physics_Traits<problem_t>::numPassiveScalars : 0;
 }
@@ -279,14 +279,14 @@ template <typename problem_t> constexpr auto StochasticStellarPopParticleChemist
 
 template <typename problem_t> constexpr auto StochasticStellarPopParticleChemistryBlockBaseIdx(int blockIndex) -> int
 {
-	return StochasticStellarPopParticleChemistryBaseIdx<problem_t>() + blockIndex * StochasticStellarPopParticleChemistryBlockSize<problem_t>();
+	return StochasticStellarPopParticleChemistryBaseIdx<problem_t>() + blockIndex * StochasticStellarPopParticleChemistryBlockCapacity<problem_t>();
 }
 
 // Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + times + positions + death density + luminosity
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps =
     StochasticStellarPopParticleChemistryBaseIdx<problem_t>() +
-    (ChemicalYieldLookup::max_tracked_channels + 1) * StochasticStellarPopParticleChemistryBlockSize<problem_t>();
+    (ChemicalYieldLookup::max_tracked_channels + 1) * StochasticStellarPopParticleChemistryBlockCapacity<problem_t>();
 
 // Number of integer components for StochasticStellarPop_particles
 constexpr int StochasticStellarPopParticleIntComps = 1; // evolution stage
@@ -456,7 +456,7 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 		};
 		const std::array<std::string, ChemicalYieldLookup::max_tracked_channels> channel_names = {"SNII", "WR", "AGB"};
 		for (int block = 0; block < ChemicalYieldLookup::max_tracked_channels + 1; ++block) {
-			for (int n = 0; n < StochasticStellarPopParticleChemistryBlockSize<problem_t>(); ++n) {
+			for (int n = 0; n < StochasticStellarPopParticleChemistryBlockCapacity<problem_t>(); ++n) {
 				if (block == 0) {
 					names.push_back("chem_birth_total_" + isotopeName(n));
 				} else {

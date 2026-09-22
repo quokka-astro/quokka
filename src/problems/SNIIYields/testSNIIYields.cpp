@@ -92,7 +92,7 @@ struct YieldStorageDisabled {};
 
 template <> struct Physics_Traits<YieldStorageDisabled> : Physics_Traits<test_SNII_Yields> {};
 
-static_assert(quokka::StochasticStellarPopParticleChemistryBlockSize<YieldStorageDisabled>() == 0);
+static_assert(quokka::StochasticStellarPopParticleChemistryBlockCapacity<YieldStorageDisabled>() == 0);
 static_assert(quokka::StochasticStellarPopParticleRealComps<YieldStorageDisabled> ==
 	      quokka::StochasticStellarPopParticleLumIdx + Physics_Traits<YieldStorageDisabled>::nGroups);
 static_assert(quokka::StochasticStellarPopParticleRealComps<test_SNII_Yields> ==
