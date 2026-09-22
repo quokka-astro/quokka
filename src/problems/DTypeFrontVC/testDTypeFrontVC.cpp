@@ -65,7 +65,7 @@ template <> struct RadSystem_Traits<DTypeFrontVC> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	static constexpr int beta_order = 1;
-	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBands() { return ChemBandsHeader(); }
 };
 
 template <> struct SimulationData<DTypeFrontVC> {
