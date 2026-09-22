@@ -387,9 +387,11 @@ template <typename problem_t> class AnisoConduction
 			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], primVar, bhat_corner, n_corner, qsat_corner, dx, params.kappa_parallel,
 								   params.l2_alpha, params.flux_limiter_type);)
 
-		PrintHeatFluxAtPoint(heat_flux, geom);
-		PrintVectorAtPoint(bhat_corner, geom, "[AnisoConduction] bhat (corner)");
-		PrintCenterDiagnostics(primVar, bhat_corner);
+		// DEBUG: uncomment to print per-step diagnostics (heat flux/bhat at a fixed probe vertex,
+		// temperature/bhat at the domain center) -- left in place for future debugging.
+		// PrintHeatFluxAtPoint(heat_flux, geom);
+		// PrintVectorAtPoint(bhat_corner, geom, "[AnisoConduction] bhat (corner)");
+		// PrintCenterDiagnostics(primVar, bhat_corner);
 
 		auto state_out = state.arrays();
 		auto const &flux_x_const = heat_flux[0].const_arrays();
