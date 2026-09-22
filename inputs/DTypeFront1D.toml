@@ -43,9 +43,7 @@ photoionize.temperature = 1.0e2
 
 # Source geometry. beamed = 1 gives each half of the source slab a flux source of -c * E on the left and
 # +c * E on the right, so both wings are injected fully beamed outward; the outward-momentum budget in the
-# test is a conservation law only in that case (it closes to 1.004 beamed, 0.78 isotropic). source_cells is
-# the number of cells per side the slab occupies; widening it does not improve the budget (1.004, 1.008,
-# 1.011, 1.012 for 1, 2, 4, 8) and pushes the measured light front outward, so one cell per side is shipped.
+# test is a conservation law only in that case.
 photoionize.beamed = 1
 photoionize.source_cells = 1
 photoionize.flux = 1.0e13
