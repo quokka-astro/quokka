@@ -116,6 +116,7 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 	static constexpr bool dust_absorption_only = false;
+	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> pe_heating_efficiency = {};
 };
 
 // this struct is specialized by the user application code
@@ -214,6 +215,12 @@ template <typename problem_t, typename = void> struct RadSystem_Has_Dust_Absorpt
 
 template <typename problem_t>
 struct RadSystem_Has_Dust_Absorption_Only<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::dust_absorption_only)>> : std::true_type {};
+
+// Use SFINAE to check if pe_heating_efficiency is defined in RadSystem_Traits<problem_t>
+template <typename problem_t, typename = void> struct RadSystem_Has_PE_Heating_Efficiency : std::false_type {};
+
+template <typename problem_t>
+struct RadSystem_Has_PE_Heating_Efficiency<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::pe_heating_efficiency)>> : std::true_type {};
 
 // Use SFINAE to check if ChemBands() is defined in RadSystem_Traits<problem_t> (indicates photoionization group)
 template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {};
@@ -325,6 +332,43 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// Number of groups that emit blackbody radiation. Dust-absorption-only bands and chemical bands do
 	// not, so this is the range over which the Planck emission and its temperature derivative are built.
 	static constexpr int nGroupsEmitting_ = dust_absorption_only_ ? 0 : nGroupsThermal_;
+
+	// Photoelectric heating yield of each dust-absorption band: the dimensionless fraction of the energy
+	// absorbed in that band that is returned to the gas as photoelectron kinetic energy, so that
+	//
+	//     Gamma_PE = sum_g pe_heating_efficiency_[g] * c * rho * kappa_{E,g} * E_g .
+	//
+	// With rho kappa = n_H sigma_d and E_g proportional to the Habing field, this reduces to the usual
+	// ISM form Gamma_PE ~ epsilon n_H G_0; the difference is that G_0 here is the actual attenuated field
+	// carried by the solver rather than a proxy. Because the heating is a fraction of energy this mode
+	// was already discarding to the dust, it does not add energy to the problem -- for epsilon <= 1 it
+	// strictly reduces what leaves the simulation.
+	//
+	// This is a compile-time constant, so it cannot depend on the local electron density or grain charge.
+	// It applies to dust-absorption bands only; the thermal-band photoelectric model is the separate
+	// ISM_Traits::enable_photoelectric_heating path, and the two are mutually exclusive.
+	static constexpr amrex::GpuArray<double, nGroups_> pe_heating_efficiency_ = []() constexpr {
+		if constexpr (RadSystem_Has_PE_Heating_Efficiency<problem_t>::value) {
+			return RadSystem_Traits<problem_t>::pe_heating_efficiency;
+		} else {
+			// value-initialization zeroes the aggregate; GpuArray::operator[] is not constexpr, so it
+			// cannot be filled element by element here
+			return amrex::GpuArray<double, nGroups_>{};
+		}
+	}();
+
+	// True when any band has a non-zero photoelectric yield. Used to guard against double-counting the
+	// photoelectric heating against an external cooling module.
+	// GpuArray::operator[] is not constexpr, so the compile-time scans below go through the underlying
+	// array member instead.
+	static constexpr bool enable_dust_pe_heating_ = []() constexpr {
+		for (int g = 0; g < nGroups_; ++g) {
+			if (pe_heating_efficiency_.arr[g] > 0.0) {
+				return true;
+			}
+		}
+		return false;
+	}();
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
 			return RadSystem_Traits<problem_t>::radBoundaries;
@@ -368,8 +412,25 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		      "ISM_Traits::enable_dust_gas_thermal_coupling_model.");
 
 	static_assert(!(dust_absorption_only_ && enable_photoelectric_heating_), // NOLINT
-		      "dust_absorption_only leaves the gas heating to an external chemistry module, so it cannot be combined with "
-		      "ISM_Traits::enable_photoelectric_heating.");
+		      "dust_absorption_only uses RadSystem_Traits::pe_heating_efficiency for photoelectric heating, so it cannot be combined with the "
+		      "thermal-band model ISM_Traits::enable_photoelectric_heating.");
+
+	// Assertion: the photoelectric yield is the fraction of the absorbed band energy returned to the gas,
+	// so it must lie in [0, 1]. A yield above 1 would return more energy than the band absorbed.
+	static_assert([]() constexpr {
+			      for (int g = 0; g < nGroups_; ++g) {
+				      if (!((pe_heating_efficiency_.arr[g] >= 0.0) && (pe_heating_efficiency_.arr[g] <= 1.0))) {
+					      return false;
+				      }
+			      }
+			      return true;
+		      }(), // NOLINT
+		      "Each entry of RadSystem_Traits::pe_heating_efficiency must lie between 0 and 1.");
+
+	// Assertion: photoelectric heating from the radiation field is implemented for dust-absorption bands
+	// only. Thermal bands use the ISM_Traits::enable_photoelectric_heating path instead.
+	static_assert(!(enable_dust_pe_heating_ && !dust_absorption_only_), // NOLINT
+		      "RadSystem_Traits::pe_heating_efficiency applies to dust-absorption bands, so it requires dust_absorption_only = true.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;

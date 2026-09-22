@@ -185,6 +185,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 
 	// The gas temperature is used only to evaluate the opacity, which does not depend on the radiation
 	// field, so the old-state value is all that is needed.
+	//
+	// IMPORTANT: this is the start-of-step temperature, and it is never revised. The outer iteration in
+	// AddSourceTerms re-enters this function with the same Egas0 each time (it converges the work term,
+	// not the gas temperature), so the opacity is always evaluated at T(Egas0). Without photoelectric
+	// heating that lag is harmless, because only the work and cosmic-ray terms move the gas energy and
+	// both are tiny. With photoelectric heating the gas temperature can change materially within a step,
+	// so THIS PATH ASSUMES THE OPACITY DOES NOT DEPEND ON THE GAS TEMPERATURE. That holds for the
+	// intended use -- ultraviolet dust opacity is a property of the grains, not of the gas -- and it is
+	// exact whenever DefineOpacityExponentsAndLowerValues ignores its Tgas argument. If a problem does
+	// make kappa depend on Tgas, the opacity lags the photoelectric heating by one step and the error is
+	// first order in dt.
 	const double T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
@@ -224,22 +235,38 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 		work_local.fillin(0.0);
 	}
 
-	// The gas receives the work term and the cosmic-ray heating, and nothing else. In particular it does
-	// not receive the absorbed radiation energy, which is what distinguishes this path from the thermal
-	// solve.
-	const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
-	const double Egas_guess = Egas0 - cscale * sum(work_local) + CR_heating;
-	AMREX_ASSERT(Egas_guess > 0.0);
-
 	// Backward-Euler absorption, group by group. Chemical bands, if any, are treated the same way here:
 	// they too emit nothing and pass their absorbed energy to photochemistry rather than to the gas. The
 	// caller has already removed their source from Src and injects it after this solve.
+	//
+	// The photoelectric heating is accumulated alongside. A band returns the fraction
+	// pe_heating_efficiency_[g] of the energy it absorbed, tau_g * Erad_g, to the gas. The factor cscale
+	// converts that radiation-side energy to the gas side, and cscale * tau_g collapses to
+	// dt * c * rho * kappa_{E,g}, so the heating rate carries the true speed of light and not chat --
+	// correctly, since it is a physical rate rather than a transport rate.
+	// A static constexpr member has no device storage, so it cannot be indexed with a runtime group
+	// number inside device code. Copy it to a local first, as UpdateFlux does with radBoundaries_.
+	const amrex::GpuArray<double, nGroups_> pe_efficiency = pe_heating_efficiency_;
+
 	auto EradVec_guess = Erad0Vec;
+	double PE_heating = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
 		const double tau = dt * rho * opacity_terms.kappaE[g] * chat;
 		EradVec_guess[g] = (Erad0Vec[g] + Src[g] + work_local[g]) / (1.0 + tau);
+		if constexpr (enable_dust_pe_heating_) {
+			PE_heating += pe_efficiency[g] * cscale * tau * EradVec_guess[g];
+		}
 	}
 	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
+
+	// The gas receives the work term, the cosmic-ray heating, and the photoelectric heating -- and
+	// nothing else. In particular it does not receive the rest of the absorbed radiation energy, which is
+	// what distinguishes this path from the thermal solve. Note that EradVec_guess does not depend on the
+	// gas energy, so this is a closed-form update and not a fixed point: the photoelectric heating adds
+	// no iteration.
+	const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
+	const double Egas_guess = Egas0 - cscale * sum(work_local) + CR_heating + PE_heating;
+	AMREX_ASSERT(Egas_guess > 0.0);
 
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1); // total number of radiation updates. NOLINT
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], 1); // total number of (here, trivial) iterations. NOLINT
