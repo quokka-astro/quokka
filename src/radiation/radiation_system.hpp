@@ -365,7 +365,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	// static functions
 
-	AMREX_GPU_HOST_DEVICE static auto GetThermalBandQuanta(int group_index) -> amrex::Real;
+	static auto GetThermalBandQuanta(int group_index) -> amrex::Real;
 
 #ifdef PHOTOCHEMISTRY
 	AMREX_GPU_HOST_DEVICE static auto GetChemBandQuanta(int group_index) -> amrex::Real;
@@ -850,7 +850,7 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 	});
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetThermalBandQuanta(int const group_index) -> amrex::Real
+template <typename problem_t> auto RadSystem<problem_t>::GetThermalBandQuanta(int const group_index) -> amrex::Real
 {
 	AMREX_ASSERT(group_index >= 0 && group_index < nGroupsThermal_);
 	return 0.5 * (radBoundaries_[group_index] + radBoundaries_[group_index + 1]) * C::ev2erg;

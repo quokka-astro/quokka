@@ -12,7 +12,7 @@ using namespace amrex;
 
 void actual_network_init();
 
-const std::string network_name = "photoionization_H_caseB_handwritten";
+const std::string network_name = "thermophotochemistry_handwritten";
 
 namespace network
 {
