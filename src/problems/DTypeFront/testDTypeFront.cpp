@@ -160,7 +160,7 @@ auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.
 
 auto net_energy_ionized(double T, double n_e) -> double
 {
-	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
+	const double alpha_B = 2.63e-13 * std::pow(T / 1.0e4, -0.7);
 	static const double RydbergEnergy = 13.6 * C::ev2erg;
 	const double eps = RadSystem<DTypeFront>::GetChemBandQuanta(0);
 	const double Gamma_photo = std::max(eps - RydbergEnergy, 0.0);
