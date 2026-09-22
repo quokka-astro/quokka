@@ -69,12 +69,13 @@ template <typename problem_t> class turbulentDriving
 		updated = tg.is_update_available(time);
 
 		if (updated) {
-			const VelocityMoments result = quokka::turbulence::calculate_dispersion<problem_t>(state);
-			disp = result.dispersion;
+			const VelocityMoments velocity_moments = quokka::turbulence::calculate_dispersion<problem_t>(state);
+			disp = velocity_moments.dispersion;
 			tg.check_for_update(time, disp.data());
 
 			const amrex::Real mean_mag =
-			    std::sqrt(result.mean[0] * result.mean[0] + result.mean[1] * result.mean[1] + result.mean[2] * result.mean[2]);
+			    std::sqrt(velocity_moments.mean[0] * velocity_moments.mean[0] + velocity_moments.mean[1] * velocity_moments.mean[1] +
+				      velocity_moments.mean[2] * velocity_moments.mean[2]);
 			const amrex::Real disp_mag = std::sqrt(disp[0] * disp[0] + disp[1] * disp[1] + disp[2] * disp[2]);
 
 			if (mean_mag > mean_flow_to_dispersion_threshold * disp_mag) {
