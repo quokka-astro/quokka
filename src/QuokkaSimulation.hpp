@@ -107,6 +107,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::componentNames_fc_flat_;
 	using AMRSimulation<problem_t>::componentNames_fc_;
 	using AMRSimulation<problem_t>::cflNumber_;
+	using AMRSimulation<problem_t>::doHydroAdvection_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::CustomPlotFileName;
 	using AMRSimulation<problem_t>::geom;
@@ -636,6 +637,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set hydro runtime parameters
 	{
 		amrex::ParmParse const hpp("hydro");
+		hpp.query("advection_enabled", doHydroAdvection_);
 		hpp.query("low_level_debugging_output", lowLevelDebuggingOutput_);
 		hpp.query("rk_integrator_order", integratorOrder_);
 		hpp.query("reconstruction_order", reconstructionOrder_);
@@ -2482,6 +2484,31 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		return burn_success_first;
 	}
 	ApplyHydroStateFixup(state_old_cc_tmp, state_old_fc_tmp, lev);
+
+	if (!doHydroAdvection_) {
+		// hydro advection frozen (hydro.advection_enabled=0): no Riemann solve, no induction update --
+		// carry the (Strang-split-updated) old state through to state_new_cc_/state_new_fc_ unchanged.
+		amrex::Copy(state_new_cc_[lev], state_old_cc_tmp, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				amrex::Copy(state_new_fc_[lev][idim], state_old_fc_tmp[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+			}
+		}
+		ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
+		amrex::Gpu::streamSynchronizeAll();
+
+		// do Strang split source terms (second half-step)
+		auto burn_success_second = addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], recal_fluxes_ptr, lev,
+												  time + dt_lev, 0.5 * dt_lev);
+		if (burn_success_second) {
+			ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
+		}
+
+		// no hydro fluxes were computed, so nothing to add to the flux/EMF registers (they were
+		// already zeroed for this step in advanceSingleTimestepAtLevel) and no face velocity to
+		// advect tracers with.
+		return burn_success_second;
+	}
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);

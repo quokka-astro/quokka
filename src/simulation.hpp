@@ -191,13 +191,17 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real maxDt_ = std::numeric_limits<double>::max();  // no limit by default
 	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
 	amrex::Real constantDt_ = 0.0;
-	amrex::Vector<int> istep;	      // which step?
-	amrex::Vector<int> nsubsteps;	      // how many substeps on each level?
-	amrex::Vector<amrex::Real> tNew_;     // for state_new_cc_
-	amrex::Vector<amrex::Real> tOld_;     // for state_old_cc_
-	amrex::Vector<amrex::Real> dt_;	      // timestep for each level
-	amrex::Real stopTime_ = 1.0;	      // default
-	amrex::Real cflNumber_ = 0.3;	      // default
+	amrex::Vector<int> istep;	  // which step?
+	amrex::Vector<int> nsubsteps;	  // how many substeps on each level?
+	amrex::Vector<amrex::Real> tNew_; // for state_new_cc_
+	amrex::Vector<amrex::Real> tOld_; // for state_old_cc_
+	amrex::Vector<amrex::Real> dt_;	  // timestep for each level
+	amrex::Real stopTime_ = 1.0;	  // default
+	amrex::Real cflNumber_ = 0.3;	  // default
+	// hydro.advection_enabled = 0 freezes density/momentum/energy/B-field advection each step (no
+	// Riemann solve, no induction update, no hydro CFL constraint on dt); Strang-split sources
+	// (conduction, cooling, chemistry, ...) still run.
+	int doHydroAdvection_ = 1;
 	amrex::Real particleCflNumber_ = 0.5; // default
 	amrex::Real signalSpeedAbort_ = -1.0;
 	amrex::Real particleSpeedAbort_ = -1.0;
@@ -1270,13 +1274,15 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 	// the signal speed is zero when no hyperbolic physics is enabled (e.g. self-gravity acting on
-	// particles only), in which case the hydro timestep does not constrain the simulation
+	// particles only), in which case the hydro timestep does not constrain the simulation.
+	// Likewise, when hydro advection is frozen (hydro.advection_enabled=0), the sound-speed-based
+	// signal speed is irrelevant to the (non-existent) hydro update, so it must not constrain dt.
 	dtloc_t hydro_dt{.value = std::numeric_limits<amrex::Real>::max(), .index = domain_signal_maxloc};
-	if (domain_signal_max > 0.0) {
+	if (doHydroAdvection_ && domain_signal_max > 0.0) {
 		hydro_dt.value = cflNumber_ * (dx_min / domain_signal_max);
 	}
 
-	if (verbose && domain_signal_max > 0.0) {
+	if (verbose && doHydroAdvection_ && domain_signal_max > 0.0) {
 		amrex::Print() << std::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
 		amrex::Print() << std::format("...[level {}] \thydro timestep limited at cell {} with signal speed = {:e}\n", lev,
 					      formatIntVect(hydro_dt.index), domain_signal_max);
