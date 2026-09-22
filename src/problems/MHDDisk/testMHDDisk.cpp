@@ -519,7 +519,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
 		// take cube root to get sidelength
 		const std::size_t n_turb_side = int(std::cbrt(n_turb) + .5);
-		
+
 		userData_.turb_nx = n_turb_side;
 		userData_.turb_ny = n_turb_side;
 		userData_.turb_nz = n_turb_side;
