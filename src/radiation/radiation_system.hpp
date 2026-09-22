@@ -575,13 +575,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
 	    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt) -> JacobianResult<problem_t>;
 
-	AMREX_GPU_DEVICE static auto SolveDustAbsorptionBands(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
-							      amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter,
-							      quokka::valarray<double, nGroups_> const &work,
-							      quokka::valarray<double, nGroups_> const &vel_times_F,
-							      quokka::valarray<double, nGroups_> const &Src,
-							      amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-							      int *p_iteration_counter) -> NewtonIterationResult<problem_t>;
+	AMREX_GPU_DEVICE static auto
+	SolveDustAbsorptionBands(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
+				 amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+				 quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
+				 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter) -> NewtonIterationResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto
 	SolveGasRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,

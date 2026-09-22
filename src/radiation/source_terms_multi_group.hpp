@@ -170,12 +170,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/
 // therefore not conserved in this mode, by construction.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho,
-								    double const dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
-								    int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
-								    quokka::valarray<double, nGroups_> const &vel_times_F,
-								    quokka::valarray<double, nGroups_> const &Src,
-								    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-								    int *p_iteration_counter) -> NewtonIterationResult<problem_t>
+								     double const dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
+								     int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+								     quokka::valarray<double, nGroups_> const &vel_times_F,
+								     quokka::valarray<double, nGroups_> const &Src,
+								     amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter)
+    -> NewtonIterationResult<problem_t>
 {
 	const double c = c_light_; // make a copy of c_light_ to avoid compiler error "undefined in device code"
 	const double chat = c_hat_;
@@ -199,8 +199,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 	// because they take it as the weight of the Planck-mean average, which is irrelevant here.
 	const quokka::valarray<double, nGroups_> fourPiBoverC = ComputeThermalRadiationMultiGroup(T_gas, rad_boundaries);
 
-	auto opacity_terms =
-	    ComputeModelDependentKappaEAndKappaP(T_gas, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad0Vec, 0, {}, {});
+	auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_gas, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad0Vec, 0, {}, {});
 	ComputeModelDependentKappaFAndDeltaTerms(T_gas, rho, rad_boundaries, fourPiBoverC, opacity_terms); // update opacity_terms in place
 
 	// Compute the work term. On the first outer iteration it is built from the old-state flux; afterwards
@@ -214,8 +213,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 					work_local[g] = vel_times_F[g] * opacity_terms.kappaF[g] * chat / (c * c) * dt;
 				} else {
-					work_local[g] = vel_times_F[g] * opacity_terms.kappaF[g] * chat / (c * c) * dt *
-							(1.0 + kappa_expo_and_lower_value[0][g]);
+					work_local[g] =
+					    vel_times_F[g] * opacity_terms.kappaF[g] * chat / (c * c) * dt * (1.0 + kappa_expo_and_lower_value[0][g]);
 				}
 			}
 		} else {
