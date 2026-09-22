@@ -593,7 +593,6 @@ auto problem_main() -> int
 
 	int status = 0;
 
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 	// The source sits at the middle of the domain and radiates both ways, so each front has Lx / 2 to travel.
 	const double half_Lx = 0.5 * (sim.geom[0].ProbHiArray()[0] - sim.geom[0].ProbLoArray()[0]);
 
