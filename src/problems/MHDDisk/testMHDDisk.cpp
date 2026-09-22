@@ -43,19 +43,11 @@ constexpr double rho_transition = 1.0e-28;
 constexpr double target_beta_seed = 1.0e3;
 constexpr double Rmax_kpc = 8.0;
 constexpr double Rmax = Rmax_kpc * 1.0e3 * C::parsec;
-constexpr double refine_Rcyl_kpc = 8.0;
-constexpr double refine_Hcyl_pc = 600.0;
-constexpr double refine_Rcyl = refine_Rcyl_kpc * 1.0e3 * C::parsec;
-constexpr double refine_Hcyl = refine_Hcyl_pc * C::parsec;
 constexpr double axis_fallback_cells = 1.0;
 constexpr double turb_target_Mach = 0.5;
 
 constexpr double r_K_factor = 2.0;  // physical kernel radius, in units of dx (paper default 3.0)
 constexpr int omega_subsamples = 4; // n_sub per dimension for boundary-cell overlap quadrature
-
-// constexpr int turb_nx = 512;
-// constexpr int turb_ny = 512;
-// constexpr int turb_nz = 512;
 } // namespace
 
 struct MHDGalaxy {};
@@ -527,7 +519,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
 		// take cube root to get sidelength
 		const std::size_t n_turb_side = int(std::cbrt(n_turb) + .5);
-
+		
 		userData_.turb_nx = n_turb_side;
 		userData_.turb_ny = n_turb_side;
 		userData_.turb_nz = n_turb_side;
@@ -962,19 +954,27 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(int lev, amrex::TagBoxA
 	const auto tag = tags.arrays();
 
 	amrex::ParmParse pp("mhd_galaxy");
-	amrex::Real shrink_kpc = 1.0;
-	amrex::Real shrink_pc = 50.0;
-	pp.query("refine_shrink_per_level_kpc", shrink_kpc);
-	pp.query("refine_shrink_per_level_pc", shrink_pc);
+	amrex::Real refine_Rcyl_kpc = NAN;
+	amrex::Real refine_Hcyl_kpc = NAN;
+	amrex::Real shrink_Rcyl_kpc = NAN;
+	amrex::Real shrink_Hcyl_kpc = NAN;
+	pp.query("refine_Rcyl_kpc", refine_Rcyl_kpc);
+	pp.query("refine_Hcyl_kpc", refine_Hcyl_kpc);
+	pp.query("refine_Rcyl_shrink_per_level_pc", shrink_Rcyl_kpc);
+	pp.query("refine_Hcyl_shrink_per_level_pc", shrink_Hcyl_kpc);
+	AMREX_ALWAYS_ASSERT(!std::isnan(refine_Rcyl_kpc));
+	AMREX_ALWAYS_ASSERT(!std::isnan(refine_Hcyl_kpc));
+	AMREX_ALWAYS_ASSERT(!std::isnan(shrink_Rcyl_kpc));
+	AMREX_ALWAYS_ASSERT(!std::isnan(shrink_Hcyl_kpc));
 
 	// Shrink the refinement cylinder at each successive level, floored at 30% of the
 	// base size, so finer levels progressively focus on the disk core instead of all
 	// sharing the same footprint out to refine_Rcyl/refine_Hcyl.
-	const amrex::Real margin_R = static_cast<amrex::Real>(lev) * shrink_kpc * 1.0e3 * C::parsec;
-	const amrex::Real margin_H = static_cast<amrex::Real>(lev) * shrink_pc * C::parsec;
+	shrink_Rcyl_kpc *= lev;
+	shrink_Hcyl_kpc *= lev;
 
-	const amrex::Real Rcyl_lev = amrex::max(static_cast<amrex::Real>(refine_Rcyl) - margin_R, static_cast<amrex::Real>(0.3 * refine_Rcyl));
-	const amrex::Real Hcyl_lev = amrex::max(static_cast<amrex::Real>(refine_Hcyl) - margin_H, static_cast<amrex::Real>(0.3 * refine_Hcyl));
+	const amrex::Real Rcyl_lev = amrex::max(refine_Rcyl_kpc - shrink_Rcyl_kpc, 0.3 * refine_Rcyl_kpc) * 1.0e3 * C::parsec;
+	const amrex::Real Hcyl_lev = amrex::max(refine_Hcyl_kpc - shrink_Hcyl_kpc, 0.3 * refine_Hcyl_kpc) * 1.0e3 * C::parsec;
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const amrex::Real x0 = prob_lo[0] + i * dx[0];
