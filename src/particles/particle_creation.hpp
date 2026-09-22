@@ -683,7 +683,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						const int scalar_offset = std::max(0, chemical_scalar_offset_);
 						const int nchem = std::max(0, std::min(chemical_num_scalars_, nscalars - scalar_offset));
 
-						for (int block = 0; block < 4; ++block) {
+						for (int block = 0; block < ChemicalYieldLookup::max_tracked_channels + 1; ++block) {
 							for (int nn = 0; nn < nscalars; ++nn) {
 								p.rdata(chem_base + block * chem_block_size + nn) = 0.0;
 							}
@@ -694,7 +694,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 							p.rdata(chem_base + nn) = std::max<amrex::Real>(0.0, state_arr(i, j, k, total_scalar) / cell_density);
 
 							if (store_channel_fields_) {
-								for (int block = 1; block < 4; ++block) {
+								for (int block = 1; block < ChemicalYieldLookup::max_tracked_channels + 1; ++block) {
 									const int channel_scalar =
 									    HydroSystem<problem_t>::scalar0_index + scalar_offset + block * nchem + nn;
 									if (channel_scalar < HydroSystem<problem_t>::scalar0_index + nscalars) {

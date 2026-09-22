@@ -96,7 +96,8 @@ static_assert(quokka::StochasticStellarPopParticleChemistryBlockSize<YieldStorag
 static_assert(quokka::StochasticStellarPopParticleRealComps<YieldStorageDisabled> ==
 	      quokka::StochasticStellarPopParticleLumIdx + Physics_Traits<YieldStorageDisabled>::nGroups);
 static_assert(quokka::StochasticStellarPopParticleRealComps<test_SNII_Yields> ==
-	      quokka::StochasticStellarPopParticleRealComps<YieldStorageDisabled> + 4 * Physics_Traits<test_SNII_Yields>::numPassiveScalars);
+	      quokka::StochasticStellarPopParticleRealComps<YieldStorageDisabled> +
+		  (quokka::ChemicalYieldLookup::max_tracked_channels + 1) * Physics_Traits<test_SNII_Yields>::numPassiveScalars);
 
 template <> void QuokkaSimulation<test_SNII_Yields>::createInitialStochasticStellarPopParticles()
 {
