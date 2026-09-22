@@ -80,7 +80,8 @@ if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
 
   # Set photoionisation properties
   set(NUM_CHEM_BANDS 1)
-  set(CHEM_BANDS "3.29e15, 1.50e16") # Hz
+  set(CHEM_BANDS "3.29e15, 8.0e15") # Hz
+  set(NUM_THERMAL_BANDS 2) # index 0 = IR, index 1 = optical, matching group_ir/group_optical in testDTypeFront1D.cpp
 
   # Configure the header
   configure_file(
@@ -95,12 +96,12 @@ if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
                 ../../radiation/photochemistry.cpp ${photoionization_sources})
 
   # this will add #define PHOTOCHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX)
+  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX THERMAL_DUST_PHOTOCHEMISTRY)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
   # One input serves both dimensionalities; only the x entries matter in 1D.
-  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}_test.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

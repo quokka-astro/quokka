@@ -1,5 +1,5 @@
-# Quick CI pipeline: builds and tests only the problems changed in this PR.
-# Trigger manually with the PR comment: /azp run rocm-quick
+# Quick Debug CI pipeline: builds and tests only the problems changed in this PR, with a Debug build.
+# Trigger manually with the PR comment: /azp run rocm-quick-debug
 # If no src/problems/ files are changed, the job skips the build with a reminder.
 trigger: none
 
@@ -7,13 +7,13 @@ pr:
   autoCancel: true
   branches:
     include:
-    - '*'
+    - development
   paths:
     include:
     - src/problems/**
 
 jobs:
-  - job: Quick_HIP_Build_Test
+  - job: Quick_HIP_Debug_Build_Test
     pool: amdgpu
     timeoutInMinutes: 150
     steps:

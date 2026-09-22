@@ -1,3 +1,4 @@
+# The problem is a spherical H II region around a central point source, so it is meaningful only in 3D.
 if(AMReX_SPACEDIM EQUAL 3)
   set(microphysics_network_name "photoionization") # this will override
                                                   # network_name to
@@ -14,7 +15,7 @@ if(AMReX_SPACEDIM EQUAL 3)
     BEFORE ${photoionization_dirs} "${CMAKE_CURRENT_BINARY_DIR}/"
     "includes/extern_parameters.H" "includes/network_properties.H")
 
-  set(JOB_NAME StromgrenSphere)
+  set(JOB_NAME DTypeFront3D)
 
   # Number of species
   set(NSPEC 3)
@@ -77,8 +78,8 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   # Set photoionisation properties
   set(NUM_CHEM_BANDS 1)
-  set(CHEM_BANDS "3.29e15, 1.50e16") # Hz
-  set(NUM_THERMAL_BANDS 0) # no thermal-band physics in this problem
+  set(CHEM_BANDS "3.29e15, 8.0e15") # Hz
+  set(NUM_THERMAL_BANDS 2) # index 0 = IR, index 1 = optical, matching group_ir/group_optical in testDTypeFront3D.cpp
 
   # Configure the header
   configure_file(
@@ -93,12 +94,12 @@ if(AMReX_SPACEDIM EQUAL 3)
                 ../../radiation/photochemistry.cpp ${photoionization_sources})
 
   # this will add #define PHOTOCHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
+  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX THERMAL_DUST_PHOTOCHEMISTRY)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  add_test(NAME ${JOB_NAME}TempIndependentRecombination COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}TempIndependentRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME}NewtonFail COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}_test_n32_newtonfail.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME}Oob COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}_test_n64_oob.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

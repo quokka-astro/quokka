@@ -24,10 +24,15 @@ recombination_cooling_switch            int        1
 # KI cooling
 KI_cooling_switch                       int        1
 
-# Ion FF cooling
+# FF cooling
 ion_ff_cooling_switch                   int        1
 
 # Switch off cooling in mixed cells
 allow_mixed_cell_cooling                int        1
 mixed_cell_lb                           real       0.01
 mixed_cell_ub                           real       0.99
+
+# Gray dust opacity to ionizing radiation [cm^2/g], only used when
+# THERMAL_DUST_PHOTOCHEMISTRY is defined. Set in photochemistry.hpp before the
+# burner call. Default of 0 leaves dust absorption of ionizing radiation off.
+dust_kappa                              real       0.0

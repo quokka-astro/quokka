@@ -1,0 +1,83 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  [-4.9371e19, -4.9371e19, -4.9371e19]
+geometry.prob_hi     =  [ 4.9371e19,  4.9371e19,  4.9371e19]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [32, 32, 32]
+amr.max_level       = 0
+amr.max_grid_size   = 128
+amr.blocking_factor = 16
+amr.n_error_buf     = 3
+amr.grid_eff        = 0.7
+regrid_interval     = 30
+
+do_reflux = 1
+do_subcycle = 1
+suppress_output = 0
+
+temperature_floor = 10.0
+# Bounds v = p/rho in the 8 cells at the origin, which optical radiation pressure on dust
+# (kappa_optical * F_opt / c ~ 3e-6 cm/s^2, sustained) evacuates without limit. Without this,
+# rho there falls to 7.8e-36 by step 40 while neighbours sit at 1.8e-24, and v = p/rho reaches
+# 15637 c_hat, collapsing dt to zero. EnforceLimits raises rho and leaves momentum untouched,
+# so the floor caps v directly. 6e-5 of ambient, far below the ~7.6e-24 cavity interior.
+density_floor = 1.0e-30
+
+stop_time = 3.15576e13
+max_timesteps = 10
+
+checkpoint_interval = 25
+checkpoint_prefix = "ChkDType3D"
+plotfile_interval = -1
+plotfile_prefix = "DType3D"
+
+photochemistry.enabled = 1
+network.energy_switch = 1
+network.recombination_temperature_dependent = 1
+network.allow_mixed_cell_cooling = 0
+network.dust_kappa = 1000.0   # cm^2/g; dust opacity to ionizing radiation, only used when ISM_Traits::dust_chemical_band_absorption is true
+
+photoionize.primary_species_1 = 1.0e-10   # e
+photoionize.primary_species_2 = 1.0e2     # H  (neutral, n_0)
+photoionize.primary_species_3 = 1.0e-10   # H+
+photoionize.temperature = 42.0            # K
+
+photoionize.flux_ion = 1.0e48
+photoionize.flux_optical = 3.0e50
+
+# The optical band is very opaque, so the shell absorbs essentially all the optical light and takes up its momentum, while the IR
+# is left nearly transparent so the reprocessed light streams out instead of being trapped.
+photoionize.kappa_ir = 1.0e-2
+photoionize.kappa_optical = 1000
+
+radiation.iteration_tolerance = 1e-10
+radiation.dust_gas_interaction_coeff = 0.0   # thermally decouple dust from gas; dust sits at radiative equilibrium
+
+integrator.rosenbrock_tableau = 3
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2
+
+integrator.atol_spec                     = 1.0e-3   # cm^-3
+integrator.atol_enuc                     = 1.24e8   # erg/g; c_v * 1 K temperature accuracy
+integrator.atol_rad_num                  = 1.0e-6   # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3   # cm^-3; = atol_spec
+integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at the front
