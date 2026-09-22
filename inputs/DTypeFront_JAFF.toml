@@ -43,8 +43,8 @@ plotfile_prefix = "DType"
 
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 
-# VODE absolute tolerances — tuned for DTypeFront (n_H = 139.9 cm^-3).
-# Erad_floor (M1 floor) is C::a_rad * 1e-8 (T~0.01 K) in testDTypeFront.cpp — see docs/markdown/photoionization.md.
+# VODE absolute tolerances — tuned for DTypeFront_JAFF (n_H = 139.9 cm^-3).
+# Erad_floor (M1 floor) is C::a_rad * 1e-8 (T~0.01 K) in testDTypeFront_JAFF.cpp — see docs/markdown/photoionization.md.
 #
 # atol_rad_num: the performance plateau for this problem is at ~5e-2 cm^-3. Below this value VODE spends
 # extra steps in dark cells; above it the step-rejection loop (N_gamma near -radiation_failure_tolerance)

@@ -6,7 +6,7 @@ if(AMReX_SPACEDIM EQUAL 3)
                                             "${CMAKE_CURRENT_BINARY_DIR}/"
                                             INTEGRATOR "${DTypeFront_INTEGRATOR}")
 
-  set(JOB_NAME DTypeFront)
+  set(JOB_NAME DTypeFront_JAFF)
 
   # NSPEC/SPECIES_ENUM/SPEC_NAMES/NUM_CHEM_BANDS/CHEM_BANDS/AION/... are derived
   # from jaff's own _parameters and jaffgen.toml by write_jaff_network_vars.py,
@@ -28,6 +28,6 @@ if(AMReX_SPACEDIM EQUAL 3)
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/DTypeFront.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/DTypeFront_JAFF.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   add_test(NAME ${JOB_NAME}RadPres COMMAND ${JOB_NAME} ../inputs/DTypeFrontRadPres.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
