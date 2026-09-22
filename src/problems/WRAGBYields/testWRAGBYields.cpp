@@ -12,17 +12,15 @@
 #include "particles/particle_chemical_yield.hpp"
 #include "particles/particle_types.hpp"
 #include "problems/InitialStellarParticles.hpp"
+#include "problems/YieldValidation.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <format>
 #include <string>
 #include <vector>
 
 namespace
 {
-
-constexpr amrex::Real yield_validation_rtol = 1.0e-10;
 
 template <typename problem_t> [[nodiscard]] auto cellVolume(const QuokkaSimulation<problem_t> &sim) -> amrex::Real
 {
@@ -40,14 +38,6 @@ auto yieldFraction(const quokka::ChemicalYieldLookup::ChemicalYieldGpuConstTable
     -> amrex::Real
 {
 	return quokka::ChemicalYieldLookup::queryYieldFraction(tables, channel_index, isotope_index, mass / C::M_solar, quokka::stellar_metallicity_fraction);
-}
-
-void assertClose(const std::string &label, amrex::Real simulated, amrex::Real expected, amrex::Real tolerance = yield_validation_rtol)
-{
-	const amrex::Real error = std::abs(simulated - expected);
-	const amrex::Real allowed_error = tolerance * std::abs(expected);
-	amrex::Print() << label << ": simulated=" << simulated << " expected=" << expected << " absolute_error=" << error << "\n";
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(error <= allowed_error, std::format("{} failed: error={} > {}", label, error, allowed_error).c_str());
 }
 
 template <typename problem_t>
@@ -96,10 +86,10 @@ void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::vect
 		const amrex::Real measured_wr = scalarMass(sim, 6 + n_idx);
 		const amrex::Real measured_agb = scalarMass(sim, 9 + n_idx);
 
-		assertClose(std::format("  {} total scalar_{}", isotopes[n], n_idx), measured_total, total_expected);
-		assertClose(std::format("  {} WR scalar_{}", isotopes[n], 6 + n_idx), measured_wr, wr_expected);
-		assertClose(std::format("  {} AGB scalar_{}", isotopes[n], 9 + n_idx), measured_agb, agb_expected);
-		assertClose(std::format("  {} SNII scalar_{}", isotopes[n], 3 + n_idx), measured_snii, 0.0);
+		quokka::testing::assertYieldClose(std::format("  {} total scalar_{}", isotopes[n], n_idx), measured_total, total_expected);
+		quokka::testing::assertYieldClose(std::format("  {} WR scalar_{}", isotopes[n], 6 + n_idx), measured_wr, wr_expected);
+		quokka::testing::assertYieldClose(std::format("  {} AGB scalar_{}", isotopes[n], 9 + n_idx), measured_agb, agb_expected);
+		quokka::testing::assertYieldClose(std::format("  {} SNII scalar_{}", isotopes[n], 3 + n_idx), measured_snii, 0.0);
 	}
 }
 
@@ -188,13 +178,6 @@ template <> void QuokkaSimulation<WRAGBYields>::setInitialConditionsOnGrid(quokk
 
 auto problem_main() -> int
 {
-	const volatile amrex::Real zero_yield = 0.0;
-	assertClose("zero yield", zero_yield, zero_yield);
-	bool test_zero_yield_only = false;
-	amrex::ParmParse("problem").query("test_zero_yield_only", test_zero_yield_only);
-	if (test_zero_yield_only) {
-		return 0;
-	}
 	QuokkaSimulation<WRAGBYields> sim;
 
 	sim.reconstructionOrder_ = 3;
