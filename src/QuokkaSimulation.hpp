@@ -1280,8 +1280,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			    MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emfComputingScheme_, emfAveragingScheme_, do_tracers != 0);
 			const int conduction_reconstructGhost = conduction_nghost_Riemann + 1;
 			if (conductionType_ == "aniso") {
-				const quokka::conduction::AnisoConductionParams aniso_params{
-				    .kappa_parallel = conductionKappaParallel_, .kappa_perp = conductionKappaPerp_, .min_temperature = tempFloor_};
+				const quokka::conduction::AnisoConductionParams aniso_params{.kappa_parallel = conductionKappaParallel_,
+											     .kappa_perp = conductionKappaPerp_,
+											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
+											     .saturation_factor = electronConductionSaturationFactor_,
+											     .min_temperature = tempFloor_};
 				quokka::conduction::AnisoConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, aniso_params, heat_flux);
 			} else {
 				const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
