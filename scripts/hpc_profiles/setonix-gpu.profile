@@ -21,9 +21,9 @@ module load cray-hdf5
 # python
 module load cray-python/3.12.12
 
-# ROCm 7.14 user-space SDK for the MI250X (gfx90a). The host amdgpu
+# ROCm 10.0 user-space SDK for the MI250X (gfx90a). The host amdgpu
 # driver is supplied by Setonix; install the wheel environment only once.
-ROCM_VENV="${MYSOFTWARE}/venvs/rocm-7.14"
+ROCM_VENV="${MYSOFTWARE}/venvs/rocm-10.0"
 
 # Keep pip's large downloads and temporary build files out of $HOME, where
 # Setonix applies a comparatively small quota. Pawsey defines $MYSCRATCH and
@@ -40,8 +40,8 @@ if [[ ! -x "${ROCM_VENV}/bin/python" ]] ||
   python -m venv "${ROCM_VENV}"
   "${ROCM_VENV}/bin/python" -m pip install --upgrade pip
   "${ROCM_VENV}/bin/python" -m pip install \
-    --index-url https://repo.amd.com/rocm/whl-multi-arch/ \
-    "rocm[libraries,devel,device-gfx90a]==7.14.0"
+    --index-url https://stable.repo.amd.com/rocm/whl-next/ \
+    "rocm[libraries,devel,device-gfx90a]==10.0.0"
 fi
 source "${ROCM_VENV}/bin/activate"
 
