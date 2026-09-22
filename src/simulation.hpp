@@ -1564,7 +1564,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			// Stellar evolution and SN deposition; only apply to star particles
 			// Update particle properties (e.g., luminosity) before particle-mesh interaction
 			particleRegister_.updateParticleProperties(cur_time, dt_[0]);
-			particleRegister_.updateChemicalFeedback(state_new_cc_[finest_level], finest_level, cur_time, dt_[0]);
 
 			// TODO(cch): Need to take care of AMR subcycling
 			particleMeshInteraction(cur_time, dt_[0]);
@@ -2143,6 +2142,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;
 
+	particleRegister_.updateChemicalFeedback(state_new_cc_[lev], lev, time, dt);
+
 	// Enforce floors and limits on hydro state to ensure we have valid hydro states
 	FixupState(lev);
 
@@ -2192,7 +2193,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 		particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 	}
 
-	// Continuous WR/AGB yields are injected during particle updates; SNII yields are injected here with the SN event.
+	// SNII and AGB yields are injected at death; continuous WR feedback precedes accretion and particle creation.
 	particleRegister_.depositChemicalFeedback(state_new_cc_[lev], lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
