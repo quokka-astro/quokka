@@ -87,6 +87,48 @@ Under the piecewise constant opacity model, \\(\alpha\_{\chi\_0,g} = 0\\) and th
 
 Summing either form over all groups recovers the grey four-force of [Matter-radiation coupling](#matter-radiation-coupling) above.
 
+### Radiation band types
+
+Not every group in a multigroup run has to couple to the matter in the same way. Quokka recognises three *band types*, which differ only in which of the terms above are switched on. Groups are ordered by type: the leading \\(N\_{\rm th}\\) groups are **thermal**, the next \\(N\_{\rm dust}\\) are **dust-absorption** bands, and the last \\(N\_{\rm chem}\\) are **chemical** (ionizing) bands. A run that declares neither \\(N\_{\rm dust}\\) nor \\(N\_{\rm chem}\\) is all-thermal, which is the default and the case every equation so far describes.
+
+| Band type       | Transport | Thermal emission | Absorbed energy heats the gas | Radiation force and work | Photochemistry |
+| --------------- | --------- | ---------------- | ----------------------------- | ------------------------ | -------------- |
+| Thermal         | yes       | yes              | yes                           | yes                      | no             |
+| Dust-absorption | yes       | no               | **no**                        | yes                      | no             |
+| Chemical        | yes       | no               | no (photochemistry instead)   | yes                      | yes            |
+
+**Thermal bands** solve the full four-force of the previous section. Use them for any band in which the gas and dust radiate and reabsorb at the local temperature — the infrared, in practice.
+
+**Chemical bands** carry ionizing photons. They are transported and absorbed, but the absorbed energy is passed to the photochemistry network rather than to the thermal solve, so that ionization and the associated heating are computed consistently with the chemical state. See [Photoionization](photoionization.md).
+
+#### Dust-absorption bands
+
+A dust-absorption band is one in which dust is the only absorber and the absorbed energy is promptly re-radiated at wavelengths that fall outside the frequency grid being followed. The far-ultraviolet and Lyman-Werner bands are the motivating case: they are absorbed by dust grains, which re-emit in the infrared, and they drive photoelectric heating and \\(\rm H\_2\\) dissociation rather than a thermal exchange with the gas.
+
+Setting \\(B\_g = 0\\) removes the emission, momentum-of-emission, and group-coupling terms from the four-force, leaving
+
+<script type="math/tex; mode=display">
+\begin{aligned}
+- c G_g^0 &= - \underbrace{c \, \chi_{0E,g} E_g}_{\text{absorbed by dust}} + \underbrace{c^{-1} (1 + \alpha_{\chi_0, g}) \chi_{0F,g} \, v^i F_g^i}_{\text{work on the gas}} \, , \\[4pt]
+- G_g^i &= \underbrace{- c^{-1} \chi_{0F,g} F_g^i}_{\text{radiation force}} + \underbrace{c^{-1} (1 + \alpha_{\chi_0, g}) \chi_{0E,g} \, v^j P_g^{ji}}_{\text{frame dragging}} \, .
+\end{aligned}
+</script>
+
+The momentum exchange is untouched, so the gas feels the full radiation force: dust and gas remain *dynamically* coupled even though they are not thermally coupled. This is the point of the band type — in a galaxy simulation the radiation pressure on dust is a first-order effect on the dynamics and must not be dropped along with the thermal exchange.
+
+What distinguishes the band type is where the absorbed energy goes. For a thermal band the gas energy equation receives the whole of \\(c G^0\_g\\). For a dust-absorption band it receives only the work part,
+
+<script type="math/tex; mode=display">
+c G^0_{g,\,\rm gas} = - c^{-1} (1 + \alpha_{\chi_0, g}) \chi_{0F,g} \, v^i F_g^i \, ,
+</script>
+
+while the radiation moments still lose the full \\(- c G^0\_g\\) above: the photons really are absorbed, they simply do not heat the gas. The difference, \\(c \chi\_{0E,g} E\_g\\) per unit volume, leaves the simulation. **Total energy is therefore not conserved in a run that uses dust-absorption bands.** That is by construction, not an error: the energy has gone into the dust, which radiates it away in the infrared, and neither the dust temperature nor that infrared emission is followed.
+
+Two consequences are worth stating plainly.
+
+- **The gas is heated by a separate module, not by this band.** The physical heating channel for FUV photons is photoelectric heating off grains, whose efficiency depends on the grain charge and therefore on the local electron density and radiation field — not on the absorbed energy alone. A dust-absorption band delivers the radiation field \\(E\_g\\) to the cell; a chemistry and cooling module such as Grackle turns it into a heating rate. Adding the absorbed energy directly to the gas as well would double-count it.
+- **The band type assumes weak gas-dust thermal coupling.** Dust and gas exchange heat at a rate \\(\propto n^2\\), so the assumption that the dust returns none of the absorbed energy to the gas holds only at low density. For the \\(\gtrsim 1\\,\rm pc\\) resolution of a galaxy simulation, where the resolved gas density stays below \\(\sim 10^3\\,\rm cm^{-3}\\), the coupling is weak everywhere and the approximation is safe. At the densities reached in a resolved star-forming core it is not, and the full dust model (`ISM_Traits::enable_dust_gas_thermal_coupling_model`, see the [Dust module](dust_module.md)) with thermal bands should be used instead.
+
 ### Reduced speed of light
 
 To relax the radiation timestep, the radiation subsystem may be solved with a reduced speed of light \\(\hat{c} < c\\) (the RSLA), set through `c_hat_over_c`. This scales the transport term by \\(\hat{c}/c\\) and leaves the equations exact when \\(\hat{c} = c\\) (the default). \\(\hat{c}\\) must remain much larger than every hydrodynamic speed in the problem. Energy and momentum are conserved to machine precision only for \\(\hat{c} = c\\).
@@ -122,7 +164,7 @@ Each implicit stage solves, cell by cell, a system of \\(4 + 4 N\_g\\) equations
 - an **inner** Newton-Raphson iteration over the \\(1 + N\_g\\) energy variables (gas energy and the group exchange terms \\(R\_g\\)), with \\(\boldsymbol{v}\\) and \\(\boldsymbol{F}\_g\\) frozen;
 - an **outer** iteration that updates \\(\boldsymbol{F}\_g\\) and the gas momentum analytically, then returns to the inner solve if the velocity-dependent terms have changed.
 
-The inner Jacobian is sparse — groups couple to the gas but not directly to each other — so [@He_2024b] invert it by Gauss-Jordan elimination in \\(O(N\_g)\\) operations rather than \\(O(N\_g^3)\\). Outside the dynamic diffusion limit the outer loop almost always converges in one pass. The gas energy is recovered from the converged exchange terms rather than solved for independently, which is what makes the update conservative to machine precision regardless of how tightly the iteration converged. Convergence tolerances are set by `radiation.iteration_tolerance` and `radiation.iteration_tolerance_rel`; the choice of per-group unknown and the round-off floor on the residual are discussed in [Radiation Integrator](radiation_integrator.md).
+Dust-absorption bands drop out of the coupled system entirely: with no emission, their exchange term does not depend on the gas temperature, and with no gas heating the gas energy does not depend on theirs, so each such group updates analytically as \\(E\_g \to (E\_g + S\_g) / (1 + \hat{c} \\, \rho \kappa\_{0E,g} \\, \Delta t)\\) and the Newton system shrinks to the thermal groups. The inner Jacobian is sparse — groups couple to the gas but not directly to each other — so [@He_2024b] invert it by Gauss-Jordan elimination in \\(O(N\_g)\\) operations rather than \\(O(N\_g^3)\\). Outside the dynamic diffusion limit the outer loop almost always converges in one pass. The gas energy is recovered from the converged exchange terms rather than solved for independently, which is what makes the update conservative to machine precision regardless of how tightly the iteration converged. Convergence tolerances are set by `radiation.iteration_tolerance` and `radiation.iteration_tolerance_rel`; the choice of per-group unknown and the round-off floor on the residual are discussed in [Radiation Integrator](radiation_integrator.md).
 
 ## Multigroup opacity models
 
@@ -271,6 +313,25 @@ The function is called on the device with the current cell density and gas tempe
 <script type="math/tex; mode=display">
 \alpha_{\chi_0,g} = \frac{\ln \left[ \chi_0(\nu_{g+}) / \chi_0(\nu_{g-}) \right]}{\ln (\nu_{g+} / \nu_{g-})} \, .
 </script>
+
+### Declaring band types
+
+By default every group is a thermal band. To declare dust-absorption or chemical bands, add the corresponding member to `RadSystem_Traits`. Groups are ordered thermal, then dust-absorption, then chemical, so the declaration only needs the counts — the boundaries come from `radBoundaries` as usual.
+
+```c++
+template <> struct RadSystem_Traits<MyProblem> {
+	static constexpr double c_hat_over_c = 1.0;
+	static constexpr double energy_unit = C::ev2erg;
+	// 4 groups: 2 infrared (thermal), then FUV and Lyman-Werner (dust-absorption)
+	static constexpr amrex::GpuArray<double, 5> radBoundaries = {0.01, 1.0, 6.0, 11.2, 13.6};
+	static constexpr int nDustBands = 2;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+};
+```
+
+`nDustBands` defaults to `0`. Chemical bands are declared with `ChemBands()`, which returns their boundaries because the photochemistry network needs them; see [Photoionization](photoionization.md). The two may be combined, in which case the last `nDustBands + NChemBands` groups are non-thermal and everything before them is thermal.
+
+The opacity hooks are unchanged: `DefineOpacityExponentsAndLowerValues` supplies \\(\kappa\\) for every group, thermal or not. For a dust-absorption band, return the dust absorption opacity of that band; the solver uses it for the absorption sink, the radiation force, and the work term, and never asks for an emissivity.
 
 ### Radiation sources
 
