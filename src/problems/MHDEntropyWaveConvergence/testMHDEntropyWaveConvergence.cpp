@@ -1,8 +1,6 @@
-//==============================================================================
-// Copyright 2022 Neco Kriel.
-// Modified for Entropy wave (MHD) test.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testMHDEntropyWaveConvergence.cpp
 /// \brief Defines a test problem for an MHD entropy wave (density perturbation
 ///        advected with background flow) and ensures face-centered quantities
