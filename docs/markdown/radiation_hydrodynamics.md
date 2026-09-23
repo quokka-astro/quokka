@@ -392,8 +392,7 @@ The following test problems exercise the solver across the streaming, static dif
 - [Advecting radiation pulse test](tests/radhydro_pulse.md) — static and dynamic diffusion, single-group and multigroup.
 - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md) — the \\(v/c\\) terms in the dynamic diffusion limit.
 - [1D H II region and dust reprocessing test](tests/DTypeFront1D.md) — multigroup radiation with dust.
-- `RadDustAbsorption` — dust-absorption-only bands: beam attenuation, radiation force, and no gas heating.
-- `RadDustAbsorptionPE` — photoelectric heating of an interstellar slab, against the analytic heating profile.
+- `RadDustAbsorption` — dust-absorption-only bands: beam attenuation, radiation force, and photoelectric heating of an interstellar slab against the analytic profile.
 
 ## References
 
