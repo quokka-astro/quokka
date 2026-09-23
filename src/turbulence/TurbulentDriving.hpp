@@ -123,7 +123,13 @@ template <typename problem_t> class turbulentDriving
 					       const amrex::Real py = data(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 					       const amrex::Real pz = data(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 
-					       return {rho, px, py, pz, rho * ax(i, j, k, 0), rho * ax(i, j, k, 1), rho * ax(i, j, k, 2)};
+					       return {rho,
+						       px,
+						       py,
+						       pz,
+						       rho * ax(i, j, k, 0),
+						       (AMREX_SPACEDIM > 1) ? rho * ax(i, j, k, 1) : amrex::Real(0.0),
+						       (AMREX_SPACEDIM > 2) ? rho * ax(i, j, k, 2) : amrex::Real(0.0)};
 				       });
 		}
 
