@@ -15,8 +15,7 @@
 #include "util/valarray.hpp"
 #include <format>
 
-struct ODETest {
-};
+struct ODETest {};
 
 constexpr double seconds_in_year = 3.154e7;
 

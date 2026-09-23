@@ -1,0 +1,553 @@
+/// \file testDustLorentzShock.cpp
+/// \brief Fluid-dust Lorentz shock regression test inspired by Moseley et al. (2023).
+
+#include "QuokkaSimulation.hpp"
+#include "util/fextract.hpp"
+#include <algorithm>
+#include <cmath>
+#include <format>
+#include <fstream>
+#include <string>
+#include <vector>
+
+namespace
+{
+constexpr double rho_ambient = 1.0;
+constexpr double u_ambient = 0.0;
+constexpr double bz_ambient = 1.0;
+constexpr double dust_density_floor = 1.0e-12;
+
+struct ShockProfile {
+	std::string output_tag_;
+	double epsilon_ = 0.0;
+	double target_magnetization_ = 0.0;
+	std::vector<double> x_;
+	std::vector<double> rho_g_;
+	std::vector<double> v_gx_;
+	std::vector<double> v_gy_;
+	std::vector<double> rho_d_;
+	std::vector<double> v_dx_;
+	std::vector<double> v_dy_;
+};
+
+template <typename problem_t> struct ShockCaseParams;
+
+struct DustLorentzShockEps001OmegaTs0 {};
+
+struct DustLorentzShockEps001OmegaTs20 {};
+
+struct DustLorentzShockEps010OmegaTs20 {};
+
+template <> struct ShockCaseParams<DustLorentzShockEps001OmegaTs0> {
+	static constexpr double sound_speed = 1.0;
+	static constexpr double rho_inflow = 3.0;
+	static constexpr double u_inflow = 2.0;
+	static constexpr double bz_inflow = 3.0;
+	static constexpr double dust_to_gas_ratio = 0.01;
+	static constexpr double stopping_time = 0.10;
+	static constexpr double target_magnetization = 0.0;
+	static constexpr double dimensionless_charge_to_mass_ratio = 0.0;
+	static constexpr char const *label = "epsilon = 0.01, Omega_L t_s = 0";
+	static constexpr char const *output_tag = "eps001_omega_ts0";
+};
+
+template <> struct ShockCaseParams<DustLorentzShockEps001OmegaTs20> {
+	static constexpr double sound_speed = 1.0;
+	static constexpr double rho_inflow = 3.0;
+	static constexpr double u_inflow = 2.0;
+	static constexpr double bz_inflow = 3.0;
+	static constexpr double dust_to_gas_ratio = 0.01;
+	static constexpr double stopping_time = 0.10;
+	static constexpr double target_magnetization = 20.0;
+	static constexpr double dimensionless_charge_to_mass_ratio = target_magnetization / (stopping_time * bz_ambient);
+	static constexpr char const *label = "epsilon = 0.01, Omega_L t_s = 20";
+	static constexpr char const *output_tag = "eps001_omega_ts20";
+};
+
+template <> struct ShockCaseParams<DustLorentzShockEps010OmegaTs20> {
+	static constexpr double sound_speed = 1.0;
+	static constexpr double rho_inflow = 3.0;
+	static constexpr double u_inflow = 2.0;
+	static constexpr double bz_inflow = 3.0;
+	static constexpr double dust_to_gas_ratio = 0.10;
+	static constexpr double stopping_time = 0.10;
+	static constexpr double target_magnetization = 20.0;
+	static constexpr double dimensionless_charge_to_mass_ratio = target_magnetization / (stopping_time * bz_ambient);
+	static constexpr char const *label = "epsilon = 0.10, Omega_L t_s = 20";
+	static constexpr char const *output_tag = "eps010_omega_ts20";
+};
+
+template <typename problem_t> struct ShockEOSTraits {
+	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double gamma = 1.0;
+	static constexpr double cs_isothermal = ShockCaseParams<problem_t>::sound_speed;
+};
+
+struct ShockPhysicsTraits {
+	static constexpr bool is_self_gravity_enabled = false;
+	static constexpr bool is_hydro_enabled = true;
+	static constexpr int numMassScalars = 0;
+	static constexpr int numPassiveScalars = 0;
+	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = true;
+	static constexpr int nDustGroups = 1;
+	static constexpr bool is_mhd_enabled = true;
+	static constexpr int nGroups = 1;
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+	static constexpr double boltzmann_constant = 1.0;
+	static constexpr double gravitational_constant = 1.0;
+	static constexpr double c_light = 1.0;
+	static constexpr double radiation_constant = 1.0;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::none;
+};
+
+AMREX_GPU_DEVICE auto computeGasEnergy(double rho, double vx, double bz) -> double
+{
+	const double kinetic = 0.5 * rho * vx * vx;
+	const double magnetic = 0.5 * bz * bz;
+	return kinetic + magnetic;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE void fillCellState(const amrex::Array4<double> &state_cc, int i, int j, int k, double rho_g, double vx_g, double rho_d, double vx_d, double bz)
+{
+	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
+	for (int n = 0; n < ncomp_cc; ++n) {
+		state_cc(i, j, k, n) = 0.0;
+	}
+
+	state_cc(i, j, k, HydroSystem<problem_t>::density_index) = rho_g;
+	state_cc(i, j, k, HydroSystem<problem_t>::energy_index) = computeGasEnergy(rho_g, vx_g, bz);
+	state_cc(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = 0.0;
+	state_cc(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = rho_g * vx_g;
+	state_cc(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = 0.0;
+	state_cc(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = 0.0;
+
+	state_cc(i, j, k, HydroSystem<problem_t>::dustDensity_index) = rho_d;
+	state_cc(i, j, k, HydroSystem<problem_t>::x1DustMomentum_index) = rho_d * vx_d;
+	state_cc(i, j, k, HydroSystem<problem_t>::x2DustMomentum_index) = 0.0;
+	state_cc(i, j, k, HydroSystem<problem_t>::x3DustMomentum_index) = 0.0;
+}
+
+template <typename problem_t> void setShockInitialConditions(quokka::grid const &grid_elem)
+{
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	const double rho_d = ShockCaseParams<problem_t>::dust_to_gas_ratio * rho_ambient;
+	const double bz = bz_ambient;
+
+	amrex::ParallelFor(indexRange,
+			   [=] AMREX_GPU_DEVICE(int i, int j, int k) { fillCellState<problem_t>(state_cc, i, j, k, rho_ambient, u_ambient, rho_d, 0.0, bz); });
+}
+
+template <typename problem_t> void setShockFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const int ncomp_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
+	double bfield = 0.0;
+	if (grid_elem.dir_ == quokka::direction::z) {
+		bfield = bz_ambient;
+	}
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		for (int n = 0; n < ncomp_fc; ++n) {
+			state_fc(i, j, k, n) = 0.0;
+		}
+		state_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) = bfield;
+	});
+}
+
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto constantStoppingTime() -> amrex::GpuArray<amrex::Real, 1>
+{
+	amrex::GpuArray<amrex::Real, 1> alpha{};
+	alpha[0] = 1.0 / ShockCaseParams<problem_t>::stopping_time;
+	return alpha;
+}
+
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto constantDimensionlessChargeToMassRatio() -> amrex::GpuArray<amrex::Real, 1>
+{
+	amrex::GpuArray<amrex::Real, 1> dimensionless_charge_to_mass_ratio{};
+	dimensionless_charge_to_mass_ratio[0] = ShockCaseParams<problem_t>::dimensionless_charge_to_mass_ratio;
+	return dimensionless_charge_to_mass_ratio;
+}
+
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto makeShockInflowCellState()
+{
+	constexpr int nvar = Physics_Indices<problem_t>::nvarTotal_cc;
+	amrex::GpuArray<amrex::Real, nvar> inflow_state{};
+	inflow_state[HydroSystem<problem_t>::density_index] = ShockCaseParams<problem_t>::rho_inflow;
+	inflow_state[HydroSystem<problem_t>::energy_index] =
+	    computeGasEnergy(ShockCaseParams<problem_t>::rho_inflow, ShockCaseParams<problem_t>::u_inflow, ShockCaseParams<problem_t>::bz_inflow);
+	inflow_state[HydroSystem<problem_t>::internalEnergy_index] = 0.0;
+	inflow_state[HydroSystem<problem_t>::x1Momentum_index] = ShockCaseParams<problem_t>::rho_inflow * ShockCaseParams<problem_t>::u_inflow;
+	inflow_state[HydroSystem<problem_t>::x2Momentum_index] = 0.0;
+	inflow_state[HydroSystem<problem_t>::x3Momentum_index] = 0.0;
+	inflow_state[HydroSystem<problem_t>::dustDensity_index] = dust_density_floor;
+	inflow_state[HydroSystem<problem_t>::x1DustMomentum_index] = 0.0;
+	inflow_state[HydroSystem<problem_t>::x2DustMomentum_index] = 0.0;
+	inflow_state[HydroSystem<problem_t>::x3DustMomentum_index] = 0.0;
+	return inflow_state;
+}
+
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto makeShockInflowFaceState() -> amrex::GpuArray<amrex::Real, 3>
+{
+	return {0.0, 0.0, ShockCaseParams<problem_t>::bz_inflow};
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setShockBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+								    amrex::GeometryData const &geom)
+{
+	const auto low_bdr_cells = makeShockInflowCellState<problem_t>();
+	AMRSimulation<problem_t>::template setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+}
+
+template <typename problem_t, quokka::direction dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setShockFaceBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+									amrex::GeometryData const &geom)
+{
+	const auto low_bdr_values = makeShockInflowFaceState<problem_t>();
+	AMRSimulation<problem_t>::template setConstantDirichletBCFaceVarLo<0, dir, 3>(iv, consVar_fc, geom, low_bdr_values);
+}
+
+void setShockHiOutflow(amrex::Vector<amrex::BCRec> &bcs)
+{
+	for (auto &bc : bcs) {
+		bc.setHi(0, amrex::BCType::foextrap);
+	}
+}
+
+template <typename problem_t> auto makeShockBCsCC() -> amrex::Vector<amrex::BCRec>
+{
+	auto BCs_cc = quokka::BC<problem_t>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
+	setShockHiOutflow(BCs_cc);
+	return BCs_cc;
+}
+
+template <typename problem_t> auto makeShockBCsFC() -> amrex::Vector<amrex::BCRec>
+{
+	auto BCs_fc = quokka::BC_fc<problem_t>(quokka::BCType::mathematicalBndryTypes::ext_dir, quokka::BCType::mathematicalBndryTypes::periodic,
+					       quokka::BCType::mathematicalBndryTypes::periodic);
+	setShockHiOutflow(BCs_fc);
+	return BCs_fc;
+}
+
+template <typename problem_t> auto extractShockProfile(QuokkaSimulation<problem_t> &sim) -> ShockProfile
+{
+	auto [x, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
+
+	ShockProfile profile;
+	profile.output_tag_ = ShockCaseParams<problem_t>::output_tag;
+	profile.epsilon_ = ShockCaseParams<problem_t>::dust_to_gas_ratio;
+	profile.target_magnetization_ = ShockCaseParams<problem_t>::target_magnetization;
+	profile.x_ = x;
+	profile.rho_g_.resize(x.size());
+	profile.v_gx_.resize(x.size());
+	profile.v_gy_.resize(x.size());
+	profile.rho_d_.resize(x.size());
+	profile.v_dx_.resize(x.size());
+	profile.v_dy_.resize(x.size());
+
+	for (size_t i = 0; i < static_cast<size_t>(x.size()); ++i) {
+		const double rho_g = values.at(HydroSystem<problem_t>::density_index)[i];
+		const double mom_gx = values.at(HydroSystem<problem_t>::x1Momentum_index)[i];
+		const double mom_gy = values.at(HydroSystem<problem_t>::x2Momentum_index)[i];
+		const double rho_d = values.at(HydroSystem<problem_t>::dustDensity_index)[i];
+		const double mom_dx = values.at(HydroSystem<problem_t>::x1DustMomentum_index)[i];
+		const double mom_dy = values.at(HydroSystem<problem_t>::x2DustMomentum_index)[i];
+
+		profile.rho_g_[i] = rho_g;
+		profile.v_gx_[i] = mom_gx / rho_g;
+		profile.v_gy_[i] = mom_gy / rho_g;
+		profile.rho_d_[i] = rho_d;
+		profile.v_dx_[i] = mom_dx / rho_d;
+		profile.v_dy_[i] = mom_dy / rho_d;
+	}
+
+	return profile;
+}
+
+template <typename problem_t> auto runShockCase() -> ShockProfile
+{
+	amrex::Print() << std::format("Running DustLorentzShock case: {}\n", ShockCaseParams<problem_t>::label);
+
+	auto BCs_cc = makeShockBCsCC<problem_t>();
+	auto BCs_fc = makeShockBCsFC<problem_t>();
+	QuokkaSimulation<problem_t> sim(BCs_cc, BCs_fc);
+
+	sim.reconstructionOrder_ = 2;
+	sim.plotfileInterval_ = -1;
+
+	sim.setInitialConditions();
+	sim.evolve();
+
+	return extractShockProfile(sim);
+}
+
+auto maxAbsValue(const std::vector<double> &values) -> double
+{
+	double max_value = 0.0;
+	for (double const value : values) {
+		max_value = std::max(max_value, std::abs(value));
+	}
+	return max_value;
+}
+
+auto detectShockPosition(const ShockProfile &profile) -> double
+{
+	double max_jump = -1.0;
+	size_t shock_index = 0;
+	for (size_t i = 0; i + 1 < profile.rho_g_.size(); ++i) {
+		const double jump = std::abs(profile.rho_g_[i + 1] - profile.rho_g_[i]);
+		if (jump > max_jump) {
+			max_jump = jump;
+			shock_index = i;
+		}
+	}
+	return profile.x_[shock_index];
+}
+
+auto meanWindowDifference(const ShockProfile &profile, const std::vector<double> &first, const std::vector<double> &second, double shock_position,
+			  double rel_lo, double rel_hi) -> double
+{
+	double sum = 0.0;
+	int count = 0;
+	for (size_t i = 0; i < profile.x_.size(); ++i) {
+		const double x_rel = profile.x_[i] - shock_position;
+		if (x_rel >= rel_lo && x_rel <= rel_hi) {
+			sum += std::abs(first[i] - second[i]);
+			count++;
+		}
+	}
+	return (count > 0) ? sum / static_cast<double>(count) : 0.0;
+}
+
+auto computeGuidingCenterVx(const ShockProfile &profile) -> std::vector<double>
+{
+	std::vector<double> guiding_vx(profile.x_.size());
+	const double omega_ts = profile.target_magnetization_;
+	if (std::abs(omega_ts) <= 0.0) {
+		return profile.v_dx_;
+	}
+	for (size_t i = 0; i < profile.x_.size(); ++i) {
+		const double w_y = profile.v_dy_[i] - profile.v_gy_[i];
+		guiding_vx[i] = profile.v_gx_[i] - w_y / omega_ts;
+	}
+	return guiding_vx;
+}
+
+void writeShockProfileCsv(const ShockProfile &profile, const std::vector<double> *guiding_vx = nullptr)
+{
+	std::ofstream file(std::format("dust_lorentz_shock_{}.csv", profile.output_tag_));
+	file << "x,rho_g,v_gx,v_gy,rho_d_scaled,v_dx,v_dy,w_y,v_guiding_x\n";
+
+	for (size_t i = 0; i < profile.x_.size(); ++i) {
+		const double w_y = profile.v_dy_[i] - profile.v_gy_[i];
+		file << profile.x_[i] << "," << profile.rho_g_[i] << "," << profile.v_gx_[i] << "," << profile.v_gy_[i] << ","
+		     << profile.rho_d_[i] / profile.epsilon_ << "," << profile.v_dx_[i] << "," << profile.v_dy_[i] << "," << w_y << ",";
+		if (guiding_vx != nullptr) {
+			file << (*guiding_vx)[i];
+		}
+		file << "\n";
+	}
+}
+
+auto runShockRegression(bool write_csv) -> int
+{
+	ShockProfile const shock_eps001_omega_ts0 = runShockCase<DustLorentzShockEps001OmegaTs0>();
+	ShockProfile const shock_eps001_omega_ts20 = runShockCase<DustLorentzShockEps001OmegaTs20>();
+	ShockProfile const shock_eps010_omega_ts20 = runShockCase<DustLorentzShockEps010OmegaTs20>();
+
+	const double shock_position_eps001_omega_ts20 = detectShockPosition(shock_eps001_omega_ts20);
+	const double shock_position_eps010_omega_ts20 = detectShockPosition(shock_eps010_omega_ts20);
+
+	const double vy_max_eps001_omega_ts0 = maxAbsValue(shock_eps001_omega_ts0.v_dy_);
+	const double vy_max_eps001_omega_ts20 = maxAbsValue(shock_eps001_omega_ts20.v_dy_);
+	const double mean_drift_eps001_omega_ts20 = meanWindowDifference(shock_eps001_omega_ts20, shock_eps001_omega_ts20.v_dx_, shock_eps001_omega_ts20.v_gx_,
+									 shock_position_eps001_omega_ts20, 0.02, 0.18);
+	const std::vector<double> guiding_vx_eps001_omega_ts20 = computeGuidingCenterVx(shock_eps001_omega_ts20);
+	const std::vector<double> guiding_vx_eps010_omega_ts20 = computeGuidingCenterVx(shock_eps010_omega_ts20);
+	const double mean_guiding_drift_eps001_omega_ts20 = meanWindowDifference(shock_eps001_omega_ts20, guiding_vx_eps001_omega_ts20,
+										 shock_eps001_omega_ts20.v_gx_, shock_position_eps001_omega_ts20, 0.02, 0.18);
+
+	if (write_csv) {
+		writeShockProfileCsv(shock_eps001_omega_ts0);
+		writeShockProfileCsv(shock_eps001_omega_ts20, &guiding_vx_eps001_omega_ts20);
+		writeShockProfileCsv(shock_eps010_omega_ts20, &guiding_vx_eps010_omega_ts20);
+	}
+
+	constexpr double neutral_vy_tol = 1.0e-8;
+	constexpr double charged_vy_min = 5.0e-2;
+	constexpr double guiding_center_factor = 0.10;
+	constexpr double shock_backreaction_margin = 5.0e-3;
+
+	amrex::Print() << std::format("  vy_max_eps001_omega_ts0              = {:.6e} (pass if < {:.6e})\n", vy_max_eps001_omega_ts0, neutral_vy_tol);
+	amrex::Print() << std::format("  vy_max_eps001_omega_ts20             = {:.6e} (pass if > {:.6e})\n", vy_max_eps001_omega_ts20, charged_vy_min);
+	amrex::Print() << std::format("  mean_drift_eps001_omega_ts20         = {:.6e}\n", mean_drift_eps001_omega_ts20);
+	amrex::Print() << std::format("  mean_guiding_drift_eps001_omega_ts20 = {:.6e} (pass if < {:.6e})\n", mean_guiding_drift_eps001_omega_ts20,
+				      guiding_center_factor * mean_drift_eps001_omega_ts20);
+	amrex::Print() << std::format("  shock_position_eps001_omega_ts20     = {:.6e}\n", shock_position_eps001_omega_ts20);
+	amrex::Print() << std::format("  shock_position_eps010_omega_ts20     = {:.6e} (pass if < {:.6e})\n", shock_position_eps010_omega_ts20,
+				      shock_position_eps001_omega_ts20 - shock_backreaction_margin);
+
+	const bool neutral_uncharged = vy_max_eps001_omega_ts0 < neutral_vy_tol;
+	const bool charged_rotates = vy_max_eps001_omega_ts20 > charged_vy_min;
+	const bool guiding_center_improves_coupling = mean_guiding_drift_eps001_omega_ts20 < guiding_center_factor * mean_drift_eps001_omega_ts20;
+	const bool backreaction_slows_shock = shock_position_eps010_omega_ts20 < (shock_position_eps001_omega_ts20 - shock_backreaction_margin);
+
+	const bool passed = neutral_uncharged && charged_rotates && guiding_center_improves_coupling && backreaction_slows_shock;
+
+	if (!passed) {
+		amrex::Print() << "DustLorentzShock FAILED.\n";
+		return 1;
+	}
+
+	amrex::Print() << "DustLorentzShock PASSED.\n";
+	return 0;
+}
+} // namespace
+
+template <> struct quokka::EOS_Traits<DustLorentzShockEps001OmegaTs0> : ShockEOSTraits<DustLorentzShockEps001OmegaTs0> {};
+template <> struct quokka::EOS_Traits<DustLorentzShockEps001OmegaTs20> : ShockEOSTraits<DustLorentzShockEps001OmegaTs20> {};
+template <> struct quokka::EOS_Traits<DustLorentzShockEps010OmegaTs20> : ShockEOSTraits<DustLorentzShockEps010OmegaTs20> {};
+
+template <> struct Physics_Traits<DustLorentzShockEps001OmegaTs0> : ShockPhysicsTraits {};
+template <> struct Physics_Traits<DustLorentzShockEps001OmegaTs20> : ShockPhysicsTraits {};
+template <> struct Physics_Traits<DustLorentzShockEps010OmegaTs20> : ShockPhysicsTraits {};
+
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps001OmegaTs0>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	return constantStoppingTime<DustLorentzShockEps001OmegaTs0>();
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps001OmegaTs0>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	return constantDimensionlessChargeToMassRatio<DustLorentzShockEps001OmegaTs0>();
+}
+
+template <> void QuokkaSimulation<DustLorentzShockEps001OmegaTs0>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	setShockInitialConditions<DustLorentzShockEps001OmegaTs0>(grid_elem);
+}
+
+template <> void QuokkaSimulation<DustLorentzShockEps001OmegaTs0>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	setShockFaceVars<DustLorentzShockEps001OmegaTs0>(grid_elem);
+}
+
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<DustLorentzShockEps001OmegaTs0>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+									   int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+									   const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+{
+	setShockBoundaryConditions<DustLorentzShockEps001OmegaTs0>(iv, consVar, geom);
+}
+
+template <>
+template <quokka::direction dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockEps001OmegaTs0>::setCustomBoundaryConditionsFaceVar(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+{
+	setShockFaceBoundaryConditions<DustLorentzShockEps001OmegaTs0, dir>(iv, dest, geom);
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps001OmegaTs20>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	return constantStoppingTime<DustLorentzShockEps001OmegaTs20>();
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps001OmegaTs20>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	return constantDimensionlessChargeToMassRatio<DustLorentzShockEps001OmegaTs20>();
+}
+
+template <> void QuokkaSimulation<DustLorentzShockEps001OmegaTs20>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	setShockInitialConditions<DustLorentzShockEps001OmegaTs20>(grid_elem);
+}
+
+template <> void QuokkaSimulation<DustLorentzShockEps001OmegaTs20>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	setShockFaceVars<DustLorentzShockEps001OmegaTs20>(grid_elem);
+}
+
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<DustLorentzShockEps001OmegaTs20>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+									    int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+									    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+{
+	setShockBoundaryConditions<DustLorentzShockEps001OmegaTs20>(iv, consVar, geom);
+}
+
+template <>
+template <quokka::direction dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockEps001OmegaTs20>::setCustomBoundaryConditionsFaceVar(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+{
+	setShockFaceBoundaryConditions<DustLorentzShockEps001OmegaTs20, dir>(iv, dest, geom);
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps010OmegaTs20>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	return constantStoppingTime<DustLorentzShockEps010OmegaTs20>();
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockEps010OmegaTs20>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	return constantDimensionlessChargeToMassRatio<DustLorentzShockEps010OmegaTs20>();
+}
+
+template <> void QuokkaSimulation<DustLorentzShockEps010OmegaTs20>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	setShockInitialConditions<DustLorentzShockEps010OmegaTs20>(grid_elem);
+}
+
+template <> void QuokkaSimulation<DustLorentzShockEps010OmegaTs20>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	setShockFaceVars<DustLorentzShockEps010OmegaTs20>(grid_elem);
+}
+
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<DustLorentzShockEps010OmegaTs20>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+									    int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+									    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+{
+	setShockBoundaryConditions<DustLorentzShockEps010OmegaTs20>(iv, consVar, geom);
+}
+
+template <>
+template <quokka::direction dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockEps010OmegaTs20>::setCustomBoundaryConditionsFaceVar(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+{
+	setShockFaceBoundaryConditions<DustLorentzShockEps010OmegaTs20, dir>(iv, dest, geom);
+}
+
+auto problem_main() -> int
+{
+	bool write_csv = true;
+	amrex::ParmParse const pp("problem");
+	pp.query("write_csv", write_csv);
+
+	return runShockRegression(write_csv);
+}

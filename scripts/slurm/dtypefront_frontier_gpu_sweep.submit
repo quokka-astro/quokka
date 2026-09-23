@@ -1,0 +1,69 @@
+#!/bin/bash --login
+#SBATCH -A ast236
+#SBATCH -J dtypefront_frontier
+#SBATCH -o %x-%j.out
+#SBATCH -e %x-%j.err
+#SBATCH -t 00:30:00
+#SBATCH -p batch
+#SBATCH -N 1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=7
+#SBATCH --gpus-per-task=1
+#SBATCH --gpu-bind=closest
+
+set -euo pipefail
+
+ROOT_DIR="${SLURM_SUBMIT_DIR:-$(pwd)}"
+INPUT_FILE="${ROOT_DIR}/inputs/DTypeFront.toml"
+LOG_DIR="${ROOT_DIR}/logs/dtypefront-frontier-${SLURM_JOB_ID:-manual}"
+ROS_BUILD_DIR="${ROOT_DIR}/build/slurm-dtypefront-frontier-rosenbrock"
+VODE_BUILD_DIR="${ROOT_DIR}/build/slurm-dtypefront-frontier-vode"
+BUILD_JOBS="${SLURM_CPUS_PER_TASK:-7}"
+
+. "${ROOT_DIR}/scripts/hpc_profiles/frontier.profile"
+
+GPU_ARCH="${AMREX_AMD_ARCH:-gfx90a}"
+
+mkdir -p "${LOG_DIR}"
+
+run_case() {
+	local exe="$1"
+	local tag="$2"
+	shift 2
+
+	echo "=== $(date -Is) ${tag} ==="
+	echo "ROCR_VISIBLE_DEVICES=${ROCR_VISIBLE_DEVICES:-unset}"
+	echo "HIP_VISIBLE_DEVICES=${HIP_VISIBLE_DEVICES:-unset}"
+	/usr/bin/time -p srun -N 1 -n 1 --gpus-per-task=1 --gpu-bind=closest "${exe}" "${INPUT_FILE}" "$@" \
+		> "${LOG_DIR}/${tag}.log" 2>&1
+}
+
+configure_build() {
+	local build_dir="$1"
+	local integrator="$2"
+
+	cmake -S "${ROOT_DIR}" -B "${build_dir}" \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DDTypeFront_INTEGRATOR="${integrator}" \
+		-DAMReX_GPU_BACKEND=HIP \
+		-DAMReX_AMD_ARCH="${GPU_ARCH}" \
+		-DAMReX_SPACEDIM=3
+	cmake --build "${build_dir}" --target DTypeFront -j "${BUILD_JOBS}"
+}
+
+echo "Running on ${HOSTNAME}"
+echo "Submit dir: ${ROOT_DIR}"
+echo "Log dir: ${LOG_DIR}"
+echo "Build jobs: ${BUILD_JOBS}"
+echo "AMReX AMD arch: ${GPU_ARCH}"
+
+configure_build "${ROS_BUILD_DIR}" Rosenbrock
+run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" ros2s integrator.rosenbrock_tableau=3
+run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" rodas3p integrator.rosenbrock_tableau=2
+run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" rodas4p integrator.rosenbrock_tableau=1
+run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" rodas5p integrator.rosenbrock_tableau=0
+
+configure_build "${VODE_BUILD_DIR}" VODE
+run_case "${VODE_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" vode
+
+echo "Done."

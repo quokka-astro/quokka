@@ -31,8 +31,7 @@
 #endif
 #include "util/BC.hpp"
 
-struct MarshakProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct MarshakProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 // Su & Olson (1997) parameters
 constexpr double eps_SuOlson = 1.0;
@@ -62,19 +61,12 @@ template <> struct quokka::EOS_Traits<MarshakProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<MarshakProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<MarshakProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;
@@ -129,10 +121,10 @@ const auto initial_Egas = 1e-10 * quokka::EOS<MarshakProblem>::ComputeEintFromTg
 const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum));      // NOLINT
 
 template <>
-void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange,
-						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
-						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time)
+void RadSystem<MarshakProblem>::AddRadSource(array_t &radEnergySource, array_t & /*reducedFluxSource*/, amrex::Box const &indexRange,
+					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
+					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const xl = (i + 0.) * dx[0];

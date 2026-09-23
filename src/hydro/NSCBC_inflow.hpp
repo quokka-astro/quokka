@@ -53,13 +53,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 		massScalars[n] = Q[HydroSystem<problem_t>::primScalar0_index + n];
 	}
 
-	const Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, quokka::EOS<problem_t>::ComputeEintFromPres(rho, P, massScalars), massScalars);
-	const Real Eint_aux_t = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_t, massScalars);
+	const Real T = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, ::quokka::EOS<problem_t>::ComputeEintFromPres(rho, P, massScalars), massScalars);
+	const Real Eint_aux_t = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_t, massScalars);
 
 	const Real du_dx = dQ_dx_data[1];
 	const Real dP_dx = dQ_dx_data[4];
 
-	const Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
+	const Real c = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
 	const amrex::Real M = amrex::Clamp(std::sqrt(u * u + v * v + w * w) / c, 0., 1.);
 
 	const Real eta_2 = 2.;
@@ -68,7 +68,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	const Real eta_5 = 2.;
 	const Real eta_6 = 2.;
 
-	const Real R = quokka::EOS<problem_t>::boltzmann_constant_ / quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+	const Real R = ::quokka::EOS<problem_t>::boltzmann_constant_ / ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 
 	// see SymPy notebook for derivation
 	quokka::valarray<Real, HydroSystem<problem_t>::nvar_> dQ_dx{};
@@ -191,14 +191,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1LowerLowOrder(const amrex::I
 
 	// compute centered ghost values
 	const Real rho = Q_i[0];
-	const Real Eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_t, massScalars);
+	const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_t, massScalars);
 	quokka::valarray<amrex::Real, N> Q_im1{};
 	Q_im1[0] = rho; // extrapolate density
 	Q_im1[1] = u_t; // prescribe velocity
 	Q_im1[2] = v_t;
 	Q_im1[3] = w_t;
-	Q_im1[4] = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars); // prescribe temperature
-	Q_im1[5] = Eint;							    // prescribe temperature
+	Q_im1[4] = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars); // prescribe temperature
+	Q_im1[5] = Eint;							      // prescribe temperature
 	for (int i = 0; i < HydroSystem<problem_t>::nscalars_; ++i) {
 		Q_im1[6 + i] = s_t[i]; // prescribe passive scalars
 	}

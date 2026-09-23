@@ -238,7 +238,7 @@ def main():
     
     # Path to the cooling tables
     resampled_table = "./isrf_1000Go_grains_resampled.h5"
-    cloudy_table = "./isrf_1000Go_grains.h5"
+    cloudy_table = "./isrf_1000Go_grains-deprecated.h5"
     
     # Define test cases with different initial conditions
     test_cases = [

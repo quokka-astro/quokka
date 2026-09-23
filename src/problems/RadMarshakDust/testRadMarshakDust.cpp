@@ -19,8 +19,7 @@
 #include "util/valarray.hpp"
 #include <format>
 
-struct MarshakProblem {
-};
+struct MarshakProblem {};
 
 AMREX_GPU_MANAGED double kappa1 = 1.0e10; // dust opacity at IR. NOLINT
 AMREX_GPU_MANAGED double kappa2 = 1.0;	  // dust opacity at FUV. NOLINT
@@ -52,17 +51,11 @@ template <> struct quokka::EOS_Traits<MarshakProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<MarshakProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<MarshakProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = n_group_; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;

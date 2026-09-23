@@ -15,9 +15,13 @@
 #include "cooling/ResampledCooling.hpp"
 #include "math/interpolate.hpp"
 #include "util/BC.hpp"
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <format>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -28,8 +32,7 @@
 #include "hydro/hydro_system.hpp"
 #include "util/fextract.hpp"
 
-struct ResampledCoolingTest {
-}; // dummy type to allow compile-time polymorphism via template specialization
+struct ResampledCoolingTest {}; // dummy type to allow compile-time polymorphism via template specialization
 
 // Function to read CSV reference solution
 auto readReferenceCSV(const std::string &filename) -> std::pair<std::vector<double>, std::vector<double>>
@@ -85,26 +88,30 @@ template <> struct SimulationData<ResampledCoolingTest> {
 };
 
 template <> struct quokka::EOS_Traits<ResampledCoolingTest> {
-	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double gamma = 5. / 3.;
+	static constexpr double mean_molecular_weight = C::m_u;
+	using EOSBackend = quokka::EOSTabulated<ResampledCoolingTest>;
 };
 
-template <> struct Physics_Traits<ResampledCoolingTest> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<ResampledCoolingTest> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+	static constexpr bool is_mhd_enabled = (AMREX_SPACEDIM == 3);
 };
 
 // Initial conditions: hot gas that will cool down
 constexpr double T_initial = 1.0e7;	// K
 constexpr double rho_initial = 1.0e-26; // g cm^-3 (constant density for isochoric)
+constexpr double mu_initial = 0.6 * quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
+constexpr double pressure_initial = rho_initial * C::k_B * T_initial / mu_initial;
+constexpr double Bx_initial = 5.264491941623788e-06; // chosen so plasma beta = P_gas / (B^2 / 2) ~= 1
+constexpr double magnetic_energy_initial = 0.5 * Bx_initial * Bx_initial;
+constexpr double active_magnetic_energy_initial = Physics_Traits<ResampledCoolingTest>::is_mhd_enabled ? magnetic_energy_initial : 0.0;
+
+auto computeInitialInternalEnergy() -> double
+{
+	constexpr double gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
+	return rho_initial * C::k_B * T_initial / ((gamma - 1.0) * mu_initial);
+}
 
 template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -114,13 +121,13 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnG
 	// Compute initial internal energy from temperature
 	const double k_B = C::k_B;
 	const double gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
-	const double mu = 0.6 * quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
 
 	// For ideal gas: P = (gamma - 1) * rho * e_int
 	// and P = rho * k_B * T / (mu * m_u)
 	// Therefore: e_int = k_B * T / ((gamma - 1) * mu * m_u)
-	const double e_int_initial = k_B * T_initial / ((gamma - 1.0) * mu);
+	const double e_int_initial = k_B * T_initial / ((gamma - 1.0) * mu_initial);
 	const double Eint_initial = rho_initial * e_int_initial;
+	const double Egas_initial = Eint_initial + active_magnetic_energy_initial;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -128,8 +135,23 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnG
 		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::x1Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::x3Momentum_index) = 0.;
-		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::energy_index) = Eint_initial;
+		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::energy_index) = Egas_initial;
 		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::internalEnergy_index) = Eint_initial;
+	});
+}
+
+template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		if (dir == quokka::direction::x) {
+			state_fc(i, j, k, Physics_Indices<ResampledCoolingTest>::mhdFirstIndex) = Bx_initial;
+		} else {
+			state_fc(i, j, k, Physics_Indices<ResampledCoolingTest>::mhdFirstIndex) = 0.0;
+		}
 	});
 }
 
@@ -143,8 +165,8 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 
 		const amrex::Real Etot = values.at(HydroSystem<ResampledCoolingTest>::energy_index)[0];
 		const amrex::Real rho = values.at(HydroSystem<ResampledCoolingTest>::density_index)[0];
-		// For isochoric cooling with no kinetic energy, Eint = Etot
-		const amrex::Real Eint = Etot;
+		// For isochoric MHD cooling with no kinetic energy and a uniform magnetic field, subtract the constant magnetic energy.
+		const amrex::Real Eint = Etot - active_magnetic_energy_initial;
 
 		// Get temperature from tables
 		amrex::Real T = NAN;
@@ -152,7 +174,7 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 			coolingTableType_ = "resampled";
 		}
 		if (coolingTableType_ == "resampled") {
-			T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables());
+			T = quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho, Eint);
 		} else {
 			amrex::Abort("Unsupported cooling table type: " + coolingTableType_);
 		}
@@ -170,6 +192,11 @@ auto problem_main() -> int
 
 	std::string output_csv_file;
 	pp.query("output_csv_file", output_csv_file);
+
+	// If positive, require the final temperature at the last cell along x to exceed the temperature at the
+	// first cell by this factor. Used to check that a position-dependent `heating_rate_external` is applied.
+	double min_spatial_heating_T_ratio = 0.0;
+	pp.query("min_spatial_heating_T_ratio", min_spatial_heating_T_ratio);
 
 	amrex::ParmParse const ppp;
 	bool use_sfh_based_pe_heating = false;
@@ -191,10 +218,31 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
+	// Extract the final profile along x (collective, so it must be called on every rank)
+	auto const final_profile = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
+
 	// Analyze results
 	int status = 0;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Check that a position-dependent external heating rate produced a position-dependent temperature
+		if (min_spatial_heating_T_ratio > 0.0) {
+			auto const &final_values = std::get<1>(final_profile);
+			auto const &Etot = final_values.at(HydroSystem<ResampledCoolingTest>::energy_index);
+			auto const &rho = final_values.at(HydroSystem<ResampledCoolingTest>::density_index);
+			const size_t i_last = Etot.size() - 1;
+			const double T_first = quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[0], Etot[0] - active_magnetic_energy_initial);
+			const double T_last =
+			    quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[i_last], Etot[i_last] - active_magnetic_energy_initial);
+			const double T_ratio_x = T_last / T_first;
+			amrex::Print() << "Spatial heating check: T(x_last)/T(x_first) = " << T_ratio_x << " (required > " << min_spatial_heating_T_ratio
+				       << ")\n";
+			if (!(T_ratio_x > min_spatial_heating_T_ratio)) { // negated so that a NaN ratio also fails
+				amrex::Print() << "ERROR: external heating rate does not vary with position!\n";
+				status = 1;
+			}
+		}
+
 		// Check that gas has cooled significantly
 		const double T_final = sim.userData_.T_vec_.back();
 		const double T_ratio = T_final / T_initial;

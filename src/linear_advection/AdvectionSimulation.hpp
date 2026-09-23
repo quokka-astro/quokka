@@ -99,6 +99,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
 	void createInitialSinkParticles() override;
+	void createInitialStarParticles() override;
 	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
@@ -113,7 +114,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
 	// compute derived variables
-	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+			       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const override;
 	// compute projected vars
 
 	// compute statistics
@@ -223,6 +225,12 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 	// note: an implementation is only effective if Sink particles are used
 }
 
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialStarParticles()
+{
+	// Optional implementation
+	// note: an implementation is only effective if Star particles are used
+}
+
 template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialTestParticles()
 {
 	// Optional implementation
@@ -240,9 +248,17 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterT
 	// do nothing -- user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+						       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// user should implement
+	(void)lev;
+	(void)dname;
+	(void)mf;
+	(void)ncomp;
+	(void)state_cc;
+	(void)state_fc;
 }
 
 template <typename problem_t> auto AdvectionSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>

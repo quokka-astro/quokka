@@ -18,8 +18,7 @@
 #include <fstream>
 #include <vector>
 
-struct DustProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct DustProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 // In this test, the hydro time step is dt = CFL * dx / (chat / 10) = 0.8 * (1/8) / (1e7 / 10) = 1e-8
 
@@ -51,17 +50,11 @@ template <> struct quokka::EOS_Traits<DustProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<DustProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<DustProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 4;
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = k_B;
@@ -159,7 +152,8 @@ template <> void QuokkaSimulation<DustProblem>::computeAfterTimestep()
 		const amrex::Real x2GasMom = values.at(RadSystem<DustProblem>::x2GasMomentum_index)[0];
 		const amrex::Real x3GasMom = values.at(RadSystem<DustProblem>::x3GasMomentum_index)[0];
 		const amrex::Real rho = values.at(RadSystem<DustProblem>::gasDensity_index)[0];
-		const amrex::Real Egas_i = RadSystem<DustProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
+		static_assert(!Physics_Traits<DustProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		const amrex::Real Egas_i = quokka::EOS<DustProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i, 0.0);
 		double Erad_i = 0.0;
 		for (int g = 0; g < Physics_Traits<DustProblem>::nGroups; ++g) {
 			Erad_i += values.at(RadSystem<DustProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[0];

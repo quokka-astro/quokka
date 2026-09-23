@@ -14,7 +14,9 @@
 
 - [Magnetohydrodynamics (beta)](mhd_module.md)
 - [Star Formation and Feedback (beta)](particles.md)
+- [Photoionization](photoionization.md)
 - [Dust Module (beta)](dust_module.md)
+- [Cooling Module](cooling_module.md)
 
 # Simulation Gallery
 
@@ -33,6 +35,7 @@
     - [Matter-radiation temperature equilibrium test](tests/energy_exchange.md)
     - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md)
     - [Advecting radiation pulse test](tests/radhydro_pulse.md)
+    - [1D H II region and dust reprocessing test](tests/DTypeFront1D.md)
 - [Runtime parameters](parameters.md)
 - [In-situ analysis](insitu_analysis.md)
 - [Postprocessing](postprocessing.md)
@@ -48,10 +51,12 @@
 - [Hydro Integrator](hydro_integrator.md)
 - [Radiation Integrator](radiation_integrator.md)
 - [State Variable Component Indices](components.md)
+- [API Reference](api_reference.md)
 - [Debugging](debugging.md)
 - [Assertions and error checking](error_checking.md)
 - [Performance tips](performance.md)
 - [How to use clang-tidy](howto_clang_tidy.md)
+- [DataTable](data_table.md)
 
 # Maintainer Guide
 

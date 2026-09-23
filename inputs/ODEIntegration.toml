@@ -21,5 +21,4 @@ amr.max_grid_size = 8
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
-cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"

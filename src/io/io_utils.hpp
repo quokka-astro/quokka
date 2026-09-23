@@ -3,6 +3,7 @@
 // ABOUTME: RAII utilities for managing AMReX I/O settings
 // ABOUTME: Ensures global I/O settings are properly restored after use
 
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_VisMF.H"
 
 namespace quokka
@@ -17,8 +18,8 @@ class ScopedVisMFNOutFiles
       public:
 	explicit ScopedVisMFNOutFiles(int nfiles) : originalNOutFiles_(amrex::VisMF::GetNOutFiles())
 	{
-		// Always set the value (including -1 which means one file per process)
-		amrex::VisMF::SetNOutFiles(nfiles);
+		const int nfiles_to_set = (nfiles == -1) ? amrex::ParallelDescriptor::NProcs() : nfiles;
+		amrex::VisMF::SetNOutFiles(nfiles_to_set);
 	}
 
 	~ScopedVisMFNOutFiles()

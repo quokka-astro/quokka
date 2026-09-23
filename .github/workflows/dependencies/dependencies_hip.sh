@@ -17,43 +17,41 @@ set -eu -o pipefail
 #   failed files the given number of times.
 echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/80-retries
 
-# Ref.: https://rocmdocs.amd.com/en/latest/deploy/linux/os-native/install.html
+# Ref.: https://rocm.docs.amd.com/en/latest/install/rocm.html
 sudo mkdir --parents --mode=0755 /etc/apt/keyrings
-wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
-    gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
+wget https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg -O - | \
+    gpg --dearmor | sudo tee /etc/apt/keyrings/amdrocm.gpg > /dev/null
 
-# Detect Ubuntu codename and choose a compatible ROCm suite
-# ROCm 7.0 provides packages for Ubuntu 22.04 (jammy). Some runners
-# (e.g., ubuntu-latest on 24.04 noble) are not yet supported by AMD's repo.
-# In such cases, fall back to jammy which is known to work for ROCm 7.0.
+# Detect the Ubuntu release and choose the matching ROCm 7.14 repository.
 if [ -r /etc/os-release ]; then
   . /etc/os-release
 fi
 
 detected_codename="${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}"
-rocm_suite="jammy"
-if [ "${detected_codename}" = "jammy" ]; then
-  rocm_suite="jammy"
-else
-  # Map all other codenames (e.g., noble, focal, etc.) to jammy for ROCm 7.0
-  rocm_suite="jammy"
-fi
+case "${detected_codename}" in
+  jammy)
+    rocm_distribution="ubuntu2204"
+    ;;
+  noble)
+    rocm_distribution="ubuntu2404"
+    ;;
+  *)
+    echo "Unsupported Ubuntu codename for ROCm 7.14: ${detected_codename}" >&2
+    exit 1
+    ;;
+esac
 
-for ver in 7.1; do
-  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$ver ${rocm_suite} main" \
-      | sudo tee --append /etc/apt/sources.list.d/rocm.list
-done
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/amdrocm.gpg] https://repo.amd.com/rocm/packages-multi-arch/${rocm_distribution} stable main" \
+  | sudo tee /etc/apt/sources.list.d/rocm.list
 
-echo 'export PATH=/opt/rocm/llvm/bin:/opt/rocm/bin:/opt/rocm/profiler/bin:/opt/rocm/opencl/bin:$PATH' \
+echo 'export ROCM_PATH=/opt/rocm/core-7.14' | sudo tee /etc/profile.d/rocm.sh
+echo "export PATH=\$ROCM_PATH/lib/llvm/bin:\$ROCM_PATH/bin:\$PATH" \
   | sudo tee -a /etc/profile.d/rocm.sh
-# we should not need to export HIP_PATH=/opt/rocm/hip with those installs
+echo "export LD_LIBRARY_PATH=\$ROCM_PATH/lib:\${LD_LIBRARY_PATH:-}" \
+  | sudo tee -a /etc/profile.d/rocm.sh
 
 sudo apt-get update
 
-# Ref.: https://rocmdocs.amd.com/en/latest/Installation_Guide/Installation-Guide.html#installing-development-packages-for-cross-compilation
-# meta-package: rocm-dkms
-# OpenCL: rocm-opencl
-# other: rocm-dev rocm-utils
 sudo apt-get install -y --no-install-recommends \
     build-essential \
     libc++-dev      \
@@ -62,13 +60,7 @@ sudo apt-get install -y --no-install-recommends \
     libnuma-dev     \
     libopenmpi-dev  \
     openmpi-bin     \
-    rocm-dev7.1.0        \
-    roctracer-dev7.1.0   \
-    rocprofiler-dev7.1.0 \
-    rocrand-dev7.1.0     \
-    hiprand-dev7.1.0     \
-    rocprim-dev7.1.0     \
-    rocsparse-dev7.1.0
+    amdrocm-core-dev7.14-gfx90a
 
 # activate
 #

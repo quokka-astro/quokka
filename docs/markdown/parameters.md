@@ -25,9 +25,9 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 | regrid_interval             | Integer       | `2`               | The number of timesteps between AMR regridding.                                                                                                                                       |
 | density_floor               | Float         | `0.0`             | The minimum density value allowed in the simulation. Enforced through EnforceLimits.                                                                                                  |
 | density_floor_expr          | String        | Empty             | Optional AMReX parser expression for a spatially varying density floor. Variables: x, y, z, base_density_floor. When set, this overrides the constant floor.                          |
-| heating_rate_external       | String        | Empty             | Optional AMReX parser expression for external heating rate per H atom (erg/s/H). Variables: `time`, `dt`. Effective when cooling is enabled. |
+| heating_rate_external       | String        | Empty             | Optional AMReX parser expression for external heating rate per H atom (erg/s/H). Variables: `x`, `y`, `z`, `time`, `dt`. Evaluated at cell centres, so the rate may vary in both space and time. Effective when cooling is enabled. |
 | debug_density_floor_plot    | Boolean (0/1) | `0` (Disabled)    | If set to 1, adds a derived field `density_floor_dbg` to plotfiles to visualize the spatially varying density floor.                                                                  |
-| temperature_floor           | Float         | `0.0`             | The minimum temperature value allowed in the simulation. Enforced through EnforceLimits.                                                                                              |
+| temperature_floor           | Float         | `2.7` (CGS), `0.0` (otherwise) | The minimum temperature allowed in the simulation, in kelvin for the `CGS` unit system and in code units for the `CONSTANTS` and `CUSTOM` unit systems. Enforced through EnforceLimits. The default is 2.7 K (the CMB temperature) when `Physics_Traits<problem_t>::unit_system` is `UnitSystem::CGS`, where the value is unambiguously in kelvin. It defaults to 0 for `CONSTANTS` and `CUSTOM`, because there a literal value is in code units rather than kelvin: `CONSTANTS` fixes the physical constants without defining a temperature scale, and `CUSTOM` rescales temperature by `Physics_Traits::unit_temperature`. Problems in those unit systems should set this explicitly if they need a floor. Idealized, dimensionless test problems should declare `UnitSystem::CONSTANTS` rather than relying on a CGS default. |
 | max_walltime                | String        | `0` (Unlimited)   | The maximum walltime for the simulation in the format DD:HH:SS (days/hours/seconds). After 90% of this walltime elapses, the simulation will automatically stop and exit.             |
 | dt_cutoff                   | Float         | `0.0` (Disabled)  | Timestep drop detector threshold. If the timestep drops below dt_cutoff * current_time, the simulation aborts with an error message. This helps detect numerical instabilities early. |
 | constant_dt                 | Float         | `0.0` (Disabled)  | Optional constant timestep. If set, forces the timestamp to be this value.                                                                                                            |
@@ -42,6 +42,7 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 | particle_cfl                | Float         | `0.5`             | Sets the CFL number for particle advection. This is independent of the hydro CFL number.                                                                                              |
 | plotfile_prefix             | String        | `"plt"`           | The prefix for plotfile output filenames.                                                                                                                                             |
 | checkpoint_prefix           | String        | `"chk"`           | The prefix for checkpoint output filenames.                                                                                                                                           |
+| statistics_file             | String        | `"history.txt"`   | The prefix for the statistics output file.                                                                                                                                            |
 | do_subcycle                 | Boolean (0/1) | `1` (Enabled)     | This turns on subcycling at coarse-fine boundaries (1) or turns it off (0).                                                                                                           |
 | poisson_supercycle_interval | Integer       | `1`               | The number of coarse timesteps between Poisson supercycle operations.                                                                                                                 |
 | poisson_reltol              | Float         | `1.0e-5`          | Relative tolerance for the Poisson solver convergence.                                                                                                                                |
@@ -96,12 +97,11 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
 
-| Parameter Name                       | Type          | Default                             | Description                                                                                                                                         |
-|--------------------------------------|---------------|-------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| cooling.enabled                      | Boolean (0/1) | `0` (Disabled)                      | If set to 1, turns on optically-thin radiative cooling as a Strang-split source term.                                                               |
-| cooling.cooling_table_type           | String        | `"resampled"`                       | Specifies the type of cooling table to use. The only supported option is "resampled".                                                               |
-| cooling.read_tables_even_if_disabled | Boolean (0/1) | `0` (Disabled)                      | If set to 1, reads the cooling tables even if the cooling module is disabled.                                                                       |
-| cooling.hdf5_data_file               | String        | **Required** if `cooling.enabled=1` | The path to the cooling tables in HDF5 format. We recommend using `extern/cooling/CloudyData_UVB=HM2012_resampled.h5` for ISM at solar metallicity. |
+| Parameter Name                       | Type          | Default                                        | Description                                                                                                                                                                                                           |
+|--------------------------------------|---------------|------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| cooling.enabled                      | Boolean (0/1) | `1` (Enabled)                                  | Only takes effect when the problem sets `EOSBackend = EOSTabulated<P>` (i.e. `quokka::EOS<P>::is_tabulated`). If set to 0, disables the cooling integrator (`applyCooling`) while the tabulated EOS still uses the table to compute temperature — useful for testing. Has no effect otherwise: for non-tabulated EOS backends, the cooling integrator never runs regardless of this value. |
+| cooling.read_tables_even_if_disabled | Boolean (0/1) | `0` (Disabled)                                 | If set to 1, reads the cooling tables even if the problem does not use the `EOSTabulated` backend. Not needed for problems that set `EOSBackend = EOSTabulated<P>`. |
+| cooling.hdf5_data_file               | String        | **Required** if `EOSTabulated` backend is used | The path to the cooling tables in HDF5 format. We recommend using `extern/cooling/CloudyData_UVB=HM2012_resampled.h5` for ISM at solar metallicity.                                                                   |
 
 ## Chemistry
 
@@ -113,16 +113,63 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | chemistry.max_density_allowed | Float         | `1.0e300`               | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold.  |
 | chemistry.min_density_allowed | Float         | Smallest positive Value | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
 
+## Integrator (VODE)
+
+These parameters control the VODE ODE integrator used for chemistry and photochemistry source terms. The generated code reads them via `init_extern_parameters()` from the `integrator` prefix. See also `docs/markdown/photoionization.md`.
+
+VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will cause the integrator to stall. Users must explicitly set the tolerances below.
+
+### Tolerance parameters
+
+| Parameter Name | Type | Default | Description |
+|---|---|---|---|
+| `integrator.atol_spec` | Float | `1.e-10` | Absolute tolerance for species number densities (cm⁻³). |
+| `integrator.rtol_spec` | Float | `1.e-10` | Relative tolerance for species number densities. |
+| `integrator.atol_enuc` | Float | `1.e-25` | Absolute tolerance for internal energy (erg g⁻¹). |
+| `integrator.rtol_enuc` | Float | `1.e-10` | Relative tolerance for internal energy. |
+| `integrator.atol_rad_num` | Float | `1.e-10` | Absolute tolerance for radiation number density (cm⁻³). |
+| `integrator.rtol_rad_num` | Float | `1.e-10` | Relative tolerance for radiation number density. |
+| `integrator.species_failure_tolerance` | Float | `0.01` | Maximum allowed negative species number density (cm⁻³) at internal VODE nodes. When exceeded, VODE rejects the substep and retries with a smaller timestep. Should equal `atol_spec`. At the final interpolated state, the threshold is relaxed to 1.5× this value to account for VODE's non-monotonic interpolation. |
+| `integrator.radiation_failure_tolerance` | Float | `0.01` | Maximum allowed negative photon number density (cm⁻³) at internal VODE nodes. When exceeded, VODE rejects the substep and retries with a smaller timestep. Should equal `atol_rad_num`. At the final interpolated state, the threshold is relaxed to 1.5× this value. |
+
+### Other integrator parameters
+
+| Parameter Name | Type | Default | Description |
+|---|---|---|---|
+| `integrator.jacobian` | Integer | `1` | Jacobian type: `1` = analytical, `2` = numerical. |
+| `integrator.ode_max_steps` | Integer | `150000` | Maximum number of VODE internal steps per burn call. |
+| `integrator.ode_max_dt` | Float | `1.e30` | Maximum internal timestep for VODE. |
+| `integrator.use_number_densities` | Boolean (0/1) | `1` | If 1, evolve species as number densities instead of mass fractions. Must be `1` for Quokka. |
+| `integrator.subtract_internal_energy` | Boolean (0/1) | `1` | If 1, subtract internal energy before integration. Must be `0` for Quokka. |
+| `integrator.call_eos_in_rhs` | Boolean (0/1) | `1` | If 1, call EOS in the RHS to update temperature from internal energy. Must be `1` for Quokka. |
+| `integrator.integrate_energy` | Boolean (0/1) | `1` | If 1, enable energy integration; if 0, freeze energy. Not recommended for use with number densities. |
+| `integrator.scale_system` | Boolean (0/1) | `0` | If 1, scale the ODE system to be O(1). Does not work with number densities — leave at `0`. |
+| `integrator.use_burn_retry` | Boolean (0/1) | `0` | If 1, retry failed burns with swapped Jacobian or relaxed tolerances. |
+| `integrator.retry_swap_jacobian` | Boolean (0/1) | `1` | If 1, swap Jacobian type (analytic to numerical) on retry. |
+| `integrator.burner_verbose` | Boolean (0/1) | `0` | If 1, print diagnostic output after each burn. |
+| `integrator.SMALL_X_SAFE` | Float | `1.e-30` | Species floor to prevent underflow in the integrator. |
+| `integrator.X_reject_buffer` | Float | `1.0` | Buffer factor for the species change-factor rejection threshold. Only meaningful for mass fractions; has no effect with number densities. Set to `1e100` to disable. |
+| `integrator.do_corrector_validation` | Boolean (0/1) | `1` | If 1, check predicted state validity before calling RHS. |
+
 ## Dust
 
-These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
+These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`, except for optional Kwok stopping-time grain parameters that are read by problem setups that opt into `quokka::dust::readDustGrainParams`.
 
-| Parameter Name              | Type          | Default        | Description                                                                                                                    |
-|-----------------------------|---------------|----------------|--------------------------------------------------------------------------------------------------------------------------------|
-| dust.enable_iter_stoptime   | Boolean (0/1) | `0` (Disabled) | If set to 1, enables iterative dust stopping time calculation.                                                                 |
-| dust.omega                  | Float         | `1.0`          | Controls the level of frictional heating, with omega = 0 turning it off and omega = 1 depositing all dissipation into the gas. |
-| dust.print_iteration_counts | Boolean (0/1) | `0` (Disabled) | If set to 1, prints dust drag iteration counts for debugging.                                                                  |
-| dust.density_floor | Float | `0.0` | The minimum dust density value allowed in the simulation. Enforced through EnforceLimits.                                                           |
+| Parameter Name                     | Type          | Default        | Description                                                                                                                                       |
+|------------------------------------|---------------|----------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| dust.enable_coefficient_iteration  | Boolean (0/1) | `0` (Disabled) | If set to 1, iterates state-dependent stopping-time and charge coefficients at both GIRK stages.                                                  |
+| dust.picard_alpha_rtol             | Float         | `1e-6`         | Relative convergence tolerance for the reciprocal stopping time \\(\alpha=1/t_{\mathrm{s}}\\) at each GIRK stage. Must be positive.              |
+| dust.picard_charge_atol            | Float         | `1e-12`        | Absolute convergence tolerance for \\(\xi\\) at each GIRK stage; used only when the magnetic field is nonzero. Must be positive.                |
+| dust.picard_charge_rtol            | Float         | `1e-6`         | Relative convergence tolerance for \\(\xi\\), scaled by its value from the current Picard iterate. Must be positive.                             |
+| dust.picard_max_iterations         | Integer       | `20`           | Maximum number of coefficient iterations per dust source update. Must be a positive integer. A nonconverged cell emits a warning and uses the final iterate. |
+| dust.omega_drag_heating            | Float         | `1.0`          | Controls the fraction of aerodynamic drag dissipation deposited as gas internal energy in the dust source update.                              |
+| dust.omega_gyro_residual           | Float         | `0.0`          | Controls deposition of the gyrofrequency-dependent part of the discrete RK energy residual in `computeDustDragAndLorentz`.                       |
+| dust.resolved_rk_scheme            | String        | `GL4`          | Selects the GIRK coefficients in resolved branch used by the dust source update. Supported values are `TP2025`, `GL4`, and `Midpoint`. At present this only affects `DustSources::computeDustDragAndLorentz`; `DustSources::computeDustDrag` is not affected. |
+| dust.print_iteration_counts        | Boolean (0/1) | `0` (Disabled) | If set to 1, prints dust drag or dust drag-plus-Lorentz iteration counts for debugging.                                                          |
+| dust.density_floor                 | Float         | `0.0`          | The minimum dust density value allowed in the simulation. Enforced through EnforceLimits.                                                        |
+| dust.grain_radius                  | Float or list | Problem default | Optional dust grain radius values used by problem setups that call the Kwok stopping-time helper. Must contain one value per dust group.         |
+| dust.grain_density                 | Float or list | Problem default | Optional dust grain material density values used by problem setups that call the Kwok stopping-time helper. Must contain one value per dust group. |
+
 ## Particles
 
 These parameters are read in the `particleParmParse()` function in `src/particles/particle_types.hpp` and `readParmParse()` in `src/simulation.hpp`.
@@ -131,8 +178,10 @@ These parameters are read in the `particleParmParse()` function in `src/particle
 |-----------------------------------------------|---------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | particles.disable_SN_feedback                 | Boolean (0/1) | `0`                                                                                                           | If set to 1, disables SN feedback when a particle evolves from SNProgenitor to SNRemnant.                                                                      |
 | particles.sink_particle_use_uniform_kernel    | Boolean (0/1) | `0` (Disabled)                                                                                                | If set to 1, uses uniform accretion kernel in a (7 dx)^3 box for sink particles.                                                                               |
+| particles.sink_max_alfven_speed               | Float         | `-1.0` (Disabled)                                                                                             | Maximum post-accretion Alfvén speed in cm/s. A negative value disables the limiter; zero is invalid.                                                         |
 | particles.SN_scheme                           | String        | `SN_thermal_or_thermal_momentum`                                                                              | Scheme for SN feedback. Options: SN_thermal_only, SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, SN_pure_kinetic_or_thermal_momentum. |
 | particles.SN_p_term_Msunkmps                  | Float         | `2.8e5`                                                                                                       | Terminal momentum of the supernova remnant in units of \\(M_\odot\,\mathrm{km\,s}^{-1}\\). The shell-formation mass \\(M_\mathrm{sf}\\) is scaled as \\((p/p_\mathrm{canonical})^2\\) so that the kinetic energy \\(p^2/(2M_\mathrm{sf})\\) is preserved. |
+| particles.SN_p_term_exponent                  | Float         | `-0.17`                                                                                                       | Exponent \\(\alpha_p\\) of the ambient-density scaling of the supernova terminal momentum, \\(p_{\mathrm{snr}} = p_{\mathrm{snr},0} \, n_\mathrm{H}^{\alpha_p}\\).                                     |
 | particles.eps_ff                              | Float         | `0.01`                                                                                                        | Star formation efficiency parameter.                                                                                                                           |
 | particles.verbose                             | Boolean (0/1) | `0`                                                                                                           | Verbosity level for particle operations. Higher values provide more detailed output.                                                                           |
 | particles.param1                              | Float         | `-1.0`                                                                                                        | Placeholder parameter for particles (used in gravity_3d.cpp tests).                                                                                            |
@@ -142,7 +191,8 @@ These parameters are read in the `particleParmParse()` function in `src/particle
 | particles.reproducibility_roundoff_redundancy | Integer       | `20`                                                                                                          | Number of bits to remove from the significand for reproducibility.                                                                                             |
 | particles.use_luminosity_table                | Boolean (0/1) | `1` (Enabled)                                                                                                 | If set to 1, uses a luminosity table for particles.                                                                                                            |
 | particles.rad_table                           | String        | **Required** if `particles.use_luminosity_table=1` and `Physics_Traits<problem_t>::is_radiation_enabled=true` | Path to the radiation luminosity table.                                                                                                                        |
-| particles.rad_table_output_spacing            | Integer       | `0` (fast_log)                                                                                                | Output spacing for radiation table.                                                                                                                            |
+| particles.rad_table_output_spacing            | Integer       | `0` (fast_log)                                                                                                | Deprecated name for `particles.rad_table_output_transform`.                                                                                                    |
+| particles.rad_table_output_transform          | String        | `fast_log`                                                                                                    | Transform used to interpolate the luminosity table outputs: `linear`, `log`, or `fast_log`. A table containing zeros requires `linear`.                         |
 | particles.split_particles_on_restart_refine   | Boolean (0/1) | `1` (Enabled)                                                                                                 | Whether to split particles when restarting with refinement.                                                                                                    |
 
 ## Turbulence

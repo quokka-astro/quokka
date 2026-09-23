@@ -27,8 +27,7 @@
 
 static constexpr bool export_csv = true;
 
-struct PulseProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct PulseProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int n_groups_ = 4;
 // constexpr int n_groups_ = 8;
@@ -111,17 +110,11 @@ template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<PulseProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<PulseProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = n_groups_;
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = k_B;

@@ -20,7 +20,7 @@ Per the documentation policy in the maintainer guide, physics features that have
 | ------ | :----: | ----- |
 | Radiation | beta | Two-moment radiation transport and matter-radiation coupling |
 | MHD | beta | Ideal MHD with constrained transport |
-| Dust | beta | Dedicated dust dynamics and drag source terms |
+| Dust | beta | Dedicated dust dynamics, drag, and charged-dust Lorentz source terms |
 | Particles | beta | Particle-mesh gravity, sink particles, star formation, and feedback |
 | Chemistry | beta | Primordial chemistry source terms |
 | Self-gravity | beta | Poisson solve for gas and particle mass |

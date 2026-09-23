@@ -43,3 +43,21 @@ If interconnect issues are observed, it is recommended to add the line :
     export FI_CXI_RX_MATCH_MODE=software
 
 to your job scripts.
+
+## NASA HEC
+
+### Athena
+Once you have logged into the front end, log in to Athena:
+    ssh afe0X
+-where X=1-6.
+
+After loading the modules Quokka can be build using:
+    cmake ../..   -DCMAKE_BUILD_TYPE=Release -G Ninja  -DQUOKKA_PYTHON=OFF 
+
+### Cabeus
+
+Cabeus machines are accessed by:
+    ssh cfe01
+
+Quokka can be built on GPUs using:
+    cmake ../..   -DCMAKE_BUILD_TYPE=Release   -DAMReX_GPU_BACKEND=CUDA   -DAMReX_SPACEDIM=3   -G Ninja  -DQUOKKA_PYTHON=OFF -DHDF5_ROOT=/nasa/hdf5/1.12.2_nvidia_serial -DAMReX_DIFFERENT_COMPILER=ON -DAMReX_CUDA_ARCH=8.0 -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -DCMAKE_CUDA_COMPILER=/nasa/nvidia/hpc_sdk/toss4/Linux_x86_64/25.11/compilers/bin/nvcc -DCMAKE_CUDA_HOST_COMPILER=g++ 

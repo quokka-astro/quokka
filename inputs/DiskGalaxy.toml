@@ -43,9 +43,7 @@ mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
 mhd.project_initial_b_field = true
 mhd.update_initial_b_energy = true
 
-cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
 temperature_floor = 1e4
 density_floor = 1e-28
@@ -55,14 +53,6 @@ checkpoint_interval = 10000
 plotfile_interval = 10000
 statistics_interval = 250
 derived_vars = [
-  "temperature",
-  "pressure",
-  "entropy",
-  "gpot",
-  "radius_sph",
-  "bfield_strength",
-  "radial_velocity",
-  "circular_velocity",
   "particle.CIC.mass_density",
   "particle.StochasticStellarPop.birth_mass_density",
 ]
@@ -81,7 +71,7 @@ quokka.stellarpop_particle_mass.normalization_expr = "1.0/(5.0e6*yr)"
 ## star formation
 particles.eps_ff = 0.01
 particles.low_mass_composite_max_mass = 5.957650359245478e+35   # grams [= 299 Msun]
-particles.reproducibility_roundoff_redundancy = 28
+particles.reproducibility_roundoff_redundancy = 36
 
 
 ###################################

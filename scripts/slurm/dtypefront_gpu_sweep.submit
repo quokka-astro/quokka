@@ -1,0 +1,57 @@
+#!/bin/bash --login
+#SBATCH --job-name=dtypefront_gpu
+#SBATCH --output=%x-%j.out
+#SBATCH --error=%x-%j.err
+#SBATCH --time=00:20:00
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --gpus=h200:1
+#SBATCH --gpu-bind=closest
+#SBATCH --mem=64G
+
+set -euo pipefail
+
+ROOT_DIR="${SLURM_SUBMIT_DIR:-$(pwd)}"
+INPUT_FILE="${ROOT_DIR}/inputs/DTypeFront.toml"
+LOG_DIR="${ROOT_DIR}/logs/dtypefront-${SLURM_JOB_ID:-manual}"
+ROS_BUILD_DIR="${ROOT_DIR}/build/slurm-dtypefront-rosenbrock"
+VODE_BUILD_DIR="${ROOT_DIR}/build/slurm-dtypefront-vode"
+BUILD_JOBS="${SLURM_CPUS_PER_TASK:-16}"
+
+mkdir -p "${LOG_DIR}"
+
+run_case() {
+	local exe="$1"
+	local tag="$2"
+	shift 2
+
+	echo "=== $(date -Is) ${tag} ==="
+	echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
+	/usr/bin/time -p "${exe}" "${INPUT_FILE}" "$@" \
+		> "${LOG_DIR}/${tag}.log" 2>&1
+}
+
+configure_build() {
+	local build_dir="$1"
+	local integrator="$2"
+
+	cmake -S "${ROOT_DIR}" -B "${build_dir}" -DDTypeFront_INTEGRATOR="${integrator}" -DAMReX_GPU_BACKEND=CUDA -DAMReX_CUDA_ARCH=9.0 -DAMReX_SPACEDIM=3 -DCMAKE_BUILD_TYPE=Release
+	cmake --build "${build_dir}" --target DTypeFront -j "${BUILD_JOBS}"
+}
+
+echo "Running on ${HOSTNAME}"
+echo "Submit dir: ${ROOT_DIR}"
+echo "Log dir: ${LOG_DIR}"
+echo "Build jobs: ${BUILD_JOBS}"
+
+configure_build "${ROS_BUILD_DIR}" Rosenbrock
+run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" ros2s integrator.rosenbrock_tableau=3
+run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" rodas3p integrator.rosenbrock_tableau=2
+run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" rodas4p integrator.rosenbrock_tableau=1
+run_case "${ROS_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" rodas5p integrator.rosenbrock_tableau=0
+
+configure_build "${VODE_BUILD_DIR}" VODE
+run_case "${VODE_BUILD_DIR}/src/problems/DTypeFront/DTypeFront" vode
+
+echo "Done."

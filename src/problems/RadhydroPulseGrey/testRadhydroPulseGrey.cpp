@@ -16,10 +16,8 @@
 #include <format>
 #include <fstream>
 
-struct PulseProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
-struct AdvPulseProblem {
-};
+struct PulseProblem {}; // dummy type to allow compile-type polymorphism via template specialization
+struct AdvPulseProblem {};
 
 constexpr double T_lo = 1.0e7; // K (temperature)
 constexpr double T_hi = 2.0e7; // K (temperature)
@@ -60,33 +58,15 @@ template <> struct RadSystem_Traits<AdvPulseProblem> {
 	static constexpr int beta_order = 2;
 };
 
-template <> struct Physics_Traits<PulseProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<PulseProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
-template <> struct Physics_Traits<AdvPulseProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<AdvPulseProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 AMREX_GPU_HOST_DEVICE

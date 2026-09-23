@@ -1,4 +1,9 @@
 # Reusable template for preparing and configuring ccache
+parameters:
+- name: stepCondition
+  type: string
+  default: succeeded()
+
 steps:
 - script: |
     mkdir -p "$CCACHE_DIR"
@@ -14,5 +19,6 @@ steps:
       echo "ccache not installed; skipping zero-stats."
     fi
   displayName: Prepare ccache
+  condition: ${{ parameters.stepCondition }}
   env:
     CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache
