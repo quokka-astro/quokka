@@ -43,12 +43,13 @@
 
 namespace quokka::turbulence
 {
-// mass-weighted mean velocity and velocity dispersion of the computational domain
+/// Mass-weighted mean velocity and velocity dispersion of the computational domain.
 struct VelocityMoments {
-	amrex::GpuArray<amrex::Real, 3> mean;
-	amrex::GpuArray<amrex::Real, 3> dispersion;
+	amrex::GpuArray<amrex::Real, 3> mean;	    ///< mass-weighted mean velocity, per component
+	amrex::GpuArray<amrex::Real, 3> dispersion; ///< mass-weighted velocity dispersion, per component
 };
 
+/// Compute the mass-weighted mean velocity and velocity dispersion over the domain.
 template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> VelocityMoments;
 
 template <typename problem_t> class turbulentDriving
@@ -126,7 +127,7 @@ template <typename problem_t> class turbulentDriving
 				       });
 		}
 
-		auto [sum_rho, sum_px, sum_py, sum_pz, sum_rax, sum_ray, sum_raz] = reduce_data.value();
+		const auto [sum_rho, sum_px, sum_py, sum_pz, sum_rax, sum_ray, sum_raz] = reduce_data.value();
 
 		amrex::GpuArray<amrex::Real, 7> reduce_vec = {sum_rho, sum_px, sum_py, sum_pz, sum_rax, sum_ray, sum_raz};
 		amrex::ParallelDescriptor::ReduceRealSum(reduce_vec.data(), 7);
