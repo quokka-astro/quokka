@@ -239,8 +239,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			}
 
 #ifdef DUST_CHEMICAL_BAND_ABSORPTION
-			if constexpr (RadSystem<problem_t>::dust_chemical_band_absorption_) {
-				//  Dividing by the burn's dt makes it a rate, because the consuming stage multiplies by its own dt.
+			if (RadSystem<problem_t>::dust_chemical_band_absorption_) {
 				dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / (RadSystem_Traits<problem_t>::c_hat_over_c * dt);
 			}
 #endif
