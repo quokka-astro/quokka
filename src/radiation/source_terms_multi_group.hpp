@@ -239,11 +239,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 	// they too emit nothing and pass their absorbed energy to photochemistry rather than to the gas. The
 	// caller has already removed their source from Src and injects it after this solve.
 	//
-	// The photoelectric heating is accumulated alongside. A band returns the fraction
-	// pe_heating_efficiency_[g] of the energy it absorbed, tau_g * Erad_g, to the gas. The factor cscale
-	// converts that radiation-side energy to the gas side, and cscale * tau_g collapses to
-	// dt * c * rho * kappa_{E,g}, so the heating rate carries the true speed of light and not chat --
-	// correctly, since it is a physical rate rather than a transport rate.
+	// The photoelectric heating is accumulated alongside, as Gamma_PE * dt with
+	// Gamma_PE = sum_g epsilon_g * pe_heating_rate_coeff_ * n_H * E_g. It is a direct physical heating rate
+	// on the gas, so it is added to the gas energy without the cscale factor that converts radiation-side
+	// energy to the gas side -- exactly as the cosmic-ray heating below is. Note what it does not depend
+	// on: neither kappa nor chat. The grain physics lives in the empirical coefficient, so a band heats the
+	// gas whether or not it is being absorbed, and that energy is not taken from the radiation.
 	// A static constexpr member has no device storage, so it cannot be indexed with a runtime group
 	// number inside device code. Copy it to a local first, as UpdateFlux does with radBoundaries_.
 	const amrex::GpuArray<double, nGroups_> pe_efficiency = pe_heating_efficiency_;
@@ -254,7 +255,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 		const double tau = dt * rho * opacity_terms.kappaE[g] * chat;
 		EradVec_guess[g] = (Erad0Vec[g] + Src[g] + work_local[g]) / (1.0 + tau);
 		if constexpr (enable_dust_pe_heating_) {
-			PE_heating += pe_efficiency[g] * cscale * tau * EradVec_guess[g];
+			PE_heating += pe_efficiency[g] * pe_heating_rate_coeff_ * H_num_den * EradVec_guess[g] * dt;
 		}
 	}
 	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
