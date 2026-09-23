@@ -137,8 +137,8 @@ template <typename problem_t> class turbulentDriving
 						       py,
 						       pz,
 						       rho * ax(i, j, k, 0),
-						       (AMREX_SPACEDIM > 1) ? rho * ax(i, j, k, 1) : amrex::Real(0.0),
-						       (AMREX_SPACEDIM > 2) ? rho * ax(i, j, k, 2) : amrex::Real(0.0)};
+						       (AMREX_SPACEDIM > 1) ? rho * ax(i, j, k, 1) : 0.0,
+						       (AMREX_SPACEDIM > 2) ? rho * ax(i, j, k, 2) : 0.0};
 				       });
 		}
 
