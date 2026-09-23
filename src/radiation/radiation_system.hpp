@@ -341,16 +341,28 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// not, so this is the range over which the Planck emission and its temperature derivative are built.
 	static constexpr int nGroupsEmitting_ = dust_absorption_only_ ? 0 : nGroupsThermal_;
 
-	// Photoelectric heating yield of each dust-absorption band: the dimensionless fraction of the energy
-	// absorbed in that band that is returned to the gas as photoelectron kinetic energy, so that
+	// Rate coefficient of the photoelectric heating, in cgs units, from Bate & Keto (2015), Eq. 26: the
+	// standard heating rate 1.33e-24 erg s^-1 per hydrogen nucleus per unit Habing field, divided by the
+	// reference interstellar radiation field energy density 5.29e-14 erg cm^-3 that defines that field.
+	// The same two numbers appear in RadSystem<MarshakProblem>::DefinePhotoelectricHeatingE1Derivative.
+	// Units: cm^3 s^-1, so that (coefficient * n_H * E_g) is an energy density per unit time.
+	static constexpr double pe_heating_rate_coeff_ = 1.33e-24 / 5.29e-14;
+
+	// Photoelectric efficiency of each dust-absorption band -- the dimensionless factor epsilon of the
+	// standard interstellar expression, about 0.05 for cold molecular gas. The heating rate is
 	//
-	//     Gamma_PE = sum_g pe_heating_efficiency_[g] * c * rho * kappa_{E,g} * E_g .
+	//     Gamma_PE = sum_g pe_heating_efficiency_[g] * pe_heating_rate_coeff_ * n_H * E_g .
 	//
-	// With rho kappa = n_H sigma_d and E_g proportional to the Habing field, this reduces to the usual
-	// ISM form Gamma_PE ~ epsilon n_H G_0; the difference is that G_0 here is the actual attenuated field
-	// carried by the solver rather than a proxy. Because the heating is a fraction of energy this mode
-	// was already discarding to the dust, it does not add energy to the problem -- for epsilon <= 1 it
-	// strictly reduces what leaves the simulation.
+	// Note what this does NOT depend on: the dust opacity of the band. Photoelectric heating is the
+	// photoelectric effect on grains, and the grain physics is folded into the empirical coefficient
+	// above rather than taken from kappa. A band with zero opacity therefore still heats the gas if its
+	// efficiency is non-zero. A consequence is that this heating is not bounded by, and is not debited
+	// from, the energy the band absorbs: like the thermal-band photoelectric model, it adds energy to the
+	// gas that the radiation does not lose.
+	//
+	// A zero entry means the band drives no photoelectric heating, which is how non-ultraviolet bands are
+	// labelled. Because the expression is linear in E_g, splitting one band into two and giving both the
+	// same efficiency reproduces the unsplit result exactly.
 	//
 	// This is a compile-time constant, so it cannot depend on the local electron density or grain charge.
 	// It applies to dust-absorption bands only; the thermal-band photoelectric model is the separate
@@ -445,6 +457,13 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// only. Thermal bands use the ISM_Traits::enable_photoelectric_heating path instead.
 	static_assert(!(enable_dust_pe_heating_ && !dust_absorption_only_), // NOLINT
 		      "RadSystem_Traits::pe_heating_efficiency applies to dust-absorption bands, so it requires dust_absorption_only = true.");
+
+	// Assertion: pe_heating_rate_coeff_ is an empirical constant in cgs units, so the photoelectric
+	// heating is only meaningful for a problem whose units are cgs. Rejecting the other unit systems
+	// outright is better than silently applying a cgs number to dimensionless quantities.
+	static_assert(!(enable_dust_pe_heating_ && (Physics_Traits<problem_t>::unit_system != UnitSystem::CGS)), // NOLINT
+		      "RadSystem_Traits::pe_heating_efficiency uses an empirical rate coefficient in cgs units, so it requires "
+		      "Physics_Traits::unit_system == UnitSystem::CGS.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
