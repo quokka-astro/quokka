@@ -161,6 +161,29 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 	amrex::Gpu::streamSynchronize();
 }
 
+template <>
+void QuokkaSimulation<ThermalConductionProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
+								   amrex::MultiFab const &state_cc,
+								   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+{
+	// compute derived variables and save in 'mf'
+	if (dname == "temperature") {
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_cc.const_arrays();
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::energy_index);
+			static_assert(!Physics_Traits<ThermalConductionProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
+			output[bx](i, j, k, ncomp) = quokka::EOS<ThermalConductionProblem>::ComputeTgasFromEint(rho, Eint);
+		});
+	}
+}
+
 // Implement User-defined diode BC
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
