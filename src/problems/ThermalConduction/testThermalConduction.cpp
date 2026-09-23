@@ -120,8 +120,8 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint + 0.5 * (rho * vz * vz);
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) = cloudTracer; // 1/vol
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = windTracer; // 1/vol
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) = rho * cloudTracer; // 1/vol
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = rho * windTracer; // 1/vol
 	});
 }
 
