@@ -38,8 +38,7 @@
 #include <cmath>
 #include <format>
 
-struct DustAbsorptionPEProblem {
-};
+struct DustAbsorptionPEProblem {};
 
 constexpr double gamma_gas = 5. / 3.;
 constexpr double n_H = 100.0;			// cm^-3, a cold interstellar cloud
@@ -90,7 +89,7 @@ template <> struct RadSystem_Traits<DustAbsorptionPEProblem> {
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<DustAbsorptionPEProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, 3> /*rad_boundaries*/,
-												   const double /*rho*/, const double /*Tgas*/)
+												    const double /*rho*/, const double /*Tgas*/)
     -> amrex::GpuArray<amrex::GpuArray<double, 3>, 2>
 {
 	// The opacity is independent of Tgas, which the dust-absorption band solver requires: it evaluates
@@ -129,9 +128,10 @@ template <> void QuokkaSimulation<DustAbsorptionPEProblem>::setInitialConditions
 }
 
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustAbsorptionPEProblem>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<DustAbsorptionPEProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+								    int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+								    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	constexpr int nvar = Physics_Indices<DustAbsorptionPEProblem>::nvarTotal_cc;
 
