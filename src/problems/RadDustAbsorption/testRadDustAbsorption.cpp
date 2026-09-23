@@ -46,8 +46,7 @@
 #include <cmath>
 #include <format>
 
-struct DustAbsorptionProblem {
-};
+struct DustAbsorptionProblem {};
 
 constexpr int n_groups = 3;
 constexpr double gamma_gas = 5. / 3.;
@@ -101,7 +100,7 @@ constexpr amrex::GpuArray<double, n_groups> kappa_band = {kappa_absorbing, 0.0, 
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<DustAbsorptionProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, n_groups + 1> /*rad_boundaries*/,
-												 const double /*rho*/, const double /*Tgas*/)
+												  const double /*rho*/, const double /*Tgas*/)
     -> amrex::GpuArray<amrex::GpuArray<double, n_groups + 1>, 2>
 {
 	// The opacity is independent of Tgas, which the dust-absorption band solver requires: it evaluates
