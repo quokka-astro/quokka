@@ -22,13 +22,14 @@ set(_pi_hand_written_species_args
 foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten thermophotochemistry_handwritten)
   set(_pi_is_jaff FALSE)
   set(_pi_species_args "")
-  set(_pi_num_thermal_bands 0)
+  set(_pi_jaff_toml_args "")
   if (_pi_name STREQUAL "photoionization_H_caseB")
     set(_pi_is_jaff TRUE)
-  else()
+    set(_pi_jaff_toml_args JAFF_TOML "${CMAKE_SOURCE_DIR}/src/networks/${_pi_name}/jaffgen.toml")
+  elseif(_pi_name STREQUAL "photoionization_H_caseB_handwritten")
     set(_pi_species_args ${_pi_hand_written_species_args})
-  endif()
-  if (_pi_name STREQUAL "thermophotochemistry_handwritten")
+  elseif(_pi_name STREQUAL "thermophotochemistry_handwritten")
+    set(_pi_species_args ${_pi_hand_written_species_args})
     set(_pi_num_thermal_bands 2)
   endif()
 
@@ -39,6 +40,7 @@ foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten the
     # family ships a unit-test _parameters file.
     NETWORKPARAMFILE  "${CMAKE_SOURCE_DIR}/src/networks/${_pi_name}/_parameters"
     HAS_NET_FILE      FALSE
+    HEADER_TEMPLATE   "${CMAKE_SOURCE_DIR}/src/networks/network_header.template"
     EXTRA_SOURCES     "${CMAKE_SOURCE_DIR}/extern/Microphysics/interfaces/eos_data.cpp"
                       "${CMAKE_SOURCE_DIR}/extern/Microphysics/interfaces/network_initialization.cpp"
                       "${CMAKE_SOURCE_DIR}/extern/Microphysics/EOS/photoionization/actual_eos_data.cpp"
@@ -50,5 +52,6 @@ foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten the
                           "${CMAKE_SOURCE_DIR}/extern/Microphysics/networks"
     NUM_THERMAL_BANDS ${_pi_num_thermal_bands}
     ${_pi_species_args}
+    ${_pi_jaff_toml_args}
   )
 endforeach()

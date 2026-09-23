@@ -17,7 +17,7 @@ const k_B = 1.3806490000000002e-16
 const n_A = 6.02214129e23
 const h   = 6.62606957e-27
 const R   = k_B * n_A
-const σ_v = 2.1596876715103067e-18
+const σ_v = 3.2467944898988799e-18
 const E_ion = 7.8173631192954724e-12
 
 struct State
