@@ -499,7 +499,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_DEVICE static auto
 	ComputeDustTemperatureBateKeto(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
-				       double R_sum, int n_step, const double Q_dust,
+				       double R_sum, int n_step, double Q_dust,
 				       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{}) -> double;
 
 	AMREX_GPU_DEVICE static auto
@@ -540,8 +540,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff,
 								  quokka::valarray<double, nGroups_> const &Erad_diff,
 								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-								  const double Q_dust, double coeff_n, quokka::valarray<double, nGroups_> const &tau,
-								  double c_v, double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
+								  double Q_dust, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v,
+								  double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
 								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt)
 	    -> JacobianResult<problem_t>;
 
@@ -555,7 +555,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto
 	ComputeJacobianForGasAndDustWithPE(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad,
 					   quokka::valarray<double, nGroups_> const &Erad0, double PE_heating_energy_derivative,
-					   quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, const double Q_dust,
+					   quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double Q_dust,
 					   double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
 					   quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t,
 					   double num_den, double dt) -> JacobianResult<problem_t>;

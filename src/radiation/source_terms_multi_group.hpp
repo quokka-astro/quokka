@@ -699,10 +699,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		const double c = c_light_;
 		const double chat = c_hat_;
 		const double dustGasCoeff_local = dustGasCoeff;
+		auto const &dustHeatingSource_local = dustHeatingSource; // NOLINT
 
 		double Q_dust = 0.0;
 		if constexpr (dust_chemical_band_absorption_) {
-			Q_dust = dustHeatingSource(i, j, k) * dt;
+			Q_dust = dustHeatingSource_local(i, j, k) * dt;
 		}
 
 		// load fluid properties
