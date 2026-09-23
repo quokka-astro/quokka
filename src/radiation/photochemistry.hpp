@@ -214,13 +214,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				for (int nn = 0; nn < NumThermalBands; ++nn) {
 					const Real dE_thermal = photochemstate.re_thermal[nn] - re_thermal_initial[nn];
 					const int eIdx = RadSystem<problem_t>::radEnergy_index + RadSystem<problem_t>::numRadVars_ * nn;
-					// The floor can only ever add energy: charge the gas for the shortfall the max()
-					// invents, not for the whole (legitimate) band update. The unclamped value is the
-					// reference, so a band that stays above small_x is debited exactly zero.
-					const Real E_thermal_unclamped = state(i, j, k, eIdx) + RadSystem_Traits<problem_t>::c_hat_over_c * dE_thermal;
-					state(i, j, k, eIdx) = amrex::max(E_thermal_unclamped, small_x);
-					const Real extra_energy_deposited = state(i, j, k, eIdx) - E_thermal_unclamped;
-					state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) -= extra_energy_deposited;
+					state(i, j, k, eIdx) =
+					    amrex::max(state(i, j, k, eIdx) + RadSystem_Traits<problem_t>::c_hat_over_c * dE_thermal, small_x);
 				}
 			}
 

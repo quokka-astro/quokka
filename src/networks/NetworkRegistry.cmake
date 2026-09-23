@@ -23,6 +23,7 @@ foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten the
   set(_pi_is_jaff FALSE)
   set(_pi_species_args "")
   set(_pi_jaff_toml_args "")
+  set(_pi_num_thermal_bands "")
   if (_pi_name STREQUAL "photoionization_H_caseB")
     set(_pi_is_jaff TRUE)
     set(_pi_jaff_toml_args JAFF_TOML "${CMAKE_SOURCE_DIR}/src/networks/${_pi_name}/jaffgen.toml")
