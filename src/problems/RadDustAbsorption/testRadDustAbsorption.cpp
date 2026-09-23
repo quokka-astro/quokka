@@ -6,17 +6,32 @@
 /// \file testRadDustAbsorption.cpp
 /// \brief Defines a test problem for dust-absorption-only radiation bands.
 ///
-/// A beam enters a uniform, static slab through the left boundary. The two groups are
-/// dust-absorption-only bands (RadSystem_Traits::dust_absorption_only = true), so they are absorbed and
-/// push on the gas but never heat it. The test pins the three properties that define the band type:
+/// A beam of interstellar ultraviolet radiation enters a uniform, static slab of cold molecular gas
+/// through the left boundary. The bands are dust-absorption bands, so they are absorbed and push on the
+/// gas but never heat it thermally; the only energy they give the gas is photoelectric, at the rate of
+/// Bate & Keto (2015), Eq. 26,
 ///
-///   1. the beam is attenuated as exp(-rho kappa_g x), group by group, including the kappa = 0 limit;
-///   2. the gas internal energy is unchanged, even though the absorbed energy exceeds it ~100-fold;
-///   3. the gas still gains the momentum the absorbed radiation carried.
+///     dE_int/dt = sum_g epsilon_g * R * n_H * E_g ,   R = 1.33e-24 / 5.29e-14 cm^3 s^-1 .
 ///
-/// Check 2 is the defining property. If the absorbed energy were delivered to the gas as it is for a
-/// thermal band, the internal energy would rise by roughly two orders of magnitude, so the test
-/// separates the two behaviours by a wide margin rather than by a tolerance.
+/// The problem is in cgs with interstellar values -- n_H = 100 cm^-3, T = 20 K, epsilon = 0.05, and one
+/// Habing unit incident per band over about 6 pc -- because that rate coefficient is empirical and
+/// defined in cgs. The heating then roughly doubles the internal energy over the run.
+///
+/// Three bands isolate the three behaviours that define the band type. They are chosen to separate those
+/// behaviours rather than to model a real dust opacity curve:
+///
+///   band 0: absorbed (tau = 2), epsilon = 0.05  -- attenuation, radiation force, and heating
+///   band 1: transparent,        epsilon = 0.05  -- heats the gas although nothing is absorbed
+///   band 2: transparent,        epsilon = 0     -- contributes nothing at all
+///
+/// Band 1 matters because photoelectric heating is the photoelectric effect on grains, not a share of
+/// the energy the dust absorbs: the rate does not go through the band opacity, so a transparent band
+/// heats the gas exactly as much as an absorbed one carrying the same E_g. Band 2 pins that a zero
+/// efficiency really does switch a band's heating off, which is how non-ultraviolet bands are labelled.
+///
+/// Comparing the whole internal-energy profile against the analytic photoelectric rate also pins the
+/// defining property of the band type, that the absorbed energy does not reach the gas: were it
+/// delivered as heat, the profile would be about an order of magnitude larger (see the printout).
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -31,66 +46,74 @@
 #include <cmath>
 #include <format>
 
-struct DustAbsorptionProblem {};
+struct DustAbsorptionProblem {
+};
 
-constexpr double c = 1.0;     // speed of light
-constexpr double rho0 = 10.0; // gas density; large enough that the gas stays effectively static (v/c ~ 1e-6)
-constexpr double Lx = 2.0;    // slab thickness
+constexpr int n_groups = 3;
+constexpr double gamma_gas = 5. / 3.;
+constexpr double n_H = 100.0;	  // cm^-3, a cold interstellar cloud
+constexpr double mu = C::m_u;	  // g, so that n_H = rho / mu
+constexpr double rho0 = n_H * mu; // g cm^-3
+constexpr double T0 = 20.0;	  // K
+constexpr double Lx = 2.0e19;	  // cm, about 6 pc
 
-// Group 0 is absorbing, group 1 is transparent. The transparent band exercises the tau = 0 limit of the
-// analytic band update, where the backward-Euler denominator is exactly 1.
-constexpr double kappa0 = 0.1;
-constexpr double kappa1 = 0.0;
-constexpr double tau0 = rho0 * kappa0 * Lx; // = 2
+constexpr double kappa_absorbing = 2.0 / (rho0 * Lx); // cm^2 g^-1, giving tau = 2 across the slab
+constexpr double tau_absorbing = rho0 * kappa_absorbing * Lx;
 
-constexpr double Frad0 = 2.0e-7; // incident flux, per group
-constexpr double initial_Erad = 1.0e-12;
-constexpr double tmax = 100.0; // 50 light-crossing times, so the slab is in steady state
+// Photoelectric efficiency and the rate coefficient of Bate & Keto (2015), Eq. 26. The coefficient is
+// repeated here rather than taken from RadSystem, so that the check is independent of the solver.
+constexpr double epsilon0 = 0.05;
+constexpr double J_ISR = 5.29e-14;	       // erg cm^-3, the reference interstellar field
+constexpr double pe_rate = 1.33e-24 / J_ISR;   // cm^3 s^-1
+constexpr double Frad0 = J_ISR * c_light_cgs_; // one Habing unit at the boundary, per band
 
-// Gas internal energy, chosen so that the radiation absorbed over the run exceeds it ~100-fold. That
-// ratio is what makes check 2 decisive.
-constexpr double initial_Egas = 1.0e-7;
+constexpr double initial_Erad = 1.0e-25;
+constexpr double initial_Egas = n_H * C::k_B * T0 / (gamma_gas - 1.0);
+constexpr double tmax = 6.0e10; // s, about 90 light-crossing times; long enough to roughly double E_int
 
 template <> struct quokka::EOS_Traits<DustAbsorptionProblem> {
-	static constexpr double mean_molecular_weight = 1.0;
-	static constexpr double gamma = 5. / 3.;
+	static constexpr double mean_molecular_weight = mu;
+	static constexpr double gamma = gamma_gas;
 };
 
 template <> struct Physics_Traits<DustAbsorptionProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr int nGroups = 2;
+	static constexpr int nGroups = n_groups;
 	// face-centred
-	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
-	static constexpr double boltzmann_constant = 1.0;
-	static constexpr double gravitational_constant = 1.0;
-	static constexpr double c_light = c;
-	static constexpr double radiation_constant = 1.0;
+	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct RadSystem_Traits<DustAbsorptionProblem> {
 	static constexpr double c_hat_over_c = 1.0;
 	static constexpr double Erad_floor = initial_Erad;
-	static constexpr double energy_unit = 1.0;
-	static constexpr amrex::GpuArray<double, 3> radBoundaries = {0.1, 1.0, 10.0};
+	static constexpr double energy_unit = C::ev2erg;
+	static constexpr amrex::GpuArray<double, n_groups + 1> radBoundaries = {5.0, 8.0, 11.2, 13.6}; // eV
 	static constexpr int beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr bool dust_absorption_only = true;
+	static constexpr amrex::GpuArray<double, n_groups> pe_heating_efficiency = {epsilon0, epsilon0, 0.0};
 };
 
+// the opacity of each band, in the order described at the top of this file
+constexpr amrex::GpuArray<double, n_groups> kappa_band = {kappa_absorbing, 0.0, 0.0};
+
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<DustAbsorptionProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, 3> /*rad_boundaries*/,
-												  const double /*rho*/, const double /*Tgas*/)
-    -> amrex::GpuArray<amrex::GpuArray<double, 3>, 2>
+AMREX_GPU_HOST_DEVICE auto RadSystem<DustAbsorptionProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, n_groups + 1> /*rad_boundaries*/,
+												 const double /*rho*/, const double /*Tgas*/)
+    -> amrex::GpuArray<amrex::GpuArray<double, n_groups + 1>, 2>
 {
-	amrex::GpuArray<amrex::GpuArray<double, 3>, 2> exponents_and_values{};
-	for (int i = 0; i < 3; ++i) {
+	// The opacity is independent of Tgas, which the dust-absorption band solver requires: it evaluates
+	// the opacity once, at the start-of-step gas temperature, and does not revise it for the temperature
+	// change the photoelectric heating produces within the step.
+	// kappa_band has no device storage, so copy it to a local before indexing it with a runtime index
+	const amrex::GpuArray<double, n_groups> kappa = kappa_band;
+	amrex::GpuArray<amrex::GpuArray<double, n_groups + 1>, 2> exponents_and_values{};
+	for (int i = 0; i < n_groups + 1; ++i) {
 		exponents_and_values[0][i] = 0.0;
+		exponents_and_values[1][i] = kappa[std::min(i, n_groups - 1)];
 	}
-	exponents_and_values[1][0] = kappa0;
-	exponents_and_values[1][1] = kappa1;
-	exponents_and_values[1][2] = kappa1;
 	return exponents_and_values;
 }
 
@@ -100,7 +123,7 @@ template <> void QuokkaSimulation<DustAbsorptionProblem>::setInitialConditionsOn
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		for (int g = 0; g < Physics_Traits<DustAbsorptionProblem>::nGroups; ++g) {
+		for (int g = 0; g < n_groups; ++g) {
 			state_cc(i, j, k, RadSystem<DustAbsorptionProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = initial_Erad;
 			state_cc(i, j, k, RadSystem<DustAbsorptionProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 			state_cc(i, j, k, RadSystem<DustAbsorptionProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
@@ -127,8 +150,8 @@ AMRSimulation<DustAbsorptionProblem>::setCustomBoundaryConditions(const amrex::I
 	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
 
 	// a fully beamed source along +x: |F| = c E
-	for (int g = 0; g < Physics_Traits<DustAbsorptionProblem>::nGroups; ++g) {
-		low_bdr_cells[RadSystem<DustAbsorptionProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Frad0 / c;
+	for (int g = 0; g < n_groups; ++g) {
+		low_bdr_cells[RadSystem<DustAbsorptionProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Frad0 / c_light_cgs_;
 		low_bdr_cells[RadSystem<DustAbsorptionProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = Frad0;
 		low_bdr_cells[RadSystem<DustAbsorptionProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
 		low_bdr_cells[RadSystem<DustAbsorptionProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
@@ -171,54 +194,64 @@ auto problem_main() -> int
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
 
-	// 1. attenuation, group by group
-	double err_norm = 0.;
-	double sol_norm = 0.;
+	// 1. each band is attenuated as exp(-rho kappa_g x); the transparent bands are not attenuated at all
+	double erad_err = 0.;
+	double erad_sol = 0.;
 	for (int i = 0; i < nx; ++i) {
 		const double x = position[i];
-		for (int g = 0; g < Physics_Traits<DustAbsorptionProblem>::nGroups; ++g) {
-			const double kappa = (g == 0) ? kappa0 : kappa1;
-			const double Erad_exact = (Frad0 / c) * std::exp(-rho0 * kappa * x);
+		for (int g = 0; g < n_groups; ++g) {
+			const double Erad_exact = (Frad0 / c_light_cgs_) * std::exp(-rho0 * kappa_band[g] * x);
 			const double Erad = values.at(RadSystem<DustAbsorptionProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
-			err_norm += std::abs(Erad - Erad_exact);
-			sol_norm += std::abs(Erad_exact);
+			erad_err += std::abs(Erad - Erad_exact);
+			erad_sol += std::abs(Erad_exact);
 		}
 	}
-	const double rel_err_norm = err_norm / sol_norm;
+	const double erad_rel_err = erad_err / erad_sol;
 
-	// 2. the gas internal energy must be unchanged: the absorbed energy goes to the dust, not the gas
-	double max_eint_change = 0.;
+	// 2. the gas is heated at exactly the photoelectric rate, summed over the bands that have a non-zero
+	// efficiency. A cell starts accumulating once the beam front reaches it at t = x / c.
+	double eint_err = 0.;
+	double eint_sol = 0.;
+	double max_heating_ratio = 0.;
 	for (int i = 0; i < nx; ++i) {
-		const double Eint = values.at(RadSystem<DustAbsorptionProblem>::gasInternalEnergy_index)[i];
-		max_eint_change = std::max(max_eint_change, std::abs(Eint - initial_Egas) / initial_Egas);
+		const double x = position[i];
+		// bands 0 and 1 heat; band 2 has zero efficiency and must contribute nothing
+		const double Erad_heating = (Frad0 / c_light_cgs_) * (std::exp(-rho0 * kappa_absorbing * x) + 1.0);
+		const double dEint_exact = epsilon0 * pe_rate * n_H * Erad_heating * (tmax - x / c_light_cgs_);
+		const double dEint = values.at(RadSystem<DustAbsorptionProblem>::gasInternalEnergy_index)[i] - initial_Egas;
+		eint_err += std::abs(dEint - dEint_exact);
+		eint_sol += std::abs(dEint_exact);
+		max_heating_ratio = std::max(max_heating_ratio, dEint / initial_Egas);
 	}
-	// For scale: had the absorbed energy been delivered to the gas, this ratio would be ~100.
-	const double absorbed_per_volume = Frad0 * (1.0 - std::exp(-tau0)) * tmax / Lx;
-	const double heating_if_thermal = absorbed_per_volume / initial_Egas;
+	const double eint_rel_err = eint_err / eint_sol;
 
-	// 3. the gas must still gain the momentum the absorbed radiation carried
+	// For scale: had the absorbed energy been delivered to the gas as heat, as it is for a thermal band,
+	// the gain at the illuminated face would be this instead of max_heating_ratio.
+	const double heating_if_thermal = rho0 * kappa_absorbing * Frad0 * tmax / initial_Egas;
+
+	// 3. the gas still receives the momentum of the absorbed radiation. Only the absorbing band
+	// contributes: the transparent bands heat the gas but exert no force on it.
 	double momentum = 0.;
 	const double dx = Lx / nx;
 	for (int i = 0; i < nx; ++i) {
 		momentum += values.at(RadSystem<DustAbsorptionProblem>::x1GasMomentum_index)[i] * dx;
 	}
-	// Steady-state deposition rate, integrated over the run. The beam takes Lx/c to fill the slab, so the
-	// measured value falls short of this by about Lx/(c tmax) = 2%.
-	const double momentum_exact = (Frad0 / c) * (1.0 - std::exp(-tau0)) * tmax;
+	const double momentum_exact = (Frad0 / c_light_cgs_) * (1.0 - std::exp(-tau_absorbing)) * tmax;
 	const double momentum_ratio = momentum / momentum_exact;
 
-	amrex::Print() << "Relative L1 norm of Erad = " << rel_err_norm << '\n';
-	amrex::Print() << "Max relative change in gas internal energy = " << max_eint_change << " (would be " << heating_if_thermal
+	amrex::Print() << "Relative L1 norm of Erad = " << erad_rel_err << '\n';
+	amrex::Print() << "Relative L1 norm of the photoelectric heating profile = " << eint_rel_err << '\n';
+	amrex::Print() << "Peak gas internal energy gain = " << max_heating_ratio << " of its initial value (would be " << heating_if_thermal
 		       << " if the absorbed energy heated the gas)\n";
 	amrex::Print() << "Gas momentum / analytic = " << momentum_ratio << '\n';
 
 	int status = 0;
-	if (!(rel_err_norm < 0.02)) {
-		amrex::Print() << "ERROR: the beam is not attenuated as exp(-rho kappa x).\n";
+	if (!(erad_rel_err < 0.02)) {
+		amrex::Print() << "ERROR: the bands are not attenuated as exp(-rho kappa x).\n";
 		status = 1;
 	}
-	if (!(max_eint_change < 0.01)) {
-		amrex::Print() << "ERROR: the gas internal energy changed; a dust-absorption band must not heat the gas.\n";
+	if (!(eint_rel_err < 0.02)) {
+		amrex::Print() << "ERROR: the gas heating does not match the photoelectric rate.\n";
 		status = 1;
 	}
 	if (!((momentum_ratio > 0.95) && (momentum_ratio < 1.005))) {
