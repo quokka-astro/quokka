@@ -56,8 +56,10 @@ template <typename problem_t> class turbulentDriving
 {
       private:
 	TurbGenEx tg;
-	bool updated = false;
-	amrex::GpuArray<amrex::Real, 3> disp = {-1.0, -1.0, -1.0};
+	bool updated_forcing_pattern = false;
+	amrex::GpuArray<amrex::Real, 3> velocity_dispersion = {-1.0, -1.0, -1.0};
+	bool remove_mean_flow = false;
+	bool removed_mean_flow = false;
 
 	// the forcing pattern is exactly zero-mean by construction, but the momentum source applied
 	// is density-weighted, so a net mean flow can still build up if the forcing correlates with
@@ -67,31 +69,38 @@ template <typename problem_t> class turbulentDriving
 
 	void update(const amrex::Real &time, amrex::MultiFab &state)
 	{
-		updated = tg.is_update_available(time);
+		updated_forcing_pattern = tg.is_update_available(time);
 
-		if (updated) {
+		if (updated_forcing_pattern) {
 			const VelocityMoments velocity_moments = quokka::turbulence::calculate_dispersion<problem_t>(state);
-			disp = velocity_moments.dispersion;
-			tg.check_for_update(time, disp.data());
+			velocity_dispersion = velocity_moments.dispersion;
+			tg.check_for_update(time, velocity_dispersion.data());
 
-			const amrex::Real mean_mag =
-			    std::sqrt(velocity_moments.mean[0] * velocity_moments.mean[0] + velocity_moments.mean[1] * velocity_moments.mean[1] +
-				      velocity_moments.mean[2] * velocity_moments.mean[2]);
-			const amrex::Real disp_mag = std::sqrt(disp[0] * disp[0] + disp[1] * disp[1] + disp[2] * disp[2]);
+			if (remove_mean_flow && removed_mean_flow) {
+				const amrex::Real mean_flow_magnitude =
+				    std::sqrt(velocity_moments.mean[0] * velocity_moments.mean[0] + velocity_moments.mean[1] * velocity_moments.mean[1] +
+					      velocity_moments.mean[2] * velocity_moments.mean[2]);
+				const amrex::Real dispersion_magnitude =
+				    std::sqrt(velocity_dispersion[0] * velocity_dispersion[0] + velocity_dispersion[1] * velocity_dispersion[1] +
+					      velocity_dispersion[2] * velocity_dispersion[2]);
 
-			if (mean_mag > mean_flow_to_dispersion_threshold * disp_mag) {
-				const std::string abort_msg =
-				    std::format("[FATAL] TurbulentDriving: mean flow ({:.3e}) exceeds {:.0f}% of the velocity dispersion "
-						"({:.3e}) at time {:.3e}; the density-weighted forcing has built up a net bulk flow.",
-						mean_mag, mean_flow_to_dispersion_threshold * 100.0, disp_mag, time);
-				amrex::Abort(abort_msg.c_str());
+				if (mean_flow_magnitude > mean_flow_to_dispersion_threshold * dispersion_magnitude) {
+					const std::string abort_msg =
+					    std::format("[FATAL] TurbulentDriving: mean flow ({:.3e}) exceeds {:.0f}% of the velocity dispersion "
+							"({:.3e}) at time {:.3e}; the density-weighted forcing has built up a net bulk flow.",
+							mean_flow_magnitude, mean_flow_to_dispersion_threshold * 100.0, dispersion_magnitude, time);
+					amrex::Abort(abort_msg.c_str());
+				}
 			}
 		}
 	}
 
       public:
 	turbulentDriving() = default;
-	explicit turbulentDriving(const std::map<std::string, std::string> &turb_params) { tg.init_driving(turb_params); }
+	explicit turbulentDriving(const std::map<std::string, std::string> &turb_params, bool remove_mean_flow_in) : remove_mean_flow(remove_mean_flow_in)
+	{
+		tg.init_driving(turb_params);
+	}
 
 	auto applyDriving(amrex::MultiFab &state, const amrex::Real time, const amrex::Real dt_in,
 			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &probLo) -> bool
@@ -140,11 +149,15 @@ template <typename problem_t> class turbulentDriving
 
 		// mean velocity the forcing would inject this step, plus any mean velocity already present;
 		// subtracting this from every cell keeps the domain-mean velocity pinned at zero every step
-		const amrex::GpuArray<amrex::Real, 3> mean_correction = {
-		    reduce_vec[1] / reduce_vec[0] + dt * reduce_vec[4] / reduce_vec[0],
-		    reduce_vec[2] / reduce_vec[0] + dt * reduce_vec[5] / reduce_vec[0],
-		    reduce_vec[3] / reduce_vec[0] + dt * reduce_vec[6] / reduce_vec[0],
-		};
+		amrex::GpuArray<amrex::Real, 3> mean_correction = {0.0, 0.0, 0.0};
+		if (remove_mean_flow) {
+			mean_correction = {
+			    reduce_vec[1] / reduce_vec[0] + dt * reduce_vec[4] / reduce_vec[0],
+			    reduce_vec[2] / reduce_vec[0] + dt * reduce_vec[5] / reduce_vec[0],
+			    reduce_vec[3] / reduce_vec[0] + dt * reduce_vec[6] / reduce_vec[0],
+			};
+			removed_mean_flow = true;
+		}
 
 		for (amrex::MFIter mf(state); mf.isValid(); ++mf) {
 			const amrex::Box &bx = mf.validbox();
@@ -169,7 +182,7 @@ template <typename problem_t> class turbulentDriving
 		}
 
 		amrex::Gpu::streamSynchronize();
-		return updated;
+		return updated_forcing_pattern;
 	}
 };
 
