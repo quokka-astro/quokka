@@ -47,7 +47,7 @@ template <> struct HydroSystem_Traits<ThermalConductionProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<ThermalConductionProblem> {
+template <> struct Physics_Traits<ThermalConductionProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
@@ -110,7 +110,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 			vz = Mach * cs_wind; // 100 km/s
 		}
 		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
-		if(i==0 & j==0 & k==0){
+		if(i==0 && j==0 && k==0){
 			amrex::Print() << "Parameters of the cloud-wind problem: " << std::endl;
 			amrex::Print() << "Twind: " << Twind << std::endl;
 			amrex::Print() << "Tcloud: " << Tcloud << std::endl;
@@ -242,17 +242,4 @@ auto problem_main() -> int
 	amrex::Print() << "Finished." << '\n';
 	return 0;
 
-	/***Richardson Extrapolation ****/
-
-	// quokka::richardson::applyQuietDefaults();
-	// quokka::richardson::Parameters params{};
-	// params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	// params.nx_initial = 128;
-	// params.nx_max = 512;
-	// params.expected_rate = 2.0;
-	// params.tolerance = 0.3;
-	// params.test_name = "Thermal Conduction";
-	// params.csv_filename = "thermal_conduction_convergence.csv";
-
-	// return quokka::richardson::run(params, [](int nx) { return runConductionTest(nx); });
 }
