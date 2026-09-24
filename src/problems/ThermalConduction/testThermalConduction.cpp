@@ -152,16 +152,16 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 {
 	// tracer-based refinement: tag cells that are less than 50% cloud AND less than 50% wind,
 	// i.e. cells in the cloud-wind mixing/interface region
-	const auto dx = geom[lev].CellSizeArray();
-	const amrex::Real cellVolume = dx[0] * dx[1] * dx[2];
 	const amrex::Real refine_threshold = 0.5 * Tracer;
 
 	auto const &state = state_new_cc_[lev].const_arrays();
 	auto const tag = tags.arrays();
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		amrex::Real const cloudTracer = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index);
-		amrex::Real const windTracer = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1);
+		// the scalars are mass-weighted (rho * concentration), so divide by rho to recover the concentration
+		amrex::Real const rho = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::density_index);
+		amrex::Real const cloudTracer = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) / rho;
+		amrex::Real const windTracer = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) / rho;
 		if (cloudTracer < refine_threshold && windTracer < refine_threshold) {
 			tag[bx](i, j, k) = amrex::TagBox::SET;
 		}
@@ -169,6 +169,29 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 	amrex::Gpu::streamSynchronize();
 }
 
+
+template <>
+void QuokkaSimulation<ThermalConductionProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
+								   amrex::MultiFab const &state_cc,
+								   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+{
+	// compute derived variables and save in 'mf'
+	if (dname == "temperature") {
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_cc.const_arrays();
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::energy_index);
+			static_assert(!Physics_Traits<ThermalConductionProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
+			output[bx](i, j, k, ncomp) = quokka::EOS<ThermalConductionProblem>::ComputeTgasFromEint(rho, Eint);
+		});
+	}
+}
 
 template <> void QuokkaSimulation<ThermalConductionProblem>::computeAfterTimestep()
 {
