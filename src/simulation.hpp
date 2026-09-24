@@ -1686,9 +1686,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		amrex::ParallelDescriptor::Bcast(&force_checkpoint_flag, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 		force_checkpoint_now = (force_checkpoint_flag == 1);
 
-		if (force_checkpoint_now && last_chk_file_step != step + 1) {
-			last_chk_file_step = step + 1;
-			WriteCheckpointFile();
+		if (force_checkpoint_now) {
+			if (last_chk_file_step != step + 1) {
+				last_chk_file_step = step + 1;
+				WriteCheckpointFile();
+			}
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				std::error_code remove_ec;
 				if (!std::filesystem::remove(checkpoint_sentinel, remove_ec) && remove_ec) {
