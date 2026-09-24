@@ -216,6 +216,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int checkpointInterval_ = -1;				     // -1 == no output
 	int amrInterpMethod_ = 1;				     // 0 == piecewise constant, 1 == lincc_interp
 	int restartRefineFactor_ = 1;				     // 1 == don't refine, >1 == refine by this factor on restart
+	bool restartAddsRadiation_ = false;			     // true if restarted from a hydro-only checkpoint with radiation enabled
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
 	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
@@ -350,6 +351,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// fix-up any unphysical states created by AMR operations
 	// (e.g., caused by the flux register or from interpolation)
 	virtual void FixupState(int level) = 0;
+	// Set the radiation variables in the valid cells of state when a hydro-only checkpoint is restarted with radiation enabled
+	virtual void initRadiationOnRestart(amrex::MultiFab & /*state*/)
+	{
+		amrex::Abort("Restarting a hydro-only checkpoint with radiation enabled is not supported by this simulation class.");
+	}
 
       protected:
 	// tag cells for refinement
@@ -5077,6 +5083,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 		// cell-centred data
 		amrex::MultiFab tmp;
 		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+		if (tmp.nComp() != state_new_cc_[lev].nComp()) {
+			// A hydro-only checkpoint may be restarted with radiation enabled. The radiation variables are the
+			// last block of the state vector, so the checkpoint holds every component before radFirstIndex.
+			constexpr int radFirstIndex = Physics_Indices<problem_t>::radFirstIndex;
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::is_radiation_enabled && tmp.nComp() == radFirstIndex,
+							 std::format("Checkpoint '{}' has {} cell-centred components, but the simulation expects {}.",
+								     restart_chkfile, tmp.nComp(), state_new_cc_[lev].nComp()));
+			if (lev == 0) {
+				amrex::Print() << "Checkpoint has no radiation variables. Setting the radiation energy to the floor and the flux to zero.\n";
+			}
+			restartAddsRadiation_ = true;
+			initRadiationOnRestart(state_new_cc_[lev]);
+		}
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp())); // check valid cells
 
@@ -5218,6 +5237,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	// This also parses particles.* parameters in restart runs.
 #if AMREX_SPACEDIM == 3
 	InitPhyParticles(&header_box_arrays);
+
+	// Particles from a hydro-only checkpoint carry no meaningful luminosity
+	if (restartAddsRadiation_) {
+		particleRegister_.zeroLuminosities();
+	}
 
 	// Read SFH data from metadata
 	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_, sn_count_cumulative_);

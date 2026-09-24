@@ -16,6 +16,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "radiation/radiation_system.hpp"
 
 struct ParticleSFProblem {};
 
@@ -49,6 +50,44 @@ template <> struct Physics_Traits<ParticleSFProblem> : DefaultPhysicsTraits {
 template <> struct SimulationData<ParticleSFProblem> {
 	Real m_gas_init;
 };
+
+// The same problem with radiation enabled, used to restart from a hydro-only checkpoint of ParticleSFProblem
+struct ParticleSFRadProblem {};
+
+template <> struct Particle_Traits<ParticleSFRadProblem> : DefaultParticleTraits {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
+};
+
+template <> struct quokka::EOS_Traits<ParticleSFRadProblem> {
+	static constexpr double gamma = gamma_;
+	static constexpr double mean_molecular_weight = mu;
+	using EOSBackend = quokka::EOSTabulated<ParticleSFRadProblem>;
+};
+
+template <> struct HydroSystem_Traits<ParticleSFRadProblem> {
+	static constexpr bool reconstruct_eint = true;
+};
+
+template <> struct Physics_Traits<ParticleSFRadProblem> : DefaultPhysicsTraits {
+	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_radiation_enabled = true;
+};
+
+template <> struct RadSystem_Traits<ParticleSFRadProblem> {
+	static constexpr double c_hat_over_c = 1.0e-4; // keep the number of radiation substeps small
+	static constexpr double Erad_floor = 1.0e-30; // erg cm^-3; the radiation energy is set to this floor on restart
+	static constexpr int beta_order = 0;
+};
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleSFRadProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+{
+	return 1.0e-20; // optically thin
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleSFRadProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+{
+	return 1.0e-20; // optically thin
+}
 
 template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -218,7 +257,8 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 	}
 }
 
-auto problem_main() -> int
+// Part 1: hydro-only star formation test. On a fresh run, n_particles is set to the number of particles at the end.
+auto runParticleSF(int &n_particles) -> int
 {
 	// Problem initialization
 	QuokkaSimulation<ParticleSFProblem> sim;
@@ -303,11 +343,11 @@ auto problem_main() -> int
 
 	int status = 0;
 
+	// total particle and gas masses (collective operations, so they must be called on all ranks)
+	const double m_star_tot2 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->computeStellarMass();
+	const double m_gas_final2 = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// get total particle mass
-		const double m_star_tot2 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->computeStellarMass();
-		// get total gas mass
-		const double m_gas_final2 = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
 		const double m_gas_change2 = sim.userData_.m_gas_init - m_gas_final2;
 		amrex::Print() << std::format("Mass of all stars [expected]   = {:.6e} [{:.6e}] M_sol \n", m_star_tot2 / C::M_solar,
 					      m_gas_change2 / C::M_solar);
@@ -318,6 +358,104 @@ auto problem_main() -> int
 			amrex::Print() << "Test failed: Total mass of all stars does not match expectation\n";
 		}
 	}
+	amrex::ParallelDescriptor::Bcast(&status, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+
+	n_particles = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getNumParticles();
 
 	return status;
+}
+
+// Part 2: restart the hydro-only checkpoint written by part 1 with radiation enabled. Right after the restart, the radiation
+// energy on the grid must equal the floor, and the radiation flux and the particle luminosities must be zero.
+auto runRadRestart(const int n_particles_chk) -> int
+{
+	using RadSys = RadSystem<ParticleSFRadProblem>;
+	constexpr int nGroups = Physics_Traits<ParticleSFRadProblem>::nGroups;
+
+	amrex::Print() << "\n=== Part 2: restart the hydro-only checkpoint with radiation ===\n";
+	amrex::ParmParse pp;
+	pp.add("restartfile", std::string("last_chk"));
+	pp.add("max_timesteps", 12);
+	pp.add("checkpoint_interval", -1);
+	pp.add("plotfile_interval", -1);
+	amrex::ParmParse pp_particles("particles");
+	pp_particles.add("use_luminosity_table", false); // keep the luminosities at zero
+
+	QuokkaSimulation<ParticleSFRadProblem> sim;
+	sim.reconstructionOrder_ = 3;
+	sim.cflNumber_ = 0.3;
+	sim.stopTime_ = 1.0e7 * year;
+	sim.setInitialConditions();
+
+	int status = 0;
+
+	// radiation energy and flux of every group on every level
+	for (int lev = 0; lev <= sim.finestLevel(); ++lev) {
+		for (int g = 0; g < nGroups; ++g) {
+			const int offset = Physics_NumVars::numRadVarsPerGroup * g;
+			const int e_comp = RadSys::radEnergy_index + offset;
+			const amrex::Real e_min = sim.state_new_cc_[lev].min(e_comp);
+			const amrex::Real e_max = sim.state_new_cc_[lev].max(e_comp);
+			if (e_min != RadSys::Erad_floor_ || e_max != RadSys::Erad_floor_) {
+				status = 1;
+				amrex::Print() << "Test failed: radiation energy of group " << g << " on level " << lev << " is in [" << e_min << ", " << e_max
+					       << "], expected " << RadSys::Erad_floor_ << "\n";
+			}
+			for (const int comp : {RadSys::x1RadFlux_index, RadSys::x2RadFlux_index, RadSys::x3RadFlux_index}) {
+				const amrex::Real max_abs = sim.state_new_cc_[lev].norm0(comp + offset);
+				if (max_abs != 0.0) {
+					status = 1;
+					amrex::Print() << "Test failed: radiation flux component " << comp + offset << " on level " << lev << " has max |value| = " << max_abs
+						       << "\n";
+				}
+			}
+		}
+	}
+
+	// particle luminosities
+	auto *descriptor = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop);
+	const int n_particles = descriptor->getNumParticles();
+	const auto [real_data, idata] = descriptor->getParticleDataAtLevel(0);
+	amrex::ignore_unused(idata);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		int n_nonzero_lum = 0;
+		for (const auto &rdata : real_data) {
+			for (int g = 0; g < nGroups; ++g) {
+				// the first AMREX_SPACEDIM entries are the particle position
+				if (rdata[AMREX_SPACEDIM + quokka::StochasticStellarPopParticleLumIdx + g] != 0.0) {
+					n_nonzero_lum++;
+				}
+			}
+		}
+		amrex::Print() << "Particles in checkpoint = " << n_particles_chk << ", after restart = " << n_particles
+			       << ", particles with nonzero luminosity = " << n_nonzero_lum << "\n";
+		if (n_particles == 0 || n_particles != n_particles_chk || n_nonzero_lum != 0) {
+			status = 1;
+			amrex::Print() << "Test failed: particle luminosities were not reset to zero on restart\n";
+		}
+	}
+	amrex::ParallelDescriptor::Bcast(&status, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+
+	// the radiation-hydro run must continue from the restarted state
+	sim.evolve();
+
+	return status;
+}
+
+auto problem_main() -> int
+{
+	int n_particles = 0;
+	const int status = runParticleSF(n_particles);
+
+	bool restart_with_radiation = false;
+	amrex::ParmParse const ppp("problem");
+	ppp.query("restart_with_radiation", restart_with_radiation);
+	std::string restartfile;
+	amrex::ParmParse const pp;
+	pp.query("restartfile", restartfile);
+	if (status != 0 || !restart_with_radiation || !restartfile.empty()) {
+		return status;
+	}
+
+	return runRadRestart(n_particles);
 }

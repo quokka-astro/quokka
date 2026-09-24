@@ -372,6 +372,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// fix-up states
 	void FixupState(int level) override;
+	void initRadiationOnRestart(amrex::MultiFab &state) override;
 	void ApplyHydroStateFixup(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev);
 
 	// implement FillPatch function
@@ -2126,6 +2127,22 @@ void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc
 
 // fix-up any unphysical states created by AMR operations
 // (e.g., caused by the flux register or from interpolation)
+template <typename problem_t> void QuokkaSimulation<problem_t>::initRadiationOnRestart(amrex::MultiFab &state)
+{
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+		// the radiation solver divides by the radiation energy, so it cannot be zero
+		constexpr double Erad_floor = RadSystem<problem_t>::Erad_floor_;
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Erad_floor > 0.0, "Restarting a hydro-only checkpoint with radiation requires RadSystem_Traits::Erad_floor > 0.");
+		constexpr int radFirstIndex = Physics_Indices<problem_t>::radFirstIndex;
+		state.setVal(0.0, radFirstIndex, Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups, 0);
+		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+			state.setVal(Erad_floor, RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g, 1, 0);
+		}
+	} else {
+		amrex::ignore_unused(state);
+	}
+}
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
 {
 	const BL_PROFILE("QuokkaSimulation::FixupState()");
