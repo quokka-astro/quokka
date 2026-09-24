@@ -45,12 +45,14 @@ This table lists all test problems in the Quokka codebase. The acronyms used are
 | HydroLeblanc                      | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | HydroQuirk                        | 2   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | HydroSMS                          | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
+| HydroShearRepro                    | 2   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | HydroShocktube                    | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | HydroShocktubeCMA                 | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | 3              |
 | HydroShuOsher                     | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | HydroVacuum                       | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | HydroWaveConvergence              | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | HydrostaticAtmosphere             | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
+| KeplerianDisk                     | 2/3 | ✅     | ❌   | ❌                 | fixed   | ❌                         | ❌              |
 | MHDBalsaraVortex                  | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
 | MHDBitwiseICs                     | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
 | MHDBlast                          | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
