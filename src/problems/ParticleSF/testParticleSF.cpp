@@ -547,8 +547,8 @@ template <typename problem_t> auto runRadRestart(const std::vector<std::vector<d
 		}
 		const amrex::Real rel_energy_change = std::abs(energy_final - energy_restart) / energy_restart;
 		amrex::Print() << "After the radiation-hydro steps: particles = " << real_data_final.size()
-			       << ", nonzero luminosity components = " << n_nonzero_lum_final << ", relative change of gas + radiation energy = " << rel_energy_change
-			       << "\n";
+			       << ", nonzero luminosity components = " << n_nonzero_lum_final
+			       << ", relative change of gas + radiation energy = " << rel_energy_change << "\n";
 		// written so that NaN or inf fails
 		if (n_nonzero_lum_final != 0 || !(rel_energy_change < 0.1)) {
 			status = 1;
