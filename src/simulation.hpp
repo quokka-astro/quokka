@@ -2142,6 +2142,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;
 
+	particleRegister_.updateChemicalFeedback(state_new_cc_[lev], lev, time, dt);
+
 	// Enforce floors and limits on hydro state to ensure we have valid hydro states
 	FixupState(lev);
 
@@ -2190,6 +2192,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	if (finest_level == max_level) {
 		particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 	}
+
+	// SNII and AGB yields are injected at death; continuous WR feedback precedes accretion and particle creation.
+	particleRegister_.depositChemicalFeedback(state_new_cc_[lev], lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
@@ -3650,7 +3655,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 	detail::verify_particle_switch_type<problem_t>();
 
 	// Read particle parameters from input file
-	quokka::particleParmParse();
+	quokka::particleParmParse<problem_t>();
 
 	// Sink and Star both accrete via the same accretion-rate buffer (see particleMeshInteraction).
 	// Enabling both would double-apply gas removal: computeSinkAccretion accumulates into the shared
