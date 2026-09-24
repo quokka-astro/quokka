@@ -902,7 +902,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	const amrex::ParmParse pp;
 	pp.query("do_tracers", do_tracers);
 
-	EMFComputeScheme emf_compute_scheme = EMFComputeScheme::FelkerStone2017;
+	EMFComputeScheme emf_compute_scheme = EMFComputeScheme::FelkerStone2018;
 	EMFAvgScheme emf_avg_scheme = EMFAvgScheme::LondrilloDelZanna2004;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		amrex::ParmParse const mhd_pp("mhd");
