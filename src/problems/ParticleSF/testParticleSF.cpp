@@ -75,7 +75,7 @@ template <> struct Physics_Traits<ParticleSFRadProblem> : DefaultPhysicsTraits {
 
 template <> struct RadSystem_Traits<ParticleSFRadProblem> {
 	static constexpr double c_hat_over_c = 1.0e-4; // keep the number of radiation substeps small
-	static constexpr double Erad_floor = 1.0e-30; // erg cm^-3; the radiation energy is set to this floor on restart
+	static constexpr double Erad_floor = 1.0e-30;  // erg cm^-3; the radiation energy is set to this floor on restart
 	static constexpr int beta_order = 0;
 };
 
@@ -405,8 +405,8 @@ auto runRadRestart(const int n_particles_chk) -> int
 				const amrex::Real max_abs = sim.state_new_cc_[lev].norm0(comp + offset);
 				if (max_abs != 0.0) {
 					status = 1;
-					amrex::Print() << "Test failed: radiation flux component " << comp + offset << " on level " << lev << " has max |value| = " << max_abs
-						       << "\n";
+					amrex::Print() << "Test failed: radiation flux component " << comp + offset << " on level " << lev
+						       << " has max |value| = " << max_abs << "\n";
 				}
 			}
 		}

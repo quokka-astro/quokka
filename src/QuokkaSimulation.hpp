@@ -2132,7 +2132,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::initRadiationOnR
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		// the radiation solver divides by the radiation energy, so it cannot be zero
 		constexpr double Erad_floor = RadSystem<problem_t>::Erad_floor_;
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Erad_floor > 0.0, "Restarting a hydro-only checkpoint with radiation requires RadSystem_Traits::Erad_floor > 0.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Erad_floor > 0.0,
+						 "Restarting a hydro-only checkpoint with radiation requires RadSystem_Traits::Erad_floor > 0.");
 		constexpr int radFirstIndex = Physics_Indices<problem_t>::radFirstIndex;
 		state.setVal(0.0, radFirstIndex, Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups, 0);
 		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
