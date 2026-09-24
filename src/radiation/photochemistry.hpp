@@ -34,10 +34,9 @@ static constexpr bool debit_work_term_from_radiation = false;
 AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
-auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt, const int stage,
+auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
 			   const Real max_density_allowed, const Real min_density_allowed) -> bool
 {
-	AMREX_ASSERT(stage == 1 || stage == 2);
 	// Start off by assuming a successful burn.
 	int photochem_burn_success = 1;
 
@@ -46,14 +45,15 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 	int num_failed = 0;
 
-	auto dt_stage = dt / static_cast<Real>(stage);
-	auto energy_update_factor = static_cast<Real>(stage);
-
 	const int firstChemIndex = RadSystem<problem_t>::radEnergy_index +
 				   RadSystem<problem_t>::numRadVars_ * (RadSystem<problem_t>::nGroups_ - RadSystem_NChemBands<problem_t>::value);
 	const int firstChemFxIndex = firstChemIndex + 1;
 	const int firstChemFyIndex = firstChemFxIndex + 1;
 	const int firstChemFzIndex = firstChemFyIndex + 1;
+
+	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
+		      "NumThermalBands (set for this network in NetworkRegistry.cmake) must equal RadSystem<problem_t>::nGroupsThermal_ "
+		      "(nGroups_ - NChemBands) when ISM_Traits::thermal_band_photochemistry is true.");
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.
@@ -112,12 +112,19 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 #endif
 			for (int nn = 0; nn < NumChemBands; ++nn) {
 				const Real n_gamma = state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) * invChemBandQuanta[nn];
-				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] = n_gamma;
+				photochemstate.rn[0 + MicrophysicsNumChemRadVarsPerGroup * nn] = n_gamma;
 #ifdef SKIP_PHOTOCHEMFLUX
 				n_gamma_initial[nn] = n_gamma;
 #else
-				photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] = 1.0_rt;
+				photochemstate.rn[1 + MicrophysicsNumChemRadVarsPerGroup * nn] = 1.0_rt;
 #endif
+			}
+			amrex::GpuArray<Real, amrex::max(NumThermalBands, 1)> re_thermal_initial{};
+			if constexpr (RadSystem<problem_t>::thermal_band_photochemistry_) {
+				for (int nn = 0; nn < NumThermalBands; ++nn) {
+					re_thermal_initial[nn] = state(i, j, k, RadSystem<problem_t>::radEnergy_index + RadSystem<problem_t>::numRadVars_ * nn);
+					photochemstate.re_thermal[nn] = re_thermal_initial[nn];
+				}
 			}
 			photochemstate.rho = rho;
 			photochemstate.e = Eint / rho;
@@ -128,7 +135,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
-			photochem_burner(photochemstate, dt_stage);
+			photochem_burner(photochemstate, dt);
 
 			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
 				amrex::Abort("Burner returned NAN");
@@ -148,8 +155,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			}
 			for (int nn = 0; nn < NumChemBands; nn += 1) {
 				// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
-				photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumRadVarsPerGroup] =
-				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumRadVarsPerGroup], small_x);
+				photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup] =
+				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup], small_x);
 			}
 
 			// get the updated specific eint
@@ -175,7 +182,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
-				const Real n_gamma_final = photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn];
+				const Real n_gamma_final = photochemstate.rn[0 + MicrophysicsNumChemRadVarsPerGroup * nn];
 				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) = n_gamma_final * chemBandQuanta[nn];
 				const Real FxOld = state(i, j, k, fxIdx);
 				const Real FyOld = state(i, j, k, fyIdx);
@@ -184,7 +191,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				// flux is not carried in photochemstate; derive the attenuation factor from the change in n_gamma
 				const Real flux_factor = (n_gamma_initial[nn] > 0.0_rt) ? (n_gamma_final / n_gamma_initial[nn]) : 0.0_rt;
 #else
-				const Real flux_factor = photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn];
+				const Real flux_factor = photochemstate.rn[1 + MicrophysicsNumChemRadVarsPerGroup * nn];
 #endif
 				// dp = (F_before - F_after) / c^2 = (1 - flux_factor) * F_before / c^2
 				const Real dpx = (1.0_rt - flux_factor) * FxOld * inv_c2;
@@ -202,10 +209,20 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				state(i, j, k, fzIdx) = flux_factor * FzOld;
 			}
 
+			if constexpr (RadSystem<problem_t>::thermal_band_photochemistry_) {
+				// Flux of thermal band is unchanged after burn since we assume isotropic emission.
+				for (int nn = 0; nn < NumThermalBands; ++nn) {
+					const Real dE_thermal = photochemstate.re_thermal[nn] - re_thermal_initial[nn];
+					const int eIdx = RadSystem<problem_t>::radEnergy_index + RadSystem<problem_t>::numRadVars_ * nn;
+					state(i, j, k, eIdx) =
+					    amrex::max(state(i, j, k, eIdx) + RadSystem_Traits<problem_t>::c_hat_over_c * dE_thermal, small_x);
+				}
+			}
+
 			// Quokka uses rho*eint
 			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
-			state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) += dEint * energy_update_factor;
-			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint * energy_update_factor;
+			state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) += dEint;
+			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint;
 
 			// O(v/c) radiation-pressure work term: apply the absorbed photon momentum (dMom, computed above) to the
 			// gas. This changes the kinetic energy of the updated momentum only; the auxiliary internal energy is

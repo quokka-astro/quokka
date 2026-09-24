@@ -31,10 +31,16 @@ constexpr int iH = H_idx + 1;
 constexpr int iHp = Hp_idx + 1;
 constexpr int i_ngamma = net_ienuc + 1;
 constexpr int i_ngamma_flux = net_ienuc + 2;
+// Thermal-band rows follow the chemistry-band rows, whose count (NumChemRadEqs) already accounts for
+// whether each band carries a flux variable. Band 0 is the IR, band 1 the optical; the order matches
+// group_ir / group_optical on the Quokka side, which reads these back into the radiation state.
+static_assert(NumThermalBands == 2, "thermophotochemistry_handwritten emits into exactly two thermal bands (IR, optical)");
+constexpr int i_ir = net_ienuc + NumChemRadEqs + 1;
+constexpr int i_optical = net_ienuc + NumChemRadEqs + 2;
 
 constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) -> Real { return 3.2467944898988799e-18_rt; }
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) -> Real { return 2.1596876715103067e-18_rt; }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Real
 {
@@ -190,8 +196,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	const amrex::Real n_e = state.xn[e_idx];
 	const amrex::Real n_HI = state.xn[H_idx];
 	const amrex::Real n_HII = state.xn[Hp_idx];
-	const amrex::Real n_gamma =
-	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
+	const amrex::Real n_gamma = amrex::max(state.rn[0], 0.0_rt);
 #ifndef SKIP_PHOTOCHEMFLUX
 	const amrex::Real n_gamma_flux = state.rn[1];
 #endif
@@ -235,6 +240,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 #ifndef SKIP_PHOTOCHEMFLUX
 	ydot(i_ngamma_flux) = -chat_sigma_photo * n_HI * n_gamma_flux;
 #endif
+
+	const amrex::Real recombination_binding_energy_rate = (energy_switch != 0) ? RydbergEnergy * recombination_term : 0.0_rt;
+	ydot(i_ir) = ion_ff_cooling_rate + KI_cooling_rate;
+	ydot(i_optical) = recombination_cooling_rate + recombination_binding_energy_rate;
 }
 
 template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
@@ -267,10 +276,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	const amrex::Real n_e = state.xn[e_idx];
 	const amrex::Real n_HI = state.xn[H_idx];
 	const amrex::Real n_HII = state.xn[Hp_idx];
-	const amrex::Real n_gamma =
-	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
-	// Gate for column-5 Jacobian entries: when rn[0] < 0 the clamp makes the RHS
-	// independent of rn[0], so all derivatives w.r.t. rn[0] are zero.
+	const amrex::Real n_gamma = amrex::max(state.rn[0], 0.0_rt);
 	const amrex::Real n_gamma_active = (state.rn[0] >= 0.0_rt) ? 1.0_rt : 0.0_rt;
 #ifndef SKIP_PHOTOCHEMFLUX
 	const amrex::Real n_gamma_flux = state.rn[1];
@@ -344,6 +350,17 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(i_ngamma_flux, i_ngamma) = 0.0_rt;
 	jac(i_ngamma_flux, i_ngamma_flux) = -n_HI * chat_sigma_photo;
 #endif
+
+	jac(i_ir, ie) = ion_ff_cooling_switch * Lambda_ff * n_HII;
+	jac(i_ir, iH) = molecular_process_switch * (2.0_rt * KI_cooling_switch * Lambda_KI * n_HI);
+	jac(i_ir, iHp) = ion_ff_cooling_switch * Lambda_ff * n_e;
+	jac(i_ir, net_ienuc) = (ion_ff_cooling_switch * d_Lambda_ff_dT * n_e * n_HII + d_KI_cooling_dT) * dTde;
+
+	const amrex::Real rydberg_rate_coeff = energy_switch * RydbergEnergy * alpha_rec;
+	const amrex::Real d_rydberg_rate_coeff_dT = energy_switch * RydbergEnergy * d_alpha_rec_dT;
+	jac(i_optical, ie) = recombination_cooling_switch * Lambda_rec * n_HII + rydberg_rate_coeff * n_HII;
+	jac(i_optical, iHp) = recombination_cooling_switch * Lambda_rec * n_e + rydberg_rate_coeff * n_e;
+	jac(i_optical, net_ienuc) = (recombination_cooling_switch * d_Lambda_rec_dT * n_e * n_HII + d_rydberg_rate_coeff_dT * n_e * n_HII) * dTde;
 }
 
 #endif
