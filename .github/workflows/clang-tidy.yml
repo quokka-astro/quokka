@@ -62,7 +62,7 @@ jobs:
 
       - name: Run clang-tidy
         if: steps.changed.outputs.has_files == 'true'
-        uses: quokka-astro/clang-tidy-action@4dc2abeec35f6b35cb8937fbe52e537932a56517
+        uses: quokka-astro/clang-tidy-action@6053fe1840bdf7790932466a818f5f23dcb03f66
         with:
           build-directory: build
           config-file: src/.clang-tidy
