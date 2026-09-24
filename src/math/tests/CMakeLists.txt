@@ -1,0 +1,8 @@
+add_executable(Interpolate2DTest testInterpolate2D.cpp)
+target_link_libraries(Interpolate2DTest PRIVATE AMReX::amrex)
+target_include_directories(Interpolate2DTest PRIVATE ..)
+target_compile_features(Interpolate2DTest PRIVATE cxx_std_20)
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  setup_target_for_cuda_compilation(Interpolate2DTest)
+endif()
+add_test(NAME Interpolate2DTest COMMAND Interpolate2DTest)
