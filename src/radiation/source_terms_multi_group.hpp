@@ -68,10 +68,16 @@ RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(double const T, d
 {
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
 	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
-	// A band that does not emit contributes nothing to the momentum of emission or to the group-coupling
-	// term, so both delta terms are left at zero there. Including them would break the telescoping
-	// cancellation that makes sum_g Delta_g(nu kappa B) vanish: the sum would terminate at the top of the
-	// emitting sub-grid and the residual would be injected as a spurious momentum source. See issue #2309.
+	// A band that does not emit has no thermal emission for the Doppler shift to act on, so its
+	// momentum-of-emission and group-coupling terms are zero by construction; both delta terms are left at
+	// zero here. Computing them anyway from the Planck function, as the code used to, injects a spurious
+	// velocity-proportional momentum source into a band that radiates nothing. See issue #2309.
+	//
+	// Note what restricting the sum costs. sum_g Delta_g(nu kappa B) telescopes to the value of
+	// nu kappa B at the two ends of whatever range it is summed over, so dropping the non-emitting bands
+	// makes it terminate at the top of the emitting sub-grid instead of at the top of the whole grid. That
+	// is harmless only where nu kappa B is already negligible, which is the existing requirement on
+	// radBoundaries: the emitting bands must span the blackbody.
 	for (int g = 0; g < nGroups_; ++g) {
 		if (g >= nGroupsEmitting_) {
 			opacity_terms.delta_nu_kappa_B_at_edge[g] = 0.0;
@@ -100,6 +106,17 @@ RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(double const T, d
 			// option anyway.
 			opacity_terms.kappaF = opacity_terms.kappaE;
 		}
+	}
+	// A band that does not emit has no Planck weight to average a flux-mean opacity over.
+	// ComputeDiffusionFluxMeanOpacity divides by (4/3) 4piB/c - (1/3) Delta_g(nu B), which is exactly zero
+	// for such a band, so its guard against a non-positive denominator would return kappaF = 0. That is
+	// not a harmless default here: kappaF carries the radiation force, the attenuation of the flux, and
+	// the work term, so a dust-absorption band would lose energy through kappaE while exerting no force
+	// on the gas at all. Fall back to the energy-mean opacity, which is the right flux mean when the
+	// spectrum is not the Planck function. This is a no-op under piecewise_constant_opacity, where
+	// kappaF, kappaP and kappaE are already equal.
+	for (int g = nGroupsEmitting_; g < nGroups_; ++g) {
+		opacity_terms.kappaF[g] = opacity_terms.kappaE[g];
 	}
 }
 
