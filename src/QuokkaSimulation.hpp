@@ -13,6 +13,7 @@
 #include "AMReX_Tuple.H"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -632,16 +633,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set hydro runtime parameters
 	{
 		amrex::ParmParse const hpp("hydro");
-		hpp.query("low_level_debugging_output", lowLevelDebuggingOutput_);
-		hpp.query("rk_integrator_order", integratorOrder_);
-		hpp.query("reconstruction_order", reconstructionOrder_);
-		hpp.query("plm_limiter", plmLimiter_);
-		hpp.query("use_dual_energy", useDualEnergy_);
-		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
-		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
+		quokka::query<"hydro", "low_level_debugging_output">(hpp, lowLevelDebuggingOutput_);
+		quokka::query<"hydro", "rk_integrator_order">(hpp, integratorOrder_);
+		quokka::query<"hydro", "reconstruction_order">(hpp, reconstructionOrder_);
+		quokka::query<"hydro", "plm_limiter">(hpp, plmLimiter_);
+		quokka::query<"hydro", "use_dual_energy">(hpp, useDualEnergy_);
+		quokka::query<"hydro", "abort_on_fofc_failure">(hpp, abortOnFofcFailure_);
+		quokka::query<"hydro", "artificial_viscosity_coefficient">(hpp, artificialViscosityK_);
 		if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
-			hpp.query("shear_viscosity", shearViscosity_);
-			hpp.query("bulk_viscosity", bulkViscosity_);
+			quokka::query<"hydro", "shear_viscosity">(hpp, shearViscosity_);
+			quokka::query<"hydro", "bulk_viscosity">(hpp, bulkViscosity_);
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shearViscosity_ >= 0.0, "hydro.shear_viscosity must be >= 0.");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bulkViscosity_ >= 0.0, "hydro.bulk_viscosity must be >= 0.");
 		} else if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::none ||
@@ -660,14 +661,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set MHD runtime parameters
 	{
 		amrex::ParmParse const hpp("mhd");
-		hpp.query("emf_reconstruction_order", emfReconstructionOrder_);
-		hpp.query("emf_compute_scheme", emfComputingScheme_);
-		hpp.query("emf_averaging_scheme", emfAveragingScheme_);
-		hpp.query("plm_limiter", mhdPlmLimiter_);
-		hpp.query("project_initial_b_field", projectInitialBField_);
-		hpp.query("update_initial_b_energy", updateInitialMagneticEnergy_);
+		quokka::query<"mhd", "emf_reconstruction_order">(hpp, emfReconstructionOrder_);
+		quokka::query<"mhd", "emf_compute_scheme">(hpp, emfComputingScheme_);
+		quokka::query<"mhd", "emf_averaging_scheme">(hpp, emfAveragingScheme_);
+		quokka::query<"mhd", "plm_limiter">(hpp, mhdPlmLimiter_);
+		quokka::query<"mhd", "project_initial_b_field">(hpp, projectInitialBField_);
+		quokka::query<"mhd", "update_initial_b_energy">(hpp, updateInitialMagneticEnergy_);
 		if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
-			hpp.query("resistivity", mhdResistivity_);
+			quokka::query<"mhd", "resistivity">(hpp, mhdResistivity_);
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mhdResistivity_ >= 0.0, "mhd.resistivity must be >= 0.");
 		} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::none ||
 				     Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
@@ -689,9 +690,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set photochemistry runtime parameters
 	{
 		amrex::ParmParse const hpp("photochemistry");
-		hpp.query("enabled", enablePhotoChemistry_);
-		hpp.query("max_density_allowed", max_density_allowed);
-		hpp.query("min_density_allowed", min_density_allowed); // don't do photochemistry in cells with densities below the minimum density specified
+		quokka::query<"photochemistry", "enabled">(hpp, enablePhotoChemistry_);
+		quokka::query<"photochemistry", "max_density_allowed">(hpp, max_density_allowed);
+		quokka::query<"photochemistry", "min_density_allowed">(
+		    hpp, min_density_allowed); // don't do photochemistry in cells with densities below the minimum density specified
 	}
 #endif
 
@@ -699,10 +701,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	bool cooling_table_include_pe = false;
 	{
 		amrex::ParmParse const hpp("cooling");
-		hpp.query("enabled", enableCooling_);
+		quokka::query<"cooling", "enabled">(hpp, enableCooling_);
 		int alwaysReadTables = 0;
-		hpp.query("cooling_table_type", coolingTableType_);
-		hpp.query("read_tables_even_if_disabled", alwaysReadTables);
+		quokka::query<"cooling", "cooling_table_type">(hpp, coolingTableType_);
+		quokka::query<"cooling", "read_tables_even_if_disabled">(hpp, alwaysReadTables);
 		if (coolingTableType_.empty()) {
 			coolingTableType_ = "resampled";
 		}
@@ -719,7 +721,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 #endif
 		}
 		if (quokka::EOS<problem_t>::is_tabulated || (alwaysReadTables == 1)) {
-			hpp.query("hdf5_data_file", coolingTableFilename_);
+			quokka::query<"cooling", "hdf5_data_file">(hpp, coolingTableFilename_);
 			if (coolingTableType_ == "resampled") {
 				// read resampled cooling tables
 				amrex::Print() << "Reading resampled cooling tables...\n";
@@ -736,31 +738,31 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set electron thermal conduction runtime parameters
 	{
 		amrex::ParmParse const hpp("conduction");
-		hpp.query("enabled", enableElectronConduction_);
-		hpp.query("conductivity_prefactor", electronConductionKappa0_);
-		hpp.query("conduction_cfl", conductionCFL);
-		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
-		hpp.query("saturation_factor", electronConductionSaturationFactor_);
+		quokka::query<"conduction", "enabled">(hpp, enableElectronConduction_);
+		quokka::query<"conduction", "conductivity_prefactor">(hpp, electronConductionKappa0_);
+		quokka::query<"conduction", "conduction_cfl">(hpp, conductionCFL);
+		quokka::query<"conduction", "flux_limiter_phi">(hpp, electronConductionFluxLimiterPhi_);
+		quokka::query<"conduction", "saturation_factor">(hpp, electronConductionSaturationFactor_);
 	}
 
 	// set turbulence runtime parameters
 	{
 		amrex::ParmParse const hpp("turbulence");
-		hpp.query("enabled", enableTurbulence_);
-		hpp.queryWithParser("stop_time", turbulenceStopTime_);
-		hpp.query("length", turbParams_["length"]);
-		hpp.query("target_vdisp", turbParams_["target_vdisp"]);
-		hpp.query("ampl_factor", turbParams_["ampl_factor"]);
-		hpp.query("ampl_auto_adjust", turbParams_["ampl_auto_adjust"]);
-		hpp.query("k_driv", turbParams_["k_driv"]);
-		hpp.query("k_min", turbParams_["k_min"]);
-		hpp.query("k_max", turbParams_["k_max"]);
-		hpp.query("sol_weight", turbParams_["sol_weight"]);
-		hpp.query("spect_form", turbParams_["spect_form"]);
-		hpp.query("power_law_exp", turbParams_["power_law_exp"]);
-		hpp.query("angles_exp", turbParams_["angles_exp"]);
-		hpp.query("random_seed", turbParams_["random_seed"]);
-		hpp.query("nsteps_per_t_turb", turbParams_["nsteps_per_t_turb"]);
+		quokka::query<"turbulence", "enabled">(hpp, enableTurbulence_);
+		quokka::queryWithParser<"turbulence", "stop_time">(hpp, turbulenceStopTime_);
+		quokka::query<"turbulence", "length">(hpp, turbParams_["length"]);
+		quokka::query<"turbulence", "target_vdisp">(hpp, turbParams_["target_vdisp"]);
+		quokka::query<"turbulence", "ampl_factor">(hpp, turbParams_["ampl_factor"]);
+		quokka::query<"turbulence", "ampl_auto_adjust">(hpp, turbParams_["ampl_auto_adjust"]);
+		quokka::query<"turbulence", "k_driv">(hpp, turbParams_["k_driv"]);
+		quokka::query<"turbulence", "k_min">(hpp, turbParams_["k_min"]);
+		quokka::query<"turbulence", "k_max">(hpp, turbParams_["k_max"]);
+		quokka::query<"turbulence", "sol_weight">(hpp, turbParams_["sol_weight"]);
+		quokka::query<"turbulence", "spect_form">(hpp, turbParams_["spect_form"]);
+		quokka::query<"turbulence", "power_law_exp">(hpp, turbParams_["power_law_exp"]);
+		quokka::query<"turbulence", "angles_exp">(hpp, turbParams_["angles_exp"]);
+		quokka::query<"turbulence", "random_seed">(hpp, turbParams_["random_seed"]);
+		quokka::query<"turbulence", "nsteps_per_t_turb">(hpp, turbParams_["nsteps_per_t_turb"]);
 		turbParams_["ndim"] = std::to_string(AMREX_SPACEDIM);
 
 		if (enableTurbulence_ == 1) {
@@ -771,10 +773,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set photoelectric heating runtime parameters
 	{
 		amrex::ParmParse const pp;
-		pp.query("use_sfh_based_pe_heating", use_sfh_based_pe_heating_);
-		pp.query("sfh_to_pe_heating_table", sfh_to_pe_heating_table_filename_);
-		pp.query("sf_area_kpc2", sf_area_kpc2_);
-		pp.query("const_sfr_Msun_per_year_per_kpc2", const_sfr_Msun_per_year_per_kpc2_);
+		quokka::query<"", "use_sfh_based_pe_heating">(pp, use_sfh_based_pe_heating_);
+		quokka::query<"", "sfh_to_pe_heating_table">(pp, sfh_to_pe_heating_table_filename_);
+		quokka::query<"", "sf_area_kpc2">(pp, sf_area_kpc2_);
+		quokka::query<"", "const_sfr_Msun_per_year_per_kpc2">(pp, const_sfr_Msun_per_year_per_kpc2_);
 		// It's allowed to turn on sfh and not turn on use_sfh_based_pe_heating, but the opposite is not allowed.
 		if (use_sfh_based_pe_heating_) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
@@ -828,26 +830,27 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set chemistry runtime parameters
 	{
 		amrex::ParmParse const hpp("chemistry");
-		hpp.query("enabled", enableChemistry_);
-		hpp.query("max_density_allowed", max_density_allowed); // chemistry is not accurate for densities > 3e-6
-		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
+		quokka::query<"chemistry", "enabled">(hpp, enableChemistry_);
+		quokka::query<"chemistry", "max_density_allowed">(hpp, max_density_allowed); // chemistry is not accurate for densities > 3e-6
+		quokka::query<"chemistry", "min_density_allowed">(
+		    hpp, min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
 	}
 #endif
 
 	// set dust runtime parameters
 	{
 		amrex::ParmParse const dpp("dust");
-		dpp.query("omega_drag_heating", dust_omega_drag_);
-		dpp.query("omega_gyro_residual", dust_omega_gyro_res_);
+		quokka::query<"dust", "omega_drag_heating">(dpp, dust_omega_drag_);
+		quokka::query<"dust", "omega_gyro_residual">(dpp, dust_omega_gyro_res_);
 		std::string resolved_rk_scheme_name;
-		if (dpp.query("resolved_rk_scheme", resolved_rk_scheme_name) != 0) {
+		if (quokka::query<"dust", "resolved_rk_scheme">(dpp, resolved_rk_scheme_name) != 0) {
 			dustResolvedRkScheme_ = quokka::dust::parseResolvedRkScheme(resolved_rk_scheme_name);
 		}
-		dpp.query("enable_coefficient_iteration", dustCoefficientIteration_.enabled);
-		dpp.query("picard_alpha_rtol", dustCoefficientIteration_.alphaRelativeTolerance);
-		dpp.query("picard_charge_atol", dustCoefficientIteration_.chargeAbsoluteTolerance);
-		dpp.query("picard_charge_rtol", dustCoefficientIteration_.chargeRelativeTolerance);
-		dpp.query("picard_max_iterations", dustCoefficientIteration_.maxIterations);
+		quokka::query<"dust", "enable_coefficient_iteration">(dpp, dustCoefficientIteration_.enabled);
+		quokka::query<"dust", "picard_alpha_rtol">(dpp, dustCoefficientIteration_.alphaRelativeTolerance);
+		quokka::query<"dust", "picard_charge_atol">(dpp, dustCoefficientIteration_.chargeAbsoluteTolerance);
+		quokka::query<"dust", "picard_charge_rtol">(dpp, dustCoefficientIteration_.chargeRelativeTolerance);
+		quokka::query<"dust", "picard_max_iterations">(dpp, dustCoefficientIteration_.maxIterations);
 		if (dustCoefficientIteration_.alphaRelativeTolerance <= 0.0) {
 			amrex::Abort("dust.picard_alpha_rtol must be positive.");
 		}
@@ -860,19 +863,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		if (dustCoefficientIteration_.maxIterations <= 0) {
 			amrex::Abort("dust.picard_max_iterations must be positive.");
 		}
-		dpp.query("print_iteration_counts", print_dust_counter_);
-		dpp.query("density_floor", dustDensityFloor_);
+		quokka::query<"dust", "print_iteration_counts">(dpp, print_dust_counter_);
+		quokka::query<"dust", "density_floor">(dpp, dustDensityFloor_);
 	}
 
 	// set radiation runtime parameters
 	{
 		amrex::ParmParse const rpp("radiation");
-		rpp.query("reconstruction_order", radiationReconstructionOrder_);
-		rpp.query("cfl", radiationCflNumber_);
-		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
-		rpp.query("print_iteration_counts", print_rad_counter_);
-		rpp.query("iteration_tolerance", radiation_iteration_tolerance_);
-		rpp.query("iteration_tolerance_rel", radiation_iteration_tolerance_rel_);
+		quokka::query<"radiation", "reconstruction_order">(rpp, radiationReconstructionOrder_);
+		quokka::query<"radiation", "cfl">(rpp, radiationCflNumber_);
+		quokka::query<"radiation", "dust_gas_interaction_coeff">(rpp, dustGasInteractionCoeff_);
+		quokka::query<"radiation", "print_iteration_counts">(rpp, print_rad_counter_);
+		quokka::query<"radiation", "iteration_tolerance">(rpp, radiation_iteration_tolerance_);
+		quokka::query<"radiation", "iteration_tolerance_rel">(rpp, radiation_iteration_tolerance_rel_);
 	}
 }
 

@@ -8,6 +8,7 @@
 ///
 
 #ifdef HAVE_PYTHON
+#include "util/CheckedParmParse.hpp"
 #include "util/matplotlibcpp.h"
 #endif
 #include "AMReX.H"
@@ -194,7 +195,7 @@ auto problem_main() -> int
 	// Select the injection mode: boundary inflow (default) or the reducedFluxSource hook
 	{
 		amrex::ParmParse const pp("problem");
-		pp.query("flux_source", use_flux_source);
+		quokka::query<"problem", "flux_source">(pp, use_flux_source);
 	}
 
 	// Boundary conditions

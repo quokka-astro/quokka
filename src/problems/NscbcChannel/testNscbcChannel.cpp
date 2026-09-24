@@ -8,6 +8,7 @@
 ///        Characteristic Boundary Conditions (NSCBC).
 ///
 #include "util/BC.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <format>
 #include <random>
 #include <tuple>
@@ -122,15 +123,15 @@ auto problem_main() -> int
 
 	amrex::ParmParse const pp("channel");
 	// initial condition parameters
-	pp.query("rho0", ::rho0);   // initial density [g/cc]
-	pp.query("Tgas0", ::Tgas0); // initial temperature [K]
-	pp.query("u0", ::u0);	    // initial velocity [cm/s]
-	pp.query("s0", ::s0);	    // initial passive scalar [dimensionless]
+	quokka::query<"channel", "rho0">(pp, ::rho0);	// initial density [g/cc]
+	quokka::query<"channel", "Tgas0">(pp, ::Tgas0); // initial temperature [K]
+	quokka::query<"channel", "u0">(pp, ::u0);	// initial velocity [cm/s]
+	quokka::query<"channel", "s0">(pp, ::s0);	// initial passive scalar [dimensionless]
 	// boundary condition parameters
-	pp.query("u_inflow", ::u_inflow);    // inflow velocity along x-axis [cm/s]
-	pp.query("v_inflow", ::v_inflow);    // transverse inflow velocity (v_y) [cm/s]
-	pp.query("w_inflow", ::w_inflow);    // transverse inflow velocity (v_z) [cm/s]
-	pp.query("s_inflow", ::s_inflow[0]); // inflow passive scalar [dimensionless]
+	quokka::query<"channel", "u_inflow">(pp, ::u_inflow);	 // inflow velocity along x-axis [cm/s]
+	quokka::query<"channel", "v_inflow">(pp, ::v_inflow);	 // transverse inflow velocity (v_y) [cm/s]
+	quokka::query<"channel", "w_inflow">(pp, ::w_inflow);	 // transverse inflow velocity (v_z) [cm/s]
+	quokka::query<"channel", "s_inflow">(pp, ::s_inflow[0]); // inflow passive scalar [dimensionless]
 
 	// compute derived parameters
 	const Real Eint0 = quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);

@@ -8,6 +8,7 @@
 ///
 
 #ifdef HAVE_PYTHON
+#include "util/CheckedParmParse.hpp"
 #include "util/matplotlibcpp.h"
 #endif
 #include "AMReX_BLassert.H"
@@ -216,7 +217,7 @@ auto problem_main() -> int
 	bool use_wavespeed_correction = false;
 
 	amrex::ParmParse const pp("marshak");
-	pp.query("use_wavespeed_correction", use_wavespeed_correction);
+	quokka::query<"marshak", "use_wavespeed_correction">(pp, use_wavespeed_correction);
 	sim.use_wavespeed_correction_ = use_wavespeed_correction;
 
 	// initialize

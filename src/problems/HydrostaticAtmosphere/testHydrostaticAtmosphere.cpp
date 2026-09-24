@@ -7,6 +7,7 @@
 /// \brief Unit test for a hydrostatic exponential atmosphere density floor.
 ///
 
+#include "util/CheckedParmParse.hpp"
 #include <cmath>
 
 #include "AMReX_ParmParse.H"
@@ -170,7 +171,7 @@ auto problem_main() -> int
 {
 	amrex::ParmParse const pp;
 	amrex::Real base_density_floor = 0.0;
-	if (pp.query("density_floor", base_density_floor) == 0) {
+	if (quokka::query<"", "density_floor">(pp, base_density_floor) == 0) {
 		amrex::Print() << "density_floor must be set for HydrostaticAtmosphere test.\n";
 		return 1;
 	}
@@ -180,7 +181,7 @@ auto problem_main() -> int
 	}
 
 	amrex::Real scale_height = 0.0;
-	if (pp.query("atmosphere_scale_height", scale_height) == 0) {
+	if (quokka::query<"", "atmosphere_scale_height">(pp, scale_height) == 0) {
 		amrex::Print() << "atmosphere_scale_height must be set for HydrostaticAtmosphere test.\n";
 		return 1;
 	}
@@ -190,7 +191,7 @@ auto problem_main() -> int
 	}
 
 	std::string density_floor_expr;
-	pp.query("density_floor_expr", density_floor_expr);
+	quokka::query<"", "density_floor_expr">(pp, density_floor_expr);
 	if (density_floor_expr.empty()) {
 		amrex::Print() << "density_floor_expr must be set for HydrostaticAtmosphere test.\n";
 		return 1;

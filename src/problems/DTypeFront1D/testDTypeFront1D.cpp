@@ -71,6 +71,7 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_dust_system.hpp" // for the separate dust-temperature solver (see ISM_Traits below)
 #include "radiation/radiation_system.hpp"
+#include "util/CheckedParmParse.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -392,13 +393,13 @@ void RadSystem<DTypeFront1D>::AddRadSource(array_t &radEnergy, array_t &reducedF
 	// COUNT, off by E_photon / GetChemBandQuanta(0) = 1.43.
 	amrex::ParmParse const pp("photoionize");
 	amrex::Real flux = 1.0e11_rt;
-	pp.query("flux", flux);
+	quokka::query<"photoionize", "flux">(pp, flux);
 	amrex::Real flux_ion = 0.0_rt;
-	pp.query("flux_ion", flux_ion);
+	quokka::query<"photoionize", "flux_ion">(pp, flux_ion);
 	int source_cells = 1;
-	pp.query("source_cells", source_cells); // cells per side occupied by the source slab
+	quokka::query<"photoionize", "source_cells">(pp, source_cells); // cells per side occupied by the source slab
 	int beamed = 1;
-	pp.query("beamed", beamed); // 1 = each wing injected beamed outward, 0 = isotropic
+	quokka::query<"photoionize", "beamed">(pp, beamed); // 1 = each wing injected beamed outward, 0 = isotropic
 
 	const auto n_cells = static_cast<amrex::Real>(source_cells);
 	const amrex::Real E_photon_ion = RadSystem<DTypeFront1D>::GetChemBandQuanta(0);
@@ -452,19 +453,19 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	userData_.n_HII_init = 1.0e-10_rt;
 	userData_.flux = 1.0e11_rt;
 	userData_.flux_ion = 0.0_rt;
-	pp.query("kappa1", kappa1); // gray opacity of the thermal band, group 0 [cm^2 g^-1]
-	pp.query("kappa2", kappa2); // gray opacity of the optical band, group 1 [cm^2 g^-1]
+	quokka::query<"photoionize", "kappa1">(pp, kappa1); // gray opacity of the thermal band, group 0 [cm^2 g^-1]
+	quokka::query<"photoionize", "kappa2">(pp, kappa2); // gray opacity of the optical band, group 1 [cm^2 g^-1]
 	// Old dust-destruction knob:
 	//
-	// pp.query("T_dust_destroy", T_dust_destroy); // dust-destruction temperature [K]; 0 disables
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
-	pp.query("temperature", userData_.temperature);
-	pp.query("n_e_init", userData_.n_e_init);
-	pp.query("n_HI_init", userData_.n_HI_init);
-	pp.query("n_HII_init", userData_.n_HII_init);
-	pp.query("flux", userData_.flux);
-	pp.query("flux_ion", userData_.flux_ion);
+	// quokka::query<"photoionize", "T_dust_destroy">(pp, T_dust_destroy); // dust-destruction temperature [K]; 0 disables
+	quokka::query<"photoionize", "small_temp">(pp, userData_.small_temp);
+	quokka::query<"photoionize", "small_dens">(pp, userData_.small_dens);
+	quokka::query<"photoionize", "temperature">(pp, userData_.temperature);
+	quokka::query<"photoionize", "n_e_init">(pp, userData_.n_e_init);
+	quokka::query<"photoionize", "n_HI_init">(pp, userData_.n_HI_init);
+	quokka::query<"photoionize", "n_HII_init">(pp, userData_.n_HII_init);
+	quokka::query<"photoionize", "flux">(pp, userData_.flux);
+	quokka::query<"photoionize", "flux_ion">(pp, userData_.flux_ion);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();

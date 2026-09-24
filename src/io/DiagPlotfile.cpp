@@ -1,6 +1,7 @@
 #include "DiagPlotfile.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "util/CheckedParmParse.hpp"
 
 void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName)
 {
@@ -26,7 +27,7 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 	if (nParticleTypes > 0) {
 		m_particleTypes.resize(nParticleTypes);
 		for (int n = 0; n < nParticleTypes; ++n) {
-			pp.get("particles", m_particleTypes[n], n);
+			quokka::get<"*", "particles">(pp, m_particleTypes[n], n);
 		}
 
 		amrex::Print() << "DiagPlotfile: Including only particles: ";
@@ -39,14 +40,14 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 	}
 
 	// Read number of output files (optional)
-	pp.query("nfiles", m_nfiles);
+	quokka::query<"*", "nfiles">(pp, m_nfiles);
 
 	// Read field names to include (optional, empty means all)
 	int const nVarNames = pp.countval("field_names");
 	if (nVarNames > 0) {
 		m_varNames.resize(nVarNames);
 		for (int n = 0; n < nVarNames; ++n) {
-			pp.get("field_names", m_varNames[n], n);
+			quokka::get<"*", "field_names">(pp, m_varNames[n], n);
 		}
 		amrex::Print() << "DiagPlotfile: Selecting fields: ";
 		for (const auto &v : m_varNames) {
@@ -58,7 +59,7 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 	}
 
 	// Read whether to include face-centered fields (optional, default: true)
-	pp.query("include_fc_fields", m_includeFcFields);
+	quokka::query<"*", "include_fc_fields">(pp, m_includeFcFields);
 	amrex::Print() << "DiagPlotfile: fc_vars output " << (m_includeFcFields ? "enabled" : "disabled") << "\n";
 
 	amrex::Print() << "DiagPlotfile initialized: file=" << m_diagfile << ", interval=" << m_interval << "\n";

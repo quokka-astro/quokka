@@ -9,6 +9,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 #include "math/interpolate.hpp"
+#include "util/CheckedParmParse.hpp"
 #include "util/fextract.hpp"
 #include <format>
 #include <numeric>
@@ -160,10 +161,10 @@ template <> void QuokkaSimulation<SinkProblem>::refineGrid(int lev, amrex::TagBo
 auto problem_main() -> int
 {
 	amrex::ParmParse const pp("problem");
-	pp.query("particles_file", particles_file);
-	pp.query("refine_half_domain", refine_half_domain);
+	quokka::query<"problem", "particles_file">(pp, particles_file);
+	quokka::query<"problem", "refine_half_domain">(pp, refine_half_domain);
 	double boost_vel_x = NAN;
-	pp.query("boost_vel_x", boost_vel_x);
+	quokka::query<"problem", "boost_vel_x">(pp, boost_vel_x);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(boost_vel_x), "boost_vel_x must be set in the input file");
 
 	// Problem initialization

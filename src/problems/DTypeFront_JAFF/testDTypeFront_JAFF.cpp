@@ -17,6 +17,7 @@
 #include "fundamental_constants.H"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/CheckedParmParse.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -273,7 +274,7 @@ void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t & /*re
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
-	pp.query("Q", Q);
+	quokka::query<"stromgen", "Q">(pp, Q);
 
 	constexpr int N = 2;
 	constexpr amrex::Real inv_N = 1.0 / static_cast<amrex::Real>(N);
@@ -340,13 +341,13 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialCondition
 	userData_.n_HI_init = 1.0e2_rt;
 	userData_.n_HII_init = 0.0e0_rt;
 	userData_.Q = 1.0e49_rt;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
-	pp.query("temperature", userData_.temperature);
-	pp.query("n_e_init", userData_.n_e_init);
-	pp.query("n_HI_init", userData_.n_HI_init);
-	pp.query("n_HII_init", userData_.n_HII_init);
-	pp.query("Q", userData_.Q);
+	quokka::query<"stromgen", "small_temp">(pp, userData_.small_temp);
+	quokka::query<"stromgen", "small_dens">(pp, userData_.small_dens);
+	quokka::query<"stromgen", "temperature">(pp, userData_.temperature);
+	quokka::query<"stromgen", "n_e_init">(pp, userData_.n_e_init);
+	quokka::query<"stromgen", "n_HI_init">(pp, userData_.n_HI_init);
+	quokka::query<"stromgen", "n_HII_init">(pp, userData_.n_HII_init);
+	quokka::query<"stromgen", "Q">(pp, userData_.Q);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();

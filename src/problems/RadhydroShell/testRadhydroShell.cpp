@@ -18,6 +18,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "util/BC.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"
@@ -135,7 +136,7 @@ template <> void QuokkaSimulation<ShellProblem>::preCalculateInitialConditions()
 	// get filename from input file
 	amrex::ParmParse const pp("shell_problem");
 	std::string filename{};
-	pp.query("filename", filename);
+	quokka::query<"shell_problem", "filename">(pp, filename);
 
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());

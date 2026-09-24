@@ -12,3 +12,4 @@ fi
 mdbook clean docs
 mdbook build docs
 python3 scripts/check_mdbook_summary.py
+python3 scripts/check_parmparse_documentation.py

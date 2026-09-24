@@ -7,6 +7,7 @@
 ///
 
 #include "hydro/hydro_system.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <format>
 
 #include "AMReX_Array.H"
@@ -83,8 +84,8 @@ void configureShearViscousParameters()
 {
 	{
 		amrex::ParmParse const pp("setup");
-		pp.query("shear_flow_axis", shear_flow_axis);
-		pp.query("shear_grad_axis", shear_grad_axis);
+		quokka::query<"setup", "shear_flow_axis">(pp, shear_flow_axis);
+		quokka::query<"setup", "shear_grad_axis">(pp, shear_grad_axis);
 	}
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shear_flow_axis >= 0 && shear_flow_axis < AMREX_SPACEDIM, "setup.shear_flow_axis must be a valid spatial axis.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shear_grad_axis >= 0 && shear_grad_axis < AMREX_SPACEDIM, "setup.shear_grad_axis must be a valid spatial axis.");
@@ -93,7 +94,7 @@ void configureShearViscousParameters()
 
 	double shearViscosity = 0.0;
 	amrex::ParmParse const hpp("hydro");
-	hpp.query("shear_viscosity", shearViscosity);
+	quokka::query<"hydro", "shear_viscosity">(hpp, shearViscosity);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shearViscosity >= 0.0, "hydro.shear_viscosity must be non-negative.");
 	constexpr double k_magn = 2.0 * M_PI; // single hardcoded mode, box length 1
 	shear_decay_rate = shearViscosity * k_magn * k_magn / rho0;
@@ -127,7 +128,7 @@ auto problem_main() -> int
 	double error_tol = 1.0e-8;
 	{
 		amrex::ParmParse const pp("setup");
-		pp.query("error_tol", error_tol);
+		quokka::query<"setup", "error_tol">(pp, error_tol);
 	}
 
 	const int ncomp_cc = Physics_Indices<ShearWaveProblem>::nvarTotal_cc;

@@ -4,6 +4,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "dust/DustRuntimeParams.hpp"
+#include "util/CheckedParmParse.hpp"
 #include "util/fextract.hpp"
 #include <algorithm>
 #include <array>
@@ -741,7 +742,7 @@ auto problem_main() -> int
 {
 	bool write_csv = true;
 	amrex::ParmParse const pp("problem");
-	pp.query("write_csv", write_csv);
+	quokka::query<"problem", "write_csv">(pp, write_csv);
 
 	quokka::dust::readDustGrainParams(g_dust_grain_radius, g_dust_grain_density);
 

@@ -8,6 +8,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "util/CheckedParmParse.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
@@ -151,9 +152,9 @@ template <> void QuokkaSimulation<StarEvolutionProblem>::computeAfterTimestep()
 auto problem_main() -> int
 {
 	amrex::ParmParse const pp("problem");
-	pp.query("M0_in_Msun", M0_in_Msun);
-	pp.query("rho0", rho0);
-	pp.query("t_end_over_t_b", t_end_over_t_b);
+	quokka::query<"problem", "M0_in_Msun">(pp, M0_in_Msun);
+	quokka::query<"problem", "rho0">(pp, rho0);
+	quokka::query<"problem", "t_end_over_t_b">(pp, t_end_over_t_b);
 
 	const double M0_g = M0_in_Msun * C::M_solar;
 	const double r_B = C::Gconst * M0_g / (cs0 * cs0);
@@ -164,11 +165,11 @@ auto problem_main() -> int
 		amrex::ParmParse const pp_geom("geometry");
 		std::vector<amrex::Real> prob_lo(AMREX_SPACEDIM);
 		std::vector<amrex::Real> prob_hi(AMREX_SPACEDIM);
-		pp_geom.getarr("prob_lo", prob_lo);
-		pp_geom.getarr("prob_hi", prob_hi);
+		quokka::getarr<"geometry", "prob_lo">(pp_geom, prob_lo);
+		quokka::getarr<"geometry", "prob_hi">(pp_geom, prob_hi);
 		amrex::ParmParse const pp_amr("amr");
 		std::vector<int> n_cell(AMREX_SPACEDIM);
-		pp_amr.getarr("n_cell", n_cell);
+		quokka::getarr<"amr", "n_cell">(pp_amr, n_cell);
 		const double dx0 = (prob_hi[0] - prob_lo[0]) / n_cell[0];
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(r_B < 0.1 * dx0, "r_B must be at least 10x smaller than dx for the sub-grid Bondi regime. "
 								  "Adjust M0_in_Msun, geometry.prob_*, or amr.n_cell.");

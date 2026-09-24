@@ -14,6 +14,7 @@
 #include "AMReX_SPACE.H"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"
@@ -134,7 +135,7 @@ template <> void QuokkaSimulation<SedovProblem>::computeAfterEvolve(amrex::Vecto
 {
 	amrex::ParmParse const pp("blast_problem");
 	bool checkSolution = true;
-	pp.query("check_solution", checkSolution);
+	quokka::query<"blast_problem", "check_solution">(pp, checkSolution);
 
 	if (checkSolution) {
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();

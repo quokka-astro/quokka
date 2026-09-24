@@ -8,6 +8,7 @@
 ///
 
 #include "hydro/hydro_system.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <format>
 #include <limits>
 #include <valarray>
@@ -93,8 +94,8 @@ void configureViscousParameters()
 	double shearViscosity = 0.0;
 	double bulkViscosity = 0.0;
 	amrex::ParmParse const hpp("hydro");
-	hpp.query("shear_viscosity", shearViscosity);
-	hpp.query("bulk_viscosity", bulkViscosity);
+	quokka::query<"hydro", "shear_viscosity">(hpp, shearViscosity);
+	quokka::query<"hydro", "bulk_viscosity">(hpp, bulkViscosity);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shearViscosity >= 0.0 && bulkViscosity >= 0.0, "hydro.shear_viscosity and hydro.bulk_viscosity must be non-negative.");
 	constexpr double k_magn = 2.0 * M_PI; // single hardcoded mode, box length 1
 	viscous_decay_rate = (4.0 / 3.0 * shearViscosity + bulkViscosity) * k_magn * k_magn / (2.0 * rho0);
@@ -210,9 +211,9 @@ auto problem_main() -> int
 	double error_tol = 1.0e-8;
 	{
 		amrex::ParmParse const pp("setup");
-		pp.query("run_convergence", run_convergence);
-		pp.query("run_sim", run_sim);
-		pp.query("error_tol", error_tol);
+		quokka::query<"setup", "run_convergence">(pp, run_convergence);
+		quokka::query<"setup", "run_sim">(pp, run_sim);
+		quokka::query<"setup", "error_tol">(pp, error_tol);
 	}
 
 	int status = 0;
@@ -275,10 +276,10 @@ auto problem_main() -> int
 		params.nx_max = 2048;
 		{
 			amrex::ParmParse const pp("setup");
-			pp.query("nx_start", params.nx_initial);
-			pp.query("nx_max", params.nx_max);
-			pp.query("machine_precision_target", params.machine_precision_target);
-			pp.query("refine_n_dims", params.refine_n_dims);
+			quokka::query<"setup", "nx_start">(pp, params.nx_initial);
+			quokka::query<"setup", "nx_max">(pp, params.nx_max);
+			quokka::query<"setup", "machine_precision_target">(pp, params.machine_precision_target);
+			quokka::query<"setup", "refine_n_dims">(pp, params.refine_n_dims);
 		}
 		params.expected_rate = 2.0;
 		params.tolerance = 0.3;

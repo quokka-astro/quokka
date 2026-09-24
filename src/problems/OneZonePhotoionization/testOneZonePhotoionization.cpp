@@ -11,6 +11,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "radiation/radiation_system.hpp"
+#include "util/CheckedParmParse.hpp"
 #include "util/fextract.hpp"
 #include <fstream>
 #include <iomanip>
@@ -92,14 +93,14 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	userData_.n_HII_init = 0.0e0_rt;
 	userData_.tend = 1000.0_rt;
 	userData_.n_photon = 1.0e5_rt;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
-	pp.query("temperature", userData_.temperature);
-	pp.query("n_e_init", userData_.n_e_init);
-	pp.query("n_HI_init", userData_.n_HI_init);
-	pp.query("n_HII_init", userData_.n_HII_init);
-	pp.query("tend", userData_.tend);
-	pp.query("n_photon", userData_.n_photon);
+	quokka::query<"photoionization", "small_temp">(pp, userData_.small_temp);
+	quokka::query<"photoionization", "small_dens">(pp, userData_.small_dens);
+	quokka::query<"photoionization", "temperature">(pp, userData_.temperature);
+	quokka::query<"photoionization", "n_e_init">(pp, userData_.n_e_init);
+	quokka::query<"photoionization", "n_HI_init">(pp, userData_.n_HI_init);
+	quokka::query<"photoionization", "n_HII_init">(pp, userData_.n_HII_init);
+	quokka::query<"photoionization", "tend">(pp, userData_.tend);
+	quokka::query<"photoionization", "n_photon">(pp, userData_.n_photon);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
@@ -267,7 +268,7 @@ auto problem_main() -> int
 	int energy_switch = 1;
 
 	amrex::ParmParse const pp1("network");
-	pp1.query("energy_switch", energy_switch);
+	quokka::query<"network", "energy_switch">(pp1, energy_switch);
 
 	std::string filename = "../extern/photoionization-julia/";
 	if (energy_switch == 0) {

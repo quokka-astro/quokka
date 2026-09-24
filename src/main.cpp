@@ -12,6 +12,9 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
+#include "util/CheckedParmParse.hpp"
+#include <filesystem>
+#include <iostream>
 
 #include "main.hpp"
 
@@ -51,14 +54,14 @@ auto main(int argc, char **argv) -> int
 		amrex::ParmParse pp_amr("amr");
 		if (!pp_amr.contains("max_grid_iterations")) {
 			int amr_max_level = -1;
-			pp_amr.query("max_level", amr_max_level);
+			quokka::query<"amr", "max_level">(pp_amr, amr_max_level);
 			pp_amr.add("max_grid_iterations", std::max(4, amr_max_level));
 		}
 
 		/// override geometry.is_periodic based on quokka.bc
 		amrex::Vector<std::string> bc_str;
 		amrex::ParmParse const pp_quokka("quokka");
-		if (pp_quokka.queryarr("bc", bc_str)) {
+		if (quokka::queryarr<"quokka", "bc">(pp_quokka, bc_str)) {
 			amrex::Vector<int> is_periodic(3, 0);
 			if (bc_str.size() < 3) {
 				amrex::Abort("quokka.bc must have 3 components");
@@ -78,7 +81,16 @@ auto main(int argc, char **argv) -> int
 	// Check if we should ignore the return code from problem_main
 	bool ignore_return = false;
 	amrex::ParmParse const pp;
-	pp.query("ignore_return", ignore_return);
+	bool list_options = false;
+	quokka::query<"", "list_options">(pp, list_options);
+	if (list_options) {
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			quokka::printParmParseOptions(std::cout, std::filesystem::path(argv[0]).stem().string());
+		}
+		amrex::Finalize();
+		return 0;
+	}
+	quokka::query<"", "ignore_return">(pp, ignore_return);
 
 	int result = 0;
 	{ // objects must be destroyed before amrex::finalize, so enter new

@@ -1,4 +1,5 @@
 #include "io/DerivedParticleDeposition.H"
+#include "util/CheckedParmParse.hpp"
 
 #include <algorithm>
 #include <array>
@@ -23,12 +24,12 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 	DerivedFieldBase::init(a_prefix, a_fieldName);
 
 	amrex::ParmParse const pp(a_prefix);
-	pp.query("prefix", m_prefix);
-	pp.query("mass_min", m_massMin);
-	pp.query("mass_max", m_massMax);
-	m_hasAgeFilter = (pp.query("t_age", m_tAgeMax) != 0);
+	quokka::query<"*", "prefix">(pp, m_prefix);
+	quokka::query<"*", "mass_min">(pp, m_massMin);
+	quokka::query<"*", "mass_max">(pp, m_massMax);
+	m_hasAgeFilter = (quokka::query<"*", "t_age">(pp, m_tAgeMax) != 0);
 	std::string normalizationExpr;
-	if (pp.query("normalization_expr", normalizationExpr) != 0) {
+	if (quokka::query<"*", "normalization_expr">(pp, normalizationExpr) != 0) {
 		amrex::Parser parser(normalizationExpr);
 		parser.setConstant("Msun", C::M_solar);
 		parser.setConstant("yr", 3.15576e7);
@@ -39,11 +40,11 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 
 	amrex::Vector<std::string> particleTypes = {"CIC"};
 	if (pp.countval("particle_types") > 0) {
-		pp.queryarr("particle_types", particleTypes);
+		quokka::queryarr<"*", "particle_types">(pp, particleTypes);
 	}
 	amrex::Vector<std::string> depositFields = {"mass"};
 	if (pp.countval("deposit_fields") > 0) {
-		pp.queryarr("deposit_fields", depositFields);
+		quokka::queryarr<"*", "deposit_fields">(pp, depositFields);
 	}
 
 	for (auto const &token : particleTypes) {

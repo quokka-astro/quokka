@@ -7,6 +7,7 @@
 #include "AMReX_Print.H"
 #include "math/interpolate.hpp"
 #include "util/BC.hpp"
+#include "util/CheckedParmParse.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
@@ -258,7 +259,7 @@ auto problem_main() -> int
 
 	// Read parameters from input file
 	const amrex::ParmParse pp("problem");
-	pp.query("refine_half_domain", refine_half_domain);
+	quokka::query<"problem", "refine_half_domain">(pp, refine_half_domain);
 
 	// initialize
 	sim.setInitialConditions();

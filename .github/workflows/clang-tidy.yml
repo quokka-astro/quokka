@@ -1,9 +1,7 @@
 name: 🧹 clang-tidy-review
 
-# You can be more specific, but it currently only works on pull requests
-# Fiewer paths are ignored because some folders (e.g. scripts) are not relavent to code build but should be linted
-on:  
-  pull_request:  
+on:
+  pull_request:
 
 concurrency:
   group: ${{ github.ref }}-${{ github.head_ref }}-clang-tidy
@@ -16,32 +14,61 @@ jobs:
       workflow_file: '.github/workflows/clang-tidy.yml'
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true' || needs.check_changes.outputs.has_scripts_changes == 'true'
 
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
-      with:
-        submodules: true
-        fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+        with:
+          submodules: true
+          fetch-depth: 0
 
-    - uses: ZedThree/clang-tidy-review@438014136def4cb6242e9d0ef3da1a1cd48fa7ce # v0.23.1
-      id: review
-      with:
-        config_file: src/.clang-tidy
-        exclude: "extern/turbulence/*"
-        build_dir: build
-        apt_packages: libopenmpi-dev,libhdf5-mpi-dev,python3-dev,python3-numpy,python3-matplotlib
-        install_commands: >
-          git config --global --add safe.directory "$GITHUB_WORKSPACE" &&
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenmpi-dev libhdf5-mpi-dev python3-dev python3-numpy python3-matplotlib
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 23
+
+      - name: Generate compilation database (configure only)
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config --global --add safe.directory "$GITHUB_WORKSPACE/extern/amrex"
-        cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON -DQUOKKA_OPENPMD=ON -DopenPMD_USE_ADIOS2=OFF -DAMReX_SPACEDIM=3
-        split_workflow: true
+          cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON -DQUOKKA_OPENPMD=ON -DopenPMD_USE_ADIOS2=OFF -DAMReX_SPACEDIM=3
 
-    # Uploads an artefact containing clang_fixes.json
-    - uses: ZedThree/clang-tidy-review/upload@438014136def4cb6242e9d0ef3da1a1cd48fa7ce # v0.23.1
+      - name: Select changed C++ files
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import subprocess
+          import uuid
 
-    # If there are any comments, fail the check
-    - if: steps.review.outputs.total_comments > 0
-      run: exit 1
+          names = subprocess.check_output(
+              ["git", "diff", "--name-only", "--diff-filter=ACMR", "-z", os.environ["BASE_SHA"], "HEAD", "--", "src/"],
+          ).decode().split("\0")
+          suffixes = {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx"}
+          files = [name for name in names if Path(name).suffix in suffixes]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"has_files={'true' if files else 'false'}\n")
+              if files:
+                  delimiter = f"FILES_{uuid.uuid4().hex}"
+                  output.write(f"files<<{delimiter}\n")
+                  output.write("\n".join(files) + "\n")
+                  output.write(f"{delimiter}\n")
+          PY
+
+      - name: Run clang-tidy
+        if: steps.changed.outputs.has_files == 'true'
+        uses: quokka-astro/clang-tidy-action@6053fe1840bdf7790932466a818f5f23dcb03f66
+        with:
+          build-directory: build
+          config-file: src/.clang-tidy
+          files: ${{ steps.changed.outputs.files }}
+          clang-tidy-binary: clang-tidy-23
+          experimental-custom-checks: 'true'

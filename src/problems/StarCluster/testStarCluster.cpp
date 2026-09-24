@@ -8,6 +8,7 @@
 ///
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <fstream>
 #include <limits>
 #include <memory>
@@ -78,7 +79,7 @@ template <> void QuokkaSimulation<StarCluster>::preCalculateInitialConditions()
 		turb_data turbData;
 		amrex::ParmParse const pp("perturb");
 		std::string turbdata_filename;
-		pp.query("filename", turbdata_filename);
+		quokka::query<"perturb", "filename">(pp, turbdata_filename);
 		initialize_turbdata(turbData, turbdata_filename);
 
 		// copy to pinned memory
@@ -209,15 +210,15 @@ auto problem_main() -> int
 
 	// cloud radius
 	Real R_sphere{};
-	pp.query("cloud_radius", R_sphere);
+	quokka::query<"perturb", "cloud_radius">(pp, R_sphere);
 
 	// cloud density
 	Real rho_sphere{};
-	pp.query("cloud_density", rho_sphere);
+	quokka::query<"perturb", "cloud_density">(pp, rho_sphere);
 
 	// cloud virial parameter
 	Real alpha_vir{};
-	pp.query("virial_parameter", alpha_vir);
+	quokka::query<"perturb", "virial_parameter">(pp, alpha_vir);
 
 	// Problem initialization
 	QuokkaSimulation<StarCluster> sim;
