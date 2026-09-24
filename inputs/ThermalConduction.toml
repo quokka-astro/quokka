@@ -1,27 +1,77 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo = [-1.5428e18, -1.5428e18, -1.5428e18]
-geometry.prob_hi = [1.5428e18, 1.5428e18, 1.5428e18]
-quokka.bc = ["foextrap", "foextrap", "foextrap"]
+# The cloud (radius R0 = 545 pc, set in testThermalConduction.cpp) is centred at (0, 0, R0).
+# Boundary conditions are set in problem_main() (inflow at z-lo, outflow elsewhere), not via quokka.bc.
+geometry.prob_lo = [-1.345355425e+22, -1.345355425e+22, -6.726777127e+21]
+geometry.prob_hi = [1.345355425e+22, 1.345355425e+22, 1.345355425e+22]
+geometry.is_periodic = [0, 0, 0]
 
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v = 1      # verbosity in Amr
+amr.v = 1  # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell = [128, 128, 128]
-amr.max_level = 1  # number of levels = max_level + 1
-amr.blocking_factor = 16  # grid size must be divisible by this
+amr.n_cell = [64, 64, 48]  # 136.25 pc base cells
+amr.max_level = 4          # 136.25/2^4 = 8.52 pc finest
+amr.blocking_factor = 16   # grid size must be divisible by this
+amr.max_grid_size = 64
 
+max_walltime = "17:45:00"
+
+do_reflux = 1
+stop_time = 260.15e13
+plotfile_interval = 20000
+checkpoint_interval = 20000
+
+cooling.enabled = 1
+cooling.read_tables_even_if_disabled = 1
+cooling.cooling_table_type = "resampled"
+cooling.hdf5_data_file = "CloudyData_UVB=HM2012_resampled.h5"
 
 cfl = 0.3
+temperature_floor = 10.0
 
 conduction.enabled = 1
-conduction.conductivity_prefactor = 0.3056958245467793e12
+conduction.conduction_type = "spitzer"      # kappa = conductivity_prefactor * T^2.5
+conduction.conductivity_prefactor = 5.6e-8  # Spitzer prefactor, in erg/s/cm/K^3.5
 conduction.flux_limiter_phi = 1
-conduction.saturation_factor = 1.2e20
-conduction.conduction_cfl = 0.1
+conduction.conduction_cfl = 0.3
+
+# *****************************************************************
+# Problem parameters (read in problem_main())
+# *****************************************************************
+windcloud.mach = 4.0
+do_frame_shift = 1  # shift to the cloud's centre-of-mass frame each coarse step
+
+# *****************************************************************
+# Outputs
+# *****************************************************************
+derived_vars = ["temperature"]
+
+plottime_interval = "5*Myr"
+
+quokka.diagnostics = ["slice_x", "slice_z", "proj"]
+
+quokka.slice_x.type = "DiagFramePlane"
+quokka.slice_x.file = "slicex_plt"
+quokka.slice_x.normal = 0    # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_x.center = 0.0  # x midplane (passes through the cloud centre)
+quokka.slice_x.time_int = "0.5*Myr"
+quokka.slice_x.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "scalar_0", "scalar_1"]
+
+quokka.slice_z.type = "DiagFramePlane"
+quokka.slice_z.file = "slicez_plt"
+quokka.slice_z.normal = 2                # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_z.center = 3.3633885615e21  # z midplane: (prob_lo + prob_hi) / 2
+quokka.slice_z.time_int = "0.5*Myr"
+quokka.slice_z.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "scalar_0", "scalar_1"]
+
+quokka.proj.type = "ProjectionPlot"  # Projection plot diagnostic
+quokka.proj.file = "proj_plt"        # Output file prefix (must end in "plt")
+quokka.proj.time_int = "0.5*Myr"
+quokka.proj.normal = 0               # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.proj.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "scalar_0", "scalar_1"]
