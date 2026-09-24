@@ -7,6 +7,26 @@
 
 All particle features can only be activated when compiled with `-DAMReX_SPACEDIM=3`.
 
+## Particle timesteps and AMR subcycling
+
+`do_subcycle` is a top-level runtime parameter. It controls the recursive **fluid** advance;
+massive physics particles use the coarse timestep `dt_[0]`. After all fluid levels reach
+the next coarse time, the driver drifts particles on every level once. Particle-property
+updates, particle-mesh interaction, and destruction also run once per coarse step.
+Destruction visits all selected levels before redistributing survivors, so moving a
+particle to a coarser level cannot make it miss a second particle drift within that step.
+
+Do not implement particle drift by calling it separately during each fluid substep:
+particles can change level ownership during redistribution. Self-gravity still rejects
+`do_subcycle=1`; gravitational particle runs must set `do_subcycle=0`.
+
+`ParticleCoarseStep` checks ballistic particles crossing in both directions between AMR
+levels, with and without fluid subcycling, and exercises destruction followed by
+redistribution using a test-only removal rule. `ParticleSinkSubcycle` separately checks
+sink refinement to the finest level. These tests do not establish the accuracy of every
+feedback or accretion model with fluid subcycling. Tracer particles follow a separate,
+per-level fluid-velocity advection path.
+
 ## Sink Particle Type
 
 Sink particles carry the following real-valued attributes:
