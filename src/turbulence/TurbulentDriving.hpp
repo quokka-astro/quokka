@@ -52,6 +52,12 @@ struct VelocityMoments {
 /// Compute the mass-weighted mean velocity and velocity dispersion over the domain.
 template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> VelocityMoments;
 
+/// Domain totals of density and density-weighted forcing, used to correct the forcing's own mean bias.
+struct ForcingTotals {
+	amrex::Real total_density;					///< sum of rho over the domain
+	amrex::GpuArray<amrex::Real, 3> total_density_weighted_forcing; ///< sum of rho*a_turb, per component
+};
+
 template <typename problem_t> class turbulentDriving
 {
       private:
@@ -140,9 +146,13 @@ template <typename problem_t> class turbulentDriving
 		amrex::GpuArray<amrex::Real, 4> volume_summed_quantities = {sum_rho, sum_rax, sum_ray, sum_raz};
 		amrex::ParallelDescriptor::ReduceRealSum(volume_summed_quantities.data(), 4);
 
-		accumulated_forcing_bias[0] += dt * volume_summed_quantities[1] / volume_summed_quantities[0];
-		accumulated_forcing_bias[1] += dt * volume_summed_quantities[2] / volume_summed_quantities[0];
-		accumulated_forcing_bias[2] += dt * volume_summed_quantities[3] / volume_summed_quantities[0];
+		const ForcingTotals forcing_totals{
+		    .total_density = volume_summed_quantities[0],
+		    .total_density_weighted_forcing = {volume_summed_quantities[1], volume_summed_quantities[2], volume_summed_quantities[3]}};
+
+		accumulated_forcing_bias[0] += dt * forcing_totals.total_density_weighted_forcing[0] / forcing_totals.total_density;
+		accumulated_forcing_bias[1] += dt * forcing_totals.total_density_weighted_forcing[1] / forcing_totals.total_density;
+		accumulated_forcing_bias[2] += dt * forcing_totals.total_density_weighted_forcing[2] / forcing_totals.total_density;
 
 		// mean velocity this step's forcing would inject; subtracting this keeps the forcing's own
 		// contribution to the domain-mean velocity at zero every step, without touching any
@@ -150,9 +160,9 @@ template <typename problem_t> class turbulentDriving
 		amrex::GpuArray<amrex::Real, 3> mean_correction = {0.0, 0.0, 0.0};
 		if (remove_mean_flow) {
 			mean_correction = {
-			    dt * volume_summed_quantities[1] / volume_summed_quantities[0],
-			    dt * volume_summed_quantities[2] / volume_summed_quantities[0],
-			    dt * volume_summed_quantities[3] / volume_summed_quantities[0],
+			    dt * forcing_totals.total_density_weighted_forcing[0] / forcing_totals.total_density,
+			    dt * forcing_totals.total_density_weighted_forcing[1] / forcing_totals.total_density,
+			    dt * forcing_totals.total_density_weighted_forcing[2] / forcing_totals.total_density,
 			};
 		}
 
