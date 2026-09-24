@@ -59,7 +59,7 @@ template <typename problem_t> class turbulentDriving
 	bool updated_forcing_pattern = false;
 	amrex::GpuArray<amrex::Real, 3> velocity_dispersion = {-1.0, -1.0, -1.0};
 	bool remove_mean_flow = false;
-	bool removed_mean_flow = false;
+	amrex::GpuArray<amrex::Real, 3> accumulated_forcing_bias = {0.0, 0.0, 0.0};
 
 	// the forcing pattern is exactly zero-mean by construction, but the momentum source applied
 	// is density-weighted, so a net mean flow can still build up if the forcing correlates with
@@ -76,22 +76,26 @@ template <typename problem_t> class turbulentDriving
 			velocity_dispersion = velocity_moments.dispersion;
 			tg.check_for_update(time, velocity_dispersion.data());
 
-			if (remove_mean_flow && removed_mean_flow) {
-				const amrex::Real mean_flow_magnitude =
-				    std::sqrt(velocity_moments.mean[0] * velocity_moments.mean[0] + velocity_moments.mean[1] * velocity_moments.mean[1] +
-					      velocity_moments.mean[2] * velocity_moments.mean[2]);
-				const amrex::Real dispersion_magnitude =
-				    std::sqrt(velocity_dispersion[0] * velocity_dispersion[0] + velocity_dispersion[1] * velocity_dispersion[1] +
-					      velocity_dispersion[2] * velocity_dispersion[2]);
+			const amrex::Real forcing_bias_magnitude =
+			    std::sqrt(accumulated_forcing_bias[0] * accumulated_forcing_bias[0] + accumulated_forcing_bias[1] * accumulated_forcing_bias[1] +
+				      accumulated_forcing_bias[2] * accumulated_forcing_bias[2]);
+			const amrex::Real dispersion_magnitude =
+			    std::sqrt(velocity_dispersion[0] * velocity_dispersion[0] + velocity_dispersion[1] * velocity_dispersion[1] +
+				      velocity_dispersion[2] * velocity_dispersion[2]);
 
-				if (mean_flow_magnitude > mean_flow_to_dispersion_threshold * dispersion_magnitude) {
-					const std::string abort_msg =
-					    std::format("[FATAL] TurbulentDriving: mean flow ({:.3e}) exceeds {:.0f}% of the velocity dispersion "
-							"({:.3e}) at time {:.3e}; the density-weighted forcing has built up a net bulk flow.",
-							mean_flow_magnitude, mean_flow_to_dispersion_threshold * 100.0, dispersion_magnitude, time);
-					amrex::Abort(abort_msg.c_str());
+			if (forcing_bias_magnitude > mean_flow_to_dispersion_threshold * dispersion_magnitude) {
+				const std::string msg =
+				    std::format("TurbulentDriving: accumulated forcing bias ({:.3e}) exceeds {:.0f}% of the velocity dispersion "
+						"({:.3e}) at time {:.3e}; the density-weighted forcing has injected a net bulk flow.",
+						forcing_bias_magnitude, mean_flow_to_dispersion_threshold * 100.0, dispersion_magnitude, time);
+				if (remove_mean_flow) {
+					amrex::Abort(("[FATAL] " + msg).c_str());
+				} else {
+					amrex::Print() << "[WARNING] " << msg << " Enable turbulence.remove_mean_flow to correct this automatically.\n";
 				}
 			}
+
+			accumulated_forcing_bias = {0.0, 0.0, 0.0};
 		}
 	}
 
@@ -110,11 +114,9 @@ template <typename problem_t> class turbulentDriving
 
 		amrex::MultiFab forcing(state.boxArray(), state.DistributionMap(), AMREX_SPACEDIM, 0);
 
-		// mass-weighted totals needed to remove the net mean flow the forcing would otherwise inject
-		amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
-				 amrex::ReduceOpSum>
-		    reduce_op;
-		amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> reduce_data(reduce_op);
+		// domain totals needed to remove the net mean flow the forcing would otherwise inject
+		amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum> reduce_op;
+		amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real, amrex::Real> reduce_data(reduce_op);
 
 		for (amrex::MFIter mf(state); mf.isValid(); ++mf) {
 			const amrex::Box &bx = mf.validbox();
@@ -125,38 +127,33 @@ template <typename problem_t> class turbulentDriving
 			auto const &ax = forcing.const_array(mf);
 
 			reduce_op.eval(bx, reduce_data,
-				       [=] AMREX_GPU_DEVICE(int i, int j, int k)
-					   -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+				       [=] AMREX_GPU_DEVICE(int i, int j, int k) -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
 					       const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
-					       const amrex::Real px = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-					       const amrex::Real py = data(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-					       const amrex::Real pz = data(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 
-					       return {rho,
-						       px,
-						       py,
-						       pz,
-						       rho * ax(i, j, k, 0),
-						       (AMREX_SPACEDIM > 1) ? rho * ax(i, j, k, 1) : 0.0,
+					       return {rho, rho * ax(i, j, k, 0), (AMREX_SPACEDIM > 1) ? rho * ax(i, j, k, 1) : 0.0,
 						       (AMREX_SPACEDIM > 2) ? rho * ax(i, j, k, 2) : 0.0};
 				       });
 		}
 
-		const auto [sum_rho, sum_px, sum_py, sum_pz, sum_rax, sum_ray, sum_raz] = reduce_data.value();
+		const auto [sum_rho, sum_rax, sum_ray, sum_raz] = reduce_data.value();
 
-		amrex::GpuArray<amrex::Real, 7> reduce_vec = {sum_rho, sum_px, sum_py, sum_pz, sum_rax, sum_ray, sum_raz};
-		amrex::ParallelDescriptor::ReduceRealSum(reduce_vec.data(), 7);
+		amrex::GpuArray<amrex::Real, 4> volume_summed_quantities = {sum_rho, sum_rax, sum_ray, sum_raz};
+		amrex::ParallelDescriptor::ReduceRealSum(volume_summed_quantities.data(), 4);
 
-		// mean velocity the forcing would inject this step, plus any mean velocity already present;
-		// subtracting this from every cell keeps the domain-mean velocity pinned at zero every step
+		accumulated_forcing_bias[0] += dt * volume_summed_quantities[1] / volume_summed_quantities[0];
+		accumulated_forcing_bias[1] += dt * volume_summed_quantities[2] / volume_summed_quantities[0];
+		accumulated_forcing_bias[2] += dt * volume_summed_quantities[3] / volume_summed_quantities[0];
+
+		// mean velocity this step's forcing would inject; subtracting this keeps the forcing's own
+		// contribution to the domain-mean velocity at zero every step, without touching any
+		// pre-existing bulk motion from other sources (initial conditions, gravity, feedback)
 		amrex::GpuArray<amrex::Real, 3> mean_correction = {0.0, 0.0, 0.0};
 		if (remove_mean_flow) {
 			mean_correction = {
-			    reduce_vec[1] / reduce_vec[0] + dt * reduce_vec[4] / reduce_vec[0],
-			    reduce_vec[2] / reduce_vec[0] + dt * reduce_vec[5] / reduce_vec[0],
-			    reduce_vec[3] / reduce_vec[0] + dt * reduce_vec[6] / reduce_vec[0],
+			    dt * volume_summed_quantities[1] / volume_summed_quantities[0],
+			    dt * volume_summed_quantities[2] / volume_summed_quantities[0],
+			    dt * volume_summed_quantities[3] / volume_summed_quantities[0],
 			};
-			removed_mean_flow = true;
 		}
 
 		for (amrex::MFIter mf(state); mf.isValid(); ++mf) {
