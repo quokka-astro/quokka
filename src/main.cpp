@@ -4,7 +4,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file main.cpp
-/// \brief The main() function for simulations.
+/// \brief The entry point for simulation executables.
 ///
 
 #include "AMReX.H"
