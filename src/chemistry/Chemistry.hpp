@@ -13,6 +13,7 @@
 
 #include "AMReX.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_MultiFab.H"
 
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
@@ -28,7 +29,9 @@ namespace quokka::chemistry
 
 AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
 
-template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed) -> bool
+template <typename problem_t>
+auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed,
+		      amrex::iMultiFab const *leaf_mask = nullptr) -> bool
 {
 
 	// Start off by assuming a successful burn.
@@ -40,11 +43,20 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 	int num_failed = 0;
 
 	const BL_PROFILE("Chemistry::computeChemistry()");
+	const bool has_leaf_mask = (leaf_mask != nullptr);
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
+		amrex::Array4<int const> mask{};
+		if (has_leaf_mask) {
+			mask = leaf_mask->const_array(iter);
+		}
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			if (has_leaf_mask && mask.contains(i, j, k) && mask(i, j, k) == 0) {
+				return;
+			}
+
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const Real xmom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
