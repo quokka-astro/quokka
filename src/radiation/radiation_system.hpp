@@ -223,6 +223,14 @@ template <typename problem_t> struct RadSystem_NChemBands<problem_t, std::void_t
 	static constexpr int value = static_cast<int>(decltype(RadSystem_Traits<problem_t>::ChemBands())::size()) - 1;
 };
 
+template <typename problem_t, typename = void> struct RadSystem_EnergyUnit {
+	static constexpr double value = C::ev2erg;
+};
+
+template <typename problem_t> struct RadSystem_EnergyUnit<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::energy_unit)>> {
+	static constexpr double value = RadSystem_Traits<problem_t>::energy_unit;
+};
+
 /// Class for the radiation moment equations
 ///
 template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
@@ -331,6 +339,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// therefore valid as long as there are no more chemical bands than groups.
 	static_assert(RadSystem_NChemBands<problem_t>::value >= 0 && RadSystem_NChemBands<problem_t>::value <= nGroups_,
 		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
+
+#ifdef PHOTOCHEMISTRY
+	static_assert(RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
+		      "ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg when PHOTOCHEMISTRY is enabled.");
+#endif
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -836,10 +849,30 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 #ifdef PHOTOCHEMISTRY
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
 {
-	auto const freq_bounds = RadSystem_Traits<problem_t>::ChemBands();
-	amrex::Real freq_low = freq_bounds[group_index];
-	amrex::Real freq_high = freq_bounds[group_index + 1];
-	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
+	// ChemBands() is in eV (jaff's native unit for radiation band edges);
+	// convert to erg here rather than have every problem's CMakeLists
+	// convert to Hz by hand.
+	auto const ev_bounds = RadSystem_Traits<problem_t>::ChemBands();
+	amrex::Real const ev_low = ev_bounds[group_index];
+	amrex::Real const ev_high = ev_bounds[group_index + 1];
+
+	amrex::Real const alpha = RadSystem_Traits<problem_t>::ChemBandsPowerLawIndex();
+
+	amrex::Real ev_avg = NAN;
+	if (std::isinf(ev_high)) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alpha < 0.0, "GetChemBandQuanta: an open-topped chemistry band only has a "
+							      "finite average photon energy for power_law_index < 0");
+		ev_avg = ev_low * (1.0 - 1.0 / alpha);
+	} else if (alpha == 0.0) {
+		ev_avg = ev_low * ev_high * std::log(ev_high / ev_low) / (ev_high - ev_low);
+	} else if (alpha == 1.0) {
+		ev_avg = (ev_high - ev_low) / std::log(ev_high / ev_low);
+	} else {
+		ev_avg = ((alpha - 1.0) / alpha) * (std::pow(ev_high, alpha) - std::pow(ev_low, alpha)) /
+			 (std::pow(ev_high, alpha - 1.0) - std::pow(ev_low, alpha - 1.0));
+	}
+
+	return ev_avg * C::ev2erg;
 }
 #endif
 
