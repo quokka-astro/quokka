@@ -50,8 +50,7 @@ auto v_dust1_analytic(double t) -> double;
 auto v_dust2_analytic(double t) -> double;
 auto E_gas_analytic(double t) -> double;
 
-struct DustDampingWithExternalForce {
-};
+struct DustDampingWithExternalForce {};
 
 template <> struct SimulationData<DustDampingWithExternalForce> {
 	std::vector<double> t_vec_;
@@ -83,10 +82,8 @@ template <> struct Physics_Traits<DustDampingWithExternalForce> : DefaultPhysics
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithExternalForce>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
-												    amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-												    amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-												    double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithExternalForce>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 2> alpha{};
 	alpha[0] = 1.0 / TS1;

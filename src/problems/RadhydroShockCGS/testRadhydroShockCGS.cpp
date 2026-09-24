@@ -26,8 +26,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct ShockProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct ShockProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 // parameters taken from Section 9.5 of Skinner et al. (2019)
 // [The Astrophysical Journal Supplement Series, 241:7 (27pp), 2019 March]

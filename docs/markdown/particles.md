@@ -99,11 +99,13 @@ The accretion rate deposited in each cell is \\(-\dot{M} \, w_i / \sum_i w_i\\) 
 
 ### Accretion limiters
 
-Two corrections are applied to the per-cell accretion rate, in the following order:
+The following corrections are applied to the per-cell accretion rate, in order:
 
 1. **Mass removal cap**: No more than 25% of a cell's mass may be removed in a single timestep (Krumholz et al. 2004). This prevents artificial sound waves from being launched by rapid density changes.
 
 2. **Jeans density floor**: If the post-accretion cell density would still exceed the Jeans density \\(\rho_J\\), the accretion rate is increased so that the final density equals \\(\rho_J\\). This is safe because such cells are at the centre of highly supersonic convergence and are causally disconnected from their surroundings.
+
+3. **Configured density and Alfvén-speed floors**: Accretion cannot reduce a cell below its configured local density floor. For MHD runs with a positive `particles.sink_max_alfven_speed`, the final density is also constrained by \\(\rho \geq B'^2/v_{A,\max}^2 = 2E_B/v_{A,\max}^2\\), where Quokka stores \\(B'=B/\sqrt{4\pi}\\). A negative value disables the Alfvén limiter.
 
 ### Momentum accretion
 
@@ -124,6 +126,7 @@ The accretion rate is computed using gas velocities in the particle frame (\\(\v
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `particles.sink_particle_use_uniform_kernel` | Boolean | `0` | Use uniform accretion kernel (for testing) |
+| `particles.sink_max_alfven_speed` | Float | `-1.0` | Maximum post-accretion Alfvén speed in cm/s. A negative value disables the limiter; zero is invalid. |
 
 ### Examples
 
@@ -137,11 +140,13 @@ The `ParticleSinkFormation` test validates combined sink particle formation and 
 
 #### ParticleSink Test
 
-The `ParticleSink` test validates Bondi-Hoyle accretion and Galilean invariance. It runs in three phases:
+The `ParticleSink` test validates Bondi-Hoyle accretion, Galilean invariance, density floors, and the Alfvén-speed limiter. It runs in five phases:
 
 1. **Base simulation**: Runs with zero boost velocity and validates the density profile against an analytical solution.
 2. **Boosted simulation**: Runs with a boost velocity of \\(10^8\\) cm/s and verifies that the density profile matches the analytical solution, demonstrating Galilean invariance.
 3. **Multi-timestep evolution**: Continues the boosted simulation for additional timesteps and validates total mass conservation to machine precision.
+4. **Parser-derived density floor**: Applies sink accretion and verifies that the minimum density equals the spatially configured floor.
+5. **Alfvén-speed limiter**: Enables a limiting speed whose implied density floor exceeds the parser floor, then validates both the final minimum density and total mass conservation.
 
 ## StochasticStellarPop Particle Type
 
@@ -160,6 +165,32 @@ Each particle also stores an integer **evolution stage** that tracks its lifecyc
 - `SNRemnant`: Compact remnant left after supernova explosion
 - `LowMassStar`: Low-mass star that will not explode (not used in the current star formation implementation)
 - `LowMassComposite`: Composite particle representing a population of low-mass stars
+
+### Stellar luminosity table
+
+When radiation is enabled, the luminosity of a StochasticStellarPop particle is read from a table instead of being computed from a closed-form law. The table is a [DataTable](data_table.md) with two inputs and one output per radiation group: the first input is the stellar age in years, the second is the stellar mass in solar masses, and each output is a band luminosity in erg/s. Quokka checks these names and units when it loads the file, so they must be written exactly as `age`, `mass`, `year`, `Msun`, and `erg/s`. Set the file with `particles.rad_table` and the interpolation of the outputs with `particles.rad_table_output_transform`; see [Runtime parameters](parameters.md).
+
+The script `scripts/python/slug_luminosity_table_for_quokka.py` builds such a table from the [slug2](https://bitbucket.org/krumholz/slug2) stellar population synthesis code. It runs slug2's `write_isochrone` utility with one top-hat filter per radiation group, then converts the output to the CSV format read by `CSVReader`. Point the script at a slug2 installation with `--slug-path`, or with the `slug2_path` environment variable:
+
+```bash
+export slug2_path="/path/to/slug2"
+
+# two bands, given as photon-energy ranges in eV
+scripts/python/slug_luminosity_table_for_quokka.py PE-and-LW.csv --eV 6 11.2 --eV 11.2 13.6
+
+# one band, given as a wavelength range in Angstroms
+scripts/python/slug_luminosity_table_for_quokka.py single-band.csv --lambda 1000 1200
+
+# a coarse FUV + Lyman continuum table on an explicit grid
+scripts/python/slug_luminosity_table_for_quokka.py FUV-and-LyC.csv --eV 6 13.6 --eV 13.6 54.4 \
+    --m0 2.1 --m1 120 --nm 21 --t0 1e5 --t1 1e8 --nt 31
+```
+
+Bands appear in the table in the order the `--eV` and `--lambda` options are given, so the first option becomes radiation group 0. They must be given in order of increasing photon energy, and adjacent bands must share a boundary: that is the layout of Quokka's radiation-group energy edges. A gap such as `--eV 6 11 --eV 11.2 13.6`, or a sequence that goes to lower energy, is rejected. The defaults cover ages from \\(10^5\\) to \\(2 \times 10^8\\) yr and masses from 2.1 to 120 \\(M\_\odot\\) on the `mist_2016_vvcrit_40` track set. Earlier ages are not useful: the tracks do not extend there, and the properties of a star that young depend on its accretion history rather than on its mass alone.
+
+`write_isochrone` samples both axes logarithmically, which is why the generated table declares `log` spacing for both inputs. Two features of its output are handled by the script. A star that no longer exists at a given age is printed as `--`, and is written to the table as zero luminosity. A band with essentially no flux can integrate to a small negative number, which is zero to within the tolerance of the numerical integration, and is also floored. Because a table produced this way contains zeros, use `particles.rad_table_output_transform = "linear"`. For a log transform, pass `--floor` with a small positive value instead.
+
+The `ParticleRadiationSlug` test validates this path end to end. A single 120 \\(M\_\odot\\) star of age 1 Myr, placed exactly on a node of both table axes, radiates into an FUV band (6 to 13.6 eV) and a Lyman continuum band (13.6 to 54.4 eV); the test checks that the radiation energy deposited on the grid equals the luminosity that slug2 prints for that star multiplied by the timestep.
 
 ## Star Formation
 
@@ -239,10 +270,10 @@ When a progenitor star reaches its death time, it explodes as a Type II supernov
 The terminal momentum is density-dependent and scales as:
 
 <script type="math/tex; mode=display">
-p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{-0.17}
+p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{\alpha_p}
 </script>
 
-where \\(n_{\text{H}}\\) is the ambient hydrogen number density averaged over the deposition kernel.
+where \\(n_{\text{H}}\\) is the ambient hydrogen number density averaged over the deposition kernel and \\(\alpha_p = -0.17\\) by default (configurable via `particles.SN_p_term_exponent`).
 
 #### Deposition Kernel
 
@@ -326,6 +357,7 @@ The cross term <script type="math/tex">\vec{v}_{\text{COM}} \cdot \vec{p}_{\text
 |-----------|------|---------|-------------|
 | `particles.SN_scheme` | String | `SN_thermal_or_thermal_momentum` | Feedback scheme (see above) |
 | `particles.SN_p_term_Msunkmps` | Float | `2.8e5` | Terminal momentum \\(p_{\text{snr},0}\\) in units of \\(M_\odot\,\mathrm{km\,s}^{-1}\\). The shell-formation mass \\(M_\mathrm{sf}\\) is scaled as \\((p/p_\mathrm{canonical})^2\\) to preserve the kinetic energy \\(p^2/(2M_\mathrm{sf})\\). |
+| `particles.SN_p_term_exponent` | Float | `-0.17` | Exponent \\(\alpha_p\\) of the ambient-density scaling of the terminal momentum, \\(p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{\alpha_p}\\). |
 | `particles.disable_SN_feedback` | Boolean | `0` | Disable SN feedback entirely |
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
 | `particles.stellar_velocity_limit` | Float | \\(10^8\\) cm/s | Maximum allowed stellar velocity (aborts if exceeded) |

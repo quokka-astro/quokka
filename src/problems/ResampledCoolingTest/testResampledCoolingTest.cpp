@@ -32,8 +32,7 @@
 #include "hydro/hydro_system.hpp"
 #include "util/fextract.hpp"
 
-struct ResampledCoolingTest {
-}; // dummy type to allow compile-time polymorphism via template specialization
+struct ResampledCoolingTest {}; // dummy type to allow compile-time polymorphism via template specialization
 
 // Function to read CSV reference solution
 auto readReferenceCSV(const std::string &filename) -> std::pair<std::vector<double>, std::vector<double>>
@@ -194,6 +193,11 @@ auto problem_main() -> int
 	std::string output_csv_file;
 	pp.query("output_csv_file", output_csv_file);
 
+	// If positive, require the final temperature at the last cell along x to exceed the temperature at the
+	// first cell by this factor. Used to check that a position-dependent `heating_rate_external` is applied.
+	double min_spatial_heating_T_ratio = 0.0;
+	pp.query("min_spatial_heating_T_ratio", min_spatial_heating_T_ratio);
+
 	amrex::ParmParse const ppp;
 	bool use_sfh_based_pe_heating = false;
 	ppp.query("use_sfh_based_pe_heating", use_sfh_based_pe_heating);
@@ -214,10 +218,31 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
+	// Extract the final profile along x (collective, so it must be called on every rank)
+	auto const final_profile = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
+
 	// Analyze results
 	int status = 0;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Check that a position-dependent external heating rate produced a position-dependent temperature
+		if (min_spatial_heating_T_ratio > 0.0) {
+			auto const &final_values = std::get<1>(final_profile);
+			auto const &Etot = final_values.at(HydroSystem<ResampledCoolingTest>::energy_index);
+			auto const &rho = final_values.at(HydroSystem<ResampledCoolingTest>::density_index);
+			const size_t i_last = Etot.size() - 1;
+			const double T_first = quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[0], Etot[0] - active_magnetic_energy_initial);
+			const double T_last =
+			    quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[i_last], Etot[i_last] - active_magnetic_energy_initial);
+			const double T_ratio_x = T_last / T_first;
+			amrex::Print() << "Spatial heating check: T(x_last)/T(x_first) = " << T_ratio_x << " (required > " << min_spatial_heating_T_ratio
+				       << ")\n";
+			if (!(T_ratio_x > min_spatial_heating_T_ratio)) { // negated so that a NaN ratio also fails
+				amrex::Print() << "ERROR: external heating rate does not vary with position!\n";
+				status = 1;
+			}
+		}
+
 		// Check that gas has cooled significantly
 		const double T_final = sim.userData_.T_vec_.back();
 		const double T_ratio = T_final / T_initial;

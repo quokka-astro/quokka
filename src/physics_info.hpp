@@ -21,6 +21,13 @@ enum class ResistivityModel {
 	problem_defined, // per-cell Ohmic resistivity; eta returned by a problem-specific computeResistivity device function
 };
 
+// enum for hydro (shear + bulk) viscosity model
+enum class ViscosityModel {
+	none,		 // no physical viscosity model
+	constant,	 // uniform shear/bulk viscosity; read from hydro.shear_viscosity / hydro.bulk_viscosity in the TOML input file
+	problem_defined, // per-cell viscosity; returned by a problem-specific computeViscosity device function
+};
+
 // default values for all Physics_Traits fields; specialize Physics_Traits by inheriting from this
 // struct and overriding only the fields that differ from the defaults
 struct DefaultPhysicsTraits {
@@ -35,6 +42,7 @@ struct DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::none;
 	static constexpr int nGroups = 1;     // number of radiation groups
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
@@ -49,8 +57,7 @@ struct DefaultPhysicsTraits {
 };
 
 // this struct is specialized by the user application code.
-template <typename problem_t> struct Physics_Traits : DefaultPhysicsTraits {
-};
+template <typename problem_t> struct Physics_Traits : DefaultPhysicsTraits {};
 
 // this struct stores the indices at which quantities start
 template <typename problem_t> struct Physics_Indices {
@@ -67,6 +74,12 @@ template <typename problem_t> struct Physics_Indices {
 		       Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups *
 			   static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled);
 	}();
+	// Passive scalars and dust live inside the hydro/radiation block of the state vector, so
+	// nvarTotal_cc silently collapses to nvarTotal_cc_adv (dropping them) if neither module is on.
+	static_assert(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled ||
+			  (Physics_Traits<problem_t>::numPassiveScalars == 0 && !Physics_Traits<problem_t>::is_dust_enabled),
+		      "Passive scalars and dust require hydro or radiation to be enabled.");
+
 	// cell-centered
 	static constexpr int hydroFirstIndex = 0;
 	static constexpr int pscalarFirstIndex = Physics_NumVars::numHydroVars;
