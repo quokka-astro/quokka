@@ -50,14 +50,15 @@ inline auto parseResolvedRkScheme(std::string const &scheme_name) -> ResolvedRkS
 	return ResolvedRkScheme::GL4;
 }
 
-template <unsigned int nDustGroups> void queryPositiveArray(amrex::ParmParse const &pp, char const *name, amrex::GpuArray<amrex::Real, nDustGroups> &values)
+template <unsigned int nDustGroups, quokka::FixedString Name>
+void queryPositiveArray(amrex::ParmParse const &pp, amrex::GpuArray<amrex::Real, nDustGroups> &values)
 {
 	static_assert(nDustGroups > 0);
 
 	amrex::Vector<amrex::Real> parsed_values;
-	if (pp.queryarr(name, parsed_values) != 0) {
+	if (quokka::queryarr<"dust", Name>(pp, parsed_values) != 0) {
 		if (parsed_values.size() != nDustGroups) {
-			amrex::Abort(std::string("dust.") + name + " must contain exactly " + std::to_string(nDustGroups) + " value(s).");
+			amrex::Abort(std::string("dust.") + std::string(Name.view()) + " must contain exactly " + std::to_string(nDustGroups) + " value(s).");
 		}
 
 		for (unsigned int g = 0; g < nDustGroups; ++g) {
@@ -67,7 +68,7 @@ template <unsigned int nDustGroups> void queryPositiveArray(amrex::ParmParse con
 
 	for (unsigned int g = 0; g < nDustGroups; ++g) {
 		if (!std::isfinite(static_cast<double>(values[g])) || values[g] <= 0.0) {
-			amrex::Abort(std::string("dust.") + name + " values must be finite and positive.");
+			amrex::Abort(std::string("dust.") + std::string(Name.view()) + " values must be finite and positive.");
 		}
 	}
 }
@@ -77,8 +78,8 @@ template <unsigned int nDustGroups>
 void readDustGrainParams(amrex::GpuArray<amrex::Real, nDustGroups> &grain_radius, amrex::GpuArray<amrex::Real, nDustGroups> &grain_density)
 {
 	amrex::ParmParse const pp("dust");
-	queryPositiveArray(pp, "grain_radius", grain_radius);
-	queryPositiveArray(pp, "grain_density", grain_density);
+	queryPositiveArray<nDustGroups, "grain_radius">(pp, grain_radius);
+	queryPositiveArray<nDustGroups, "grain_density">(pp, grain_density);
 }
 
 } // namespace quokka::dust

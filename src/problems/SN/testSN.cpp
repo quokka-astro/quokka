@@ -11,6 +11,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 #include "math/interpolate.hpp"
+#include "util/CheckedParmParse.hpp"
 #include "util/fextract.hpp"
 #include <format>
 #include <fstream>
@@ -211,14 +212,14 @@ auto problem_main() -> int
 {
 	// get n_amb from the input file
 	amrex::ParmParse const pp("problem");
-	pp.query("n_amb", n_amb);
-	pp.query("SN_particles_file", SN_particles_file);
-	pp.query("refine_half_domain", refine_half_domain);
+	quokka::query<"problem", "n_amb">(pp, n_amb);
+	quokka::query<"problem", "SN_particles_file">(pp, SN_particles_file);
+	quokka::query<"problem", "refine_half_domain">(pp, refine_half_domain);
 	double boost_vel_x = 1.0e8;
-	pp.query("boost_vel_x", boost_vel_x);
+	quokka::query<"problem", "boost_vel_x">(pp, boost_vel_x);
 
 	amrex::ParmParse const cpp("cooling");
-	cpp.query("cooling_table_type", coolingTableType_);
+	quokka::query<"cooling", "cooling_table_type">(cpp, coolingTableType_);
 
 	// Problem initialization
 	QuokkaSimulation<SNProblem> sim;

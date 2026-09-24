@@ -2,6 +2,7 @@
 /// \brief Defines a problem for a galactic patch (tall box) with self-consistent star formation and SN feedback.
 ///
 
+#include "util/CheckedParmParse.hpp"
 #include <cmath>
 #include <iostream>
 #include <utility>
@@ -113,7 +114,7 @@ template <> void QuokkaSimulation<TheProblem>::refineGrid(int lev, amrex::TagBox
 	// tag cells within the cylinder defined by R < Rmax and abs(z) < zmax
 	amrex::ParmParse const pp("problem");
 	std::vector<amrex::Real> refine_zmax_list;
-	pp.queryarr("refine_zmax", refine_zmax_list);
+	quokka::queryarr<"problem", "refine_zmax">(pp, refine_zmax_list);
 
 	// If no list is provided or level exceeds list size, skip refinement
 	if (refine_zmax_list.empty() || std::cmp_greater_equal(lev, refine_zmax_list.size())) {
@@ -487,13 +488,13 @@ auto problem_main() -> int
 	QuokkaSimulation<TheProblem> sim;
 
 	amrex::ParmParse const pp("problem");
-	pp.query("stars_file", sim.userData_.stars_file);
-	pp.query("IC_file", sim.userData_.IC_file);
-	pp.query("rho01", sim.userData_.rho01);
-	pp.query("sigma1", sim.userData_.sigma1);
-	pp.query("initial_scalar_density", sim.userData_.initial_scalar_density);
-	pp.query("hot_T", sim.userData_.hot_T);
-	pp.query("warm_T", sim.userData_.warm_T);
+	quokka::query<"problem", "stars_file">(pp, sim.userData_.stars_file);
+	quokka::query<"problem", "IC_file">(pp, sim.userData_.IC_file);
+	quokka::query<"problem", "rho01">(pp, sim.userData_.rho01);
+	quokka::query<"problem", "sigma1">(pp, sim.userData_.sigma1);
+	quokka::query<"problem", "initial_scalar_density">(pp, sim.userData_.initial_scalar_density);
+	quokka::query<"problem", "hot_T">(pp, sim.userData_.hot_T);
+	quokka::query<"problem", "warm_T">(pp, sim.userData_.warm_T);
 	if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
 		AMREX_ALWAYS_ASSERT(!std::isnan(sim.userData_.initial_scalar_density));
 	}
@@ -502,7 +503,7 @@ auto problem_main() -> int
 	// so that the SN ejected metal density in SN remnant is greater than the background density.
 	amrex::ParmParse const pp_particles("particles");
 	double scalar_yield_per_SN = NAN;
-	pp_particles.query("scalar_yield_per_SN", scalar_yield_per_SN);
+	quokka::query<"particles", "scalar_yield_per_SN">(pp_particles, scalar_yield_per_SN);
 	AMREX_ALWAYS_ASSERT(!std::isnan(scalar_yield_per_SN));
 	const Real SNR_volume = std::pow(128.0 * C::parsec, 3);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_yield_per_SN > sim.userData_.initial_scalar_density * SNR_volume,

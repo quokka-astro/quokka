@@ -5,6 +5,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "util/CheckedParmParse.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -150,11 +151,11 @@ auto problem_main() -> int
 
 	// Read parameters from input file
 	const amrex::ParmParse pp("problem");
-	pp.query("particles_filename", sim.userData_.particles_filename);
+	quokka::query<"problem", "particles_filename">(pp, sim.userData_.particles_filename);
 
 	quokka::TransformType rad_table_output_transform = quokka::TransformType::linear;
 	const amrex::ParmParse ppp("particles");
-	ppp.query("rad_table_output_transform", rad_table_output_transform);
+	quokka::query<"particles", "rad_table_output_transform">(ppp, rad_table_output_transform);
 
 	// initialize (this will parse particle parameters and load luminosity table)
 	sim.setInitialConditions();

@@ -38,6 +38,7 @@
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "util/BC.hpp"
+#include "util/CheckedParmParse.hpp"
 
 struct SubcycleProblem {};
 namespace
@@ -128,7 +129,7 @@ auto problem_main() -> int
 	sim.cflNumber_ = 0.3;
 
 	const amrex::ParmParse pp;
-	pp.query("density_refinement", density_refinement_enabled);
+	quokka::query<"", "density_refinement">(pp, density_refinement_enabled);
 
 	// setInitialConditions: InitFromScratch runs the initial regrid (density tags only,
 	// no particles exist yet) → level-1 at [0,15]. Then InitPhyParticles creates the particle

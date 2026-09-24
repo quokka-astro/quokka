@@ -10,6 +10,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "util/CheckedParmParse.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -153,7 +154,7 @@ auto problem_main() -> int
 	sim.maxDt_ = dt_;
 
 	const amrex::ParmParse pp("problem");
-	pp.query("particles_filename", sim.userData_.particles_filename);
+	quokka::query<"problem", "particles_filename">(pp, sim.userData_.particles_filename);
 
 	// initialize (this will parse particle parameters and load the luminosity table)
 	sim.setInitialConditions();

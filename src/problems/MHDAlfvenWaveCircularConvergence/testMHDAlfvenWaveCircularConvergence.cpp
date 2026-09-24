@@ -7,6 +7,7 @@
 ///        makes sure face-centred quantities are created correctly.
 ///
 
+#include "util/CheckedParmParse.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -288,12 +289,12 @@ auto problem_main() -> int
 	double error_tol = 0.003;
 	{
 		amrex::ParmParse const pp("setup");
-		pp.query("run_convergence", run_convergence);
-		pp.query("run_sim", run_sim);
-		pp.query("error_tol", error_tol);
+		quokka::query<"setup", "run_convergence">(pp, run_convergence);
+		quokka::query<"setup", "run_sim">(pp, run_sim);
+		quokka::query<"setup", "error_tol">(pp, error_tol);
 
 		double unused_num_periods = 0.0;
-		if (run_convergence && !run_sim && (pp.query("num_periods", unused_num_periods) != 0)) {
+		if (run_convergence && !run_sim && (quokka::query<"setup", "num_periods">(pp, unused_num_periods) != 0)) {
 			amrex::Abort("setup.num_periods has no effect when setup.run_convergence=true and setup.run_sim=false; the "
 				     "convergence sweep always uses a fixed one-period run length. Remove setup.num_periods or set "
 				     "setup.run_sim=true.");
@@ -305,7 +306,7 @@ auto problem_main() -> int
 	{
 		double eta = 0.0;
 		amrex::ParmParse const mhd_pp("mhd");
-		mhd_pp.query("resistivity", eta);
+		quokka::query<"mhd", "resistivity">(mhd_pp, eta);
 		if (eta != 0.0) {
 			amrex::Abort("MHDAlfvenWaveCircularConvergence does not support mhd.resistivity != 0; use MHDAlfvenWaveLinearConvergence "
 				     "for resistivity validation.");
@@ -330,14 +331,14 @@ auto problem_main() -> int
 		double num_periods = 1.0;
 		{
 			amrex::ParmParse const pp("setup");
-			pp.query("num_periods", num_periods);
+			quokka::query<"setup", "num_periods">(pp, num_periods);
 		}
 		if (!std::isfinite(num_periods) || num_periods <= 0.0) {
 			amrex::Abort("setup.num_periods must be finite and > 0.");
 		}
 		{
 			double unused_stop_time = 0.0;
-			if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
+			if (amrex::ParmParse const pp_root; quokka::query<"", "stop_time">(pp_root, unused_stop_time) != 0) {
 				amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
 					     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
 			}
@@ -363,9 +364,9 @@ auto problem_main() -> int
 		params.nx_max = 128;
 		{
 			amrex::ParmParse const pp("setup");
-			pp.query("nx_start", params.nx_initial);
-			pp.query("nx_max", params.nx_max);
-			pp.query("machine_precision_target", params.machine_precision_target);
+			quokka::query<"setup", "nx_start">(pp, params.nx_initial);
+			quokka::query<"setup", "nx_max">(pp, params.nx_max);
+			quokka::query<"setup", "machine_precision_target">(pp, params.machine_precision_target);
 		}
 		params.expected_rate = 2.0;
 		params.tolerance = 0.3;

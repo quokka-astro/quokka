@@ -14,6 +14,7 @@
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_Periodicity.H"
 #include "AMReX_String.H"
+#include "util/CheckedParmParse.hpp"
 #include <algorithm>
 #include <cfenv>
 #include <cmath>
@@ -273,7 +274,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	{
 		amrex::ParmParse const pp_quokka("quokka");
 		amrex::Vector<quokka::BCType::mathematicalBndryTypes> bc_type;
-		if (pp_quokka.queryarr("bc", bc_type) != 0) {
+		if (quokka::queryarr<"quokka", "bc">(pp_quokka, bc_type) != 0) {
 			// Parse BCs
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_type.size() == 3, "quokka.bc must have 3 components");
 
@@ -900,14 +901,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// ParmParse reads inputs from the *.inputs file
 	const amrex::ParmParse pp;
-	pp.query("do_tracers", do_tracers);
+	quokka::query<"", "do_tracers">(pp, do_tracers);
 
 	EMFComputeScheme emf_compute_scheme = EMFComputeScheme::FelkerStone2017;
 	EMFAvgScheme emf_avg_scheme = EMFAvgScheme::LondrilloDelZanna2004;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		amrex::ParmParse const mhd_pp("mhd");
-		mhd_pp.query("emf_compute_scheme", emf_compute_scheme);
-		mhd_pp.query("emf_averaging_scheme", emf_avg_scheme);
+		quokka::query<"mhd", "emf_compute_scheme">(mhd_pp, emf_compute_scheme);
+		quokka::query<"mhd", "emf_averaging_scheme">(mhd_pp, emf_avg_scheme);
 	}
 	const int nghost_Riemann = MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emf_compute_scheme, emf_avg_scheme, do_tracers != 0);
 	nghost_cc_ = nghost_Riemann + 4;
@@ -915,45 +916,45 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	setCustomGhostCells();
 
 	// Default == true
-	pp.query("show_performance_hints", showPerformanceHints_);
+	quokka::query<"", "show_performance_hints">(pp, showPerformanceHints_);
 
 	// Default nsteps == INT_MAX
-	pp.query("max_timesteps", maxTimesteps_);
+	quokka::query<"", "max_timesteps">(pp, maxTimesteps_);
 
 	// Default CFL number == 0.3, set to whatever is in the file
-	pp.query("cfl", cflNumber_);
+	quokka::query<"", "cfl">(pp, cflNumber_);
 
 	// Default CFL number for particles == 0.5, set to whatever is in the file
-	pp.query("particle_cfl", particleCflNumber_);
+	quokka::query<"", "particle_cfl">(pp, particleCflNumber_);
 
 	// Optional fixed timestep controls
-	pp.queryWithParser("constant_dt", constantDt_);
-	pp.queryWithParser("initial_dt", initDt_);
-	pp.queryWithParser("max_dt", maxDt_);
+	quokka::queryWithParser<"", "constant_dt">(pp, constantDt_);
+	quokka::queryWithParser<"", "initial_dt">(pp, initDt_);
+	quokka::queryWithParser<"", "max_dt">(pp, maxDt_);
 
 	const int dt_override_count =
 	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dt_override_count <= 1, "Specify at most one of init_shrink, initial_dt, or constant_dt in the inputs.");
 
 	// Abort when signal speed exceeds this threshold (in code units)
-	pp.query("signal_speed_abort", signalSpeedAbort_);
-	pp.query("particle_speed_abort", particleSpeedAbort_);
+	quokka::query<"", "signal_speed_abort">(pp, signalSpeedAbort_);
+	quokka::query<"", "particle_speed_abort">(pp, particleSpeedAbort_);
 
 	// Default AMR interpolation method == lincc_interp
-	pp.query("amr_interpolation_method", amrInterpMethod_);
+	quokka::query<"", "amr_interpolation_method">(pp, amrInterpMethod_);
 
 	// Default stopping time
-	pp.queryWithParser("stop_time", stopTime_);
+	quokka::queryWithParser<"", "stop_time">(pp, stopTime_);
 
 	// Default timestep cutoff (safety feature)
-	pp.queryWithParser("dt_cutoff", dtCutoff_);
+	quokka::queryWithParser<"", "dt_cutoff">(pp, dtCutoff_);
 
 	// Default initial timestep shrink factor
-	pp.query("init_shrink", initShrink_);
+	quokka::query<"", "init_shrink">(pp, initShrink_);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(initShrink_ > 0.0 && initShrink_ <= 1.0, "init_shrink must be in (0, 1].");
 
 	// Default output interval
-	pp.query("plotfile_interval", plotfileInterval_);
+	quokka::query<"", "plotfile_interval">(pp, plotfileInterval_);
 
 	if (pp.contains("projection_interval")) {
 		amrex::Print() << "Warning: 'projection_interval' is deprecated and ignored. Use 'quokka.diagnostics' to configure projections.\n";
@@ -964,70 +965,70 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default output interval
 	// Default statistics interval
-	pp.query("statistics_interval", statisticsInterval_);
+	quokka::query<"", "statistics_interval">(pp, statisticsInterval_);
 
 	// Default Time interval
-	pp.queryWithParser("plottime_interval", plotTimeInterval_);
+	quokka::queryWithParser<"", "plottime_interval">(pp, plotTimeInterval_);
 
 	// Skip initial plotfile
-	pp.query("skip_initial_plotfile", skipInitialPlotfile_);
+	quokka::query<"", "skip_initial_plotfile">(pp, skipInitialPlotfile_);
 
 	// Default Time interval
-	pp.queryWithParser("checkpointtime_interval", checkpointTimeInterval_);
+	quokka::queryWithParser<"", "checkpointtime_interval">(pp, checkpointTimeInterval_);
 
 	// Default checkpoint interval
-	pp.query("checkpoint_interval", checkpointInterval_);
+	quokka::query<"", "checkpoint_interval">(pp, checkpointInterval_);
 
 	// Default plotfile prefix
-	pp.query("plotfile_prefix", plot_file);
+	quokka::query<"", "plotfile_prefix">(pp, plot_file);
 
 	// Default checkpoint prefix
-	pp.query("checkpoint_prefix", chk_file);
+	quokka::query<"", "checkpoint_prefix">(pp, chk_file);
 
 	// Default statistics file name
-	pp.query("statistics_file", stats_file);
+	quokka::query<"", "statistics_file">(pp, stats_file);
 
 	// Default do_reflux = 1
-	pp.query("do_reflux", do_reflux);
+	quokka::query<"", "do_reflux">(pp, do_reflux);
 
 	// Default do_subcycle = 1
-	pp.query("do_subcycle", do_subcycle);
+	quokka::query<"", "do_subcycle">(pp, do_subcycle);
 
 	// Default poisson_supercycle_interval = 1
-	pp.query("poisson_supercycle_interval", poissonSupercycleInterval_);
+	quokka::query<"", "poisson_supercycle_interval">(pp, poissonSupercycleInterval_);
 
 	// Default Poisson solver tolerances
-	pp.query("poisson_reltol", reltolPoisson_);
-	pp.query("poisson_abstol", abstolPoisson_);
+	quokka::query<"", "poisson_reltol">(pp, reltolPoisson_);
+	quokka::query<"", "poisson_abstol">(pp, abstolPoisson_);
 
 	// Default suppress_output = 0
-	pp.query("suppress_output", suppress_output);
+	quokka::query<"", "suppress_output">(pp, suppress_output);
 
 	// Default print_cycle_timing = 0
-	pp.query("print_cycle_timing", printCycleTiming_);
+	quokka::query<"", "print_cycle_timing">(pp, printCycleTiming_);
 
 	// specify this on the command-line in order to restart from a checkpoint
 	// file
-	pp.query("restartfile", restart_chkfile);
+	quokka::query<"", "restartfile">(pp, restart_chkfile);
 
 	// Specify derived variables to save to plotfiles
-	pp.queryarr("derived_vars", derivedNames_);
+	quokka::queryarr<"", "derived_vars">(pp, derivedNames_);
 
 	// Configure runtime-derived field providers (factory-based)
 	createRuntimeDerivedFields();
 
 	// re-grid interval
-	pp.query("regrid_interval", regrid_int);
+	quokka::query<"", "regrid_interval">(pp, regrid_int);
 
 	// read density floor in g cm^-3
-	pp.query("density_floor", densityFloor_);
+	quokka::query<"", "density_floor">(pp, densityFloor_);
 
 	// read temperature floor in K
-	pp.query("temperature_floor", tempFloor_);
+	quokka::query<"", "temperature_floor">(pp, tempFloor_);
 
 	// optional density floor expression (variables: x, y, z, base_density_floor)
 	densityFloorExpr_.clear();
-	pp.query("density_floor_expr", densityFloorExpr_);
+	quokka::query<"", "density_floor_expr">(pp, densityFloorExpr_);
 	useDensityFloorParser_ = !densityFloorExpr_.empty();
 	if (useDensityFloorParser_) {
 		densityFloorParser_.emplace(densityFloorExpr_);
@@ -1045,7 +1046,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// optional external heating rate expression (variables: x, y, z, time, dt)
 	heatingRateExternalExpr_.clear();
-	pp.query("heating_rate_external", heatingRateExternalExpr_);
+	quokka::query<"", "heating_rate_external">(pp, heatingRateExternalExpr_);
 	useHeatingRateExternalParser_ = !heatingRateExternalExpr_.empty();
 	if (useHeatingRateExternalParser_) {
 		heatingRateExternalParser_.emplace(heatingRateExternalExpr_);
@@ -1053,13 +1054,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		if (!amrex::ParmParse::ParserPrefix.empty()) {
 			amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
 			for (auto const &symbol : symbols) {
-				// `x`, `y`, `z`, `time` and `dt` are runtime parser inputs, not constants from ParmParse.
-				// Available ParmParse constants are: `yr`, `kyr`, `Myr`, `Gyr`.
-				if (symbol == "x" || symbol == "y" || symbol == "z" || symbol == "time" || symbol == "dt") {
-					continue;
-				}
+				// Only the four registered time units may be constants in this expression.
 				amrex::Real value = 0.0;
-				if (parser_pp.query(symbol, value) != 0) {
+				bool found = false;
+				if (symbol == "yr") {
+					found = quokka::query<"quokka_time_units", "yr">(parser_pp, value) != 0;
+				} else if (symbol == "kyr") {
+					found = quokka::query<"quokka_time_units", "kyr">(parser_pp, value) != 0;
+				} else if (symbol == "Myr") {
+					found = quokka::query<"quokka_time_units", "Myr">(parser_pp, value) != 0;
+				} else if (symbol == "Gyr") {
+					found = quokka::query<"quokka_time_units", "Gyr">(parser_pp, value) != 0;
+				}
+				if (found) {
 					heatingRateExternalParser_->setConstant(symbol, value);
 				}
 			}
@@ -1080,7 +1087,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	}
 
 	// Optional debug output: spatially varying density floor
-	pp.query("debug_density_floor_plot", debugDensityFloorPlot_);
+	quokka::query<"", "debug_density_floor_plot">(pp, debugDensityFloorPlot_);
 	if (debugDensityFloorPlot_) {
 		static constexpr char const *kDensityFloorDbgName = "density_floor_dbg";
 		if (std::ranges::find(derivedNames_, kDensityFloorDbgName) == derivedNames_.end()) {
@@ -1090,7 +1097,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// specify maximum walltime in HH:MM:SS format
 	std::string maxWalltimeInput;
-	pp.query("max_walltime", maxWalltimeInput);
+	quokka::query<"", "max_walltime">(pp, maxWalltimeInput);
 	// convert to seconds
 	int hours = 0;
 	int minutes = 0;
@@ -1102,28 +1109,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	}
 
 	// SFH parameters
-	pp.query("sfh_interval", sfh_interval_);
-	pp.queryWithParser("sfh_time_interval", sfh_time_interval_);
+	quokka::query<"", "sfh_interval">(pp, sfh_interval_);
+	quokka::queryWithParser<"", "sfh_time_interval">(pp, sfh_time_interval_);
 
 	// IO settings (following the AMReX convention for the Amr class)
 	// (Since we use AmrCore instead of Amr, we have to reimplement these.)
 	amrex::ParmParse const pp_amr("amr");
 
 	// Default max number of binary files per multifab when writing plotfiles
-	pp_amr.query("plot_nfiles", plot_nfiles);
+	quokka::query<"amr", "plot_nfiles">(pp_amr, plot_nfiles);
 
 	// Default max number of binary files per multifab when writing checkpoints
-	pp_amr.query("checkpoint_nfiles", checkpoint_nfiles);
+	quokka::query<"amr", "checkpoint_nfiles">(pp_amr, checkpoint_nfiles);
 
 	// set particle luminosity table parameters
 	{
 #if AMREX_SPACEDIM == 3
 		amrex::ParmParse const ppp("particles");
-		ppp.query("use_luminosity_table", useLuminosityTable_);
-		ppp.query("rad_table", luminosityTableFilename_);
-		ppp.query("rad_table_output_spacing", rad_table_output_transform_);   // legacy key (pre-rename)
-		ppp.query("rad_table_output_transform", rad_table_output_transform_); // new key takes precedence
-		ppp.query("split_particles_on_restart_refine", splitParticlesOnRestartRefine_);
+		quokka::query<"particles", "use_luminosity_table">(ppp, useLuminosityTable_);
+		quokka::query<"particles", "rad_table">(ppp, luminosityTableFilename_);
+		quokka::query<"particles", "rad_table_output_spacing">(ppp, rad_table_output_transform_);   // legacy key (pre-rename)
+		quokka::query<"particles", "rad_table_output_transform">(ppp, rad_table_output_transform_); // new key takes precedence
+		quokka::query<"particles", "split_particles_on_restart_refine">(ppp, splitParticlesOnRestartRefine_);
 
 		// if particle and radiation are enabled
 		if (particleRegister_.HasRadiatingParticles() && Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -4192,7 +4199,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 		std::string const field_prefix = code_prefix_with_dot + field_group;
 		amrex::ParmParse const ppf(field_prefix);
 		std::string field_type;
-		ppf.get("type", field_type);
+		quokka::get<"*", "type">(ppf, field_type);
 		if (!quokka::DerivedFieldBase::contains(field_type)) {
 			continue;
 		}
@@ -4301,7 +4308,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 		diags.resize(n_diags);
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			for (int n = 0; n < n_diags; ++n) {
-				pp.get("diagnostics", diags[n], n);
+				quokka::get<"*", "diagnostics">(pp, diags[n], n);
 			}
 		}
 		for (int n = 0; n < n_diags; ++n) {
@@ -4326,7 +4333,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 		std::string const diag_prefix = code_prefix + "." + diags[n];
 		amrex::ParmParse const ppd(diag_prefix);
 		std::string diag_type;
-		ppd.get("type", diag_type);
+		quokka::get<"*", "type">(ppd, diag_type);
 		m_diagnostics[n] = DiagBase::create(diag_type);
 		m_diagnostics[n]->init(diag_prefix, diags[n]);
 		m_diagnostics[n]->addVars(m_diagVars);

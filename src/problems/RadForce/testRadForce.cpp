@@ -8,6 +8,7 @@
 ///
 
 #ifdef HAVE_PYTHON
+#include "util/CheckedParmParse.hpp"
 #include "util/matplotlibcpp.h"
 #endif
 #include "radiation/radiation_system.hpp"
@@ -178,7 +179,7 @@ auto problem_main() -> int
 
 	// Read max_dt from parameter file
 	amrex::ParmParse const pp;
-	pp.query("max_dt", max_dt);
+	quokka::query<"", "max_dt">(pp, max_dt);
 
 	// Problem initialization
 	QuokkaSimulation<TubeProblem> sim(BCs_cc);

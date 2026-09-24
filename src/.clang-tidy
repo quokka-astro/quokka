@@ -395,4 +395,20 @@ CheckOptions:
     value:           ''
   - key:             zircon-temporary-objects.Names
     value:           ''
+CustomChecks:
+  - Name: no-direct-parmparse-access
+    Query: |
+      match cxxMemberCallExpr(
+        callee(cxxMethodDecl(hasAnyName(
+          "::amrex::ParmParse::query",
+          "::amrex::ParmParse::queryarr",
+          "::amrex::ParmParse::queryWithParser",
+          "::amrex::ParmParse::get",
+          "::amrex::ParmParse::getarr"
+        )))
+      ).bind("call")
+    Diagnostic:
+      - BindName: call
+        Message: use a checked quokka ParmParse accessor
+        Level: Warning
 ...

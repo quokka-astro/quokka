@@ -1,16 +1,17 @@
 #include "DiagBase.H"
 #include "AMReX_ParmParse.H"
+#include "util/CheckedParmParse.hpp"
 
 void DiagBase::init(const std::string &a_prefix, std::string_view a_diagName)
 {
 	amrex::ParmParse const pp(a_prefix);
 
 	// IO
-	pp.query("int", m_interval);
-	pp.query("per", m_per);
-	pp.queryWithParser("time_int", m_time_interval); // time_int takes precedence over per; supports unit expressions (e.g. "1.0*Myr")
+	quokka::query<"*", "int">(pp, m_interval);
+	quokka::query<"*", "per">(pp, m_per);
+	quokka::queryWithParser<"*", "time_int">(pp, m_time_interval); // time_int takes precedence over per; supports unit expressions (e.g. "1.0*Myr")
 	m_diagfile = a_diagName;
-	pp.query("file", m_diagfile);
+	quokka::query<"*", "file">(pp, m_diagfile);
 	AMREX_ASSERT(m_interval > 0 || m_per > 0.0 || m_time_interval > 0.0);
 
 	// Initialize next output time for time-based diagnostics
@@ -26,7 +27,7 @@ void DiagBase::init(const std::string &a_prefix, std::string_view a_diagName)
 		filtersName.resize(nFilters);
 	}
 	for (int n = 0; n < nFilters; ++n) {
-		pp.get("filters", filtersName[n], n);
+		quokka::get<"*", "filters">(pp, filtersName[n], n);
 		const std::string filter_prefix = a_prefix + "." + filtersName[n];
 		m_filters[n].init(filter_prefix);
 	}
