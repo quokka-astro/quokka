@@ -108,7 +108,7 @@ constexpr amrex::GpuArray<double, n_groups> kappa_band = {kappa_absorbing, 0.0, 
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<DustAbsorptionPPLProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, n_groups + 1> /*rad_boundaries*/,
-												  const double /*rho*/, const double /*Tgas*/)
+												     const double /*rho*/, const double /*Tgas*/)
     -> amrex::GpuArray<amrex::GpuArray<double, n_groups + 1>, 2>
 {
 	// The opacity is independent of Tgas, which the dust-absorption band solver requires: it evaluates
@@ -149,8 +149,8 @@ template <> void QuokkaSimulation<DustAbsorptionPPLProblem>::setInitialCondition
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<DustAbsorptionPPLProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-								  int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-								  const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+								     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+								     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	constexpr int nvar = Physics_Indices<DustAbsorptionPPLProblem>::nvarTotal_cc;
 
