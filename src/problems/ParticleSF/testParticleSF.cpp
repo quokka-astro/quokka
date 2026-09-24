@@ -257,8 +257,9 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 	}
 }
 
-// Part 1: hydro-only star formation test. On a fresh run, n_particles is set to the number of particles at the end.
-auto runParticleSF(int &n_particles) -> int
+// Part 1: hydro-only star formation test. On a fresh run, n_particles is set to the number of particles at the end and
+// chk_name to the name of the last checkpoint (empty if no checkpoint was written).
+auto runParticleSF(int &n_particles, std::string &chk_name) -> int
 {
 	// Problem initialization
 	QuokkaSimulation<ParticleSFProblem> sim;
@@ -361,13 +362,19 @@ auto runParticleSF(int &n_particles) -> int
 	amrex::ParallelDescriptor::Bcast(&status, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 	n_particles = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getNumParticles();
+	if (sim.checkpointInterval_ > 0) {
+		// the last checkpoint is written at the final step
+		std::string chk_prefix = "chk";
+		p3.query("checkpoint_prefix", chk_prefix);
+		chk_name = amrex::Concatenate(chk_prefix, sim.istep[0], 7);
+	}
 
 	return status;
 }
 
 // Part 2: restart the hydro-only checkpoint written by part 1 with radiation enabled. Right after the restart, the radiation
 // energy on the grid must equal the floor, and the radiation flux and the particle luminosities must be zero.
-auto runRadRestart(const int n_particles_chk) -> int
+auto runRadRestart(const int n_particles_chk, const std::string &chk_name) -> int
 {
 	using RadSys = RadSystem<ParticleSFRadProblem>;
 	constexpr int nGroups = Physics_Traits<ParticleSFRadProblem>::nGroups;
@@ -377,7 +384,7 @@ auto runRadRestart(const int n_particles_chk) -> int
 	// so these take precedence over the input file. They must be added before the simulation is constructed, because the
 	// constructor reads the parameters and evolve() re-reads them; setting e.g. sim.maxTimesteps_ directly would be undone.
 	amrex::ParmParse pp;
-	pp.add("restartfile", std::string("last_chk"));
+	pp.add("restartfile", chk_name);
 	pp.add("max_timesteps", 12);
 	pp.add("checkpoint_interval", -1);
 	pp.add("plotfile_interval", -1);
@@ -448,17 +455,13 @@ auto runRadRestart(const int n_particles_chk) -> int
 auto problem_main() -> int
 {
 	int n_particles = 0;
-	const int status = runParticleSF(n_particles);
+	std::string chk_name;
+	const int status = runParticleSF(n_particles, chk_name);
 
-	bool restart_with_radiation = false;
-	amrex::ParmParse const ppp("problem");
-	ppp.query("restart_with_radiation", restart_with_radiation);
-	std::string restartfile;
-	amrex::ParmParse const pp;
-	pp.query("restartfile", restartfile);
-	if (status != 0 || !restart_with_radiation || !restartfile.empty()) {
+	// part 2 needs a checkpoint written by a fresh (not restarted) run of part 1
+	if (status != 0 || chk_name.empty()) {
 		return status;
 	}
 
-	return runRadRestart(n_particles);
+	return runRadRestart(n_particles, chk_name);
 }
