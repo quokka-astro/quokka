@@ -236,7 +236,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	energy_source -= ion_ff_cooling_rate;
 	energy_source -= collisional_ionization_cooling_rate;
 	ydot(net_ienuc) = energy_source / state.rho;
-	ydot(5) = -photoionization_term;
+	ydot(i_ngamma) = -photoionization_term;
 #ifndef SKIP_PHOTOCHEMFLUX
 	ydot(i_ngamma_flux) = -chat_sigma_photo * n_HI * n_gamma_flux;
 #endif
@@ -329,7 +329,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(net_ienuc, net_ienuc) = energy_switch *
 				    (-d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT - RydbergEnergy * d_collisional_ionization_term_dT) *
 				    dTde / state.rho;
-	jac(net_ienuc, 5) = energy_switch * (photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) * n_gamma_active / state.rho;
+	jac(net_ienuc, i_ngamma) = energy_switch * (photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) * n_gamma_active / state.rho;
 
 	jac(i_ngamma, ie) = 0.0_rt;
 	jac(i_ngamma, iH) = -chat_sigma_photo * n_gamma;
