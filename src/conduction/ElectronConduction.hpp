@@ -41,8 +41,6 @@ template <typename problem_t> class ElectronConduction
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
 				    amrex::Real dt, ElectronConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
-		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Electron conduction requires hydro to be enabled.");
-
 		if ((dt <= 0.0) || (params.conductivity_prefactor <= 0.0)) {
 			return;
 		}
