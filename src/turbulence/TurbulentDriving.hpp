@@ -97,7 +97,8 @@ template <typename problem_t> class turbulentDriving
 				if (remove_mean_flow) {
 					amrex::Abort(("[FATAL] " + msg).c_str());
 				} else {
-					amrex::Print() << "[WARNING] " << msg << " Enable turbulence.remove_mean_flow for this to be automatically corrected.\n";
+					amrex::Print()
+					    << "[WARNING] " << msg << " Enable turbulence.remove_mean_flow for this to be automatically corrected.\n";
 				}
 			}
 
