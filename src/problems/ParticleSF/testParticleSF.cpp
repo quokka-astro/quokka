@@ -373,6 +373,9 @@ auto runRadRestart(const int n_particles_chk) -> int
 	constexpr int nGroups = Physics_Traits<ParticleSFRadProblem>::nGroups;
 
 	amrex::Print() << "\n=== Part 2: restart the hydro-only checkpoint with radiation ===\n";
+	// Override runtime parameters in the global ParmParse table. add() appends a new value and query() returns the last one,
+	// so these take precedence over the input file. They must be added before the simulation is constructed, because the
+	// constructor reads the parameters and evolve() re-reads them; setting e.g. sim.maxTimesteps_ directly would be undone.
 	amrex::ParmParse pp;
 	pp.add("restartfile", std::string("last_chk"));
 	pp.add("max_timesteps", 12);
