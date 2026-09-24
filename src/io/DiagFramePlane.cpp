@@ -353,8 +353,6 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 	auto whichRD = amrex::FArrayBox::getDataDescriptor();
 	bool const doConvert(*whichRD != amrex::FPC::NativeRealDescriptor());
 
-	amrex::Long bytesWritten(0);
-
 	std::string const filePrefix(a_mf_name + "_D_");
 
 	bool const calcMinMax = false;
@@ -389,6 +387,7 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 		nfi.SetDynamic();
 	}
 	for (; nfi.ReadyToWrite(); ++nfi) {
+		amrex::Long bytesWritten(0);
 		int const whichRDBytes(whichRD->numBytes());
 		int nFABs(0);
 		amrex::Long writeDataItems(0);
