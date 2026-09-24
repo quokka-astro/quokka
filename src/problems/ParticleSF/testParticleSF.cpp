@@ -10,6 +10,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 #include "util/BC.hpp"
+#include <cmath>
 #include <format>
 
 #include "QuokkaSimulation.hpp"
@@ -198,22 +199,34 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 			const Real tol_m_star_high_tot = 0.1;
 			const Real tol_m_star_tot = 0.1;
 			const Real tol_n_star_high = 0.1;
+			// 5%: the 3-sigma sampling scatter of the mean is 0.7% at the default threshold and 0.5% at
+			// 3 Msun, while the fstar_high/m_star_high_avg mismatch this guards against was 10.3%.
+			const Real tol_mean_mass_high = 0.05;
 			const Real sigma_over_expectation_n_star_low = 1.0 / std::sqrt(exp_n_star_low_total);
 			const Real tol_n_star_low = 3.0 * sigma_over_expectation_n_star_low;
 
-			if (!((m_star_high_tot - exp_m_star_high_total) / exp_m_star_high_total < tol_m_star_high_tot)) {
+			// NOTE: these comparisons must stay two-sided. The sampler under-producing high-mass stars is
+			// exactly the failure mode this test exists to catch, and a one-sided check passes for any
+			// under-count, including zero high-mass stars.
+			if (!(std::abs(m_star_high_tot - exp_m_star_high_total) / exp_m_star_high_total < tol_m_star_high_tot)) {
 				status = 1;
 				amrex::Print() << "Test failed: Mass of high-mass stars does not match expectation\n";
 			}
-			if (!((n_star_high - exp_n_star_high_total) / exp_n_star_high_total < tol_n_star_high)) {
+			if (!(std::abs(n_star_high - exp_n_star_high_total) / exp_n_star_high_total < tol_n_star_high)) {
 				status = 1;
 				amrex::Print() << "Test failed: Number of high-mass stars does not match expectation\n";
 			}
-			if (!((n_star_low - exp_n_star_low_total) / exp_n_star_low_total < tol_n_star_low)) {
+			// The mean mass is the quantity that most directly exposes a mismatch between the mass budget
+			// (fstar_high) and the mean mass used to convert it into a star count (m_star_high_avg).
+			if (!(std::abs(mean_mass_high_mass_stars / C::M_solar - exp_Mstar_high_mean) / exp_Mstar_high_mean < tol_mean_mass_high)) {
+				status = 1;
+				amrex::Print() << "Test failed: Mean mass of high-mass stars does not match expectation\n";
+			}
+			if (!(std::abs(n_star_low - exp_n_star_low_total) / exp_n_star_low_total < tol_n_star_low)) {
 				status = 1;
 				amrex::Print() << "Test failed: Number of low-mass stars does not match expectation\n";
 			}
-			if (!((m_star_tot - m_gas_change) / m_gas_change < tol_m_star_tot)) {
+			if (!(std::abs(m_star_tot - m_gas_change) / m_gas_change < tol_m_star_tot)) {
 				status = 1;
 				amrex::Print() << "Test failed: Total mass of all stars does not match expectation\n";
 			}

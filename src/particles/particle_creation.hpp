@@ -510,6 +510,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real low_mass_composite_max_mass_ = low_mass_composite_max_mass;
 		amrex::Real fstar_high_ = imf_mass_fraction_individual;
 		amrex::Real m_star_high_ = min_mass_individual_stars * C::M_solar;
+		// Loop-invariant power of the sampling threshold, hoisted out of the per-star loop below.
+		// Computed on the host when the functor is constructed, then captured by value.
+		amrex::Real m_star_high_pow_ = std::pow(m_star_high_, 1.0 - alpha);
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
@@ -647,11 +650,11 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						{
 							// Sample mass from the IMF between m_star_high_ and m_imf_max using inverse transform
 							// sampling. The lower limit is a runtime parameter, so its power is no longer a
-							// compile-time constant; the IMF is a pure power law over this range (guaranteed by
-							// the >= 1 Msun check in ChabrierIMF::massFractionAbove).
+							// compile-time constant; it is precomputed on the host as m_star_high_pow_. The IMF is
+							// a pure power law over this range (guaranteed by the >= 1 Msun check in
+							// ChabrierIMF::massFractionAbove).
 							constexpr double mimf_max_pow = gcem::pow(m_imf_max, 1.0 - alpha);
-							const double mstar_high_pow = std::pow(m_star_high_, 1.0 - alpha);
-							double mass_of_star = amrex::Random(engine) * (mimf_max_pow - mstar_high_pow) + mstar_high_pow;
+							double mass_of_star = amrex::Random(engine) * (mimf_max_pow - m_star_high_pow_) + m_star_high_pow_;
 							mass_of_star = std::pow(mass_of_star, 1. / (1. - alpha));
 							p.rdata(mass_idx) = mass_of_star;
 
