@@ -1,0 +1,10 @@
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+geometry.is_periodic = [0, 0, 0]
+amr.n_cell = [8, 8, 8]
+amr.max_level = 1
+amr.blocking_factor = 8
+do_subcycle = 0
+do_reflux = 0
+plotfile_interval = -1
+checkpoint_interval = -1
