@@ -88,6 +88,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_OpenBC.H"
 
 #include "AMReX_AmrParticles.H"
+#include "AMReX_ParticleHeader.H"
 #include "particles/PhysicsParticles.hpp"
 #include "particles/particle_deposition.hpp"
 #include "particles/particle_utils.hpp"
@@ -216,6 +217,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int checkpointInterval_ = -1;				     // -1 == no output
 	int amrInterpMethod_ = 1;				     // 0 == piecewise constant, 1 == lincc_interp
 	int restartRefineFactor_ = 1;				     // 1 == don't refine, >1 == refine by this factor on restart
+	bool restartAddsRadiation_ = false;			     // true if restarted from a hydro-only checkpoint with radiation enabled
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
 	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
@@ -350,6 +352,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// fix-up any unphysical states created by AMR operations
 	// (e.g., caused by the flux register or from interpolation)
 	virtual void FixupState(int level) = 0;
+	// Set the radiation variables in the valid cells of state when a hydro-only checkpoint is restarted with radiation enabled
+	virtual void initRadiationOnRestart(amrex::MultiFab & /*state*/)
+	{
+		amrex::Abort("Restarting a hydro-only checkpoint with radiation enabled is not supported by this simulation class.");
+	}
 
       protected:
 	// tag cells for refinement
@@ -542,6 +549,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	template <quokka::ParticleType particle_type, typename ContainerType>
 	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, amrex::Vector<amrex::BoxArray> const &header_box_arrays);
+
+	template <typename ContainerType>
+	auto restartParticlesFromHydroOnlyLayout(std::unique_ptr<ContainerType> &container, std::string const &particle_type_name, int lum_idx,
+						 amrex::Vector<amrex::BoxArray> const &header_box_arrays) -> bool;
 
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
@@ -5077,6 +5088,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 		// cell-centred data
 		amrex::MultiFab tmp;
 		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+		if (tmp.nComp() != state_new_cc_[lev].nComp()) {
+			// A hydro-only checkpoint may be restarted with radiation enabled. The radiation variables are the
+			// last block of the state vector, so the checkpoint holds every component before radFirstIndex.
+			constexpr int radFirstIndex = Physics_Indices<problem_t>::radFirstIndex;
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::is_radiation_enabled && tmp.nComp() == radFirstIndex,
+							 std::format("Checkpoint '{}' has {} cell-centred components, but the simulation expects {}.",
+								     restart_chkfile, tmp.nComp(), state_new_cc_[lev].nComp()));
+			if (lev == 0) {
+				amrex::Print() << "Checkpoint has no radiation variables. Setting the radiation energy to the floor and the flux to zero.\n";
+			}
+			restartAddsRadiation_ = true;
+			initRadiationOnRestart(state_new_cc_[lev]);
+		}
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp())); // check valid cells
 
@@ -5219,6 +5243,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 #if AMREX_SPACEDIM == 3
 	InitPhyParticles(&header_box_arrays);
 
+	// Particles from a hydro-only checkpoint carry no meaningful luminosity
+	if (restartAddsRadiation_) {
+		particleRegister_.zeroLuminosities();
+	}
+
 	// Read SFH data from metadata
 	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_, sn_count_cumulative_);
 #endif // AMREX_SPACEDIM == 3
@@ -5323,6 +5352,83 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 }
 
 #if AMREX_SPACEDIM == 3
+// Restart particles from a hydro-only checkpoint when radiation is enabled with nGroups > 1. A hydro-only build has one
+// luminosity component, so the checkpoint has nGroups - 1 fewer real components than the container. Read the particles
+// into a container with the hydro-only layout, then copy them into the real container with all luminosities set to zero.
+// Returns false (and reads nothing) if the checkpoint layout matches the container.
+template <typename problem_t>
+template <typename ContainerType>
+auto AMRSimulation<problem_t>::restartParticlesFromHydroOnlyLayout(std::unique_ptr<ContainerType> &container, std::string const &particle_type_name,
+								   const int lum_idx, amrex::Vector<amrex::BoxArray> const &header_box_arrays) -> bool
+{
+	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+	constexpr int nExtraLum = nGroups - 1; // luminosity components missing from a hydro-only checkpoint
+	constexpr int nReal = ContainerType::NStructReal;
+	constexpr int nInt = ContainerType::NStructInt;
+	static_assert(ContainerType::NArrayReal == 0 && ContainerType::NArrayInt == 0, "only Array-of-Structs particles are supported");
+
+	if constexpr (nExtraLum > 0 && nReal > nExtraLum) {
+		if (!restartAddsRadiation_ || lum_idx < 0 || !amrex::FileSystem::Exists(restart_chkfile + "/" + particle_type_name + "/Header")) {
+			return false;
+		}
+		const amrex::ParticleHeader header = amrex::ParticleHeader::read(restart_chkfile, particle_type_name);
+		if (header.num_real == nReal) {
+			return false;
+		}
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(header.num_real == nReal - nExtraLum,
+						 std::format("{} in checkpoint '{}' have {} real components, but the simulation expects {} (or {} for a "
+							     "hydro-only checkpoint).",
+							     particle_type_name, restart_chkfile, header.num_real, nReal, nReal - nExtraLum));
+		amrex::Print() << std::format("Restarting {} from a hydro-only layout with {} real components; setting all {} luminosity components to zero.\n",
+					      particle_type_name, header.num_real, nGroups);
+
+		constexpr int nRealHydro = nReal - nExtraLum;
+		using HydroContainer = amrex::AmrParticleContainer<nRealHydro, nInt>;
+		auto hydro_container = std::make_unique<HydroContainer>(this);
+		restartParticleContainerWithRefinement(hydro_container, restart_chkfile, particle_type_name, header_box_arrays);
+
+		// particle ids are counted per particle type, so continue the count of the checkpoint
+		ContainerType::ParticleType::NextID(header.next_id);
+
+		for (int lev = 0; lev <= hydro_container->finestLevel(); ++lev) {
+			for (typename HydroContainer::ParIterType pti(*hydro_container, lev); pti.isValid(); ++pti) {
+				const int np = pti.numParticles();
+				const auto *src = pti.GetArrayOfStructs()().data();
+				auto &dst_tile = container->DefineAndReturnParticleTile(lev, pti.index(), pti.LocalTileIndex());
+				const auto old_np = dst_tile.numParticles();
+				dst_tile.resize(old_np + np);
+				auto *dst = dst_tile.GetArrayOfStructs()().data() + old_np;
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+					const auto &ps = src[i]; // NOLINT
+					auto &pd = dst[i];	 // NOLINT
+					pd.m_idcpu = ps.m_idcpu;
+					for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+						pd.pos(d) = ps.pos(d);
+					}
+					for (int n = 0; n < lum_idx; ++n) {
+						pd.rdata(n) = ps.rdata(n);
+					}
+					for (int g = 0; g < nGroups; ++g) {
+						pd.rdata(lum_idx + g) = 0.0;
+					}
+					for (int n = lum_idx + 1; n < nRealHydro; ++n) {
+						pd.rdata(n + nExtraLum) = ps.rdata(n);
+					}
+					for (int n = 0; n < nInt; ++n) {
+						pd.idata(n) = ps.idata(n);
+					}
+				});
+			}
+		}
+		amrex::Gpu::streamSynchronize();
+		container->Redistribute();
+		return true;
+	} else {
+		amrex::ignore_unused(container, particle_type_name, lum_idx, header_box_arrays);
+		return false;
+	}
+}
+
 template <typename problem_t>
 template <quokka::ParticleType particle_type, typename ContainerType>
 void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container,
@@ -5335,7 +5441,11 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 	particleRegister_.template registerParticleType<particle_type>(container.get());
 
 	// Read particles
-	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);
+	const std::string particle_type_name = particleRegister_.getParticleTypeName(particle_type);
+	const int lum_idx = particleRegister_.getParticleDescriptor(particle_type)->getLumIndex();
+	if (!restartParticlesFromHydroOnlyLayout(container, particle_type_name, lum_idx, header_box_arrays)) {
+		restartParticleContainerWithRefinement(container, restart_chkfile, particle_type_name, header_box_arrays);
+	}
 
 	// Split particles
 	if constexpr (quokka::ParticleTypeTraits<particle_type>::allow_restart_refine_splitting) {
