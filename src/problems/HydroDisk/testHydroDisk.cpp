@@ -94,9 +94,9 @@ template <> struct SimulationData<HDGalaxy> {
 
 	amrex::Real sn_jeans_J{};
 	amrex::Real sn_momentum{};
-	amrex::Real star_formation_efficiency{0.5}; // fraction of cell gas mass converted to stars per SN event
+	amrex::Real star_formation_efficiency{0.5};    // fraction of cell gas mass converted to stars per SN event
 	amrex::Real sn_cluster_momentum_exponent{0.0}; // exponent for scaling momentum injection with cluster mass
-	amrex::Real sn_mass_per_event_msun{100.0};      // mass scale per SN event/cluster [M_sun]
+	amrex::Real sn_mass_per_event_msun{100.0};     // mass scale per SN event/cluster [M_sun]
 
 	// Owning GPU storage for the vx/vy/vz turbulence cubes loaded from binary files.
 	// The generator writes double-precision arrays with dimensions
@@ -681,9 +681,8 @@ template <> void QuokkaSimulation<HDGalaxy>::computeAfterTimestep()
 
 				// Eq 20: terminal momentum (extensive, g*cm/s), scaled by N_SN^cluster_exponent
 				// to allow momentum boosting for cluster-forming cells (matches MHDDisk convention).
-				const double p_terminal = sn_momentum_ref * MSUN * KM_S *
-				                          std::pow(static_cast<double>(N_SN), cluster_exponent) *
-				                          std::pow(amrex::max(nH_amb, 1.0e-8), -0.17);
+				const double p_terminal = sn_momentum_ref * MSUN * KM_S * std::pow(static_cast<double>(N_SN), cluster_exponent) *
+							  std::pow(amrex::max(nH_amb, 1.0e-8), -0.17);
 
 				// MC regime only (Eq 19, R_M > 1): full terminal momentum, no thermal-only
 				// or Sedov-Taylor branching. R_M is retained purely as a diagnostic.
