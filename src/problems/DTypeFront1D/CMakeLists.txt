@@ -19,7 +19,7 @@ if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
                 ../../radiation/photochemistry.cpp ${${microphysics_network_name}_sources})
 
   # this will add #define PHOTOCHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX THERMAL_DUST_PHOTOCHEMISTRY)
+  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX THERMAL_DUST_PHOTOCHEMISTRY DUST_CHEMICAL_BAND_ABSORPTION)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})

@@ -81,6 +81,14 @@ template <> struct ISM_Traits<DTypeFront1D> {
 #else
 	    false;
 #endif
+	// The network only carries the absorbed-energy ODE variable when it is built with the matching macro,
+	// so the trait has to follow it rather than being set unconditionally.
+	static constexpr bool dust_chemical_band_absorption =
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+	    true;
+#else
+	    false;
+#endif
 };
 
 template <> struct SimulationData<DTypeFront1D> {

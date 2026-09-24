@@ -47,6 +47,7 @@ photochemistry.enabled = 1
 network.energy_switch = 1
 network.recombination_temperature_dependent = 1
 network.allow_mixed_cell_cooling = 0
+network.dust_kappa = 1000.0
 
 photoionize.n_e_init = 1.0e-10
 photoionize.n_HI_init = 1.0e2

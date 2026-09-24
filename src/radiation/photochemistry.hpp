@@ -35,8 +35,10 @@ AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
-			   const Real max_density_allowed, const Real min_density_allowed) -> bool
+			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource) -> bool
 {
+	amrex::ignore_unused(dustHeatingSource);
+
 	// Start off by assuming a successful burn.
 	int photochem_burn_success = 1;
 
@@ -65,10 +67,20 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		invChemBandQuanta[nn] = 1.0_rt / chemBandQuanta[nn];
 	}
 
+	// Cells the burn skips (rho < min_density_allowed) must read zero, not the previous substep's deposit.
+	if constexpr (RadSystem<problem_t>::dust_chemical_band_absorption_) {
+		dustHeatingSource.setVal(0.0);
+	}
+
 	const BL_PROFILE("PhotoChemistry::computePhotoChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
+
+		amrex::Array4<amrex::Real> dustHeatingSource_arr{};
+		if constexpr (RadSystem<problem_t>::dust_chemical_band_absorption_) {
+			dustHeatingSource_arr = dustHeatingSource.array(iter);
+		}
 
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -128,6 +140,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			}
 			photochemstate.rho = rho;
 			photochemstate.e = Eint / rho;
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+			// burn_t declares these only under the macro, and photochemstate is a non-dependent type,
+			// so its members are looked up even inside a discarded if constexpr branch. The guard has
+			// to be a preprocessor one.
+			photochemstate.dust_kappa = network_rp::dust_kappa;
+			photochemstate.e_dust_absorbed = 0.0_rt;
+#endif
 
 			// call the EOS to set the temperature
 			eos(eos_input_re, photochemstate);
@@ -219,6 +238,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				}
 			}
 
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+			if (RadSystem<problem_t>::dust_chemical_band_absorption_) {
+				dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / (RadSystem_Traits<problem_t>::c_hat_over_c * dt);
+			}
+#endif
+
 			// Quokka uses rho*eint
 			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
 			state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) += dEint;
@@ -282,7 +307,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	amrex::ParallelDescriptor::ReduceIntMin(photochem_burn_success);
 
 	if (!photochem_burn_success) {
-		amrex::Abort("Burn failed in VODE. Aborting.");
+		amrex::Abort("Burn failed in the microphysics integrator. Aborting.");
 	}
 
 	return photochem_burn_success;
