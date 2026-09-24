@@ -1663,14 +1663,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	const double rel_change_tol = 1.0e-6;
 	const int max_iter_td = 100;
 
-	// Tolerance scale. The caller passes the physical scale its residual should be measured against, but for
-	// the dust temperature that scale is the gas-dust collisional term, which vanishes identically when the
-	// coupling coefficient is set to zero. The tolerance would then be zero and could never be met. Fall
-	// back to the size of the initial residual so the criterion degrades to a relative reduction instead of
-	// something unsatisfiable.
+	// The caller passes `compare`, the physical scale the residual is measured against. It must be positive:
+	// a zero scale makes the convergence test unsatisfiable.
+	AMREX_ASSERT(compare > 0.0);
+
 	const double f0 = rhs(x0);
-	const double scale = std::max(compare, std::abs(f0));
-	if (std::abs(f0) < rel_tol * scale) {
+	if (std::abs(f0) < rel_tol * compare) {
 		return x0;
 	}
 
@@ -1721,7 +1719,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	int iter_Td = 0;
 	for (; iter_Td < max_iter_td; ++iter_Td) {
 		const double the_rhs = rhs(x);
-		if (std::abs(the_rhs) < rel_tol * scale) {
+		if (std::abs(the_rhs) < rel_tol * compare) {
 			break;
 		}
 
@@ -1813,7 +1811,22 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		return dLHS_dTd;
 	};
 
-	const double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas;
+	// Scale for the convergence test, which must be strictly positive and have the units of the residual, i.e.
+	// radiation energy density. The gas-dust collisional term vanishes when the coupling coefficient N_d is zero
+	// and the radiative terms vanish when the opacity is zero, so neither is enough on its own. sum(fourPiBoverC)
+	// is the blackbody energy density at the initial dust temperature; it is positive for any T_d_init > 0 and so
+	// keeps the scale non-zero in every degenerate case.
+	double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas;
+	if constexpr (nGroups_ == 1) {
+		const auto fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d_init);
+		const auto kappaE = ComputeEnergyMeanOpacity(rho, T_d_init);
+		const auto kappaP = ComputePlanckOpacity(rho, T_d_init);
+		Lambda_compare += c_hat_ * dt * rho * (kappaE * Erad[0] + kappaP * fourPiBoverC) + fourPiBoverC;
+	} else {
+		const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d_init, rad_boundaries);
+		const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d_init, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
+		Lambda_compare += c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad + opacity_terms.kappaP * fourPiBoverC) + sum(fourPiBoverC);
+	}
 
 	const auto T_d = BackwardEulerOneVariable(rhs, jac, T_d_init, Lambda_compare);
 	AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
