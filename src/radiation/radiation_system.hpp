@@ -377,7 +377,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		}
 	}();
 
-	// True when any band has a non-zero photoelectric yield. Used to guard against double-counting the
+	// True when any band has a non-zero photoelectric efficiency. Used to guard against double-counting the
 	// photoelectric heating against an external cooling module.
 	// GpuArray::operator[] is not constexpr, so the compile-time scans below go through the underlying
 	// array member instead.
@@ -440,8 +440,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		      "dust_absorption_only uses RadSystem_Traits::pe_heating_efficiency for photoelectric heating, so it cannot be combined with the "
 		      "thermal-band model ISM_Traits::enable_photoelectric_heating.");
 
-	// Assertion: the photoelectric yield is the fraction of the absorbed band energy returned to the gas,
-	// so it must lie in [0, 1]. A yield above 1 would return more energy than the band absorbed.
+	// Assertion: pe_heating_efficiency is the dimensionless efficiency factor epsilon of the standard
+	// interstellar expression, a fraction between 0 and 1 (about 0.05 for cold molecular gas).
 	static_assert(
 	    []() constexpr {
 		    for (int g = 0; g < nGroups_; ++g) {
