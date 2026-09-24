@@ -422,6 +422,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(RadSystem_NChemBands<problem_t>::value >= 0 && RadSystem_NChemBands<problem_t>::value <= nGroups_,
 		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
 
+#ifdef PHOTOCHEMISTRY
+	static_assert(RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
+		      "ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg when PHOTOCHEMISTRY is enabled.");
+#endif
+
 	// Assertions: dust_absorption_only turns off thermal emission and the gas-radiation energy exchange
 	// for every thermal group, so it is incompatible with the models that rely on either.
 	static_assert(!(dust_absorption_only_ && nGroups_ == 1), // NOLINT
