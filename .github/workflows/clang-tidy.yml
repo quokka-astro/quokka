@@ -31,6 +31,8 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 23
+          sudo apt-get install -y clang-tidy-23
+          clang-tidy-23 --version
 
       - name: Generate compilation database (configure only)
         run: |
