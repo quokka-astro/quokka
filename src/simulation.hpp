@@ -442,6 +442,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	/// Helper function to set diode boundary conditions on the lower boundary of a specific dimension.
 	/// Diode BC: allows outflow (using first-order extrapolation), prevents inflow (using reflection with flipped normal momentum).
+	/// If radiation is enabled, radiation variables are copied from the nearest interior cell, with an inward normal flux set to zero.
 	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
 	/// @param iv The cell index
 	/// @param consVar The array to fill
@@ -451,6 +452,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	/// Helper function to set diode boundary conditions on the upper boundary of a specific dimension.
 	/// Diode BC: allows outflow (using first-order extrapolation), prevents inflow (using reflection with flipped normal momentum).
+	/// If radiation is enabled, radiation variables are copied from the nearest interior cell, with an inward normal flux set to zero.
 	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
 	/// @param iv The cell index
 	/// @param consVar The array to fill
@@ -2853,6 +2855,22 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 				    consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::scalar0_index + n);
 			}
 		}
+
+		// Radiation: zero-gradient copy from the nearest interior cell, for both gas outflow and inflow,
+		// since radiation propagates independently of the gas velocity. A normal flux pointing into the
+		// domain (+dir direction) is set to zero so that the boundary does not act as a radiation source.
+		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+			constexpr int radFirst = Physics_Indices<problem_t>::radFirstIndex;
+			constexpr int nRadVars = Physics_NumVars::numRadVarsPerGroup;
+			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				for (int n = 0; n < nRadVars; ++n) {
+					const int comp = radFirst + nRadVars * g + n;
+					consVar(i, j, k, comp) = consVar(i_interior, j_interior, k_interior, comp);
+				}
+				const int normalFluxComp = radFirst + nRadVars * g + 1 + dir;
+				consVar(i, j, k, normalFluxComp) = std::min(consVar(i, j, k, normalFluxComp), 0.0);
+			}
+		}
 	}
 }
 
@@ -2972,6 +2990,22 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
 				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
 				    consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::scalar0_index + n);
+			}
+		}
+
+		// Radiation: zero-gradient copy from the nearest interior cell, for both gas outflow and inflow,
+		// since radiation propagates independently of the gas velocity. A normal flux pointing into the
+		// domain (-dir direction) is set to zero so that the boundary does not act as a radiation source.
+		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+			constexpr int radFirst = Physics_Indices<problem_t>::radFirstIndex;
+			constexpr int nRadVars = Physics_NumVars::numRadVarsPerGroup;
+			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				for (int n = 0; n < nRadVars; ++n) {
+					const int comp = radFirst + nRadVars * g + n;
+					consVar(i, j, k, comp) = consVar(i_interior, j_interior, k_interior, comp);
+				}
+				const int normalFluxComp = radFirst + nRadVars * g + 1 + dir;
+				consVar(i, j, k, normalFluxComp) = std::max(consVar(i, j, k, normalFluxComp), 0.0);
 			}
 		}
 	}
