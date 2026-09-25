@@ -363,7 +363,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	double relax = 1.0;
 	double Fg_abs_sum_prev = std::numeric_limits<double>::max();
 	double delta_x_prev = 0.0;
-	quokka::valarray<double, nGroups_> delta_R_prev{};
+	// worsen_streak counts consecutive iterations that fail to reduce the residual, so a cut fires only once it
+	// reaches newton_damping_patience; cooldown_remaining then blocks further cuts or growth for a few iterations.
+	int worsen_streak = 0;
+	int cooldown_remaining = 0;
 	int n = 0;
 	for (; n < maxIter; ++n) { // NOSONAR
 		// if relative change is within tol, break
@@ -565,23 +568,37 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 				// that would ODR-use the namespace-scope constexpr constant, which nvcc does not make
 				// available in device code.
 				const double damping_min = newton_damping_min;
-				relax *= (jacobian.Fg_abs_sum > Fg_abs_sum_prev) ? newton_damping_down : newton_damping_up;
+				const bool worsened = jacobian.Fg_abs_sum > Fg_abs_sum_prev;
+				worsen_streak = worsened ? worsen_streak + 1 : 0;
+				if (cooldown_remaining > 0) {
+					--cooldown_remaining;
+				} else if (worsen_streak >= newton_damping_patience) {
+					// Patience-gated cut: a lone bad iteration (which an oscillating -- not diverging --
+					// residual produces regularly) does not by itself shorten the step, only a sustained
+					// run of non-improving iterations does, whatever the period of the oscillation.
+					relax *= newton_damping_down;
+					worsen_streak = 0;
+					cooldown_remaining = newton_damping_cooldown;
+				} else if (!worsened) {
+					relax *= newton_damping_up;
+				}
 				relax = std::min(std::max(relax, damping_min), 1.0);
 			}
 			Fg_abs_sum_prev = jacobian.Fg_abs_sum;
 			// Oscillation catch. When the iteration cycles about the root rather than approaching it, the
-			// steps alternate in sign and each one overshoots past the root; the mean of two consecutive
-			// steps is what actually points at it (for a clean period-two cycle the mean lands on it).
-			// Advance by that mean instead of the raw Newton step, and let the usual convergence test
-			// below decide -- this damps the cycle without bypassing the criterion.
+			// steps alternate in sign and each one overshoots past the root. For a clean period-two cycle
+			// x_a <-> x_b the root is the midpoint, which is reached by half of the current step, so take
+			// that instead of the raw Newton step, and let the usual convergence test below decide -- this
+			// damps the cycle without bypassing the criterion. (Not the mean of the current and previous
+			// steps: the previous one has already been applied, so that re-applies half of it -- a 2-cycle's
+			// steps +d, -d average to 0 and the iterate stalls.)
 			double step_x = delta_x;
 			auto step_R = delta_R;
 			if (n > 0 && delta_x * delta_x_prev < 0.0) {
-				step_x = 0.5 * (delta_x + delta_x_prev);
-				step_R = 0.5 * (delta_R + delta_R_prev);
+				step_x = 0.5 * delta_x;
+				step_R = 0.5 * delta_R;
 			}
 			delta_x_prev = delta_x;
-			delta_R_prev = delta_R;
 			T_d += relax * step_x;
 			for (int g = 0; g < nGroups_; ++g) {
 				if (rebase_thin && (tau[g] > 0.0) && (tau[g] < newton_erad_base_tau_threshold)) {

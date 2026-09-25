@@ -55,6 +55,14 @@ static constexpr double newton_resid_roundoff_factor = 10.0;
 static constexpr double newton_damping_down = 0.5;
 static constexpr double newton_damping_up = 1.5;
 static constexpr double newton_damping_min = 0.05;
+// Reacting to a single iteration's residual comparison lets relax lock into a stable limit cycle (cycling
+// through a fixed sequence of values, e.g. period 3) instead of settling. So a cut by newton_damping_down
+// fires only after newton_damping_patience consecutive iterations fail to reduce the residual, which makes
+// it period-agnostic: the step is shortened once recent progress has clearly stalled, not because one
+// sample of an oscillating sequence ticked upward. newton_damping_cooldown then holds relax fixed for that
+// many iterations after a cut, so the shorter step takes effect before it is judged again.
+static constexpr int newton_damping_patience = 3;
+static constexpr int newton_damping_cooldown = 2;
 static constexpr bool use_D_as_base = false;
 // Optical depth below which a group's Newton unknown is its radiation energy Erad_g rather than its
 // exchange term R_g. With R_g as the unknown, Erad_g must be recovered as
@@ -665,25 +673,31 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 		return radEnergyFractions;
 	} else {
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		amrex::Real y = NAN;
-		amrex::Real previous = 0.0;
+		// (P, Q) = lower/upper normalized Planck integrals at the group's lower edge; the first group's lower edge is taken as x = 0.
+		amrex::Real p_prev = 0.0;
+		amrex::Real q_prev = 1.0;
+		bool prev_in_tail = false;
 		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission. When
 		// chemical bands are present the thermal fractions are NOT renormalized: the blackbody radiation
 		// above the first chemical-band boundary is simply dropped, so the fractions sum to < 1.
 		for (int g = 0; g < nGroupsThermal_; ++g) {
-			if (g == nGroups_ - 1) {
-				// no chemical bands: the last group carries all remaining blackbody, total fraction = 1.0
-				y = 1.0;
-			} else {
+			// no chemical bands: the last group carries all remaining blackbody, total fraction = 1.0
+			amrex::Real p = 1.0;
+			amrex::Real q = 0.0;
+			bool in_tail = true;
+			if (g < nGroups_ - 1) {
 				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-				if (x >= 100.) { // 100. is the upper limit of x in the table
-					y = 1.0;
-				} else {
-					y = integrate_planck_from_0_to_x(x);
-				}
+				in_tail = x >= X_TAIL;
+				const auto pq = integrate_planck_below_and_above_x(x);
+				p = pq[0];
+				q = pq[1];
 			}
-			radEnergyFractions[g] = y - previous;
-			previous = y;
+			// A group whose lower edge is in the Wien tail (see X_TAIL in planck_integral.hpp) takes its fraction as a difference
+			// of upper integrals, Q(x_lo) - Q(x_hi), rather than of lower integrals that are both ~1.
+			radEnergyFractions[g] = prev_in_tail ? q_prev - q : p - p_prev;
+			p_prev = p;
+			q_prev = q;
+			prev_in_tail = in_tail;
 		}
 		// chemical bands (g >= nGroupsThermal_) emit no blackbody radiation; left at 0.
 		AMREX_ASSERT(sum(radEnergyFractions) < 1.0 + 1.0e-10);
@@ -752,24 +766,38 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 		//     D(x) = (15/pi^4) \int_0^x s^4 e^s / (e^s - 1)^2 ds = 4 P(x) - (15/pi^4) x^4 / (e^x - 1),
 		// where P is the same normalized Planck integral used for the energy fractions, so the exact
 		// derivative costs one extra term per group boundary. D(inf) = 4 recovers d(a T^4)/dT.
+		// Alongside D(x) this also tracks its complement
+		//     U(x) = 4 - D(x) = 4 Q(x) + (15/pi^4) x^4 / (e^x - 1),
+		// and a group whose lower edge is in the Wien tail takes U(x_lo) - U(x_hi) instead of D(x_hi) - D(x_lo), mirroring
+		// ComputePlanckEnergyFractions. There Q comes from the exact tail series (see X_TAIL in planck_integral.hpp), so this is
+		// the derivative of the emission actually computed, not of the true Planck function that the table only approximates.
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		amrex::Real y = NAN;
-		amrex::Real previous = 0.0;
+		amrex::Real d_prev = 0.0;
+		amrex::Real u_prev = 4.0;
+		bool prev_in_tail = false;
 		// Only the thermal groups emit; the chemical bands are left at 0, as in ComputePlanckEnergyFractions.
 		for (int g = 0; g < nGroupsThermal_; ++g) {
-			if (g == nGroups_ - 1) {
-				// no chemical bands: the last group carries all remaining blackbody, so D = D(inf) = 4
-				y = 4.0;
-			} else {
+			// no chemical bands: the last group carries all remaining blackbody, so D = D(inf) = 4
+			amrex::Real d = 4.0;
+			amrex::Real u = 0.0;
+			bool in_tail = true;
+			if (g < nGroups_ - 1) {
 				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-				if (x >= 100.) { // 100. is the upper limit of x in the table
-					y = 4.0;
+				const amrex::Real kernel = (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
+				if (x >= X_TAIL) {
+					const amrex::Real q = integrate_planck_from_x_to_inf_series(x);
+					d = 4. * (1.0 - q) - kernel;
+					u = 4. * q + kernel;
 				} else {
-					y = 4. * integrate_planck_from_0_to_x(x) - (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
+					in_tail = false;
+					d = 4. * integrate_planck_from_0_to_x(x) - kernel;
+					u = 4.0 - d;
 				}
 			}
-			d_fourpiboverc_d_t[g] = a_T3 * (y - previous);
-			previous = y;
+			d_fourpiboverc_d_t[g] = a_T3 * (prev_in_tail ? u_prev - u : d - d_prev);
+			d_prev = d;
+			u_prev = u;
+			prev_in_tail = in_tail;
 		}
 
 		return d_fourpiboverc_d_t;

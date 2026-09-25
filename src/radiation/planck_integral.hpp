@@ -262,4 +262,59 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	return y;
 }
 
+// Above X_TAIL the table is replaced by an exact series for the upper tail of the Planck integral, for two reasons:
+//   1. A group lying entirely in the Wien tail has an energy fraction Q(x_lo) - Q(x_hi) with Q = 1 - P << 1. Formed from the
+//      table as P(x_hi) - P(x_lo), both operands are ~1, so the fraction carries an absolute round-off of ~epsilon -- a relative
+//      error of epsilon / Q, which makes the group emission a staircase in T. (The table's 15 stored digits also cannot resolve
+//      Q below ~1e-15 at all.)
+//   2. Linear interpolation in log x gives the emission the slope of the bin's chord, while the analytic temperature derivative
+//      (ComputeThermalRadiationTempDerivativeMultiGroup) uses the exact kernel. In the tail these differ by up to ~10%, so the
+//      Newton Jacobian is inconsistent with the residual it differentiates and the iteration overshoots on every step.
+// X_TAIL sits on a table node, the one nearest x = 5 (0-based node 739, x = 10^(LOG_X_MIN + 739 (LOG_X_MAX - LOG_X_MIN) /
+// (INTERP_SIZE - 1))), where the table equals the exact P to its stored precision, so the emission stays continuous across the
+// switch.
+static constexpr Real X_TAIL = 4.996877453854884;
+// Upper bound on the number of series terms. Above X_TAIL the terms fall off at least as fast as e^(-5 k), so the series
+// reaches double precision by k = 8; the cap only guards the loop.
+static constexpr int TAIL_SERIES_MAX_TERMS = 20;
+
+// Upper tail of the Planck integral, (15/pi^4) \int_x^inf s^3 / (e^s - 1) ds. Expanding 1/(e^s - 1) = sum_k e^(-k s) and
+// integrating each term exactly gives
+//     Q(x) = (15/pi^4) sum_{k>=1} e^(-k x) (x^3/k + 3 x^2/k^2 + 6 x/k^3 + 6/k^4),
+// whose terms fall off like e^(-k x): 8 terms at x = 5, 2 at x = 20 for double precision. Only meant for x >= X_TAIL.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_x_to_inf_series(const Real x) -> Real
+{
+	AMREX_ASSERT(!std::isnan(x));
+	AMREX_ASSERT(x >= 0.);
+
+	const Real e = std::exp(-x);
+	const Real x2 = x * x;
+	const Real x3 = x2 * x;
+	Real ek = e;
+	Real q = 0.0;
+	for (int k = 1; k <= TAIL_SERIES_MAX_TERMS; ++k) {
+		const Real kf = static_cast<Real>(k);
+		const Real term = ek * (x3 / kf + 3.0 * x2 / (kf * kf) + 6.0 * x / (kf * kf * kf) + 6.0 / (kf * kf * kf * kf));
+		q += term;
+		if (term <= 1.0e-17 * q) { // also stops at once when e^(-x) underflows to 0
+			break;
+		}
+		ek *= e;
+	}
+	return q / gInf;
+}
+
+// Both the lower and upper normalized Planck integrals at x, {P, Q} with P + Q = 1, each computed from whichever representation
+// holds it without cancellation. Below X_TAIL this is the table's P (identical to integrate_planck_from_0_to_x); above it, the
+// tail series' Q.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_below_and_above_x(const Real x) -> amrex::GpuArray<Real, 2>
+{
+	if (x >= X_TAIL) {
+		const Real q = integrate_planck_from_x_to_inf_series(x);
+		return {1.0 - q, q};
+	}
+	const Real p = integrate_planck_from_0_to_x(x);
+	return {p, 1.0 - p};
+}
+
 #endif // PLANCKINTEGRAL_HPP_
