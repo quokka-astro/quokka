@@ -90,7 +90,17 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 
 	const double cs_max = std::max(sL.cs, sR.cs);
 	const double tp = std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
-	const double theta = tp * tp * tp * tp;
+	const double theta_raw = tp * tp * tp * tp;
+
+	// The carbuncle correction targets faces whose normal flux direction runs
+	// along a shock, where pressure is nearly continuous across the face. Restore
+	// the unmodified pressure term for a significant normal pressure jump.
+	constexpr double pressure_jump_low = 0.05;
+	constexpr double pressure_jump_high = 0.20;
+	const double pressure_sum = sL.P + sR.P;
+	const double normal_pressure_jump = (pressure_sum > 0.0) ? std::abs(sR.P - sL.P) / pressure_sum : 0.0;
+	const double carbuncle_weight = amrex::Clamp((pressure_jump_high - normal_pressure_jump) / (pressure_jump_high - pressure_jump_low), 0.0, 1.0);
+	const double theta = 1.0 - carbuncle_weight * (1.0 - theta_raw);
 
 	// compute speed of the 'star' state
 
