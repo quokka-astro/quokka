@@ -51,15 +51,14 @@ template <> void QuokkaSimulation<BinaryOrbitGravityOnly>::setInitialConditionsO
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-	// negligible, non-advected gas (as in BinaryOrbitCIC): a positive density keeps the gravitational
+		// negligible, non-advected gas (as in BinaryOrbitCIC): a positive density keeps the gravitational
 		// kick on the gas finite, and its mass (~1e-15 of the particle mass) does not affect the orbit
-	for (int n = 0; n < Physics_Indices<BinaryOrbitGravityOnly>::nvarTotal_cc; ++n) {
-		state_cc(i, j, k, n) = 0;
-	}
-	const double rho = 1.0e-22; // g cm^{-3}
-	state_cc(i, j, k, HydroSystem<BinaryOrbitGravityOnly>::density_index) = rho;
-});
-
+		for (int n = 0; n < Physics_Indices<BinaryOrbitGravityOnly>::nvarTotal_cc; ++n) {
+			state_cc(i, j, k, n) = 0;
+		}
+		const double rho = 1.0e-22; // g cm^{-3}
+		state_cc(i, j, k, HydroSystem<BinaryOrbitGravityOnly>::density_index) = rho;
+	});
 }
 
 template <> void QuokkaSimulation<BinaryOrbitGravityOnly>::createInitialCICParticles()
