@@ -1,0 +1,75 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  [-4.9371e19, -4.9371e19, -4.9371e19]
+geometry.prob_hi     =  [ 4.9371e19,  4.9371e19,  4.9371e19]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [64, 64, 64]
+amr.max_level       = 1
+amr.max_grid_size   = 128
+amr.blocking_factor = 32
+amr.n_error_buf     = 3
+amr.grid_eff        = 0.7
+regrid_interval     = 30
+
+do_reflux = 1
+do_subcycle = 1
+suppress_output = 0
+
+temperature_floor = 10.0
+density_floor = 1.0e-30
+
+stop_time = 3.15576e13
+max_timesteps = 200
+
+plotfile_interval = 100
+plotfile_prefix = "DType3D"
+
+photochemistry.enabled = 1
+network.energy_switch = 1
+network.recombination_temperature_dependent = 1
+network.allow_mixed_cell_cooling = 0
+
+photoionize.n_e_init   = 1.0e-10
+photoionize.n_HI_init  = 1.0e2     # neutral density n_0
+photoionize.n_HII_init = 1.0e-10
+photoionize.temperature = 42.0   # K
+
+photoionize.flux_ion = 1.0e48
+photoionize.flux_optical = 3.0e50
+
+# The optical band is very opaque, so the shell absorbs essentially all the optical light and takes up its momentum, while the IR
+# is left nearly transparent so the reprocessed light streams out instead of being trapped.
+photoionize.kappa_ir = 1.0e-2
+photoionize.kappa_optical = 300
+
+radiation.iteration_tolerance = 1e-10
+radiation.dust_gas_interaction_coeff = 0.0   # thermally decouple dust from gas; dust sits at radiative equilibrium
+
+integrator.rosenbrock_tableau = 3
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2
+
+integrator.atol_spec                     = 1.0e-3   # cm^-3
+integrator.atol_enuc                     = 1.24e8   # erg/g; c_v * 1 K temperature accuracy
+integrator.atol_rad_num                  = 1.0e-6   # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3   # cm^-3; = atol_spec
+integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at the front
