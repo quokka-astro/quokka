@@ -12,7 +12,8 @@
 ///        q_xx-type) term and one transverse ("cross", q_xy/q_xz-type) term per transverse
 ///        direction; the normal term is limited with the biased L2 limiter (their Eq. 21, sign-
 ///        definite so it tolerates a biased limiter), while each cross term is limited with a
-///        nested minmod (L(L(a,b),L(c,d))) since it is sign-indefinite. Both terms read bhat/n at
+///        nested symmetric limiter (L(L(a,b),L(c,d))), MC or minmod, since it is sign-indefinite
+///        (selected by AnisoConductionParams::flux_limiter_type). Both terms read bhat/n at
 ///        mesh vertices ("corners") and gradT via direct two-point differences of cell-centered T,
 ///        never a precomputed face/corner gradT field. Only kappa_parallel enters the flux
 ///        (kappa_perp is currently unused -- see AnisoConductionParams); the result is saturated
@@ -41,10 +42,10 @@
 namespace quokka::conduction
 {
 
-// Selects how LimitUpperLowerFlux combines a face's two per-corner flux estimates (Sharma & Hammett
-// 2007). Only Minmod is implemented so far; add new cases here (and in LimitUpperLowerFlux's switch)
-// to support more limiter types.
-enum class AnisoFluxLimiterType { Minmod };
+// Selects the limiter LimitUpperLowerFlux applies to the transverse temperature gradients of the cross
+// term (Sharma & Hammett 2007). Minmod and MC (monotonized central) are implemented; add new cases
+// here (and in LimitUpperLowerFlux's switch) to support more limiter types.
+enum class AnisoFluxLimiterType { Minmod, MC };
 
 struct AnisoConductionParams {
 	amrex::Real kappa_parallel = 0.0; // field-aligned conductivity, units erg cm^-1 s^-1 K^-1
@@ -55,8 +56,8 @@ struct AnisoConductionParams {
 	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
 	int reconstruction_order = 3;	     // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM;
 	SlopeLimiter plm_limiter = SlopeLimiter::sweby;
-	int ng_reconstruct = 2;						       // number of ghost faces to reconstruct beyond the valid box
-	AnisoFluxLimiterType flux_limiter_type = AnisoFluxLimiterType::Minmod; // combines a face's lower/upper corner flux estimates; see LimitUpperLowerFlux
+	int ng_reconstruct = 2;						   // number of ghost faces to reconstruct beyond the valid box
+	AnisoFluxLimiterType flux_limiter_type = AnisoFluxLimiterType::MC; // transverse-gradient limiter (hard-coded; set to ::Minmod to switch back)
 };
 
 template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect FaceMinusOne(int i, int j, int k)
@@ -95,11 +96,14 @@ inline auto ParseAnisoFluxLimiterType(std::string const &name) -> AnisoFluxLimit
 	if (name == "minmod") {
 		return AnisoFluxLimiterType::Minmod;
 	}
-	amrex::Abort("Unknown anisotropic-conduction flux limiter \"" + name + "\" (valid: \"minmod\")");
+	if (name == "mc") {
+		return AnisoFluxLimiterType::MC;
+	}
+	amrex::Abort("Unknown anisotropic-conduction flux limiter \"" + name + "\" (valid: \"minmod\", \"mc\")");
 	return AnisoFluxLimiterType::Minmod; // unreachable; amrex::Abort does not return
 }
 
-// Combines two per-corner or per-neighbor estimates (q_lower, q_upper) into a single minmod-limited
+// Combines two per-corner or per-neighbor estimates (q_lower, q_upper) into a single limited
 // value, per the limiter selected by `limiter_type` -- used both directly (the transverse-term
 // NestedLimit) and, in earlier revisions of this scheme, to combine per-corner flux estimates. Takes
 // the pre-parsed enum (see ParseAnisoFluxLimiterType) rather than a string, since this runs per-face
@@ -110,9 +114,18 @@ inline auto ParseAnisoFluxLimiterType(std::string const &name) -> AnisoFluxLimit
 // the signature of a spurious, non-physical contribution (e.g. near a field bend or a field-direction
 // null), so it is suppressed entirely rather than averaged into a nonzero residual. If they agree in
 // sign, returns whichever has the smaller magnitude (with that shared sign), to avoid overshoot.
+//
+// MC (monotonized central): same zero-on-sign-disagreement rule; otherwise returns
+// sign * min(2|q_lower|, 2|q_upper|, |q_lower + q_upper|/2) -- the central average where it is
+// safe, less diffusive than minmod.
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real LimitUpperLowerFlux(amrex::Real q_lower, amrex::Real q_upper, AnisoFluxLimiterType limiter_type)
 {
 	switch (limiter_type) {
+		case AnisoFluxLimiterType::MC:
+			if (q_lower * q_upper <= 0.0) {
+				return 0.0;
+			}
+			return std::copysign(amrex::min(2.0 * std::abs(q_lower), 2.0 * std::abs(q_upper), 0.5 * std::abs(q_lower + q_upper)), q_lower);
 		case AnisoFluxLimiterType::Minmod:
 		default:
 			if (q_lower * q_upper <= 0.0) {
@@ -128,7 +141,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real LimitUpperLowerFlux(amrex::
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real DiagCoeff(amrex::Real bn, amrex::Real kappa_par) { return kappa_par * bn * bn; }
 
 // kappa_par * bi * bj -- the off-diagonal tensor entry (q_xy/q_xz-type term). Sign-indefinite (flips
-// with bi*bj), so it needs minmod-style limiting (see NestedLimit below), not L2.
+// with bi*bj), so it needs symmetric minmod/MC limiting (see NestedLimit below), not L2.
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real CrossCoeff(amrex::Real bi, amrex::Real bj, amrex::Real kappa_par) { return kappa_par * bi * bj; }
 
 // Sharma & Hammett (2007) Eq. (21): a biased limiter for the (sign-definite) normal term. Not
@@ -146,8 +159,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real L2(amrex::Real anchor, amre
 	return (avg <= lo) ? lo : hi;
 }
 
-// L(L(a,b), L(c,d)) -- Eq. (17) / Sec. 6.1's nested-minmod pattern for the (sign-indefinite)
-// transverse term. Reuses LimitUpperLowerFlux rather than re-deriving minmod a second time.
+// L(L(a,b), L(c,d)) -- Eq. (17) / Sec. 6.1's nested-limiter pattern for the (sign-indefinite)
+// transverse term, with L = minmod or MC per `limiter_type`. Reuses LimitUpperLowerFlux rather than
+// re-deriving the limiter a second time.
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real NestedLimit(amrex::Real a, amrex::Real b, amrex::Real c, amrex::Real d, AnisoFluxLimiterType limiter_type)
 {
 	return LimitUpperLowerFlux(LimitUpperLowerFlux(a, b, limiter_type), LimitUpperLowerFlux(c, d, limiter_type), limiter_type);
