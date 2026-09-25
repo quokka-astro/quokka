@@ -45,7 +45,6 @@ template <> struct Physics_Indices<SemiellipseProblem> {
 	static constexpr int mhdFirstIndex = 0;
 };
 
-
 AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
