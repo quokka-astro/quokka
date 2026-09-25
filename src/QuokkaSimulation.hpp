@@ -259,6 +259,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void initialize()
 	{
 		AMRSimulation<problem_t>::initialize();
+		// add units and physics-specific metadata
+		this->initializeSimulationMetadata();
 
 #if (AMREX_SPACEDIM != 3)
 		static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "MHD is only supported in 3D.");
