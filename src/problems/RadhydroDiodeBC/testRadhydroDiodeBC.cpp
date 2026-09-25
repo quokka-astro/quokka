@@ -19,7 +19,7 @@ struct DiodeProblem {}; // dummy type to allow compile-type polymorphism via tem
 constexpr int n_groups_ = 2;
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.0e-3, 1.0, 1.0e3};
 
-constexpr double c = 10.0;	// speed of light (dimensionless)
+constexpr double c = 10.0;	   // speed of light (dimensionless)
 constexpr double kappa0 = 1.0e-10; // opacity, small enough that radiation is decoupled from the gas
 constexpr double rho0 = 1.0;
 constexpr double T0 = 1.0;
@@ -28,7 +28,7 @@ constexpr double a_rad = 1.0;
 constexpr double k_B = 1.0;
 constexpr double mu = 1.0;
 
-constexpr double Erad0 = 1.0;	   // uniform radiation energy density of group 0
+constexpr double Erad0 = 1.0;	    // uniform radiation energy density of group 0
 constexpr double Erad1_bg = 1.0e-6; // background radiation energy density of group 1
 constexpr double Erad1_pk = 1.0;    // peak of the group 1 pulse
 constexpr double pulse_width = 0.05;
@@ -103,9 +103,9 @@ template <> void QuokkaSimulation<DiodeProblem>::setInitialConditionsOnGrid(quok
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<DiodeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							 int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							 const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+AMRSimulation<DiodeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
+							 int /*bcomp*/, int /*orig_comp*/)
 {
 	setDiodeBCLo<0>(iv, consVar, geom);
 	setDiodeBCHi<0>(iv, consVar, geom);
