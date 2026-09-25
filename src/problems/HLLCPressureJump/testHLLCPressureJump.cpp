@@ -33,8 +33,8 @@ template <> struct Physics_Traits<HLLCPressureJumpProblem> : DefaultPhysicsTrait
 auto problem_main() -> int
 {
 	constexpr int num_cases = 3;
-	double host_flux[num_cases] = {NAN, NAN, NAN};
-	amrex::AsyncArray async_flux(host_flux, num_cases);
+	std::array<double, num_cases> host_flux = {NAN, NAN, NAN};
+	amrex::AsyncArray async_flux(host_flux.data(), num_cases);
 	double *const flux_out = async_flux.data();
 
 	amrex::ParallelFor(num_cases, [=] AMREX_GPU_DEVICE(int n) noexcept {
@@ -83,7 +83,7 @@ auto problem_main() -> int
 		    quokka::Riemann::HLLC<HLLCPressureJumpProblem, 0, 0, 6>(left, right, quokka::EOS_Traits<HLLCPressureJumpProblem>::gamma, du, dw);
 		flux_out[n] = flux[0];
 	});
-	async_flux.copyToHost(host_flux, num_cases);
+	async_flux.copyToHost(host_flux.data(), num_cases);
 
 	constexpr std::array<double, num_cases> expected_flux = {-2.1589381771725202e-19, 2.5203897321703885e-18, 2.979327941432850e-18};
 	constexpr double relative_tolerance = 1.0e-9;
