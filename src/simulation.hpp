@@ -830,11 +830,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	amrex::Print() << std::format("\tAMReX-Hydro git: {}\n", AMREX_HYDRO_GIT_HASH);
 #endif
 	amrex::Print() << std::format("\tTurbGen git: {}\n", TURBULENCE_GIT_HASH);
-
-	// add units and physics-specific metadata
-	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		initializeSimulationMetadata();
-	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
