@@ -150,6 +150,8 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 
 	// Apply boundary condition using helper function (direction 0 = x-axis)
 	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	// Outflow at the upper x boundary; the diode BC reduces to foextrap here and exercises its radiation part
+	setDiodeBCHi<0>(iv, consVar, geom);
 }
 
 auto problem_main() -> int
@@ -167,7 +169,7 @@ auto problem_main() -> int
 	for (int n = 0; n < nvars; ++n) {
 		// for x-axis:
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
+		BCs_cc[n].setHi(0, amrex::BCType::ext_dir); // diode
 		// for y-, z- axes:
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			// periodic
