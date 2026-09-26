@@ -27,7 +27,7 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-amd64
     outputs:
       has_docs_changes: ${{ steps.set-output.outputs.has_docs_changes }}
       has_non_docs_changes: ${{ steps.set-output.outputs.has_non_docs_changes }}
