@@ -52,10 +52,7 @@ constexpr double A0 = 0.05; // amplitude of the vector potential perturbation
 bool mixed_flow = false; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // vector potential A_z(x, y) of the field perturbation, evaluated on cell edges so that the face field is exactly divergence-free
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vectorPotential(double x, double y) -> double
-{
-	return A0 * std::cos(0.5 * M_PI * x) * std::sin(2.0 * M_PI * y);
-}
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vectorPotential(double x, double y) -> double { return A0 * std::cos(0.5 * M_PI * x) * std::sin(2.0 * M_PI * y); }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto density(double x, double y) -> double { return 1.0 + 0.5 * x * x + 0.2 * std::sin(2.0 * M_PI * y); }
 } // namespace
@@ -136,11 +133,11 @@ template <> auto AMRSimulation<MHDDiode>::isMHDDiodeBoundary(int dir, int /*side
 
 namespace
 {
-amrex::Real initial_mass = NAN;	 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-amrex::Real previous_mass = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-amrex::Real max_mass_err = 0.;	 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-amrex::Real max_mass_gain = 0.;	 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-amrex::Real max_divB = 0.;	 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real initial_mass = NAN;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real previous_mass = NAN;				      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real max_mass_err = 0.;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real max_mass_gain = 0.;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real max_divB = 0.;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 amrex::Real min_inflow_mom = std::numeric_limits<amrex::Real>::max(); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 

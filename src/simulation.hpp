@@ -3037,7 +3037,8 @@ void AMRSimulation<problem_t>::applyMHDDiodeBC(amrex::MultiFab &state_cc, std::a
 					int const ng = slab.length(d);
 
 					auto const &cc = state_cc.array(mfi);
-					std::array<amrex::Array4<amrex::Real>, 3> const fc = {state_fc[0].array(mfi), state_fc[1].array(mfi), state_fc[2].array(mfi)};
+					std::array<amrex::Array4<amrex::Real>, 3> const fc = {state_fc[0].array(mfi), state_fc[1].array(mfi),
+											      state_fc[2].array(mfi)};
 
 					// the same inflow/outflow rule as setDiodeBCLo/Hi, evaluated on the first valid cell of the column
 					auto const isInflow = [=] AMREX_GPU_DEVICE(amrex::IntVect col) -> bool {
@@ -3056,7 +3057,8 @@ void AMRSimulation<problem_t>::applyMHDDiodeBC(amrex::MultiFab &state_cc, std::a
 							amrex::IntVect col_lo = iv;
 							col_lo[t] -= 1;
 							// a face shared by an inflow and an outflow column is treated as inflow
-							bool const inflow = (ccbox.contains(iv) && isInflow(iv)) || (ccbox.contains(col_lo) && isInflow(col_lo));
+							bool const inflow =
+							    (ccbox.contains(iv) && isInflow(iv)) || (ccbox.contains(col_lo) && isInflow(col_lo));
 							int const m = sgn * (iv[d] - icell);
 							amrex::IntVect src = iv;
 							src[d] = inflow ? (icell - sgn * (m - 1)) : icell;
