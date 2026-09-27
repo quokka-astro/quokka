@@ -32,4 +32,5 @@ stop_time = 0.05
 max_timesteps = 5000
 
 hydro.rk_integrator_order = 2
-hydro.reconstruction_order = 3
+# xPPM: with PPM the wall face states are flattened to first order, which hides errors in the ghost fill
+hydro.reconstruction_order = 5
