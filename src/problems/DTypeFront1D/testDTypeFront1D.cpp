@@ -745,9 +745,10 @@ auto problem_main() -> int
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
 		const amrex::Real transverse_area = AMREX_D_TERM(1.0_rt, *(prob_hi[1] - prob_lo[1]), *(prob_hi[2] - prob_lo[2]));
 
-		const amrex::Real E_ir = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(sim.getNewMF_cc()),
-								  RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ir,
-								  sim.Geom(), sim.refRatio());
+		auto state_ptrs = amrex::GetVecOfConstPtrs(sim.getNewMF_cc());
+		state_ptrs.resize(sim.finestLevel() + 1);
+		const amrex::Real E_ir = amrex::volumeWeightedSum(
+		    state_ptrs, RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ir, sim.Geom(), sim.refRatio());
 
 		const double t_end = sim.tNew_[0];
 		const amrex::Real L_opt_injected =
