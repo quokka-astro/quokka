@@ -32,15 +32,11 @@
 
 namespace
 {
-constexpr double Rd_kpc = 3.0;
-constexpr double Rd = Rd_kpc * 1.0e3 * C::parsec;
 constexpr double alpha_profile = 2.0;
 constexpr double beta_profile = 0.5;
 constexpr double q_flatten = 0.7;
 constexpr double rho_transition = 1.0e-28;
 constexpr double target_beta_seed = 1.0e3;
-constexpr double Rmax_kpc = 8.0;
-constexpr double Rmax = Rmax_kpc * 1.0e3 * C::parsec;
 constexpr double axis_fallback_cells = 1.0;
 constexpr double turb_target_Mach = 0.5;
 
@@ -58,7 +54,7 @@ template <> struct quokka::EOS_Traits<MHDGalaxy> {
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double T_cgm = 1.0e7;
 	static constexpr double cs_cgm = gcem::sqrt(gamma * C::k_B * T_cgm / mean_molecular_weight);
-	static constexpr double cs_disk = 7.0e5;
+	static constexpr double cs_disk = 7.0e5;  // sound speed 7 km/s
 };
 
 template <> struct HydroSystem_Traits<MHDGalaxy> {
@@ -84,6 +80,8 @@ template <> struct Physics_Traits<MHDGalaxy> : DefaultPhysicsTraits {
 
 template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real Rc{};
+	amrex::Real Rd{};
+	amrex::Real Rmax{};
 	amrex::Real Q_mean{};
 	amrex::Real Mc{};
 	amrex::Real vc{};
@@ -131,15 +129,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vcircAnalytic(double R, double z, 
 	return vc * R / D;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, double Sigma0) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, double Rd, double Sigma0) -> double
 {
 	const double x = R / Rd;
 	return Sigma0 * std::exp(-x - beta_profile * std::exp(-alpha_profile * x));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Sigma0, double Mc, double cs, double Rc) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Rc, double Rd, double Sigma0, double Mc, double cs) -> double
 {
-	const double Sigma = surfaceDensityProfile(R, Sigma0);
+	const double Sigma = surfaceDensityProfile(R, Rd, Sigma0);
 	if (Sigma <= 0.0) {
 		return 0.0;
 	}
@@ -383,6 +381,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 {
 	amrex::ParmParse const pp("mhd_galaxy");
 	pp.get("Rc_kpc", userData_.Rc);  userData_.Rc *= 1.0e3 * C::parsec;
+	pp.get("Rd_kpc", userData_.Rd);  userData_.Rd *= 1.0e3 * C::parsec;
+	pp.get("Rmax_kpc", userData_.Rmax);  userData_.Rmax *= 1.0e3 * C::parsec;
 	pp.get("Mc", userData_.Mc);
 	pp.get("Q_mean", userData_.Q_mean);
 	pp.query("sn_jeans_J", userData_.sn_jeans_J);
@@ -397,6 +397,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	userData_.vc = userData_.Mc * cs_disk;
 	const double vc = userData_.vc;
 	const double Rc = userData_.Rc;
+	const double Rd = userData_.Rd;
+	const double Rmax = userData_.Rmax;
 
 	// Sigma0 via Simpson integration of Toomre Q condition
 	auto integrand = [=](double R) -> double {
@@ -405,7 +407,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		const double Omega = vc / sqrtD;
 		const double dOdR = -vc * R / (D * sqrtD);
 		const double kappa = std::sqrt(std::max(4.0 * Omega * Omega + 2.0 * R * Omega * dOdR, 0.0));
-		return kappa * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, 1.0));
+		return kappa * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, Rd, 1.0));
 	};
 	constexpr int N = 1000;
 	static_assert(N % 2 == 0);
@@ -415,6 +417,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		integral += (i % 2 == 0 ? 2.0 : 4.0) * integrand(i * h);
 	}
 	integral *= h / 3.0;
+	// set densityProfile factor such that the integral equals Q_mean
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
 	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
 
@@ -498,7 +501,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		{
 			constexpr double cs = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
 			constexpr double gam = quokka::EOS_Traits<MHDGalaxy>::gamma;
-			const double Sigma_Rd = surfaceDensityProfile(Rd, userData_.Sigma0);
+			const double Sigma_Rd = surfaceDensityProfile(Rd, Rd, userData_.Sigma0);
 			const double rho_mid = (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * cs * cs);
 			userData_.rho_mid = rho_mid;
 			const double B_rms_HL = cs * std::sqrt(2.0 * rho_mid / (gam * target_beta_seed));
@@ -579,6 +582,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	const double vc = userData_.vc;
 	const double Mc = userData_.Mc;
 	const double Rc = userData_.Rc;
+	const double Rd = userData_.Rd;
 	const double Sigma0 = userData_.Sigma0;
 	const double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
 	const double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
@@ -669,7 +673,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double z = prob_lo[2] + (k + 0.5) * dx[2];
 		const double R = std::sqrt(x * x + y * y + 1e-200);
 
-		const double rho_disc_raw = diskDensityAnalytic(R, z, Sigma0, Mc, cs_disk, Rc);
+		const double rho_disc_raw = diskDensityAnalytic(R, z, Rc, Rd, Sigma0, Mc, cs_disk);
 		const bool in_disk = (rho_disc_raw > rho_transition);
 		const double rho = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
 		const double cs = in_disk ? cs_disk : cs_cgm;
