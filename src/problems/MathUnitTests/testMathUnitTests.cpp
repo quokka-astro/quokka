@@ -7,10 +7,10 @@
 /// \brief Unit tests of the math utilities: ODE integration and bracketing root finding (host and device).
 ///
 
-#include "eos.H"
-#include "extern_parameters.H"
 #include "AMReX_Gpu.H"
 #include "AMReX_GpuContainers.H"
+#include "eos.H"
+#include "extern_parameters.H"
 
 #include "math/ODEIntegrate.hpp"
 #include "math/bracketing_root_finding.hpp"
