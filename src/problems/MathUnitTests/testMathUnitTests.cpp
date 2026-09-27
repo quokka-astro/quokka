@@ -22,6 +22,7 @@
 #include <cmath>
 #include <format>
 #include <iostream>
+#include <numbers>
 
 struct ODETest {};
 
@@ -132,17 +133,17 @@ struct TestCase {
 
 // clang-format off
 const std::array<TestCase, nfunc> cases = {{
-    {"x^2 - 2",               0.0, 2.0, 1.4142135623730951, true},
-    {"x^3 - 2x - 5",          2.0, 3.0, 2.0945514815423265, true},
-    {"cos(x) - x",            0.0, 1.0, 0.7390851332151607, true},
-    {"exp(x) - 10",           0.0, 5.0, 2.302585092994046, true},
-    {"x^10 - 1",              0.0, 1.3, 1.0, true},
-    {"(x - 1)^3",             0.0, 3.0, 1.0, false},
-    {"tanh(1000 (x - 0.3))",  0.0, 1.0, 0.3, false},
-    {"step at 0.3",           0.0, 1.0, 0.3, false},
-    {"log(x), reversed",      5.0, 0.5, 1.0, true},
-    {"x, root at left end",   0.0, 1.0, 0.0, true},
-    {"1e-10 (x - 1e5)",       0.0, 1.0e10, 1.0e5, true},
+    {.name = "x^2 - 2", .a = 0.0, .b = 2.0, .root = std::numbers::sqrt2, .smooth = true},
+    {.name = "x^3 - 2x - 5", .a = 2.0, .b = 3.0, .root = 2.0945514815423265, .smooth = true},
+    {.name = "cos(x) - x", .a = 0.0, .b = 1.0, .root = 0.7390851332151607, .smooth = true},
+    {.name = "exp(x) - 10", .a = 0.0, .b = 5.0, .root = std::numbers::ln10, .smooth = true},
+    {.name = "x^10 - 1", .a = 0.0, .b = 1.3, .root = 1.0, .smooth = true},
+    {.name = "(x - 1)^3", .a = 0.0, .b = 3.0, .root = 1.0, .smooth = false},
+    {.name = "tanh(1000 (x - 0.3))", .a = 0.0, .b = 1.0, .root = 0.3, .smooth = false},
+    {.name = "step at 0.3", .a = 0.0, .b = 1.0, .root = 0.3, .smooth = false},
+    {.name = "log(x), reversed", .a = 5.0, .b = 0.5, .root = 1.0, .smooth = true},
+    {.name = "x, root at left end", .a = 0.0, .b = 1.0, .root = 0.0, .smooth = true},
+    {.name = "1e-10 (x - 1e5)", .a = 0.0, .b = 1.0e10, .root = 1.0e5, .smooth = true},
 }};
 // clang-format on
 
@@ -199,7 +200,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto solve(int solver, int func, Real a
 		const Real hi = amrex::max(a, b);
 		r = quokka::math::toms748_solve(f, lo, hi, tol, iter);
 	}
-	return Result{r.second / 2 + r.first / 2, iter};
+	return Result{.root = r.second / 2 + r.first / 2, .iter = iter};
 }
 
 auto TestRootFinding() -> int
@@ -239,10 +240,10 @@ auto TestRootFinding() -> int
 	std::cout << std::format("{:<24}{:<9}{:>6}{:>6}{:>12}{:>12}\n", "function", "solver", "iter", "(dev)", "rel err", "(dev)");
 	for (int n = 0; n < ntest; ++n) {
 		const TestCase &tc = cases[n / nsolver];
-		const Real scale = amrex::max(std::abs(tc.root), Real(1.0e-300));
+		const Real scale = (tc.root == 0) ? 1.0 : std::abs(tc.root);
 		const Real reltol = 1.0e-13;
-		const Real err_h = std::abs(host[n].root - tc.root) / (tc.root == 0 ? 1.0 : scale);
-		const Real err_d = std::abs(dev[n].root - tc.root) / (tc.root == 0 ? 1.0 : scale);
+		const Real err_h = std::abs(host[n].root - tc.root) / scale;
+		const Real err_d = std::abs(dev[n].root - tc.root) / scale;
 		const int iter_limit = tc.smooth ? max_iter_smooth : max_iter_budget - 1;
 		const bool ok = (err_h <= reltol) && (err_d <= reltol) && (host[n].iter <= iter_limit) && (dev[n].iter <= iter_limit);
 		std::cout << std::format("{:<24}{:<9}{:>6}{:>6}{:>12.2e}{:>12.2e}{}\n", tc.name, solver_names[n % nsolver], host[n].iter, dev[n].iter, err_h,
