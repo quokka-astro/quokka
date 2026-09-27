@@ -125,13 +125,19 @@ template <> struct SimulationData<MHDGalaxy> {
 	int turb_nz{};
 };
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vcircAnalytic(double R, double z, double vc, double Rc) -> double
+{
+	const double D = std::sqrt( R*R + Rc * Rc + (z / q_flatten) * (z / q_flatten));
+	return vc * R / D;
+}
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, double Sigma0) -> double
 {
 	const double x = R / Rd;
 	return Sigma0 * std::exp(-x - beta_profile * std::exp(-alpha_profile * x));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Sigma0, double vc, double cs, double Rc) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Sigma0, double Mc, double cs, double Rc) -> double
 {
 	const double Sigma = surfaceDensityProfile(R, Sigma0);
 	if (Sigma <= 0.0) {
@@ -145,7 +151,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, doub
 	const double disk_factor = sech * sech;
 
 	const double denom = R * R + Rc * Rc;
-	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -vc * vc / (2.0 * cs * cs));
+	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -Mc * Mc /2.0);
 
 	return rho0 * disk_factor * halo_factor;
 }
@@ -571,6 +577,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const double vc = userData_.vc;
+	const double Mc = userData_.Mc;
 	const double Rc = userData_.Rc;
 	const double Sigma0 = userData_.Sigma0;
 	const double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
@@ -660,17 +667,17 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double x = prob_lo[0] + (i + 0.5) * dx[0];
 		const double y = prob_lo[1] + (j + 0.5) * dx[1];
 		const double z = prob_lo[2] + (k + 0.5) * dx[2];
-		const double R = std::sqrt(x * x + y * y);
+		const double R = std::sqrt(x * x + y * y + 1e-200);
 
-		const double rho_disc_raw = diskDensityAnalytic(R, z, Sigma0, vc, cs_disk, Rc);
+		const double rho_disc_raw = diskDensityAnalytic(R, z, Sigma0, Mc, cs_disk, Rc);
 		const bool in_disk = (rho_disc_raw > rho_transition);
 		const double rho = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
 		const double cs = in_disk ? cs_disk : cs_cgm;
 
-		const double vrot = (R > 0.0) ? vc * R / std::sqrt(R * R + Rc * Rc) : 0.0;
+		const double vrot = vcircAnalytic(R, 0.0, vc, Rc);
 		double vx = 0.0;
 		double vy = 0.0;
-		if (in_disk && R > 0.0) {
+		if (in_disk) {
 			vx = -vrot * y / R;
 			vy = vrot * x / R;
 		}
@@ -918,8 +925,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 			const double x = prob_lo[0] + (i + 0.5) * dx[0];
 			const double y = prob_lo[1] + (j + 0.5) * dx[1];
 			const double z = prob_lo[2] + (k + 0.5) * dx[2];
-			const double R2 = x * x + y * y;
-			const double R = std::sqrt(R2);
+			const double R = std::sqrt(x * x + y * y + 1e-200);
 
 			const double rho = state(i, j, k, HydroSystem<MHDGalaxy>::density_index);
 			const double px = state(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index);
@@ -930,15 +936,15 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 			const double Ekin_old = 0.5 * (px * px + py * py + pz * pz) / rho;
 			const double Emag = Etot_old - Ekin_old - Eint;
 
-			const double D = R2 + Rc * Rc + (z / q_flatten) * (z / q_flatten);
-			const double g_R = (R > 0.0) ? -(vc * vc * R / D) : 0.0;
-			const double g_z = -(vc * vc * z / (q_flatten * q_flatten * D));
-			const double gx = (R > 0.0) ? g_R * x / R : 0.0;
-			const double gy = (R > 0.0) ? g_R * y / R : 0.0;
+			const double v = vcircAnalytic(R, z, vc, Rc);
+			const double g_R = - v*v/ R;
+			const double gx = g_R * x / R;
+			const double gy = g_R * y / R;
+			const double gz = g_R * z / R / (q_flatten * q_flatten);
 
 			const double px_new = px + dt_lev * rho * gx;
 			const double py_new = py + dt_lev * rho * gy;
-			const double pz_new = pz + dt_lev * rho * g_z;
+			const double pz_new = pz + dt_lev * rho * gz;
 			const double Ekin_new = 0.5 * (px_new * px_new + py_new * py_new + pz_new * pz_new) / rho;
 
 			state(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index) = px_new;
