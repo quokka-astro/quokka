@@ -2718,7 +2718,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 	} else {
 		amrex::ignore_unused(stage1Weight, nghost_Riemann, dx);
-		amrex::Copy(state_new_cc_[lev], state_old_cc_tmp, 0, 0, nvars_, 0);
+		amrex::Copy(state_new_cc_[lev], state_old_cc_tmp, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, 0);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				amrex::Copy(state_new_fc_[lev][idim], state_old_fc_tmp[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, 0);
