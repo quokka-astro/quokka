@@ -34,7 +34,7 @@ template <> struct HydroSystem_Traits<ThermalConductionAnisoProblem> {
 
 template <> struct Physics_Traits<ThermalConductionAnisoProblem> : DefaultPhysicsTraits {
 	// cell-centred
-	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_hydro_enabled = false;
 	static constexpr bool is_mhd_enabled = true;
 	// dimensionless problem: rho, length, and time carry no fixed physical scale, but
 	// boltzmann_constant is kept at its physical CGS value so that Tgas is genuinely in kelvin.
