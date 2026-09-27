@@ -282,7 +282,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	amrex::ParallelDescriptor::ReduceIntMin(photochem_burn_success);
 
 	if (!photochem_burn_success) {
-		amrex::Abort("Burn failed in VODE. Aborting.");
+		amrex::Abort("Burn failed in the Rosenbrock integrator. Aborting.");
 	}
 
 	return photochem_burn_success;
