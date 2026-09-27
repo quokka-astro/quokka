@@ -232,7 +232,8 @@ void QuokkaSimulation<MHDTallBoxSf>::ComputeDerivedVar(int lev, std::string cons
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const z = prob_lo[2] + (k + 0.5) * dx[2];
-			Real const vz = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::x3Momentum_index) / state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::density_index);
+			Real const vz =
+			    state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::x3Momentum_index) / state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::density_index);
 			output[bx](i, j, k, ncomp) = state[bx](i, j, k, comp) * vz * std::copysign(1.0, z);
 		});
 	}
@@ -248,20 +249,20 @@ template <> void QuokkaSimulation<MHDTallBoxSf>::computeAfterTimestep()
 	const Real z_out = userData_.outflow_height;
 	auto const &state = state_new_cc_[0].const_arrays();
 
-	auto const [mdot_gas, mdot_metal] = amrex::ParReduce(
-	    amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum>{}, amrex::TypeList<amrex::Real, amrex::Real>{}, state_new_cc_[0], amrex::IntVect(0),
-	    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real> {
-		    Real const z_lo = prob_lo[2] + k * dx[2];
-		    Real const z_c = z_lo + 0.5 * dx[2];
-		    bool const in_plane = ((z_lo <= z_out) && (z_out < z_lo + dx[2])) || ((z_lo <= -z_out) && (-z_out < z_lo + dx[2]));
-		    if (!in_plane) {
-			    return {0.0, 0.0};
-		    }
-		    Real const rho = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::density_index);
-		    Real const vz_out = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::x3Momentum_index) / rho * std::copysign(1.0, z_c);
-		    Real const area = dx[0] * dx[1];
-		    return {rho * vz_out * area, state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::scalar0_index) * vz_out * area};
-	    });
+	auto const [mdot_gas, mdot_metal] =
+	    amrex::ParReduce(amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum>{}, amrex::TypeList<amrex::Real, amrex::Real>{}, state_new_cc_[0],
+			     amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real> {
+				     Real const z_lo = prob_lo[2] + k * dx[2];
+				     Real const z_c = z_lo + 0.5 * dx[2];
+				     bool const in_plane = ((z_lo <= z_out) && (z_out < z_lo + dx[2])) || ((z_lo <= -z_out) && (-z_out < z_lo + dx[2]));
+				     if (!in_plane) {
+					     return {0.0, 0.0};
+				     }
+				     Real const rho = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::density_index);
+				     Real const vz_out = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::x3Momentum_index) / rho * std::copysign(1.0, z_c);
+				     Real const area = dx[0] * dx[1];
+				     return {rho * vz_out * area, state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::scalar0_index) * vz_out * area};
+			     });
 	amrex::Real rates[2] = {mdot_gas, mdot_metal};
 	amrex::ParallelDescriptor::ReduceRealSum(rates, 2);
 
