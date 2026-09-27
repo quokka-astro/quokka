@@ -8,6 +8,7 @@
 /// problem.B0_uG). This field depends on z only, so it is divergence-free.
 
 #include <cmath>
+#include <fstream>
 #include <string>
 
 #include "AMReX.H"
@@ -25,6 +26,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "util/DataTable.hpp"
+#include "util/time_units.hpp"
 
 constexpr double mu = 1.0 * C::m_p;
 
@@ -45,6 +47,10 @@ template <> struct SimulationData<MHDTallBoxSf> {
 
 	// midplane magnetic field strength in microgauss (Gaussian units)
 	Real B0_uG = 3.0;
+
+	// total outflow rates are measured through the planes |z| = outflow_height
+	Real outflow_height = 1.0e3 * C::parsec; // 1 kpc
+	std::string outflow_file = "MHDTallBoxSf_outflow.txt";
 };
 
 template <> struct Particle_Traits<MHDTallBoxSf> : DefaultParticleTraits {
@@ -219,8 +225,51 @@ void QuokkaSimulation<MHDTallBoxSf>::ComputeDerivedVar(int lev, std::string cons
 			Real const Eint = HydroSystem<MHDTallBoxSf>::ComputeInternalEnergy(state[bx], i, j, k, &fc);
 			output[bx](i, j, k, ncomp) = quokka::EOS<MHDTallBoxSf>::ComputeTgasFromEint(rho, Eint);
 		});
+	} else if (dname == "gas_z_outflow_rate" || dname == "metal_z_outflow_rate") {
+		// outward (away from the midplane) vertical mass flux density of gas or metals [g cm^-2 s^-1]; scalar_0 is the metal density
+		const int comp = (dname == "gas_z_outflow_rate") ? HydroSystem<MHDTallBoxSf>::density_index : HydroSystem<MHDTallBoxSf>::scalar0_index;
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const z = prob_lo[2] + (k + 0.5) * dx[2];
+			Real const vz = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::x3Momentum_index) / state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::density_index);
+			output[bx](i, j, k, ncomp) = state[bx](i, j, k, comp) * vz * std::copysign(1.0, z);
+		});
 	}
 	amrex::Gpu::streamSynchronizeAll();
+}
+
+// Total gas and metal outflow rates through the planes |z| = outflow_height, appended to outflow_file every step.
+// The flux is taken at the centres of the cells that contain the planes, on level 0.
+template <> void QuokkaSimulation<MHDTallBoxSf>::computeAfterTimestep()
+{
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[0].ProbLoArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[0].CellSizeArray();
+	const Real z_out = userData_.outflow_height;
+	auto const &state = state_new_cc_[0].const_arrays();
+
+	auto const [mdot_gas, mdot_metal] = amrex::ParReduce(
+	    amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum>{}, amrex::TypeList<amrex::Real, amrex::Real>{}, state_new_cc_[0], amrex::IntVect(0),
+	    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real> {
+		    Real const z_lo = prob_lo[2] + k * dx[2];
+		    Real const z_c = z_lo + 0.5 * dx[2];
+		    bool const in_plane = ((z_lo <= z_out) && (z_out < z_lo + dx[2])) || ((z_lo <= -z_out) && (-z_out < z_lo + dx[2]));
+		    if (!in_plane) {
+			    return {0.0, 0.0};
+		    }
+		    Real const rho = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::density_index);
+		    Real const vz_out = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::x3Momentum_index) / rho * std::copysign(1.0, z_c);
+		    Real const area = dx[0] * dx[1];
+		    return {rho * vz_out * area, state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::scalar0_index) * vz_out * area};
+	    });
+	amrex::Real rates[2] = {mdot_gas, mdot_metal};
+	amrex::ParallelDescriptor::ReduceRealSum(rates, 2);
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		constexpr Real msun_per_yr = C::M_solar / quokka::yr_in_s; // g/s
+		std::ofstream file(userData_.outflow_file, std::ios::app);
+		file << tNew_[0] / quokka::Myr_in_s << " " << rates[0] / msun_per_yr << " " << rates[1] / msun_per_yr << "\n";
+	}
 }
 
 // Strang-split source term for the external fixed potential
@@ -285,6 +334,8 @@ auto problem_main() -> int
 	pp.query("rho01", sim.userData_.rho01);
 	pp.query("sigma1", sim.userData_.sigma1);
 	pp.query("B0_uG", sim.userData_.B0_uG);
+	pp.query("outflow_height", sim.userData_.outflow_height);
+	pp.query("outflow_file", sim.userData_.outflow_file);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.userData_.B0_uG > 0.0, "problem.B0_uG must be positive");
 	pp.query("initial_scalar_density", sim.userData_.initial_scalar_density);
 	AMREX_ALWAYS_ASSERT(!std::isnan(sim.userData_.initial_scalar_density));
@@ -300,6 +351,11 @@ auto problem_main() -> int
 	// ic_table must be initialised even when restarting from a checkpoint
 	sim.preCalculateInitialConditions();
 	sim.setInitialConditions();
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::ofstream file(sim.userData_.outflow_file);
+		file << "# total outflow rates through |z| = " << sim.userData_.outflow_height / C::parsec << " pc\n";
+		file << "# time [Myr]  Mdot_gas [Msun/yr]  Mdot_metal [Msun/yr]\n";
+	}
 	sim.evolve();
 
 	// div B check over the valid cells, normalised by the midplane field: dx |div B| / B_0
