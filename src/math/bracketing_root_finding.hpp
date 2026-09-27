@@ -198,12 +198,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto modab_solve(F f, T ax, T bx, T fax
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sgn(y1) != sgn(y2), "modab_solve: parameters a and b do not bracket the root!");
 
 	bool bisecting = true;
-	int side = 0;			  // side that moved in the previous Anderson-Bjork step
-	T threshold = x2 - x1;		  // fall back to bisection if Anderson-Bjork does not shrink the bracket below this
-	constexpr T C = 2;		  // safety factor for the threshold (two iterations)
-	T f1 = y1;			  // unmodified residuals at the bracket ends
-	T f2 = y2;			  // (y1, y2 hold the Anderson-Bjork-scaled ones)
-	T yMin = 0;			  // smallest unmodified residual of the bracket at the previous AB step
+	int side = 0;	       // side that moved in the previous Anderson-Bjork step
+	T threshold = x2 - x1; // fall back to bisection if Anderson-Bjork does not shrink the bracket below this
+	constexpr T C = 2;     // safety factor for the threshold (two iterations)
+	T f1 = y1;	       // unmodified residuals at the bracket ends
+	T f2 = y2;	       // (y1, y2 hold the Anderson-Bjork-scaled ones)
+	T yMin = 0;	       // smallest unmodified residual of the bracket at the previous AB step
 
 	while ((max_iter < budget) && !tol(x1, x2)) {
 		T x3{};
@@ -213,9 +213,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto modab_solve(F f, T ax, T bx, T fax
 			y3 = f(x3);
 			++max_iter;
 			if (std::isfinite(f2 - f1)) {
-				const T ym = (f1 + f2) / 2;		 // chord ordinate at the midpoint
+				const T ym = (f1 + f2) / 2;		  // chord ordinate at the midpoint
 				const T r = 1 - std::abs(ym / (f2 - f1)); // symmetry factor
-				const T k = r * r;			 // deviation factor
+				const T k = r * r;			  // deviation factor
 				if (std::abs(ym - y3) < k * std::abs(y3) + k * std::abs(ym)) {
 					// close enough to linear: switch to Anderson-Bjork, starting from the true residuals
 					bisecting = false;
