@@ -51,15 +51,15 @@ Boundaries of type `ext_dir` in `quokka.bc` are filled by the problem's `setCust
 
 The diode lets gas leave the domain and stops it from entering. For hydro, call `setDiodeBCLo<dir>` / `setDiodeBCHi<dir>` in `setCustomBoundaryConditions`. For MHD, additionally set the face-centred boundary to `foextrap` (a placeholder) and specialise `AMRSimulation<problem_t>::isMHDDiodeBoundary(dir, side)` to return `true`; `applyMHDDiodeBC` then fills the ghost magnetic field after the regular ghost fills. `src/problems/MHDDiode` is an example.
 
-Each boundary column is flagged by the sign of the normal momentum in its first valid cell. Below, cell \\(0\\) is the first valid cell, ghost cell \\(-m\\) has left face \\(-m\\), and face \\(0\\) is the boundary face (lower boundary; the upper boundary is symmetric).
+We take the lower \\(x\\) boundary as the example: \\(x\\) is the normal direction and \\(y\\), \\(z\\) are transverse; the other boundaries follow by symmetry. Cell \\(0\\) is the first valid cell, ghost cell \\(-m\\) has left face \\(-m\\), and face \\(0\\) is the boundary face. Each column (fixed \\(j\\), \\(k\\)) is outflow if \\(\rho v\_x < 0\\) in its first valid cell and inflow otherwise.
 
 | Quantity | Outflow column | Inflow column |
 |---|---|---|
-| \\(\rho\\), \\(\rho \mathbf{v}\_t\\), internal energy, scalars | copy of cell \\(0\\) | mirror of cell \\(m-1\\) |
-| \\(\rho v\_n\\) | copy of cell \\(0\\) | mirror of cell \\(m-1\\), sign reversed |
-| \\(B\_t\\) on ghost faces | copy of cell \\(0\\) | mirror of cell \\(m-1\\), same sign |
-| \\(B\_n\\) on ghost faces | from \\(\nabla \cdot \mathbf{B} = 0\\), eq. (1) | from \\(\nabla \cdot \mathbf{B} = 0\\), eq. (1) |
-| \\(B\_n\\) on the boundary face | not written (evolved by CT) | not written (evolved by CT) |
+| \\(\rho\\), \\(\rho v\_y\\), \\(\rho v\_z\\), internal energy, scalars | copy of cell \\(0\\) | mirror of cell \\(m-1\\) |
+| \\(\rho v\_x\\) | copy of cell \\(0\\) | mirror of cell \\(m-1\\), sign reversed |
+| \\(B\_y\\), \\(B\_z\\) on ghost faces | copy of cell \\(0\\) | mirror of cell \\(m-1\\), same sign |
+| \\(B\_x\\) on ghost faces | from \\(\nabla \cdot \mathbf{B} = 0\\), eq. (1) | from \\(\nabla \cdot \mathbf{B} = 0\\), eq. (1) |
+| \\(B\_x\\) on the boundary face | not written (evolved by CT) | not written (evolved by CT) |
 | total energy | copy, then eq. (2) | mirror, then eq. (2) |
 
 A transverse ghost face shared by an inflow and an outflow column is treated as inflow. The normal field and the total energy in the ghost cells are
@@ -77,11 +77,11 @@ with \\(E\_B\\) from the face-averaged field and the source cell being cell \\(0
 Justification:
 
 - **Normal field from the divergence constraint.** Eq. (1) makes every ghost cell divergence-free for any transverse values, so the inflow/outflow pattern, and a column switching type, cannot create \\(\nabla \cdot \mathbf{B}\\). The boundary face is updated by CT with a curl, so no EMF boundary condition is needed (unlike the EMF-based diode of [@Pjanka2020]).
-- **No conducting-wall reflection.** Reflecting \\(B\_n\\) as an odd function, \\(B\_x(-m) = -B\_x(m)\\), is divergence-free only if \\(B\_x(0) = 0\\); otherwise the first ghost cell has \\(\nabla \cdot \mathbf{B} = 2 B\_x(0) / \Delta x\\).
+- **No conducting-wall reflection.** Reflecting \\(B\_x\\) as an odd function, \\(B\_x(-m) = -B\_x(m)\\), is divergence-free only if \\(B\_x(0) = 0\\); otherwise the first ghost cell has \\(\nabla \cdot \mathbf{B} = 2 B\_x(0) / \Delta x\\).
 - **Mirror, not copy-and-flip, at inflow.** With reconstruction order above one, the face states at the boundary are mirror images only if the ghost data are a geometric mirror. Copying cell \\(0\\) and flipping the momentum loses a fraction \\(2.7 \times 10^{-3}\\) of the mass in the `MHDDiode` wall test.
-- **Zero mass flux.** For mirror-image face states (equal \\(\rho\\), \\(P\\), \\(|\mathbf{B}\_t|\\), opposite \\(u\\)), the numerator of the HLLD middle speed (eq. 38 of [@Miyoshi2005]), \\((S\_R - u\_R)\rho\_R u\_R - (S\_L - u\_L)\rho\_L u\_L + p\_{T,L} - p\_{T,R}\\), is exactly zero, so \\(S\_M = 0\\) and the mass flux vanishes to round-off.
+- **Zero mass flux.** For mirror-image face states (equal \\(\rho\\), \\(P\\), \\(B\_y^2 + B\_z^2\\), opposite \\(v\_x\\)), the numerator of the HLLD middle speed (eq. 38 of [@Miyoshi2005]), \\((S\_R - v\_{x,R})\rho\_R v\_{x,R} - (S\_L - v\_{x,L})\rho\_L v\_{x,L} + p\_{T,L} - p\_{T,R}\\), is exactly zero, so \\(S\_M = 0\\) and the mass flux vanishes to round-off.
 - **Energy correction.** The copied total energy contains the source-cell magnetic energy, while the ghost field differs. Without eq. (2) the ghost pressure is wrong, the face states are not mirror images, and mass leaks (\\(3 \times 10^{-6}\\) with PLM, \\(10^{-5}\\) with xPPM in the wall test; PPM hides the error because it falls to first order at the wall).
-- **Same-sign mirror of \\(B\_t\\).** Mirroring \\(B\_t\\) with the opposite sign (\\(B\_n\\) even, \\(B\_t\\) odd) is also divergence-free and also gives \\(S\_M = 0\\), but it puts a current sheet at the wall and flips the ghost \\(B\_t\\) every time a column switches, which jumps the boundary-edge EMFs.
+- **Same-sign mirror of \\(B\_y\\), \\(B\_z\\).** Mirroring them with the opposite sign (\\(B\_x\\) even, \\(B\_y\\), \\(B\_z\\) odd) is also divergence-free and also gives \\(S\_M = 0\\), but it puts a current sheet at the wall and flips the ghost \\(B\_y\\), \\(B\_z\\) every time a column switches, which jumps the boundary-edge EMFs.
 - **Shared faces as inflow.** This keeps the ghost data of every inflow column exactly mirrored, which zero mass flux needs; it only slightly changes the neighbouring outflow column.
 
 **Limitation.** The diode constrains the mass flux only. Where \\(B\_x(0) \neq 0\\), tangential flow at the wall gives a non-zero boundary EMF, so magnetic flux can enter through inflow faces, and the wall can carry magnetic stress and Poynting flux.
