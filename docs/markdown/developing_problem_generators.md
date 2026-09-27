@@ -72,7 +72,7 @@ B_x(-m) = B_x(-m+1) + \Delta x \left[ \frac{B_y(-m, j+1) - B_y(-m, j)}{\Delta y}
 E_{\rm ghost} \leftarrow E_{\rm ghost} - E_B^{\rm source} + E_B^{\rm ghost}, \qquad (2)
 </script>
 
-with \\(E\_B\\) from the face-averaged field and the source cell being cell \\(0\\) (outflow) or \\(m-1\\) (inflow). In a fully mirrored column, eq. (1) gives \\(B\_x(-m) = 2 B\_x(0) - B\_x(m)\\).
+with \\(E\_B\\) from the face-averaged field. The source cell is the valid cell whose state the cell-centred fill copied into the ghost cell: cell \\(0\\) (outflow) or cell \\(m-1\\) (inflow). Since the kinetic energies of the ghost and source cells are equal, eq. (2) is the same as rebuilding \\(E\_{\rm ghost} = E\_{\rm int} + E\_{\rm kin} + E\_B^{\rm ghost}\\) with \\(E\_{\rm int} = E\_{\rm source} - E\_{\rm kin} - E\_B^{\rm source}\\), the internal energy from which `ComputePrimVars` computes the pressure (not the auxiliary internal energy). In a fully mirrored column, eq. (1) gives \\(B\_x(-m) = 2 B\_x(0) - B\_x(m)\\).
 
 Justification:
 
