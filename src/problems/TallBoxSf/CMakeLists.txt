@@ -25,5 +25,4 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
     add_test(NAME MHDTallBoxSf COMMAND MHDTallBoxSf ../inputs/MHDTallBoxSf.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    set_tests_properties(MHDTallBoxSf PROPERTIES LABELS "MHD")
 endif()

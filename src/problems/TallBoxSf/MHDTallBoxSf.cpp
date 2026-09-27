@@ -7,6 +7,7 @@
 /// gas density, B_x(z) = B_0 sqrt(rho(z) / rho_0), with rho_0 the midplane density and a midplane strength B_0 = 3 microgauss (the default of
 /// problem.B0_uG). This field depends on z only, so it is divergence-free.
 
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <string>
@@ -263,8 +264,8 @@ template <> void QuokkaSimulation<MHDTallBoxSf>::computeAfterTimestep()
 				     Real const area = dx[0] * dx[1];
 				     return {rho * vz_out * area, state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::scalar0_index) * vz_out * area};
 			     });
-	amrex::Real rates[2] = {mdot_gas, mdot_metal};
-	amrex::ParallelDescriptor::ReduceRealSum(rates, 2);
+	std::array<amrex::Real, 2> rates = {mdot_gas, mdot_metal};
+	amrex::ParallelDescriptor::ReduceRealSum(rates.data(), static_cast<int>(rates.size()));
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		constexpr Real msun_per_yr = C::M_solar / quokka::yr_in_s; // g/s
