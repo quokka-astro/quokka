@@ -52,8 +52,10 @@ constexpr double A0 = 0.1; // amplitude of the vector potential perturbation
 bool mixed_flow = false; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // vector potential A_z(x, y) of the field perturbation, evaluated on cell edges so that the face field is exactly divergence-free
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vectorPotential(double x, double y) -> double { // (the x^2 dependence gives both B_x and dB_y/dx non-zero values at the walls)
-	return 0.5 * A0 * x * x * std::sin(2.0 * M_PI * y); }
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vectorPotential(double x, double y) -> double
+{ // (the x^2 dependence gives both B_x and dB_y/dx non-zero values at the walls)
+	return 0.5 * A0 * x * x * std::sin(2.0 * M_PI * y);
+}
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto density(double x, double y) -> double { return 1.0 + 0.5 * x * x + 0.2 * std::sin(2.0 * M_PI * y); }
 } // namespace
