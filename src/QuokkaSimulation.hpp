@@ -297,7 +297,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		if (enableElectronConduction_) {
 			// TODO (av): add support for subcycling with conduction
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0, "AMR subcycling is not supported with conduction. Set do_subcycle = 0.");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!HydroSystem<problem_t>::is_eos_isothermal(), "Electron conduction has no effect with an isothermal EOS (gamma = 1).");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!HydroSystem<problem_t>::is_eos_isothermal(),
+							 "Electron conduction has no effect with an isothermal EOS (gamma = 1).");
 		}
 		if constexpr (Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
 			const bool viscosity_active = (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) ||
