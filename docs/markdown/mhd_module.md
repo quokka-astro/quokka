@@ -116,10 +116,6 @@ separate, fully operator-split solve after the hydrodynamic update.
   synchronised with the magnetized total energy to avoid large truncation errors
   in the internal energy in high Mach number regions.
 
-## Diode boundary condition
-
-A diode (outflow, no-inflow) boundary is available for MHD. The gas uses the hydro diode (`setDiodeBCLo`/`setDiodeBCHi`: copy at outflow, mirror with reversed normal momentum at inflow). A post-fill pass, `applyMHDDiodeBC`, then fills the ghost magnetic field. It copies or mirrors the transverse field, integrates the normal field outward from the boundary face so that every ghost cell is divergence-free, and corrects the ghost total energy so that the ghost pressure is consistent. The boundary face is never written, and no EMF boundary condition is needed. The mass flux through inflow faces vanishes to round-off, but magnetic flux can still enter there. See [MHD diode boundary condition](mhd_diode_bc.md) for usage, requirements, the analysis of alternative schemes, the equations, and the justification of each choice.
-
 ## Runtime controls
 
 The following input parameters tune the MHD discretization and are documented in

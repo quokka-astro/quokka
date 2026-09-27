@@ -13,7 +13,6 @@
 # Physics Modules
 
 - [Magnetohydrodynamics (beta)](mhd_module.md)
-    - [MHD diode boundary condition](mhd_diode_bc.md)
 - [Star Formation and Feedback (beta)](particles.md)
 - [Photoionization](photoionization.md)
 - [Dust Module (beta)](dust_module.md)
