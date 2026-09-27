@@ -402,17 +402,18 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 
 	// Sigma0 via Simpson integration of Toomre Q condition
 	auto integrand = [=](double R) -> double {
-		const double D = R * R + Rc * Rc;
-		const double sqrtD = std::sqrt(D);
-		const double Omega = vc / sqrtD;
-		const double dOdR = -vc * R / (D * sqrtD);
-		const double kappa = std::sqrt(std::max(4.0 * Omega * Omega + 2.0 * R * Omega * dOdR, 0.0));
+		const auto Ω = [=](double R) -> double {
+			return vcircAnalytic(R, 0.0, vc, Rc) / R;
+		};
+		const double ε = 1e-4 * Rmax;
+		const double dΩdR = (Ω(R + ε) - Ω(R - ε)) / (2.0 * ε);  // numeric derivative of Ω
+		const double kappa = std::sqrt(std::max(4.0 * Ω(R) * Ω(R) + 2.0 * R * Ω(R) * dΩdR, 0.0));
 		return kappa * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, Rd, 1.0));
 	};
 	constexpr int N = 1000;
 	static_assert(N % 2 == 0);
 	const double h = Rmax / N;
-	double integral = integrand(0.0) + integrand(Rmax);
+	double integral = integrand(1e-20*Rmax) + integrand(Rmax);
 	for (int i = 1; i < N; ++i) {
 		integral += (i % 2 == 0 ? 2.0 : 4.0) * integrand(i * h);
 	}

@@ -42,8 +42,10 @@ derived_vars        = ["gpot", "pressure", "radius_sph", "radial_velocity", "cir
 # Problem parameters (Table 1, Q1_M29)
 # *****************************************************************
 mhd_galaxy.Rc_kpc    = 2.0   # gravitational binding inner cutoff spherical radius
-mhd_galaxy.Q_mean    = 0.96
-mhd_galaxy.Mc        = 28.6
+mhd_galaxy.Rd_kpc    = 3.0   # galactic disk characteristic radius
+mhd_galaxy.Rmax_kpc  = 8.0   # Maximum radius for enforcing Toomre condition
+mhd_galaxy.Q_mean    = 0.96  # target Tomre condition
+mhd_galaxy.Mc        = 28.6  # orbital speed, in mach
 mhd_galaxy.sn_jeans_J              = 4.0 # value from Truelove et al. 1997
 mhd_galaxy.star_formation_efficiency    = 0.5
 mhd_galaxy.sn_momentum             = 1.0e8  # SN bubble enhancement estimate
