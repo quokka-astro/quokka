@@ -118,25 +118,7 @@ separate, fully operator-split solve after the hydrodynamic update.
 
 ## Diode boundary condition
 
-A diode boundary lets gas leave the domain freely and stops gas from entering. For each boundary column, the sign of the normal momentum in the first valid cell decides between outflow and inflow, as in the hydro-only diode (`setDiodeBCLo`/`setDiodeBCHi`). To use it in an MHD problem:
-
-1. set the cell-centred boundary to `ext_dir` and call `setDiodeBCLo<dir>`/`setDiodeBCHi<dir>` in `setCustomBoundaryConditions`;
-2. set the face-centred boundary to `foextrap` (a placeholder that is overwritten);
-3. specialise `AMRSimulation<problem_t>::isMHDDiodeBoundary(dir, side)` to return `true` for the diode boundaries.
-
-After the cell- and face-centred ghost fills, `applyMHDDiodeBC` fills the magnetic field in the ghost cells:
-
-- The transverse field is copied from the first valid cell (outflow) or mirrored with the same sign (inflow). A transverse ghost face shared by an inflow and an outflow column is treated as inflow.
-- The normal field on the ghost faces is integrated outward from the boundary face so that \\(\nabla \cdot \mathbf{B} = 0\\) in every ghost cell. For the lower \\(x\\) boundary, with ghost cell \\(-m\\) and its left face \\(-m\\), this is
-
-<script type="math/tex; mode=display">
-B_x(-m) = B_x(-m+1) + \Delta x \left[ \frac{B_y(-m, j+1) - B_y(-m, j)}{\Delta y} + \frac{B_z(-m, k+1) - B_z(-m, k)}{\Delta z} \right].
-</script>
-
-- The boundary face itself is valid data. It is never written by the boundary fill and is evolved only by the constrained-transport update, so no EMF boundary condition is needed.
-- The ghost total energy is corrected by the difference between the magnetic energy of the ghost cell and that of its source cell, so that the ghost gas pressure equals the source-cell pressure.
-
-In inflow columns the gas state is a mirror image of the interior with the normal velocity reversed, so the mass flux through the boundary face vanishes to round-off. **Limitation:** this is a condition on the mass flux only. Where the normal field at the boundary is non-zero, the tangential motion at the wall produces a non-zero EMF on the boundary edges. The boundary-face normal field therefore still evolves, so magnetic flux can enter the domain through inflow faces, and the wall can exert a tangential magnetic stress and carry a Poynting flux. The test problem `MHDDiode` (inputs `MHDDiodeWall.toml` and `MHDDiodeMixed.toml`) checks the zero mass flux at inflow boundaries and \\(\nabla \cdot \mathbf{B} = 0\\) to round-off in all valid and ghost cells.
+A diode (outflow, no-inflow) boundary is available for MHD. The gas uses the hydro diode (`setDiodeBCLo`/`setDiodeBCHi`: copy at outflow, mirror with reversed normal momentum at inflow). A post-fill pass, `applyMHDDiodeBC`, then fills the ghost magnetic field. It copies or mirrors the transverse field, integrates the normal field outward from the boundary face so that every ghost cell is divergence-free, and corrects the ghost total energy so that the ghost pressure is consistent. The boundary face is never written, and no EMF boundary condition is needed. The mass flux through inflow faces vanishes to round-off, but magnetic flux can still enter there. See [MHD diode boundary condition](mhd_diode_bc.md) for usage, requirements, the analysis of alternative schemes, the equations, and the justification of each choice.
 
 ## Runtime controls
 
