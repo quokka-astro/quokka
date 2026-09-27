@@ -71,7 +71,9 @@ template <class T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ab_factor(T y3,
 } // namespace detail
 
 /// Brent's method (inverse quadratic interpolation / secant / bisection).
-/// Port of Brent() from NonlinearSolve.jl. fax and fbx are f(ax) and f(bx).
+/// Port of Brent() from NonlinearSolve.jl, plus the minimum-step safeguard of Numerical Recipes' zbrent
+/// (without it, the far end of the bracket converges only by bisection when f is exactly rounded, e.g. with FMA).
+/// fax and fbx are f(ax) and f(bx).
 template <class F, class T, class Tol>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax, T fbx, Tol tol, int &max_iter) -> std::pair<T, T>
 {
@@ -107,7 +109,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 	bool cond = true; // whether the previous step was a bisection
 
 	while (max_iter < budget) {
-		auto [lo, hi] = ordered(left, right);
+		const auto [lo, hi] = ordered(left, right);
 		if (tol(lo, hi)) {
 			break;
 		}
@@ -132,6 +134,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 			cond = true;
 		} else {
 			cond = false;
+			// Numerical Recipes (zbrent) safeguard: step at least tol1 towards the contrapoint, so the bracket
+			// still collapses when every interpolated iterate lands on the same side of the root.
+			const T tol1 = amrex::max(2 * eps * std::abs(right), std::numeric_limits<T>::min());
+			if (std::abs(s - right) < tol1) {
+				s = right + ((left > right) ? tol1 : -tol1);
+				if (!((s > lo) && (s < hi))) {
+					s = detail::safe_midpoint(left, right);
+				}
+			}
 		}
 
 		const T fs = f(s);

@@ -22,6 +22,7 @@ namespace
 constexpr int nfunc = 11;
 constexpr int nsolver = 3;
 constexpr int max_iter_budget = 200;
+constexpr int max_iter_smooth = 20; // bound for superlinearly convergent cases
 constexpr std::array<const char *, nsolver> solver_names = {"Brent", "ModAB", "TOMS748"};
 
 struct TestCase {
@@ -29,21 +30,22 @@ struct TestCase {
 	Real a;
 	Real b;
 	Real root;
+	bool smooth; // simple root of a smooth function: superlinear convergence expected
 };
 
 // clang-format off
 const std::array<TestCase, nfunc> cases = {{
-    {"x^2 - 2",               0.0, 2.0, 1.4142135623730951},
-    {"x^3 - 2x - 5",          2.0, 3.0, 2.0945514815423265},
-    {"cos(x) - x",            0.0, 1.0, 0.7390851332151607},
-    {"exp(x) - 10",           0.0, 5.0, 2.302585092994046},
-    {"x^10 - 1",              0.0, 1.3, 1.0},
-    {"(x - 1)^3",             0.0, 3.0, 1.0},
-    {"tanh(1000 (x - 0.3))",  0.0, 1.0, 0.3},
-    {"step at 0.3",           0.0, 1.0, 0.3},
-    {"log(x), reversed",      5.0, 0.5, 1.0},
-    {"x, root at left end",   0.0, 1.0, 0.0},
-    {"1e-10 (x - 1e5)",       0.0, 1.0e10, 1.0e5},
+    {"x^2 - 2",               0.0, 2.0, 1.4142135623730951, true},
+    {"x^3 - 2x - 5",          2.0, 3.0, 2.0945514815423265, true},
+    {"cos(x) - x",            0.0, 1.0, 0.7390851332151607, true},
+    {"exp(x) - 10",           0.0, 5.0, 2.302585092994046, true},
+    {"x^10 - 1",              0.0, 1.3, 1.0, true},
+    {"(x - 1)^3",             0.0, 3.0, 1.0, false},
+    {"tanh(1000 (x - 0.3))",  0.0, 1.0, 0.3, false},
+    {"step at 0.3",           0.0, 1.0, 0.3, false},
+    {"log(x), reversed",      5.0, 0.5, 1.0, true},
+    {"x, root at left end",   0.0, 1.0, 0.0, true},
+    {"1e-10 (x - 1e5)",       0.0, 1.0e10, 1.0e5, true},
 }};
 // clang-format on
 
@@ -137,7 +139,7 @@ auto problem_main() -> int
 	std::array<Result, ntest> dev{};
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dev_d.begin(), dev_d.end(), dev.begin());
 
-	// check: the bracket midpoint must match the exact root to a few ulp of the scale, within the iteration budget
+	// check: the bracket midpoint must match the exact root to a few ulp of the scale, and smooth simple roots must converge in few iterations
 	int status = 0;
 	std::cout << std::format("{:<24}{:<9}{:>6}{:>6}{:>12}{:>12}\n", "function", "solver", "iter", "(dev)", "rel err", "(dev)");
 	for (int n = 0; n < ntest; ++n) {
@@ -146,7 +148,8 @@ auto problem_main() -> int
 		const Real reltol = 1.0e-13;
 		const Real err_h = std::abs(host[n].root - tc.root) / (tc.root == 0 ? 1.0 : scale);
 		const Real err_d = std::abs(dev[n].root - tc.root) / (tc.root == 0 ? 1.0 : scale);
-		const bool ok = (err_h <= reltol) && (err_d <= reltol) && (host[n].iter < max_iter_budget) && (dev[n].iter < max_iter_budget);
+		const int iter_limit = tc.smooth ? max_iter_smooth : max_iter_budget - 1;
+		const bool ok = (err_h <= reltol) && (err_d <= reltol) && (host[n].iter <= iter_limit) && (dev[n].iter <= iter_limit);
 		std::cout << std::format("{:<24}{:<9}{:>6}{:>6}{:>12.2e}{:>12.2e}{}\n", tc.name, solver_names[n % nsolver], host[n].iter, dev[n].iter, err_h,
 					 err_d, ok ? "" : "  FAIL");
 		if (!ok) {
