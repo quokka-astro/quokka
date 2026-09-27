@@ -182,8 +182,17 @@ template <class F, class T, class Tol> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
 	return brent_solve(f, ax, bx, f(ax), f(bx), tol, max_iter);
 }
 
-/// Modified Anderson-Bjork method (ModAB), Ganchovski & Traykov (2023), doi:10.1088/1757-899X/1276/1/012010,
-/// with the improvements of Ganchovski et al. (2026), Algorithms 19, 332, doi:10.3390/a19050332.
+/// ModAB (Modified Anderson-Bjork)
+///
+/// Use the ModAB method to find a root of a bracketed function, with a convergence rate between 1.7 and 1.8.
+///
+/// This method was introduced in the paper "Modified Anderson-Bjork's method for solving non-linear equations
+/// in structural mechanics" (https://doi.org/10.1088/1757-899X/1276/1/012010) by N Ganchovski and A Traykov.
+///
+/// This implementation includes the latest improvements made in 2026 by the following paper:
+/// Ganchovski, N.; Smith, O.; Rackauckas, C.; Tomov, L.; Traykov, A. Improvements to the Modified
+/// Anderson-Bjorck (modAB) Root-Finding Algorithm. Algorithms 2026, 19, 332. (https://doi.org/10.3390/a19050332)
+///
 /// Port of ModAB() from NonlinearSolve.jl. fax and fbx are f(ax) and f(bx).
 template <class F, class T, class Tol>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto modab_solve(F f, T ax, T bx, T fax, T fbx, Tol tol, int &max_iter) -> std::pair<T, T>
