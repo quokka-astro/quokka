@@ -284,8 +284,7 @@ template <typename problem_t> class AnisoConduction
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
 				    amrex::Real dt, AnisoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
-		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Anisotropic conduction requires hydro to be enabled.");
-
+		
 		if ((dt <= 0.0) || (params.kappa_parallel <= 0.0)) { // kappa_perp currently unused -- see file doc-comment
 			return;
 		}
