@@ -33,9 +33,7 @@
 namespace
 {
 constexpr double Rd_kpc = 3.0;
-constexpr double Rc_kpc = 2.0;
 constexpr double Rd = Rd_kpc * 1.0e3 * C::parsec;
-constexpr double Rc = Rc_kpc * 1.0e3 * C::parsec;
 constexpr double alpha_profile = 2.0;
 constexpr double beta_profile = 0.5;
 constexpr double q_flatten = 0.7;
@@ -85,6 +83,7 @@ template <> struct Physics_Traits<MHDGalaxy> : DefaultPhysicsTraits {
 };
 
 template <> struct SimulationData<MHDGalaxy> {
+	amrex::Real Rc{};
 	amrex::Real Q_mean{};
 	amrex::Real Mc{};
 	amrex::Real vc{};
@@ -132,7 +131,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, do
 	return Sigma0 * std::exp(-x - beta_profile * std::exp(-alpha_profile * x));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Sigma0, double vc, double cs) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Sigma0, double vc, double cs, double Rc) -> double
 {
 	const double Sigma = surfaceDensityProfile(R, Sigma0);
 	if (Sigma <= 0.0) {
@@ -377,6 +376,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto cellSphereOverlapFraction(double di, do
 template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 {
 	amrex::ParmParse const pp("mhd_galaxy");
+	pp.get("Rc_kpc", userData_.Rc);  userData_.Rc *= 1.0e3 * C::parsec;
 	pp.get("Mc", userData_.Mc);
 	pp.get("Q_mean", userData_.Q_mean);
 	pp.query("sn_jeans_J", userData_.sn_jeans_J);
@@ -390,6 +390,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 
 	userData_.vc = userData_.Mc * cs_disk;
 	const double vc = userData_.vc;
+	const double Rc = userData_.Rc;
 
 	// Sigma0 via Simpson integration of Toomre Q condition
 	auto integrand = [=](double R) -> double {
@@ -570,6 +571,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const double vc = userData_.vc;
+	const double Rc = userData_.Rc;
 	const double Sigma0 = userData_.Sigma0;
 	const double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
 	const double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
@@ -660,7 +662,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double z = prob_lo[2] + (k + 0.5) * dx[2];
 		const double R = std::sqrt(x * x + y * y);
 
-		const double rho_disc_raw = diskDensityAnalytic(R, z, Sigma0, vc, cs_disk);
+		const double rho_disc_raw = diskDensityAnalytic(R, z, Sigma0, vc, cs_disk, Rc);
 		const bool in_disk = (rho_disc_raw > rho_transition);
 		const double rho = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
 		const double cs = in_disk ? cs_disk : cs_cgm;
@@ -907,6 +909,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const double vc = userData_.vc;
+	const double Rc = userData_.Rc;
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);

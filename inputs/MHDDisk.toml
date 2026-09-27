@@ -41,6 +41,7 @@ derived_vars        = ["gpot", "pressure", "radius_sph", "radial_velocity", "cir
 # *****************************************************************
 # Problem parameters (Table 1, Q1_M29)
 # *****************************************************************
+mhd_galaxy.Rc_kpc    = 2.0   # gravitational binding inner cutoff spherical radius
 mhd_galaxy.Q_mean    = 0.96
 mhd_galaxy.Mc        = 28.6
 mhd_galaxy.sn_jeans_J              = 4.0 # value from Truelove et al. 1997
