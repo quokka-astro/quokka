@@ -70,11 +70,6 @@ See [Runtime parameters](parameters.md#thermal-conduction) for the full list of 
 
 The conduction timestep is \\(\Delta t = C\,\Delta x\_{\min}^2 / D\\), minimized over all cells. Here \\(C\\) is `conduction.conduction_cfl`, and the thermal diffusivity is \\(D = \kappa\_{\rm eff} / (\partial e / \partial T)\\), evaluated with the cell's own \\(\rho\\) and \\(T\\). \\(\kappa\_{\rm eff} = \kappa\\) in the isotropic geometry and \\(2(\kappa\_\parallel + \kappa\_\perp)\\) in the anisotropic geometry.
 
-## Limitations
-
-- AMR subcycling is not supported; set `do_subcycle = 0`.
-- The perpendicular conductivity \\(\kappa\_\perp\\) is accepted but not yet used by the anisotropic flux.
-- The anisotropic solver has been tested in 3D. It compiles in 2D, but the 2D path has not been validated.
 
 ## Test problems
 
