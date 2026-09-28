@@ -144,11 +144,22 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<proble
 	AMREX_ASSERT(cell.Egas0 > 0.0);
 	const auto br = quokka::math::bracket_root_of_increasing(G, amrex::max(cell.Egas0, cell.Emin), cell.Emin);
 	if (!br.found) {
-		// reported unconverged rather than guessed at, with one exception: the march stopped at the gas energy
-		// floor (br.lo == cell.Emin) because the equilibrium value lies below it, and G there is already smaller
-		// than tol times the cell's energy scale. Clamping to the floor is the best an inadmissible root allows,
-		// and the conservation error it leaves is below the solve's own tolerance (a transparent, radiation-
-		// dominated cell whose gas has relaxed to the EOS floor: RadStreamingFluxSource).
+		if (br.lo == cell.Emin) {
+			// the march reached the gas floor without a sign change, so the root lies below the admissible range:
+			// the gas is clamped to the floor and the groups take the closed form at T_floor; the energy
+			// G(Emin) > 0 is created by the temperature floor, as any floor does, and there is no threshold on it
+			// (a threshold would be a residual test in disguise). Routine in a transparent, radiation-dominated
+			// cell whose gas has relaxed to the floor and whose lagged work term is slightly positive
+			// (RadStreamingFluxSource).
+			auto sol = GasCouplingState(cell, cell.Emin);
+			sol.converged = true;
+			sol.nevals = br.nevals + 1;
+			ApplyEnergyFloors(cell, sol);
+			sol.T_d = sol.T_gas;
+			return sol;
+		}
+		// the march exhausted its budget going upward without a sign change: reported unconverged rather than
+		// guessed at, and the driver aborts as it does for a failed iteration.
 		CouplingSolution<problem_t> sol{};
 		sol.Egas = cell.Egas0;
 		sol.T_gas = TgasOf(cell, cell.Egas0);
@@ -156,8 +167,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<proble
 		sol.Erad = cell.Erad0 + cell.Src;
 		sol.residual = br.flo;
 		sol.nevals = br.nevals;
-		const double atol = std::abs(TotalEnergy(cell)) * amrex::max(tol, 4 * std::numeric_limits<double>::epsilon());
-		sol.converged = (br.lo == cell.Emin) && (amrex::max(std::abs(br.flo), std::abs(br.fhi)) <= atol);
+		sol.converged = false;
 		ApplyEnergyFloors(cell, sol);
 		sol.T_d = sol.T_gas;
 		return sol;

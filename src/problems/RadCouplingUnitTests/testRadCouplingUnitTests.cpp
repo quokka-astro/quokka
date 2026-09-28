@@ -177,6 +177,22 @@ template <typename P, bool with_dust> auto solve_cells(std::vector<CouplingCell<
 	return sols;
 }
 
+/// The closed-form state at the gas floor, computed by RadSystem<P>::GasCouplingState the same way solve_cells exercises
+/// SolveGasCoupling: the reference the floor-clamp branch of SolveGasCoupling must reproduce exactly.
+template <typename P> auto floor_state(CouplingCell<P> const &cell) -> CouplingSolution<P>
+{
+	std::vector<CouplingCell<P>> cells{cell};
+	amrex::Gpu::DeviceVector<CouplingCell<P>> d_cells(1);
+	amrex::Gpu::DeviceVector<CouplingSolution<P>> d_sols(1);
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, cells.begin(), cells.end(), d_cells.begin());
+	CouplingCell<P> const *cell_ptr = d_cells.data();
+	CouplingSolution<P> *sol_ptr = d_sols.data();
+	amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int i) noexcept { sol_ptr[i] = RadSystem<P>::GasCouplingState(cell_ptr[i], cell_ptr[i].Emin); });
+	std::vector<CouplingSolution<P>> sols(1);
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, d_sols.begin(), d_sols.end(), sols.begin());
+	return sols[0];
+}
+
 auto check(bool ok, std::string const &what) -> int
 {
 	std::cout << std::format("{:<78}{}\n", what, ok ? "ok" : "FAIL");
@@ -253,20 +269,47 @@ auto TestGasSweep() -> int
 	}
 
 	// A work term that by itself exceeds the gas energy breaks the bracket (hydro3d section 3.1): G(E_min) > 0, so the
-	// downward march reaches the floor without a sign change, and the cell must be reported unconverged with its old
-	// state kept. (A negative work term does not break it: G is unbounded above, so the upward march still finds a root.)
+	// downward march reaches the floor without a sign change. The root lies below the admissible range, so the gas is
+	// clamped to the floor and the groups take the closed form at T_floor (the floor rule of design-coupling-rewrite.md
+	// section 2.4), not kept at the old, unconverged state.
 	sweep_kappa0 = 1.0e3;
+	sweep_expo = 0.0;
 	{
 		auto cell = make_cell<Sweep4>(1.0, 0.5, gas_dt, 0.0);
 		for (int g = 0; g < 4; ++g) {
 			cell.work[g] = 2.0 * cell.Egas0;
 		}
 		const auto sols = solve_cells<Sweep4, false>({cell}, 1.0e-9);
-		bool radiation_kept = true;
+		const auto floor_sol = floor_state<Sweep4>(cell);
+		bool erad_matches_floor = true;
 		for (int g = 0; g < 4; ++g) {
-			radiation_kept = radiation_kept && (sols[0].Erad[g] == cell.Erad0[g] + cell.Src[g]);
+			erad_matches_floor = erad_matches_floor && (sols[0].Erad[g] == floor_sol.Erad[g]);
 		}
-		status |= check(!sols[0].converged && (sols[0].Egas == cell.Egas0) && radiation_kept, "no bracket: unconverged, old state kept");
+		const double Etot = conserved_total(cell);
+		const double residual_check = total_energy(cell, sols[0].Egas, sols[0].Erad) - conserved_total(cell);
+		status |= check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_floor && (sols[0].residual > 0.0) &&
+				     (std::abs(residual_check - sols[0].residual) <= 1.0e-9 * Etot),
+				 "root below the floor: clamped to the floor state, converged");
+	}
+
+	// The reviewer's hot-cell case: a transparent cell whose root lies just below the floor must be clamped, not kept
+	// hot. The work term totals Egas0 + 1e-12 across the four groups, so G(E_min) = E_min + 1e-12 > 0 while Egas0 = 1 is
+	// far above E_min = 1e-10 (the old code returned this cell converged with Egas == Egas0, i.e. no exchange at all).
+	sweep_kappa0 = 0.0;
+	sweep_expo = 0.0;
+	{
+		auto cell = make_cell<Sweep4>(1.0, 0.5, gas_dt, 0.0);
+		for (int g = 0; g < 4; ++g) {
+			cell.work[g] = (cell.Egas0 + 1.0e-12) / 4.0;
+		}
+		const auto sols = solve_cells<Sweep4, false>({cell}, 1.0e-9);
+		bool erad_matches_transparent = true;
+		for (int g = 0; g < 4; ++g) {
+			erad_matches_transparent = erad_matches_transparent && (sols[0].Erad[g] == cell.Erad0[g] + cell.work[g]);
+		}
+		status |= check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_transparent &&
+				     (std::abs(sols[0].residual - (cell.Emin + 1.0e-12)) <= 1.0e-9),
+				 "hot cell with the root just below the floor is clamped, not kept hot");
 	}
 
 	// A temperature floor of zero (every CONSTANTS-unit problem): the downward march must stay finite and find its root.
