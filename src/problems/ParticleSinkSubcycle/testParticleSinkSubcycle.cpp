@@ -42,7 +42,7 @@
 struct SubcycleProblem {};
 namespace
 {
-bool density_refinement_enabled = true; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+bool density_refinement_enabled = true;	    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 bool hierarchy_ready_before_advance = true; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 
@@ -89,8 +89,7 @@ template <> void QuokkaSimulation<SubcycleProblem>::setInitialConditionsOnGridFa
 template <> void QuokkaSimulation<SubcycleProblem>::computeBeforeTimestep()
 {
 	if (do_subcycle == 0) {
-		const auto [ids_all, data_all, idata_all] =
-		    particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtAllLevels();
+		const auto [ids_all, data_all, idata_all] = particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtAllLevels();
 		const auto &[data_finest, idata_finest] =
 		    particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(finestLevel());
 		hierarchy_ready_before_advance = hierarchy_ready_before_advance && (data_finest.size() == data_all.size());
