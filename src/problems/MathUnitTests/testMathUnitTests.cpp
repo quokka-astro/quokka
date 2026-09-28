@@ -19,6 +19,7 @@
 #include "util/BC.hpp"
 #include "util/valarray.hpp"
 #include <array>
+#include <cfenv>
 #include <cmath>
 #include <format>
 #include <iostream>
@@ -210,6 +211,11 @@ auto TestRootFinding() -> int
 {
 	constexpr int ntest = nfunc * nsolver;
 
+	// The overflow test case raises FE_OVERFLOW/FE_INVALID on purpose, so suspend the FP-exception traps
+	// that the test suite enables (amrex.fpe_trap_*) while the solvers run on the host.
+	std::fenv_t fenv{};
+	std::feholdexcept(&fenv);
+
 	// host
 	std::array<Result, ntest> host{};
 	for (int n = 0; n < ntest; ++n) {
@@ -237,6 +243,7 @@ auto TestRootFinding() -> int
 	});
 	std::array<Result, ntest> dev{};
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dev_d.begin(), dev_d.end(), dev.begin());
+	std::fesetenv(&fenv);
 
 	// check: the bracket midpoint must match the exact root to a few ulp of the scale, and smooth simple roots must converge in few iterations
 	int status = 0;
