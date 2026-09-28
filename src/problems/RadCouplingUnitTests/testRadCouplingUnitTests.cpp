@@ -322,8 +322,8 @@ auto TestDustSweep() -> int
 	int nevals_max = 0;
 	dust_sweep<Sweep4>(ncells, nfail, worst_energy, worst_state, nevals_sum, nevals_max);
 	dust_sweep<Sweep1>(ncells, nfail, worst_energy, worst_state, nevals_sum, nevals_max);
-	std::cout << std::format("dust sweep: {} cells, {} failures, energy error {:.2e}, vs 1e-12 solve {:.2e}, evaluations mean {:.1f} max {}\n", ncells, nfail,
-				 worst_energy, worst_state, static_cast<double>(nevals_sum) / ncells, nevals_max);
+	std::cout << std::format("dust sweep: {} cells, {} failures, energy error {:.2e}, vs 1e-12 solve {:.2e}, evaluations mean {:.1f} max {}\n", ncells,
+				 nfail, worst_energy, worst_state, static_cast<double>(nevals_sum) / ncells, nevals_max);
 	status |= check(ncells == 432, "dust sweep has 432 cells");
 	status |= check(nfail == 0, "dust sweep: every cell converged");
 	status |= check(worst_energy < 1.0e-13, "dust sweep: energy conserved to round-off");
@@ -339,7 +339,8 @@ auto TestDustSweep() -> int
 				const auto dust = solve_cells<Sweep4, true>({cell}, 1.0e-9);
 				const auto gas = solve_cells<Sweep4, false>({cell}, 1.0e-9);
 				const double Etot = conserved_total(cell);
-				status |= check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot && std::abs(dust[0].T_d / dust[0].T_gas - 1.0) <= 1.0e-8,
+				status |= check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot &&
+						    std::abs(dust[0].T_d / dust[0].T_gas - 1.0) <= 1.0e-8,
 						std::format("K = 1e12 recovers the dust-free solve (expo {}, Tg {}, Tr {})", expo, Tg, Tr));
 			}
 			{
@@ -347,13 +348,15 @@ auto TestDustSweep() -> int
 				const auto dust = solve_cells<Sweep1, true>({cell}, 1.0e-9);
 				const auto gas = solve_cells<Sweep1, false>({cell}, 1.0e-9);
 				const double Etot = conserved_total(cell);
-				status |= check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot, std::format("K = 1e12, one group (expo {}, Tg {})", expo, Tg));
+				status |= check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot,
+						std::format("K = 1e12, one group (expo {}, Tg {})", expo, Tg));
 			}
 			{
 				const auto cell = make_cell<Sweep4>(Tg, Tr, 1.0, 0.0);
 				const auto dust = solve_cells<Sweep4, true>({cell}, 1.0e-9);
 				const double Etot = conserved_total(cell);
-				status |= check(dust[0].converged && std::abs(dust[0].Egas - cell.Egas0) <= 1.0e-12 * Etot, std::format("K = 0 leaves the gas unchanged (expo {}, Tg {})", expo, Tg));
+				status |= check(dust[0].converged && std::abs(dust[0].Egas - cell.Egas0) <= 1.0e-12 * Etot,
+						std::format("K = 0 leaves the gas unchanged (expo {}, Tg {})", expo, Tg));
 			}
 		}
 	}
@@ -365,7 +368,8 @@ auto TestDustSweep() -> int
 	{
 		const auto sols = solve_cells<Sweep4, true>({make_cell<Sweep4>(0.01, 1.0, 1.0, 1.0)}, 1.0e-9);
 		std::cout << std::format("three-root dust cell: T_d = {:.6f}\n", sols[0].T_d);
-		status |= check(sols[0].converged && (0.0113 < sols[0].T_d) && (sols[0].T_d < 0.0115), "three-root dust cell returns the root connected to cold gas");
+		status |=
+		    check(sols[0].converged && (0.0113 < sols[0].T_d) && (sols[0].T_d < 0.0115), "three-root dust cell returns the root connected to cold gas");
 	}
 	return status;
 }
