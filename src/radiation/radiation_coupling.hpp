@@ -197,8 +197,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::DustCouplingState(CouplingCell<probl
 // round-off in T - T_d by dt K sqrt(T), which reaches 1e8 of the cell's energy in a strongly coupled cell. The bracket
 // width in T_d is not the test either: at small K the gas energy follows from conservation, and its error is the T_d
 // error times (c/chat) sum_g E_g / E_gas, which is large where the radiation holds most of the energy (DTypeFront1D).
-// So the test is the gas energy across the final bracket, |E_gas(lo) - E_gas(hi)| <= tol E_tot; where it fails, the
-// relative T_d tolerance is shrunk by the measured amplification and the bracket re-solved, at most three times.
+// So the test is the gas energy across the final bracket, relative to itself: |E_gas(lo) - E_gas(hi)| <= atol,
+// atol = max(tol |E_gas|, 4 eps E_tot), which is a relative tolerance on T_gas. It is floored by the round-off of the
+// conservation subtraction E_gas = E_tot - (c/chat) sum_g E_g, which cannot resolve E_gas better than eps E_tot, and by
+// the resolution of T_d: once the T_d bracket is a few ulp wide it cannot shrink further, the gas-energy width across it
+// is round-off, and the cell is converged. Otherwise, where the test fails, the T_d tolerance is set from the slope
+// dE_gas/dT_d measured across the bracket and the bracket re-solved, at most three times.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<problem_t> const &cell, double const tol) -> CouplingSolution<problem_t>
 {
@@ -227,7 +231,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 		return sol;
 	}
 
-	const double atol = tol * std::abs(TotalEnergy(cell));
+	const double atol_floor = 4 * std::numeric_limits<double>::epsilon() * std::abs(TotalEnergy(cell));
 	int iters = max_root_iterations_;
 	auto [lo, hi] = quokka::math::brent_solve(H, br.lo, br.hi, br.flo, br.fhi, quokka::math::eps_tolerance<double>(tol), iters);
 
@@ -239,21 +243,28 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 		nevals += 2;
 		return std::abs(DustCouplingState(cell, a).Egas - DustCouplingState(cell, b).Egas);
 	};
+	constexpr double eps_mach = std::numeric_limits<double>::epsilon();
+	auto mid = DustCouplingState(cell, lo / 2 + hi / 2);
+	double atol = amrex::max(tol * std::abs(mid.Egas), atol_floor);
 	double width = gas_width(lo, hi);
-	double eps = tol;
-	const int max_repeats = 3;
-	for (int repeat = 0; (repeat < max_repeats) && (width > atol); ++repeat) {
+	auto at_fp_limit = [&]() { return (hi - lo) <= 4 * eps_mach * std::abs(lo / 2 + hi / 2); };
+	const int max_solves = 4; // the first solve and at most three repeats
+	for (int nsolve = 1; (width > atol) && !at_fp_limit() && (nsolve < max_solves); ++nsolve) {
+		// the T_d half-width that would bring the gas-energy width to atol, from the slope measured across the bracket;
 		// the factor 4: 2 for the half- versus full-width of the bracket, 2 as margin for the slope changing across it
-		eps = amrex::max(eps * atol / (4.0 * width), 4 * std::numeric_limits<double>::epsilon());
+		const double slope = width / (hi - lo);
+		const double eps = amrex::max(atol / (4.0 * slope) / std::abs(lo / 2 + hi / 2), 4 * eps_mach);
 		iters = max_root_iterations_;
 		const auto bracket = quokka::math::brent_solve(H, lo, hi, quokka::math::eps_tolerance<double>(eps), iters);
 		lo = bracket.first;
 		hi = bracket.second;
+		mid = DustCouplingState(cell, lo / 2 + hi / 2);
+		atol = amrex::max(tol * std::abs(mid.Egas), atol_floor);
 		width = gas_width(lo, hi);
 	}
 
-	auto sol = DustCouplingState(cell, lo / 2 + hi / 2);
-	sol.converged = (width <= atol);
+	auto sol = mid;
+	sol.converged = (width <= atol) || at_fp_limit();
 	sol.nevals = nevals;
 	ApplyEnergyFloors(cell, sol);
 	return sol;
