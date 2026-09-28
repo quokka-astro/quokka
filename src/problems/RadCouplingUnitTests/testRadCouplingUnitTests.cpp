@@ -24,9 +24,9 @@
 #include "util/valarray.hpp"
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <format>
 #include <iostream>
-#include <cstdint>
 #include <limits>
 #include <numbers>
 #include <string>
@@ -55,34 +55,34 @@ struct Sweep1 {};
 
 } // namespace
 
-	template <> struct quokka::EOS_Traits<Sweep4> {
-		static constexpr double mean_molecular_weight = mu;
-		static constexpr double gamma = 5. / 3.;
-	};
-	template <> struct Physics_Traits<Sweep4> : DefaultPhysicsTraits {
-		static constexpr bool is_hydro_enabled = false;
-		static constexpr bool is_radiation_enabled = true;
-		static constexpr int nGroups = 4;
-		static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
-		static constexpr double boltzmann_constant = 1.0;
-		static constexpr double gravitational_constant = 1.0;
-		static constexpr double c_light = 1.0;
-		static constexpr double radiation_constant = a_rad;
-	};
-	template <> struct quokka::EOS_Traits<Sweep1> {
-		static constexpr double mean_molecular_weight = mu;
-		static constexpr double gamma = 5. / 3.;
-	};
-	template <> struct Physics_Traits<Sweep1> : DefaultPhysicsTraits {
-		static constexpr bool is_hydro_enabled = false;
-		static constexpr bool is_radiation_enabled = true;
-		static constexpr int nGroups = 1;
-		static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
-		static constexpr double boltzmann_constant = 1.0;
-		static constexpr double gravitational_constant = 1.0;
-		static constexpr double c_light = 1.0;
-		static constexpr double radiation_constant = a_rad;
-	};
+template <> struct quokka::EOS_Traits<Sweep4> {
+	static constexpr double mean_molecular_weight = mu;
+	static constexpr double gamma = 5. / 3.;
+};
+template <> struct Physics_Traits<Sweep4> : DefaultPhysicsTraits {
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_radiation_enabled = true;
+	static constexpr int nGroups = 4;
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+	static constexpr double boltzmann_constant = 1.0;
+	static constexpr double gravitational_constant = 1.0;
+	static constexpr double c_light = 1.0;
+	static constexpr double radiation_constant = a_rad;
+};
+template <> struct quokka::EOS_Traits<Sweep1> {
+	static constexpr double mean_molecular_weight = mu;
+	static constexpr double gamma = 5. / 3.;
+};
+template <> struct Physics_Traits<Sweep1> : DefaultPhysicsTraits {
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_radiation_enabled = true;
+	static constexpr int nGroups = 1;
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+	static constexpr double boltzmann_constant = 1.0;
+	static constexpr double gravitational_constant = 1.0;
+	static constexpr double c_light = 1.0;
+	static constexpr double radiation_constant = a_rad;
+};
 
 template <> struct RadSystem_Traits<Sweep4> {
 	static constexpr double c_hat_over_c = 1.0;
@@ -279,7 +279,7 @@ auto TestGasSweep() -> int
 		cell.Src[1] = 0.25;
 		const auto sols = solve_cells<Sweep4, false>({cell}, 1.0e-9);
 		check(sols[0].converged && (sols[0].Erad[1] == cell.Erad0[1] + 0.25) && (std::abs(sols[0].Egas - cell.Egas0) <= 1e-9 * cell.Egas0),
-				"transparent group keeps its source and the gas is untouched");
+		      "transparent group keeps its source and the gas is untouched");
 	}
 
 	// A work term that by itself exceeds the gas energy breaks the bracket (hydro3d section 3.1): G(E_min) > 0, so the
@@ -301,9 +301,9 @@ auto TestGasSweep() -> int
 		}
 		const double Etot = conserved_total(cell);
 		const double residual_check = total_energy(cell, sols[0].Egas, sols[0].Erad) - conserved_total(cell);
-		check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_floor &&
-				    (sols[0].residual > 0.0) && (std::abs(residual_check - sols[0].residual) <= 1.0e-9 * Etot),
-				"root below the floor: clamped to the floor state, converged");
+		check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_floor && (sols[0].residual > 0.0) &&
+			  (std::abs(residual_check - sols[0].residual) <= 1.0e-9 * Etot),
+		      "root below the floor: clamped to the floor state, converged");
 	}
 
 	// The reviewer's hot-cell case: a transparent cell whose root lies just below the floor must be clamped, not kept
@@ -322,8 +322,8 @@ auto TestGasSweep() -> int
 			erad_matches_transparent = erad_matches_transparent && (sols[0].Erad[g] == cell.Erad0[g] + cell.work[g]);
 		}
 		check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_transparent &&
-				    (std::abs(sols[0].residual - (cell.Emin + 1.0e-12)) <= 1.0e-9),
-				"hot cell with the root just below the floor is clamped, not kept hot");
+			  (std::abs(sols[0].residual - (cell.Emin + 1.0e-12)) <= 1.0e-9),
+		      "hot cell with the root just below the floor is clamped, not kept hot");
 	}
 
 	// The same hot cell with a zero temperature floor (every CONSTANTS-unit problem): the march floors at round-off of the
@@ -342,7 +342,7 @@ auto TestGasSweep() -> int
 		}
 		constexpr double eps = std::numeric_limits<double>::epsilon();
 		check(sols[0].converged && (sols[0].Egas > 0.0) && (sols[0].Egas <= 16.0 * eps * 1.0) && erad_matches_transparent,
-				"hot cell, zero temperature floor: clamped at round-off of Egas0");
+		      "hot cell, zero temperature floor: clamped at round-off of Egas0");
 	}
 
 	// A temperature floor of zero (every CONSTANTS-unit problem): the downward march must stay finite and find its root.
@@ -354,7 +354,7 @@ auto TestGasSweep() -> int
 		const auto sols = solve_cells<Sweep4, false>({cell}, 1.0e-9);
 		const double Etot = conserved_total(cell);
 		check(sols[0].converged && std::isfinite(sols[0].Egas) && std::abs(total_energy(cell, sols[0].Egas, sols[0].Erad) - Etot) <= 1e-8 * Etot,
-			  "zero temperature floor: converged and conserved");
+		      "zero temperature floor: converged and conserved");
 	}
 	return (n_failed > 0) ? 1 : 0;
 }
@@ -429,8 +429,8 @@ auto TestDustSweep() -> int
 				const auto gas = solve_cells<Sweep4, false>({cell}, 1.0e-9);
 				const double Etot = conserved_total(cell);
 				check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot &&
-						    std::abs(dust[0].T_d / dust[0].T_gas - 1.0) <= 1.0e-8,
-						std::format("K = 1e12 recovers the dust-free solve (expo {}, Tg {}, Tr {})", expo, Tg, Tr));
+					  std::abs(dust[0].T_d / dust[0].T_gas - 1.0) <= 1.0e-8,
+				      std::format("K = 1e12 recovers the dust-free solve (expo {}, Tg {}, Tr {})", expo, Tg, Tr));
 			}
 			{
 				const auto cell = make_cell<Sweep1>(Tg, Tr, 1.0, 1.0e12);
@@ -438,14 +438,14 @@ auto TestDustSweep() -> int
 				const auto gas = solve_cells<Sweep1, false>({cell}, 1.0e-9);
 				const double Etot = conserved_total(cell);
 				check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot,
-						std::format("K = 1e12, one group (expo {}, Tg {})", expo, Tg));
+				      std::format("K = 1e12, one group (expo {}, Tg {})", expo, Tg));
 			}
 			{
 				const auto cell = make_cell<Sweep4>(Tg, Tr, 1.0, 0.0);
 				const auto dust = solve_cells<Sweep4, true>({cell}, 1.0e-9);
 				const double Etot = conserved_total(cell);
 				check(dust[0].converged && std::abs(dust[0].Egas - cell.Egas0) <= 1.0e-12 * Etot,
-						std::format("K = 0 leaves the gas unchanged (expo {}, Tg {})", expo, Tg));
+				      std::format("K = 0 leaves the gas unchanged (expo {}, Tg {})", expo, Tg));
 			}
 		}
 	}
