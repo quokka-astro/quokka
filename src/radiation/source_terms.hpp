@@ -12,10 +12,10 @@
 // PPL_opacity_full_spectrum only, which fits alpha_E to Erad and alpha_P to fourPiBoverC).
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP(double const T, double const rho,
-										  amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-										  amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
-										  quokka::valarray<double, nGroups_> const &fourPiBoverC,
-										  quokka::valarray<double, nGroups_> const &Erad) -> OpacityTerms<problem_t>
+										 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+										 amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
+										 quokka::valarray<double, nGroups_> const &fourPiBoverC,
+										 quokka::valarray<double, nGroups_> const &Erad) -> OpacityTerms<problem_t>
 {
 	OpacityTerms<problem_t> result;
 
@@ -139,8 +139,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeLorentzFactors(double const r
 // Every opacity the flux update and the work term need, at the temperature the radiation couples at: kappaP, kappaE,
 // kappaF and the Delta(nu kappa B) edge terms. Erad enters only the alpha_E fit of PPL_opacity_full_spectrum.
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeOpacityTermsAt(CouplingCell<problem_t> const &cell, double const T, quokka::valarray<double, nGroups_> const &Erad)
-    -> OpacityTerms<problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeOpacityTermsAt(CouplingCell<problem_t> const &cell, double const T,
+								  quokka::valarray<double, nGroups_> const &Erad) -> OpacityTerms<problem_t>
 {
 	OpacityTerms<problem_t> terms{};
 	if constexpr (nGroups_ == 1) {
@@ -161,7 +161,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeOpacityTermsAt(CouplingCell<p
 // single-group (2 kappa_E - kappa_F) gamma_v, the piecewise-constant kappa_F, or the PPL (1 + alpha_g) kappa_F.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeWorkTerm(CouplingCell<problem_t> const &cell, double const T, OpacityTerms<problem_t> const &opacity,
-							    quokka::valarray<double, nGroups_> const &vel_times_F, double const lorentz_v) -> quokka::valarray<double, nGroups_>
+							    quokka::valarray<double, nGroups_> const &vel_times_F, double const lorentz_v)
+    -> quokka::valarray<double, nGroups_>
 {
 	const double c = c_light_;
 	const double chat = c_hat_;
@@ -287,7 +288,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveEnergyExchange(CouplingCell<pro
 	if (!sol.converged) {
 		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1); // NOLINT
 	}
-	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	       // total number of coupling solves. NOLINT
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	      // total number of coupling solves. NOLINT
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], sol.nevals); // total number of residual evaluations. NOLINT
 	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], sol.nevals); // maximum number of residual evaluations. NOLINT
 	AMREX_ASSERT(sol.Egas > 0.0);
@@ -305,8 +306,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveEnergyExchange(CouplingCell<pro
 
 // Update radiation flux and gas momentum. Returns FluxUpdateResult struct. The function also updates energy.Egas and energy.work.
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arrayconst_t const &consPrev, EnergyExchangeResult<problem_t> &energy,
-						       CouplingCell<problem_t> const &cell, double const gas_update_factor, double const Ekin0,
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arrayconst_t const &consPrev,
+						       EnergyExchangeResult<problem_t> &energy, CouplingCell<problem_t> const &cell,
+						       double const gas_update_factor, double const Ekin0,
 						       amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> const &Src_flux, double Emag,
 						       amrex::GpuArray<double, 3> const &lorentz) -> FluxUpdateResult<problem_t>
 {
@@ -366,12 +368,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 					// single group: the (kappa_F - kappa_E) term and the Lorentz factors of beta_order >= 2
 					Planck_term = energy.opacity_terms.kappaP[g] * fourPiBoverC[g] * lorentz[1];
 					if (energy.opacity_terms.kappaF[g] != energy.opacity_terms.kappaE[g]) {
-						Planck_term += (energy.opacity_terms.kappaF[g] - energy.opacity_terms.kappaE[g]) * erad * std::pow(lorentz[1], 3);
+						Planck_term +=
+						    (energy.opacity_terms.kappaF[g] - energy.opacity_terms.kappaE[g]) * erad * std::pow(lorentz[1], 3);
 					}
 					pressure_term *= chat * cell.dt * energy.opacity_terms.kappaF[g] * lorentz[1];
 				} else {
 					if constexpr (include_delta_B) {
-						Planck_term = energy.opacity_terms.kappaP[g] * fourPiBoverC[g] - 1.0 / 3.0 * energy.opacity_terms.delta_nu_kappa_B_at_edge[g];
+						Planck_term = energy.opacity_terms.kappaP[g] * fourPiBoverC[g] -
+							      1.0 / 3.0 * energy.opacity_terms.delta_nu_kappa_B_at_edge[g];
 					} else {
 						Planck_term = energy.opacity_terms.kappaP[g] * fourPiBoverC[g];
 					}
@@ -528,8 +532,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
-					  amrex::Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double const tol_h, double const tempFloor_h,
-					  int *p_iteration_counter, int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
+					  amrex::Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double const tol_h,
+					  double const tempFloor_h, int *p_iteration_counter, int *p_iteration_failure_counter,
+					  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	static_assert(nGroups_ == 1 || beta_order_ <= 1, "beta_order > 1 is implemented for single-group radiation only");
 
@@ -679,7 +684,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							alpha_quant_minus_one[0] = 2.0;
 							alpha_quant_minus_one[nGroups_ - 1] = -4.0;
 						}
-						updated_energy.opacity_terms.kappaF = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, cell.rad_boundary_ratios, alpha_quant_minus_one);
+						updated_energy.opacity_terms.kappaF =
+						    ComputeGroupMeanOpacity(kappa_expo_and_lower_value, cell.rad_boundary_ratios, alpha_quant_minus_one);
 					}
 				}
 			}
@@ -733,7 +739,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			const auto x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
-			consNew(i, j, k, gasEnergy_index) = ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
+			consNew(i, j, k, gasEnergy_index) =
+			    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 		} else {
 			amrex::ignore_unused(Egas_guess, Egas0, Ekin0, T_start, work_prev);
 		}

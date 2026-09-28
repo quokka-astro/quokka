@@ -218,7 +218,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	bool use_wavespeed_correction_ = false;
 	bool print_rad_counter_ = false;
-	amrex::Real radiation_iteration_tolerance_ = 1e-11; // relative tolerance on the unknown of the matter-radiation coupling solve (the gas energy, or the dust temperature)
+	amrex::Real radiation_iteration_tolerance_ =
+	    1e-11; // relative tolerance on the unknown of the matter-radiation coupling solve (the gas energy, or the dust temperature)
 
 	bool projectInitialBField_ = false;
 	bool updateInitialMagneticEnergy_ = true;
@@ -3368,8 +3369,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 				// Full gas update (gas_update_factor = 1.0)
 				RadSystem<problem_t>::AddSourceTerms(stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage2_implicit, 1.0,
-								     dustGasInteractionCoeff_, rad_tol, tempFloor, p_iteration_counter, p_iteration_failure_counter,
-								     cons_fc_arr);
+								     dustGasInteractionCoeff_, rad_tol, tempFloor, p_iteration_counter,
+								     p_iteration_failure_counter, cons_fc_arr);
 			}
 		}
 
@@ -3470,7 +3471,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 			// Full gas update (gas_update_factor = 1.0)
 			RadSystem<problem_t>::AddSourceTerms(stateNew_cc, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage3_implicit, 1.0,
-							     dustGasInteractionCoeff_, rad_tol, tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
+							     dustGasInteractionCoeff_, rad_tol, tempFloor, p_iteration_counter, p_iteration_failure_counter,
+							     cons_fc_arr);
 		}
 #ifdef PHOTOCHEMISTRY
 		if (enablePhotoChemistry_ == 1) {

@@ -499,8 +499,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 						amrex::GpuArray<double, 3> const &lorentz) -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
-				   amrex::Real dt_implicit, double gas_update_factor, double dustGasCoeff, double tol, double tempFloor, int *p_iteration_counter,
-				   int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
+				   amrex::Real dt_implicit, double gas_update_factor, double dustGasCoeff, double tol, double tempFloor,
+				   int *p_iteration_counter, int *p_iteration_failure_counter,
+				   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -582,7 +583,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto ComputeOpacityTermsAt(CouplingCell<problem_t> const &cell, double T, quokka::valarray<double, nGroups_> const &Erad)
 	    -> OpacityTerms<problem_t>;
 	AMREX_GPU_DEVICE static auto ComputeWorkTerm(CouplingCell<problem_t> const &cell, double T, OpacityTerms<problem_t> const &opacity,
-						     quokka::valarray<double, nGroups_> const &vel_times_F, double lorentz_v) -> quokka::valarray<double, nGroups_>;
+						     quokka::valarray<double, nGroups_> const &vel_times_F, double lorentz_v)
+	    -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_DEVICE static auto SolveEnergyExchange(CouplingCell<problem_t> const &cell, double tol, int *p_iteration_counter,
 							 int *p_iteration_failure_counter) -> EnergyExchangeResult<problem_t>;
 	AMREX_GPU_DEVICE static auto SolveDustAbsorptionBands(CouplingCell<problem_t> const &cell, int *p_iteration_counter) -> EnergyExchangeResult<problem_t>;
