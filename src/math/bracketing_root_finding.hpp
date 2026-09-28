@@ -127,9 +127,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 		}
 
 		const T q = (3 * left + right) / 4;
+		// The minimum step (Brent's delta, Numerical Recipes' tol1). The bisection tests on the last two steps compare with it,
+		// not with machine epsilon: otherwise a residual that is flat at round-off next to the root lets the safeguard below
+		// creep by tol1 per iteration without ever bisecting, and the budget runs out (seen in DTypeFront1D's dust solve).
+		const T tol1 = amrex::max(2 * eps * std::abs(right), std::numeric_limits<T>::min());
 		// !isfinite(s): the interpolation overflowed (e.g. |f| ~ 1e200); NaN would pass every comparison below
 		if (!std::isfinite(s) || (s < amrex::min(q, right)) || (s > amrex::max(q, right)) || (cond && std::abs(s - right) >= std::abs(right - c) / 2) ||
-		    (!cond && std::abs(s - right) >= std::abs(c - d) / 2) || (cond && std::abs(right - c) <= eps) || (!cond && std::abs(c - d) <= eps)) {
+		    (!cond && std::abs(s - right) >= std::abs(c - d) / 2) || (cond && std::abs(right - c) <= tol1) || (!cond && std::abs(c - d) <= tol1)) {
 			// bisection
 			s = detail::safe_midpoint(left, right);
 			if ((s == left) || (s == right)) {
@@ -140,7 +144,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 			cond = false;
 			// Numerical Recipes (zbrent) safeguard: step at least tol1 towards the contrapoint, so the bracket
 			// still collapses when every interpolated iterate lands on the same side of the root.
-			const T tol1 = amrex::max(2 * eps * std::abs(right), std::numeric_limits<T>::min());
 			if (std::abs(s - right) < tol1) {
 				s = right + ((left > right) ? tol1 : -tol1);
 				if (!((s > lo) && (s < hi))) {
