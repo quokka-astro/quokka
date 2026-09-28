@@ -13,6 +13,9 @@
 /// a relative tolerance on the unknown. The method, its derivation and its measurements are hydro3d.jl's
 /// docs/coupling-new-method.md and docs/coupling-new-method-dust.md; the Quokka specifics are in the PR's design note.
 
+#include <cmath>
+#include <limits>
+
 #include "math/bracketing_root_finding.hpp"
 #include "math/root_finding.hpp"
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
@@ -189,9 +192,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::DustCouplingState(CouplingCell<probl
 
 // The solve with dust: bracket H by marching from the gas temperature at the start of the step (Quokka's initial guess
 // for the dust temperature, which where the dust balance has several roots selects the one connected to dust as warm as
-// the gas), hand it to Brent to a relative tolerance on T_d, and take the midpoint of the final bracket. H is not used as
-// a convergence test: its collision term multiplies the round-off in T - T_d by dt K sqrt(T), which reaches 1e8 of the
-// cell's energy in a strongly coupled cell, whereas the bracket width in T_d is not amplified by anything.
+// the gas), hand it to Brent, and take the midpoint of the final bracket. The convergence test is on the state
+// (hydro3d.jl, docs/coupling-new-method-dust.md sections 4-5). H is not the test: its collision term multiplies the
+// round-off in T - T_d by dt K sqrt(T), which reaches 1e8 of the cell's energy in a strongly coupled cell. The bracket
+// width in T_d is not the test either: at small K the gas energy follows from conservation, and its error is the T_d
+// error times (c/chat) sum_g E_g / E_gas, which is large where the radiation holds most of the energy (DTypeFront1D).
+// So the test is the gas energy across the final bracket, |E_gas(lo) - E_gas(hi)| <= tol E_tot; where it fails, the
+// relative T_d tolerance is shrunk by the measured amplification and the bracket re-solved, at most three times.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<problem_t> const &cell, double const tol) -> CouplingSolution<problem_t>
 {
@@ -220,11 +227,33 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 		return sol;
 	}
 
-	quokka::math::eps_tolerance<double> tolerance(tol);
+	const double atol = tol * std::abs(TotalEnergy(cell));
 	int iters = max_root_iterations_;
-	const auto [lo, hi] = quokka::math::brent_solve(H, br.lo, br.hi, br.flo, br.fhi, tolerance, iters);
+	auto [lo, hi] = quokka::math::brent_solve(H, br.lo, br.hi, br.flo, br.fhi, quokka::math::eps_tolerance<double>(tol), iters);
+
+	// the spread of the gas energy across the final bracket; two evaluations, counted
+	auto gas_width = [&](double const a, double const b) {
+		if (a == b) {
+			return 0.0;
+		}
+		nevals += 2;
+		return std::abs(DustCouplingState(cell, a).Egas - DustCouplingState(cell, b).Egas);
+	};
+	double width = gas_width(lo, hi);
+	double eps = tol;
+	const int max_repeats = 3;
+	for (int repeat = 0; (repeat < max_repeats) && (width > atol); ++repeat) {
+		// the factor 4: 2 for the half- versus full-width of the bracket, 2 as margin for the slope changing across it
+		eps = amrex::max(eps * atol / (4.0 * width), 4 * std::numeric_limits<double>::epsilon());
+		iters = max_root_iterations_;
+		const auto bracket = quokka::math::brent_solve(H, lo, hi, quokka::math::eps_tolerance<double>(eps), iters);
+		lo = bracket.first;
+		hi = bracket.second;
+		width = gas_width(lo, hi);
+	}
+
 	auto sol = DustCouplingState(cell, lo / 2 + hi / 2);
-	sol.converged = tolerance(lo, hi);
+	sol.converged = (width <= atol);
 	sol.nevals = nevals;
 	ApplyEnergyFloors(cell, sol);
 	return sol;
