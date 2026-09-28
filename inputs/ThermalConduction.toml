@@ -35,11 +35,9 @@ conduction.conduction_cfl = 0.1
 suppress_output = 0
 
 #Spitzer IC
-conduction.conduction_type = "spitzer"
 conduction.conductivity_prefactor = 5.40e-10
 stop_time = 660942.2643981476
 
 #Constant IC
-#conduction.conduction_type = "constant"
 #conduction.conductivity_prefactor = 0.6113916490935586e12
 #stop_time = 469054.0075444166
