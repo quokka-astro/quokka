@@ -615,8 +615,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		cell.Tfloor = tempFloor;
 		cell.massScalars = massScalars;
 		cell.rad_boundaries = radBoundaries_g;
-		for (int g = 0; g < nGroups_; ++g) {
-			cell.rad_boundary_ratios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
+		if constexpr (nGroups_ > 1) {
+			// A single group's boundaries are [0, DBL_MAX] and its ratio is never read (ComputeCouplingCoefficients
+			// takes the nGroups_ == 1 branch), so this is skipped there: 0/0 or DBL_MAX/0 would otherwise trap.
+			for (int g = 0; g < nGroups_; ++g) {
+				cell.rad_boundary_ratios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
+			}
 		}
 		if constexpr (gamma_ != 1.0) {
 			cell.Emin = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, tempFloor, massScalars);
