@@ -146,11 +146,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::sfh_time_interval_;
 
 	using AMRSimulation<problem_t>::enableElectronConduction_;
-	using AMRSimulation<problem_t>::electronConductionKappa0_;
-	using AMRSimulation<problem_t>::conductionKappaParallel_;
-	using AMRSimulation<problem_t>::conductionKappaPerp_;
+	using AMRSimulation<problem_t>::conductivityParams_;
 	using AMRSimulation<problem_t>::conductionCFL;
-	using AMRSimulation<problem_t>::conductionType_;
 
 #if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
@@ -732,17 +729,51 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const hpp("conduction");
 		hpp.query("enabled", enableElectronConduction_);
-		hpp.query("conductivity_prefactor", electronConductionKappa0_);
 		hpp.query("conduction_cfl", conductionCFL);
 		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
 		hpp.query("saturation_factor", electronConductionSaturationFactor_);
-		hpp.query("conduction_type", conductionType_);
-		if (conductionType_ == "aniso"){
-		hpp.query("kappaPar", conductionKappaParallel_);
-		hpp.query("kappaPerp", conductionKappaPerp_);
-		}
-		if (conductionType_ != "constant" && conductionType_ != "spitzer" && conductionType_ != "aniso") {
-			amrex::Abort("Invalid conduction.conduction_type! Must be 'constant', 'spitzer', or 'aniso'.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!hpp.contains("conduction_type"),
+						 "conduction.conduction_type has been removed; set Physics_Traits::conduction_model and "
+						 "Physics_Traits::conduction_geometry in the problem file instead.");
+
+		constexpr ConductionModel conduction_model = Physics_Traits<problem_t>::conduction_model;
+		constexpr bool is_anisotropic = (Physics_Traits<problem_t>::conduction_geometry == ConductionGeometry::anisotropic);
+		static_assert(!is_anisotropic || Physics_Traits<problem_t>::is_mhd_enabled, "ConductionGeometry::anisotropic requires is_mhd_enabled = true.");
+		const bool conduction_enabled = (enableElectronConduction_ != 0);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!conduction_enabled || conduction_model != ConductionModel::none,
+						 "conduction.enabled = 1, but this problem's Physics_Traits::conduction_model is `none`.");
+
+		// Conductivity prefactors (erg cm^-1 s^-1 K^-1; erg cm^-1 s^-1 K^-3.5 for spitzer) are only read for the
+		// built-in models, and only under the keys matching conduction_geometry.
+		const bool isotropic_key_present = hpp.contains("conductivity_prefactor");
+		const bool anisotropic_key_present = hpp.contains("kappaPar") || hpp.contains("kappaPerp");
+		if constexpr (conduction_model == ConductionModel::constant || conduction_model == ConductionModel::spitzer) {
+			if constexpr (is_anisotropic) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    !isotropic_key_present, "conduction.conductivity_prefactor is set, but this problem's Physics_Traits::conduction_geometry "
+							    "is `anisotropic`; use conduction.kappaPar / conduction.kappaPerp instead.");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!conduction_enabled || hpp.contains("kappaPar"),
+								 "conduction.kappaPar must be set for anisotropic conduction.");
+				hpp.query("kappaPar", conductivityParams_.kappa0_par);
+				hpp.query("kappaPerp", conductivityParams_.kappa0_perp);
+			} else {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    !anisotropic_key_present,
+				    "conduction.kappaPar or conduction.kappaPerp is set, but this problem's "
+				    "Physics_Traits::conduction_geometry is `isotropic`; use conduction.conductivity_prefactor instead.");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!conduction_enabled || isotropic_key_present,
+								 "conduction.conductivity_prefactor must be set for isotropic conduction.");
+				hpp.query("conductivity_prefactor", conductivityParams_.kappa0_par);
+				conductivityParams_.kappa0_perp = conductivityParams_.kappa0_par;
+			}
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductivityParams_.kappa0_par >= 0.0 && conductivityParams_.kappa0_perp >= 0.0,
+							 "Conductivity prefactors must be >= 0.");
+		} else {
+			// ConductionModel::none or ConductionModel::problem_defined
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!isotropic_key_present && !anisotropic_key_present,
+							 "conduction.conductivity_prefactor, conduction.kappaPar or conduction.kappaPerp is set, but this "
+							 "problem's Physics_Traits::conduction_model is not `constant` or `spitzer`; with `problem_defined`, "
+							 "the conductivity comes from computeConductivity instead.");
 		}
 	}
 
@@ -1262,29 +1293,28 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 							       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 				}
 			}
-			// Match the hydro solver's own reconstruction ghost width (QuokkaSimulation::computeHydroFluxes)
-			// so the (rho, T) reconstruction used for the conduction flux has the same stencil robustness
-			// as the hydro reconstruction it mirrors.
-			const int conduction_nghost_Riemann =
-			    MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emfComputingScheme_, emfAveragingScheme_, do_tracers != 0);
-			const int conduction_reconstructGhost = conduction_nghost_Riemann + 1;
-			if (conductionType_ == "aniso") {
-				const quokka::conduction::AnisoConductionParams aniso_params{.kappa_parallel = conductionKappaParallel_,
-											     .kappa_perp = conductionKappaPerp_,
+			if constexpr (Physics_Traits<problem_t>::conduction_geometry == ConductionGeometry::anisotropic) {
+				const quokka::conduction::AnisoConductionParams aniso_params{.conductivity = conductivityParams_,
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 											     .saturation_factor = electronConductionSaturationFactor_,
 											     .min_temperature = tempFloor_};
 				quokka::conduction::AnisoConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, aniso_params, heat_flux);
 			} else {
-				const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
+				// Match the hydro solver's own reconstruction ghost width (QuokkaSimulation::computeHydroFluxes)
+				// so the (rho, T) reconstruction used for the conduction flux has the same stencil robustness
+				// as the hydro reconstruction it mirrors.
+				const int conduction_nghost_Riemann = MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emfComputingScheme_,
+											       emfAveragingScheme_, do_tracers != 0);
+				const int conduction_reconstructGhost = conduction_nghost_Riemann + 1;
+				const quokka::conduction::ElectronConductionParams conduction_params{.conductivity = conductivityParams_,
 												     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 												     .saturation_factor = electronConductionSaturationFactor_,
 												     .min_temperature = tempFloor_,
-												     .spitzer_scaling = (conductionType_ == "spitzer"),
 												     .reconstruction_order = reconstructionOrder_,
 												     .plm_limiter = plmLimiter_,
 												     .ng_reconstruct = conduction_reconstructGhost};
-				quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
+				quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params,
+												   heat_flux);
 			}
 			if ((do_reflux != 0) && (recal_fluxes != nullptr)) {
 				// heat_flux has a single component, so accumulate it into the energy components of the
