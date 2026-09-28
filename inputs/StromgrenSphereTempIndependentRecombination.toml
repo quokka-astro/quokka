@@ -21,9 +21,9 @@ do_subcycle = 0
 suppress_output = 0
 
 stromgen.tend = 1.2e10
-stromgen.primary_species_1 = 1.0e-30
-stromgen.primary_species_2 = 1670
-stromgen.primary_species_3 = 1.0e-30
+stromgen.n_e_init = 1.0e-30
+stromgen.n_HI_init = 1670
+stromgen.n_HII_init = 1.0e-30
 stromgen.Q = 1e51
 
 photochemistry.enabled = 1

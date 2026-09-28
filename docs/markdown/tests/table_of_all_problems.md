@@ -16,7 +16,7 @@ This table lists all test problems in the Quokka codebase. The acronyms used are
 | BinaryOrbitCIC                    | 3   | ✅     | ❌   | ❌                 | ✅       | CIC                       | ❌              |
 | BrioWuShockTube                   | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
 | CurrentSheet                      | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
-| DTypeFront                        | 3   | ✅     | ❌   | SG                | ❌       | ❌                         | ❌              |
+| DTypeFront_JAFF                   | 3   | ✅     | ❌   | SG                | ❌       | ❌                         | ❌              |
 | DTypeFrontVC                      | 2   | ✅     | ❌   | SG                | ❌       | ❌                         | ❌              |
 | DiskGalaxy                        | 3   | ✅     | ✅   | ❌                 | ✅       | CIC, StochasticStellarPop | 1              |
 | DustAdvection                     | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |

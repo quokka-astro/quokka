@@ -121,25 +121,6 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
 			}
 
-			// update the number density of electrons due to charge conservation
-			// TODO(psharda): generalize this to other chem networks
-			chemstate.xn[0] = -chemstate.xn[3] - chemstate.xn[7] + chemstate.xn[1] + chemstate.xn[12] + chemstate.xn[6] + chemstate.xn[4] +
-					  chemstate.xn[9] + 2.0 * chemstate.xn[11];
-
-			// reconserve mass fractions post charge conservation
-			insum = 0;
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
-				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
-				insum += inmfracs[nn];
-			}
-
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				inmfracs[nn] /= insum;
-				// update the number densities with conserved mass fractions
-				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
-			}
-
 			// get the updated specific eint
 			eos(eos_input_rt, chemstate);
 

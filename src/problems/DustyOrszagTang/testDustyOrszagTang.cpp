@@ -59,7 +59,7 @@ struct ProfileData {
 	std::string snapshot_tag_;
 	std::vector<double> y_;
 	std::vector<double> rho_g_;
-	std::vector<double> rho_d_scaled_;
+	std::vector<double> rho_d_;
 	std::vector<double> v_gx_;
 	std::vector<double> v_gy_;
 	std::vector<double> v_dx_;
@@ -133,10 +133,10 @@ void writeSliceCsv(const SliceData &slice)
 void writeProfileCsv(const ProfileData &profile)
 {
 	std::ofstream file(std::format("dusty_orszag_tang_{}_{}_profile.csv", profile.case_tag_, profile.snapshot_tag_));
-	file << "y,rho_g,rho_d_scaled,v_gx,v_gy,v_dx,v_dy\n";
+	file << "y,rho_g,rho_d,v_gx,v_gy,v_dx,v_dy\n";
 	for (size_t idx = 0; idx < profile.y_.size(); ++idx) {
-		file << profile.y_[idx] << "," << profile.rho_g_[idx] << "," << profile.rho_d_scaled_[idx] << "," << profile.v_gx_[idx] << ","
-		     << profile.v_gy_[idx] << "," << profile.v_dx_[idx] << "," << profile.v_dy_[idx] << "\n";
+		file << profile.y_[idx] << "," << profile.rho_g_[idx] << "," << profile.rho_d_[idx] << "," << profile.v_gx_[idx] << "," << profile.v_gy_[idx]
+		     << "," << profile.v_dx_[idx] << "," << profile.v_dy_[idx] << "\n";
 	}
 }
 
@@ -145,8 +145,7 @@ auto profileIsFinite(const ProfileData &profile) -> bool
 	auto const check = [](const std::vector<double> &values) {
 		return std::all_of(values.begin(), values.end(), [](double value) { return std::isfinite(value); });
 	};
-	return check(profile.rho_g_) && check(profile.rho_d_scaled_) && check(profile.v_gx_) && check(profile.v_gy_) && check(profile.v_dx_) &&
-	       check(profile.v_dy_);
+	return check(profile.rho_g_) && check(profile.rho_d_) && check(profile.v_gx_) && check(profile.v_gy_) && check(profile.v_dx_) && check(profile.v_dy_);
 }
 
 auto sliceIsFinite(const SliceData &slice) -> bool
@@ -292,8 +291,6 @@ template <typename problem_t> auto extractProfile(QuokkaSimulation<problem_t> &s
 	const int i_left = lo.x + nx / 2 - 1;
 	const int i_right = lo.x + nx / 2;
 	const double rescale = static_cast<double>(nx) / 2.0;
-	const double epsilon0 = config.epsilon0_;
-	const amrex::Real tiny_number_local = tiny_number;
 
 	auto rho_g_avg = sim.computeAxisAlignedProfile(1, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) {
 		return ((i == i_left) || (i == i_right)) ? state(i, j, k, HydroSystem<problem_t>::density_index) : 0.0;
@@ -319,7 +316,7 @@ template <typename problem_t> auto extractProfile(QuokkaSimulation<problem_t> &s
 	profile.snapshot_tag_ = snapshotTag(time);
 	profile.y_.resize(ny);
 	profile.rho_g_.resize(ny);
-	profile.rho_d_scaled_.resize(ny);
+	profile.rho_d_.resize(ny);
 	profile.v_gx_.resize(ny);
 	profile.v_gy_.resize(ny);
 	profile.v_dx_.resize(ny);
@@ -335,7 +332,7 @@ template <typename problem_t> auto extractProfile(QuokkaSimulation<problem_t> &s
 
 		profile.y_[j] = prob_lo[1] + (lo.y + j + 0.5) * dx[1];
 		profile.rho_g_[j] = rho_g;
-		profile.rho_d_scaled_[j] = rho_d / amrex::max(epsilon0, tiny_number_local);
+		profile.rho_d_[j] = rho_d;
 		profile.v_gx_[j] = (rho_g > 0.0) ? mom_gx / rho_g : 0.0;
 		profile.v_gy_[j] = (rho_g > 0.0) ? mom_gy / rho_g : 0.0;
 		profile.v_dx_[j] = (rho_d > 0.0) ? mom_dx / rho_d : 0.0;
