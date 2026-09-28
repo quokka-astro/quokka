@@ -136,7 +136,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 		const T min_step = 2 * tol1;
 		// !isfinite(s): the interpolation overflowed (e.g. |f| ~ 1e200); NaN would pass every comparison below
 		if (!std::isfinite(s) || (s < amrex::min(q, right)) || (s > amrex::max(q, right)) || (cond && std::abs(s - right) >= std::abs(right - c) / 2) ||
-		    (!cond && std::abs(s - right) >= std::abs(c - d) / 2) || (cond && std::abs(right - c) <= min_step) || (!cond && std::abs(c - d) <= min_step)) {
+		    (!cond && std::abs(s - right) >= std::abs(c - d) / 2) || (cond && std::abs(right - c) <= min_step) ||
+		    (!cond && std::abs(c - d) <= min_step)) {
 			// bisection
 			s = detail::safe_midpoint(left, right);
 			if ((s == left) || (s == right)) {
