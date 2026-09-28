@@ -1,0 +1,80 @@
+@var kB = 1.380649e-16   # Boltzmann's constant, erg/K
+@var eV = 1.602176634e-12   # 1 eV in erg (matches C::ev2erg)
+
+# Radiation band edges, in eV. MUST be kept equal to jaffgen.toml's
+# bands = [Eband_lo, Eband_hi] by hand -- jaff does not expose
+# [network.radiation] settings as .jfunc symbols, so there is no mechanism,
+# automated or otherwise, tying these two values to that file. This is NOT
+# fixable from this repo: jaffgen would need to inject bands/power_law_index
+# from the parsed TOML into the .jfunc namespace (or cross-check them
+# post-parse) before this can be made self-consistent. Until then, if
+# jaffgen.toml's bands change, these two lines must be updated by hand, and
+# nothing will warn you if they aren't.
+@var Eband_lo = 13.6
+@var Eband_hi = 26.0
+
+# Mean photon energy for a power_law_index = 0 band (jaffgen.toml's current
+# value). Deriving this from Eband_lo/Eband_hi only removes the arithmetic
+# duplication -- it does NOT close the gap above, since Eband_lo/Eband_hi are
+# themselves the hand-copied, unchecked values. This formula is also only
+# valid for power_law_index = 0 -- it must be re-derived by hand (see
+# GetChemBandQuanta() in src/radiation/radiation_system.hpp) if
+# jaffgen.toml's power_law_index ever changes from 0. power_law_index is
+# likewise never exposed to jaff, so that too can only be kept in sync by
+# hand.
+@var Eavg0 = Eband_lo * Eband_hi * log(Eband_hi / Eband_lo) / (Eband_hi - Eband_lo)
+
+# Reaction 2: H + e- -> H+ + e- + e- (collisional ionization)
+# Arrhenius fit: A * sqrt(T) * exp(-2.18e-11 erg / (kB * T))
+@function chemRate2(tgas)
+    A = 5.84e-11
+    x = A * sqrt(tgas) * exp(-2.18e-11 / (kB * tgas))
+    return x
+
+# Reaction 0: H -> H+ + e- (photoionization)
+# Fixed photoheating energy per ionization event.
+@function deltaE0()
+    x = (Eavg0 - 13.6) * eV
+    return x
+
+# Reaction 2: H + e- -> H+ + e- + e- (collisional ionization)
+# Each collisional ionization removes one Rydberg (13.6 eV) from the gas
+# thermal energy.
+@function deltaE2()
+    x = -13.6 * eV
+    return x
+
+# Standalone (non-reaction-tied) heating/cooling. These do not scale with any
+# reaction's own rate coefficient, so they live here rather than in a deltaE
+# function (dEdt_chem = deltaE_i * rate_i * reactant densities would otherwise
+# multiply them by that reaction's own T-dependence):
+#   + KI heating (constant rate per unit H density)
+#   - KI cooling (Vazquez-Semadeni et al. 2007 functional form)
+#   - recombination cooling, T-dependent, no cooling below 100 K, tied to n_e * n_Hj
+#   - ion free-free (Bremsstrahlung) plus collisionally excited line (CLE)
+#     cooling, tied to n_e * n_Hj (Frazer and Heitsch 2019)
+#
+# Density symbols follow jaff's charge encoding: "+" is spelled "j" and "-" is
+# spelled "k" (n_Hj is H+), so a charge marker cannot be confused with an
+# element letter. n_e is special-cased for the electron.
+@function heatingCoolingRate(tgas, n_H, n_e, n_Hj)
+    heating_KI = 2.0e-26 * n_H
+
+    cooling_KI = 2.0e-26 * (1.0e7 * exp(-118400.0 / (tgas + 1.0e3)) + 1.4e-2 * sqrt(tgas) * exp(-92.0 / tgas)) * n_H * n_H
+
+    cooling_recombination = Piecewise((0.0, tgas < 100.0), (6.1e-10 * kB * tgas * tgas**(-0.89), True)) * n_e * n_Hj
+
+    # Collisionally excited line cooling: eight-segment power-law fit in tgas.
+    cle_term = Piecewise( \
+        (3.47e-29 * tgas**1.915, tgas < 1.0e2), \
+        (2.34e-26 * tgas**0.500, tgas < 10.0**2.8), \
+        (1.11e-24 * tgas**(-0.099), tgas < 10.0**3.6), \
+        (1.08e-32 * tgas**2.127, tgas < 1.0e4), \
+        (2.67e-30 * tgas**1.529, tgas < 10.0**4.5), \
+        (1.74e-24 * tgas**0.237, tgas < 1.0e5), \
+        (1.10e-21 * tgas**(-0.323), tgas < 1.0e6), \
+        (7.49e-21 * tgas**(-0.462), True))
+
+    cooling_ff = (1.3 * 1.427e-27 * sqrt(tgas) + cle_term) * n_e * n_Hj
+
+    return heating_KI - cooling_KI - cooling_recombination - cooling_ff

@@ -291,16 +291,16 @@ void plotRelativeDrift(SimulationData<DustHallPedersenDrift> const &data)
 	}
 
 	matplotlibcpp::clf();
-	matplotlibcpp::plot(t_dense, wx_dense, {{"label", R"(analytic $w_x$)"}, {"color", "C0"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
+	matplotlibcpp::plot(t_dense, wx_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
 	matplotlibcpp::plot(data.t_vec_, data.wx_vec_,
-			    {{"label", R"(numerical $w_x$)"}, {"color", "C0"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
-	matplotlibcpp::plot(t_dense, wy_dense, {{"label", R"(analytic $w_y$)"}, {"color", "C1"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
+			    {{"label", R"($w_x$)"}, {"color", "C0"}, {"linestyle", "None"}, {"marker", "o"}, {"markerfacecolor", "none"}, {"markersize", "4"}});
+	matplotlibcpp::plot(t_dense, wy_dense, {{"color", "k"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
 	matplotlibcpp::plot(data.t_vec_, data.wy_vec_,
-			    {{"label", R"(numerical $w_y$)"}, {"color", "C1"}, {"linestyle", "None"}, {"marker", "s"}, {"markersize", "4"}});
+			    {{"label", R"($w_y$)"}, {"color", "C1"}, {"linestyle", "None"}, {"marker", "o"}, {"markerfacecolor", "none"}, {"markersize", "4"}});
 	matplotlibcpp::legend();
 	matplotlibcpp::tick_params({{"labelsize", "13"}});
 	matplotlibcpp::xlabel("t", {{"fontsize", "15"}});
-	matplotlibcpp::ylabel(R"($w_x,\ w_y$)", {{"fontsize", "15"}});
+	matplotlibcpp::ylabel("relative velocity", {{"fontsize", "15"}});
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_hall_pedersen_drift.pdf");
 }
