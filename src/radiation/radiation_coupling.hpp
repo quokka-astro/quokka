@@ -143,7 +143,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<proble
 	AMREX_ASSERT(cell.Egas0 > 0.0);
 	const auto br = quokka::math::bracket_root_of_increasing(G, amrex::max(cell.Egas0, cell.Emin), cell.Emin);
 	if (!br.found) {
-		// reported unconverged rather than guessed at: keep the old state, with the source injected
+		// reported unconverged rather than guessed at, with one exception: the march stopped at the gas energy
+		// floor (br.lo == cell.Emin) because the equilibrium value lies below it, and G there is already smaller
+		// than tol times the cell's energy scale. Clamping to the floor is the best an inadmissible root allows,
+		// and the conservation error it leaves is below the solve's own tolerance (a transparent, radiation-
+		// dominated cell whose gas has relaxed to the EOS floor: RadStreamingFluxSource).
 		CouplingSolution<problem_t> sol{};
 		sol.Egas = cell.Egas0;
 		sol.T_gas = TgasOf(cell, cell.Egas0);
@@ -151,7 +155,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<proble
 		sol.Erad = cell.Erad0 + cell.Src;
 		sol.residual = br.flo;
 		sol.nevals = br.nevals;
-		sol.converged = false;
+		const double atol = std::abs(TotalEnergy(cell)) * amrex::max(tol, 4 * std::numeric_limits<double>::epsilon());
+		sol.converged = (br.lo == cell.Emin) && (amrex::max(std::abs(br.flo), std::abs(br.fhi)) <= atol);
 		ApplyEnergyFloors(cell, sol);
 		sol.T_d = sol.T_gas;
 		return sol;
