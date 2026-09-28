@@ -218,8 +218,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	bool use_wavespeed_correction_ = false;
 	bool print_rad_counter_ = false;
-	amrex::Real radiation_iteration_tolerance_ =
-	    1e-11; // relative tolerance on the unknown of the matter-radiation coupling solve (the gas energy, or the dust temperature)
+	// relative tolerance on the unknown of the matter-radiation coupling solve (the gas energy, or the dust temperature)
+	amrex::Real radiation_iteration_tolerance_ = 1e-11;
 
 	bool projectInitialBField_ = false;
 	bool updateInitialMagneticEnergy_ = true;
