@@ -26,7 +26,9 @@
 #include <cmath>
 #include <format>
 #include <iostream>
+#include <cstdint>
 #include <limits>
+#include <numbers>
 #include <string>
 #include <vector>
 
@@ -38,7 +40,7 @@ constexpr double mu = 1.5; // c_V = rho k_B / ((gamma - 1) mu) = 1 at rho = 1
 constexpr double Tfloor = 1.0e-10;
 constexpr double Efloor_group = 1.0e-30;
 // exp(range(log 0.1, log 20; length = 5)): hydro3d's RadiationGroups(0.1, 20, 4)
-constexpr amrex::GpuArray<double, 5> edges4 = {0.1, 0.37606030930863937, 1.4142135623730951, 5.318295896944989, 20.0};
+constexpr amrex::GpuArray<double, 5> edges4 = {0.1, 0.37606030930863937, std::numbers::sqrt2, 5.318295896944989, 20.0};
 
 // The opacity law of the cells being solved, kappa = kappa0 * T^expo, set on the host before each kernel launch.
 AMREX_GPU_MANAGED double sweep_kappa0 = 1.0; // NOLINT
@@ -53,24 +55,34 @@ struct Sweep1 {};
 
 } // namespace
 
-#define SWEEP_TRAITS(P, NG)                                                                                                                                    \
-	template <> struct quokka::EOS_Traits<P> {                                                                                                             \
-		static constexpr double mean_molecular_weight = mu;                                                                                            \
-		static constexpr double gamma = 5. / 3.;                                                                                                       \
-	};                                                                                                                                                     \
-	template <> struct Physics_Traits<P> : DefaultPhysicsTraits {                                                                                          \
-		static constexpr bool is_hydro_enabled = false;                                                                                                \
-		static constexpr bool is_radiation_enabled = true;                                                                                             \
-		static constexpr int nGroups = NG;                                                                                                             \
-		static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;                                                                               \
-		static constexpr double boltzmann_constant = 1.0;                                                                                              \
-		static constexpr double gravitational_constant = 1.0;                                                                                          \
-		static constexpr double c_light = 1.0;                                                                                                         \
-		static constexpr double radiation_constant = a_rad;                                                                                            \
+	template <> struct quokka::EOS_Traits<Sweep4> {
+		static constexpr double mean_molecular_weight = mu;
+		static constexpr double gamma = 5. / 3.;
 	};
-
-SWEEP_TRAITS(Sweep4, 4)
-SWEEP_TRAITS(Sweep1, 1)
+	template <> struct Physics_Traits<Sweep4> : DefaultPhysicsTraits {
+		static constexpr bool is_hydro_enabled = false;
+		static constexpr bool is_radiation_enabled = true;
+		static constexpr int nGroups = 4;
+		static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+		static constexpr double boltzmann_constant = 1.0;
+		static constexpr double gravitational_constant = 1.0;
+		static constexpr double c_light = 1.0;
+		static constexpr double radiation_constant = a_rad;
+	};
+	template <> struct quokka::EOS_Traits<Sweep1> {
+		static constexpr double mean_molecular_weight = mu;
+		static constexpr double gamma = 5. / 3.;
+	};
+	template <> struct Physics_Traits<Sweep1> : DefaultPhysicsTraits {
+		static constexpr bool is_hydro_enabled = false;
+		static constexpr bool is_radiation_enabled = true;
+		static constexpr int nGroups = 1;
+		static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+		static constexpr double boltzmann_constant = 1.0;
+		static constexpr double gravitational_constant = 1.0;
+		static constexpr double c_light = 1.0;
+		static constexpr double radiation_constant = a_rad;
+	};
 
 template <> struct RadSystem_Traits<Sweep4> {
 	static constexpr double c_hat_over_c = 1.0;
@@ -105,10 +117,6 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputePlanckOpacity(c
 	return sweep_kappa(Tgas);
 }
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputeEnergyMeanOpacity(const double /*rho*/, const double Tgas) -> amrex::Real
-{
-	return sweep_kappa(Tgas);
-}
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputeFluxMeanOpacity(const double /*rho*/, const double Tgas) -> amrex::Real
 {
 	return sweep_kappa(Tgas);
 }
@@ -194,10 +202,15 @@ template <typename P> auto floor_state(CouplingCell<P> const &cell) -> CouplingS
 	return sols[0];
 }
 
-auto check(bool ok, std::string const &what) -> int
+int n_failed = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+// Print one check line and count a failure; the test functions return whether any check failed so far.
+void check(bool ok, std::string const &what)
 {
 	std::cout << std::format("{:<78}{}\n", what, ok ? "ok" : "FAIL");
-	return ok ? 0 : 1;
+	if (!ok) {
+		++n_failed;
+	}
 }
 
 // hydro3d docs/coupling-new-method.md section 5.2: 8 states x 10 optical depths x 3 opacity laws, dt = 1e-3, tol = 1e-9
@@ -209,11 +222,10 @@ constexpr double gas_dt = 1.0e-3;
 
 auto TestGasSweep() -> int
 {
-	int status = 0;
 	int nfail = 0;
 	double worst_energy = 0.0;
 	double worst_vs_ref = 0.0;
-	long nevals_sum = 0;
+	std::int64_t nevals_sum = 0;
 	int nevals_max = 0;
 	int ncells = 0;
 	for (const double expo : gas_laws) {
@@ -221,6 +233,7 @@ auto TestGasSweep() -> int
 			sweep_kappa0 = tau / gas_dt; // rho = 1, chat = 1: tau = dt rho kappa0 at T = 1
 			sweep_expo = expo;
 			std::vector<CouplingCell<Sweep4>> cells;
+			cells.reserve(gas_states.size());
 			for (const auto &[Tg, Tr] : gas_states) {
 				cells.push_back(make_cell<Sweep4>(Tg, Tr, gas_dt, 0.0));
 			}
@@ -240,13 +253,13 @@ auto TestGasSweep() -> int
 	const double nevals_mean = static_cast<double>(nevals_sum) / ncells;
 	std::cout << std::format("gas sweep: {} cells, {} failures, energy error {:.2e}, vs 1e-13 solve {:.2e}, evaluations mean {:.1f} max {}\n", ncells,
 				 nfail, worst_energy, worst_vs_ref, nevals_mean, nevals_max);
-	status |= check(ncells == 240, "gas sweep has 240 cells");
-	status |= check(nfail == 0, "gas sweep: every cell converged");
+	check(ncells == 240, "gas sweep has 240 cells");
+	check(nfail == 0, "gas sweep: every cell converged");
 	// Convergence is on E_gas, so the conservation error is dG/dE_gas times the tolerance: up to thousands of times
 	// 1e-9 in a radiation-dominated cell (hydro3d section 4.3). The measured value is printed above.
-	status |= check(worst_energy <= 1.0e-8, "gas sweep: energy conserved to 1e-8 of the cell's energy");
-	status |= check(worst_vs_ref <= 2.0e-9, "gas sweep: within 2e-9 of a 1e-13 solve");
-	status |= check(nevals_mean <= 16.0, "gas sweep: mean evaluations per cell at most 16 (hydro3d: 12)");
+	check(worst_energy <= 1.0e-8, "gas sweep: energy conserved to 1e-8 of the cell's energy");
+	check(worst_vs_ref <= 2.0e-9, "gas sweep: within 2e-9 of a 1e-13 solve");
+	check(nevals_mean <= 16.0, "gas sweep: mean evaluations per cell at most 16 (hydro3d: 12)");
 
 	// Three roots (hydro3d section 3.3): kappa = 10 T^2, gas at 0.1, radiation at 3; G changes sign at 0.110, 1.17 and
 	// 2.52 and the error-controlled ODE ends at 0.109. Marching from the old state must return the cold root.
@@ -255,7 +268,7 @@ auto TestGasSweep() -> int
 	{
 		const auto sols = solve_cells<Sweep4, false>({make_cell<Sweep4>(0.1, 3.0, gas_dt, 0.0)}, 1.0e-9);
 		std::cout << std::format("three-root gas cell: Egas = {:.6f}\n", sols[0].Egas);
-		status |= check(sols[0].converged && sols[0].Egas < 0.2, "three-root gas cell returns the root connected to the old state");
+		check(sols[0].converged && sols[0].Egas < 0.2, "three-root gas cell returns the root connected to the old state");
 	}
 
 	// A transparent group keeps its source exactly: kappa = 0 everywhere, source in group 1.
@@ -265,7 +278,7 @@ auto TestGasSweep() -> int
 		auto cell = make_cell<Sweep4>(1.0, 0.5, gas_dt, 0.0);
 		cell.Src[1] = 0.25;
 		const auto sols = solve_cells<Sweep4, false>({cell}, 1.0e-9);
-		status |= check(sols[0].converged && (sols[0].Erad[1] == cell.Erad0[1] + 0.25) && (std::abs(sols[0].Egas - cell.Egas0) <= 1e-9 * cell.Egas0),
+		check(sols[0].converged && (sols[0].Erad[1] == cell.Erad0[1] + 0.25) && (std::abs(sols[0].Egas - cell.Egas0) <= 1e-9 * cell.Egas0),
 				"transparent group keeps its source and the gas is untouched");
 	}
 
@@ -288,7 +301,7 @@ auto TestGasSweep() -> int
 		}
 		const double Etot = conserved_total(cell);
 		const double residual_check = total_energy(cell, sols[0].Egas, sols[0].Erad) - conserved_total(cell);
-		status |= check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_floor &&
+		check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_floor &&
 				    (sols[0].residual > 0.0) && (std::abs(residual_check - sols[0].residual) <= 1.0e-9 * Etot),
 				"root below the floor: clamped to the floor state, converged");
 	}
@@ -308,7 +321,7 @@ auto TestGasSweep() -> int
 		for (int g = 0; g < 4; ++g) {
 			erad_matches_transparent = erad_matches_transparent && (sols[0].Erad[g] == cell.Erad0[g] + cell.work[g]);
 		}
-		status |= check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_transparent &&
+		check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_transparent &&
 				    (std::abs(sols[0].residual - (cell.Emin + 1.0e-12)) <= 1.0e-9),
 				"hot cell with the root just below the floor is clamped, not kept hot");
 	}
@@ -328,7 +341,7 @@ auto TestGasSweep() -> int
 			erad_matches_transparent = erad_matches_transparent && (sols[0].Erad[g] == cell.Erad0[g] + cell.work[g]);
 		}
 		constexpr double eps = std::numeric_limits<double>::epsilon();
-		status |= check(sols[0].converged && (sols[0].Egas > 0.0) && (sols[0].Egas <= 16.0 * eps * 1.0) && erad_matches_transparent,
+		check(sols[0].converged && (sols[0].Egas > 0.0) && (sols[0].Egas <= 16.0 * eps * 1.0) && erad_matches_transparent,
 				"hot cell, zero temperature floor: clamped at round-off of Egas0");
 	}
 
@@ -340,17 +353,16 @@ auto TestGasSweep() -> int
 		cell.Emin = 0.0;
 		const auto sols = solve_cells<Sweep4, false>({cell}, 1.0e-9);
 		const double Etot = conserved_total(cell);
-		status |=
-		    check(sols[0].converged && std::isfinite(sols[0].Egas) && std::abs(total_energy(cell, sols[0].Egas, sols[0].Erad) - Etot) <= 1e-8 * Etot,
+		check(sols[0].converged && std::isfinite(sols[0].Egas) && std::abs(total_energy(cell, sols[0].Egas, sols[0].Erad) - Etot) <= 1e-8 * Etot,
 			  "zero temperature floor: converged and conserved");
 	}
-	return status;
+	return (n_failed > 0) ? 1 : 0;
 }
 
 // hydro3d docs/coupling-new-method-dust.md section 6, with kappa0 in place of rho (see the file comment): N_G in {1, 4},
 // two opacity laws, Tgas in {0.01, 1, 10}, Trad in {0, 1, 5}, kappa0 in {1e-4, 1, 1e4, 1e8}, K in {0, 1, 1e8}; dt = 1.
 template <typename P>
-auto dust_sweep(int &ncells, int &nfail, double &worst_energy, double &worst_state, long &nevals_sum, int &nevals_max, std::string &worst_cell) -> void
+auto dust_sweep(int &ncells, int &nfail, double &worst_energy, double &worst_state, std::int64_t &nevals_sum, int &nevals_max, std::string &worst_cell) -> void
 {
 	for (const double expo : {0.0, 2.0}) {
 		for (const double kappa0 : {1e-4, 1.0, 1e4, 1e8}) {
@@ -389,12 +401,11 @@ auto dust_sweep(int &ncells, int &nfail, double &worst_energy, double &worst_sta
 
 auto TestDustSweep() -> int
 {
-	int status = 0;
 	int ncells = 0;
 	int nfail = 0;
 	double worst_energy = 0.0;
 	double worst_state = 0.0;
-	long nevals_sum = 0;
+	std::int64_t nevals_sum = 0;
 	int nevals_max = 0;
 	std::string worst_cell;
 	dust_sweep<Sweep4>(ncells, nfail, worst_energy, worst_state, nevals_sum, nevals_max, worst_cell);
@@ -402,10 +413,10 @@ auto TestDustSweep() -> int
 	std::cout << std::format("dust sweep: {} cells, {} failures, energy error {:.2e}, vs 1e-12 solve {:.2e}, evaluations mean {:.1f} max {}\n", ncells,
 				 nfail, worst_energy, worst_state, static_cast<double>(nevals_sum) / ncells, nevals_max);
 	std::cout << std::format("dust sweep: largest state error at {}\n", worst_cell);
-	status |= check(ncells == 432, "dust sweep has 432 cells");
-	status |= check(nfail == 0, "dust sweep: every cell converged");
-	status |= check(worst_energy < 1.0e-13, "dust sweep: energy conserved to round-off");
-	status |= check(worst_state <= 2.0e-9, "dust sweep: state within 2e-9 of a 1e-12 solve");
+	check(ncells == 432, "dust sweep has 432 cells");
+	check(nfail == 0, "dust sweep: every cell converged");
+	check(worst_energy < 1.0e-13, "dust sweep: energy conserved to round-off");
+	check(worst_state <= 2.0e-9, "dust sweep: state within 2e-9 of a 1e-12 solve");
 
 	// K -> infinity locks the dust to the gas: the dust-free solve with the same opacity law. K = 0 leaves the gas alone.
 	for (const double expo : {0.0, -1.5}) {
@@ -417,7 +428,7 @@ auto TestDustSweep() -> int
 				const auto dust = solve_cells<Sweep4, true>({cell}, 1.0e-9);
 				const auto gas = solve_cells<Sweep4, false>({cell}, 1.0e-9);
 				const double Etot = conserved_total(cell);
-				status |= check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot &&
+				check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot &&
 						    std::abs(dust[0].T_d / dust[0].T_gas - 1.0) <= 1.0e-8,
 						std::format("K = 1e12 recovers the dust-free solve (expo {}, Tg {}, Tr {})", expo, Tg, Tr));
 			}
@@ -426,14 +437,14 @@ auto TestDustSweep() -> int
 				const auto dust = solve_cells<Sweep1, true>({cell}, 1.0e-9);
 				const auto gas = solve_cells<Sweep1, false>({cell}, 1.0e-9);
 				const double Etot = conserved_total(cell);
-				status |= check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot,
+				check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot,
 						std::format("K = 1e12, one group (expo {}, Tg {})", expo, Tg));
 			}
 			{
 				const auto cell = make_cell<Sweep4>(Tg, Tr, 1.0, 0.0);
 				const auto dust = solve_cells<Sweep4, true>({cell}, 1.0e-9);
 				const double Etot = conserved_total(cell);
-				status |= check(dust[0].converged && std::abs(dust[0].Egas - cell.Egas0) <= 1.0e-12 * Etot,
+				check(dust[0].converged && std::abs(dust[0].Egas - cell.Egas0) <= 1.0e-12 * Etot,
 						std::format("K = 0 leaves the gas unchanged (expo {}, Tg {})", expo, Tg));
 			}
 		}
@@ -446,10 +457,9 @@ auto TestDustSweep() -> int
 	{
 		const auto sols = solve_cells<Sweep4, true>({make_cell<Sweep4>(0.01, 1.0, 1.0, 1.0)}, 1.0e-9);
 		std::cout << std::format("three-root dust cell: T_d = {:.6f}\n", sols[0].T_d);
-		status |=
-		    check(sols[0].converged && (0.0113 < sols[0].T_d) && (sols[0].T_d < 0.0115), "three-root dust cell returns the root connected to cold gas");
+		check(sols[0].converged && (0.0113 < sols[0].T_d) && (sols[0].T_d < 0.0115), "three-root dust cell returns the root connected to cold gas");
 	}
-	return status;
+	return (n_failed > 0) ? 1 : 0;
 }
 
 } // namespace
@@ -467,5 +477,5 @@ auto problem_main() -> int
 	const int dust_status = TestDustSweep();
 	const int status = (gas_status == 0 && dust_status == 0) ? 0 : 1;
 	std::cout << (status == 0 ? "RadCouplingUnitTests: all tests passed.\n" : "RadCouplingUnitTests: FAILED.\n");
-	return status;
+	return (n_failed > 0) ? 1 : 0;
 }

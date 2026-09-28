@@ -570,7 +570,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto TgasOf(CouplingCell<problem_t> const &cell, double Egas) -> double;
 	AMREX_GPU_DEVICE static auto TotalEnergy(CouplingCell<problem_t> const &cell) -> double;
 	AMREX_GPU_DEVICE static auto ComputeCouplingCoefficients(CouplingCell<problem_t> const &cell, double T) -> CouplingCoefficients<problem_t>;
-	AMREX_GPU_DEVICE static auto GroupEnergies(CouplingCell<problem_t> const &cell, CouplingCoefficients<problem_t> const &coef)
+	AMREX_GPU_DEVICE static auto GroupExchange(CouplingCell<problem_t> const &cell, CouplingCoefficients<problem_t> const &coef)
+	    -> quokka::valarray<double, nGroups_>;
+	AMREX_GPU_DEVICE static auto GroupEnergies(CouplingCell<problem_t> const &cell, quokka::valarray<double, nGroups_> const &exchange)
 	    -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_DEVICE static auto GasCouplingState(CouplingCell<problem_t> const &cell, double Egas) -> CouplingSolution<problem_t>;
 	AMREX_GPU_DEVICE static auto DustCouplingState(CouplingCell<problem_t> const &cell, double T_d) -> CouplingSolution<problem_t>;

@@ -285,21 +285,21 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto run_march_case(int which) -> March
 	quokka::math::BracketMarchResult<Real> m{};
 	if (which == 0) {
 		// upward: x - 3 from 0.5 probes 0.5, 1, 2, 4 and brackets [2, 4]
-		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 3; }, Real(0.5), Real(0.01));
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 3; }, 0.5, 0.01);
 	} else if (which == 1) {
 		// downward: x - 3 from 40 probes 40, 20, 10, 5, 2.5 and brackets [2.5, 5]
-		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 3; }, Real(40.0), Real(0.01));
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 3; }, 40.0, 0.01);
 	} else if (which == 2) {
 		// no root above the floor: x + 1 from 1 with xmin 0.25 probes 1, 0.5, 0.25 and reports not found
-		m = quokka::math::bracket_root_of_increasing([](Real x) { return x + 1; }, Real(1.0), Real(0.25));
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x + 1; }, 1.0, 0.25);
 	} else if (which == 3) {
 		// an exact zero at the start is a bracket of zero width
-		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 2; }, Real(2.0), Real(0.01));
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 2; }, 2.0, 0.01);
 	} else {
 		// a non-finite residual ends the march at once, reported not found
-		m = quokka::math::bracket_root_of_increasing([](Real /*x*/) { return std::numeric_limits<Real>::quiet_NaN(); }, Real(1.0), Real(0.01));
+		m = quokka::math::bracket_root_of_increasing([](Real /*x*/) { return std::numeric_limits<Real>::quiet_NaN(); }, 1.0, 0.01);
 	}
-	return MarchOutcome{m.lo, m.hi, m.flo, m.fhi, m.nevals, m.found};
+	return MarchOutcome{.lo = m.lo, .hi = m.hi, .flo = m.flo, .fhi = m.fhi, .nevals = m.nevals, .found = m.found};
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto march_case_ok(int which, MarchOutcome const &o) -> bool
@@ -363,14 +363,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto run_flat_case(int which) -> Result
 			return jump + slope * (x - r);
 		}
 		if (x >= r - flat_width) {
-			return Real(-1.0e-23);
+			return -1.0e-23;
 		}
 		return slope * (x - r);
 	};
 	quokka::math::eps_tolerance<Real> tol(1.0e-8);
 	int iter = 100;
 	const auto [lo, hi] = quokka::math::brent_solve(f, r / 2, 2 * r, tol, iter);
-	return Result{.root = tol(lo, hi) ? Real(1) : Real(0), .iter = iter};
+	return Result{.root = tol(lo, hi) ? 1.0 : 0.0, .iter = iter};
 }
 
 auto TestBrentFlatResidual() -> int

@@ -18,7 +18,7 @@
 
 #include "math/bracketing_root_finding.hpp"
 #include "math/root_finding.hpp"
-#include "radiation/radiation_system.hpp" // IWYU pragma: keep
+#include "radiation/radiation_system.hpp" // IWYU pragma: keep // NOLINT(misc-header-include-cycle)
 
 // Gas temperature from the internal energy, held at the floor below it: a trial energy handed over by the bracket march
 // or by the dust balance may lie below the floor, and the Planck function must still be evaluable there.
@@ -65,19 +65,34 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCouplingCoefficients(Coupling
 	return coef;
 }
 
-// The group block of the step, solved in closed form:
-//     E_g = (rad0_g + tau_scale emission_g) / (1 + tau_scale absorption_g),   rad0_g = E_g^0 + S_g + W_g .
-// A convex combination of where the group started and the Planck value at the matter temperature, weighted by the
-// optical depth of the step: all of the stiffness is in that one weight and is handled exactly. A transparent group
-// (zero opacity) keeps rad0_g, source included.
+// The energy each group gains from the matter over the step, in the closed form of the backward-Euler group block:
+//     Delta_g = tau_scale (emission_g - absorption_g rad0_g) / (1 + tau_scale absorption_g),   rad0_g = E_g^0 + S_g + W_g ,
+// so that E_g = rad0_g + Delta_g = (rad0_g + tau_scale emission_g) / (1 + tau_scale absorption_g), a convex combination of
+// where the group started and the Planck value at the matter temperature, weighted by the optical depth of the step. The
+// exchange is formed as a difference of rates, not of energies: the gas energy then follows from gas0 - (c/chat) sum Delta_g
+// without subtracting the radiation energy from the cell's total, which in a radiation-dominated cell would leave the gas
+// energy with the round-off of a number 1e5 times larger than itself (DTypeFront1D's mirror-symmetry check measures that).
+// A transparent group (zero opacity) has Delta_g = 0 exactly and keeps rad0_g, source included.
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::GroupEnergies(CouplingCell<problem_t> const &cell, CouplingCoefficients<problem_t> const &coef)
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::GroupExchange(CouplingCell<problem_t> const &cell, CouplingCoefficients<problem_t> const &coef)
+    -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> exchange{};
+	for (int g = 0; g < nGroups_; ++g) {
+		const double rad0 = cell.Erad0[g] + cell.Src[g] + cell.work[g];
+		exchange[g] = cell.tau_scale * (coef.emission[g] - coef.absorption[g] * rad0) / (1.0 + cell.tau_scale * coef.absorption[g]);
+	}
+	return exchange;
+}
+
+// The group energies implied by the exchange: E_g = rad0_g + Delta_g.
+template <typename problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::GroupEnergies(CouplingCell<problem_t> const &cell, quokka::valarray<double, nGroups_> const &exchange)
     -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> Erad{};
 	for (int g = 0; g < nGroups_; ++g) {
-		const double rad0 = cell.Erad0[g] + cell.Src[g] + cell.work[g];
-		Erad[g] = (rad0 + cell.tau_scale * coef.emission[g]) / (1.0 + cell.tau_scale * coef.absorption[g]);
+		Erad[g] = cell.Erad0[g] + cell.Src[g] + cell.work[g] + exchange[g];
 	}
 	return Erad;
 }
@@ -88,12 +103,16 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::GroupEnergies(CouplingCell<problem_t
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::GasCouplingState(CouplingCell<problem_t> const &cell, double const Egas) -> CouplingSolution<problem_t>
 {
+	const double cscale = c_light_ / c_hat_;
 	CouplingSolution<problem_t> sol{};
 	sol.Egas = Egas;
 	sol.T_gas = TgasOf(cell, Egas);
 	sol.T_d = sol.T_gas;
-	sol.Erad = GroupEnergies(cell, ComputeCouplingCoefficients(cell, sol.T_gas));
-	sol.residual = Egas + (c_light_ / c_hat_) * sum(sol.Erad) - TotalEnergy(cell);
+	const auto exchange = GroupExchange(cell, ComputeCouplingCoefficients(cell, sol.T_gas));
+	sol.Erad = GroupEnergies(cell, exchange);
+	// G = (E_gas - gas0) + (c/chat) sum_g Delta_g: the new total energy minus the old, written through the exchange
+	const double gas0 = cell.Egas0 - cscale * sum(cell.work);
+	sol.residual = (Egas - gas0) + cscale * sum(exchange);
 	return sol;
 }
 
@@ -202,12 +221,16 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::DustCouplingState(CouplingCell<probl
 	const double cscale = c_light_ / c_hat_;
 	CouplingSolution<problem_t> sol{};
 	sol.T_d = T_d;
-	sol.Erad = GroupEnergies(cell, ComputeCouplingCoefficients(cell, T_d));
-	sol.Egas = TotalEnergy(cell) - cscale * sum(sol.Erad);
-	sol.T_gas = TgasOf(cell, sol.Egas);
+	const auto exchange = GroupExchange(cell, ComputeCouplingCoefficients(cell, T_d));
+	sol.Erad = GroupEnergies(cell, exchange);
+	// the gas pays what the radiation gains: E_gas = gas0 - (c/chat) sum_g Delta_g, formed from the exchange rather than
+	// from the cell's total energy, so that its round-off is that of the exchange and not of the radiation energy
 	const double gas0 = cell.Egas0 - cscale * sum(cell.work);
+	const double dust_gain = cscale * sum(exchange);
+	sol.Egas = gas0 - dust_gain;
+	sol.T_gas = TgasOf(cell, sol.Egas);
 	const double T = sol.T_gas;
-	sol.residual = (gas0 - sol.Egas) - cell.dtK * std::sqrt(T) * (T - T_d);
+	sol.residual = dust_gain - cell.dtK * std::sqrt(T) * (T - T_d);
 	return sol;
 }
 
@@ -252,7 +275,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 		return sol;
 	}
 
-	const double atol_floor = 4 * std::numeric_limits<double>::epsilon() * std::abs(TotalEnergy(cell));
+	// the round-off floor of the gas energy: it is gas0 minus (c/chat) times the exchange, so its round-off is that of those
+	// two terms, not of the cell's total energy (which can be 1e5 times larger in a radiation-dominated cell)
+	const double cscale = c_light_ / c_hat_;
+	const double gas0 = cell.Egas0 - cscale * sum(cell.work);
+	auto atol_floor_of = [&](CouplingSolution<problem_t> const &state) {
+		double exchange_abs = 0.0;
+		for (int g = 0; g < nGroups_; ++g) {
+			exchange_abs += std::abs(state.Erad[g] - (cell.Erad0[g] + cell.Src[g] + cell.work[g]));
+		}
+		return 4 * std::numeric_limits<double>::epsilon() * (std::abs(gas0) + cscale * exchange_abs);
+	};
 	int iters = max_root_iterations_;
 	// plain locals, not a structured binding: nvcc rejects a device lambda first-capturing a structured binding by reference
 	const auto lohi0 = quokka::math::brent_solve(H, br.lo, br.hi, br.flo, br.fhi, quokka::math::eps_tolerance<double>(tol), iters);
@@ -269,7 +302,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 	};
 	constexpr double eps_mach = std::numeric_limits<double>::epsilon();
 	auto mid = DustCouplingState(cell, lo / 2 + hi / 2);
-	double atol = amrex::max(tol * std::abs(mid.Egas), atol_floor);
+	double atol = amrex::max(tol * std::abs(mid.Egas), atol_floor_of(mid));
 	double width = gas_width(lo, hi);
 	auto at_fp_limit = [&]() { return (hi - lo) <= 4 * eps_mach * std::abs(lo / 2 + hi / 2); };
 	const int max_solves = 4; // the first solve and at most three repeats
@@ -283,7 +316,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 		lo = bracket.first;
 		hi = bracket.second;
 		mid = DustCouplingState(cell, lo / 2 + hi / 2);
-		atol = amrex::max(tol * std::abs(mid.Egas), atol_floor);
+		atol = amrex::max(tol * std::abs(mid.Egas), atol_floor_of(mid));
 		width = gas_width(lo, hi);
 	}
 

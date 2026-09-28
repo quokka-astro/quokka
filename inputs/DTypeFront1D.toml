@@ -55,7 +55,11 @@ photoionize.flux = 1.0e13
 # The ionizing band is always transparent to this gray opacity.
 photoionize.kappa1 = 1.0e1
 photoionize.kappa2 = 1.0e3
-radiation.iteration_tolerance = 1e-8
+# Relative tolerance of the coupling solve on the gas energy. The mirror-symmetry check below needs the
+# default (1e-11): the bracketed solve returns the midpoint of its final bracket, so mirror cells whose
+# inputs differ by round-off can differ by up to this tolerance, and at 1e-8 the signed momentum reached
+# 3e-10 of the injected momentum on macOS against a limit of 1e-10.
+radiation.iteration_tolerance = 1e-11
 
 # Ionizing photon flux injected per side [photons cm^-2 s^-1]. A chemistry band's source is not scaled by
 # chat/c the way a thermal band's is, so this value is c/chat = 1000 times smaller than photoionize.flux in
