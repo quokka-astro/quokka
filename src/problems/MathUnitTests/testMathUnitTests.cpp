@@ -23,6 +23,7 @@
 #include <cmath>
 #include <format>
 #include <iostream>
+#include <limits>
 #include <numbers>
 
 struct ODETest {};
@@ -291,9 +292,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto run_march_case(int which) -> March
 	} else if (which == 2) {
 		// no root above the floor: x + 1 from 1 with xmin 0.25 probes 1, 0.5, 0.25 and reports not found
 		m = quokka::math::bracket_root_of_increasing([](Real x) { return x + 1; }, Real(1.0), Real(0.25));
-	} else {
+	} else if (which == 3) {
 		// an exact zero at the start is a bracket of zero width
 		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 2; }, Real(2.0), Real(0.01));
+	} else {
+		// a non-finite residual ends the march at once, reported not found
+		m = quokka::math::bracket_root_of_increasing([](Real /*x*/) { return std::numeric_limits<Real>::quiet_NaN(); }, Real(1.0), Real(0.01));
 	}
 	return MarchOutcome{m.lo, m.hi, m.flo, m.fhi, m.nevals, m.found};
 }
@@ -309,12 +313,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto march_case_ok(int which, MarchOutc
 	if (which == 2) {
 		return !o.found && (o.lo == 0.25) && (o.hi == 0.5) && (o.nevals == 3);
 	}
-	return o.found && (o.lo == 2.0) && (o.hi == 2.0) && (o.nevals == 1);
+	if (which == 3) {
+		return o.found && (o.lo == 2.0) && (o.hi == 2.0) && (o.nevals == 1);
+	}
+	return !o.found && (o.lo == 1.0) && (o.hi == 1.0) && (o.nevals == 1);
 }
 
 auto TestBracketMarch() -> int
 {
-	constexpr int ncase = 4;
+	constexpr int ncase = 5;
 	int status = 0;
 	amrex::Gpu::DeviceVector<MarchOutcome> dev_d(ncase);
 	MarchOutcome *dev_ptr = dev_d.data();

@@ -336,13 +336,17 @@ template <class T> struct BracketMarchResult {
 /// the direction the sign of f says the root lies, until the sign changes, never below xmin. Marching from the old state
 /// rather than taking a wide bracket is what selects the physical root when f has several (hydro3d.jl,
 /// docs/coupling-new-method.md section 3.3). Going down the walk stops at xmin; going up it stops after max_evals
-/// evaluations; in both cases without a sign change it reports found = false rather than guessing. x0 must be positive.
+/// evaluations; in both cases without a sign change it reports found = false rather than guessing. A non-finite f also
+/// ends the walk with found = false, lo = hi at that point. x0 must be positive.
 template <class F, class T>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto bracket_root_of_increasing(F const &f, T x0, T xmin, int max_evals = 200) -> BracketMarchResult<T>
 {
 	T x = x0;
 	T g = f(x);
 	int n = 1;
+	if (!std::isfinite(g)) {
+		return BracketMarchResult<T>{x, x, g, g, n, false};
+	}
 	if (g == 0) {
 		return BracketMarchResult<T>{x, x, g, g, n, true};
 	}
@@ -351,6 +355,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto bracket_root_of_increasing(F const
 			const T y = 2 * x;
 			const T gy = f(y);
 			++n;
+			if (!std::isfinite(gy)) {
+				return BracketMarchResult<T>{y, y, gy, gy, n, false};
+			}
 			if (gy >= 0) {
 				return BracketMarchResult<T>{x, y, g, gy, n, true};
 			}
@@ -362,6 +369,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto bracket_root_of_increasing(F const
 			const T y = amrex::max(x / 2, xmin);
 			const T gy = f(y);
 			++n;
+			if (!std::isfinite(gy)) {
+				return BracketMarchResult<T>{y, y, gy, gy, n, false};
+			}
 			if (gy <= 0) {
 				return BracketMarchResult<T>{y, x, gy, g, n, true};
 			}

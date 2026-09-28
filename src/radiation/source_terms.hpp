@@ -322,15 +322,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 	const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 	const std::array<double, 3> gasMtm0 = {x1GasMom0, x2GasMom0, x3GasMom0};
 
+	// Only the gamma != 1 branch below reads these; isothermal gas has T_d = NaN, and evaluating them there would trap.
 	quokka::valarray<double, nGroups_> fourPiBoverC{};
-	if constexpr (nGroups_ == 1) {
-		fourPiBoverC[0] = (nGroupsThermal_ == 0) ? 0.0 : ComputeThermalRadiationSingleGroup(energy.T_d);
-	} else {
-		fourPiBoverC = ComputeThermalRadiationMultiGroup(energy.T_d, cell.rad_boundaries);
-	}
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
-	if constexpr (nGroups_ > 1) {
-		kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(cell.rad_boundaries, rho, energy.T_d);
+	if constexpr (gamma_ != 1.0) {
+		if constexpr (nGroups_ == 1) {
+			fourPiBoverC[0] = (nGroupsThermal_ == 0) ? 0.0 : ComputeThermalRadiationSingleGroup(energy.T_d);
+		} else {
+			fourPiBoverC = ComputeThermalRadiationMultiGroup(energy.T_d, cell.rad_boundaries);
+		}
+		if constexpr (nGroups_ > 1) {
+			kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(cell.rad_boundaries, rho, energy.T_d);
+		}
 	}
 
 	const double chat = c_hat_;

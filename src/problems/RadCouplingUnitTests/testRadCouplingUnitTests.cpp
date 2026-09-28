@@ -26,6 +26,7 @@
 #include <cmath>
 #include <format>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -312,6 +313,25 @@ auto TestGasSweep() -> int
 				"hot cell with the root just below the floor is clamped, not kept hot");
 	}
 
+	// The same hot cell with a zero temperature floor (every CONSTANTS-unit problem): the march floors at round-off of the
+	// initial gas energy instead of halving towards E = 0 until its budget runs out.
+	{
+		auto cell = make_cell<Sweep4>(1.0, 0.5, gas_dt, 0.0);
+		cell.Tfloor = 0.0;
+		cell.Emin = 0.0;
+		for (int g = 0; g < 4; ++g) {
+			cell.work[g] = (cell.Egas0 + 1.0e-12) / 4.0;
+		}
+		const auto sols = solve_cells<Sweep4, false>({cell}, 1.0e-9);
+		bool erad_matches_transparent = true;
+		for (int g = 0; g < 4; ++g) {
+			erad_matches_transparent = erad_matches_transparent && (sols[0].Erad[g] == cell.Erad0[g] + cell.work[g]);
+		}
+		constexpr double eps = std::numeric_limits<double>::epsilon();
+		status |= check(sols[0].converged && (sols[0].Egas > 0.0) && (sols[0].Egas <= 16.0 * eps * 1.0) && erad_matches_transparent,
+				"hot cell, zero temperature floor: clamped at round-off of Egas0");
+	}
+
 	// A temperature floor of zero (every CONSTANTS-unit problem): the downward march must stay finite and find its root.
 	sweep_kappa0 = 1.0e6;
 	{
@@ -329,17 +349,20 @@ auto TestGasSweep() -> int
 
 // hydro3d docs/coupling-new-method-dust.md section 6, with kappa0 in place of rho (see the file comment): N_G in {1, 4},
 // two opacity laws, Tgas in {0.01, 1, 10}, Trad in {0, 1, 5}, kappa0 in {1e-4, 1, 1e4, 1e8}, K in {0, 1, 1e8}; dt = 1.
-template <typename P> auto dust_sweep(int &ncells, int &nfail, double &worst_energy, double &worst_state, long &nevals_sum, int &nevals_max) -> void
+template <typename P>
+auto dust_sweep(int &ncells, int &nfail, double &worst_energy, double &worst_state, long &nevals_sum, int &nevals_max, std::string &worst_cell) -> void
 {
 	for (const double expo : {0.0, 2.0}) {
 		for (const double kappa0 : {1e-4, 1.0, 1e4, 1e8}) {
 			sweep_kappa0 = kappa0;
 			sweep_expo = expo;
 			std::vector<CouplingCell<P>> cells;
+			std::vector<std::array<double, 3>> params; // (Tg, Tr, K) of each cell
 			for (const double Tg : {0.01, 1.0, 10.0}) {
 				for (const double Tr : {0.0, 1.0, 5.0}) {
 					for (const double K : {0.0, 1.0, 1e8}) {
 						cells.push_back(make_cell<P>(Tg, Tr, 1.0, K));
+						params.push_back({Tg, Tr, K});
 					}
 				}
 			}
@@ -349,7 +372,13 @@ template <typename P> auto dust_sweep(int &ncells, int &nfail, double &worst_ene
 				const double Etot = conserved_total(cells[i]);
 				nfail += sols[i].converged ? 0 : 1;
 				worst_energy = std::max(worst_energy, std::abs(total_energy(cells[i], sols[i].Egas, sols[i].Erad) / Etot - 1.0));
-				worst_state = std::max(worst_state, std::abs(sols[i].Egas - refs[i].Egas) / Etot);
+				const double state_err = std::abs(sols[i].Egas - refs[i].Egas) / Etot;
+				if (state_err > worst_state) {
+					worst_state = state_err;
+					worst_cell = std::format("N_G {} expo {} kappa0 {:.0e} Tg {} Tr {} K {:.0e}: Egas {:.16e} vs ref {:.16e} ({} evals)",
+								 Physics_Traits<P>::nGroups, expo, kappa0, params[i][0], params[i][1], params[i][2], sols[i].Egas,
+								 refs[i].Egas, sols[i].nevals);
+				}
 				nevals_sum += sols[i].nevals;
 				nevals_max = std::max(nevals_max, sols[i].nevals);
 				++ncells;
@@ -367,10 +396,12 @@ auto TestDustSweep() -> int
 	double worst_state = 0.0;
 	long nevals_sum = 0;
 	int nevals_max = 0;
-	dust_sweep<Sweep4>(ncells, nfail, worst_energy, worst_state, nevals_sum, nevals_max);
-	dust_sweep<Sweep1>(ncells, nfail, worst_energy, worst_state, nevals_sum, nevals_max);
+	std::string worst_cell;
+	dust_sweep<Sweep4>(ncells, nfail, worst_energy, worst_state, nevals_sum, nevals_max, worst_cell);
+	dust_sweep<Sweep1>(ncells, nfail, worst_energy, worst_state, nevals_sum, nevals_max, worst_cell);
 	std::cout << std::format("dust sweep: {} cells, {} failures, energy error {:.2e}, vs 1e-12 solve {:.2e}, evaluations mean {:.1f} max {}\n", ncells,
 				 nfail, worst_energy, worst_state, static_cast<double>(nevals_sum) / ncells, nevals_max);
+	std::cout << std::format("dust sweep: largest state error at {}\n", worst_cell);
 	status |= check(ncells == 432, "dust sweep has 432 cells");
 	status |= check(nfail == 0, "dust sweep: every cell converged");
 	status |= check(worst_energy < 1.0e-13, "dust sweep: energy conserved to round-off");

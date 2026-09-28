@@ -142,24 +142,29 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<proble
 	};
 
 	AMREX_ASSERT(cell.Egas0 > 0.0);
-	const auto br = quokka::math::bracket_root_of_increasing(G, amrex::max(cell.Egas0, cell.Emin), cell.Emin);
+	// a relative floor at round-off of the initial gas energy, so that a zero temperature floor (every CONSTANTS-unit
+	// problem) still ends the march; probing exactly E = 0 would evaluate the Planck function at T = 0
+	const double Emin_march = amrex::max(cell.Emin, 16.0 * std::numeric_limits<double>::epsilon() * cell.Egas0);
+	const auto br = quokka::math::bracket_root_of_increasing(G, amrex::max(cell.Egas0, Emin_march), Emin_march);
 	if (!br.found) {
-		if (br.lo == cell.Emin) {
+		// br.flo > 0: the march reached the floor with a positive residual, the only way it gets there legitimately
+		// (a non-finite residual also stops the march, and is reported unconverged below)
+		if ((br.lo == Emin_march) && (br.flo > 0.0)) {
 			// the march reached the gas floor without a sign change, so the root lies below the admissible range:
 			// the gas is clamped to the floor and the groups take the closed form at T_floor; the energy
 			// G(Emin) > 0 is created by the temperature floor, as any floor does, and there is no threshold on it
 			// (a threshold would be a residual test in disguise). Routine in a transparent, radiation-dominated
 			// cell whose gas has relaxed to the floor and whose lagged work term is slightly positive
 			// (RadStreamingFluxSource).
-			auto sol = GasCouplingState(cell, cell.Emin);
+			auto sol = GasCouplingState(cell, Emin_march);
 			sol.converged = true;
 			sol.nevals = br.nevals + 1;
 			ApplyEnergyFloors(cell, sol);
 			sol.T_d = sol.T_gas;
 			return sol;
 		}
-		// the march exhausted its budget going upward without a sign change: reported unconverged rather than
-		// guessed at, and the driver aborts as it does for a failed iteration.
+		// the march exhausted its budget going upward without a sign change, or met a non-finite residual: reported
+		// unconverged rather than guessed at, and the driver aborts as it does for a failed iteration.
 		CouplingSolution<problem_t> sol{};
 		sol.Egas = cell.Egas0;
 		sol.T_gas = TgasOf(cell, cell.Egas0);
