@@ -324,7 +324,8 @@ auto TestBracketMarch() -> int
 	for (int n = 0; n < ncase; ++n) {
 		const MarchOutcome host = run_march_case(n);
 		const bool ok = march_case_ok(n, host) && march_case_ok(n, dev[n]);
-		std::cout << std::format("bracket march case {}: [{}, {}] in {} evals, found = {}{}\n", n, host.lo, host.hi, host.nevals, host.found, ok ? "" : "  FAIL");
+		std::cout << std::format("bracket march case {}: [{}, {}] in {} evals, found = {}{}\n", n, host.lo, host.hi, host.nevals, host.found,
+					 ok ? "" : "  FAIL");
 		if (!ok) {
 			status = 1;
 		}
