@@ -97,7 +97,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::GasCouplingState(CouplingCell<proble
 // Project the solved state onto the admissible set by moving energy between the gas and the radiation rather than
 // creating it: lift every group to the floor and charge the gas, and if the gas then cannot pay, take the shortfall back
 // from every group in proportion to what it holds above the floor, so the spectrum keeps its shape.
-template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::ApplyEnergyFloors(CouplingCell<problem_t> const &cell, CouplingSolution<problem_t> &sol)
+template <typename problem_t>
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ApplyEnergyFloors(CouplingCell<problem_t> const &cell, CouplingSolution<problem_t> &sol)
 {
 	const double cscale = c_light_ / c_hat_;
 	double paid = 0.0;

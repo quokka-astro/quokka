@@ -148,7 +148,7 @@ template <typename problem_t> struct OpacityTerms {
 // (the work term changes between them) and read by every residual evaluation. See radiation_coupling.hpp.
 template <typename problem_t> struct CouplingCell {
 	static constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-	double Egas0{};					   // gas internal energy at the start of the step
+	double Egas0{};				   // gas internal energy at the start of the step
 	quokka::valarray<double, nGroups> Erad0{}; // group radiation energies at the start of the step
 	quokka::valarray<double, nGroups> Src{};   // external source over the step, radiation side (already scaled by chat/c for thermal bands)
 	quokka::valarray<double, nGroups> work{};  // lagged work term over the step, radiation side
@@ -179,7 +179,7 @@ template <typename problem_t> struct CouplingSolution {
 	double T_gas{};
 	double T_d{}; // the temperature the radiation couples at: T_gas without dust, the dust temperature with it
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Erad{};
-	int nevals{};	   // residual evaluations spent by the solve
+	int nevals{};	  // residual evaluations spent by the solve
 	bool converged{}; // whether the bracket met the tolerance within the iteration budget
 };
 
@@ -1974,7 +1974,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	return T_d;
 }
 
-#include "radiation/radiation_coupling.hpp" // IWYU pragma: export
+#include "radiation/radiation_coupling.hpp"	   // IWYU pragma: export
 #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
 

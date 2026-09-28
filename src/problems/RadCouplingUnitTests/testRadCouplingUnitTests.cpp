@@ -46,28 +46,26 @@ AMREX_GPU_MANAGED double sweep_expo = 0.0;   // NOLINT
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sweep_kappa(double T) -> double { return sweep_kappa0 * std::pow(amrex::max(T, 0.0), sweep_expo); }
 
 // Four groups: the gas and dust sweeps.
-struct Sweep4 {
-};
+struct Sweep4 {};
 // One group: the grey dust sweep.
-struct Sweep1 {
-};
+struct Sweep1 {};
 
 } // namespace
 
-#define SWEEP_TRAITS(P, NG)                                                                                                                                  \
-	template <> struct quokka::EOS_Traits<P> {                                                                                                           \
-		static constexpr double mean_molecular_weight = mu;                                                                                          \
-		static constexpr double gamma = 5. / 3.;                                                                                                     \
-	};                                                                                                                                                   \
-	template <> struct Physics_Traits<P> : DefaultPhysicsTraits {                                                                                        \
-		static constexpr bool is_hydro_enabled = false;                                                                                              \
-		static constexpr bool is_radiation_enabled = true;                                                                                           \
-		static constexpr int nGroups = NG;                                                                                                           \
-		static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;                                                                             \
-		static constexpr double boltzmann_constant = 1.0;                                                                                            \
-		static constexpr double gravitational_constant = 1.0;                                                                                        \
-		static constexpr double c_light = 1.0;                                                                                                       \
-		static constexpr double radiation_constant = a_rad;                                                                                          \
+#define SWEEP_TRAITS(P, NG)                                                                                                                                    \
+	template <> struct quokka::EOS_Traits<P> {                                                                                                             \
+		static constexpr double mean_molecular_weight = mu;                                                                                            \
+		static constexpr double gamma = 5. / 3.;                                                                                                       \
+	};                                                                                                                                                     \
+	template <> struct Physics_Traits<P> : DefaultPhysicsTraits {                                                                                          \
+		static constexpr bool is_hydro_enabled = false;                                                                                                \
+		static constexpr bool is_radiation_enabled = true;                                                                                             \
+		static constexpr int nGroups = NG;                                                                                                             \
+		static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;                                                                               \
+		static constexpr double boltzmann_constant = 1.0;                                                                                              \
+		static constexpr double gravitational_constant = 1.0;                                                                                          \
+		static constexpr double c_light = 1.0;                                                                                                         \
+		static constexpr double radiation_constant = a_rad;                                                                                            \
 	};
 
 SWEEP_TRAITS(Sweep4, 4)
@@ -91,7 +89,7 @@ template <> struct RadSystem_Traits<Sweep1> {
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<Sweep4>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/,
-											       const double /*rho*/, const double Tgas)
+												      const double /*rho*/, const double Tgas)
     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
@@ -101,12 +99,18 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<Sweep4>::DefineOpacityEx
 	}
 	return exponents_and_values;
 }
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputePlanckOpacity(const double /*rho*/, const double Tgas) -> amrex::Real { return sweep_kappa(Tgas); }
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputePlanckOpacity(const double /*rho*/, const double Tgas) -> amrex::Real
+{
+	return sweep_kappa(Tgas);
+}
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputeEnergyMeanOpacity(const double /*rho*/, const double Tgas) -> amrex::Real
 {
 	return sweep_kappa(Tgas);
 }
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputeFluxMeanOpacity(const double /*rho*/, const double Tgas) -> amrex::Real { return sweep_kappa(Tgas); }
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputeFluxMeanOpacity(const double /*rho*/, const double Tgas) -> amrex::Real
+{
+	return sweep_kappa(Tgas);
+}
 
 namespace
 {
@@ -140,7 +144,8 @@ template <typename P> auto make_cell(double Tgas, double Trad, double dt, double
 	return cell;
 }
 
-template <typename P> auto total_energy(CouplingCell<P> const & /*cell*/, double Egas, quokka::valarray<double, Physics_Traits<P>::nGroups> const &Erad) -> double
+template <typename P>
+auto total_energy(CouplingCell<P> const & /*cell*/, double Egas, quokka::valarray<double, Physics_Traits<P>::nGroups> const &Erad) -> double
 {
 	return Egas + (RadSystem<P>::c_light_ / RadSystem<P>::c_hat_) * sum(Erad);
 }
@@ -175,7 +180,8 @@ auto check(bool ok, std::string const &what) -> int
 }
 
 // hydro3d docs/coupling-new-method.md section 5.2: 8 states x 10 optical depths x 3 opacity laws, dt = 1e-3, tol = 1e-9
-constexpr std::array<std::pair<double, double>, 8> gas_states{{{1.3, 0.5}, {0.5, 1.3}, {1.0, 0.3}, {10.0, 1.0}, {1.0, 10.0}, {1.0, 1.0001}, {3.0, 0.1}, {0.1, 3.0}}};
+constexpr std::array<std::pair<double, double>, 8> gas_states{
+    {{1.3, 0.5}, {0.5, 1.3}, {1.0, 0.3}, {10.0, 1.0}, {1.0, 10.0}, {1.0, 1.0001}, {3.0, 0.1}, {0.1, 3.0}}};
 constexpr std::array<double, 10> gas_taus{1e-4, 1e-2, 1.0, 1e2, 1e4, 1e6, 1e8, 1e9, 1e10, 1e12};
 constexpr std::array<double, 3> gas_laws{0.0, -3.5, 2.0};
 constexpr double gas_dt = 1.0e-3;
@@ -211,8 +217,8 @@ auto TestGasSweep() -> int
 		}
 	}
 	const double nevals_mean = static_cast<double>(nevals_sum) / ncells;
-	std::cout << std::format("gas sweep: {} cells, {} failures, energy error {:.2e}, vs 1e-13 solve {:.2e}, evaluations mean {:.1f} max {}\n", ncells, nfail,
-				 worst_energy, worst_vs_ref, nevals_mean, nevals_max);
+	std::cout << std::format("gas sweep: {} cells, {} failures, energy error {:.2e}, vs 1e-13 solve {:.2e}, evaluations mean {:.1f} max {}\n", ncells,
+				 nfail, worst_energy, worst_vs_ref, nevals_mean, nevals_max);
 	status |= check(ncells == 240, "gas sweep has 240 cells");
 	status |= check(nfail == 0, "gas sweep: every cell converged");
 	// Convergence is on E_gas, so the conservation error is dG/dE_gas times the tolerance: up to thousands of times
@@ -263,8 +269,9 @@ auto TestGasSweep() -> int
 		cell.Emin = 0.0;
 		const auto sols = solve_cells<Sweep4, false>({cell}, 1.0e-9);
 		const double Etot = conserved_total(cell);
-		status |= check(sols[0].converged && std::isfinite(sols[0].Egas) && std::abs(total_energy(cell, sols[0].Egas, sols[0].Erad) - Etot) <= 1e-8 * Etot,
-				"zero temperature floor: converged and conserved");
+		status |=
+		    check(sols[0].converged && std::isfinite(sols[0].Egas) && std::abs(total_energy(cell, sols[0].Egas, sols[0].Erad) - Etot) <= 1e-8 * Etot,
+			  "zero temperature floor: converged and conserved");
 	}
 	return status;
 }
