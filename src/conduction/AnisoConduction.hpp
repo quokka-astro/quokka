@@ -233,15 +233,10 @@ ComputeCrossTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const 
 // does. Declared here so that AnisoConduction::ComputeExplicit (which calls all four) can be read
 // first; scroll down past the class for the bodies.
 
-// Unit B-field at mesh vertices ("corners"), built from FACE-CENTERED input data (state_fc), shared
-// by all three flux directions -- see the definition below for details. bhat_corner_mf must already
-// be defined by the caller on a fully-nodal box array, e.g.
-// amrex::convert(state.boxArray(), amrex::IntVect::TheUnitVector()).
+// Unit B-field at mesh vertices ("corners"), built from FACE-CENTERED input data (state_fc)
 template <typename problem_t> void ComputeCornerFC(amrex::MultiFab &bhat_corner_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int nghost);
 
-// kappa and qsat at mesh vertices ("corners"), built from CELL-CENTERED input data (primVar), on the
-// same fully-nodal box array as ComputeCornerFC's bhat_corner_mf -- see the definition below for
-// details. gradT is no longer computed here: ComputeAnisotropicFlux differences primVar directly.
+// kappa and qsat at mesh vertices ("corners"), built from CELL-CENTERED input data (primVar)
 template <typename problem_t>
 void ComputeCornerCC(amrex::MultiFab &kappa_corner_mf, amrex::MultiFab &qsat_corner_mf, amrex::MultiFab const &primVar, ConductivityParams const &conductivity,
 		     amrex::Real saturation_factor, amrex::Real flux_limiter_phi, int nghost);
@@ -361,17 +356,7 @@ template <typename problem_t> class AnisoConduction
 			heat_flux[idim].setVal(0.0);
 		}
 
-		// Unit B-field, kappa, and qsat at mesh vertices ("corners") -- direction-independent, so computed
-		// once (unlike the old per-face bhat_fc/n_fc/q_sat_fc) and shared by all three DIR-face flux
-		// calculations below. Each box's own fully-nodal valid region already extends one node beyond
-		// its cell range in every direction, covering both the "lower" and "upper" transverse corners
-		// of every face in that box, so no ghost cells are needed on these corner MultiFabs themselves
-		// -- only the *inputs* (state_fc, primVar) need their own pre-existing ghost cells to fill a
-		// box's boundary corners. ComputeAnisotropicFlux additionally differences primVar directly at
-		// the DIR-neighbor faces one cell to either transverse side of each face it computes (see
-		// ComputeDiagTerm/ComputeCrossTerm); since heat_flux itself is only ever evaluated on the
-		// valid (non-ghost) nodal region, that neighbor is always within 1 ghost ring of primVar, so
-		// state.nGrow() >= 1 (asserted below) remains sufficient.
+		// Unit B-field, kappa, and qsat at mesh vertices ("corners") 
 		amrex::BoxArray const ba_corner = amrex::convert(state.boxArray(), amrex::IntVect::TheUnitVector());
 		amrex::MultiFab bhat_corner(ba_corner, state.DistributionMap(), 3, 0);
 		amrex::MultiFab kappa_corner(ba_corner, state.DistributionMap(), 2, 0); // (kappa_par, kappa_perp)
