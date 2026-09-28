@@ -287,9 +287,9 @@ auto TestGasSweep() -> int
 		}
 		const double Etot = conserved_total(cell);
 		const double residual_check = total_energy(cell, sols[0].Egas, sols[0].Erad) - conserved_total(cell);
-		status |= check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_floor && (sols[0].residual > 0.0) &&
-				     (std::abs(residual_check - sols[0].residual) <= 1.0e-9 * Etot),
-				 "root below the floor: clamped to the floor state, converged");
+		status |= check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_floor &&
+				    (sols[0].residual > 0.0) && (std::abs(residual_check - sols[0].residual) <= 1.0e-9 * Etot),
+				"root below the floor: clamped to the floor state, converged");
 	}
 
 	// The reviewer's hot-cell case: a transparent cell whose root lies just below the floor must be clamped, not kept
@@ -308,8 +308,8 @@ auto TestGasSweep() -> int
 			erad_matches_transparent = erad_matches_transparent && (sols[0].Erad[g] == cell.Erad0[g] + cell.work[g]);
 		}
 		status |= check(sols[0].converged && (std::abs(sols[0].Egas - cell.Emin) <= 1.0e-12 * cell.Emin) && erad_matches_transparent &&
-				     (std::abs(sols[0].residual - (cell.Emin + 1.0e-12)) <= 1.0e-9),
-				 "hot cell with the root just below the floor is clamped, not kept hot");
+				    (std::abs(sols[0].residual - (cell.Emin + 1.0e-12)) <= 1.0e-9),
+				"hot cell with the root just below the floor is clamped, not kept hot");
 	}
 
 	// A temperature floor of zero (every CONSTANTS-unit problem): the downward march must stay finite and find its root.
