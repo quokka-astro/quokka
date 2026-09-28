@@ -127,13 +127,16 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 		}
 
 		const T q = (3 * left + right) / 4;
-		// The minimum step (Brent's delta, Numerical Recipes' tol1). The bisection tests on the last two steps compare with it,
-		// not with machine epsilon: otherwise a residual that is flat at round-off next to the root lets the safeguard below
-		// creep by tol1 per iteration without ever bisecting, and the budget runs out (seen in DTypeFront1D's dust solve).
+		// The minimum step (Brent's delta, Numerical Recipes' tol1). The bisection tests on the last two steps compare with a
+		// multiple of it, not with machine epsilon: otherwise a residual that is flat at round-off next to the root lets the
+		// safeguard below creep by tol1 per iteration without ever bisecting, and the budget runs out (seen in DTypeFront1D's
+		// dust solve). The factor 2 is needed because a stored safeguard step is tol1 rounded to the ulp of the iterate, which
+		// can exceed tol1 by up to half an ulp; comparing with tol1 itself then fails for about half of all mantissas.
 		const T tol1 = amrex::max(2 * eps * std::abs(right), std::numeric_limits<T>::min());
+		const T min_step = 2 * tol1;
 		// !isfinite(s): the interpolation overflowed (e.g. |f| ~ 1e200); NaN would pass every comparison below
 		if (!std::isfinite(s) || (s < amrex::min(q, right)) || (s > amrex::max(q, right)) || (cond && std::abs(s - right) >= std::abs(right - c) / 2) ||
-		    (!cond && std::abs(s - right) >= std::abs(c - d) / 2) || (cond && std::abs(right - c) <= tol1) || (!cond && std::abs(c - d) <= tol1)) {
+		    (!cond && std::abs(s - right) >= std::abs(c - d) / 2) || (cond && std::abs(right - c) <= min_step) || (!cond && std::abs(c - d) <= min_step)) {
 			// bisection
 			s = detail::safe_midpoint(left, right);
 			if ((s == left) || (s == right)) {

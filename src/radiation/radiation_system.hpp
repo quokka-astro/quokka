@@ -308,7 +308,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	}();
 
 	// Number of groups that emit blackbody radiation. Dust-absorption-only bands and chemical bands do
-	// not, so this is the range over which the Planck emission and its temperature derivative are built.
+	// not, so this is the range over which the Planck emission is built.
 	static constexpr int nGroupsEmitting_ = dust_absorption_only_ ? 0 : nGroupsThermal_;
 
 	// Rate coefficient of the photoelectric heating, in cgs units, from Bate & Keto (2015), Eq. 26: the

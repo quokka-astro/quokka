@@ -537,6 +537,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	static_assert(nGroups_ == 1 || beta_order_ <= 1, "beta_order > 1 is implemented for single-group radiation only");
+	static_assert(beta_order_ <= 3, "beta_order must be 0, 1, 2 or 3");
 
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
