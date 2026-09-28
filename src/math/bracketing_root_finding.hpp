@@ -17,6 +17,9 @@
 /// The bracket is returned unconverged (tol(a, b) == false) if the iteration
 /// budget is exhausted, if f returns NaN (ModAB), or if the bracket cannot be
 /// split further in floating point.
+///
+/// bracket_root_of_increasing builds a starting bracket for these solvers by marching from a point in
+/// factor-of-two steps.
 
 #include <cmath>
 #include <limits>
@@ -310,6 +313,59 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto modab_solve(F f, T ax, T bx, T fax
 template <class F, class T, class Tol> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto modab_solve(F f, T ax, T bx, Tol tol, int &max_iter) -> std::pair<T, T>
 {
 	return modab_solve(f, ax, bx, f(ax), f(bx), tol, max_iter);
+}
+
+/// What bracket_root_of_increasing returns. lo <= hi, f(lo) <= 0 <= f(hi) when found; nevals counts the evaluations made.
+template <class T> struct BracketMarchResult {
+	T lo;
+	T hi;
+	T flo;
+	T fhi;
+	int nevals;
+	bool found;
+};
+
+/// A bracket of an increasing f around the root continuously connected to x0: start there and step by factors of two in
+/// the direction the sign of f says the root lies, until the sign changes, never below xmin. Marching from the old state
+/// rather than taking a wide bracket is what selects the physical root when f has several (hydro3d.jl,
+/// docs/coupling-new-method.md section 3.3). Going down the walk stops at xmin; going up it stops after max_evals
+/// evaluations; in both cases without a sign change it reports found = false rather than guessing. x0 must be positive.
+template <class F, class T>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto bracket_root_of_increasing(F const &f, T x0, T xmin, int max_evals = 200) -> BracketMarchResult<T>
+{
+	T x = x0;
+	T g = f(x);
+	int n = 1;
+	if (g == 0) {
+		return BracketMarchResult<T>{x, x, g, g, n, true};
+	}
+	if (g < 0) {
+		while (n < max_evals) {
+			const T y = 2 * x;
+			const T gy = f(y);
+			++n;
+			if (gy >= 0) {
+				return BracketMarchResult<T>{x, y, g, gy, n, true};
+			}
+			x = y;
+			g = gy;
+		}
+	} else {
+		while (n < max_evals) {
+			const T y = amrex::max(x / 2, xmin);
+			const T gy = f(y);
+			++n;
+			if (gy <= 0) {
+				return BracketMarchResult<T>{y, x, gy, g, n, true};
+			}
+			if (y == xmin) {
+				return BracketMarchResult<T>{y, x, gy, g, n, false};
+			}
+			x = y;
+			g = gy;
+		}
+	}
+	return BracketMarchResult<T>{x, x, g, g, n, false};
 }
 
 } // namespace quokka::math

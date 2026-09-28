@@ -267,17 +267,87 @@ auto TestRootFinding() -> int
 	return status;
 }
 
+// --- bracket_root_of_increasing ---
+// The coupling solver (radiation_coupling.hpp) builds its bracket by marching from the old state (hydro3d.jl,
+// docs/coupling-new-method.md section 3.3). Each case pins the exact sequence of probes.
+struct MarchOutcome {
+	Real lo;
+	Real hi;
+	Real flo;
+	Real fhi;
+	int nevals;
+	bool found;
+};
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto run_march_case(int which) -> MarchOutcome
+{
+	quokka::math::BracketMarchResult<Real> m{};
+	if (which == 0) {
+		// upward: x - 3 from 0.5 probes 0.5, 1, 2, 4 and brackets [2, 4]
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 3; }, Real(0.5), Real(0.01));
+	} else if (which == 1) {
+		// downward: x - 3 from 40 probes 40, 20, 10, 5, 2.5 and brackets [2.5, 5]
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 3; }, Real(40.0), Real(0.01));
+	} else if (which == 2) {
+		// no root above the floor: x + 1 from 1 with xmin 0.25 probes 1, 0.5, 0.25 and reports not found
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x + 1; }, Real(1.0), Real(0.25));
+	} else {
+		// an exact zero at the start is a bracket of zero width
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 2; }, Real(2.0), Real(0.01));
+	}
+	return MarchOutcome{m.lo, m.hi, m.flo, m.fhi, m.nevals, m.found};
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto march_case_ok(int which, MarchOutcome const &o) -> bool
+{
+	if (which == 0) {
+		return o.found && (o.lo == 2.0) && (o.hi == 4.0) && (o.flo == -1.0) && (o.fhi == 1.0) && (o.nevals == 4);
+	}
+	if (which == 1) {
+		return o.found && (o.lo == 2.5) && (o.hi == 5.0) && (o.flo == -0.5) && (o.fhi == 2.0) && (o.nevals == 5);
+	}
+	if (which == 2) {
+		return !o.found && (o.lo == 0.25) && (o.hi == 0.5) && (o.nevals == 3);
+	}
+	return o.found && (o.lo == 2.0) && (o.hi == 2.0) && (o.nevals == 1);
+}
+
+auto TestBracketMarch() -> int
+{
+	constexpr int ncase = 4;
+	int status = 0;
+	amrex::Gpu::DeviceVector<MarchOutcome> dev_d(ncase);
+	MarchOutcome *dev_ptr = dev_d.data();
+	amrex::ParallelFor(ncase, [=] AMREX_GPU_DEVICE(int n) noexcept { dev_ptr[n] = run_march_case(n); });
+	std::array<MarchOutcome, ncase> dev{};
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dev_d.begin(), dev_d.end(), dev.begin());
+	for (int n = 0; n < ncase; ++n) {
+		const MarchOutcome host = run_march_case(n);
+		const bool ok = march_case_ok(n, host) && march_case_ok(n, dev[n]);
+		std::cout << std::format("bracket march case {}: [{}, {}] in {} evals, found = {}{}\n", n, host.lo, host.hi, host.nevals, host.found, ok ? "" : "  FAIL");
+		if (!ok) {
+			status = 1;
+		}
+	}
+	std::cout << (status == 0 ? "Bracket march: all tests passed.\n" : "Bracket march: FAILED.\n");
+	return status;
+}
+
 } // namespace
 
 auto problem_main() -> int
 {
 	const int ode_status = TestODEIntegration();
 	const int root_status = TestRootFinding();
+	const int march_status = TestBracketMarch();
 	if (ode_status != 0) {
 		std::cout << "MathUnitTests: ODE integration test FAILED.\n";
 	}
 	if (root_status != 0) {
 		std::cout << "MathUnitTests: root finding test FAILED.\n";
 	}
-	return ((ode_status != 0) || (root_status != 0)) ? 1 : 0;
+	if (march_status != 0) {
+		std::cout << "MathUnitTests: bracket march test FAILED.\n";
+	}
+	return ((ode_status != 0) || (root_status != 0) || (march_status != 0)) ? 1 : 0;
 }
