@@ -39,8 +39,10 @@
 /// \endcode
 ///
 /// \return {kappa_parallel, kappa_perp}. With ConductionGeometry::isotropic only kappa_parallel
-///         (component 0) is used, as the isotropic conductivity. Both must be >= 0: AnisoConduction limits
-///         the normal flux term with the biased L2 limiter, which relies on kappa_parallel * b_n^2 >= 0.
+///         (component 0) is used, as the isotropic conductivity. Both must be >= 0, and with
+///         ConductionGeometry::anisotropic kappa_perp must be <= kappa_parallel: AnisoConduction limits the
+///         normal flux term with the biased L2 limiter, which relies on (kappa_parallel - kappa_perp) * b_n^2 >= 0.
+///         This is only checked in debug builds (AMREX_ASSERT in AnisoConduction).
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeConductivity(amrex::Real /*rho*/, amrex::Real /*Tgas*/) -> quokka::valarray<amrex::Real, 2>
 {
@@ -57,7 +59,7 @@ namespace quokka::conduction
 struct ConductivityParams {
 	amrex::Real kappa0_par = 0.0;  // ConductionModel::constant: kappa (erg cm^-1 s^-1 K^-1);
 				       // ConductionModel::spitzer: kappa0 in kappa = kappa0 * T^2.5 (erg cm^-1 s^-1 K^-3.5)
-	amrex::Real kappa0_perp = 0.0; // as kappa0_par, across the magnetic field (ConductionGeometry::anisotropic only)
+	amrex::Real kappa0_perp = 0.0; // as kappa0_par, across the magnetic field (ConductionGeometry::anisotropic only); must be <= kappa0_par
 };
 
 /// \brief Returns the thermal diffusivities {chi_parallel, chi_perp} = kappa / (n k_B) in cm^2 s^-1, with
