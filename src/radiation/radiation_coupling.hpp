@@ -104,9 +104,10 @@ template <typename problem_t>
 AMREX_GPU_DEVICE void RadSystem<problem_t>::ApplyEnergyFloors(CouplingCell<problem_t> const &cell, CouplingSolution<problem_t> &sol)
 {
 	const double cscale = c_light_ / c_hat_;
+	const double erad_floor = Erad_floor_; // local copy: nvcc cannot address a static constexpr member in device code
 	double paid = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
-		const double lifted = amrex::max(sol.Erad[g], Erad_floor_);
+		const double lifted = amrex::max(sol.Erad[g], erad_floor);
 		paid += cscale * (lifted - sol.Erad[g]);
 		sol.Erad[g] = lifted;
 	}
@@ -117,11 +118,11 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ApplyEnergyFloors(CouplingCell<probl
 	}
 	double headroom = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
-		headroom += cscale * (sol.Erad[g] - Erad_floor_);
+		headroom += cscale * (sol.Erad[g] - erad_floor);
 	}
 	const double frac = (headroom > 0.0) ? amrex::min((cell.Emin - sol.Egas) / headroom, 1.0) : 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
-		sol.Erad[g] -= frac * (sol.Erad[g] - Erad_floor_);
+		sol.Erad[g] -= frac * (sol.Erad[g] - erad_floor);
 	}
 	sol.Egas = amrex::max(sol.Egas + frac * headroom, cell.Emin);
 	sol.T_gas = TgasOf(cell, sol.Egas);
@@ -238,7 +239,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 
 	const double atol_floor = 4 * std::numeric_limits<double>::epsilon() * std::abs(TotalEnergy(cell));
 	int iters = max_root_iterations_;
-	auto [lo, hi] = quokka::math::brent_solve(H, br.lo, br.hi, br.flo, br.fhi, quokka::math::eps_tolerance<double>(tol), iters);
+	// plain locals, not a structured binding: nvcc rejects a device lambda first-capturing a structured binding by reference
+	const auto lohi0 = quokka::math::brent_solve(H, br.lo, br.hi, br.flo, br.fhi, quokka::math::eps_tolerance<double>(tol), iters);
+	double lo = lohi0.first;
+	double hi = lohi0.second;
 
 	// the spread of the gas energy across the final bracket; two evaluations, counted
 	auto gas_width = [&](double const a, double const b) {

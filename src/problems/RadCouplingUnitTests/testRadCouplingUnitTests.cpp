@@ -162,10 +162,14 @@ template <typename P, bool with_dust> auto solve_cells(std::vector<CouplingCell<
 	CouplingCell<P> const *cell_ptr = d_cells.data();
 	CouplingSolution<P> *sol_ptr = d_sols.data();
 	amrex::ParallelFor(n, [=] AMREX_GPU_DEVICE(int i) noexcept {
+		// force capture unconditionally: nvcc rejects a captured variable first used inside an if constexpr branch
+		CouplingCell<P> const *const cell_ptr_capture = cell_ptr;
+		CouplingSolution<P> *const sol_ptr_capture = sol_ptr;
+		const double tol_capture = tol;
 		if constexpr (with_dust) {
-			sol_ptr[i] = RadSystem<P>::SolveDustCoupling(cell_ptr[i], tol);
+			sol_ptr_capture[i] = RadSystem<P>::SolveDustCoupling(cell_ptr_capture[i], tol_capture);
 		} else {
-			sol_ptr[i] = RadSystem<P>::SolveGasCoupling(cell_ptr[i], tol);
+			sol_ptr_capture[i] = RadSystem<P>::SolveGasCoupling(cell_ptr_capture[i], tol_capture);
 		}
 	});
 	std::vector<CouplingSolution<P>> sols(n);
