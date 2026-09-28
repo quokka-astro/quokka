@@ -108,6 +108,7 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ApplyEnergyFloors(CouplingCell<probl
 		sol.Erad[g] = lifted;
 	}
 	sol.Egas -= paid;
+	sol.T_gas = TgasOf(cell, sol.Egas);
 	if (sol.Egas >= cell.Emin) {
 		return;
 	}
@@ -149,6 +150,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<proble
 		sol.nevals = br.nevals;
 		sol.converged = false;
 		ApplyEnergyFloors(cell, sol);
+		sol.T_d = sol.T_gas;
 		return sol;
 	}
 
@@ -159,6 +161,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<proble
 	sol.converged = tolerance(lo, hi);
 	sol.nevals = nevals;
 	ApplyEnergyFloors(cell, sol);
+	sol.T_d = sol.T_gas; // without dust the radiation couples at the gas temperature
 	return sol;
 }
 

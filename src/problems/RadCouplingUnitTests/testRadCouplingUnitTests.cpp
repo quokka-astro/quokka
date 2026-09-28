@@ -258,7 +258,11 @@ auto TestGasSweep() -> int
 			cell.work[g] = 2.0 * cell.Egas0;
 		}
 		const auto sols = solve_cells<Sweep4, false>({cell}, 1.0e-9);
-		status |= check(!sols[0].converged && (sols[0].Egas == cell.Egas0) && (min(sols[0].Erad) >= 0.0), "no bracket: unconverged, old state kept");
+		bool radiation_kept = true;
+		for (int g = 0; g < 4; ++g) {
+			radiation_kept = radiation_kept && (sols[0].Erad[g] == cell.Erad0[g] + cell.Src[g]);
+		}
+		status |= check(!sols[0].converged && (sols[0].Egas == cell.Egas0) && radiation_kept, "no bracket: unconverged, old state kept");
 	}
 
 	// A temperature floor of zero (every CONSTANTS-unit problem): the downward march must stay finite and find its root.
