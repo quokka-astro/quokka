@@ -376,8 +376,8 @@ auto dust_sweep(int &ncells, int &nfail, double &worst_energy, double &worst_sta
 				if (state_err > worst_state) {
 					worst_state = state_err;
 					worst_cell = std::format("N_G {} expo {} kappa0 {:.0e} Tg {} Tr {} K {:.0e}: Egas {:.16e} vs ref {:.16e} ({} evals)",
-								 Physics_Traits<P>::nGroups, expo, kappa0, params[i][0], params[i][1], params[i][2], sols[i].Egas,
-								 refs[i].Egas, sols[i].nevals);
+								 Physics_Traits<P>::nGroups, expo, kappa0, params[i][0], params[i][1], params[i][2],
+								 sols[i].Egas, refs[i].Egas, sols[i].nevals);
 				}
 				nevals_sum += sols[i].nevals;
 				nevals_max = std::max(nevals_max, sols[i].nevals);
