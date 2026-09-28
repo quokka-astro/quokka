@@ -575,5 +575,4 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 	return result;
 }
 
-
 #endif // RADIATION_DUST_SYSTEM_HPP_
