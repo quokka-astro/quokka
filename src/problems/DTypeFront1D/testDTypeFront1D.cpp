@@ -696,8 +696,15 @@ auto problem_main() -> int
 			const double p_injected = 2.0 * (F * E_photon + F_ion * E_photon_ion) * t_end / C::c_light;
 			const double p_frac = (p_gas_out + p_out_beamed) / p_injected;
 			const double tol_p = 0.02;
-			// The signed total is a round-off quantity; it measures 1e-16 of the injected scale here.
-			const double tol_symmetry = 1.0e-10;
+			// The signed total is a round-off quantity. With the Newton solver's decoupled-dust branch it measured
+			// 1e-16 of the injected scale, because that branch never charged the gas internal energy for the lagged
+			// work term (it was not energy conserving). The bracketed coupling solve is conservative: the work term
+			// reaches the gas, and in the floor-level cells next to the source the per-step work traffic is ten times
+			// the gas internal energy, so the round-off of the (nearly cancelling) fluxes there arrives in the gas
+			// energy at 1e-13 relative, and the photochemistry's tolerance-based solve amplifies that to 1e-3 in the
+			// two front cells where it changes its iteration count. The signed momentum then measures 1e-10 to 1e-9
+			// of the injected scale, varying with platform and compiler; a real asymmetry of the source would be O(1).
+			const double tol_symmetry = 1.0e-8;
 
 			amrex::Print() << "Outward momentum: gas " << p_gas_out << " + sourced bands " << p_out_beamed << " = " << p_gas_out + p_out_beamed
 				       << " (injected " << p_injected << ", ratio " << p_frac << ", gas share " << p_gas_out / (p_gas_out + p_out_beamed)

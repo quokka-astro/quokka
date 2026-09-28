@@ -199,9 +199,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<proble
 
 	quokka::math::eps_tolerance<double> tolerance(tol);
 	int iters = max_root_iterations_;
-	const auto [lo, hi] = quokka::math::brent_solve(G, br.lo, br.hi, br.flo, br.fhi, tolerance, iters);
-	auto sol = GasCouplingState(cell, lo / 2 + hi / 2);
-	sol.converged = tolerance(lo, hi);
+	const auto bracket = quokka::math::brent_solve_bracket(G, br.lo, br.hi, br.flo, br.fhi, tolerance, iters);
+	// The state is taken where the chord through the ends of Brent's final bracket crosses zero, not at its midpoint.
+	// Brent stops anywhere inside the tolerance window, so two cells whose inputs differ by an ulp can stop at different
+	// points of it; the chord crossing is within second order in the bracket width of the root, so the state depends on
+	// the bracket only through terms of order tol^2, i.e. round-off. DTypeFront1D's mirror-symmetry check measures this.
+	auto sol = GasCouplingState(cell, quokka::math::secant_point(bracket));
+	sol.converged = tolerance(bracket.lo, bracket.hi);
 	sol.nevals = nevals;
 	ApplyEnergyFloors(cell, sol);
 	sol.T_d = sol.T_gas; // without dust the radiation couples at the gas temperature
@@ -288,9 +292,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 	};
 	int iters = max_root_iterations_;
 	// plain locals, not a structured binding: nvcc rejects a device lambda first-capturing a structured binding by reference
-	const auto lohi0 = quokka::math::brent_solve(H, br.lo, br.hi, br.flo, br.fhi, quokka::math::eps_tolerance<double>(tol), iters);
-	double lo = lohi0.first;
-	double hi = lohi0.second;
+	auto bracket = quokka::math::brent_solve_bracket(H, br.lo, br.hi, br.flo, br.fhi, quokka::math::eps_tolerance<double>(tol), iters);
+	double lo = bracket.lo;
+	double hi = bracket.hi;
 
 	// the spread of the gas energy across the final bracket; two evaluations, counted
 	auto gas_width = [&](double const a, double const b) {
@@ -301,7 +305,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 		return std::abs(DustCouplingState(cell, a).Egas - DustCouplingState(cell, b).Egas);
 	};
 	constexpr double eps_mach = std::numeric_limits<double>::epsilon();
-	auto mid = DustCouplingState(cell, lo / 2 + hi / 2);
+	// the state at the chord crossing of the final bracket, not its midpoint: see SolveGasCoupling
+	auto mid = DustCouplingState(cell, quokka::math::secant_point(bracket));
 	double atol = amrex::max(tol * std::abs(mid.Egas), atol_floor_of(mid));
 	double width = gas_width(lo, hi);
 	auto at_fp_limit = [&]() { return (hi - lo) <= 4 * eps_mach * std::abs(lo / 2 + hi / 2); };
@@ -312,16 +317,38 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 		const double slope = width / (hi - lo);
 		const double eps = amrex::max(atol / (4.0 * slope) / std::abs(lo / 2 + hi / 2), 4 * eps_mach);
 		iters = max_root_iterations_;
-		const auto bracket = quokka::math::brent_solve(H, lo, hi, quokka::math::eps_tolerance<double>(eps), iters);
-		lo = bracket.first;
-		hi = bracket.second;
-		mid = DustCouplingState(cell, lo / 2 + hi / 2);
+		bracket = quokka::math::brent_solve_bracket(H, lo, hi, H(lo), H(hi), quokka::math::eps_tolerance<double>(eps), iters);
+		lo = bracket.lo;
+		hi = bracket.hi;
+		mid = DustCouplingState(cell, quokka::math::secant_point(bracket));
 		atol = amrex::max(tol * std::abs(mid.Egas), atol_floor_of(mid));
 		width = gas_width(lo, hi);
 	}
 
 	auto sol = mid;
 	sol.converged = (width <= atol) || at_fp_limit();
+
+	// The gas energy at the root can be written two ways that agree up to the residual H: from conservation,
+	// gas0 - (c/chat) sum_g Delta_g, or from the gas equation, gas0 - dt K sqrt(T) (T - T_d). Their round-off differs.
+	// The first cancels the group exchanges, which in a radiation-dominated cell are 1e5 times the gas energy; the
+	// second carries only the collisional transfer, but that transfer is evaluated at the conservation-form temperature,
+	// whose error it amplifies by dt K sqrt(T) / c_V (up to 1e8 when the dust is locked to the gas). Take the form with
+	// the smaller estimated error. At K = 0 this leaves the gas energy exactly gas0, as the physics says: the gas
+	// exchanges nothing with the dust, and mirror cells stay mirror images (DTypeFront1D's symmetry check).
+	{
+		double exchange_abs = 0.0;
+		for (int g = 0; g < nGroups_; ++g) {
+			exchange_abs += std::abs(sol.Erad[g] - (cell.Erad0[g] + cell.Src[g] + cell.work[g]));
+		}
+		const double T_c = sol.T_gas;
+		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(cell.rho, T_c, cell.massScalars);
+		const double err_cons = eps_mach * (std::abs(gas0) + cscale * exchange_abs);
+		const double err_gas = eps_mach * std::abs(gas0) + 1.5 * cell.dtK * std::sqrt(T_c) * (err_cons / c_v);
+		if (err_gas < err_cons) {
+			sol.Egas = gas0 - cell.dtK * std::sqrt(T_c) * (T_c - sol.T_d);
+			sol.T_gas = TgasOf(cell, sol.Egas);
+		}
+	}
 	sol.nevals = nevals;
 	ApplyEnergyFloors(cell, sol);
 	return sol;

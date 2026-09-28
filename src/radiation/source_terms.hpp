@@ -6,7 +6,7 @@
 /// dust-absorption bands, the flux and momentum update, and the cell kernel AddSourceTerms that drives the coupling
 /// solve of radiation_coupling.hpp for single-group and multigroup radiation alike.
 
-#include "radiation/radiation_system.hpp" // IWYU pragma: keep
+#include "radiation/radiation_system.hpp" // IWYU pragma: keep // NOLINT(misc-header-include-cycle)
 
 // Compute kappaE and kappaP based on the opacity model. Returns them with alpha_P and alpha_E (the latter two are set by
 // PPL_opacity_full_spectrum only, which fits alpha_E to Erad and alpha_P to fourPiBoverC).

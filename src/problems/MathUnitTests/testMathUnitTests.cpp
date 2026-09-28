@@ -337,6 +337,14 @@ auto TestBracketMarch() -> int
 			status = 1;
 		}
 	}
+	// secant_point: the chord crossing of [2, 4] with f = x - 3 is exactly 3; equal residuals fall back to the midpoint
+	{
+		const quokka::math::BracketSolveResult<Real> b{2.0, 4.0, -1.0, 1.0};
+		const quokka::math::BracketSolveResult<Real> flat{2.0, 4.0, -1.0, -1.0};
+		const bool ok = (quokka::math::secant_point(b) == 3.0) && (quokka::math::secant_point(flat) == 3.0);
+		std::cout << std::format("secant point of [2, 4]: {}{}\n", quokka::math::secant_point(b), ok ? "" : "  FAIL");
+		status = ok ? status : 1;
+	}
 	std::cout << (status == 0 ? "Bracket march: all tests passed.\n" : "Bracket march: FAILED.\n");
 	return status;
 }

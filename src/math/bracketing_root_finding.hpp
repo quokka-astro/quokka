@@ -73,12 +73,37 @@ template <class T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ab_factor(T y3,
 }
 } // namespace detail
 
-/// Brent's method (inverse quadratic interpolation / secant / bisection).
+/// The final bracket of a bracketing solve, with the residuals at both ends. lo <= hi; lo == hi on an exact zero.
+template <class T> struct BracketSolveResult {
+	T lo;
+	T hi;
+	T flo;
+	T fhi;
+};
+
+/// The point where the chord through the ends of a bracket crosses zero (regula falsi), clamped to the bracket, or its
+/// midpoint when the ends do not differ or the chord is not finite. On a smooth f it is within second order in the
+/// bracket width of the root, so a state taken there depends on which bracket the solver stopped at only through terms
+/// of that order: what makes a tolerance-based solve reproducible to round-off across cells whose inputs differ by an ulp.
+template <class T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto secant_point(BracketSolveResult<T> const &b) -> T
+{
+	if (b.hi <= b.lo) {
+		return b.lo;
+	}
+	const T x = detail::safe_secant(b.lo, b.flo, b.hi, b.fhi);
+	if (!std::isfinite(x) || (b.flo == b.fhi)) {
+		return detail::safe_midpoint(b.lo, b.hi);
+	}
+	return x;
+}
+
+/// Brent's method (inverse quadratic interpolation / secant / bisection), returning the final bracket with the residuals
+/// at both ends.
 /// Port of Brent() from NonlinearSolve.jl, plus the minimum-step safeguard of Numerical Recipes' zbrent
 /// (without it, the far end of the bracket converges only by bisection when f is exactly rounded, e.g. with FMA).
 /// fax and fbx are f(ax) and f(bx).
 template <class F, class T, class Tol>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax, T fbx, Tol tol, int &max_iter) -> std::pair<T, T>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve_bracket(F f, T ax, T bx, T fax, T fbx, Tol tol, int &max_iter) -> BracketSolveResult<T>
 {
 	const T eps = std::numeric_limits<T>::epsilon();
 	const int budget = max_iter;
@@ -90,14 +115,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 	T fr = fbx;
 
 	if (fl == 0) {
-		return std::make_pair(left, left);
+		return BracketSolveResult<T>{left, left, fl, fl};
 	}
 	if (fr == 0) {
-		return std::make_pair(right, right);
+		return BracketSolveResult<T>{right, right, fr, fr};
 	}
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sgn(fl) != sgn(fr), "brent_solve: parameters a and b do not bracket the root!");
 
-	auto ordered = [](T a, T b) { return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a); };
+	auto ordered = [](T a, T b, T fa, T fb) { return (a < b) ? BracketSolveResult<T>{a, b, fa, fb} : BracketSolveResult<T>{b, a, fb, fa}; };
 
 	// keep 'right' as the best estimate
 	if (std::abs(fl) < std::abs(fr)) {
@@ -112,7 +137,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 	bool cond = true; // whether the previous step was a bisection
 
 	while (max_iter < budget) {
-		const auto [lo, hi] = ordered(left, right);
+		const T lo = amrex::min(left, right);
+		const T hi = amrex::max(left, right);
 		if (tol(lo, hi)) {
 			break;
 		}
@@ -159,7 +185,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 		const T fs = f(s);
 		++max_iter;
 		if (fs == 0) {
-			return std::make_pair(s, s);
+			return BracketSolveResult<T>{s, s, fs, fs};
 		}
 
 		if (sgn(fl) * sgn(fs) < 0) {
@@ -184,7 +210,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 		}
 	}
 
-	return ordered(left, right);
+	return ordered(left, right, fl, fr);
+}
+
+/// Brent's method; see brent_solve_bracket. Returns the ordered final bracket (a, b), a <= b.
+template <class F, class T, class Tol>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax, T fbx, Tol tol, int &max_iter) -> std::pair<T, T>
+{
+	const auto r = brent_solve_bracket(f, ax, bx, fax, fbx, tol, max_iter);
+	return std::make_pair(r.lo, r.hi);
 }
 
 /// Brent's method; evaluates f(ax) and f(bx) itself.
