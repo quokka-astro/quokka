@@ -11,7 +11,6 @@
 #include "fundamental_constants.H"
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
-#include "radiation/radiation_dust_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <format>
@@ -75,7 +74,6 @@ template <> struct RadSystem_Traits<DustProblem> {
 
 template <> struct ISM_Traits<DustProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
-	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 };
 
 template <>
@@ -101,17 +99,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationMultiG
 	const double power = radiation_constant_ * temperature;
 	Erad_g.fillin(power * radEnergyFractions);
 	return Erad_g;
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real /*temperature*/,
-												   amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
-    -> quokka::valarray<amrex::Real, nGroups_>
-{
-	quokka::valarray<amrex::Real, nGroups_> d_power_dt{};
-	const double radEnergyFractions = 1.0 / nGroups_;
-	d_power_dt.fillin(radiation_constant_ * radEnergyFractions);
-	return d_power_dt;
 }
 
 template <> void QuokkaSimulation<DustProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

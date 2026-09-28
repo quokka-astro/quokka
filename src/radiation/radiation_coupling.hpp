@@ -51,7 +51,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCouplingCoefficients(Coupling
 		// PPL_opacity_full_spectrum fits alpha_E to the spectrum the groups start the step with and alpha_P to the
 		// Planck spectrum at T; the other models ignore the last argument.
 		coef.opacity = ComputeModelDependentKappaEAndKappaP(T, cell.rho, cell.rad_boundaries, cell.rad_boundary_ratios, coef.fourPiBoverC,
-								    cell.Erad0 + cell.Src + cell.work, 0, {}, {});
+								    cell.Erad0 + cell.Src + cell.work);
 	}
 	for (int g = 0; g < nGroups_; ++g) {
 		AMREX_ASSERT(coef.opacity.kappaP[g] >= 0.0);
@@ -203,7 +203,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 
 	const double T0 = amrex::max(TgasOf(cell, cell.Egas0), cell.Tfloor);
 	AMREX_ASSERT(T0 > 0.0);
-	const auto br = quokka::math::bracket_root_of_increasing(H, T0, cell.Tfloor);
+	// The march is not stopped at the gas temperature floor: the dust holds no energy and is not floored, and where the
+	// radiation field is near Erad_floor its radiative-equilibrium temperature can lie far below T_floor, where the floor
+	// emission alone already makes H positive (DTypeFront1D: T_floor = 10 K). The old Newton solver did not floor T_d either.
+	const auto br = quokka::math::bracket_root_of_increasing(H, T0, 0.0);
 	if (!br.found) {
 		CouplingSolution<problem_t> sol{};
 		sol.Egas = cell.Egas0;

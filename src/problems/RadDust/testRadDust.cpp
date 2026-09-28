@@ -57,7 +57,6 @@ template <> struct RadSystem_Traits<DustProblem> {
 
 template <> struct ISM_Traits<DustProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
-	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 };
 
 template <> struct Physics_Traits<DustProblem> : DefaultPhysicsTraits {
@@ -86,12 +85,6 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRad
 {
 	// We assume the thermal emission is proportional to T_d in order to linearize the problem so that we can derive an analytical solution.
 	return radiation_constant_ * temperature;
-}
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real /*temperature*/) -> amrex::Real
-{
-	// Same. We assume B(T_d) = a_rad * T_d.
-	return radiation_constant_;
 }
 
 template <> void QuokkaSimulation<DustProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

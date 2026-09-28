@@ -69,7 +69,6 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "physics_info.hpp"
-#include "radiation/radiation_dust_system.hpp" // for the separate dust-temperature solver (see ISM_Traits below)
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -164,16 +163,14 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 template <> struct ISM_Traits<DTypeFront1D> {
 	// Solve for a separate dust temperature rather than assuming T_dust == T_gas. With
 	// radiation.dust_gas_interaction_coeff = 0 in the input file the gas-dust collisional term vanishes, so
-	// the solver takes its decoupled branch (dust_model == 2 in radiation_dust_system.hpp): the dust
-	// temperature is fixed purely by radiative equilibrium with the local radiation field, and no energy is
-	// exchanged with the gas at all.
+	// the dust temperature is fixed purely by radiative equilibrium with the local radiation field, and no
+	// energy is exchanged with the gas at all.
 	//
 	// Decoupled here means thermally decoupled only. Radiation momentum is a separate channel and is still
 	// deposited, so the beam drives the gas: it reaches ~8e6 cm/s and evacuates the cells nearest the source
 	// by a factor of a few hundred in density. The gas temperature therefore still varies widely, through
 	// compression and expansion rather than through radiative heating.
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
-	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 };
 
 template <> struct SimulationData<DTypeFront1D> {
@@ -294,7 +291,7 @@ auto compute_gas_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex
 
 // Domain-integrated x-momentum of the radiation field: sum_cells sign * w_g * F_x,g * dx for group g, with the same sign convention as compute_gas_momentum.
 // The weight w_g turns a radiation flux into the momentum the solver actually trades with the gas, and it is not the same for the two kinds of band. A thermal
-// group uses w = 1 / (c * chat), the pairing in UpdateFlux (source_terms_multi_group.hpp), while a chemistry band uses w = 1 / c^2, the pairing in
+// group uses w = 1 / (c * chat), the pairing in UpdateFlux (source_terms.hpp), while a chemistry band uses w = 1 / c^2, the pairing in
 // computePhotoChemistry (photochemistry.hpp). They differ because a chemistry band's energy density is deliberately inflated by c / chat so that chat *
 // n_photon reproduces the physical photon flux and the ionization rate comes out right; its momentum weight divides that factor back out. Under either weight
 // an injected photon flux Phi carries the physical momentum flux Phi * E_photon / c, which is what makes the single budget below meaningful across both kinds
@@ -327,7 +324,7 @@ auto compute_group_rad_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray
 // |F| > c E, so this is a physical invariant rather than a tuned tolerance: a value above one means the
 // radiation flux and the radiation energy have been updated inconsistently. It is what detects a flux source
 // applied to a group whose energy source was dropped, which is how a transparent sourced group behaved in the
-// dust solvers before the injection loop there was added (radiation_dust_system.hpp).
+// old dust solvers before their source injection was fixed.
 auto compute_max_reduced_flux(amrex::MultiFab const &state_mf, int g) -> amrex::Real
 {
 	amrex::ReduceOps<amrex::ReduceOpMax> reduce_op;
@@ -376,7 +373,7 @@ void RadSystem<DTypeFront1D>::AddRadSource(array_t &radEnergy, array_t &reducedF
 	// the dust's own thermal re-emission of the absorbed optical light.
 	//
 	// The two sourced bands take different internal scalings: a thermal group's source is multiplied by
-	// chat/c, a chemistry band's is not (see source_terms_multi_group.hpp), and the flux source is scaled to
+	// chat/c, a chemistry band's is not (see source_terms.hpp), and the flux source is scaled to
 	// match its own energy source. The hook takes a reduced flux rather than a flux, so a reduced flux of
 	// unit magnitude means "beamed" for either kind of band and |F| > c E is unrepresentable.
 	// The shipped fluxes differ by exactly that factor of c/chat = 1000, so the two bands receive the same
@@ -632,7 +629,7 @@ auto problem_main() -> int
 				E_thermal += E_g;
 			}
 		}
-		// A thermal group's source carries the code's internal chat/c factor (see source_terms_multi_group.hpp).
+		// A thermal group's source carries the code's internal chat/c factor (see source_terms.hpp).
 		// Only the optical group is sourced among the thermal ones; both start at the radiation floor.
 		// The slab emits F * E_photon per unit area per unit time to EACH side, hence the leading factor of two.
 		const double injected = 2.0 * (c_hat / C::c_light) * F * E_photon * t_end + 2.0 * Erad_floor_ * Lx;
