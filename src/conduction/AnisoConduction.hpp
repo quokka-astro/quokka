@@ -13,12 +13,14 @@
 ///        direction; the normal term is limited with the biased L2 limiter (their Eq. 21, sign-
 ///        definite so it tolerates a biased limiter), while each cross term is limited with a
 ///        nested symmetric limiter (L(L(a,b),L(c,d))), MC or minmod, since it is sign-indefinite
-///        (selected by AnisoConductionParams::flux_limiter_type). Both terms read bhat/n at
+///        (selected by AnisoConductionParams::flux_limiter_type). Both terms read bhat/kappa at
 ///        mesh vertices ("corners") and gradT via direct two-point differences of cell-centered T,
-///        never a precomputed face/corner gradT field. Only kappa_parallel enters the flux
-///        (kappa_perp is currently unused -- see AnisoConductionParams); the result is saturated
-///        exactly as in ElectronConduction::ComputeExplicit, using a saturation flux computed from
-///        (rho, T) averaged from the corners bounding the face.
+///        never a precomputed face/corner gradT field. kappa is the parallel conductivity at each
+///        corner, kappa = n k_B chi (Sharma & Hammett's n chi), with chi from EvaluateDiffusivity
+///        (conductivity.hpp) evaluated at the corner-averaged (rho, T); the perpendicular
+///        conductivity is currently unused. The result is saturated exactly as in
+///        ElectronConduction::ComputeExplicit, using a saturation flux computed from (rho, T)
+///        averaged from the corners bounding the face.
 
 #include <array>
 #include <cmath>
@@ -36,6 +38,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
+#include "conduction/conductivity.hpp"
 #include "hydro/hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 
@@ -48,9 +51,8 @@ namespace quokka::conduction
 enum class AnisoFluxLimiterType { Minmod, MC };
 
 struct AnisoConductionParams {
-	amrex::Real kappa_parallel = 0.0; // field-aligned conductivity, units erg cm^-1 s^-1 K^-1
-	amrex::Real kappa_perp = 0.0;	  // currently unused by ComputeAnisotropicFlux -- see file doc-comment
-	amrex::Real l2_alpha = 2.0;	  // bias factor for the L2 limiter (Sharma & Hammett 2007 Eq. 21) applied to the normal (q_xx-type) term
+	ConductivityParams conductivity{}; // prefactors for ConductionModel::constant/spitzer (see conductivity.hpp); kappa0_perp is currently unused
+	amrex::Real l2_alpha = 2.0;	   // bias factor for the L2 limiter (Sharma & Hammett 2007 Eq. 21) applied to the normal (q_xx-type) term
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
 	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
@@ -62,13 +64,8 @@ struct AnisoConductionParams {
 
 template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect FaceMinusOne(int i, int j, int k)
 {
-	if constexpr (DIR == FluxDir::X1) {
-		return {i - 1, j, k};
-	} else if constexpr (DIR == FluxDir::X2) {
-		return {i, j - 1, k};
-	} else {
-		return {i, j, k - 1};
-	}
+	amrex::ignore_unused(i, j, k);
+	return amrex::IntVect(AMREX_D_DECL(i, j, k)) - amrex::IntVect::TheDimensionVector(static_cast<int>(DIR));
 }
 
 // The "upper" corner bounding a DIR-face, given the face's own (lower-corner) index (i,j,k) -- i.e.
@@ -78,13 +75,8 @@ template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect FaceMi
 // lower corner (i,j,k), leaving the other two corners (offset in only one transverse direction) unused.
 template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect UpperCorner(int i, int j, int k)
 {
-	if constexpr (DIR == FluxDir::X1) {
-		return {i, j + (AMREX_SPACEDIM >= 2 ? 1 : 0), k + (AMREX_SPACEDIM == 3 ? 1 : 0)};
-	} else if constexpr (DIR == FluxDir::X2) {
-		return {i + 1, j, k + (AMREX_SPACEDIM == 3 ? 1 : 0)};
-	} else {
-		return {i + 1, j + 1, k};
-	}
+	amrex::ignore_unused(i, j, k);
+	return amrex::IntVect(AMREX_D_DECL(i + 1, j + 1, k + 1)) - amrex::IntVect::TheDimensionVector(static_cast<int>(DIR));
 }
 
 // Host-only: parses a limiter name (e.g. from an input parameter) into AnisoFluxLimiterType. Not
@@ -136,7 +128,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real LimitUpperLowerFlux(amrex::
 }
 
 // kappa_par * bn^2 -- the diagonal tensor entry (q_xx-type term). Always non-negative, since it's
-// kappa_par times a square -- this is why the normal term is safe to limit with the biased L2 rather
+// kappa_par (>= 0) times a square -- this is why the normal term is safe to limit with the biased L2 rather
 // than minmod (see L2 below).
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real DiagCoeff(amrex::Real bn, amrex::Real kappa_par) { return kappa_par * bn * bn; }
 
@@ -178,24 +170,18 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real SaturateFlux(amrex::Real q_
 // UpperCorner<DIR>, which steps along every transverse axis of the face simultaneously.
 template <int Axis> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect AxisUnit()
 {
-	if constexpr (Axis == 0) {
-		return {1, 0, 0};
-	} else if constexpr (Axis == 1) {
-		return {0, 1, 0};
-	} else {
-		return {0, 0, 1};
-	}
+	static_assert(Axis >= 0 && Axis < AMREX_SPACEDIM, "AxisUnit: Axis must be a valid spatial direction");
+	return amrex::IntVect::TheDimensionVector(Axis);
 }
 
 // q_xx-type normal term for a DIR-face at (i,j,k) (cells cm, cp), limited across the `Axis`-
 // transverse direction via L2. `corner_lo` is the face's lower bounding corner along every axis
 // OTHER than `Axis` (fixed by the caller, e.g. to average over a second transverse axis in 3D);
-// `corner_lo` and `corner_lo + AxisUnit<Axis>()` are the two corners this term reads bhat/n from.
+// `corner_lo` and `corner_lo + AxisUnit<Axis>()` are the two corners this term reads bhat/kappa from.
 template <FluxDir DIR, int Axis>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real ComputeDiagTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const amrex::Real> const &bhat,
-								amrex::Array4<const amrex::Real> const &n, amrex::IntVect const &cm, amrex::IntVect const &cp,
-								amrex::IntVect const &corner_lo, amrex::Real dx_n, amrex::Real kappa_parallel,
-								amrex::Real l2_alpha)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real
+ComputeDiagTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const amrex::Real> const &bhat, amrex::Array4<const amrex::Real> const &kappa,
+		amrex::IntVect const &cm, amrex::IntVect const &cp, amrex::IntVect const &corner_lo, amrex::Real dx_n, amrex::Real l2_alpha)
 {
 	constexpr int normal_comp = static_cast<int>(DIR);
 	constexpr int T_comp = 1;
@@ -210,19 +196,18 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real ComputeDiagTerm(amrex::Array4<co
 	amrex::IntVect const corner_N = corner_lo + shift;
 	amrex::IntVect const corner_S = corner_lo;
 
-	const amrex::Real q_N = -n(corner_N, 0) * DiagCoeff(bhat(corner_N, normal_comp), kappa_parallel) * grad_N;
-	const amrex::Real q_S = -n(corner_S, 0) * DiagCoeff(bhat(corner_S, normal_comp), kappa_parallel) * grad_S;
+	const amrex::Real q_N = -DiagCoeff(bhat(corner_N, normal_comp), kappa(corner_N, 0)) * grad_N;
+	const amrex::Real q_S = -DiagCoeff(bhat(corner_S, normal_comp), kappa(corner_S, 0)) * grad_S;
 	return 0.5 * (q_N + q_S);
 }
 
 // q_xy/q_xz-type cross term for a DIR-face at (i,j,k) (cells cm, cp), limited across the `Axis`-
 // transverse direction via NestedLimit. `corner_lo`/`corner_lo + AxisUnit<Axis>()` are the two
-// corners bhat/n are face-averaged from (see the same `corner_lo` convention as ComputeDiagTerm).
+// corners bhat/kappa are face-averaged from (see the same `corner_lo` convention as ComputeDiagTerm).
 template <FluxDir DIR, int Axis>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real ComputeCrossTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const amrex::Real> const &bhat,
-								 amrex::Array4<const amrex::Real> const &n, amrex::IntVect const &cm, amrex::IntVect const &cp,
-								 amrex::IntVect const &corner_lo, amrex::Real dx_t, amrex::Real kappa_parallel,
-								 AnisoFluxLimiterType limiter_type)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real
+ComputeCrossTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const amrex::Real> const &bhat, amrex::Array4<const amrex::Real> const &kappa,
+		 amrex::IntVect const &cm, amrex::IntVect const &cp, amrex::IntVect const &corner_lo, amrex::Real dx_t, AnisoFluxLimiterType limiter_type)
 {
 	constexpr int normal_comp = static_cast<int>(DIR);
 	constexpr int T_comp = 1;
@@ -237,9 +222,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real ComputeCrossTerm(amrex::Array4<c
 	amrex::IntVect const corner_hi = corner_lo + shift;
 	const amrex::Real bn_face = 0.5 * (bhat(corner_lo, normal_comp) + bhat(corner_hi, normal_comp));
 	const amrex::Real bt_face = 0.5 * (bhat(corner_lo, Axis) + bhat(corner_hi, Axis));
-	const amrex::Real n_face = 0.5 * (n(corner_lo, 0) + n(corner_hi, 0));
+	const amrex::Real kappa_face = 0.5 * (kappa(corner_lo, 0) + kappa(corner_hi, 0));
 
-	return -n_face * CrossCoeff(bn_face, bt_face, kappa_parallel) * slope;
+	return -CrossCoeff(bn_face, bt_face, kappa_face) * slope;
 }
 
 // Declarations only -- see the definitions below AnisoConduction for what each of these actually
@@ -252,16 +237,16 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real ComputeCrossTerm(amrex::Array4<c
 // amrex::convert(state.boxArray(), amrex::IntVect::TheUnitVector()).
 template <typename problem_t> void ComputeCornerFC(amrex::MultiFab &bhat_corner_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int nghost);
 
-// n and qsat at mesh vertices ("corners"), built from CELL-CENTERED input data (primVar), on the
+// kappa and qsat at mesh vertices ("corners"), built from CELL-CENTERED input data (primVar), on the
 // same fully-nodal box array as ComputeCornerFC's bhat_corner_mf -- see the definition below for
 // details. gradT is no longer computed here: ComputeAnisotropicFlux differences primVar directly.
 template <typename problem_t>
-void ComputeCornerCC(amrex::MultiFab &n_corner_mf, amrex::MultiFab &qsat_corner_mf, amrex::MultiFab const &primVar, amrex::Real mean_molecular_weight,
+void ComputeCornerCC(amrex::MultiFab &kappa_corner_mf, amrex::MultiFab &qsat_corner_mf, amrex::MultiFab const &primVar, ConductivityParams const &conductivity,
 		     amrex::Real saturation_factor, amrex::Real flux_limiter_phi, int nghost);
 
 template <FluxDir DIR>
-void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &primVar, amrex::MultiFab const &bhat_corner, amrex::MultiFab const &n_corner,
-			    amrex::MultiFab const &qsat_corner, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real kappa_parallel,
+void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &primVar, amrex::MultiFab const &bhat_corner,
+			    amrex::MultiFab const &kappa_corner, amrex::MultiFab const &qsat_corner, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 			    amrex::Real l2_alpha, AnisoFluxLimiterType limiter_type);
 
 // DEBUG: prints the face-centered heat flux components (Fx, Fy, Fz) at the fixed grid index
@@ -284,9 +269,18 @@ template <typename problem_t> class AnisoConduction
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
 				    amrex::Real dt, AnisoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
-		
-		if ((dt <= 0.0) || (params.kappa_parallel <= 0.0)) { // kappa_perp currently unused -- see file doc-comment
+		constexpr ConductionModel model = Physics_Traits<problem_t>::conduction_model;
+		if constexpr (model == ConductionModel::none) {
+			amrex::ignore_unused(state, state_fc, geom, dt, params, heat_flux);
 			return;
+		}
+		if (dt <= 0.0) {
+			return;
+		}
+		if constexpr (model == ConductionModel::constant || model == ConductionModel::spitzer) {
+			if (params.conductivity.kappa0_par <= 0.0) { // kappa0_perp currently unused -- see file doc-comment
+				return;
+			}
 		}
 
 		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
@@ -365,7 +359,7 @@ template <typename problem_t> class AnisoConduction
 			heat_flux[idim].setVal(0.0);
 		}
 
-		// Unit B-field, n, and qsat at mesh vertices ("corners") -- direction-independent, so computed
+		// Unit B-field, kappa, and qsat at mesh vertices ("corners") -- direction-independent, so computed
 		// once (unlike the old per-face bhat_fc/n_fc/q_sat_fc) and shared by all three DIR-face flux
 		// calculations below. Each box's own fully-nodal valid region already extends one node beyond
 		// its cell range in every direction, covering both the "lower" and "upper" transverse corners
@@ -378,7 +372,7 @@ template <typename problem_t> class AnisoConduction
 		// state.nGrow() >= 1 (asserted below) remains sufficient.
 		amrex::BoxArray const ba_corner = amrex::convert(state.boxArray(), amrex::IntVect::TheUnitVector());
 		amrex::MultiFab bhat_corner(ba_corner, state.DistributionMap(), 3, 0);
-		amrex::MultiFab n_corner(ba_corner, state.DistributionMap(), 1, 0);
+		amrex::MultiFab kappa_corner(ba_corner, state.DistributionMap(), 1, 0);
 		amrex::MultiFab qsat_corner(ba_corner, state.DistributionMap(), 1, 0);
 		bhat_corner.setVal(0.0); // zeroed when MHD is disabled, so a non-MHD build gets zero flux rather than reading uninitialized data.
 
@@ -386,19 +380,18 @@ template <typename problem_t> class AnisoConduction
 			ComputeCornerFC<problem_t>(bhat_corner, state_fc, 0);
 		}
 
-		const amrex::Real mmw = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-		ComputeCornerCC<problem_t>(n_corner, qsat_corner, primVar, mmw, params.saturation_factor, params.flux_limiter_phi, 0);
+		ComputeCornerCC<problem_t>(kappa_corner, qsat_corner, primVar, params.conductivity, params.saturation_factor, params.flux_limiter_phi, 0);
 
 		// Heat flux at each face: ComputeAnisotropicFlux splits the flux into a normal (q_xx-type)
 		// term limited via L2 and one transverse (q_xy/q_xz-type) term per transverse direction
 		// limited via NestedLimit, then saturates the sum (Sharma & Hammett 2007) -- see the file
 		// doc-comment and ComputeDiagTerm/ComputeCrossTerm for details.
-		AMREX_D_TERM(ComputeAnisotropicFlux<FluxDir::X1>(heat_flux[0], primVar, bhat_corner, n_corner, qsat_corner, dx, params.kappa_parallel,
-								 params.l2_alpha, params.flux_limiter_type);
-			     , ComputeAnisotropicFlux<FluxDir::X2>(heat_flux[1], primVar, bhat_corner, n_corner, qsat_corner, dx, params.kappa_parallel,
-								   params.l2_alpha, params.flux_limiter_type);
-			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], primVar, bhat_corner, n_corner, qsat_corner, dx, params.kappa_parallel,
-								   params.l2_alpha, params.flux_limiter_type);)
+		AMREX_D_TERM(ComputeAnisotropicFlux<FluxDir::X1>(heat_flux[0], primVar, bhat_corner, kappa_corner, qsat_corner, dx, params.l2_alpha,
+								 params.flux_limiter_type);
+			     , ComputeAnisotropicFlux<FluxDir::X2>(heat_flux[1], primVar, bhat_corner, kappa_corner, qsat_corner, dx, params.l2_alpha,
+								   params.flux_limiter_type);
+			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], primVar, bhat_corner, kappa_corner, qsat_corner, dx, params.l2_alpha,
+								   params.flux_limiter_type);)
 
 		// DEBUG: uncomment to print per-step diagnostics (heat flux/bhat at a fixed probe vertex,
 		// temperature/bhat at the domain center) -- left in place for future debugging.
@@ -491,14 +484,14 @@ template <typename problem_t> void ComputeCornerFC(amrex::MultiFab &bhat_corner_
 	});
 }
 
-// Estimate n and qsat at mesh vertices ("corners") from CELL-CENTERED input data (primVar), on the
+// Estimate kappa and qsat at mesh vertices ("corners") from CELL-CENTERED input data (primVar), on the
 // same fully-nodal box array and vertex-indexing convention as ComputeCornerFC (vertex (i,j,k) draws
-// from the 8 (3D) or 4 (2D) cells with indices in {i-1,i}x{j-1,j}x{k-1,k}). n and qsat are the plain
-// average of (rho,T,massScalars) over those cells, then the same EOS chain as
-// ComputeFaceNumberDensityAndSaturationFlux (Cowie & McKee 1977). gradT is intentionally not computed
+// from the 8 (3D) or 4 (2D) cells with indices in {i-1,i}x{j-1,j}x{k-1,k}). (rho,T,massScalars) are
+// the plain average over those cells; kappa = n k_B chi_parallel with chi from EvaluateDiffusivity, and
+// qsat follows the same EOS chain as ComputeFaceNumberDensityAndSaturationFlux (Cowie & McKee 1977). gradT is intentionally not computed
 // here -- ComputeAnisotropicFlux differences primVar directly (see ComputeDiagTerm/ComputeCrossTerm).
 template <typename problem_t>
-void ComputeCornerCC(amrex::MultiFab &n_corner_mf, amrex::MultiFab &qsat_corner_mf, amrex::MultiFab const &primVar, amrex::Real mean_molecular_weight,
+void ComputeCornerCC(amrex::MultiFab &kappa_corner_mf, amrex::MultiFab &qsat_corner_mf, amrex::MultiFab const &primVar, ConductivityParams const &conductivity,
 		     amrex::Real saturation_factor, amrex::Real flux_limiter_phi, int nghost)
 {
 	constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
@@ -506,12 +499,15 @@ void ComputeCornerCC(amrex::MultiFab &n_corner_mf, amrex::MultiFab &qsat_corner_
 	const amrex::Real small = std::numeric_limits<amrex::Real>::min();
 
 	auto const &primVar_in = primVar.const_arrays();
-	auto n_out = n_corner_mf.arrays();
+	const ConductivityParams conductivity_params = conductivity;
+	const amrex::Real mean_molecular_weight = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+	const amrex::Real k_B = quokka::EOS<problem_t>::boltzmann_constant_;
+	auto kappa_out = kappa_corner_mf.arrays();
 	auto qsat_out = qsat_corner_mf.arrays();
 
 	amrex::IntVect const ng{AMREX_D_DECL(nghost, nghost, nghost)};
-	amrex::ParallelFor(n_corner_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// n / qsat: plain average of (rho, T, massScalars) over the {i-1,i}x{j-1,j}x{k-1,k} cells
+	amrex::ParallelFor(kappa_corner_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// kappa / qsat: plain average of (rho, T, massScalars) over the {i-1,i}x{j-1,j}x{k-1,k} cells
 		// touching this vertex, then the same EOS chain ComputeFaceNumberDensityAndSaturationFlux uses.
 		auto const corner_avg = [=](int comp) {
 #if AMREX_SPACEDIM == 3
@@ -528,7 +524,9 @@ void ComputeCornerCC(amrex::MultiFab &n_corner_mf, amrex::MultiFab &qsat_corner_
 		const amrex::Real rho_corner = corner_avg(0);
 		const amrex::Real T_corner = corner_avg(T_comp);
 
-		n_out[bx](i, j, k) = rho_corner / mean_molecular_weight;
+		// kappa = n k_B chi (Sharma & Hammett's n chi); see conductivity.hpp
+		const amrex::Real chi_corner = EvaluateDiffusivity<problem_t>(rho_corner, T_corner, conductivity_params)[0];
+		kappa_out[bx](i, j, k) = (rho_corner / mean_molecular_weight) * k_B * chi_corner;
 
 		amrex::GpuArray<amrex::Real, nmscalars_> massArray_corner{};
 		for (int n = 0; n < nmscalars_; ++n) {
@@ -545,7 +543,7 @@ void ComputeCornerCC(amrex::MultiFab &n_corner_mf, amrex::MultiFab &qsat_corner_
 }
 
 // Compute the anisotropic heat flux crossing the DIR-faces (Sharma & Hammett 2007's symmetric
-// scheme), given bhat/n/qsat at mesh vertices (ComputeCornerFC/ComputeCornerCC) and T at cell centers
+// scheme), given bhat/kappa/qsat at mesh vertices (ComputeCornerFC/ComputeCornerCC) and T at cell centers
 // (primVar). Splits q_classical into a normal (q_xx-type) term (ComputeDiagTerm, limited via L2) plus
 // one transverse (q_xy/q_xz-type) term per transverse direction (ComputeCrossTerm, limited via
 // NestedLimit); in 3D each term is evaluated once per position along the *other* transverse axis and
@@ -553,8 +551,8 @@ void ComputeCornerCC(amrex::MultiFab &n_corner_mf, amrex::MultiFab &qsat_corner_
 // plain average of all corners bounding the face. See the file doc-comment for the overall scheme and
 // ComputeDiagTerm/ComputeCrossTerm's doc-comments for the per-term derivations.
 template <FluxDir DIR>
-void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &primVar, amrex::MultiFab const &bhat_corner, amrex::MultiFab const &n_corner,
-			    amrex::MultiFab const &qsat_corner, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real kappa_parallel,
+void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &primVar, amrex::MultiFab const &bhat_corner,
+			    amrex::MultiFab const &kappa_corner, amrex::MultiFab const &qsat_corner, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 			    amrex::Real l2_alpha, AnisoFluxLimiterType limiter_type)
 {
 	constexpr int normal_comp = static_cast<int>(DIR);
@@ -564,48 +562,52 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 
 	auto const &T_in = primVar.const_arrays();
 	auto const &bhat_in = bhat_corner.const_arrays();
-	auto const &n_in = n_corner.const_arrays();
+	auto const &kappa_in = kappa_corner.const_arrays();
 	auto const &qsat_in = qsat_corner.const_arrays();
 	auto flux_out = heat_flux_fc.arrays();
 
 	amrex::ParallelFor(heat_flux_fc, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		amrex::IntVect const cm = FaceMinusOne<DIR>(i, j, k);
-		amrex::IntVect const cp{i, j, k};
-		amrex::IntVect const corner_lo{i, j, k};
+		amrex::IntVect const cp(AMREX_D_DECL(i, j, k));
+		amrex::IntVect const corner_lo(AMREX_D_DECL(i, j, k));
 
 #if AMREX_SPACEDIM == 1
 		amrex::ignore_unused(corner_lo);
-		const amrex::Real q_classical = -n_in[bx](i, j, k, 0) * DiagCoeff(bhat_in[bx](i, j, k, normal_comp), kappa_parallel) *
-						((T_in[bx](cp, T_comp) - T_in[bx](cm, T_comp)) / dx_n);
+		const amrex::Real q_classical =
+		    -DiagCoeff(bhat_in[bx](i, j, k, normal_comp), kappa_in[bx](i, j, k, 0)) * ((T_in[bx](cp, T_comp) - T_in[bx](cm, T_comp)) / dx_n);
 		const amrex::Real qsat_face = qsat_in[bx](i, j, k, 0);
 #else
-		// Cyclic transverse-axis convention (matches ComputeFaceUnitBField elsewhere in this file):
-		// X1 -> (y,z), X2 -> (z,x), X3 -> (x,y).
-		constexpr int Ax0 = (DIR == FluxDir::X1) ? 1 : (DIR == FluxDir::X2) ? 2 : 0;
-		constexpr int Ax1 = (DIR == FluxDir::X1) ? 2 : (DIR == FluxDir::X2) ? 0 : 1;
+#if AMREX_SPACEDIM == 2
+		// The only transverse axis of an x-face is y, and of a y-face is x.
+		constexpr int Ax0 = (DIR == FluxDir::X1) ? 1 : 0;
 		const amrex::Real dx0 = dx[Ax0];
 
-#if AMREX_SPACEDIM == 2
-		const amrex::Real q_xx = ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], n_in[bx], cm, cp, corner_lo, dx_n, kappa_parallel, l2_alpha);
-		const amrex::Real q_cross = ComputeCrossTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], n_in[bx], cm, cp, corner_lo, dx0, kappa_parallel, limiter_type);
+		const amrex::Real q_xx = ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx_n, l2_alpha);
+		const amrex::Real q_cross = ComputeCrossTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx0, limiter_type);
 		const amrex::Real q_classical = q_xx + q_cross;
 
 		amrex::IntVect const corner_hi = UpperCorner<DIR>(i, j, k);
 		const amrex::Real qsat_face = 0.5 * (qsat_in[bx](corner_lo, 0) + qsat_in[bx](corner_hi, 0));
 #else // AMREX_SPACEDIM == 3
+
+		// Cyclic transverse-axis convention (matches ComputeFaceUnitBField elsewhere in this file):
+		// X1 -> (y,z), X2 -> (z,x), X3 -> (x,y).
+		constexpr int Ax0 = (DIR == FluxDir::X1) ? 1 : (DIR == FluxDir::X2) ? 2 : 0;
+		constexpr int Ax1 = (DIR == FluxDir::X1) ? 2 : (DIR == FluxDir::X2) ? 0 : 1;
+		const amrex::Real dx0 = dx[Ax0];
 		const amrex::Real dx1 = dx[Ax1];
 		amrex::IntVect const corner_0 = corner_lo + AxisUnit<Ax0>();
 		amrex::IntVect const corner_1 = corner_lo + AxisUnit<Ax1>();
 		amrex::IntVect const corner_01 = UpperCorner<DIR>(i, j, k); // == corner_0 + AxisUnit<Ax1>()
 
-		const amrex::Real q_xx = 0.5 * (ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], n_in[bx], cm, cp, corner_lo, dx_n, kappa_parallel, l2_alpha) +
-						ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], n_in[bx], cm, cp, corner_1, dx_n, kappa_parallel, l2_alpha));
+		const amrex::Real q_xx = 0.5 * (ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx_n, l2_alpha) +
+						ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_1, dx_n, l2_alpha));
 		const amrex::Real q_cross0 =
-		    0.5 * (ComputeCrossTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], n_in[bx], cm, cp, corner_lo, dx0, kappa_parallel, limiter_type) +
-			   ComputeCrossTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], n_in[bx], cm, cp, corner_1, dx0, kappa_parallel, limiter_type));
+		    0.5 * (ComputeCrossTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx0, limiter_type) +
+			   ComputeCrossTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_1, dx0, limiter_type));
 		const amrex::Real q_cross1 =
-		    0.5 * (ComputeCrossTerm<DIR, Ax1>(T_in[bx], bhat_in[bx], n_in[bx], cm, cp, corner_lo, dx1, kappa_parallel, limiter_type) +
-			   ComputeCrossTerm<DIR, Ax1>(T_in[bx], bhat_in[bx], n_in[bx], cm, cp, corner_0, dx1, kappa_parallel, limiter_type));
+		    0.5 * (ComputeCrossTerm<DIR, Ax1>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx1, limiter_type) +
+			   ComputeCrossTerm<DIR, Ax1>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_0, dx1, limiter_type));
 		const amrex::Real q_classical = q_xx + q_cross0 + q_cross1;
 
 		const amrex::Real qsat_face =

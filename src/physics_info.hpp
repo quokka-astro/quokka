@@ -28,6 +28,20 @@ enum class ViscosityModel {
 	problem_defined, // per-cell viscosity; returned by a problem-specific computeViscosity device function
 };
 
+// enum for thermal conduction conductivity model
+enum class ConductionModel {
+	none,		 // no thermal conduction
+	constant,	 // uniform conductivity; read from the conduction.* coefficients in the TOML input file
+	spitzer,	 // Spitzer conductivity, kappa = kappa0 * T^2.5; kappa0 read from the conduction.* coefficients in the TOML input file
+	problem_defined, // per-point conductivity; returned by a problem-specific computeConductivity device function
+};
+
+// enum for thermal conduction geometry
+enum class ConductionGeometry {
+	isotropic,   // heat flux along -grad T (ElectronConduction)
+	anisotropic, // heat flux along the magnetic field (AnisoConduction); requires MHD
+};
+
 // default values for all Physics_Traits fields; specialize Physics_Traits by inheriting from this
 // struct and overriding only the fields that differ from the defaults
 struct DefaultPhysicsTraits {
@@ -43,6 +57,8 @@ struct DefaultPhysicsTraits {
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::none;
+	static constexpr ConductionModel conduction_model = ConductionModel::none;
+	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::isotropic;
 	static constexpr int nGroups = 1;     // number of radiation groups
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
