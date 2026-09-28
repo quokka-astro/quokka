@@ -174,7 +174,6 @@ template <> struct ISM_Traits<DTypeFront1D> {
 	// compression and expansion rather than through radiative heating.
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool enable_photoelectric_heating = false;
 };
 
 template <> struct SimulationData<DTypeFront1D> {

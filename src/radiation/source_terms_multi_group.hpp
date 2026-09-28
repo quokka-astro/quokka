@@ -989,17 +989,10 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 											 radBoundaries_g_copy, tol, tol_rel, tempFloor,
 											 p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
-					if constexpr (!enable_photoelectric_heating_) {
-						// gas + radiation + dust
-						updated_energy = SolveGasDustRadiationEnergyExchange(
-						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy, tol,
-						    tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
-					} else {
-						// gas + radiation + dust + photoelectric heating
-						updated_energy = SolveGasDustRadiationEnergyExchangeWithPE(
-						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy, tol,
-						    tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
-					}
+					// gas + radiation + dust
+					updated_energy = SolveGasDustRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F,
+											     Src, radBoundaries_g_copy, tol, tol_rel, tempFloor,
+											     p_iteration_counter_local, p_iteration_failure_counter_local);
 				}
 
 				Egas_guess = updated_energy.Egas;
