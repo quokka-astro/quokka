@@ -117,7 +117,7 @@ auto TestODEIntegration() -> int
 	return status;
 }
 
-constexpr int nfunc = 11;
+constexpr int nfunc = 12;
 constexpr int nsolver = 3;
 constexpr int max_iter_budget = 200;
 constexpr int max_iter_smooth = 20; // bound for superlinearly convergent cases
@@ -144,6 +144,7 @@ const std::array<TestCase, nfunc> cases = {{
     {.name = "log(x), reversed", .a = 5.0, .b = 0.5, .root = 1.0, .smooth = true},
     {.name = "x, root at left end", .a = 0.0, .b = 1.0, .root = 0.0, .smooth = true},
     {.name = "1e-10 (x - 1e5)", .a = 0.0, .b = 1.0e10, .root = 1.0e5, .smooth = true},
+    {.name = "1e300 (x^3 - 0.027)", .a = 0.0, .b = 1.0, .root = 0.3, .smooth = false}, // interpolation overflows
 }};
 // clang-format on
 
@@ -173,8 +174,10 @@ struct TestFunction {
 				return std::log(x);
 			case 9:
 				return x;
-			default:
+			case 10:
 				return 1.0e-10 * (x - 1.0e5);
+			default:
+				return 1.0e300 * (x * x * x - 0.027);
 		}
 	}
 };
