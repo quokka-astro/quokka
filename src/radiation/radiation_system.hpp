@@ -144,6 +144,45 @@ template <typename problem_t> struct OpacityTerms {
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_E;
 };
 
+// The per-cell state one backward-Euler coupling step is solved from. Built by AddSourceTerms once per outer iteration
+// (the work term changes between them) and read by every residual evaluation. See radiation_coupling.hpp.
+template <typename problem_t> struct CouplingCell {
+	static constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+	double Egas0{};					   // gas internal energy at the start of the step
+	quokka::valarray<double, nGroups> Erad0{}; // group radiation energies at the start of the step
+	quokka::valarray<double, nGroups> Src{};   // external source over the step, radiation side (already scaled by chat/c for thermal bands)
+	quokka::valarray<double, nGroups> work{};  // lagged work term over the step, radiation side
+	double rho{};
+	double dt{};	    // the step
+	double tau_scale{}; // dt * chat * lorentz factor: what multiplies rho * kappa to make an optical depth
+	double dtK{};	    // dt * K, K = dustGasCoeff * n_H^2 the collisional gas-dust coefficient; 0 without the dust model
+	double Tfloor{};    // temperature floor
+	double Emin{};	    // gas internal energy at the temperature floor
+	amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::numMassScalars> massScalars{};
+	amrex::GpuArray<double, nGroups + 1> rad_boundaries{};
+	amrex::GpuArray<double, nGroups> rad_boundary_ratios{};
+};
+
+// The two coefficients of the coupling at one matter temperature: emission_g = rho kappa_P,g 4 pi B_g / c and
+// absorption_g = rho kappa_E,g, with the opacities they were built from.
+template <typename problem_t> struct CouplingCoefficients {
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> emission{};
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> absorption{};
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> fourPiBoverC{};
+	OpacityTerms<problem_t> opacity{};
+};
+
+// The state implied by one trial value of the coupling unknown, and the residual there.
+template <typename problem_t> struct CouplingSolution {
+	double residual{}; // G (gas-energy unknown) or H (dust-temperature unknown) at this state
+	double Egas{};
+	double T_gas{};
+	double T_d{}; // the temperature the radiation couples at: T_gas without dust, the dust temperature with it
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Erad{};
+	int nevals{};	   // residual evaluations spent by the solve
+	bool converged{}; // whether the bracket met the tolerance within the iteration budget
+};
+
 // A struct to hold the results of the Newton-Raphson iteration for energy update, containing the following elements:
 // Egas, T_gas, T_d, EradVec, work, opacity_terms
 template <typename problem_t> struct NewtonIterationResult {
@@ -630,6 +669,20 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 									  quokka::valarray<double, nGroups_> const &Erad, int n_iter,
 									  amrex::GpuArray<double, nGroups_> const &alpha_E = {},
 									  amrex::GpuArray<double, nGroups_> const &alpha_P = {}) -> OpacityTerms<problem_t>;
+
+	// --- the bracketed coupling solve (radiation_coupling.hpp) ---
+	static constexpr int max_root_iterations_ = 100;
+
+	AMREX_GPU_DEVICE static auto TgasOf(CouplingCell<problem_t> const &cell, double Egas) -> double;
+	AMREX_GPU_DEVICE static auto TotalEnergy(CouplingCell<problem_t> const &cell) -> double;
+	AMREX_GPU_DEVICE static auto ComputeCouplingCoefficients(CouplingCell<problem_t> const &cell, double T) -> CouplingCoefficients<problem_t>;
+	AMREX_GPU_DEVICE static auto GroupEnergies(CouplingCell<problem_t> const &cell, CouplingCoefficients<problem_t> const &coef)
+	    -> quokka::valarray<double, nGroups_>;
+	AMREX_GPU_DEVICE static auto GasCouplingState(CouplingCell<problem_t> const &cell, double Egas) -> CouplingSolution<problem_t>;
+	AMREX_GPU_DEVICE static auto DustCouplingState(CouplingCell<problem_t> const &cell, double T_d) -> CouplingSolution<problem_t>;
+	AMREX_GPU_DEVICE static void ApplyEnergyFloors(CouplingCell<problem_t> const &cell, CouplingSolution<problem_t> &sol);
+	AMREX_GPU_DEVICE static auto SolveGasCoupling(CouplingCell<problem_t> const &cell, double tol) -> CouplingSolution<problem_t>;
+	AMREX_GPU_DEVICE static auto SolveDustCoupling(CouplingCell<problem_t> const &cell, double tol) -> CouplingSolution<problem_t>;
 
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGas(double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
 							   quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
@@ -1921,6 +1974,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	return T_d;
 }
 
+#include "radiation/radiation_coupling.hpp" // IWYU pragma: export
 #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
 

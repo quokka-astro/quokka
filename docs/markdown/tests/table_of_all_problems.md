@@ -52,6 +52,7 @@ This table lists all test problems in the Quokka codebase. The acronyms used are
 | HydroWaveConvergence              | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | HydrostaticAtmosphere             | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | MathUnitTests                     | 1   | ❌     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
+| RadCouplingUnitTests              | 1   | ❌     | ❌   | SG+MG (single-cell) | ❌       | ❌                         | ❌              |
 | MHDBalsaraVortex                  | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
 | MHDBitwiseICs                     | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
 | MHDBlast                          | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
