@@ -557,6 +557,33 @@ template <> void QuokkaSimulation<DiskGalaxy>::refineGrid(int lev, amrex::TagBox
 	amrex::Gpu::streamSynchronize();
 }
 
+template <> void QuokkaSimulation<DiskGalaxy>::computeBeforeTimestep()
+{
+	// parse once, on first call
+	static bool initialized = false;
+	static std::optional<amrex::Parser> epsParser;
+	static std::optional<amrex::ParserExecutor<1>> epsExe;
+
+	if (!initialized) {
+		std::string expr;
+		amrex::ParmParse const pp("particles");
+		pp.query("eps_ff_expr", expr);
+		if (!expr.empty()) {
+			epsParser.emplace(expr);
+			epsParser->registerVariables({"t"});
+			epsExe = epsParser->compileHost<1>(); // host-only is enough: evaluated once per step
+		}
+		initialized = true;
+	}
+
+	if (epsExe) {
+		quokka::eps_ff = (*epsExe)(tNew_[0]);
+		if (quokka::particle_verbose > 0) {
+			amrex::Print() << "eps_ff(t = " << tNew_[0] << ") = " << quokka::eps_ff << "\n";
+		}
+	}
+}
+
 template <>
 void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
 						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
