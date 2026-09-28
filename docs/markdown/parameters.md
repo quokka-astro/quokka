@@ -77,8 +77,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | radiation.cfl                        | Float         | `0.3`             | Sets the CFL number for the radiation advance. This is independent of the hydro CFL number.                                                                      |
 | radiation.dust_gas_interaction_coeff | Float         | `2.5e-34`         | Coefficient for dust-gas interaction in radiation calculations.                                                                                                  |
 | radiation.print_iteration_counts     | Boolean (0/1) | `0` (Disabled)    | If set to 1, prints radiation iteration counts for debugging.                                                                                                    |
-| radiation.iteration_tolerance        | Float         | `1e-11`           | Tolerance for the Newton-Raphson iteration residuals.                                                                                                            |
-| radiation.iteration_tolerance_rel    | Float         | `-1.0` (Disabled) | Tolerance for the relative change between two consecutive Newton-Raphson iterations.                                                                             |
+| radiation.iteration_tolerance        | Float         | `1e-11`           | Relative tolerance on the unknown of the implicit matter-radiation coupling solve (gas energy, or dust temperature).                                             |
 
 ## MHD
 

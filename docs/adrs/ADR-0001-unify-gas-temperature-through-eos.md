@@ -14,7 +14,7 @@ When `cooling.cooling_table_type = resampled`, the table-backed value is current
 This produces a split-brain (and inconsistent) design:
 
 - Core hydro and radiation machinery uses `EOS`:
-  `src/hydro/hydro_system.hpp`, `src/hydro/NSCBC_inflow.hpp`, `src/radiation/source_terms_single_group.hpp`, `src/radiation/source_terms_multi_group.hpp`, `src/radiation/radiation_dust_system.hpp`, and `src/radiation/radiation_system.hpp`.
+  `src/hydro/hydro_system.hpp`, `src/hydro/NSCBC_inflow.hpp`, `src/radiation/radiation_coupling.hpp`, `src/radiation/source_terms.hpp`, and `src/radiation/radiation_system.hpp`.
 - Resampled-cooling diagnostics and temperature-threshold logic bypass `EOS` and call the cooling table directly:
   `src/problems/DiskGalaxy/testDiskGalaxy.cpp`,
   `src/problems/TallBoxSf/testTallBoxSf.cpp`,
