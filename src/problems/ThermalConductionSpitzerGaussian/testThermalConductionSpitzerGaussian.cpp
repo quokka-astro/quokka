@@ -5,6 +5,8 @@
 //==============================================================================
 /// \file testThermalConductionSpitzerGaussian.cpp
 /// \brief Defines a test problem for Spitzer thermal conduction (kappa = kappa0*T^2.5) with a Gaussian IC.
+///        The conductivity is supplied through ConductionModel::problem_defined (computeConductivity below), so this
+///        test also covers the problem-defined conductivity path; ThermalConductionPattle covers ConductionModel::spitzer.
 ///
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
@@ -36,6 +38,7 @@ constexpr double Eint0 = 2.505e-8; // Gaussian peak (equivalent to T = 2.e8 K)
 constexpr double Efloor = Eint0 / 10.0;
 const double rho0 = 0.1;		     // 1/cm^3
 constexpr double sigma = 2.410685615625e+17; // width of the initial Gaussian, in cm (amr2-branch value)
+constexpr double kappa0 = 5.40e-10;	     // Spitzer prefactor, kappa = kappa0 * T^2.5 (erg cm^-1 s^-1 K^-3.5)
 struct ThermalConductionSpitzerGaussianProblem {};
 
 template <> struct quokka::EOS_Traits<ThermalConductionSpitzerGaussianProblem> {
@@ -51,7 +54,18 @@ template <> struct Physics_Traits<ThermalConductionSpitzerGaussianProblem> : Def
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ConductionModel conduction_model = ConductionModel::problem_defined;
+	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::isotropic;
 };
+
+// Identical to ConductionModel::spitzer with conduction.conductivity_prefactor = kappa0, so this reproduces the
+// built-in Spitzer result exactly.
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeConductivity<ThermalConductionSpitzerGaussianProblem>(amrex::Real /*rho*/, amrex::Real Tgas)
+    -> quokka::valarray<amrex::Real, 2>
+{
+	return {kappa0 * std::pow(Tgas, 2.5), 0.0};
+}
 
 template <> void QuokkaSimulation<ThermalConductionSpitzerGaussianProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {

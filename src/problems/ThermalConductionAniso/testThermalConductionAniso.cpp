@@ -36,6 +36,8 @@ template <> struct Physics_Traits<ThermalConductionAnisoProblem> : DefaultPhysic
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr bool is_mhd_enabled = true;
+	static constexpr ConductionModel conduction_model = ConductionModel::constant;
+	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::anisotropic;
 	// dimensionless problem: rho, length, and time carry no fixed physical scale, but
 	// boltzmann_constant is kept at its physical CGS value so that Tgas is genuinely in kelvin.
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;

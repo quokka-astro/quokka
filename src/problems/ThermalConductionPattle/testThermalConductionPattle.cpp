@@ -51,6 +51,8 @@ template <> struct Physics_Traits<ThermalConductionPattleProblem> : DefaultPhysi
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ConductionModel conduction_model = ConductionModel::spitzer;
+	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::isotropic;
 };
 
 namespace
@@ -90,7 +92,7 @@ template <> void QuokkaSimulation<ThermalConductionPattleProblem>::setInitialCon
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
-	const amrex::Real kappa0 = electronConductionKappa0_;
+	const amrex::Real kappa0 = conductivityParams_.kappa0_par;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -160,7 +162,7 @@ void QuokkaSimulation<ThermalConductionPattleProblem>::computeReferenceSolution(
 										amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
-	const amrex::Real kappa0 = electronConductionKappa0_;
+	const amrex::Real kappa0 = conductivityParams_.kappa0_par;
 	const amrex::Real t = tNew_[0] + spitzer_t_start;
 
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
