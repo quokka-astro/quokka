@@ -756,6 +756,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 								 "conduction.kappaPar must be set for anisotropic conduction.");
 				hpp.query("kappaPar", conductivityParams_.kappa0_par);
 				hpp.query("kappaPerp", conductivityParams_.kappa0_perp);
+				// AnisoConduction limits the (kappa_par - kappa_perp) b_n^2 normal term with the biased L2 limiter,
+				// which is only monotone for a non-negative coefficient.
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductivityParams_.kappa0_perp <= conductivityParams_.kappa0_par,
+								 "conduction.kappaPerp must be <= conduction.kappaPar for anisotropic conduction.");
 			} else {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    !anisotropic_key_present,
