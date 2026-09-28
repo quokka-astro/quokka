@@ -280,6 +280,96 @@ auto TestGasSweep() -> int
 	return status;
 }
 
+// hydro3d docs/coupling-new-method-dust.md section 6, with kappa0 in place of rho (see the file comment): N_G in {1, 4},
+// two opacity laws, Tgas in {0.01, 1, 10}, Trad in {0, 1, 5}, kappa0 in {1e-4, 1, 1e4, 1e8}, K in {0, 1, 1e8}; dt = 1.
+template <typename P> auto dust_sweep(int &ncells, int &nfail, double &worst_energy, double &worst_state, long &nevals_sum, int &nevals_max) -> void
+{
+	for (const double expo : {0.0, 2.0}) {
+		for (const double kappa0 : {1e-4, 1.0, 1e4, 1e8}) {
+			sweep_kappa0 = kappa0;
+			sweep_expo = expo;
+			std::vector<CouplingCell<P>> cells;
+			for (const double Tg : {0.01, 1.0, 10.0}) {
+				for (const double Tr : {0.0, 1.0, 5.0}) {
+					for (const double K : {0.0, 1.0, 1e8}) {
+						cells.push_back(make_cell<P>(Tg, Tr, 1.0, K));
+					}
+				}
+			}
+			const auto sols = solve_cells<P, true>(cells, 1.0e-9);
+			const auto refs = solve_cells<P, true>(cells, 1.0e-12);
+			for (std::size_t i = 0; i < cells.size(); ++i) {
+				const double Etot = conserved_total(cells[i]);
+				nfail += sols[i].converged ? 0 : 1;
+				worst_energy = std::max(worst_energy, std::abs(total_energy(cells[i], sols[i].Egas, sols[i].Erad) / Etot - 1.0));
+				worst_state = std::max(worst_state, std::abs(sols[i].Egas - refs[i].Egas) / Etot);
+				nevals_sum += sols[i].nevals;
+				nevals_max = std::max(nevals_max, sols[i].nevals);
+				++ncells;
+			}
+		}
+	}
+}
+
+auto TestDustSweep() -> int
+{
+	int status = 0;
+	int ncells = 0;
+	int nfail = 0;
+	double worst_energy = 0.0;
+	double worst_state = 0.0;
+	long nevals_sum = 0;
+	int nevals_max = 0;
+	dust_sweep<Sweep4>(ncells, nfail, worst_energy, worst_state, nevals_sum, nevals_max);
+	dust_sweep<Sweep1>(ncells, nfail, worst_energy, worst_state, nevals_sum, nevals_max);
+	std::cout << std::format("dust sweep: {} cells, {} failures, energy error {:.2e}, vs 1e-12 solve {:.2e}, evaluations mean {:.1f} max {}\n", ncells, nfail,
+				 worst_energy, worst_state, static_cast<double>(nevals_sum) / ncells, nevals_max);
+	status |= check(ncells == 432, "dust sweep has 432 cells");
+	status |= check(nfail == 0, "dust sweep: every cell converged");
+	status |= check(worst_energy < 1.0e-13, "dust sweep: energy conserved to round-off");
+	status |= check(worst_state <= 2.0e-9, "dust sweep: state within 2e-9 of a 1e-12 solve");
+
+	// K -> infinity locks the dust to the gas: the dust-free solve with the same opacity law. K = 0 leaves the gas alone.
+	for (const double expo : {0.0, -1.5}) {
+		sweep_kappa0 = 1.0;
+		sweep_expo = expo;
+		for (const auto &[Tg, Tr] : {std::pair{1.0, 0.1}, std::pair{0.3, 2.0}}) {
+			{
+				const auto cell = make_cell<Sweep4>(Tg, Tr, 1.0, 1.0e12);
+				const auto dust = solve_cells<Sweep4, true>({cell}, 1.0e-9);
+				const auto gas = solve_cells<Sweep4, false>({cell}, 1.0e-9);
+				const double Etot = conserved_total(cell);
+				status |= check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot && std::abs(dust[0].T_d / dust[0].T_gas - 1.0) <= 1.0e-8,
+						std::format("K = 1e12 recovers the dust-free solve (expo {}, Tg {}, Tr {})", expo, Tg, Tr));
+			}
+			{
+				const auto cell = make_cell<Sweep1>(Tg, Tr, 1.0, 1.0e12);
+				const auto dust = solve_cells<Sweep1, true>({cell}, 1.0e-9);
+				const auto gas = solve_cells<Sweep1, false>({cell}, 1.0e-9);
+				const double Etot = conserved_total(cell);
+				status |= check(dust[0].converged && std::abs(dust[0].Egas - gas[0].Egas) <= 1.0e-8 * Etot, std::format("K = 1e12, one group (expo {}, Tg {})", expo, Tg));
+			}
+			{
+				const auto cell = make_cell<Sweep4>(Tg, Tr, 1.0, 0.0);
+				const auto dust = solve_cells<Sweep4, true>({cell}, 1.0e-9);
+				const double Etot = conserved_total(cell);
+				status |= check(dust[0].converged && std::abs(dust[0].Egas - cell.Egas0) <= 1.0e-12 * Etot, std::format("K = 0 leaves the gas unchanged (expo {}, Tg {})", expo, Tg));
+			}
+		}
+	}
+
+	// Three roots of the dust balance itself (hydro3d dust section 3): kappa = T_d^2, gas at 0.01, radiation at 1,
+	// K = 1, dt = 1; roots at T_d = 0.0114, 0.134 and 0.738. From the gas temperature the march returns the cold one.
+	sweep_kappa0 = 1.0;
+	sweep_expo = 2.0;
+	{
+		const auto sols = solve_cells<Sweep4, true>({make_cell<Sweep4>(0.01, 1.0, 1.0, 1.0)}, 1.0e-9);
+		std::cout << std::format("three-root dust cell: T_d = {:.6f}\n", sols[0].T_d);
+		status |= check(sols[0].converged && (0.0113 < sols[0].T_d) && (sols[0].T_d < 0.0115), "three-root dust cell returns the root connected to cold gas");
+	}
+	return status;
+}
+
 } // namespace
 
 auto problem_main() -> int
@@ -292,6 +382,8 @@ auto problem_main() -> int
 	// every pinned number below assumes c_V = 1 at rho = 1; fail loudly if the EOS convention differs
 	AMREX_ALWAYS_ASSERT(std::abs(make_cell<Sweep4>(1.0, 0.5, 1.0, 0.0).Egas0 - 1.0) < 1e-12);
 	const int gas_status = TestGasSweep();
-	std::cout << (gas_status == 0 ? "RadCouplingUnitTests: gas tests passed.\n" : "RadCouplingUnitTests: FAILED.\n");
-	return gas_status;
+	const int dust_status = TestDustSweep();
+	const int status = (gas_status == 0 && dust_status == 0) ? 0 : 1;
+	std::cout << (status == 0 ? "RadCouplingUnitTests: all tests passed.\n" : "RadCouplingUnitTests: FAILED.\n");
+	return status;
 }

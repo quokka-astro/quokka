@@ -165,19 +165,66 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<proble
 	return sol;
 }
 
-// --- with dust: filled in by the next task ---
+// The state at a trial dust temperature, and H there. The dust holds no energy and the radiation couples to it alone, so
+// given T_d everything else is closed form: the group block at T_d (GroupEnergies), the gas energy from conservation,
+// and what is left is the gas equation,
+//     H = (gas0 - E_gas) - dt K sqrt(T) (T - T_d) ,   gas0 = E_gas^0 - (c/chat) sum_g W_g ,
+// zero where the dust is in balance, written with the sign that makes it increase with T_d (hotter dust radiates more
+// and is fed less). Total energy is conserved to round-off at every trial T_d. At K = 0 the gas is untouched and H = 0 is
+// radiative equilibrium of the dust; as K -> infinity, T_d -> T and the dust-free step is recovered.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::DustCouplingState(CouplingCell<problem_t> const &cell, double const T_d) -> CouplingSolution<problem_t>
 {
-	amrex::ignore_unused(cell, T_d);
-	return CouplingSolution<problem_t>{};
+	const double cscale = c_light_ / c_hat_;
+	CouplingSolution<problem_t> sol{};
+	sol.T_d = T_d;
+	sol.Erad = GroupEnergies(cell, ComputeCouplingCoefficients(cell, T_d));
+	sol.Egas = TotalEnergy(cell) - cscale * sum(sol.Erad);
+	sol.T_gas = TgasOf(cell, sol.Egas);
+	const double gas0 = cell.Egas0 - cscale * sum(cell.work);
+	const double T = sol.T_gas;
+	sol.residual = (gas0 - sol.Egas) - cell.dtK * std::sqrt(T) * (T - T_d);
+	return sol;
 }
 
+// The solve with dust: bracket H by marching from the gas temperature at the start of the step (Quokka's initial guess
+// for the dust temperature, which where the dust balance has several roots selects the one connected to dust as warm as
+// the gas), hand it to Brent to a relative tolerance on T_d, and take the midpoint of the final bracket. H is not used as
+// a convergence test: its collision term multiplies the round-off in T - T_d by dt K sqrt(T), which reaches 1e8 of the
+// cell's energy in a strongly coupled cell, whereas the bracket width in T_d is not amplified by anything.
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<problem_t> const &cell, double const /*tol*/) -> CouplingSolution<problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<problem_t> const &cell, double const tol) -> CouplingSolution<problem_t>
 {
-	amrex::ignore_unused(cell);
-	return CouplingSolution<problem_t>{};
+	int nevals = 0;
+	auto H = [&](double const T_d) {
+		++nevals;
+		return DustCouplingState(cell, T_d).residual;
+	};
+
+	const double T0 = amrex::max(TgasOf(cell, cell.Egas0), cell.Tfloor);
+	AMREX_ASSERT(T0 > 0.0);
+	const auto br = quokka::math::bracket_root_of_increasing(H, T0, cell.Tfloor);
+	if (!br.found) {
+		CouplingSolution<problem_t> sol{};
+		sol.Egas = cell.Egas0;
+		sol.T_gas = TgasOf(cell, cell.Egas0);
+		sol.T_d = T0;
+		sol.Erad = cell.Erad0 + cell.Src;
+		sol.residual = br.flo;
+		sol.nevals = br.nevals;
+		sol.converged = false;
+		ApplyEnergyFloors(cell, sol);
+		return sol;
+	}
+
+	quokka::math::eps_tolerance<double> tolerance(tol);
+	int iters = max_root_iterations_;
+	const auto [lo, hi] = quokka::math::brent_solve(H, br.lo, br.hi, br.flo, br.fhi, tolerance, iters);
+	auto sol = DustCouplingState(cell, lo / 2 + hi / 2);
+	sol.converged = tolerance(lo, hi);
+	sol.nevals = nevals;
+	ApplyEnergyFloors(cell, sol);
+	return sol;
 }
 
 #endif // RADIATION_COUPLING_HPP_
