@@ -271,6 +271,41 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(CouplingCel
 	return result;
 }
 
+// The energy exchange of an isothermal gas: there is none. The radiation keeps its energy, source included, and only the
+// flux is updated, which needs kappaF. The opacity of such a problem does not depend on the temperature, so kappaF is
+// built directly from the opacity hooks at an undefined temperature (the Planck-weighted flux mean of
+// ComputeOpacityTermsAt would be NaN there); the power-law models take the fixed-slope group mean.
+template <typename problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::IsothermalEnergyExchange(CouplingCell<problem_t> const &cell) -> EnergyExchangeResult<problem_t>
+{
+	EnergyExchangeResult<problem_t> result{};
+	result.EradVec = cell.Erad0 + cell.Src;
+	result.T_gas = NAN;
+	result.T_d = NAN;
+	result.work = cell.work;
+	if constexpr (nGroups_ == 1) {
+		result.opacity_terms.kappaF[0] = ComputeFluxMeanOpacity(cell.rho, NAN);
+	} else {
+		const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(cell.rad_boundaries, cell.rho, NAN);
+		if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+			for (int g = 0; g < nGroups_; ++g) {
+				result.opacity_terms.kappaF[g] = kappa_expo_and_lower_value[1][g];
+			}
+		} else {
+			amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
+			for (int g = 0; g < nGroups_; ++g) {
+				alpha_quant_minus_one[g] = -1.0;
+			}
+			if constexpr (special_edge_bin_slopes) {
+				alpha_quant_minus_one[0] = 2.0;
+				alpha_quant_minus_one[nGroups_ - 1] = -4.0;
+			}
+			result.opacity_terms.kappaF = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, cell.rad_boundary_ratios, alpha_quant_minus_one);
+		}
+	}
+	return result;
+}
+
 // The energy exchange of one cell over the step: the bracketed solve of radiation_coupling.hpp in the form the dust
 // model selects, the iteration counters, and the opacities at the temperature the radiation coupled at, which the flux
 // update needs. An unconverged cell keeps its old state and is counted; the driver aborts on the count.
@@ -667,35 +702,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				Egas_guess = updated_energy.Egas;
 				work_prev = work;
 			} else {
-				// isothermal gas: no energy exchange; the radiation keeps its energy, source included, and only the
-				// flux is updated. The opacity of such a problem does not depend on the temperature, so kappaF is
-				// built directly from the opacity hooks at an undefined temperature (the Planck-weighted flux mean
-				// of ComputeOpacityTermsAt would be NaN there).
-				updated_energy.EradVec = Erad0Vec + Src;
-				updated_energy.T_gas = NAN;
-				updated_energy.T_d = NAN;
-				updated_energy.work = work;
-				if constexpr (nGroups_ == 1) {
-					updated_energy.opacity_terms.kappaF[0] = ComputeFluxMeanOpacity(rho, NAN);
-				} else {
-					const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g, rho, NAN);
-					if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-						for (int g = 0; g < nGroups_; ++g) {
-							updated_energy.opacity_terms.kappaF[g] = kappa_expo_and_lower_value[1][g];
-						}
-					} else {
-						amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
-						for (int g = 0; g < nGroups_; ++g) {
-							alpha_quant_minus_one[g] = -1.0;
-						}
-						if constexpr (special_edge_bin_slopes) {
-							alpha_quant_minus_one[0] = 2.0;
-							alpha_quant_minus_one[nGroups_ - 1] = -4.0;
-						}
-						updated_energy.opacity_terms.kappaF =
-						    ComputeGroupMeanOpacity(kappa_expo_and_lower_value, cell.rad_boundary_ratios, alpha_quant_minus_one);
-					}
-				}
+				updated_energy = IsothermalEnergyExchange(cell);
 			}
 
 			// 2. the flux and momentum update

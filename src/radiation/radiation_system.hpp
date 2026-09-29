@@ -590,6 +590,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto SolveEnergyExchange(CouplingCell<problem_t> const &cell, double tol, int *p_iteration_counter,
 							 int *p_iteration_failure_counter) -> EnergyExchangeResult<problem_t>;
 	AMREX_GPU_DEVICE static auto SolveDustAbsorptionBands(CouplingCell<problem_t> const &cell, int *p_iteration_counter) -> EnergyExchangeResult<problem_t>;
+	AMREX_GPU_DEVICE static auto IsothermalEnergyExchange(CouplingCell<problem_t> const &cell) -> EnergyExchangeResult<problem_t>;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
