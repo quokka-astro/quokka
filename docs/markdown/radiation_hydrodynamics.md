@@ -5,7 +5,7 @@
 > The radiation module has been verified against the test problems in [@Wibking_2022], [@He_2024], and [@He_2024b], but is still marked **beta** for science-use maturity. Please cite the relevant methods paper and record the exact commit hash used.
 >
 
-Quokka solves the equations of radiation hydrodynamics (RHD) with a two-moment (M1) method in the mixed-frame formulation, accurate to first order in \\(v/c\\). Radiation may be grey (a single frequency-integrated group) or multigroup, and the solver is *asymptotic-preserving*: it recovers the correct diffusion solution even when the photon mean free path is far smaller than a cell. This page summarises what is solved, how, and how to set it up. The methods are presented in full in three papers, cited throughout below: the Godunov radiation solver in [@Wibking_2022], the grey time-integration scheme in [@He_2024], and the multigroup formulation in [@He_2024b]. The stage-by-stage structure of the time integrator is documented separately in the [Radiation Integrator](radiation_integrator.md) page, and the full conservation-law system including MHD, dust, and gravity in [Equations](equations.md). The matter-radiation coupling solve is newer than these papers; it is summarised in [The implicit solve](#the-implicit-solve) and derived in [Radiation Integrator](radiation_integrator.md#matter-radiation-coupling-solve).
+Quokka solves the equations of radiation hydrodynamics (RHD) with a two-moment (M1) method in the mixed-frame formulation, accurate to first order in \\(v/c\\). Radiation may be grey (a single frequency-integrated group) or multigroup, and the solver is *asymptotic-preserving*: it recovers the correct diffusion solution even when the photon mean free path is far smaller than a cell. This page summarises what is solved, how, and how to set it up. The methods are presented in full in three papers, cited throughout below: the Godunov radiation solver in [@Wibking_2022], the grey time-integration scheme in [@He_2024], and the multigroup formulation in [@He_2024b]. The stage-by-stage structure of the time integrator is documented separately in the [Radiation Integrator](radiation_integrator.md) page, and the full conservation-law system including MHD, dust, and gravity in [Equations](equations.md). The matter-radiation coupling solve differs from the one in these papers; it is summarised in [The implicit solve](#the-implicit-solve) and derived in [Radiation Integrator](radiation_integrator.md#matter-radiation-coupling-solve).
 
 ## Equations solved
 
@@ -167,7 +167,7 @@ which is positive when the gas heats the dust. Here \\(k\_{\rm gd}\\) is the run
 \sum_g Q_g(T_d) = \Lambda_{\rm gd} \, , \qquad \frac{\partial E_{\rm gas}}{\partial t} = - \Lambda_{\rm gd} \, .
 </script>
 
-The balance fixes \\(T\_d\\) in every cell at every implicit stage; \\(T\_d\\) is not a state variable and is not advected. One set of equations covers every coupling strength. At \\(k\_{\rm gd} = 0\\) the dust is in pure radiative equilibrium with the local field and the gas is thermally decoupled from the radiation (the [1D H II region test](tests/DTypeFront1D.md) runs in this limit); as \\(k\_{\rm gd} \to \infty\\), \\(T\_d \to T\\) and case I is recovered. There is no longer a separate well-coupled and decoupled regime. Case II works with single-group and multigroup radiation, and cannot be combined with [dust-absorption-only mode](#dust-absorption-only-mode).
+The balance fixes \\(T\_d\\) in every cell at every implicit stage; \\(T\_d\\) is not a state variable and is not advected. One set of equations covers every coupling strength. At \\(k\_{\rm gd} = 0\\) the dust is in pure radiative equilibrium with the local field and the gas is thermally decoupled from the radiation (the [1D H II region test](tests/DTypeFront1D.md) runs in this limit); as \\(k\_{\rm gd} \to \infty\\), \\(T\_d \to T\\) and case I is recovered. Case II works with single-group and multigroup radiation, and cannot be combined with [dust-absorption-only mode](#dust-absorption-only-mode).
 
 ### The multigroup four-force
 
@@ -241,20 +241,78 @@ One practical consequence, demonstrated in [@He_2024]: because the scheme is asy
 
 Each implicit stage solves, cell by cell, a system of \\(4 + 4 N\_g\\) equations for the gas energy, the gas momentum, and the energy and flux of every group. Following [@Wibking_2022] and [@He_2024b], it is split into two nested parts:
 
-- an **inner** solve of the energy exchange of [Thermal bands](#thermal-bands-matter-radiation-coupling), with \\(\boldsymbol{v}\\) and \\(\boldsymbol{F}\_g\\) frozen. The group equations are linear in the group energies at a fixed matter temperature, so they are eliminated in closed form, and the inner solve is **one scalar equation**: energy conservation in the gas energy in case I, and the gas equation in the dust temperature in case II. It is bracketed by marching outward from the old state and solved with Brent's method to a relative tolerance on the unknown. The derivation, the bracket and the tolerance are in [Radiation Integrator](radiation_integrator.md#matter-radiation-coupling-solve);
+- an **inner** solve of the energy exchange of [Thermal bands](#thermal-bands-matter-radiation-coupling), with \\(\boldsymbol{v}\\) and \\(\boldsymbol{F}\_g\\) frozen. The group equations are linear in the group energies at a fixed matter temperature, so they are solved directly, and the inner solve reduces to **one scalar equation** (see [Reduction to one equation](#reduction-to-one-equation) below). It is bracketed by marching outward from the old state and solved with Brent's method to a relative tolerance on the unknown; the bracket and the tolerance are described in [Radiation Integrator](radiation_integrator.md#matter-radiation-coupling-solve);
 - an **outer** iteration that updates \\(\boldsymbol{F}\_g\\) and the gas momentum analytically, then returns to the inner solve if the velocity-dependent terms have changed.
 
 Each group couples to the matter but not directly to any other group, which is what makes the elimination possible; a term that moved energy between groups directly would need a different solver. Outside the dynamic diffusion limit the outer loop almost always converges in one pass.
 
-The inner solve is an improvement over the Newton-Raphson iteration of [@Howell_2003] on all \\(1 + N\_g\\) energy variables, which Quokka used before:
-
-- **The group energies are eliminated exactly**, not carried as unknowns and linearised about their old values. In an optically thick cell far from equilibrium, the first step of that linearisation can point away from the root.
-- **The root is bracketed before it is refined**, so the solve cannot diverge. Marching from the old state also selects the root connected to it when a steep opacity law gives the step more than one.
-- **Convergence is judged on the unknown, never on a residual.** A Newton residual of the form \\(\tau\_g (4 \pi B\_g / c - E\_g)\\), with \\(\tau\_g\\) the optical depth of the step, carries a round-off error of about \\(\epsilon \\, \tau\_g\\) times the cell's energy (\\(\epsilon\\) is the machine epsilon), so a residual test at \\(10^{-11}\\) cannot be met once \\(\tau\_g \gtrsim 10^5\\).
-- **No Jacobian and no linear solve.** Each evaluation of the scalar equation costs one Planck integral per group.
-- **One equation covers every dust-gas coupling strength**, from dust in pure radiative equilibrium to dust locked to the gas, so the earlier split into a well-coupled and a decoupled regime is gone.
-
 **Under `dust_absorption_only` there is no coupled iteration at all.** Because these bands do not emit, their exchange term does not depend on the gas temperature; and because their absorbed energy is not given to the gas, the gas energy does not depend on theirs. Nothing couples, so the coupling solve is skipped outright and each group is updated in closed form, \\(E\_g \to (E\_g + S\_g + W\_g) / (1 + \hat{c} \\, \rho \kappa\_{0E,g} \\, \Delta t)\\), where \\(W\_g\\) is the work term. The outer iteration remains and is the only iteration left: it converges \\(W\_g\\), which is the one quantity these bands deliver to the gas, and is how radiation pressure keeps doing work on it even though no heat is exchanged.
+
+#### Reduction to one equation
+
+Each implicit stage takes one backward-Euler step, of length \\(\Delta t\\) (the implicit step of the stage), of the energy exchange of [Thermal bands](#thermal-bands-matter-radiation-coupling). The external radiation source \\(S\_g\\) and the \\(v/c\\) work term \\(W\_g\\), which is lagged across the outer iteration, are held fixed over the step and folded into the old state,
+
+<script type="math/tex; mode=display">
+\mathrm{rad0}_g = E_g^n + S_g + W_g \, , \qquad \mathrm{gas0} = E_{\rm gas}^n - \frac{c}{\hat c} \sum_g W_g \, ,
+</script>
+
+and the net emission is written as \\(Q\_g = c \\, (\varepsilon\_g - \alpha\_g E\_g)\\), with the emission and absorption coefficients \\(\varepsilon\_g = 4 \pi \chi\_{0B,g} B\_g / c\\) and \\(\alpha\_g = \chi\_{0E,g}\\) (\\(\chi\_{0P}\\) and \\(\chi\_{0E}\\) for one group) evaluated at the matter temperature.
+
+**Case I.** The unknowns are \\(E\_{\rm gas}\\) and the \\(N\_g\\) group energies; the gas temperature \\(T\\) follows from \\(E\_{\rm gas}\\) through the equation of state. The backward-Euler step is
+
+<script type="math/tex; mode=display">
+\begin{aligned}
+E_g - \mathrm{rad0}_g &= \Delta t \, \hat c \left[ \varepsilon_g(T) - \alpha_g(T) \, E_g \right] , \qquad g = 1 \ldots N_g \, , \\[4pt]
+E_{\rm gas} - \mathrm{gas0} &= - \frac{c}{\hat c} \sum_g \left( E_g - \mathrm{rad0}_g \right) .
+\end{aligned}
+</script>
+
+No group appears in the equation of another group: the groups meet only through \\(T\\). At a fixed \\(T\\), each group equation is therefore linear in its own \\(E\_g\\) and is solved directly,
+
+<script type="math/tex; mode=display">
+E_g(T) = \frac{\mathrm{rad0}_g + \Delta t \, \hat c \, \varepsilon_g(T)}{1 + \Delta t \, \hat c \, \alpha_g(T)} \, ,
+</script>
+
+a weighted mean of the energy the group starts from and its equilibrium value \\(\varepsilon\_g / \alpha\_g\\), with weights \\(1\\) and \\(\Delta t \\, \hat c \\, \alpha\_g\\), the optical depth of the step. The stiffness of an optically thick group, \\(\Delta t \\, \hat c \\, \alpha\_g \gg 1\\), is handled exactly by this formula, and a transparent group keeps \\(\mathrm{rad0}\_g\\). Substituting \\(E\_g(T(E\_{\rm gas}))\\) into the gas equation leaves one equation in one unknown,
+
+<script type="math/tex; mode=display">
+G(E_{\rm gas}) \equiv E_{\rm gas} - \mathrm{gas0} + \frac{c}{\hat c} \sum_g \left[ E_g\big(T(E_{\rm gas})\big) - \mathrm{rad0}_g \right] = 0 \, ,
+</script>
+
+which states that the total energy \\(E\_{\rm gas} + (c / \hat c) \sum\_g E\_g\\) is the same after the step as before it.
+
+**Case II.** The unknowns are \\(E\_{\rm gas}\\), the group energies, and \\(T\_d\\). With \\(\Lambda\_{\rm gd}(T, T\_d) = k\_{\rm gd} \\, n\_{\rm H}^2 \\, T^{1/2} (T - T\_d)\\), the backward-Euler step consists of the group equations, the dust energy balance, and the gas equation,
+
+<script type="math/tex; mode=display">
+\begin{aligned}
+E_g - \mathrm{rad0}_g &= \Delta t \, \hat c \left[ \varepsilon_g(T_d) - \alpha_g(T_d) \, E_g \right] , \qquad g = 1 \ldots N_g \, , \\[4pt]
+\frac{c}{\hat c} \sum_g \left( E_g - \mathrm{rad0}_g \right) &= \Delta t \, \Lambda_{\rm gd}(T, T_d) \, , \\[4pt]
+E_{\rm gas} - \mathrm{gas0} &= - \Delta t \, \Lambda_{\rm gd}(T, T_d) \, .
+\end{aligned}
+</script>
+
+Now the groups meet only through \\(T\_d\\), so at a fixed \\(T\_d\\) the group equations are again linear and give \\(E\_g(T\_d)\\) by the formula above with \\(T\\) replaced by \\(T\_d\\). Adding the last two equations gives the gas energy directly as well, from energy conservation,
+
+<script type="math/tex; mode=display">
+E_{\rm gas}(T_d) = \mathrm{gas0} - \frac{c}{\hat c} \sum_g \left[ E_g(T_d) - \mathrm{rad0}_g \right] ,
+</script>
+
+and with it the gas temperature \\(T(T\_d)\\). What is left is the dust energy balance, one equation in one unknown,
+
+<script type="math/tex; mode=display">
+H(T_d) \equiv \frac{c}{\hat c} \sum_g \left[ E_g(T_d) - \mathrm{rad0}_g \right] - \Delta t \, \Lambda_{\rm gd}\big(T(T_d), T_d\big) = 0 \, .
+</script>
+
+Total energy is conserved at every trial \\(T\_d\\), not only at the root. At \\(k\_{\rm gd} = 0\\) the gas energy stays at \\(\mathrm{gas0}\\) and \\(H = 0\\) is the radiative equilibrium of the dust; as \\(k\_{\rm gd} \to \infty\\), \\(T\_d \to T\\) and \\(H = 0\\) becomes \\(G = 0\\) of case I.
+
+#### Comparison with the Newton-Raphson iteration
+
+The inner solve differs from the Newton-Raphson iteration of [@Howell_2003], used in [@Wibking_2022], [@He_2024], and [@He_2024b], which iterates on all \\(1 + N\_g\\) energy variables and tests convergence on the residuals of their equations:
+
+- **The group energies are eliminated exactly** rather than iterated on. A Newton step linearises them about the current iterate, and in an optically thick cell far from equilibrium the first step, taken about the starting group energies, can point away from the root.
+- **The root is bracketed before it is refined**, so the solve cannot diverge. Marching from the old state also selects the root connected to it when a steep opacity law gives the step more than one.
+- **Convergence is judged on the unknown, not on a residual.** A group residual of the form \\(\tau\_g (4 \pi B\_g / c - E\_g)\\), with \\(\tau\_g\\) the optical depth of the step, carries a round-off error of about \\(\epsilon \\, \tau\_g\\) times the cell's energy (\\(\epsilon\\) is the machine epsilon), so a residual test at \\(10^{-11}\\) cannot be met once \\(\tau\_g \gtrsim 10^5\\). A relative tolerance on the gas energy means the same at every optical depth.
+- **No Jacobian and no linear solve.** Each evaluation of the scalar equation costs one Planck integral per group.
 
 ## Multigroup opacity models
 
@@ -478,4 +536,4 @@ Because the three Quokka methods papers share authors and year, the short citati
 - [@He_2024] — *An asymptotically correct implicit-explicit time integration scheme for finite volume radiation-hydrodynamics*. The IMEX PD-ARS scheme of [Numerical method](#numerical-method), its asymptotic analysis in the static and dynamic diffusion limits, and the removal of the wavespeed correction.
 - [@He_2024b] — *A novel numerical method for mixed-frame multigroup radiation-hydrodynamics with GPU acceleration implemented in the QUOKKA code*. Everything multigroup: the group-integrated four-force of [The multigroup four-force](#the-multigroup-four-force), the PC and PPL [opacity models](#multigroup-opacity-models), and the group-integrated source terms.
 
-The mixed-frame formulation itself follows [@MihalasMihalas] and [@Krumholz2007]. The matter-radiation coupling solve of [The implicit solve](#the-implicit-solve) is an improvement over the Newton-Raphson iteration of [@Howell_2003], which earlier versions of Quokka used: it eliminates the group energies exactly and solves one bracketed scalar equation, which cannot diverge and whose tolerance holds at any optical depth, and it treats a separate dust temperature at any coupling strength with the same equation. It is newer than the three papers above and is documented on this page and in [Radiation Integrator](radiation_integrator.md#matter-radiation-coupling-solve). If you use the radiation module, please cite the papers that apply to your work — see [Citation](citation.md).
+The mixed-frame formulation itself follows [@MihalasMihalas] and [@Krumholz2007]. The matter-radiation coupling solve of [The implicit solve](#the-implicit-solve) is an improvement over the Newton-Raphson iteration of [@Howell_2003], which [@Wibking_2022], [@He_2024], and [@He_2024b] use: it eliminates the group energies exactly and solves one bracketed scalar equation, which cannot diverge and whose tolerance holds at any optical depth, and it treats a separate dust temperature at any coupling strength with the same equation. It is not part of the three Quokka papers above; it is documented on this page and in [Radiation Integrator](radiation_integrator.md#matter-radiation-coupling-solve). If you use the radiation module, please cite the papers that apply to your work — see [Citation](citation.md).
