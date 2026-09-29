@@ -1260,6 +1260,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 							       static_cast<quokka::direction>(idim), AMRSimulation<problem_t>::InterpHookNone,
 							       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 				}
+				AMRSimulation<problem_t>::applyMHDDiodeBC(state, state_fc, lev);
 			}
 			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
@@ -2495,6 +2496,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 					       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
 					       FillPatchType::fillpatch_function);
 		}
+		AMRSimulation<problem_t>::applyMHDDiodeBC(state_old_cc_tmp, state_old_fc_tmp, lev);
 	}
 
 	// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
@@ -2653,6 +2655,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 						       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone,
 						       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 			}
+			AMRSimulation<problem_t>::applyMHDDiodeBC(state_inter_cc_, state_inter_fc_, lev);
 		}
 
 		// check intermediate state validity
