@@ -201,21 +201,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<proble
 	quokka::math::eps_tolerance<double> tolerance(tol);
 	int iters = max_root_iterations_;
 	const auto bracket = quokka::math::brent_solve_bracket(G, br.lo, br.hi, br.flo, br.fhi, tolerance, iters);
-	// Rebuild the full state (group energies, temperature) at the chosen gas energy: Brent sees only the residual G, and
-	// the chosen point is one it never evaluated.
+	// Brent returns only a bracket, so build the full state (group energies etc.) at the chosen gas energy.
 	//
-	// That point is where the chord through the ends of Brent's final bracket crosses zero, not an end or the midpoint.
-	// Brent stops once the bracket is narrower than tol E_gas, and where the root estimate lands inside that window
-	// depends on the path the iteration took. That path can change when the inputs change by round-off: one comparison
-	// that flips moves the final bracket by up to its own width. A state taken at an end or at the midpoint would then
-	// jump by up to tol E_gas (1e-11 relative at the default tolerance) in response to a 1e-16 change of the inputs, so
-	// the solve would amplify round-off by five orders of magnitude. Physically identical cells whose inputs differ only
-	// by round-off -- the two mirror halves of a symmetric problem, for example -- would end the step different at the
-	// level of the tolerance, and the problem would lose its symmetry there (DTypeFront1D's mirror-symmetry check measures
-	// this); the difference is also noise that later steps and other solvers can amplify further. The chord crossing is
-	// within second order in the bracket width of the root, i.e. within about tol^2 of it in relative terms, at or below
-	// round-off, so the returned state no longer depends on where Brent stopped: inputs that differ by round-off give
-	// states that differ by round-off.
+	// The chosen point is where the line through the bracket ends crosses zero, not an end or the midpoint. This fixes a
+	// problem with stopping on a tolerance: where Brent stops depends on round-off in the inputs, so an end or the midpoint
+	// can differ by up to the tolerance between cells that should be identical (e.g. the mirror halves in DTypeFront1D).
+	// The crossing is within ~tol^2 of the root, so where Brent stopped no longer matters.
 	auto sol = GasCouplingState(cell, quokka::math::secant_point(bracket));
 	sol.converged = tolerance(bracket.lo, bracket.hi);
 	sol.nevals = nevals;
