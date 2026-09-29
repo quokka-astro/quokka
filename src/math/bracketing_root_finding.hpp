@@ -83,8 +83,10 @@ template <class T> struct BracketSolveResult {
 
 /// The point where the chord through the ends of a bracket crosses zero (regula falsi), clamped to the bracket, or its
 /// midpoint when the ends do not differ or the chord is not finite. On a smooth f it is within second order in the
-/// bracket width of the root, so a state taken there depends on which bracket the solver stopped at only through terms
-/// of that order: what makes a tolerance-based solve reproducible to round-off across cells whose inputs differ by an ulp.
+/// bracket width of the root. That matters because where a tolerance-based solver stops inside its tolerance window
+/// depends on the path of the iteration, which a round-off change of the inputs can alter: a state taken at an end or
+/// the midpoint of the final bracket then jumps by up to the tolerance in response to round-off, while a state taken
+/// here changes only by terms of second order in the tolerance, i.e. by round-off.
 template <class T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto secant_point(BracketSolveResult<T> const &b) -> T
 {
 	if (b.hi <= b.lo) {
