@@ -31,8 +31,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate2d(double x, double y, 
 	y = amrex::Clamp(y, yi, yf);
 
 	// compute indices
-	int ix = amrex::Clamp(static_cast<int>(std::floor((x - xi) / dx)), xv.begin, xv.end - 1);
-	int iy = amrex::Clamp(static_cast<int>(std::floor((y - yi) / dy)), yv.begin, yv.end - 1);
+	const int ix = amrex::Clamp(xv.begin + static_cast<int>(std::floor((x - xi) / dx)), xv.begin, xv.end - 1);
+	const int iy = amrex::Clamp(yv.begin + static_cast<int>(std::floor((y - yi) / dy)), yv.begin, yv.end - 1);
 	int iix = (ix == xv.end - 1) ? ix : ix + 1;
 	int iiy = (iy == yv.end - 1) ? iy : iy + 1;
 
@@ -55,17 +55,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate2d(double x, double y, 
 		w12 = (x2 - x) * (y - y1) / vol;
 		w21 = (x - x1) * (y2 - y) / vol;
 		w22 = (x - x1) * (y - y1) / vol;
-	} else if (ix == iix && yi != iiy) {
+	} else if (ix == iix && iy != iiy) {
 		const double vol = (y2 - y1);
 		AMREX_ASSERT(vol > 0.);
 		w11 = (y2 - y) / vol;
 		w12 = (y - y1) / vol;
-	} else if (ix != iix && yi == iiy) {
+	} else if (ix != iix && iy == iiy) {
 		const double vol = (x2 - x1);
 		AMREX_ASSERT(vol > 0.);
 		w11 = (x2 - x) / vol;
 		w21 = (x - x1) / vol;
-	} else { // ix == iix && yi == iiy
+	} else { // ix == iix && iy == iiy
 		w11 = 1.0;
 	}
 
