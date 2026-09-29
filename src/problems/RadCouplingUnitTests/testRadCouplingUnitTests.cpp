@@ -57,9 +57,9 @@ struct Sweep1 {};
 struct SweepDType {};
 
 // The group opacities of SweepDType (IR, optical) in cm^2 g^-1, set on the host before each kernel launch.
-AMREX_GPU_MANAGED double dtype_kappa_ir = 1.0e-2;  // NOLINT
-AMREX_GPU_MANAGED double dtype_kappa_opt = 1.0e3;  // NOLINT
-constexpr double dtype_Tfloor = 10.0;               // K
+AMREX_GPU_MANAGED double dtype_kappa_ir = 1.0e-2;		// NOLINT
+AMREX_GPU_MANAGED double dtype_kappa_opt = 1.0e3;		// NOLINT
+constexpr double dtype_Tfloor = 10.0;				// K
 constexpr double dtype_Erad_floor = 1.0e-10 * 13.6 * C::ev2erg; // erg cm^-3, shared by the two groups
 
 } // namespace
@@ -150,9 +150,9 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputeEnergyMeanOpaci
 	return sweep_kappa(Tgas);
 }
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SweepDType>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/,
-													  const double /*rho*/, const double /*Tgas*/)
-    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<SweepDType>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+							    const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	exponents_and_values[1][0] = dtype_kappa_ir;
@@ -563,7 +563,8 @@ auto TestDTypeDustSweep() -> int
 							for (const double dt : {1.6e9, 1.6e11}) {
 								for (const double w : {0.0, 0.5, -0.5}) {
 									cells.push_back(make_dtype_cell(n_H, Tg, E_ir, E_opt, dt, k_gd, w));
-									params.push_back(std::format("kappa_ir {:.0e} n_H {:.0e} Tg {:.0f} E_opt {:.0e} E_ir {:.0e} k_gd {:.1e} dt {:.1e} w {}",
+									params.push_back(std::format("kappa_ir {:.0e} n_H {:.0e} Tg {:.0f} E_opt {:.0e} E_ir "
+												     "{:.0e} k_gd {:.1e} dt {:.1e} w {}",
 												     kappa_ir, n_H, Tg, E_opt, E_ir, k_gd, dt, w));
 								}
 							}
@@ -600,7 +601,8 @@ auto TestDTypeDustSweep() -> int
 			worst_Td = std::max(worst_Td, std::abs(sol.T_d / refs[i].T_d - 1.0));
 			if (dE / Etot0 > worst_state) {
 				worst_state = dE / Etot0;
-				worst_cell = std::format("{}: Egas {:.16e} vs ref {:.16e}, Etot {:.3e} ({} evals)", params[i], sol.Egas, refs[i].Egas, Etot0, sol.nevals);
+				worst_cell = std::format("{}: Egas {:.16e} vs ref {:.16e}, Etot {:.3e} ({} evals)", params[i], sol.Egas, refs[i].Egas, Etot0,
+							 sol.nevals);
 			}
 			nevals_sum += sol.nevals;
 			nevals_max = std::max(nevals_max, sol.nevals);
