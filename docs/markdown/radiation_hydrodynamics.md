@@ -58,17 +58,17 @@ while the gas equations keep the full \\(c\\): both the transport of the radiati
 
 ### Radiation band types
 
-Not every group in a multigroup run has to couple to the matter in the same way. Quokka recognises three *band types*, which differ in which terms of the four-force are switched on and in where the absorbed energy goes. **Chemical** (ionizing) bands are declared individually and occupy the last groups of the frequency grid. The **dust-absorption** type is at present a property of the whole run rather than of a single band: setting `dust_absorption_only` converts every non-chemical group at once. Thermal and dust-absorption bands cannot yet be mixed in one run; supporting that is future work. The default is all-**thermal**. The three types are described in the sections that follow.
+Not every group in a multigroup run has to couple to the matter in the same way. Quokka has three *band types*, which differ in which terms of the four-force are switched on and in where the absorbed energy goes. **Thermal** bands, the default, exchange energy with the matter by emission and absorption at the local matter temperature. **Chemical** (ionizing) bands are declared individually, occupy the last groups of the frequency grid, and pass the energy they deposit to the photochemistry network. **Dust-absorption-only** bands are absorbed by dust, and the absorbed energy leaves the simulation instead of heating the gas; setting `dust_absorption_only` makes every non-chemical group one. Thermal and dust-absorption-only bands cannot yet be mixed in one run, so the non-chemical groups of a run are either all thermal or all dust-absorption-only; supporting a mix is future work. The three types are described in the sections that follow.
 
-| Band type       | Transport | Thermal emission | Absorbed energy heats the gas                        | Radiation force and work | Photochemistry |
-| --------------- | --------- | ---------------- | ---------------------------------------------------- | ------------------------ | -------------- |
-| Thermal         | yes       | yes              | yes (through the dust in the two-temperature model)  | yes                      | no             |
-| Dust-absorption | yes       | no               | **no**                                               | yes                      | no             |
-| Chemical        | yes       | no               | no (photochemistry instead)                          | yes                      | yes            |
+| Band type            | Transport | Thermal emission | Absorbed energy heats the gas                        | Radiation force and work | Photochemistry |
+| -------------------- | --------- | ---------------- | ---------------------------------------------------- | ------------------------ | -------------- |
+| Thermal              | yes       | yes              | yes (through the dust in the two-temperature model)  | yes                      | no             |
+| Chemical             | yes       | no               | no (photochemistry instead)                          | yes                      | yes            |
+| Dust-absorption-only | yes       | no               | **no**                                               | yes                      | no             |
 
-### Dust-absorption-only mode
+### Dust-absorption-only bands
 
-A dust-absorption band is one in which dust is the only absorber and the absorbed energy is promptly re-radiated at wavelengths that fall outside the frequency grid being followed. The far-ultraviolet and Lyman-Werner bands are the motivating case: they are absorbed by dust grains, which re-emit in the infrared, and they drive photoelectric heating and \\(\rm H\_2\\) dissociation rather than a thermal exchange with the gas.
+A dust-absorption-only band is one in which dust is the only absorber and the absorbed energy is promptly re-radiated at wavelengths that fall outside the frequency grid being followed. The far-ultraviolet and Lyman-Werner bands are the motivating case: they are absorbed by dust grains, which re-emit in the infrared, and they drive photoelectric heating and \\(\rm H\_2\\) dissociation rather than a thermal exchange with the gas.
 
 In the notation of [The multigroup four-force](#the-multigroup-four-force) below, setting \\(B\_g = 0\\) removes the emission, momentum-of-emission, and group-coupling terms from the four-force, leaving
 
@@ -79,20 +79,20 @@ In the notation of [The multigroup four-force](#the-multigroup-four-force) below
 \end{aligned}
 </script>
 
-The momentum exchange is untouched, so the gas feels the full radiation force: dust and gas remain *dynamically* coupled even though they are not thermally coupled. This is the point of the mode — in a galaxy simulation the radiation pressure on dust is a first-order effect on the dynamics and must not be dropped along with the thermal exchange.
+The momentum exchange is untouched, so the gas feels the full radiation force: dust and gas remain *dynamically* coupled even though they are not thermally coupled. This is the point of these bands — in a galaxy simulation the radiation pressure on dust is a first-order effect on the dynamics and must not be dropped along with the thermal exchange.
 
-What distinguishes the mode is where the absorbed energy goes. For a thermal band the gas energy equation receives the whole of \\(c G^0\_g\\). For a dust-absorption band it receives only the work part,
+What distinguishes these bands is where the absorbed energy goes. For a thermal band the gas energy equation receives the whole of \\(c G^0\_g\\). For a dust-absorption-only band it receives only the work part,
 
 <script type="math/tex; mode=display">
 c G^0_{g,\,\rm gas} = - c^{-1} (1 + \alpha_{\chi_0, g}) \chi_{0F,g} \, v^i F_g^i \, ,
 </script>
 
-while the radiation moments still lose the full \\(- c G^0\_g\\) above: the photons really are absorbed, they simply do not heat the gas. The difference, \\(c \chi\_{0E,g} E\_g\\) per unit volume, leaves the simulation. **Total energy is therefore not conserved in this mode.** That is by construction, not an error: the energy has gone into the dust, which radiates it away in the infrared, and neither the dust temperature nor that infrared emission is followed.
+while the radiation moments still lose the full \\(- c G^0\_g\\) above: the photons really are absorbed, they simply do not heat the gas. The difference, \\(c \chi\_{0E,g} E\_g\\) per unit volume, leaves the simulation. **Total energy is therefore not conserved in a run with dust-absorption-only bands.** That is by construction, not an error: the energy has gone into the dust, which radiates it away in the infrared, and neither the dust temperature nor that infrared emission is followed.
 
 Two consequences are worth stating plainly.
 
-- **The absorbed energy does not heat the gas.** The physical heating channel for FUV photons is photoelectric heating off grains, whose efficiency depends on the grain charge and therefore on the local electron density and radiation field — not on the absorbed energy alone. A dust-absorption band delivers the radiation field \\(E\_g\\) to the cell, and the heating rate is computed from it, either by the [photoelectric heating](#photoelectric-heating) below or by a chemistry and cooling module such as Grackle. Adding the absorbed energy to the gas as well would double-count it.
-- **The mode assumes weak gas-dust thermal coupling.** Dust and gas exchange heat at a rate \\(\propto n^2\\), so the assumption that the dust returns none of the absorbed energy to the gas holds only at low density. For the \\(\gtrsim 1\\,\rm pc\\) resolution of a galaxy simulation, where the resolved gas density stays below \\(\sim 10^3\\,\rm cm^{-3}\\), the coupling is weak everywhere and the approximation is safe. At the densities reached in a resolved star-forming core it is not, and thermal bands with a separate dust temperature (the [two-temperature model](#two-temperature-model-a-separate-dust-temperature)) should be used instead. The two are mutually exclusive, and combining them is a compile-time error.
+- **The absorbed energy does not heat the gas.** The physical heating channel for FUV photons is photoelectric heating off grains, whose efficiency depends on the grain charge and therefore on the local electron density and radiation field — not on the absorbed energy alone. A dust-absorption-only band delivers the radiation field \\(E\_g\\) to the cell, and the heating rate is computed from it, either by the [photoelectric heating](#photoelectric-heating) below or by a chemistry and cooling module such as Grackle. Adding the absorbed energy to the gas as well would double-count it.
+- **These bands assume weak gas-dust thermal coupling.** Dust and gas exchange heat at a rate \\(\propto n^2\\), so the assumption that the dust returns none of the absorbed energy to the gas holds only at low density. For the \\(\gtrsim 1\\,\rm pc\\) resolution of a galaxy simulation, where the resolved gas density stays below \\(\sim 10^3\\,\rm cm^{-3}\\), the coupling is weak everywhere and the approximation is safe. At the densities reached in a resolved star-forming core it is not, and thermal bands with a separate dust temperature (the [two-temperature model](#two-temperature-model-a-separate-dust-temperature)) should be used instead. The two are mutually exclusive, and combining them is a compile-time error.
 
 #### Photoelectric heating
 
@@ -102,7 +102,7 @@ Setting a non-zero `pe_heating_efficiency` heats the gas photoelectrically from 
 \Gamma_{\rm PE} = \sum_g \epsilon_g \, R \, n_{\rm H} E_g \, , \qquad R = \frac{1.33 \times 10^{-24}}{5.29 \times 10^{-14}} \ {\rm cm^3\,s^{-1}} \, ,
 </script>
 
-where \\(1.33 \times 10^{-24}\\,\rm erg\\,s^{-1}\\) is the heating rate per hydrogen nucleus in a unit Habing field and \\(5.29 \times 10^{-14}\\,\rm erg\\,cm^{-3}\\) is the energy density that defines that field, so that \\(E\_g\\) divided by the latter is the local \\(G\_0\\). A zero entry means the band drives no photoelectric heating, which is how non-ultraviolet bands are labelled. Because the expression is linear in \\(E\_g\\), splitting one band into two and giving both the same efficiency reproduces the unsplit result exactly. Apart from transport, the gas energy in this mode therefore changes only by the work of the radiation force and by photoelectric heating,
+where \\(1.33 \times 10^{-24}\\,\rm erg\\,s^{-1}\\) is the heating rate per hydrogen nucleus in a unit Habing field and \\(5.29 \times 10^{-14}\\,\rm erg\\,cm^{-3}\\) is the energy density that defines that field, so that \\(E\_g\\) divided by the latter is the local \\(G\_0\\). A zero entry means the band drives no photoelectric heating, which is how non-ultraviolet bands are labelled. Because the expression is linear in \\(E\_g\\), splitting one band into two and giving both the same efficiency reproduces the unsplit result exactly. Apart from transport, these bands therefore change the gas energy only by the work of the radiation force and by photoelectric heating,
 
 <script type="math/tex; mode=display">
 \frac{\partial E_{\rm gas}}{\partial t} = \sum_g c G^0_{g,\,\rm gas} + \Gamma_{\rm PE} \, .
@@ -111,14 +111,14 @@ where \\(1.33 \times 10^{-24}\\,\rm erg\\,s^{-1}\\) is the heating rate per hydr
 Note what \\(\Gamma\_{\rm PE}\\) does **not** contain: the dust opacity of the band. Photoelectric heating is the photoelectric effect on grains, and the grain physics is folded into the empirical coefficient rather than taken from \\(\kappa\\). Two consequences follow, and both differ from what a fraction-of-absorbed-energy model would give.
 
 - **A transparent band still heats the gas.** A band with \\(\kappa\_g = 0\\) is not attenuated and exerts no radiation force, but if its efficiency is non-zero it heats the gas exactly as much as an absorbed band carrying the same \\(E\_g\\).
-- **The heating is not taken out of the radiation.** It is neither bounded by, nor debited from, the energy the band absorbs: it adds energy to the gas that the radiation does not lose, on top of the energy this mode already discards to the dust.
+- **The heating is not taken out of the radiation.** It is neither bounded by, nor debited from, the energy the band absorbs: it adds energy to the gas that the radiation does not lose, on top of the energy these bands already discard to the dust.
 
 What the form does buy is that it costs no iteration. \\(\Gamma\_{\rm PE}\\) depends on \\(E\_g\\), \\(n\_{\rm H}\\) and two constants, none of which depend on the gas energy, so it is added to the closed-form update rather than solved for. It also carries no \\(\hat{c}\\): it is a direct physical heating rate on the gas, not a transport rate.
 
 Three limitations are worth knowing before using this.
 
 - **cgs only.** \\(R\\) is an empirical coefficient in cgs units, so a non-zero efficiency requires `Physics_Traits::unit_system == UnitSystem::CGS`. Other unit systems are rejected at compile time rather than silently given a cgs number.
-- **The opacity is not updated for the heating.** The band solver evaluates \\(\kappa\\) once, at the gas temperature at the start of the step, and the outer iteration does not revise it — it converges the work term, not the temperature. Photoelectric heating can change the gas temperature materially within a step, so **this mode assumes the opacity does not depend on the gas temperature.** That holds for its intended use, since ultraviolet dust opacity is a property of the grains rather than of the gas, and it is exact whenever `DefineOpacityExponentsAndLowerValues` ignores its `Tgas` argument. Otherwise the opacity lags the heating by one step and the error is first order in \\(\Delta t\\).
+- **The opacity is not updated for the heating.** The band solver evaluates \\(\kappa\\) once, at the gas temperature at the start of the step, and the outer iteration does not revise it — it converges the work term, not the temperature. Photoelectric heating can change the gas temperature materially within a step, so **dust-absorption-only bands assume the opacity does not depend on the gas temperature.** That holds for its intended use, since ultraviolet dust opacity is a property of the grains rather than of the gas, and it is exact whenever `DefineOpacityExponentsAndLowerValues` ignores its `Tgas` argument. Otherwise the opacity lags the heating by one step and the error is first order in \\(\Delta t\\).
 - **\\(\epsilon\_g\\) is a compile-time constant**, so it cannot depend on the local electron density or grain charge. A problem needing an efficiency that varies with the electron density or the field strength is not served by this interface.
 
 Because this deposits photoelectric heating inside Quokka, no other part of the calculation may do so as well. Two guards enforce that at startup: the Grackle cooling table must not itself include photoelectric heating, and `use_sfh_based_pe_heating` — which answers the same question from a global star formation rate instead of the local field — must be off.
@@ -167,7 +167,7 @@ which is positive when the gas heats the dust. Here \\(k\_{\rm gd}\\) is the run
 \sum_g Q_g(T_d) = \Lambda_{\rm gd} \, , \qquad \frac{\partial E_{\rm gas}}{\partial t} = - \Lambda_{\rm gd} \, .
 </script>
 
-The balance fixes \\(T\_d\\) in every cell at every implicit stage; \\(T\_d\\) is not a state variable and is not advected. One set of equations covers every coupling strength. At \\(k\_{\rm gd} = 0\\) the dust is in pure radiative equilibrium with the local field and the gas is thermally decoupled from the radiation (the [1D H II region test](tests/DTypeFront1D.md) runs in this limit); as \\(k\_{\rm gd} \to \infty\\), \\(T\_d \to T\\) and the one-temperature model is recovered. The two-temperature model works with single-group and multigroup radiation, and cannot be combined with [dust-absorption-only mode](#dust-absorption-only-mode).
+The balance fixes \\(T\_d\\) in every cell at every implicit stage; \\(T\_d\\) is not a state variable and is not advected. One set of equations covers every coupling strength. At \\(k\_{\rm gd} = 0\\) the dust is in pure radiative equilibrium with the local field and the gas is thermally decoupled from the radiation (the [1D H II region test](tests/DTypeFront1D.md) runs in this limit); as \\(k\_{\rm gd} \to \infty\\), \\(T\_d \to T\\) and the one-temperature model is recovered. The two-temperature model works with single-group and multigroup radiation, and cannot be combined with [dust-absorption-only bands](#dust-absorption-only-bands).
 
 ### The multigroup four-force
 
@@ -398,7 +398,7 @@ The function is called on the device with the current cell density and temperatu
 
 ### Declaring band types
 
-By default every group is a thermal band. Setting `dust_absorption_only` on `RadSystem_Traits` turns every non-chemical group into a dust-absorption band for the whole run:
+By default every group is a thermal band. Setting `dust_absorption_only` on `RadSystem_Traits` turns every non-chemical group into a dust-absorption-only band for the whole run:
 
 ```c++
 template <> struct RadSystem_Traits<MyProblem> {
@@ -413,7 +413,7 @@ template <> struct RadSystem_Traits<MyProblem> {
 };
 ```
 
-The flag defaults to `false`, requires `nGroups > 1`, and cannot be combined with `ISM_Traits::enable_dust_gas_thermal_coupling_model`, which assumes a thermal exchange this mode deliberately removes, so the combination is rejected at compile time. Chemical bands are declared separately with `ChemBands()`, which returns their boundaries because the photochemistry network needs them; see [Photoionization](photoionization.md).
+The flag defaults to `false`, requires `nGroups > 1`, and cannot be combined with `ISM_Traits::enable_dust_gas_thermal_coupling_model`, which assumes a thermal exchange these bands deliberately remove, so the combination is rejected at compile time. Chemical bands are declared separately with `ChemBands()`, which returns their boundaries because the photochemistry network needs them; see [Photoionization](photoionization.md).
 
 `pe_heating_efficiency` defaults to all zeros, in which case no photoelectric heating is applied; see [Photoelectric heating](#photoelectric-heating). Each entry must lie in \\([0, 1]\\), and a non-zero entry requires both `dust_absorption_only` and cgs units; all three are checked at compile time.
 
