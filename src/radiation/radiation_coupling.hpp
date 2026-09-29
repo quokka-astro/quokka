@@ -149,10 +149,9 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ApplyEnergyFloors(CouplingCell<probl
 }
 
 // The solve without dust: bracket G by marching from the old gas energy, hand it to Brent, and take the state where the
-// chord through the ends of the final bracket crosses zero. The tolerance is relative on the unknown, |hi - lo| <= tol min(|lo|, |hi|), which for an ideal gas is a
-// relative tolerance on the gas temperature. The conservation error that follows is at most about dG/dE_gas times
-// tol E_gas (much less at the chord crossing); it
-// is not tested per cell (RadCouplingUnitTests measures it over a sweep of 240 cells taken from hydro3d.jl).
+// chord through the ends of the final bracket crosses zero. The tolerance is relative on the unknown, |hi - lo| <= tol min(|lo|, |hi|), which for an ideal gas
+// is a relative tolerance on the gas temperature. The conservation error that follows is at most about dG/dE_gas times tol E_gas (much less at the chord
+// crossing); it is not tested per cell (RadCouplingUnitTests measures it over a sweep of 240 cells taken from hydro3d.jl).
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<problem_t> const &cell, double const tol) -> CouplingSolution<problem_t>
 {
