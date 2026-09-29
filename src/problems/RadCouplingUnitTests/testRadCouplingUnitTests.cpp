@@ -10,8 +10,9 @@
 /// docs/coupling-new-method-dust.md section 6) in code units: c = chat = a_rad = k_B = 1, rho = 1 and
 /// mu = 1.5 so that c_V = 1, four groups spaced logarithmically between 0.1 and 20, and a temperature floor of
 /// 1e-10. hydro3d's dust sweep varies rho at fixed c_V, which an ideal gas cannot do, so kappa_0 is varied over
-/// the same four decades instead. Every case runs inside an amrex::ParallelFor, so the same code is exercised on
-/// the host (CPU build) and on the device (GPU build).
+/// the same four decades instead. A third sweep solves the two-temperature system in CGS at the conditions of a
+/// dusty D-type ionization front (the DTypeFront1D setup of PR #2305). Every case runs inside an amrex::ParallelFor,
+/// so the same code is exercised on the host (CPU build) and on the device (GPU build).
 
 #include "AMReX.H"
 #include "AMReX_Gpu.H"
@@ -52,6 +53,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sweep_kappa(double T) -> double { 
 struct Sweep4 {};
 // One group: the grey dust sweep.
 struct Sweep1 {};
+// CGS, IR and optical groups of a dusty D-type front: the hard dust sweep.
+struct SweepDType {};
+
+// The group opacities of SweepDType (IR, optical) in cm^2 g^-1, set on the host before each kernel launch.
+AMREX_GPU_MANAGED double dtype_kappa_ir = 1.0e-2;  // NOLINT
+AMREX_GPU_MANAGED double dtype_kappa_opt = 1.0e3;  // NOLINT
+constexpr double dtype_Tfloor = 10.0;               // K
+constexpr double dtype_Erad_floor = 1.0e-10 * 13.6 * C::ev2erg; // erg cm^-3, shared by the two groups
 
 } // namespace
 
@@ -100,6 +109,26 @@ template <> struct RadSystem_Traits<Sweep1> {
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 };
 
+template <> struct quokka::EOS_Traits<SweepDType> {
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double gamma = 5. / 3.;
+};
+template <> struct Physics_Traits<SweepDType> : DefaultPhysicsTraits {
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_radiation_enabled = true;
+	static constexpr int nGroups = 2;
+	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+};
+// The thermal bands of the D-type front: IR below 0.41 eV, optical up to the Lyman edge; chat = c / 1000.
+template <> struct RadSystem_Traits<SweepDType> {
+	static constexpr double c_hat_over_c = 1.0e-3;
+	static constexpr double Erad_floor = dtype_Erad_floor;
+	static constexpr int beta_order = 1;
+	static constexpr double energy_unit = C::ev2erg;
+	static constexpr amrex::GpuArray<double, 3> radBoundaries = {1.0e-6, 0.413567, 13.6};
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+};
+
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<Sweep4>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/,
 												      const double /*rho*/, const double Tgas)
@@ -119,6 +148,16 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputePlanckOpacity(c
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<Sweep1>::ComputeEnergyMeanOpacity(const double /*rho*/, const double Tgas) -> amrex::Real
 {
 	return sweep_kappa(Tgas);
+}
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SweepDType>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/,
+													  const double /*rho*/, const double /*Tgas*/)
+    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+{
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	exponents_and_values[1][0] = dtype_kappa_ir;
+	exponents_and_values[1][1] = dtype_kappa_opt;
+	return exponents_and_values;
 }
 
 namespace
@@ -150,6 +189,32 @@ template <typename P> auto make_cell(double Tgas, double Trad, double dt, double
 	}
 	cell.Src.fillin(0.0);
 	cell.work.fillin(0.0);
+	return cell;
+}
+
+/// One SweepDType cell in CGS: hydrogen number density n_H [cm^-3], gas temperature [K], IR and optical group energies
+/// [erg cm^-3] (held at the floor at least), step dt [s], collisional coefficient k_gd [erg cm^3 s^-1 K^-3/2], and a
+/// lagged work term on the optical group equal to w times its energy.
+auto make_dtype_cell(double n_H, double Tgas, double E_ir, double E_opt, double dt, double k_gd, double w) -> CouplingCell<SweepDType>
+{
+	using P = SweepDType;
+	CouplingCell<P> cell{};
+	cell.rho = n_H * C::m_u;
+	cell.dt = dt;
+	cell.tau_scale = dt * RadSystem<P>::c_hat_;
+	cell.dtK = dt * k_gd * n_H * n_H;
+	cell.Tfloor = dtype_Tfloor;
+	cell.Emin = quokka::EOS<P>::ComputeEintFromTgas(cell.rho, dtype_Tfloor, cell.massScalars);
+	cell.Egas0 = quokka::EOS<P>::ComputeEintFromTgas(cell.rho, Tgas, cell.massScalars);
+	cell.rad_boundaries = RadSystem<P>::radBoundaries_;
+	for (int g = 0; g < 2; ++g) {
+		cell.rad_boundary_ratios[g] = cell.rad_boundaries[g + 1] / cell.rad_boundaries[g];
+	}
+	cell.Erad0[0] = std::max(E_ir, RadSystem<P>::Erad_floor_);
+	cell.Erad0[1] = std::max(E_opt, RadSystem<P>::Erad_floor_);
+	cell.Src.fillin(0.0);
+	cell.work.fillin(0.0);
+	cell.work[1] = w * cell.Erad0[1];
 	return cell;
 }
 
@@ -462,6 +527,111 @@ auto TestDustSweep() -> int
 	return (n_failed > 0) ? 1 : 0;
 }
 
+// The two-temperature system at the conditions of a dusty D-type ionization front in CGS (the DTypeFront1D setup of
+// PR #2305, and the stronger optical source and IR opacity of the DTypeFront1D shipped here): chat = c / 1000, so the
+// radiation can hold far more energy than the gas; the gas at the 10 K floor or photoheated; IR and optical
+// radiation from the floor to near the source; the gas-dust coupling from zero (the PR #2305 input) through the default
+// coefficient to 1e8 times it; radiation substeps and hydro-sized steps; and a lagged work term of +-half the optical
+// energy, which in a radiation-dominated cell charges the gas many times its own energy.
+auto TestDTypeDustSweep() -> int
+{
+	using P = SweepDType;
+	std::vector<CouplingCell<P>> cells_all;
+	std::vector<std::string> labels;
+	int ncells = 0;
+	int nfail = 0;
+	int nfail_ref = 0;
+	int nfloored = 0;
+	int nbad = 0;
+	double worst_energy = 0.0;  // cells above the gas floor: relative change of the conserved total
+	double worst_created = 0.0; // cells at the gas floor: energy created, relative to the floor energy it can come from
+	double worst_state = 0.0;   // |Egas - Egas_ref| / Etot
+	double worst_Td = 0.0;	    // |T_d / T_d_ref - 1|
+	std::string worst_cell;
+	std::int64_t nevals_sum = 0;
+	int nevals_max = 0;
+	for (const double kappa_ir : {1.0e-2, 10.0}) {
+		dtype_kappa_ir = kappa_ir;
+		dtype_kappa_opt = 1.0e3;
+		std::vector<CouplingCell<P>> cells;
+		std::vector<std::string> params;
+		for (const double n_H : {40.0, 1.0e2, 1.0e4}) {
+			for (const double Tg : {10.0, 42.0, 1.0e3, 8.0e3}) {
+				for (const double E_opt : {0.0, 1.0e-13, 1.0e-11, 1.0e-9}) {
+					for (const double E_ir : {0.0, 1.0e-12, 1.0e-9}) {
+						for (const double k_gd : {0.0, 2.5e-34, 2.5e-30, 2.5e-26}) {
+							for (const double dt : {1.6e9, 1.6e11}) {
+								for (const double w : {0.0, 0.5, -0.5}) {
+									cells.push_back(make_dtype_cell(n_H, Tg, E_ir, E_opt, dt, k_gd, w));
+									params.push_back(std::format("kappa_ir {:.0e} n_H {:.0e} Tg {:.0f} E_opt {:.0e} E_ir {:.0e} k_gd {:.1e} dt {:.1e} w {}",
+												     kappa_ir, n_H, Tg, E_opt, E_ir, k_gd, dt, w));
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		const auto sols = solve_cells<P, true>(cells, 1.0e-9);
+		const auto refs = solve_cells<P, true>(cells, 1.0e-12);
+		for (std::size_t i = 0; i < cells.size(); ++i) {
+			const auto &cell = cells[i];
+			const auto &sol = sols[i];
+			const double Etot0 = conserved_total(cell);
+			const double Etot1 = total_energy(cell, sol.Egas, sol.Erad);
+			nfail += sol.converged ? 0 : 1;
+			nfail_ref += refs[i].converged ? 0 : 1;
+			const bool finite = std::isfinite(sol.Egas) && std::isfinite(sol.T_d) && std::isfinite(sum(sol.Erad));
+			const bool admissible = finite && (sol.T_d >= 0.0) && (sol.Egas >= cell.Emin * (1.0 - 1.0e-12)) &&
+						(min(sol.Erad) >= RadSystem<P>::Erad_floor_ * (1.0 - 1.0e-12));
+			nbad += admissible ? 0 : 1;
+			// The floors only ever add energy, and only as much as the floor state holds: the gas at E_min and the
+			// groups at Erad_floor. Anywhere else the step conserves the total to round-off.
+			const bool floored = sol.Egas <= cell.Emin * (1.0 + 1.0e-12);
+			if (floored) {
+				++nfloored;
+				const double floor_energy = cell.Emin + (RadSystem<P>::c_light_ / RadSystem<P>::c_hat_) * dtype_Erad_floor;
+				worst_created = std::max(worst_created, (Etot1 - Etot0) / floor_energy);
+				worst_energy = std::max(worst_energy, std::max(0.0, (Etot0 - Etot1) / Etot0)); // never removes energy
+			} else {
+				worst_energy = std::max(worst_energy, std::abs(Etot1 / Etot0 - 1.0));
+			}
+			const double dE = std::abs(sol.Egas - refs[i].Egas);
+			worst_Td = std::max(worst_Td, std::abs(sol.T_d / refs[i].T_d - 1.0));
+			if (dE / Etot0 > worst_state) {
+				worst_state = dE / Etot0;
+				worst_cell = std::format("{}: Egas {:.16e} vs ref {:.16e}, Etot {:.3e} ({} evals)", params[i], sol.Egas, refs[i].Egas, Etot0, sol.nevals);
+			}
+			nevals_sum += sol.nevals;
+			nevals_max = std::max(nevals_max, sol.nevals);
+			++ncells;
+		}
+	}
+	std::cout << std::format("D-type dust sweep: {} cells, {} failures ({} at 1e-12), {} inadmissible, {} at the gas floor\n", ncells, nfail, nfail_ref,
+				 nbad, nfloored);
+	std::cout << std::format("D-type dust sweep: vs 1e-12 solve {:.2e} of Etot in Egas and {:.2e} in T_d; energy error {:.2e}, floor energy created "
+				 "{:.2e} of the floor state; evaluations mean {:.1f} max {}\n",
+				 worst_state, worst_Td, worst_energy, worst_created, static_cast<double>(nevals_sum) / ncells, nevals_max);
+	std::cout << std::format("D-type dust sweep: largest state error at {}\n", worst_cell);
+	check(ncells == 6912, "D-type dust sweep has 6912 cells");
+	check(nfail == 0 && nfail_ref == 0, "D-type dust sweep: every cell converged, at 1e-9 and at 1e-12");
+	check(nbad == 0, "D-type dust sweep: every state finite and above the floors");
+	check(worst_state <= 2.0e-9 && worst_Td <= 2.0e-9, "D-type dust sweep: state within 2e-9 of a 1e-12 solve");
+	check(worst_energy < 1.0e-8, "D-type dust sweep: energy conserved to 1e-8 off the gas floor");
+	check(worst_created <= 1.0 + 1.0e-12, "D-type dust sweep: at the gas floor, at most the floor energy is created");
+
+	// Radiation at its floor and no gas-dust coupling: the dust emits the floor whatever T_d is, so H stays positive
+	// down to T_d = 0 and the dust floor rule must return the state unchanged, converged.
+	{
+		const auto cell = make_dtype_cell(1.0e2, 42.0, 0.0, 0.0, 1.6e9, 0.0, 0.0);
+		const auto sols = solve_cells<P, true>({cell}, 1.0e-9);
+		check(sols[0].converged && std::abs(sols[0].Egas / cell.Egas0 - 1.0) <= 1.0e-12 && std::abs(sols[0].Erad[0] / cell.Erad0[0] - 1.0) <= 1.0e-12 &&
+			  std::abs(sols[0].Erad[1] / cell.Erad0[1] - 1.0) <= 1.0e-12,
+		      "radiation at the floor, no gas-dust coupling: converged, unchanged");
+	}
+	return (n_failed > 0) ? 1 : 0;
+}
+
 } // namespace
 
 auto problem_main() -> int
@@ -475,7 +645,8 @@ auto problem_main() -> int
 	AMREX_ALWAYS_ASSERT(std::abs(make_cell<Sweep4>(1.0, 0.5, 1.0, 0.0).Egas0 - 1.0) < 1e-12);
 	const int gas_status = TestGasSweep();
 	const int dust_status = TestDustSweep();
-	const int status = (gas_status == 0 && dust_status == 0) ? 0 : 1;
+	const int dtype_status = TestDTypeDustSweep();
+	const int status = (gas_status == 0 && dust_status == 0 && dtype_status == 0) ? 0 : 1;
 	std::cout << (status == 0 ? "RadCouplingUnitTests: all tests passed.\n" : "RadCouplingUnitTests: FAILED.\n");
 	return (n_failed > 0) ? 1 : 0;
 }

@@ -142,7 +142,8 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ApplyEnergyFloors(CouplingCell<probl
 	}
 	const double frac = (headroom > 0.0) ? amrex::min((cell.Emin - sol.Egas) / headroom, 1.0) : 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
-		sol.Erad[g] -= frac * (sol.Erad[g] - erad_floor);
+		// the max only absorbs rounding: E_g - frac (E_g - floor) can land an ulp of E_g below the floor
+		sol.Erad[g] = amrex::max(sol.Erad[g] - frac * (sol.Erad[g] - erad_floor), erad_floor);
 	}
 	sol.Egas = amrex::max(sol.Egas + frac * headroom, cell.Emin);
 	sol.T_gas = TgasOf(cell, sol.Egas);
@@ -265,10 +266,27 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 
 	const double T0 = amrex::max(TgasOf(cell, cell.Egas0), cell.Tfloor);
 	AMREX_ASSERT(T0 > 0.0);
-	// The march is not stopped at the gas temperature floor: the dust holds no energy and is not floored, and where the
-	// radiation field is near Erad_floor its radiative-equilibrium temperature can lie far below T_floor, where the floor
-	// emission alone already makes H positive (DTypeFront1D: T_floor = 10 K).
-	const auto br = quokka::math::bracket_root_of_increasing(H, T0, 0.0);
+	// The march is not stopped at the gas temperature floor: the dust holds no energy, and where the radiation field is
+	// near Erad_floor its radiative-equilibrium temperature can lie far below T_floor (DTypeFront1D: T_floor = 10 K). It
+	// stops at Td_min instead. Every emitting group emits at least Erad_floor, so below T_emit_floor = (Erad_floor /
+	// a_r)^(1/4) the group block no longer depends on T_d and H is flat apart from the collisional term; 1e-10 T0 covers
+	// a zero Erad_floor, where the emission there is negligible.
+	const double erad_floor = Erad_floor_; // local copy: nvcc cannot address a static constexpr member in device code
+	const double T_emit_floor = std::pow(erad_floor / radiation_constant_, 0.25);
+	const double Td_min = amrex::min(amrex::max(T_emit_floor, 1.0e-10 * T0), T0);
+	const auto br = quokka::math::bracket_root_of_increasing(H, T0, Td_min);
+	if (!br.found && (br.lo == Td_min) && (br.flo > 0.0)) {
+		// The dust floor rule, as the gas floor rule of SolveGasCoupling: H is still positive at Td_min, so the dust
+		// emits more than it absorbs even at the emission floor. This is routine where the radiation sits at its floor
+		// and the gas-dust coupling is zero. The group energies and the gas energy (from conservation) are the same for
+		// every T_d below T_emit_floor, so this is the state at the root whenever there is one; otherwise the gas pays for
+		// the floor emission, as ApplyEnergyFloors charges it for lifting a group to the floor.
+		auto sol = DustCouplingState(cell, Td_min);
+		sol.converged = true;
+		sol.nevals = br.nevals + 1;
+		ApplyEnergyFloors(cell, sol);
+		return sol;
+	}
 	if (!br.found) {
 		CouplingSolution<problem_t> sol{};
 		sol.Egas = cell.Egas0;

@@ -122,7 +122,7 @@ The emission and absorption terms of \\(- c G^0\_g\\) give the net thermal emiss
 Q_g(T_m) = 4 \pi \chi_{0B,g}(T_m) \, B_g(T_m) - c \, \chi_{0E,g}(T_m) \, E_g \, ,
 </script>
 
-where \\(T\_m\\) is the temperature of the matter the radiation couples to. With the transport and the \\(v/c\\) terms left out (the work term moves energy between the radiation and the gas directly, in both cases below), each group then evolves as
+where \\(T\_m\\) is the temperature of the matter the radiation couples to. With the transport and the \\(v/c\\) terms left out (the work term moves energy between the radiation and the gas directly, in both models below), each group then evolves as
 
 <script type="math/tex; mode=display">
 \frac{\partial E_g}{\partial t} = \frac{\hat c}{c} \, Q_g(T_m) \, .
@@ -460,7 +460,7 @@ The following test problems exercise the solver across the streaming, static dif
 - [Advecting radiation pulse test](tests/radhydro_pulse.md) — static and dynamic diffusion, single-group and multigroup.
 - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md) — the \\(v/c\\) terms in the dynamic diffusion limit.
 - [1D H II region and dust reprocessing test](tests/DTypeFront1D.md) — multigroup radiation with a chemical band and a dust temperature in pure radiative equilibrium (two-temperature model with \\(k\_{\rm gd} = 0\\)).
-- `RadCouplingUnitTests` — the coupling solve cell by cell, in both cases, over sweeps of temperature, radiation energy, opacity law and optical depth: convergence, energy conservation, cells with several roots, the temperature floor, and the limits \\(k\_{\rm gd} = 0\\) and \\(k\_{\rm gd} \to \infty\\).
+- `RadCouplingUnitTests` — the coupling solve cell by cell, for both temperature models, over sweeps of temperature, radiation energy, opacity law and optical depth: convergence, energy conservation, cells with several roots, the temperature floor, and the limits \\(k\_{\rm gd} = 0\\) and \\(k\_{\rm gd} \to \infty\\), plus a CGS sweep of the two-temperature model at the conditions of a dusty D-type ionization front.
 - `RadDust` and `RadDustMG` — the two-temperature model in a uniform medium, single-group and multigroup: the relaxation of gas and radiation temperatures against an analytic solution.
 - `RadMarshakDust` — a multigroup Marshak wave with weak dust-gas coupling (two-temperature model).
 - `RadDustAbsorption` — dust-absorption-only bands: beam attenuation, radiation force, and photoelectric heating of an interstellar slab against the analytic profile.
