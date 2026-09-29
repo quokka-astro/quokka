@@ -259,10 +259,7 @@ auto problem_main() -> int
 {
 	// Single run against a pre-computed reference error norm; the grid is set by the input file.
 	double const error_norm = runConductionTest();
-	// gasInternalEnergy relative L1 error for inputs/ThermalConductionAnisoGaussian.toml (128x128x8).
-	// TODO: replace with the value from a rerun with foextrap face-centred BCs (expected ~4.6e-4 from the interior z-planes
-	// of the reflect_odd run); 1.8771e-02 was dominated by the z-boundary planes.
-	constexpr amrex::Real estimated_error = 1.8771e-02;
+	constexpr amrex::Real estimated_error = 1.811513e-03;
 	amrex::Real const delta = std::abs(error_norm - estimated_error) / estimated_error;
 
 	amrex::Print() << std::format("gasInternalEnergy relative L1 error = {:.6e} (expected = {:.6e})\n", error_norm, estimated_error);
