@@ -60,11 +60,11 @@ while the gas equations keep the full \\(c\\): both the transport of the radiati
 
 Not every group in a multigroup run has to couple to the matter in the same way. Quokka recognises three *band types*, which differ in which terms of the four-force are switched on and in where the absorbed energy goes. **Chemical** (ionizing) bands are declared individually and occupy the last groups of the frequency grid. The **dust-absorption** type is at present a property of the whole run rather than of a single band: setting `dust_absorption_only` converts every non-chemical group at once. Thermal and dust-absorption bands cannot yet be mixed in one run; supporting that is future work. The default is all-**thermal**. The three types are described in the sections that follow.
 
-| Band type       | Transport | Thermal emission | Absorbed energy heats the gas     | Radiation force and work | Photochemistry |
-| --------------- | --------- | ---------------- | --------------------------------- | ------------------------ | -------------- |
-| Thermal         | yes       | yes              | yes (through the dust in case II) | yes                      | no             |
-| Dust-absorption | yes       | no               | **no**                            | yes                      | no             |
-| Chemical        | yes       | no               | no (photochemistry instead)       | yes                      | yes            |
+| Band type       | Transport | Thermal emission | Absorbed energy heats the gas                        | Radiation force and work | Photochemistry |
+| --------------- | --------- | ---------------- | ---------------------------------------------------- | ------------------------ | -------------- |
+| Thermal         | yes       | yes              | yes (through the dust in the two-temperature model)  | yes                      | no             |
+| Dust-absorption | yes       | no               | **no**                                               | yes                      | no             |
+| Chemical        | yes       | no               | no (photochemistry instead)                          | yes                      | yes            |
 
 ### Dust-absorption-only mode
 
@@ -92,7 +92,7 @@ while the radiation moments still lose the full \\(- c G^0\_g\\) above: the phot
 Two consequences are worth stating plainly.
 
 - **The absorbed energy does not heat the gas.** The physical heating channel for FUV photons is photoelectric heating off grains, whose efficiency depends on the grain charge and therefore on the local electron density and radiation field — not on the absorbed energy alone. A dust-absorption band delivers the radiation field \\(E\_g\\) to the cell, and the heating rate is computed from it, either by the [photoelectric heating](#photoelectric-heating) below or by a chemistry and cooling module such as Grackle. Adding the absorbed energy to the gas as well would double-count it.
-- **The mode assumes weak gas-dust thermal coupling.** Dust and gas exchange heat at a rate \\(\propto n^2\\), so the assumption that the dust returns none of the absorbed energy to the gas holds only at low density. For the \\(\gtrsim 1\\,\rm pc\\) resolution of a galaxy simulation, where the resolved gas density stays below \\(\sim 10^3\\,\rm cm^{-3}\\), the coupling is weak everywhere and the approximation is safe. At the densities reached in a resolved star-forming core it is not, and thermal bands with a separate dust temperature ([Case II](#case-ii-with-a-cell-by-cell-dust-temperature)) should be used instead. The two are mutually exclusive, and combining them is a compile-time error.
+- **The mode assumes weak gas-dust thermal coupling.** Dust and gas exchange heat at a rate \\(\propto n^2\\), so the assumption that the dust returns none of the absorbed energy to the gas holds only at low density. For the \\(\gtrsim 1\\,\rm pc\\) resolution of a galaxy simulation, where the resolved gas density stays below \\(\sim 10^3\\,\rm cm^{-3}\\), the coupling is weak everywhere and the approximation is safe. At the densities reached in a resolved star-forming core it is not, and thermal bands with a separate dust temperature (the [two-temperature model](#two-temperature-model-a-separate-dust-temperature)) should be used instead. The two are mutually exclusive, and combining them is a compile-time error.
 
 #### Photoelectric heating
 
@@ -141,9 +141,9 @@ where \\(T\_m\\) is the temperature of the matter the radiation couples to. With
 \frac{\partial E_g}{\partial t} = \frac{\hat c}{c} \, Q_g(T_m) \, .
 </script>
 
-This exchange is stiff: in an optically thick cell the coupling time \\(1 / (\hat c \chi\_0)\\) can be many orders of magnitude shorter than the radiation step, which is why it is solved implicitly (see [The implicit solve](#the-implicit-solve)). Quokka offers two models of the matter, which differ in \\(T\_m\\) and in how the exchanged energy reaches the gas. In both, the dust stores no energy of its own, so \\(E\_{\rm gas} + (c / \hat c) \sum\_g E\_g\\) is conserved.
+This exchange is stiff: in an optically thick cell the coupling time \\(1 / (\hat c \chi\_0)\\) can be many orders of magnitude shorter than the radiation step, which is why it is solved implicitly (see [The implicit solve](#the-implicit-solve)). Quokka offers two models of the matter, the one-temperature model and the two-temperature model, which differ in \\(T\_m\\) and in how the exchanged energy reaches the gas. In both, the dust stores no energy of its own, so \\(E\_{\rm gas} + (c / \hat c) \sum\_g E\_g\\) is conserved.
 
-#### Case I: without dust
+#### One-temperature model: dust at the gas temperature
 
 By default no separate dust temperature is followed. The dust is assumed to be perfectly coupled to the gas, so it shares the gas temperature, \\(T\_m = T\\), and the gas pays for the exchange directly:
 
@@ -153,7 +153,7 @@ By default no separate dust temperature is followed. The dust is assumed to be p
 
 This is the right model wherever collisions between gas and dust are fast compared with the radiative exchange, and for problems whose absorber is the gas itself.
 
-#### Case II: with a cell-by-cell dust temperature
+#### Two-temperature model: a separate dust temperature
 
 With `ISM_Traits::enable_dust_gas_thermal_coupling_model`, every cell has a dust temperature \\(T\_d\\) of its own. The radiation couples to the dust alone, \\(T\_m = T\_d\\), and the dust exchanges energy with the gas through collisions at the rate
 
@@ -167,7 +167,7 @@ which is positive when the gas heats the dust. Here \\(k\_{\rm gd}\\) is the run
 \sum_g Q_g(T_d) = \Lambda_{\rm gd} \, , \qquad \frac{\partial E_{\rm gas}}{\partial t} = - \Lambda_{\rm gd} \, .
 </script>
 
-The balance fixes \\(T\_d\\) in every cell at every implicit stage; \\(T\_d\\) is not a state variable and is not advected. One set of equations covers every coupling strength. At \\(k\_{\rm gd} = 0\\) the dust is in pure radiative equilibrium with the local field and the gas is thermally decoupled from the radiation (the [1D H II region test](tests/DTypeFront1D.md) runs in this limit); as \\(k\_{\rm gd} \to \infty\\), \\(T\_d \to T\\) and case I is recovered. Case II works with single-group and multigroup radiation, and cannot be combined with [dust-absorption-only mode](#dust-absorption-only-mode).
+The balance fixes \\(T\_d\\) in every cell at every implicit stage; \\(T\_d\\) is not a state variable and is not advected. One set of equations covers every coupling strength. At \\(k\_{\rm gd} = 0\\) the dust is in pure radiative equilibrium with the local field and the gas is thermally decoupled from the radiation (the [1D H II region test](tests/DTypeFront1D.md) runs in this limit); as \\(k\_{\rm gd} \to \infty\\), \\(T\_d \to T\\) and the one-temperature model is recovered. The two-temperature model works with single-group and multigroup radiation, and cannot be combined with [dust-absorption-only mode](#dust-absorption-only-mode).
 
 ### The multigroup four-force
 
@@ -188,7 +188,7 @@ where \\(B\_g\\), \\(E\_g\\), \\(\boldsymbol{F}\_g\\), and \\(\mathsf{P}\_g\\) a
 
 is the difference of a frequency-dependent quantity between the upper and lower edges of the group.
 
-**At which temperature.** The opacities in the four-force are dust opacities. They, and the Planck function \\(B\_g\\), are evaluated at the temperature of the matter the radiation couples to, as defined in [Thermal bands](#thermal-bands-matter-radiation-coupling): in case I at the gas temperature \\(T\\), which the dust shares because the two are assumed perfectly coupled, and in case II at the dust temperature \\(T\_d\\). Every term of the four-force uses that temperature, and the same holds for the grey four-force of [The RHD system](#the-rhd-system). In case I any other absorber at the gas temperature, such as the gas itself, is treated in the same way. In case II the opacity functions of a problem generator are therefore called with \\(T\_d\\) in their `Tgas` argument (see [Enabling the dust temperature](#enabling-the-dust-temperature)).
+**At which temperature.** The opacities in the four-force are dust opacities. They, and the Planck function \\(B\_g\\), are evaluated at the temperature of the matter the radiation couples to, as defined in [Thermal bands](#thermal-bands-matter-radiation-coupling): in the one-temperature model at the gas temperature \\(T\\), which the dust shares because the two are assumed perfectly coupled, and in the two-temperature model at the dust temperature \\(T\_d\\). Every term of the four-force uses that temperature, and the same holds for the grey four-force of [The RHD system](#the-rhd-system). In the one-temperature model any other absorber at the gas temperature, such as the gas itself, is treated in the same way. In the two-temperature model the opacity functions of a problem generator are therefore called with \\(T\_d\\) in their `Tgas` argument (see [Enabling the dust temperature](#enabling-the-dust-temperature)).
 
 See [Multigroup opacity models](#multigroup-opacity-models) below for how the three mean opacities and \\(\alpha\_{\chi\_0,g}\\) are evaluated, and [Multigroup opacities](#multigroup-opacities) for how to supply them from a problem generator.
 
@@ -241,7 +241,7 @@ One practical consequence, demonstrated in [@He_2024]: because the scheme is asy
 
 Each implicit stage solves, cell by cell, a system of \\(4 + 4 N\_g\\) equations for the gas energy, the gas momentum, and the energy and flux of every group. Following [@Wibking_2022] and [@He_2024b], it is split into two nested parts:
 
-- an **inner** solve of the energy exchange of [Thermal bands](#thermal-bands-matter-radiation-coupling), with \\(\boldsymbol{v}\\) and \\(\boldsymbol{F}\_g\\) frozen. At a fixed matter temperature the group equations of a backward-Euler step are linear in the group energies, so they are solved directly and each cell is left with **one scalar equation**: energy conservation in the gas energy in case I, and the dust energy balance in the dust temperature in case II. It is bracketed by marching outward from the old state and solved with Brent's method to a relative tolerance on the unknown;
+- an **inner** solve of the energy exchange of [Thermal bands](#thermal-bands-matter-radiation-coupling), with \\(\boldsymbol{v}\\) and \\(\boldsymbol{F}\_g\\) frozen. At a fixed matter temperature the group equations of a backward-Euler step are linear in the group energies, so they are solved directly and each cell is left with **one scalar equation**: energy conservation in the gas energy in the one-temperature model, and the dust energy balance in the dust temperature in the two-temperature model. It is bracketed by marching outward from the old state and solved with Brent's method to a relative tolerance on the unknown;
 - an **outer** iteration that updates \\(\boldsymbol{F}\_g\\) and the gas momentum analytically, then returns to the inner solve if the velocity-dependent terms have changed. Outside the dynamic diffusion limit it almost always converges in one pass.
 
 The derivation of the scalar equations, the bracket, the tolerance, and a comparison with the Newton-Raphson iteration of [@Howell_2003] are in [Radiation Integrator](radiation_integrator.md#matter-radiation-coupling-solve).
@@ -294,7 +294,7 @@ Two things are worth knowing about the ends of this range. At high resolution PC
 
 ### Flux-mean opacity
 
-The flux-mean opacity \\(\chi\_{0F,g}\\) that appears in the four-force is not supplied by the user. It is computed internally from \\(\chi\_{0E,g}\\), \\(\chi\_{0B,g}\\), and the matter temperature (the dust temperature in case II) so that \\(\boldsymbol{G}\_g \to 0\\) in an optically thick moving medium. As shown in [@He_2024b], enforcing this relation is what guarantees that the multigroup scheme reaches the correct diffusion limit; in the PC case it reduces to \\(\chi\_{0F,g} = \chi\_{0,g}\\), as expected.
+The flux-mean opacity \\(\chi\_{0F,g}\\) that appears in the four-force is not supplied by the user. It is computed internally from \\(\chi\_{0E,g}\\), \\(\chi\_{0B,g}\\), and the matter temperature (the dust temperature in the two-temperature model) so that \\(\boldsymbol{G}\_g \to 0\\) in an optically thick moving medium. As shown in [@He_2024b], enforcing this relation is what guarantees that the multigroup scheme reaches the correct diffusion limit; in the PC case it reduces to \\(\chi\_{0F,g} = \chi\_{0,g}\\), as expected.
 
 ## Setting up a problem
 
@@ -323,7 +323,7 @@ Then specialise `RadSystem_Traits`:
 
 ### Grey opacities
 
-For `nGroups = 1`, define the mean opacities \\(\chi\_{0P}\\), \\(\chi\_{0F}\\), and \\(\chi\_{0E}\\) of [The RHD system](#the-rhd-system) as functions of density and temperature (the gas temperature, or the dust temperature in case II). Each returns a mass opacity in \\(\mathrm{cm^2\\,g^{-1}}\\). Only `ComputePlanckOpacity` is mandatory; the other two default to it.
+For `nGroups = 1`, define the mean opacities \\(\chi\_{0P}\\), \\(\chi\_{0F}\\), and \\(\chi\_{0E}\\) of [The RHD system](#the-rhd-system) as functions of density and temperature (the gas temperature, or the dust temperature in the two-temperature model). Each returns a mass opacity in \\(\mathrm{cm^2\\,g^{-1}}\\). Only `ComputePlanckOpacity` is mandatory; the other two default to it.
 
 ```c++
 template <> struct RadSystem_Traits<MyProblem> {
@@ -390,7 +390,7 @@ A piecewise power-law opacity \\(\kappa \propto \nu^{-2}\\) differs only in the 
 	}
 ```
 
-The function is called on the device with the current cell density and temperature (the gas temperature, or the dust temperature in case II), so the opacity may depend on both. If the opacity is tabulated rather than analytic, a convenient choice of exponent is the secant slope across the group,
+The function is called on the device with the current cell density and temperature (the gas temperature, or the dust temperature in the two-temperature model), so the opacity may depend on both. If the opacity is tabulated rather than analytic, a convenient choice of exponent is the secant slope across the group,
 
 <script type="math/tex; mode=display">
 \alpha_{\chi_0,g} = \frac{\ln \left[ \chi_0(\nu_{g+}) / \chi_0(\nu_{g-}) \right]}{\ln (\nu_{g+} / \nu_{g-})} \, .
@@ -421,7 +421,7 @@ The opacity hook is unchanged: `DefineOpacityExponentsAndLowerValues` supplies \
 
 ### Enabling the dust temperature
 
-Case II of [Thermal bands](#thermal-bands-matter-radiation-coupling) is switched on with a compile-time trait:
+The two-temperature model of [Thermal bands](#thermal-bands-matter-radiation-coupling) is switched on with a compile-time trait:
 
 ```c++
 template <> struct ISM_Traits<MyProblem> {
@@ -441,9 +441,9 @@ A problem can inject radiation directly — for example from stellar sources —
 | -------------------------------------- | ------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `radiation.cfl`                        | Float         | `0.3`             | CFL number for the radiation substeps, based on \\(\hat{c}\\). Independent of the hydro CFL number.                           |
 | `radiation.reconstruction_order`       | Integer       | `3`               | Spatial reconstruction for the radiation variables: 1 (donor cell), 2 (PLM), 3 (PPM), 5 (extremum-preserving PPM).            |
-| `radiation.iteration_tolerance`        | Float         | `1e-11`           | Relative tolerance of the implicit coupling solve on the gas energy (in case II, on its spread across the final bracket in the dust temperature). |
+| `radiation.iteration_tolerance`        | Float         | `1e-11`           | Relative tolerance of the implicit coupling solve on the gas energy (in the two-temperature model, on its spread across the final bracket in the dust temperature). |
 | `radiation.print_iteration_counts`     | Boolean (0/1) | `0`               | Print the number of coupling solves and residual evaluations per step. Useful when diagnosing a stiff problem.                |
-| `radiation.dust_gas_interaction_coeff` | Float         | `2.5e-34`         | Collisional coefficient \\(k\_{\rm gd}\\) of the dust-gas energy exchange of [Case II](#case-ii-with-a-cell-by-cell-dust-temperature), in \\(\mathrm{erg\\,cm^3\\,s^{-1}\\,K^{-3/2}}\\). Used only when `ISM_Traits::enable_dust_gas_thermal_coupling_model` is enabled. |
+| `radiation.dust_gas_interaction_coeff` | Float         | `2.5e-34`         | Collisional coefficient \\(k\_{\rm gd}\\) of the dust-gas energy exchange of the [two-temperature model](#two-temperature-model-a-separate-dust-temperature), in \\(\mathrm{erg\\,cm^3\\,s^{-1}\\,K^{-3/2}}\\). Used only when `ISM_Traits::enable_dust_gas_thermal_coupling_model` is enabled. |
 
 The number of radiation substeps per hydro step is computed automatically from `radiation.cfl` and \\(\hat{c}\\); it is not set directly.
 
@@ -452,13 +452,13 @@ The number of radiation substeps per hydro step is computed automatically from `
 The following test problems exercise the solver across the streaming, static diffusion, and dynamic diffusion regimes:
 
 - [Radiative shock test](tests/radshock.md) — non-equilibrium radiating shock.
-- [Matter-radiation temperature equilibrium test](tests/energy_exchange.md) — the implicit coupling in isolation (case I).
+- [Matter-radiation temperature equilibrium test](tests/energy_exchange.md) — the implicit coupling in isolation (one-temperature model).
 - [Advecting radiation pulse test](tests/radhydro_pulse.md) — static and dynamic diffusion, single-group and multigroup.
 - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md) — the \\(v/c\\) terms in the dynamic diffusion limit.
-- [1D H II region and dust reprocessing test](tests/DTypeFront1D.md) — multigroup radiation with a chemical band and a dust temperature in pure radiative equilibrium (case II with \\(k\_{\rm gd} = 0\\)).
+- [1D H II region and dust reprocessing test](tests/DTypeFront1D.md) — multigroup radiation with a chemical band and a dust temperature in pure radiative equilibrium (two-temperature model with \\(k\_{\rm gd} = 0\\)).
 - `RadCouplingUnitTests` — the coupling solve cell by cell, in both cases, over sweeps of temperature, radiation energy, opacity law and optical depth: convergence, energy conservation, cells with several roots, the temperature floor, and the limits \\(k\_{\rm gd} = 0\\) and \\(k\_{\rm gd} \to \infty\\).
-- `RadDust` and `RadDustMG` — case II in a uniform medium, single-group and multigroup: the relaxation of gas and radiation temperatures against an analytic solution.
-- `RadMarshakDust` — a multigroup Marshak wave with weak dust-gas coupling (case II).
+- `RadDust` and `RadDustMG` — the two-temperature model in a uniform medium, single-group and multigroup: the relaxation of gas and radiation temperatures against an analytic solution.
+- `RadMarshakDust` — a multigroup Marshak wave with weak dust-gas coupling (two-temperature model).
 - `RadDustAbsorption` — dust-absorption-only bands: beam attenuation, radiation force, and photoelectric heating of an interstellar slab against the analytic profile.
 - `RadDustAbsorptionPPL` — the same problem under a piecewise power-law opacity model.
 

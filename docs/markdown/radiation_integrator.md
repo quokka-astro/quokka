@@ -186,7 +186,7 @@ The step, of length \\(\Delta t\\) = `dt_implicit`, covers the energy exchange o
 
 and the net emission is written as \\(Q\_g = c \\, (\varepsilon\_g - \alpha\_g E\_g)\\), with the emission and absorption coefficients \\(\varepsilon\_g = 4 \pi \chi\_{0B,g} B\_g / c\\) and \\(\alpha\_g = \chi\_{0E,g}\\) (\\(\chi\_{0P}\\) and \\(\chi\_{0E}\\) for one group; \\(\chi = \rho \kappa\\)) evaluated at the matter temperature. On the single-group `beta_order >= 2` path, \\(\Delta t \\, \hat c\\) is multiplied by the Lorentz factor.
 
-**Case I.** The unknowns are \\(E\_{\rm gas}\\) and the \\(N\_g\\) group energies; the gas temperature \\(T\\) follows from \\(E\_{\rm gas}\\) through the equation of state. The backward-Euler step is
+**One-temperature model.** The unknowns are \\(E\_{\rm gas}\\) and the \\(N\_g\\) group energies; the gas temperature \\(T\\) follows from \\(E\_{\rm gas}\\) through the equation of state. The backward-Euler step is
 
 <script type="math/tex; mode=display">
 \begin{aligned}
@@ -209,7 +209,7 @@ G(E_{\rm gas}) \equiv E_{\rm gas} - \mathrm{gas0} + \frac{c}{\hat c} \sum_g \lef
 
 which states that the total energy \\(E\_{\rm gas} + (c / \hat c) \sum\_g E\_g\\) is the same after the step as before it.
 
-**Case II.** The unknowns are \\(E\_{\rm gas}\\), the group energies, and \\(T\_d\\). With the collisional rate \\(\Lambda\_{\rm gd}(T, T\_d) = K \\, T^{1/2} (T - T\_d)\\), \\(K = k\_{\rm gd} \\, n\_{\rm H}^2\\) and \\(k\_{\rm gd}\\) the input `radiation.dust_gas_interaction_coeff`, the backward-Euler step consists of the group equations, the dust energy balance, and the gas equation,
+**Two-temperature model.** The unknowns are \\(E\_{\rm gas}\\), the group energies, and \\(T\_d\\). With the collisional rate \\(\Lambda\_{\rm gd}(T, T\_d) = K \\, T^{1/2} (T - T\_d)\\), \\(K = k\_{\rm gd} \\, n\_{\rm H}^2\\) and \\(k\_{\rm gd}\\) the input `radiation.dust_gas_interaction_coeff`, the backward-Euler step consists of the group equations, the dust energy balance, and the gas equation,
 
 <script type="math/tex; mode=display">
 \begin{aligned}
@@ -231,7 +231,7 @@ and with it the gas temperature \\(T(T\_d)\\). What is left is the dust energy b
 H(T_d) \equiv \frac{c}{\hat c} \sum_g \left[ E_g(T_d) - \mathrm{rad0}_g \right] - \Delta t \, \Lambda_{\rm gd}\big(T(T_d), T_d\big) = 0 \, .
 </script>
 
-Total energy is conserved at every trial \\(T\_d\\), not only at the root. At \\(K = 0\\) the gas energy stays at \\(\mathrm{gas0}\\) and \\(H = 0\\) is the radiative equilibrium of the dust; as \\(K \to \infty\\), \\(T\_d \to T\\) and \\(H = 0\\) becomes \\(G = 0\\) of case I.
+Total energy is conserved at every trial \\(T\_d\\), not only at the root. At \\(K = 0\\) the gas energy stays at \\(\mathrm{gas0}\\) and \\(H = 0\\) is the radiative equilibrium of the dust; as \\(K \to \infty\\), \\(T\_d \to T\\) and \\(H = 0\\) becomes \\(G = 0\\) of the one-temperature model.
 
 ### Comparison with the Newton-Raphson iteration
 
