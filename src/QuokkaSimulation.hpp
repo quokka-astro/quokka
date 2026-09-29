@@ -738,6 +738,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse const hpp("conduction");
 		hpp.query("enabled", enableElectronConduction_);
 		hpp.query("conductivity_prefactor", electronConductionKappa0_);
+		if (enableElectronConduction_ == 1) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(electronConductionKappa0_ > 0.0,
+							 "conduction.conductivity_prefactor must be positive when "
+							 "conduction is enabled; set conduction.enabled = 0 to disable conduction ");
+		}
 		hpp.query("conduction_cfl", conductionCFL);
 		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
 		hpp.query("saturation_factor", electronConductionSaturationFactor_);
