@@ -458,6 +458,23 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	template <int dir>
 	AMREX_GPU_DEVICE static void setDiodeBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom);
 
+	/// Problem hook: select the boundaries that use the MHD diode boundary condition (see applyMHDDiodeBC).
+	/// @param dir The boundary dimension (0=x, 1=y, 2=z)
+	/// @param side 0 for the lower boundary, 1 for the upper boundary
+	/// @return true if this boundary uses the MHD diode boundary condition (default: false)
+	static auto isMHDDiodeBoundary(int dir, int side) -> bool; // template specialized by problem generator
+
+	/// Fill the face-centred magnetic field in the ghost cells of MHD diode boundaries.
+	/// Must be called after the cell-centred fill (which must use setDiodeBCLo/Hi on these boundaries) and the face-centred fill.
+	/// Transverse B is copied from the first valid cell (outflow) or mirrored with the same sign (inflow); a transverse ghost face
+	/// is treated as inflow if either adjacent column is inflow. The normal B on the ghost faces is then integrated outward from the
+	/// boundary face so that div B = 0 in every ghost cell. The boundary face itself is valid data and is never written.
+	/// Finally, the ghost total energy is corrected so that the ghost pressure equals the pressure of its source cell.
+	/// @param state_cc The cell-centred state (ghost cells already filled)
+	/// @param state_fc The face-centred state (ghost faces already filled)
+	/// @param lev The AMR level
+	void applyMHDDiodeBC(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev);
+
 	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension for face variables.
 	/// @tparam boundary_dim The dimension to check for boundaries (0=x, 1=y, 2=z)
 	/// @tparam face_dir The face direction (quokka::direction::x, y, or z)
@@ -2970,6 +2987,127 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			}
 		}
 	}
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::isMHDDiodeBoundary(int /*dir*/, int /*side*/) -> bool
+{
+	// user should implement if needed using template specialization
+	return false;
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::applyMHDDiodeBC(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev)
+{
+#if (AMREX_SPACEDIM == 3)
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		constexpr int bIdx = Physics_Indices<problem_t>::mhdFirstIndex;
+		amrex::Box const &domain = geom[lev].Domain();
+		auto const dx = geom[lev].CellSizeArray();
+
+		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+			for (int side = 0; side < 2; ++side) {
+				if (!isMHDDiodeBoundary(d, side)) {
+					continue;
+				}
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!geom[lev].isPeriodic(d), "MHD diode boundary set on a periodic dimension!");
+
+				// outward normal sign, and index of the first valid cell next to the boundary
+				int const sgn = (side == 0) ? -1 : 1;
+				int const icell = (side == 0) ? domain.smallEnd(d) : domain.bigEnd(d);
+				int const momIdx = HydroSystem<problem_t>::x1Momentum_index + d;
+				amrex::GpuArray<int, 2> const tdirs = {(d + 1) % 3, (d + 2) % 3};
+
+				for (amrex::MFIter mfi(state_cc); mfi.isValid(); ++mfi) {
+					// ghost cells of this fab that lie outside the domain on this boundary
+					amrex::Box const ccbox = state_cc[mfi].box();
+					amrex::Box slab = ccbox;
+					if (side == 0) {
+						slab.setBig(d, domain.smallEnd(d) - 1);
+					} else {
+						slab.setSmall(d, domain.bigEnd(d) + 1);
+					}
+					if (!slab.ok()) {
+						continue;
+					}
+					int const ng = slab.length(d);
+
+					auto const &cc = state_cc.array(mfi);
+					std::array<amrex::Array4<amrex::Real>, 3> const fc = {state_fc[0].array(mfi), state_fc[1].array(mfi),
+											      state_fc[2].array(mfi)};
+
+					// the same inflow/outflow rule as setDiodeBCLo/Hi, evaluated on the first valid cell of the column
+					auto const isInflow = [=] AMREX_GPU_DEVICE(amrex::IntVect col) -> bool {
+						col[d] = icell;
+						amrex::Real const mom = cc(col, momIdx);
+						return (side == 0) ? !(mom < 0.0) : !(mom > 0.0);
+					};
+
+					// 1. transverse B on ghost faces: copy (outflow) or mirror with the same sign (inflow)
+					for (int n = 0; n < 2; ++n) {
+						int const t = tdirs[n];
+						amrex::Box const tbox = amrex::surroundingNodes(slab, t) & state_fc[t][mfi].box();
+						auto const &bt = fc[t];
+						amrex::ParallelFor(tbox, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+							amrex::IntVect const iv(i, j, k);
+							amrex::IntVect col_lo = iv;
+							col_lo[t] -= 1;
+							// a face shared by an inflow and an outflow column is treated as inflow
+							bool const inflow =
+							    (ccbox.contains(iv) && isInflow(iv)) || (ccbox.contains(col_lo) && isInflow(col_lo));
+							int const m = sgn * (iv[d] - icell);
+							amrex::IntVect src = iv;
+							src[d] = inflow ? (icell - sgn * (m - 1)) : icell;
+							bt(iv, bIdx) = bt(src, bIdx);
+						});
+					}
+
+					// 2. normal B on ghost faces: integrate div B = 0 outward, starting from the boundary face
+					amrex::Box tslab = slab;
+					tslab.setRange(d, icell);
+					auto const &bn = fc[d];
+					amrex::ParallelFor(tslab, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						amrex::IntVect c(i, j, k);
+						for (int m = 1; m <= ng; ++m) {
+							c[d] = icell + sgn * m;
+							amrex::Real div_t = 0.0;
+							for (int n = 0; n < 2; ++n) {
+								int const t = tdirs[n];
+								amrex::IntVect cp = c;
+								cp[t] += 1;
+								div_t += (fc[t](cp, bIdx) - fc[t](c, bIdx)) / dx[t];
+							}
+							// lower side: new face is the left face of c; upper side: new face is the right face of c
+							amrex::IntVect f_new = c;
+							amrex::IntVect f_known = c;
+							if (side == 0) {
+								f_known[d] += 1;
+							} else {
+								f_new[d] += 1;
+							}
+							bn(f_new, bIdx) = bn(f_known, bIdx) - sgn * dx[d] * div_t;
+						}
+					});
+
+					// 3. keep the ghost pressure equal to the source-cell pressure: replace the source magnetic energy
+					//    contained in the copied/mirrored total energy by the magnetic energy of the ghost cell
+					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const fc_const = {
+					    state_fc[0].const_array(mfi), state_fc[1].const_array(mfi), state_fc[2].const_array(mfi)};
+					amrex::ParallelFor(slab, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						amrex::IntVect const c(i, j, k);
+						int const m = sgn * (c[d] - icell);
+						amrex::IntVect src = c;
+						src[d] = isInflow(c) ? (icell - sgn * (m - 1)) : icell;
+						amrex::Real const eb_ghost = ComputeCellCenteredMagneticEnergy<problem_t>(c[0], c[1], c[2], fc_const);
+						amrex::Real const eb_src = ComputeCellCenteredMagneticEnergy<problem_t>(src[0], src[1], src[2], fc_const);
+						cc(c, HydroSystem<problem_t>::energy_index) += eb_ghost - eb_src;
+					});
+				}
+			}
+		}
+	}
+#else
+	amrex::ignore_unused(state_cc, state_fc, lev);
+#endif
 }
 
 template <typename problem_t>
