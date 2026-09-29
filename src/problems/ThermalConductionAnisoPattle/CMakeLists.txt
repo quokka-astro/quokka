@@ -1,0 +1,1 @@
+quokka_add_problem(JOB_NAME ThermalConductionAnisoPattle PRIORITY 100)
