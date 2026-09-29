@@ -402,7 +402,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 					const double kappaE = energy.opacity_terms.kappaE[g];
 					const double lorentz_factor_v_v = lorentz[2];
 					const double c = c_light_;
-					// Moved as it was from the old single-group driver: gasVel is never assigned, so the K0 terms are zero.
+					// gasVel is never assigned, so the K0 terms below are zero.
 					std::array<double, 3> gasVel{};
 					const double K0 = 2.0 * rho * chat * cell.dt * (kappaF - kappaE) / c / c * std::pow(lorentz_factor_v_v, 3);
 
@@ -669,8 +669,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			} else {
 				// isothermal gas: no energy exchange; the radiation keeps its energy, source included, and only the
 				// flux is updated. The opacity of such a problem does not depend on the temperature, so kappaF is
-				// built directly from the opacity hooks at an undefined temperature, exactly as the old multigroup
-				// driver did (the Planck-weighted flux mean of ComputeOpacityTermsAt would be NaN there).
+				// built directly from the opacity hooks at an undefined temperature (the Planck-weighted flux mean
+				// of ComputeOpacityTermsAt would be NaN there).
 				updated_energy.EradVec = Erad0Vec + Src;
 				updated_energy.T_gas = NAN;
 				updated_energy.T_d = NAN;

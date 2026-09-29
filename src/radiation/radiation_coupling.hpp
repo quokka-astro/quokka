@@ -11,7 +11,8 @@
 /// their unknown except where a steep opacity law makes them non-monotone, so the bracket is built by marching outward
 /// from the old state (which selects the root continuously connected to it) and the root is found with Brent's method to
 /// a relative tolerance on the unknown. The method, its derivation and its measurements are hydro3d.jl's
-/// docs/coupling-new-method.md and docs/coupling-new-method-dust.md; the Quokka specifics are in the PR's design note.
+/// docs/coupling-new-method.md and docs/coupling-new-method-dust.md; the Quokka version is described in
+/// docs/markdown/radiation_integrator.md ("Matter-radiation coupling solve").
 
 #include <cmath>
 #include <limits>
@@ -147,10 +148,11 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ApplyEnergyFloors(CouplingCell<probl
 	sol.T_gas = TgasOf(cell, sol.Egas);
 }
 
-// The solve without dust: bracket G by marching from the old gas energy, hand it to Brent, and take the midpoint of the
-// final bracket. The tolerance is relative on the unknown, |hi - lo| <= tol min(|lo|, |hi|), which for an ideal gas is a
-// relative tolerance on the gas temperature. The conservation error that follows is about dG/dE_gas times tol E_gas; it
-// is not tested per cell (RadCouplingUnitTests measures it over hydro3d's sweep).
+// The solve without dust: bracket G by marching from the old gas energy, hand it to Brent, and take the state where the
+// chord through the ends of the final bracket crosses zero. The tolerance is relative on the unknown, |hi - lo| <= tol min(|lo|, |hi|), which for an ideal gas is a
+// relative tolerance on the gas temperature. The conservation error that follows is at most about dG/dE_gas times
+// tol E_gas (much less at the chord crossing); it
+// is not tested per cell (RadCouplingUnitTests measures it over a sweep of 240 cells taken from hydro3d.jl).
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasCoupling(CouplingCell<problem_t> const &cell, double const tol) -> CouplingSolution<problem_t>
 {
@@ -240,15 +242,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::DustCouplingState(CouplingCell<probl
 
 // The solve with dust: bracket H by marching from the gas temperature at the start of the step (Quokka's initial guess
 // for the dust temperature, which where the dust balance has several roots selects the one connected to dust as warm as
-// the gas), hand it to Brent, and take the midpoint of the final bracket. The convergence test is on the state
+// the gas), hand it to Brent, and take the state at the chord crossing of the final bracket. The convergence test is on the state
 // (hydro3d.jl, docs/coupling-new-method-dust.md sections 4-5). H is not the test: its collision term multiplies the
 // round-off in T - T_d by dt K sqrt(T), which reaches 1e8 of the cell's energy in a strongly coupled cell. The bracket
 // width in T_d is not the test either: at small K the gas energy follows from conservation, and its error is the T_d
 // error times (c/chat) sum_g E_g / E_gas, which is large where the radiation holds most of the energy (DTypeFront1D).
 // So the test is the gas energy across the final bracket, relative to itself: |E_gas(lo) - E_gas(hi)| <= atol,
-// atol = max(tol |E_gas|, 4 eps E_tot), which is a relative tolerance on T_gas. It is floored by the round-off of the
-// conservation subtraction E_gas = E_tot - (c/chat) sum_g E_g, which cannot resolve E_gas better than eps E_tot, and by
-// the resolution of T_d: once the T_d bracket is a few ulp wide it cannot shrink further, the gas-energy width across it
+// atol = max(tol |E_gas|, 4 eps (|gas0| + (c/chat) sum_g |Delta_g|)), which is a relative tolerance on T_gas. It is
+// floored by the round-off of E_gas = gas0 - (c/chat) sum_g Delta_g, which cannot resolve E_gas better than eps times
+// the sizes of the terms it adds, and by the resolution of T_d: once the T_d bracket is a few ulp wide it cannot shrink further, the gas-energy width across it
 // is round-off, and the cell is converged. Otherwise, where the test fails, the T_d tolerance is set from the slope
 // dE_gas/dT_d measured across the bracket and the bracket re-solved, at most three times.
 template <typename problem_t>
@@ -264,7 +266,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 	AMREX_ASSERT(T0 > 0.0);
 	// The march is not stopped at the gas temperature floor: the dust holds no energy and is not floored, and where the
 	// radiation field is near Erad_floor its radiative-equilibrium temperature can lie far below T_floor, where the floor
-	// emission alone already makes H positive (DTypeFront1D: T_floor = 10 K). The old Newton solver did not floor T_d either.
+	// emission alone already makes H positive (DTypeFront1D: T_floor = 10 K).
 	const auto br = quokka::math::bracket_root_of_increasing(H, T0, 0.0);
 	if (!br.found) {
 		CouplingSolution<problem_t> sol{};

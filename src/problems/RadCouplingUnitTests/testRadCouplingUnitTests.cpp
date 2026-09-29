@@ -306,9 +306,9 @@ auto TestGasSweep() -> int
 		      "root below the floor: clamped to the floor state, converged");
 	}
 
-	// The reviewer's hot-cell case: a transparent cell whose root lies just below the floor must be clamped, not kept
+	// A hot transparent cell whose root lies just below the floor must be clamped, not kept
 	// hot. The work term totals Egas0 + 1e-12 across the four groups, so G(E_min) = E_min + 1e-12 > 0 while Egas0 = 1 is
-	// far above E_min = 1e-10 (the old code returned this cell converged with Egas == Egas0, i.e. no exchange at all).
+	// far above E_min = 1e-10; keeping Egas == Egas0 would mean no exchange at all.
 	sweep_kappa0 = 0.0;
 	sweep_expo = 0.0;
 	{
