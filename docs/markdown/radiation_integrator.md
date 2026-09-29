@@ -174,43 +174,79 @@ This makes the mapping from Butcher tableau entries to solver calls transparent.
 
 ## Matter-radiation coupling solve
 
-Each implicit stage solves, cell by cell, one backward-Euler step of the energy exchange between the gas (or the dust) and the \\(N\_g\\) radiation groups. The unknowns are one scalar for the matter and one energy per group, but the group equations are linear in the group energies at a fixed matter temperature, so they are solved in closed form and the whole step reduces to **one scalar equation**. The method follows the hydro3d.jl reference implementation; the code is `radiation_coupling.hpp`.
+Each implicit stage solves, cell by cell, one backward-Euler step of the energy exchange between the matter and the \\(N\_g\\) radiation groups. The group equations are solved directly and the step reduces to **one scalar equation**, which is bracketed and solved with Brent's method. The method follows the hydro3d.jl reference implementation; the code is `radiation_coupling.hpp`.
 
-### The closed-form group block
+### Reduction to one equation
 
-With \\(\mathrm{rad0}\_g = E\_g^0 + S\_g + W\_g\\) (the group's starting energy plus its external source and lagged work term), \\(\tau\_s = \Delta t \\, \hat c\\) (times the Lorentz factor on the single-group `beta_order >= 2` path), and the emission and absorption coefficients \\(\varepsilon\_g = \rho \kappa\_{P,g} \\, 4\pi B\_g / c\\) and \\(\alpha\_g = \rho \kappa\_{E,g}\\) evaluated at the matter temperature \\(T\_m\\),
-
-<script type="math/tex; mode=display">
-E_g = \frac{\mathrm{rad0}_g + \tau_s \, \varepsilon_g(T_m)}{1 + \tau_s \, \alpha_g(T_m)} \, ,
-</script>
-
-a convex combination of where the group started and the Planck value at the matter temperature, weighted by the optical depth of the step. All of the stiffness is in that one weight and is handled exactly; a transparent group keeps \\(\mathrm{rad0}\_g\\), source included.
-
-### One equation
-
-**Without dust** the matter temperature is the gas temperature, and what is left is energy conservation,
+The step, of length \\(\Delta t\\) = `dt_implicit`, covers the energy exchange of [Thermal bands](radiation_hydrodynamics.md#thermal-bands-matter-radiation-coupling), for the two dust models defined there. The external radiation source \\(S\_g\\) and the \\(v/c\\) work term \\(W\_g\\), which is lagged across the outer iteration, are held fixed over the step and folded into the old state,
 
 <script type="math/tex; mode=display">
-G(E_{\rm gas}) = E_{\rm gas} + \frac{c}{\hat c} \sum_g E_g\!\left(T(E_{\rm gas})\right) - \mathcal{E} = 0 \, , \qquad \mathcal{E} = E_{\rm gas}^0 + \frac{c}{\hat c} \sum_g \left( E_g^0 + S_g \right) \, ,
+\mathrm{rad0}_g = E_g^n + S_g + W_g \, , \qquad \mathrm{gas0} = E_{\rm gas}^n - \frac{c}{\hat c} \sum_g W_g \, ,
 </script>
 
-the new total energy minus the old.
+and the net emission is written as \\(Q\_g = c \\, (\varepsilon\_g - \alpha\_g E\_g)\\), with the emission and absorption coefficients \\(\varepsilon\_g = 4 \pi \chi\_{0B,g} B\_g / c\\) and \\(\alpha\_g = \chi\_{0E,g}\\) (\\(\chi\_{0P}\\) and \\(\chi\_{0E}\\) for one group; \\(\chi = \rho \kappa\\)) evaluated at the matter temperature. On the single-group `beta_order >= 2` path, \\(\Delta t \\, \hat c\\) is multiplied by the Lorentz factor.
 
-**With dust** (`ISM_Traits::enable_dust_gas_thermal_coupling_model`) the radiation couples to the dust at \\(T\_d\\), the dust holds no energy, and gas and dust exchange energy at the rate \\(K T^{1/2} (T - T\_d)\\) with \\(K\\) the coefficient `radiation.dust_gas_interaction_coeff` times \\(n\_{\rm H}^2\\). The unknown is \\(T\_d\\): the group block is evaluated at \\(T\_d\\), the gas energy follows from conservation, and what is left is the gas equation,
+**Case I.** The unknowns are \\(E\_{\rm gas}\\) and the \\(N\_g\\) group energies; the gas temperature \\(T\\) follows from \\(E\_{\rm gas}\\) through the equation of state. The backward-Euler step is
 
 <script type="math/tex; mode=display">
-H(T_d) = \left( E_{\rm gas}^0 - \frac{c}{\hat c} \sum_g W_g - E_{\rm gas} \right) - \Delta t \, K \, T^{1/2} \left( T - T_d \right) = 0 \, .
+\begin{aligned}
+E_g - \mathrm{rad0}_g &= \Delta t \, \hat c \left[ \varepsilon_g(T) - \alpha_g(T) \, E_g \right] , \qquad g = 1 \ldots N_g \, , \\[4pt]
+E_{\rm gas} - \mathrm{gas0} &= - \frac{c}{\hat c} \sum_g \left( E_g - \mathrm{rad0}_g \right) .
+\end{aligned}
 </script>
 
-Total energy is conserved to round-off at every trial \\(T\_d\\), not only at the root. One equation covers every coupling strength: at \\(K = 0\\) the gas is untouched and \\(H = 0\\) is radiative equilibrium of the dust; as \\(K \to \infty\\), \\(T\_d \to T\\) and the dust-free step is recovered.
+No group appears in the equation of another group: the groups meet only through \\(T\\). (A term that moved energy between groups directly would break this and need a different solver.) At a fixed \\(T\\), each group equation is therefore linear in its own \\(E\_g\\) and is solved directly,
+
+<script type="math/tex; mode=display">
+E_g(T) = \frac{\mathrm{rad0}_g + \Delta t \, \hat c \, \varepsilon_g(T)}{1 + \Delta t \, \hat c \, \alpha_g(T)} \, ,
+</script>
+
+a weighted mean of the energy the group starts from and its equilibrium value \\(\varepsilon\_g / \alpha\_g\\), with weights \\(1\\) and \\(\Delta t \\, \hat c \\, \alpha\_g\\), the optical depth of the step. The stiffness of an optically thick group, \\(\Delta t \\, \hat c \\, \alpha\_g \gg 1\\), is handled exactly by this formula, and a transparent group keeps \\(\mathrm{rad0}\_g\\). Substituting \\(E\_g(T(E\_{\rm gas}))\\) into the gas equation leaves one equation in one unknown,
+
+<script type="math/tex; mode=display">
+G(E_{\rm gas}) \equiv E_{\rm gas} - \mathrm{gas0} + \frac{c}{\hat c} \sum_g \left[ E_g\big(T(E_{\rm gas})\big) - \mathrm{rad0}_g \right] = 0 \, ,
+</script>
+
+which states that the total energy \\(E\_{\rm gas} + (c / \hat c) \sum\_g E\_g\\) is the same after the step as before it.
+
+**Case II.** The unknowns are \\(E\_{\rm gas}\\), the group energies, and \\(T\_d\\). With the collisional rate \\(\Lambda\_{\rm gd}(T, T\_d) = K \\, T^{1/2} (T - T\_d)\\), \\(K = k\_{\rm gd} \\, n\_{\rm H}^2\\) and \\(k\_{\rm gd}\\) the input `radiation.dust_gas_interaction_coeff`, the backward-Euler step consists of the group equations, the dust energy balance, and the gas equation,
+
+<script type="math/tex; mode=display">
+\begin{aligned}
+E_g - \mathrm{rad0}_g &= \Delta t \, \hat c \left[ \varepsilon_g(T_d) - \alpha_g(T_d) \, E_g \right] , \qquad g = 1 \ldots N_g \, , \\[4pt]
+\frac{c}{\hat c} \sum_g \left( E_g - \mathrm{rad0}_g \right) &= \Delta t \, \Lambda_{\rm gd}(T, T_d) \, , \\[4pt]
+E_{\rm gas} - \mathrm{gas0} &= - \Delta t \, \Lambda_{\rm gd}(T, T_d) \, .
+\end{aligned}
+</script>
+
+Now the groups meet only through \\(T\_d\\), so at a fixed \\(T\_d\\) the group equations are again linear and give \\(E\_g(T\_d)\\) by the formula above with \\(T\\) replaced by \\(T\_d\\). Adding the last two equations gives the gas energy directly as well, from energy conservation,
+
+<script type="math/tex; mode=display">
+E_{\rm gas}(T_d) = \mathrm{gas0} - \frac{c}{\hat c} \sum_g \left[ E_g(T_d) - \mathrm{rad0}_g \right] ,
+</script>
+
+and with it the gas temperature \\(T(T\_d)\\). What is left is the dust energy balance, one equation in one unknown,
+
+<script type="math/tex; mode=display">
+H(T_d) \equiv \frac{c}{\hat c} \sum_g \left[ E_g(T_d) - \mathrm{rad0}_g \right] - \Delta t \, \Lambda_{\rm gd}\big(T(T_d), T_d\big) = 0 \, .
+</script>
+
+Total energy is conserved at every trial \\(T\_d\\), not only at the root. At \\(K = 0\\) the gas energy stays at \\(\mathrm{gas0}\\) and \\(H = 0\\) is the radiative equilibrium of the dust; as \\(K \to \infty\\), \\(T\_d \to T\\) and \\(H = 0\\) becomes \\(G = 0\\) of case I.
+
+### Comparison with the Newton-Raphson iteration
+
+The inner solve differs from the Newton-Raphson iteration of [@Howell_2003], used in [@Wibking_2022], [@He_2024], and [@He_2024b], which iterates on all \\(1 + N\_g\\) energy variables and tests convergence on the residuals of their equations:
+
+- **The group energies are eliminated exactly** rather than iterated on. A Newton step linearises them about the current iterate, and in an optically thick cell far from equilibrium the first step, taken about the starting group energies, can point away from the root.
+- **The root is bracketed before it is refined**, so the solve cannot diverge. Marching from the old state also selects the root connected to it when a steep opacity law gives the step more than one.
+- **Convergence is judged on the unknown, not on a residual.** A group residual of the form \\(\tau\_g (4 \pi B\_g / c - E\_g)\\), with \\(\tau\_g\\) the optical depth of the step, carries a round-off error of about \\(\epsilon \\, \tau\_g\\) times the cell's energy (\\(\epsilon\\) is the machine epsilon), so a residual test at \\(10^{-11}\\) cannot be met once \\(\tau\_g \gtrsim 10^5\\). A relative tolerance on the gas energy means the same at every optical depth.
+- **No Jacobian and no linear solve.** Each evaluation of the scalar equation costs one Planck integral per group.
 
 ### Bracket, root finder, tolerance
 
 Both equations increase with their unknown except where a steep opacity law makes them non-monotone, in which case the step can have several roots. The bracket is therefore built by **marching outward from the old state** (\\(E\_{\rm gas}^0\\), or the start-of-step gas temperature for \\(T\_d\\)) by factors of two in the direction the sign of the residual indicates, which isolates the root continuously connected to where the cell started. The march in \\(E\_{\rm gas}\\) never goes below \\(E\_{\rm min} = E\_{\rm int}(\rho, T\_{\rm floor})\\): if it reaches \\(E\_{\rm min}\\) without a sign change, the root lies below the admissible range, the gas is clamped to the floor and the groups take the closed form at \\(T\_{\rm floor}\\), the cell counts as converged, and the energy \\(G(E\_{\rm min}) > 0\\) is created by the temperature floor, as any floor does, with no threshold on that amount. With a zero temperature floor (every problem in `UnitSystem::CONSTANTS`) \\(E\_{\rm min} = 0\\), and the march instead floors at round-off of the initial gas energy, \\(16 \\, \epsilon \\, E\_{\rm gas}^0\\) with \\(\epsilon\\) the machine epsilon, so that it still ends; probing exactly \\(E = 0\\) would evaluate the Planck function at \\(T = 0\\). This is routine, not pathological: a transparent, radiation-dominated cell whose gas sits at the floor hits this every step. The march in \\(T\_d\\) has no floor: \\(T\_{\rm floor}\\) is a floor on the gas, and dust in a weak field is colder than it, so as \\(T\_d \to 0\\) the emission vanishes and \\(H\\) always finds its sign change. Only an upward march that exhausts its 200 doublings, or a march that meets a non-finite residual, is reported unconverged, and the run aborts.
 
-The root is found with `quokka::math::brent_solve` (Brent's method with a minimum step; see `bracketing_root_finding.hpp`), which stops when the bracket is narrow relative to the unknown: \\(|hi - lo| \le \mathrm{tol} \\, \min(|lo|, |hi|)\\) with `tol` the input `radiation.iteration_tolerance`. For an ideal gas the unknown \\(E\_{\rm gas} = c\_V T\\) makes this a relative tolerance on the gas temperature. With dust the promise is on the gas energy across Brent's final bracket in \\(T\_d\\), \\(|E\_{\rm gas}(T\_d^-) - E\_{\rm gas}(T\_d^+)| \le \max(\mathrm{tol}\\,|E\_{\rm gas}|,\\ 4\varepsilon\\, e\_{\rm r})\\), with \\(e\_{\rm r} = |E\_{\rm gas}^0 - (c/\hat c)\sum\_g W\_g| + (c/\hat c)\sum\_g |E\_g - \mathrm{rad0}\_g|\\) the scale of the round-off in the gas energy, because at small \\(K\\) the gas energy follows from conservation and its error is the \\(T\_d\\) error times \\((c/\hat c)\sum\_g E\_g / E\_{\rm gas}\\) (about \\(10^5\\) in `DTypeFront1D`); if the test fails, Brent is repeated on its own final bracket with the \\(T\_d\\) tolerance set from the measured slope, at most three times, and a bracket at the floating-point resolution of \\(T\_d\\) counts as converged. The state is evaluated where the chord through the ends of Brent's final bracket crosses zero (`secant_point`), not at the midpoint, so that it depends on where Brent stopped only through terms of second order in the tolerance. With dust, the gas energy at that point is then taken either from conservation or from the gas equation, \\(E\_{\rm gas}^0 - (c/\hat c)\sum\_g W\_g - \Delta t \\, K T^{1/2} (T - T\_d)\\), whichever has the smaller estimated round-off; at \\(K = 0\\) this leaves the gas energy exactly unchanged. Convergence is judged on the unknown, never on the residual: \\(H\\) in particular multiplies the round-off in \\(T - T\_d\\) by \\(\Delta t K T^{1/2}\\) and cannot be tested directly. The conservation error of a step is then at most about \\(\mathrm{d}G/\mathrm{d}E\_{\rm gas}\\) times the tolerance times the gas energy. Over a 240-cell sweep taken from hydro3d.jl, spanning three opacity laws and sixteen decades of optical depth the solve needs about 10 evaluations of the equation per cell without dust and about 14 with dust, and fails on none; `RadCouplingUnitTests` reproduces that sweep and the dust sweep.
-
-Each evaluation costs one pass over the groups (one Planck integral per group) and no derivative, no matrix and no linear solve. `radiation.print_iteration_counts` reports the mean and maximum number of evaluations per solve.
+The root is found with `quokka::math::brent_solve` (Brent's method with a minimum step; see `bracketing_root_finding.hpp`), which stops when the bracket is narrow relative to the unknown: \\(|hi - lo| \le \mathrm{tol} \\, \min(|lo|, |hi|)\\) with `tol` the input `radiation.iteration_tolerance`. For an ideal gas the unknown \\(E\_{\rm gas} = c\_V T\\) makes this a relative tolerance on the gas temperature. With dust the promise is on the gas energy across Brent's final bracket in \\(T\_d\\), \\(|E\_{\rm gas}(T\_d^-) - E\_{\rm gas}(T\_d^+)| \le \max(\mathrm{tol}\\,|E\_{\rm gas}|,\\ 4\varepsilon\\, e\_{\rm r})\\), with \\(e\_{\rm r} = |E\_{\rm gas}^0 - (c/\hat c)\sum\_g W\_g| + (c/\hat c)\sum\_g |E\_g - \mathrm{rad0}\_g|\\) the scale of the round-off in the gas energy, because at small \\(K\\) the gas energy follows from conservation and its error is the \\(T\_d\\) error times \\((c/\hat c)\sum\_g E\_g / E\_{\rm gas}\\) (about \\(10^5\\) in `DTypeFront1D`); if the test fails, Brent is repeated on its own final bracket with the \\(T\_d\\) tolerance set from the measured slope, at most three times, and a bracket at the floating-point resolution of \\(T\_d\\) counts as converged. The state is evaluated where the chord through the ends of Brent's final bracket crosses zero (`secant_point`), not at the midpoint, so that it depends on where Brent stopped only through terms of second order in the tolerance. With dust, the gas energy at that point is then taken either from conservation or from the gas equation, \\(E\_{\rm gas}^0 - (c/\hat c)\sum\_g W\_g - \Delta t \\, K T^{1/2} (T - T\_d)\\), whichever has the smaller estimated round-off; at \\(K = 0\\) this leaves the gas energy exactly unchanged. Convergence is judged on the unknown, never on the residual: \\(H\\) in particular multiplies the round-off in \\(T - T\_d\\) by \\(\Delta t K T^{1/2}\\) and cannot be tested directly. The conservation error of a step is then at most about \\(\mathrm{d}G/\mathrm{d}E\_{\rm gas}\\) times the tolerance times the gas energy. Over a 240-cell sweep taken from hydro3d.jl, spanning three opacity laws and sixteen decades of optical depth the solve needs about 10 evaluations of the equation per cell without dust and about 14 with dust, and fails on none; `RadCouplingUnitTests` reproduces that sweep and the dust sweep. `radiation.print_iteration_counts` reports the mean and maximum number of evaluations per solve.
 
 ## Equivalence with the previous implementation (single-group)
 
