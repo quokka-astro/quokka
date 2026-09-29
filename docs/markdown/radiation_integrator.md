@@ -178,7 +178,7 @@ Each implicit stage solves, cell by cell, one backward-Euler step of the energy 
 
 ### Reduction to one equation
 
-The step, of length \\(\Delta t\\) = `dt_implicit`, covers the energy exchange of [Thermal bands](radiation_hydrodynamics.md#thermal-bands-matter-radiation-coupling), for the two dust models defined there. The external radiation source \\(S\_g\\) and the \\(v/c\\) work term \\(W\_g\\), which is lagged across the outer iteration, are held fixed over the step and folded into the old state,
+The step, of length \\(\Delta t\\) = `dt_implicit`, covers the [energy exchange with the matter](radiation_hydrodynamics.md#energy-exchange-with-the-matter), for the two dust models defined there. The external radiation source \\(S\_g\\) and the \\(v/c\\) work term \\(W\_g\\), which is lagged across the outer iteration, are held fixed over the step and folded into the old state,
 
 <script type="math/tex; mode=display">
 \mathrm{rad0}_g = E_g^n + S_g + W_g \, , \qquad \mathrm{gas0} = E_{\rm gas}^n - \frac{c}{\hat c} \sum_g W_g \, ,
