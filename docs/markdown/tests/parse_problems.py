@@ -66,7 +66,6 @@ def parse_cpp_flags(cpp_path: Path) -> Dict[str, any]:
         'is_radiation_enabled',
         'is_self_gravity_enabled',
         'enable_dust_gas_thermal_coupling_model',
-        'enable_photoelectric_heating',
     ]
 
     for key in bool_flags:
@@ -87,6 +86,12 @@ def parse_cpp_flags(cpp_path: Path) -> Dict[str, any]:
         # If any value is true, set flag to true (handles files with multiple trait structs)
         if bool_values:
             flags[key] = any(bool_values)
+
+    # Photoelectric heating: a dust-absorption band with a non-zero RadSystem_Traits::pe_heating_efficiency
+    pe_matches = re.findall(r'pe_heating_efficiency\s*=\s*\{([^}]*)\}', content)
+    if pe_matches:
+        entries = [e.strip() for m in pe_matches for e in m.split(',') if e.strip()]
+        flags['pe_heating'] = any(not re.fullmatch(r'0*\.?0*([eE][+-]?\d+)?', e) for e in entries)
 
     # Parse integer flags
     int_patterns = {
@@ -153,7 +158,7 @@ def format_radiation(flags: Dict) -> str:
     modifiers = []
     if flags.get('enable_dust_gas_thermal_coupling_model', False):
         modifiers.append('ThermalDust')
-    if flags.get('enable_photoelectric_heating', False):
+    if flags.get('pe_heating', False):
         modifiers.append('PE')
 
     if modifiers:

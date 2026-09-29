@@ -55,7 +55,8 @@ photoionize.flux = 1.0e13
 # The ionizing band is always transparent to this gray opacity.
 photoionize.kappa1 = 1.0e1
 photoionize.kappa2 = 1.0e3
-radiation.iteration_tolerance = 1e-8
+# Relative tolerance of the matter-radiation coupling solve on the gas energy (the default).
+radiation.iteration_tolerance = 1e-11
 
 # Ionizing photon flux injected per side [photons cm^-2 s^-1]. A chemistry band's source is not scaled by
 # chat/c the way a thermal band's is, so this value is c/chat = 1000 times smaller than photoionize.flux in

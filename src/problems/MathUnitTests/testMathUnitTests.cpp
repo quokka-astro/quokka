@@ -23,6 +23,7 @@
 #include <cmath>
 #include <format>
 #include <iostream>
+#include <limits>
 #include <numbers>
 
 struct ODETest {};
@@ -267,17 +268,159 @@ auto TestRootFinding() -> int
 	return status;
 }
 
+// --- bracket_root_of_increasing ---
+// The coupling solver (radiation_coupling.hpp) builds its bracket by marching from the old state (hydro3d.jl,
+// docs/coupling-new-method.md section 3.3). Each case pins the exact sequence of probes.
+struct MarchOutcome {
+	Real lo;
+	Real hi;
+	Real flo;
+	Real fhi;
+	int nevals;
+	bool found;
+};
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto run_march_case(int which) -> MarchOutcome
+{
+	quokka::math::BracketMarchResult<Real> m{};
+	if (which == 0) {
+		// upward: x - 3 from 0.5 probes 0.5, 1, 2, 4 and brackets [2, 4]
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 3; }, 0.5, 0.01);
+	} else if (which == 1) {
+		// downward: x - 3 from 40 probes 40, 20, 10, 5, 2.5 and brackets [2.5, 5]
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 3; }, 40.0, 0.01);
+	} else if (which == 2) {
+		// no root above the floor: x + 1 from 1 with xmin 0.25 probes 1, 0.5, 0.25 and reports not found
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x + 1; }, 1.0, 0.25);
+	} else if (which == 3) {
+		// an exact zero at the start is a bracket of zero width
+		m = quokka::math::bracket_root_of_increasing([](Real x) { return x - 2; }, 2.0, 0.01);
+	} else {
+		// a non-finite residual ends the march at once, reported not found
+		m = quokka::math::bracket_root_of_increasing([](Real /*x*/) { return std::numeric_limits<Real>::quiet_NaN(); }, 1.0, 0.01);
+	}
+	return MarchOutcome{.lo = m.lo, .hi = m.hi, .flo = m.flo, .fhi = m.fhi, .nevals = m.nevals, .found = m.found};
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto march_case_ok(int which, MarchOutcome const &o) -> bool
+{
+	if (which == 0) {
+		return o.found && (o.lo == 2.0) && (o.hi == 4.0) && (o.flo == -1.0) && (o.fhi == 1.0) && (o.nevals == 4);
+	}
+	if (which == 1) {
+		return o.found && (o.lo == 2.5) && (o.hi == 5.0) && (o.flo == -0.5) && (o.fhi == 2.0) && (o.nevals == 5);
+	}
+	if (which == 2) {
+		return !o.found && (o.lo == 0.25) && (o.hi == 0.5) && (o.nevals == 3);
+	}
+	if (which == 3) {
+		return o.found && (o.lo == 2.0) && (o.hi == 2.0) && (o.nevals == 1);
+	}
+	return !o.found && (o.lo == 1.0) && (o.hi == 1.0) && (o.nevals == 1);
+}
+
+auto TestBracketMarch() -> int
+{
+	constexpr int ncase = 5;
+	int status = 0;
+	amrex::Gpu::DeviceVector<MarchOutcome> dev_d(ncase);
+	MarchOutcome *dev_ptr = dev_d.data();
+	amrex::ParallelFor(ncase, [=] AMREX_GPU_DEVICE(int n) noexcept { dev_ptr[n] = run_march_case(n); });
+	std::array<MarchOutcome, ncase> dev{};
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dev_d.begin(), dev_d.end(), dev.begin());
+	for (int n = 0; n < ncase; ++n) {
+		const MarchOutcome host = run_march_case(n);
+		const bool ok = march_case_ok(n, host) && march_case_ok(n, dev[n]);
+		std::cout << std::format("bracket march case {}: [{}, {}] in {} evals, found = {}{}\n", n, host.lo, host.hi, host.nevals, host.found,
+					 ok ? "" : "  FAIL");
+		if (!ok) {
+			status = 1;
+		}
+	}
+	// secant_point: the chord crossing of [2, 4] with f = x - 3 is exactly 3; equal residuals fall back to the midpoint
+	{
+		const quokka::math::BracketSolveResult<Real> b{.lo = 2.0, .hi = 4.0, .flo = -1.0, .fhi = 1.0};
+		const quokka::math::BracketSolveResult<Real> flat{.lo = 2.0, .hi = 4.0, .flo = -1.0, .fhi = -1.0};
+		const bool ok = (quokka::math::secant_point(b) == 3.0) && (quokka::math::secant_point(flat) == 3.0);
+		std::cout << std::format("secant point of [2, 4]: {}{}\n", quokka::math::secant_point(b), ok ? "" : "  FAIL");
+		status = ok ? status : 1;
+	}
+	std::cout << (status == 0 ? "Bracket march: all tests passed.\n" : "Bracket march: FAILED.\n");
+	return status;
+}
+
+// --- brent_solve on a residual flat at round-off next to the root ---
+// The coupling residual is quantized at round-off near its root: in DTypeFront1D's dust solve it is linear far from the
+// root, sits at one tiny level (-2.4e-23) just below it and jumps to the next (6.6e-21) above it. Brent's interpolation
+// then lands on the flat side again and again, and the minimum-step safeguard advances it by tol1 per iteration; the
+// solver must notice and bisect. The root is placed at several mantissas, because the stored safeguard step is tol1
+// rounded to the ulp of the iterate, which rounds up or down with the mantissa. With the bisection test comparing the
+// last step with tol1 itself, m = 1.3, 1.4, 1.8, 1.9 take 66 to 87 evaluations; with 2 tol1, every case takes 30.
+constexpr int nflat = 6;
+constexpr int max_evals_flat = 40;
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto run_flat_case(int which) -> Result
+{
+	const amrex::GpuArray<Real, nflat> mantissa{1.0, 1.1, 1.3, 1.4, 1.8, 1.9};
+	const Real r = 32.0 * mantissa[which];
+	const Real slope = 1.2e-9;
+	const Real jump = 6.6e-21;
+	const Real flat_width = jump / slope;
+	auto f = [=](Real x) -> Real {
+		if (x >= r) {
+			return jump + slope * (x - r);
+		}
+		if (x >= r - flat_width) {
+			return -1.0e-23;
+		}
+		return slope * (x - r);
+	};
+	quokka::math::eps_tolerance<Real> tol(1.0e-8);
+	int iter = 100;
+	const auto [lo, hi] = quokka::math::brent_solve(f, r / 2, 2 * r, tol, iter);
+	return Result{.root = tol(lo, hi) ? 1.0 : 0.0, .iter = iter};
+}
+
+auto TestBrentFlatResidual() -> int
+{
+	int status = 0;
+	amrex::Gpu::DeviceVector<Result> dev_d(nflat);
+	Result *dev_ptr = dev_d.data();
+	amrex::ParallelFor(nflat, [=] AMREX_GPU_DEVICE(int n) noexcept { dev_ptr[n] = run_flat_case(n); });
+	std::array<Result, nflat> dev{};
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dev_d.begin(), dev_d.end(), dev.begin());
+	for (int n = 0; n < nflat; ++n) {
+		const Result host = run_flat_case(n);
+		const bool ok = (host.root == 1) && (dev[n].root == 1) && (host.iter <= max_evals_flat) && (dev[n].iter <= max_evals_flat);
+		std::cout << std::format("brent flat residual case {}: converged = {}, iter = {} (dev {}){}\n", n, host.root == 1, host.iter, dev[n].iter,
+					 ok ? "" : "  FAIL");
+		if (!ok) {
+			status = 1;
+		}
+	}
+	std::cout << (status == 0 ? "Brent flat residual: all tests passed.\n" : "Brent flat residual: FAILED.\n");
+	return status;
+}
+
 } // namespace
 
 auto problem_main() -> int
 {
 	const int ode_status = TestODEIntegration();
 	const int root_status = TestRootFinding();
+	const int march_status = TestBracketMarch();
+	const int flat_status = TestBrentFlatResidual();
 	if (ode_status != 0) {
 		std::cout << "MathUnitTests: ODE integration test FAILED.\n";
 	}
 	if (root_status != 0) {
 		std::cout << "MathUnitTests: root finding test FAILED.\n";
 	}
-	return ((ode_status != 0) || (root_status != 0)) ? 1 : 0;
+	if (march_status != 0) {
+		std::cout << "MathUnitTests: bracket march test FAILED.\n";
+	}
+	if (flat_status != 0) {
+		std::cout << "MathUnitTests: brent flat residual test FAILED.\n";
+	}
+	return ((ode_status != 0) || (root_status != 0) || (march_status != 0) || (flat_status != 0)) ? 1 : 0;
 }

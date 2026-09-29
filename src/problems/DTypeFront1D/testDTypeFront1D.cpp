@@ -69,7 +69,6 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "physics_info.hpp"
-#include "radiation/radiation_dust_system.hpp" // for the separate dust-temperature solver (see ISM_Traits below)
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -164,17 +163,14 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 template <> struct ISM_Traits<DTypeFront1D> {
 	// Solve for a separate dust temperature rather than assuming T_dust == T_gas. With
 	// radiation.dust_gas_interaction_coeff = 0 in the input file the gas-dust collisional term vanishes, so
-	// the solver takes its decoupled branch (dust_model == 2 in radiation_dust_system.hpp): the dust
-	// temperature is fixed purely by radiative equilibrium with the local radiation field, and no energy is
-	// exchanged with the gas at all.
+	// the dust temperature is fixed purely by radiative equilibrium with the local radiation field, and no
+	// energy is exchanged with the gas at all.
 	//
 	// Decoupled here means thermally decoupled only. Radiation momentum is a separate channel and is still
 	// deposited, so the beam drives the gas: it reaches ~8e6 cm/s and evacuates the cells nearest the source
 	// by a factor of a few hundred in density. The gas temperature therefore still varies widely, through
 	// compression and expansion rather than through radiative heating.
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
-	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool enable_photoelectric_heating = false;
 };
 
 template <> struct SimulationData<DTypeFront1D> {
@@ -295,7 +291,7 @@ auto compute_gas_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex
 
 // Domain-integrated x-momentum of the radiation field: sum_cells sign * w_g * F_x,g * dx for group g, with the same sign convention as compute_gas_momentum.
 // The weight w_g turns a radiation flux into the momentum the solver actually trades with the gas, and it is not the same for the two kinds of band. A thermal
-// group uses w = 1 / (c * chat), the pairing in UpdateFlux (source_terms_multi_group.hpp), while a chemistry band uses w = 1 / c^2, the pairing in
+// group uses w = 1 / (c * chat), the pairing in UpdateFlux (source_terms.hpp), while a chemistry band uses w = 1 / c^2, the pairing in
 // computePhotoChemistry (photochemistry.hpp). They differ because a chemistry band's energy density is deliberately inflated by c / chat so that chat *
 // n_photon reproduces the physical photon flux and the ionization rate comes out right; its momentum weight divides that factor back out. Under either weight
 // an injected photon flux Phi carries the physical momentum flux Phi * E_photon / c, which is what makes the single budget below meaningful across both kinds
@@ -328,7 +324,7 @@ auto compute_group_rad_momentum(amrex::MultiFab const &state_mf, amrex::GpuArray
 // |F| > c E, so this is a physical invariant rather than a tuned tolerance: a value above one means the
 // radiation flux and the radiation energy have been updated inconsistently. It is what detects a flux source
 // applied to a group whose energy source was dropped, which is how a transparent sourced group behaved in the
-// dust solvers before the injection loop there was added (radiation_dust_system.hpp).
+// old dust solvers before their source injection was fixed.
 auto compute_max_reduced_flux(amrex::MultiFab const &state_mf, int g) -> amrex::Real
 {
 	amrex::ReduceOps<amrex::ReduceOpMax> reduce_op;
@@ -377,7 +373,7 @@ void RadSystem<DTypeFront1D>::AddRadSource(array_t &radEnergy, array_t &reducedF
 	// the dust's own thermal re-emission of the absorbed optical light.
 	//
 	// The two sourced bands take different internal scalings: a thermal group's source is multiplied by
-	// chat/c, a chemistry band's is not (see source_terms_multi_group.hpp), and the flux source is scaled to
+	// chat/c, a chemistry band's is not (see source_terms.hpp), and the flux source is scaled to
 	// match its own energy source. The hook takes a reduced flux rather than a flux, so a reduced flux of
 	// unit magnitude means "beamed" for either kind of band and |F| > c E is unrepresentable.
 	// The shipped fluxes differ by exactly that factor of c/chat = 1000, so the two bands receive the same
@@ -633,7 +629,7 @@ auto problem_main() -> int
 				E_thermal += E_g;
 			}
 		}
-		// A thermal group's source carries the code's internal chat/c factor (see source_terms_multi_group.hpp).
+		// A thermal group's source carries the code's internal chat/c factor (see source_terms.hpp).
 		// Only the optical group is sourced among the thermal ones; both start at the radiation floor.
 		// The slab emits F * E_photon per unit area per unit time to EACH side, hence the leading factor of two.
 		const double injected = 2.0 * (c_hat / C::c_light) * F * E_photon * t_end + 2.0 * Erad_floor_ * Lx;
@@ -667,18 +663,20 @@ auto problem_main() -> int
 		// isotropic source injects no net momentum at all: the outward momentum then has to be *generated* by
 		// transport as M1 beams the two wings, which it does only gradually, leaving the budget short and
 		// strongly resolution-dependent. Run with photoionize.beamed = 0 to see it -- the ratio falls to 0.78
-		// and drifts with resolution.
+		// at 128 cells and drifts with resolution (0.87 at 1024).
 		//
 		// The IR band is excluded, for the same reason the ionizing band is excluded from the energy budget
 		// above: nothing injects momentum into it. The dust creates the IR by re-emission, which is isotropic
 		// and carries no net momentum, and the outward flux it subsequently develops is generated by transport
 		// down the radiation pressure gradient rather than by the source. Outward momentum is not conserved
 		// under transport -- only the signed total is -- so that term has no place in a budget against what was
-		// injected. It is not small either: including it would add 9.2% here, because the reservoir
+		// injected. It is not small either: including it would add 9.5% here, because the reservoir
 		// F / (c * chat) is inflated by c / chat relative to the physical E / c.
 		//
-		// The residual +0.4% is the IR the dust reabsorbs: a fraction tau_IR = rho * kappa1 * chat * t_end of
-		// the outward IR flux is absorbed and lands in the gas momentum. The tolerance covers it.
+		// The residual +0.9% is momentum the radiation did not supply: the photoheated gas pushes outward on the
+		// neutral gas by its own pressure as it expands (the ratio is 0.9997 with network.energy_switch = 0). The IR
+		// the dust reabsorbs, a fraction tau_IR = rho * kappa1 * chat * t_end ~ 0.01 of the outward IR flux, adds only
+		// about 0.03%. The tolerance covers both.
 		//
 		// The signed total is checked alongside, and much more tightly: the source injects zero net momentum,
 		// nothing reaches a boundary, and every radiation-gas exchange is equal and opposite, so the signed sum
@@ -700,8 +698,13 @@ auto problem_main() -> int
 			const double p_injected = 2.0 * (F * E_photon + F_ion * E_photon_ion) * t_end / C::c_light;
 			const double p_frac = (p_gas_out + p_out_beamed) / p_injected;
 			const double tol_p = 0.02;
-			// The signed total is a round-off quantity; it measures 1e-16 of the injected scale here.
-			const double tol_symmetry = 1.0e-10;
+			// The signed total is a round-off quantity. The coupling solve is conservative, so the lagged work term
+			// reaches the gas internal energy, and in the floor-level cells next to the source the per-step work traffic is ten times
+			// the gas internal energy, so the round-off of the (nearly cancelling) fluxes there arrives in the gas
+			// energy at 1e-13 relative, and the photochemistry's tolerance-based solve amplifies that to 1e-3 in the
+			// two front cells where it changes its iteration count. The signed momentum then measures 1e-10 to 1e-9
+			// of the injected scale, varying with platform and compiler; a real asymmetry of the source would be O(1).
+			const double tol_symmetry = 1.0e-8;
 
 			amrex::Print() << "Outward momentum: gas " << p_gas_out << " + sourced bands " << p_out_beamed << " = " << p_gas_out + p_out_beamed
 				       << " (injected " << p_injected << ", ratio " << p_frac << ", gas share " << p_gas_out / (p_gas_out + p_out_beamed)
@@ -802,8 +805,8 @@ auto problem_main() -> int
 	// ionized column and the inequality still holds (verified: scaling the source by chat/c passes it). The
 	// surviving fraction is what catches that. Each ionization front stalls at its Stromgren column well
 	// inside the light-travel distance chat * t, so a good fraction of the injected photons are always still
-	// in flight; mis-scaling the source by c/chat = 1000 collapses the surviving fraction from 0.20 to
-	// 8e-5. Hence the lower bound as well as the upper one.
+	// in flight; mis-scaling the source by chat/c = 1/1000 collapses the surviving fraction from 0.26 to
+	// 3e-8. Hence the lower bound as well as the upper one.
 	{
 		const double E_ion = compute_group_total_erad(sim.state_new_cc_[0], dx, group_ionizing, transverse_cells);
 		// As in the energy budget above, the slab feeds both sides, hence the factor of two. The photon

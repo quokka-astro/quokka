@@ -17,6 +17,9 @@
 /// The bracket is returned unconverged (tol(a, b) == false) if the iteration
 /// budget is exhausted, if f returns NaN (ModAB), or if the bracket cannot be
 /// split further in floating point.
+///
+/// bracket_root_of_increasing builds a starting bracket for these solvers by marching from a point in
+/// factor-of-two steps.
 
 #include <cmath>
 #include <limits>
@@ -70,12 +73,37 @@ template <class T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ab_factor(T y3,
 }
 } // namespace detail
 
-/// Brent's method (inverse quadratic interpolation / secant / bisection).
+/// The final bracket of a bracketing solve, with the residuals at both ends. lo <= hi; lo == hi on an exact zero.
+template <class T> struct BracketSolveResult {
+	T lo;
+	T hi;
+	T flo;
+	T fhi;
+};
+
+/// The point where the chord through the ends of a bracket crosses zero (regula falsi), clamped to the bracket, or its
+/// midpoint when the ends do not differ or the chord is not finite. On a smooth f it is within second order in the
+/// bracket width of the root, so a state taken there depends on which bracket the solver stopped at only through terms
+/// of that order: what makes a tolerance-based solve reproducible to round-off across cells whose inputs differ by an ulp.
+template <class T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto secant_point(BracketSolveResult<T> const &b) -> T
+{
+	if (b.hi <= b.lo) {
+		return b.lo;
+	}
+	const T x = detail::safe_secant(b.lo, b.flo, b.hi, b.fhi);
+	if (!std::isfinite(x) || (b.flo == b.fhi)) {
+		return detail::safe_midpoint(b.lo, b.hi);
+	}
+	return x;
+}
+
+/// Brent's method (inverse quadratic interpolation / secant / bisection), returning the final bracket with the residuals
+/// at both ends.
 /// Port of Brent() from NonlinearSolve.jl, plus the minimum-step safeguard of Numerical Recipes' zbrent
 /// (without it, the far end of the bracket converges only by bisection when f is exactly rounded, e.g. with FMA).
 /// fax and fbx are f(ax) and f(bx).
 template <class F, class T, class Tol>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax, T fbx, Tol tol, int &max_iter) -> std::pair<T, T>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve_bracket(F f, T ax, T bx, T fax, T fbx, Tol tol, int &max_iter) -> BracketSolveResult<T>
 {
 	const T eps = std::numeric_limits<T>::epsilon();
 	const int budget = max_iter;
@@ -87,14 +115,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 	T fr = fbx;
 
 	if (fl == 0) {
-		return std::make_pair(left, left);
+		return BracketSolveResult<T>{left, left, fl, fl};
 	}
 	if (fr == 0) {
-		return std::make_pair(right, right);
+		return BracketSolveResult<T>{right, right, fr, fr};
 	}
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sgn(fl) != sgn(fr), "brent_solve: parameters a and b do not bracket the root!");
 
-	auto ordered = [](T a, T b) { return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a); };
+	auto ordered = [](T a, T b, T fa, T fb) { return (a < b) ? BracketSolveResult<T>{a, b, fa, fb} : BracketSolveResult<T>{b, a, fb, fa}; };
 
 	// keep 'right' as the best estimate
 	if (std::abs(fl) < std::abs(fr)) {
@@ -109,7 +137,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 	bool cond = true; // whether the previous step was a bisection
 
 	while (max_iter < budget) {
-		const auto [lo, hi] = ordered(left, right);
+		const T lo = amrex::min(left, right);
+		const T hi = amrex::max(left, right);
 		if (tol(lo, hi)) {
 			break;
 		}
@@ -124,9 +153,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 		}
 
 		const T q = (3 * left + right) / 4;
+		// The minimum step (Brent's delta, Numerical Recipes' tol1). The bisection tests on the last two steps compare with a
+		// multiple of it, not with machine epsilon: otherwise a residual that is flat at round-off next to the root lets the
+		// safeguard below creep by tol1 per iteration without ever bisecting, and the budget runs out (seen in DTypeFront1D's
+		// dust solve). The factor 2 is needed because a stored safeguard step is tol1 rounded to the ulp of the iterate, which
+		// can exceed tol1 by up to half an ulp; comparing with tol1 itself then fails for about half of all mantissas.
+		const T tol1 = amrex::max(2 * eps * std::abs(right), std::numeric_limits<T>::min());
+		const T min_step = 2 * tol1;
 		// !isfinite(s): the interpolation overflowed (e.g. |f| ~ 1e200); NaN would pass every comparison below
 		if (!std::isfinite(s) || (s < amrex::min(q, right)) || (s > amrex::max(q, right)) || (cond && std::abs(s - right) >= std::abs(right - c) / 2) ||
-		    (!cond && std::abs(s - right) >= std::abs(c - d) / 2) || (cond && std::abs(right - c) <= eps) || (!cond && std::abs(c - d) <= eps)) {
+		    (!cond && std::abs(s - right) >= std::abs(c - d) / 2) || (cond && std::abs(right - c) <= min_step) ||
+		    (!cond && std::abs(c - d) <= min_step)) {
 			// bisection
 			s = detail::safe_midpoint(left, right);
 			if ((s == left) || (s == right)) {
@@ -137,7 +174,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 			cond = false;
 			// Numerical Recipes (zbrent) safeguard: step at least tol1 towards the contrapoint, so the bracket
 			// still collapses when every interpolated iterate lands on the same side of the root.
-			const T tol1 = amrex::max(2 * eps * std::abs(right), std::numeric_limits<T>::min());
 			if (std::abs(s - right) < tol1) {
 				s = right + ((left > right) ? tol1 : -tol1);
 				if (!((s > lo) && (s < hi))) {
@@ -149,7 +185,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 		const T fs = f(s);
 		++max_iter;
 		if (fs == 0) {
-			return std::make_pair(s, s);
+			return BracketSolveResult<T>{s, s, fs, fs};
 		}
 
 		if (sgn(fl) * sgn(fs) < 0) {
@@ -174,7 +210,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax
 		}
 	}
 
-	return ordered(left, right);
+	return ordered(left, right, fl, fr);
+}
+
+/// Brent's method; see brent_solve_bracket. Returns the ordered final bracket (a, b), a <= b.
+template <class F, class T, class Tol>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto brent_solve(F f, T ax, T bx, T fax, T fbx, Tol tol, int &max_iter) -> std::pair<T, T>
+{
+	const auto r = brent_solve_bracket(f, ax, bx, fax, fbx, tol, max_iter);
+	return std::make_pair(r.lo, r.hi);
 }
 
 /// Brent's method; evaluates f(ax) and f(bx) itself.
@@ -310,6 +354,69 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto modab_solve(F f, T ax, T bx, T fax
 template <class F, class T, class Tol> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto modab_solve(F f, T ax, T bx, Tol tol, int &max_iter) -> std::pair<T, T>
 {
 	return modab_solve(f, ax, bx, f(ax), f(bx), tol, max_iter);
+}
+
+/// What bracket_root_of_increasing returns. lo <= hi, f(lo) <= 0 <= f(hi) when found; nevals counts the evaluations made.
+template <class T> struct BracketMarchResult {
+	T lo;
+	T hi;
+	T flo;
+	T fhi;
+	int nevals;
+	bool found;
+};
+
+/// A bracket of an increasing f around the root continuously connected to x0: start there and step by factors of two in
+/// the direction the sign of f says the root lies, until the sign changes, never below xmin. Marching from the old state
+/// rather than taking a wide bracket is what selects the physical root when f has several (hydro3d.jl,
+/// docs/coupling-new-method.md section 3.3). Going down the walk stops at xmin; going up it stops after max_evals
+/// evaluations; in both cases without a sign change it reports found = false rather than guessing. A non-finite f also
+/// ends the walk with found = false, lo = hi at that point. x0 must be positive.
+template <class F, class T>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto bracket_root_of_increasing(F const &f, T x0, T xmin, int max_evals = 200) -> BracketMarchResult<T>
+{
+	T x = x0;
+	T g = f(x);
+	int n = 1;
+	if (!std::isfinite(g)) {
+		return BracketMarchResult<T>{x, x, g, g, n, false};
+	}
+	if (g == 0) {
+		return BracketMarchResult<T>{x, x, g, g, n, true};
+	}
+	if (g < 0) {
+		while (n < max_evals) {
+			const T y = 2 * x;
+			const T gy = f(y);
+			++n;
+			if (!std::isfinite(gy)) {
+				return BracketMarchResult<T>{y, y, gy, gy, n, false};
+			}
+			if (gy >= 0) {
+				return BracketMarchResult<T>{x, y, g, gy, n, true};
+			}
+			x = y;
+			g = gy;
+		}
+	} else {
+		while (n < max_evals) {
+			const T y = amrex::max(x / 2, xmin);
+			const T gy = f(y);
+			++n;
+			if (!std::isfinite(gy)) {
+				return BracketMarchResult<T>{y, y, gy, gy, n, false};
+			}
+			if (gy <= 0) {
+				return BracketMarchResult<T>{y, x, gy, g, n, true};
+			}
+			if (y == xmin) {
+				return BracketMarchResult<T>{y, x, gy, g, n, false};
+			}
+			x = y;
+			g = gy;
+		}
+	}
+	return BracketMarchResult<T>{x, x, g, g, n, false};
 }
 
 } // namespace quokka::math

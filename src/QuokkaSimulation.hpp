@@ -218,8 +218,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	bool use_wavespeed_correction_ = false;
 	bool print_rad_counter_ = false;
-	amrex::Real radiation_iteration_tolerance_ = 1e-11;    // tolerance for the Newton-Raphson iteration residuals
-	amrex::Real radiation_iteration_tolerance_rel_ = -1.0; // tolerance for the relative change between two consecutive Newton-Raphson iterations
+	// relative tolerance on the unknown of the matter-radiation coupling solve (the gas energy, or the dust temperature)
+	amrex::Real radiation_iteration_tolerance_ = 1e-11;
 
 	bool projectInitialBField_ = false;
 	bool updateInitialMagneticEnergy_ = true;
@@ -889,7 +889,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
 		rpp.query("print_iteration_counts", print_rad_counter_);
 		rpp.query("iteration_tolerance", radiation_iteration_tolerance_);
-		rpp.query("iteration_tolerance_rel", radiation_iteration_tolerance_rel_);
 	}
 }
 
@@ -3259,7 +3258,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	int nsubSteps = 0;
 	amrex::Real dt_radiation = NAN;
 	auto const rad_tol = radiation_iteration_tolerance_;
-	auto const rad_tol_rel = radiation_iteration_tolerance_rel_;
 	auto const tempFloor = tempFloor_;
 
 	if (Physics_Traits<problem_t>::is_hydro_enabled && !(constantDt_ > 0.)) {
@@ -3295,10 +3293,10 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		// We use the three-stage IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
 
-		// failure counter for: matter-radiation coupling, dust temperature, outer iteration
-		amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0});
-		// iteration counter for: radiation update, Newton-Raphson iterations, max Newton-Raphson iterations, decoupled gas-dust update
-		amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0, 0});
+		// failure counter for: matter-radiation coupling, outer iteration
+		amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0});
+		// iteration counter for: coupling solves, residual evaluations, max residual evaluations
+		amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0});
 		int *p_iteration_failure_counter = iteration_failure_counter.data();
 		int *p_iteration_counter = iteration_counter.data();
 
@@ -3370,15 +3368,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				}
 
 				// Full gas update (gas_update_factor = 1.0)
-				if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
-					RadSystem<problem_t>::AddSourceTermsSingleGroup(
-					    stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage2_implicit, 1.0, dustGasInteractionCoeff_,
-					    rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
-				} else {
-					RadSystem<problem_t>::AddSourceTermsMultiGroup(
-					    stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage2_implicit, 1.0, dustGasInteractionCoeff_,
-					    rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
-				}
+				RadSystem<problem_t>::AddSourceTerms(stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage2_implicit, 1.0,
+								     dustGasInteractionCoeff_, rad_tol, tempFloor, p_iteration_counter,
+								     p_iteration_failure_counter, cons_fc_arr);
 			}
 		}
 
@@ -3478,15 +3470,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			}
 
 			// Full gas update (gas_update_factor = 1.0)
-			if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
-				RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew_cc, radEnergySource_arr, radFluxSource_arr, indexRange,
-										dt_stage3_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
-										tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
-			} else {
-				RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, radFluxSource_arr, indexRange,
-									       dt_stage3_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
-									       tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
-			}
+			RadSystem<problem_t>::AddSourceTerms(stateNew_cc, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage3_implicit, 1.0,
+							     dustGasInteractionCoeff_, rad_tol, tempFloor, p_iteration_counter, p_iteration_failure_counter,
+							     cons_fc_arr);
 		}
 #ifdef PHOTOCHEMISTRY
 		if (enablePhotoChemistry_ == 1) {
@@ -3507,16 +3493,13 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		if (print_rad_counter_) {
 			auto *h_iteration_counter = iteration_counter.copyToHost();
-			long global_solver_count = h_iteration_counter[0];  // number of Newton-Raphson solvings, NOLINT(google-runtime-int)
-			long global_iteration_sum = h_iteration_counter[1]; // sum of Newton-Raphson iterations, NOLINT(google-runtime-int)
-			int global_iteration_max = h_iteration_counter[2];  // max number of Newton-Raphson iterations, NOLINT(google-runtime-int)
-			// sum of decoupled gas-dust Newton-Raphson iterations
-			long global_decoupled_iteration_sum = h_iteration_counter[3]; // NOLINT(google-runtime-int)
+			long global_solver_count = h_iteration_counter[0];  // number of coupling solves, NOLINT(google-runtime-int)
+			long global_iteration_sum = h_iteration_counter[1]; // sum of residual evaluations, NOLINT(google-runtime-int)
+			int global_iteration_max = h_iteration_counter[2];  // max number of residual evaluations, NOLINT(google-runtime-int)
 
 			amrex::ParallelDescriptor::ReduceLongSum(global_solver_count);
 			amrex::ParallelDescriptor::ReduceLongSum(global_iteration_sum);
 			amrex::ParallelDescriptor::ReduceIntMax(global_iteration_max);
-			amrex::ParallelDescriptor::ReduceLongSum(global_decoupled_iteration_sum);
 
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				const auto n_cells = CountCells(lev);
@@ -3526,35 +3509,22 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					    static_cast<double>(global_iteration_sum) / static_cast<double>(global_solver_count);
 					const double global_solving_mean =
 					    static_cast<double>(global_solver_count) / static_cast<double>(n_cells) / 2.0; // 2 stages
-					const double global_decoupled_iteration_mean =
-					    static_cast<double>(global_decoupled_iteration_sum) / static_cast<double>(global_solver_count);
-					amrex::Print() << "The average number of Newton-Raphson solvings per IMEX stage is " << global_solving_mean
-						       << ", (mean, max) number of Newton-Raphson iterations are " << global_iteration_mean << ", "
+					amrex::Print() << "The average number of coupling solves per IMEX stage is " << global_solving_mean
+						       << ", (mean, max) number of residual evaluations per solve are " << global_iteration_mean << ", "
 						       << global_iteration_max << ".\n";
-					if constexpr (ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model) {
-						amrex::Print() << "The fraction of gas-dust interactions that are decoupled is "
-							       << global_decoupled_iteration_mean << "\n";
-					}
 				}
 			}
 		}
 
 		auto *h_iteration_failure_counter = iteration_failure_counter.copyToHost();
 		long nf_coupling = h_iteration_failure_counter[0]; // number of matter-radiation coupling failures, NOLINT(google-runtime-int)
-		long nf_dust = h_iteration_failure_counter[1];	   // number of dust temperature failures, NOLINT(google-runtime-int)
-		long nf_outer = h_iteration_failure_counter[2];	   // number of outer iterations failures, NOLINT(google-runtime-int)
+		long nf_outer = h_iteration_failure_counter[1];	   // number of outer iterations failures, NOLINT(google-runtime-int)
 
 		amrex::ParallelDescriptor::ReduceLongSum(nf_coupling);
-		amrex::ParallelDescriptor::ReduceLongSum(nf_dust);
 		amrex::ParallelDescriptor::ReduceLongSum(nf_outer);
 
-		// Note that the nf_dust has to abort BEFORE nf_coupling, because the dust temperature is used in the matter-radiation coupling and if
-		// dust temperature is negative, the matter-radiation coupling will fail to converge.
-		if (nf_dust > 0) {
-			amrex::Abort("Newton-Raphson iteration for dust temperature failed to converge or dust temperature is negative!");
-		}
 		if (nf_coupling > 0) {
-			amrex::Abort("Newton-Raphson iteration for matter-radiation coupling failed to converge!");
+			amrex::Abort("Matter-radiation coupling failed to converge (no bracket or tolerance not met)!");
 		}
 		if (nf_outer > 0) {
 			amrex::Abort("Outer iteration for matter-radiation coupling failed to converge!");
