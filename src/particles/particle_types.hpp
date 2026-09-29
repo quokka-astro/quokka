@@ -6,6 +6,7 @@
 #include "AMReX_ParIter.H"
 #include "particles/stellar_models.hpp"
 #include "physics_info.hpp"
+#include "util/CheckedParmParse.hpp"
 
 // Function to create bit flags: bitflag(position) = 2^(position - 1)
 // Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
@@ -576,47 +577,47 @@ inline void particleParmParse()
 {
 	// Parse particle parameters
 	const amrex::ParmParse pp("particles");
-	pp.query("disable_SN_feedback", disable_SN_feedback);
-	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
-	pp.query("sink_max_alfven_speed", sink_max_alfven_speed);
+	quokka::query<"particles", "disable_SN_feedback">(pp, disable_SN_feedback);
+	quokka::query<"particles", "sink_particle_use_uniform_kernel">(pp, sink_particle_use_uniform_kernel);
+	quokka::query<"particles", "sink_max_alfven_speed">(pp, sink_max_alfven_speed);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sink_max_alfven_speed != 0.0, "particles.sink_max_alfven_speed must be negative (disabled) or positive (cm/s).");
 
 	// Handle SNScheme enum
-	pp.query("SN_scheme", SN_scheme);
+	quokka::query<"particles", "SN_scheme">(pp, SN_scheme);
 
 	// SN Galilean invariance option
-	pp.query("SN_smooth_gas_velocity", SN_smooth_gas_velocity);
+	quokka::query<"particles", "SN_smooth_gas_velocity">(pp, SN_smooth_gas_velocity);
 
 	// Stochastic SF parameters
-	pp.query("eps_ff", eps_ff);
+	quokka::query<"particles", "eps_ff">(pp, eps_ff);
 
 	// Handle integer verbose flag
-	pp.query("verbose", particle_verbose);
+	quokka::query<"particles", "verbose">(pp, particle_verbose);
 
 	// Disable particle drift
-	pp.query("disable_particle_drift", disable_particle_drift);
+	quokka::query<"particles", "disable_particle_drift">(pp, disable_particle_drift);
 
 	// Stellar velocity limit parameter
-	pp.query("stellar_velocity_limit", stellar_velocity_limit);
+	quokka::query<"particles", "stellar_velocity_limit">(pp, stellar_velocity_limit);
 
 	// Low-mass composite particle mass cap (split into multiple particles if exceeded)
-	pp.query("low_mass_composite_max_mass", low_mass_composite_max_mass);
+	quokka::query<"particles", "low_mass_composite_max_mass">(pp, low_mass_composite_max_mass);
 
 	// Roundoff factor for particles
-	pp.query("reproducibility_roundoff_redundancy", reproducibility_roundoff_redundancy);
+	quokka::query<"particles", "reproducibility_roundoff_redundancy">(pp, reproducibility_roundoff_redundancy);
 
 	// Scalar yield per supernova
-	pp.query("scalar_yield_per_SN", scalar_yield_per_SN);
+	quokka::query<"particles", "scalar_yield_per_SN">(pp, scalar_yield_per_SN);
 
 	// SN terminal momentum (overrides canonical value if set)
-	pp.query("SN_p_term_Msunkmps", SN_p_term_Msunkmps);
+	quokka::query<"particles", "SN_p_term_Msunkmps">(pp, SN_p_term_Msunkmps);
 
 	// SN terminal momentum density scaling exponent (overrides canonical value if set)
-	pp.query("SN_p_term_exponent", SN_p_term_exponent);
+	quokka::query<"particles", "SN_p_term_exponent">(pp, SN_p_term_exponent);
 
 	// Placeholder parameters for particles
-	pp.query("param1", particle_param1);
-	pp.query("param2", particle_param2);
+	quokka::query<"particles", "param1">(pp, particle_param1);
+	quokka::query<"particles", "param2">(pp, particle_param2);
 }
 
 } // namespace quokka

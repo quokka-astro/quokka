@@ -7,6 +7,7 @@
 /// \brief Defines a test problem for primordial chemistry (microphysics).
 ///
 #ifdef HAVE_PYTHON
+#include "util/CheckedParmParse.hpp"
 #include "util/matplotlibcpp.h"
 #endif
 #include "util/BC.hpp"
@@ -78,13 +79,13 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 	// parmparse species and temperature
 	amrex::ParmParse const pp("primordial_chem");
 	userData_.small_temp = 1e1;
-	pp.query("small_temp", userData_.small_temp);
+	quokka::query<"primordial_chem", "small_temp">(pp, userData_.small_temp);
 
 	userData_.small_dens = 1e-60;
-	pp.query("small_dens", userData_.small_dens);
+	quokka::query<"primordial_chem", "small_dens">(pp, userData_.small_dens);
 
 	userData_.temperature = 1e1;
-	pp.query("temperature", userData_.temperature);
+	quokka::query<"primordial_chem", "temperature">(pp, userData_.temperature);
 
 	userData_.primary_species_1 = 1.0e0_rt;
 	userData_.primary_species_2 = 0.0e0_rt;
@@ -101,20 +102,20 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 	userData_.primary_species_13 = 0.0e0_rt;
 	userData_.primary_species_14 = 0.0e0_rt;
 
-	pp.query("primary_species_1", userData_.primary_species_1);
-	pp.query("primary_species_2", userData_.primary_species_2);
-	pp.query("primary_species_3", userData_.primary_species_3);
-	pp.query("primary_species_4", userData_.primary_species_4);
-	pp.query("primary_species_5", userData_.primary_species_5);
-	pp.query("primary_species_6", userData_.primary_species_6);
-	pp.query("primary_species_7", userData_.primary_species_7);
-	pp.query("primary_species_8", userData_.primary_species_8);
-	pp.query("primary_species_9", userData_.primary_species_9);
-	pp.query("primary_species_10", userData_.primary_species_10);
-	pp.query("primary_species_11", userData_.primary_species_11);
-	pp.query("primary_species_12", userData_.primary_species_12);
-	pp.query("primary_species_13", userData_.primary_species_13);
-	pp.query("primary_species_14", userData_.primary_species_14);
+	quokka::query<"primordial_chem", "primary_species_1">(pp, userData_.primary_species_1);
+	quokka::query<"primordial_chem", "primary_species_2">(pp, userData_.primary_species_2);
+	quokka::query<"primordial_chem", "primary_species_3">(pp, userData_.primary_species_3);
+	quokka::query<"primordial_chem", "primary_species_4">(pp, userData_.primary_species_4);
+	quokka::query<"primordial_chem", "primary_species_5">(pp, userData_.primary_species_5);
+	quokka::query<"primordial_chem", "primary_species_6">(pp, userData_.primary_species_6);
+	quokka::query<"primordial_chem", "primary_species_7">(pp, userData_.primary_species_7);
+	quokka::query<"primordial_chem", "primary_species_8">(pp, userData_.primary_species_8);
+	quokka::query<"primordial_chem", "primary_species_9">(pp, userData_.primary_species_9);
+	quokka::query<"primordial_chem", "primary_species_10">(pp, userData_.primary_species_10);
+	quokka::query<"primordial_chem", "primary_species_11">(pp, userData_.primary_species_11);
+	quokka::query<"primordial_chem", "primary_species_12">(pp, userData_.primary_species_12);
+	quokka::query<"primordial_chem", "primary_species_13">(pp, userData_.primary_species_13);
+	quokka::query<"primordial_chem", "primary_species_14">(pp, userData_.primary_species_14);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();

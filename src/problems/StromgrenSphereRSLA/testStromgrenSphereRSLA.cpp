@@ -16,6 +16,7 @@
 #include "fundamental_constants.H"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/CheckedParmParse.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -136,11 +137,11 @@ void RadSystem<StromgrenSphere>::AddRadSource(array_t &radEnergy, array_t & /*re
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
-	pp.query("Q", Q);
+	quokka::query<"stromgen", "Q">(pp, Q);
 
 	amrex::ParmParse const pp2("amr");
 	int n = 16;
-	pp2.query("n_cell", n);
+	quokka::query<"amr", "n_cell">(pp2, n);
 
 	const amrex::Real sigma_star = sigma_star_coeff * (prob_hi[0] - prob_lo[0]);
 	const amrex::Real r_trunc = r_trunc_coeff * sigma_star;
@@ -212,17 +213,17 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	userData_.n_HII_init = 0.0e0_rt;
 	userData_.Q = 1.0e49_rt;
 	userData_.recombination_switch = 0;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
-	pp.query("temperature", userData_.temperature);
-	pp.query("tend", userData_.tend);
-	pp.query("n_e_init", userData_.n_e_init);
-	pp.query("n_HI_init", userData_.n_HI_init);
-	pp.query("n_HII_init", userData_.n_HII_init);
-	pp.query("Q", userData_.Q);
+	quokka::query<"stromgen", "small_temp">(pp, userData_.small_temp);
+	quokka::query<"stromgen", "small_dens">(pp, userData_.small_dens);
+	quokka::query<"stromgen", "temperature">(pp, userData_.temperature);
+	quokka::query<"stromgen", "tend">(pp, userData_.tend);
+	quokka::query<"stromgen", "n_e_init">(pp, userData_.n_e_init);
+	quokka::query<"stromgen", "n_HI_init">(pp, userData_.n_HI_init);
+	quokka::query<"stromgen", "n_HII_init">(pp, userData_.n_HII_init);
+	quokka::query<"stromgen", "Q">(pp, userData_.Q);
 
 	amrex::ParmParse const pp2("network");
-	pp2.query("recombination_switch", userData_.recombination_switch);
+	quokka::query<"network", "recombination_switch">(pp2, userData_.recombination_switch);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();

@@ -1,27 +1,28 @@
 #include "DiagFilter.H"
 #include "AMReX_ParmParse.H"
+#include "util/CheckedParmParse.hpp"
 
 void DiagFilter::init(const std::string &a_prefix)
 {
 	amrex::ParmParse const pp(a_prefix);
 
-	pp.query("field_name", m_filterVar);
+	quokka::query<"*", "field_name">(pp, m_filterVar);
 	if (m_filterVar.empty()) {
 		amrex::Abort("filter: " + a_prefix + " is missing a field_name !");
 	}
 
 	int definedRange = 0;
 	if (pp.countval("value_greater") != 0) {
-		pp.get("value_greater", m_fdata.m_low_val);
+		quokka::get<"*", "value_greater">(pp, m_fdata.m_low_val);
 		m_fdata.m_high_val = AMREX_REAL_MAX;
 		definedRange = 1;
 	} else if (pp.countval("value_less") != 0) {
-		pp.get("value_less", m_fdata.m_high_val);
+		quokka::get<"*", "value_less">(pp, m_fdata.m_high_val);
 		m_fdata.m_low_val = AMREX_REAL_LOWEST;
 		definedRange = 1;
 	} else if (pp.countval("value_inrange") != 0) {
 		amrex::Vector<amrex::Real> range{0.0};
-		pp.getarr("value_inrange", range, 0, 2);
+		quokka::getarr<"*", "value_inrange">(pp, range, 0, 2);
 		m_fdata.m_low_val = std::min(range[0], range[1]);
 		m_fdata.m_high_val = std::max(range[0], range[1]);
 		definedRange = 1;

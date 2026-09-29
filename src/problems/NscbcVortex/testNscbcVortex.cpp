@@ -8,6 +8,7 @@
 ///        Characteristic Boundary Conditions (NSCBC).
 ///
 #include "util/BC.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <format>
 #include <random>
 #include <tuple>
@@ -171,14 +172,14 @@ auto problem_main() -> int
 
 	amrex::ParmParse const pp("vortex");
 	// initial condition parameters
-	pp.query("strength", ::G_vortex); // vortex strength
-	pp.query("Tgas0", ::T_ref);	  // initial temperature [K]
-	pp.query("P0", ::P_ref);	  // initial pressure [erg cm^-3]
+	quokka::query<"vortex", "strength">(pp, ::G_vortex); // vortex strength
+	quokka::query<"vortex", "Tgas0">(pp, ::T_ref);	     // initial temperature [K]
+	quokka::query<"vortex", "P0">(pp, ::P_ref);	     // initial pressure [erg cm^-3]
 	// boundary condition parameters
-	pp.query("u_inflow", ::u0);    // inflow velocity along x-axis [cm/s]
-	pp.query("v_inflow", ::v0);    // transverse inflow velocity (v_y) [cm/s]
-	pp.query("w_inflow", ::w0);    // transverse inflow velocity (v_z) [cm/s]
-	pp.query("s_inflow", ::s0[0]); // inflow passive scalar [dimensionless]
+	quokka::query<"vortex", "u_inflow">(pp, ::u0);	  // inflow velocity along x-axis [cm/s]
+	quokka::query<"vortex", "v_inflow">(pp, ::v0);	  // transverse inflow velocity (v_y) [cm/s]
+	quokka::query<"vortex", "w_inflow">(pp, ::w0);	  // transverse inflow velocity (v_z) [cm/s]
+	quokka::query<"vortex", "s_inflow">(pp, ::s0[0]); // inflow passive scalar [dimensionless]
 
 	// Set initial conditions
 	sim.setInitialConditions();

@@ -8,6 +8,7 @@
 ///   https://www.astro.princeton.edu/~jstone/Athena/tests/field-loop/Field-loop.html
 ///
 
+#include "util/CheckedParmParse.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -141,7 +142,7 @@ template <> void QuokkaSimulation<FieldLoop>::refineGrid(int lev, amrex::TagBoxA
 {
 	RefineOn refine_based_on{};
 	amrex::ParmParse const pp("setup");
-	pp.query("refine_based_on", refine_based_on);
+	quokka::query<"setup", "refine_based_on">(pp, refine_based_on);
 
 	auto const &dx = geom[lev].CellSizeArray();
 	auto const &plo = geom[lev].ProbLoArray();
@@ -218,18 +219,18 @@ auto problem_main() -> int
 {
 	amrex::ParmParse const pp("setup");
 
-	pp.query("loop_radius", loop_radius);
-	pp.query("loop_center_x", loop_center_x);
-	pp.query("loop_center_y", loop_center_y);
-	pp.query("advection_vz", advection_vz);
+	quokka::query<"setup", "loop_radius">(pp, loop_radius);
+	quokka::query<"setup", "loop_center_x">(pp, loop_center_x);
+	quokka::query<"setup", "loop_center_y">(pp, loop_center_y);
+	quokka::query<"setup", "advection_vz">(pp, advection_vz);
 
 	RefineOn refine_based_on{};
-	pp.query("refine_based_on", refine_based_on);
+	quokka::query<"setup", "refine_based_on">(pp, refine_based_on);
 
-	pp.query("region_lo_x", region_lo_x);
-	pp.query("region_hi_x", region_hi_x);
-	pp.query("region_lo_y", region_lo_y);
-	pp.query("region_hi_y", region_hi_y);
+	quokka::query<"setup", "region_lo_x">(pp, region_lo_x);
+	quokka::query<"setup", "region_hi_x">(pp, region_hi_x);
+	quokka::query<"setup", "region_lo_y">(pp, region_lo_y);
+	quokka::query<"setup", "region_hi_y">(pp, region_hi_y);
 
 	if (loop_radius <= 0.0) {
 		amrex::Abort("setup.loop_radius must be > 0.");
@@ -243,7 +244,7 @@ auto problem_main() -> int
 	// default in-plane advection direction: the domain's own diagonal (x-y extent), so the loop
 	// crosses the periodic domain and returns to its starting position; independent of loop_center
 	double advection_angle_deg = std::atan2(sim.geom[0].ProbLength(0), sim.geom[0].ProbLength(1)) * 180.0 / M_PI;
-	pp.query("advection_angle_deg", advection_angle_deg);
+	quokka::query<"setup", "advection_angle_deg">(pp, advection_angle_deg);
 	const double advection_angle_rad = advection_angle_deg * M_PI / 180.0;
 	advection_vx = std::sin(advection_angle_rad);
 	advection_vy = std::cos(advection_angle_rad);
@@ -253,13 +254,13 @@ auto problem_main() -> int
 	// the default advection_angle_deg (chosen so vx/vy = Lx/Ly); at any other angle, num_periods is just
 	// a normalised run-duration unit, not a guarantee that the loop retraces itself.
 	double num_periods = 1.0;
-	pp.query("num_periods", num_periods);
+	quokka::query<"setup", "num_periods">(pp, num_periods);
 	if (!std::isfinite(num_periods) || num_periods <= 0.0) {
 		amrex::Abort("setup.num_periods must be finite and > 0.");
 	}
 	{
 		double unused_stop_time = 0.0;
-		if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
+		if (amrex::ParmParse const pp_root; quokka::query<"", "stop_time">(pp_root, unused_stop_time) != 0) {
 			amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
 				     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
 		}
@@ -268,10 +269,10 @@ auto problem_main() -> int
 	sim.stopTime_ = num_periods * domain_diagonal;
 
 	// default the region's z-bounds to the full domain, matching the prior (z-unbounded) behavior
-	if (pp.query("region_lo_z", region_lo_z) == 0) {
+	if (quokka::query<"setup", "region_lo_z">(pp, region_lo_z) == 0) {
 		region_lo_z = sim.geom[0].ProbLo(2);
 	}
-	if (pp.query("region_hi_z", region_hi_z) == 0) {
+	if (quokka::query<"setup", "region_hi_z">(pp, region_hi_z) == 0) {
 		region_hi_z = sim.geom[0].ProbHi(2);
 	}
 	if (region_lo_z >= region_hi_z) {

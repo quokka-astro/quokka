@@ -6,6 +6,7 @@
 /// \brief advecting MHD Balsara vortex.
 ///
 
+#include "util/CheckedParmParse.hpp"
 #include <cassert>
 #include <cmath>
 #include <gcem.hpp>
@@ -219,11 +220,11 @@ auto problem_main() -> int
 
 	int advection_int = 0;
 	double num_periods = 1.0;
-	hpp.query("vortex_radius", vortex_radius);
-	hpp.query("vortex_Mach", vortex_Mach);
-	hpp.query("vortex_b_magn", vortex_b_magn);
-	hpp.query("advection", advection_int);
-	hpp.query("num_periods", num_periods);
+	quokka::query<"setup", "vortex_radius">(hpp, vortex_radius);
+	quokka::query<"setup", "vortex_Mach">(hpp, vortex_Mach);
+	quokka::query<"setup", "vortex_b_magn">(hpp, vortex_b_magn);
+	quokka::query<"setup", "advection">(hpp, advection_int);
+	quokka::query<"setup", "num_periods">(hpp, num_periods);
 	const double vortex_u_magn = vortex_Mach * sound_speed;
 	const bool is_advection_enabled = (advection_int != 0);
 	if (vortex_radius <= 0.0) {
@@ -234,7 +235,7 @@ auto problem_main() -> int
 	}
 	{
 		double unused_stop_time = 0.0;
-		if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
+		if (amrex::ParmParse const pp_root; quokka::query<"", "stop_time">(pp_root, unused_stop_time) != 0) {
 			amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
 				     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
 		}

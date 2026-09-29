@@ -2,6 +2,10 @@
 
 This document lists all of the runtime parameters in Quokka that are set using the AMReX ParmParse object. Users can set these via the input file or by using command-line arguments.
 
+Run a problem executable with `list_options=1` to print its compiled option registry and exit before starting the simulation. The registry lives in `src/util/ParmParseOptionRegistry.hpp`; add a fully qualified name and description there when introducing a new Quokka option, and document it in a Markdown parameter table. The mdBook CI check requires a table row for every registered option. With `QUOKKA_VALIDATE_PARM_PARSE_OPTIONS=ON` (the default), Quokka's checked ParmParse accessors require each option name to appear in that registry at compile time. This checks names used by C++ code; it does not check the spelling of options in an input file.
+
+Other registered options, including those read by individual problem drivers, are listed in [Additional registered options](additional_parameters.md).
+
 ## General
 
 These parameters are read in the `AMRSimulation<problem_t>::readParameters()` function in `src/simulation.hpp` or `src/main.cpp`.

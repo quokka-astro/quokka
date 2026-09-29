@@ -4,6 +4,7 @@
 #include "AMReX_Gpu.H"
 #include "AMReX_ParmParse.H"
 #include "QuokkaSimulation.hpp"
+#include "util/CheckedParmParse.hpp"
 #include "util/fextract.hpp"
 #include <algorithm>
 #include <cmath>
@@ -948,8 +949,8 @@ auto problem_main() -> int
 	bool write_csv = true;
 	int reference_steps = 50000;
 	amrex::ParmParse const pp("problem");
-	pp.query("write_csv", write_csv);
-	pp.query("reference_steps", reference_steps);
+	quokka::query<"problem", "write_csv">(pp, write_csv);
+	quokka::query<"problem", "reference_steps">(pp, reference_steps);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reference_steps > 0, "problem.reference_steps must be positive.");
 
 	std::vector<CaseResult> results;

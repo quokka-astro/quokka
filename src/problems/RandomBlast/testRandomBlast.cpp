@@ -9,6 +9,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_MultiFab.H"
+#include "util/CheckedParmParse.hpp"
 #include <format>
 
 #include "QuokkaSimulation.hpp"
@@ -171,11 +172,11 @@ auto problem_main() -> int
 
 	// read parameters
 	amrex::ParmParse const pp("problem");
-	pp.query("n_amb", sim.userData_.n_amb);
-	pp.query("T_amb", sim.userData_.T_amb);
-	pp.query("part_fn", sim.userData_.part_fn);
+	quokka::query<"problem", "n_amb">(pp, sim.userData_.n_amb);
+	quokka::query<"problem", "T_amb">(pp, sim.userData_.T_amb);
+	quokka::query<"problem", "part_fn">(pp, sim.userData_.part_fn);
 
-	if (pp.queryarr("boost_velocity", sim.userData_.boost_velocity) == 0) {
+	if (quokka::queryarr<"problem", "boost_velocity">(pp, sim.userData_.boost_velocity) == 0) {
 		amrex::Abort("boost_velocity must be specified in the input file.");
 	} else {
 		amrex::Print() << "boost_velocity: " << sim.userData_.boost_velocity[0] << ", " << sim.userData_.boost_velocity[1] << ", "

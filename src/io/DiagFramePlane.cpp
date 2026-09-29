@@ -1,3 +1,4 @@
+#include "util/CheckedParmParse.hpp"
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -57,16 +58,16 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 	m_fieldNames.resize(nOutFields);
 	m_fieldIndices_d.resize(nOutFields);
 	for (int f{0}; f < nOutFields; ++f) {
-		pp.get("field_names", m_fieldNames[f], f);
+		quokka::get<"*", "field_names">(pp, m_fieldNames[f], f);
 	}
 
 	// Plane normal
-	pp.get("normal", m_normal);
+	quokka::get<"*", "normal">(pp, m_normal);
 	AMREX_ASSERT(m_normal >= 0 && m_normal < AMREX_SPACEDIM);
 
 	// Plane center
 	amrex::Vector<amrex::Real> center;
-	pp.getarr("center", center, 0, pp.countval("center"));
+	quokka::getarr<"*", "center">(pp, center, 0, pp.countval("center"));
 	if (center.size() == AMREX_SPACEDIM) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
 			m_center[idim] = center[idim];
@@ -80,7 +81,7 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 	if (nParticleTypes > 0) {
 		m_particleTypes.resize(nParticleTypes);
 		for (int n = 0; n < nParticleTypes; ++n) {
-			pp.get("particles", m_particleTypes[n], n);
+			quokka::get<"*", "particles">(pp, m_particleTypes[n], n);
 		}
 
 		amrex::Print() << "DiagFramePlane: Including particles: ";

@@ -8,6 +8,7 @@
 ///
 
 #ifdef HAVE_PYTHON
+#include "util/CheckedParmParse.hpp"
 #include "util/matplotlibcpp.h"
 #endif
 #include "AMReX.H"
@@ -179,8 +180,8 @@ auto problem_main() -> int
 
 	// read user parameters
 	amrex::ParmParse const pp("problem");
-	pp.query("kappa1", kappa1);
-	pp.query("kappa2", kappa2);
+	quokka::query<"problem", "kappa1">(pp, kappa1);
+	quokka::query<"problem", "kappa2">(pp, kappa2);
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<MarshakProblem>::nvar_;

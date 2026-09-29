@@ -7,6 +7,7 @@
 /// \brief Defines a test problem for pressureless spherical collapse.
 ///
 #include "hydro/hydro_system.hpp"
+#include "util/CheckedParmParse.hpp"
 
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
@@ -136,8 +137,8 @@ void QuokkaSimulation<CollapseProblem>::ComputeDerivedVar(int lev, std::string c
 auto problem_main() -> int
 {
 	amrex::ParmParse const pp("problem");
-	pp.query("num_particles", GlobalConfig::num_particles);
-	pp.query("seed", GlobalConfig::seed);
+	quokka::query<"problem", "num_particles">(pp, GlobalConfig::num_particles);
+	quokka::query<"problem", "seed">(pp, GlobalConfig::seed);
 
 	// Problem initialization
 	QuokkaSimulation<CollapseProblem> sim;

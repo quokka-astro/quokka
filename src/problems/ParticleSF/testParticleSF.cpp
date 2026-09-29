@@ -10,6 +10,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 #include "util/BC.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <format>
 
 #include "QuokkaSimulation.hpp"
@@ -92,7 +93,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 
 		amrex::Real eps_ff = 0.5;
 		amrex::ParmParse const pp("particles");
-		pp.query("eps_ff", eps_ff);
+		quokka::query<"particles", "eps_ff">(pp, eps_ff);
 
 		const amrex::Real eps_star = 0.5;
 		const amrex::Real rho0 = n0 * mu;
@@ -233,11 +234,11 @@ auto problem_main() -> int
 
 	// Real Tamb and n0 from the input file
 	amrex::ParmParse const ppp("problem");
-	ppp.query("Tamb", Tamb);
-	ppp.query("n0", n0);
-	ppp.query("validate_initial_imf_stats", validate_initial_imf_stats);
+	quokka::query<"problem", "Tamb">(ppp, Tamb);
+	quokka::query<"problem", "n0">(ppp, n0);
+	quokka::query<"problem", "validate_initial_imf_stats">(ppp, validate_initial_imf_stats);
 	bool verify_low_mass_cap_on_restart = false;
-	ppp.query("verify_low_mass_cap_on_restart", verify_low_mass_cap_on_restart);
+	quokka::query<"problem", "verify_low_mass_cap_on_restart">(ppp, verify_low_mass_cap_on_restart);
 
 	sim.setInitialConditions();
 
@@ -251,7 +252,7 @@ auto problem_main() -> int
 	// We validate restarting from a checkpoint below when verify_low_mass_cap_on_restart is true.
 	std::string restartfile;
 	amrex::ParmParse const p3;
-	p3.query("restartfile", restartfile);
+	quokka::query<"", "restartfile">(p3, restartfile);
 	if (!restartfile.empty()) {
 		if (!verify_low_mass_cap_on_restart) {
 			return 0; // success
@@ -259,7 +260,7 @@ auto problem_main() -> int
 
 		amrex::Real low_mass_cap = std::numeric_limits<amrex::Real>::max();
 		amrex::ParmParse const p_particles("particles");
-		p_particles.query("low_mass_composite_max_mass", low_mass_cap);
+		quokka::query<"particles", "low_mass_composite_max_mass">(p_particles, low_mass_cap);
 
 		const auto [real_data_restart, idata_restart] =
 		    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);

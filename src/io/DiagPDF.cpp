@@ -1,3 +1,4 @@
+#include "util/CheckedParmParse.hpp"
 #include <ios>
 
 #include "AMReX_BLassert.H"
@@ -16,7 +17,7 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 	DiagBase::init(a_prefix, a_diagName);
 
 	amrex::ParmParse const hist_pp(a_prefix);
-	hist_pp.query("weight_by", m_weightType); // "volume", "mass", "cell_counts"
+	quokka::query<"*", "weight_by">(hist_pp, m_weightType); // "volume", "mass", "cell_counts"
 
 	// get number of histogram axes
 	const int ndims = hist_pp.countval("var_names");
@@ -27,18 +28,18 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 	m_highBnd.resize(ndims);
 	m_useFieldMinMax.resize(ndims);
 
-	hist_pp.getarr("var_names", m_varNames, 0, ndims);
+	quokka::getarr<"*", "var_names">(hist_pp, m_varNames, 0, ndims);
 
 	for (int n = 0; n < ndims; ++n) {
 		std::string const var_prefix = a_prefix + "." + m_varNames[n];
 		amrex::ParmParse const var_pp(var_prefix);
-		var_pp.get("nBins", m_nBins[n]);
-		var_pp.query("log_spaced_bins", m_useLogSpacedBins[n]);
+		quokka::get<"*", "nBins">(var_pp, m_nBins[n]);
+		quokka::query<"*", "log_spaced_bins">(var_pp, m_useLogSpacedBins[n]);
 		AMREX_ALWAYS_ASSERT(m_nBins[n] > 0);
 
 		if (var_pp.countval("range") != 0) {
 			amrex::Vector<amrex::Real> range{0.0};
-			var_pp.getarr("range", range, 0, 2);
+			quokka::getarr<"*", "range">(var_pp, range, 0, 2);
 
 			m_lowBnd[n] = std::min(range[0], range[1]);
 			m_highBnd[n] = std::max(range[0], range[1]);

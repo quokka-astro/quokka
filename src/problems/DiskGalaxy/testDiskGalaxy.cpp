@@ -7,6 +7,7 @@
 /// \brief Defines a simulation using disk galaxy initial conditions.
 ///
 
+#include "util/CheckedParmParse.hpp"
 #include <cmath>
 #include <optional>
 
@@ -100,7 +101,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 	// get circular velocity profile filename from ParmParse
 	amrex::ParmParse const pp("disk_galaxy");
 	std::string filename;
-	pp.query("vcirc_file", filename);
+	quokka::query<"disk_galaxy", "vcirc_file">(pp, filename);
 
 	auto halo_table = quokka::DataTable<1, 4, quokka::OutOfBounds::clamp>::CSVReader(filename, quokka::TransformType::linear);
 	auto const halo_table_const = halo_table.const_tables_host();
@@ -142,7 +143,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 
 	// optional halo v_phi expression (variables: x, y, z)
 	userData_.haloVphiExpr.clear();
-	pp.query("halo_vphi_expr", userData_.haloVphiExpr);
+	quokka::query<"disk_galaxy", "halo_vphi_expr">(pp, userData_.haloVphiExpr);
 	userData_.useHaloVphiParser = !userData_.haloVphiExpr.empty();
 	if (userData_.useHaloVphiParser) {
 		userData_.haloVphiParser.emplace(userData_.haloVphiExpr);
@@ -167,7 +168,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	amrex::ParmParse const pp("disk_galaxy");
 
 	double magnetic_field_microgauss = 1.0; // default B-field strength
-	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
+	quokka::query<"disk_galaxy", "magnetic_field_microgauss">(pp, magnetic_field_microgauss);
 	const double B_0 = magnetic_field_microgauss * 1.0e-6 / std::sqrt(4.0 * M_PI);
 
 	// disc parameters
@@ -178,13 +179,13 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	double disk_perturb_amplitude = NAN; // amplitude of harmonic mode perturbation
 	double disk_perturb_Rmax_kpc = NAN;  // max radius (in kpc) for harmonic mode perturbations
 	double initial_scalar_density = NAN; // scalar density at cgs units (cm^-3)
-	pp.query("disk_gas_mass_Msun", disk_gas_mass_Msun);
-	pp.query("disk_Rscale_kpc", disk_Rscale_kpc);
-	pp.query("disk_zscale_kpc", disk_zscale_kpc);
-	pp.query("disk_temperature", T_disk);
-	pp.query("disk_perturb_amplitude", disk_perturb_amplitude);
-	pp.query("disk_perturb_Rmax_kpc", disk_perturb_Rmax_kpc);
-	pp.query("initial_scalar_density", initial_scalar_density);
+	quokka::query<"disk_galaxy", "disk_gas_mass_Msun">(pp, disk_gas_mass_Msun);
+	quokka::query<"disk_galaxy", "disk_Rscale_kpc">(pp, disk_Rscale_kpc);
+	quokka::query<"disk_galaxy", "disk_zscale_kpc">(pp, disk_zscale_kpc);
+	quokka::query<"disk_galaxy", "disk_temperature">(pp, T_disk);
+	quokka::query<"disk_galaxy", "disk_perturb_amplitude">(pp, disk_perturb_amplitude);
+	quokka::query<"disk_galaxy", "disk_perturb_Rmax_kpc">(pp, disk_perturb_Rmax_kpc);
+	quokka::query<"disk_galaxy", "initial_scalar_density">(pp, initial_scalar_density);
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_gas_mass_Msun));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_Rscale_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_zscale_kpc));
@@ -238,7 +239,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	// so that the SN ejected metal density in SN remnant is greater than the background density.
 	amrex::ParmParse const pp_particles("particles");
 	double scalar_yield_per_SN = NAN;
-	pp_particles.query("scalar_yield_per_SN", scalar_yield_per_SN);
+	quokka::query<"particles", "scalar_yield_per_SN">(pp_particles, scalar_yield_per_SN);
 	AMREX_ALWAYS_ASSERT(!std::isnan(scalar_yield_per_SN));
 	const Real SNR_volume = std::pow(128.0 * C::parsec, 3);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_yield_per_SN > initial_scalar_density * SNR_volume,
@@ -449,13 +450,13 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGridFaceVar
 {
 	amrex::ParmParse const pp("disk_galaxy");
 	double magnetic_field_microgauss = 1.0;
-	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
+	quokka::query<"disk_galaxy", "magnetic_field_microgauss">(pp, magnetic_field_microgauss);
 
 	// disc parameters
 	double disk_Rscale_kpc = NAN; // disk scale length
 	double disk_zscale_kpc = NAN; // disk scale height
-	pp.query("disk_Rscale_kpc", disk_Rscale_kpc);
-	pp.query("disk_zscale_kpc", disk_zscale_kpc);
+	quokka::query<"disk_galaxy", "disk_Rscale_kpc">(pp, disk_Rscale_kpc);
+	quokka::query<"disk_galaxy", "disk_zscale_kpc">(pp, disk_zscale_kpc);
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_Rscale_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_zscale_kpc));
 	const double R_d = disk_Rscale_kpc * (1.0e3 * C::parsec);
@@ -503,7 +504,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::createInitialCICParticles()
 	// read particles from ASCII file
 	amrex::ParmParse const pp("disk_galaxy");
 	std::string filename;
-	pp.query("particle_file", filename);
+	quokka::query<"disk_galaxy", "particle_file">(pp, filename);
 
 	amrex::Print() << "\nReading particles from ASCII file " << filename << "...\n";
 	CICParticles->SetVerbose(1);
@@ -519,8 +520,8 @@ template <> void QuokkaSimulation<DiskGalaxy>::refineGrid(int lev, amrex::TagBox
 	amrex::ParmParse const pp("disk_galaxy");
 	amrex::Real refine_Rmax_kpc = NAN;
 	amrex::Real refine_zmax_kpc = NAN;
-	pp.query("refine_Rmax_kpc", refine_Rmax_kpc);
-	pp.query("refine_zmax_kpc", refine_zmax_kpc);
+	quokka::query<"disk_galaxy", "refine_Rmax_kpc">(pp, refine_Rmax_kpc);
+	quokka::query<"disk_galaxy", "refine_zmax_kpc">(pp, refine_zmax_kpc);
 	const amrex::Real refine_Rmax = refine_Rmax_kpc * (1.0e3 * C::parsec);
 	const amrex::Real refine_zmax = refine_zmax_kpc * (1.0e3 * C::parsec);
 
@@ -712,9 +713,9 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 	amrex::Real refine_Rmax_kpc = NAN;
 	amrex::Real refine_zmax_kpc = NAN;
 	amrex::Real flux_sphere_radius_kpc = NAN;
-	pp.query("refine_Rmax_kpc", refine_Rmax_kpc);
-	pp.query("refine_zmax_kpc", refine_zmax_kpc);
-	pp.query("flux_sphere_radius_kpc", flux_sphere_radius_kpc);
+	quokka::query<"disk_galaxy", "refine_Rmax_kpc">(pp, refine_Rmax_kpc);
+	quokka::query<"disk_galaxy", "refine_zmax_kpc">(pp, refine_zmax_kpc);
+	quokka::query<"disk_galaxy", "flux_sphere_radius_kpc">(pp, flux_sphere_radius_kpc);
 	AMREX_ALWAYS_ASSERT(!std::isnan(refine_Rmax_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(refine_zmax_kpc));
 	const amrex::Real refine_Rmax = refine_Rmax_kpc * (1.0e3 * C::parsec);

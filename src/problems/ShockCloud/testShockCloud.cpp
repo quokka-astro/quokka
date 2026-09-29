@@ -21,6 +21,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
+#include "util/CheckedParmParse.hpp"
 #include <array>
 #include <format>
 
@@ -715,35 +716,35 @@ auto problem_main() -> int
 
 	// use a sharp cloud edge?
 	int sharp_cloud_edge = 0;
-	pp.query("sharp_cloud_edge", sharp_cloud_edge);
+	quokka::query<"", "sharp_cloud_edge">(pp, sharp_cloud_edge);
 	::sharp_cloud_edge = sharp_cloud_edge == 1;
 
 	// do frame shifting to follow cloud center-of-mass?
 	int do_frame_shift = 1;
-	pp.query("do_frame_shift", do_frame_shift);
+	quokka::query<"", "do_frame_shift">(pp, do_frame_shift);
 	::do_frame_shift = do_frame_shift == 1;
 
 	// background gas H number density
-	pp.query("nH_bg", nH_bg); // cm^-3
+	quokka::query<"", "nH_bg">(pp, nH_bg); // cm^-3
 
 	// cloud H number density
-	pp.query("nH_cloud", nH_cloud); // cm^-3
+	quokka::query<"", "nH_cloud">(pp, nH_cloud); // cm^-3
 
 	// background gas pressure
-	pp.query("P_over_k", P_over_k); // K cm^-3
+	quokka::query<"", "P_over_k">(pp, P_over_k); // K cm^-3
 
 	// cloud radius
-	pp.query("R_cloud_pc", ::R_cloud); // pc
-	::R_cloud *= parsec_in_cm;	   // convert to cm
+	quokka::query<"", "R_cloud_pc">(pp, ::R_cloud); // pc
+	::R_cloud *= parsec_in_cm;			// convert to cm
 
 	// cloud position (relative to box length)
-	pp.query("cloud_relpos_x", ::cloud_relpos_x); // dimensionless
+	quokka::query<"", "cloud_relpos_x">(pp, ::cloud_relpos_x); // dimensionless
 
 	// (pre-shock) Mach number
-	pp.query("Mach_shock", M0); // dimensionless
+	quokka::query<"", "Mach_shock">(pp, M0); // dimensionless
 
 	// simulation end time (in number of cloud-crushing times)
-	pp.query("max_t_cc", max_t_cc); // dimensionless
+	quokka::query<"", "max_t_cc">(pp, max_t_cc); // dimensionless
 
 	// compute background pressure
 	// (pressure equilibrium should hold *before* the shock enters the box)

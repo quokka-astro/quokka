@@ -8,6 +8,7 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "dust/DustRuntimeParams.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -218,12 +219,12 @@ void loadProblemParameters()
 	g_grain_density = grain_density[0];
 
 	amrex::ParmParse const pp("problem");
-	pp.query("write_csv", g_write_csv);
-	pp.query("history_dt_over_ts0", g_history_dt_over_ts0);
-	pp.query("noise_amplitude", g_noise_amplitude);
-	pp.query("noise_seed", g_noise_seed);
+	quokka::query<"problem", "write_csv">(pp, g_write_csv);
+	quokka::query<"problem", "history_dt_over_ts0">(pp, g_history_dt_over_ts0);
+	quokka::query<"problem", "noise_amplitude">(pp, g_noise_amplitude);
+	quokka::query<"problem", "noise_seed">(pp, g_noise_seed);
 	amrex::Vector<double> stage_times_over_ts0;
-	if (pp.queryarr("stage_times_over_ts0", stage_times_over_ts0) != 0) {
+	if (quokka::queryarr<"problem", "stage_times_over_ts0">(pp, stage_times_over_ts0) != 0) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stage_times_over_ts0.size() == static_cast<amrex::Long>(g_stage_times_over_ts0.size()),
 						 "problem.stage_times_over_ts0 must contain exactly 3 values.");
 		for (std::size_t i = 0; i < g_stage_times_over_ts0.size(); ++i) {

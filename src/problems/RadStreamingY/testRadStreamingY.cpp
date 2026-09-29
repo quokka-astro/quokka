@@ -8,6 +8,7 @@
 ///
 
 #ifdef HAVE_PYTHON
+#include "util/CheckedParmParse.hpp"
 #include "util/matplotlibcpp.h"
 #endif
 #include "AMReX.H"
@@ -158,7 +159,7 @@ auto problem_main() -> int
 
 	// read tmax from inputs file
 	amrex::ParmParse pp; // NOLINT
-	pp.query("max_time", tmax);
+	quokka::query<"", "max_time">(pp, tmax);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = tmax;

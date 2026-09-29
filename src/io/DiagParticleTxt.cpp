@@ -1,6 +1,7 @@
 #include "DiagParticleTxt.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "util/CheckedParmParse.hpp"
 
 void DiagParticleTxt::init(const std::string &a_prefix, std::string_view a_diagName)
 {
@@ -21,7 +22,7 @@ void DiagParticleTxt::init(const std::string &a_prefix, std::string_view a_diagN
 	if (nParticleTypes > 0) {
 		m_particleTypes.resize(nParticleTypes);
 		for (int n = 0; n < nParticleTypes; ++n) {
-			pp.get("particles", m_particleTypes[n], n);
+			quokka::get<"*", "particles">(pp, m_particleTypes[n], n);
 		}
 
 		amrex::Print() << "DiagParticleTxt: Including only particles: ";

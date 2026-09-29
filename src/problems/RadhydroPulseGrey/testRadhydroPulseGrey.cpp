@@ -3,6 +3,7 @@
 ///
 
 #ifdef HAVE_PYTHON
+#include "util/CheckedParmParse.hpp"
 #include "util/matplotlibcpp.h"
 #endif
 #include "AMReX_BC_TYPES.H"
@@ -191,9 +192,9 @@ auto problem_main() -> int
 
 	double max_time = 4.8e-5;
 	amrex::ParmParse pp; // NOLINT
-	pp.query("kappa0", kappa0);
-	pp.query("v0_adv", v0_adv);
-	pp.query("max_time", max_time);
+	quokka::query<"", "kappa0">(pp, kappa0);
+	quokka::query<"", "v0_adv">(pp, v0_adv);
+	quokka::query<"", "max_time">(pp, max_time);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;

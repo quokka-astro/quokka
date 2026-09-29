@@ -15,6 +15,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "util/BC.hpp"
+#include "util/CheckedParmParse.hpp"
 #include "util/fextract.hpp"
 #include <format>
 #include <gcem.hpp>
@@ -417,14 +418,14 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("problem");
 
 	// particle mass
-	pp.query("star_mass", M_star_in_Msun);
-	pp.query("sink_file", sink_file);
-	pp.query("turnon_fextract", turnon_fextract);
-	pp.query("rho0", rho0);
-	pp.query("uniform_density", uniform_density);
-	pp.query("return_1_at_fail", return_1_at_fail);
-	pp.query("t_end_over_t_b", t_end_over_t_b);
-	pp.query("refine_center", refine_center);
+	quokka::query<"problem", "star_mass">(pp, M_star_in_Msun);
+	quokka::query<"problem", "sink_file">(pp, sink_file);
+	quokka::query<"problem", "turnon_fextract">(pp, turnon_fextract);
+	quokka::query<"problem", "rho0">(pp, rho0);
+	quokka::query<"problem", "uniform_density">(pp, uniform_density);
+	quokka::query<"problem", "return_1_at_fail">(pp, return_1_at_fail);
+	quokka::query<"problem", "t_end_over_t_b">(pp, t_end_over_t_b);
+	quokka::query<"problem", "refine_center">(pp, refine_center);
 
 	const double M_star_in_g = M_star_in_Msun * C::M_solar;
 	const Real r_BH = C::Gconst * M_star_in_g / (cs0 * cs0);

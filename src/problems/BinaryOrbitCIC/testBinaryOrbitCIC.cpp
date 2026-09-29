@@ -10,6 +10,7 @@
 #include "AMReX_BLassert.H"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <algorithm>
 #include <fstream>
 #include <limits>
@@ -162,9 +163,9 @@ auto problem_main() -> int
 {
 	// read in runtime parameters for this test problem
 	amrex::ParmParse const pp("problem");
-	pp.query("do_split_particles", do_split_particles);
-	pp.query("split_factor", split_factor);
-	pp.query("verify_particle_layout", verify_particle_layout);
+	quokka::query<"problem", "do_split_particles">(pp, do_split_particles);
+	quokka::query<"problem", "split_factor">(pp, split_factor);
+	quokka::query<"problem", "verify_particle_layout">(pp, verify_particle_layout);
 
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim;
@@ -179,7 +180,7 @@ auto problem_main() -> int
 
 	std::array<int, AMREX_SPACEDIM> n_cell{};
 	amrex::ParmParse const amr_pp("amr");
-	amr_pp.query("n_cell", n_cell);
+	quokka::query<"amr", "n_cell">(amr_pp, n_cell);
 	const bool is_refactor = n_cell[0] == 64;
 	const bool is_refactor_splitparticle = is_refactor && sim.splitParticlesOnRestartRefine_;
 

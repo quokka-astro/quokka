@@ -17,6 +17,7 @@
 #include "physics_info.hpp"
 #include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <array>
 #include <cmath>
 #include <limits>
@@ -98,12 +99,12 @@ template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 	userData_.n_e_init = 1.0e-10;
 	userData_.n_HI_init = 1.0e2;
 	userData_.n_HII_init = 1.0e-10;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
-	pp.query("temperature", userData_.temperature);
-	pp.query("n_e_init", userData_.n_e_init);
-	pp.query("n_HI_init", userData_.n_HI_init);
-	pp.query("n_HII_init", userData_.n_HII_init);
+	quokka::query<"photoionization_momentum", "small_temp">(pp, userData_.small_temp);
+	quokka::query<"photoionization_momentum", "small_dens">(pp, userData_.small_dens);
+	quokka::query<"photoionization_momentum", "temperature">(pp, userData_.temperature);
+	quokka::query<"photoionization_momentum", "n_e_init">(pp, userData_.n_e_init);
+	quokka::query<"photoionization_momentum", "n_HI_init">(pp, userData_.n_HI_init);
+	quokka::query<"photoionization_momentum", "n_HII_init">(pp, userData_.n_HII_init);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();

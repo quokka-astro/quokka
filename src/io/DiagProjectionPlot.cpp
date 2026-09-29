@@ -1,6 +1,7 @@
 #include "DiagProjectionPlot.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "util/CheckedParmParse.hpp"
 
 void DiagProjectionPlot::init(const std::string &a_prefix, std::string_view a_diagName)
 {
@@ -19,7 +20,7 @@ void DiagProjectionPlot::init(const std::string &a_prefix, std::string_view a_di
 	AMREX_ALWAYS_ASSERT(nOutFields > 0);
 	m_fieldNames.resize(nOutFields);
 	for (int f = 0; f < nOutFields; ++f) {
-		pp.get("field_names", m_fieldNames[f], f);
+		quokka::get<"*", "field_names">(pp, m_fieldNames[f], f);
 	}
 
 	// DiagFramePlane does not enforce a "plt" suffix; match that behavior here.
@@ -29,7 +30,7 @@ void DiagProjectionPlot::init(const std::string &a_prefix, std::string_view a_di
 	if (nParticleTypes > 0) {
 		m_particleTypes.resize(nParticleTypes);
 		for (int n = 0; n < nParticleTypes; ++n) {
-			pp.get("particles", m_particleTypes[n], n);
+			quokka::get<"*", "particles">(pp, m_particleTypes[n], n);
 		}
 
 		amrex::Print() << "DiagProjectionPlot: Including particles: ";
@@ -51,7 +52,7 @@ void DiagProjectionPlot::init(const std::string &a_prefix, std::string_view a_di
 
 	if (nNormals > 0) {
 		int normal = 0;
-		pp.get("normal", normal);
+		quokka::get<"*", "normal">(pp, normal);
 		if (normal < 0 || normal >= AMREX_SPACEDIM) {
 			amrex::Abort("DiagProjectionPlot: 'normal' must be in [0, AMREX_SPACEDIM).");
 		}

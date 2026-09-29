@@ -3,6 +3,7 @@
 ///
 
 #include "QuokkaSimulation.hpp"
+#include "util/CheckedParmParse.hpp"
 #include "util/fextract.hpp"
 #include <algorithm>
 #include <array>
@@ -501,7 +502,7 @@ auto problem_main() -> int
 {
 	bool write_csv = true;
 	amrex::ParmParse const pp("problem");
-	pp.query("write_csv", write_csv);
+	quokka::query<"problem", "write_csv">(pp, write_csv);
 
 	std::vector<SchemeRunResult> runs;
 	runs.reserve(resolved_rk_schemes.size());

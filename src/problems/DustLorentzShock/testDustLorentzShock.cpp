@@ -2,6 +2,7 @@
 /// \brief Fluid-dust Lorentz shock regression test inspired by Moseley et al. (2023).
 
 #include "QuokkaSimulation.hpp"
+#include "util/CheckedParmParse.hpp"
 #include "util/fextract.hpp"
 #include <algorithm>
 #include <cmath>
@@ -547,7 +548,7 @@ auto problem_main() -> int
 {
 	bool write_csv = true;
 	amrex::ParmParse const pp("problem");
-	pp.query("write_csv", write_csv);
+	quokka::query<"problem", "write_csv">(pp, write_csv);
 
 	return runShockRegression(write_csv);
 }

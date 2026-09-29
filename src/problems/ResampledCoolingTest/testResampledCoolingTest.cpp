@@ -10,6 +10,7 @@
 ///
 
 #ifdef HAVE_PYTHON
+#include "util/CheckedParmParse.hpp"
 #include "util/matplotlibcpp.h"
 #endif
 #include "cooling/ResampledCooling.hpp"
@@ -188,19 +189,19 @@ auto problem_main() -> int
 	// Read runtime parameters
 	amrex::ParmParse const pp("cooling_test");
 	std::string reference_file;
-	pp.query("reference_solution_file", reference_file);
+	quokka::query<"cooling_test", "reference_solution_file">(pp, reference_file);
 
 	std::string output_csv_file;
-	pp.query("output_csv_file", output_csv_file);
+	quokka::query<"cooling_test", "output_csv_file">(pp, output_csv_file);
 
 	// If positive, require the final temperature at the last cell along x to exceed the temperature at the
 	// first cell by this factor. Used to check that a position-dependent `heating_rate_external` is applied.
 	double min_spatial_heating_T_ratio = 0.0;
-	pp.query("min_spatial_heating_T_ratio", min_spatial_heating_T_ratio);
+	quokka::query<"cooling_test", "min_spatial_heating_T_ratio">(pp, min_spatial_heating_T_ratio);
 
 	amrex::ParmParse const ppp;
 	bool use_sfh_based_pe_heating = false;
-	ppp.query("use_sfh_based_pe_heating", use_sfh_based_pe_heating);
+	quokka::query<"", "use_sfh_based_pe_heating">(ppp, use_sfh_based_pe_heating);
 
 	QuokkaSimulation<ResampledCoolingTest> sim;
 

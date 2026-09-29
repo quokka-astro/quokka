@@ -8,6 +8,14 @@ on:
   pull_request:
 
 jobs:
+  parmparse-options:
+    name: Check ParmParse option documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Check registered options against Markdown sources
+        run: python3 scripts/check_parmparse_documentation.py
+
   check_changes:
     uses: ./.github/workflows/check_changes.yml
     with:

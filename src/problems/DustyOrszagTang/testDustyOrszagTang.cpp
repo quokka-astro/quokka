@@ -4,6 +4,7 @@
 #include "AMReX_Gpu.H"
 #include "AMReX_ParmParse.H"
 #include "QuokkaSimulation.hpp"
+#include "util/CheckedParmParse.hpp"
 #include <algorithm>
 #include <cmath>
 #include <format>
@@ -506,7 +507,7 @@ auto problem_main() -> int
 {
 	bool write_csv = true;
 	amrex::ParmParse const pp("problem");
-	pp.query("write_csv", write_csv);
+	quokka::query<"problem", "write_csv">(pp, write_csv);
 
 	std::vector<CaseConfig> const cases = makeCaseConfigs();
 	CaseResult const high_epsilon = runCase<DustyOrszagTang>(cases[0], write_csv);
