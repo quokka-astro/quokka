@@ -507,6 +507,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			 amrex::iMultiFab &redoFlag);
 
 	// void PrintRadEnergySource(amrex::MultiFab const &radEnergySource);
+	void WritePlotFile() override;
 };
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentNames()
@@ -3921,5 +3922,42 @@ void QuokkaSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::
 	const auto plotfile_name = CustomPlotFileName(plotfile_prefix.c_str(), istep[lev]);
 	WriteSingleLevelPlotfile(plotfile_name, mf, compNames, geom[lev], tNew_[lev], istep[lev]);
 }
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::WritePlotFile()
+{
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		// Calculate the current dimensionless factors E(a) and H(a)
+		const amrex::Real E_a = quokka::cosmology::HubbleFactor(a_now_, cosmology_params_);
+		const amrex::Real H_cgs = cosmology_params_.H0 * E_a;
+		const amrex::Real H_km_s_Mpc = H_cgs * (C::parsec * 1.0e6) / 1.0e5;   // convert to (km/s) / Mpc
+		const amrex::Real E2 = E_a * E_a;
+		const amrex::Real a2 = a_now_ * a_now_;
+		const amrex::Real a3 = a2 * a_now_;
+		const amrex::Real a4 = a2 * a2;
+
+		// Scale the densities according to the cosmic epoch
+		const amrex::Real Omega_m_a  = cosmology_params_.Omega_m / (a3 * E2);
+		const amrex::Real Omega_b_a  = cosmology_params_.Omega_b / (a3 * E2);
+		const amrex::Real Omega_dm_a = cosmology_params_.Omega_dm / (a3 * E2);
+		const amrex::Real Omega_r_a  = cosmology_params_.Omega_r / (a4 * E2);
+		const amrex::Real Omega_L_a  = cosmology_params_.Omega_L / E2;
+		const amrex::Real Omega_k_a  = (1.0 - cosmology_params_.Omega_m - cosmology_params_.Omega_r - cosmology_params_.Omega_L) / (a2 * E2);
+		
+		// update dynamic cosmological state for this output
+		this->simulationMetadata_["cosmology"]["a"] = a_now_;
+		this->simulationMetadata_["cosmology"]["z"] = (1.0 / a_now_) - 1.0;
+		this->simulationMetadata_["cosmology"]["H_cgs"] = H_cgs;
+		this->simulationMetadata_["cosmology"]["H_km_s_Mpc"] = H_km_s_Mpc;
+		this->simulationMetadata_["cosmology"]["Omega_m_current"]  = Omega_m_a;
+		this->simulationMetadata_["cosmology"]["Omega_b_current"]  = Omega_b_a;
+		this->simulationMetadata_["cosmology"]["Omega_dm_current"] = Omega_dm_a;
+		this->simulationMetadata_["cosmology"]["Omega_r_current"]  = Omega_r_a;
+		this->simulationMetadata_["cosmology"]["Omega_Lambda_current"] = Omega_L_a;
+		this->simulationMetadata_["cosmology"]["Omega_k_current"]  = Omega_k_a;
+		this->simulationMetadata_["cosmology"]["comoving_mean_density"] = comoving_mean_density_;
+	}
+	AMRSimulation<problem_t>::WritePlotFile();
+}
+
 
 #endif // RADIATION_SIMULATION_HPP_
