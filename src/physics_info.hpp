@@ -61,19 +61,14 @@ template <typename problem_t> struct Physics_Traits : DefaultPhysicsTraits {};
 
 // this struct stores the indices at which quantities start
 template <typename problem_t> struct Physics_Indices {
-	// number of cc quantities required for advection problems
-	static constexpr int nvarTotal_cc_adv = 1;
-	// number of cc quantities required for rad /+ hydro problem
-	static constexpr int nvarTotal_cc = []() constexpr {
-		if constexpr (!(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled)) {
-			return nvarTotal_cc_adv;
-		}
-		return Physics_Traits<problem_t>::numPassiveScalars + Physics_NumVars::numHydroVars +
-		       Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups *
-			   static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled) +
-		       Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups *
-			   static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled);
-	}();
+	// number of cc quantities
+	// the hydro variables are always allocated: is_hydro_enabled only controls whether they are advected,
+	// so the gas state (and any Strang-split sources acting on it) exists even when hydro is disabled
+	static constexpr int nvarTotal_cc =
+	    Physics_Traits<problem_t>::numPassiveScalars + Physics_NumVars::numHydroVars +
+	    Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups * static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled) +
+	    Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups * static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled);
+
 	// cell-centered
 	static constexpr int hydroFirstIndex = 0;
 	static constexpr int pscalarFirstIndex = Physics_NumVars::numHydroVars;

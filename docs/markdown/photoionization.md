@@ -183,7 +183,7 @@ by a diagnostic variable. In dark cells where flux goes to 0, demanding 1% accur
 near-zero value wastes VODE steps with no physical benefit.
 
 Excluding flux from convergence gave a **3.8× speedup** in photochemistry on CPU and a
-**2.2× speedup** on GPU for the DTypeFront test.
+**2.2× speedup** on GPU for the DTypeFront_JAFF test.
 
 ### 3.4 Physical constants
 
