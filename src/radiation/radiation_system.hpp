@@ -303,6 +303,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 	static constexpr bool thermal_band_photochemistry_ = ISM_Traits<problem_t>::thermal_band_photochemistry;
 	static constexpr bool dust_chemical_band_absorption_ = ISM_Traits<problem_t>::dust_chemical_band_absorption;
+	static_assert(!dust_chemical_band_absorption_ || enable_dust_gas_thermal_coupling_model_,
+		      "ISM_Traits::dust_chemical_band_absorption requires ISM_Traits::enable_dust_gas_thermal_coupling_model = true, "
+		      "otherwise the dust-absorbed chemical-band energy (Q_dust) is silently dropped.");
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	// Chemical (ionizing) bands occupy the LAST NChemBands groups; the leading nGroupsThermal_ groups
