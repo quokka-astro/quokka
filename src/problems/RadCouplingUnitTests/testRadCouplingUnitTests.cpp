@@ -1,8 +1,3 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file testRadCouplingUnitTests.cpp
 /// \brief Single-cell tests of the bracketed matter-radiation coupling solver in radiation_coupling.hpp.
 ///
@@ -228,8 +223,8 @@ template <typename P> auto conserved_total(CouplingCell<P> const &cell) -> doubl
 
 /// Solve every cell of a batch inside one kernel, with dust (SolveDustCoupling) or without (SolveGasCoupling).
 template <typename P, bool with_dust> auto solve_cells(std::vector<CouplingCell<P>> const &cells, double tol) -> std::vector<CouplingSolution<P>>
-{
-	const int n = static_cast<int>(cells.size());
+{l
+	const int n = static_cast<int>(cels.size());
 	amrex::Gpu::DeviceVector<CouplingCell<P>> d_cells(n);
 	amrex::Gpu::DeviceVector<CouplingSolution<P>> d_sols(n);
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, cells.begin(), cells.end(), d_cells.begin());
