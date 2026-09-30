@@ -516,7 +516,7 @@ auto problem_main() -> int
 				const amrex::Real analytical_radius = sim.userData_.r_analytical_vec_[i];
 				const amrex::Real upper_bound = analytical_radius + error_tol;
 				const amrex::Real lower_bound = analytical_radius - error_tol;
-				if (((r84_numerical > upper_bound) || (r16_numerical < lower_bound)) && (analytical_radius > r_trunc)) {
+				if ((std::isgreater(r84_numerical, upper_bound) || std::isless(r16_numerical, lower_bound)) && (analytical_radius > r_trunc)) {
 					amrex::Print() << "Test failed at t = " << sim.userData_.t_vec_[i] << "\n";
 					amrex::Print() << "Analytical radius: " << analytical_radius << '\n';
 					amrex::Print() << "Numerical r16: " << r16_numerical << '\n';
