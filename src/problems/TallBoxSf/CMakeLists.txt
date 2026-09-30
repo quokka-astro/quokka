@@ -17,4 +17,12 @@ if (AMReX_SPACEDIM EQUAL 3)
     set_tests_properties(ComputeTallBoxSfPerturbations PROPERTIES FIXTURES_SETUP TallBoxSf_fixture)
     set_tests_properties(TallBoxSf PROPERTIES FIXTURES_REQUIRED TallBoxSf_fixture)
     set_tests_properties(TallBoxSf PROPERTIES COST 85)
+
+    # MHD version with the MHD diode on the z boundaries
+    add_executable(MHDTallBoxSf MHDTallBoxSf.cpp ${QuokkaObjSources})
+    if(AMReX_GPU_BACKEND MATCHES "CUDA")
+        setup_target_for_cuda_compilation(MHDTallBoxSf)
+    endif()
+
+    add_test(NAME MHDTallBoxSf COMMAND MHDTallBoxSf ../inputs/MHDTallBoxSf.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
