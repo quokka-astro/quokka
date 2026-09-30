@@ -78,6 +78,7 @@ template <> struct ISM_Traits<MarshakProblem> {
 	static constexpr bool enable_photoelectric_heating = false;
 	// 1.0e-5 is the minimum value allowed for this test; smaller values will result in negative T_d.
 	static constexpr double gas_dust_coupling_threshold = 1.0e-4;
+	static constexpr bool thermal_band_photochemistry = false; // no photochemistry network in this problem
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
