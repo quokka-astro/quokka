@@ -432,8 +432,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
 	// radiation subcycle
-	void copyRadiationState(amrex::MultiFab &stateOld_cc, amrex::MultiFab const &stateNew_cc);
-	void copyHydroState(amrex::MultiFab &stateOld_cc, amrex::MultiFab const &stateNew_cc);
+	void copyRadiationState(amrex::MultiFab &dest_cc, amrex::MultiFab const &src_cc);
+	void copyHydroState(amrex::MultiFab &dest_cc, amrex::MultiFab const &src_cc);
 	auto computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int;
 	void advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::FluxRegister *fr_as_crse,
 					  amrex::FluxRegister *fr_as_fine, amrex::MultiFab &state_out);
@@ -3208,16 +3208,16 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 	}
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::copyRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
+template <typename problem_t> void QuokkaSimulation<problem_t>::copyRadiationState(amrex::MultiFab &dest, amrex::MultiFab const &src)
 {
-	// copy radiation state variables from stateNew_cc to stateOld_cc
-	amrex::MultiFab::Copy(stateOld, stateNew, nstartHyperbolic_, nstartHyperbolic_, ncompHyperbolic_, 0);
+	// copy radiation state variables from src to dest
+	amrex::MultiFab::Copy(dest, src, nstartHyperbolic_, nstartHyperbolic_, ncompHyperbolic_, 0);
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::copyHydroState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
+template <typename problem_t> void QuokkaSimulation<problem_t>::copyHydroState(amrex::MultiFab &dest, amrex::MultiFab const &src)
 {
-	// copy hydro state variables from stateNew_cc to stateOld_cc
-	amrex::MultiFab::Copy(stateOld, stateNew, 0, 0, nvars_, 0);
+	// copy hydro state variables from src to dest
+	amrex::MultiFab::Copy(dest, src, 0, 0, nvars_, 0);
 }
 
 template <typename problem_t>
