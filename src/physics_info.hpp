@@ -69,6 +69,7 @@ struct DefaultPhysicsTraits {
 // this struct is specialized by the user application code.
 template <typename problem_t> struct Physics_Traits : DefaultPhysicsTraits {};
 
+
 // this struct stores the indices at which quantities start
 template <typename problem_t> struct Physics_Indices {
 	// number of cc quantities required for advection problems

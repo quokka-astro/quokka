@@ -70,6 +70,7 @@ namespace filesystem = experimental::filesystem;
 #include "chemistry/Chemistry.hpp"
 #include "conduction/ElectronConduction.hpp"
 #include "cooling/ResampledCooling.hpp"
+#include "cosmology/Cosmology.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
 #include "eos.H"
@@ -246,6 +247,29 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	enum class SourceOrder { forward, reverse };
 
+	// cosmological members
+	quokka::cosmology::CosmologyParams cosmology_params_;
+	amrex::Real a_now_ = 1.0;
+	amrex::Real comoving_mean_density_ = 0.0;
+	amrex::Real cosmology_dt_limit_ = Physics_Traits<problem_t>::cosmology_dt_limit;
+	// a_half_ = a(t_n + dt/2): cached by particleCosmologyComputeHalfStep() before the hydro
+	// advance so that the drift and the Strang-split post-kick drag can both use the same
+	// bitwise-identical midpoint scale factor.
+	amrex::Real a_half_ = 1.0;
+
+	auto getCosmologyScaleFactor() const -> amrex::Real override
+	{
+		return a_now_;	
+	}
+
+	auto getCosmologyScaleFactorHalf() const -> amrex::Real override
+	{
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			return a_half_;
+		}
+		return 1.0;
+	}
+
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
@@ -327,6 +351,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void CheckHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc,
 			      std::source_location const &location = std::source_location::current());
 	void computeMaxSignalLocal(int level) override;
+	auto computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
@@ -940,6 +965,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 			// so there is no signal speed and the timestep is set by the other physics modules
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { maxSignal(i, j, k) = 0.0; });
 		}
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			max_signal_speed_[level].mult(1.0 / a_now_);
+		}
 	}
 
 	// diffusive CFL constraint for Ohmic resistivity: dt <= cfl * dx^2 / (2*eta)
@@ -982,6 +1010,23 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 		}
 	}
 }
+
+// Ovveriding from AMRSimulation (simulation.hpp) to exploit member cosmological data for
+// constraining cosmological timestep
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
+{
+	auto dt_loc = AMRSimulation<problem_t>::computeTimestepAtLevel(lev);
+
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		const amrex::Real a = a_now_;
+		const amrex::Real H = quokka::cosmology::HubbleFactor(a, cosmology_params_) * cosmology_params_.H0;
+		if (H > 0) {
+			dt_loc.value = std::min(dt_loc.value, cosmology_dt_limit_ / H);
+		}
+	}
+	return dt_loc;
+}
+
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::printCellProperties(int lev, amrex::IntVect const &index)
 {

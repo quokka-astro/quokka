@@ -293,7 +293,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void setInitialConditionsAtLevel_fc(int level, amrex::Real time);
 	void evolve();
 	void computeTimestep();
-	auto computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>;
+	virtual auto computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>;
 
 	void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start, int srccomp_total) const;
 	virtual void setCustomGhostCells() {}
@@ -317,6 +317,22 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void particleMeshInteraction(amrex::Real time, amrex::Real dt);
 	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow creating them at the start
 	// of the simulation
+
+	// Particle cosmology hooks
+	// getCosmologyScaleFactor()     : returns a_now (current scale factor)
+	// getCosmologyScaleFactorHalf() : returns a_half = a(t_n + dt/2), stored by
+	//                                 particleCosmologyComputeHalfStep before the hydro advance
+	// particleCosmologyComputeHalfStep : integrates a from t_n to t_n+dt/2 and stores a_half_
+	// particleCosmologyPreKick  : Hubble drag  v *= a_n     / a_{n+1/2}  (before 1st kick)
+	// particleCosmologyPostKick : Hubble drag  v *= a_{n+1/2} / a_{n+1}  (after  2nd kick)
+	virtual auto getCosmologyScaleFactor() const -> amrex::Real { return 1.0; }
+	virtual auto getCosmologyScaleFactorHalf() const -> amrex::Real { return 1.0; }
+	virtual void particleCosmologyComputeHalfStep(amrex::Real /* dt*/) {}
+	virtual void particleCosmologyPreKick(amrex::Real /* dt*/) {} 
+	virtual void particleCosmologyPostKick(amrex::Real /* dt*/) {}
+
+
+
 #endif // AMREX_SPACEDIM == 3
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
@@ -1311,7 +1327,14 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
 		// (when no hyperbolic physics is enabled, hydro_dt is unconstrained and the cutoff is zero)
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {
-			particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
+			// Comoving CFL: |v_pec| * dt / a <= CFL * dx  =>  dt <= CFL * a * dx / |v_pec|
+			// Without the factor a, particles can drift up to dx/a per step (100x too far at a=0.01).
+			if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+				const amrex::Real a_cfl = getCosmologyScaleFactor(); // a_old at timestep start
+				particle_dt.value = particleCflNumber_ * a_cfl * (dx_min / max_particle_speed.value);
+			} else {
+				particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
+			}
 		}
 		if (verbose) {
 			amrex::Print() << std::format("...[level {}] estimated particle timestep: {:e}\n", lev, particle_dt.value);
