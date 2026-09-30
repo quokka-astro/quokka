@@ -3139,6 +3139,14 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 						      flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2],
 						      reconstructGhost, nvars, nghost_Riemann, dx);)
 
+	// cosmological flux rescaling (nabla_phys -> nabla_com / a)
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		const amrex::Real a = a_now_;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			flux[idim].mult(1.0 / a);
+		}
+	}
+
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
 
