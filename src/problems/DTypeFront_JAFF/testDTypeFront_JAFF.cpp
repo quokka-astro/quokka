@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testDTypeFront.cpp
-/// \brief Defines a test problem for a D Type front.
+/// \file testDTypeFront_JAFF.cpp
+/// \brief Defines a test problem for a D Type front that uses a JAFF generated network.
 ///
 
 #include "AMReX.H"
@@ -33,16 +33,16 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-struct DTypeFront {};
+struct DTypeFront_JAFF {};
 
 constexpr double c_hat = C::c_light / 1000.0;
 
-template <> struct quokka::EOS_Traits<DTypeFront> {
+template <> struct quokka::EOS_Traits<DTypeFront_JAFF> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<DTypeFront> : DefaultPhysicsTraits {
+template <> struct Physics_Traits<DTypeFront_JAFF> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
@@ -50,7 +50,7 @@ template <> struct Physics_Traits<DTypeFront> : DefaultPhysicsTraits {
 	static constexpr bool is_radiation_enabled = true;
 };
 
-template <> struct RadSystem_Traits<DTypeFront> {
+template <> struct RadSystem_Traits<DTypeFront_JAFF> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	// Erad_floor sets the M1 radiation energy density floor (erg cm^-3), defined here as a
 	// blackbody at T=0.01 K.  The corresponding photon number density floor is
@@ -67,16 +67,17 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	// photochemistry momentum deposition is gated on beta_order == 1, so this test validates pure
 	// thermal-pressure D-type front expansion with radiation pressure.
 	static constexpr int beta_order = 1;
+	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
 	static constexpr auto ChemBands() { return ChemBandsHeader(); }
 };
 
-template <> struct SimulationData<DTypeFront> {
+template <> struct SimulationData<DTypeFront_JAFF> {
 	amrex::Real small_temp{};
 	amrex::Real small_dens{};
 	amrex::Real temperature{};
-	amrex::Real primary_species_1{};
-	amrex::Real primary_species_2{};
-	amrex::Real primary_species_3{};
+	amrex::Real n_e_init{};
+	amrex::Real n_HI_init{};
+	amrex::Real n_HII_init{};
 	amrex::Real Q{};
 	int recombination_switch{};
 	amrex::Vector<amrex::Real> t_vec_;
@@ -101,8 +102,10 @@ auto compute_effective_radius(amrex::MultiFab const &state_mf, amrex::GpuArray<a
 	const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-		const amrex::Real n_HI = state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + 1) / spmasses[1];
-		const amrex::Real n_HII = state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + 2) / spmasses[2];
+		const amrex::Real n_HI =
+		    state[box_no](i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+		const amrex::Real n_HII =
+		    state[box_no](i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
 		const amrex::Real denom = n_HI + n_HII;
 		if (denom <= 0.0_rt) {
 			return 0.0_rt;
@@ -158,11 +161,9 @@ auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.
 
 auto net_energy_ionized(double T, double n_e) -> double
 {
-	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
-	// mean photoheating energy per ionization: mean ionizing-band photon energy above the
-	// H ionization threshold, matching get_ionization_heating_coefficient() in actual_rhs.H
+	const double alpha_B = 2.63e-13 * std::pow(T / 1.0e4, -0.7);
 	static const double RydbergEnergy = 13.6 * C::ev2erg;
-	const double eps = RadSystem<DTypeFront>::GetChemBandQuanta(0);
+	const double eps = RadSystem<DTypeFront_JAFF>::GetChemBandQuanta(0);
 	const double Gamma_photo = std::max(eps - RydbergEnergy, 0.0);
 	// alpha_B * n_e^2 = n_gamma
 	const double photoheating = alpha_B * n_e * n_e * Gamma_photo;
@@ -247,10 +248,10 @@ auto rosenbrock_tableau_name(int tableau) -> char const *
 void print_microphysics_integrator()
 {
 #ifdef DTYPEFRONT_USE_ROSENBROCK
-	amrex::Print() << "DTypeFront microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
+	amrex::Print() << "DTypeFront_JAFF microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
 		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
 #else
-	amrex::Print() << "DTypeFront microphysics integrator: VODE\n";
+	amrex::Print() << "DTypeFront_JAFF microphysics integrator: VODE\n";
 #endif
 }
 
@@ -265,9 +266,10 @@ AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
 }
 
 template <>
-void RadSystem<DTypeFront>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
-					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
+void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
@@ -277,7 +279,7 @@ void RadSystem<DTypeFront>::AddRadSource(array_t &radEnergy, array_t & /*reduced
 	constexpr amrex::Real inv_N = 1.0 / static_cast<amrex::Real>(N);
 	constexpr auto cutoff_r2 = static_cast<amrex::Real>(N * N);
 
-	const amrex::Real L_star = Q * RadSystem<DTypeFront>::GetChemBandQuanta(0);
+	const amrex::Real L_star = Q * RadSystem<DTypeFront_JAFF>::GetChemBandQuanta(0);
 	const amrex::Real x0 = 0.0_rt;
 	const amrex::Real y0 = 0.0_rt;
 	const amrex::Real z0 = 0.0_rt;
@@ -324,7 +326,7 @@ void RadSystem<DTypeFront>::AddRadSource(array_t &radEnergy, array_t & /*reduced
 	});
 }
 
-template <> void QuokkaSimulation<DTypeFront>::preCalculateInitialConditions()
+template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
 	init_extern_parameters();
@@ -334,16 +336,16 @@ template <> void QuokkaSimulation<DTypeFront>::preCalculateInitialConditions()
 	userData_.small_temp = 1e-2;
 	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e4;
-	userData_.primary_species_1 = 0.0e0_rt;
-	userData_.primary_species_2 = 1.0e2_rt;
-	userData_.primary_species_3 = 0.0e0_rt;
+	userData_.n_e_init = 0.0e0_rt;
+	userData_.n_HI_init = 1.0e2_rt;
+	userData_.n_HII_init = 0.0e0_rt;
 	userData_.Q = 1.0e49_rt;
 	pp.query("small_temp", userData_.small_temp);
 	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
-	pp.query("primary_species_1", userData_.primary_species_1);
-	pp.query("primary_species_2", userData_.primary_species_2);
-	pp.query("primary_species_3", userData_.primary_species_3);
+	pp.query("n_e_init", userData_.n_e_init);
+	pp.query("n_HI_init", userData_.n_HI_init);
+	pp.query("n_HII_init", userData_.n_HII_init);
 	pp.query("Q", userData_.Q);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
@@ -357,39 +359,26 @@ template <> void QuokkaSimulation<DTypeFront>::preCalculateInitialConditions()
 	}
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront_JAFF>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return 0.0_rt;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront_JAFF>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return 0.0_rt;
 }
 
-template <> void QuokkaSimulation<DTypeFront>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<DTypeFront_JAFF>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	burn_t state;
 	std::array<Real, NumSpec> numdens = {-1.0};
-	for (int n = 1; n <= NumSpec; ++n) {
-		switch (n) {
-			case 1:
-				numdens[n - 1] = userData_.primary_species_1;
-				break;
-			case 2:
-				numdens[n - 1] = userData_.primary_species_2;
-				break;
-			case 3:
-				numdens[n - 1] = userData_.primary_species_3;
-				break;
-			default:
-				amrex::Abort("Cannot initialize number density for chem specie");
-				break;
-		}
-	}
+	numdens[Species::e] = userData_.n_e_init;
+	numdens[Species::H] = userData_.n_HI_init;
+	numdens[Species::H_p] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 	// find the density in g/cm^3
@@ -406,26 +395,26 @@ template <> void QuokkaSimulation<DTypeFront>::setInitialConditionsOnGrid(quokka
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int g = 0; g < Physics_Traits<DTypeFront>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<DTypeFront>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = 1.e-99_rt;
-			state_cc(i, j, k, RadSystem<DTypeFront>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
-			state_cc(i, j, k, RadSystem<DTypeFront>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
-			state_cc(i, j, k, RadSystem<DTypeFront>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
+		for (int g = 0; g < Physics_Traits<DTypeFront_JAFF>::nGroups; ++g) {
+			state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = 1.e-99_rt;
+			state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
+			state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
+			state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 		}
-		state_cc(i, j, k, RadSystem<DTypeFront>::gasEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<DTypeFront>::gasDensity_index) = rhotot;
-		state_cc(i, j, k, RadSystem<DTypeFront>::gasInternalEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<DTypeFront>::x1GasMomentum_index) = 0.0_rt;
-		state_cc(i, j, k, RadSystem<DTypeFront>::x2GasMomentum_index) = 0.0_rt;
-		state_cc(i, j, k, RadSystem<DTypeFront>::x3GasMomentum_index) = 0.0_rt;
+		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::gasEnergy_index) = Egas0;
+		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::gasDensity_index) = rhotot;
+		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::gasInternalEnergy_index) = Egas0;
+		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x1GasMomentum_index) = 0.0_rt;
+		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x2GasMomentum_index) = 0.0_rt;
+		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x3GasMomentum_index) = 0.0_rt;
 		for (int nn = 0; nn < NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<DTypeFront>::scalar0_index + nn) =
+			state_cc(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + nn) =
 			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
 
-template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
+template <> void QuokkaSimulation<DTypeFront_JAFF>::computeAfterTimestep()
 {
 	const int lev = 0;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
@@ -434,15 +423,17 @@ template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
 	userData_.r_effective_vec_.push_back(r_effective);
 	userData_.t_vec_.push_back(t);
 
-	const amrex::Real n_e = userData_.primary_species_2;
+	// In the fully ionized cavity, every initial HI atom becomes one H+ and one e-,
+	// so n_HI_init also gives the equilibrium electron density there.
+	const amrex::Real n_e = userData_.n_HI_init;
 	const amrex::Real T_eq = compute_equilibrium_temperature_ionized(n_e);
-	const amrex::Real alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
+	const amrex::Real alpha_B = 2.63e-13 * std::pow(T_eq / 1.0e4, -0.7);
 	const amrex::Real mu = 0.5;
 	const amrex::Real Q = userData_.Q;
 	const amrex::Real c_i = std::sqrt(C::k_B * T_eq / (mu * C::m_p));
 	const amrex::Real rho =
-	    userData_.primary_species_1 * spmasses[0] + userData_.primary_species_2 * spmasses[1] + userData_.primary_species_3 * spmasses[2];
-	const amrex::Real eps = RadSystem<DTypeFront>::GetChemBandQuanta(0);
+	    userData_.n_e_init * spmasses[Species::e] + userData_.n_HI_init * spmasses[Species::H] + userData_.n_HII_init * spmasses[Species::H_p];
+	const amrex::Real eps = RadSystem<DTypeFront_JAFF>::GetChemBandQuanta(0);
 
 	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_e * n_e), 1.0_rt / 3.0_rt);
 	const amrex::Real t_s = r_s / c_i;
@@ -477,7 +468,7 @@ auto problem_main() -> int
 	const double dt_max = 1e99;
 
 	// Problem initialization
-	QuokkaSimulation<DTypeFront> sim;
+	QuokkaSimulation<DTypeFront_JAFF> sim;
 	print_microphysics_integrator();
 
 	// initialize
@@ -531,11 +522,12 @@ auto problem_main() -> int
 
 	// Check 2: temperature in cavity and neutral region at end of simulation
 	{
-		// primary_species_2 is the initial n_HI (species index 1), which equals n_e in the fully ionized cavity
-		const double ne_eq = sim.userData_.primary_species_2;
-		const double n_HI_init = sim.userData_.primary_species_2; // in neutral region all hydrogen remains as HI
+		// In the fully ionized cavity, the initial n_HI equals the equilibrium n_e;
+		// in the neutral region, all hydrogen remains as HI at its initial density.
+		const double ne_eq = sim.userData_.n_HI_init;
+		const double n_HI_eq = sim.userData_.n_HI_init;
 		const double T_ion_eq = compute_equilibrium_temperature_ionized(ne_eq);
-		const double T_neu_eq = compute_equilibrium_temperature_neutral(n_HI_init);
+		const double T_neu_eq = compute_equilibrium_temperature_neutral(n_HI_eq);
 
 		amrex::MultiFab const &state_mf = sim.state_new_cc_[0];
 
@@ -554,10 +546,12 @@ auto problem_main() -> int
 			const auto state = host_fab.const_array();
 
 			amrex::LoopOnCpu(box, [&](int i, int j, int k) noexcept {
-				const amrex::Real rho = state(i, j, k, HydroSystem<DTypeFront>::density_index);
-				const amrex::Real Eint = state(i, j, k, RadSystem<DTypeFront>::gasInternalEnergy_index);
-				const amrex::Real n_HI_cell = state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + 1) / spmasses[1];
-				const amrex::Real n_HII_cell = state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + 2) / spmasses[2];
+				const amrex::Real rho = state(i, j, k, HydroSystem<DTypeFront_JAFF>::density_index);
+				const amrex::Real Eint = state(i, j, k, RadSystem<DTypeFront_JAFF>::gasInternalEnergy_index);
+				const amrex::Real n_HI_cell =
+				    state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+				const amrex::Real n_HII_cell =
+				    state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
 				const amrex::Real denom = n_HI_cell + n_HII_cell;
 				if (denom <= 0.0_rt) {
 					return;
@@ -567,7 +561,7 @@ auto problem_main() -> int
 
 				burn_t bstate;
 				for (int nn = 0; nn < NumSpec; ++nn) {
-					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + nn) / spmasses[nn];
+					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + nn) / spmasses[nn];
 				}
 				bstate.rho = rho;
 				bstate.e = Eint / rho;

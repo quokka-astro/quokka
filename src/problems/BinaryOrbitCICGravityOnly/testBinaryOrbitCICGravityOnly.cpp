@@ -1,11 +1,12 @@
 /// \file testBinaryOrbitCICGravityOnly.cpp
 /// \brief Defines a test problem for a binary orbit with only self-gravity enabled.
 ///
-/// This is a copy of the BinaryOrbitCIC test problem with hydro, MHD and radiation
-/// switched off. The gas in BinaryOrbitCIC is dynamically irrelevant (its total mass
-/// is ~1e-15 of the particle mass), so removing it must not change the orbit: this
-/// test therefore uses the same particles, the same grid and the same tolerance as
-/// BinaryOrbitCIC.
+/// This is a copy of the BinaryOrbitCIC test problem with hydro advection, MHD and
+/// radiation switched off. The gas state is always allocated, so it carries the same
+/// negligible gas as BinaryOrbitCIC (its total mass is ~1e-15 of the particle mass),
+/// but the gas is not advected. Since that gas is dynamically irrelevant, the orbit
+/// must not change: this test therefore uses the same particles, the same grid and
+/// the same tolerance as BinaryOrbitCIC.
 ///
 
 #include <algorithm>
@@ -20,15 +21,22 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
+#include "hydro/hydro_system.hpp"
 
 struct BinaryOrbitGravityOnly {};
+
+template <> struct quokka::EOS_Traits<BinaryOrbitGravityOnly> {
+	static constexpr double gamma = 1.0;	       // isothermal
+	static constexpr double cs_isothermal = 1.3e7; // cm s^{-1}
+	static constexpr double mean_molecular_weight = C::m_u;
+};
 
 template <> struct Particle_Traits<BinaryOrbitGravityOnly> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 
 template <> struct Physics_Traits<BinaryOrbitGravityOnly> : DefaultPhysicsTraits {
-	// hydro, MHD and radiation are all disabled; only self-gravity acts on the particles
+	// hydro advection (is_hydro_enabled defaults to false), MHD and radiation are all disabled;
 	static constexpr bool is_self_gravity_enabled = true;
 };
 
@@ -39,11 +47,18 @@ template <> struct SimulationData<BinaryOrbitGravityOnly> {
 
 template <> void QuokkaSimulation<BinaryOrbitGravityOnly>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	// with no hyperbolic state, the cell-centred state holds a single unused placeholder component
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_cc(i, j, k, 0) = 0; });
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// negligible, non-advected gas (as in BinaryOrbitCIC): a positive density keeps the gravitational
+		// kick on the gas finite, and its mass (~1e-15 of the particle mass) does not affect the orbit
+		for (int n = 0; n < Physics_Indices<BinaryOrbitGravityOnly>::nvarTotal_cc; ++n) {
+			state_cc(i, j, k, n) = 0;
+		}
+		const double rho = 1.0e-22; // g cm^{-3}
+		state_cc(i, j, k, HydroSystem<BinaryOrbitGravityOnly>::density_index) = rho;
+	});
 }
 
 template <> void QuokkaSimulation<BinaryOrbitGravityOnly>::createInitialCICParticles()
