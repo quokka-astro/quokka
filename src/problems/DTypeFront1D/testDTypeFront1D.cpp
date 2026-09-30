@@ -197,10 +197,12 @@ auto lambda_ff(double T) -> double { return 1.3 * 1.427e-27 * std::sqrt(T) + get
 
 auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * std::sqrt(T) * std::exp(-92.0 / T)); }
 
+auto recombination_coefficient(amrex::Real T_i) -> amrex::Real { return 2.63e-13 * std::pow(T_i / 1.0e4, -0.7); }
+
 // Collisional ionization is omitted
 auto net_energy_ionized(double T, double n_e, double eps_ion) -> double
 {
-	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
+	const double alpha_B = recombination_coefficient(T);
 	const double epsilon = std::max(eps_ion - 13.6 * C::ev2erg, 0.0);
 	// alpha_B * n_e^2 = n_gamma
 	const double photoheating = alpha_B * n_e * n_e * epsilon;
@@ -261,8 +263,6 @@ auto compute_equilibrium_temperature_ionized(double n_e, double eps_ion) -> doub
 	}
 	return 0.5 * (T_lo + T_hi);
 }
-
-auto recombination_coefficient(amrex::Real T_i) -> amrex::Real { return 2.6e-13 * std::pow(T_i / 1.0e4, -0.7); }
 
 auto ionized_sound_speed(amrex::Real T_i) -> amrex::Real { return std::sqrt(C::k_B * T_i / (0.5_rt * C::m_p)); }
 
@@ -765,12 +765,62 @@ auto problem_main() -> int
 			amrex::Print() << "Test FAILED: only " << 100.0 * ir_fraction
 				       << "% of the injected optical energy is present in the IR band; "
 					  "expected at least "
-				       << 100.0 * min_ir_fraction << "% (IR has no external source, so this energy can only arrive via re-emission).\n";
+				       << 100.0 * min_ir_fraction << "%.\n";
 			status = 1;
 		} else {
-			amrex::Print() << "Test passed: " << 100.0 * ir_fraction
-				       << "% of the injected optical energy is present in the sourceless IR band, consistent with thermal-band "
-					  "re-emission of network gas cooling.\n";
+			amrex::Print() << "Test passed: " << 100.0 * ir_fraction << "% of the injected optical energy is present in the sourceless IR band.\n";
+		}
+	}
+
+	// Check 4: the network's thermal-band emission.
+	{
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
+		const amrex::Real transverse_area = AMREX_D_TERM(1.0_rt, *(prob_hi[1] - prob_lo[1]), *(prob_hi[2] - prob_lo[2]));
+		const amrex::Real domain_volume = 2.0_rt * half_Lx * transverse_area;
+
+		auto state_ptrs = amrex::GetVecOfConstPtrs(sim.getNewMF_cc());
+		state_ptrs.resize(sim.finestLevel() + 1);
+		auto volume_integral = [&](int comp) -> amrex::Real { return amrex::volumeWeightedSum(state_ptrs, comp, sim.Geom(), sim.refRatio()); };
+
+		const amrex::Real E_ir = volume_integral(RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ir);
+		const amrex::Real E_opt = volume_integral(RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_optical);
+		const amrex::Real E_ion = volume_integral(RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ionizing);
+		const amrex::Real N_HII = volume_integral(HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+		const amrex::Real N_HI = volume_integral(HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+
+		const double t_end = sim.tNew_[0];
+		const double c_hat_over_c = RadSystem_Traits<DTypeFront1D>::c_hat_over_c;
+		const double eps_ion = sim.userData_.eps_ion;
+		const double rydberg_energy = 13.6 * C::ev2erg;
+		const double KI_heating_coefficient = 2.0e-26;
+
+		const amrex::Real E_opt_injected = 2.0_rt * sim.userData_.flux_optical * sim.userData_.eps_opt * transverse_area * c_hat_over_c * t_end;
+		const amrex::Real E_thermal_floor = 2.0_rt * Erad_floor_ * domain_volume;
+		const amrex::Real Q_net_measured = (E_ir + E_opt - E_thermal_floor - E_opt_injected) / c_hat_over_c;
+
+		const amrex::Real N_gamma_injected = 2.0_rt * sim.userData_.flux_ion * transverse_area * t_end;
+		const amrex::Real N_gamma_initial = Erad_floor_ * domain_volume / eps_ion;
+		const amrex::Real N_gamma_absorbed = N_gamma_injected + N_gamma_initial - E_ion / eps_ion;
+		const amrex::Real N_HII_initial = sim.userData_.n_HII_init * domain_volume;
+		const amrex::Real N_recombined = N_gamma_absorbed - (N_HII - N_HII_initial);
+		const double T_i = sim.userData_.T_ionized;
+		const double eps_per_recombination = rydberg_energy + (lambda_rec(T_i) + lambda_ff(T_i)) / recombination_coefficient(T_i);
+		// Time-averaged neutral column: hydrogen is conserved and the ionized column grows as sqrt(l) ~ t^0.4, so it averages
+		// Delta N_HII / 1.4. This assumes spitzer solution and does not change the result much.
+		const amrex::Real N_HI_mean = N_HI + (2.0_rt / 7.0_rt) * (N_HII - N_HII_initial);
+		const amrex::Real Q_net_predicted = eps_per_recombination * N_recombined + KI_heating_coefficient * N_HI_mean * t_end;
+
+		const double ratio = Q_net_measured / Q_net_predicted;
+		constexpr double tol_ratio = 0.01;
+
+		if (std::abs(ratio - 1.0) > tol_ratio) {
+			amrex::Print() << "Test FAILED: measured network thermal-band emission is " << ratio
+				       << " times the prediction (tolerance: " << 100.0 * tol_ratio << "%).\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: measured network thermal-band emission matches the prediction within " << 100.0 * tol_ratio << "% ("
+				       << 100.0 * (ratio - 1.0) << "%).\n";
 		}
 	}
 
