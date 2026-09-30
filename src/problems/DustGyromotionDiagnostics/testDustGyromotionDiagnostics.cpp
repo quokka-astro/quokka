@@ -27,8 +27,8 @@ constexpr double epsilon = 1.0;
 constexpr double rho_dust = epsilon * rho_gas;
 constexpr double sound_speed = 1.0;
 constexpr double dimensionless_charge_to_mass_ratio = 1.0;
-constexpr double magnetic_field_z = 1.0;
-constexpr double initial_relative_drift = 1.0;
+constexpr double magnetic_field_z = 5.0;
+constexpr double initial_relative_drift = 10.0;
 
 constexpr double omega_L = dimensionless_charge_to_mass_ratio * magnetic_field_z;
 constexpr double omega_rel = (1.0 + epsilon) * omega_L;
@@ -40,18 +40,26 @@ using ResolvedRkScheme = quokka::dust::ResolvedRkScheme;
 
 constexpr double third_decade_factor = 2.154434690031884;
 constexpr double two_thirds_decade_factor = 4.641588833612778;
-constexpr std::array<double, 17> requested_dt_values = {
-    1.0e-2 / third_decade_factor,      1.0e-2, third_decade_factor * 1.0e-2, two_thirds_decade_factor * 1.0e-2, 1.0e-1, third_decade_factor * 1.0e-1,
-    two_thirds_decade_factor * 1.0e-1, 1.0,    third_decade_factor,	     two_thirds_decade_factor,		1.0e1,	third_decade_factor * 1.0e1,
-    two_thirds_decade_factor * 1.0e1,  1.0e2,  third_decade_factor * 1.0e2,  two_thirds_decade_factor * 1.0e2,	1.0e3};
+// Keep the timestep sweep fixed in units of the inverse gyrofrequency.
+constexpr double gyro_time = 1.0 / omega_L;
+constexpr std::array<double, 17> requested_dt_values = [] {
+	std::array<double, 17> timesteps = {
+	    1.0e-2 / third_decade_factor,      1.0e-2, third_decade_factor * 1.0e-2, two_thirds_decade_factor * 1.0e-2, 1.0e-1, third_decade_factor * 1.0e-1,
+	    two_thirds_decade_factor * 1.0e-1, 1.0,    third_decade_factor,	     two_thirds_decade_factor,		1.0e1,	third_decade_factor * 1.0e1,
+	    two_thirds_decade_factor * 1.0e1,  1.0e2,  third_decade_factor * 1.0e2,  two_thirds_decade_factor * 1.0e2,	1.0e3};
+	for (double &dt : timesteps) {
+		dt *= gyro_time;
+	}
+	return timesteps;
+}();
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
 constexpr int energy_diagnostic_steps = 20;
 constexpr int theory_sample_count = 401;
-constexpr double theory_dt_max = third_decade_factor * 1.0e1;
+constexpr double theory_dt_max = third_decade_factor * 1.0e1 * gyro_time;
 constexpr double stiff_phase_step = std::numbers::pi / 4.0;
 constexpr double stiff_phase_zero_offset = std::numbers::pi / 64.0;
 constexpr double stiff_numerical_phase_step = std::numbers::pi;
-constexpr double stiff_numerical_dense_dt_max = 10.0;
+constexpr double stiff_numerical_dense_dt_max = 10.0 * gyro_time;
 constexpr int stiff_numerical_sparse_phase_stride = 3;
 constexpr double conservative_dt_factor = 1.333521432163324; // 10^(1/8)
 constexpr double plot_floor = std::numeric_limits<double>::epsilon();
@@ -135,6 +143,7 @@ template <> struct Physics_Traits<DustPureGyromotion> {
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::none;
 };
 
 template <>
