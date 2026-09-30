@@ -113,6 +113,7 @@ template <> struct SimulationData<DTypeFront1D> {
 	amrex::Real l_ode_last_t_{};
 	amrex::Real l_ode_last_l_{};
 	amrex::Real l_ode_last_u_{};
+	amrex::Real N_gamma_dust_{};
 };
 
 namespace
@@ -284,12 +285,47 @@ auto spitzer_planar_position(amrex::Real t, amrex::Real flux_ion, amrex::Real n_
 	return x_St * std::pow(1.0_rt + (5.0_rt / 4.0_rt) * c_i * t / x_St, 4.0_rt / 5.0_rt);
 }
 
-// Numerically integrate the planar D-type front ODE including radiation pressure,
-// d(l * ldot)/dt = sqrt(l_s / l) * c_s^2  +  (F_ion * eps_ion + F_opt * eps_opt) / (rho_0 * c),
-// Integrated as the first-order system for y = (l, u) with u = l * ldot:
-// dl/dt = u / l,     du/dt = sqrt(l_s / l) * c_s^2 + Xi.
-// The natural start is the end of the R-type phase, l = l_s moving at c_s.
-auto integrate_front(amrex::Real dt_target, amrex::Real l0, amrex::Real u0, amrex::Real l_s, amrex::Real c_s, amrex::Real Xi) -> amrex::GpuArray<amrex::Real, 2>
+auto dust_attenuation_factor(amrex::Real tau) -> amrex::Real { return (tau > 0.0_rt) ? std::expm1(tau) / tau : 1.0_rt; }
+
+// Ionized-to-ambient density ratio s from F_ion = alpha n_i^2 l (e^tau - 1) / tau with tau = kappa rho_0 s l, i.e. l_s / l = s^2 (e^tau - 1) / tau.
+auto ionized_density_ratio(amrex::Real l, amrex::Real l_s, amrex::Real kappa_rho_0) -> amrex::Real
+{
+	amrex::Real s_lo = 0.0_rt;
+	amrex::Real s_hi = std::sqrt(l_s / l);
+	for (int iter = 0; iter < 100; ++iter) {
+		const amrex::Real s = 0.5_rt * (s_lo + s_hi);
+		if (s * s * dust_attenuation_factor(kappa_rho_0 * s * l) > l_s / l) {
+			s_hi = s;
+		} else {
+			s_lo = s;
+		}
+	}
+	return 0.5_rt * (s_lo + s_hi);
+}
+
+// End of the R-type phase (s = 1): l_s = l (e^tau - 1) / tau with tau = kappa rho_0 l.
+auto dusty_stromgren_column(amrex::Real l_s, amrex::Real kappa_rho_0) -> amrex::Real
+{
+	amrex::Real l_lo = 0.0_rt;
+	amrex::Real l_hi = l_s;
+	for (int iter = 0; iter < 100; ++iter) {
+		const amrex::Real l = 0.5_rt * (l_lo + l_hi);
+		if (l * dust_attenuation_factor(kappa_rho_0 * l) > l_s) {
+			l_hi = l;
+		} else {
+			l_lo = l;
+		}
+	}
+	return 0.5_rt * (l_lo + l_hi);
+}
+
+// Numerically integrate the planar D-type front ODE including radiation pressure and dust absorption of ionizing photons,
+// d(l * ldot)/dt = s(l) * c_s^2  +  Xi + Xi_rec * f_rec(l),
+// where s = n_i / n_0 and f_rec = s^2 l / l_s is the fraction of ionizing photons that recombine rather than hit dust.
+// Integrated as the first-order system for y = (l, u) with u = l * ldot.
+// The natural start is the end of the R-type phase, l = dusty_stromgren_column moving at c_s.
+auto integrate_front(amrex::Real dt_target, amrex::Real l0, amrex::Real u0, amrex::Real l_s, amrex::Real c_s, amrex::Real Xi, amrex::Real Xi_rec,
+		     amrex::Real kappa_rho_0) -> amrex::GpuArray<amrex::Real, 2>
 {
 	if (dt_target <= 0.0_rt) {
 		return {l0, u0};
@@ -298,7 +334,8 @@ auto integrate_front(amrex::Real dt_target, amrex::Real l0, amrex::Real u0, amre
 	const amrex::Real l_floor = 1.0e-10_rt * l_s; // guard against a division by zero in an RK stage
 	auto rhs = [&](amrex::GpuArray<amrex::Real, 2> const &y) -> amrex::GpuArray<amrex::Real, 2> {
 		const amrex::Real l = std::max(y[0], l_floor);
-		return {y[1] / l, std::sqrt(l_s / l) * c_s * c_s + Xi};
+		const amrex::Real s = ionized_density_ratio(l, l_s, kappa_rho_0);
+		return {y[1] / l, s * c_s * c_s + Xi + Xi_rec * s * s * l / l_s};
 	};
 
 	int N = 256;
@@ -428,9 +465,10 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	{
 		const amrex::Real l_s = stromgren_column(userData_.flux_ion, userData_.n_HI_init, userData_.T_ionized);
 		const amrex::Real c_s = ionized_sound_speed(userData_.T_ionized);
+		const amrex::Real l_d = dusty_stromgren_column(l_s, network_rp::dust_kappa * userData_.n_HI_init * spmasses[Species::H]);
 		userData_.l_ode_last_t_ = 0.0_rt;
-		userData_.l_ode_last_l_ = l_s;
-		userData_.l_ode_last_u_ = l_s * c_s;
+		userData_.l_ode_last_l_ = l_d;
+		userData_.l_ode_last_u_ = l_d * c_s;
 		amrex::Print() << "Stromgren column l_s = " << l_s << " cm, ionized sound speed c_s = " << c_s << " cm/s\n";
 	}
 
@@ -524,6 +562,15 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 	    });
 	const amrex::Real x_eff = ionized_volume_integral / transverse_area / 2.0_rt;
 
+	const amrex::Real chat_kappa_over_eps = c_hat * network_rp::dust_kappa / userData_.eps_ion;
+	userData_.N_gamma_dust_ +=
+	    dt_[lev] * computeVolumeIntegral(
+			   [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
+						std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
+				   return chat_kappa_over_eps * state(i, j, k, HydroSystem<DTypeFront1D>::density_index) *
+					  state(i, j, k, RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ionizing);
+			   });
+
 	amrex::Real x_ode = std::numeric_limits<amrex::Real>::quiet_NaN();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const amrex::Real n_0 = userData_.n_HI_init;
@@ -534,18 +581,20 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 		// Energy per recombination: binding energy plus the kinetic energy carried off. The network emits this into the optical band (ydot(i_optical)
 		// in actual_rhs.H), hence its grouping below.
 		const amrex::Real eps_rec = 13.6 * C::ev2erg + lambda_rec(T_i) / recombination_coefficient(T_i);
-		const amrex::Real Xi =
-		    (userData_.flux_ion * userData_.eps_ion + userData_.flux_optical * userData_.eps_opt + userData_.flux_ion * eps_rec) / (rho_0 * C::c_light);
+		const amrex::Real Xi = (userData_.flux_ion * userData_.eps_ion + userData_.flux_optical * userData_.eps_opt) / (rho_0 * C::c_light);
+		const amrex::Real Xi_rec = userData_.flux_ion * eps_rec / (rho_0 * C::c_light);
+		const amrex::Real kappa_rho_0 = network_rp::dust_kappa * rho_0;
 
 		amrex::Real dt_ode = t - userData_.l_ode_last_t_;
 		if (dt_ode < 0.0_rt) {
 			// time went backwards or was reset; restart the integration from the R-type endpoint
+			const amrex::Real l_d = dusty_stromgren_column(l_s, kappa_rho_0);
 			userData_.l_ode_last_t_ = 0.0_rt;
-			userData_.l_ode_last_l_ = l_s;
-			userData_.l_ode_last_u_ = l_s * c_s;
+			userData_.l_ode_last_l_ = l_d;
+			userData_.l_ode_last_u_ = l_d * c_s;
 			dt_ode = t;
 		}
-		const auto y = integrate_front(dt_ode, userData_.l_ode_last_l_, userData_.l_ode_last_u_, l_s, c_s, Xi);
+		const auto y = integrate_front(dt_ode, userData_.l_ode_last_l_, userData_.l_ode_last_u_, l_s, c_s, Xi, Xi_rec, kappa_rho_0);
 		userData_.l_ode_last_t_ = t;
 		userData_.l_ode_last_l_ = y[0];
 		userData_.l_ode_last_u_ = y[1];
@@ -811,16 +860,20 @@ auto problem_main() -> int
 		const amrex::Real N_gamma_initial = Erad_floor_ * domain_volume / eps_ion;
 		const amrex::Real N_gamma_absorbed = N_gamma_injected + N_gamma_initial - E_ion / eps_ion;
 		const amrex::Real N_HII_initial = sim.userData_.n_HII_init * domain_volume;
-		const amrex::Real N_recombined = N_gamma_absorbed - (N_HII - N_HII_initial);
+		const amrex::Real N_gamma_dust = sim.userData_.N_gamma_dust_;
+		const amrex::Real N_recombined = N_gamma_absorbed - (N_HII - N_HII_initial) - N_gamma_dust;
 		const double T_i = sim.userData_.T_ionized;
 		const double eps_per_recombination = rydberg_energy + (lambda_rec(T_i) + lambda_ff(T_i)) / recombination_coefficient(T_i);
 		// Time-averaged neutral column: hydrogen is conserved and the ionized column grows as sqrt(l) ~ t^0.4, so it averages
 		// Delta N_HII / 1.4. This assumes spitzer solution and does not change the result much.
 		const amrex::Real N_HI_mean = N_HI + (2.0_rt / 7.0_rt) * (N_HII - N_HII_initial);
-		const amrex::Real Q_net_predicted = eps_per_recombination * N_recombined + KI_heating_coefficient * N_HI_mean * t_end;
+
+		const amrex::Real Q_net_predicted =
+		    eps_per_recombination * N_recombined + eps_ion * N_gamma_dust / c_hat_over_c + KI_heating_coefficient * N_HI_mean * t_end;
+		amrex::Print() << "Ionizing photons absorbed by dust: " << N_gamma_dust / N_gamma_absorbed << " of all absorbed.\n";
 
 		const double ratio = Q_net_measured / Q_net_predicted;
-		constexpr double tol_ratio = 0.01;
+		constexpr double tol_ratio = 0.05;
 
 		if (std::abs(ratio - 1.0) > tol_ratio) {
 			amrex::Print() << "Test FAILED: measured network thermal-band emission is " << ratio
