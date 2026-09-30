@@ -355,12 +355,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 	sol.converged = (width <= atol) || at_fp_limit();
 
 	// The gas energy at the root can be written two ways that agree up to the residual H: from conservation,
-	// gas0 - (c/chat) sum_g Delta_g, or from the gas equation, gas0 - dt K sqrt(T) (T - T_d). Their round-off differs.
-	// The first cancels the group exchanges, which in a radiation-dominated cell are 1e5 times the gas energy; the
-	// second carries only the collisional transfer, but that transfer is evaluated at the conservation-form temperature,
-	// whose error it amplifies by dt K sqrt(T) / c_V (up to 1e8 when the dust is locked to the gas). Take the form with
-	// the smaller estimated error. At K = 0 this leaves the gas energy exactly gas0, as the physics says: the gas
-	// exchanges nothing with the dust, and mirror cells stay mirror images (DTypeFront1D's symmetry check).
+	// gas0 - (c/chat) sum_g Delta_g, or from the gas equation, E = gas0 - dt K sqrt(T) (T - T_d). Their round-off differs.
+	// The first cancels the group exchanges, which in a radiation-dominated cell can be 1e17 times the gas energy. The
+	// second carries only the collisional transfer, whose response to an error in the gas temperature is 1.5 dt K sqrt(T)
+	// / c_V; that is small where the coupling is weak and up to 1e8 where the dust locks the gas. Take the form with the
+	// smaller estimated error. At K = 0 this leaves the gas energy exactly gas0, as the physics says: the gas exchanges
+	// nothing with the dust, and mirror cells stay mirror images (DTypeFront1D's symmetry check).
 	{
 		double exchange_abs = 0.0;
 		for (int g = 0; g < nGroups_; ++g) {
@@ -371,8 +371,23 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 		const double err_cons = eps_mach * (std::abs(gas0) + cscale * exchange_abs);
 		const double err_gas = eps_mach * std::abs(gas0) + 1.5 * cell.dtK * std::sqrt(T_c) * (err_cons / c_v);
 		if (err_gas < err_cons) {
-			sol.Egas = gas0 - cell.dtK * std::sqrt(T_c) * (T_c - sol.T_d);
-			sol.T_gas = TgasOf(cell, sol.Egas);
+			// Solve the gas equation for its own temperature, by fixed-point iteration from gas0. Evaluating the transfer
+			// at the conservation-form temperature T_c instead would carry the round-off of that form into the heating:
+			// in a cell 5.5e17 times radiation-dominated T_c is 8% low, and the heating 4% low. The coupling is weak here
+			// (that is why this form was chosen), so the iteration contracts fast; if it does not settle, the
+			// conservation form is kept.
+			double E = gas0;
+			bool settled = false;
+			for (int k = 0; (k < 8) && !settled; ++k) {
+				const double T = TgasOf(cell, E);
+				const double E_next = gas0 - cell.dtK * std::sqrt(T) * (T - sol.T_d);
+				settled = std::abs(E_next - E) <= 4 * eps_mach * std::abs(E_next);
+				E = E_next;
+			}
+			if (settled) {
+				sol.Egas = E;
+				sol.T_gas = TgasOf(cell, E);
+			}
 		}
 	}
 	sol.nevals = nevals;

@@ -50,6 +50,8 @@ struct Sweep4 {};
 struct Sweep1 {};
 // CGS, IR and optical groups of a dusty D-type front: the hard dust sweep.
 struct SweepDType {};
+// CGS, one grey group: a weakly coupled, radiation-dominated two-temperature cell.
+struct GreyCGS {};
 
 // The group opacities of SweepDType (IR, optical) in cm^2 g^-1, set on the host before each kernel launch.
 AMREX_GPU_MANAGED double dtype_kappa_ir = 1.0e-2;		// NOLINT
@@ -153,6 +155,29 @@ RadSystem<SweepDType>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doub
 	exponents_and_values[1][0] = dtype_kappa_ir;
 	exponents_and_values[1][1] = dtype_kappa_opt;
 	return exponents_and_values;
+}
+
+template <> struct quokka::EOS_Traits<GreyCGS> {
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double gamma = 5. / 3.;
+};
+template <> struct Physics_Traits<GreyCGS> : DefaultPhysicsTraits {
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_radiation_enabled = true;
+	static constexpr int nGroups = 1;
+	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+};
+template <> struct RadSystem_Traits<GreyCGS> {
+	static constexpr double c_hat_over_c = 1.0e-3;
+	static constexpr double Erad_floor = 1.0e-40;
+	static constexpr int beta_order = 1;
+	static constexpr double energy_unit = C::ev2erg;
+	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
+};
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<GreyCGS>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real { return 1.0e3; }
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<GreyCGS>::ComputeEnergyMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+{
+	return 1.0e3;
 }
 
 namespace
@@ -629,6 +654,46 @@ auto TestDTypeDustSweep() -> int
 	return (n_failed > 0) ? 1 : 0;
 }
 
+// A weakly coupled, radiation-dominated cell (a reviewer's counterexample): n = 0.03 cm^-3 of 10 K gas in 1459 K
+// radiation, kappa = 1e3 cm^2 g^-1, dt = 1e12 s, chat = c / 1000 and the default gas-dust coefficient. The radiation holds
+// 5.5e17 times the gas energy, so energy conservation cannot resolve the gas energy: at the returned T_d it gives
+// 9.2 K. The gas equation can, because the collisional heating is only 1.7e-5 of the gas energy, and the heating must
+// be evaluated at the gas's own temperature. The reference solves c_V (T - T0) = dt K sqrt(T) (T_d - T) at the returned
+// T_d by Newton's method on the host; the exact root is 10.00016594 K.
+auto TestWeakCouplingCell() -> int
+{
+	using P = GreyCGS;
+	const double n = 0.03;
+	const double T0 = 10.0;
+	CouplingCell<P> cell{};
+	cell.rho = n * C::m_u;
+	cell.dt = 1.0e12;
+	cell.tau_scale = cell.dt * RadSystem<P>::c_hat_;
+	cell.dtK = cell.dt * 2.5e-34 * n * n;
+	cell.Tfloor = 1.0e-3;
+	cell.Emin = quokka::EOS<P>::ComputeEintFromTgas(cell.rho, cell.Tfloor, cell.massScalars);
+	cell.Egas0 = quokka::EOS<P>::ComputeEintFromTgas(cell.rho, T0, cell.massScalars);
+	cell.Erad0[0] = C::a_rad * std::pow(1459.0, 4);
+	cell.Src.fillin(0.0);
+	cell.work.fillin(0.0);
+	const double c_v = cell.Egas0 / T0; // ideal gas
+	for (const double tol : {1.0e-9, 1.0e-14}) {
+		const auto sol = solve_cells<P, true>({cell}, tol);
+		double T = T0;
+		for (int k = 0; k < 50; ++k) {
+			const double F = c_v * (T - T0) - cell.dtK * std::sqrt(T) * (sol[0].T_d - T);
+			const double dF = c_v - cell.dtK * (0.5 * (sol[0].T_d - T) / std::sqrt(T) - std::sqrt(T));
+			T -= F / dF;
+		}
+		const double increment_error = std::abs((sol[0].T_gas - T0) / (T - T0) - 1.0);
+		std::cout << std::format("weakly coupled cell (tol {:.0e}): T_gas {:.10f} K (reference {:.10f} K), T_d {:.6f} K, increment error {:.2e}\n", tol,
+					 sol[0].T_gas, T, sol[0].T_d, increment_error);
+		check(sol[0].converged && std::abs(sol[0].T_gas / T - 1.0) <= 1.0e-14 && increment_error <= 1.0e-8 && std::abs(T - 10.00016594) <= 1.0e-8,
+		      std::format("weakly coupled, radiation-dominated cell: gas heating exact (tol {:.0e})", tol));
+	}
+	return (n_failed > 0) ? 1 : 0;
+}
+
 // The group energies of an optically thick group with negligible emission: E_g = rad0 / (1 + tau), which rad0 + Delta_g
 // would lose to cancellation (a relative error of 2e-5 at tau = 1e12, and zero instead of 1e-16 at tau = 1e16).
 auto TestThickGroupEnergy() -> int
@@ -667,7 +732,8 @@ auto problem_main() -> int
 	const int dust_status = TestDustSweep();
 	const int dtype_status = TestDTypeDustSweep();
 	const int thick_status = TestThickGroupEnergy();
-	const int status = (gas_status == 0 && dust_status == 0 && dtype_status == 0 && thick_status == 0) ? 0 : 1;
+	const int weak_status = TestWeakCouplingCell();
+	const int status = (gas_status == 0 && dust_status == 0 && dtype_status == 0 && thick_status == 0 && weak_status == 0) ? 0 : 1;
 	std::cout << (status == 0 ? "RadCouplingUnitTests: all tests passed.\n" : "RadCouplingUnitTests: FAILED.\n");
 	return (n_failed > 0) ? 1 : 0;
 }
