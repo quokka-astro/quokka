@@ -118,93 +118,53 @@ template <> struct SimulationData<DTypeFront1D> {
 namespace
 {
 
-// Ionization-fraction-weighted effective ionized length on the +x side of the source, as a distance from the
-// source: x_eff = integral_{x_source}^{L} (1 - x_HI) dx, averaged over the transverse (y, z) columns.
-auto compute_effective_length(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real x_source) -> amrex::Real
+auto make_level_mask(amrex::Vector<amrex::MultiFab> const &state_cc, amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio,
+		     int lev, int finest_level) -> amrex::iMultiFab
 {
-	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
-	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
-	auto const state = state_mf.const_arrays();
-	const amrex::Real cell_length = dx[0];
-	const amrex::Real x_lo = prob_lo[0];
-
-	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-		const amrex::Real x = x_lo + (static_cast<amrex::Real>(i) + 0.5_rt) * cell_length;
-		if (x <= x_source) {
-			return 0.0_rt;
-		}
-		const amrex::Real n_HI = state[box_no](i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
-		const amrex::Real n_HII =
-		    state[box_no](i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
-		const amrex::Real denom = n_HI + n_HII;
-		if (denom <= 0.0_rt) {
-			return 0.0_rt;
-		}
-		const amrex::Real x_HI = n_HI / denom;
-		return cell_length * (1.0_rt - x_HI);
-	});
-
-	auto const &hv = reduce_data.value(reduce_op);
-	amrex::Real total_ionized_length = amrex::get<0>(hv);
-	amrex::ParallelAllReduce::Sum(total_ionized_length, amrex::ParallelContext::CommunicatorSub());
-
-	const amrex::Box &domain = state_mf.boxArray().minimalBox();
-	const amrex::GpuArray<int, 3> len3d = domain.length3d();
-	const amrex::Long n_transverse = static_cast<amrex::Long>(len3d[1]) * static_cast<amrex::Long>(len3d[2]);
-	return total_ionized_length / static_cast<amrex::Real>(n_transverse);
+	if (lev == finest_level) {
+		amrex::iMultiFab mask(state_cc[lev].boxArray(), state_cc[lev].DistributionMap(), 1, 0);
+		mask.setVal(1);
+		return mask;
+	}
+	return amrex::makeFineMask(state_cc[lev], state_cc[lev + 1], amrex::IntVect(0), ref_ratio[lev], geom[lev].periodicity(), 1, 0);
 }
 
 // Position of the dense shocked shell on the +x side of the source, returned as a distance from the source.
-auto compute_shell_position(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real x_source) -> amrex::Real
+auto compute_shell_position(amrex::Vector<amrex::MultiFab> const &state_cc, amrex::Vector<amrex::Geometry> const &geom,
+			    amrex::Vector<amrex::IntVect> const &ref_ratio, int finest_level, amrex::Real x_source) -> amrex::Real
 {
-	const amrex::Real cell_length = dx[0];
-	const amrex::Real x_lo = prob_lo[0];
+	using ValLoc = amrex::ValLocPair<amrex::Real, amrex::Real>; // .value = density, .index = x position
 
-	// Pass 1: the largest gas density outward of the source.
-	amrex::Real rho_max = 0.0;
-	{
-		amrex::ReduceOps<amrex::ReduceOpMax> reduce_op;
-		amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+	ValLoc shell = ValLoc::lowest();
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		amrex::MultiFab const &state_mf = state_cc[lev];
+		const amrex::iMultiFab mask = make_level_mask(state_cc, geom, ref_ratio, lev, finest_level);
+		const amrex::Real cell_length = geom[lev].CellSizeArray()[0];
+		const amrex::Real x_lo = geom[lev].ProbLoArray()[0];
+
 		auto const state = state_mf.const_arrays();
+		auto const mask_arr = mask.const_arrays();
 
-		reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-			const amrex::Real x = x_lo + (static_cast<amrex::Real>(i) + 0.5_rt) * cell_length;
-			if (x <= x_source) {
-				return 0.0_rt;
-			}
-			return state[box_no](i, j, k, HydroSystem<DTypeFront1D>::density_index);
-		});
+		const ValLoc level_shell =
+		    amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<ValLoc>{}, state_mf, amrex::IntVect(0),
+				     [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> ValLoc {
+					     if (mask_arr[box_no](i, j, k) == 0) {
+						     return ValLoc::lowest();
+					     }
+					     const amrex::Real x = x_lo + (static_cast<amrex::Real>(i) + 0.5_rt) * cell_length;
+					     if (x <= x_source) {
+						     return ValLoc::lowest();
+					     }
+					     return ValLoc{.value = state[box_no](i, j, k, HydroSystem<DTypeFront1D>::density_index), .index = x};
+				     });
 
-		auto const &hv = reduce_data.value(reduce_op);
-		rho_max = amrex::get<0>(hv);
-		amrex::ParallelAllReduce::Max(rho_max, amrex::ParallelContext::CommunicatorSub());
+		if (level_shell.value > shell.value) {
+			shell = level_shell;
+		}
 	}
+	amrex::ParallelAllReduce::Max(shell, amrex::ParallelContext::CommunicatorSub());
 
-	// Pass 2: the innermost cell attaining that density.
-	amrex::Real x_shell = 0.0;
-	{
-		amrex::ReduceOps<amrex::ReduceOpMin> reduce_op;
-		amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
-		auto const state = state_mf.const_arrays();
-		const amrex::Real threshold = rho_max;
-		const amrex::Real x_none = std::numeric_limits<amrex::Real>::max();
-
-		reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-			const amrex::Real x = x_lo + (static_cast<amrex::Real>(i) + 0.5_rt) * cell_length;
-			if (x <= x_source || state[box_no](i, j, k, HydroSystem<DTypeFront1D>::density_index) < threshold) {
-				return x_none;
-			}
-			return x;
-		});
-
-		auto const &hv = reduce_data.value(reduce_op);
-		x_shell = amrex::get<0>(hv);
-		amrex::ParallelAllReduce::Min(x_shell, amrex::ParallelContext::CommunicatorSub());
-	}
-
-	return x_shell - x_source;
+	return shell.index - x_source;
 }
 
 auto lambda_rec(double T) -> double
@@ -245,10 +205,12 @@ auto lambda_ff(double T) -> double { return 1.3 * 1.427e-27 * std::sqrt(T) + get
 
 auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * std::sqrt(T) * std::exp(-92.0 / T)); }
 
+auto recombination_coefficient(amrex::Real T_i) -> amrex::Real { return 2.63e-13 * std::pow(T_i / 1.0e4, -0.7); }
+
 // Collisional ionization is omitted
 auto net_energy_ionized(double T, double n_e, double eps_ion) -> double
 {
-	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
+	const double alpha_B = recombination_coefficient(T);
 	const double epsilon = std::max(eps_ion - 13.6 * C::ev2erg, 0.0);
 	// alpha_B * n_e^2 = n_gamma
 	const double photoheating = alpha_B * n_e * n_e * epsilon;
@@ -309,8 +271,6 @@ auto compute_equilibrium_temperature_ionized(double n_e, double eps_ion) -> doub
 	}
 	return 0.5 * (T_lo + T_hi);
 }
-
-auto recombination_coefficient(amrex::Real T_i) -> amrex::Real { return 2.6e-13 * std::pow(T_i / 1.0e4, -0.7); }
 
 auto ionized_sound_speed(amrex::Real T_i) -> amrex::Real { return std::sqrt(C::k_B * T_i / (0.5_rt * C::m_p)); }
 
@@ -537,16 +497,32 @@ template <> void QuokkaSimulation<DTypeFront1D>::setInitialConditionsOnGrid(quok
 template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 {
 	const int lev = 0;
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
 	const amrex::Real x_source = 0.5 * (prob_lo[0] + prob_hi[0]);
 	const amrex::Real t = tNew_[lev];
 	userData_.t_vec_.push_back(t);
 
-	const amrex::Real x_shell = compute_shell_position(state_new_cc_[lev], dx, prob_lo, x_source);
+	const amrex::Real x_shell = compute_shell_position(state_new_cc_, geom, ref_ratio, finest_level, x_source);
 	const amrex::Real x_spitzer = spitzer_planar_position(t, userData_.flux_ion, userData_.n_HI_init, userData_.T_ionized);
-	const amrex::Real x_eff = compute_effective_length(state_new_cc_[lev], dx, prob_lo, x_source);
+
+	// Ionization-fraction-weighted effective ionized length on the +x side of the source, as a distance from the
+	// source: x_eff = integral_{x_source}^{L} (1 - x_HI) dx, averaged over the transverse (y, z) extent.
+	const amrex::Real transverse_area = AMREX_D_TERM(1.0_rt, *(prob_hi[1] - prob_lo[1]), *(prob_hi[2] - prob_lo[2]));
+	const amrex::Real ionized_volume_integral = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
+				 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
+		    const amrex::Real n_HI = state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+		    const amrex::Real n_HII =
+			state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+		    const amrex::Real denom = n_HI + n_HII;
+		    if (denom <= 0.0_rt) {
+			    return 0.0_rt;
+		    }
+		    const amrex::Real x_HI = n_HI / denom;
+		    return 1.0_rt - x_HI;
+	    });
+	const amrex::Real x_eff = ionized_volume_integral / transverse_area / 2.0_rt;
 
 	amrex::Real x_ode = std::numeric_limits<amrex::Real>::quiet_NaN();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -723,10 +699,7 @@ auto problem_main() -> int
 	}
 
 	// Check 2: the D-type front radius against the numerically integrated thin-shell solution that carries
-	// both the ionized-gas pressure and the radiation pressure. The offset between the two is a systematic,
-	// largely resolution-independent fraction of the front radius, so the tolerance is relative rather than a
-	// fixed cell count. Either metric matching is sufficient: the shell position and the effective ionized
-	// length measure the same front from different sides of its finite thickness.
+	// both the ionized-gas pressure and the radiation pressure.
 	{
 		const double x_front = sim.userData_.xeff_vec_.back();
 		const double x_shell = sim.userData_.xshell_vec_.back();
@@ -771,6 +744,91 @@ auto problem_main() -> int
 						  "solution within tolerance.\n";
 				status = 1;
 			}
+		}
+	}
+
+	// Check 3: Most optical radiation should be reprocessed into the IR band since the optical opacity >> IR opacity.
+	{
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
+		const amrex::Real transverse_area = AMREX_D_TERM(1.0_rt, *(prob_hi[1] - prob_lo[1]), *(prob_hi[2] - prob_lo[2]));
+
+		auto state_ptrs = amrex::GetVecOfConstPtrs(sim.getNewMF_cc());
+		state_ptrs.resize(sim.finestLevel() + 1);
+		const amrex::Real E_ir = amrex::volumeWeightedSum(
+		    state_ptrs, RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ir, sim.Geom(), sim.refRatio());
+
+		const double t_end = sim.tNew_[0];
+		const amrex::Real L_opt_injected =
+		    2.0_rt * sim.userData_.flux_optical * sim.userData_.eps_opt * transverse_area * RadSystem_Traits<DTypeFront1D>::c_hat_over_c;
+		const amrex::Real E_opt_injected = L_opt_injected * t_end;
+
+		const double ir_fraction = E_ir / E_opt_injected;
+		constexpr double min_ir_fraction = 0.90;
+
+		amrex::Print() << "Injected optical energy (L_opt * t_end): " << E_opt_injected << " erg\n";
+		amrex::Print() << "IR-band radiation energy (final):        " << E_ir << " erg (" << 100.0 * ir_fraction << "% of injected optical)\n";
+
+		if (ir_fraction < min_ir_fraction) {
+			amrex::Print() << "Test FAILED: only " << 100.0 * ir_fraction
+				       << "% of the injected optical energy is present in the IR band; "
+					  "expected at least "
+				       << 100.0 * min_ir_fraction << "%.\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: " << 100.0 * ir_fraction << "% of the injected optical energy is present in the sourceless IR band.\n";
+		}
+	}
+
+	// Check 4: the network's thermal-band emission.
+	{
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
+		const amrex::Real transverse_area = AMREX_D_TERM(1.0_rt, *(prob_hi[1] - prob_lo[1]), *(prob_hi[2] - prob_lo[2]));
+		const amrex::Real domain_volume = 2.0_rt * half_Lx * transverse_area;
+
+		auto state_ptrs = amrex::GetVecOfConstPtrs(sim.getNewMF_cc());
+		state_ptrs.resize(sim.finestLevel() + 1);
+		auto volume_integral = [&](int comp) -> amrex::Real { return amrex::volumeWeightedSum(state_ptrs, comp, sim.Geom(), sim.refRatio()); };
+
+		const amrex::Real E_ir = volume_integral(RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ir);
+		const amrex::Real E_opt = volume_integral(RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_optical);
+		const amrex::Real E_ion = volume_integral(RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ionizing);
+		const amrex::Real N_HII = volume_integral(HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+		const amrex::Real N_HI = volume_integral(HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+
+		const double t_end = sim.tNew_[0];
+		const double c_hat_over_c = RadSystem_Traits<DTypeFront1D>::c_hat_over_c;
+		const double eps_ion = sim.userData_.eps_ion;
+		const double rydberg_energy = 13.6 * C::ev2erg;
+		const double KI_heating_coefficient = 2.0e-26;
+
+		const amrex::Real E_opt_injected = 2.0_rt * sim.userData_.flux_optical * sim.userData_.eps_opt * transverse_area * c_hat_over_c * t_end;
+		const amrex::Real E_thermal_floor = 2.0_rt * Erad_floor_ * domain_volume;
+		const amrex::Real Q_net_measured = (E_ir + E_opt - E_thermal_floor - E_opt_injected) / c_hat_over_c;
+
+		const amrex::Real N_gamma_injected = 2.0_rt * sim.userData_.flux_ion * transverse_area * t_end;
+		const amrex::Real N_gamma_initial = Erad_floor_ * domain_volume / eps_ion;
+		const amrex::Real N_gamma_absorbed = N_gamma_injected + N_gamma_initial - E_ion / eps_ion;
+		const amrex::Real N_HII_initial = sim.userData_.n_HII_init * domain_volume;
+		const amrex::Real N_recombined = N_gamma_absorbed - (N_HII - N_HII_initial);
+		const double T_i = sim.userData_.T_ionized;
+		const double eps_per_recombination = rydberg_energy + (lambda_rec(T_i) + lambda_ff(T_i)) / recombination_coefficient(T_i);
+		// Time-averaged neutral column: hydrogen is conserved and the ionized column grows as sqrt(l) ~ t^0.4, so it averages
+		// Delta N_HII / 1.4. This assumes spitzer solution and does not change the result much.
+		const amrex::Real N_HI_mean = N_HI + (2.0_rt / 7.0_rt) * (N_HII - N_HII_initial);
+		const amrex::Real Q_net_predicted = eps_per_recombination * N_recombined + KI_heating_coefficient * N_HI_mean * t_end;
+
+		const double ratio = Q_net_measured / Q_net_predicted;
+		constexpr double tol_ratio = 0.01;
+
+		if (std::abs(ratio - 1.0) > tol_ratio) {
+			amrex::Print() << "Test FAILED: measured network thermal-band emission is " << ratio
+				       << " times the prediction (tolerance: " << 100.0 * tol_ratio << "%).\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: measured network thermal-band emission matches the prediction within " << 100.0 * tol_ratio << "% ("
+				       << 100.0 * (ratio - 1.0) << "%).\n";
 		}
 	}
 
