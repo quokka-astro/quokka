@@ -814,6 +814,9 @@ auto problem_main() -> int
 
 		const double ir_fraction = E_ir / E_opt_injected;
 		constexpr double min_ir_fraction = 0.90;
+		// Besides reprocessed optical, the IR band can only gain what the network and dust re-emit.
+		const amrex::Real E_ion_injected = 2.0_rt * sim.userData_.flux_ion * sim.userData_.eps_ion * transverse_area * t_end;
+		const double max_ir_fraction = 1.0 + RadSystem_Traits<DTypeFront1D>::c_hat_over_c * E_ion_injected / E_opt_injected;
 
 		amrex::Print() << "Injected optical energy (L_opt * t_end): " << E_opt_injected << " erg\n";
 		amrex::Print() << "IR-band radiation energy (final):        " << E_ir << " erg (" << 100.0 * ir_fraction << "% of injected optical)\n";
@@ -823,6 +826,11 @@ auto problem_main() -> int
 				       << "% of the injected optical energy is present in the IR band; "
 					  "expected at least "
 				       << 100.0 * min_ir_fraction << "%.\n";
+			status = 1;
+		} else if (ir_fraction > max_ir_fraction) {
+			amrex::Print() << "Test FAILED: " << 100.0 * ir_fraction
+				       << "% of the injected optical energy is present in the IR band; the injected optical + ionizing energy allows at most "
+				       << 100.0 * max_ir_fraction << "%.\n";
 			status = 1;
 		} else {
 			amrex::Print() << "Test passed: " << 100.0 * ir_fraction << "% of the injected optical energy is present in the sourceless IR band.\n";
@@ -868,12 +876,11 @@ auto problem_main() -> int
 		// Delta N_HII / 1.4. This assumes spitzer solution and does not change the result much.
 		const amrex::Real N_HI_mean = N_HI + (2.0_rt / 7.0_rt) * (N_HII - N_HII_initial);
 
-		const amrex::Real Q_net_predicted =
-		    eps_per_recombination * N_recombined + eps_ion * N_gamma_dust / c_hat_over_c + KI_heating_coefficient * N_HI_mean * t_end;
+		const amrex::Real Q_net_predicted = eps_per_recombination * N_recombined + eps_ion * N_gamma_dust + KI_heating_coefficient * N_HI_mean * t_end;
 		amrex::Print() << "Ionizing photons absorbed by dust: " << N_gamma_dust / N_gamma_absorbed << " of all absorbed.\n";
 
 		const double ratio = Q_net_measured / Q_net_predicted;
-		constexpr double tol_ratio = 0.05;
+		constexpr double tol_ratio = 0.01;
 
 		if (std::abs(ratio - 1.0) > tol_ratio) {
 			amrex::Print() << "Test FAILED: measured network thermal-band emission is " << ratio

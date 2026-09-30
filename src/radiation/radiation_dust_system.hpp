@@ -39,7 +39,6 @@ RadSystem<problem_t>::ComputeJacobianForGasAndDust(double T_gas, double T_d, dou
 	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, num_den) * dt;
 	const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
 
-	// Q_dust is already c/c_hat scaled.
 	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - CR_heating - Q_dust;
 	result.Fg = Erad_diff - (Rvec + Src);
 	if constexpr (add_line_cooling_to_radiation_in_jac) {
@@ -97,8 +96,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 	constexpr double c_hat_over_c = RadSystem_Traits<problem_t>::c_hat_over_c;
 	JacobianResult<problem_t> result;
 
-	// lambda_gd_time_dt and Rvec are c_hat/c scaled. So, we are solving sum(R_g) - lambda_gd_time_dt - c_hat / c * Q_dust = 0, because Q_dust is already c
-	// / c_hat scaled. We could have equivalently moved the c_hat / c factor to the other terms.
+	// lambda_gd_time_dt and Rvec are c_hat/c scaled. So, we are solving
+	// sum(R_g) - lambda_gd_time_dt - c_hat / c * Q_dust = 0. We could have equivalently moved the c_hat / c factor to the other terms.
 	result.F0 = -lambda_gd_time_dt + sum(Rvec) - c_hat_over_c * Q_dust;
 	result.Fg = Erad_diff - (Rvec + Src);
 	result.Fg_abs_sum = 0.0;
@@ -153,7 +152,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, num_den) * dt;
 	const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
 
-	// Q_dust is already c/c_hat scaled.
 	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - PE_heating_energy_derivative * Erad[nGroups_ - 1] - CR_heating - Q_dust;
 	result.Fg = Erad - Erad0 - (Rvec + Src);
 	if constexpr (add_line_cooling_to_radiation_in_jac) {

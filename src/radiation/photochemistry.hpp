@@ -242,7 +242,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			static_assert(RadSystem<problem_t>::dust_chemical_band_absorption_,
 				      "DUST_CHEMICAL_BAND_ABSORPTION is defined but ISM_Traits::dust_chemical_band_absorption is false: "
 				      "the dust-absorbed photon energy would be silently dropped.");
-			dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / (RadSystem_Traits<problem_t>::c_hat_over_c * dt);
+			dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / dt;
 #endif
 
 			// Quokka uses rho*eint
