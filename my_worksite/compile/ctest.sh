@@ -1,5 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=ctest
+#SBATCH --mem=5G
 #SBATCH --cpus-per-task=48
 #SBATCH --time=24:30:00
 #SBATCH -o /data/mfulghieri/ufficial_quokka/outputs/compilation/ctest.out
@@ -56,12 +57,13 @@ echo "Total tasks:            $SLURM_NTASKS"
 echo "Assigned nodes:         $SLURM_JOB_NODELIST"
 env | grep -E "SLURM|OMPI|MPI"
 
-
-# Set OpenMP threads per test process to leverage Slurm allocated CPU cores
-export OMP_NUM_THREADS=6
+# To use all the cpus asked to slurm
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OMP_THREAD_LIMIT=$SLURM_CPUS_PER_TASK
 
 # Run 8 test jobs in parallel, each using 6 OpenMP threads (8 x 6 = 48 cores)
 # This prevents filesystem race conditions on shared plotfile/checkpoint directories (plt0000000, last_chk)
-ctest -j 8 --output-on-failure "$@"
+ctest -j 8 --output-on-failure  --timeout 3600 "$@"
 
 

@@ -1390,12 +1390,22 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		}
 	};
 
+	// cosmology: Strang splitting for a_half and consequently hydro Hubble drag and adiabatic cooling
+	auto const applyCosmology = [&] () {
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			amrex::Real a_end = quokka::cosmology::applyCosmologyHalfStep<problem_t>(state, a_now_, dt, cosmology_params_);
+			a_now_ = a_end;
+			// N.B.: a_end as intermediate for not touching the member a_now_, since 
+			// AMR still to be implemented for cosmology!
+		}
+	};
+
 	auto const applyUserSources = [&]() {
 		// compute user-specified sources
 		addStrangSplitSources(state, lev, time, dt);
 	};
 
-	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyConduction, applyUserSources);
+	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyConduction, applyCosmology, applyUserSources);
 
 	return (burn_success && cool_success);
 }
