@@ -1835,11 +1835,31 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 	auto rhs = rhs_mf.arrays();
 	const Real G = Gconst_;
 
-	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	// gravity rhs fork: cosmological or not cosmological Poisson equation
+	// OBS. NVCC 13 limitation: any variable whose *first use* in a __device__ lambda falls inside
+	// an `if constexpr` block triggers error 20178 / "first-capture in constexpr-if context".
+	// The only safe pattern is to put `if constexpr` OUTSIDE the lambda, giving each branch
+	// its own dedicated kernel. At most one branch is compiled per instantiation (zero cost).
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		// Comoving Poisson equation: nabla^2 phi = 4*pi*G * (rho_c - rho_bar_c) / a
+		// rho_c is the comoving density stored in the state, rho_bar_c is the mean.
+		const amrex::Real a_cosmo = a_now_;
+		const amrex::Real rho_mean_cosmo = comoving_mean_density_;
+		amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real const rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			rhs[bx](i, j, k) += 4.0 * M_PI * G * (rho - rho_mean_cosmo) / a_cosmo;
+		});
+	}
+	else {
+		amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// *add* density to rhs_mf
 		// (N.B. particles **will not work** if you overwrite the density here!)
 		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
-	});
+		});
+	}
+	// For periodic BCs: when cosmology is enabled, RHS = 4*pi*G*(rho_c - rho_bar_c)/a
+	// sums to zero by construction. When cosmology is disabled, MLMG handles the
+	// null-space projection internally. Either way, we do not subtract the mean here.
 	amrex::Gpu::streamSynchronizeAll();
 }
 
@@ -1851,30 +1871,52 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 	auto const &phi = phi_mf.const_arrays();
 	auto state = state_new_cc_[lev].arrays();
 
-	amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// add operator-split gravitational acceleration
-		const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
-		amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-		amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-		amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-		const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
 
-		// g = -grad \phi
-		amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
-		amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
-		amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
-
-		px += dt * rho * gx;
-		py += dt * rho * gy;
-		pz += dt * rho * gz;
-		const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
-		const amrex::Real dKE = KE_new - KE_old;
-
-		state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
-		state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
-		state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
-		state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
-	});
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		// In comoving coordinates the peculiar acceleration is g_pec = -nabla_x phi / a
+		const amrex::Real a_cosmo = a_now_;
+		amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
+			// g = -grad phi / a  (comoving peculiar acceleration)
+			const amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / (dx[0] * a_cosmo);
+			const amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / (dx[1] * a_cosmo);
+			const amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / (dx[2] * a_cosmo);
+			px += dt * rho * gx;
+			py += dt * rho * gy;
+			pz += dt * rho * gz;
+			const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
+			const amrex::Real dKE = KE_new - KE_old;
+			state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
+			state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
+			state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
+			state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
+		});
+	} else {
+		amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
+			// g = -grad phi  (standard Newtonian acceleration)
+			const amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
+			const amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
+			const amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
+			px += dt * rho * gx;
+			py += dt * rho * gy;
+			pz += dt * rho * gz;
+			const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
+			const amrex::Real dKE = KE_new - KE_old;
+			state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
+			state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
+			state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
+			state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
+		});
+	}
 #else
 	amrex::ignore_unused(phi_mf, lev, dt);
 #endif // (AMREX_SPACEDIM == 3)
