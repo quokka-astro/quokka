@@ -332,7 +332,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void particleCosmologyPostKick(amrex::Real /* dt*/) {}
 
 
-
 #endif // AMREX_SPACEDIM == 3
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
