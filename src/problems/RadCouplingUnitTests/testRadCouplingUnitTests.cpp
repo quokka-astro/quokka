@@ -223,8 +223,8 @@ template <typename P> auto conserved_total(CouplingCell<P> const &cell) -> doubl
 
 /// Solve every cell of a batch inside one kernel, with dust (SolveDustCoupling) or without (SolveGasCoupling).
 template <typename P, bool with_dust> auto solve_cells(std::vector<CouplingCell<P>> const &cells, double tol) -> std::vector<CouplingSolution<P>>
-{l
-	const int n = static_cast<int>(cels.size());
+{
+	const int n = static_cast<int>(cells.size());
 	amrex::Gpu::DeviceVector<CouplingCell<P>> d_cells(n);
 	amrex::Gpu::DeviceVector<CouplingSolution<P>> d_sols(n);
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, cells.begin(), cells.end(), d_cells.begin());
