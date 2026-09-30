@@ -15,8 +15,7 @@
 #include <string_view>
 #include <vector>
 
-struct DustGyromotionDiagnostics {
-};
+struct DustGyromotionDiagnostics {};
 
 using DustPureGyromotion = DustGyromotionDiagnostics;
 

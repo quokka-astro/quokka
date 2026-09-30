@@ -36,14 +36,11 @@ struct ShockProfile {
 
 template <typename problem_t> struct ShockCaseParams;
 
-struct DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004 {
-};
+struct DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004 {};
 
-struct DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004 {
-};
+struct DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004 {};
 
-struct DustLorentzShockMoseleyEps1em4OmegaTs12Ts010 {
-};
+struct DustLorentzShockMoseleyEps1em4OmegaTs12Ts010 {};
 
 template <> struct ShockCaseParams<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004> {
 	static constexpr double sound_speed = 1.0;
@@ -361,11 +358,11 @@ void writeShockProfileCsv(const ShockProfile &profile, const std::vector<double>
 	for (size_t i = 0; i < profile.x_.size(); ++i) {
 		const double w_y = profile.v_dy_[i] - profile.v_gy_[i];
 		const double omega_ts_guiding = use_local_guiding_center_gyrofrequency
-						   ? profile.dimensionless_charge_to_mass_ratio_ * profile.bz_[i] * profile.stopping_time_
-						   : profile.target_magnetization_;
+						    ? profile.dimensionless_charge_to_mass_ratio_ * profile.bz_[i] * profile.stopping_time_
+						    : profile.target_magnetization_;
 		file << profile.x_[i] << "," << profile.rho_g_[i] << "," << profile.v_gx_[i] << "," << profile.v_gy_[i] << "," << profile.bz_[i] << ","
-		     << omega_ts_guiding << "," << profile.rho_d_[i] / profile.epsilon_ << "," << profile.v_dx_[i] << ","
-		     << profile.v_dy_[i] << "," << w_y << "," << guiding_vx[i] << "\n";
+		     << omega_ts_guiding << "," << profile.rho_d_[i] / profile.epsilon_ << "," << profile.v_dx_[i] << "," << profile.v_dy_[i] << "," << w_y
+		     << "," << guiding_vx[i] << "\n";
 	}
 }
 
@@ -397,9 +394,10 @@ auto runShockAnalogue(bool write_csv) -> int
 	amrex::Print() << std::format("  vy_max_eps1em1_omega3p0_ts0p04 = {:.6e} (pass if > {:.6e})\n", vy_max_eps1em1_omega3p0_ts0p04, vy_min_case2);
 	amrex::Print() << std::format("  vy_max_eps1em4_omega12_ts0p10 = {:.6e} (pass if > {:.6e})\n", vy_max_eps1em4_omega12_ts0p10, vy_min_case3);
 
-	const bool finite = profileIsFinite(shock_eps1em4_omega1p8_ts0p04) && profileIsFinite(shock_eps1em1_omega3p0_ts0p04) && profileIsFinite(shock_eps1em4_omega12_ts0p10);
-	const bool charged_rotates = vy_max_eps1em4_omega1p8_ts0p04 > vy_min_case1 && vy_max_eps1em1_omega3p0_ts0p04 > vy_min_case2 &&
-				     vy_max_eps1em4_omega12_ts0p10 > vy_min_case3;
+	const bool finite =
+	    profileIsFinite(shock_eps1em4_omega1p8_ts0p04) && profileIsFinite(shock_eps1em1_omega3p0_ts0p04) && profileIsFinite(shock_eps1em4_omega12_ts0p10);
+	const bool charged_rotates =
+	    vy_max_eps1em4_omega1p8_ts0p04 > vy_min_case1 && vy_max_eps1em1_omega3p0_ts0p04 > vy_min_case2 && vy_max_eps1em4_omega12_ts0p10 > vy_min_case3;
 
 	const bool passed = finite && charged_rotates;
 	if (!passed) {
@@ -412,19 +410,13 @@ auto runShockAnalogue(bool write_csv) -> int
 }
 } // namespace
 
-template <> struct quokka::EOS_Traits<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004> : ShockEOSTraits<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004> {
-};
-template <> struct quokka::EOS_Traits<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004> : ShockEOSTraits<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004> {
-};
-template <> struct quokka::EOS_Traits<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010> : ShockEOSTraits<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010> {
-};
+template <> struct quokka::EOS_Traits<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004> : ShockEOSTraits<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004> {};
+template <> struct quokka::EOS_Traits<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004> : ShockEOSTraits<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004> {};
+template <> struct quokka::EOS_Traits<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010> : ShockEOSTraits<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010> {};
 
-template <> struct Physics_Traits<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004> : ShockPhysicsTraits {
-};
-template <> struct Physics_Traits<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004> : ShockPhysicsTraits {
-};
-template <> struct Physics_Traits<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010> : ShockPhysicsTraits {
-};
+template <> struct Physics_Traits<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004> : ShockPhysicsTraits {};
+template <> struct Physics_Traits<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004> : ShockPhysicsTraits {};
+template <> struct Physics_Traits<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010> : ShockPhysicsTraits {};
 
 template <>
 AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
@@ -434,8 +426,9 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs1p8T
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>::ComputeDustDimensionlessChargeToMassRatio(
-    DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto
+DustSources<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantDimensionlessChargeToMassRatio<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>();
 }
@@ -451,11 +444,9 @@ template <> void QuokkaSimulation<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>
 }
 
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-											   int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-											   const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-											   int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	setShockBoundaryConditions<DustLorentzShockMoseleyEps1em4OmegaTs1p8Ts004>(iv, consVar, geom);
 }
@@ -477,8 +468,9 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em1OmegaTs3p0T
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>::ComputeDustDimensionlessChargeToMassRatio(
-    DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto
+DustSources<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantDimensionlessChargeToMassRatio<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>();
 }
@@ -494,11 +486,9 @@ template <> void QuokkaSimulation<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>
 }
 
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-											   int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-											   const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-											   int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	setShockBoundaryConditions<DustLorentzShockMoseleyEps1em1OmegaTs3p0Ts004>(iv, consVar, geom);
 }
@@ -520,8 +510,9 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs12Ts
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>::ComputeDustDimensionlessChargeToMassRatio(
-    DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto
+DustSources<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantDimensionlessChargeToMassRatio<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>();
 }
@@ -537,11 +528,9 @@ template <> void QuokkaSimulation<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>:
 }
 
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-											  int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-											  const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-											  int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	setShockBoundaryConditions<DustLorentzShockMoseleyEps1em4OmegaTs12Ts010>(iv, consVar, geom);
 }

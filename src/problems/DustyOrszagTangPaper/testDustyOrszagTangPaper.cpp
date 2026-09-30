@@ -15,8 +15,7 @@
 #include <utility>
 #include <vector>
 
-struct DustyOrszagTangPaper {
-};
+struct DustyOrszagTangPaper {};
 
 namespace
 {
@@ -32,14 +31,14 @@ constexpr double first_snapshot_time = 0.25;
 constexpr double second_snapshot_time = 0.5;
 constexpr double shock_window_ymax = 0.3;
 
-AMREX_GPU_MANAGED double g_initial_dust_density = 1.0e-1;    // NOLINT
-AMREX_GPU_MANAGED double g_stopping_time = stopping_time0;   // NOLINT
+AMREX_GPU_MANAGED double g_initial_dust_density = 1.0e-1;					     // NOLINT
+AMREX_GPU_MANAGED double g_stopping_time = stopping_time0;					     // NOLINT
 AMREX_GPU_MANAGED double g_dimensionless_charge_to_mass_ratio = dimensionless_charge_to_mass_ratio0; // NOLINT
-std::string g_active_case_tag;				     // NOLINT
-std::string g_output_prefix = "dusty_orszag_tang_paper";     // NOLINT
-std::string g_resolution_tag = "64";			     // NOLINT
-bool g_capture_slice_csv = true;			     // NOLINT
-bool g_capture_profile_csv = true;			     // NOLINT
+std::string g_active_case_tag;									     // NOLINT
+std::string g_output_prefix = "dusty_orszag_tang_paper";					     // NOLINT
+std::string g_resolution_tag = "64";								     // NOLINT
+bool g_capture_slice_csv = true;								     // NOLINT
+bool g_capture_profile_csv = true;								     // NOLINT
 
 struct ProblemRuntimeConfig {
 	bool write_csv_ = true;
@@ -125,10 +124,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeTotalEnergy(double rho_g, double
 	return internal + kinetic + magnetic;
 }
 
-auto makeCaseConfigs() -> std::vector<CaseConfig>
-{
-	return {{"high_epsilon", 1.0e-1, 1.0e-1 / rho_gas0}, {"low_epsilon", 1.0e-6, 1.0e-6 / rho_gas0}};
-}
+auto makeCaseConfigs() -> std::vector<CaseConfig> { return {{"high_epsilon", 1.0e-1, 1.0e-1 / rho_gas0}, {"low_epsilon", 1.0e-6, 1.0e-6 / rho_gas0}}; }
 
 auto selectCases(amrex::Vector<std::string> const &requested_tags) -> std::vector<CaseConfig>
 {
@@ -196,8 +192,8 @@ void writeProfileCsv(ProfileData const &profile)
 	std::ofstream file(csvFilename(profile.case_tag_, profile.snapshot_tag_, "profile"));
 	file << "y,rho_g,rho_d,v_gx,v_gy,v_dx,v_dy\n";
 	for (size_t idx = 0; idx < profile.y_.size(); ++idx) {
-		file << profile.y_[idx] << "," << profile.rho_g_[idx] << "," << profile.rho_d_[idx] << "," << profile.v_gx_[idx] << ","
-		     << profile.v_gy_[idx] << "," << profile.v_dx_[idx] << "," << profile.v_dy_[idx] << "\n";
+		file << profile.y_[idx] << "," << profile.rho_g_[idx] << "," << profile.rho_d_[idx] << "," << profile.v_gx_[idx] << "," << profile.v_gy_[idx]
+		     << "," << profile.v_dx_[idx] << "," << profile.v_dy_[idx] << "\n";
 	}
 }
 
@@ -206,8 +202,7 @@ auto profileIsFinite(ProfileData const &profile) -> bool
 	auto const check = [](std::vector<double> const &values) {
 		return std::all_of(values.begin(), values.end(), [](double value) { return std::isfinite(value); });
 	};
-	return check(profile.rho_g_) && check(profile.rho_d_) && check(profile.v_gx_) && check(profile.v_gy_) && check(profile.v_dx_) &&
-	       check(profile.v_dy_);
+	return check(profile.rho_g_) && check(profile.rho_d_) && check(profile.v_gx_) && check(profile.v_gy_) && check(profile.v_dx_) && check(profile.v_dy_);
 }
 
 auto sliceIsFinite(SliceData const &slice) -> bool
@@ -429,8 +424,7 @@ struct DustyOrszagTangPaperHistory {
 
 } // namespace
 
-template <> struct SimulationData<DustyOrszagTangPaper> : DustyOrszagTangPaperHistory {
-};
+template <> struct SimulationData<DustyOrszagTangPaper> : DustyOrszagTangPaperHistory {};
 
 namespace
 {
@@ -565,8 +559,8 @@ template <> void QuokkaSimulation<DustyOrszagTangPaper>::setInitialConditionsOnG
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustSources<DustyOrszagTangPaper>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustyOrszagTangPaper>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> alpha{};
 	alpha[0] = 1.0 / g_stopping_time;

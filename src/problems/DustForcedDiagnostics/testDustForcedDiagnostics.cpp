@@ -15,8 +15,7 @@
 #include <string_view>
 #include <vector>
 
-struct DustForcedDiagnostics {
-};
+struct DustForcedDiagnostics {};
 
 using DustHallPedersenForcedDiagnostics = DustForcedDiagnostics;
 
