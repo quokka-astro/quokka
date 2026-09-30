@@ -253,7 +253,7 @@ auto problem_main() -> int
 		amrex::Print() << "ERROR: the gas heating does not match the photoelectric rate.\n";
 		status = 1;
 	}
-	if (!((momentum_ratio > 0.95) && (momentum_ratio < 1.005))) {
+	if (!(momentum_ratio > 0.95) || !(momentum_ratio < 1.005)) {
 		amrex::Print() << "ERROR: the gas did not receive the momentum of the absorbed radiation.\n";
 		status = 1;
 	}
