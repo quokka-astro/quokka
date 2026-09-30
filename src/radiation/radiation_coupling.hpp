@@ -70,10 +70,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCouplingCoefficients(Coupling
 //     Delta_g = tau_scale (emission_g - absorption_g rad0_g) / (1 + tau_scale absorption_g),   rad0_g = E_g^0 + S_g + W_g ,
 // so that E_g = rad0_g + Delta_g = (rad0_g + tau_scale emission_g) / (1 + tau_scale absorption_g), a convex combination of
 // where the group started and the Planck value at the matter temperature, weighted by the optical depth of the step. The
-// exchange is formed as a difference of rates, not of energies: the gas energy then follows from gas0 - (c/chat) sum Delta_g
-// without subtracting the radiation energy from the cell's total, which in a radiation-dominated cell would leave the gas
-// energy with the round-off of a number 1e5 times larger than itself (DTypeFront1D's mirror-symmetry check measures that).
-// A transparent group (zero opacity) has Delta_g = 0 exactly and keeps rad0_g, source included.
+// gas side uses the exchange: the gas energy follows from gas0 - (c/chat) sum Delta_g without subtracting the radiation
+// energy from the cell's total, which in a radiation-dominated cell would leave the gas energy with the round-off of a
+// number 1e5 times larger than itself (DTypeFront1D's mirror-symmetry check measures that). The group energies use the
+// closed form instead (GroupEnergies). A transparent group (zero opacity) has Delta_g = 0 exactly.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::GroupExchange(CouplingCell<problem_t> const &cell, CouplingCoefficients<problem_t> const &coef)
     -> quokka::valarray<double, nGroups_>
@@ -86,14 +86,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::GroupExchange(CouplingCell<problem_t
 	return exchange;
 }
 
-// The group energies implied by the exchange: E_g = rad0_g + Delta_g.
+// The group energies, E_g = (rad0_g + tau_scale emission_g) / (1 + tau_scale absorption_g). Not rad0_g + Delta_g: in an
+// optically thick group with little emission Delta_g is almost -rad0_g, and the sum would lose what is left of the group
+// to cancellation (zero instead of 1e-16 rad0_g at an optical depth of 1e16).
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::GroupEnergies(CouplingCell<problem_t> const &cell, quokka::valarray<double, nGroups_> const &exchange)
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::GroupEnergies(CouplingCell<problem_t> const &cell, CouplingCoefficients<problem_t> const &coef)
     -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> Erad{};
 	for (int g = 0; g < nGroups_; ++g) {
-		Erad[g] = cell.Erad0[g] + cell.Src[g] + cell.work[g] + exchange[g];
+		const double rad0 = cell.Erad0[g] + cell.Src[g] + cell.work[g];
+		Erad[g] = (rad0 + cell.tau_scale * coef.emission[g]) / (1.0 + cell.tau_scale * coef.absorption[g]);
 	}
 	return Erad;
 }
@@ -109,8 +112,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::GasCouplingState(CouplingCell<proble
 	sol.Egas = Egas;
 	sol.T_gas = TgasOf(cell, Egas);
 	sol.T_d = sol.T_gas;
-	const auto exchange = GroupExchange(cell, ComputeCouplingCoefficients(cell, sol.T_gas));
-	sol.Erad = GroupEnergies(cell, exchange);
+	const auto coef = ComputeCouplingCoefficients(cell, sol.T_gas);
+	const auto exchange = GroupExchange(cell, coef);
+	sol.Erad = GroupEnergies(cell, coef);
 	// G = (E_gas - gas0) + (c/chat) sum_g Delta_g: the new total energy minus the old, written through the exchange
 	const double gas0 = cell.Egas0 - cscale * sum(cell.work);
 	sol.residual = (Egas - gas0) + cscale * sum(exchange);
@@ -229,8 +233,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::DustCouplingState(CouplingCell<probl
 	const double cscale = c_light_ / c_hat_;
 	CouplingSolution<problem_t> sol{};
 	sol.T_d = T_d;
-	const auto exchange = GroupExchange(cell, ComputeCouplingCoefficients(cell, T_d));
-	sol.Erad = GroupEnergies(cell, exchange);
+	const auto coef = ComputeCouplingCoefficients(cell, T_d);
+	const auto exchange = GroupExchange(cell, coef);
+	sol.Erad = GroupEnergies(cell, coef);
 	// the gas pays what the radiation gains: E_gas = gas0 - (c/chat) sum_g Delta_g, formed from the exchange rather than
 	// from the cell's total energy, so that its round-off is that of the exchange and not of the radiation energy
 	const double gas0 = cell.Egas0 - cscale * sum(cell.work);

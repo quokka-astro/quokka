@@ -629,6 +629,29 @@ auto TestDTypeDustSweep() -> int
 	return (n_failed > 0) ? 1 : 0;
 }
 
+// The group energies of an optically thick group with negligible emission: E_g = rad0 / (1 + tau), which rad0 + Delta_g
+// would lose to cancellation (a relative error of 2e-5 at tau = 1e12, and zero instead of 1e-16 at tau = 1e16).
+auto TestThickGroupEnergy() -> int
+{
+	for (const double tau : {1.0e12, 1.0e16}) {
+		CouplingCell<Sweep1> cell{};
+		cell.tau_scale = tau;
+		cell.Erad0[0] = 1.0;
+		cell.Src.fillin(0.0);
+		cell.work.fillin(0.0);
+		CouplingCoefficients<Sweep1> coef{};
+		coef.emission[0] = 1.0e-30;
+		coef.absorption[0] = 1.0;
+		amrex::Gpu::DeviceScalar<double> d_E(0.0);
+		double *E_ptr = d_E.dataPtr();
+		amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) noexcept { *E_ptr = RadSystem<Sweep1>::GroupEnergies(cell, coef)[0]; });
+		const double E = d_E.dataValue();
+		const double exact = (1.0 + tau * 1.0e-30) / (1.0 + tau);
+		check(std::abs(E / exact - 1.0) <= 1.0e-15, std::format("optically thick group keeps its remaining energy (tau {:.0e})", tau));
+	}
+	return (n_failed > 0) ? 1 : 0;
+}
+
 } // namespace
 
 auto problem_main() -> int
@@ -643,7 +666,8 @@ auto problem_main() -> int
 	const int gas_status = TestGasSweep();
 	const int dust_status = TestDustSweep();
 	const int dtype_status = TestDTypeDustSweep();
-	const int status = (gas_status == 0 && dust_status == 0 && dtype_status == 0) ? 0 : 1;
+	const int thick_status = TestThickGroupEnergy();
+	const int status = (gas_status == 0 && dust_status == 0 && dtype_status == 0 && thick_status == 0) ? 0 : 1;
 	std::cout << (status == 0 ? "RadCouplingUnitTests: all tests passed.\n" : "RadCouplingUnitTests: FAILED.\n");
 	return (n_failed > 0) ? 1 : 0;
 }

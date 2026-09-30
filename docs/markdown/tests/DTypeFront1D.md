@@ -104,7 +104,7 @@ The test passes if all of the following hold. Measured values at the reference r
 |---|---|---|---|
 | 1 | IR + optical equals the energy injected into the optical band | 1% | 1.0000072 |
 | 2a | outward momentum of the gas plus the two sourced bands against \\(p_{\text{inj}}\\) | 2% | 1.0090 |
-| 2b | signed total momentum over the gas and all three bands vanishes | \\(10^{-8}\\) | \\(1.8\times10^{-10}\\) |
+| 2b | signed total momentum over the gas and all three bands vanishes | \\(10^{-8}\\) | \\(6.1\times10^{-11}\\) |
 | 3 | optical light front sits at \\(\hat c \\, t\\) from the source | 10% | 4.2% |
 | 4a | fraction reprocessed into the IR | \\(> 0.25\\) | 0.368 |
 | 4b | surviving optical energy against the \\(e^{-\tau}\\) integral above | 10% | 1.0007 |
