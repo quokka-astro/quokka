@@ -58,8 +58,11 @@ The `constant` and `spitzer` models read their prefactor from the key that match
 | `isotropic` | `conduction.conductivity_prefactor` (required when conduction is enabled) |
 | `anisotropic` | `conduction.kappaPar` (required when conduction is enabled), `conduction.kappaPerp` (optional, default 0) |
 
+With the anisotropic geometry, `conduction.aniso_flux_limiter` selects the limiter for the transverse (cross) terms of the flux, `mc` (default) or `minmod`, for any `conduction_model`.
+
 Quokka aborts at startup in these cases:
 - a prefactor is set that does not match the geometry, or any prefactor is set with `problem_defined`;
+- `conduction.aniso_flux_limiter` is set with the isotropic geometry, or is not `mc` or `minmod`;
 - a prefactor is negative;
 - `conduction.enabled = 1` while the problem's `conduction_model` is `none`;
 - the input file still sets the removed `conduction.conduction_type` key.
