@@ -38,8 +38,6 @@ template <> struct Physics_Traits<ThermalConductionAnisoProblem> : DefaultPhysic
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr ConductionModel conduction_model = ConductionModel::constant;
 	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::anisotropic;
-	// dimensionless problem: rho, length, and time carry no fixed physical scale, but
-	// boltzmann_constant is kept at its physical CGS value so that Tgas is genuinely in kelvin.
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 };
@@ -256,7 +254,7 @@ void QuokkaSimulation<ThermalConductionAnisoProblem>::ComputeDerivedVar(int /*le
 
 auto problem_main() -> int
 {
-	// Single-resolution run of the ring conduction test (no AMR, no reference solution).
+	// Single-resolution run of the ring conduction test
 	constexpr double max_time = 200.0;
 
 	// Setup boundary conditions
@@ -297,6 +295,15 @@ auto problem_main() -> int
 	amrex::Print() << std::format("\nRing test, {} x {} cells, t = {}: gasInternalEnergy L1 error = {:.6e} (relative = {:.6e})\n", domain.length(0),
 				      domain.length(1), sim.tNew_[0], eint_abs_err, eint_rel_err);
 
-	amrex::Print() << "\n✓ Thermal conduction (anisotropic) ring test completed\n";
-	return std::isfinite(eint_rel_err) ? 0 : 1;
+	// pass if the relative L1 error is at or below the tolerance (a NaN error fails the comparison)
+	constexpr double rel_err_tol = 1.e-3; // measured 9.2432e-04 at 128x128x8, t = 200 (mc limiter, kappaPerp = 0), plus ~8% margin
+	amrex::Print() << std::format("relative error tolerance = {:.6e}\n", rel_err_tol);
+	bool const passed = (eint_rel_err <= rel_err_tol);
+
+	if (passed) {
+		amrex::Print() << "\n✓ Thermal conduction (anisotropic) ring test PASSED\n";
+		return 0;
+	}
+	amrex::Print() << "\n✗ Thermal conduction (anisotropic) ring test FAILED\n";
+	return 1;
 }
