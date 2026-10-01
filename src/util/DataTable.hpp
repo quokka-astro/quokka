@@ -1026,7 +1026,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	//   Line 9: xhi (comma-separated upper bounds for each dimension)
 	//   Line 10: spacing (comma-separated spacing types: linear, log, fast_log)
 	//   Remaining lines: data values
-	//     For 2D: nx2 rows × nx1 columns (last dimension varies fastest in rows)
+	//     For 2D: nx2 rows × nx1 columns (first dimension varies across columns)
 	//     For 3D: (nx3 × nx2) rows × nx1 columns
 	//     For 4D: (nx4 × nx3 × nx2) rows × nx1 columns
 	//
@@ -1055,125 +1055,58 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			int n_dim = 0;
 			int n_out = 0;
 			std::array<std::pair<amrex::Real, amrex::Real>, Ndim> coord_bounds{};
-			std::array<std::string, Ndim> spacing_types{};
 
-			file >> n_dim;
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    n_dim == Ndim, std::format("CSV file dimension mismatch! File has {} dimensions, but DataTable is {}-dimensional", n_dim, Ndim));
-
-			std::string nx_line;
-			std::getline(file >> std::ws, nx_line);
-			{
-				std::stringstream ss(nx_line);
-				for (int dim = 0; dim < Ndim; ++dim) {
-					char comma = ' ';
-					ss >> sizes[dim];
-					if (dim < Ndim - 1) {
-						ss >> comma;
-					}
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0,
-									 std::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
-				}
-			}
-
-			file >> n_out;
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    n_out == Nout, std::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
-
-			std::string input_names_line;
-			std::getline(file >> std::ws, input_names_line);
-			{
-				std::stringstream ss(input_names_line);
-				for (int i = 0; i < Ndim; ++i) {
-					if (i < Ndim - 1) {
-						std::getline(ss, input_names[i], ',');
+			// Read exactly one CSV row, rejecting missing/extra fields and partial
+			// numeric conversions before any table data is broadcast.
+			const auto read_row = [&file, &file_path](auto &values, const std::string &label) {
+				std::string line;
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<bool>(std::getline(file, line)),
+								 std::format("CSVReader: {}: missing {}", file_path, label));
+				std::stringstream row(line);
+				for (std::size_t i = 0; i < values.size(); ++i) {
+					std::string token;
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<bool>(std::getline(row, token, ',')),
+									 std::format("CSVReader: {}: missing field {} in {}", file_path, i, label));
+					if constexpr (std::is_same_v<std::decay_t<decltype(values[i])>, std::string>) {
+						const auto first = token.find_first_not_of(" \t\r");
+						const auto last = token.find_last_not_of(" \t\r");
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(first != std::string::npos,
+										 std::format("CSVReader: {}: empty field {} in {}", file_path, i, label));
+						values[i] = token.substr(first, last - first + 1);
 					} else {
-						ss >> input_names[i];
+						std::stringstream number(token);
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<bool>(number >> values[i]),
+										 std::format("CSVReader: {}: invalid field {} in {}", file_path, i, label));
+						number >> std::ws;
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    number.eof(), std::format("CSVReader: {}: trailing characters in field {} in {}", file_path, i, label));
 					}
 				}
-			}
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.eof(), std::format("CSVReader: {}: extra fields in {}", file_path, label));
+			};
 
-			std::string output_names_line;
-			std::getline(file >> std::ws, output_names_line);
-			{
-				std::stringstream ss(output_names_line);
-				for (int i = 0; i < Nout; ++i) {
-					if (i < Nout - 1) {
-						std::getline(ss, output_names[i], ',');
-					} else {
-						ss >> output_names[i];
-					}
-				}
+			std::array<int, 1> count{};
+			read_row(count, "Ndim");
+			n_dim = count[0];
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_dim == Ndim, std::format("CSVReader: dimension mismatch: expected {}, got {}", Ndim, n_dim));
+			read_row(sizes, "Nx");
+			for (int dim = 0; dim < Ndim; ++dim) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, std::format("CSVReader: invalid size {} for dimension {}", sizes[dim], dim));
 			}
-
-			std::string input_units_line;
-			std::getline(file >> std::ws, input_units_line);
-			{
-				std::stringstream ss(input_units_line);
-				for (int i = 0; i < Ndim; ++i) {
-					if (i < Ndim - 1) {
-						std::getline(ss, input_units[i], ',');
-					} else {
-						ss >> input_units[i];
-					}
-				}
-			}
-
-			std::string output_units_line;
-			std::getline(file >> std::ws, output_units_line);
-			{
-				std::stringstream ss(output_units_line);
-				for (int i = 0; i < Nout; ++i) {
-					if (i < Nout - 1) {
-						std::getline(ss, output_units[i], ',');
-					} else {
-						ss >> output_units[i];
-					}
-				}
-			}
+			read_row(count, "Nout");
+			n_out = count[0];
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_out == Nout, std::format("CSVReader: output count mismatch: expected {}, got {}", Nout, n_out));
+			read_row(input_names, "input_names");
+			read_row(output_names, "output_names");
+			read_row(input_units, "input_units");
+			read_row(output_units, "output_units");
 
 			std::array<amrex::Real, Ndim> xlo_metadata{};
 			std::array<amrex::Real, Ndim> xhi_metadata{};
 			std::array<std::string, Ndim> spacing_metadata{};
-
-			std::string xlo_line;
-			std::getline(file >> std::ws, xlo_line);
-			{
-				std::stringstream ss(xlo_line);
-				for (int i = 0; i < Ndim; ++i) {
-					char comma = ' ';
-					ss >> xlo_metadata[i];
-					if (i < Ndim - 1) {
-						ss >> comma;
-					}
-				}
-			}
-
-			std::string xhi_line;
-			std::getline(file >> std::ws, xhi_line);
-			{
-				std::stringstream ss(xhi_line);
-				for (int i = 0; i < Ndim; ++i) {
-					char comma = ' ';
-					ss >> xhi_metadata[i];
-					if (i < Ndim - 1) {
-						ss >> comma;
-					}
-				}
-			}
-
-			std::string spacing_line;
-			std::getline(file >> std::ws, spacing_line);
-			{
-				std::stringstream ss(spacing_line);
-				for (int i = 0; i < Ndim; ++i) {
-					if (i < Ndim - 1) {
-						std::getline(ss, spacing_metadata[i], ',');
-					} else {
-						ss >> spacing_metadata[i];
-					}
-				}
-			}
+			read_row(xlo_metadata, "xlo");
+			read_row(xhi_metadata, "xhi");
+			read_row(spacing_metadata, "spacing");
 
 			for (int dim = 0; dim < Ndim; ++dim) {
 				coord_bounds[dim].first = xlo_metadata[dim];
@@ -1203,99 +1136,37 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			flat_data.resize(flatDataSize(sizes));
 
-			if constexpr (Ndim == 1) {
-				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			const auto rows_per_output = flat_data.size() / (Nout * static_cast<std::size_t>(sizes[0]));
+			std::vector<amrex::Real> row_values(sizes[0]);
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				for (std::size_t row = 0; row < rows_per_output; ++row) {
+					std::array<int, Ndim> index{};
+					auto remaining = row;
+					std::string row_index = "(column";
+					for (int dim = 1; dim < Ndim; ++dim) {
+						index[dim] = static_cast<int>(remaining % sizes[dim]);
+						remaining /= sizes[dim];
+						row_index += std::format(",{}", index[dim]);
+					}
+					row_index += ")";
+					read_row(row_values, std::format("output {} index {}", out_idx, row_index));
 					for (int i = 0; i < sizes[0]; ++i) {
-						char comma = ' ';
-						amrex::Real value = 0.0;
-						file >> value;
-						if (i < sizes[0] - 1) {
-							file >> comma;
-						}
+						index[0] = i;
+						auto value = row_values[i];
 						if (output_transform_bcast == TransformType::fast_log || output_transform_bcast == TransformType::log) {
 							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-							    value > 0.0,
-							    std::format("log output transform requires positive values, got {} at output {} index {}", value,
-									out_idx, i));
+							    value > 0.,
+							    std::format(
+								"CSVReader: log output requires positive values, got {} at output {} index {}, column {}",
+								value, out_idx, row_index, i));
 							value = log_(value);
 						}
-						flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i})] = value;
-					}
-				}
-			} else if constexpr (Ndim == 2) {
-				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i2 = 0; i2 < sizes[1]; ++i2) {
-						for (int i1 = 0; i1 < sizes[0]; ++i1) {
-							char comma = ' ';
-							amrex::Real value = 0.0;
-							file >> value;
-							if (i1 < sizes[0] - 1) {
-								file >> comma;
-							}
-							if (output_transform_bcast == TransformType::fast_log || output_transform_bcast == TransformType::log) {
-								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-								    value > 0.0,
-								    std::format(
-									"log output transform requires positive values, got {} at output {} index ({}, {})",
-									value, out_idx, i1, i2));
-								value = log_(value);
-							}
-							flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2})] = value;
-						}
-					}
-				}
-			} else if constexpr (Ndim == 3) {
-				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i3 = 0; i3 < sizes[2]; ++i3) {
-						for (int i2 = 0; i2 < sizes[1]; ++i2) {
-							for (int i1 = 0; i1 < sizes[0]; ++i1) {
-								char comma = ' ';
-								amrex::Real value = 0.0;
-								file >> value;
-								if (i1 < sizes[0] - 1) {
-									file >> comma;
-								}
-								if (output_transform_bcast == TransformType::fast_log ||
-								    output_transform_bcast == TransformType::log) {
-									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-									    value > 0.0, std::format("log output transform requires positive values, got {} at "
-												     "output {} index ({}, {}, {})",
-												     value, out_idx, i1, i2, i3));
-									value = log_(value);
-								}
-								flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2, i3})] = value;
-							}
-						}
-					}
-				}
-			} else if constexpr (Ndim == 4) {
-				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i4 = 0; i4 < sizes[3]; ++i4) {
-						for (int i3 = 0; i3 < sizes[2]; ++i3) {
-							for (int i2 = 0; i2 < sizes[1]; ++i2) {
-								for (int i1 = 0; i1 < sizes[0]; ++i1) {
-									char comma = ' ';
-									amrex::Real value = 0.0;
-									file >> value;
-									if (i1 < sizes[0] - 1) {
-										file >> comma;
-									}
-									if (output_transform_bcast == TransformType::fast_log ||
-									    output_transform_bcast == TransformType::log) {
-										AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-										    value > 0.0,
-										    std::format("log output transform requires positive values, got "
-												"{} at output {} index ({}, {}, {}, {})",
-												value, out_idx, i1, i2, i3, i4));
-										value = log_(value);
-									}
-									flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2, i3, i4})] = value;
-								}
-							}
-						}
+						flat_data[flatDataIndex(out_idx, sizes, index)] = value;
 					}
 				}
 			}
+			file >> std::ws;
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.eof(), std::format("CSVReader: {}: unexpected trailing data", file_path));
 		}
 
 		bcastArray(sizes);
