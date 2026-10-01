@@ -41,4 +41,5 @@ conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
 conduction.kappaPar = 0.6113916490935586e12
 conduction.kappaPerp = 0.1834174947280676e12
+conduction.aniso_flux_limiter = "mc"
 suppress_output = 0
