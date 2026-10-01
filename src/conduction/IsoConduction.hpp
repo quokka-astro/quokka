@@ -1,13 +1,13 @@
-#ifndef ELECTRON_CONDUCTION_HPP_ // NOLINT
-#define ELECTRON_CONDUCTION_HPP_
+#ifndef ISO_CONDUCTION_HPP_ // NOLINT
+#define ISO_CONDUCTION_HPP_
 
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file ElectronConduction.hpp
-/// \brief Explicit flux-limited electron thermal conduction update.
+/// \file IsoConduction.hpp
+/// \brief Explicit flux-limited isotropic thermal conduction update.
 
 #include <array>
 #include <cmath>
@@ -27,7 +27,7 @@
 namespace quokka::conduction
 {
 
-struct ElectronConductionParams {
+struct IsoConductionParams {
 	ConductivityParams conductivity{}; // prefactors for ConductionModel::constant/spitzer (see conductivity.hpp)
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
@@ -37,13 +37,13 @@ struct ElectronConductionParams {
 	int ng_reconstruct = 2; // number of ghost faces to reconstruct beyond the valid box
 };
 
-template <typename problem_t> class ElectronConduction
+template <typename problem_t> class IsoConduction
 {
       public:
 	// Reconstruct rho and T at the interfaces
 	template <FluxDir DIR>
 	static void ReconstructPrimVar(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int ng_reconstruct,
-				       ElectronConductionParams const &params)
+				       IsoConductionParams const &params)
 	{
 		constexpr int nvars = 2;
 		if (params.reconstruction_order == 5) {
@@ -56,12 +56,12 @@ template <typename problem_t> class ElectronConduction
 		} else if (params.reconstruction_order == 1) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 		} else {
-			amrex::Abort("Invalid reconstruction order specified for electron conduction!");
+			amrex::Abort("Invalid reconstruction order specified for isotropic conduction!");
 		}
 	}
 
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
-				    amrex::Real dt, ElectronConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
+				    amrex::Real dt, IsoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
 		constexpr ConductionModel model = Physics_Traits<problem_t>::conduction_model;
 		if constexpr (model == ConductionModel::none) {
@@ -82,7 +82,7 @@ template <typename problem_t> class ElectronConduction
 			return;
 		}
 
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state.nGrow() >= 1, "Electron conduction requires at least 1 ghost cell.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state.nGrow() >= 1, "Isotropic conduction requires at least 1 ghost cell.");
 
 		const auto dx = geom.CellSizeArray();
 		const amrex::Real flux_limiter_phi = params.flux_limiter_phi;
@@ -280,4 +280,4 @@ template <typename problem_t> class ElectronConduction
 
 } // namespace quokka::conduction
 
-#endif // ELECTRON_CONDUCTION_HPP_
+#endif // ISO_CONDUCTION_HPP_

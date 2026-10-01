@@ -21,7 +21,7 @@
 ///        q = -kappa_perp grad T - (kappa_par - kappa_perp) bhat (bhat . grad T): the diagonal and
 ///        cross terms above carry (kappa_par - kappa_perp), and the isotropic kappa_perp term is an
 ///        unlimited two-point difference across the face. The result is saturated exactly as in
-///        ElectronConduction::ComputeExplicit, using a saturation flux computed from (rho, T)
+///        IsoConduction::ComputeExplicit, using a saturation flux computed from (rho, T)
 ///        averaged from the corners bounding the face.
 
 #include <array>
