@@ -115,7 +115,8 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | conduction.saturation_factor      | Float         | `5.0`          | \\(f\_{\rm sat}\\) in the saturation flux (Cowie & McKee 1977).                                                                                                          |
 | conduction.conductivity_prefactor | Float         | **Required** for isotropic `constant`/`spitzer` | \\(\kappa\_0\\) (erg cm\\(^{-1}\\) s\\(^{-1}\\) K\\(^{-1}\\); K\\(^{-7/2}\\) for `spitzer`). Not allowed with the anisotropic geometry or `problem_defined`.      |
 | conduction.kappaPar               | Float         | **Required** for anisotropic `constant`/`spitzer` | Parallel \\(\kappa\_0\\), same units as `conductivity_prefactor`. Not allowed with the isotropic geometry or `problem_defined`.                             |
-| conduction.kappaPerp              | Float         | `0.0`          | Perpendicular \\(\kappa\_0\\); anisotropic geometry only. Currently unused by the flux.                                                                                    |
+| conduction.kappaPerp              | Float         | `0.0`          | Perpendicular \\(\kappa\_0\\), same units as `kappaPar`; must be \\(\le\\) `kappaPar`. Anisotropic geometry only.                                                     |
+| conduction.aniso_flux_limiter     | String        | `mc`           | Limiter for the transverse (cross) terms of the anisotropic flux: `mc` (monotonized central) or `minmod`. Anisotropic geometry only.                                        |
 
 ## Chemistry
 
