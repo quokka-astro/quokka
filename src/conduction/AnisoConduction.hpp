@@ -33,12 +33,8 @@
 #include "AMReX_Enum.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuQualifiers.H"
-#include "AMReX_MFIter.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelDescriptor.H"
-#include "AMReX_Print.H"
 #include "AMReX_REAL.H"
-#include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
 #include "conduction/conductivity.hpp"
 #include "hydro/hydro_system.hpp"
@@ -103,10 +99,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real LimitUpperLowerFlux(amrex::
 // (kappa_par - kappa_perp) * bn^2 -- the field-aligned part of the diagonal tensor entry (q_xx-type term).
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real DiagCoeff(amrex::Real bn, amrex::Real kappa_aniso) { return kappa_aniso * bn * bn; }
 
-// (kappa_par - kappa_perp) * bi * bj -- the off-diagonal tensor entry (q_xy/q_xz-type term). 
+// (kappa_par - kappa_perp) * bi * bj -- the off-diagonal tensor entry (q_xy/q_xz-type term).
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real CrossCoeff(amrex::Real bi, amrex::Real bj, amrex::Real kappa_aniso) { return kappa_aniso * bi * bj; }
 
-// Sharma & Hammett (2007) Eq. (21): a biased limiter 
+// Sharma & Hammett (2007) Eq. (21): a biased limiter
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real L2(amrex::Real anchor, amrex::Real neighbor, amrex::Real alpha)
 {
 	const amrex::Real avg = 0.5 * (anchor + neighbor);
@@ -205,20 +201,6 @@ template <FluxDir DIR>
 void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const &primVar, amrex::MultiFab const &bhat_corner,
 			    amrex::MultiFab const &kappa_corner, amrex::MultiFab const &qsat_corner, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 			    amrex::Real l2_alpha, AnisoFluxLimiterType limiter_type);
-
-// DEBUG: prints the face-centered heat flux components (Fx, Fy, Fz) at the fixed grid index
-// (i=192, j=128, k=0), to check that flux is non-zero only along the field direction.
-void PrintHeatFluxAtPoint(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &heat_flux, amrex::Geometry const &geom);
-
-// DEBUG: prints the 3 components of a fixed (x,y,z)-ordered vector MultiFab (e.g. bhat_corner) at
-// the fixed grid index (i=192, j=128, k=0), prefixed by `label`.
-void PrintVectorAtPoint(amrex::MultiFab const &vec_fc, amrex::Geometry const &geom, char const *label);
-
-// DEBUG: prints T (from the cell touching the domain-center vertex) and bhat AT the domain-center
-// vertex (i=128, j=128, k=0) -- the exact grid point where this problem's B-field direction is
-// mathematically singular (Bx=-y/r, By=x/r is 0/0 at r=0) -- to check whether an erratic/arbitrary
-// discrete bhat there is acting as a leak path for heat to reach the center.
-void PrintCenterDiagnostics(amrex::MultiFab const &primVar, amrex::MultiFab const &bhat_corner);
 
 template <typename problem_t> class AnisoConduction
 {
@@ -339,12 +321,6 @@ template <typename problem_t> class AnisoConduction
 								   params.flux_limiter_type);
 			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], primVar, bhat_corner, kappa_corner, qsat_corner, dx, params.l2_alpha,
 								   params.flux_limiter_type);)
-
-		// DEBUG: uncomment to print per-step diagnostics (heat flux/bhat at a fixed probe vertex,
-		// temperature/bhat at the domain center) -- left in place for future debugging.
-		// PrintHeatFluxAtPoint(heat_flux, geom);
-		// PrintVectorAtPoint(bhat_corner, geom, "[AnisoConduction] bhat (corner)");
-		// PrintCenterDiagnostics(primVar, bhat_corner);
 
 		auto state_out = state.arrays();
 		auto const &flux_x_const = heat_flux[0].const_arrays();
@@ -577,94 +553,6 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 
 		flux_out[bx](i, j, k) = SaturateFlux(q_classical, qsat_face, small);
 	});
-}
-
-// DEBUG: the fixed grid index (i=192, j=128, k=0) probed by PrintHeatFluxAtPoint and
-// PrintVectorAtPoint -- shared so both sample the exact same face/vertex.
-amrex::IntVect DebugProbeIntVect(amrex::Geometry const &geom)
-{
-	amrex::ignore_unused(geom);
-	return amrex::IntVect{AMREX_D_DECL(192, 128, 0)};
-}
-
-// DEBUG: MPI-safe extraction of a single component at a single cell/face/corner of a MultiFab. Uses
-// Max (not Sum) because `mf` may be nodal in some direction (heat_flux/bhat_corner both are): at a
-// box-decomposition boundary, the shared nodal point is duplicated verbatim in both
-// neighboring boxes' valid regions, so summing would double-count it. All duplicate copies hold the
-// identical value, so Max recovers it exactly regardless of how many boxes/ranks contain a copy.
-amrex::Real DebugReduceComponentAt(amrex::MultiFab const &mf, amrex::IntVect const &iv, int comp)
-{
-	amrex::Box const target_box(iv, iv);
-
-	amrex::ReduceOps<amrex::ReduceOpMax> reduce_op;
-	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
-	using ReduceTuple = typename decltype(reduce_data)::Type;
-
-	for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
-		amrex::Box const bx = mfi.validbox() & target_box;
-		if (bx.ok()) {
-			auto const &arr = mf.const_array(mfi);
-			reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> ReduceTuple { return {arr(i, j, k, comp)}; });
-		}
-	}
-
-	amrex::Real local_val = amrex::get<0>(reduce_data.value());
-	amrex::ParallelDescriptor::ReduceRealMax(local_val);
-	return local_val;
-}
-
-// DEBUG: extracts and prints the (Fx, Fy, Fz) face-centered heat flux at the fixed grid index
-// (i=192, j=128, k=0). For a pure B-aligned conduction test with B along y, only Fy should be nonzero;
-// nonzero Fx/Fz indicates leakage of flux perpendicular to the field. Remove once verified.
-void PrintHeatFluxAtPoint(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &heat_flux, amrex::Geometry const &geom)
-{
-	amrex::IntVect const iv = DebugProbeIntVect(geom);
-
-	amrex::Real flux_vals[AMREX_SPACEDIM] = {AMREX_D_DECL(0.0, 0.0, 0.0)};
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		flux_vals[idim] = DebugReduceComponentAt(heat_flux[idim], iv, 0);
-	}
-
-	amrex::Print() << "[AnisoConduction] heat flux at (i=192,j=128,k=0): Fx=" << flux_vals[0]
-#if AMREX_SPACEDIM >= 2
-		       << " Fy=" << flux_vals[1]
-#endif
-#if AMREX_SPACEDIM == 3
-		       << " Fz=" << flux_vals[2]
-#endif
-		       << std::endl;
-}
-
-// DEBUG: prints the 3 components of a fixed (x,y,z)-ordered vector MultiFab (e.g. bhat_corner) at
-// the fixed grid index (i=192, j=128, k=0), prefixed by `label`.
-void PrintVectorAtPoint(amrex::MultiFab const &vec_fc, amrex::Geometry const &geom, char const *label)
-{
-	amrex::IntVect const iv = DebugProbeIntVect(geom);
-
-	const amrex::Real vx = DebugReduceComponentAt(vec_fc, iv, 0);
-	const amrex::Real vy = DebugReduceComponentAt(vec_fc, iv, 1);
-	const amrex::Real vz = DebugReduceComponentAt(vec_fc, iv, 2);
-
-	amrex::Print() << label << " at (i=192,j=128,k=0): (" << vx << ", " << vy << ", " << vz << ")" << std::endl;
-}
-
-// DEBUG: prints T (from the cell touching the domain-center vertex) and bhat AT the domain-center
-// vertex (i=128, j=128, k=0) -- the exact grid point where this problem's B-field direction is
-// mathematically singular (Bx=-y/r, By=x/r is 0/0 at r=0) -- to check whether an erratic/arbitrary
-// discrete bhat there is acting as a leak path for heat to reach the center.
-void PrintCenterDiagnostics(amrex::MultiFab const &primVar, amrex::MultiFab const &bhat_corner)
-{
-	constexpr int T_comp = 1;
-	amrex::IntVect const iv_vertex{AMREX_D_DECL(128, 128, 0)};
-	amrex::IntVect const iv_cell = iv_vertex; // one of the 4 (2D) / 8 (3D) cells touching that vertex
-
-	const amrex::Real T = DebugReduceComponentAt(primVar, iv_cell, T_comp);
-
-	const amrex::Real bx = DebugReduceComponentAt(bhat_corner, iv_vertex, 0);
-	const amrex::Real by = DebugReduceComponentAt(bhat_corner, iv_vertex, 1);
-	const amrex::Real bz = DebugReduceComponentAt(bhat_corner, iv_vertex, 2);
-
-	amrex::Print() << "[AnisoConduction] domain center (i=128,j=128,k=0): T=" << T << " bhat=(" << bx << ", " << by << ", " << bz << ")" << std::endl;
 }
 
 } // namespace quokka::conduction
