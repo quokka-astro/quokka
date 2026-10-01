@@ -219,15 +219,19 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 	pp.query("halo_vphi_expr", userData_.haloVphiExpr);
 	userData_.useHaloVphiParser = !userData_.haloVphiExpr.empty();
 	if (userData_.useHaloVphiParser) {
-		userData_.haloVphiParser.emplace(userData_.haloVphiExpr);
-		userData_.haloVphiParser->registerVariables({"x", "y", "z"});
-		userData_.haloVphiParserExe = userData_.haloVphiParser->compile<3>();
+		// The executor only points to bytecode owned by the Parser, so the Parser must stay alive
+		// for as long as the executor is used (destroying it frees the bytecode, and later
+		// allocations can overwrite it). Build it once; this function runs once per level.
+		if (!userData_.haloVphiParser.has_value()) {
+			userData_.haloVphiParser.emplace(userData_.haloVphiExpr);
+			userData_.haloVphiParser->registerVariables({"x", "y", "z"});
+			userData_.haloVphiParserExe = userData_.haloVphiParser->compile<3>();
+		}
 #ifdef AMREX_USE_GPU
 		if (userData_.haloVphiParserExe->m_device_executor == nullptr) {
 			amrex::Abort("disk_galaxy.halo_vphi_expr: device parser executor is null after compile<3>()");
 		}
 #endif
-		userData_.haloVphiParser.reset();
 	} else {
 		userData_.haloVphiParser.reset();
 		userData_.haloVphiParserExe.reset();
