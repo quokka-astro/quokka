@@ -112,3 +112,5 @@ where \\(C\\) is `conduction.conduction_cfl`, \\(e\\) is the internal energy per
 | `ThermalConductionAniso` | `constant` | anisotropic |
 | `ThermalConductionAnisoGaussian` | `constant` (with \\(\kappa\_\perp > 0\\)) | anisotropic |
 | `ThermalConductionAnisoPattle` | `spitzer` | anisotropic |
+
+The anisotropic test problems are built only when `AMReX_SPACEDIM = 3`.
