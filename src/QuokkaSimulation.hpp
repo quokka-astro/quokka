@@ -299,6 +299,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		if (enableConduction_) {
 			// TODO (av): add support for subcycling with conduction
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0, "AMR subcycling is not supported with conduction. Set do_subcycle = 0.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!HydroSystem<problem_t>::is_eos_isothermal(),
+							 "Electron conduction has no effect with an isothermal EOS (gamma = 1).");
 		}
 		if constexpr (Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
 			const bool viscosity_active = (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) ||
@@ -1303,6 +1305,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 							       static_cast<quokka::direction>(idim), AMRSimulation<problem_t>::InterpHookNone,
 							       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 				}
+				AMRSimulation<problem_t>::applyMHDDiodeBC(state, state_fc, lev);
 			}
 			if constexpr (Physics_Traits<problem_t>::conduction_geometry == ConductionGeometry::anisotropic) {
 				const quokka::conduction::AnisoConductionParams aniso_params{.conductivity = conductivityParams_,
@@ -2525,6 +2528,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 						       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone,
 						       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 			}
+			AMRSimulation<problem_t>::applyMHDDiodeBC(state_old_cc_tmp, state_old_fc_tmp, lev);
 		}
 
 		// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
@@ -2684,6 +2688,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 							       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone,
 							       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 				}
+				AMRSimulation<problem_t>::applyMHDDiodeBC(state_inter_cc_, state_inter_fc_, lev);
 			}
 
 			// check intermediate state validity
@@ -3525,7 +3530,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				fc_ptrs[2] = &state_new_fc_[lev][2];
 #endif
 			}
-			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, 1, max_density_allowed,
+			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
 										 min_density_allowed);
 		}
 #endif

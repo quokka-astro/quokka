@@ -7,7 +7,7 @@ pr:
   autoCancel: true
   branches:
     include:
-    - development
+    - '*'
   paths:
     include:
     - src/problems/**

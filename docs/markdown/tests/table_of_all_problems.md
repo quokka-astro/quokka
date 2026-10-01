@@ -16,7 +16,7 @@ This table lists all test problems in the Quokka codebase. The acronyms used are
 | BinaryOrbitCIC                    | 3   | ✅     | ❌   | ❌                 | ✅       | CIC                       | ❌              |
 | BrioWuShockTube                   | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
 | CurrentSheet                      | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
-| DTypeFront                        | 3   | ✅     | ❌   | SG                | ❌       | ❌                         | ❌              |
+| DTypeFront_JAFF                   | 3   | ✅     | ❌   | SG                | ❌       | ❌                         | ❌              |
 | DTypeFrontVC                      | 2   | ✅     | ❌   | SG                | ❌       | ❌                         | ❌              |
 | DiskGalaxy                        | 3   | ✅     | ✅   | ❌                 | ✅       | CIC, StochasticStellarPop | 1              |
 | DustAdvection                     | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
@@ -51,6 +51,7 @@ This table lists all test problems in the Quokka codebase. The acronyms used are
 | HydroVacuum                       | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | HydroWaveConvergence              | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | HydrostaticAtmosphere             | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
+| MathUnitTests                     | 1   | ❌     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | MHDBalsaraVortex                  | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
 | MHDBitwiseICs                     | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
 | MHDBlast                          | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
@@ -58,7 +59,6 @@ This table lists all test problems in the Quokka codebase. The acronyms used are
 | MHDResistiveEnergyFluxKernel      | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
 | NscbcChannel                      | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | 1              |
 | NscbcVortex                       | 2   | ✅     | ❌   | ❌                 | ❌       | ❌                         | 1              |
-| ODEIntegration                    | 1   | ❌     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | OneZonePhotoionization            | 1   | ❌     | ❌   | SG                | ❌       | ❌                         | ❌              |
 | OrszagTang                        | 3   | ✅     | ✅   | ❌                 | ❌       | ❌                         | ❌              |
 | ParticleAccretion                 | 3   | ✅     | ✅   | ❌                 | ✅       | Sink                      | ❌              |
