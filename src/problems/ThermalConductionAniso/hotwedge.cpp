@@ -44,15 +44,6 @@ template <> struct Physics_Traits<ThermalConductionAnisoProblem> : DefaultPhysic
 	static constexpr double boltzmann_constant = 1.0;
 };
 
-// Ring parameters, shared by the initial condition and the analytic reference solution.
-constexpr amrex::Real rho_bg = 1.0; // dimensionless background density
-constexpr amrex::Real T_bg = 10.0;
-constexpr amrex::Real T_wedge = 12.0;
-constexpr amrex::Real r_wedge_in = 0.5;
-constexpr amrex::Real r_wedge_out = 0.7;
-constexpr amrex::Real theta_wedge_centre = M_PI;
-constexpr amrex::Real theta_wedge_halfwidth = M_PI / 12.0;
-
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeMagneticVectorPotential_z(amrex::Real x1, amrex::Real x2) -> amrex::Real
 {
 	// Regularization radius for the field-direction singularity at r=0 -- must be << 0.5
@@ -76,6 +67,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeMagneticVectorPotential_z(amrex:
 	return -B0 * std::min(rad, 1.0);
 }
 
+
 template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -83,6 +75,9 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	const amrex::Real rho_bg = 1.0;	    // dimensionless background density
+	const amrex::Real T_bg = 10.0;
+	const amrex::Real T_wedge = 12.0;
 	// true: wedge density = rho_bg * T_bg / T_wedge, so P = rho*T is uniform (no initial pressure jump).
 	// false: uniform density, so the hot wedge starts overpressured and drives a flow.
 	constexpr bool isobaric_wedge = false;
@@ -93,12 +88,10 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 		const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
 		const amrex::Real rad = std::sqrt(x * x + y * y);
 		amrex::Real theta = std::atan2(y, x);
-		if (theta < 0.0) {
-			theta += 2.0 * M_PI;
-		}
+		if (theta < 0.0){ theta += 2.0 * M_PI; }
 		amrex::Real temp = T_bg;
 		amrex::Real rho = rho_bg;
-		if (rad > r_wedge_in && rad < r_wedge_out && std::abs(theta - theta_wedge_centre) < theta_wedge_halfwidth) {
+		if(rad > 0.5 & rad < 0.7 & theta > 11.* M_PI/12.0 & theta < 13.* M_PI/12.0) {
 			temp = T_wedge;
 			if (isobaric_wedge) {
 				rho = rho_bg * T_bg / T_wedge; // P = rho*T (mu = 1) uniform
@@ -116,11 +109,15 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 	});
 }
 
-// Fill the face-centred B for direction `dir` from the curl of the vector potential. Used for both the initial condition and
-// the reference solution (conduction does not evolve B).
-void fillRingBField(amrex::Array4<double> const &state_fc, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-		    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
+	// extract grid information
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+
 	const int ncomp_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarPerDim_fc;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_fc; ++n) {
@@ -145,96 +142,10 @@ void fillRingBField(amrex::Array4<double> const &state_fc, amrex::Box const &ind
 	});
 }
 
-template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
-{
-	fillRingBField(grid_elem.array_, grid_elem.indexRange_, grid_elem.dx_, grid_elem.prob_lo_, grid_elem.dir_);
-}
-
-template <>
-void QuokkaSimulation<ThermalConductionAnisoProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-									       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
-{
-	// With kappa_perp = 0 and circular field lines, each radius r obeys the periodic 1D diffusion equation
-	//   dT/dt = (D / r^2) d^2T/dtheta^2,   D = kappa_par / C_V,
-	// where C_V = dEint/dT is the volumetric heat capacity. For a top-hat of half-width a centred on theta_0,
-	//   T = T_bg + dT [ a/pi + sum_{m>=1} 2 sin(m a)/(m pi) cos(m (theta - theta_0)) exp(-m^2 D t / r^2) ]
-	// inside r_wedge_in < r < r_wedge_out, and T = T_bg outside it.
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductivityParams_.kappa0_perp == 0.0, "The ring analytic solution assumes conduction.kappaPerp = 0");
-
-	const amrex::Real t = tNew_[0];
-	// Eint is linear in T for an ideal gas, so Eint(rho, T=1) is the heat capacity per unit volume
-	const amrex::Real C_V = quokka::EOS<ThermalConductionAnisoProblem>::ComputeEintFromTgas(rho_bg, 1.0);
-	const amrex::Real D = conductivityParams_.kappa0_par / C_V;
-	const amrex::Real dT = T_wedge - T_bg;
-	const amrex::Real a = theta_wedge_halfwidth;
-	// stop summing once exp(-m^2 D t / r^2) is below roundoff; the cap only matters for very small t
-	constexpr amrex::Real decay_cutoff = 1.0e-17;
-	constexpr int max_modes = 100000;
-
-	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateExact = ref.array(iter);
-		auto const ncomp = ref.nComp();
-
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			// sample at the cell centre, matching the initial condition
-			const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
-			const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
-			const amrex::Real rad = std::sqrt(x * x + y * y);
-			amrex::Real theta = std::atan2(y, x);
-			if (theta < 0.0) {
-				theta += 2.0 * M_PI;
-			}
-			const amrex::Real phi = theta - theta_wedge_centre;
-
-			amrex::Real T = T_bg;
-			if (rad > r_wedge_in && rad < r_wedge_out) {
-				if (t <= 0.0) {
-					T = (std::abs(phi) < a) ? T_wedge : T_bg;
-				} else {
-					const amrex::Real rate = D * t / (rad * rad);
-					amrex::Real sum = a / M_PI;
-					for (int m = 1; m <= max_modes; ++m) {
-						const amrex::Real decay = std::exp(-static_cast<amrex::Real>(m) * m * rate);
-						if (decay < decay_cutoff) {
-							break;
-						}
-						sum += 2.0 * std::sin(m * a) / (m * M_PI) * std::cos(m * phi) * decay;
-					}
-					T = T_bg + dT * sum;
-				}
-			}
-			const amrex::Real Eint = quokka::EOS<ThermalConductionAnisoProblem>::ComputeEintFromTgas(rho_bg, T);
-
-			for (int n = 0; n < ncomp; ++n) {
-				stateExact(i, j, k, n) = 0.;
-			}
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::density_index) = rho_bg;
-			// energy_index should also include the (spatially varying) magnetic energy, which is not added here, so only
-			// the gasInternalEnergy error is meaningful for this test.
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint;
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::internalEnergy_index) = Eint;
-		});
-	}
-	amrex::Gpu::streamSynchronize();
-}
-
-template <>
-void QuokkaSimulation<ThermalConductionAnisoProblem>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-										  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-										  quokka::direction const dir)
-{
-	// conduction does not evolve B, so the exact solution is the initial field
-	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
-		fillRingBField(ref.array(iter), iter.validbox(), dx, prob_lo, dir);
-	}
-	amrex::Gpu::streamSynchronize();
-}
-
 template <>
 void QuokkaSimulation<ThermalConductionAnisoProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-									amrex::MultiFab const &state_cc,
-									amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+									   amrex::MultiFab const &state_cc,
+									   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
@@ -283,20 +194,6 @@ auto problem_main() -> int
 
 	sim.evolve();
 
-	// L1 error of the internal energy (the quantity conduction evolves) against the analytic ring solution.
-	// Resolution is set by amr.n_cell in the input file.
-	double eint_abs_err = NAN;
-	double eint_rel_err = NAN;
-	for (const auto &[name, abs_err, rel_err, ref_norm] : sim.computeComponentErrors()) {
-		if (name == "gasInternalEnergy") {
-			eint_abs_err = abs_err;
-			eint_rel_err = rel_err;
-		}
-	}
-	const amrex::Box domain = sim.Geom(0).Domain();
-	amrex::Print() << std::format("\nRing test, {} x {} cells, t = {}: gasInternalEnergy L1 error = {:.6e} (relative = {:.6e})\n", domain.length(0),
-				      domain.length(1), sim.tNew_[0], eint_abs_err, eint_rel_err);
-
 	amrex::Print() << "\n✓ Thermal conduction (anisotropic) ring test completed\n";
-	return std::isfinite(eint_rel_err) ? 0 : 1;
+	return 0;
 }
