@@ -52,6 +52,21 @@ struct Sweep1 {};
 struct SweepDType {};
 // CGS, one grey group: a weakly coupled, radiation-dominated two-temperature cell.
 struct GreyCGS {};
+// CGS, six half-decade groups from 0.01 eV to 10 eV with kappa_nu = kappa_0 (nu / nu_0)^p (T / T_0)^beta: the round-off
+// bound sweep.
+struct PowerLawCGS {};
+
+// The opacity law of PowerLawCGS, set on the host before each kernel launch: kappa_0 in cm^2 g^-1 at nu_0 = 1 eV and
+// T_0 = 100 K, the frequency exponent p and the temperature exponent beta.
+AMREX_GPU_MANAGED double pl_kappa0 = 1.0; // NOLINT
+AMREX_GPU_MANAGED double pl_expo = 0.0;	  // NOLINT
+AMREX_GPU_MANAGED double pl_beta = 0.0;	  // NOLINT
+constexpr double pl_nu0 = 1.0;		  // eV
+constexpr double pl_T0 = 100.0;		  // K
+constexpr int pl_ngroups = 6;
+constexpr amrex::GpuArray<double, pl_ngroups + 1> pl_edges = {1.0e-2, 3.1622776601683795e-2, 1.0e-1, 3.1622776601683795e-1, 1.0, 3.1622776601683795, 10.0};
+constexpr double pl_Erad_floor = 1.0e-30; // erg cm^-3
+constexpr double pl_Tfloor = 1.0;	  // K
 
 // The group opacities of SweepDType (IR, optical) in cm^2 g^-1, set on the host before each kernel launch.
 AMREX_GPU_MANAGED double dtype_kappa_ir = 1.0e-2;		// NOLINT
@@ -178,6 +193,39 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<GreyCGS>::ComputePlanckOpacity(
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<GreyCGS>::ComputeEnergyMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return 1.0e3;
+}
+
+template <> struct quokka::EOS_Traits<PowerLawCGS> {
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double gamma = 5. / 3.;
+};
+template <> struct Physics_Traits<PowerLawCGS> : DefaultPhysicsTraits {
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_radiation_enabled = true;
+	static constexpr int nGroups = pl_ngroups;
+	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+};
+template <> struct RadSystem_Traits<PowerLawCGS> {
+	static constexpr double c_hat_over_c = 1.0e-3;
+	static constexpr double Erad_floor = pl_Erad_floor;
+	static constexpr int beta_order = 1;
+	static constexpr double energy_unit = C::ev2erg;
+	static constexpr amrex::GpuArray<double, pl_ngroups + 1> radBoundaries = pl_edges;
+	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
+};
+// kappa_nu = kappa_0 (nu / nu_0)^p (T / T_0)^beta in every group: the exponent p and the value at the group's lower edge.
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PowerLawCGS>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries,
+													   const double /*rho*/, const double Tgas)
+    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+{
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	const double kappa_T = pl_kappa0 * std::pow(amrex::max(Tgas, 1.0e-10) / pl_T0, pl_beta);
+	for (int i = 0; i < nGroups_ + 1; ++i) {
+		exponents_and_values[0][i] = pl_expo;
+		exponents_and_values[1][i] = kappa_T * std::pow(rad_boundaries[i] / pl_nu0, pl_expo);
+	}
+	return exponents_and_values;
 }
 
 namespace
@@ -717,6 +765,608 @@ auto TestThickGroupEnergy() -> int
 	return (n_failed > 0) ? 1 : 0;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Round-off bounds for power-law opacities, kappa_nu = kappa_0 (nu / nu_0)^p (T / T_0)^beta with -4 < p <= 2 and
+// -3 <= beta <= 2.
+//
+// The analysis is in docs/markdown/radiation_integrator.md ("Round-off error of the returned state"). In short: the
+// solve returns the root of a scalar residual (G in E_gas, or H in T_d) whose floating-point evaluation carries an
+// absolute round-off of a few eps times the gross energy traffic of the step, and the root inherits that divided by the
+// slope of the residual. The group energies then follow in closed form, so their error is a few eps plus the
+// temperature error times the logarithmic sensitivity of E_g to the matter temperature, which for kappa_nu ~ nu^p is
+// bounded by the local exponents of the group emission and absorption. The bound is also the condition number of the
+// step itself: perturbing one input by one ulp moves the exact root by the same amount.
+//
+// This test measures both sides of that statement. The reference solution of every cell is found by bisection in
+// long double on the host, using the code's own double-precision coupling coefficients (ComputeCouplingCoefficients,
+// evaluated on the device at the trial temperature rounded to double), so it isolates the arithmetic of the solve from
+// the model behind the coefficients and is exact to one ulp of the trial temperature. The bound is evaluated at the
+// reference root from the measured temperature derivatives of the coefficients, and the ratio of the observed error to
+// the bound is reported per p.
+// ---------------------------------------------------------------------------------------------------------------------
+
+using LD = long double;
+constexpr double eps_double = std::numeric_limits<double>::epsilon();
+constexpr int pl_NG = pl_ngroups;
+
+/// One PowerLawCGS cell: hydrogen number density n_H [cm^-3], gas temperature [K], radiation temperature [K] (the groups
+/// carry a Planck spectrum at T_rad), step dt [s], and the collisional coefficient k_gd [erg cm^3 s^-1 K^-3/2].
+auto make_pl_cell(double n_H, double Tgas, double Trad, double dt, double k_gd) -> CouplingCell<PowerLawCGS>
+{
+	using P = PowerLawCGS;
+	CouplingCell<P> cell{};
+	cell.rho = n_H * C::m_u;
+	cell.dt = dt;
+	cell.tau_scale = dt * RadSystem<P>::c_hat_;
+	cell.dtK = dt * k_gd * n_H * n_H;
+	cell.Tfloor = pl_Tfloor;
+	cell.Emin = quokka::EOS<P>::ComputeEintFromTgas(cell.rho, pl_Tfloor, cell.massScalars);
+	cell.Egas0 = quokka::EOS<P>::ComputeEintFromTgas(cell.rho, Tgas, cell.massScalars);
+	cell.rad_boundaries = RadSystem<P>::radBoundaries_;
+	for (int g = 0; g < pl_NG; ++g) {
+		cell.rad_boundary_ratios[g] = cell.rad_boundaries[g + 1] / cell.rad_boundaries[g];
+	}
+	const auto frac = RadSystem<P>::ComputePlanckEnergyFractions(cell.rad_boundaries, Trad);
+	for (int g = 0; g < pl_NG; ++g) {
+		cell.Erad0[g] = std::max(RadSystem<P>::radiation_constant_ * std::pow(Trad, 4) * frac[g], pl_Erad_floor);
+	}
+	cell.Src.fillin(0.0);
+	cell.work.fillin(0.0);
+	return cell;
+}
+
+/// The coupling coefficients of every cell at its own trial temperature, evaluated on the device by the code's
+/// ComputeCouplingCoefficients.
+template <typename P> auto coefficients_at(std::vector<CouplingCell<P>> const &cells, std::vector<double> const &T) -> std::vector<CouplingCoefficients<P>>
+{
+	const int n = static_cast<int>(cells.size());
+	amrex::Gpu::DeviceVector<CouplingCell<P>> d_cells(n);
+	amrex::Gpu::DeviceVector<double> d_T(n);
+	amrex::Gpu::DeviceVector<CouplingCoefficients<P>> d_coef(n);
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, cells.begin(), cells.end(), d_cells.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, T.begin(), T.end(), d_T.begin());
+	CouplingCell<P> const *cell_ptr = d_cells.data();
+	double const *T_ptr = d_T.data();
+	CouplingCoefficients<P> *coef_ptr = d_coef.data();
+	amrex::ParallelFor(n, [=] AMREX_GPU_DEVICE(int i) noexcept { coef_ptr[i] = RadSystem<P>::ComputeCouplingCoefficients(cell_ptr[i], T_ptr[i]); });
+	std::vector<CouplingCoefficients<P>> coef(n);
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, d_coef.begin(), d_coef.end(), coef.begin());
+	return coef;
+}
+
+/// The state of a PowerLawCGS cell at a trial unknown, in long double, from double coefficients.
+struct RefEval {
+	LD residual{};
+	LD Egas{};
+	LD T{};
+	LD Tcoef{};  // the temperature the coefficients are evaluated at: T without dust, T_d with it
+	LD T_cons{}; // with dust: the gas temperature from conservation, before the gas equation replaces it
+	std::array<LD, pl_NG> Erad{};
+};
+
+template <bool with_dust> auto ref_eval(CouplingCell<PowerLawCGS> const &cell, CouplingCoefficients<PowerLawCGS> const &coef, LD x, LD cV) -> RefEval
+{
+	using P = PowerLawCGS;
+	const LD cscale = static_cast<LD>(RadSystem<P>::c_light_) / static_cast<LD>(RadSystem<P>::c_hat_);
+	const LD tau = cell.tau_scale;
+	LD gas0 = cell.Egas0;
+	LD dust_gain = 0.0L;
+	RefEval r{};
+	for (int g = 0; g < pl_NG; ++g) {
+		const LD rad0 = static_cast<LD>(cell.Erad0[g]) + static_cast<LD>(cell.Src[g]) + static_cast<LD>(cell.work[g]);
+		gas0 -= cscale * static_cast<LD>(cell.work[g]);
+		const LD eps = coef.emission[g];
+		const LD alpha = coef.absorption[g];
+		dust_gain += cscale * tau * (eps - alpha * rad0) / (1.0L + tau * alpha);
+		r.Erad[g] = (rad0 + tau * eps) / (1.0L + tau * alpha);
+	}
+	auto T_of = [&](LD E) { return (E > static_cast<LD>(cell.Emin)) ? E / cV : static_cast<LD>(cell.Tfloor); };
+	if constexpr (with_dust) {
+		r.Egas = gas0 - dust_gain;
+		r.T = T_of(r.Egas);
+		r.Tcoef = x;
+		r.residual = dust_gain - static_cast<LD>(cell.dtK) * std::sqrt(r.T) * (r.T - x);
+	} else {
+		r.Egas = x;
+		r.T = T_of(x);
+		r.Tcoef = r.T;
+		r.residual = (x - gas0) + dust_gain;
+	}
+	return r;
+}
+
+/// The reference root of every cell: the march of bracket_root_of_increasing from x0 (never below xmin), then bisection
+/// to 1e-18 relative, all in long double and in lockstep across the batch so that the device evaluates the coefficients of
+/// every cell once per step. found == false marks a cell whose march reached xmin with a positive residual (the floor
+/// rule of the solver) or exhausted its budget.
+struct RefRoot {
+	LD x{};
+	RefEval state{};
+	CouplingCoefficients<PowerLawCGS> coef{};
+	bool found{};
+};
+
+template <bool with_dust>
+auto reference_roots(std::vector<CouplingCell<PowerLawCGS>> const &cells, std::vector<LD> const &x0, std::vector<LD> const &xmin, std::vector<LD> const &cV)
+    -> std::vector<RefRoot>
+{
+	const int n = static_cast<int>(cells.size());
+	struct Walker {
+		int phase{0}; // 0 marching, 1 bisecting, 2 done
+		int steps{0};
+		LD x{}, f{};
+		LD lo{}, hi{}, flo{}, fhi{};
+		bool have_f{false};
+		bool found{false};
+	};
+	std::vector<Walker> w(n);
+	for (int i = 0; i < n; ++i) {
+		w[i].x = x0[i];
+	}
+	auto trial_T = [&](int i) -> double {
+		if constexpr (with_dust) {
+			return static_cast<double>(w[i].x);
+		} else {
+			return static_cast<double>((w[i].x > static_cast<LD>(cells[i].Emin)) ? w[i].x / cV[i] : static_cast<LD>(cells[i].Tfloor));
+		}
+	};
+	std::vector<double> T(n);
+	for (int iter = 0; iter < 600; ++iter) {
+		bool any = false;
+		for (int i = 0; i < n; ++i) {
+			T[i] = trial_T(i);
+			any = any || (w[i].phase < 2);
+		}
+		if (!any) {
+			break;
+		}
+		const auto coef = coefficients_at<PowerLawCGS>(cells, T);
+		for (int i = 0; i < n; ++i) {
+			auto &s = w[i];
+			if (s.phase == 2) {
+				continue;
+			}
+			const LD f = ref_eval<with_dust>(cells[i], coef[i], s.x, cV[i]).residual;
+			if (s.phase == 0) {
+				++s.steps;
+				if (f == 0.0L) {
+					s.lo = s.hi = s.x;
+					s.flo = s.fhi = f;
+					s.found = true;
+					s.phase = 2;
+					continue;
+				}
+				if (s.have_f && ((f > 0.0L) != (s.f > 0.0L))) {
+					// sign change between the previous point and this one
+					if (s.x < s.lo) {
+						s.lo = s.x;
+						s.flo = f;
+					} else {
+						s.hi = s.x;
+						s.fhi = f;
+					}
+					s.phase = 1;
+					s.x = s.lo / 2 + s.hi / 2;
+					continue;
+				}
+				if (!s.have_f || (f < 0.0L) == (s.f < 0.0L)) {
+					s.f = f;
+					s.have_f = true;
+					s.lo = s.hi = s.x;
+					s.flo = s.fhi = f;
+					if (f < 0.0L) {
+						s.x = 2 * s.x;
+					} else {
+						if (s.x == xmin[i] || s.steps > 300) {
+							s.phase = 2; // the floor rule, or no bracket: not a root
+							continue;
+						}
+						s.x = std::max(s.x / 2, xmin[i]);
+					}
+				}
+				continue;
+			}
+			// bisection
+			if ((f > 0.0L) == (s.fhi > 0.0L)) {
+				s.hi = s.x;
+				s.fhi = f;
+			} else {
+				s.lo = s.x;
+				s.flo = f;
+			}
+			const LD mid = s.lo / 2 + s.hi / 2;
+			if ((s.hi - s.lo) <= 1.0e-18L * std::abs(s.hi) || mid == s.lo || mid == s.hi) {
+				s.found = true;
+				s.phase = 2;
+				continue;
+			}
+			s.x = mid;
+		}
+	}
+	// the final estimate: the chord crossing of the last bracket, as the solver does
+	std::vector<RefRoot> roots(n);
+	for (int i = 0; i < n; ++i) {
+		auto &s = w[i];
+		if (s.found && s.hi > s.lo && s.flo != s.fhi) {
+			s.x = (s.lo * std::abs(s.fhi) + s.hi * std::abs(s.flo)) / (std::abs(s.flo) + std::abs(s.fhi));
+		} else if (s.found) {
+			s.x = s.lo;
+		}
+		roots[i].x = s.x;
+		roots[i].found = s.found;
+		T[i] = trial_T(i);
+	}
+	const auto coef = coefficients_at<PowerLawCGS>(cells, T);
+	for (int i = 0; i < n; ++i) {
+		roots[i].coef = coef[i];
+		roots[i].state = ref_eval<with_dust>(cells[i], coef[i], roots[i].x, cV[i]);
+		if constexpr (with_dust) {
+			// At the root the gas energy can be written from conservation, gas0 - (c/chat) sum_g Delta_g, or from the gas
+			// equation, E = gas0 - dt K sqrt(T) (T - T_d). In a radiation-dominated cell the first cancels terms up to
+			// 1e15 times the gas energy, which even long double (eps = 5e-20) cannot resolve, so the reference takes the
+			// gas equation, solved by Newton's method in T from the conservation value, whenever that converges.
+			auto &st = roots[i].state;
+			st.T_cons = st.T;
+			if (roots[i].found && st.Egas > static_cast<LD>(cells[i].Emin)) {
+				const LD cscale = static_cast<LD>(RadSystem<PowerLawCGS>::c_light_) / static_cast<LD>(RadSystem<PowerLawCGS>::c_hat_);
+				LD gas0 = cells[i].Egas0;
+				for (int g = 0; g < pl_NG; ++g) {
+					gas0 -= cscale * static_cast<LD>(cells[i].work[g]);
+				}
+				const LD dtK = cells[i].dtK;
+				const LD Td = roots[i].x;
+				// F(T) = c_V (T - T0) + dt K sqrt(T) (T - T_d) increases with T only where T >= T_d / 3 or the coupling is
+				// weak, so Newton is tried from the conservation value, then from T_d, then from the start-of-step T.
+				LD Tn = NAN;
+				bool settled = false;
+				for (const LD start : {st.T, Td, static_cast<LD>(cells[i].Egas0) / cV[i]}) {
+					Tn = start;
+					for (int k = 0; k < 100 && !settled; ++k) {
+						const LD sq = std::sqrt(Tn);
+						const LD F = cV[i] * Tn - gas0 + dtK * sq * (Tn - Td);
+						const LD dF = cV[i] + dtK * (1.5L * sq - 0.5L * Td / sq);
+						if (!(dF > 0.0L) || !(Tn > 0.0L)) {
+							break;
+						}
+						const LD step = F / dF;
+						Tn -= step;
+						settled = std::abs(step) <= 1.0e-18L * Tn;
+					}
+					if (settled) {
+						break;
+					}
+				}
+				if (settled && Tn * cV[i] > static_cast<LD>(cells[i].Emin)) {
+					st.T = Tn;
+					st.Egas = Tn * cV[i];
+				}
+			}
+		}
+	}
+	return roots;
+}
+
+/// The round-off bound of one cell at its reference root, from the temperature derivatives of the coefficients measured
+/// by central differences on the device. All quantities on the gas side (multiplied by c / chat).
+struct RoundoffBound {
+	double cond_T{};		     // (|gas0| + R) / (E_gas |1 + S|): the condition number of the gas energy without dust
+	double slope_ratio{};		     // the residual's slope over the sum of the magnitudes of its terms: near zero only at a fold
+	double bound_T{};		     // relative bound on T_gas (= E_gas for an ideal gas)
+	double bound_Td{};		     // relative bound on T_d (dust only)
+	std::array<double, pl_NG> bound_E{}; // relative bound on each group energy
+	double sens_E_max{};		     // the largest |d ln E_g / d ln T_m| among the groups kept
+};
+
+template <bool with_dust>
+auto roundoff_bounds(std::vector<CouplingCell<PowerLawCGS>> const &cells, std::vector<RefRoot> const &roots, std::vector<LD> const &cV)
+    -> std::vector<RoundoffBound>
+{
+	using P = PowerLawCGS;
+	const int n = static_cast<int>(cells.size());
+	const double cscale = RadSystem<P>::c_light_ / RadSystem<P>::c_hat_;
+	const double h = 1.0e-4;
+	std::vector<double> Tp(n);
+	std::vector<double> Tm(n);
+	for (int i = 0; i < n; ++i) {
+		const double Tc = static_cast<double>(roots[i].state.Tcoef);
+		Tp[i] = Tc * (1.0 + h);
+		Tm[i] = Tc * (1.0 - h);
+	}
+	const auto cp = coefficients_at<P>(cells, Tp);
+	const auto cm = coefficients_at<P>(cells, Tm);
+	std::vector<RoundoffBound> out(n);
+	for (int i = 0; i < n; ++i) {
+		auto const &cell = cells[i];
+		auto const &st = roots[i].state;
+		auto const &coef = roots[i].coef;
+		const double Tc = static_cast<double>(st.Tcoef);
+		const double T = static_cast<double>(st.T);
+		const double Egas = static_cast<double>(st.Egas);
+		const double tau = cell.tau_scale;
+		double gas0 = cell.Egas0;
+		double R = 0.0;		 // gross exchange: emitted plus absorbed over the step, gas side
+		double dDelta = 0.0;	 // d(sum_g Delta_g)/dT_m, gas side
+		double dDelta_abs = 0.0; // the same with every group's term taken positive
+		std::array<double, pl_NG> sens{};
+		std::array<double, pl_NG> coef_round{};
+		for (int g = 0; g < pl_NG; ++g) {
+			const double rad0 = cell.Erad0[g] + cell.Src[g] + cell.work[g];
+			gas0 -= cscale * cell.work[g];
+			const double eps = coef.emission[g];
+			const double alpha = coef.absorption[g];
+			const double deps = (cp[i].emission[g] - cm[i].emission[g]) / (2 * h * Tc);
+			const double dalpha = (cp[i].absorption[g] - cm[i].absorption[g]) / (2 * h * Tc);
+			// The group emission is rho kappa_P,g a T^4 f_g with f_g the Planck fraction of the group, computed as the
+			// difference of the cumulative Planck integrals at the group's two edges: its absolute round-off is eps
+			// times rho kappa_P,g a T^4 Y_g, with Y_g the cumulative fraction below the upper edge, not eps times the
+			// group's own emission. That is the round-off of the coefficient the solve is handed, so it enters both the
+			// residual and the group energy. (rho kappa_P,g a T^4 Y_g = rho kappa_P,g times the cumulative 4 pi B_k / c.)
+			double planck_cum = 0.0;
+			for (int k = 0; k <= g; ++k) {
+				planck_cum += coef.fourPiBoverC[k];
+			}
+			const double eps_full = cell.rho * coef.opacity.kappaP[g] * planck_cum;
+			const double absorbed = cscale * tau * alpha * rad0 / (1.0 + tau * alpha);
+			const double emitted_full = cscale * tau * std::max(eps, eps_full) / (1.0 + tau * alpha);
+			R += absorbed + emitted_full;
+			const double dDelta_g =
+			    cscale * tau * (deps * (1.0 + tau * alpha) - dalpha * (rad0 + tau * eps)) / ((1.0 + tau * alpha) * (1.0 + tau * alpha));
+			dDelta += dDelta_g;
+			dDelta_abs += std::abs(dDelta_g);
+			// d ln E_g / d ln T_m for E_g = (rad0 + tau eps) / (1 + tau alpha)
+			sens[g] = std::abs(tau * deps * Tc / (rad0 + tau * eps)) + std::abs(tau * dalpha * Tc / (1.0 + tau * alpha));
+			// the coefficient round-off reaching E_g directly: tau delta(eps_g) / (1 + tau alpha) relative to E_g
+			const double Eg = (rad0 + tau * eps) / (1.0 + tau * alpha);
+			coef_round[g] = eps_double * tau * std::max(eps, eps_full) / ((1.0 + tau * alpha) * Eg);
+		}
+		const double c_v = static_cast<double>(cV[i]);
+		RoundoffBound b{};
+		if constexpr (!with_dust) {
+			const double S = dDelta / c_v;
+			b.slope_ratio = (1.0 + S) / (1.0 + dDelta_abs / c_v);
+			b.cond_T = (std::abs(gas0) + R) / (Egas * std::abs(1.0 + S));
+			b.bound_T = eps_double * (1.0 + b.cond_T);
+			b.bound_Td = b.bound_T;
+		} else {
+			const double Td = Tc;
+			const double Lp = cell.dtK * std::sqrt(T);				     // d(collisional term)/dT_d, up to sign
+			const double LT = cell.dtK * (1.5 * std::sqrt(T) - 0.5 * Td / std::sqrt(T)); // d(collisional term)/dT at fixed T_d
+			const double Hp = dDelta * (1.0 + LT / c_v) + Lp;
+			const double dE_round = eps_double * (std::abs(gas0) + R);
+			const double dH = eps_double * (R + Lp * (T + Td)) + std::abs(LT) * dE_round / c_v;
+			b.slope_ratio = Hp / (dDelta_abs * (1.0 + std::abs(LT) / c_v) + Lp);
+			b.bound_Td = dH / (std::abs(Hp) * Td);
+			// the gas energy: from conservation, or from the gas equation solved at its own temperature
+			const double bound_cons = (dE_round + std::abs(dDelta) * Td * b.bound_Td) / Egas;
+			const double gas_form_slope = 1.0 + LT / c_v;
+			double bound_gas = std::numeric_limits<double>::infinity();
+			if (gas_form_slope > 0.5) {
+				bound_gas = (eps_double * (std::abs(gas0) + Lp * (T + Td)) + Lp * Td * b.bound_Td) / (gas_form_slope * Egas);
+			}
+			b.bound_T = std::min(bound_cons, bound_gas);
+			b.cond_T = bound_cons / eps_double;
+		}
+		for (int g = 0; g < pl_NG; ++g) {
+			b.bound_E[g] = 4.0 * eps_double + coef_round[g] + sens[g] * b.bound_Td;
+			b.sens_E_max = std::max(b.sens_E_max, sens[g]);
+		}
+		out[i] = b;
+	}
+	return out;
+}
+
+/// The sweep over p and beta: for each (p, beta) and each optical-depth scale, 84 cells (3 densities, 4 gas temperatures,
+/// 7 radiation temperatures) solved without dust and with four dust couplings, each compared with its long-double
+/// reference.
+auto TestRoundoffBounds() -> int
+{
+	using P = PowerLawCGS;
+	constexpr double dt = 1.0e9; // s
+	constexpr std::array<double, 7> expos{-3.9, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0};
+	constexpr std::array<double, 5> betas{-3.0, -1.5, 0.0, 1.0, 2.0};
+	constexpr std::array<double, 5> tau0s{1.0e-4, 1.0e-1, 1.0e2, 1.0e5, 1.0e8}; // rho kappa_0 chat dt at n_H = 100
+	constexpr std::array<double, 3> densities{1.0e-2, 1.0e2, 1.0e4};
+	constexpr std::array<double, 4> Tgases{10.0, 1.0e2, 1.0e3, 1.0e4};
+	constexpr std::array<double, 7> Tratios{0.1, 0.5, 1.0, 1.001, 2.0, 10.0, 100.0};
+	constexpr std::array<double, 4> kgds{0.0, 2.5e-34, 2.5e-30, 2.5e-26};
+	constexpr double tol = 1.0e-11;
+	// the bound constants asserted below; the measured maxima are printed
+	constexpr double C_T = 4.0;
+	constexpr double C_E = 8.0;
+	constexpr double C_Td = 16.0;
+
+	struct Stats {
+		int cells{0}, checked{0}, floored{0}, unconverged{0}, fold{0}, branch{0};
+		double max_err_T{0}, max_err_E{0}, max_err_Td{0};
+		double max_ratio_T{0}, max_ratio_E{0}, max_ratio_Td{0};
+		double max_cond{0}, max_sens{0};
+		std::string worst_T, worst_E;
+	};
+	std::array<std::array<Stats, betas.size()>, expos.size()> stats_gas{};
+	std::array<std::array<Stats, betas.size()>, expos.size()> stats_dust{};
+
+	auto accumulate = [&](Stats &s, bool with_dust, std::vector<CouplingCell<P>> const &cells, std::vector<CouplingSolution<P>> const &sols,
+			      std::vector<RefRoot> const &roots, std::vector<RoundoffBound> const &bounds, std::vector<std::string> const &labels) {
+		for (std::size_t i = 0; i < cells.size(); ++i) {
+			++s.cells;
+			if (!sols[i].converged) {
+				++s.unconverged;
+				continue;
+			}
+			// cells the solver or the reference clamped at a floor carry no root to compare with
+			if (!roots[i].found || sols[i].Egas <= cells[i].Emin * (1.0 + 1.0e-10) ||
+			    roots[i].state.Egas <= static_cast<LD>(cells[i].Emin) * (1.0L + 1.0e-10L)) {
+				++s.floored;
+				continue;
+			}
+			// near a fold of the residual (its slope cancels to under a tenth of the magnitude of its terms) the branch
+			// itself is decided by rounding; the bound is formally valid but the comparison is not meaningful there
+			if (std::abs(bounds[i].slope_ratio) < 0.1) {
+				++s.fold;
+				continue;
+			}
+			const double T_ref = static_cast<double>(roots[i].state.T);
+			const double err_T = std::abs(sols[i].T_gas / T_ref - 1.0);
+			if (err_T > 1.0e-3) {
+				++s.branch; // the solver and the reference followed different roots
+				continue;
+			}
+			++s.checked;
+			double err_E = 0.0;
+			double ratio_E = 0.0;
+			for (int g = 0; g < pl_NG; ++g) {
+				const double E_ref = static_cast<double>(roots[i].state.Erad[g]);
+				if (E_ref <= 2.0 * pl_Erad_floor) {
+					continue; // a group at the floor is set by ApplyEnergyFloors, not by the solve
+				}
+				const double e = std::abs(sols[i].Erad[g] / E_ref - 1.0);
+				err_E = std::max(err_E, e);
+				ratio_E = std::max(ratio_E, e / bounds[i].bound_E[g]);
+			}
+			const double ratio_T = err_T / bounds[i].bound_T;
+			s.max_err_T = std::max(s.max_err_T, err_T);
+			s.max_err_E = std::max(s.max_err_E, err_E);
+			s.max_cond = std::max(s.max_cond, bounds[i].cond_T);
+			s.max_sens = std::max(s.max_sens, bounds[i].sens_E_max);
+			if (ratio_T > s.max_ratio_T) {
+				s.max_ratio_T = ratio_T;
+				s.worst_T = std::format("{} err_T {:.2e} bound {:.2e} cond {:.1e}", labels[i], err_T, bounds[i].bound_T, bounds[i].cond_T);
+			}
+			if (ratio_E > s.max_ratio_E) {
+				s.max_ratio_E = ratio_E;
+				s.worst_E = std::format("{} err_E {:.2e} sens {:.1f}", labels[i], err_E, bounds[i].sens_E_max);
+			}
+			if (with_dust) {
+				const double Td_ref = static_cast<double>(roots[i].x);
+				const double err_Td = std::abs(sols[i].T_d / Td_ref - 1.0);
+				s.max_err_Td = std::max(s.max_err_Td, err_Td);
+				s.max_ratio_Td = std::max(s.max_ratio_Td, err_Td / bounds[i].bound_Td);
+			}
+		}
+	};
+
+	for (std::size_t ip = 0; ip < expos.size(); ++ip) {
+		for (std::size_t ib = 0; ib < betas.size(); ++ib) {
+			pl_expo = expos[ip];
+			pl_beta = betas[ib];
+			for (const double tau0 : tau0s) {
+				pl_kappa0 = tau0 / (1.0e2 * C::m_u * RadSystem<P>::c_hat_ * dt);
+				std::vector<CouplingCell<P>> cells_gas;
+				std::vector<CouplingCell<P>> cells_dust;
+				std::vector<std::string> labels_gas;
+				std::vector<std::string> labels_dust;
+				for (const double n_H : densities) {
+					for (const double Tg : Tgases) {
+						for (const double ratio : Tratios) {
+							cells_gas.push_back(make_pl_cell(n_H, Tg, ratio * Tg, dt, 0.0));
+							labels_gas.push_back(std::format("p {} beta {} tau0 {:.0e} n_H {:.0e} Tg {:.0f} Tr/Tg {}", expos[ip],
+											 betas[ib], tau0, n_H, Tg, ratio));
+							for (const double k_gd : kgds) {
+								cells_dust.push_back(make_pl_cell(n_H, Tg, ratio * Tg, dt, k_gd));
+								labels_dust.push_back(std::format("{} k_gd {:.1e}", labels_gas.back(), k_gd));
+							}
+						}
+					}
+				}
+				auto cV_of = [](std::vector<CouplingCell<P>> const &cells) {
+					std::vector<LD> cV(cells.size());
+					for (std::size_t i = 0; i < cells.size(); ++i) {
+						cV[i] = static_cast<LD>(quokka::EOS<P>::ComputeEintFromTgas(cells[i].rho, 1.0, cells[i].massScalars));
+					}
+					return cV;
+				};
+				// without dust: the unknown is E_gas, marched from Egas0 and never below the solver's march floor
+				{
+					const auto cV = cV_of(cells_gas);
+					std::vector<LD> x0(cells_gas.size());
+					std::vector<LD> xmin(cells_gas.size());
+					for (std::size_t i = 0; i < cells_gas.size(); ++i) {
+						xmin[i] = std::max(static_cast<LD>(cells_gas[i].Emin),
+								   16.0L * static_cast<LD>(eps_double) * static_cast<LD>(cells_gas[i].Egas0));
+						x0[i] = std::max(static_cast<LD>(cells_gas[i].Egas0), xmin[i]);
+					}
+					const auto sols = solve_cells<P, false>(cells_gas, tol);
+					const auto roots = reference_roots<false>(cells_gas, x0, xmin, cV);
+					const auto bounds = roundoff_bounds<false>(cells_gas, roots, cV);
+					accumulate(stats_gas[ip][ib], false, cells_gas, sols, roots, bounds, labels_gas);
+				}
+				// with dust: the unknown is T_d, marched from the start-of-step gas temperature down to T_d^min
+				{
+					const auto cV = cV_of(cells_dust);
+					std::vector<LD> x0(cells_dust.size());
+					std::vector<LD> xmin(cells_dust.size());
+					const LD T_emit_floor =
+					    std::pow(static_cast<LD>(pl_Erad_floor) / static_cast<LD>(RadSystem<P>::radiation_constant_), 0.25L);
+					for (std::size_t i = 0; i < cells_dust.size(); ++i) {
+						const LD T0 = std::max(static_cast<LD>(cells_dust[i].Egas0) / cV[i], static_cast<LD>(cells_dust[i].Tfloor));
+						x0[i] = T0;
+						xmin[i] = std::min(std::max(T_emit_floor, 1.0e-10L * T0), T0);
+					}
+					const auto sols = solve_cells<P, true>(cells_dust, tol);
+					const auto roots = reference_roots<true>(cells_dust, x0, xmin, cV);
+					const auto bounds = roundoff_bounds<true>(cells_dust, roots, cV);
+					accumulate(stats_dust[ip][ib], true, cells_dust, sols, roots, bounds, labels_dust);
+				}
+			}
+		}
+	}
+
+	auto report = [&](std::string const &name, std::array<std::array<Stats, betas.size()>, expos.size()> const &stats, bool with_dust) {
+		std::cout << std::format("round-off bounds, {} (kappa_nu ~ nu^p T^beta, {} groups, chat = c/1000, reference in long double):\n", name, pl_NG);
+		std::cout << std::format("{:>5} {:>5} {:>6} {:>7} {:>7} {:>5} {:>6} {:>6} {:>9} {:>8} {:>9} {:>8} {:>8} {:>7}{}\n", "p", "beta", "cells",
+					 "checked", "floored", "fold", "branch", "unconv", "err_T", "ratio_T", "err_E", "ratio_E", "cond_T", "sens_E",
+					 with_dust ? "    err_Td ratio_Td" : "");
+		Stats worst_T_all{};
+		Stats worst_E_all{};
+		for (std::size_t ip = 0; ip < expos.size(); ++ip) {
+			for (std::size_t ib = 0; ib < betas.size(); ++ib) {
+				auto const &s = stats[ip][ib];
+				std::cout << std::format(
+				    "{:>5} {:>5} {:>6} {:>7} {:>7} {:>5} {:>6} {:>6} {:>9.2e} {:>8.2f} {:>9.2e} {:>8.2f} {:>8.1e} {:>7.1f}", expos[ip],
+				    betas[ib], s.cells, s.checked, s.floored, s.fold, s.branch, s.unconverged, s.max_err_T, s.max_ratio_T, s.max_err_E,
+				    s.max_ratio_E, s.max_cond, s.max_sens);
+				if (with_dust) {
+					std::cout << std::format(" {:>9.2e} {:>8.2f}", s.max_err_Td, s.max_ratio_Td);
+				}
+				std::cout << "\n";
+				if (s.max_ratio_T > worst_T_all.max_ratio_T) {
+					worst_T_all = s;
+				}
+				if (s.max_ratio_E > worst_E_all.max_ratio_E) {
+					worst_E_all = s;
+				}
+			}
+		}
+		std::cout << std::format("  worst T ratio at {}\n  worst E ratio at {}\n", worst_T_all.worst_T, worst_E_all.worst_E);
+	};
+	report("one-temperature model", stats_gas, false);
+	report("two-temperature model", stats_dust, true);
+
+	int checked_gas = 0;
+	int checked_dust = 0;
+	int unconverged = 0;
+	double worst_T = 0.0;
+	double worst_E = 0.0;
+	double worst_Td = 0.0;
+	for (std::size_t ip = 0; ip < expos.size(); ++ip) {
+		for (std::size_t ib = 0; ib < betas.size(); ++ib) {
+			checked_gas += stats_gas[ip][ib].checked;
+			checked_dust += stats_dust[ip][ib].checked;
+			unconverged += stats_gas[ip][ib].unconverged + stats_dust[ip][ib].unconverged;
+			worst_T = std::max({worst_T, stats_gas[ip][ib].max_ratio_T, stats_dust[ip][ib].max_ratio_T});
+			worst_E = std::max({worst_E, stats_gas[ip][ib].max_ratio_E, stats_dust[ip][ib].max_ratio_E});
+			worst_Td = std::max(worst_Td, stats_dust[ip][ib].max_ratio_Td);
+		}
+	}
+	check(unconverged == 0, "round-off sweep: every cell converged");
+	check(checked_gas >= 10000 && checked_dust >= 30000,
+	      std::format("round-off sweep: {} + {} cells compared with the reference", checked_gas, checked_dust));
+	check(worst_T <= C_T, std::format("round-off sweep: gas temperature error within {} times its bound (max ratio {:.2f})", C_T, worst_T));
+	check(worst_E <= C_E, std::format("round-off sweep: group energy error within {} times its bound (max ratio {:.2f})", C_E, worst_E));
+	check(worst_Td <= C_Td, std::format("round-off sweep: dust temperature error within {} times its bound (max ratio {:.2f})", C_Td, worst_Td));
+	return (n_failed > 0) ? 1 : 0;
+}
+
 } // namespace
 
 auto problem_main() -> int
@@ -733,7 +1383,8 @@ auto problem_main() -> int
 	const int dtype_status = TestDTypeDustSweep();
 	const int thick_status = TestThickGroupEnergy();
 	const int weak_status = TestWeakCouplingCell();
-	const int status = (gas_status == 0 && dust_status == 0 && dtype_status == 0 && thick_status == 0 && weak_status == 0) ? 0 : 1;
+	const int roundoff_status = TestRoundoffBounds();
+	const int status = (gas_status == 0 && dust_status == 0 && dtype_status == 0 && thick_status == 0 && weak_status == 0 && roundoff_status == 0) ? 0 : 1;
 	std::cout << (status == 0 ? "RadCouplingUnitTests: all tests passed.\n" : "RadCouplingUnitTests: FAILED.\n");
 	return (n_failed > 0) ? 1 : 0;
 }
