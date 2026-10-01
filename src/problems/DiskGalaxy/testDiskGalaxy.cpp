@@ -87,25 +87,23 @@ inline auto interpolate_turbulence(const amrex::Real *table, int nx, int ny, int
 	       c001 * (1 - fx) * (1 - fy) * fz + c101 * fx * (1 - fy) * fz + c011 * (1 - fx) * fy * fz + c111 * fx * fy * fz;
 }
 
-// Read a raw binary file of n_expect amrex::Real values into device memory.
-inline auto load_bin_to_device(const std::string &path, std::size_t n_expect) -> amrex::Gpu::DeviceVector<amrex::Real>
+// Read a raw binary file of n_expect amrex::Real values into pinned host memory, which GPU
+// kernels read directly (like the vcirc/halo tables). This uses no device memory and needs no
+// host-to-device copy.
+inline auto load_bin_to_pinned(const std::string &path, std::size_t n_expect) -> amrex::Gpu::PinnedVector<amrex::Real>
 {
-	std::vector<amrex::Real> host(n_expect);
+	amrex::Gpu::PinnedVector<amrex::Real> table(n_expect);
 	std::ifstream f(path, std::ios::binary);
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f, ("Cannot open " + path).c_str());
 	const std::size_t total_bytes = n_expect * sizeof(amrex::Real);
 	// NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-narrowing-conversions)
-	f.read(reinterpret_cast<char *>(host.data()), static_cast<std::streamsize>(total_bytes));
+	f.read(reinterpret_cast<char *>(table.data()), static_cast<std::streamsize>(total_bytes));
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f, ("Error reading " + path).c_str());
 
-	amrex::Gpu::DeviceVector<amrex::Real> dev(n_expect);
-	amrex::Gpu::copy(amrex::Gpu::hostToDevice, host.begin(), host.end(), dev.begin());
-	amrex::Gpu::synchronize();
-
 	amrex::Print() << "Loaded " << path << " (" << n_expect << " elements)\n";
-	return dev;
+	return table;
 }
 } // namespace
 
@@ -162,9 +160,9 @@ template <> struct SimulationData<DiskGalaxy> {
 	bool turb_enabled = false;
 	bool turb_loaded = false; // guard: preCalculateInitialConditions runs once per level
 	bool turb_debug = false;  // print per-rank progress (with GPU syncs) during turbulence setup
-	amrex::Gpu::DeviceVector<amrex::Real> turb_vx_device;
-	amrex::Gpu::DeviceVector<amrex::Real> turb_vy_device;
-	amrex::Gpu::DeviceVector<amrex::Real> turb_vz_device;
+	amrex::Gpu::PinnedVector<amrex::Real> turb_vx_table;
+	amrex::Gpu::PinnedVector<amrex::Real> turb_vy_table;
+	amrex::Gpu::PinnedVector<amrex::Real> turb_vz_table;
 	amrex::Real turb_rescale_factor{}; // cm/s per unit table value
 	amrex::Real turb_box_half{};	   // half-width (cm) of the cube, centred on the origin, that the table is mapped onto
 	int turb_n{};			   // table side length
@@ -264,14 +262,14 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 						 "disk_galaxy.turb_v{x,y,z}_file must all be the same size");
 
 		userData_.turb_n = n_side;
-		userData_.turb_vx_device = load_bin_to_device(turb_vx_file, n_turb);
-		userData_.turb_vy_device = load_bin_to_device(turb_vy_file, n_turb);
-		userData_.turb_vz_device = load_bin_to_device(turb_vz_file, n_turb);
+		userData_.turb_vx_table = load_bin_to_pinned(turb_vx_file, n_turb);
+		userData_.turb_vy_table = load_bin_to_pinned(turb_vy_file, n_turb);
+		userData_.turb_vz_table = load_bin_to_pinned(turb_vz_file, n_turb);
 		userData_.turb_rescale_factor = turb_velocity_kms * vel_unit;
 		userData_.turb_box_half = turb_box_half_kpc * length_unit;
 		userData_.turb_loaded = true;
 		if (userData_.turb_debug) {
-			amrex::AllPrint() << "[turb_debug] rank " << amrex::ParallelDescriptor::MyProc() << ": turbulence tables on device\n";
+			amrex::AllPrint() << "[turb_debug] rank " << amrex::ParallelDescriptor::MyProc() << ": turbulence tables in pinned host memory\n";
 		}
 
 		amrex::Print() << "Turbulence enabled: cube " << n_side << "^3 mapped onto +/- " << turb_box_half_kpc << " kpc, velocity scale "
@@ -572,12 +570,12 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	}
 
 	// Optional turbulent velocity perturbation, applied to the disk gas only (weighted by the
-	// cell-averaged disk density) inside the +/- turb_box_half cube. This is a separate kernel on
-	// purpose: adding it to the kernel above overflows the GPU stack on AMD (cf. #1826).
+	// cell-averaged disk density) inside the +/- turb_box_half cube. Kept as a separate kernel so
+	// the large kernel above stays unchanged (its GPU stack usage is already near the limit, cf. #1826).
 	if (userData_.turb_enabled) {
-		const amrex::Real *turb_vx = userData_.turb_vx_device.data();
-		const amrex::Real *turb_vy = userData_.turb_vy_device.data();
-		const amrex::Real *turb_vz = userData_.turb_vz_device.data();
+		const amrex::Real *turb_vx = userData_.turb_vx_table.data();
+		const amrex::Real *turb_vy = userData_.turb_vy_table.data();
+		const amrex::Real *turb_vz = userData_.turb_vz_table.data();
 		const int turb_n = userData_.turb_n;
 		const amrex::Real turb_rescale = userData_.turb_rescale_factor;
 		const amrex::Real turb_box_half = userData_.turb_box_half;
@@ -755,13 +753,13 @@ template <> void QuokkaSimulation<DiskGalaxy>::computeBeforeTimestep()
 {
 	// the turbulence table is only needed to set initial conditions; free it before the first step
 	// (regridding fills new levels from coarser ones, and restarts do not re-run the initial conditions)
-	if (!userData_.turb_vx_device.empty()) {
-		userData_.turb_vx_device.clear();
-		userData_.turb_vx_device.shrink_to_fit();
-		userData_.turb_vy_device.clear();
-		userData_.turb_vy_device.shrink_to_fit();
-		userData_.turb_vz_device.clear();
-		userData_.turb_vz_device.shrink_to_fit();
+	if (!userData_.turb_vx_table.empty()) {
+		userData_.turb_vx_table.clear();
+		userData_.turb_vx_table.shrink_to_fit();
+		userData_.turb_vy_table.clear();
+		userData_.turb_vy_table.shrink_to_fit();
+		userData_.turb_vz_table.clear();
+		userData_.turb_vz_table.shrink_to_fit();
 	}
 
 	// parse once, on first call
