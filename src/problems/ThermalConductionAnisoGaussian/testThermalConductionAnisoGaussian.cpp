@@ -25,7 +25,7 @@ profiles diffuse independently with D_par = kappa_par (gamma - 1) / (n k_B) and 
 n = rho / mu. kappaPar and kappaPerp (erg cm^-1 s^-1 K^-1) are read from the input file (conduction.*).
 The profile is uniform in z.
 */
-static_assert(AMREX_SPACEDIM >= 2, "This problem needs at least 2 dimensions.");
+static_assert(AMREX_SPACEDIM == 3, "This problem is only supported in 3D.");
 
 constexpr double Eint0 = 2.505e-8;	     // Gaussian peak (equivalent to T = 2.e8 K)
 constexpr double Efloor = 2.505e-11;	     // equivalent to T = 2.e6 K
