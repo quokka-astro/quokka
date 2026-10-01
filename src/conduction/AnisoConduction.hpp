@@ -27,10 +27,10 @@
 #include <array>
 #include <cmath>
 #include <limits>
-#include <string>
 
 #include "AMReX.H"
 #include "AMReX_Array4.H"
+#include "AMReX_Enum.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_MFIter.H"
@@ -48,9 +48,9 @@ namespace quokka::conduction
 {
 
 // Selects the limiter LimitUpperLowerFlux applies to the transverse temperature gradients of the cross
-// term (Sharma & Hammett 2007). Minmod and MC (monotonized central) are implemented; add new cases
-// here (and in LimitUpperLowerFlux's switch) to support more limiter types.
-enum class AnisoFluxLimiterType { Minmod, MC };
+// term (Sharma & Hammett 2007), read from conduction.aniso_flux_limiter. Minmod and MC (monotonized
+// central: default) are implemented.
+AMREX_ENUM(AnisoFluxLimiterType, minmod, mc); // NOLINT
 
 struct AnisoConductionParams {
 	ConductivityParams conductivity{}; // prefactors for ConductionModel::constant/spitzer (see conductivity.hpp)
@@ -61,7 +61,7 @@ struct AnisoConductionParams {
 	int reconstruction_order = 3;	     // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM;
 	SlopeLimiter plm_limiter = SlopeLimiter::sweby;
 	int ng_reconstruct = 2;						   // number of ghost faces to reconstruct beyond the valid box
-	AnisoFluxLimiterType flux_limiter_type = AnisoFluxLimiterType::MC; // transverse-gradient limiter (hard-coded; set to ::Minmod to switch back)
+	AnisoFluxLimiterType flux_limiter_type = AnisoFluxLimiterType::mc; // transverse-gradient limiter (conduction.aniso_flux_limiter)
 };
 
 template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect FaceMinusOne(int i, int j, int k)
@@ -81,46 +81,17 @@ template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect UpperC
 	return amrex::IntVect(AMREX_D_DECL(i + 1, j + 1, k + 1)) - amrex::IntVect::TheDimensionVector(static_cast<int>(DIR));
 }
 
-// Host-only: parses a limiter name (e.g. from an input parameter) into AnisoFluxLimiterType. Not
-// GPU-safe -- call this once on the host (e.g. while populating AnisoConductionParams), never from
-// inside a GPU kernel; std::string comparisons are not usable in device code, which is why
-// LimitUpperLowerFlux below takes the already-parsed enum instead of a string.
-inline auto ParseAnisoFluxLimiterType(std::string const &name) -> AnisoFluxLimiterType
-{
-	if (name == "minmod") {
-		return AnisoFluxLimiterType::Minmod;
-	}
-	if (name == "mc") {
-		return AnisoFluxLimiterType::MC;
-	}
-	amrex::Abort("Unknown anisotropic-conduction flux limiter \"" + name + "\" (valid: \"minmod\", \"mc\")");
-	return AnisoFluxLimiterType::Minmod; // unreachable; amrex::Abort does not return
-}
-
 // Combines two per-corner or per-neighbor estimates (q_lower, q_upper) into a single limited
-// value, per the limiter selected by `limiter_type` -- used both directly (the transverse-term
-// NestedLimit) and, in earlier revisions of this scheme, to combine per-corner flux estimates. Takes
-// the pre-parsed enum (see ParseAnisoFluxLimiterType) rather than a string, since this runs per-face
-// inside a device kernel and std::string comparisons are not GPU-safe. Marked host+device (unlike
-// UpperCorner/FaceMinusOne) since it is pure arithmetic with no device-only memory access.
-//
-// Minmod: if q_lower and q_upper disagree in sign (or either is exactly zero), returns 0 -- this is
-// the signature of a spurious, non-physical contribution (e.g. near a field bend or a field-direction
-// null), so it is suppressed entirely rather than averaged into a nonzero residual. If they agree in
-// sign, returns whichever has the smaller magnitude (with that shared sign), to avoid overshoot.
-//
-// MC (monotonized central): same zero-on-sign-disagreement rule; otherwise returns
-// sign * min(2|q_lower|, 2|q_upper|, |q_lower + q_upper|/2) -- the central average where it is
-// safe, less diffusive than minmod.
+// value
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real LimitUpperLowerFlux(amrex::Real q_lower, amrex::Real q_upper, AnisoFluxLimiterType limiter_type)
 {
 	switch (limiter_type) {
-		case AnisoFluxLimiterType::MC:
+		case AnisoFluxLimiterType::mc:
 			if (q_lower * q_upper <= 0.0) {
 				return 0.0;
 			}
 			return std::copysign(amrex::min(2.0 * std::abs(q_lower), 2.0 * std::abs(q_upper), 0.5 * std::abs(q_lower + q_upper)), q_lower);
-		case AnisoFluxLimiterType::Minmod:
+		case AnisoFluxLimiterType::minmod:
 		default:
 			if (q_lower * q_upper <= 0.0) {
 				return 0.0;
@@ -130,18 +101,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real LimitUpperLowerFlux(amrex::
 }
 
 // (kappa_par - kappa_perp) * bn^2 -- the field-aligned part of the diagonal tensor entry (q_xx-type term).
-// Non-negative as long as kappa_perp <= kappa_par -- this is why the normal term is safe to limit with the
-// biased L2 rather than minmod (see L2 below).
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real DiagCoeff(amrex::Real bn, amrex::Real kappa_aniso) { return kappa_aniso * bn * bn; }
 
-// (kappa_par - kappa_perp) * bi * bj -- the off-diagonal tensor entry (q_xy/q_xz-type term). Sign-indefinite
-// (flips with bi*bj), so it needs symmetric minmod/MC limiting (see NestedLimit below), not L2.
+// (kappa_par - kappa_perp) * bi * bj -- the off-diagonal tensor entry (q_xy/q_xz-type term). 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real CrossCoeff(amrex::Real bi, amrex::Real bj, amrex::Real kappa_aniso) { return kappa_aniso * bi * bj; }
 
-// Sharma & Hammett (2007) Eq. (21): a biased limiter for the (sign-definite) normal term. Not
-// symmetric in its arguments -- `anchor` must be the face's own gradient estimate, `neighbor` the
-// transverse-neighbor face's. Returns the neighbor-inclusive average when it falls within
-// [alpha*anchor, anchor/alpha] (in either order), otherwise clamps to whichever bound was crossed.
+// Sharma & Hammett (2007) Eq. (21): a biased limiter 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real L2(amrex::Real anchor, amrex::Real neighbor, amrex::Real alpha)
 {
 	const amrex::Real avg = 0.5 * (anchor + neighbor);
@@ -154,8 +119,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real L2(amrex::Real anchor, amre
 }
 
 // L(L(a,b), L(c,d)) -- Eq. (17) / Sec. 6.1's nested-limiter pattern for the (sign-indefinite)
-// transverse term, with L = minmod or MC per `limiter_type`. Reuses LimitUpperLowerFlux rather than
-// re-deriving the limiter a second time.
+// transverse term, with L = minmod or MC per `limiter_type`.
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real NestedLimit(amrex::Real a, amrex::Real b, amrex::Real c, amrex::Real d, AnisoFluxLimiterType limiter_type)
 {
 	return LimitUpperLowerFlux(LimitUpperLowerFlux(a, b, limiter_type), LimitUpperLowerFlux(c, d, limiter_type), limiter_type);
@@ -228,10 +192,6 @@ ComputeCrossTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const 
 
 	return -CrossCoeff(bn_face, bt_face, kappa_face) * slope;
 }
-
-// Declarations only -- see the definitions below AnisoConduction for what each of these actually
-// does. Declared here so that AnisoConduction::ComputeExplicit (which calls all four) can be read
-// first; scroll down past the class for the bodies.
 
 // Unit B-field at mesh vertices ("corners"), built from FACE-CENTERED input data (state_fc)
 template <typename problem_t> void ComputeCornerFC(amrex::MultiFab &bhat_corner_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int nghost);
@@ -356,7 +316,7 @@ template <typename problem_t> class AnisoConduction
 			heat_flux[idim].setVal(0.0);
 		}
 
-		// Unit B-field, kappa, and qsat at mesh vertices ("corners") 
+		// Unit B-field, kappa, and qsat at mesh vertices ("corners")
 		amrex::BoxArray const ba_corner = amrex::convert(state.boxArray(), amrex::IntVect::TheUnitVector());
 		amrex::MultiFab bhat_corner(ba_corner, state.DistributionMap(), 3, 0);
 		amrex::MultiFab kappa_corner(ba_corner, state.DistributionMap(), 2, 0); // (kappa_par, kappa_perp)
