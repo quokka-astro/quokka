@@ -1,7 +1,7 @@
 include_guard(GLOBAL)
 
-set(QUOKKA_YIELD_ARCHIVE "${CMAKE_SOURCE_DIR}/extern/yields/quokka_yield_tables.tar.gz")
-set(QUOKKA_YIELD_DESTINATION "${CMAKE_SOURCE_DIR}/extern/yields")
+set(QUOKKA_YIELD_ARCHIVE "${QuokkaCode_SOURCE_DIR}/extern/yields/quokka_yield_tables.tar.gz")
+set(QUOKKA_YIELD_DESTINATION "${QuokkaCode_SOURCE_DIR}/extern/yields")
 
 file(ARCHIVE_EXTRACT INPUT "${QUOKKA_YIELD_ARCHIVE}" DESTINATION "${QUOKKA_YIELD_DESTINATION}")
 
