@@ -733,9 +733,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("conduction_cfl", conductionCFL);
 		hpp.query("flux_limiter_phi", conductionFluxLimiterPhi_);
 		hpp.query("saturation_factor", conductionSaturationFactor_);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!hpp.contains("conduction_type"),
-						 "conduction.conduction_type has been removed; set Physics_Traits::conduction_model and "
-						 "Physics_Traits::conduction_geometry in the problem file instead.");
 
 		constexpr ConductionModel conduction_model = Physics_Traits<problem_t>::conduction_model;
 		constexpr bool is_anisotropic = (Physics_Traits<problem_t>::conduction_geometry == ConductionGeometry::anisotropic);
