@@ -455,6 +455,8 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 			return "unused_" + std::to_string(idx);
 		};
 		const std::array<std::string, ChemicalYieldLookup::max_tracked_channels> channel_names = {"SNII", "WR", "AGB"};
+		// Birth-abundance names use total/channel blocks, e.g. chem_birth_total_C12 and chem_birth_SNII_C12.
+		// Reserved slots use names such as chem_birth_total_unused_3; see docs/markdown/particles.md.
 		for (int block = 0; block < ChemicalYieldLookup::max_tracked_channels + 1; ++block) {
 			for (int n = 0; n < StochasticStellarPopParticleChemistryBlockCapacity<problem_t>(); ++n) {
 				if (block == 0) {
