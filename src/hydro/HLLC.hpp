@@ -95,8 +95,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	const double theta = tp * tp * tp * tp;
 
 	// compute speed of the 'star' state with the full pressure jump
-	const double S_star =
-	    ((sR.P - sL.P) + (sL.rho * sL.u * (S_L - sL.u) - sR.rho * sR.u * (S_R - sR.u))) / (sL.rho * (S_L - sL.u) - sR.rho * (S_R - sR.u));
+	const double S_star = ((sR.P - sL.P) + (sL.rho * sL.u * (S_L - sL.u) - sR.rho * sR.u * (S_R - sR.u))) / (sL.rho * (S_L - sL.u) - sR.rho * (S_R - sR.u));
 
 	// Low-dissipation pressure correction 'phi' [Eq. 23 of Minoshima & Miyoshi]
 
