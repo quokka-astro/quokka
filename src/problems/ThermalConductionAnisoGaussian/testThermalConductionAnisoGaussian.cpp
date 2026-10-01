@@ -33,8 +33,7 @@ const double rho0 = 0.1;		     // 1/cm^3
 constexpr double Lref = 7.714e+17;	     // quarter box length, fixes region of refinement
 constexpr double sigma = 2.410685615625e+17; // width of the initial Gaussian, in cm (amr2-branch value)
 constexpr double Bx0 = 1.e-6;		     // uniform field along x, in Quokka's code units (E_mag = B^2 / 2, i.e. B_Gauss / sqrt(4 pi))
-struct ThermalConductionAnisoProblem {
-};
+struct ThermalConductionAnisoProblem {};
 
 template <> struct quokka::EOS_Traits<ThermalConductionAnisoProblem> {
 	static constexpr double gamma = 2.0;

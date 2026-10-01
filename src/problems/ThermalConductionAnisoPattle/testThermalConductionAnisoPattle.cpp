@@ -34,8 +34,7 @@ constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref; // Normalization
 constexpr double spitzer_t_start = 330471.1321990738;	// initial time at which the IC/reference Pattle solution is evaluated
 constexpr amrex::Real pattle_q = 2.5;			// conductivity exponent: kappa(T) = kappa0 * T^pattle_q (2.5 for Spitzer)
 constexpr double Bx0 = 1.e-6;				// uniform field along x, in Quokka's code units (E_mag = B^2 / 2, i.e. B_Gauss / sqrt(4 pi))
-struct ThermalConductionAnisoPattleProblem {
-};
+struct ThermalConductionAnisoPattleProblem {};
 
 template <> struct quokka::EOS_Traits<ThermalConductionAnisoPattleProblem> {
 	static constexpr double gamma = 2.0;
