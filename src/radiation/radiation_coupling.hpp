@@ -356,38 +356,53 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustCoupling(CouplingCell<probl
 
 	// The gas energy at the root can be written two ways that agree up to the residual H: from conservation,
 	// gas0 - (c/chat) sum_g Delta_g, or from the gas equation, E = gas0 - dt K sqrt(T) (T - T_d). Their round-off differs.
-	// The first cancels the group exchanges, which in a radiation-dominated cell can be 1e17 times the gas energy. The
-	// second carries only the collisional transfer, whose response to an error in the gas temperature is 1.5 dt K sqrt(T)
-	// / c_V; that is small where the coupling is weak and up to 1e8 where the dust locks the gas. Take the form with the
-	// smaller estimated error. At K = 0 this leaves the gas energy exactly gas0, as the physics says: the gas exchanges
-	// nothing with the dust, and mirror cells stay mirror images (DTypeFront1D's symmetry check).
+	// The first carries the round-off of the group exchanges, eps times the gross emission and absorption of the step
+	// (the Planck fraction of a group is the difference of two cumulative integrals of order one, so even a group far
+	// from the Planck peak contributes eps times the full Planck emission), which in a radiation-dominated cell is up to
+	// 1e17 times the gas energy. The same round-off moves the root T_d by delta H / H', and the gas equation inherits
+	// only dt K sqrt(T) times that, which is at most the fraction dt K sqrt(T) / H' <= 1 of the conservation form's
+	// error; its own evaluation adds eps (|gas0| + dt K sqrt(T) (T + T_d)) / F'. So the gas equation is solved for E at
+	// its own temperature, by Newton's method on F(E) = (E - gas0) + dt K sqrt(T(E)) (T(E) - T_d) (see
+	// docs/markdown/radiation_integrator.md, "Round-off error of the returned state"). Evaluating the transfer at the
+	// conservation-form temperature instead would carry the round-off of that form into the heating: in a cell 5.5e17
+	// times radiation-dominated that temperature is 8% low, and the heating 4% low. F increases with E only where
+	// T >= T_d / 3 or the coupling is weak, so Newton starts from gas0 (the weakly coupled root is near it) and, if that
+	// start lies where F' <= 0, from the dust temperature (the strongly coupled root is near T_d). The conservation form
+	// is kept only where neither converges. At K = 0 the gas equation leaves the gas energy exactly gas0, as the physics
+	// says: the gas exchanges nothing with the dust, and mirror cells stay mirror images (DTypeFront1D's symmetry check).
 	{
-		double exchange_abs = 0.0;
-		for (int g = 0; g < nGroups_; ++g) {
-			exchange_abs += std::abs(sol.Erad[g] - (cell.Erad0[g] + cell.Src[g] + cell.work[g]));
-		}
-		const double T_c = sol.T_gas;
-		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(cell.rho, T_c, cell.massScalars);
-		const double err_cons = eps_mach * (std::abs(gas0) + cscale * exchange_abs);
-		const double err_gas = eps_mach * std::abs(gas0) + 1.5 * cell.dtK * std::sqrt(T_c) * (err_cons / c_v);
-		if (err_gas < err_cons) {
-			// Solve the gas equation for its own temperature, by fixed-point iteration from gas0. Evaluating the transfer
-			// at the conservation-form temperature T_c instead would carry the round-off of that form into the heating:
-			// in a cell 5.5e17 times radiation-dominated T_c is 8% low, and the heating 4% low. The coupling is weak here
-			// (that is why this form was chosen), so the iteration contracts fast; if it does not settle, the
-			// conservation form is kept.
-			double E = gas0;
-			bool settled = false;
-			for (int k = 0; (k < 8) && !settled; ++k) {
+		auto newton_from = [&](double E, double &E_root) {
+			for (int k = 0; k < 20; ++k) {
 				const double T = TgasOf(cell, E);
-				const double E_next = gas0 - cell.dtK * std::sqrt(T) * (T - sol.T_d);
-				settled = std::abs(E_next - E) <= 4 * eps_mach * std::abs(E_next);
-				E = E_next;
+				const double sqrtT = std::sqrt(T);
+				const double F = (E - gas0) + cell.dtK * sqrtT * (T - sol.T_d);
+				double dF = 1.0; // below the floor T is held at Tfloor, so F' = 1 there
+				if (E > cell.Emin) {
+					const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(cell.rho, T, cell.massScalars);
+					dF += cell.dtK * (1.5 * sqrtT - 0.5 * sol.T_d / sqrtT) / c_v;
+				}
+				if (!(dF > 0.0)) {
+					return false;
+				}
+				const double step = F / dF;
+				E -= step;
+				// settled once the step is within the round-off of F itself: eps times the terms F adds, over F'
+				const double step_floor = 4 * eps_mach * (std::abs(E) + std::abs(gas0) + cell.dtK * sqrtT * (T + sol.T_d)) / dF;
+				if (std::abs(step) <= step_floor) {
+					E_root = E;
+					return true;
+				}
 			}
-			if (settled) {
-				sol.Egas = E;
-				sol.T_gas = TgasOf(cell, E);
-			}
+			return false;
+		};
+		double E_root = NAN;
+		bool settled = newton_from(gas0, E_root);
+		if (!settled) {
+			settled = newton_from(::quokka::EOS<problem_t>::ComputeEintFromTgas(cell.rho, sol.T_d, cell.massScalars), E_root);
+		}
+		if (settled) {
+			sol.Egas = E_root;
+			sol.T_gas = TgasOf(cell, E_root);
 		}
 	}
 	sol.nevals = nevals;
