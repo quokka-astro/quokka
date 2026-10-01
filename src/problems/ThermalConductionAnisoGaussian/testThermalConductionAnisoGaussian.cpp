@@ -259,7 +259,7 @@ auto problem_main() -> int
 {
 	// Single run against a pre-computed reference error norm; the grid is set by the input file.
 	double const error_norm = runConductionTest();
-	constexpr amrex::Real estimated_error = 1.811513e-03;
+	constexpr amrex::Real estimated_error = 1.148689e-04;
 	amrex::Real const delta = std::abs(error_norm - estimated_error) / estimated_error;
 
 	amrex::Print() << std::format("gasInternalEnergy relative L1 error = {:.6e} (expected = {:.6e})\n", error_norm, estimated_error);
