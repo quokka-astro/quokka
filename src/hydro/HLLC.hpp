@@ -86,26 +86,17 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 		S_R = std::max(sR.u + (sR.cs + s_NR), u_tilde + (cs_tilde + s_NR));
 	}
 
-	// carbuncle correction [Eq. 10 of Minoshima & Miyoshi (2021)]
-
+	// Use the Minoshima & Miyoshi (2021), Eq. 10 shock sensor to blend
+	// toward the more diffusive two-wave HLL flux below. Do not suppress the
+	// normal pressure jump in S_star: transverse compression can also occur
+	// next to a genuine pressure-driven flow.
 	const double cs_max = std::max(sL.cs, sR.cs);
 	const double tp = std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
-	const double theta_raw = tp * tp * tp * tp;
+	const double theta = tp * tp * tp * tp;
 
-	// The carbuncle correction targets faces whose normal flux direction runs
-	// along a shock, where pressure is nearly continuous across the face. Restore
-	// the unmodified pressure term for a significant normal pressure jump.
-	constexpr double pressure_jump_low = 0.05;
-	constexpr double pressure_jump_high = 0.20;
-	const double pressure_sum = sL.P + sR.P;
-	const double normal_pressure_jump = (pressure_sum > 0.0) ? std::abs(sR.P - sL.P) / pressure_sum : 0.0;
-	const double carbuncle_weight = amrex::Clamp((pressure_jump_high - normal_pressure_jump) / (pressure_jump_high - pressure_jump_low), 0.0, 1.0);
-	const double theta = 1.0 - carbuncle_weight * (1.0 - theta_raw);
-
-	// compute speed of the 'star' state
-
+	// compute speed of the 'star' state with the full pressure jump
 	const double S_star =
-	    (theta * (sR.P - sL.P) + (sL.rho * sL.u * (S_L - sL.u) - sR.rho * sR.u * (S_R - sR.u))) / (sL.rho * (S_L - sL.u) - sR.rho * (S_R - sR.u));
+	    ((sR.P - sL.P) + (sL.rho * sL.u * (S_L - sL.u) - sR.rho * sR.u * (S_R - sR.u))) / (sL.rho * (S_L - sL.u) - sR.rho * (S_R - sR.u));
 
 	// Low-dissipation pressure correction 'phi' [Eq. 23 of Minoshima & Miyoshi]
 
@@ -157,6 +148,15 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 		F = F_starR;
 	} else { // S_R < 0.0
 		F = F_R;
+	}
+
+	// Both solvers reduce to the same upwind flux outside the Riemann fan.
+	// Within the fan, blend the entire flux vector, including auxiliary
+	// internal energy and passive scalars, using the same face weight.
+	// No pressure-jump threshold switches off this correction.
+	if ((theta < 1.0) && (S_L < 0.0) && (S_R > 0.0)) {
+		const quokka::valarray<double, fluxdim> F_HLL = (S_R * F_L - S_L * F_R + S_L * S_R * (U_R - U_L)) / (S_R - S_L);
+		F = theta * F + (1.0 - theta) * F_HLL;
 	}
 
 	return F;
