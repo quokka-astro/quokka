@@ -233,8 +233,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Conduction parameters
 	// conductivity prefactors for ConductionModel::constant/spitzer; model and geometry are set by Physics_Traits
 	quokka::conduction::ConductivityParams conductivityParams_{};
-	amrex::Real conductionCFL = 0.2;   // default
-	int enableElectronConduction_ = 0; // default
+	amrex::Real conductionCFL = 0.2; // default
+	int enableConduction_ = 0;	 // default
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
@@ -1281,7 +1281,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	if constexpr (Physics_Traits<problem_t>::conduction_model != ConductionModel::none) {
-		if (enableElectronConduction_ == 1) {
+		if (enableConduction_ == 1) {
 			auto const &state_mf = state_new_cc_[lev].const_arrays(); // MultiFab containing the cell-centered state
 			auto const &state_fc_x0 = state_new_fc_[lev][0].const_arrays();
 #if AMREX_SPACEDIM >= 2
@@ -1446,7 +1446,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		n_factor *= nsubsteps[level];
 
 		auto effective_factor = static_cast<amrex::Real>(n_factor);
-		if (enableElectronConduction_ == 1) {
+		if (enableConduction_ == 1) {
 			// Conduction timestep scales as dx^2, so we need to use n_factor^2 here instead of n_factor.
 			effective_factor = static_cast<amrex::Real>(n_factor) * static_cast<amrex::Real>(n_factor);
 		}

@@ -38,7 +38,7 @@ enum class ConductionModel {
 
 // enum for thermal conduction geometry
 enum class ConductionGeometry {
-	isotropic,   // heat flux along -grad T (ElectronConduction)
+	isotropic,   // heat flux along -grad T (IsoConduction)
 	anisotropic, // heat flux along the magnetic field (AnisoConduction); requires MHD
 };
 
