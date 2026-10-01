@@ -32,13 +32,12 @@ derived_vars = ["temperature"]
 # Anisotropic Spitzer conduction
 # (model/geometry are set via Physics_Traits: spitzer + anisotropic)
 # kappa_par = kappaPar * T^2.5, kappa_perp = kappaPerp * T^2.5 (erg cm^-1 s^-1 K^-3.5).
-# kappaPar equals the isotropic ThermalConductionPattle conductivity_prefactor, so the solution is identical.
-# kappaPerp has no effect for this 1D profile along B; it is set nonzero to check that it stays inert.
+# B is along x and the profile varies only along x, so only kappaPar acts; kappaPerp = 0.
 # *****************************************************************
 conduction.enabled = 1
 conduction.flux_limiter_phi = 1
 conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
 conduction.kappaPar = 5.40e-10
-conduction.kappaPerp = 1.62e-10
+conduction.kappaPerp = 0.0
 suppress_output = 0

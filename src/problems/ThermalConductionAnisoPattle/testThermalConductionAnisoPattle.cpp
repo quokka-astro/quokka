@@ -20,7 +20,9 @@
 #include "util/BC.hpp"
 
 /** Anisotropic Spitzer thermal conduction test problem with Pattle IC
-kappa_par = kappaPar*T^2.5, kappa_perp = kappaPerp*T^2.5, in a uniform field B = (Bx0, 0, 0).*/
+kappa_par = kappaPar*T^2.5, kappa_perp = kappaPerp*T^2.5, in a uniform field B = (Bx0, 0, 0).
+The profile varies only along x (parallel to B), so only kappa_par acts and the solution is the 1D Pattle solution
+with kappa0 = kappaPar.*/
 
 constexpr double Eint0 = 2.505e-8;   // peak Eint at the reference resolution nx_ref (equivalent to T = 2.e8 K)
 constexpr double Efloor = 2.505e-11; // numerical representability floor outside the front, equivalent to T = 2.e6 K
@@ -90,14 +92,13 @@ template <> void QuokkaSimulation<ThermalConductionAnisoPattleProblem>::setIniti
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 	const amrex::Real kappa0 = conductivityParams_.kappa0_par;
+	const amrex::Real Emag = 0.5 * Bx0 * Bx0; // matches HydroSystem::ComputeMagneticEnergy (0.5 B^2)
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real xlow = prob_lo[0] + i * dx[0];
 		const amrex::Real xhigh = prob_lo[0] + (i + 1) * dx[0];
 		const amrex::Real Eint = computePattleSolution(rho, kappa0, spitzer_t_start, xlow, xhigh);
-		// Magnetic energy of the uniform field B = (Bx0, 0, 0); matches HydroSystem::ComputeMagneticEnergy (0.5 B^2)
-		const amrex::Real Emag = 0.5 * Bx0 * Bx0;
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
@@ -214,7 +215,7 @@ void QuokkaSimulation<ThermalConductionAnisoPattleProblem>::computeReferenceSolu
 											quokka::direction const dir)
 {
 	amrex::ignore_unused(dx, prob_lo);
-	// neither conduction nor the (static, force-free) uniform field changes B, so the exact solution is B = (Bx0, 0, 0)
+	// conduction does not change B, so the exact solution is the initial field B = (Bx0, 0, 0)
 	const amrex::Real B_exact = (dir == quokka::direction::x) ? Bx0 : 0.0;
 	const int ncomp_fc = Physics_Indices<ThermalConductionAnisoPattleProblem>::nvarPerDim_fc;
 
@@ -268,7 +269,7 @@ auto runConductionTest(int nx) -> double
 		}
 	}
 
-	// The field is uniform, B = (Bx0, 0, 0), so the ghost faces must copy it. reflect_odd on the tangential components
+	// The field is uniform, so the ghost faces must copy it. reflect_odd on the tangential components
 	// (a conducting wall) would set Bx -> -Bx in the y/z ghost cells, zeroing the corner-averaged bhat on those walls
 	// and suppressing parallel conduction in the boundary planes.
 	const int nvars_fc = Physics_Indices<ThermalConductionAnisoPattleProblem>::nvarTotal_fc;
