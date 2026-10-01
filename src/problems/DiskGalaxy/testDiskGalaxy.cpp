@@ -331,17 +331,6 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	const amrex::Real rho_outer = userData_.rho_outer;
 	const amrex::Real velr_outer = userData_.velr_outer;
 	const amrex::Real temp_outer = userData_.temp_outer;
-
-	// turbulence table (pointers are null and never dereferenced when turb_enabled is false)
-	const bool turb_enabled = userData_.turb_enabled;
-	const amrex::Real *turb_vx = userData_.turb_vx_device.data();
-	const amrex::Real *turb_vy = userData_.turb_vy_device.data();
-	const amrex::Real *turb_vz = userData_.turb_vz_device.data();
-	const int turb_n = userData_.turb_n;
-	const amrex::Real turb_rescale = userData_.turb_rescale_factor;
-	const amrex::Real turb_box_half = userData_.turb_box_half;
-	const amrex::Real turb_d = turb_enabled ? 2.0 * turb_box_half / static_cast<amrex::Real>(turb_n - 1) : 1.0;
-
 	const bool use_halo_vphi_parser = userData_.useHaloVphiParser;
 	amrex::ParserExecutor<3> halo_vphi_parser{};
 	if (use_halo_vphi_parser) {
@@ -541,27 +530,11 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 		const double momz = quad_3d(momz_total_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 		const double Eint = quad_3d(eint_total_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 
-		// optional turbulent velocity perturbation, applied to the disk gas only
-		// (weighted by the cell-averaged disk density) inside the +/- turb_box_half cube
-		double dmomx = 0.0;
-		double dmomy = 0.0;
-		double dmomz = 0.0;
-		const bool in_turb_box = (std::abs(x_mid) <= turb_box_half) && (std::abs(y_mid) <= turb_box_half) && (std::abs(z_mid) <= turb_box_half);
-		if (turb_enabled && in_turb_box) {
-			const double tx = (x_mid + turb_box_half) / turb_d;
-			const double ty = (y_mid + turb_box_half) / turb_d;
-			const double tz = (z_mid + turb_box_half) / turb_d;
-			const double rho_disk_cell = quad_3d(rhoDisk_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-			dmomx = rho_disk_cell * interpolate_turbulence(turb_vx, turb_n, turb_n, turb_n, tx, ty, tz) * turb_rescale;
-			dmomy = rho_disk_cell * interpolate_turbulence(turb_vy, turb_n, turb_n, turb_n, tx, ty, tz) * turb_rescale;
-			dmomz = rho_disk_cell * interpolate_turbulence(turb_vz, turb_n, turb_n, turb_n, tx, ty, tz) * turb_rescale;
-		}
-
 		// Add up disk and halo contributions
 		double const rho_disk_halo = rho;
-		double const momx_disk_halo = momx + dmomx;
-		double const momy_disk_halo = momy + dmomy;
-		double const momz_disk_halo = momz + dmomz;
+		double const momx_disk_halo = momx;
+		double const momy_disk_halo = momy;
+		double const momz_disk_halo = momz;
 		double const Ekin_disk_halo =
 		    0.5 * (momx_disk_halo * momx_disk_halo + momy_disk_halo * momy_disk_halo + momz_disk_halo * momz_disk_halo) / rho_disk_halo;
 		double const Eint_disk_halo = Eint;
@@ -582,6 +555,67 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 			state_cc(i, j, k, HydroSystem<DiskGalaxy>::scalar0_index) = initial_scalar_density_d;
 		}
 	});
+
+	// Optional turbulent velocity perturbation, applied to the disk gas only (weighted by the
+	// cell-averaged disk density) inside the +/- turb_box_half cube. This is a separate kernel on
+	// purpose: adding it to the kernel above overflows the GPU stack on AMD (cf. #1826).
+	if (userData_.turb_enabled) {
+		const amrex::Real *turb_vx = userData_.turb_vx_device.data();
+		const amrex::Real *turb_vy = userData_.turb_vy_device.data();
+		const amrex::Real *turb_vz = userData_.turb_vz_device.data();
+		const int turb_n = userData_.turb_n;
+		const amrex::Real turb_rescale = userData_.turb_rescale_factor;
+		const amrex::Real turb_box_half = userData_.turb_box_half;
+		const amrex::Real turb_d = 2.0 * turb_box_half / static_cast<amrex::Real>(turb_n - 1);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
+			amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
+			amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
+			amrex::Real const x1 = x0 + dx[0];
+			amrex::Real const y1 = y0 + dx[1];
+			amrex::Real const z1 = z0 + dx[2];
+			amrex::Real const x_mid = 0.5 * (x0 + x1);
+			amrex::Real const y_mid = 0.5 * (y0 + y1);
+			amrex::Real const z_mid = 0.5 * (z0 + z1);
+
+			if ((std::abs(x_mid) > turb_box_half) || (std::abs(y_mid) > turb_box_half) || (std::abs(z_mid) > turb_box_half)) {
+				return;
+			}
+
+			// same disk profile as rhoDisk_exact above
+			auto rhoDisk_exact = [=](double x, double y, double z) {
+				double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+				double const theta = std::atan2(x, y);
+				double const drho_over_rho = disk_perturb_amplitude * jn(2, 5.1356 * R / R_max_perturb) * std::sin(2.0 * theta);
+				return rho_0 * std::exp(-R / R_d) * std::exp(-std::abs(z) / z_d) * (1.0 + drho_over_rho);
+			};
+			const double rho_disk_cell = quad_3d(rhoDisk_exact, x0, x1, y0, y1, z0, z1) / (dx[0] * dx[1] * dx[2]);
+
+			const double tx = (x_mid + turb_box_half) / turb_d;
+			const double ty = (y_mid + turb_box_half) / turb_d;
+			const double tz = (z_mid + turb_box_half) / turb_d;
+			const double dmomx = rho_disk_cell * interpolate_turbulence(turb_vx, turb_n, turb_n, turb_n, tx, ty, tz) * turb_rescale;
+			const double dmomy = rho_disk_cell * interpolate_turbulence(turb_vy, turb_n, turb_n, turb_n, tx, ty, tz) * turb_rescale;
+			const double dmomz = rho_disk_cell * interpolate_turbulence(turb_vz, turb_n, turb_n, turb_n, tx, ty, tz) * turb_rescale;
+
+			// add the momentum and the corresponding change in kinetic energy (Eint and Emag are unchanged)
+			const double rho = state_cc(i, j, k, HydroSystem<DiskGalaxy>::density_index);
+			const double momx = state_cc(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
+			const double momy = state_cc(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
+			const double momz = state_cc(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
+			const double momx_new = momx + dmomx;
+			const double momy_new = momy + dmomy;
+			const double momz_new = momz + dmomz;
+			const double dEkin =
+			    0.5 * ((momx_new * momx_new + momy_new * momy_new + momz_new * momz_new) - (momx * momx + momy * momy + momz * momz)) / rho;
+
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index) = momx_new;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index) = momy_new;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index) = momz_new;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::energy_index) += dEkin;
+		});
+	}
 }
 
 template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
