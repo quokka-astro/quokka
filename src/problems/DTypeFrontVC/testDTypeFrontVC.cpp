@@ -246,8 +246,9 @@ auto problem_main() -> int
 	const EnergyCheck energy_before = compute_energy_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray());
 
 	std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const fc_ptrs{};
+	amrex::MultiFab dustHeatingSource;
 	static_cast<void>(quokka::photochemistry::computePhotoChemistry<DTypeFrontVC>(sim.state_new_cc_[0], fc_ptrs, burn_dt,
-										      std::numeric_limits<amrex::Real>::max(), 0.0_rt));
+										      std::numeric_limits<amrex::Real>::max(), 0.0_rt, dustHeatingSource));
 
 	const MomentumCheck check = compute_momentum_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray(), initial_flux_x);
 	const EnergyCheck energy_after = compute_energy_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray());
