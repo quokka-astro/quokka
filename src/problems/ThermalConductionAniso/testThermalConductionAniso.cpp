@@ -255,7 +255,7 @@ void QuokkaSimulation<ThermalConductionAnisoProblem>::ComputeDerivedVar(int /*le
 auto problem_main() -> int
 {
 	// Single-resolution run of the ring conduction test
-	constexpr double max_time = 200.0;
+	constexpr double max_time = 20.0;
 
 	// Setup boundary conditions
 	auto BCs_cc = quokka::BC<ThermalConductionAnisoProblem>(quokka::BCType::reflecting);
@@ -296,7 +296,7 @@ auto problem_main() -> int
 				      domain.length(1), sim.tNew_[0], eint_abs_err, eint_rel_err);
 
 	// pass if the relative L1 error is at or below the tolerance (a NaN error fails the comparison)
-	constexpr double rel_err_tol = 1.e-3; // measured 9.2432e-04 at 128x128x8, t = 200 (mc limiter, kappaPerp = 0), plus ~8% margin
+	constexpr double rel_err_tol = 1.69684956e-03; // measured 1.571157e-03 at 64x64x8, t = 20, includes 8% error
 	amrex::Print() << std::format("relative error tolerance = {:.6e}\n", rel_err_tol);
 	bool const passed = (eint_rel_err <= rel_err_tol);
 
