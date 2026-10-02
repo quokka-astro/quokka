@@ -120,6 +120,4 @@ KokkosCore_config.tmp
 
 # worksite and outputs 
 my_worksite/**
-!my_worksite/**/
-!my_worksite/**/*.py
 outputs/
