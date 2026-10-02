@@ -1,0 +1,42 @@
+# *****************************************************************
+# Problem size and geometry
+# (BCs are set in problem_main(): reflecting cell-centred, reflect_even/odd face-centred)
+# *****************************************************************
+geometry.prob_lo = [-1.0, -1.0, -1.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+geometry.is_periodic = [0, 0, 0]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1      # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [64, 64, 8]
+amr.max_level = 0     # number of levels = max_level + 1
+amr.blocking_factor = 8   # grid size must be divisible by this
+
+do_reflux = 1
+do_subcycle = 0
+
+plotfile_interval = 5000
+# (cfl and stop_time are overridden in problem_main())
+cfl = 0.3
+
+derived_vars = ["temperature"]
+cooling.enabled = 0
+
+# *****************************************************************
+# Anisotropic conduction
+# (model/geometry are set via Physics_Traits: constant + anisotropic)
+# *****************************************************************
+conduction.enabled = 1
+conduction.flux_limiter_phi = 1
+conduction.saturation_factor = 1.2e20
+conduction.conduction_cfl = 0.1
+conduction.kappaPar = 0.01
+conduction.kappaPerp = 0.0
+conduction.aniso_flux_limiter = "mc"
+suppress_output = 0
