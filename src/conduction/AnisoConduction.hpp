@@ -60,7 +60,7 @@ struct AnisoConductionParams {
 	AnisoFluxLimiterType flux_limiter_type = AnisoFluxLimiterType::mc; // transverse-gradient limiter (conduction.aniso_flux_limiter)
 };
 
-template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect FaceMinusOne(int i, int j, int k)
+template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto FaceMinusOne(int i, int j, int k) -> amrex::IntVect
 {
 	amrex::ignore_unused(i, j, k);
 	return amrex::IntVect(AMREX_D_DECL(i, j, k)) - amrex::IntVect::TheDimensionVector(static_cast<int>(DIR));
@@ -71,7 +71,7 @@ template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect FaceMi
 // already exactly at the right position along DIR). In 2D there is only one transverse direction, so
 // this is unambiguous; in 3D a face has 4 corners, and this picks the one diagonally opposite the
 // lower corner (i,j,k), leaving the other two corners (offset in only one transverse direction) unused.
-template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect UpperCorner(int i, int j, int k)
+template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto UpperCorner(int i, int j, int k) -> amrex::IntVect
 {
 	amrex::ignore_unused(i, j, k);
 	return amrex::IntVect(AMREX_D_DECL(i + 1, j + 1, k + 1)) - amrex::IntVect::TheDimensionVector(static_cast<int>(DIR));
@@ -79,7 +79,7 @@ template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect UpperC
 
 // Combines two per-corner or per-neighbor estimates (q_lower, q_upper) into a single limited
 // value
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real LimitUpperLowerFlux(amrex::Real q_lower, amrex::Real q_upper, AnisoFluxLimiterType limiter_type)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto LimitUpperLowerFlux(amrex::Real q_lower, amrex::Real q_upper, AnisoFluxLimiterType limiter_type) -> amrex::Real
 {
 	switch (limiter_type) {
 		case AnisoFluxLimiterType::mc:
@@ -97,13 +97,16 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real LimitUpperLowerFlux(amrex::
 }
 
 // (kappa_par - kappa_perp) * bn^2 -- the field-aligned part of the diagonal tensor entry (q_xx-type term).
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real DiagCoeff(amrex::Real bn, amrex::Real kappa_aniso) { return kappa_aniso * bn * bn; }
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto DiagCoeff(amrex::Real bn, amrex::Real kappa_aniso) -> amrex::Real { return kappa_aniso * bn * bn; }
 
 // (kappa_par - kappa_perp) * bi * bj -- the off-diagonal tensor entry (q_xy/q_xz-type term).
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real CrossCoeff(amrex::Real bi, amrex::Real bj, amrex::Real kappa_aniso) { return kappa_aniso * bi * bj; }
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto CrossCoeff(amrex::Real bi, amrex::Real bj, amrex::Real kappa_aniso) -> amrex::Real
+{
+	return kappa_aniso * bi * bj;
+}
 
 // Sharma & Hammett (2007) Eq. (21): a biased limiter
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real L2(amrex::Real anchor, amrex::Real neighbor, amrex::Real alpha)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto L2(amrex::Real anchor, amrex::Real neighbor, amrex::Real alpha) -> amrex::Real
 {
 	const amrex::Real avg = 0.5 * (anchor + neighbor);
 	const amrex::Real lo = amrex::min(alpha * anchor, anchor / alpha);
@@ -116,13 +119,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real L2(amrex::Real anchor, amre
 
 // L(L(a,b), L(c,d)) -- Eq. (17) / Sec. 6.1's nested-limiter pattern for the (sign-indefinite)
 // transverse term, with L = minmod or MC per `limiter_type`.
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real NestedLimit(amrex::Real a, amrex::Real b, amrex::Real c, amrex::Real d, AnisoFluxLimiterType limiter_type)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto NestedLimit(amrex::Real a, amrex::Real b, amrex::Real c, amrex::Real d, AnisoFluxLimiterType limiter_type)
+    -> amrex::Real
 {
 	return LimitUpperLowerFlux(LimitUpperLowerFlux(a, b, limiter_type), LimitUpperLowerFlux(c, d, limiter_type), limiter_type);
 }
 
 // q/(1 + |q|/qsat) -- shared by ComputeAnisotropicFlux so the saturation formula lives in one place.
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real SaturateFlux(amrex::Real q_classical, amrex::Real q_sat, amrex::Real small)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto SaturateFlux(amrex::Real q_classical, amrex::Real q_sat, amrex::Real small) -> amrex::Real
 {
 	return q_classical / (1.0 + std::abs(q_classical) / amrex::max(q_sat, small));
 }
@@ -130,7 +134,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real SaturateFlux(amrex::Real q_
 // Unit IntVect shift along a single axis (0=x, 1=y, 2=z). Used to step from a face's own "lower"
 // bounding corner to its immediate neighbor along exactly one transverse axis -- unlike
 // UpperCorner<DIR>, which steps along every transverse axis of the face simultaneously.
-template <int Axis> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect AxisUnit()
+template <int Axis> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto AxisUnit() -> amrex::IntVect
 {
 	static_assert(Axis >= 0 && Axis < AMREX_SPACEDIM, "AxisUnit: Axis must be a valid spatial direction");
 	return amrex::IntVect::TheDimensionVector(Axis);
@@ -141,9 +145,9 @@ template <int Axis> AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::IntVect AxisUnit(
 // OTHER than `Axis` (fixed by the caller, e.g. to average over a second transverse axis in 3D);
 // `corner_lo` and `corner_lo + AxisUnit<Axis>()` are the two corners this term reads bhat/kappa from.
 template <FluxDir DIR, int Axis>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real
-ComputeDiagTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const amrex::Real> const &bhat, amrex::Array4<const amrex::Real> const &kappa,
-		amrex::IntVect const &cm, amrex::IntVect const &cp, amrex::IntVect const &corner_lo, amrex::Real dx_n, amrex::Real l2_alpha)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeDiagTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const amrex::Real> const &bhat,
+							 amrex::Array4<const amrex::Real> const &kappa, amrex::IntVect const &cm, amrex::IntVect const &cp,
+							 amrex::IntVect const &corner_lo, amrex::Real dx_n, amrex::Real l2_alpha) -> amrex::Real
 {
 	constexpr int normal_comp = static_cast<int>(DIR);
 	constexpr int T_comp = 1;
@@ -167,9 +171,9 @@ ComputeDiagTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const a
 // transverse direction via NestedLimit. `corner_lo`/`corner_lo + AxisUnit<Axis>()` are the two
 // corners bhat/kappa are face-averaged from (see the same `corner_lo` convention as ComputeDiagTerm).
 template <FluxDir DIR, int Axis>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real
-ComputeCrossTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const amrex::Real> const &bhat, amrex::Array4<const amrex::Real> const &kappa,
-		 amrex::IntVect const &cm, amrex::IntVect const &cp, amrex::IntVect const &corner_lo, amrex::Real dx_t, AnisoFluxLimiterType limiter_type)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCrossTerm(amrex::Array4<const amrex::Real> const &T, amrex::Array4<const amrex::Real> const &bhat,
+							  amrex::Array4<const amrex::Real> const &kappa, amrex::IntVect const &cm, amrex::IntVect const &cp,
+							  amrex::IntVect const &corner_lo, amrex::Real dx_t, AnisoFluxLimiterType limiter_type) -> amrex::Real
 {
 	constexpr int normal_comp = static_cast<int>(DIR);
 	constexpr int T_comp = 1;
@@ -534,8 +538,8 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 
 		// Cyclic transverse-axis convention (matches ComputeFaceUnitBField elsewhere in this file):
 		// X1 -> (y,z), X2 -> (z,x), X3 -> (x,y).
-		constexpr int Ax0 = (DIR == FluxDir::X1) ? 1 : (DIR == FluxDir::X2) ? 2 : 0;
-		constexpr int Ax1 = (DIR == FluxDir::X1) ? 2 : (DIR == FluxDir::X2) ? 0 : 1;
+		constexpr int Ax0 = (static_cast<int>(DIR) + 1) % 3;
+		constexpr int Ax1 = (static_cast<int>(DIR) + 2) % 3;
 		const amrex::Real dx0 = dx[Ax0];
 		const amrex::Real dx1 = dx[Ax1];
 		amrex::IntVect const corner_0 = corner_lo + AxisUnit<Ax0>();
