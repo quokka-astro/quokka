@@ -13,7 +13,6 @@ amr.n_cell          = [32, 32, 32]
 amr.max_level       = 0             # number of levels = max_level + 1
 amr.blocking_factor = 8             # grid size must be divisible by this
 
-stop_time      = 2.945e11    # from a=0.001 to a=10
 max_timesteps  = 20000000
 cfl            = 0.3
 
@@ -22,9 +21,12 @@ cfl            = 0.3
 # Cosmology
 # *****************************************************************
 cosmology.hubble_constant = 0.7
-cosmology.omega_m         = 1.0    # Einstein-de Sitter    
+cosmology.omega_m         = 1.0    # Einstein-de Sitter  
+cosmology.omega_b         = 1.0    # only ordinary matter
+cosmology.omega_dm        = 0.0  
 cosmology.omega_lambda    = 0.0
 cosmology.a_init          = 1e-3   # CMB time
+cosmology.a_final         = 10     # in the future
 
 
 # *****************************************************************

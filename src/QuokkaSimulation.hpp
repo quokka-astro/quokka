@@ -257,10 +257,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// bitwise-identical midpoint scale factor.
 	amrex::Real a_half_ = 1.0;
 
-	auto getCosmologyScaleFactor() const -> amrex::Real override
-	{
-		return a_now_;	
-	}
+	auto getCosmologyScaleFactor() const -> amrex::Real override { return a_now_; }
 
 	auto getCosmologyScaleFactorHalf() const -> amrex::Real override
 	{
@@ -897,13 +894,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set cosmology runtime parameters
 	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
 		amrex::ParmParse const cpp("cosmology");
-		amrex::Real omega_m      = Physics_Traits<problem_t>::omega_m;
-		amrex::Real omega_r      = Physics_Traits<problem_t>::omega_r;
+		amrex::Real omega_m = Physics_Traits<problem_t>::omega_m;
+		amrex::Real omega_r = Physics_Traits<problem_t>::omega_r;
 		amrex::Real omega_lambda = Physics_Traits<problem_t>::omega_lambda;
-		amrex::Real omega_b      = Physics_Traits<problem_t>::omega_b;
-		amrex::Real omega_dm     = Physics_Traits<problem_t>::omega_dm;
-		amrex::Real h            = Physics_Traits<problem_t>::hubble_constant;
-		a_now_                   = Physics_Traits<problem_t>::a_init;
+		amrex::Real omega_b = Physics_Traits<problem_t>::omega_b;
+		amrex::Real omega_dm = Physics_Traits<problem_t>::omega_dm;
+		amrex::Real h = Physics_Traits<problem_t>::hubble_constant;
+		a_now_ = Physics_Traits<problem_t>::a_init;
 
 		cpp.query("omega_m", omega_m);
 		cpp.query("omega_r", omega_r);
@@ -925,26 +922,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			}
 		}
 
-		// fill the struct of cosmological params defined in Cosmology.hpp and member of 
+		// fill the struct of cosmological params defined in Cosmology.hpp and member of
 		// the class accounting for user inputs
-		cosmology_params_ = {   
-    		.H0 = H0_cgs,
-    		.Omega_m = omega_m,
-    		.Omega_r = omega_r,
-    		.Omega_L = omega_lambda,
-    		.Omega_b = omega_b,
-    		.Omega_dm = omega_dm
-		};
+		cosmology_params_ = {.H0 = H0_cgs, .Omega_m = omega_m, .Omega_r = omega_r, .Omega_L = omega_lambda, .Omega_b = omega_b, .Omega_dm = omega_dm};
 
 		// Assertion with the validate method of the Cosmology.hpp struct cosmology_params
 		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
-			cosmology_params_.validate();  // assert if (omega_b + omega_dm - omega_m) < 1e-6
+			cosmology_params_.validate(); // assert if (omega_b + omega_dm - omega_m) < 1e-6
 		}
 
 		cpp.query("comoving_mean_density", comoving_mean_density_);
-		if (comoving_mean_density_ == 0) {  // as from member initialization
+		if (comoving_mean_density_ == 0) { // as from member initialization
 			// rho_crit = 3 H0^2 / (8 pi G)
-			const amrex::Real rho_crit_0 = 3.0 * H0_cgs * H0_cgs / (8.0 * M_PI * C::Gconst); 
+			const amrex::Real rho_crit_0 = 3.0 * H0_cgs * H0_cgs / (8.0 * M_PI * C::Gconst);
 			comoving_mean_density_ = omega_m * rho_crit_0;
 		}
 
@@ -962,7 +952,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		this->simulationMetadata_["cosmology"]["a_init"] = a_now_;
 
 		// informative print on the logs
-		quokka::cosmology::printCosmologyInfo(cosmology_params_, a_now_); 		
+		quokka::cosmology::printCosmologyInfo(cosmology_params_, a_now_);
 	}
 }
 
@@ -1030,9 +1020,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 			// so there is no signal speed and the timestep is set by the other physics modules
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { maxSignal(i, j, k) = 0.0; });
 		}
-		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
-			max_signal_speed_[level].mult(1.0 / a_now_);
-		}
+	}
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		max_signal_speed_[level].mult(1.0 / a_now_);
 	}
 
 	// diffusive CFL constraint for Ohmic resistivity: dt <= cfl * dx^2 / (2*eta)
@@ -1091,7 +1081,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeTimestepA
 	}
 	return dt_loc;
 }
-
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::printCellProperties(int lev, amrex::IntVect const &index)
 {
@@ -1392,11 +1381,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	};
 
 	// cosmology: Strang splitting for a_half and consequently hydro Hubble drag and adiabatic cooling
-	auto const applyCosmology = [&] () {
+	auto const applyCosmology = [&]() {
 		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
 			amrex::Real a_end = quokka::cosmology::applyCosmologyHalfStep<problem_t>(state, a_now_, dt, cosmology_params_);
 			a_now_ = a_end;
-			// N.B.: a_end as intermediate for not touching the member a_now_, since 
+			// N.B.: a_end as intermediate for not touching the member a_now_, since
 			// AMR still to be implemented for cosmology!
 		}
 	};
@@ -1850,12 +1839,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 			amrex::Real const rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 			rhs[bx](i, j, k) += 4.0 * M_PI * G * (rho - rho_mean_cosmo) / a_cosmo;
 		});
-	}
-	else {
+	} else {
 		amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// *add* density to rhs_mf
-		// (N.B. particles **will not work** if you overwrite the density here!)
-		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			// *add* density to rhs_mf
+			// (N.B. particles **will not work** if you overwrite the density here!)
+			rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 		});
 	}
 	// For periodic BCs: when cosmology is enabled, RHS = 4*pi*G*(rho_c - rho_bar_c)/a
@@ -1871,7 +1859,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 	auto const &dx = geom[lev].CellSizeArray();
 	auto const &phi = phi_mf.const_arrays();
 	auto state = state_new_cc_[lev].arrays();
-
 
 	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
 		// In comoving coordinates the peculiar acceleration is g_pec = -nabla_x phi / a
@@ -3929,35 +3916,34 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::WritePlotFile()
 		// Calculate the current dimensionless factors E(a) and H(a)
 		const amrex::Real E_a = quokka::cosmology::HubbleFactor(a_now_, cosmology_params_);
 		const amrex::Real H_cgs = cosmology_params_.H0 * E_a;
-		const amrex::Real H_km_s_Mpc = H_cgs * (C::parsec * 1.0e6) / 1.0e5;   // convert to (km/s) / Mpc
+		const amrex::Real H_km_s_Mpc = H_cgs * (C::parsec * 1.0e6) / 1.0e5; // convert to (km/s) / Mpc
 		const amrex::Real E2 = E_a * E_a;
 		const amrex::Real a2 = a_now_ * a_now_;
 		const amrex::Real a3 = a2 * a_now_;
 		const amrex::Real a4 = a2 * a2;
 
 		// Scale the densities according to the cosmic epoch
-		const amrex::Real Omega_m_a  = cosmology_params_.Omega_m / (a3 * E2);
-		const amrex::Real Omega_b_a  = cosmology_params_.Omega_b / (a3 * E2);
+		const amrex::Real Omega_m_a = cosmology_params_.Omega_m / (a3 * E2);
+		const amrex::Real Omega_b_a = cosmology_params_.Omega_b / (a3 * E2);
 		const amrex::Real Omega_dm_a = cosmology_params_.Omega_dm / (a3 * E2);
-		const amrex::Real Omega_r_a  = cosmology_params_.Omega_r / (a4 * E2);
-		const amrex::Real Omega_L_a  = cosmology_params_.Omega_L / E2;
-		const amrex::Real Omega_k_a  = (1.0 - cosmology_params_.Omega_m - cosmology_params_.Omega_r - cosmology_params_.Omega_L) / (a2 * E2);
-		
+		const amrex::Real Omega_r_a = cosmology_params_.Omega_r / (a4 * E2);
+		const amrex::Real Omega_L_a = cosmology_params_.Omega_L / E2;
+		const amrex::Real Omega_k_a = (1.0 - cosmology_params_.Omega_m - cosmology_params_.Omega_r - cosmology_params_.Omega_L) / (a2 * E2);
+
 		// update dynamic cosmological state for this output
 		this->simulationMetadata_["cosmology"]["a"] = a_now_;
 		this->simulationMetadata_["cosmology"]["z"] = (1.0 / a_now_) - 1.0;
 		this->simulationMetadata_["cosmology"]["H_cgs"] = H_cgs;
 		this->simulationMetadata_["cosmology"]["H_km_s_Mpc"] = H_km_s_Mpc;
-		this->simulationMetadata_["cosmology"]["Omega_m_current"]  = Omega_m_a;
-		this->simulationMetadata_["cosmology"]["Omega_b_current"]  = Omega_b_a;
+		this->simulationMetadata_["cosmology"]["Omega_m_current"] = Omega_m_a;
+		this->simulationMetadata_["cosmology"]["Omega_b_current"] = Omega_b_a;
 		this->simulationMetadata_["cosmology"]["Omega_dm_current"] = Omega_dm_a;
-		this->simulationMetadata_["cosmology"]["Omega_r_current"]  = Omega_r_a;
+		this->simulationMetadata_["cosmology"]["Omega_r_current"] = Omega_r_a;
 		this->simulationMetadata_["cosmology"]["Omega_Lambda_current"] = Omega_L_a;
-		this->simulationMetadata_["cosmology"]["Omega_k_current"]  = Omega_k_a;
+		this->simulationMetadata_["cosmology"]["Omega_k_current"] = Omega_k_a;
 		this->simulationMetadata_["cosmology"]["comoving_mean_density"] = comoving_mean_density_;
 	}
 	AMRSimulation<problem_t>::WritePlotFile();
 }
-
 
 #endif // RADIATION_SIMULATION_HPP_
