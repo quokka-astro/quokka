@@ -101,8 +101,6 @@ template <typename problem_t> class turbulentDriving
 					    << "[WARNING] " << msg << " Enable turbulence.remove_mean_flow for this to be automatically corrected.\n";
 				}
 			}
-
-			accumulated_forcing_bias = {0.0, 0.0, 0.0};
 		}
 	}
 
@@ -151,21 +149,25 @@ template <typename problem_t> class turbulentDriving
 		    .total_density = volume_summed_quantities[0],
 		    .total_density_weighted_forcing = {volume_summed_quantities[1], volume_summed_quantities[2], volume_summed_quantities[3]}};
 
-		accumulated_forcing_bias[0] += dt * forcing_totals.total_density_weighted_forcing[0] / forcing_totals.total_density;
-		accumulated_forcing_bias[1] += dt * forcing_totals.total_density_weighted_forcing[1] / forcing_totals.total_density;
-		accumulated_forcing_bias[2] += dt * forcing_totals.total_density_weighted_forcing[2] / forcing_totals.total_density;
+		const amrex::GpuArray<amrex::Real, 3> forcing_bias_increment = {
+		    dt * forcing_totals.total_density_weighted_forcing[0] / forcing_totals.total_density,
+		    dt * forcing_totals.total_density_weighted_forcing[1] / forcing_totals.total_density,
+		    dt * forcing_totals.total_density_weighted_forcing[2] / forcing_totals.total_density,
+		};
 
 		// mean velocity this step's forcing would inject; subtracting this keeps the forcing's own
 		// contribution to the domain-mean velocity at zero every step, without touching any
 		// pre-existing bulk motion from other sources (initial conditions, gravity, feedback)
 		amrex::GpuArray<amrex::Real, 3> mean_correction = {0.0, 0.0, 0.0};
 		if (remove_mean_flow) {
-			mean_correction = {
-			    dt * forcing_totals.total_density_weighted_forcing[0] / forcing_totals.total_density,
-			    dt * forcing_totals.total_density_weighted_forcing[1] / forcing_totals.total_density,
-			    dt * forcing_totals.total_density_weighted_forcing[2] / forcing_totals.total_density,
-			};
+			mean_correction = forcing_bias_increment;
 		}
+
+		// residual bias left uncorrected this step; zero by construction when remove_mean_flow is
+		// enabled, so a nonzero residual there signals the correction itself has broken
+		accumulated_forcing_bias[0] += forcing_bias_increment[0] - mean_correction[0];
+		accumulated_forcing_bias[1] += forcing_bias_increment[1] - mean_correction[1];
+		accumulated_forcing_bias[2] += forcing_bias_increment[2] - mean_correction[2];
 
 		for (amrex::MFIter mf(state); mf.isValid(); ++mf) {
 			const amrex::Box &bx = mf.validbox();
