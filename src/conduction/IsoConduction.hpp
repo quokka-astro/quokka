@@ -63,6 +63,12 @@ template <typename problem_t> class IsoConduction
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
 				    amrex::Real dt, IsoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
+			heat_flux[idim].setVal(0.0);
+		}
+
 		constexpr ConductionModel model = Physics_Traits<problem_t>::conduction_model;
 		if constexpr (model == ConductionModel::none) {
 			amrex::ignore_unused(state, state_fc, geom, dt, params, heat_flux);
@@ -149,8 +155,6 @@ template <typename problem_t> class IsoConduction
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
 			leftState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2, ng_reconstruct);
 			rightState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2, ng_reconstruct);
-			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
-			heat_flux[idim].setVal(0.0);
 		}
 
 		AMREX_D_TERM(ReconstructPrimVar<FluxDir::X1>(primVar, leftState[0], rightState[0], ng_reconstruct, params);

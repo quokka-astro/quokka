@@ -208,6 +208,12 @@ template <typename problem_t> class AnisoConduction
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
 				    amrex::Real dt, AnisoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
+			heat_flux[idim].setVal(0.0);
+		}
+
 		constexpr ConductionModel model = Physics_Traits<problem_t>::conduction_model;
 		if constexpr (model == ConductionModel::none) {
 			amrex::ignore_unused(state, state_fc, geom, dt, params, heat_flux);
@@ -291,13 +297,6 @@ template <typename problem_t> class AnisoConduction
 			}
 		});
 
-		// heat_flux at each face -- the actual per-direction output of this routine.
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
-			heat_flux[idim].setVal(0.0);
-		}
-
 		// Unit B-field, kappa, and qsat at mesh vertices ("corners")
 		amrex::BoxArray const ba_corner = amrex::convert(state.boxArray(), amrex::IntVect::TheUnitVector());
 		amrex::MultiFab bhat_corner(ba_corner, state.DistributionMap(), 3, 0);
@@ -359,8 +358,8 @@ template <typename problem_t> class AnisoConduction
 			const amrex::Real pz = state_out[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 
 			const amrex::Real Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
-			const amrex::Real Eint_old = state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
 			const amrex::Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &local_state_fc);
+			const amrex::Real Eint_old = HydroSystem<problem_t>::ComputeInternalEnergy(state_out[bx], i, j, k, &local_state_fc);
 			amrex::Real div_flux = (flux_x_const[bx](i + 1, j, k) - flux_x_const[bx](i, j, k)) / dx[0];
 #if AMREX_SPACEDIM >= 2
 			div_flux += (flux_y_const[bx](i, j + 1, k) - flux_y_const[bx](i, j, k)) / dx[1];
