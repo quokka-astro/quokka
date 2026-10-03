@@ -41,6 +41,10 @@ Write an ADR whenever a change has broad impact, is hard to reverse, or triggers
 6. Decide and define the rollout: update CI coverage, add tests, document migrations (especially for problem interfaces or `ParmParse` adjustments).
 7. Maintain the ADR lifecycle: revisit annually or when assumptions change, preferring supersession over silent drift.
 
+## Current ADRs
+
+- [ADR-0002: Migrate Quokka Particles to Runtime SoA](../adrs/ADR-0002-migrate-particles-to-runtime-soa.md) -- Proposed
+
 ---
 
 ## ADR Template
