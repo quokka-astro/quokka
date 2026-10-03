@@ -832,7 +832,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				// 1.3. Compute the gas and radiation energy update. This also updates the opacities. When iter == 0, this also computes
 				// the work term.
 
-				if constexpr (!enable_dust_gas_thermal_coupling_model_) {
+				if constexpr (NestedRadiationCoupling_Traits<problem_t>::enabled) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Q_dust == 0.0, "Nested coupling excludes external dust heating.");
+					updated_energy = SolveNestedRadiationCoupling(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, Src, radBoundaries_g_copy,
+										      tempFloor, p_iteration_counter_local);
+				} else if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 					// gas + radiation
 					updated_energy = SolveGasRadiationEnergyExchange(Egas0, Erad0Vec, rho, dt, massScalars, iter, work, vel_times_F, Src,
 											 radBoundaries_g_copy, tol, tol_rel, tempFloor,

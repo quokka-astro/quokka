@@ -1,0 +1,28 @@
+(* Reproducible public theorem/assumption inventory. *)
+From BlackBox Require Import EndToEnd NestedDriver Binary64Accuracy Binary64Adapter
+ NestedInnerSolve InnerInitialization NormalGridReachability GeneralOpacity StoredInputs WidthSafety.
+
+Check physical_solution_unique.
+Check planck_slope_contract_implies_conditioning.
+Check physical_binary64_main_accuracy_local.
+Check physical_binary64_early_accuracy.
+Check nested_driver_accepted_accuracy.
+Check nested_driver_stored_input_accuracy.
+Check nested_driver_converges.
+Check normal_grid_outer_width_RN64.
+Check solve_nested_inner_converges.
+Check normal_grid_endpoint_rank_finite.
+Check IEEE64_plus_correspondence.
+Check IEEE64_mult_correspondence.
+Check IEEE64_div_correspondence.
+Check IEEE64_sqrt_correspondence.
+
+Print Assumptions physical_solution_unique.
+Print Assumptions physical_binary64_main_accuracy_local.
+Print Assumptions physical_binary64_early_accuracy.
+Print Assumptions nested_driver_accepted_accuracy.
+Print Assumptions nested_driver_stored_input_accuracy.
+Print Assumptions nested_driver_converges.
+Print Assumptions normal_grid_outer_width_RN64.
+Print Assumptions solve_nested_inner_converges.
+Print Assumptions normal_grid_endpoint_rank_finite.

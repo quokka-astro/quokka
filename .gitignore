@@ -32,7 +32,8 @@ Backtrace.*
 *.sif
 
 # files in tests/ folder
-/tests/
+/tests/*
+!/tests/radiation_coupling/
 !/tests/matplotlibrc
 # !/tests/ascent_actions.yaml
 

@@ -13,6 +13,7 @@
 
 #include <array>
 #include <cmath>
+#include <type_traits>
 
 // library headers
 #include "AMReX.H" // IWYU pragma: keep
@@ -28,6 +29,9 @@
 #include "math/math_impl.hpp"
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
+#define MGSOLVE_HD AMREX_GPU_DEVICE
+#include "radiation/nested/multigroup_solver.hpp"
+#undef MGSOLVE_HD
 #include "util/valarray.hpp"
 
 using Real = amrex::Real;
@@ -125,6 +129,13 @@ template <typename problem_t> struct ISM_Traits {
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool thermal_band_photochemistry = false;
 	static constexpr bool dust_chemical_band_absorption = false;
+};
+
+// Explicit opt-in to the nested thermal solver. The contract and options hooks
+// below must also be supplied by the problem. This does not certify opacity hooks.
+template <typename problem_t> struct NestedRadiationCoupling_Traits {
+	static constexpr bool enabled = false;
+	static constexpr bool thermal_only = false; // no line/cosmic-ray/dust/PE heating or chemistry
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -354,6 +365,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
+	static_assert(!NestedRadiationCoupling_Traits<problem_t>::enabled || gamma_ > 1.0, "Nested coupling requires an ideal gas with gamma > 1.");
 
 	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
@@ -485,6 +497,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature)
 	    -> quokka::valarray<amrex::Real, nGroups_>;
+
+	AMREX_GPU_DEVICE static auto NestedCouplingOptions() -> mgsolve::Options;
+	AMREX_GPU_DEVICE static auto NestedCouplingContract(double rho, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> mgsolve::Contract<nGroups_>;
+	AMREX_GPU_DEVICE static auto NestedCouplingValues(double rho, double temperature, quokka::valarray<double, nGroups_> const &radiation,
+							  amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> mgsolve::GroupValues<nGroups_>;
+	AMREX_GPU_DEVICE static auto SolveNestedRadiationCoupling(double gas_energy, quokka::valarray<double, nGroups_> const &radiation, double rho,
+								  double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
+								  quokka::valarray<double, nGroups_> const &source,
+								  amrex::GpuArray<double, nGroups_ + 1> const &boundaries, double temperature_floor,
+								  int *iterations) -> NewtonIterationResult<problem_t>;
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> double;
 
@@ -1852,6 +1874,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	return T_d;
 }
 
+#include "radiation/nested_coupling.hpp"
 #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
 
