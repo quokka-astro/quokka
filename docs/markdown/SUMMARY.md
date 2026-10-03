@@ -12,6 +12,7 @@
 
 # Physics Modules
 
+- [Radiation Hydrodynamics (beta)](radiation_hydrodynamics.md)
 - [Magnetohydrodynamics (beta)](mhd_module.md)
 - [Star Formation and Feedback (beta)](particles.md)
 - [Photoionization](photoionization.md)
