@@ -283,3 +283,71 @@ incorrect temperatures and ionization fractions.
 **Correct setup:** use `photochemistry.enabled = 1` and leave `cooling.enabled = 0`
 (the default). The photoionization chemistry network handles all heating and cooling
 internally.
+
+## 5. Strömgren-Volume Subgrid Feedback
+
+The M1 solver described above transports ionizing photons and solves the hydrogen chemistry explicitly. That is the accurate option, but it is expensive, and it only works when the H II region is resolved by several cells. In galaxy-scale and cloud-scale runs the H II region around a young star is often smaller than one cell, so the M1 solve costs a great deal and still cannot represent the feedback. For those cases Quokka provides a much cheaper subgrid alternative in `src/particles/particle_photoionization.hpp`, which transports no photons at all.
+
+The module follows the Strömgren-volume technique of Kessel-Deynet & Burkert (2000) and Dale et al. (2007b), in the form used for stellar feedback by Hopkins et al. (2018, FIRE-2). For each star particle it finds the volume whose recombinations exactly consume the particle's ionizing photon budget $Q$, marks the gas inside as ionized, and holds it at a fixed temperature $T_{\rm HII}$. The resulting overpressure is what drives the H II region expansion. Like the M1 module, it assumes the on-the-spot approximation, which is why the case-B recombination coefficient appears.
+
+FIRE-2 sorts the cells near a star by distance and walks outward consuming the budget. Because cells are consumed in order of increasing distance, the consumed set is always a distance-prefix, which is exactly a ball. The walk is therefore equivalent to finding the single radius $R_{\rm St}$ at which the enclosed recombination rate equals $Q$, and that equivalence is exact for an arbitrary, non-uniform density field. Quokka uses this to replace the cross-rank cell sort with a radial-bin histogram and one small MPI reduction per source, which parallelizes cleanly over AMReX boxes and ranks.
+
+The ionizing photon rate is a per-particle property assigned once at birth from the stellar mass. `ToyStellarModel` takes it from the Sternberg, Hoffmann & Pauldrach (2003) grid as recalibrated by Martins, Schaerer & Hillier (2005). The coefficients are a least-squares fit to all twelve luminosity-class-V rows of their Table 1 (theoretical $T_{\rm eff}$ scale), regressing the tabulated $\log_{10} Q_0$ on $x \equiv \log_{10}(M_{\rm spec}/M_\odot)$:
+
+$$\log_{10} Q_0\ [\mathrm{s}^{-1}] = c_0 + c_1 x + c_2 x^2,$$
+
+with $c_0 = 34.3149$, $c_1 = 15.8931$, $c_2 = -4.0825$. The fit spans O9.5V ($16.46\,M_\odot$, $\log_{10} Q_0 = 47.56$) to O3V ($58.34\,M_\odot$, $\log_{10} Q_0 = 49.63$), with an rms residual of $0.036$ dex and a maximum residual of $0.064$ dex.
+
+A quadratic is used rather than a cubic deliberately. Fitting a cubic to the same twelve points lowers the rms only from $0.036$ to $0.035$ dex, which is no real gain, but its leading coefficient comes out negative: the cubic peaks at $71\,M_\odot$ and falls thereafter, so it would assign a $150\,M_\odot$ star less ionizing flux than a $37\,M_\odot$ one. The quadratic has the same qualitative flaw only beyond $88\,M_\odot$, outside the tabulated range, and the clamp below removes it entirely.
+
+Outside the tabulated mass range the fit is not extrapolated:
+
+- **Below $16.46\,M_\odot$** the star is later than O9.5V and its ionizing output falls off a cliff, so $Q$ is set to zero. Extrapolating instead would return $\sim10^{43}$ photons per second for a $5\,M_\odot$ star against a true value near $10^{38}$, and because low-mass stars outnumber O stars by orders of magnitude in a sampled IMF, that spurious contribution would dominate the total budget.
+- **Above $58.34\,M_\odot$** the mass is clamped, so $Q$ saturates at the O3V value. This under-predicts genuinely very massive stars — a $100\,M_\odot$ star is given the $58\,M_\odot$ rate, low by roughly a factor of two — which is the conservative direction for a feedback module and is preferable to following the polynomial into its turnover.
+
+The rate is stored in a dedicated particle component and is not refreshed as the particle accretes. The one exception is a star born below the cutoff, which carries $Q = 0$ and is re-evaluated until accretion carries it into the O-star range; at that point $Q$ is assigned from the mass it has then and frozen.
+
+The fit and a figure of $Q(M)$ can be regenerated from the source table with `make_qm_figure.sh`, which re-derives the coefficients rather than hardcoding them.
+
+**Important:** the stellar model assigns $Q$ on the first update, and detects the "not yet assigned" state by the component still being zero. `amrex::ParticleContainer::InitFromAsciiFile` only fills the components present in the file and leaves the rest indeterminate, so a problem that creates star particles that way must explicitly zero the remaining real components. See `src/problems/StromgrenVolumeFeedback/` and `src/problems/ParticleStarEvolution/` for worked examples.
+
+### 5.1 The ionized-fraction output slot
+
+The ionized fraction is written into a passive scalar so that it appears in plotfiles. Two properties of that slot matter.
+
+First, passive scalars are stored as **conserved densities**, so the slot holds $\rho\, x_{\rm ion}$, not $x_{\rm ion}$. Divide by the density to recover the fraction.
+
+Second, the passive-scalar block **begins with the mass scalars** — `numPassiveScalars` counts the mass scalars as well as any extra ones. Pointing `stromgren.x_ion_scalar_index` at one of those slots would overwrite a species partial density every step, and `EnforceLimits` would then renormalize the corrupted value back into the composition. The module therefore rejects an index below `numMassScalars` or at or above `numPassiveScalars`, aborting with an explanatory message rather than silently corrupting the chemistry or silently writing nothing.
+
+The field is recomputed from scratch each step from the current density and photon budgets, so it is a diagnostic output rather than an advected state variable.
+
+### 5.2 Input parameters
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `stromgren.enabled` | `0` | Master switch. |
+| `stromgren.T_HII` | `1.0e4` | Temperature imposed on fully ionized gas (K). |
+| `stromgren.alpha_B` | `2.59e-13` | Case-B recombination coefficient ($\mathrm{cm}^3\ \mathrm{s}^{-1}$). |
+| `stromgren.hydrogen_mass_fraction` | `1.0` | Converts mass density to hydrogen number density. |
+| `stromgren.R_max_cells` | `32.0` | Cap on the search radius, in cells. |
+| `stromgren.x_ion_scalar_index` | `-1` | Passive scalar slot receiving the ionized fraction; negative disables the output. Must be $\geq$ `numMassScalars` and $<$ `numPassiveScalars` (validated at runtime; see below). |
+| `stromgren.Q_ion` | `-1.0` | When positive, overrides the per-particle rate from the stellar model. |
+
+### 5.3 Limitations
+
+1. **The ionized region is always spherical.** Champagne flows, breakout along low-density channels, and shadowing behind dense clumps are not represented. This is inherent to the Strömgren-volume approximation, not to Quokka's implementation of it; capturing anisotropy would require angular binning.
+2. **Finest level only.** Like the supernova deposition, the module acts on the finest level, where star particles are assumed to live. An H II region extending beyond the finest-level grids is truncated.
+3. **Photons are not conserved globally.** A budget not exhausted within `R_max_cells` is discarded, as in FIRE-1. There is no long-range transfer step to receive the remainder; the module warns when this happens.
+4. **The mean molecular weight does not track ionization.** Quokka's EOS uses a fixed $\mu$ unless mass scalars are evolved, so ionized gas keeps its neutral $\mu$. Since $P = \rho k T / (\mu m_H)$, the overpressure driving the expansion is underestimated by roughly $\mu_{\rm neutral} / \mu_{\rm ionized} \approx 2$. Compensate by setting $T_{\rm HII}$ to an effective value near $2\times10^4$ K rather than $10^4$ K.
+5. **No radiation pressure and no MHD.** Only thermal feedback is applied. The module aborts at runtime if enabled for a problem with face-centred (MHD) variables, because the internal energy update does not remove the magnetic contribution.
+
+### 5.4 Validation
+
+Four tests run the same binary against different paths through the module.
+
+| Test | Configuration | Checks |
+|---|---|---|
+| `StromgrenVolumeFeedback` | one source, uniform medium | equivalent radius matches the analytic $R_{\rm St} = (3Q / 4\pi \alpha_B n_H^2)^{1/3}$ to better than $0.01$ cells |
+| `StromgrenVolumeGradient` | linear density gradient, off-centre source | the analytic radius no longer applies, so photon conservation is checked instead: recombinations inside the region equal $Q$ |
+| `StromgrenVolumeSubgrid` | $Q$ so small that $R_{\rm St} \approx 0.005$ cells | the unresolved regime the module exists for; a one-cell tolerance is vacuous here, so relative accuracy is required (measured $\sim 2\times10^{-7}$) |
+| `StromgrenVolumeOverlap` | two co-located sources | combined region matches $2^{1/3} R_{\rm St}$ and recombinations equal $2Q$, confirming photons are not spent twice | The dynamical benchmark for this class of model is the StarBench D-type expansion comparison (Bisbas et al. 2015), which should be checked against the Hosokawa & Inutsuka (2006) solution rather than the Spitzer (1978) one; it is not part of the automated test suite.
