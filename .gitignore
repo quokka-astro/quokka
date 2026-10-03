@@ -42,6 +42,7 @@ Backtrace.*
 !/.claude/rules/
 /.agent
 /.agents
+/issues/
 
 # LaTeX files
 *.aux
