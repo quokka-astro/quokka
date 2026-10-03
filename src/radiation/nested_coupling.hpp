@@ -2,6 +2,8 @@
 #ifndef QUOKKA_NESTED_COUPLING_HPP_
 #define QUOKKA_NESTED_COUPLING_HPP_
 
+#include "radiation/radiation_system.hpp" // IWYU pragma: keep
+
 // The default hooks fail closed. A problem must declare domain-wide opacity
 // assumptions and explicitly allow estimated results if its evaluator is unverified.
 template <typename problem_t> AMREX_GPU_DEVICE auto RadSystem<problem_t>::NestedCouplingOptions() -> mgsolve::Options { return {}; }

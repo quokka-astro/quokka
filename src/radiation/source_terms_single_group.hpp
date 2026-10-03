@@ -33,6 +33,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const double chat = c_hat_;
 		const double dustGasCoeff_ = dustGasCoeff;
 		const double resid_tol = tol_h;
+		const double temperature_floor = tempFloor; // Capture outside constexpr-if for CUDA.
 
 		// load fluid properties
 		const double rho = consPrev(i, j, k, gasDensity_index);
@@ -115,9 +116,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			Erad_guess = Erad0;
 
 			if constexpr (NestedRadiationCoupling_Traits<problem_t>::enabled) {
-				auto const updated =
-				    SolveNestedRadiationCoupling(Egas0, quokka::valarray<double, 1>{Erad0}, rho, coeff_n, dt, massScalars,
-								 quokka::valarray<double, 1>{Src}, radBoundaries_, tempFloor, p_iteration_counter_local);
+				auto const updated = SolveNestedRadiationCoupling(Egas0, quokka::valarray<double, 1>{Erad0}, rho, coeff_n, dt, massScalars,
+										  quokka::valarray<double, 1>{Src}, radBoundaries_, temperature_floor,
+										  p_iteration_counter_local);
 				Egas_guess = updated.Egas;
 				Erad_guess = updated.EradVec[0];
 				T_gas = updated.T_gas;

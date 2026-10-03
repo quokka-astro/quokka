@@ -1,4 +1,4 @@
-#include "multigroup_solver.hpp"
+#include "../../src/radiation/nested/multigroup_solver.hpp"
 #include <random>
 #include <vector>
 #ifdef NDEBUG
@@ -17,12 +17,18 @@ template <std::size_t N> void check() {
                           : std::ldexp(1.0 + double(rng() % 65536) / 65536,
                                        int(rng() % 401) - 200);
     }
-    for (std::size_t n = N; n > 1;) {
-      std::size_t m = 0;
-      for (std::size_t i = 0; i < n; i += 2) {
-        ref[m++] = (i + 1 < n) ? ref[i] + ref[i + 1] : ref[i];
+    while (ref.size() > 1) {
+      std::vector<double> next;
+      next.reserve((ref.size() + 1) / 2);
+      auto it = ref.cbegin();
+      while (it != ref.cend()) {
+        double value = *it++;
+        if (it != ref.cend()) {
+          value += *it++;
+        }
+        next.push_back(value);
       }
-      n = m;
+      ref = std::move(next);
     }
     mgsolve::detail::Arithmetic arithmetic;
     double value = mgsolve::detail::sum(arithmetic, a);

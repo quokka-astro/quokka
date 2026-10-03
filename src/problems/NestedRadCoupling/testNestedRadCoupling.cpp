@@ -92,10 +92,10 @@ template <int N> auto test_live(double initial_temperature, double dust_root) ->
 	amrex::Box const box(amrex::IntVect(0), amrex::IntVect(0));
 	amrex::FArrayBox state(box, Physics_Indices<NestedProblem<N>>::nvarTotal_cc);
 	amrex::FArrayBox source(box, N), flux(box, 3 * N), heating(box, 1);
-	state.setVal(0);
-	source.setVal(0);
-	flux.setVal(0);
-	heating.setVal(0);
+	state.setVal<amrex::RunOn::Device>(0);
+	source.setVal<amrex::RunOn::Device>(0);
+	flux.setVal<amrex::RunOn::Device>(0);
+	heating.setVal<amrex::RunOn::Device>(0);
 	auto a = state.array();
 	auto src = source.array();
 	constexpr double gas_root = 4.0;

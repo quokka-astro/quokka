@@ -1,5 +1,5 @@
 // Independent auditor's driver for the three inner collision charts.
-#include "multigroup_solver.hpp"
+#include "../../src/radiation/nested/multigroup_solver.hpp"
 #include <iomanip>
 #include <iostream>
 int main() {

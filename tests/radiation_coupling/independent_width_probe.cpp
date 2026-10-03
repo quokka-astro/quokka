@@ -1,5 +1,5 @@
 // Pure-binary64 full-frequency Planck model that reaches width acceptance.
-#include "multigroup_solver.hpp"
+#include "../../src/radiation/nested/multigroup_solver.hpp"
 #include <iomanip>
 #include <iostream>
 int main() {

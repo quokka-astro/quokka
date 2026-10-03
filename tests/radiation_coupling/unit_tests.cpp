@@ -1,4 +1,4 @@
-#include "multigroup_solver.hpp"
+#include "../../src/radiation/nested/multigroup_solver.hpp"
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
