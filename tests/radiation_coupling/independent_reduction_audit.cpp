@@ -11,15 +11,17 @@ template <std::size_t N> void check() {
   for (int trial = 0; trial < 100; ++trial) {
     mgsolve::Array<double, N> a;
     std::vector<double> ref(N);
-    for (std::size_t i = 0; i < N; ++i)
+    for (std::size_t i = 0; i < N; ++i) {
       a[i] = ref[i] = (rng() % 5 == 0)
                           ? 0
                           : std::ldexp(1.0 + double(rng() % 65536) / 65536,
                                        int(rng() % 401) - 200);
+    }
     for (std::size_t n = N; n > 1;) {
       std::size_t m = 0;
-      for (std::size_t i = 0; i < n; i += 2)
+      for (std::size_t i = 0; i < n; i += 2) {
         ref[m++] = (i + 1 < n) ? ref[i] + ref[i + 1] : ref[i];
+      }
       n = m;
     }
     mgsolve::detail::Arithmetic arithmetic;

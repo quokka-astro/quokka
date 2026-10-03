@@ -42,21 +42,25 @@ auto operator>>(std::istream &stream, ReadDouble number) -> std::istream & {
 }
 
 bool read(Input &i) {
-  if (!(std::cin >> i.name))
+  if (!(std::cin >> i.name)) {
     return false;
+  }
   if (!(std::cin >> i.N >> ReadDouble{i.A} >> ReadDouble{i.D} >>
         ReadDouble{i.T} >> ReadDouble{i.h} >> ReadDouble{i.chi} >>
         ReadDouble{i.xmin} >> ReadDouble{i.xmax} >> ReadDouble{i.tol} >>
         i.margin >> i.certified >> i.variable >> i.residual >> i.width >>
         i.max_outer >> i.max_inner >> i.max_bracket >> i.newton >>
-        i.derivative_mode >> i.root_in_domain))
+        i.derivative_mode >> i.root_in_domain)) {
     throw std::runtime_error("malformed scalar inputs");
+  }
   i.groups.resize(i.N);
-  for (auto &g : i.groups)
+  for (auto &g : i.groups) {
     if (!(std::cin >> ReadDouble{g.r} >> ReadDouble{g.alpha} >>
           ReadDouble{g.p} >> ReadDouble{g.b} >> g.alpha_quarters >>
-          g.p_quarters >> g.beta >> ReadDouble{g.L}))
+          g.p_quarters >> g.beta >> ReadDouble{g.L})) {
       throw std::runtime_error("malformed group inputs");
+    }
+  }
   return true;
 }
 
@@ -66,12 +70,15 @@ bool read(Input &i) {
 // budget.
 bool normal_or_zero(double x) { return x == 0 || (x > 0 && std::isnormal(x)); }
 double quarter_power(double x, int q) {
-  if (q == 0)
+  if (q == 0) {
     return 1;
-  if (q == 1)
+  }
+  if (q == 1) {
     return std::sqrt(std::sqrt(x));
-  if (q == 2)
+  }
+  if (q == 2) {
     return std::sqrt(x);
+  }
   return std::numeric_limits<double>::quiet_NaN();
 }
 
@@ -108,8 +115,9 @@ template <std::size_t N> void run(Input const &input) {
         (input.groups[g].p == 0 || input.groups[g].b == 0);
   }
   auto oracle = [&](double x, mgsolve::GroupValues<N> &v) {
-    if (!(x > 0 && std::isnormal(x)))
+    if (!(x > 0 && std::isnormal(x))) {
       return false;
+    }
     v.derivatives = input.derivative_mode != 0;
     for (std::size_t j = 0; j < N; ++j) {
       auto const &g = input.groups[j];
@@ -118,44 +126,55 @@ template <std::size_t N> void run(Input const &input) {
       v.B_zero[j] = g.b == 0;
       double ap = quarter_power(x, g.alpha_quarters),
              pp = quarter_power(x, g.p_quarters);
-      if (!normal_or_zero(ap) || !normal_or_zero(pp))
+      if (!normal_or_zero(ap) || !normal_or_zero(pp)) {
         return false;
+      }
       v.alpha[j] = g.alpha == 0 ? 0 : g.alpha * ap;
       v.p[j] = g.p == 0 ? 0 : g.p * pp;
       double monomial = x;
-      if (g.beta == 2 || g.beta == 4)
+      if (g.beta == 2 || g.beta == 4) {
         monomial = x * x;
-      if (!normal_or_zero(monomial) || monomial == 0)
+      }
+      if (!normal_or_zero(monomial) || monomial == 0) {
         return false;
-      if (g.beta == 4)
+      }
+      if (g.beta == 4) {
         monomial = monomial * monomial;
-      if (!normal_or_zero(monomial) || monomial == 0)
+      }
+      if (!normal_or_zero(monomial) || monomial == 0) {
         return false;
-      if (g.beta != 1 && g.beta != 2 && g.beta != 4)
+      }
+      if (g.beta != 1 && g.beta != 2 && g.beta != 4) {
         return false;
+      }
       v.B[j] = g.b == 0 ? 0 : g.b * monomial;
       if (!normal_or_zero(v.alpha[j]) || !normal_or_zero(v.p[j]) ||
-          !normal_or_zero(v.B[j]))
+          !normal_or_zero(v.B[j])) {
         return false;
+      }
       if ((v.alpha[j] == 0 && g.alpha != 0) || (v.p[j] == 0 && g.p != 0) ||
-          (v.B[j] == 0 && g.b != 0))
+          (v.B[j] == 0 && g.b != 0)) {
         return false;
+      }
       v.d_alpha[j] = (g.alpha_quarters / 4.0) * v.alpha[j] / x;
       v.d_p[j] = (g.p_quarters / 4.0) * v.p[j] / x;
       v.d_B[j] = g.beta * v.B[j] / x;
-      if (input.derivative_mode == 2)
+      if (input.derivative_mode == 2) {
         v.d_B[j] = std::numeric_limits<double>::quiet_NaN();
-      if (input.derivative_mode == 3)
+      }
+      if (input.derivative_mode == 3) {
         v.d_B[j] = -1e100 * v.d_B[j];
+      }
     }
     return true;
   };
   auto r = mgsolve::solve(p, oracle, c, o);
   auto number = [](double x) {
-    if (std::isfinite(x))
+    if (std::isfinite(x)) {
       std::cout << x;
-    else
+    } else {
       std::cout << "null";
+    }
   };
   std::cout << "{\"name\":\"" << input.name << "\",\"status\":\""
             << mgsolve::status_name(r.status) << "\",\"accepted\":"
@@ -168,8 +187,9 @@ template <std::size_t N> void run(Input const &input) {
   number(r.gas_energy);
   std::cout << ",\"radiation\":[";
   for (std::size_t g = 0; g < N; ++g) {
-    if (g)
+    if (g) {
       std::cout << ',';
+    }
     number(r.radiation[g]);
   }
   std::cout << "],\"certificate\":{\"conditional\":"
@@ -180,8 +200,9 @@ template <std::size_t N> void run(Input const &input) {
   number(r.certificate.gas_relative);
   std::cout << ",\"group_relative\":[";
   for (std::size_t g = 0; g < N; ++g) {
-    if (g)
+    if (g) {
       std::cout << ',';
+    }
     number(r.certificate.group_relative[g]);
   }
   std::cout << "]},\"outer_iterations\":" << r.outer_iterations

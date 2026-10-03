@@ -3,8 +3,9 @@
 #include <iostream>
 int main() {
   std::uint64_t b;
-  while (std::cin >> b)
+  while (std::cin >> b) {
     std::cout << mgsolve::detail::rank(mgsolve::detail::relative_bound(
                      mgsolve::detail::unrank(b)))
               << "\n";
+  }
 }

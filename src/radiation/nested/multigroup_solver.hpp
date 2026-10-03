@@ -131,8 +131,9 @@ struct Arithmetic {
 	bool ok = true;
 	MGSOLVE_HD double check(double z, bool exact_zero = false)
 	{
-		if (!(normal(z) || (exact_zero && z == 0)))
+		if (!(normal(z) || (exact_zero && z == 0))) {
 			ok = false;
+		}
 		return z;
 	}
 	MGSOLVE_HD double add(double a, double b) { return check(a + b, a == 0 && b == 0); }
@@ -156,10 +157,12 @@ MGSOLVE_HD inline double div_up(double a, double b) { return a == 0 ? 0 : up(a /
 // not an interval root solver and no assumption about exp/expm1 accuracy.
 MGSOLVE_HD inline double relative_bound(double b)
 {
-	if (b == 0)
+	if (b == 0) {
 		return 0;
-	if (!(b > 0 && b < 0.5))
+	}
+	if (!(b > 0 && b < 0.5)) {
 		return infinity;
+	}
 	double lower_den = ::nextafter(1 - b, 0.0);
 	return div_up(b, lower_den);
 }
@@ -190,22 +193,26 @@ MGSOLVE_HD inline double safeguard(double lo, double hi, double proposal)
 	auto l = rank(lo), h = rank(hi), width = h - l;
 	if (normal(proposal)) {
 		auto p = rank(proposal);
-		if (p > l && p < h && p - l >= width / 4 && h - p >= width / 4)
+		if (p > l && p < h && p - l >= width / 4 && h - p >= width / 4) {
 			return proposal;
+		}
 	}
 	return midpoint(lo, hi);
 }
 MGSOLVE_HD inline bool narrow(double lo, double hi, double units)
 {
-	if (!(normal(lo) && normal(hi) && lo <= hi))
+	if (!(normal(lo) && normal(hi) && lo <= hi)) {
 		return false;
-	if (lo == hi)
+	}
+	if (lo == hi) {
 		return true;
+	}
 	// SafeDifference64: close binary64 endpoints subtract exactly (Sterbenz),
 	// including subnormal gaps; far endpoints have a finite normal difference.
 	double gap = hi - lo;
-	if (!(gap > 0 && gap <= std::numeric_limits<double>::max()))
+	if (!(gap > 0 && gap <= std::numeric_limits<double>::max())) {
 		return false;
+	}
 	double width = gap / lo;
 	return normal(width) && width <= units * u;
 }
@@ -262,12 +269,14 @@ MGSOLVE_HD inline Inner inner(double A, double D, double T, double x, const Opti
 	InnerEval e;
 	if (x < T) {
 		double half = T * 0.5;
-		if (!normal(half))
+		if (!normal(half)) {
 			return out;
+		}
 		e = eval_inner(A, D, T, x, half, Chart::strong);
 		++out.iterations;
-		if (!e.ok)
+		if (!e.ok) {
 			return out;
+		}
 		int s = guard(e.ratio, 16);
 		if (s == 0) {
 			out.status = Status::accepted_conditional;
@@ -286,16 +295,19 @@ MGSOLVE_HD inline Inner inner(double A, double D, double T, double x, const Opti
 		Arithmetic a;
 		double delta = chart == Chart::heating ? a.sub(x, T) : a.sub(T, x);
 		hi = a.mul(delta, 1 + 32 * u);
-		if (chart == Chart::weak)
+		if (chart == Chart::weak) {
 			hi = min(hi, T * 0.5);
-		if (!a.ok || !normal(hi))
+		}
+		if (!a.ok || !normal(hi)) {
 			return out;
+		}
 		// Search for actual certified signs; a rounded analytic seed alone is not
 		// a certified endpoint. The widened upper endpoint encloses the root.
 		e = eval_inner(A, D, T, x, hi, chart);
 		++out.iterations;
-		if (!e.ok)
+		if (!e.ok) {
 			return out;
+		}
 		int sign = guard(e.ratio, 16);
 		if (sign == 0) {
 			out.status = Status::accepted_conditional;
@@ -312,12 +324,14 @@ MGSOLVE_HD inline Inner inner(double A, double D, double T, double x, const Opti
 		bool found = false;
 		for (int i = 0; i < opt.max_bracket; ++i) {
 			lo *= 0.5;
-			if (!normal(lo))
+			if (!normal(lo)) {
 				return out;
+			}
 			e = eval_inner(A, D, T, x, lo, chart);
 			++out.iterations;
-			if (!e.ok)
+			if (!e.ok) {
 				return out;
+			}
 			sign = guard(e.ratio, 16);
 			if (sign == 0) {
 				out.status = Status::accepted_conditional;
@@ -341,8 +355,9 @@ MGSOLVE_HD inline Inner inner(double A, double D, double T, double x, const Opti
 	for (int i = 0; i < opt.max_inner; ++i) {
 		e = eval_inner(A, D, T, x, z, chart);
 		++out.iterations;
-		if (!e.ok)
+		if (!e.ok) {
 			return out;
+		}
 		int sign = guard(e.ratio, 16);
 		if (sign == 0 || narrow(lo, hi, 4)) {
 			out.status = Status::accepted_conditional;
@@ -355,10 +370,11 @@ MGSOLVE_HD inline Inner inner(double A, double D, double T, double x, const Opti
 			out.status = Status::precision_limit;
 			return out;
 		}
-		if ((sign < 0) != (chart == Chart::strong))
+		if ((sign < 0) != (chart == Chart::strong)) {
 			lo = z;
-		else
+		} else {
 			hi = z;
+		}
 		double proposal = z - (e.ratio - 1) / e.derivative;
 		z = safeguard(lo, hi, opt.use_newton ? proposal : 0);
 	}
@@ -371,10 +387,12 @@ template <std::size_t N> MGSOLVE_HD double sum(Arithmetic &a, Array<double, N> v
 	std::size_t n = N;
 	while (n > 1) {
 		const std::size_t pairs = n / 2;
-		for (std::size_t i = 0; i < pairs; ++i)
+		for (std::size_t i = 0; i < pairs; ++i) {
 			values[i] = a.add(values[2 * i], values[2 * i + 1]);
-		if (n % 2)
+		}
+		if (n % 2) {
 			values[pairs] = values[n - 1];
+		}
 		n = pairs + n % 2;
 	}
 	return N ? values[0] : 0;
@@ -391,8 +409,9 @@ MGSOLVE_HD Evaluation<N> evaluate(const Problem<N> &prob, Oracle &oracle, double
 {
 	Evaluation<N> e;
 	GroupValues<N> v;
-	if (!oracle(x, v))
+	if (!oracle(x, v)) {
 		return e;
+	}
 	Arithmetic a;
 	Array<double, N> emissions{}, absorptions{};
 	double dM = 0, dH = 0;
@@ -440,30 +459,35 @@ MGSOLVE_HD Evaluation<N> evaluate(const Problem<N> &prob, Oracle &oracle, double
 		if (e.H == 0) {
 			e.sign = numerator == 0 ? 0 : 1;
 			e.ratio = numerator == 0 ? 1 : infinity;
-		} else
+		} else {
 			e.ratio = a.div(numerator, e.H);
+		}
 	} else {
 		double den = a.add(e.q, e.H);
 		if (den == 0) {
 			e.sign = e.M == 0 ? 0 : 1;
 			e.ratio = e.M == 0 ? 1 : infinity;
-		} else
+		} else {
 			e.ratio = a.div(e.M, den);
+		}
 	}
 	if (!a.ok) {
 		e.status = Status::range_failure;
 		return e;
 	}
-	if (e.ratio != infinity)
+	if (e.ratio != infinity) {
 		e.sign = guard(e.ratio, 128);
+	}
 	if (v.derivatives) {
 		double t = e.t;
 		double dt = 1 / (1 + prob.A / prob.D * (t + prob.T) / (2 * t * ::sqrt(t)));
 		double dq = (x >= prob.T ? 1 : -1) * prob.A * dt;
-		if (x >= prob.T && e.H > 0)
+		if (x >= prob.T && e.H > 0) {
 			e.ratio_derivative = (dq + dM - e.ratio * dH) / e.H;
-		if (x < prob.T && e.q + e.H > 0)
+		}
+		if (x < prob.T && e.q + e.H > 0) {
 			e.ratio_derivative = (dM - e.ratio * (dq + dH)) / (e.q + e.H);
+		}
 	}
 	e.status = Status::accepted_conditional;
 	return e;
@@ -491,11 +515,14 @@ template <std::size_t N> MGSOLVE_HD Certificate<N> certificate(const Contract<N>
 }
 template <std::size_t N> MGSOLVE_HD bool meets(const Certificate<N> &c, double tolerance)
 {
-	if (!(c.dust_relative <= tolerance && c.gas_relative <= tolerance))
+	if (!(c.dust_relative <= tolerance && c.gas_relative <= tolerance)) {
 		return false;
-	for (std::size_t g = 0; g < N; ++g)
-		if (!(c.group_relative[g] <= tolerance))
+	}
+	for (std::size_t g = 0; g < N; ++g) {
+		if (!(c.group_relative[g] <= tolerance)) {
 			return false;
+		}
+	}
 	return true;
 }
 } // namespace detail
@@ -518,11 +545,14 @@ template <std::size_t N, class Oracle> MGSOLVE_HD Result<N> solve(const Problem<
 #endif
 	if (!(normal(p.A) && normal(p.D) && normal(p.T) && normal(p.h) && normal(p.chi) && normal(opt.x_min) && normal(opt.x_max) && opt.x_min <= opt.x_max &&
 	      opt.relative_tolerance > 0 && opt.relative_tolerance < infinity && opt.max_outer > 0 && opt.max_inner > 0 && opt.max_bracket > 0 &&
-	      opt.max_outer <= 65536 && opt.max_inner <= 65536 && opt.max_bracket <= 65536))
+	      opt.max_outer <= 65536 && opt.max_inner <= 65536 && opt.max_bracket <= 65536)) {
 		return out;
-	for (std::size_t g = 0; g < N; ++g)
-		if (!nonnegative(p.r[g]))
+	}
+	for (std::size_t g = 0; g < N; ++g) {
+		if (!nonnegative(p.r[g])) {
 			return out;
+		}
+	}
 	if (!c.certified && !opt.allow_estimated) {
 		out.status = Status::missing_contract;
 		return out;
@@ -545,11 +575,12 @@ template <std::size_t N, class Oracle> MGSOLVE_HD Result<N> solve(const Problem<
 			return out;
 		}
 	}
-	for (std::size_t g = 0; g < N; ++g)
+	for (std::size_t g = 0; g < N; ++g) {
 		if (!(c.sensitivity[g] >= 0 && c.sensitivity[g] < infinity)) {
 			out.status = Status::missing_contract;
 			return out;
 		}
+	}
 	double x = max(opt.x_min, min(p.T, opt.x_max));
 	auto e = evaluate(p, oracle, x, opt, c.emission_identically_zero || N == 0);
 	++out.oracle_calls;
@@ -572,8 +603,9 @@ template <std::size_t N, class Oracle> MGSOLVE_HD Result<N> solve(const Problem<
 			t = a.add(p.T, increment);
 			double ds = a.mul(p.D, a.sqrt(t));
 			x = a.add(t, a.div(e.H, ds));
-		} else
+		} else {
 			x = t;
+		}
 		if (!a.ok) {
 			out.status = Status::range_failure;
 			return out;
@@ -646,12 +678,14 @@ template <std::size_t N, class Oracle> MGSOLVE_HD Result<N> solve(const Problem<
 			out.status = Status::tolerance_unavailable;
 			return out;
 		}
-		if (e.sign < 0)
+		if (e.sign < 0) {
 			lo = x;
-		else if (e.sign > 0)
+		} else if (e.sign > 0) {
 			hi = x;
-		if (lo > 0 && hi > 0)
+		}
+		if (lo > 0 && hi > 0) {
 			bracket = true;
+		}
 		if (bracket) {
 			if (++out.outer_iterations > opt.max_outer) {
 				out.status = Status::iteration_limit;
@@ -669,10 +703,11 @@ template <std::size_t N, class Oracle> MGSOLVE_HD Result<N> solve(const Problem<
 				return out;
 			}
 			double next;
-			if (first_sign < 0)
+			if (first_sign < 0) {
 				next = x > opt.x_max * 0.5 ? opt.x_max : min(opt.x_max, x * 2);
-			else
+			} else {
 				next = max(opt.x_min, x * 0.5);
+			}
 			if (next == x) {
 				out.status = Status::no_bracket;
 				return out;

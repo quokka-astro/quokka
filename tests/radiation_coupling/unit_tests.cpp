@@ -19,8 +19,9 @@ struct TwoGroups {
       v.d_B[g] = 4 * v.B[g] / x;
     }
     v.derivatives = derivatives;
-    if (poison)
+    if (poison) {
       v.d_B[0] = std::numeric_limits<double>::quiet_NaN();
+    }
     return true;
   }
 };
@@ -41,8 +42,9 @@ int main() {
   o.x_max = 100;
   auto c = contract();
   auto r = solve(p, TwoGroups{}, c, o);
-  if (!accepted(r.status))
+  if (!accepted(r.status)) {
     std::cerr << status_name(r.status) << "\n";
+  }
   assert(accepted(r.status));
   assert(r.dust_temperature > 1 && r.gas_temperature > 1);
   assert(r.radiation[0] > 0 && r.radiation[1] > 0);
@@ -124,8 +126,9 @@ int main() {
   // Odd balanced tree includes each group exactly once, with no padding copies.
   detail::Arithmetic ar;
   Array<double, 5> terms;
-  for (int i = 0; i < 5; ++i)
+  for (int i = 0; i < 5; ++i) {
     terms[i] = i + 1;
+  }
   assert(detail::sum(ar, terms) == 15 && ar.ok);
   // Compare standalone inner solve against substitution, all three charts.
   for (double x : {.0001, .1, .9, 1., 1.1, 4., 1e8}) {
