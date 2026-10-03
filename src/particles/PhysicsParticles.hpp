@@ -177,6 +177,9 @@ class PhysicsParticleDescriptorBase
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
 
+	// Set the nGroups luminosity components of every particle to zero
+	virtual void zeroLuminosity(int nGroups) = 0;
+
 	// Redistribute particles at level lev and above
 	virtual void redistribute(int lev) const = 0;
 
@@ -671,6 +674,30 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
+	// Implementation of luminosity reset
+	void zeroLuminosity(int nGroups) override
+	{
+		if (container_ == nullptr || this->getLumIndex() < 0) {
+			return;
+		}
+		const int lum_idx = this->getLumIndex();
+		AMREX_ALWAYS_ASSERT(lum_idx + nGroups <= ContainerType::ParticleType::NReal);
+		for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
+			for (auto &kv : container_->GetParticles(lev)) {
+				auto &particle_array = kv.second.GetArrayOfStructs();
+				const int np = particle_array.numParticles();
+				auto *pdata = particle_array().data();
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+					auto &p = pdata[i]; // NOLINT
+					for (int g = 0; g < nGroups; ++g) {
+						p.rdata(lum_idx + g) = 0.0;
+					}
+				});
+			}
+		}
+		amrex::Gpu::streamSynchronize();
+	}
+
 	// Implementation of particle redistribution within a level
 	void redistribute(int lev) const override
 	{
@@ -1015,6 +1042,16 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getLumIndex() >= 0) {
 				descriptor->depositRadiation(radEnergySource, lev, current_time, Physics_Traits<problem_t>::nGroups);
+			}
+		}
+	}
+
+	// Set the luminosity of all luminous particles to zero
+	void zeroLuminosities()
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getLumIndex() >= 0) {
+				descriptor->zeroLuminosity(Physics_Traits<problem_t>::nGroups);
 			}
 		}
 	}
