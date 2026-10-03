@@ -103,7 +103,7 @@ jobs:
           ../inputs/MHDFastWave.toml \
           amr.max_grid_size_x=32 \
           amr.blocking_factor_x=16 \
-          mhd.emf_compute_scheme=FelkerStone2017 \
+          mhd.emf_compute_scheme=FelkerStone2018 \
           mhd.emf_averaging_scheme=LondrilloDelZanna2004 \
           amrex.init_snan=1 \
           amrex.fpe_trap_invalid=1 \
