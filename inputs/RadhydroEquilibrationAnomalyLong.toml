@@ -1,0 +1,29 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+# *****************************************************************
+# Verbosity
+# *****************************************************************
+amr.v = 0
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [8, 8, 8]
+amr.max_level = 0
+amr.blocking_factor = 8
+amr.max_grid_size = 8
+
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 1
+
+anomaly.initial_erad = 300000.0
+anomaly.constant_dt = 1.0e-4
+anomaly.stop_time = 0.05
+anomaly.write_history = 1
+anomaly.check_short_step = 0
