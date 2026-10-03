@@ -1,0 +1,47 @@
+geometry.prob_lo = [-2.468542065193094e20, -2.468542065193094e20, -2.468542065193094e20]
+geometry.prob_hi = [ 2.468542065193094e20,  2.468542065193094e20,  2.468542065193094e20]
+quokka.bc = ["foextrap", "foextrap", "foextrap"]
+
+amr.n_cell = [16, 16, 16]
+amr.max_level = 0
+amr.blocking_factor = 16
+amr.max_grid_size = 16
+amr.v = 0
+
+do_reflux = 1
+do_subcycle = 0
+regrid_interval = -1
+cfl = 0.2
+hydro.reconstruction_order = 3
+
+initial_dt = "1.0 * yr"
+stop_time = "100.0 * yr"
+max_timesteps = 1
+temperature_floor = 10.0
+density_floor = 1.0e-28
+
+cooling.enabled = 0
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
+
+particles.disable_SN_feedback = true
+particles.disable_particle_drift = true
+particles.scalar_yield_per_SN = 1.9884e34
+particles.verbose = 0
+
+problem.cloud_mass_Msun = 1.0e5
+problem.cloud_radius_pc = 20.0
+problem.cloud_temperature = 100.0
+problem.density_contrast = 100.0
+problem.edge_width_pc = 1.0
+problem.virial_parameter = 2.0
+problem.stellar_mass_Msun = 2.0e3
+problem.stellar_particles_file = "../inputs/MolecularCloudDisruption_particles.txt"
+problem.allow_star_formation = false
+problem.dense_threshold_nH = 50.0
+problem.cold_threshold_temperature = 300.0
+
+statistics_interval = -1
+plotfile_interval = -1
+checkpoint_interval = -1
+suppress_output = 1
+tiny_profiler.enabled = 0
