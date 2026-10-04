@@ -56,7 +56,8 @@ int main() {
   Options bisection = o;
   bisection.use_newton = false;
   std::feclearexcept(FE_DIVBYZERO);
-  auto derivative_free_bisection = solve(p, TwoGroups{false, false}, c, bisection);
+  auto derivative_free_bisection =
+      solve(p, TwoGroups{false, false}, c, bisection);
   assert(std::fetestexcept(FE_DIVBYZERO) == 0);
   assert(accepted(derivative_free_bisection.status));
   assert(std::abs(derivative_free_bisection.gas_energy - r.gas_energy) < 1e-12);
