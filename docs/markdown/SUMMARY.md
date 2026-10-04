@@ -51,6 +51,7 @@
 - [Hydro Integrator](hydro_integrator.md)
 - [Radiation Integrator](radiation_integrator.md)
 - [Radiation solver accuracy](radiation_solver_accuracy.md)
+  - [Detailed solver control flow](radiation_solver_flowcharts.md)
 - [State Variable Component Indices](components.md)
 - [API Reference](api_reference.md)
 - [Debugging](debugging.md)

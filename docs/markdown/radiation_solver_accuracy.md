@@ -24,6 +24,8 @@ flowchart TD
     F -->|No safe progress| I[Report precision, range, or iteration failure]
 ```
 
+For the exact C++ branch tests, stopping criteria, and failure paths, see the separate [detailed solver flowcharts](radiation_solver_flowcharts.md).
+
 ## Symbols and conventions
 
 This chapter follows the physical notation of [He, Wibking, and Krumholz (2024a)](https://doi.org/10.1093/mnras/stae1244) and their [multigroup paper (2024b)](https://academic.oup.com/mnras/article/535/4/3059/7903407), especially the group means in equations (21)–(23) of the latter. We write gas temperature as \\(T\\) and extend the notation to a separate dust temperature \\(T_{\rm d}\\). Superscript \\((0)\\) means the fixed, source-adjusted input to this local implicit stage; it need not be the start of the full timestep.
