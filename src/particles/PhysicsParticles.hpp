@@ -1385,9 +1385,9 @@ template <typename problem_t> class PhysicsParticleRegister
 
 						for (const auto &entry : sfh_yaml) {
 							if (entry.IsSequence() && entry.size() == 3) {
-								const int nstep = entry[0].as<int>();
-								const auto time = entry[1].as<amrex::Real>();
-								const auto mass = entry[2].as<amrex::Real>();
+								const int nstep = entry[0].template as<int>();
+								const auto time = entry[1].template as<amrex::Real>();
+								const auto mass = entry[2].template as<amrex::Real>();
 								sfh_data_[type].emplace_back(nstep, time, mass);
 								last_time = time;
 							}
