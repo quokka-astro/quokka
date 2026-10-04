@@ -4,11 +4,20 @@ These diagrams expand the [algorithm overview and error analysis](radiation_solv
 
 The physical notation remains that of the explainer: dust temperature is \\(T_{\rm d}\\), gas temperature is \\(T\\), and the adjusted input gas temperature is \\(T^{(0)}\\). Diagram labels use the exact C++ names where this makes a condition easier to locate: `x = T_d`, `t = T`, `p.T = T^(0)`, `p.A = C_v`, `p.D = D`, `p.h = H`, and `p.chi = C` (the last three are the explainer's calligraphic symbols). `M` and `H` inside an evaluation are the separate emission and absorption sums; they are not `p.h`.
 
-The large diagrams retain full-size labels. Scroll within a diagram to follow a path; the numbered panels connect through named calls.
+Each diagram starts fitted to its window. Use **Zoom in**, **Zoom out**, **Fit whole chart**, or **100%** above it. At larger scales, scroll within the diagram to follow a path. The numbered panels connect through named calls.
 
 <style>
-.solver-flow { overflow: auto; max-height: 85vh; border: 1px solid var(--table-border-color); padding: 0.5rem; margin-block: 1rem; }
-.solver-flow svg { min-width: var(--flow-width); max-width: none !important; }
+.solver-flow { border: 1px solid var(--table-border-color); margin-block: 1rem; }
+.solver-flow-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.6rem; }
+.solver-flow-toolbar button { cursor: pointer; padding: 0.35rem 0.65rem; color: var(--fg); background: var(--bg); border: 1px solid var(--table-border-color); border-radius: 3px; }
+.solver-flow-toolbar output { margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+.solver-flow-viewport { overflow: auto; height: 65vh; min-height: 280px; }
+.solver-flow svg { min-width: 0; max-width: none !important; display: block; }
+@media print {
+  .solver-flow-toolbar { display: none; }
+  .solver-flow-viewport { overflow: visible; height: auto; }
+  .solver-flow svg { width: 100% !important; height: auto !important; }
+}
 </style>
 
 ## Exact tests used in the diagrams
@@ -26,7 +35,7 @@ The large diagrams retain full-size labels. Scroll within a diagram to follow a 
 
 ## 1. Entry checks and the constant zero-emission shortcut
 
-<div class="solver-flow" style="--flow-width: 1602px">
+<div class="solver-flow">
 
 ```mermaid
 flowchart TD
@@ -74,7 +83,7 @@ The direct path uses dust-coordinate log allowance `27.5*lambda_upper` and gas a
 
 ## 2. Outer dust-temperature search and stopping
 
-<div class="solver-flow" style="--flow-width: 2373px">
+<div class="solver-flow">
 
 ```mermaid
 flowchart TD
@@ -128,7 +137,7 @@ The ordering matters. Acceptance uses the current bracket **before** the current
 
 ## 3. One trial evaluation
 
-<div class="solver-flow" style="--flow-width: 1280px">
+<div class="solver-flow">
 
 ```mermaid
 flowchart TD
@@ -176,7 +185,7 @@ The coefficient validation repeats for every group. A structural-zero flag asser
 
 ## 4. Inner gas solve: branch selection, initialization, and iteration
 
-<div class="solver-flow" style="--flow-width: 2086px">
+<div class="solver-flow">
 
 ```mermaid
 flowchart TD
@@ -233,7 +242,7 @@ The chart balances are defined in the explainer. Heating and weak cooling solve 
 
 ## 5. Shared Newton safeguard
 
-<div class="solver-flow" style="--flow-width: 748px">
+<div class="solver-flow">
 
 ```mermaid
 flowchart TD
