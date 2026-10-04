@@ -24,9 +24,11 @@ function convertBlocks() {
 function addDiagramControls() {
   for (const panel of document.querySelectorAll(".solver-flow")) {
     const svg = panel.querySelector("svg");
-    if (!svg || panel.dataset.zoomReady) continue;
+    if (!svg || panel.dataset.zoomReady)
+      continue;
     const box = svg.viewBox.baseVal;
-    if (!(box.width > 0 && box.height > 0)) continue;
+    if (!(box.width > 0 && box.height > 0))
+      continue;
     panel.dataset.zoomReady = "true";
     const width = box.width, height = box.height;
     const viewport = document.createElement("div");
@@ -55,7 +57,8 @@ function addDiagramControls() {
     }
     function fitDiagram() {
       setScale(Math.min((viewport.clientWidth - 16) / width,
-                        (viewport.clientHeight - 16) / height, 1), true);
+                        (viewport.clientHeight - 16) / height, 1),
+               true);
     }
     function button(label, action) {
       const control = document.createElement("button");
@@ -71,7 +74,10 @@ function addDiagramControls() {
     toolbar.appendChild(percentage);
     panel.append(toolbar, viewport);
     // Refit only in fit mode; preserve a reader's chosen zoom on resize.
-    new ResizeObserver(() => { if (fitted) fitDiagram(); }).observe(viewport);
+    new ResizeObserver(() => {
+      if (fitted)
+        fitDiagram();
+    }).observe(viewport);
     fitDiagram();
   }
 }
