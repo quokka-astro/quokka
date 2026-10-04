@@ -115,8 +115,7 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 			mask.define(a_state[lev]->boxArray(), a_state[lev]->DistributionMap(), 1, amrex::IntVect(0));
 			mask.setVal(1);
 		} else {
-			mask =
-			    amrex::makeFineMask(*a_state[lev], *a_state[lev + 1], amrex::IntVect(0), m_refRatio[lev], amrex::Periodicity::NonPeriodic(), 1, 0);
+			mask = amrex::makeFineMask(*a_state[lev], *a_state[lev + 1], amrex::IntVect(0), m_refRatio[lev], m_geoms[lev].periodicity(), 1, 0);
 		}
 		auto const &sarrs = a_state[lev]->const_arrays();
 		auto const &marrs = mask.arrays();
