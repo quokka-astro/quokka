@@ -50,7 +50,16 @@ int main() {
   assert(r.radiation[0] > 0 && r.radiation[1] > 0);
   assert(r.certificate.conditional);
   assert(r.certificate.gas_relative <= o.relative_tolerance);
+  std::feclearexcept(FE_DIVBYZERO);
   auto derivative_free = solve(p, TwoGroups{false, false}, c, o);
+  assert(std::fetestexcept(FE_DIVBYZERO) == 0);
+  Options bisection = o;
+  bisection.use_newton = false;
+  std::feclearexcept(FE_DIVBYZERO);
+  auto derivative_free_bisection = solve(p, TwoGroups{false, false}, c, bisection);
+  assert(std::fetestexcept(FE_DIVBYZERO) == 0);
+  assert(accepted(derivative_free_bisection.status));
+  assert(std::abs(derivative_free_bisection.gas_energy - r.gas_energy) < 1e-12);
   auto poisoned = solve(p, TwoGroups{true, true}, c, o);
   assert(accepted(derivative_free.status) && accepted(poisoned.status));
   assert(std::abs(derivative_free.gas_energy - r.gas_energy) < 1e-12);

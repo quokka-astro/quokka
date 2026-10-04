@@ -695,8 +695,12 @@ template <std::size_t N, class Oracle> MGSOLVE_HD Result<N> solve(const Problem<
 				out.status = Status::precision_limit;
 				return out;
 			}
-			double proposal = x - (e.ratio - 1) / e.ratio_derivative;
-			x = safeguard(lo, hi, opt.use_newton ? proposal : 0);
+			if (opt.use_newton && std::isfinite(e.ratio_derivative) && e.ratio_derivative != 0) {
+				const double proposal = x - (e.ratio - 1) / e.ratio_derivative;
+				x = safeguard(lo, hi, proposal);
+			} else {
+				x = midpoint(lo, hi);
+			}
 		} else {
 			if (k >= opt.max_bracket) {
 				out.status = Status::iteration_limit;
