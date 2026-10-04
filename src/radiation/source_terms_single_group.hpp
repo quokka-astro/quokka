@@ -2,7 +2,8 @@
 #ifndef RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_
 
-#include "radiation/radiation_system.hpp" // IWYU pragma: keep
+// RadSystem member definitions intentionally include the guarded class declaration.
+#include "radiation/radiation_system.hpp" // IWYU pragma: keep // NOLINT(misc-header-include-cycle)
 
 #define LARGE 1.0e100
 

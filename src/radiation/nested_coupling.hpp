@@ -2,7 +2,8 @@
 #ifndef QUOKKA_NESTED_COUPLING_HPP_
 #define QUOKKA_NESTED_COUPLING_HPP_
 
-#include "radiation/radiation_system.hpp" // IWYU pragma: keep
+// RadSystem member definitions intentionally include the guarded class declaration.
+#include "radiation/radiation_system.hpp" // IWYU pragma: keep // NOLINT(misc-header-include-cycle)
 
 // The default hooks fail closed. A problem must declare domain-wide opacity
 // assumptions and explicitly allow estimated results if its evaluator is unverified.

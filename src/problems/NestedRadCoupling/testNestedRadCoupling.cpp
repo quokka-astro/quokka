@@ -47,40 +47,61 @@ template <int N> struct NestedRadiationCoupling_Traits<NestedProblem<N>> {
 
 // Analytic positive bands with elasticity four isolate source mapping, c/chat,
 // collision scaling, and positive reconstruction from interpolation error.
-#define NESTED_HOOKS(N)                                                                                                                                        \
-	template <> AMREX_GPU_DEVICE auto RadSystem<NestedProblem<N>>::NestedCouplingOptions() -> mgsolve::Options                                             \
-	{                                                                                                                                                      \
-		mgsolve::Options options;                                                                                                                      \
-		options.x_min = 0.125;                                                                                                                         \
-		options.x_max = 16;                                                                                                                            \
-		options.allow_estimated = true;                                                                                                                \
-		options.relative_tolerance = 1.e-11;                                                                                                           \
-		return options;                                                                                                                                \
-	}                                                                                                                                                      \
-	template <>                                                                                                                                            \
-	AMREX_GPU_DEVICE auto RadSystem<NestedProblem<N>>::NestedCouplingContract(double, amrex::GpuArray<double, N + 1> const &) -> mgsolve::Contract<N>      \
-	{                                                                                                                                                      \
-		mgsolve::Contract<N> contract;                                                                                                                 \
-		for (int g = 0; g < N; ++g) {                                                                                                                  \
-			contract.sensitivity[g] = 4;                                                                                                           \
-		}                                                                                                                                              \
-		return contract;                                                                                                                               \
-	}                                                                                                                                                      \
-	template <> AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<N>>::ComputePlanckOpacity(double, double) -> double { return 1; }                       \
-	template <> AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<N>>::ComputeEnergyMeanOpacity(double, double) -> double { return 1; }                   \
-	template <> AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<N>>::ComputeFluxMeanOpacity(double, double) -> double { return 1; }
-NESTED_HOOKS(1)
-NESTED_HOOKS(2)
-#undef NESTED_HOOKS
+template <> AMREX_GPU_DEVICE auto RadSystem<NestedProblem<1>>::NestedCouplingOptions() -> mgsolve::Options
+{
+	mgsolve::Options options;
+	options.x_min = 0.125;
+	options.x_max = 16;
+	options.allow_estimated = true;
+	options.relative_tolerance = 1.e-11;
+	return options;
+}
+template <>
+AMREX_GPU_DEVICE auto RadSystem<NestedProblem<1>>::NestedCouplingContract(double /*unused*/, amrex::GpuArray<double, 1 + 1> const & /*unused*/)
+    -> mgsolve::Contract<1>
+{
+	mgsolve::Contract<1> contract;
+	for (int g = 0; g < 1; ++g) {
+		contract.sensitivity[g] = 4;
+	}
+	return contract;
+}
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<1>>::ComputePlanckOpacity(double /*unused*/, double /*unused*/) -> double { return 1; }
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<1>>::ComputeEnergyMeanOpacity(double /*unused*/, double /*unused*/) -> double { return 1; }
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<1>>::ComputeFluxMeanOpacity(double /*unused*/, double /*unused*/) -> double { return 1; }
+
+template <> AMREX_GPU_DEVICE auto RadSystem<NestedProblem<2>>::NestedCouplingOptions() -> mgsolve::Options
+{
+	mgsolve::Options options;
+	options.x_min = 0.125;
+	options.x_max = 16;
+	options.allow_estimated = true;
+	options.relative_tolerance = 1.e-11;
+	return options;
+}
+template <>
+AMREX_GPU_DEVICE auto RadSystem<NestedProblem<2>>::NestedCouplingContract(double /*unused*/, amrex::GpuArray<double, 2 + 1> const & /*unused*/)
+    -> mgsolve::Contract<2>
+{
+	mgsolve::Contract<2> contract;
+	for (int g = 0; g < 2; ++g) {
+		contract.sensitivity[g] = 4;
+	}
+	return contract;
+}
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<2>>::ComputePlanckOpacity(double /*unused*/, double /*unused*/) -> double { return 1; }
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<2>>::ComputeEnergyMeanOpacity(double /*unused*/, double /*unused*/) -> double { return 1; }
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<2>>::ComputeFluxMeanOpacity(double /*unused*/, double /*unused*/) -> double { return 1; }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<2>>::ComputeThermalRadiationMultiGroup(double x, amrex::GpuArray<double, 3> const &)
+AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<2>>::ComputeThermalRadiationMultiGroup(double x, amrex::GpuArray<double, 3> const & /*unused*/)
     -> quokka::valarray<double, 2>
 {
 	return {0.5 * x * x * x * x, 0.5 * x * x * x * x};
 }
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<2>>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, 3>, double, double)
+AMREX_GPU_HOST_DEVICE auto RadSystem<NestedProblem<2>>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, 3> /*unused*/, double /*unused*/,
+											     double /*unused*/)
     -> amrex::GpuArray<amrex::GpuArray<double, 3>, 2>
 {
 	return {{{0, 0, 0}, {1, 1, 1}}};
@@ -91,13 +112,15 @@ template <int N> auto test_live(double initial_temperature, double dust_root) ->
 	using RS = RadSystem<NestedProblem<N>>;
 	amrex::Box const box(amrex::IntVect(0), amrex::IntVect(0));
 	amrex::FArrayBox state(box, Physics_Indices<NestedProblem<N>>::nvarTotal_cc);
-	amrex::FArrayBox source(box, N), flux(box, 3 * N), heating(box, 1);
+	amrex::FArrayBox source(box, N);
+	amrex::FArrayBox flux(box, 3 * N);
+	amrex::FArrayBox heating(box, 1);
 	state.setVal<amrex::RunOn::Device>(0);
 	source.setVal<amrex::RunOn::Device>(0);
 	flux.setVal<amrex::RunOn::Device>(0);
 	heating.setVal<amrex::RunOn::Device>(0);
-	auto a = state.array();
-	auto src = source.array();
+	auto const a = state.array();
+	auto const src = source.array();
 	constexpr double gas_root = 4.0;
 	// A=8, D=1, h=1, chi=4. These states solve the frozen equations.
 	double const B = dust_root * dust_root * dust_root * dust_root;
@@ -113,10 +136,11 @@ template <int N> auto test_live(double initial_temperature, double dust_root) ->
 			src(i, j, k, g) = 0.5; // dt/chat correction gives 0.125 injected energy
 		}
 	});
-	amrex::Gpu::DeviceVector<int> counts(3, 0), failures(3, 0);
-	auto energy_source = source.const_array();
-	auto flux_source = flux.const_array();
-	amrex::GpuArray<double, 0> scalars{};
+	amrex::Gpu::DeviceVector<int> counts(3, 0);
+	amrex::Gpu::DeviceVector<int> failures(3, 0);
+	auto const energy_source = source.const_array();
+	auto const flux_source = flux.const_array();
+	amrex::GpuArray<double, 0> const scalars{};
 	double const nH = RS::ComputeNumberDensityH(1.0, scalars);
 	double const dust_coefficient = 1.0 / (nH * nH);
 	if constexpr (N == 1) {
@@ -146,7 +170,8 @@ template <int N> auto test_live(double initial_temperature, double dust_root) ->
 auto problem_main() -> int
 {
 	init_extern_parameters();
-	double small_temp = 1.e-10, small_density = 1.e-10;
+	double small_temp = 1.e-10;
+	double small_density = 1.e-10;
 	eos_init(small_temp, small_density);
 	int status = 0;
 	status += test_live<1>(3.0, 8.0);

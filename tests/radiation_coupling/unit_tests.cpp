@@ -6,12 +6,26 @@
 #include <cfenv>
 #include <iostream>
 #include <limits>
-using namespace mgsolve;
+using mgsolve::accepted;
+namespace detail = mgsolve::detail;
+using mgsolve::Array;
+using mgsolve::Contract;
+using mgsolve::GroupValues;
+using mgsolve::infinity;
+using mgsolve::min_normal;
+using mgsolve::Options;
+using mgsolve::Problem;
+using mgsolve::solve;
+using mgsolve::Status;
+using mgsolve::status_name;
+using mgsolve::Stop;
+using mgsolve::u;
 struct TwoGroups {
   bool derivatives = true;
   bool poison = false;
-  bool operator()(double x, GroupValues<2> &v) const {
-    const double x2 = x * x, x4 = x2 * x2;
+  auto operator()(double x, GroupValues<2> &v) const -> bool {
+    const double x2 = x * x;
+    const double x4 = x2 * x2;
     for (int g = 0; g < 2; ++g) {
       v.alpha[g] = g == 0 ? 1 : 4;
       v.p[g] = v.alpha[g];
@@ -25,14 +39,14 @@ struct TwoGroups {
     return true;
   }
 };
-Contract<2> contract() {
+auto contract() -> Contract<2> {
   Contract<2> c;
   c.certified = true;
   c.root_in_domain = true;
   c.sensitivity[0] = c.sensitivity[1] = 4;
   return c;
 }
-int main() {
+auto main() -> int {
   assert(std::fegetround() == FE_TONEAREST);
   Problem<2> p;
   p.r[0] = .5;
@@ -41,7 +55,8 @@ int main() {
   o.x_min = .001;
   o.x_max = 100;
   auto c = contract();
-  auto r = solve(p, TwoGroups{}, c, o);
+  TwoGroups const oracle;
+  auto r = solve(p, oracle, c, o);
   if (!accepted(r.status)) {
     std::cerr << status_name(r.status) << "\n";
   }
@@ -51,17 +66,19 @@ int main() {
   assert(r.certificate.conditional);
   assert(r.certificate.gas_relative <= o.relative_tolerance);
   std::feclearexcept(FE_DIVBYZERO);
-  auto derivative_free = solve(p, TwoGroups{false, false}, c, o);
+  auto const derivative_free =
+      solve(p, TwoGroups{.derivatives = false, .poison = false}, c, o);
   assert(std::fetestexcept(FE_DIVBYZERO) == 0);
   Options bisection = o;
   bisection.use_newton = false;
   std::feclearexcept(FE_DIVBYZERO);
-  auto derivative_free_bisection =
-      solve(p, TwoGroups{false, false}, c, bisection);
+  auto const derivative_free_bisection =
+      solve(p, TwoGroups{.derivatives = false, .poison = false}, c, bisection);
   assert(std::fetestexcept(FE_DIVBYZERO) == 0);
   assert(accepted(derivative_free_bisection.status));
   assert(std::abs(derivative_free_bisection.gas_energy - r.gas_energy) < 1e-12);
-  auto poisoned = solve(p, TwoGroups{true, true}, c, o);
+  auto const poisoned =
+      solve(p, TwoGroups{.derivatives = true, .poison = true}, c, o);
   assert(accepted(derivative_free.status) && accepted(poisoned.status));
   assert(std::abs(derivative_free.gas_energy - r.gas_energy) < 1e-12);
   c.certified = false;
@@ -97,7 +114,7 @@ int main() {
   std::fesetround(FE_TONEAREST);
   // Net zero does not imply unchanged radiation: a dyadic equal-weight
   // exchange.
-  auto netzero = [](double x, GroupValues<2> &v) {
+  auto const netzero = [](double x, GroupValues<2> &v) {
     for (int g = 0; g < 2; ++g) {
       v.alpha[g] = 1;
       v.p[g] = 1;
@@ -112,7 +129,7 @@ int main() {
   assert(z.gas_energy == 1 && z.dust_temperature == 1);
   assert(z.radiation[0] == .625 && z.radiation[1] == 1.375);
   // Every hidden underflow must fail, not silently become structural zero.
-  auto badzero = [](double, GroupValues<2> &v) {
+  auto const badzero = [](double, GroupValues<2> &v) {
     for (int g = 0; g < 2; ++g) {
       v.alpha[g] = 1;
       v.p[g] = 1;
@@ -121,7 +138,7 @@ int main() {
     return true;
   };
   assert(solve(p, badzero, c, o).status == Status::oracle_failure);
-  auto underflow = [](double, GroupValues<2> &v) {
+  auto const underflow = [](double, GroupValues<2> &v) {
     for (int g = 0; g < 2; ++g) {
       v.alpha[g] = 1;
       v.p[g] = min_normal;
@@ -141,10 +158,11 @@ int main() {
   }
   assert(detail::sum(ar, terms) == 15 && ar.ok);
   // Compare standalone inner solve against substitution, all three charts.
-  for (double x : {.0001, .1, .9, 1., 1.1, 4., 1e8}) {
-    auto inner = detail::inner(1., 10., 1., x, o);
+  for (double const x : {.0001, .1, .9, 1., 1.1, 4., 1e8}) {
+    auto const inner = detail::inner(1., 10., 1., x, o);
     assert(accepted(inner.status));
-    double collision = inner.t - 1 + 10 * std::sqrt(inner.t) * (inner.t - x);
+    double const collision =
+        inner.t - 1 + 10 * std::sqrt(inner.t) * (inner.t - x);
     assert(std::abs(collision) <=
            1e-12 * std::max(1., inner.t * std::sqrt(inner.t)));
   }
@@ -157,9 +175,9 @@ int main() {
   tc.certified = true;
   tc.root_in_domain = true;
   tc.sensitivity[0] = 4;
-  auto to = [](double x, GroupValues<1> &v) {
+  auto const to = [](double x, GroupValues<1> &v) {
     v.alpha[0] = v.p[0] = 1;
-    double x2 = x * x;
+    double const x2 = x * x;
     v.B[0] = x2 * x2;
     return true;
   };
@@ -168,7 +186,7 @@ int main() {
   wo.x_max = 2;
   wo.relative_tolerance = 2e-14;
   wo.allow_residual = false;
-  auto width = solve(thin, to, tc, wo);
+  auto const width = solve(thin, to, tc, wo);
   assert(accepted(width.status) && width.stop == Stop::width);
   assert(width.bracket_lo <= width.dust_temperature &&
          width.dust_temperature <= width.bracket_hi);
@@ -179,7 +197,7 @@ int main() {
   ac.certified = true;
   ac.root_in_domain = true;
   ac.emission_identically_zero = true;
-  auto ao = [](double, GroupValues<1> &v) {
+  auto const ao = [](double, GroupValues<1> &v) {
     v.alpha[0] = 1;
     v.p_zero[0] = true;
     v.B_zero[0] = true;
@@ -187,7 +205,7 @@ int main() {
   };
   Options direct_opt;
   direct_opt.max_inner = 1;
-  auto direct = solve(absorption, ao, ac, direct_opt);
+  auto const direct = solve(absorption, ao, ac, direct_opt);
   assert(accepted(direct.status) && direct.stop == Stop::direct_absorption &&
          direct.inner_iterations == 0);
   Problem<0> empty;
@@ -196,8 +214,8 @@ int main() {
   Contract<0> ec;
   ec.certified = true;
   ec.root_in_domain = true;
-  auto eo = [](double, GroupValues<0> &) { return true; };
-  auto er = solve(empty, eo, ec);
+  auto const eo = [](double, GroupValues<0> &) { return true; };
+  auto const er = solve(empty, eo, ec);
   assert(accepted(er.status) && er.stop == Stop::zero_exchange &&
          er.gas_energy == 6 && er.dust_temperature == 3);
   std::cout << "All unit tests passed\n";

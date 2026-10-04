@@ -16,9 +16,9 @@ struct GroupInput {
 struct Input {
   std::string name;
   int N = 0;
-  double A, D, T, h, chi, xmin, xmax, tol, margin;
-  int certified, variable, residual, width, max_outer, max_inner, max_bracket,
-      newton, derivative_mode, root_in_domain;
+  double A{}, D{}, T{}, h{}, chi{}, xmin{}, xmax{}, tol{}, margin{};
+  int certified{}, variable{}, residual{}, width{}, max_outer{}, max_inner{},
+      max_bracket{}, newton{}, derivative_mode{}, root_in_domain{};
   std::vector<GroupInput> groups;
 };
 
@@ -26,7 +26,8 @@ struct Input {
 // strtod preserves these deliberate invalid-input cases so the solver can
 // reject them.
 struct ReadDouble {
-  double &value;
+  // This extraction proxy deliberately writes to its caller-owned value.
+  double &value; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 };
 auto operator>>(std::istream &stream, ReadDouble number) -> std::istream & {
   std::string token;
@@ -41,7 +42,7 @@ auto operator>>(std::istream &stream, ReadDouble number) -> std::istream & {
   return stream;
 }
 
-bool read(Input &i) {
+auto read(Input &i) -> bool {
   if (!(std::cin >> i.name)) {
     return false;
   }
@@ -68,8 +69,10 @@ bool read(Input &i) {
 // powers use correctly rounded IEEE sqrt rather than a general libm pow.
 // Degree <=4 monomials require <=4 rounded multiplies, below the 8lambda
 // budget.
-bool normal_or_zero(double x) { return x == 0 || (x > 0 && std::isnormal(x)); }
-double quarter_power(double x, int q) {
+auto normal_or_zero(double x) -> bool {
+  return x == 0 || (x > 0 && std::isnormal(x));
+}
+auto quarter_power(double x, int q) -> double {
   if (q == 0) {
     return 1;
   }
@@ -114,8 +117,8 @@ template <std::size_t N> void run(Input const &input) {
         c.emission_identically_zero &&
         (input.groups[g].p == 0 || input.groups[g].b == 0);
   }
-  auto oracle = [&](double x, mgsolve::GroupValues<N> &v) {
-    if (!(x > 0 && std::isnormal(x))) {
+  auto const oracle = [&](double x, mgsolve::GroupValues<N> &v) {
+    if (x <= 0 || !std::isnormal(x)) {
       return false;
     }
     v.derivatives = input.derivative_mode != 0;
@@ -124,8 +127,8 @@ template <std::size_t N> void run(Input const &input) {
       v.alpha_zero[j] = g.alpha == 0;
       v.p_zero[j] = g.p == 0;
       v.B_zero[j] = g.b == 0;
-      double ap = quarter_power(x, g.alpha_quarters),
-             pp = quarter_power(x, g.p_quarters);
+      double const ap = quarter_power(x, g.alpha_quarters);
+      double const pp = quarter_power(x, g.p_quarters);
       if (!normal_or_zero(ap) || !normal_or_zero(pp)) {
         return false;
       }
@@ -169,15 +172,15 @@ template <std::size_t N> void run(Input const &input) {
     return true;
   };
   auto r = mgsolve::solve(p, oracle, c, o);
-  auto number = [](double x) {
+  auto const number = [](double x) {
     if (std::isfinite(x)) {
       std::cout << x;
     } else {
       std::cout << "null";
     }
   };
-  std::cout << "{\"name\":\"" << input.name << "\",\"status\":\""
-            << mgsolve::status_name(r.status) << "\",\"accepted\":"
+  std::cout << R"({"name":")" << input.name << R"(","status":")"
+            << mgsolve::status_name(r.status) << R"(","accepted":)"
             << (mgsolve::accepted(r.status) ? "true" : "false")
             << ",\"stop\":" << int(r.stop) << ",\"dust_temperature\":";
   number(r.dust_temperature);
@@ -192,7 +195,7 @@ template <std::size_t N> void run(Input const &input) {
     }
     number(r.radiation[g]);
   }
-  std::cout << "],\"certificate\":{\"conditional\":"
+  std::cout << R"(],"certificate":{"conditional":)"
             << (r.certificate.conditional ? "true" : "false")
             << ",\"dust_relative\":";
   number(r.certificate.dust_relative);
@@ -210,25 +213,36 @@ template <std::size_t N> void run(Input const &input) {
             << ",\"oracle_calls\":" << r.oracle_calls << "}\n";
 }
 
-int main() {
+auto main() -> int {
   std::cout << std::setprecision(17);
   try {
     Input i;
     while (read(i)) {
       switch (i.N) {
-#define CASE(N)                                                                \
-  case N:                                                                      \
-    run<N>(i);                                                                 \
-    break
-        CASE(1);
-        CASE(2);
-        CASE(3);
-        CASE(4);
-        CASE(8);
-        CASE(16);
-        CASE(64);
-        CASE(1024);
-#undef CASE
+      case 1:
+        run<1>(i);
+        break;
+      case 2:
+        run<2>(i);
+        break;
+      case 3:
+        run<3>(i);
+        break;
+      case 4:
+        run<4>(i);
+        break;
+      case 8:
+        run<8>(i);
+        break;
+      case 16:
+        run<16>(i);
+        break;
+      case 64:
+        run<64>(i);
+        break;
+      case 1024:
+        run<1024>(i);
+        break;
       default:
         throw std::runtime_error("unsupported test group count");
       }

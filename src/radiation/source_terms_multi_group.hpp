@@ -2,7 +2,8 @@
 #ifndef RAD_SOURCE_TERMS_MULTI_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_MULTI_GROUP_HPP_
 
-#include "radiation/radiation_system.hpp" // IWYU pragma: keep
+// RadSystem member definitions intentionally include the guarded class declaration.
+#include "radiation/radiation_system.hpp" // IWYU pragma: keep // NOLINT(misc-header-include-cycle)
 
 // Compute kappaE and kappaP based on the opacity model. The result is stored in the last five arguments: alpha_P, alpha_E, kappaP, kappaE, and kappaPoverE.
 template <typename problem_t>
