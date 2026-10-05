@@ -36,7 +36,11 @@ cfl = 0.3
 temperature_floor = 10.0
 
 conduction.enabled = 1
-conduction.conductivity_prefactor = 5.6e-8  # Spitzer prefactor, in erg/s/cm/K^3.5 (model set via Physics_Traits)
+# anisotropic Spitzer conduction (model/geometry set via Physics_Traits: spitzer + anisotropic)
+# kappa_par = kappaPar * T^2.5, kappa_perp = kappaPerp * T^2.5, in erg/s/cm/K^3.5
+conduction.kappaPar = 5.6e-8   # along the field
+conduction.kappaPerp = 0.0     # across the field (must be <= kappaPar)
+conduction.aniso_flux_limiter = "mc"  # limiter for the transverse-gradient terms
 conduction.flux_limiter_phi = 1
 conduction.conduction_cfl = 0.3
 
@@ -44,6 +48,8 @@ conduction.conduction_cfl = 0.3
 # Problem parameters (read in problem_main())
 # *****************************************************************
 windcloud.mach = 4.0
+windcloud.plasmaBeta = 100.0             # plasma beta of the wind, beta = P_wind / (B^2 / 2)
+windcloud.field_orientation = "parallel"  # field "parallel" or "perpendicular" to the wind (z) direction
 do_frame_shift = 1  # shift to the cloud's centre-of-mass frame each coarse step
 
 # *****************************************************************

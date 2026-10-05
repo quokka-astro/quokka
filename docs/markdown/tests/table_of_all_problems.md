@@ -113,5 +113,5 @@ This table lists all test problems in the Quokka codebase. The acronyms used are
 | StromgrenSphere                   | 3   | ❌     | ❌   | SG                | ❌       | ❌                         | ❌              |
 | StromgrenSphereRSLA               | 3   | ❌     | ❌   | SG                | ❌       | ❌                         | ❌              |
 | TallBoxSf                         | 3   | ✅     | ❌   | ❌                 | ✅       | StochasticStellarPop      | 1              |
-| ThermalConduction                 | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
+| WindCloud                         | 1   | ✅     | ❌   | ❌                 | ❌       | ❌                         | ❌              |
 | Turbulence                        | 3   | ✅     | ❌   | ❌                 | ❌       | ❌                         | 1              |

@@ -15,6 +15,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include <fstream>
+#include <string>
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
@@ -44,6 +45,14 @@ AMREX_GPU_MANAGED Real v_wind = NAN;		      // wind speed (z direction)
 AMREX_GPU_MANAGED Real cloud_crushing_time = NAN;    // t_cc, estimated from R0 and v_wind
 AMREX_GPU_MANAGED Real delta_vz = 0;		      // cumulative center-of-mass frame velocity offset
 
+// magnetic field (set inside problem_main())
+// The field is uniform, with strength set by the plasma beta of the wind, beta = P_wind / (B0^2 / 2),
+// and oriented either parallel (along z) or perpendicular (along x) to the wind direction.
+enum class FieldOrientation { parallel, perpendicular };
+AMREX_GPU_MANAGED Real plasma_beta = NAN;					    // plasma beta of the wind
+AMREX_GPU_MANAGED Real B0 = NAN;						    // field strength, in code units (E_mag = B0^2 / 2)
+AMREX_GPU_MANAGED FieldOrientation field_orientation = FieldOrientation::parallel; // field direction relative to the wind
+
 struct WindCloudProblem {
 };
 
@@ -59,11 +68,11 @@ template <> struct HydroSystem_Traits<WindCloudProblem> {
 template <> struct Physics_Traits<WindCloudProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 2; // cloud tracer + wind tracer
-	static constexpr ConductionModel conduction_model = ConductionModel::spitzer; // kappa = conductivity_prefactor * T^2.5
-	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::isotropic;
+	static constexpr ConductionModel conduction_model = ConductionModel::spitzer; // kappa_par/perp = kappaPar/kappaPerp * T^2.5
+	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::anisotropic; // conduction along/across B
 };
 
 template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -106,6 +115,7 @@ template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGrid(
 			vz = ::v_wind; // set in problem_main(), so it stays consistent with the frame-shift BC
 		}
 		const amrex::Real Eint = quokka::EOS<WindCloudProblem>::ComputeEintFromTgas(rho, T);
+		const amrex::Real Emag = 0.5 * ::B0 * ::B0; // uniform field
 		/*-------------------------------------------------*/
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
@@ -120,7 +130,7 @@ template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGrid(
 		}
 		state_cc(i, j, k, HydroSystem<WindCloudProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<WindCloudProblem>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<WindCloudProblem>::energy_index) = Eint + 0.5 * (rho * vz * vz);
+		state_cc(i, j, k, HydroSystem<WindCloudProblem>::energy_index) = Eint + 0.5 * (rho * vz * vz) + Emag;
 		state_cc(i, j, k, HydroSystem<WindCloudProblem>::internalEnergy_index) = Eint;
 		state_cc(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) = rho * cloudTracer; // 1/vol
 		state_cc(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) = rho * windTracer; // 1/vol
@@ -128,26 +138,28 @@ template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGrid(
 }
 
 
-// template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
-// {
-// 	const amrex::Array4<double> &state_fc = grid_elem.array_;
-// 	const amrex::Box &indexRange = grid_elem.indexRange_;
-// 	const quokka::direction dir = grid_elem.dir_;
+template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
 
-// 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-// 		constexpr double bx = 0.0;
-// 		constexpr double by = 0.0;
-// 		constexpr double bz = 1.;
+	// uniform field: along z (the wind direction) if parallel, along x if perpendicular
+	const bool is_parallel = (::field_orientation == FieldOrientation::parallel);
+	const amrex::Real bx = is_parallel ? 0.0 : ::B0;
+	const amrex::Real by = 0.0;
+	const amrex::Real bz = is_parallel ? ::B0 : 0.0;
 
-// 		if (dir == quokka::direction::x) {
-// 			state_fc(i, j, k, Physics_Indices<WindCloudProblem>::mhdFirstIndex) = bx;
-// 		} else if (dir == quokka::direction::y) {
-// 			state_fc(i, j, k, Physics_Indices<WindCloudProblem>::mhdFirstIndex) = by;
-// 		} else if (dir == quokka::direction::z) {
-// 			state_fc(i, j, k, Physics_Indices<WindCloudProblem>::mhdFirstIndex) = bz;
-// 		}
-// 	});
-// }
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		if (dir == quokka::direction::x) {
+			state_fc(i, j, k, Physics_Indices<WindCloudProblem>::mhdFirstIndex) = bx;
+		} else if (dir == quokka::direction::y) {
+			state_fc(i, j, k, Physics_Indices<WindCloudProblem>::mhdFirstIndex) = by;
+		} else if (dir == quokka::direction::z) {
+			state_fc(i, j, k, Physics_Indices<WindCloudProblem>::mhdFirstIndex) = bz;
+		}
+	});
+}
 
 
 template <> void QuokkaSimulation<WindCloudProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
@@ -175,23 +187,24 @@ template <> void QuokkaSimulation<WindCloudProblem>::refineGrid(int lev, amrex::
 template <>
 void QuokkaSimulation<WindCloudProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
 								   amrex::MultiFab const &state_cc,
-								   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+								   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
 		const int ncomp = ncomp_in;
-		auto const &output = mf.arrays();
-		auto const &state = state_cc.const_arrays();
-		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<WindCloudProblem>::density_index);
-			Real const x1Mom = state[bx](i, j, k, HydroSystem<WindCloudProblem>::x1Momentum_index);
-			Real const x2Mom = state[bx](i, j, k, HydroSystem<WindCloudProblem>::x2Momentum_index);
-			Real const x3Mom = state[bx](i, j, k, HydroSystem<WindCloudProblem>::x3Momentum_index);
-			Real const Egas = state[bx](i, j, k, HydroSystem<WindCloudProblem>::energy_index);
-			static_assert(!Physics_Traits<WindCloudProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-			Real const Eint = quokka::EOS<WindCloudProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
-			output[bx](i, j, k, ncomp) = quokka::EOS<WindCloudProblem>::ComputeTgasFromEint(rho, Eint);
-		});
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state = state_cc.const_array(iter);
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				Real const rho = state(i, j, k, HydroSystem<WindCloudProblem>::density_index);
+				// subtracts kinetic and magnetic energy from the total energy
+				Real const Eint = HydroSystem<WindCloudProblem>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
+				output(i, j, k, ncomp) = quokka::EOS<WindCloudProblem>::ComputeTgasFromEint(rho, Eint);
+			});
+		}
 	}
 }
 
@@ -254,7 +267,7 @@ template <> void QuokkaSimulation<WindCloudProblem>::computeAfterTimestep()
 				Real const zmom = state[box](i, j, k, HydroSystem<WindCloudProblem>::x3Momentum_index);
 				Real const E = state[box](i, j, k, HydroSystem<WindCloudProblem>::energy_index);
 				Real const KE = 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
-				Real const Eint = E - KE;
+				Real const Eint = E - KE; // N.B. includes magnetic energy, which the frame shift leaves unchanged
 				Real const new_zmom = zmom - rho * vz_cm;
 				Real const new_KE = 0.5 * (xmom * xmom + ymom * ymom + new_zmom * new_zmom) / rho;
 
@@ -296,7 +309,7 @@ AMRSimulation<WindCloudProblem>::setCustomBoundaryConditions(const amrex::IntVec
     const double vz_edge = ::v_wind - ::delta_vz;
     x3Mom_edge = rho_edge * vz_edge;
     eint_edge = quokka::EOS<WindCloudProblem>::ComputeEintFromTgas(rho_edge, Twind);
-    etot_edge = eint_edge + 0.5 * (x3Mom_edge * x3Mom_edge) / rho_edge;
+    etot_edge = eint_edge + 0.5 * (x3Mom_edge * x3Mom_edge) / rho_edge + 0.5 * ::B0 * ::B0; // uniform field
     
     consVar(i, j, k, HydroSystem<WindCloudProblem>::density_index) = rho_edge;
     consVar(i, j, k, HydroSystem<WindCloudProblem>::x1Momentum_index) = 0.0;
@@ -314,6 +327,19 @@ auto problem_main() -> int
 	// read problem-specific parameters
 	amrex::ParmParse const pp("windcloud");
 	pp.query("mach", ::Mach);
+
+	// magnetic field: plasma beta of the wind, and orientation relative to the wind ("parallel" or "perpendicular")
+	pp.get("plasmaBeta", ::plasma_beta);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(::plasma_beta > 0.0, "windcloud.plasmaBeta must be > 0.");
+	std::string field_orientation;
+	pp.get("field_orientation", field_orientation);
+	if (field_orientation == "parallel") {
+		::field_orientation = FieldOrientation::parallel;
+	} else if (field_orientation == "perpendicular") {
+		::field_orientation = FieldOrientation::perpendicular;
+	} else {
+		amrex::Abort("windcloud.field_orientation must be \"parallel\" or \"perpendicular\".");
+	}
 
 	// do frame shifting to follow cloud center-of-mass?
 	amrex::ParmParse const pp_global; // top-level, unprefixed
@@ -338,8 +364,19 @@ auto problem_main() -> int
 	}
 	} 
 
+	// face-centred (magnetic field) boundary conditions
+	// TODO (av): placeholder; set proper inflow/outflow BCs for the field
+	constexpr int ncomp_fc = Physics_Indices<WindCloudProblem>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(ncomp_fc);
+	for (int n = 0; n < ncomp_fc; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			BCs_fc[n].setLo(i, amrex::BCType::foextrap);
+			BCs_fc[n].setHi(i, amrex::BCType::foextrap);
+		}
+	}
+
 	// Problem initialization
-	QuokkaSimulation<WindCloudProblem> sim(BCs_cc);
+	QuokkaSimulation<WindCloudProblem> sim(BCs_cc, BCs_fc);
 
 	// compute wind speed (pressure equilibrium with the cloud sets the wind density)
 	const Real rho_wind = rho_cloud * Tcloud / Twind; // g/cm^3
@@ -348,6 +385,11 @@ auto problem_main() -> int
 	::v_wind = ::Mach * cs_wind;
 	amrex::Print() << "rho_wind = " << rho_wind << " g/cm^3" << std::endl;
 	amrex::Print() << "v_wind = " << (::v_wind / 1.0e5) << " km/s" << std::endl;
+
+	// field strength from the plasma beta of the wind: beta = P_wind / (B0^2 / 2)
+	::B0 = std::sqrt(2.0 * P_wind / ::plasma_beta);
+	amrex::Print() << "plasma beta = " << ::plasma_beta << ", B0 = " << ::B0 << " (code units) = " << (::B0 * std::sqrt(4.0 * M_PI) * 1.0e6)
+		       << " uG, " << field_orientation << " to the wind" << std::endl;
 
 	// estimate cloud-crushing time: t_cc = sqrt(chi) * R_cloud / v_wind, chi = rho_cloud / rho_wind
 	const Real chi = rho_cloud / rho_wind;
