@@ -40,12 +40,12 @@ struct IsoConductionParams {
 template <typename problem_t> class IsoConduction
 {
       public:
-	// Reconstruct rho and T at the interfaces
+	// Reconstruct rho, T, and mass fractions at the interfaces
 	template <FluxDir DIR>
 	static void ReconstructPrimVar(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int ng_reconstruct,
 				       IsoConductionParams const &params)
 	{
-		constexpr int nvars = 2;
+		constexpr int nvars = 2 + Physics_Traits<problem_t>::numMassScalars;
 		if (params.reconstruction_order == 5) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 		} else if (params.reconstruction_order == 3) {
@@ -100,7 +100,7 @@ template <typename problem_t> class IsoConduction
 		const amrex::Real small = std::numeric_limits<amrex::Real>::min();
 		constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 
-		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2, state.nGrow());
+		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2 + nmscalars_, state.nGrow());
 		primVar.setVal(0.0);
 
 		auto const &state_x0 = state.const_arrays();
@@ -140,21 +140,26 @@ template <typename problem_t> class IsoConduction
 			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
 			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
 			// Temperature always from EOS
-			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+			auto const massScalarsRaw = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massScalarsRaw;
 			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 
 			primVar_arr[bx](i, j, k, 0) = rho;
 			primVar_arr[bx](i, j, k, 1) = amrex::max(Tgas, t_min);
+			for (int n = 0; n < nmscalars_; ++n) {
+				// store mass fraction (not partial density) so it reconstructs consistently with rho and T
+				primVar_arr[bx](i, j, k, 2 + n) = massScalarsRaw[n] / rho;
+			}
 		});
 
-		// Reconstruct (rho, T) to the interfaces
+		// Reconstruct (rho, T, mass fractions) to the interfaces
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
 		const int ng_reconstruct = params.ng_reconstruct;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			leftState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2, ng_reconstruct);
-			rightState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2, ng_reconstruct);
+			leftState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2 + nmscalars_, ng_reconstruct);
+			rightState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2 + nmscalars_, ng_reconstruct);
 		}
 
 		AMREX_D_TERM(ReconstructPrimVar<FluxDir::X1>(primVar, leftState[0], rightState[0], ng_reconstruct, params);
@@ -162,14 +167,20 @@ template <typename problem_t> class IsoConduction
 			     , ReconstructPrimVar<FluxDir::X3>(primVar, leftState[2], rightState[2], ng_reconstruct, params);)
 
 		auto const evaluateFace = [=] AMREX_GPU_DEVICE(amrex::Real rho_L, amrex::Real T_L, amrex::Real rho_R, amrex::Real T_R,
-							       amrex::GpuArray<amrex::Real, nmscalars_> const &massScalars_L,
-							       amrex::GpuArray<amrex::Real, nmscalars_> const &massScalars_R, amrex::Real &kappa_face,
+							       amrex::GpuArray<amrex::Real, nmscalars_> const &massFrac_L,
+							       amrex::GpuArray<amrex::Real, nmscalars_> const &massFrac_R, amrex::Real &kappa_face,
 							       amrex::Real &qsat_face) noexcept {
 			const amrex::Real rho_face = 0.5 * (rho_L + rho_R);
 			const amrex::Real T_face = amrex::max(0.5 * (T_L + T_R), t_min);
 			amrex::GpuArray<amrex::Real, nmscalars_> massArray_face{};
+			amrex::Real sumFrac = 0.0;
 			for (int n = 0; n < nmscalars_; ++n) {
-				massArray_face[n] = 0.5 * (massScalars_L[n] / rho_L + massScalars_R[n] / rho_R) * rho_face;
+				massArray_face[n] = 0.5 * (massFrac_L[n] + massFrac_R[n]);
+				sumFrac += massArray_face[n];
+			}
+			const amrex::Real invSum = 1.0 / amrex::max(sumFrac, small);
+			for (int n = 0; n < nmscalars_; ++n) {
+				massArray_face[n] *= invSum * rho_face;
 			}
 			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massArray_face;
 			const amrex::Real Eint_face = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_face, T_face, massScalars);
@@ -190,10 +201,14 @@ template <typename problem_t> class IsoConduction
 			const amrex::Real gradT = (temp[bx](i, j, k, 1) - temp[bx](i - 1, j, k, 1)) / dx[0];
 			amrex::Real kappa_face = 0.0;
 			amrex::Real q_sat_face = 0.0;
-			auto const massScalars_L = RadSystem<problem_t>::ComputeMassScalars(state_x0[bx], i - 1, j, k);
-			auto const massScalars_R = RadSystem<problem_t>::ComputeMassScalars(state_x0[bx], i, j, k);
-			evaluateFace(left_x[bx](i, j, k, 0), left_x[bx](i, j, k, 1), right_x[bx](i, j, k, 0), right_x[bx](i, j, k, 1), massScalars_L,
-				     massScalars_R, kappa_face, q_sat_face);
+			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_L{};
+			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_R{};
+			for (int n = 0; n < nmscalars_; ++n) {
+				massFrac_L[n] = left_x[bx](i, j, k, 2 + n);
+				massFrac_R[n] = right_x[bx](i, j, k, 2 + n);
+			}
+			evaluateFace(left_x[bx](i, j, k, 0), left_x[bx](i, j, k, 1), right_x[bx](i, j, k, 0), right_x[bx](i, j, k, 1), massFrac_L, massFrac_R,
+				     kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_x[bx](i, j, k) = q_classical / limiter;
@@ -207,10 +222,14 @@ template <typename problem_t> class IsoConduction
 			const amrex::Real gradT = (temp[bx](i, j, k, 1) - temp[bx](i, j - 1, k, 1)) / dx[1];
 			amrex::Real kappa_face = 0.0;
 			amrex::Real q_sat_face = 0.0;
-			auto const massScalars_L = RadSystem<problem_t>::ComputeMassScalars(state_x0[bx], i, j - 1, k);
-			auto const massScalars_R = RadSystem<problem_t>::ComputeMassScalars(state_x0[bx], i, j, k);
-			evaluateFace(left_y[bx](i, j, k, 0), left_y[bx](i, j, k, 1), right_y[bx](i, j, k, 0), right_y[bx](i, j, k, 1), massScalars_L,
-				     massScalars_R, kappa_face, q_sat_face);
+			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_L{};
+			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_R{};
+			for (int n = 0; n < nmscalars_; ++n) {
+				massFrac_L[n] = left_y[bx](i, j, k, 2 + n);
+				massFrac_R[n] = right_y[bx](i, j, k, 2 + n);
+			}
+			evaluateFace(left_y[bx](i, j, k, 0), left_y[bx](i, j, k, 1), right_y[bx](i, j, k, 0), right_y[bx](i, j, k, 1), massFrac_L, massFrac_R,
+				     kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_y[bx](i, j, k) = q_classical / limiter;
@@ -225,10 +244,14 @@ template <typename problem_t> class IsoConduction
 			const amrex::Real gradT = (temp[bx](i, j, k, 1) - temp[bx](i, j, k - 1, 1)) / dx[2];
 			amrex::Real kappa_face = 0.0;
 			amrex::Real q_sat_face = 0.0;
-			auto const massScalars_L = RadSystem<problem_t>::ComputeMassScalars(state_x0[bx], i, j, k - 1);
-			auto const massScalars_R = RadSystem<problem_t>::ComputeMassScalars(state_x0[bx], i, j, k);
-			evaluateFace(left_z[bx](i, j, k, 0), left_z[bx](i, j, k, 1), right_z[bx](i, j, k, 0), right_z[bx](i, j, k, 1), massScalars_L,
-				     massScalars_R, kappa_face, q_sat_face);
+			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_L{};
+			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_R{};
+			for (int n = 0; n < nmscalars_; ++n) {
+				massFrac_L[n] = left_z[bx](i, j, k, 2 + n);
+				massFrac_R[n] = right_z[bx](i, j, k, 2 + n);
+			}
+			evaluateFace(left_z[bx](i, j, k, 0), left_z[bx](i, j, k, 1), right_z[bx](i, j, k, 0), right_z[bx](i, j, k, 1), massFrac_L, massFrac_R,
+				     kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_z[bx](i, j, k) = q_classical / limiter;

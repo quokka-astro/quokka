@@ -31,3 +31,7 @@ ion_ff_cooling_switch                   int        1
 allow_mixed_cell_cooling                int        1
 mixed_cell_lb                           real       0.01
 mixed_cell_ub                           real       0.99
+
+# Gray dust opacity to ionizing radiation [cm^2/g], only used when
+# DUST_CHEMICAL_BAND_ABSORPTION is defined.
+dust_kappa                              real       0.0

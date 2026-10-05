@@ -35,8 +35,10 @@ AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
-			   const Real max_density_allowed, const Real min_density_allowed) -> bool
+			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource) -> bool
 {
+	amrex::ignore_unused(dustHeatingSource);
+
 	// Start off by assuming a successful burn.
 	int photochem_burn_success = 1;
 
@@ -54,6 +56,11 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
 		      "NumThermalBands (set for this network in NetworkRegistry.cmake) must equal RadSystem<problem_t>::nGroupsThermal_ "
 		      "(nGroups_ - NChemBands) when ISM_Traits::thermal_band_photochemistry is true.");
+#ifndef DUST_CHEMICAL_BAND_ABSORPTION
+	static_assert(!RadSystem<problem_t>::dust_chemical_band_absorption_,
+		      "ISM_Traits::dust_chemical_band_absorption is true but DUST_CHEMICAL_BAND_ABSORPTION is not defined: "
+		      "the network does not compute e_dust_absorbed, so Q_dust would always be zero.");
+#endif
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.
@@ -65,10 +72,20 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		invChemBandQuanta[nn] = 1.0_rt / chemBandQuanta[nn];
 	}
 
+	// Cells the burn skips (rho < min_density_allowed) must read zero, not the previous substep's deposit.
+	if constexpr (RadSystem<problem_t>::dust_chemical_band_absorption_) {
+		dustHeatingSource.setVal(0.0);
+	}
+
 	const BL_PROFILE("PhotoChemistry::computePhotoChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
+
+		amrex::Array4<amrex::Real> dustHeatingSource_arr{};
+		if constexpr (RadSystem<problem_t>::dust_chemical_band_absorption_) {
+			dustHeatingSource_arr = dustHeatingSource.array(iter);
+		}
 
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -128,6 +145,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			}
 			photochemstate.rho = rho;
 			photochemstate.e = Eint / rho;
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+			// burn_t declares these only under the macro, and photochemstate is a non-dependent type,
+			// so its members are looked up even inside a discarded if constexpr branch. The guard has
+			// to be a preprocessor one.
+			photochemstate.dust_kappa = network_rp::dust_kappa;
+			photochemstate.e_dust_absorbed = 0.0_rt;
+#endif
 
 			// call the EOS to set the temperature
 			eos(eos_input_re, photochemstate);
@@ -218,6 +242,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 					    amrex::max(state(i, j, k, eIdx) + RadSystem_Traits<problem_t>::c_hat_over_c * dE_thermal, small_x);
 				}
 			}
+
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+			static_assert(RadSystem<problem_t>::dust_chemical_band_absorption_,
+				      "DUST_CHEMICAL_BAND_ABSORPTION is defined but ISM_Traits::dust_chemical_band_absorption is false: "
+				      "the dust-absorbed photon energy would be silently dropped.");
+			dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / dt;
+#endif
 
 			// Quokka uses rho*eint
 			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
