@@ -73,7 +73,7 @@ Term by term:
 - **Work on the gas.** The \\(O(v/c)\\) energy exchange that accompanies the radiation force: as the gas is pushed by the flux, the radiation does work on it. The factor \\((1 + \alpha\_{\chi\_0,g})\\) arises from the \\(\nu \\, \partial \chi\_0 / \partial \nu\\) term in the lab-frame opacity — a moving observer sees Doppler-shifted frequencies, and if the opacity varies across the group, that shift changes how strongly the group is absorbed. It reduces to unity for an opacity that is constant across the group.
 - **Radiation force.** The momentum the gas absorbs from the group's flux. This is the leading term of the momentum exchange and the one responsible for radiation pressure on matter.
 - **Momentum of emission.** Thermal emission from moving matter is beamed forward by the Doppler effect, so it carries net momentum even though it is isotropic in the comoving frame. This term is the corresponding recoil on the gas.
-- **Group coupling.** This term has no counterpart in the grey equations. The same Doppler shift that gives the thermal emission net momentum also spreads that momentum over frequency differently from the way it spreads the energy; this term is that difference, and it is what moves photons across group boundaries. Because it telescopes, \\(\sum\_g \Delta\_g (\nu \chi\_0 B\_\nu)\\) collapses to the value of \\(\nu \chi\_0 B\_\nu\\) at the two ends of the whole frequency grid, so it contributes nothing to the total momentum exchange and the grey expressions are recovered exactly — it only redistributes photons among groups. This does place a requirement on `radBoundaries`: the grid must be wide enough that \\(\nu \chi\_0 B\_\nu\\) is negligible at both ends, otherwise the cancellation is incomplete and the total momentum exchange through \\(-G\_g^i\\) is in error.
+- **Group coupling.** This term has no counterpart in the grey equations. The same Doppler shift that gives the thermal emission net momentum also spreads that momentum over frequency differently from the way it spreads the energy; this term is that difference, and it is what shifts momentum between groups. Because it telescopes, \\(\sum\_g \Delta\_g (\nu \chi\_0 B\_\nu)\\) collapses to the value of \\(\nu \chi\_0 B\_\nu\\) at the two ends of the whole frequency grid, so it contributes nothing to the total momentum exchange and the grey expressions are recovered exactly — it only redistributes momentum among groups. This does place a requirement on `radBoundaries`: the grid must be wide enough that \\(\nu \chi\_0 B\_\nu\\) is negligible at both ends, otherwise the cancellation is incomplete and the total momentum exchange through \\(-G\_g^i\\) is in error.
 - **Frame dragging.** The \\(O(v/c)\\) transformation of the group's radiation pressure between the lab and comoving frames. Together with the work term it becomes order unity in the dynamic diffusion regime, which is why both must be retained.
 
 Under the piecewise constant opacity model, \\(\alpha\_{\chi\_0,g} = 0\\) and the three mean opacities collapse to a single value \\(\chi\_{0,g}\\), leaving
@@ -89,7 +89,7 @@ Summing either form over all groups recovers the grey four-force of [Matter-radi
 
 ### Reduced speed of light
 
-To relax the radiation timestep, the radiation subsystem may be solved with a reduced speed of light \\(\hat{c} < c\\) (the RSLA), set through `c_hat_over_c`. This scales the transport term by \\(\hat{c}/c\\) and leaves the equations exact when \\(\hat{c} = c\\) (the default). \\(\hat{c}\\) must remain much larger than every hydrodynamic speed in the problem. Energy and momentum are conserved to machine precision only for \\(\hat{c} = c\\).
+To relax the radiation timestep, the radiation subsystem may be solved with a reduced speed of light \\(\hat{c} < c\\) (the RSLA), set through `c_hat_over_c`. This scales the transport term by \\(\hat{c}/c\\) and leaves the equations exact when \\(\hat{c} = c\\) (`c_hat_over_c = 1`). \\(\hat{c}\\) must remain much larger than every hydrodynamic speed in the problem. Energy and momentum are conserved to machine precision only for \\(\hat{c} = c\\).
 
 ## Numerical method
 
@@ -122,7 +122,7 @@ Each implicit stage solves, cell by cell, a system of \\(4 + 4 N\_g\\) equations
 - an **inner** Newton-Raphson iteration over the \\(1 + N\_g\\) energy variables (gas energy and the group exchange terms \\(R\_g\\)), with \\(\boldsymbol{v}\\) and \\(\boldsymbol{F}\_g\\) frozen;
 - an **outer** iteration that updates \\(\boldsymbol{F}\_g\\) and the gas momentum analytically, then returns to the inner solve if the velocity-dependent terms have changed.
 
-The inner Jacobian is sparse — groups couple to the gas but not directly to each other — so [@He_2024b] invert it by Gauss-Jordan elimination in \\(O(N\_g)\\) operations rather than \\(O(N\_g^3)\\). Outside the dynamic diffusion limit the outer loop almost always converges in one pass. The gas energy is recovered from the converged exchange terms rather than solved for independently, which is what makes the update conservative to machine precision regardless of how tightly the iteration converged. Convergence tolerances are set by `radiation.iteration_tolerance` and `radiation.iteration_tolerance_rel`; the choice of per-group unknown and the round-off floor on the residual are discussed in [Radiation Integrator](radiation_integrator.md).
+The inner Jacobian is sparse — groups couple to the gas but not directly to each other — so [@He_2024b] invert it by Gauss-Jordan elimination in \\(O(N\_g)\\) operations rather than \\(O(N\_g^3)\\). Outside the dynamic diffusion limit the outer loop almost always converges in one pass. The gas energy is recovered from the converged exchange terms rather than solved for independently, so energy is conserved only to the accuracy set by `radiation.iteration_tolerance`. Convergence tolerances are set by `radiation.iteration_tolerance` and `radiation.iteration_tolerance_rel`; the choice of per-group unknown and the round-off floor on the residual are discussed in [Radiation Integrator](radiation_integrator.md).
 
 ## Multigroup opacity models
 
@@ -186,15 +186,15 @@ template <> struct Physics_Traits<MyProblem> : DefaultPhysicsTraits {
 };
 ```
 
-Then specialise `RadSystem_Traits`:
+Then specialise `RadSystem_Traits`. A specialisation does not inherit defaults, so `c_hat_over_c`, `Erad_floor`, and `beta_order` must always be set; omitting one is a compile error.
 
 | Trait            | Type                       | Default          | Meaning                                                                                                                        |
 | ---------------- | -------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `c_hat_over_c`   | `double`                   | `1.0`            | Reduced speed of light \\(\hat{c}/c\\). Use `1.0` unless the radiation timestep is prohibitive.                                 |
-| `Erad_floor`     | `double`                   | `0.`             | Floor on the radiation energy density of each group, in \\(\mathrm{erg\\,cm^{-3}}\\).                                           |
+| `c_hat_over_c`   | `double`                   | required         | Reduced speed of light \\(\hat{c}/c\\). Use `1.0` unless the radiation timestep is prohibitive.                                 |
+| `Erad_floor`     | `double`                   | required         | Floor on the *total* radiation energy density, in \\(\mathrm{erg\\,cm^{-3}}\\); each group gets `Erad_floor / nGroups`.                  |
 | `energy_unit`    | `double`                   | `C::ev2erg`      | Unit in which `radBoundaries` is expressed. Use `C::hplanck` to give group boundaries in Hz, `C::ev2erg` to give them in eV.    |
 | `radBoundaries`  | `GpuArray<double, nGroups+1>` | `{0., inf}` (grey only) | Group boundaries, monotonically increasing, in units of `energy_unit`. For `nGroups > 1`, give finite, positive end points (not `0` or `inf`) that span the full range where \\(\nu B\_\nu\\) matters, so that \\(\nu \chi\_0 B\_\nu\\) is negligible at both. |
-| `beta_order`     | `int`                      | `1`              | Highest order of \\(v/c\\) retained in the four-force. `0` drops all velocity terms; `1` is the documented scheme. The single-group solver also accepts `2` and `3`. |
+| `beta_order`     | `int`                      | required         | Highest order of \\(v/c\\) retained in the four-force. `0` drops all velocity terms; `1` is the documented scheme. The single-group solver also accepts `2` and `3`. |
 | `opacity_model`  | `OpacityModel`             | `single_group`   | `single_group` for grey radiation; when `nGroups > 1`, one of the multigroup models — see [Which model to use](#which-model-to-use). |
 
 ### Grey opacities
@@ -225,7 +225,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<MyProblem>::ComputeFluxMeanOpacity(const do
 
 ### Multigroup opacities
 
-For `nGroups > 1` the grey hooks are not used. Instead specialise a single function, `DefineOpacityExponentsAndLowerValues`, which returns two arrays of length `nGroups + 1`: the power-law exponents \\(\alpha\_{\chi\_0,g}\\) in element `[0]`, and the opacity at the lower edge of each group, \\(\kappa\_{0,g-}\\), in element `[1]`. These are the two quantities that define the power law in [Piecewise power law (PPL)](#piecewise-power-law-ppl); under the PC model the exponents are ignored and `[1][g]` is used directly as the constant opacity of group `g`. The three group means \\(\chi\_{0B,g}\\), \\(\chi\_{0E,g}\\), and \\(\chi\_{0F,g}\\) that enter the four-force are derived from them internally.
+For `nGroups > 1` the grey hooks are not used. Instead specialise a single function, `DefineOpacityExponentsAndLowerValues`, which returns two arrays of length `nGroups + 1`: the power-law exponents \\(\alpha\_{\chi\_0,g}\\) in element `[0]`, and the opacity at the lower edge of each group, \\(\kappa\_{0,g-}\\), in element `[1]`. These are the two quantities that define the power law in [Piecewise power law (PPL)](#piecewise-power-law-ppl); under the PC model `[1][g]` is used directly as the constant opacity of group `g`, and the exponents are used only to extrapolate the opacity to the upper group edge in the group-coupling term, so they should be set consistently (`0` for a constant opacity). The three group means \\(\chi\_{0B,g}\\), \\(\chi\_{0E,g}\\), and \\(\chi\_{0F,g}\\) that enter the four-force are derived from them internally.
 
 A piecewise constant opacity, uniform across all groups:
 
@@ -246,7 +246,7 @@ RadSystem<MyProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int g = 0; g < nGroups_ + 1; ++g) {
-		exponents_and_values[0][g] = 0.0;    // ignored by the PC model
+		exponents_and_values[0][g] = 0.0;    // constant opacity within each group
 		exponents_and_values[1][g] = kappa0; // cm^2 g^-1
 	}
 	return exponents_and_values;
