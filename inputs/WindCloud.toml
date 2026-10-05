@@ -40,7 +40,6 @@ conduction.enabled = 1
 # kappa_par = kappaPar * T^2.5, kappa_perp = kappaPerp * T^2.5, in erg/s/cm/K^3.5
 conduction.kappaPar = 5.6e-8   # along the field
 conduction.kappaPerp = 0.0     # across the field (must be <= kappaPar)
-conduction.aniso_flux_limiter = "mc"  # limiter for the transverse-gradient terms
 conduction.flux_limiter_phi = 1
 conduction.conduction_cfl = 0.3
 
@@ -57,26 +56,26 @@ do_frame_shift = 1  # shift to the cloud's centre-of-mass frame each coarse step
 # *****************************************************************
 derived_vars = ["temperature"]
 
-plottime_interval = "5*Myr"
+plottime_interval = "1*Myr"
 
 quokka.diagnostics = ["slice_x", "slice_z", "proj"]
 
 quokka.slice_x.type = "DiagFramePlane"
 quokka.slice_x.file = "slicex_plt"
 quokka.slice_x.normal = 0    # Plane normal (0 == x, 1 == y, 2 == z)
-quokka.slice_x.center = 0.0  # x midplane (passes through the cloud centre)
-quokka.slice_x.time_int = "0.5*Myr"
-quokka.slice_x.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "scalar_0", "scalar_1"]
+quokka.slice_x.center = 0.0              # x midplane (passes through the cloud centre)
+quokka.slice_x.time_int = "1*Myr"
+quokka.slice_x.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "scalar_0", "scalar_1", "x-BField", "y-BField", "z-BField"]
 
 quokka.slice_z.type = "DiagFramePlane"
 quokka.slice_z.file = "slicez_plt"
 quokka.slice_z.normal = 2                # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_z.center = 3.3633885615e21  # z midplane: (prob_lo + prob_hi) / 2
-quokka.slice_z.time_int = "0.5*Myr"
-quokka.slice_z.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "scalar_0", "scalar_1"]
+quokka.slice_z.time_int = "1*Myr"
+quokka.slice_z.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "scalar_0", "scalar_1", "x-BField", "y-BField", "z-BField"]
 
 quokka.proj.type = "ProjectionPlot"  # Projection plot diagnostic
 quokka.proj.file = "proj_plt"        # Output file prefix (must end in "plt")
-quokka.proj.time_int = "0.5*Myr"
+quokka.proj.time_int = "1*Myr"
 quokka.proj.normal = 0               # Plane normal (0 == x, 1 == y, 2 == z)
-quokka.proj.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "scalar_0", "scalar_1"]
+quokka.proj.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "scalar_0", "scalar_1", "x-BField", "y-BField", "z-BField"]
