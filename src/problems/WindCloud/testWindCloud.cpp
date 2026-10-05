@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testThermalConduction.cpp
-/// \brief Defines a test problem for thermal conduction.
+/// \file testWindCloud.cpp
+/// \brief Defines a wind-cloud problem with Spitzer thermal conduction.
 ///
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
@@ -44,19 +44,19 @@ AMREX_GPU_MANAGED Real v_wind = NAN;		      // wind speed (z direction)
 AMREX_GPU_MANAGED Real cloud_crushing_time = NAN;    // t_cc, estimated from R0 and v_wind
 AMREX_GPU_MANAGED Real delta_vz = 0;		      // cumulative center-of-mass frame velocity offset
 
-struct ThermalConductionProblem {
+struct WindCloudProblem {
 };
 
-template <> struct quokka::EOS_Traits<ThermalConductionProblem> {
+template <> struct quokka::EOS_Traits<WindCloudProblem> {
 	static constexpr double gamma = 5./3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct HydroSystem_Traits<ThermalConductionProblem> {
+template <> struct HydroSystem_Traits<WindCloudProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<ThermalConductionProblem> : DefaultPhysicsTraits {
+template <> struct Physics_Traits<WindCloudProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = false;
@@ -66,9 +66,9 @@ template <> struct Physics_Traits<ThermalConductionProblem> : DefaultPhysicsTrai
 	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::isotropic;
 };
 
-template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	// initialize a ThermalConduction test problem using parameters from
+	// initialize a WindCloud problem using parameters from
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
@@ -102,10 +102,10 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 			cloudTracer = 0.0 ; // outside the cloud
 			windTracer = Tracer; // dimensionless concentration, independent of rho
 			amrex::Real pressure = rho * T * C::k_B / C::m_u;
-			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
+			cs_wind = quokka::EOS<WindCloudProblem>::ComputeSoundSpeed(rho, pressure);
 			vz = ::v_wind; // set in problem_main(), so it stays consistent with the frame-shift BC
 		}
-		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
+		const amrex::Real Eint = quokka::EOS<WindCloudProblem>::ComputeEintFromTgas(rho, T);
 		/*-------------------------------------------------*/
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
@@ -118,17 +118,17 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 			amrex::Print() << "Internal Energy: " << Eint << std::endl;
 			amrex::Print() << "cs: " << cs_wind << ", vz:" << vz << std::endl;
 		}
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint + 0.5 * (rho * vz * vz);
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) = rho * cloudTracer; // 1/vol
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = rho * windTracer; // 1/vol
+		state_cc(i, j, k, HydroSystem<WindCloudProblem>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<WindCloudProblem>::x3Momentum_index) = rho * vz;
+		state_cc(i, j, k, HydroSystem<WindCloudProblem>::energy_index) = Eint + 0.5 * (rho * vz * vz);
+		state_cc(i, j, k, HydroSystem<WindCloudProblem>::internalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) = rho * cloudTracer; // 1/vol
+		state_cc(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) = rho * windTracer; // 1/vol
 	});
 }
 
 
-// template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+// template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 // {
 // 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 // 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -140,17 +140,17 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 // 		constexpr double bz = 1.;
 
 // 		if (dir == quokka::direction::x) {
-// 			state_fc(i, j, k, Physics_Indices<ThermalConductionProblem>::mhdFirstIndex) = bx;
+// 			state_fc(i, j, k, Physics_Indices<WindCloudProblem>::mhdFirstIndex) = bx;
 // 		} else if (dir == quokka::direction::y) {
-// 			state_fc(i, j, k, Physics_Indices<ThermalConductionProblem>::mhdFirstIndex) = by;
+// 			state_fc(i, j, k, Physics_Indices<WindCloudProblem>::mhdFirstIndex) = by;
 // 		} else if (dir == quokka::direction::z) {
-// 			state_fc(i, j, k, Physics_Indices<ThermalConductionProblem>::mhdFirstIndex) = bz;
+// 			state_fc(i, j, k, Physics_Indices<WindCloudProblem>::mhdFirstIndex) = bz;
 // 		}
 // 	});
 // }
 
 
-template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<WindCloudProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tracer-based refinement: tag cells that are less than 50% cloud AND less than 50% wind,
 	// i.e. cells in the cloud-wind mixing/interface region
@@ -161,9 +161,9 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// the scalars are mass-weighted (rho * concentration), so divide by rho to recover the concentration
-		amrex::Real const rho = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::density_index);
-		amrex::Real const cloudTracer = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) / rho;
-		amrex::Real const windTracer = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) / rho;
+		amrex::Real const rho = state[bx](i, j, k, HydroSystem<WindCloudProblem>::density_index);
+		amrex::Real const cloudTracer = state[bx](i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) / rho;
+		amrex::Real const windTracer = state[bx](i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) / rho;
 		if (cloudTracer < refine_threshold && windTracer < refine_threshold) {
 			tag[bx](i, j, k) = amrex::TagBox::SET;
 		}
@@ -173,7 +173,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 
 
 template <>
-void QuokkaSimulation<ThermalConductionProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
+void QuokkaSimulation<WindCloudProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
 								   amrex::MultiFab const &state_cc,
 								   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
@@ -183,19 +183,19 @@ void QuokkaSimulation<ThermalConductionProblem>::ComputeDerivedVar(int /*lev*/, 
 		auto const &output = mf.arrays();
 		auto const &state = state_cc.const_arrays();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::density_index);
-			Real const x1Mom = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index);
-			Real const x2Mom = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index);
-			Real const x3Mom = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index);
-			Real const Egas = state[bx](i, j, k, HydroSystem<ThermalConductionProblem>::energy_index);
-			static_assert(!Physics_Traits<ThermalConductionProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-			Real const Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
-			output[bx](i, j, k, ncomp) = quokka::EOS<ThermalConductionProblem>::ComputeTgasFromEint(rho, Eint);
+			Real const rho = state[bx](i, j, k, HydroSystem<WindCloudProblem>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<WindCloudProblem>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<WindCloudProblem>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<WindCloudProblem>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<WindCloudProblem>::energy_index);
+			static_assert(!Physics_Traits<WindCloudProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<WindCloudProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
+			output[bx](i, j, k, ncomp) = quokka::EOS<WindCloudProblem>::ComputeTgasFromEint(rho, Eint);
 		});
 	}
 }
 
-template <> void QuokkaSimulation<ThermalConductionProblem>::computeAfterTimestep()
+template <> void QuokkaSimulation<WindCloudProblem>::computeAfterTimestep()
 {
 	const Real dt_coarse = dt_[0];
 	const Real time = tNew_[0];
@@ -212,13 +212,13 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::computeAfterTimeste
 		amrex::MultiFab temp_mf(boxArray(0), DistributionMap(0), nc, ng);
 
 		// compute z-momentum weighted by cloud tracer
-		amrex::MultiFab::Copy(temp_mf, state_new_cc_[0], HydroSystem<ThermalConductionProblem>::x3Momentum_index, 0, nc, ng);
-		amrex::MultiFab::Multiply(temp_mf, state_new_cc_[0], HydroSystem<ThermalConductionProblem>::scalar0_index, 0, nc, ng);
+		amrex::MultiFab::Copy(temp_mf, state_new_cc_[0], HydroSystem<WindCloudProblem>::x3Momentum_index, 0, nc, ng);
+		amrex::MultiFab::Multiply(temp_mf, state_new_cc_[0], HydroSystem<WindCloudProblem>::scalar0_index, 0, nc, ng);
 		const Real zmom = temp_mf.sum(0);
 
 		// compute cloud mass (weighted by cloud tracer) within simulation box
-		amrex::MultiFab::Copy(temp_mf, state_new_cc_[0], HydroSystem<ThermalConductionProblem>::density_index, 0, nc, ng);
-		amrex::MultiFab::Multiply(temp_mf, state_new_cc_[0], HydroSystem<ThermalConductionProblem>::scalar0_index, 0, nc, ng);
+		amrex::MultiFab::Copy(temp_mf, state_new_cc_[0], HydroSystem<WindCloudProblem>::density_index, 0, nc, ng);
+		amrex::MultiFab::Multiply(temp_mf, state_new_cc_[0], HydroSystem<WindCloudProblem>::scalar0_index, 0, nc, ng);
 		const Real cloud_mass = temp_mf.sum(0);
 
 		// compute center-of-mass velocity of the cloud
@@ -248,18 +248,18 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::computeAfterTimeste
 			auto const &mf = state_new_cc_[lev];
 			auto const &state = state_new_cc_[lev].arrays();
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept {
-				Real const rho = state[box](i, j, k, HydroSystem<ThermalConductionProblem>::density_index);
-				Real const xmom = state[box](i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index);
-				Real const ymom = state[box](i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index);
-				Real const zmom = state[box](i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index);
-				Real const E = state[box](i, j, k, HydroSystem<ThermalConductionProblem>::energy_index);
+				Real const rho = state[box](i, j, k, HydroSystem<WindCloudProblem>::density_index);
+				Real const xmom = state[box](i, j, k, HydroSystem<WindCloudProblem>::x1Momentum_index);
+				Real const ymom = state[box](i, j, k, HydroSystem<WindCloudProblem>::x2Momentum_index);
+				Real const zmom = state[box](i, j, k, HydroSystem<WindCloudProblem>::x3Momentum_index);
+				Real const E = state[box](i, j, k, HydroSystem<WindCloudProblem>::energy_index);
 				Real const KE = 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
 				Real const Eint = E - KE;
 				Real const new_zmom = zmom - rho * vz_cm;
 				Real const new_KE = 0.5 * (xmom * xmom + ymom * ymom + new_zmom * new_zmom) / rho;
 
-				state[box](i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = new_zmom;
-				state[box](i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint + new_KE;
+				state[box](i, j, k, HydroSystem<WindCloudProblem>::x3Momentum_index) = new_zmom;
+				state[box](i, j, k, HydroSystem<WindCloudProblem>::energy_index) = Eint + new_KE;
 			});
 		}
 		amrex::Gpu::streamSynchronizeAll();
@@ -270,7 +270,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::computeAfterTimeste
 // Implement User-defined diode BC
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+AMRSimulation<WindCloudProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
                              amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
                              int /*orig_comp*/)
 {
@@ -295,17 +295,17 @@ AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex
     rho_edge = rho_cloud * Tcloud / Twind; // g/cm^3
     const double vz_edge = ::v_wind - ::delta_vz;
     x3Mom_edge = rho_edge * vz_edge;
-    eint_edge = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho_edge, Twind);
+    eint_edge = quokka::EOS<WindCloudProblem>::ComputeEintFromTgas(rho_edge, Twind);
     etot_edge = eint_edge + 0.5 * (x3Mom_edge * x3Mom_edge) / rho_edge;
     
-    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho_edge;
-    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index) = 0.0;
-    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index) = 0.0;
-    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = x3Mom_edge;
-    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = etot_edge;
-    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = eint_edge;
-    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index) = 0.0; // wind boundary carries no cloud tracer
-    consVar(i, j, k, HydroSystem<ThermalConductionProblem>::scalar0_index + 1) = Tracer; // wind boundary carries wind tracer
+    consVar(i, j, k, HydroSystem<WindCloudProblem>::density_index) = rho_edge;
+    consVar(i, j, k, HydroSystem<WindCloudProblem>::x1Momentum_index) = 0.0;
+    consVar(i, j, k, HydroSystem<WindCloudProblem>::x2Momentum_index) = 0.0;
+    consVar(i, j, k, HydroSystem<WindCloudProblem>::x3Momentum_index) = x3Mom_edge;
+    consVar(i, j, k, HydroSystem<WindCloudProblem>::energy_index) = etot_edge;
+    consVar(i, j, k, HydroSystem<WindCloudProblem>::internalEnergy_index) = eint_edge;
+    consVar(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) = 0.0; // wind boundary carries no cloud tracer
+    consVar(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) = Tracer; // wind boundary carries wind tracer
 }
 
 
@@ -322,7 +322,7 @@ auto problem_main() -> int
 	::do_frame_shift = do_frame_shift == 1;
 
 	// boundary conditions
-	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
+	constexpr int ncomp_cc = Physics_Indices<WindCloudProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 
 	for (int n = 0; n < ncomp_cc; ++n) {
@@ -339,12 +339,12 @@ auto problem_main() -> int
 	} 
 
 	// Problem initialization
-	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
+	QuokkaSimulation<WindCloudProblem> sim(BCs_cc);
 
 	// compute wind speed (pressure equilibrium with the cloud sets the wind density)
 	const Real rho_wind = rho_cloud * Tcloud / Twind; // g/cm^3
 	const Real P_wind = rho_wind * Twind * C::k_B / C::m_u;
-	const Real cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho_wind, P_wind);
+	const Real cs_wind = quokka::EOS<WindCloudProblem>::ComputeSoundSpeed(rho_wind, P_wind);
 	::v_wind = ::Mach * cs_wind;
 	amrex::Print() << "rho_wind = " << rho_wind << " g/cm^3" << std::endl;
 	amrex::Print() << "v_wind = " << (::v_wind / 1.0e5) << " km/s" << std::endl;

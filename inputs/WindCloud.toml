@@ -1,7 +1,7 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-# The cloud (radius R0 = 545 pc, set in testThermalConduction.cpp) is centred at (0, 0, R0).
+# The cloud (radius R0 = 545 pc, set in testWindCloud.cpp) is centred at (0, 0, R0).
 # Boundary conditions are set in problem_main() (inflow at z-lo, outflow elsewhere), not via quokka.bc.
 geometry.prob_lo = [-1.345355425e+22, -1.345355425e+22, -6.726777127e+21]
 geometry.prob_hi = [1.345355425e+22, 1.345355425e+22, 1.345355425e+22]
