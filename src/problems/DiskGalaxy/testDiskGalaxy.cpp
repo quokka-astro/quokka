@@ -8,7 +8,12 @@
 ///
 
 #include <cmath>
+#include <cstddef>
+#include <filesystem>
+#include <fstream>
 #include <optional>
+#include <string>
+#include <vector>
 
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
@@ -18,6 +23,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelContext.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParallelReduce.H"
 #include "AMReX_Parser.H"
 #include "AMReX_Print.H"
@@ -42,6 +48,63 @@ namespace
 {
 constexpr double keV_in_ergs = 1000.0 * C::ev2erg; // ergs == 1 keV
 constexpr double seconds_per_year = 3.15576e7;
+
+// Trilinear interpolation into a turbulence cube written by
+// MHDDisk/fieldgen_mpi/fieldgen3. The on-disk layout is row-major [i][j][k] with
+// k fastest-varying (not AMReX's Array4 convention). x, y, z are fractional
+// table indices.
+AMREX_GPU_HOST_DEVICE
+inline auto interpolate_turbulence(const amrex::Real *table, int nx, int ny, int nz, amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
+{
+	x = amrex::max(0.0, amrex::min(x, static_cast<amrex::Real>(nx - 1)));
+	y = amrex::max(0.0, amrex::min(y, static_cast<amrex::Real>(ny - 1)));
+	z = amrex::max(0.0, amrex::min(z, static_cast<amrex::Real>(nz - 1)));
+
+	const int i0 = static_cast<int>(x);
+	const int j0 = static_cast<int>(y);
+	const int k0 = static_cast<int>(z);
+
+	const int i1 = amrex::min(i0 + 1, nx - 1);
+	const int j1 = amrex::min(j0 + 1, ny - 1);
+	const int k1 = amrex::min(k0 + 1, nz - 1);
+
+	const amrex::Real fx = x - i0;
+	const amrex::Real fy = y - j0;
+	const amrex::Real fz = z - k0;
+
+	auto idx = [ny, nz](int i, int j, int k) -> std::size_t { return (static_cast<std::size_t>(i) * ny + j) * nz + k; };
+
+	const auto c000 = table[idx(i0, j0, k0)];
+	const auto c100 = table[idx(i1, j0, k0)];
+	const auto c010 = table[idx(i0, j1, k0)];
+	const auto c110 = table[idx(i1, j1, k0)];
+	const auto c001 = table[idx(i0, j0, k1)];
+	const auto c101 = table[idx(i1, j0, k1)];
+	const auto c011 = table[idx(i0, j1, k1)];
+	const auto c111 = table[idx(i1, j1, k1)];
+
+	return c000 * (1 - fx) * (1 - fy) * (1 - fz) + c100 * fx * (1 - fy) * (1 - fz) + c010 * (1 - fx) * fy * (1 - fz) + c110 * fx * fy * (1 - fz) +
+	       c001 * (1 - fx) * (1 - fy) * fz + c101 * fx * (1 - fy) * fz + c011 * (1 - fx) * fy * fz + c111 * fx * fy * fz;
+}
+
+// Read a raw binary file of n_expect amrex::Real values into pinned host memory, which GPU
+// kernels read directly (like the vcirc/halo tables). This uses no device memory and needs no
+// host-to-device copy.
+inline auto load_bin_to_pinned(const std::string &path, std::size_t n_expect) -> amrex::Gpu::PinnedVector<amrex::Real>
+{
+	amrex::Gpu::PinnedVector<amrex::Real> table(n_expect);
+	std::ifstream f(path, std::ios::binary);
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f, ("Cannot open " + path).c_str());
+	const std::size_t total_bytes = n_expect * sizeof(amrex::Real);
+	// NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-narrowing-conversions)
+	f.read(reinterpret_cast<char *>(table.data()), static_cast<std::streamsize>(total_bytes));
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f, ("Error reading " + path).c_str());
+
+	amrex::Print() << "Loaded " << path << " (" << n_expect << " elements)\n";
+	return table;
+}
 } // namespace
 
 struct DiskGalaxy {};
@@ -92,6 +155,17 @@ template <> struct SimulationData<DiskGalaxy> {
 	bool useHaloVphiParser = false;
 	std::optional<amrex::Parser> haloVphiParser;
 	std::optional<amrex::ParserExecutor<3>> haloVphiParserExe;
+
+	// optional turbulent velocity perturbation of the disk (disk_galaxy.use_turbulence)
+	bool turb_enabled = false;
+	bool turb_loaded = false; // guard: preCalculateInitialConditions runs once per level
+	bool turb_debug = false;  // print per-rank progress (with GPU syncs) during turbulence setup
+	amrex::Gpu::PinnedVector<amrex::Real> turb_vx_table;
+	amrex::Gpu::PinnedVector<amrex::Real> turb_vy_table;
+	amrex::Gpu::PinnedVector<amrex::Real> turb_vz_table;
+	amrex::Real turb_rescale_factor{}; // cm/s per unit table value
+	amrex::Real turb_box_half{};	   // half-width (cm) of the cube, centred on the origin, that the table is mapped onto
+	int turb_n{};			   // table side length
 };
 
 template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
@@ -145,18 +219,67 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 	pp.query("halo_vphi_expr", userData_.haloVphiExpr);
 	userData_.useHaloVphiParser = !userData_.haloVphiExpr.empty();
 	if (userData_.useHaloVphiParser) {
-		userData_.haloVphiParser.emplace(userData_.haloVphiExpr);
-		userData_.haloVphiParser->registerVariables({"x", "y", "z"});
-		userData_.haloVphiParserExe = userData_.haloVphiParser->compile<3>();
+		// The executor only points to bytecode owned by the Parser, so the Parser must stay alive
+		// for as long as the executor is used (destroying it frees the bytecode, and later
+		// allocations can overwrite it). Build it once; this function runs once per level.
+		if (!userData_.haloVphiParser.has_value()) {
+			userData_.haloVphiParser.emplace(userData_.haloVphiExpr);
+			userData_.haloVphiParser->registerVariables({"x", "y", "z"});
+			userData_.haloVphiParserExe = userData_.haloVphiParser->compile<3>();
+		}
 #ifdef AMREX_USE_GPU
 		if (userData_.haloVphiParserExe->m_device_executor == nullptr) {
 			amrex::Abort("disk_galaxy.halo_vphi_expr: device parser executor is null after compile<3>()");
 		}
 #endif
-		userData_.haloVphiParser.reset();
 	} else {
 		userData_.haloVphiParser.reset();
 		userData_.haloVphiParserExe.reset();
+	}
+
+	// 3. optional turbulent velocity field (cubes generated by MHDDisk/fieldgen_mpi/fieldgen3)
+	pp.query("use_turbulence", userData_.turb_enabled);
+	pp.query("turb_debug", userData_.turb_debug);
+	if (userData_.turb_enabled && !userData_.turb_loaded) {
+		if (userData_.turb_debug) {
+			amrex::AllPrint() << "[turb_debug] rank " << amrex::ParallelDescriptor::MyProc() << ": reading turbulence tables\n";
+		}
+		std::string turb_vx_file;
+		std::string turb_vy_file;
+		std::string turb_vz_file;
+		double turb_velocity_kms = NAN; // 3D rms of the scaled table (table rms is `stddev` given to fieldgen3)
+		double turb_box_half_kpc = NAN;
+		pp.get("turb_vx_file", turb_vx_file);
+		pp.get("turb_vy_file", turb_vy_file);
+		pp.get("turb_vz_file", turb_vz_file);
+		pp.get("turb_velocity_kms", turb_velocity_kms);
+		pp.get("turb_box_half_kpc", turb_box_half_kpc);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(turb_box_half_kpc > 0.0, "disk_galaxy.turb_box_half_kpc must be positive");
+
+		// the table is a cube; infer its side length from the file size
+		const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
+		const auto n_side = static_cast<int>(std::cbrt(static_cast<double>(n_turb)) + 0.5);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<std::size_t>(n_side) * n_side * n_side == n_turb && n_side > 1,
+						 "disk_galaxy.turb_vx_file is not a cube of double-precision values");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::filesystem::file_size(turb_vy_file) == std::filesystem::file_size(turb_vx_file) &&
+						     std::filesystem::file_size(turb_vz_file) == std::filesystem::file_size(turb_vx_file),
+						 "disk_galaxy.turb_v{x,y,z}_file must all be the same size");
+
+		userData_.turb_n = n_side;
+		userData_.turb_vx_table = load_bin_to_pinned(turb_vx_file, n_turb);
+		userData_.turb_vy_table = load_bin_to_pinned(turb_vy_file, n_turb);
+		userData_.turb_vz_table = load_bin_to_pinned(turb_vz_file, n_turb);
+		userData_.turb_rescale_factor = turb_velocity_kms * vel_unit;
+		userData_.turb_box_half = turb_box_half_kpc * length_unit;
+		userData_.turb_loaded = true;
+		if (userData_.turb_debug) {
+			amrex::AllPrint() << "[turb_debug] rank " << amrex::ParallelDescriptor::MyProc() << ": turbulence tables in pinned host memory\n";
+		}
+
+		amrex::Print() << "Turbulence enabled: cube " << n_side << "^3 mapped onto +/- " << turb_box_half_kpc << " kpc, velocity scale "
+			       << turb_velocity_kms << " km/s\n";
+	} else if (!userData_.turb_enabled) {
+		amrex::Print() << "Turbulence disabled (disk_galaxy.use_turbulence = false)\n";
 	}
 }
 
@@ -443,6 +566,79 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 			state_cc(i, j, k, HydroSystem<DiskGalaxy>::scalar0_index) = initial_scalar_density_d;
 		}
 	});
+
+	const bool turb_debug = userData_.turb_debug;
+	if (turb_debug) {
+		amrex::Gpu::streamSynchronize();
+		amrex::AllPrint() << "[turb_debug] rank " << amrex::ParallelDescriptor::MyProc() << ": main IC kernel done on " << indexRange << "\n";
+	}
+
+	// Optional turbulent velocity perturbation, applied to the disk gas only (weighted by the
+	// cell-averaged disk density) inside the +/- turb_box_half cube. Kept as a separate kernel so
+	// the large kernel above stays unchanged (its GPU stack usage is already near the limit, cf. #1826).
+	if (userData_.turb_enabled) {
+		const amrex::Real *turb_vx = userData_.turb_vx_table.data();
+		const amrex::Real *turb_vy = userData_.turb_vy_table.data();
+		const amrex::Real *turb_vz = userData_.turb_vz_table.data();
+		const int turb_n = userData_.turb_n;
+		const amrex::Real turb_rescale = userData_.turb_rescale_factor;
+		const amrex::Real turb_box_half = userData_.turb_box_half;
+		const amrex::Real turb_d = 2.0 * turb_box_half / static_cast<amrex::Real>(turb_n - 1);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
+			amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
+			amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
+			amrex::Real const x1 = x0 + dx[0];
+			amrex::Real const y1 = y0 + dx[1];
+			amrex::Real const z1 = z0 + dx[2];
+			amrex::Real const x_mid = 0.5 * (x0 + x1);
+			amrex::Real const y_mid = 0.5 * (y0 + y1);
+			amrex::Real const z_mid = 0.5 * (z0 + z1);
+
+			if ((std::abs(x_mid) > turb_box_half) || (std::abs(y_mid) > turb_box_half) || (std::abs(z_mid) > turb_box_half)) {
+				return;
+			}
+
+			// same disk profile as rhoDisk_exact above
+			auto rhoDisk_exact = [=](double x, double y, double z) {
+				double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+				double const theta = std::atan2(x, y);
+				double const drho_over_rho = disk_perturb_amplitude * jn(2, 5.1356 * R / R_max_perturb) * std::sin(2.0 * theta);
+				return rho_0 * std::exp(-R / R_d) * std::exp(-std::abs(z) / z_d) * (1.0 + drho_over_rho);
+			};
+			const double rho_disk_cell = quad_3d(rhoDisk_exact, x0, x1, y0, y1, z0, z1) / (dx[0] * dx[1] * dx[2]);
+
+			const double tx = (x_mid + turb_box_half) / turb_d;
+			const double ty = (y_mid + turb_box_half) / turb_d;
+			const double tz = (z_mid + turb_box_half) / turb_d;
+			const double dmomx = rho_disk_cell * interpolate_turbulence(turb_vx, turb_n, turb_n, turb_n, tx, ty, tz) * turb_rescale;
+			const double dmomy = rho_disk_cell * interpolate_turbulence(turb_vy, turb_n, turb_n, turb_n, tx, ty, tz) * turb_rescale;
+			const double dmomz = rho_disk_cell * interpolate_turbulence(turb_vz, turb_n, turb_n, turb_n, tx, ty, tz) * turb_rescale;
+
+			// add the momentum and the corresponding change in kinetic energy (Eint and Emag are unchanged)
+			const double rho = state_cc(i, j, k, HydroSystem<DiskGalaxy>::density_index);
+			const double momx = state_cc(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
+			const double momy = state_cc(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
+			const double momz = state_cc(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
+			const double momx_new = momx + dmomx;
+			const double momy_new = momy + dmomy;
+			const double momz_new = momz + dmomz;
+			const double dEkin =
+			    0.5 * ((momx_new * momx_new + momy_new * momy_new + momz_new * momz_new) - (momx * momx + momy * momy + momz * momz)) / rho;
+
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index) = momx_new;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index) = momy_new;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index) = momz_new;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::energy_index) += dEkin;
+		});
+
+		if (turb_debug) {
+			amrex::Gpu::streamSynchronize();
+			amrex::AllPrint() << "[turb_debug] rank " << amrex::ParallelDescriptor::MyProc() << ": turbulence kernel done on " << indexRange
+					  << "\n";
+		}
+	}
 }
 
 template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
@@ -555,6 +751,44 @@ template <> void QuokkaSimulation<DiskGalaxy>::refineGrid(int lev, amrex::TagBox
 		}
 	});
 	amrex::Gpu::streamSynchronize();
+}
+
+template <> void QuokkaSimulation<DiskGalaxy>::computeBeforeTimestep()
+{
+	// the turbulence table is only needed to set initial conditions; free it before the first step
+	// (regridding fills new levels from coarser ones, and restarts do not re-run the initial conditions)
+	if (!userData_.turb_vx_table.empty()) {
+		userData_.turb_vx_table.clear();
+		userData_.turb_vx_table.shrink_to_fit();
+		userData_.turb_vy_table.clear();
+		userData_.turb_vy_table.shrink_to_fit();
+		userData_.turb_vz_table.clear();
+		userData_.turb_vz_table.shrink_to_fit();
+	}
+
+	// parse once, on first call
+	static bool initialized = false;
+	static std::optional<amrex::Parser> epsParser;
+	static std::optional<amrex::ParserExecutor<1>> epsExe;
+
+	if (!initialized) {
+		std::string expr;
+		amrex::ParmParse const pp("particles");
+		pp.query("eps_ff_expr", expr);
+		if (!expr.empty()) {
+			epsParser.emplace(expr);
+			epsParser->registerVariables({"t"});
+			epsExe = epsParser->compileHost<1>(); // host-only is enough: evaluated once per step
+		}
+		initialized = true;
+	}
+
+	if (epsExe) {
+		quokka::eps_ff = (*epsExe)(tNew_[0]);
+		if (quokka::particle_verbose > 0) {
+			amrex::Print() << "eps_ff(t = " << tNew_[0] << ") = " << quokka::eps_ff << "\n";
+		}
+	}
 }
 
 template <>
