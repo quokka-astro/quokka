@@ -34,7 +34,7 @@
 struct DTypeFrontHe {
 };
 
-constexpr double c_hat = C::c_light / 10;
+constexpr double c_hat = C::c_light / 1000;
 
 template <> struct quokka::EOS_Traits<DTypeFrontHe> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -149,7 +149,7 @@ auto compute_effective_radii(amrex::MultiFab const &state_mf, amrex::GpuArray<am
 	amrex::ParallelAllReduce::Sum(volume_HeII, amrex::ParallelContext::CommunicatorSub());
 	amrex::ParallelAllReduce::Sum(volume_HeIII, amrex::ParallelContext::CommunicatorSub());
 
-	auto volume_to_radius = [](amrex::Real volume) -> amrex::Real { return std::cbrt((3.0_rt * 8.0_rt * volume) / (4.0_rt * M_PI)); };
+	auto volume_to_radius = [](amrex::Real volume) -> amrex::Real { return std::cbrt((3.0_rt * volume) / (4.0_rt * M_PI)); };
 	return {volume_to_radius(volume_HII), volume_to_radius(volume_HeI), volume_to_radius(volume_HeII), volume_to_radius(volume_HeIII)};
 }
 
@@ -194,7 +194,7 @@ AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
 template <>
 void RadSystem<DTypeFrontHe>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
+					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
@@ -215,9 +215,10 @@ void RadSystem<DTypeFrontHe>::AddRadSource(array_t &radEnergy, array_t & /*reduc
 	for (int g = 0; g < 3; ++g) {
 		L_star[g] = Q * band_photon_fraction[g] * RadSystem<DTypeFrontHe>::GetChemBandQuanta(g);
 	}
-	const amrex::Real x0 = 0.0_rt;
-	const amrex::Real y0 = 0.0_rt;
-	const amrex::Real z0 = 0.0_rt;
+	// source at the centre of the domain
+	const amrex::Real x0 = 0.5_rt * (prob_lo[0] + prob_hi[0]);
+	const amrex::Real y0 = 0.5_rt * (prob_lo[1] + prob_hi[1]);
+	const amrex::Real z0 = 0.5_rt * (prob_lo[2] + prob_hi[2]);
 	const amrex::Real volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 	const amrex::Real inv_volume = 1.0 / volume;
 
