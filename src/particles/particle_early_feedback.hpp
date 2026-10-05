@@ -282,6 +282,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void limitVelocity(amrex::Array4<amrex::Real
 		state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = velocity_scale * px;
 		state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = velocity_scale * py;
 		state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = velocity_scale * pz;
+		// The roundoff error relative to retained kinetic energy scales as epsilon * (velocity / velocity_limit)^2
+		// so for subluminal uncapped velocities, this is of order 1e-12 or less.
 		state(i, j, k, HydroSystem<problem_t>::energy_index) += kinetic_energy_new - kinetic_energy_old;
 	}
 
