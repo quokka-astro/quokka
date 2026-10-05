@@ -62,6 +62,8 @@ template <> struct Physics_Traits<ThermalConductionProblem> : DefaultPhysicsTrai
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 2; // cloud tracer + wind tracer
+	static constexpr ConductionModel conduction_model = ConductionModel::spitzer; // kappa = conductivity_prefactor * T^2.5
+	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::isotropic;
 };
 
 template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

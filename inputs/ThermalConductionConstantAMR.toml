@@ -34,5 +34,4 @@ conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
 suppress_output = 0
 
-conduction.conduction_type = "constant"
 conduction.conductivity_prefactor = 0.6113916490935586e12

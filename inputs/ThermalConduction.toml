@@ -36,8 +36,7 @@ cfl = 0.3
 temperature_floor = 10.0
 
 conduction.enabled = 1
-conduction.conduction_type = "spitzer"      # kappa = conductivity_prefactor * T^2.5
-conduction.conductivity_prefactor = 5.6e-8  # Spitzer prefactor, in erg/s/cm/K^3.5
+conduction.conductivity_prefactor = 5.6e-8  # Spitzer prefactor, in erg/s/cm/K^3.5 (model set via Physics_Traits)
 conduction.flux_limiter_phi = 1
 conduction.conduction_cfl = 0.3
 

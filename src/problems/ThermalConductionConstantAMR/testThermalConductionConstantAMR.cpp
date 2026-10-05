@@ -44,6 +44,8 @@ template <> struct Physics_Traits<ThermalConductionConstantAMRProblem> : Default
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ConductionModel conduction_model = ConductionModel::constant;
+	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::isotropic;
 };
 
 template <> void QuokkaSimulation<ThermalConductionConstantAMRProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

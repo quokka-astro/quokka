@@ -34,11 +34,13 @@ constexpr int NumSpecTotal = NumSpec + NumSpecExtra;
 #ifdef PHOTOCHEMISTRY
 constexpr int NumChemBands = @NUM_CHEM_BANDS@;
 #ifdef SKIP_PHOTOCHEMFLUX
-constexpr int MicrophysicsNumRadVarsPerGroup = 1;
+constexpr int MicrophysicsNumChemRadVarsPerGroup = 1;
 #else
-constexpr int MicrophysicsNumRadVarsPerGroup = 2;
+constexpr int MicrophysicsNumChemRadVarsPerGroup = 2;
 #endif
-constexpr int NumRadEqs = NumChemBands * MicrophysicsNumRadVarsPerGroup;
+constexpr int NumChemRadEqs = NumChemBands * MicrophysicsNumChemRadVarsPerGroup;
+constexpr int NumThermalBands = @NUM_THERMAL_BANDS@;
+constexpr int NumRadEqs = NumChemRadEqs + NumThermalBands;
 // jaff network.radiation.power_law_index: photon-number spectrum index alpha in n(E) ~ E^(alpha-2)
 constexpr double ChemBandsPowerLawIndex_ = @POWER_LAW_INDEX@;
 #endif

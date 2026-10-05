@@ -1,10 +1,10 @@
 # *****************************************************************
 # Problem size and geometry
+# (BCs are set in problem_main(): foextrap cell-centred and face-centred)
 # *****************************************************************
 geometry.prob_lo = [-1.5428e18, -1.5428e18, -1.5428e18]
 geometry.prob_hi = [1.5428e18, 1.5428e18, 1.5428e18]
 geometry.is_periodic = [0, 0, 0]
-quokka.bc = ["foextrap", "foextrap", "foextrap"]
 
 # *****************************************************************
 # VERBOSITY
@@ -13,26 +13,32 @@ amr.v = 1      # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
+# (nx/max_level are actually set programmatically in problem_main's resolution sweep;
+# these are just placeholder defaults)
 # *****************************************************************
-amr.n_cell = [64, 64, 64]
-amr.max_level = 0  # number of levels = max_level + 1
+amr.n_cell = [128, 128, 128]
+amr.max_level = 0
 amr.blocking_factor = 16  # grid size must be divisible by this
-
-# ghost-cell interpolation at the coarse-fine AMR boundary: the default
-# (method=1) over-limits for this problem and breaks second-order convergence;
-# method=3 (unlimited linear conservative interpolation) restores it
-amr_interpolation_method = 3
 
 do_reflux = 1
 do_subcycle = 0
 
+# (cfl and stop_time are overridden in problem_main())
 cfl = 0.3
 
+derived_vars = ["temperature"]
+
+# *****************************************************************
+# Anisotropic Spitzer conduction
+# (model/geometry are set via Physics_Traits: spitzer + anisotropic)
+# kappa_par = kappaPar * T^2.5, kappa_perp = kappaPerp * T^2.5 (erg cm^-1 s^-1 K^-3.5).
+# B is along x and the profile varies only along x, so only kappaPar acts; kappaPerp = 0.
+# *****************************************************************
 conduction.enabled = 1
 conduction.flux_limiter_phi = 1
 conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
+conduction.kappaPar = 5.40e-10
+conduction.kappaPerp = 0.0
+conduction.aniso_flux_limiter = "mc"
 suppress_output = 0
-
-conduction.conduction_type = "constant"
-conduction.conductivity_prefactor = 0.6113916490935586e12
