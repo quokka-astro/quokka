@@ -2417,7 +2417,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	const amrex::Real stage1Weight = (integratorOrder_ == 2) ? 0.5 : 1.0;
 	const int nghost_Riemann =
 	    MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emfComputingScheme_, emfAveragingScheme_, do_tracers != 0);
-	const amrex::Real fofcDensityThreshold = (fofcUseDensityFloor_ != 0) ? densityFloor_ : amrex::Real(0.0);
+	const amrex::Real fofcDensityThreshold = (fofcUseDensityFloor_ != 0) ? densityFloor_ : static_cast<amrex::Real>(0.0);
 
 	auto ba_cc = grids[lev];
 	auto dm = dmap[lev];
