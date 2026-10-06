@@ -10,7 +10,6 @@
 #include <complex>
 #include <format>
 #include <fstream>
-#include <limits>
 #include <numbers>
 #include <string>
 #include <tuple>
@@ -31,7 +30,6 @@ constexpr double stop_time_default = 10.0 / alfven_frequency;
 constexpr double final_time = 5.0;
 constexpr double dust_density_floor = 1.0e-14;
 constexpr double initial_b_magnitude = 1.004987562112089; // sqrt(1 + u0^2)
-constexpr double sample_z_target = 0.5;
 constexpr double time_tolerance = 1.0e-12;
 constexpr double advance_tolerance = 1.0e-14;
 constexpr int history_stride = 20;
@@ -55,7 +53,7 @@ struct CaseConfig {
 
 // historical data
 struct CaseHistory {
-	double sample_z_ = sample_z_target;
+	double sample_z_ = 0.0;
 	std::vector<double> t_;
 	std::vector<double> dust_vx_;
 	std::vector<double> ref_dust_vx_;
@@ -565,21 +563,13 @@ template <typename problem_t> void appendHistory(QuokkaSimulation<problem_t> &si
 		if (!sim.userData_.t_.empty() && std::abs(sim.userData_.t_.back() - sim.tNew_[0]) < time_tolerance) {
 			return;
 		}
-		size_t sample_index = 0;
-		double min_distance = std::numeric_limits<double>::max();
-		for (size_t i = 0; i < profile.z_.size(); ++i) {
-			const double distance = std::abs(profile.z_[i] - sample_z_target);
-			if (distance < min_distance) {
-				min_distance = distance;
-				sample_index = i;
-			}
-		}
+		// fextract sorts the profile by z; sample the first cell at z = dz / 2.
 		const std::complex<double> gas_amp = projectHelicalAmplitude(profile.z_, profile.gas_vx_, profile.gas_vy_);
 		const std::complex<double> b_amp = projectHelicalAmplitude(profile.z_, profile.bx_, profile.by_);
 
-		sim.userData_.sample_z_ = profile.z_[sample_index];
+		sim.userData_.sample_z_ = profile.z_.front();
 		sim.userData_.t_.push_back(sim.tNew_[0]);
-		sim.userData_.dust_vx_.push_back(profile.dust_vx_[sample_index]);
+		sim.userData_.dust_vx_.push_back(profile.dust_vx_.front());
 		sim.userData_.gas_amp_re_.push_back(std::real(gas_amp));
 		sim.userData_.gas_amp_im_.push_back(std::imag(gas_amp));
 		sim.userData_.b_amp_re_.push_back(std::real(b_amp));
@@ -735,9 +725,10 @@ void writeProfileCsv(const CaseResult &result)
 void writeHistoryCsv(const CaseResult &result)
 {
 	std::ofstream file(std::format("dusty_alfven_{}_{}_history.csv", result.config_.sweep_, result.config_.tag_));
-	file << "t,dust_vx,ref_dust_vx\n";
+	file << "t,z,dust_vx,ref_dust_vx\n";
 	for (size_t i = 0; i < result.history_.t_.size(); ++i) {
-		file << result.history_.t_[i] << "," << result.history_.dust_vx_[i] << "," << result.history_.ref_dust_vx_[i] << "\n";
+		file << result.history_.t_[i] << "," << result.history_.sample_z_ << "," << result.history_.dust_vx_[i] << ","
+		     << result.history_.ref_dust_vx_[i] << "\n";
 	}
 }
 
@@ -946,7 +937,7 @@ template <> void QuokkaSimulation<DustyAlfvenWave>::computeAfterTimestep() { app
 auto problem_main() -> int
 {
 	bool write_csv = true;
-	int reference_steps = 50000;
+	int reference_steps = 20000;
 	amrex::ParmParse const pp("problem");
 	pp.query("write_csv", write_csv);
 	pp.query("reference_steps", reference_steps);
