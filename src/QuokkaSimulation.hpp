@@ -235,8 +235,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
-	amrex::Real shearViscosity_ = 0.0;	// shear viscosity coefficient; see viscous CFL limit below
-	amrex::Real bulkViscosity_ = 0.0;	// bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
+	ArtificialViscosityScheme artificialViscosityScheme_ = ArtificialViscosityScheme::ColellaWoodward1984;
+	amrex::Real artificialViscosityBeta_ = 0.3; // beta for McCorquodaleColella2011 (eq. 36)
+	amrex::Real shearViscosity_ = 0.0;	    // shear viscosity coefficient; see viscous CFL limit below
+	amrex::Real bulkViscosity_ = 0.0;	    // bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2018;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
@@ -465,17 +467,19 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
 
 	template <FluxDir DIR>
-	void hydroFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
-			       amrex::MultiFab &leftState_bfield, amrex::MultiFab &rightState_bfield, amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel,
-			       amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab const &x1Flat,
-			       amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, int ng_reconstruct_total, int nvars, int nghost_Riemann,
+	void hydroFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab const &consVar_cc, amrex::MultiFab &cc_bfield_perp_comps_mf,
+			       amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &leftState_bfield, amrex::MultiFab &rightState_bfield,
+			       amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1FSpds,
+			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab const &x1Flat, amrex::MultiFab const &x2Flat,
+			       amrex::MultiFab const &x3Flat, int ng_reconstruct_total, int nvars, int nghost_Riemann,
 			       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
 	template <FluxDir DIR>
-	void hydroFOFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
-				 amrex::MultiFab &leftState_bfield, amrex::MultiFab &rightState_bfield, amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel,
-				 amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &x1ConsVar_fc_mf, int ng_reconstruct_total,
-				 int nvars, int nghost_Riemann, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
+	void hydroFOFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab const &consVar_cc, amrex::MultiFab &cc_bfield_perp_comps_mf,
+				 amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &leftState_bfield, amrex::MultiFab &rightState_bfield,
+				 amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1FSpds,
+				 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &x1ConsVar_fc_mf, int ng_reconstruct_total, int nvars, int nghost_Riemann,
+				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
 	void replaceFluxes(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,
 			   amrex::iMultiFab &redoFlag);
@@ -634,6 +638,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
+		hpp.query("artificial_viscosity_scheme", artificialViscosityScheme_);
+		hpp.query("artificial_viscosity_beta", artificialViscosityBeta_);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(artificialViscosityBeta_ > 0.0, "hydro.artificial_viscosity_beta must be > 0.");
 		if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
 			hpp.query("shear_viscosity", shearViscosity_);
 			hpp.query("bulk_viscosity", bulkViscosity_);
@@ -2981,15 +2988,15 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 	// compute flux functions
 	const auto &dx = geom[lev].CellSizeArray();
-	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, cc_bfield_perp_comps, leftState[0], rightState[0], leftState_bfield[0], rightState_bfield[0],
-						    flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2],
-						    reconstructGhost, nvars, nghost_Riemann, dx);
-		     , hydroFluxFunction<FluxDir::X2>(primVar, cc_bfield_perp_comps, leftState[1], rightState[1], leftState_bfield[1], rightState_bfield[1],
-						      flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2],
-						      reconstructGhost, nvars, nghost_Riemann, dx);
-		     , hydroFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2], rightState_bfield[2],
-						      flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2],
-						      reconstructGhost, nvars, nghost_Riemann, dx);)
+	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, consVar_cc, cc_bfield_perp_comps, leftState[0], rightState[0], leftState_bfield[0],
+						    rightState_bfield[0], flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, flatCoefs[0], flatCoefs[1],
+						    flatCoefs[2], reconstructGhost, nvars, nghost_Riemann, dx);
+		     , hydroFluxFunction<FluxDir::X2>(primVar, consVar_cc, cc_bfield_perp_comps, leftState[1], rightState[1], leftState_bfield[1],
+						      rightState_bfield[1], flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, flatCoefs[0], flatCoefs[1],
+						      flatCoefs[2], reconstructGhost, nvars, nghost_Riemann, dx);
+		     , hydroFluxFunction<FluxDir::X3>(primVar, consVar_cc, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2],
+						      rightState_bfield[2], flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1],
+						      flatCoefs[2], reconstructGhost, nvars, nghost_Riemann, dx);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -3081,12 +3088,13 @@ AMREX_FORCE_INLINE void QuokkaSimulation<problem_t>::computeCCPerpBfieldComps(am
 
 template <typename problem_t>
 template <FluxDir DIR>
-void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &leftState,
-						    amrex::MultiFab &rightState, amrex::MultiFab &leftState_bfield, amrex::MultiFab &rightState_bfield,
-						    amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab &x1FSpds,
-						    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab const &x1Flat,
-						    amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct, const int nvars,
-						    const int nghost_Riemann, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab const &consVar_cc, amrex::MultiFab &cc_bfield_perp_comps_mf,
+						    amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &leftState_bfield,
+						    amrex::MultiFab &rightState_bfield, amrex::MultiFab &flux, amrex::MultiFab &faceVel,
+						    amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc,
+						    amrex::MultiFab const &x1Flat, amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat,
+						    const int ng_reconstruct, const int nvars, const int nghost_Riemann,
+						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		QuokkaSimulation<problem_t>::template computeCCPerpBfieldComps<DIR>(cc_bfield_perp_comps_mf, consVar_fc);
@@ -3126,12 +3134,13 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(
-		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, artificialViscosityK_, dx, shearViscosity_,
-		    bulkViscosity_, &x1FSpds, &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
+		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, consVar_cc, artificialViscosityK_,
+		    artificialViscosityScheme_, artificialViscosityBeta_, dx, shearViscosity_, bulkViscosity_, &x1FSpds, &consVar_fc[static_cast<int>(DIR)],
+		    nghost_Riemann);
 	} else {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											 rightState_bfield, primVar_mf, artificialViscosityK_, dx,
-											 shearViscosity_, bulkViscosity_, nullptr, nullptr, nghost_Riemann);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(
+		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, consVar_cc, artificialViscosityK_,
+		    artificialViscosityScheme_, artificialViscosityBeta_, dx, shearViscosity_, bulkViscosity_, nullptr, nullptr, nghost_Riemann);
 	}
 }
 
@@ -3178,12 +3187,15 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 
 	// compute flux functions
 	const auto &dx = geom[lev].CellSizeArray();
-	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar, cc_bfield_perp_comps, leftState[0], rightState[0], leftState_bfield[0], rightState_bfield[0],
-						      flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, reconstructRange, nvars, nghost_Riemann, dx);
-		     , hydroFOFluxFunction<FluxDir::X2>(primVar, cc_bfield_perp_comps, leftState[1], rightState[1], leftState_bfield[1], rightState_bfield[1],
-							flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, reconstructRange, nvars, nghost_Riemann, dx);
-		     , hydroFOFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2], rightState_bfield[2],
-							flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructRange, nvars, nghost_Riemann, dx);)
+	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar, consVar_cc, cc_bfield_perp_comps, leftState[0], rightState[0], leftState_bfield[0],
+						      rightState_bfield[0], flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, reconstructRange, nvars,
+						      nghost_Riemann, dx);
+		     , hydroFOFluxFunction<FluxDir::X2>(primVar, consVar_cc, cc_bfield_perp_comps, leftState[1], rightState[1], leftState_bfield[1],
+							rightState_bfield[1], flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, reconstructRange, nvars,
+							nghost_Riemann, dx);
+		     , hydroFOFluxFunction<FluxDir::X3>(primVar, consVar_cc, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2],
+							rightState_bfield[2], flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructRange, nvars,
+							nghost_Riemann, dx);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -3194,11 +3206,12 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 
 template <typename problem_t>
 template <FluxDir DIR>
-void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &leftState,
-						      amrex::MultiFab &rightState, amrex::MultiFab &leftState_bfield, amrex::MultiFab &rightState_bfield,
-						      amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab &x1FSpds,
-						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &x1ConsVar_fc_mf, const int ng_reconstruct,
-						      const int nvars, const int nghost_Riemann, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab const &consVar_cc, amrex::MultiFab &cc_bfield_perp_comps_mf,
+						      amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &leftState_bfield,
+						      amrex::MultiFab &rightState_bfield, amrex::MultiFab &flux, amrex::MultiFab &faceVel,
+						      amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &x1ConsVar_fc_mf,
+						      const int ng_reconstruct, const int nvars, const int nghost_Riemann,
+						      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		QuokkaSimulation<problem_t>::template computeCCPerpBfieldComps<DIR>(cc_bfield_perp_comps_mf, x1ConsVar_fc_mf);
@@ -3214,12 +3227,13 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 	// LLF solver
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(
-		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, artificialViscosityK_, dx, shearViscosity_,
-		    bulkViscosity_, &x1FSpds, &x1ConsVar_fc_mf[static_cast<int>(DIR)], nghost_Riemann);
+		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, consVar_cc, artificialViscosityK_,
+		    artificialViscosityScheme_, artificialViscosityBeta_, dx, shearViscosity_, bulkViscosity_, &x1FSpds,
+		    &x1ConsVar_fc_mf[static_cast<int>(DIR)], nghost_Riemann);
 	} else {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											rightState_bfield, primVar_mf, artificialViscosityK_, dx,
-											shearViscosity_, bulkViscosity_, nullptr, nullptr, nghost_Riemann);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(
+		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, consVar_cc, artificialViscosityK_,
+		    artificialViscosityScheme_, artificialViscosityBeta_, dx, shearViscosity_, bulkViscosity_, nullptr, nullptr, nghost_Riemann);
 	}
 }
 
