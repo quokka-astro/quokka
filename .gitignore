@@ -117,7 +117,3 @@ KokkosCore_config.tmp
 
 # hdf5 files
 *.hdf5
-
-# worksite and outputs 
-my_worksite/**
-outputs/

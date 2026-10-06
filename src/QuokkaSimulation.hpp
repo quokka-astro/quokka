@@ -257,6 +257,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// bitwise-identical midpoint scale factor.
 	amrex::Real a_half_ = 1.0;
 
+#if AMREX_SPACEDIM == 3
+	// overrides of the particle cosmology hooks, declared in AMRSimulation only in 3D
 	auto getCosmologyScaleFactor() const -> amrex::Real override { return a_now_; }
 
 	auto getCosmologyScaleFactorHalf() const -> amrex::Real override
@@ -266,6 +268,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		}
 		return 1.0;
 	}
+#endif // AMREX_SPACEDIM == 3
 
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
