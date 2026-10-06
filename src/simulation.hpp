@@ -328,9 +328,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual auto getCosmologyScaleFactor() const -> amrex::Real { return 1.0; }
 	virtual auto getCosmologyScaleFactorHalf() const -> amrex::Real { return 1.0; }
 	virtual void particleCosmologyComputeHalfStep(amrex::Real /* dt*/) {}
-	virtual void particleCosmologyPreKick(amrex::Real /* dt*/) {} 
+	virtual void particleCosmologyPreKick(amrex::Real /* dt*/) {}
 	virtual void particleCosmologyPostKick(amrex::Real /* dt*/) {}
-
 
 #endif // AMREX_SPACEDIM == 3
 	virtual void computeBeforeTimestep() = 0;

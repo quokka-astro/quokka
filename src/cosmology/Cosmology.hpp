@@ -50,26 +50,27 @@
 
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "math/ODEIntegrate.hpp"
 #include "physics_info.hpp"
-#include "math/ODEIntegrate.hpp"  
 
 namespace quokka::cosmology
 {
 
 /// @brief Parameters for the cosmological model (LCDM by default)
 struct CosmologyParams {
-	amrex::Real H0{C::Hubble_const};      ///< Hubble constant at z=0: 32.407764868e-19 s^-1 (assuming h=1), from quokka//extern/Microphysics/constants/fundamental_constants.H
-	amrex::Real Omega_m{0.30966};	      ///< Matter density parameter
-	amrex::Real Omega_r{9.13896e-05};	  ///< Radiation density parameter
-	amrex::Real Omega_L{0.68885};	      ///< Dark energy (Lambda) density parameter
+	amrex::Real H0{C::Hubble_const};  ///< Hubble constant at z=0: 32.407764868e-19 s^-1 (assuming h=1), from
+					  ///< quokka//extern/Microphysics/constants/fundamental_constants.H
+	amrex::Real Omega_m{0.30966};	  ///< Matter density parameter
+	amrex::Real Omega_r{9.13896e-05}; ///< Radiation density parameter
+	amrex::Real Omega_L{0.68885};	  ///< Dark energy (Lambda) density parameter
 	// Omega_k = 1 - (Omega_m + Omega_r + Omega_L)  [derived]
 
-	amrex::Real Omega_b{0.04897};         ///< Ordinary matter density parameter
-	amrex::Real Omega_dm{0.26069};	      ///< DM density parameter
-	
-	void validate() const {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(Omega_b + Omega_dm - Omega_m) < 1e-6, 
-    	"Error: The sum of Omega_b and Omega_dm must equal Omega_m!");
+	amrex::Real Omega_b{0.04897};  ///< Ordinary matter density parameter
+	amrex::Real Omega_dm{0.26069}; ///< DM density parameter
+
+	void validate() const
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(Omega_b + Omega_dm - Omega_m) < 1e-6, "Error: The sum of Omega_b and Omega_dm must equal Omega_m!");
 	}
 };
 
@@ -91,7 +92,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto HubbleFactor(amrex::Real a, Cosmol
 	return std::sqrt(std::max(E2, static_cast<amrex::Real>(0.0)));
 }
 
-
 /// @brief Evolve the scale factor a(t) from a_old to a_old+dt using an adaptive (according to the
 /// relative error) RK12 (Heun and Euler)
 ///
@@ -106,41 +106,40 @@ struct FriedmannRhsFunctor {
 	CosmologyParams const &cosmo;
 
 	// Constructor (explicit to prevent accidental data coversion)
-	AMREX_GPU_HOST_DEVICE explicit FriedmannRhsFunctor(CosmologyParams const &cosmo_in) : cosmo(cosmo_in) {
-	}  
+	AMREX_GPU_HOST_DEVICE explicit FriedmannRhsFunctor(CosmologyParams const &cosmo_in) : cosmo(cosmo_in) {}
 
 	// Functor for the Friedmann rhs: overloading of the () operator:
 	// t is the current time
 	// y_data is the input current status
 	// y_rhs is the output, the derivative dy/dt
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-	auto operator()(amrex::Real /* t */, quokka::valarray<amrex::Real, 1> const &y_data, quokka::valarray<Real, 1> &y_rhs) const -> int {
-		const amrex::Real a = y_data[0];                   // initial scale factor value from the state vector
-		y_rhs[0] = a * cosmo.H0 * HubbleFactor(a, cosmo);  // da/dt = a * H(a)
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(amrex::Real /* t */, quokka::valarray<amrex::Real, 1> const &y_data,
+								 quokka::valarray<Real, 1> &y_rhs) const -> int
+	{
+		const amrex::Real a = y_data[0];		  // initial scale factor value from the state vector
+		y_rhs[0] = a * cosmo.H0 * HubbleFactor(a, cosmo); // da/dt = a * H(a)
 		return 0;
 	}
 };
 
 /// [[nodiscard]]: the compiler warns if the caller discards the return value.
 // Evolve the scale factor solving the Friedmann equation
-[[nodiscard]] inline auto evolveScaleFactor(amrex::Real a_old, amrex::Real dt, CosmologyParams const &cosmo) -> amrex::Real {
+[[nodiscard]] inline auto evolveScaleFactor(amrex::Real a_old, amrex::Real dt, CosmologyParams const &cosmo) -> amrex::Real
+{
 
 	// Check the scale factor is not negative
 	AMREX_ASSERT_WITH_MESSAGE(a_old > 0.0, "Scale factor a_old must be positive!");
 
 	// Inputs for the integrator
 	FriedmannRhsFunctor rhs(cosmo);
-	quokka::valarray<amrex::Real, 1> y ={a_old};
-    quokka::valarray<amrex::Real, 1> abstol = {1.0e-12 * a_old}; // absolute tolerance
-    const Real rtol = 1.0e-8;                                    // relative tolerance
+	quokka::valarray<amrex::Real, 1> y = {a_old};
+	quokka::valarray<amrex::Real, 1> abstol = {1.0e-12 * a_old}; // absolute tolerance
+	const Real rtol = 1.0e-8;				     // relative tolerance
 
-	int steps_taken = 0;   // counter of the substeps to cover the integration dt
+	int steps_taken = 0; // counter of the substeps to cover the integration dt
 	rk_adaptive_integrate(rhs, 0, y, dt, rtol, abstol, steps_taken);
 
-	return y[0];           // new scale factor a(t+dt)
+	return y[0]; // new scale factor a(t+dt)
 }
-
-
 
 /// @brief Apply cosmological source terms (Hubble drag + expansion cooling) over [a_old, a_new]
 ///
@@ -170,11 +169,11 @@ template <typename problem_t> void applyCosmologicalSourceTerms(amrex::MultiFab 
 
 	// Read variable indices once on the CPU and capture by value into the GPU lambda
 	const int density_idx = HydroSystem<problem_t>::density_index;
-	const int px_idx      = HydroSystem<problem_t>::x1Momentum_index;
-	const int py_idx      = HydroSystem<problem_t>::x2Momentum_index;
-	const int pz_idx      = HydroSystem<problem_t>::x3Momentum_index;
-	const int etot_idx    = HydroSystem<problem_t>::energy_index;
-	const int eint_idx    = HydroSystem<problem_t>::internalEnergy_index;
+	const int px_idx = HydroSystem<problem_t>::x1Momentum_index;
+	const int py_idx = HydroSystem<problem_t>::x2Momentum_index;
+	const int pz_idx = HydroSystem<problem_t>::x3Momentum_index;
+	const int etot_idx = HydroSystem<problem_t>::energy_index;
+	const int eint_idx = HydroSystem<problem_t>::internalEnergy_index;
 
 	// state.arrays() returns a MultiArray4 proxy that covers all boxes on this
 	// MPI rank simultaneously, enabling a single batch kernel launch across all boxes
@@ -203,14 +202,13 @@ template <typename problem_t> void applyCosmologicalSourceTerms(amrex::MultiFab 
 		const amrex::Real etot_new = eint_new + KE_new;
 
 		// Write back all updated quantities
-		state_arrs[bx](i, j, k, px_idx)   = px_new;
-		state_arrs[bx](i, j, k, py_idx)   = py_new;
-		state_arrs[bx](i, j, k, pz_idx)   = pz_new;
+		state_arrs[bx](i, j, k, px_idx) = px_new;
+		state_arrs[bx](i, j, k, py_idx) = py_new;
+		state_arrs[bx](i, j, k, pz_idx) = pz_new;
 		state_arrs[bx](i, j, k, eint_idx) = eint_new;
 		state_arrs[bx](i, j, k, etot_idx) = etot_new;
 	});
 	amrex::Gpu::streamSynchronize(); // wait for the GPU kernel to finish before returning
-
 }
 
 /// @brief Perform one half-step of the Strang-split cosmological source term update

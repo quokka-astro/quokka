@@ -15,11 +15,11 @@
 #include <cmath>
 
 struct ExpansionProblem {
-	static constexpr amrex::Real rho0_default = 1.0e-30;   // low density
-	static constexpr amrex::Real P0_default   = 1.0e-25;   // low pressure (enough to have low sound speed and thus small dt)
-	static constexpr amrex::Real vx0_default  = 5.77e4;    // (5*10^5)/3	       
-	static constexpr amrex::Real vy0_default  = 5.77e4;
-	static constexpr amrex::Real vz0_default  = 5.77e4;
+	static constexpr amrex::Real rho0_default = 1.0e-30; // low density
+	static constexpr amrex::Real P0_default = 1.0e-25;   // low pressure (enough to have low sound speed and thus small dt)
+	static constexpr amrex::Real vx0_default = 5.77e4;   // (5*10^5)/3
+	static constexpr amrex::Real vy0_default = 5.77e4;
+	static constexpr amrex::Real vz0_default = 5.77e4;
 };
 
 template <> struct quokka::EOS_Traits<ExpansionProblem> {
@@ -32,13 +32,13 @@ template <> struct Physics_Traits<ExpansionProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_cosmology_enabled = true;
 
 	// Cosmology: flat EdS universe (only gas, no dm)
-	static constexpr amrex::Real omega_m  = 1.0;
-	static constexpr amrex::Real omega_b  = 1.0;
+	static constexpr amrex::Real omega_m = 1.0;
+	static constexpr amrex::Real omega_b = 1.0;
 	static constexpr amrex::Real omega_dm = 0.0;
-	static constexpr amrex::Real omega_r  = 0.0;
+	static constexpr amrex::Real omega_r = 0.0;
 	static constexpr amrex::Real omega_lambda = 0.0;
-	static constexpr amrex::Real hubble_constant = 0.7;	    // H0 = 70 km/s/Mpc
-	static constexpr amrex::Real a_init = 1e-3;		        
+	static constexpr amrex::Real hubble_constant = 0.7; // H0 = 70 km/s/Mpc
+	static constexpr amrex::Real a_init = 1e-3;
 	static constexpr amrex::Real cosmology_dt_limit = 1e-4; // very small for accuracy
 };
 
@@ -47,10 +47,10 @@ template <> void QuokkaSimulation<ExpansionProblem>::setInitialConditionsOnGrid(
 	// Initial conditions: default of the problem
 	const amrex::Real gamma = quokka::EOS_Traits<ExpansionProblem>::gamma;
 	amrex::Real rho = ExpansionProblem::rho0_default;
-	amrex::Real P   = ExpansionProblem::P0_default;
-	amrex::Real vx  = ExpansionProblem::vx0_default;
-	amrex::Real vy  = ExpansionProblem::vy0_default;
-	amrex::Real vz  = ExpansionProblem::vz0_default;
+	amrex::Real P = ExpansionProblem::P0_default;
+	amrex::Real vx = ExpansionProblem::vx0_default;
+	amrex::Real vy = ExpansionProblem::vy0_default;
+	amrex::Real vz = ExpansionProblem::vz0_default;
 
 	// Initial conditions: precedence to user-entered values (override if present in the .in file)
 	amrex::ParmParse pp("problem");
@@ -60,7 +60,7 @@ template <> void QuokkaSimulation<ExpansionProblem>::setInitialConditionsOnGrid(
 	pp.query("vy0", vy);
 	pp.query("vz0", vz);
 
-	const amrex::Box &indexRange = grid_elem.indexRange_;	  // set of the indices of the grid patch (e.g. from 0 to 31 in x, y, z) 
+	const amrex::Box &indexRange = grid_elem.indexRange_;	       // set of the indices of the grid patch (e.g. from 0 to 31 in x, y, z)
 	const amrex::Array4<amrex::Real> &state_cc = grid_elem.array_; // Array4 is a pointer to the data
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -76,7 +76,7 @@ template <> void QuokkaSimulation<ExpansionProblem>::setInitialConditionsOnGrid(
 // Analytical solution (comoving density is constant)
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_analytic_energy(amrex::Real e_init, amrex::Real a0, amrex::Real a_fin, amrex::Real gamma) -> amrex::Real
 {
-	return e_init * std::pow(a0 / a_fin, 3.0 * (gamma - 1.0));  // internal energy scaling a^(-3*(gamma-1))
+	return e_init * std::pow(a0 / a_fin, 3.0 * (gamma - 1.0)); // internal energy scaling a^(-3*(gamma-1))
 }
 
 template <>
@@ -88,8 +88,8 @@ void QuokkaSimulation<ExpansionProblem>::computeReferenceSolution(amrex::MultiFa
 	amrex::Real a_init = Physics_Traits<ExpansionProblem>::a_init;
 	amrex::ParmParse pp_cosmo("cosmology");
 	pp_cosmo.query("a_init", a_init);
-	amrex::Real a_now = this->a_now_;	         
-	const amrex::Real a_ratio = a_init / a_now;  
+	amrex::Real a_now = this->a_now_;
+	const amrex::Real a_ratio = a_init / a_now;
 
 	amrex::Real rho = ExpansionProblem::rho0_default;
 	amrex::Real P = ExpansionProblem::P0_default;
@@ -106,7 +106,7 @@ void QuokkaSimulation<ExpansionProblem>::computeReferenceSolution(amrex::MultiFa
 	// Analytic solutions
 	const amrex::Real e0_int = P / (gamma - 1);
 	const amrex::Real eint_sol = get_analytic_energy(e0_int, a_init, a_now, gamma);
-	const amrex::Real rho_sol = rho;         // comoving density doesn't change
+	const amrex::Real rho_sol = rho; // comoving density doesn't change
 
 	// Peculiar velocity and momentum
 	const amrex::Real vx_sol = vx * a_ratio; // peculiar velocity scales as a^-1
@@ -116,11 +116,11 @@ void QuokkaSimulation<ExpansionProblem>::computeReferenceSolution(amrex::MultiFa
 	const amrex::Real momy_sol = rho * vy_sol;
 	const amrex::Real momz_sol = rho * vz_sol;
 
-	const amrex::Real v2_sol = (vx_sol * vx_sol + vy_sol * vy_sol + vz_sol * vz_sol);   // velocity module
-	const amrex::Real e_kin_sol = 0.5 * rho * v2_sol;    // kinetic energy
-	const amrex::Real e_tot_sol = eint_sol + e_kin_sol;  // Etot = Eint + Ek
-	
-	auto const &ref_arrays = ref.arrays();   // pointers (Array4) of the grid collection MultiFab ref
+	const amrex::Real v2_sol = (vx_sol * vx_sol + vy_sol * vy_sol + vz_sol * vz_sol); // velocity module
+	const amrex::Real e_kin_sol = 0.5 * rho * v2_sol;				  // kinetic energy
+	const amrex::Real e_tot_sol = eint_sol + e_kin_sol;				  // Etot = Eint + Ek
+
+	auto const &ref_arrays = ref.arrays(); // pointers (Array4) of the grid collection MultiFab ref
 
 	// Kernel GPU to fill the reference solution captured by [=]
 	amrex::ParallelFor(ref, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
@@ -145,20 +145,20 @@ auto problem_main() -> int
 	sim.readParameters();
 
 	// Simulation stop time based on target scale factors
-	amrex::Real a_final = 10;                                // default iin the future
-	amrex::Real a_init  = Physics_Traits<ExpansionProblem>::a_init;
-	amrex::ParmParse pp_cosmo("cosmology");	
+	amrex::Real a_final = 10; // default iin the future
+	amrex::Real a_init = Physics_Traits<ExpansionProblem>::a_init;
+	amrex::ParmParse pp_cosmo("cosmology");
 	pp_cosmo.query("a_init", a_init);
 	pp_cosmo.query("a_final", a_final);
 
 	const amrex::Real h = Physics_Traits<ExpansionProblem>::hubble_constant;
-	const amrex::Real Mpc_to_cm = C::parsec * 1.0e6; 
-	const amrex::Real H0 = (h * 100.0 * 1e5) / Mpc_to_cm;    // Hubble parameter today (s^-1)
-	const amrex::Real H_init = H0 * std::pow(a_init, -1.5);  // initial Hubble paramter for EdS from H0
+	const amrex::Real Mpc_to_cm = C::parsec * 1.0e6;
+	const amrex::Real H0 = (h * 100.0 * 1e5) / Mpc_to_cm;	// Hubble parameter today (s^-1)
+	const amrex::Real H_init = H0 * std::pow(a_init, -1.5); // initial Hubble paramter for EdS from H0
 
-	// EdS analytical 
-	const amrex::Real t_init   = (2.0 / 3.0) * (1.0 / H0) * std::pow(a_init, 1.5);
-	const amrex::Real t_final  = (2.0 / 3.0) * (1.0 / H0) * std::pow(a_final, 1.5);
+	// EdS analytical
+	const amrex::Real t_init = (2.0 / 3.0) * (1.0 / H0) * std::pow(a_init, 1.5);
+	const amrex::Real t_final = (2.0 / 3.0) * (1.0 / H0) * std::pow(a_final, 1.5);
 	const amrex::Real sim_time = t_final - t_init;
 	sim.stopTime_ = sim_time;
 
@@ -168,13 +168,13 @@ auto problem_main() -> int
 
 	// Max timesteps and cfl
 	sim.maxTimesteps_ = 100000000;
-	sim.cflNumber_    = 0.3;
-	amrex::ParmParse pp;  
+	sim.cflNumber_ = 0.3;
+	amrex::ParmParse pp;
 	pp.query("max_timesteps", sim.maxTimesteps_);
 	pp.query("cfl", sim.cflNumber_);
 
 	// Retrive density, energy and momentum index
-	const int rho_idx  = HydroSystem<ExpansionProblem>::density_index;
+	const int rho_idx = HydroSystem<ExpansionProblem>::density_index;
 	const int eint_idx = HydroSystem<ExpansionProblem>::internalEnergy_index;
 	const int momx_idx = HydroSystem<ExpansionProblem>::x1Momentum_index;
 	const int momy_idx = HydroSystem<ExpansionProblem>::x2Momentum_index;
@@ -182,11 +182,11 @@ auto problem_main() -> int
 
 	// Set initial conditions and extract initial-state averages for error analysis
 	sim.setInitialConditions();
-	const amrex::Real total_rho  = sim.state_new_cc_[0].sum(rho_idx, 0); // sum(idx, 0) in AMReX is collective for MPI, 0 is the number of ghost cells
+	const amrex::Real total_rho = sim.state_new_cc_[0].sum(rho_idx, 0); // sum(idx, 0) in AMReX is collective for MPI, 0 is the number of ghost cells
 	const amrex::Real total_eint = sim.state_new_cc_[0].sum(eint_idx, 0);
-	const amrex::Real num_pts    = sim.boxArray(0).numPts();
+	const amrex::Real num_pts = sim.boxArray(0).numPts();
 
-	const amrex::Real rho0_avg  = total_rho / num_pts;
+	const amrex::Real rho0_avg = total_rho / num_pts;
 	const amrex::Real eint0_avg = total_eint / num_pts;
 
 	amrex::Print() << "Initial Average Density           : " << rho0_avg << "\n";
@@ -201,16 +201,15 @@ auto problem_main() -> int
 	auto const &mf_sim = sim.state_new_cc_[0]; // the MultiFab of the simulation at the final time
 	// Allocation of the new MultiFab mf_ref for the analytical solution, copying the spatial structure and division between the simulation processors
 	// (boxArray(0) and DistributionMap(0)), the same number of components ( mf_sim.nComp()), but 0 ghost cells
-	amrex::MultiFab mf_ref(mf_sim.boxArray(), mf_sim.DistributionMap(), mf_sim.nComp(), 0); 
+	amrex::MultiFab mf_ref(mf_sim.boxArray(), mf_sim.DistributionMap(), mf_sim.nComp(), 0);
 
 	// Calculation of the current analytical solution
-	sim.computeReferenceSolution(mf_ref, sim.Geom(0).CellSizeArray(),
-				     sim.Geom(0).ProbLoArray()); 
+	sim.computeReferenceSolution(mf_ref, sim.Geom(0).CellSizeArray(), sim.Geom(0).ProbLoArray());
 
 	// Error calculation: simulation - reference
 	amrex::MultiFab mf_err(mf_sim.boxArray(), mf_sim.DistributionMap(), mf_sim.nComp(), 0); // allocate a new MultiFab to store the error of each cell
-	amrex::MultiFab::Copy(mf_err, mf_sim, 0, 0, mf_sim.nComp(), 0);				            // copy all the simulationd data (mf_sim) in mf_err
-	amrex::MultiFab::Subtract(mf_err, mf_ref, 0, 0, mf_sim.nComp(), 0);			            // cell error = sim cell - ref cell
+	amrex::MultiFab::Copy(mf_err, mf_sim, 0, 0, mf_sim.nComp(), 0);				// copy all the simulationd data (mf_sim) in mf_err
+	amrex::MultiFab::Subtract(mf_err, mf_ref, 0, 0, mf_sim.nComp(), 0);			// cell error = sim cell - ref cell
 
 	// Calculation of the norms
 	struct Norms {
@@ -221,37 +220,35 @@ auto problem_main() -> int
 	amrex::Print() << "\n[Analysing Errors] Computing field norms ...\n";
 
 	// Lambda to calculate the norms
-	// N.B.: if the L1 norm of the analytic solution MultiFab is not zero, it is used as a normalization 
+	// N.B.: if the L1 norm of the analytic solution MultiFab is not zero, it is used as a normalization
 	// for the norms, to have a relative error, independent from the units system and usable for the final test
 	// L1 Norm :
 	//     ||E||_1 = \sum_{i,j,k} |E(i,j,k)|
 	//     - Relative L1 Error: ||E||_1 / ||Reference||_1
-	//  2) L2 Norm 
+	//  2) L2 Norm
 	//     ||E||_2 = \sqrt{ \sum_{i,j,k} |E(i,j,k)|^2 }
 	//     - Relative L2 Error: ||E||_2 / ||Reference||_2
-	//  3) Linf Norm 
+	//  3) Linf Norm
 	//     ||E||_\infty = \max_{i,j,k} |E(i,j,k)|
 	//     - Relative Linf Error: ||E||_\infty / ||R|eference|_\infty
-	auto get_norms = [&](int idx) -> Norms
-	{ 
-		amrex::Real norm_ref = mf_ref.norm1(idx);  // mf_ref is the analytic solution
-		if (norm_ref > 0) {                        // avoid division by 0
+	auto get_norms = [&](int idx) -> Norms {
+		amrex::Real norm_ref = mf_ref.norm1(idx); // mf_ref is the analytic solution
+		if (norm_ref > 0) {			  // avoid division by 0
 			// return the relative errors {L1, L2, Linf}
 			amrex::Print() << "Non-zero L1 norm of the analytical solution MultiFab used as a denominator for the norms of"
-			                   " the error Multifab, to have a relative error.\n";
+					  " the error Multifab, to have a relative error.\n";
 			return {mf_err.norm1(idx) / norm_ref, mf_err.norm2(idx) / mf_ref.norm2(idx), mf_err.norminf(idx) / mf_ref.norminf(idx), true};
-			
-		} 
-		else {                               
+
+		} else {
 			// return the absolute errors {L1, L2, Linf}
 			amrex::Print() << "Vanishing L1 norm of the analytical solution MultiFab: return only the L1, L2 Linf norms"
-			                  " of the error MultiFab (not normalized by the L1 norm of the analytical solution)\n";
+					  " of the error MultiFab (not normalized by the L1 norm of the analytical solution)\n";
 			return {mf_err.norm1(idx), mf_err.norm2(idx), mf_err.norminf(idx), false};
 		}
 	};
 
 	// Calculation of the norms
-	Norms rho_norm  = get_norms(rho_idx);
+	Norms rho_norm = get_norms(rho_idx);
 	Norms eint_norm = get_norms(eint_idx);
 	Norms momx_norm = get_norms(momx_idx);
 	Norms momy_norm = get_norms(momy_idx);
@@ -259,19 +256,19 @@ auto problem_main() -> int
 
 	// Final print
 	amrex::Print() << "\nVerification Norms:\n";
-	amrex::Print() << "  Density   : L1 = " << rho_norm.L1  << " (Type: " << (rho_norm.is_relative  ? "Relative to L1 analyical" : "Absolute") << ")\n";
+	amrex::Print() << "  Density   : L1 = " << rho_norm.L1 << " (Type: " << (rho_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Energy    : L1 = " << eint_norm.L1 << " (Type: " << (eint_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Momentum x: L1 = " << momx_norm.L1 << " (Type: " << (momx_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Momentum y: L1 = " << momy_norm.L1 << " (Type: " << (momy_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Momentum z: L1 = " << momz_norm.L1 << " (Type: " << (momz_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  \n-------------------------------------------------------------------------------------------------------------------------\n";
-	amrex::Print() << "  Density   : L2 = " << rho_norm.L2  << " (Type: " << (rho_norm.is_relative  ? "Relative to L1 analyical" : "Absolute") << ")\n";
+	amrex::Print() << "  Density   : L2 = " << rho_norm.L2 << " (Type: " << (rho_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Energy    : L2 = " << eint_norm.L2 << " (Type: " << (eint_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Momentum x: L2 = " << momx_norm.L2 << " (Type: " << (momx_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Momentum y: L2 = " << momy_norm.L2 << " (Type: " << (momy_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Momentum z: L2 = " << momz_norm.L2 << " (Type: " << (momz_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  \n-------------------------------------------------------------------------------------------------------------------------\n";
-	amrex::Print() << "  Density   : Linf = " << rho_norm.Linf  << " (Type: " << (rho_norm.is_relative  ? "Relative to L1 analyical" : "Absolute") << ")\n";
+	amrex::Print() << "  Density   : Linf = " << rho_norm.Linf << " (Type: " << (rho_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Energy    : Linf = " << eint_norm.Linf << " (Type: " << (eint_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Momentum x: Linf = " << momx_norm.Linf << " (Type: " << (momx_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
 	amrex::Print() << "  Momentum y: Linf = " << momy_norm.Linf << " (Type: " << (momy_norm.is_relative ? "Relative to L1 analyical" : "Absolute") << ")\n";
@@ -289,8 +286,7 @@ auto problem_main() -> int
 	const amrex::Real tol_mom = 1e-4;
 
 	// L1 norm as a reference for the error
-	if (rho_norm.L1 > tol_rho || eint_norm.L1 > tol_eint || 
-	    momx_norm.L1 > tol_mom || momy_norm.L1 > tol_mom || momz_norm.L1 > tol_mom) {
+	if (rho_norm.L1 > tol_rho || eint_norm.L1 > tol_eint || momx_norm.L1 > tol_mom || momy_norm.L1 > tol_mom || momz_norm.L1 > tol_mom) {
 		amrex::Print() << "TEST FAILED: Error exceeds tolerances!\n";
 		status = 1;
 	} else {
@@ -298,4 +294,3 @@ auto problem_main() -> int
 	}
 	return status;
 }
-
