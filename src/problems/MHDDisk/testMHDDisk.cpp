@@ -54,7 +54,7 @@ template <> struct quokka::EOS_Traits<MHDGalaxy> {
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double T_cgm = 1.0e7;
 	static constexpr double cs_cgm = gcem::sqrt(gamma * C::k_B * T_cgm / mean_molecular_weight);
-	static constexpr double cs_disk = 7.0e5;  // sound speed 7 km/s
+	static constexpr double cs_disk = 7.0e5; // sound speed 7 km/s
 };
 
 template <> struct HydroSystem_Traits<MHDGalaxy> {
@@ -122,7 +122,7 @@ template <> struct SimulationData<MHDGalaxy> {
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vcircAnalytic(double R, double z, double vc, double Rc) -> double
 {
-	const double D = std::sqrt( R*R + Rc * Rc + (z / q_flatten) * (z / q_flatten));
+	const double D = std::sqrt(R * R + Rc * Rc + (z / q_flatten) * (z / q_flatten));
 	return vc * R / D;
 }
 
@@ -146,7 +146,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, doub
 	const double disk_factor = sech * sech;
 
 	const double denom = R * R + Rc * Rc;
-	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -Mc * Mc /2.0);
+	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -Mc * Mc / 2.0);
 
 	return rho0 * disk_factor * halo_factor;
 }
@@ -383,9 +383,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	was_called = true;
 
 	amrex::ParmParse const pp("mhd_galaxy");
-	pp.get("Rc_kpc", userData_.Rc);  userData_.Rc *= 1.0e3 * C::parsec;
-	pp.get("Rd_kpc", userData_.Rd);  userData_.Rd *= 1.0e3 * C::parsec;
-	pp.get("Rmax_kpc", userData_.Rmax);  userData_.Rmax *= 1.0e3 * C::parsec;
+	pp.get("Rc_kpc", userData_.Rc);
+	userData_.Rc *= 1.0e3 * C::parsec;
+	pp.get("Rd_kpc", userData_.Rd);
+	userData_.Rd *= 1.0e3 * C::parsec;
+	pp.get("Rmax_kpc", userData_.Rmax);
+	userData_.Rmax *= 1.0e3 * C::parsec;
 	pp.get("Mc", userData_.Mc);
 	pp.get("Q_mean", userData_.Q_mean);
 	pp.query("sn_jeans_J", userData_.sn_jeans_J);
@@ -405,18 +408,16 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 
 	// Sigma0 via Simpson integration of Toomre Q condition, accurate to 10 figures for the default functions
 	auto integrand = [=](double R) -> double {
-		const auto Ω = [=](double R) -> double {
-			return vcircAnalytic(R, 0.0, vc, Rc) / R;
-		};
+		const auto Ω = [=](double R) -> double { return vcircAnalytic(R, 0.0, vc, Rc) / R; };
 		const double ε = 0.5e-5 * Rmax;
-		const double dΩdR = (Ω(R + ε) - Ω(R - ε)) / (2.0 * ε);  // numeric derivative of Ω
+		const double dΩdR = (Ω(R + ε) - Ω(R - ε)) / (2.0 * ε); // numeric derivative of Ω
 		const double kappa = std::sqrt(std::max(4.0 * Ω(R) * Ω(R) + 2.0 * R * Ω(R) * dΩdR, 0.0));
 		return kappa * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, Rd, 1.0));
 	};
 	constexpr int N = 100000;
 	static_assert(N % 2 == 0);
 	const double h = Rmax / N;
-	double integral = integrand(1e-20*Rmax) + integrand(Rmax);
+	double integral = integrand(1e-20 * Rmax) + integrand(Rmax);
 	for (int i = 1; i < N; ++i) {
 		integral += (i % 2 == 0 ? 2.0 : 4.0) * integrand(i * h);
 	}
@@ -424,7 +425,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	// set densityProfile factor such that the integral equals Q_mean
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
 	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
-
 
 	// Load 2D Cylindrical A_phi Potential Table
 	std::string aphi_meta_file;
@@ -512,7 +512,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		amrex::Print() << "Seed field: target_beta=" << target_beta_seed << "  rho_mid=" << rho_mid << "  B_rms_HL=" << B_rms_HL
 			       << "  B0_scale=" << userData_.seed_B0_HL << " G*cm (HL)\n";
 	}
-
 
 	// Turb Sampling
 	std::string turb_vx_file;
@@ -930,7 +929,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 			const double Ekin_old = 0.5 * (px * px + py * py + pz * pz) / rho;
 
 			const double v = vcircAnalytic(R, z, vc, Rc);
-			const double g_R = - v*v/ R;
+			const double g_R = -v * v / R;
 			const double gx = g_R * x / R;
 			const double gy = g_R * y / R;
 			const double gz = g_R * z / R / (q_flatten * q_flatten);
