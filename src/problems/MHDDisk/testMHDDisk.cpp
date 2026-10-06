@@ -73,9 +73,6 @@ template <> struct Physics_Traits<MHDGalaxy> : DefaultPhysicsTraits {
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 0;
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = 0;
-	static constexpr int nGroups = 1;
 };
 
 template <> struct SimulationData<MHDGalaxy> {
@@ -697,13 +694,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 			const double ty = (y - turb_ymin) / turb_dy;
 			const double tz = (z - turb_zmin) / turb_dz;
 
-			const double tx_c = amrex::min(amrex::max(tx, 0.0), static_cast<double>(turb_nx - 1));
-			const double ty_c = amrex::min(amrex::max(ty, 0.0), static_cast<double>(turb_ny - 1));
-			const double tz_c = amrex::min(amrex::max(tz, 0.0), static_cast<double>(turb_nz - 1));
-
-			dvx_pert = interpolate_turbulence(turb_vx, turb_nx, turb_ny, turb_nz, tx_c, ty_c, tz_c) * turb_rescale;
-			dvy_pert = interpolate_turbulence(turb_vy, turb_nx, turb_ny, turb_nz, tx_c, ty_c, tz_c) * turb_rescale;
-			dvz_pert = interpolate_turbulence(turb_vz, turb_nx, turb_ny, turb_nz, tx_c, ty_c, tz_c) * turb_rescale;
+			dvx_pert = interpolate_turbulence(turb_vx, turb_nx, turb_ny, turb_nz, tx, ty, tz) * turb_rescale;
+			dvy_pert = interpolate_turbulence(turb_vy, turb_nx, turb_ny, turb_nz, tx, ty, tz) * turb_rescale;
+			dvz_pert = interpolate_turbulence(turb_vz, turb_nx, turb_ny, turb_nz, tx, ty, tz) * turb_rescale;
 		}
 		vx += dvx_pert;
 		vy += dvy_pert;
@@ -936,10 +929,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 			const double px = state(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index);
 			const double py = state(i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index);
 			const double pz = state(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index);
-			const double Eint = state(i, j, k, HydroSystem<MHDGalaxy>::internalEnergy_index);
-			const double Etot_old = state(i, j, k, HydroSystem<MHDGalaxy>::energy_index);
 			const double Ekin_old = 0.5 * (px * px + py * py + pz * pz) / rho;
-			const double Emag = Etot_old - Ekin_old - Eint;
 
 			const double v = vcircAnalytic(R, z, vc, Rc);
 			const double g_R = - v*v/ R;
@@ -955,7 +945,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 			state(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index) = px_new;
 			state(i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index) = py_new;
 			state(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index) = pz_new;
-			state(i, j, k, HydroSystem<MHDGalaxy>::energy_index) = Ekin_new + Eint + Emag;
+			state(i, j, k, HydroSystem<MHDGalaxy>::energy_index) += Ekin_new - Ekin_old;
 		});
 	}
 }
