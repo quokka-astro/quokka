@@ -260,14 +260,13 @@ auto problem_main() -> int
 	// Setup boundary conditions
 	auto BCs_cc = quokka::BC<ThermalConductionAnisoProblem>(quokka::BCType::reflecting);
 	const int nvars_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarTotal_fc;
-	const int nvars_per_dim_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarPerDim_fc;
+	// face-centred B: first-order extrapolation into the ghost faces. reflect_odd on the tangential components
+	// flips the sign of the ring field where it runs along a wall, which cancels it in the corner-averaged bhat.
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		int const component_dir = (nvars_per_dim_fc > 0) ? (icomp / nvars_per_dim_fc) : 0;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			int const bc_type = (component_dir == idim) ? amrex::BCType::reflect_even : amrex::BCType::reflect_odd;
-			BCs_fc[icomp].setLo(idim, bc_type);
-			BCs_fc[icomp].setHi(idim, bc_type);
+			BCs_fc[icomp].setLo(idim, amrex::BCType::foextrap);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::foextrap);
 		}
 	}
 
