@@ -1,6 +1,5 @@
 # *****************************************************************
 # Problem size and geometry
-# (BCs are set in problem_main(): reflecting cell-centred, reflect_even/odd face-centred)
 # *****************************************************************
 geometry.prob_lo = [-1.0, -1.0, -1.0]
 geometry.prob_hi = [1.0, 1.0, 1.0]
