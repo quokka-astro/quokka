@@ -55,6 +55,13 @@ template <typename T> inline constexpr bool dependent_false_v = dependent_false<
 
 enum class RiemannSolver { HLLC, LLF, LLF_MHD, HLLD };
 
+/// Artificial viscosity schemes (selected by hydro.artificial_viscosity_scheme):
+///  - ColellaWoodward1984: linear viscosity, Colella & Woodward (1984), eq. (4.2)
+///  - McCorquodaleColella2011: McCorquodale & Colella (2011), sec. 2.5.2, eqs. (35)-(38). The linear viscosity
+///    scaled by min((h lambda)^2 / (beta c_min^2), 1), acting on the difference of the cell averages, so that it is
+///    O(h^4) in smooth flow and reduces to the linear viscosity at strong shocks
+AMREX_ENUM(ArtificialViscosityScheme, ColellaWoodward1984, McCorquodaleColella2011); // NOLINT
+
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
 template <typename problem_t> class HydroSystem : public HyperbolicSystem<problem_t>
@@ -183,7 +190,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	template <RiemannSolver RIEMANN, FluxDir DIR>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &leftState_bfield_mf,
-				  amrex::MultiFab const &rightState_bfield_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc,
+				  amrex::MultiFab const &rightState_bfield_mf, amrex::MultiFab const &primVar_mf, amrex::MultiFab const &consVar_cc_mf,
+				  amrex::Real K_visc, ArtificialViscosityScheme avisc_scheme, amrex::Real avisc_beta,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real shearViscosity, amrex::Real bulkViscosity,
 				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
 
@@ -1289,9 +1297,11 @@ template <typename problem_t>
 template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &x1LeftState_bfield_mf,
-					   amrex::MultiFab const &x1RightState_bfield_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const amrex::Real shearViscosity, const amrex::Real bulkViscosity,
-					   amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf, const int nghost_vel)
+					   amrex::MultiFab const &x1RightState_bfield_mf, amrex::MultiFab const &primVar_mf,
+					   amrex::MultiFab const &consVar_cc_mf, const amrex::Real K_visc, const ArtificialViscosityScheme avisc_scheme,
+					   const amrex::Real avisc_beta, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const amrex::Real shearViscosity,
+					   const amrex::Real bulkViscosity, amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf,
+					   const int nghost_vel)
 {
 
 	// By convention, the interfaces are defined on the left edge of each
@@ -1305,6 +1315,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	auto const &x1LeftState_bfield_in = x1LeftState_bfield_mf.const_arrays();
 	auto const &x1RightState_bfield_in = x1RightState_bfield_mf.const_arrays();
 	auto const &primVar_in = primVar_mf.const_arrays();
+	auto const &consVar_cc_in = consVar_cc_mf.const_arrays();
 	auto x1Flux_in = x1Flux_mf.arrays();
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
 
@@ -1340,6 +1351,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState_bfield(x1LeftState_bfield_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState_bfield(x1RightState_bfield_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
+		quokka::Array4View<const amrex::Real, DIR> consVar_cc(consVar_cc_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in[bx]);
 
@@ -1449,7 +1461,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		int velV_index = x2Velocity_index;
 		int velW_index = x3Velocity_index;
 
-		// grid spacing along normal/transverse directions, for the viscous stress below (3D only)
+		// grid spacing along normal/transverse directions, for the artificial viscosity and viscous stress below
+		// (NAN for directions that do not exist)
 		[[maybe_unused]] amrex::Real dx_n = NAN;
 		[[maybe_unused]] amrex::Real dx_v = NAN;
 		[[maybe_unused]] amrex::Real dx_w = NAN;
@@ -1458,16 +1471,20 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			velN_index = x1Velocity_index;
 			velV_index = x2Velocity_index;
 			velW_index = x3Velocity_index;
-			if constexpr (AMREX_SPACEDIM == 3) {
-				dx_n = dx[0];
-				dx_v = dx[1];
-				dx_w = dx[2];
-			}
+			dx_n = dx[0];
+#if (AMREX_SPACEDIM >= 2)
+			dx_v = dx[1];
+#endif
+#if (AMREX_SPACEDIM == 3)
+			dx_w = dx[2];
+#endif
 		} else if constexpr (DIR == FluxDir::X2) {
 #if (AMREX_SPACEDIM == 2)
 			velN_index = x2Velocity_index;
 			velV_index = x1Velocity_index;
 			velW_index = x3Velocity_index; // unchanged in 2D
+			dx_n = dx[1];
+			dx_v = dx[0];
 #endif
 #if (AMREX_SPACEDIM == 3)
 			velN_index = x2Velocity_index;
@@ -1567,10 +1584,47 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			x1FSpds(i, j, k, 1) = fspd_p;
 		}
 
-		// add artificial viscosity
-		// following Colella & Woodward (1984), eq. (4.2)
-		const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
-		const double viscosity = K_visc * std::max(-div_v, 0.);
+		// artificial viscosity coefficient (>= 0); the flux is incremented by viscosity * (difference in U) below
+		double viscosity = 0.;
+		if (avisc_scheme == ArtificialViscosityScheme::ColellaWoodward1984) {
+			// following Colella & Woodward (1984), eq. (4.2)
+			const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
+			viscosity = K_visc * std::max(-div_v, 0.);
+		} else {
+			// McCorquodale & Colella (2011), sec. 2.5.2, with K_visc == alpha. All inputs are cell-centered
+			// primitives computed from the cell averages, W(<U>), i.e. q.
+			// Eq. (35): face-centered velocity divergence (multiplied by dx_n), using centered transverse differences
+			// averaged over the two cells adjacent to the face
+			double h_lambda = q(i, j, k, velN_index) - q(i - 1, j, k, velN_index);
+#if AMREX_SPACEDIM >= 2
+			h_lambda += 0.25 * (dx_n / dx_v) *
+				    (q(i, j + 1, k, velV_index) - q(i, j - 1, k, velV_index) + q(i - 1, j + 1, k, velV_index) - q(i - 1, j - 1, k, velV_index));
+#endif
+#if AMREX_SPACEDIM == 3
+			h_lambda += 0.25 * (dx_n / dx_w) *
+				    (q(i, j, k + 1, velW_index) - q(i, j, k - 1, velW_index) + q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k - 1, velW_index));
+#endif
+			if (h_lambda < 0.) {
+				// c_min = min(c_{i-1}, c_i), from the cell-centered density and pressure
+				const auto cellSoundSpeed = [&](int ii) -> double {
+					if constexpr (is_eos_isothermal()) {
+						return cs_iso_;
+					} else {
+						const double rho = q(ii, j, k, primDensity_index);
+						amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(q, ii, j, k);
+						double P = q(ii, j, k, pressure_index);
+						if constexpr (reconstruct_eint) {
+							// pressure_index is actually specific internal energy
+							P = ::quokka::EOS<problem_t>::ComputePressure(rho, rho * P, massScalars);
+						}
+						return ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
+					}
+				};
+				const double cs_min = std::min(cellSoundSpeed(i - 1), cellSoundSpeed(i));
+				// eq. (36); the paper's nu is <= 0, so this is alpha * (-nu)
+				viscosity = K_visc * (-h_lambda) * std::min((h_lambda * h_lambda) / (avisc_beta * cs_min * cs_min), 1.0);
+			}
+		}
 
 		quokka::valarray<double, nHydroScalars_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
 		quokka::valarray<double, nHydroScalars_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
@@ -1591,7 +1645,24 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			}
 		}
 
-		F_canonical = F_canonical + viscosity * (U_L - U_R);
+		if (avisc_scheme == ArtificialViscosityScheme::ColellaWoodward1984) {
+			F_canonical = F_canonical + viscosity * (U_L - U_R);
+		} else if (viscosity > 0.) {
+			// McCorquodale & Colella (2011), eq. (38): the difference is taken between the cell averages <U>
+			const auto cellAverage = [&](int ii) -> quokka::valarray<double, nHydroScalars_> {
+				quokka::valarray<double, nHydroScalars_> U = {consVar_cc(ii, j, k, density_index),
+									      consVar_cc(ii, j, k, x1Momentum_index + (velN_index - x1Velocity_index)),
+									      consVar_cc(ii, j, k, x1Momentum_index + (velV_index - x1Velocity_index)),
+									      consVar_cc(ii, j, k, x1Momentum_index + (velW_index - x1Velocity_index)),
+									      consVar_cc(ii, j, k, energy_index),
+									      consVar_cc(ii, j, k, internalEnergy_index)};
+				for (int n = 0; n < nscalars_; ++n) {
+					U[nHydroScalars_ - nscalars_ + n] = consVar_cc(ii, j, k, scalar0_index + n);
+				}
+				return U;
+			};
+			F_canonical = F_canonical + viscosity * (cellAverage(i - 1) - cellAverage(i));
+		}
 
 		// physical shear/bulk viscosity, added the same way as the artificial viscosity above
 		if constexpr (AMREX_SPACEDIM == 3 && Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
