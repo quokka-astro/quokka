@@ -488,8 +488,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			msg += ": ";
 			msg += e.what();
 			amrex::Abort(msg);
-		}       
-	}           
+		}
+	}
 	meta_file.close();
 
 	if (userData_.seed_str.empty()) {
