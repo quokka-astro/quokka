@@ -168,8 +168,15 @@ def make_figure(
 
 def make_comparison_figure(data_dir: Path, output_dir: Path) -> Path:
     """Compare Eulerian dust and tracer diagnostics at the same physical parameters."""
-    fig, axes = plt.subplots(3, len(OMEGA_CASES), figsize=(FIGURE_WIDTH, 6.2), sharex="row")
-    fig.subplots_adjust(left=0.10, right=0.985, bottom=0.08, top=0.94, wspace=0.24, hspace=0.38)
+    panel_height = 1.1293  # Inches; keep panels fixed when adjusting row spacing.
+    row_spacing = 0.30
+    bottom_margin, top_margin = 0.416, 0.312  # Inches.
+    figure_height = panel_height * (3 + 2 * row_spacing) + bottom_margin + top_margin
+    fig, axes = plt.subplots(3, len(OMEGA_CASES), figsize=(FIGURE_WIDTH, figure_height), sharex="row")
+    fig.subplots_adjust(
+        left=0.10, right=0.985, bottom=bottom_margin / figure_height,
+        top=1 - top_margin / figure_height, wspace=0.24, hspace=row_spacing,
+    )
     markers = {"linestyle": "None", "marker": "s", "markersize": 3.0, "markeredgewidth": 0.7, "zorder": 2}
     annotation_box = {"boxstyle": "round,pad=0.2", "facecolor": "0.92", "edgecolor": "none"}
 
@@ -200,6 +207,9 @@ def make_comparison_figure(data_dir: Path, output_dir: Path) -> Path:
         profile_ax.set(xlim=(0.0, 1.0), ylim=OMEGA_LIMITS[column], title=title, xlabel=r"$z$")
         for ax in (fluid_ax, tracer_ax):
             ax.set(xlim=(0.0, 5.0), ylim=OMEGA_LIMITS[column], xlabel=r"$t$")
+        for ax in (profile_ax, fluid_ax, tracer_ax):
+            ax.xaxis.labelpad = 0.0
+        fluid_ax.set_ylim(-0.1, 0.5)  # Include the resonant peak near 0.458.
         tracer_ax.set_ylim(-0.55, 0.55)  # Include the resonant minimum below -0.5.
         if column == 0:
             for ax, label in (
@@ -211,7 +221,7 @@ def make_comparison_figure(data_dir: Path, output_dir: Path) -> Path:
     axes[0, 0].set_ylabel("x-velocity")
     axes[1, 0].set_ylabel("dust fluid x-velocity")
     axes[2, 0].set_ylabel("dust tracer x-velocity")
-    axes[0, 0].legend(loc="upper right")
+    axes[0, 0].legend(loc="upper right", bbox_to_anchor=(0.92, 1.0))
 
     output_path = output_dir / "dusty_alfven_omega_comparison.pdf"
     fig.savefig(output_path)
