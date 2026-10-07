@@ -325,7 +325,7 @@ AMRSimulation<WindCloudProblem>::setCustomBoundaryConditions(const amrex::IntVec
     consVar(i, j, k, HydroSystem<WindCloudProblem>::energy_index) = etot_edge;
     consVar(i, j, k, HydroSystem<WindCloudProblem>::internalEnergy_index) = eint_edge;
     consVar(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) = 0.0; // wind boundary carries no cloud tracer
-    consVar(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) = rho * Tracer; // wind boundary carries wind tracer
+    consVar(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) = rho_edge * Tracer; // wind boundary carries wind tracer
 }
 
 
