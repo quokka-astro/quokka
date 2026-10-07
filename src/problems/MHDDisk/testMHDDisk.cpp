@@ -1514,6 +1514,13 @@ void QuokkaSimulation<MHDGalaxy>::ComputeDerivedVar(int lev, std::string const &
 		amrex::Gpu::streamSynchronize();
 		return;
 	}
+
+	// default case
+	auto out_arrs = mf.arrays();
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		out_arrs[bx](i, j, k, ncomp) = NAN;
+	});
+	amrex::Gpu::streamSynchronize();
 }
 
 template <> auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics() -> std::map<std::string, amrex::Real>
