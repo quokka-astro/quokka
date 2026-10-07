@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testThermalConductionPattle.cpp
-/// \brief Defines a test problem for Spitzer thermal conduction (kappa = kappa0*T^2.5) with a Pattle IC.
+/// \file testThermalConductionAnisoPattle.cpp
+/// \brief Defines a test problem for anisotropic Spitzer thermal conduction (kappa = kappa0*T^2.5) with a Pattle IC.
 ///
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
@@ -19,40 +19,38 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
-/** Spitzer thermal conduction test problem  with Pattle IC
-kappa = kappa0*T^2.5. Initial condition is the Pattle (1959) self-similar solution evaluated at
-t = spitzer_t_start. The reference solution is the same Pattle profile evaluated at t = tNew_[0] + spitzer_t_start.
-This test estimates the error across different resolutions and compares the convergence slope against unity.
-Most of the error comes from around the edges of the smooth solution, which drop to 0 at a certain radius.
-Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does
-not have time to move and the energy evolution is purely due to conduction. */
+/** Anisotropic Spitzer thermal conduction test problem with Pattle IC
+kappa_par = kappaPar*T^2.5, kappa_perp = kappaPerp*T^2.5, in a uniform field B = (Bx0, 0, 0).
+The profile varies only along x (parallel to B), so only kappa_par acts and the solution is the 1D Pattle solution
+with kappa0 = kappaPar.*/
 
 constexpr double Eint0 = 2.505e-8;   // peak Eint at the reference resolution nx_ref (equivalent to T = 2.e8 K)
 constexpr double Efloor = 2.505e-11; // numerical representability floor outside the front, equivalent to T = 2.e6 K
 const double rho0 = 0.1;	     // 1/cm^3
 constexpr double Lref = 7.714e+17;   // quarter box length, fixes region of refinement
-constexpr int nx_ref = 128;	     // resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConductionPattle.toml)
+constexpr int nx_ref = 128;	     // resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConductionAnisoPattle.toml)
 constexpr double dx0_ref = 4.0 * Lref / nx_ref;
 constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref; // Normalization
 constexpr double spitzer_t_start = 330471.1321990738;	// initial time at which the IC/reference Pattle solution is evaluated
 constexpr amrex::Real pattle_q = 2.5;			// conductivity exponent: kappa(T) = kappa0 * T^pattle_q (2.5 for Spitzer)
-struct ThermalConductionPattleProblem {};
+constexpr double Bx0 = 1.e-6;				// uniform field along x, in Quokka's code units (E_mag = B^2 / 2, i.e. B_Gauss / sqrt(4 pi))
+struct ThermalConductionAnisoPattleProblem {};
 
-template <> struct quokka::EOS_Traits<ThermalConductionPattleProblem> {
+template <> struct quokka::EOS_Traits<ThermalConductionAnisoPattleProblem> {
 	static constexpr double gamma = 2.0;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct HydroSystem_Traits<ThermalConductionPattleProblem> {
+template <> struct HydroSystem_Traits<ThermalConductionAnisoPattleProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<ThermalConductionPattleProblem> : DefaultPhysicsTraits {
+template <> struct Physics_Traits<ThermalConductionAnisoPattleProblem> : DefaultPhysicsTraits {
 	// cell-centred
-	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr ConductionModel conduction_model = ConductionModel::spitzer;
-	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::isotropic;
+	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::anisotropic;
 };
 
 namespace
@@ -61,8 +59,8 @@ namespace
 // Note that even in 3D the reference solution is for dimension = 1 because of the problem set up.
 AMREX_GPU_HOST_DEVICE auto computePattleSolution(amrex::Real rho, amrex::Real kappa0, amrex::Real t, amrex::Real xlow, amrex::Real xhigh) -> amrex::Real
 {
-	const amrex::Real A = quokka::EOS<ThermalConductionPattleProblem>::ComputeEintFromTgas(rho, 1.0); // A = mu * mp/rho/kb
-	const amrex::Real D0 = kappa0 / A;								  // D(T) = D0 * T^pattle_q
+	const amrex::Real A = quokka::EOS<ThermalConductionAnisoPattleProblem>::ComputeEintFromTgas(rho, 1.0); // A = mu * mp/rho/kb
+	const amrex::Real D0 = kappa0 / A;								       // D(T) = D0 * T^pattle_q
 	const amrex::Real Q0 = M0 / A;
 	const amrex::Real Gamma_num = std::tgamma(1.0 / pattle_q + 1.5);
 	const amrex::Real Gamma_den = std::tgamma(1.0 / pattle_q + 1.0);
@@ -78,13 +76,13 @@ AMREX_GPU_HOST_DEVICE auto computePattleSolution(amrex::Real rho, amrex::Real ka
 	if (std::abs(x) <= r1) {
 		const amrex::Real base = 1.0 - (x / r1) * (x / r1);
 		const amrex::Real T = std::pow(base, 1.0 / pattle_q) * Tscale;
-		Eint = quokka::EOS<ThermalConductionPattleProblem>::ComputeEintFromTgas(rho, T);
+		Eint = quokka::EOS<ThermalConductionAnisoPattleProblem>::ComputeEintFromTgas(rho, T);
 	}
 	return Eint;
 }
 } // namespace
 
-template <> void QuokkaSimulation<ThermalConductionPattleProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<ThermalConductionAnisoPattleProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
@@ -93,6 +91,7 @@ template <> void QuokkaSimulation<ThermalConductionPattleProblem>::setInitialCon
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 	const amrex::Real kappa0 = conductivityParams_.kappa0_par;
+	const amrex::Real Emag = 0.5 * Bx0 * Bx0; // matches HydroSystem::ComputeMagneticEnergy (0.5 B^2)
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -104,13 +103,29 @@ template <> void QuokkaSimulation<ThermalConductionPattleProblem>::setInitialCon
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
 
-		state_cc(i, j, k, HydroSystem<ThermalConductionPattleProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<ThermalConductionPattleProblem>::energy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<ThermalConductionPattleProblem>::internalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoPattleProblem>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoPattleProblem>::energy_index) = Eint + Emag;
+		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoPattleProblem>::internalEnergy_index) = Eint;
 	});
 }
 
-template <> void QuokkaSimulation<ThermalConductionPattleProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ThermalConductionAnisoPattleProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+	const amrex::Real bval = (dir == quokka::direction::x) ? Bx0 : 0.0;
+
+	const int ncomp_fc = Physics_Indices<ThermalConductionAnisoPattleProblem>::nvarPerDim_fc;
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		for (int n = 0; n < ncomp_fc; ++n) {
+			state_fc(i, j, k, n) = 0.0; // fill unused quantities with zeros
+		}
+		state_fc(i, j, k, MHDSystem<ThermalConductionAnisoPattleProblem>::bfield_index) = bval;
+	});
+}
+
+template <> void QuokkaSimulation<ThermalConductionAnisoPattleProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for testing AMR near the Pattle front
 	const double refine_Lmax = Lref;
@@ -158,12 +173,14 @@ template <> void QuokkaSimulation<ThermalConductionPattleProblem>::refineGrid(in
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionPattleProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-										amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+void QuokkaSimulation<ThermalConductionAnisoPattleProblem>::computeReferenceSolution(amrex::MultiFab &ref,
+										     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+										     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 	const amrex::Real kappa0 = conductivityParams_.kappa0_par;
 	const amrex::Real t = tNew_[0] + spitzer_t_start;
+	const amrex::Real Emag = 0.5 * Bx0 * Bx0;
 
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -179,12 +196,37 @@ void QuokkaSimulation<ThermalConductionPattleProblem>::computeReferenceSolution(
 				stateExact(i, j, k, n) = 0.;
 			}
 
-			stateExact(i, j, k, HydroSystem<ThermalConductionPattleProblem>::density_index) = rho;
-			stateExact(i, j, k, HydroSystem<ThermalConductionPattleProblem>::energy_index) = Eint_exact;
-			stateExact(i, j, k, HydroSystem<ThermalConductionPattleProblem>::internalEnergy_index) = Eint_exact;
-			stateExact(i, j, k, HydroSystem<ThermalConductionPattleProblem>::x1Momentum_index) = 0.0;
-			stateExact(i, j, k, HydroSystem<ThermalConductionPattleProblem>::x2Momentum_index) = 0.;
-			stateExact(i, j, k, HydroSystem<ThermalConductionPattleProblem>::x3Momentum_index) = 0.;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoPattleProblem>::density_index) = rho;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoPattleProblem>::energy_index) = Eint_exact + Emag;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoPattleProblem>::internalEnergy_index) = Eint_exact;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoPattleProblem>::x1Momentum_index) = 0.0;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoPattleProblem>::x2Momentum_index) = 0.;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoPattleProblem>::x3Momentum_index) = 0.;
+		});
+	}
+	amrex::Gpu::streamSynchronize();
+}
+
+template <>
+void QuokkaSimulation<ThermalConductionAnisoPattleProblem>::computeReferenceSolution_fc(amrex::MultiFab &ref,
+											amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+											amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+											quokka::direction const dir)
+{
+	amrex::ignore_unused(dx, prob_lo);
+	// conduction does not change B, so the exact solution is the initial field B = (Bx0, 0, 0)
+	const amrex::Real B_exact = (dir == quokka::direction::x) ? Bx0 : 0.0;
+	const int ncomp_fc = Physics_Indices<ThermalConductionAnisoPattleProblem>::nvarPerDim_fc;
+
+	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateExact = ref.array(iter);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			for (int n = 0; n < ncomp_fc; ++n) {
+				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
+			}
+			stateExact(i, j, k, MHDSystem<ThermalConductionAnisoPattleProblem>::bfield_index) = B_exact;
 		});
 	}
 	amrex::Gpu::streamSynchronize();
@@ -217,7 +259,7 @@ auto runConductionTest(int nx) -> double
 	pp_geom.addarr("is_periodic", is_periodic);
 
 	// Setup boundary conditions
-	constexpr int ncomp_cc = Physics_Indices<ThermalConductionPattleProblem>::nvarTotal_cc;
+	constexpr int ncomp_cc = Physics_Indices<ThermalConductionAnisoPattleProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
@@ -226,8 +268,20 @@ auto runConductionTest(int nx) -> double
 		}
 	}
 
+	// The field is uniform, so the ghost faces must copy it. reflect_odd on the tangential components
+	// (a conducting wall) would set Bx -> -Bx in the y/z ghost cells, zeroing the corner-averaged bhat on those walls
+	// and suppressing parallel conduction in the boundary planes.
+	const int nvars_fc = Physics_Indices<ThermalConductionAnisoPattleProblem>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::foextrap);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::foextrap);
+		}
+	}
+
 	// Problem initialization
-	QuokkaSimulation<ThermalConductionPattleProblem> sim(BCs_cc);
+	QuokkaSimulation<ThermalConductionAnisoPattleProblem> sim(BCs_cc, BCs_fc);
 
 	sim.cflNumber_ = 0.3;
 	sim.stopTime_ = max_time;
@@ -236,13 +290,22 @@ auto runConductionTest(int nx) -> double
 	sim.setInitialConditions();
 
 	sim.evolve();
-	return sim.computeErrorNorm();
+
+	// The combined computeErrorNorm() mixes components with very different units (its denominator is dominated by |Bx|),
+	// so use the relative L1 error of the internal energy, which is the quantity conduction evolves.
+	double eint_rel_err = NAN;
+	for (const auto &[name, abs_err, rel_err, ref_norm] : sim.computeComponentErrors()) {
+		if (name == "gasInternalEnergy") {
+			eint_rel_err = rel_err;
+		}
+	}
+	return eint_rel_err;
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionPattleProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-									 amrex::MultiFab const &state_cc,
-									 amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+void QuokkaSimulation<ThermalConductionAnisoPattleProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+									      amrex::MultiFab const &state_cc,
+									      amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
@@ -253,9 +316,9 @@ void QuokkaSimulation<ThermalConductionPattleProblem>::ComputeDerivedVar(int /*l
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
 			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				Real const rho = state(i, j, k, HydroSystem<ThermalConductionPattleProblem>::density_index);
-				Real const Eint = HydroSystem<ThermalConductionPattleProblem>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
-				Real const Tgas = quokka::EOS<ThermalConductionPattleProblem>::ComputeTgasFromEint(rho, Eint);
+				Real const rho = state(i, j, k, HydroSystem<ThermalConductionAnisoPattleProblem>::density_index);
+				Real const Eint = HydroSystem<ThermalConductionAnisoPattleProblem>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
+				Real const Tgas = quokka::EOS<ThermalConductionAnisoPattleProblem>::ComputeTgasFromEint(rho, Eint);
 				output(i, j, k, ncomp) = Tgas;
 			});
 		}
@@ -296,14 +359,14 @@ auto problem_main() -> int
 	constexpr double tolerance = 0.0;
 	constexpr double passThreshold = -(expectedRate - tolerance);
 	amrex::Print() << std::format(
-	    "Spitzer+Pattle conduction convergence: slope = {:.4f} ({:.1f} expected, converging faster is fine, pass threshold = {:.4f})\n", slope,
+	    "Anisotropic Spitzer+Pattle conduction convergence: slope = {:.4f} ({:.1f} expected, converging faster is fine, pass threshold = {:.4f})\n", slope,
 	    -expectedRate, passThreshold);
 	bool const passed = slope <= passThreshold;
 
 	if (passed) {
-		amrex::Print() << "\n✓ Thermal conduction (spitzer, Pattle) test PASSED\n";
+		amrex::Print() << "\n✓ Thermal conduction (anisotropic spitzer, Pattle) test PASSED\n";
 		return 0;
 	}
-	amrex::Print() << "\n✗ Thermal conduction (spitzer, Pattle) test FAILED\n";
+	amrex::Print() << "\n✗ Thermal conduction (anisotropic spitzer, Pattle) test FAILED\n";
 	return 1;
 }

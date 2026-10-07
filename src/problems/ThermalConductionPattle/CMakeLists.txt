@@ -1,1 +1,1 @@
-quokka_add_problem(JOB_NAME ThermalConductionPattle)
+quokka_add_problem(JOB_NAME ThermalConductionPattle PRIORITY 100)
