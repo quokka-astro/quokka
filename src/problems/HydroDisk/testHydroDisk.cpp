@@ -943,7 +943,7 @@ template <> void QuokkaSimulation<HDGalaxy>::computeAfterTimestep()
 
 template <>
 void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-						   amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &/*state_fc*/) const
+						   amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	constexpr double cs_disk = quokka::EOS_Traits<HDGalaxy>::cs_disk;
 	constexpr double cs_cgm = quokka::EOS_Traits<HDGalaxy>::cs_cgm;
