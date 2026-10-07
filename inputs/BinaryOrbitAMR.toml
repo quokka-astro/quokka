@@ -15,10 +15,16 @@ amr.v = 1  # verbosity in Amr
 # *****************************************************************
 amr.n_cell = [32, 32, 32]
 amr.max_level = 1  # number of levels = max_level + 1
-amr.blocking_factor = 32  # grid size must be divisible by this
+amr.blocking_factor = 8   # in level-1 cells; small enough that the x >= 0 tag survives blocking
 amr.max_grid_size = 32  # at least 128 for GPUs
 amr.n_error_buf = 3  # minimum 3 cell buffer around tagged cells
 amr.grid_eff = 1.0
+
+# Static mesh refinement: level 1 covers the x >= 0 half of the domain, so the binary
+# orbits across a fixed coarse/fine boundary at x = 0 in addition to the refinement that
+# follows the particles. This exercises gravitational self-force errors at the refinement
+# boundary (Zhu & Gnedin 2021, arXiv:2104.10170).
+problem.refine_x_min = 0.0
 
 cfl = 0.3
 max_timesteps = 2000
