@@ -156,9 +156,9 @@ inline auto interpolate_turbulence(const amrex::Real *table, int nx, int ny, int
 	const int j1 = amrex::min(j0 + 1, ny - 1);
 	const int k1 = amrex::min(k0 + 1, nz - 1);
 
-	amrex::Real fx = x - i0;
-	amrex::Real fy = y - j0;
-	amrex::Real fz = z - k0;
+	const amrex::Real fx = x - i0;
+	const amrex::Real fy = y - j0;
+	const amrex::Real fz = z - k0;
 
 	// Row-major (C-order) with k fastest-varying, matching fieldgen_mpi/fieldgen3.c's
 	// writeData(): the loop nest is i (outer) -> j -> k (contiguous fwrite of `ngrid`
