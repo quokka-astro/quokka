@@ -426,6 +426,25 @@ In each of the three tests, the simulation is run twice, one initially at rest a
 
 The `RandomBlast` problem provides a testbed for multiple SN explosions with various ambient conditions and bulk flows.
 
+## Stochastic stellar population chemistry components
+
+When `Particle_Traits<problem_t>::enable_chemical_feedback` is enabled, chemistry
+components follow the ordinary particle fields and any luminosity components.
+Their block order is `total`, `SNII`, `WR`, then `AGB`, independent of which
+feedback channels are enabled at runtime.
+
+Within each block, slots follow the configured tracked-isotope order. Names use
+`chem_birth_<block>_<isotope>`, for example `chem_birth_total_C12`,
+`chem_birth_SNII_C12`, `chem_birth_WR_C12`, and `chem_birth_AGB_C12`.
+These fields store birth abundances, not the subsequently accumulated ejecta.
+
+`StochasticStellarPopParticleChemistryBlockCapacity<problem_t>()` is the storage
+stride of each block, equal to `numPassiveScalars` when chemical feedback storage
+is enabled, and zero otherwise. It is not the number of tracked isotopes. Reserved
+slots beyond the isotope list use `unused_<index>`, with a zero-based slot index;
+for three tracked isotopes, the next total-block component is
+`chem_birth_total_unused_3`.
+
 ## Star Particle Type (modular stellar evolution)
 
 Star particles (`ParticleSwitch::Star`) represent individual stars whose radius and

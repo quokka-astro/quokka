@@ -233,6 +233,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
 	amrex::Real conductionCFL = 0.2;	      // default
 	int enableElectronConduction_ = 0;	      // default
+	std::string conductionType_ = "constant";     // "constant" or "spitzer"; controls the conduction timestep estimate
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
@@ -457,6 +458,23 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	/// @param geom The geometry data
 	template <int dir>
 	AMREX_GPU_DEVICE static void setDiodeBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom);
+
+	/// Problem hook: select the boundaries that use the MHD diode boundary condition (see applyMHDDiodeBC).
+	/// @param dir The boundary dimension (0=x, 1=y, 2=z)
+	/// @param side 0 for the lower boundary, 1 for the upper boundary
+	/// @return true if this boundary uses the MHD diode boundary condition (default: false)
+	static auto isMHDDiodeBoundary(int dir, int side) -> bool; // template specialized by problem generator
+
+	/// Fill the face-centred magnetic field in the ghost cells of MHD diode boundaries.
+	/// Must be called after the cell-centred fill (which must use setDiodeBCLo/Hi on these boundaries) and the face-centred fill.
+	/// Transverse B is copied from the first valid cell (outflow) or mirrored with the same sign (inflow); a transverse ghost face
+	/// is treated as inflow if either adjacent column is inflow. The normal B on the ghost faces is then integrated outward from the
+	/// boundary face so that div B = 0 in every ghost cell. The boundary face itself is valid data and is never written.
+	/// Finally, the ghost total energy is corrected so that the ghost pressure equals the pressure of its source cell.
+	/// @param state_cc The cell-centred state (ghost cells already filled)
+	/// @param state_fc The face-centred state (ghost faces already filled)
+	/// @param lev The AMR level
+	void applyMHDDiodeBC(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev);
 
 	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension for face variables.
 	/// @tparam boundary_dim The dimension to check for boundaries (0=x, 1=y, 2=z)
@@ -830,11 +848,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	amrex::Print() << std::format("\tAMReX-Hydro git: {}\n", AMREX_HYDRO_GIT_HASH);
 #endif
 	amrex::Print() << std::format("\tTurbGen git: {}\n", TURBULENCE_GIT_HASH);
-
-	// add units and physics-specific metadata
-	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		initializeSimulationMetadata();
-	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
@@ -902,7 +915,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	const amrex::ParmParse pp;
 	pp.query("do_tracers", do_tracers);
 
-	EMFComputeScheme emf_compute_scheme = EMFComputeScheme::FelkerStone2017;
+	EMFComputeScheme emf_compute_scheme = EMFComputeScheme::FelkerStone2018;
 	EMFAvgScheme emf_avg_scheme = EMFAvgScheme::LondrilloDelZanna2004;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		amrex::ParmParse const mhd_pp("mhd");
@@ -1284,13 +1297,84 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	if (enableElectronConduction_ == 1) {
-		double c_v = C::k_B / (::quokka::EOS_Traits<problem_t>::mean_molecular_weight * (::quokka::EOS_Traits<problem_t>::gamma - 1.0));
-		double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
-		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient / AMREX_SPACEDIM;
-		conduction_dt.index = domain_signal_maxloc;
-		if (verbose) {
-			amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
-			amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
+		if (conductionType_ == "constant") {
+			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+			double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
+			conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
+			conduction_dt.index = domain_signal_maxloc;
+
+			if (verbose) {
+				amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
+				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
+							      formatIntVect(conduction_dt.index));
+			}
+		} else {							  // conductionType_ == "spitzer"
+			auto const &state_mf = state_new_cc_[lev].const_arrays(); // MultiFab containing the cell-centered state
+			auto const &state_fc_x0 = state_new_fc_[lev][0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+			auto const &state_fc_x1 = state_new_fc_[lev][1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+			auto const &state_fc_x2 = state_new_fc_[lev][2].const_arrays();
+#endif
+
+			amrex::Real cfl = conductionCFL;
+			const amrex::Real kappa0 = electronConductionKappa0_;
+			const amrex::Real t_min = tempFloor_;
+
+			// Use amrex::ParReduce to find the minimum dt and its location across all GPU threads
+			auto r = amrex::ParReduce(
+			    amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{}, state_new_cc_[lev],
+			    amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
+				    auto const &cons = state_mf[bx];
+				    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
+				    amrex::ignore_unused(state_fc_x0
+#if AMREX_SPACEDIM >= 2
+							 ,
+							 state_fc_x1
+#endif
+#if AMREX_SPACEDIM == 3
+							 ,
+							 state_fc_x2
+#endif
+				    );
+				    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					    local_state_fc[0] = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+					    local_state_fc[1] = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+					    local_state_fc[2] = state_fc_x2[bx];
+#endif
+				    }
+
+				    amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+				    amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
+				    auto const massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+				    amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars));
+
+				    amrex::Real const kappa_spitzer = kappa0 * std::pow(T, 2.5);
+				    double heat_capacity = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T, massScalars);
+				    amrex::Real const diffusion_coefficient = kappa_spitzer / heat_capacity;
+
+				    // Avoid division by zero for unphysical states
+				    amrex::Real cell_dt = std::numeric_limits<amrex::Real>::max();
+				    if (diffusion_coefficient > 0.0) {
+					    cell_dt = cfl * (dx_min * dx_min) / diffusion_coefficient;
+				    }
+
+				    return {.value = cell_dt, .index = amrex::IntVect{AMREX_D_DECL(i, j, k)}};
+			    });
+
+			// Extract the global reduction results
+			conduction_dt = r;
+			amrex::ParallelAllReduce::Min(conduction_dt, amrex::ParallelContext::CommunicatorSub());
+
+			if (verbose) {
+				amrex::Print() << std::format("...[level {}] \testimated Spitzer conduction timestep: {:e}\n", lev, conduction_dt.value);
+				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
+							      formatIntVect(conduction_dt.index));
+			}
 		}
 	}
 
@@ -2142,6 +2226,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;
 
+	particleRegister_.updateChemicalFeedback(state_new_cc_[lev], lev, time, dt);
+
 	// Enforce floors and limits on hydro state to ensure we have valid hydro states
 	FixupState(lev);
 
@@ -2190,6 +2276,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	if (finest_level == max_level) {
 		particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 	}
+
+	// SNII and AGB yields are injected at death; continuous WR feedback precedes accretion and particle creation.
+	particleRegister_.depositChemicalFeedback(state_new_cc_[lev], lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
@@ -2366,7 +2455,6 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 	if ((fr_as_crse == nullptr) && (fr_as_fine == nullptr)) {
 		return;
 	}
-
 	const auto dx = geom[lev].CellSizeArray();
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> face_area{};
 
@@ -2975,6 +3063,127 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			}
 		}
 	}
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::isMHDDiodeBoundary(int /*dir*/, int /*side*/) -> bool
+{
+	// user should implement if needed using template specialization
+	return false;
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::applyMHDDiodeBC(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev)
+{
+#if (AMREX_SPACEDIM == 3)
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		constexpr int bIdx = Physics_Indices<problem_t>::mhdFirstIndex;
+		amrex::Box const &domain = geom[lev].Domain();
+		auto const dx = geom[lev].CellSizeArray();
+
+		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+			for (int side = 0; side < 2; ++side) {
+				if (!isMHDDiodeBoundary(d, side)) {
+					continue;
+				}
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!geom[lev].isPeriodic(d), "MHD diode boundary set on a periodic dimension!");
+
+				// outward normal sign, and index of the first valid cell next to the boundary
+				int const sgn = (side == 0) ? -1 : 1;
+				int const icell = (side == 0) ? domain.smallEnd(d) : domain.bigEnd(d);
+				int const momIdx = HydroSystem<problem_t>::x1Momentum_index + d;
+				amrex::GpuArray<int, 2> const tdirs = {(d + 1) % 3, (d + 2) % 3};
+
+				for (amrex::MFIter mfi(state_cc); mfi.isValid(); ++mfi) {
+					// ghost cells of this fab that lie outside the domain on this boundary
+					amrex::Box const ccbox = state_cc[mfi].box();
+					amrex::Box slab = ccbox;
+					if (side == 0) {
+						slab.setBig(d, domain.smallEnd(d) - 1);
+					} else {
+						slab.setSmall(d, domain.bigEnd(d) + 1);
+					}
+					if (!slab.ok()) {
+						continue;
+					}
+					int const ng = slab.length(d);
+
+					auto const &cc = state_cc.array(mfi);
+					std::array<amrex::Array4<amrex::Real>, 3> const fc = {state_fc[0].array(mfi), state_fc[1].array(mfi),
+											      state_fc[2].array(mfi)};
+
+					// the same inflow/outflow rule as setDiodeBCLo/Hi, evaluated on the first valid cell of the column
+					auto const isInflow = [=] AMREX_GPU_DEVICE(amrex::IntVect col) -> bool {
+						col[d] = icell;
+						amrex::Real const mom = cc(col, momIdx);
+						return (side == 0) ? !(mom < 0.0) : !(mom > 0.0);
+					};
+
+					// 1. transverse B on ghost faces: copy (outflow) or mirror with the same sign (inflow)
+					for (int n = 0; n < 2; ++n) {
+						int const t = tdirs[n];
+						amrex::Box const tbox = amrex::surroundingNodes(slab, t) & state_fc[t][mfi].box();
+						auto const &bt = fc[t];
+						amrex::ParallelFor(tbox, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+							amrex::IntVect const iv(i, j, k);
+							amrex::IntVect col_lo = iv;
+							col_lo[t] -= 1;
+							// a face shared by an inflow and an outflow column is treated as inflow
+							bool const inflow =
+							    (ccbox.contains(iv) && isInflow(iv)) || (ccbox.contains(col_lo) && isInflow(col_lo));
+							int const m = sgn * (iv[d] - icell);
+							amrex::IntVect src = iv;
+							src[d] = inflow ? (icell - sgn * (m - 1)) : icell;
+							bt(iv, bIdx) = bt(src, bIdx);
+						});
+					}
+
+					// 2. normal B on ghost faces: integrate div B = 0 outward, starting from the boundary face
+					amrex::Box tslab = slab;
+					tslab.setRange(d, icell);
+					auto const &bn = fc[d];
+					amrex::ParallelFor(tslab, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						amrex::IntVect c(i, j, k);
+						for (int m = 1; m <= ng; ++m) {
+							c[d] = icell + sgn * m;
+							amrex::Real div_t = 0.0;
+							for (int n = 0; n < 2; ++n) {
+								int const t = tdirs[n];
+								amrex::IntVect cp = c;
+								cp[t] += 1;
+								div_t += (fc[t](cp, bIdx) - fc[t](c, bIdx)) / dx[t];
+							}
+							// lower side: new face is the left face of c; upper side: new face is the right face of c
+							amrex::IntVect f_new = c;
+							amrex::IntVect f_known = c;
+							if (side == 0) {
+								f_known[d] += 1;
+							} else {
+								f_new[d] += 1;
+							}
+							bn(f_new, bIdx) = bn(f_known, bIdx) - sgn * dx[d] * div_t;
+						}
+					});
+
+					// 3. keep the ghost pressure equal to the source-cell pressure: replace the source magnetic energy
+					//    contained in the copied/mirrored total energy by the magnetic energy of the ghost cell
+					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const fc_const = {
+					    state_fc[0].const_array(mfi), state_fc[1].const_array(mfi), state_fc[2].const_array(mfi)};
+					amrex::ParallelFor(slab, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						amrex::IntVect const c(i, j, k);
+						int const m = sgn * (c[d] - icell);
+						amrex::IntVect src = c;
+						src[d] = isInflow(c) ? (icell - sgn * (m - 1)) : icell;
+						amrex::Real const eb_ghost = ComputeCellCenteredMagneticEnergy<problem_t>(c[0], c[1], c[2], fc_const);
+						amrex::Real const eb_src = ComputeCellCenteredMagneticEnergy<problem_t>(src[0], src[1], src[2], fc_const);
+						cc(c, HydroSystem<problem_t>::energy_index) += eb_ghost - eb_src;
+					});
+				}
+			}
+		}
+	}
+#else
+	amrex::ignore_unused(state_cc, state_fc, lev);
+#endif
 }
 
 template <typename problem_t>
@@ -3650,7 +3859,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 	detail::verify_particle_switch_type<problem_t>();
 
 	// Read particle parameters from input file
-	quokka::particleParmParse();
+	quokka::particleParmParse<problem_t>();
 
 	// Sink and Star both accrete via the same accretion-rate buffer (see particleMeshInteraction).
 	// Enabling both would double-apply gas removal: computeSinkAccretion accumulates into the shared

@@ -123,6 +123,8 @@ template <typename problem_t> struct ISM_Traits {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr bool thermal_band_photochemistry = false;
+	static constexpr bool dust_chemical_band_absorption = false;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -223,6 +225,14 @@ template <typename problem_t> struct RadSystem_NChemBands<problem_t, std::void_t
 	static constexpr int value = static_cast<int>(decltype(RadSystem_Traits<problem_t>::ChemBands())::size()) - 1;
 };
 
+template <typename problem_t, typename = void> struct RadSystem_EnergyUnit {
+	static constexpr double value = C::ev2erg;
+};
+
+template <typename problem_t> struct RadSystem_EnergyUnit<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::energy_unit)>> {
+	static constexpr double value = RadSystem_Traits<problem_t>::energy_unit;
+};
+
 /// Class for the radiation moment equations
 ///
 template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
@@ -291,6 +301,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr bool enable_dust_gas_thermal_coupling_model_ = ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
+	static constexpr bool thermal_band_photochemistry_ = ISM_Traits<problem_t>::thermal_band_photochemistry;
+	static constexpr bool dust_chemical_band_absorption_ = ISM_Traits<problem_t>::dust_chemical_band_absorption;
+	static_assert(!dust_chemical_band_absorption_ || enable_dust_gas_thermal_coupling_model_,
+		      "ISM_Traits::dust_chemical_band_absorption requires ISM_Traits::enable_dust_gas_thermal_coupling_model = true, "
+		      "otherwise the dust-absorbed chemical-band energy (Q_dust) is silently dropped.");
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	// Chemical (ionizing) bands occupy the LAST NChemBands groups; the leading nGroupsThermal_ groups
@@ -332,6 +347,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(RadSystem_NChemBands<problem_t>::value >= 0 && RadSystem_NChemBands<problem_t>::value <= nGroups_,
 		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
 
+#ifdef PHOTOCHEMISTRY
+	static_assert(RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
+		      "ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg when PHOTOCHEMISTRY is enabled.");
+#endif
+
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
 
@@ -349,6 +369,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	}();
 
 	// static functions
+
+	static auto GetThermalBandQuanta(int group_index) -> amrex::Real;
 
 #ifdef PHOTOCHEMISTRY
 	AMREX_GPU_HOST_DEVICE static auto GetChemBandQuanta(int group_index) -> amrex::Real;
@@ -404,6 +426,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
 					     amrex::Real dt_implicit, double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h,
 					     double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter,
+					     amrex::Array4<const amrex::Real> const &dustHeatingSource,
 					     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
 
 	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
@@ -479,7 +502,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_DEVICE static auto
 	ComputeDustTemperatureBateKeto(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
-				       double R_sum, int n_step,
+				       double R_sum, int n_step, double Q_dust,
 				       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{}) -> double;
 
 	AMREX_GPU_DEVICE static auto
@@ -520,21 +543,25 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff,
 								  quokka::valarray<double, nGroups_> const &Erad_diff,
 								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-								  double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v,
+								  double Q_dust, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v,
 								  double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
 								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt)
 	    -> JacobianResult<problem_t>;
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustDecoupled(
-	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
-	    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
-	    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
+	AMREX_GPU_DEVICE static auto
+	ComputeJacobianForGasAndDustDecoupled(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
+					      quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double Q_dust,
+					      double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
+					      quokka::valarray<double, nGroups_> const &kappaPoverE,
+					      quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustWithPE(
-	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad, quokka::valarray<double, nGroups_> const &Erad0,
-	    double PE_heating_energy_derivative, quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double coeff_n,
-	    quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
-	    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt) -> JacobianResult<problem_t>;
+	AMREX_GPU_DEVICE static auto
+	ComputeJacobianForGasAndDustWithPE(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad,
+					   quokka::valarray<double, nGroups_> const &Erad0, double PE_heating_energy_derivative,
+					   quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double Q_dust,
+					   double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
+					   quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t,
+					   double num_den, double dt) -> JacobianResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto
 	SolveGasRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
@@ -547,7 +574,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 									 double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
 									 int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
 									 quokka::valarray<double, nGroups_> const &vel_times_F,
-									 quokka::valarray<double, nGroups_> const &Src,
+									 quokka::valarray<double, nGroups_> const &Src, double Q_dust,
 									 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol,
 									 double rel_change_tol, double tempFloor, int *p_iteration_counter,
 									 int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
@@ -556,7 +583,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 									       double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
 									       int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
 									       quokka::valarray<double, nGroups_> const &vel_times_F,
-									       quokka::valarray<double, nGroups_> const &Src,
+									       quokka::valarray<double, nGroups_> const &Src, double Q_dust,
 									       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol,
 									       double rel_change_tol, double tempFloor, int *p_iteration_counter,
 									       int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
@@ -833,13 +860,36 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 	});
 }
 
+template <typename problem_t> auto RadSystem<problem_t>::GetThermalBandQuanta(int const group_index) -> amrex::Real
+{
+	AMREX_ASSERT(group_index >= 0 && group_index < nGroupsThermal_);
+	return 0.5 * (radBoundaries_[group_index] + radBoundaries_[group_index + 1]) * C::ev2erg;
+}
+
 #ifdef PHOTOCHEMISTRY
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
 {
-	auto const freq_bounds = RadSystem_Traits<problem_t>::ChemBands();
-	amrex::Real freq_low = freq_bounds[group_index];
-	amrex::Real freq_high = freq_bounds[group_index + 1];
-	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
+	auto const ev_bounds = RadSystem_Traits<problem_t>::ChemBands();
+	amrex::Real const ev_low = ev_bounds[group_index];
+	amrex::Real const ev_high = ev_bounds[group_index + 1];
+
+	amrex::Real const alpha = RadSystem_Traits<problem_t>::ChemBandsPowerLawIndex();
+
+	amrex::Real ev_avg = NAN;
+	if (std::isinf(ev_high)) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alpha < 0.0, "GetChemBandQuanta: an open-topped chemistry band only has a "
+							      "finite average photon energy for power_law_index < 0");
+		ev_avg = ev_low * (1.0 - 1.0 / alpha);
+	} else if (alpha == 0.0) {
+		ev_avg = ev_low * ev_high * std::log(ev_high / ev_low) / (ev_high - ev_low);
+	} else if (alpha == 1.0) {
+		ev_avg = (ev_high - ev_low) / std::log(ev_high / ev_low);
+	} else {
+		ev_avg = ((alpha - 1.0) / alpha) * (std::pow(ev_high, alpha) - std::pow(ev_low, alpha)) /
+			 (std::pow(ev_high, alpha - 1.0) - std::pow(ev_low, alpha - 1.0));
+	}
+
+	return ev_avg * C::ev2erg;
 }
 #endif
 
@@ -882,7 +932,7 @@ template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendR
 	for (int g = 0; g < nGroups_; ++g) {
 		auto E_r = cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_];
 		// If E_r is NaN or below floor, set to floor
-		if (E_r < Erad_floor_) {
+		if (!(E_r >= Erad_floor_)) {
 			cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_] = Erad_floor_;
 			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
 			cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
@@ -1630,14 +1680,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	const double rel_change_tol = 1.0e-6;
 	const int max_iter_td = 100;
 
-	// Tolerance scale. The caller passes the physical scale its residual should be measured against, but for
-	// the dust temperature that scale is the gas-dust collisional term, which vanishes identically when the
-	// coupling coefficient is set to zero. The tolerance would then be zero and could never be met. Fall
-	// back to the size of the initial residual so the criterion degrades to a relative reduction instead of
-	// something unsatisfiable.
+	// The caller passes `compare`, the physical scale the residual is measured against. It must be positive:
+	// a zero scale makes the convergence test unsatisfiable.
+	AMREX_ASSERT(compare > 0.0);
+
 	const double f0 = rhs(x0);
-	const double scale = std::max(compare, std::abs(f0));
-	if (std::abs(f0) < rel_tol * scale) {
+	if (std::abs(f0) < rel_tol * compare) {
 		return x0;
 	}
 
@@ -1688,7 +1736,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	int iter_Td = 0;
 	for (; iter_Td < max_iter_td; ++iter_Td) {
 		const double the_rhs = rhs(x);
-		if (std::abs(the_rhs) < rel_tol * scale) {
+		if (std::abs(the_rhs) < rel_tol * compare) {
 			break;
 		}
 
@@ -1727,10 +1775,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(double const T_gas, double const T_d_init, double const rho,
 									   quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, double R_sum,
-									   int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double
+									   int n_step, const double Q_dust,
+									   amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double
 {
+	constexpr double c_hat_over_c = RadSystem_Traits<problem_t>::c_hat_over_c;
 	if (n_step > 0) {
-		const auto T_d = T_gas - R_sum / (N_d * std::sqrt(T_gas));
+		const auto T_d = T_gas - (R_sum - c_hat_over_c * Q_dust) / (N_d * std::sqrt(T_gas));
 		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 		return T_d;
 	}
@@ -1743,7 +1793,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		}
 	}
 
-	// the RHS of the equation 0 = c_hat_ dt rho (kappa_E * E_g - kappa_P * B_g) + N_d sqrt(T_gas) (T_gas - T_d)
+	// the RHS of the equation 0 = c_hat_ dt rho (kappa_E * E_g - kappa_P * B_g) + N_d sqrt(T_gas) (T_gas - T_d) + Q_dust
 	auto rhs = [=](double T_d) -> double {
 		double LHS = NAN;
 
@@ -1751,18 +1801,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 			const auto fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
 			const auto kappaE = ComputeEnergyMeanOpacity(rho, T_d);
 			const auto kappaP = ComputePlanckOpacity(rho, T_d);
-			LHS = c_hat_ * dt * rho * (kappaE * Erad[0] - kappaP * fourPiBoverC) + N_d * std::sqrt(T_gas) * (T_gas - T_d);
+			LHS = c_hat_ * dt * rho * (kappaE * Erad[0] - kappaP * fourPiBoverC) + N_d * std::sqrt(T_gas) * (T_gas - T_d) + Q_dust * c_hat_over_c;
 		} else {
 			const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
 			const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
-			LHS =
-			    c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad - opacity_terms.kappaP * fourPiBoverC) + N_d * std::sqrt(T_gas) * (T_gas - T_d);
+			LHS = c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad - opacity_terms.kappaP * fourPiBoverC) +
+			      N_d * std::sqrt(T_gas) * (T_gas - T_d) + Q_dust * c_hat_over_c;
 		}
 
 		return LHS;
 	};
 
-	// the Jacobian of the RHS of the equation 0 = c_hat_ dt rho (kappa_E * E_g - kappa_P * B_g) + N_d sqrt(T_gas) (T_gas - T_d)
+	// the Jacobian of the RHS of the equation 0 = c_hat_ dt rho (kappa_E * E_g - kappa_P * B_g) + N_d sqrt(T_gas) (T_gas - T_d) + Q_dust
 	auto jac = [=](double T_d) -> double {
 		double dLHS_dTd = NAN;
 
@@ -1780,7 +1830,21 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		return dLHS_dTd;
 	};
 
-	const double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas;
+	// Scale for the convergence test. The residual balances the radiative term against the gas-dust collisional
+	// term and the dust's chemical-band absorption, so the scale must contain all three: the collisional term
+	// vanishes identically when the gas-dust coupling coefficient N_d is zero, and a scale of zero would make
+	// the convergence test unsatisfiable.
+	double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas + (c_hat_ / c_light_) * std::abs(Q_dust);
+	if constexpr (nGroups_ == 1) {
+		const auto fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d_init);
+		const auto kappaE = ComputeEnergyMeanOpacity(rho, T_d_init);
+		const auto kappaP = ComputePlanckOpacity(rho, T_d_init);
+		Lambda_compare += c_hat_ * dt * rho * (kappaE * Erad[0] + kappaP * fourPiBoverC) + fourPiBoverC;
+	} else {
+		const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d_init, rad_boundaries);
+		const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d_init, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
+		Lambda_compare += c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad + opacity_terms.kappaP * fourPiBoverC) + sum(fourPiBoverC);
+	}
 
 	const auto T_d = BackwardEulerOneVariable(rhs, jac, T_d_init, Lambda_compare);
 	AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
