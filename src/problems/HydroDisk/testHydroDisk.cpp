@@ -10,7 +10,6 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -667,16 +666,7 @@ template <> void QuokkaSimulation<HDGalaxy>::computeAfterTimestep()
 				const double vCOMy = (momy_sum * vol + Mej * vy_c) / Msnr;
 				const double vCOMz = (momz_sum * vol + Mej * vz_c) / Msnr;
 
-				// nH_amb, shell-formation mass (Sec 3.2.1). M_sf is rescaled by
-				// (p_terminal_ref / p_terminal_canonical)^2 so that the kinetic energy
-				// p_terminal^2/(2 M_sf) stays invariant under changes to the runtime
-				// sn_momentum_ref parameter -- matches the real reference implementation
-				// (SNFeedbackUtils::depositThermalKineticMomentumSNR)
 				const double nH_amb = Msnr / (mu_H * Vsnr_local);
-				constexpr double M_sf_canonical = 1679.0 * MSUN;	// at nH=1 cm^-3, calibrated to p_ref_canonical
-				constexpr double p_ref_canonical = 2.8e5 * MSUN * KM_S; // Kim & Ostriker (2015) canonical terminal momentum
-				const double p_ratio = (sn_momentum_ref * MSUN * KM_S) / p_ref_canonical;
-				const double M_sf = M_sf_canonical * std::pow(amrex::max(nH_amb, 1.0e-8), -0.26) * p_ratio * p_ratio;
 
 				// Eq 20: terminal momentum (extensive, g*cm/s), scaled by N_SN^cluster_exponent
 				// to allow momentum boosting for cluster-forming cells (matches MHDDisk convention).
