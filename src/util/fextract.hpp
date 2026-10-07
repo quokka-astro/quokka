@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef FEXTRACT_HPP_
 #define FEXTRACT_HPP_
 

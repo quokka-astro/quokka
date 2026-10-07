@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testParticleRadiation.cpp
 /// \brief Defines a test problem for radiation from particles.
 ///

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef STELLAR_MODELS_HPP_
 #define STELLAR_MODELS_HPP_
 

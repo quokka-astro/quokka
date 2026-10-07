@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef HYDROSTATE_HPP_ // NOLINT
 #define HYDROSTATE_HPP_
 

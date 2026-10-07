@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #include "DiagBase.H"
 #include "AMReX_ParmParse.H"
 

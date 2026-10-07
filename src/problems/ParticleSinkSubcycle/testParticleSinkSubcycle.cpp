@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testParticleSinkSubcycle.cpp
 /// \brief Regression test for issue #1957: sink particles losing finest-level coverage
 ///        under AMR subcycling with max_level >= 2.

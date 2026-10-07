@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testMHDRemakeFaceField.cpp
 /// \brief Regression test verifying RemakeLevel preserves a level's fine mhd face
 ///        field on regrid instead of discarding it.

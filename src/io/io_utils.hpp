@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef IO_UTILS_HPP_
 #define IO_UTILS_HPP_
 // ABOUTME: RAII utilities for managing AMReX I/O settings

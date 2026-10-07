@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustSoundwave.cpp
 /// \brief Defines a test problem for dust transport terms and dust drag force
 ///

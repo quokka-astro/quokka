@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustDampedGyromotion.cpp
 /// \brief Damped dust-gas gyromotion test from Moseley et al. (2023).
 ///
