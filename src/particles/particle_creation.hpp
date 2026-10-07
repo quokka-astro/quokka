@@ -579,6 +579,11 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(StochasticStellarPopParticleDeathPosZIdx) = unset_position;
 					p.rdata(StochasticStellarPopParticleDeathTimeIdx) = unset_position;
 					p.rdata(StochasticStellarPopParticleDeathDensityIdx) = unset_position;
+					// The luminosity model sets the luminosity; until then it must not hold uninitialized memory,
+					// which would be deposited as radiation.
+					for (int n = StochasticStellarPopParticleLumIdx; n < ParticleType::NReal; ++n) {
+						p.rdata(n) = 0.0;
+					}
 
 					// Everything is now set EXCEPT for mass, velocity, evolutionary stage, and mass at birth.
 					// (For SN progenitors, the death time will be overridden based on the interpolated lifetime.)
