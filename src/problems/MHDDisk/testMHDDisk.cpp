@@ -32,17 +32,11 @@
 
 namespace
 {
-constexpr double Rd_kpc = 3.0;
-constexpr double Rc_kpc = 2.0;
-constexpr double Rd = Rd_kpc * 1.0e3 * C::parsec;
-constexpr double Rc = Rc_kpc * 1.0e3 * C::parsec;
 constexpr double alpha_profile = 2.0;
 constexpr double beta_profile = 0.5;
 constexpr double q_flatten = 0.7;
 constexpr double rho_transition = 1.0e-28;
 constexpr double target_beta_seed = 1.0e3;
-constexpr double Rmax_kpc = 8.0;
-constexpr double Rmax = Rmax_kpc * 1.0e3 * C::parsec;
 constexpr double axis_fallback_cells = 1.0;
 constexpr double turb_target_Mach = 0.5;
 
@@ -60,7 +54,7 @@ template <> struct quokka::EOS_Traits<MHDGalaxy> {
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double T_cgm = 1.0e7;
 	static constexpr double cs_cgm = gcem::sqrt(gamma * C::k_B * T_cgm / mean_molecular_weight);
-	static constexpr double cs_disk = 7.0e5;
+	static constexpr double cs_disk = 7.0e5; // sound speed 7 km/s
 };
 
 template <> struct HydroSystem_Traits<MHDGalaxy> {
@@ -79,12 +73,12 @@ template <> struct Physics_Traits<MHDGalaxy> : DefaultPhysicsTraits {
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 0;
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = 0;
-	static constexpr int nGroups = 1;
 };
 
 template <> struct SimulationData<MHDGalaxy> {
+	amrex::Real Rc{};
+	amrex::Real Rd{};
+	amrex::Real Rmax{};
 	amrex::Real Q_mean{};
 	amrex::Real Mc{};
 	amrex::Real vc{};
@@ -126,15 +120,21 @@ template <> struct SimulationData<MHDGalaxy> {
 	int turb_nz{};
 };
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, double Sigma0) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vcircAnalytic(double R, double z, double vc, double Rc) -> double
+{
+	const double D = std::sqrt(R * R + Rc * Rc + (z / q_flatten) * (z / q_flatten));
+	return vc * R / D;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, double Rd, double Sigma0) -> double
 {
 	const double x = R / Rd;
 	return Sigma0 * std::exp(-x - beta_profile * std::exp(-alpha_profile * x));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Sigma0, double vc, double cs) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Rc, double Rd, double Sigma0, double Mc, double cs) -> double
 {
-	const double Sigma = surfaceDensityProfile(R, Sigma0);
+	const double Sigma = surfaceDensityProfile(R, Rd, Sigma0);
 	if (Sigma <= 0.0) {
 		return 0.0;
 	}
@@ -146,7 +146,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, doub
 	const double disk_factor = sech * sech;
 
 	const double denom = R * R + Rc * Rc;
-	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -vc * vc / (2.0 * cs * cs));
+	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -Mc * Mc / 2.0);
 
 	return rho0 * disk_factor * halo_factor;
 }
@@ -376,7 +376,20 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto cellSphereOverlapFraction(double di, do
 
 template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 {
+	// run only once
+	static bool was_called = false;
+	if (was_called) {
+		return;
+	}
+	was_called = true;
+
 	amrex::ParmParse const pp("mhd_galaxy");
+	pp.get("Rc_kpc", userData_.Rc);
+	userData_.Rc *= 1.0e3 * C::parsec;
+	pp.get("Rd_kpc", userData_.Rd);
+	userData_.Rd *= 1.0e3 * C::parsec;
+	pp.get("Rmax_kpc", userData_.Rmax);
+	userData_.Rmax *= 1.0e3 * C::parsec;
 	pp.get("Mc", userData_.Mc);
 	pp.get("Q_mean", userData_.Q_mean);
 	pp.query("sn_jeans_J", userData_.sn_jeans_J);
@@ -390,177 +403,177 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 
 	userData_.vc = userData_.Mc * cs_disk;
 	const double vc = userData_.vc;
+	const double Rc = userData_.Rc;
+	const double Rd = userData_.Rd;
+	const double Rmax = userData_.Rmax;
 
-	// Sigma0 via Simpson integration of Toomre Q condition
+	// Sigma0 via Simpson integration of Toomre Q condition, accurate to 10 figures for the default functions
 	auto integrand = [=](double R) -> double {
-		const double D = R * R + Rc * Rc;
-		const double sqrtD = std::sqrt(D);
-		const double Omega = vc / sqrtD;
-		const double dOdR = -vc * R / (D * sqrtD);
-		const double kappa = std::sqrt(std::max(4.0 * Omega * Omega + 2.0 * R * Omega * dOdR, 0.0));
-		return kappa * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, 1.0));
+		const auto Ω = [=](double R) -> double { return vcircAnalytic(R, 0.0, vc, Rc) / R; };
+		const double ε = 0.5e-5 * Rmax;
+		const double dΩdR = (Ω(R + ε) - Ω(R - ε)) / (2.0 * ε); // numeric derivative of Ω
+		const double kappa = std::sqrt(std::max(4.0 * Ω(R) * Ω(R) + 2.0 * R * Ω(R) * dΩdR, 0.0));
+		return kappa * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, Rd, 1.0));
 	};
-	constexpr int N = 1000;
+	constexpr int N = 100000;
 	static_assert(N % 2 == 0);
 	const double h = Rmax / N;
-	double integral = integrand(0.0) + integrand(Rmax);
+	double integral = integrand(1e-20 * Rmax) + integrand(Rmax);
 	for (int i = 1; i < N; ++i) {
 		integral += (i % 2 == 0 ? 2.0 : 4.0) * integrand(i * h);
 	}
 	integral *= h / 3.0;
+	// set densityProfile factor such that the integral equals Q_mean
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
 	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
 
-	// Load 2D Cylindrical A_phi Potential Table first time only
-	if (userData_.Aphi_device.empty()) {
-		amrex::ParmParse pp_field("mhd_galaxy");
-		std::string aphi_meta_file;
-		std::string aphi_data_file;
-		pp_field.get("aphi_meta_file", aphi_meta_file);
-		pp_field.get("aphi_data_file", aphi_data_file);
+	// Load 2D Cylindrical A_phi Potential Table
+	std::string aphi_meta_file;
+	std::string aphi_data_file;
+	pp.get("aphi_meta_file", aphi_meta_file);
+	pp.get("aphi_data_file", aphi_data_file);
 
-		std::ifstream meta_file(aphi_meta_file);
-		if (!meta_file.is_open()) {
-			amrex::Abort("Could not open 2D seed field metadata file: " + aphi_meta_file);
-		}
-
-		std::string line;
-		while (std::getline(meta_file, line)) {
-			if (line.empty() || line[0] == '#') {
-				continue;
-			}
-			std::size_t eq_pos = line.find('=');
-			if (eq_pos == std::string::npos) {
-				continue;
-			}
-			std::string key = line.substr(0, eq_pos);
-			while (!key.empty() && (std::isspace(key.back()) != 0)) {
-				key.pop_back();
-			}
-			std::size_t start = key.find_first_not_of(" \t");
-			if (start != std::string::npos) {
-				key = key.substr(start);
-			}
-			std::string val_str = line.substr(eq_pos + 1);
-			std::size_t first_num = val_str.find_first_not_of(" \t");
-			if (first_num != std::string::npos) {
-				val_str = val_str.substr(first_num);
-			}
-			std::size_t end_num = val_str.find_first_of(" \t#[]");
-			if (end_num != std::string::npos) {
-				val_str = val_str.substr(0, end_num);
-			}
-
-			try {
-				if (key == "seed_nR") {
-					userData_.seed_nR = std::stoul(val_str);
-				} else if (key == "seed_nz") {
-					userData_.seed_nz = std::stoul(val_str);
-				} else if (key == "seed_Rmax") {
-					userData_.seed_Rmax = std::stod(val_str);
-				} else if (key == "seed_Lz") {
-					userData_.seed_Lz = std::stod(val_str);
-				} else if (key == "seed_seed") {
-					userData_.seed_str = val_str;
-				}
-			} catch (const std::exception &e) {
-				amrex::Abort("Error parsing '" + key + "' = '" + val_str + "' in " + aphi_meta_file + ": " + e.what());
-			}
-		}
-		meta_file.close();
-
-		if (userData_.seed_str.empty()) {
-			amrex::Print() << "WARNING: no 'seed_seed' key found while parsing " << aphi_meta_file << "\n";
-		}
-
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_nR > 0 && userData_.seed_nz > 0 && userData_.seed_Rmax > 0.0 && userData_.seed_Lz > 0.0,
-						 "Error parsing cylindrical vector potential meta variables from init_seed_pot_field "
-						 "(seed_nR/seed_nz/seed_Rmax/seed_Lz must all be present and positive).");
-
-		std::size_t total_elements = userData_.seed_nR * userData_.seed_nz;
-		userData_.Aphi_device = load_bin_to_device(aphi_data_file, total_elements);
-
-		amrex::Print() << "Loaded 2D Cylindrical Aphi Table cleanly. Map Size: " << userData_.seed_nR << " x " << userData_.seed_nz << "\n";
-
-		// Derive B0 from target plasma beta at the disk midplane (R=Rd, z=0).
-		// The stored Aphi table is dimensionless with rms(curl_nd) = 1 in units of 1/Rmax.
-		// Physical B = aphi_nd * B0_scale / Rmax * curl_nd, so B_rms = B0_scale / Rmax.
-		// beta = (rho cs^2 / gamma) / (B_rms^2 / 2)
-		// => B_rms = cs * sqrt(2 rho_mid / (gamma * beta))
-		// => B0_scale = B_rms * Rmax
-		{
-			constexpr double cs = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-			constexpr double gam = quokka::EOS_Traits<MHDGalaxy>::gamma;
-			const double Sigma_Rd = surfaceDensityProfile(Rd, userData_.Sigma0);
-			const double rho_mid = (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * cs * cs);
-			userData_.rho_mid = rho_mid;
-			const double B_rms_HL = cs * std::sqrt(2.0 * rho_mid / (gam * target_beta_seed));
-			userData_.seed_B0_HL = B_rms_HL * userData_.seed_Rmax;
-			amrex::Print() << "Seed field: target_beta=" << target_beta_seed << "  rho_mid=" << rho_mid << "  B_rms_HL=" << B_rms_HL
-				       << "  B0_scale=" << userData_.seed_B0_HL << " G*cm (HL)\n";
-		}
+	std::ifstream meta_file(aphi_meta_file);
+	if (!meta_file.is_open()) {
+		amrex::Abort("Could not open 2D seed field metadata file: " + aphi_meta_file);
 	}
 
-	static bool isTurbSamplingDone = false;
-	if (!isTurbSamplingDone) {
-
-		amrex::ParmParse pp("mhd_galaxy");
-
-		std::string turb_vx_file;
-		std::string turb_vy_file;
-		std::string turb_vz_file;
-
-		pp.get("turb_vx_file", turb_vx_file);
-		pp.get("turb_vy_file", turb_vy_file);
-		pp.get("turb_vz_file", turb_vz_file);
-
-		// assume nturb is cubic, i.e. has equal x, y, and z dimensions
-		// get number of cells in file
-		const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
-		// take cube root to get sidelength
-		const std::size_t n_turb_side = int(std::cbrt(n_turb) + .5);
-
-		userData_.turb_nx = n_turb_side;
-		userData_.turb_ny = n_turb_side;
-		userData_.turb_nz = n_turb_side;
-
-		userData_.turb_vx_device = load_bin_to_device(turb_vx_file, n_turb);
-
-		userData_.turb_vy_device = load_bin_to_device(turb_vy_file, n_turb);
-
-		userData_.turb_vz_device = load_bin_to_device(turb_vz_file, n_turb);
-
-		std::string turb_seed_file;
-		pp.query("turb_seed_file", turb_seed_file);
-		if (!turb_seed_file.empty()) {
-			userData_.turb_seeds = load_turb_seeds(turb_seed_file);
-
-			amrex::Print() << "Turbulence seed file: " << turb_seed_file << " (seeds read = " << userData_.turb_seeds.size() << "):";
-			for (std::size_t r = 0; r < userData_.turb_seeds.size(); ++r) {
-				amrex::Print() << " " << userData_.turb_seeds[r];
-			}
-			amrex::Print() << "\n";
+	std::string line;
+	while (std::getline(meta_file, line)) {
+		if (line.empty() || line[0] == '#') {
+			continue;
+		}
+		const std::size_t eq_pos = line.find('=');
+		if (eq_pos == std::string::npos) {
+			continue;
+		}
+		std::string key = line.substr(0, eq_pos);
+		while (!key.empty() && (std::isspace(key.back()) != 0)) {
+			key.pop_back();
+		}
+		const std::size_t start = key.find_first_not_of(" \t");
+		if (start != std::string::npos) {
+			key = key.substr(start);
+		}
+		std::string val_str = line.substr(eq_pos + 1);
+		const std::size_t first_num = val_str.find_first_not_of(" \t");
+		if (first_num != std::string::npos) {
+			val_str = val_str.substr(first_num);
+		}
+		const std::size_t end_num = val_str.find_first_of(" \t#[]");
+		if (end_num != std::string::npos) {
+			val_str = val_str.substr(0, end_num);
 		}
 
-		constexpr double turb_rescale = turb_target_Mach * quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-		userData_.turb_rescale_factor = turb_rescale;
-
-		amrex::Print() << "Turbulence loaded from binary files:\n"
-			       << " vx = " << turb_vx_file << "\n"
-			       << " vy = " << turb_vy_file << "\n"
-			       << " vz = " << turb_vz_file << "\n"
-			       << " cube size = " << userData_.turb_nx << " x " << userData_.turb_ny << " x " << userData_.turb_nz << "\n"
-			       << "Velocity scale = " << turb_rescale / 1.0e5 << " km/s\n";
-
-		amrex::Print() << "MHDGalaxy init complete\n"
-			       << "Mc=" << userData_.Mc << " Q=" << userData_.Q_mean << " Sigma0=" << userData_.Sigma0
-			       << " Seed=" << (userData_.seed_str.empty() ? std::string("<not found>") : userData_.seed_str) << "\n"
-			       << "sn_mass_per_event_msun=" << userData_.sn_mass_per_event_msun
-			       << " sn_cluster_momentum_exponent=" << userData_.sn_cluster_momentum_exponent << "\n"
-			       << "M_solar=" << C::M_solar << "\n";
-
-		isTurbSamplingDone = true;
+		try {
+			if (key == "seed_nR") {
+				userData_.seed_nR = std::stoul(val_str);
+			} else if (key == "seed_nz") {
+				userData_.seed_nz = std::stoul(val_str);
+			} else if (key == "seed_Rmax") {
+				userData_.seed_Rmax = std::stod(val_str);
+			} else if (key == "seed_Lz") {
+				userData_.seed_Lz = std::stod(val_str);
+			} else if (key == "seed_seed") {
+				userData_.seed_str = val_str;
+			}
+		} catch (const std::exception &e) {
+			std::string msg;
+			msg += "Error parsing '";
+			msg += key;
+			msg += "' = '";
+			msg += val_str;
+			msg += "' in ";
+			msg += aphi_meta_file;
+			msg += ": ";
+			msg += e.what();
+			amrex::Abort(msg);
+		}
 	}
+	meta_file.close();
+
+	if (userData_.seed_str.empty()) {
+		amrex::Print() << "WARNING: no 'seed_seed' key found while parsing " << aphi_meta_file << "\n";
+	}
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_nR > 0 && userData_.seed_nz > 0 && userData_.seed_Rmax > 0.0 && userData_.seed_Lz > 0.0,
+					 "Error parsing cylindrical vector potential meta variables from init_seed_pot_field "
+					 "(seed_nR/seed_nz/seed_Rmax/seed_Lz must all be present and positive).");
+
+	const std::size_t total_elements = userData_.seed_nR * userData_.seed_nz;
+	userData_.Aphi_device = load_bin_to_device(aphi_data_file, total_elements);
+
+	amrex::Print() << "Loaded 2D Cylindrical Aphi Table cleanly. Map Size: " << userData_.seed_nR << " x " << userData_.seed_nz << "\n";
+
+	// Derive B0 from target plasma beta at the disk midplane (R=Rd, z=0).
+	// The stored Aphi table is dimensionless with rms(curl_nd) = 1 in units of 1/Rmax.
+	// Physical B = aphi_nd * B0_scale / Rmax * curl_nd, so B_rms = B0_scale / Rmax.
+	// beta = (rho cs^2 / gamma) / (B_rms^2 / 2)
+	// => B_rms = cs * sqrt(2 rho_mid / (gamma * beta))
+	// => B0_scale = B_rms * Rmax
+	{
+		constexpr double cs = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
+		constexpr double gam = quokka::EOS_Traits<MHDGalaxy>::gamma;
+		const double Sigma_Rd = surfaceDensityProfile(Rd, Rd, userData_.Sigma0);
+		const double rho_mid = (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * cs * cs);
+		userData_.rho_mid = rho_mid;
+		const double B_rms_HL = cs * std::sqrt(2.0 * rho_mid / (gam * target_beta_seed));
+		userData_.seed_B0_HL = B_rms_HL * userData_.seed_Rmax;
+		amrex::Print() << "Seed field: target_beta=" << target_beta_seed << "  rho_mid=" << rho_mid << "  B_rms_HL=" << B_rms_HL
+			       << "  B0_scale=" << userData_.seed_B0_HL << " G*cm (HL)\n";
+	}
+
+	// Turb Sampling
+	std::string turb_vx_file;
+	std::string turb_vy_file;
+	std::string turb_vz_file;
+
+	pp.get("turb_vx_file", turb_vx_file);
+	pp.get("turb_vy_file", turb_vy_file);
+	pp.get("turb_vz_file", turb_vz_file);
+
+	// assume nturb is cubic, i.e. has equal x, y, and z dimensions
+	// get number of cells in file
+	const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
+	// take cube root to get sidelength
+	const auto n_turb_side = static_cast<std::size_t>(std::lround(std::cbrt(static_cast<double>(n_turb))));
+
+	userData_.turb_nx = static_cast<int>(n_turb_side);
+	userData_.turb_ny = static_cast<int>(n_turb_side);
+	userData_.turb_nz = static_cast<int>(n_turb_side);
+
+	userData_.turb_vx_device = load_bin_to_device(turb_vx_file, n_turb);
+	userData_.turb_vy_device = load_bin_to_device(turb_vy_file, n_turb);
+	userData_.turb_vz_device = load_bin_to_device(turb_vz_file, n_turb);
+
+	std::string turb_seed_file;
+	pp.query("turb_seed_file", turb_seed_file);
+	if (!turb_seed_file.empty()) {
+		userData_.turb_seeds = load_turb_seeds(turb_seed_file);
+
+		amrex::Print() << "Turbulence seed file: " << turb_seed_file << " (seeds read = " << userData_.turb_seeds.size() << "):";
+		for (const auto turb_seed : userData_.turb_seeds) {
+			amrex::Print() << " " << turb_seed;
+		}
+		amrex::Print() << "\n";
+	}
+
+	constexpr double turb_rescale = turb_target_Mach * quokka::EOS_Traits<MHDGalaxy>::cs_disk;
+	userData_.turb_rescale_factor = turb_rescale;
+
+	amrex::Print() << "Turbulence loaded from binary files:\n"
+		       << " vx = " << turb_vx_file << "\n"
+		       << " vy = " << turb_vy_file << "\n"
+		       << " vz = " << turb_vz_file << "\n"
+		       << " cube size = " << userData_.turb_nx << " x " << userData_.turb_ny << " x " << userData_.turb_nz << "\n"
+		       << "Velocity scale = " << turb_rescale / 1.0e5 << " km/s\n";
+
+	amrex::Print() << "MHDGalaxy init complete\n"
+		       << "Mc=" << userData_.Mc << " Q=" << userData_.Q_mean << " Sigma0=" << userData_.Sigma0
+		       << " Seed=" << (userData_.seed_str.empty() ? std::string("<not found>") : userData_.seed_str) << "\n"
+		       << "sn_mass_per_event_msun=" << userData_.sn_mass_per_event_msun
+		       << " sn_cluster_momentum_exponent=" << userData_.sn_cluster_momentum_exponent << "\n"
+		       << "M_solar=" << C::M_solar << "\n";
 }
 
 // Set initial conditions on the grid by evaluating the analytic disk density and velocity profiles at cell centers,
@@ -570,6 +583,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const double vc = userData_.vc;
+	const double Mc = userData_.Mc;
+	const double Rc = userData_.Rc;
+	const double Rd = userData_.Rd;
 	const double Sigma0 = userData_.Sigma0;
 	const double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
 	const double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
@@ -658,17 +674,17 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double x = prob_lo[0] + (i + 0.5) * dx[0];
 		const double y = prob_lo[1] + (j + 0.5) * dx[1];
 		const double z = prob_lo[2] + (k + 0.5) * dx[2];
-		const double R = std::sqrt(x * x + y * y);
+		const double R = std::sqrt(x * x + y * y + 1e-200);
 
-		const double rho_disc_raw = diskDensityAnalytic(R, z, Sigma0, vc, cs_disk);
+		const double rho_disc_raw = diskDensityAnalytic(R, z, Rc, Rd, Sigma0, Mc, cs_disk);
 		const bool in_disk = (rho_disc_raw > rho_transition);
 		const double rho = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
 		const double cs = in_disk ? cs_disk : cs_cgm;
 
-		const double vrot = (R > 0.0) ? vc * R / std::sqrt(R * R + Rc * Rc) : 0.0;
+		const double vrot = vcircAnalytic(R, 0.0, vc, Rc);
 		double vx = 0.0;
 		double vy = 0.0;
-		if (in_disk && R > 0.0) {
+		if (in_disk) {
 			vx = -vrot * y / R;
 			vy = vrot * x / R;
 		}
@@ -683,13 +699,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 			const double ty = (y - turb_ymin) / turb_dy;
 			const double tz = (z - turb_zmin) / turb_dz;
 
-			const double tx_c = amrex::min(amrex::max(tx, 0.0), static_cast<double>(turb_nx - 1));
-			const double ty_c = amrex::min(amrex::max(ty, 0.0), static_cast<double>(turb_ny - 1));
-			const double tz_c = amrex::min(amrex::max(tz, 0.0), static_cast<double>(turb_nz - 1));
-
-			dvx_pert = interpolate_turbulence(turb_vx, turb_nx, turb_ny, turb_nz, tx_c, ty_c, tz_c) * turb_rescale;
-			dvy_pert = interpolate_turbulence(turb_vy, turb_nx, turb_ny, turb_nz, tx_c, ty_c, tz_c) * turb_rescale;
-			dvz_pert = interpolate_turbulence(turb_vz, turb_nx, turb_ny, turb_nz, tx_c, ty_c, tz_c) * turb_rescale;
+			dvx_pert = interpolate_turbulence(turb_vx, turb_nx, turb_ny, turb_nz, tx, ty, tz) * turb_rescale;
+			dvy_pert = interpolate_turbulence(turb_vy, turb_nx, turb_ny, turb_nz, tx, ty, tz) * turb_rescale;
+			dvz_pert = interpolate_turbulence(turb_vz, turb_nx, turb_ny, turb_nz, tx, ty, tz) * turb_rescale;
 		}
 		vx += dvx_pert;
 		vy += dvy_pert;
@@ -907,6 +919,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const double vc = userData_.vc;
+	const double Rc = userData_.Rc;
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
@@ -915,33 +928,29 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 			const double x = prob_lo[0] + (i + 0.5) * dx[0];
 			const double y = prob_lo[1] + (j + 0.5) * dx[1];
 			const double z = prob_lo[2] + (k + 0.5) * dx[2];
-			const double R2 = x * x + y * y;
-			const double R = std::sqrt(R2);
+			const double R = std::sqrt(x * x + y * y + 1e-200);
 
 			const double rho = state(i, j, k, HydroSystem<MHDGalaxy>::density_index);
 			const double px = state(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index);
 			const double py = state(i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index);
 			const double pz = state(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index);
-			const double Eint = state(i, j, k, HydroSystem<MHDGalaxy>::internalEnergy_index);
-			const double Etot_old = state(i, j, k, HydroSystem<MHDGalaxy>::energy_index);
 			const double Ekin_old = 0.5 * (px * px + py * py + pz * pz) / rho;
-			const double Emag = Etot_old - Ekin_old - Eint;
 
-			const double D = R2 + Rc * Rc + (z / q_flatten) * (z / q_flatten);
-			const double g_R = (R > 0.0) ? -(vc * vc * R / D) : 0.0;
-			const double g_z = -(vc * vc * z / (q_flatten * q_flatten * D));
-			const double gx = (R > 0.0) ? g_R * x / R : 0.0;
-			const double gy = (R > 0.0) ? g_R * y / R : 0.0;
+			const double v = vcircAnalytic(R, z, vc, Rc);
+			const double g_R = -v * v / R;
+			const double gx = g_R * x / R;
+			const double gy = g_R * y / R;
+			const double gz = g_R * z / R / (q_flatten * q_flatten);
 
 			const double px_new = px + dt_lev * rho * gx;
 			const double py_new = py + dt_lev * rho * gy;
-			const double pz_new = pz + dt_lev * rho * g_z;
+			const double pz_new = pz + dt_lev * rho * gz;
 			const double Ekin_new = 0.5 * (px_new * px_new + py_new * py_new + pz_new * pz_new) / rho;
 
 			state(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index) = px_new;
 			state(i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index) = py_new;
 			state(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index) = pz_new;
-			state(i, j, k, HydroSystem<MHDGalaxy>::energy_index) = Ekin_new + Eint + Emag;
+			state(i, j, k, HydroSystem<MHDGalaxy>::energy_index) += Ekin_new - Ekin_old;
 		});
 	}
 }
