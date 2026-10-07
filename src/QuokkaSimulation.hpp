@@ -436,6 +436,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// radiation subcycle
 	void copyRadiationState(amrex::MultiFab &dest_cc, amrex::MultiFab const &src_cc);
 	void copyHydroState(amrex::MultiFab &dest_cc, amrex::MultiFab const &src_cc);
+	[[nodiscard]] auto UncoveredBoxes(int lev, amrex::Box const &bx) const -> amrex::Vector<amrex::Box>;
 	auto computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int;
 	void advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::FluxRegister *fr_as_crse,
 					  amrex::FluxRegister *fr_as_fine, amrex::MultiFab &state_out);
@@ -3231,6 +3232,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::copyRadiationSta
 	amrex::MultiFab::Copy(dest, src, nstartHyperbolic_, nstartHyperbolic_, ncompHyperbolic_, 0);
 }
 
+/// Split `bx` into boxes that are not covered by level lev+1. Without subcycling the covered coarse cells are overwritten by
+/// average-down at the end of the step, and their conserved energy includes unresolved fine-cell velocity dispersion, which a
+/// nonlinear matter-radiation source solve would misread as thermal energy. With subcycling, return `bx` unchanged.
+template <typename problem_t> auto QuokkaSimulation<problem_t>::UncoveredBoxes(int lev, amrex::Box const &bx) const -> amrex::Vector<amrex::Box>
+{
+	if (do_subcycle != 0 || lev >= this->finest_level) {
+		return {bx};
+	}
+	amrex::BoxArray covered = this->grids[lev + 1];
+	covered.coarsen(this->ref_ratio[lev]);
+	return amrex::complementIn(bx, covered).boxList().data();
+}
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::copyHydroState(amrex::MultiFab &dest, amrex::MultiFab const &src)
 {
 	// copy hydro state variables from src to dest
@@ -3346,7 +3360,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			const amrex::Real dt_stage2_implicit = IMEX_Aim_22 * dt_radiation;
 
 			for (amrex::MFIter iter(state_tmp1_cc); iter.isValid(); ++iter) {
-				const amrex::Box &indexRange = iter.validbox();
+				for (const amrex::Box &indexRange : UncoveredBoxes(lev, iter.validbox())) {
 				auto const &stateTmp1 = state_tmp1_cc.array(iter);
 				auto const &prob_lo = geom[lev].ProbLoArray();
 				auto const &prob_hi = geom[lev].ProbHiArray();
@@ -3384,6 +3398,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 										       dt_stage2_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
 										       tempFloor, p_iteration_counter, p_iteration_failure_counter,
 										       dustHeatingSource_arr, cons_fc_arr);
+				}
 				}
 			}
 		}
@@ -3460,7 +3475,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		const amrex::Real dt_stage3_implicit = IMEX_Aim_33 * dt_radiation;
 
 		for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
+			for (const amrex::Box &indexRange : UncoveredBoxes(lev, iter.validbox())) {
 			auto const &stateNew_cc = state_new_cc_[lev].array(iter);
 			auto const &prob_lo = geom[lev].ProbLoArray();
 			auto const &prob_hi = geom[lev].ProbHiArray();
@@ -3496,6 +3511,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				RadSystem<problem_t>::AddSourceTermsMultiGroup(
 				    stateNew_cc, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage3_implicit, 1.0, dustGasInteractionCoeff_, rad_tol,
 				    rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter, dustHeatingSource_arr, cons_fc_arr);
+			}
 			}
 		}
 
