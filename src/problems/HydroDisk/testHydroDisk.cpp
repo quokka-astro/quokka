@@ -677,7 +677,7 @@ template <> void QuokkaSimulation<HDGalaxy>::computeAfterTimestep()
 				constexpr double p_ref_canonical = 2.8e5 * MSUN * KM_S; // Kim & Ostriker (2015) canonical terminal momentum
 				const double p_ratio = (sn_momentum_ref * MSUN * KM_S) / p_ref_canonical;
 				const double M_sf = M_sf_canonical * std::pow(amrex::max(nH_amb, 1.0e-8), -0.26) * p_ratio * p_ratio;
-			
+
 				// Eq 20: terminal momentum (extensive, g*cm/s), scaled by N_SN^cluster_exponent
 				// to allow momentum boosting for cluster-forming cells (matches MHDDisk convention).
 				const double p_terminal = sn_momentum_ref * MSUN * KM_S * std::pow(static_cast<double>(N_SN), cluster_exponent) *
