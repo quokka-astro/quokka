@@ -677,15 +677,12 @@ template <> void QuokkaSimulation<HDGalaxy>::computeAfterTimestep()
 				constexpr double p_ref_canonical = 2.8e5 * MSUN * KM_S; // Kim & Ostriker (2015) canonical terminal momentum
 				const double p_ratio = (sn_momentum_ref * MSUN * KM_S) / p_ref_canonical;
 				const double M_sf = M_sf_canonical * std::pow(amrex::max(nH_amb, 1.0e-8), -0.26) * p_ratio * p_ratio;
-				const double R_M = Msnr / M_sf;
-
+			
 				// Eq 20: terminal momentum (extensive, g*cm/s), scaled by N_SN^cluster_exponent
 				// to allow momentum boosting for cluster-forming cells (matches MHDDisk convention).
 				const double p_terminal = sn_momentum_ref * MSUN * KM_S * std::pow(static_cast<double>(N_SN), cluster_exponent) *
 							  std::pow(amrex::max(nH_amb, 1.0e-8), -0.17);
 
-				// MC regime only (Eq 19, R_M > 1): full terminal momentum, no thermal-only
-				// or Sedov-Taylor branching. R_M is retained purely as a diagnostic.
 				const double p_radial_mag = p_terminal / vol;
 
 				// Full weight omega_ijk = 1 applied to every included kernel cell; the
