@@ -148,6 +148,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::enableElectronConduction_;
 	using AMRSimulation<problem_t>::electronConductionKappa0_;
 	using AMRSimulation<problem_t>::conductionCFL;
+	using AMRSimulation<problem_t>::conductionType_;
 
 #if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
@@ -168,6 +169,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int enableChemistry_ = 0;
 	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
+	int removeMeanFlow_ = 0;
 	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
 	quokka::dust::CoefficientIterationConfig dustCoefficientIteration_;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
@@ -238,7 +240,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real shearViscosity_ = 0.0;	// shear viscosity coefficient; see viscous CFL limit below
 	amrex::Real bulkViscosity_ = 0.0;	// bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
 
-	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
+	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2018;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
 	amrex::Real mhdResistivity_ = 0.0;					// Ohmic resistivity eta; parabolic limit: dt < dx^2 / (2*eta)
 
@@ -761,12 +763,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("conduction_cfl", conductionCFL);
 		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
 		hpp.query("saturation_factor", electronConductionSaturationFactor_);
+		hpp.query("conduction_type", conductionType_);
+		if (conductionType_ != "constant" && conductionType_ != "spitzer") {
+			amrex::Abort("Invalid conduction.conduction_type! Must be 'constant' or 'spitzer'.");
+		}
 	}
 
 	// set turbulence runtime parameters
 	{
 		amrex::ParmParse const hpp("turbulence");
 		hpp.query("enabled", enableTurbulence_);
+		hpp.query("remove_mean_flow", removeMeanFlow_);
 		hpp.queryWithParser("stop_time", turbulenceStopTime_);
 		hpp.query("length", turbParams_["length"]);
 		hpp.query("target_vdisp", turbParams_["target_vdisp"]);
@@ -784,7 +791,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		turbParams_["ndim"] = std::to_string(AMREX_SPACEDIM);
 
 		if (enableTurbulence_ == 1) {
-			td = std::make_unique<quokka::turbulence::turbulentDriving<problem_t>>(turbParams_);
+			td = std::make_unique<quokka::turbulence::turbulentDriving<problem_t>>(turbParams_, removeMeanFlow_ == 1);
 		}
 	}
 
@@ -972,7 +979,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::rereadRuntimePar
 	readParmParse();
 
 	// Re-read particle parameters
-	quokka::particleParmParse();
+	quokka::particleParmParse<problem_t>();
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int
@@ -1363,10 +1370,20 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 				}
 				AMRSimulation<problem_t>::applyMHDDiodeBC(state, state_fc, lev);
 			}
+			// Match the hydro solver's own reconstruction ghost width (QuokkaSimulation::computeHydroFluxes)
+			// so the (rho, T) reconstruction used for the conduction flux has the same stencil robustness
+			// as the hydro reconstruction it mirrors.
+			const int conduction_nghost_Riemann =
+			    MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emfComputingScheme_, emfAveragingScheme_, do_tracers != 0);
+			const int conduction_reconstructGhost = conduction_nghost_Riemann + 1;
 			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 											     .saturation_factor = electronConductionSaturationFactor_,
-											     .min_temperature = tempFloor_};
+											     .min_temperature = tempFloor_,
+											     .spitzer_scaling = (conductionType_ == "spitzer"),
+											     .reconstruction_order = reconstructionOrder_,
+											     .plm_limiter = plmLimiter_,
+											     .ng_reconstruct = conduction_reconstructGhost};
 			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
 			if ((do_reflux != 0) && (recal_fluxes != nullptr)) {
 				// heat_flux has a single component, so accumulate it into the energy components of the
