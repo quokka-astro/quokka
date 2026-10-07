@@ -45,12 +45,16 @@ AMREX_GPU_MANAGED Real v_wind = NAN;		      // wind speed (z direction)
 AMREX_GPU_MANAGED Real cloud_crushing_time = NAN;    // t_cc, estimated from R0 and v_wind
 AMREX_GPU_MANAGED Real delta_vz = 0;		      // cumulative center-of-mass frame velocity offset
 
-// magnetic field (set inside problem_main())
+// Anisotropic conduction runs along the magnetic field, so MHD (and the magnetic field inputs
+// windcloud.plasmaBeta and windcloud.field_orientation) is enabled only when conduction is anisotropic.
+constexpr bool anisotropic_conduction = false;
+
+// magnetic field (set inside problem_main(); only used when anisotropic_conduction == true)
 // The field is uniform, with strength set by the plasma beta of the wind, beta = P_wind / (B0^2 / 2),
 // and oriented either parallel (along z) or perpendicular (along x) to the wind direction.
 enum class FieldOrientation { parallel, perpendicular };
 AMREX_GPU_MANAGED Real plasma_beta = NAN;					    // plasma beta of the wind
-AMREX_GPU_MANAGED Real B0 = NAN;						    // field strength, in code units (E_mag = B0^2 / 2)
+AMREX_GPU_MANAGED Real B0 = 0.0;						    // field strength, in code units (E_mag = B0^2 / 2)
 AMREX_GPU_MANAGED FieldOrientation field_orientation = FieldOrientation::parallel; // field direction relative to the wind
 
 struct WindCloudProblem {
@@ -68,11 +72,12 @@ template <> struct HydroSystem_Traits<WindCloudProblem> {
 template <> struct Physics_Traits<WindCloudProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_mhd_enabled = true;
+	static constexpr bool is_mhd_enabled = anisotropic_conduction;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 2; // cloud tracer + wind tracer
-	static constexpr ConductionModel conduction_model = ConductionModel::spitzer; // kappa_par/perp = kappaPar/kappaPerp * T^2.5
-	static constexpr ConductionGeometry conduction_geometry = ConductionGeometry::anisotropic; // conduction along/across B
+	static constexpr ConductionModel conduction_model = ConductionModel::spitzer; // kappa = prefactor * T^2.5
+	static constexpr ConductionGeometry conduction_geometry =
+	    anisotropic_conduction ? ConductionGeometry::anisotropic : ConductionGeometry::isotropic; // anisotropic: conduction along/across B
 };
 
 template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -196,8 +201,10 @@ void QuokkaSimulation<WindCloudProblem>::ComputeDerivedVar(int /*lev*/, std::str
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
 			auto const &state = state_cc.const_array(iter);
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
-			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+			if constexpr (Physics_Traits<WindCloudProblem>::is_mhd_enabled) {
+				cons_fc = {AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
+			}
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const rho = state(i, j, k, HydroSystem<WindCloudProblem>::density_index);
 				// subtracts kinetic and magnetic energy from the total energy
@@ -318,7 +325,7 @@ AMRSimulation<WindCloudProblem>::setCustomBoundaryConditions(const amrex::IntVec
     consVar(i, j, k, HydroSystem<WindCloudProblem>::energy_index) = etot_edge;
     consVar(i, j, k, HydroSystem<WindCloudProblem>::internalEnergy_index) = eint_edge;
     consVar(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) = 0.0; // wind boundary carries no cloud tracer
-    consVar(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) = Tracer; // wind boundary carries wind tracer
+    consVar(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) = rho * Tracer; // wind boundary carries wind tracer
 }
 
 
@@ -329,16 +336,23 @@ auto problem_main() -> int
 	pp.query("mach", ::Mach);
 
 	// magnetic field: plasma beta of the wind, and orientation relative to the wind ("parallel" or "perpendicular")
-	pp.get("plasmaBeta", ::plasma_beta);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(::plasma_beta > 0.0, "windcloud.plasmaBeta must be > 0.");
+	// (only read for anisotropic conduction, which needs MHD)
 	std::string field_orientation;
-	pp.get("field_orientation", field_orientation);
-	if (field_orientation == "parallel") {
-		::field_orientation = FieldOrientation::parallel;
-	} else if (field_orientation == "perpendicular") {
-		::field_orientation = FieldOrientation::perpendicular;
+	if constexpr (anisotropic_conduction) {
+		pp.get("plasmaBeta", ::plasma_beta);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(::plasma_beta > 0.0, "windcloud.plasmaBeta must be > 0.");
+		pp.get("field_orientation", field_orientation);
+		if (field_orientation == "parallel") {
+			::field_orientation = FieldOrientation::parallel;
+		} else if (field_orientation == "perpendicular") {
+			::field_orientation = FieldOrientation::perpendicular;
+		} else {
+			amrex::Abort("windcloud.field_orientation must be \"parallel\" or \"perpendicular\".");
+		}
 	} else {
-		amrex::Abort("windcloud.field_orientation must be \"parallel\" or \"perpendicular\".");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!pp.contains("plasmaBeta") && !pp.contains("field_orientation"),
+						 "windcloud.plasmaBeta / windcloud.field_orientation are set, but conduction is isotropic (no magnetic field). "
+						 "Set anisotropic_conduction = true in testWindCloud.cpp to use them.");
 	}
 
 	// do frame shifting to follow cloud center-of-mass?
@@ -364,7 +378,7 @@ auto problem_main() -> int
 	}
 	} 
 
-	// face-centred (magnetic field) boundary conditions
+	// face-centred (magnetic field) boundary conditions; empty when MHD is disabled
 	// TODO (av): placeholder; set proper inflow/outflow BCs for the field
 	constexpr int ncomp_fc = Physics_Indices<WindCloudProblem>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(ncomp_fc);
@@ -387,9 +401,13 @@ auto problem_main() -> int
 	amrex::Print() << "v_wind = " << (::v_wind / 1.0e5) << " km/s" << std::endl;
 
 	// field strength from the plasma beta of the wind: beta = P_wind / (B0^2 / 2)
-	::B0 = std::sqrt(2.0 * P_wind / ::plasma_beta);
-	amrex::Print() << "plasma beta = " << ::plasma_beta << ", B0 = " << ::B0 << " (code units) = " << (::B0 * std::sqrt(4.0 * M_PI) * 1.0e6)
-		       << " uG, " << field_orientation << " to the wind" << std::endl;
+	if constexpr (anisotropic_conduction) {
+		::B0 = std::sqrt(2.0 * P_wind / ::plasma_beta);
+		amrex::Print() << "plasma beta = " << ::plasma_beta << ", B0 = " << ::B0 << " (code units) = " << (::B0 * std::sqrt(4.0 * M_PI) * 1.0e6)
+			       << " uG, " << field_orientation << " to the wind" << std::endl;
+	} else {
+		amrex::Print() << "no magnetic field (isotropic conduction)" << std::endl;
+	}
 
 	// estimate cloud-crushing time: t_cc = sqrt(chi) * R_cloud / v_wind, chi = rho_cloud / rho_wind
 	const Real chi = rho_cloud / rho_wind;
