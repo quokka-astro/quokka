@@ -149,13 +149,13 @@ inline auto interpolate_turbulence(const amrex::Real *table, int nx, int ny, int
 	y = amrex::max(0.0, amrex::min(y, static_cast<amrex::Real>(ny - 1)));
 	z = amrex::max(0.0, amrex::min(z, static_cast<amrex::Real>(nz - 1)));
 
-	int i0 = static_cast<int>(x);
-	int j0 = static_cast<int>(y);
-	int k0 = static_cast<int>(z);
+	const int i0 = static_cast<int>(x);
+	const int j0 = static_cast<int>(y);
+	const int k0 = static_cast<int>(z);
 
-	int i1 = amrex::min(i0 + 1, nx - 1);
-	int j1 = amrex::min(j0 + 1, ny - 1);
-	int k1 = amrex::min(k0 + 1, nz - 1);
+	const int i1 = amrex::min(i0 + 1, nx - 1);
+	const int j1 = amrex::min(j0 + 1, ny - 1);
+	const int k1 = amrex::min(k0 + 1, nz - 1);
 
 	amrex::Real fx = x - i0;
 	amrex::Real fy = y - j0;
@@ -258,7 +258,7 @@ template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
 	static bool isTurbSamplingDone = false;
 	if (!isTurbSamplingDone) {
 
-		amrex::ParmParse pp_turb("hd_galaxy");
+		const amrex::ParmParse pp_turb("hd_galaxy");
 
 		std::string turb_vx_file;
 		std::string turb_vy_file;
@@ -270,7 +270,7 @@ template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
 
 		// Infer cube size from file size (assumes cubic, equal x/y/z dimensions)
 		const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
-		const std::size_t n_turb_side = static_cast<std::size_t>(std::cbrt(static_cast<double>(n_turb)) + 0.5);
+		const auto n_turb_side = static_cast<std::size_t>(std::lround(std::cbrt(static_cast<double>(n_turb))));
 
 		userData_.turb_nx = static_cast<int>(n_turb_side);
 		userData_.turb_ny = static_cast<int>(n_turb_side);
@@ -479,7 +479,7 @@ template <> void QuokkaSimulation<HDGalaxy>::refineGrid(int lev, amrex::TagBoxAr
 	const auto dx = geom[lev].CellSizeArray();
 	const auto tag = tags.arrays();
 
-	amrex::ParmParse pp("hd_galaxy");
+	const amrex::ParmParse pp("hd_galaxy");
 	amrex::Real refine_Rcyl_kpc = NAN;
 	amrex::Real refine_Hcyl_kpc = NAN;
 	amrex::Real shrink_Rcyl_kpc = NAN;
@@ -943,7 +943,7 @@ template <> void QuokkaSimulation<HDGalaxy>::computeAfterTimestep()
 
 template <>
 void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-						   amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+						   amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &/*state_fc*/) const
 {
 	constexpr double cs_disk = quokka::EOS_Traits<HDGalaxy>::cs_disk;
 	constexpr double cs_cgm = quokka::EOS_Traits<HDGalaxy>::cs_cgm;
