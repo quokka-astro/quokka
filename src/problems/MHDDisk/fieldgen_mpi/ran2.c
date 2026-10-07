@@ -1,3 +1,4 @@
+/* NOLINT(*) */
 /* note #undef's at end of file */
 #define IM1 2147483563
 #define IM2 2147483399
