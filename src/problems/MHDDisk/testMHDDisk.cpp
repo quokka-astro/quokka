@@ -378,8 +378,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 {
 	// run only once
 	static bool was_called = false;
-	if (was_called)
+	if (was_called) {
 		return;
+	}
 	was_called = true;
 
 	amrex::ParmParse const pp("mhd_galaxy");
@@ -442,7 +443,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		if (line.empty() || line[0] == '#') {
 			continue;
 		}
-		std::size_t eq_pos = line.find('=');
+		const std::size_t eq_pos = line.find('=');
 		if (eq_pos == std::string::npos) {
 			continue;
 		}
@@ -450,16 +451,16 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		while (!key.empty() && (std::isspace(key.back()) != 0)) {
 			key.pop_back();
 		}
-		std::size_t start = key.find_first_not_of(" \t");
+		const std::size_t start = key.find_first_not_of(" \t");
 		if (start != std::string::npos) {
 			key = key.substr(start);
 		}
 		std::string val_str = line.substr(eq_pos + 1);
-		std::size_t first_num = val_str.find_first_not_of(" \t");
+		const std::size_t first_num = val_str.find_first_not_of(" \t");
 		if (first_num != std::string::npos) {
 			val_str = val_str.substr(first_num);
 		}
-		std::size_t end_num = val_str.find_first_of(" \t#[]");
+		const std::size_t end_num = val_str.find_first_of(" \t#[]");
 		if (end_num != std::string::npos) {
 			val_str = val_str.substr(0, end_num);
 		}
@@ -477,9 +478,18 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 				userData_.seed_str = val_str;
 			}
 		} catch (const std::exception &e) {
-			amrex::Abort("Error parsing '" + key + "' = '" + val_str + "' in " + aphi_meta_file + ": " + e.what());
-		}
-	}
+			std::string msg;
+			msg += "Error parsing '";
+			msg += key;
+			msg += "' = '";
+			msg += val_str;
+			msg += "' in ";
+			msg += aphi_meta_file;
+			msg += ": ";
+			msg += e.what();
+			amrex::Abort(msg);
+		}       
+	}           
 	meta_file.close();
 
 	if (userData_.seed_str.empty()) {
@@ -490,7 +500,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 					 "Error parsing cylindrical vector potential meta variables from init_seed_pot_field "
 					 "(seed_nR/seed_nz/seed_Rmax/seed_Lz must all be present and positive).");
 
-	std::size_t total_elements = userData_.seed_nR * userData_.seed_nz;
+	const std::size_t total_elements = userData_.seed_nR * userData_.seed_nz;
 	userData_.Aphi_device = load_bin_to_device(aphi_data_file, total_elements);
 
 	amrex::Print() << "Loaded 2D Cylindrical Aphi Table cleanly. Map Size: " << userData_.seed_nR << " x " << userData_.seed_nz << "\n";
@@ -526,16 +536,14 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	// get number of cells in file
 	const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
 	// take cube root to get sidelength
-	const std::size_t n_turb_side = int(std::cbrt(n_turb) + .5);
+	const std::size_t n_turb_side = static_cast<std::size_t>(std::lround(std::cbrt(static_cast<double>(n_turb))));
 
-	userData_.turb_nx = n_turb_side;
-	userData_.turb_ny = n_turb_side;
-	userData_.turb_nz = n_turb_side;
+	userData_.turb_nx = static_cast<int>(n_turb_side);
+	userData_.turb_ny = static_cast<int>(n_turb_side);
+	userData_.turb_nz = static_cast<int>(n_turb_side);
 
 	userData_.turb_vx_device = load_bin_to_device(turb_vx_file, n_turb);
-
 	userData_.turb_vy_device = load_bin_to_device(turb_vy_file, n_turb);
-
 	userData_.turb_vz_device = load_bin_to_device(turb_vz_file, n_turb);
 
 	std::string turb_seed_file;
@@ -544,8 +552,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		userData_.turb_seeds = load_turb_seeds(turb_seed_file);
 
 		amrex::Print() << "Turbulence seed file: " << turb_seed_file << " (seeds read = " << userData_.turb_seeds.size() << "):";
-		for (std::size_t r = 0; r < userData_.turb_seeds.size(); ++r) {
-			amrex::Print() << " " << userData_.turb_seeds[r];
+		for (long long turb_seed : userData_.turb_seeds) {
+			amrex::Print() << " " << turb_seed;
 		}
 		amrex::Print() << "\n";
 	}
