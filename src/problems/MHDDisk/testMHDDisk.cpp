@@ -536,7 +536,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	// get number of cells in file
 	const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
 	// take cube root to get sidelength
-	const std::size_t n_turb_side = static_cast<std::size_t>(std::lround(std::cbrt(static_cast<double>(n_turb))));
+	const auto n_turb_side = static_cast<std::size_t>(std::lround(std::cbrt(static_cast<double>(n_turb))));
 
 	userData_.turb_nx = static_cast<int>(n_turb_side);
 	userData_.turb_ny = static_cast<int>(n_turb_side);
@@ -552,7 +552,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		userData_.turb_seeds = load_turb_seeds(turb_seed_file);
 
 		amrex::Print() << "Turbulence seed file: " << turb_seed_file << " (seeds read = " << userData_.turb_seeds.size() << "):";
-		for (long long turb_seed : userData_.turb_seeds) {
+		for (const auto turb_seed : userData_.turb_seeds) {
 			amrex::Print() << " " << turb_seed;
 		}
 		amrex::Print() << "\n";
