@@ -42,6 +42,8 @@ constexpr double turb_target_Mach = 0.5;
 
 constexpr double r_K_factor = 2.0;  // physical kernel radius, in units of dx (paper default 3.0)
 constexpr int omega_subsamples = 4; // n_sub per dimension for boundary-cell overlap quadrature
+constexpr int initial_condition_subsamples = 16; // per dimension samples. 4 means 4³ samples
+constexpr int refine_grid_subsamples = 16; // per dimension samples. 4 means 4³ samples
 } // namespace
 
 struct MHDGalaxy {};
@@ -427,6 +429,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
 	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
 
+
 	// Load 2D Cylindrical A_phi Potential Table
 	std::string aphi_meta_file;
 	std::string aphi_data_file;
@@ -523,6 +526,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			       << "  B0_scale=" << userData_.seed_B0_HL << " G*cm (HL)\n";
 	}
 
+
 	// Turb Sampling
 	std::string turb_vx_file;
 	std::string turb_vy_file;
@@ -596,9 +600,14 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(B0_scale > 0.0, "Beta-derived seed field strength must be positive.");
 
 	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const auto dx = grid_elem.dx_;
 	const auto prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<amrex::Real> &state_cc = grid_elem.array_;
+
+	const auto dxvec = grid_elem.dx_;
+	const int subsample = initial_condition_subsamples;
+	const double dx = dxvec[0]/double(subsample);
+	const double dy = dxvec[1]/double(subsample);
+	const double dz = dxvec[2]/double(subsample);
 
 	const int turb_nx = userData_.turb_nx;
 	const int turb_ny = userData_.turb_ny;
@@ -654,7 +663,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		if (R_e < axis_dead_zone) {
 			return 0.0;
 		}
-		const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx[0], dx[1], dx[2]);
+		const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx, dy, dz);
 		const double Aphi = get_Aphi_physical(x_e, y_e, z_e);
 		return -Aphi * (y_e / R_e) * taper;
 	};
@@ -665,15 +674,21 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		if (R_e < axis_dead_zone) {
 			return 0.0;
 		}
-		const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx[0], dx[1], dx[2]);
+		const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx, dy, dz);
 		const double Aphi = get_Aphi_physical(x_e, y_e, z_e);
 		return Aphi * (x_e / R_e) * taper;
 	};
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		const double x = prob_lo[0] + (i + 0.5) * dx[0];
-		const double y = prob_lo[1] + (j + 0.5) * dx[1];
-		const double z = prob_lo[2] + (k + 0.5) * dx[2];
+
+		double rho_samples = 0.0, px_samples = 0.0, py_samples = 0.0, pz_samples = 0.0, Etot_samples = 0.0, Eint_samples = 0.0;
+
+		for (int a = 0; a < subsample; ++a)
+		for (int b = 0; b < subsample; ++b)
+		for (int c = 0; c < subsample; ++c) {
+		const double x = prob_lo[0] + (subsample*i + a + 0.5) * dx;
+		const double y = prob_lo[1] + (subsample*j + b + 0.5) * dy;
+		const double z = prob_lo[2] + (subsample*k + c + 0.5) * dz;
 		const double R = std::sqrt(x * x + y * y + 1e-200);
 
 		const double rho_disc_raw = diskDensityAnalytic(R, z, Rc, Rd, Sigma0, Mc, cs_disk);
@@ -711,23 +726,23 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double Eint = pressure / (gamma - 1.0);
 		const double Ekin = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 
-		const double x_node_lo = prob_lo[0] + i * dx[0];
-		const double x_node_hi = prob_lo[0] + (i + 1) * dx[0];
-		const double y_node_lo = prob_lo[1] + j * dx[1];
-		const double y_node_hi = prob_lo[1] + (j + 1) * dx[1];
-		const double z_node_lo = prob_lo[2] + k * dx[2];
-		const double z_node_hi = prob_lo[2] + (k + 1) * dx[2];
+		const double x_node_lo = prob_lo[0] + (subsample*i + a + 0) * dx;
+		const double x_node_hi = prob_lo[0] + (subsample*i + a + 1) * dx;
+		const double y_node_lo = prob_lo[1] + (subsample*j + b + 0) * dy;
+		const double y_node_hi = prob_lo[1] + (subsample*j + b + 1) * dy;
+		const double z_node_lo = prob_lo[2] + (subsample*k + c + 0) * dz;
+		const double z_node_hi = prob_lo[2] + (subsample*k + c + 1) * dz;
 
 		const double Ay_hi_left = get_Ay(x_node_lo, y, z_node_hi);
 		const double Ay_lo_left = get_Ay(x_node_lo, y, z_node_lo);
 		const double Ay_hi_right = get_Ay(x_node_hi, y, z_node_hi);
 		const double Ay_lo_right = get_Ay(x_node_hi, y, z_node_lo);
-		double Bx_face_left = -(Ay_hi_left - Ay_lo_left) / dx[2];
-		double Bx_face_right = -(Ay_hi_right - Ay_lo_right) / dx[2];
-		if (std::abs(x_node_lo - prob_lo_dom[0]) < boundary_tol * dx[0] || std::abs(x_node_lo - prob_hi_dom[0]) < boundary_tol * dx[0]) {
+		double Bx_face_left = -(Ay_hi_left - Ay_lo_left) / dz;
+		double Bx_face_right = -(Ay_hi_right - Ay_lo_right) / dz;
+		if (std::abs(x_node_lo - prob_lo_dom[0]) < boundary_tol * dx || std::abs(x_node_lo - prob_hi_dom[0]) < boundary_tol * dx) {
 			Bx_face_left = 0.0;
 		}
-		if (std::abs(x_node_hi - prob_lo_dom[0]) < boundary_tol * dx[0] || std::abs(x_node_hi - prob_hi_dom[0]) < boundary_tol * dx[0]) {
+		if (std::abs(x_node_hi - prob_lo_dom[0]) < boundary_tol * dx || std::abs(x_node_hi - prob_hi_dom[0]) < boundary_tol * dx) {
 			Bx_face_right = 0.0;
 		}
 		const double Bx_cc = 0.5 * (Bx_face_left + Bx_face_right);
@@ -736,12 +751,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double Ax_lo_bot = get_Ax(x, y_node_lo, z_node_lo);
 		const double Ax_hi_top = get_Ax(x, y_node_hi, z_node_hi);
 		const double Ax_lo_top = get_Ax(x, y_node_hi, z_node_lo);
-		double By_face_bot = (Ax_hi_bot - Ax_lo_bot) / dx[2];
-		double By_face_top = (Ax_hi_top - Ax_lo_top) / dx[2];
-		if (std::abs(y_node_lo - prob_lo_dom[1]) < boundary_tol * dx[1] || std::abs(y_node_lo - prob_hi_dom[1]) < boundary_tol * dx[1]) {
+		double By_face_bot = (Ax_hi_bot - Ax_lo_bot) / dz;
+		double By_face_top = (Ax_hi_top - Ax_lo_top) / dz;
+		if (std::abs(y_node_lo - prob_lo_dom[1]) < boundary_tol * dy || std::abs(y_node_lo - prob_hi_dom[1]) < boundary_tol * dy) {
 			By_face_bot = 0.0;
 		}
-		if (std::abs(y_node_hi - prob_lo_dom[1]) < boundary_tol * dx[1] || std::abs(y_node_hi - prob_hi_dom[1]) < boundary_tol * dx[1]) {
+		if (std::abs(y_node_hi - prob_lo_dom[1]) < boundary_tol * dy || std::abs(y_node_hi - prob_hi_dom[1]) < boundary_tol * dy) {
 			By_face_top = 0.0;
 		}
 		const double By_cc = 0.5 * (By_face_bot + By_face_top);
@@ -750,16 +765,25 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double Ay_l_cc = get_Ay(x_node_lo, y, z);
 		const double Ax_t_cc = get_Ax(x, y_node_hi, z);
 		const double Ax_b_cc = get_Ax(x, y_node_lo, z);
-		const double Bz_cc = ((Ay_r_cc - Ay_l_cc) / dx[0]) - ((Ax_t_cc - Ax_b_cc) / dx[1]);
+		const double Bz_cc = ((Ay_r_cc - Ay_l_cc) / dx) - ((Ax_t_cc - Ax_b_cc) / dy);
 
 		const double Emag = 0.5 * (Bx_cc * Bx_cc + By_cc * By_cc + Bz_cc * Bz_cc);
 
-		state_cc(i, j, k, HydroSystem<MHDGalaxy>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index) = rho * vx;
-		state_cc(i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index) = rho * vy;
-		state_cc(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<MHDGalaxy>::energy_index) = Ekin + Eint + Emag;
-		state_cc(i, j, k, HydroSystem<MHDGalaxy>::internalEnergy_index) = Eint;
+		rho_samples += rho;
+		px_samples += rho * vx;
+		py_samples += rho * vy;
+		pz_samples += rho * vz;
+		Etot_samples += Ekin + Eint + Emag;
+		Eint_samples += Eint;
+		}
+
+		const auto n_samples = double(subsample * subsample * subsample);
+		state_cc(i, j, k, HydroSystem<MHDGalaxy>::density_index) = rho_samples / n_samples;
+		state_cc(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index) = px_samples / n_samples;
+		state_cc(i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index) = py_samples / n_samples;
+		state_cc(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index) = pz_samples / n_samples;
+		state_cc(i, j, k, HydroSystem<MHDGalaxy>::energy_index) = Etot_samples / n_samples;
+		state_cc(i, j, k, HydroSystem<MHDGalaxy>::internalEnergy_index) = Eint_samples / n_samples;
 	});
 }
 
@@ -957,7 +981,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 
 template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx = geom[lev].CellSizeArray();
 	const auto tag = tags.arrays();
@@ -998,11 +1021,14 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(int lev, amrex::TagBoxA
 				tag[bx](i, j, k) = amrex::TagBox::SET;
 			}
 		};
-		// Test all 8 corners, not just the cell center, so cells straddling the
-		// refinement-region boundary still get tagged.
-		for (auto const &x : {x0, x1}) {
-			for (auto const &y : {y0, y1}) {
-				for (auto const &z : {z0, z1}) {
+
+		constexpr int subsamples = refine_grid_subsamples;
+		for (int a = 0; a < subsamples; ++a) {
+			const amrex::Real x = std::lerp(x0,x1,a/(subsamples-1));
+			for (int b = 0; b < subsamples; ++b) {
+				const amrex::Real y = std::lerp(y0,y1,b/(subsamples-1));
+				for (int c = 0; c < subsamples; ++c) {
+					const amrex::Real z = std::lerp(z0,z1,c/(subsamples-1));
 					tagIfInRegion(x, y, z);
 				}
 			}
