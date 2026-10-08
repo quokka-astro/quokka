@@ -81,6 +81,7 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real Rc{};
 	amrex::Real Rd{};
 	amrex::Real Rmax{};
+	amrex::Real Rcutoff{};
 	amrex::Real Q_mean{};
 	amrex::Real Mc{};
 	amrex::Real vc{};
@@ -392,6 +393,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	userData_.Rd *= 1.0e3 * C::parsec;
 	pp.get("Rmax_kpc", userData_.Rmax);
 	userData_.Rmax *= 1.0e3 * C::parsec;
+	pp.get("Rcutoff_kpc", userData_.Rcutoff);
+	userData_.Rcutoff *= 1.0e3 * C::parsec;
 	pp.get("Mc", userData_.Mc);
 	pp.get("Q_mean", userData_.Q_mean);
 	pp.query("sn_jeans_J", userData_.sn_jeans_J);
@@ -590,6 +593,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	const double Mc = userData_.Mc;
 	const double Rc = userData_.Rc;
 	const double Rd = userData_.Rd;
+	const double Rcutoff = userData_.Rcutoff;
 	const double Sigma0 = userData_.Sigma0;
 	const double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
 	const double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
@@ -691,7 +695,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double z = prob_lo[2] + (subsample*k + c + 0.5) * dz;
 		const double R = std::sqrt(x * x + y * y + 1e-200);
 
-		const double rho_disc_raw = diskDensityAnalytic(R, z, Rc, Rd, Sigma0, Mc, cs_disk);
+		const double rho_disc_raw = R < Rcutoff ? diskDensityAnalytic(R, z, Rc, Rd, Sigma0, Mc, cs_disk) : 0.0;
 		const bool in_disk = (rho_disc_raw > rho_transition);
 		const double rho = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
 		const double cs = in_disk ? cs_disk : cs_cgm;
