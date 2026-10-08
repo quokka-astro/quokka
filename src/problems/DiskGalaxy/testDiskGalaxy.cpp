@@ -49,7 +49,7 @@ namespace
 constexpr double keV_in_ergs = 1000.0 * C::ev2erg; // ergs == 1 keV
 constexpr double seconds_per_year = 3.15576e7;
 
-// Trilinear interpolation into a turbulence cube written by
+// Trilinear interpolation into a turbulence cube written in
 // MHDDisk/fieldgen_mpi/fieldgen3. The on-disk layout is row-major [i][j][k] with
 // k fastest-varying (not AMReX's Array4 convention). x, y, z are fractional
 // table indices.
