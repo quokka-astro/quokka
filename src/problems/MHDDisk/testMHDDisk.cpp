@@ -985,28 +985,22 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(int lev, amrex::TagBoxA
 	const auto dx = geom[lev].CellSizeArray();
 	const auto tag = tags.arrays();
 
-	amrex::ParmParse pp("mhd_galaxy");
-	amrex::Real refine_Rcyl_kpc = NAN;
-	amrex::Real refine_Hcyl_kpc = NAN;
-	amrex::Real shrink_Rcyl_kpc = NAN;
-	amrex::Real shrink_Hcyl_kpc = NAN;
-	pp.query("refine_Rcyl_kpc", refine_Rcyl_kpc);
-	pp.query("refine_Hcyl_kpc", refine_Hcyl_kpc);
-	pp.query("refine_Rcyl_shrink_per_level_kpc", shrink_Rcyl_kpc);
-	pp.query("refine_Hcyl_shrink_per_level_kpc", shrink_Hcyl_kpc);
-	AMREX_ALWAYS_ASSERT(!std::isnan(refine_Rcyl_kpc));
-	AMREX_ALWAYS_ASSERT(!std::isnan(refine_Hcyl_kpc));
-	AMREX_ALWAYS_ASSERT(!std::isnan(shrink_Rcyl_kpc));
-	AMREX_ALWAYS_ASSERT(!std::isnan(shrink_Hcyl_kpc));
+	amrex::ParmParse const pp("mhd_galaxy");
+	// clang-format off
+	amrex::Real refine_Rcyl; pp.get("refine_Rcyl_kpc",                  refine_Rcyl); refine_Rcyl *= 1.0e3 * C::parsec;
+	amrex::Real refine_Hcyl; pp.get("refine_Hcyl_kpc",                  refine_Hcyl); refine_Hcyl *= 1.0e3 * C::parsec;
+	amrex::Real shrink_Rcyl; pp.get("refine_Rcyl_shrink_per_level_kpc", shrink_Rcyl); shrink_Rcyl *= 1.0e3 * C::parsec;
+	amrex::Real shrink_Hcyl; pp.get("refine_Hcyl_shrink_per_level_kpc", shrink_Hcyl); shrink_Hcyl *= 1.0e3 * C::parsec;
+	// clang-format on
 
 	// Shrink the refinement cylinder at each successive level, floored at 30% of the
 	// base size, so finer levels progressively focus on the disk core instead of all
 	// sharing the same footprint out to refine_Rcyl/refine_Hcyl.
-	shrink_Rcyl_kpc *= lev;
-	shrink_Hcyl_kpc *= lev;
+	shrink_Rcyl *= lev;
+	shrink_Hcyl *= lev;
 
-	const amrex::Real Rcyl_lev = amrex::max(refine_Rcyl_kpc - shrink_Rcyl_kpc, 0.3 * refine_Rcyl_kpc) * 1.0e3 * C::parsec;
-	const amrex::Real Hcyl_lev = amrex::max(refine_Hcyl_kpc - shrink_Hcyl_kpc, 0.3 * refine_Hcyl_kpc) * 1.0e3 * C::parsec;
+	const amrex::Real Rcyl_lev = amrex::max(refine_Rcyl - shrink_Rcyl, 0.3 * refine_Rcyl);
+	const amrex::Real Hcyl_lev = amrex::max(refine_Hcyl - shrink_Hcyl, 0.3 * refine_Hcyl);
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const amrex::Real x0 = prob_lo[0] + i * dx[0];
@@ -1017,7 +1011,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(int lev, amrex::TagBoxA
 		const amrex::Real z1 = z0 + dx[2];
 
 		auto tagIfInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
-			if (std::sqrt(x * x + y * y) < Rcyl_lev && std::abs(z) < Hcyl_lev) {
+			const auto R = std::sqrt(x * x + y * y);
+			if (R < Rcyl_lev && std::abs(z) < Hcyl_lev) {
 				tag[bx](i, j, k) = amrex::TagBox::SET;
 			}
 		};
