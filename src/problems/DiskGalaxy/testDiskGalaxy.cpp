@@ -53,6 +53,12 @@ constexpr double seconds_per_year = 3.15576e7;
 // MHDDisk/fieldgen_mpi/fieldgen3. The on-disk layout is row-major [i][j][k] with
 // k fastest-varying (not AMReX's Array4 convention). x, y, z are fractional
 // table indices.
+// Command (in that directory; writes v.bin.1/.2/.3 = vx/vy/vz):
+//  mpirun -np 8 ./fieldgen3 v.bin 256 2 64 -1.66667 1
+// i.e. 256^3 doubles, kmin=2, kmax=64, spectral index -1.66667, stddev=1.
+// Per-rank seeds are read from seed.txt (one per MPI rank, so 8 ranks). The seed.txt
+// used for these cubes was not saved, so a rerun will not be bit-identical;
+
 AMREX_GPU_HOST_DEVICE
 inline auto interpolate_turbulence(const amrex::Real *table, int nx, int ny, int nz, amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
 {
