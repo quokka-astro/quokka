@@ -42,8 +42,8 @@ constexpr double turb_target_Mach = 0.5;
 
 constexpr double r_K_factor = 2.0;  // physical kernel radius, in units of dx (paper default 3.0)
 constexpr int omega_subsamples = 4; // n_sub per dimension for boundary-cell overlap quadrature
-constexpr int initial_condition_subsamples = 16; // per dimension samples. 4 means 4³ samples
-constexpr int refine_grid_subsamples = 16; // per dimension samples. 4 means 4³ samples
+constexpr int initial_condition_subsamples = 4; // per dimension samples. 4 means 4³ samples
+constexpr int refine_grid_subsamples = 4; // per dimension samples. 4 means 4³ samples
 } // namespace
 
 struct MHDGalaxy {};
