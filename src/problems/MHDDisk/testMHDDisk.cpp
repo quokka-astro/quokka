@@ -40,10 +40,10 @@ constexpr double target_beta_seed = 1.0e3;
 constexpr double axis_fallback_cells = 1.0;
 constexpr double turb_target_Mach = 0.5;
 
-constexpr double r_K_factor = 2.0;  // physical kernel radius, in units of dx (paper default 3.0)
-constexpr int omega_subsamples = 4; // n_sub per dimension for boundary-cell overlap quadrature
+constexpr double r_K_factor = 2.0;		// physical kernel radius, in units of dx (paper default 3.0)
+constexpr int omega_subsamples = 4;		// n_sub per dimension for boundary-cell overlap quadrature
 constexpr int initial_condition_subsamples = 4; // per dimension samples. 4 means 4³ samples
-constexpr int refine_grid_subsamples = 4; // per dimension samples. 4 means 4³ samples
+constexpr int refine_grid_subsamples = 4;	// per dimension samples. 4 means 4³ samples
 } // namespace
 
 struct MHDGalaxy {};
@@ -528,7 +528,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			       << "  B0_scale=" << userData_.seed_B0_HL << " G*cm (HL)\n";
 	}
 
-
 	// Turb Sampling
 	std::string turb_vx_file;
 	std::string turb_vy_file;
@@ -608,9 +607,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 
 	const auto dxvec = grid_elem.dx_;
 	const int subsample = initial_condition_subsamples;
-	const double dx = dxvec[0]/double(subsample);
-	const double dy = dxvec[1]/double(subsample);
-	const double dz = dxvec[2]/double(subsample);
+	const double dx = dxvec[0] / double(subsample);
+	const double dy = dxvec[1] / double(subsample);
+	const double dz = dxvec[2] / double(subsample);
 
 	const int turb_nx = userData_.turb_nx;
 	const int turb_ny = userData_.turb_ny;
@@ -682,10 +681,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		return Aphi * (x_e / R_e) * taper;
 	};
 
-	auto sampleSubcell = [=] AMREX_GPU_DEVICE(
-		int i, int j, int k,
-		double& rho_samples, double& px_samples, double& py_samples, double& pz_samples, double& Etot_samples, double& Eint_samples
-	) {
+	auto sampleSubcell = [=] AMREX_GPU_DEVICE(int i, int j, int k, double &rho_samples, double &px_samples, double &py_samples, double &pz_samples,
+						  double &Etot_samples, double &Eint_samples) {
 		const double x = prob_lo[0] + (i + 0.5) * dx;
 		const double y = prob_lo[1] + (j + 0.5) * dy;
 		const double z = prob_lo[2] + (k + 0.5) * dz;
@@ -778,17 +775,14 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	};
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-
 		const auto n_samples = double(subsample * subsample * subsample);
 		double rho_samples = 0.0, px_samples = 0.0, py_samples = 0.0, pz_samples = 0.0, Etot_samples = 0.0, Eint_samples = 0.0;
 
 		for (int a = 0; a < subsample; ++a) {
 			for (int b = 0; b < subsample; ++b) {
 				for (int c = 0; c < subsample; ++c) {
-					sampleSubcell(
-						subsample * i + a, subsample * j + b, subsample * k + c,
-						rho_samples, px_samples, py_samples, pz_samples, Etot_samples, Eint_samples
-					);
+					sampleSubcell(subsample * i + a, subsample * j + b, subsample * k + c, rho_samples, px_samples, py_samples, pz_samples,
+						      Etot_samples, Eint_samples);
 				}
 			}
 		}
@@ -1037,11 +1031,11 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(int lev, amrex::TagBoxA
 
 		constexpr int subsamples = refine_grid_subsamples;
 		for (int a = 0; a < subsamples; ++a) {
-			const amrex::Real x = std::lerp(x0,x1,a/(subsamples-1));
+			const amrex::Real x = std::lerp(x0, x1, a / (subsamples - 1));
 			for (int b = 0; b < subsamples; ++b) {
-				const amrex::Real y = std::lerp(y0,y1,b/(subsamples-1));
+				const amrex::Real y = std::lerp(y0, y1, b / (subsamples - 1));
 				for (int c = 0; c < subsamples; ++c) {
-					const amrex::Real z = std::lerp(z0,z1,c/(subsamples-1));
+					const amrex::Real z = std::lerp(z0, z1, c / (subsamples - 1));
 					tagIfInRegion(x, y, z);
 				}
 			}
@@ -1530,9 +1524,7 @@ void QuokkaSimulation<MHDGalaxy>::ComputeDerivedVar(int lev, std::string const &
 
 	// default case
 	auto out_arrs = mf.arrays();
-	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		out_arrs[bx](i, j, k, ncomp) = NAN;
-	});
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { out_arrs[bx](i, j, k, ncomp) = NAN; });
 	amrex::Gpu::streamSynchronize();
 }
 
