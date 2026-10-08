@@ -432,7 +432,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
 	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
 
-
 	// Load 2D Cylindrical A_phi Potential Table
 	std::string aphi_meta_file;
 	std::string aphi_data_file;
