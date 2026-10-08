@@ -682,16 +682,13 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		return Aphi * (x_e / R_e) * taper;
 	};
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-
-		double rho_samples = 0.0, px_samples = 0.0, py_samples = 0.0, pz_samples = 0.0, Etot_samples = 0.0, Eint_samples = 0.0;
-
-		for (int a = 0; a < subsample; ++a)
-		for (int b = 0; b < subsample; ++b)
-		for (int c = 0; c < subsample; ++c) {
-		const double x = prob_lo[0] + (subsample*i + a + 0.5) * dx;
-		const double y = prob_lo[1] + (subsample*j + b + 0.5) * dy;
-		const double z = prob_lo[2] + (subsample*k + c + 0.5) * dz;
+	auto sampleSubcell = [=] AMREX_GPU_DEVICE(
+		int i, int j, int k,
+		double& rho_samples, double& px_samples, double& py_samples, double& pz_samples, double& Etot_samples, double& Eint_samples
+	) {
+		const double x = prob_lo[0] + (i + 0.5) * dx;
+		const double y = prob_lo[1] + (j + 0.5) * dy;
+		const double z = prob_lo[2] + (k + 0.5) * dz;
 		const double R = std::sqrt(x * x + y * y + 1e-200);
 
 		const double rho_disc_raw = R < Rcutoff ? diskDensityAnalytic(R, z, Rc, Rd, Sigma0, Mc, cs_disk) : 0.0;
@@ -729,12 +726,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double Eint = pressure / (gamma - 1.0);
 		const double Ekin = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 
-		const double x_node_lo = prob_lo[0] + (subsample*i + a + 0) * dx;
-		const double x_node_hi = prob_lo[0] + (subsample*i + a + 1) * dx;
-		const double y_node_lo = prob_lo[1] + (subsample*j + b + 0) * dy;
-		const double y_node_hi = prob_lo[1] + (subsample*j + b + 1) * dy;
-		const double z_node_lo = prob_lo[2] + (subsample*k + c + 0) * dz;
-		const double z_node_hi = prob_lo[2] + (subsample*k + c + 1) * dz;
+		const double x_node_lo = prob_lo[0] + (i + 0) * dx;
+		const double x_node_hi = prob_lo[0] + (i + 1) * dx;
+		const double y_node_lo = prob_lo[1] + (j + 0) * dy;
+		const double y_node_hi = prob_lo[1] + (j + 1) * dy;
+		const double z_node_lo = prob_lo[2] + (k + 0) * dz;
+		const double z_node_hi = prob_lo[2] + (k + 1) * dz;
 
 		const double Ay_hi_left = get_Ay(x_node_lo, y, z_node_hi);
 		const double Ay_lo_left = get_Ay(x_node_lo, y, z_node_lo);
@@ -778,9 +775,25 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		pz_samples += rho * vz;
 		Etot_samples += Ekin + Eint + Emag;
 		Eint_samples += Eint;
-		}
+	};
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 
 		const auto n_samples = double(subsample * subsample * subsample);
+		double rho_samples = 0.0, px_samples = 0.0, py_samples = 0.0, pz_samples = 0.0, Etot_samples = 0.0, Eint_samples = 0.0;
+
+		for (int a = 0; a < subsample; ++a) {
+			for (int b = 0; b < subsample; ++b) {
+				for (int c = 0; c < subsample; ++c) {
+					sampleSubcell(
+						subsample * i + a, subsample * j + b, subsample * k + c,
+						rho_samples, px_samples, py_samples, pz_samples, Etot_samples, Eint_samples
+					);
+				}
+			}
+		}
+
+		// set cell to average of subcells
 		state_cc(i, j, k, HydroSystem<MHDGalaxy>::density_index) = rho_samples / n_samples;
 		state_cc(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index) = px_samples / n_samples;
 		state_cc(i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index) = py_samples / n_samples;
