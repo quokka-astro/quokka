@@ -169,22 +169,20 @@ template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGridF
 
 template <> void QuokkaSimulation<WindCloudProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tracer-based refinement: tag cells that are less than 50% cloud AND less than 50% wind,
-	// i.e. cells in the cloud-wind mixing/interface region
-	const amrex::Real refine_threshold = 0.5 * Tracer;
-
 	auto const &state = state_new_cc_[lev].const_arrays();
 	auto const tag = tags.arrays();
 
-	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// the scalars are mass-weighted (rho * concentration), so divide by rho to recover the concentration
-		amrex::Real const rho = state[bx](i, j, k, HydroSystem<WindCloudProblem>::density_index);
-		amrex::Real const cloudTracer = state[bx](i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) / rho;
-		amrex::Real const windTracer = state[bx](i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) / rho;
-		if (cloudTracer < refine_threshold && windTracer < refine_threshold) {
-			tag[bx](i, j, k) = amrex::TagBox::SET;
-		}
-	});
+	const amrex::Real C_lo = 0.1;   // lowest cloud fraction counted as tail
+	const amrex::Real C_hi = 0.9;      // above this = core, don't tag
+
+amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+    amrex::Real const rho = state[bx](i, j, k, HydroSystem<WindCloudProblem>::density_index);
+    amrex::Real const C = state[bx](i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) / rho;
+
+    if (C > C_lo && C < C_hi) {
+        tag[bx](i, j, k) = amrex::TagBox::SET;
+    }
+});
 	amrex::Gpu::streamSynchronize();
 }
 
