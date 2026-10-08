@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadhydroShockMultigroup.cpp
 /// \brief Defines a test problem for a multigroup gray-opacity non-equilibrium radiative shock.
 ///

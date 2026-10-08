@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2024 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDiskGalaxy.cpp
 /// \brief Defines a simulation using disk galaxy initial conditions.
 ///

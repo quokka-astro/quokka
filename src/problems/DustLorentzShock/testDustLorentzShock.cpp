@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustLorentzShock.cpp
 /// \brief Fluid-dust Lorentz shock regression test inspired by Moseley et al. (2023).
 

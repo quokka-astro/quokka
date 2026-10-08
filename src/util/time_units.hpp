@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef TIME_UNITS_HPP_
 #define TIME_UNITS_HPP_
 /// \file time_units.hpp

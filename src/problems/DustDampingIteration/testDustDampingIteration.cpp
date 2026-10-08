@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustDampingIteration.cpp
 /// \brief Defines a test problem for dust iterative stopping time
 ///

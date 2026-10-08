@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadDust.cpp
 /// \brief Defines a single-group test problem for gas-dust-radiation coupling in uniform medium.
 ///

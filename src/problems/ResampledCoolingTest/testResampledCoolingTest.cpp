@@ -1,10 +1,8 @@
 // ABOUTME: Test problem for cooling integrator accuracy using isochoric cooling
 // ABOUTME: Uses the ResampledCooling module via runtime parameter
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testResampledCoolingTest.cpp
 /// \brief Defines a test problem for cooling integrator accuracy using the ResampledCooling module.
 ///

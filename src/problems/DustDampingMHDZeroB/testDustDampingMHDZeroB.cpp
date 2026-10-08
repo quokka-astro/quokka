@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustDampingMHDZeroB.cpp
 /// \brief Dust drag damping test with MHD enabled and zero magnetic field.
 ///

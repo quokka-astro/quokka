@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef DUSTSTATE_HPP_ // NOLINT
 #define DUSTSTATE_HPP_
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef STAR_PARTICLE_INDICES_H_
 #define STAR_PARTICLE_INDICES_H_
 

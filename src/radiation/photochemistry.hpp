@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef PHOTOCHEMISTRY_HPP_ // NOLINT
 #define PHOTOCHEMISTRY_HPP_
 

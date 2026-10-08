@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustDampingIterationMHDZeroCharge.cpp
 /// \brief Dust damping test for the MHD dust drag and Lorentz integrator with zero charge-to-mass ratio.
 ///

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef DIAGFRAMEPLANE_H
 #define DIAGFRAMEPLANE_H
 

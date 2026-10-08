@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadMarshakVaytet.cpp
 /// \brief Defines a Marshak wave problem with variable opacity.
 ///
