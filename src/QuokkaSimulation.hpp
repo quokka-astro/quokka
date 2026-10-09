@@ -235,6 +235,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	SlopeLimiter mhdPlmLimiter_ = SlopeLimiter::sweby;
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
+	int fofcAtDensityFloor_ = 0;		// 0 == FOFC triggers on rho<=0 (default); 1 == FOFC triggers on rho<density_floor
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 	amrex::Real shearViscosity_ = 0.0;	// shear viscosity coefficient; see viscous CFL limit below
 	amrex::Real bulkViscosity_ = 0.0;	// bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
@@ -634,6 +635,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("plm_limiter", plmLimiter_);
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
+		hpp.query("fofc_at_density_floor", fofcAtDensityFloor_);
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
 		if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
 			hpp.query("shear_viscosity", shearViscosity_);
@@ -2537,7 +2539,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
 			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag);
-			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, nvars_, redoFlag);
+			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, nvars_, redoFlag, densityFloor_, fofcAtDensityFloor_);
 
 			// LOW LEVEL DEBUGGING: output rhs
 			if (lowLevelDebuggingOutput_ == 1) {
@@ -2590,7 +2592,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				// re-do RK update
 				HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
 				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag);
-				HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, nvars_, redoFlag);
+				HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, nvars_, redoFlag, densityFloor_, fofcAtDensityFloor_);
 
 				amrex::Gpu::streamSynchronizeAll(); // just in case
 				amrex::Long const ncells_bad = static_cast<int>(redoFlag.sum(0));
@@ -2681,7 +2683,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, nvars_);
 			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag);
-			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag);
+			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag, densityFloor_, fofcAtDensityFloor_);
 
 			// do first-order flux correction (FOFC)
 			amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -2707,7 +2709,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				// re-do RK update
 				HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, nvars_);
 				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag);
-				HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag);
+				HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag, densityFloor_, fofcAtDensityFloor_);
 
 				amrex::Gpu::streamSynchronizeAll(); // just in case
 				amrex::Long const ncells_bad = redoFlag.sum(0);
