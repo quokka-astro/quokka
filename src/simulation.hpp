@@ -402,6 +402,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
+	void regridIfNeeded(int lev, amrex::Real time);
 	void regrid(int lbase, amrex::Real time, bool initial) override;
 	void calculateGpotAllLevels();
 	void gravAccelAllLevels(amrex::Real dt);
@@ -1592,6 +1593,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			}
 		}
 
+		// With synchronized AMR timesteps, regrid before computing dt so newly
+		// created fine levels participate in the timestep constraint.
+		if (do_subcycle == 0) {
+			regridIfNeeded(0, cur_time);
+		}
+
 		computeTimestep();
 
 		// Check for timestep drop (safety feature)
@@ -2228,6 +2235,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;
 
+	particleRegister_.updateChemicalFeedback(state_new_cc_[lev], lev, time, dt);
+
 	// Enforce floors and limits on hydro state to ensure we have valid hydro states
 	FixupState(lev);
 
@@ -2302,6 +2311,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 				       InterpHookNone, FillPatchType::fillpatch_function);
 	}
 
+	// SNII and AGB yields are injected at death; continuous WR feedback precedes accretion and particle creation.
+	particleRegister_.depositChemicalFeedback(state_new_cc_[lev], lev, time, dt);
+
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
 	sn_count_ = num_sn_explosions;
@@ -2325,66 +2337,84 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 // keeps the virtual method available for future diagnostics.
 template <typename problem_t> void AMRSimulation<problem_t>::regrid(int lbase, amrex::Real time, bool initial) { amrex::AmrCore::regrid(lbase, time, initial); }
 
+template <typename problem_t> void AMRSimulation<problem_t>::regridIfNeeded(int lev, amrex::Real time)
+{
+	BL_PROFILE("AMRSimulation::regridIfNeeded()"); // NOLINT(misc-const-correctness)
+
+	if (regrid_int <= 0) {
+		return;
+	}
+
+	// help keep track of whether a level was already regridded
+	// from a coarser level call to regrid
+	static amrex::Vector<int> last_regrid_step(max_level + 1, 0);
+
+	// regrid changes level "lev+1" so we don't regrid on max_level
+	// also make sure we don't regrid fine levels again if
+	// it was taken care of during a coarser regrid
+	bool force_finest_regrid = false;
+#if AMREX_SPACEDIM == 3
+	// When ForceFinestLevel particles exist (e.g., sink particles), a level-0 regrid is
+	// forced at the start of every coarse step (istep[0] == 0), regardless of regrid_interval.
+	// This ensures the AMR hierarchy is fully rebuilt around sink particles before any level
+	// advance occurs, preventing the subcycled regrid from losing finest-level coverage.
+	force_finest_regrid = (lev == 0 && lev < max_level && istep[lev] == 0 && particleRegister_.anyParticleRequiresFinestLevel());
+#endif
+	if ((lev < max_level && istep[lev] > last_regrid_step[lev]) || force_finest_regrid) {
+		if (istep[lev] % regrid_int == 0 || force_finest_regrid) {
+			// regrid could add newly refined levels (if finest_level < max_level)
+			// so we save the previous finest level index
+			int old_finest = finest_level;
+			regrid(lev, time, false);
+
+			// mark that we have regridded this level already
+			for (int k = lev; k <= finest_level; ++k) {
+				last_regrid_step[k] = istep[k];
+			}
+
+			// if there are newly created levels, set the time step
+			for (int k = old_finest + 1; k <= finest_level; ++k) {
+				if (do_subcycle != 0) {
+					dt_[k] = dt_[k - 1] / nsubsteps[k];
+				} else {
+					dt_[k] = dt_[k - 1];
+				}
+			}
+
+			// redistribute particles
+			if (do_tracers != 0) {
+				TracerPC->Redistribute(lev);
+			}
+
+#if AMREX_SPACEDIM == 3
+			// redistribute all particles in particleRegister_
+			particleRegister_.redistribute(lev);
+#endif // AMREX_SPACEDIM == 3
+
+			// do fix-up on all levels that have been re-gridded
+			for (int k = lev; k <= finest_level; ++k) {
+				FixupState(k);
+			}
+
+			// Regridding changes the AMR hierarchy, so rebuild the gravitational
+			// potential before the pre-advance particle kick accesses phi on a
+			// newly created or remade level.
+			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+				calculateGpotAllLevels();
+			}
+		}
+	}
+}
+
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
 template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, int iteration)
 {
 	BL_PROFILE("AMRSimulation::timeStepWithSubcycling()"); // NOLINT(misc-const-correctness)
 
-	// perform regrid if needed
-	if (regrid_int > 0) {
-		// help keep track of whether a level was already regridded
-		// from a coarser level call to regrid
-		static amrex::Vector<int> last_regrid_step(max_level + 1, 0);
-
-		// regrid changes level "lev+1" so we don't regrid on max_level
-		// also make sure we don't regrid fine levels again if
-		// it was taken care of during a coarser regrid
-		bool force_finest_regrid = false;
-#if AMREX_SPACEDIM == 3
-		// When ForceFinestLevel particles exist (e.g., sink particles), a level-0 regrid is
-		// forced at the start of every coarse step (istep[0] == 0), regardless of regrid_interval.
-		// This ensures the AMR hierarchy is fully rebuilt around sink particles before any level
-		// advance occurs, preventing the subcycled regrid from losing finest-level coverage.
-		force_finest_regrid = (lev == 0 && lev < max_level && istep[lev] == 0 && particleRegister_.anyParticleRequiresFinestLevel());
-#endif
-		if ((lev < max_level && istep[lev] > last_regrid_step[lev]) || force_finest_regrid) {
-			if (istep[lev] % regrid_int == 0 || force_finest_regrid) {
-				// regrid could add newly refined levels (if finest_level < max_level)
-				// so we save the previous finest level index
-				int old_finest = finest_level;
-				regrid(lev, time, false);
-
-				// mark that we have regridded this level already
-				for (int k = lev; k <= finest_level; ++k) {
-					last_regrid_step[k] = istep[k];
-				}
-
-				// if there are newly created levels, set the time step
-				for (int k = old_finest + 1; k <= finest_level; ++k) {
-					if (do_subcycle != 0) {
-						dt_[k] = dt_[k - 1] / nsubsteps[k];
-					} else {
-						dt_[k] = dt_[k - 1];
-					}
-				}
-
-				// redistribute particles
-				if (do_tracers != 0) {
-					TracerPC->Redistribute(lev);
-				}
-
-#if AMREX_SPACEDIM == 3
-				// redistribute all particles in particleRegister_
-				particleRegister_.redistribute(lev);
-#endif // AMREX_SPACEDIM == 3
-
-				// do fix-up on all levels that have been re-gridded
-				for (int k = lev; k <= finest_level; ++k) {
-					FixupState(k);
-				}
-			}
-		}
+	// For synchronized timesteps, regridding already happened before computeTimestep().
+	if (do_subcycle != 0) {
+		regridIfNeeded(lev, time);
 	}
 
 	if (Verbose()) {
@@ -3880,7 +3910,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 	detail::verify_particle_switch_type<problem_t>();
 
 	// Read particle parameters from input file
-	quokka::particleParmParse();
+	quokka::particleParmParse<problem_t>();
 
 	// Sink and Star both accrete via the same accretion-rate buffer (see particleMeshInteraction).
 	// Enabling both would double-apply gas removal: computeSinkAccretion accumulates into the shared
