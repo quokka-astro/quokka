@@ -82,6 +82,7 @@ template <> struct SimulationData<ParticleEarlyFeedback> {
 	amrex::Real boostVelocity = 0.0;
 	amrex::Real inflowSpeed = 0.0;
 	bool expectClipping = false;
+	bool expectPreservedBoost = false;
 };
 
 template <> void QuokkaSimulation<ParticleEarlyFeedback>::setInitialConditionsOnGrid(quokka::grid const &grid_element)
@@ -162,6 +163,7 @@ auto problem_main() -> int
 	problem_parameters.query("boost_velocity", simulation.userData_.boostVelocity);
 	problem_parameters.query("inflow_speed", simulation.userData_.inflowSpeed);
 	problem_parameters.query("expect_clipping", simulation.userData_.expectClipping);
+	problem_parameters.query("expect_preserved_boost", simulation.userData_.expectPreservedBoost);
 	simulation.setInitialConditions();
 	auto *stellar_descriptor = simulation.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop);
 	const amrex::Real stellar_mass_before_split = stellar_descriptor->computeStellarMass();
@@ -179,6 +181,7 @@ auto problem_main() -> int
 	const amrex::Real initial_gas_mass = simulation.state_new_cc_[0].sum(HydroSystem<ParticleEarlyFeedback>::density_index) * cell_volume;
 	const amrex::Real initial_scalar_mass = simulation.state_new_cc_[0].sum(HydroSystem<ParticleEarlyFeedback>::scalar0_index) * cell_volume;
 	const amrex::Real initial_internal_energy = simulation.state_new_cc_[0].sum(HydroSystem<ParticleEarlyFeedback>::internalEnergy_index) * cell_volume;
+	const amrex::Real initial_total_energy = simulation.state_new_cc_[0].sum(HydroSystem<ParticleEarlyFeedback>::energy_index) * cell_volume;
 	using FaceStateArray = std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM>;
 	const amrex::Real initial_momentum_x = simulation.state_new_cc_[0].sum(HydroSystem<ParticleEarlyFeedback>::x1Momentum_index) * cell_volume;
 	const amrex::Real initial_momentum_y = simulation.state_new_cc_[0].sum(HydroSystem<ParticleEarlyFeedback>::x2Momentum_index) * cell_volume;
@@ -235,7 +238,11 @@ auto problem_main() -> int
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.active_particles == 6, "EMF must include split composite, individual high-mass, and remnant particles.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(stats.scalar_momentum, expected_momentum),
 					 "Equation-10 requested momentum does not use the summed birth mass.");
-	if (!simulation.userData_.expectClipping) {
+	if (simulation.userData_.expectPreservedBoost) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_total_energy, initial_total_energy),
+						 "Tiny EMF braked pre-existing gas kinetic energy.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(momentum_x) <= 2.0e-12 * std::abs(initial_momentum_x), "Tiny EMF clipped pre-existing gas momentum.");
+	} else if (!simulation.userData_.expectClipping) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.clipped_cells == 0, "Nominal EMF test unexpectedly activated the velocity limiter.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(scalar_impulse, expected_momentum, deposition_tolerance),
 						 "Deposited scalar impulse does not equal the Equation-10 request.");
@@ -246,10 +253,10 @@ auto problem_main() -> int
 	} else {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.clipped_cells > 0, "Extreme EMF test did not activate the velocity limiter.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.min_velocity_scale < 1.0, "Clipped EMF cells did not report a reduced velocity scale.");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.max_velocity <= quokka::EMF_max_velocity * (1.0 + 2.0e-12),
-						 "EMF cell-by-cell limiter exceeded its velocity limit.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_impulse < expected_momentum, "Clipped EMF did not reduce the deposited scalar impulse.");
 	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.max_velocity <= std::max(quokka::EMF_max_velocity, std::abs(boost_velocity) + inflow_speed) * (1.0 + 2.0e-12),
+					 "EMF raised the speed above both the configured cap and the pre-feedback speed.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_gas_mass, initial_gas_mass), "EMF changed gas mass.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_scalar_mass, initial_scalar_mass), "EMF changed a MassScalar.");
 	if (simulation.userData_.inflowSpeed > 0.0) {

@@ -166,7 +166,6 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAngMomIndex() const -> int { return angMomIndex_; }
 
 	// setter methods for particle properties
-	AMREX_FORCE_INLINE void setAllowsCreation(bool allow) { allowsCreation_ = allow; }
 	AMREX_FORCE_INLINE void setForceFinestLevel(bool force) { forceFinestLevel_ = force; }
 
 	// New method to get particle positions and data

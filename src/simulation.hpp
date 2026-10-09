@@ -228,8 +228,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real last_sfh_time_ = 0.0;
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
-	int emf_active_particle_count_ = 0;
-	amrex::Real emf_momentum_requested_ = 0.0;
 
 	// Conduction parameters
 	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
@@ -2289,13 +2287,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Match the existing SN feedback AMR policy: deposit only particles stored on the finest level. There is no explicit coarse-fine source
 	// synchronization when a feedback stencil crosses a refinement boundary.
 	const auto early_feedback_stats = particleRegister_.depositEarlyFeedback(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
-	emf_active_particle_count_ = early_feedback_stats.active_particles;
-	emf_momentum_requested_ = early_feedback_stats.scalar_momentum;
 	if (verbose && early_feedback_stats.active_particles > 0) {
 		amrex::Print() << std::format("[PARTICLES] Early feedback: Time: {} - {} active particles requested {} g cm/s at level {}\n", time,
 					      early_feedback_stats.active_particles, early_feedback_stats.scalar_momentum, lev);
 	}
-	if (early_feedback_stats.clipped_cells > 0) {
+	if (verbose && early_feedback_stats.clipped_cells > 0) {
 		amrex::Print() << std::format("[PARTICLES] Early feedback limited in {} cells at level {} (minimum velocity scale = {}).\n",
 					      early_feedback_stats.clipped_cells, lev, early_feedback_stats.min_velocity_scale);
 	}
@@ -2307,7 +2303,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 
 	// Early feedback updates valid cells only; SN deposition reads stencil momenta from ghost cells.
 	if (early_feedback_stats.active_particles > 0) {
-		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, InterpHookNone,
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
 				       InterpHookNone, FillPatchType::fillpatch_function);
 	}
 

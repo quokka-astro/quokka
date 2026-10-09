@@ -26,4 +26,12 @@ if(AMReX_SPACEDIM EQUAL 3)
     NAME ${JOB_NAME}CapBoost
     COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml problem.expect_clipping=1 problem.boost_velocity=3.0e8 particles.EMF_p0_kmps=1.0e7 ${QuokkaTestParams}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(
+    NAME ${JOB_NAME}CapFastBoost
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml problem.expect_clipping=1 problem.boost_velocity=3.5e8 particles.EMF_p0_kmps=1.0e7 ${QuokkaTestParams}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(
+    NAME ${JOB_NAME}PreserveFastBoost
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml problem.expect_preserved_boost=1 problem.boost_velocity=3.5e8 particles.EMF_p0_kmps=1.0e-6 ${QuokkaTestParams}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
