@@ -42,7 +42,8 @@
 struct SubcycleProblem {};
 namespace
 {
-bool density_refinement_enabled = true; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+bool density_refinement_enabled = true;	    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+bool hierarchy_ready_before_advance = true; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 
 template <> struct Particle_Traits<SubcycleProblem> : DefaultParticleTraits {
@@ -84,6 +85,16 @@ template <> void QuokkaSimulation<SubcycleProblem>::setInitialConditionsOnGrid(q
 }
 
 template <> void QuokkaSimulation<SubcycleProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const & /*grid_elem*/) {}
+
+template <> void QuokkaSimulation<SubcycleProblem>::computeBeforeTimestep()
+{
+	if (do_subcycle == 0) {
+		const auto [ids_all, data_all, idata_all] = particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtAllLevels();
+		const auto &[data_finest, idata_finest] =
+		    particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(finestLevel());
+		hierarchy_ready_before_advance = hierarchy_ready_before_advance && (data_finest.size() == data_all.size());
+	}
+}
 
 template <> void QuokkaSimulation<SubcycleProblem>::createInitialSinkParticles()
 {
@@ -144,6 +155,11 @@ auto problem_main() -> int
 	sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->setForceFinestLevel(true);
 
 	sim.evolve();
+
+	if (sim.do_subcycle == 0 && !hierarchy_ready_before_advance) {
+		amrex::Print() << "ISSUE #2187 REPRODUCED: synchronized AMR regridding happened after timestep computation\n";
+		return 1;
+	}
 
 	// Verify the particle reached the finest level.
 	const int finest = sim.finestLevel();
