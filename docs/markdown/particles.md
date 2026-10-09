@@ -430,12 +430,13 @@ The `RandomBlast` problem provides a testbed for multiple SN explosions with var
 
 When `Particle_Traits<problem_t>::enable_chemical_feedback` is enabled, chemistry
 components follow the ordinary particle fields and any luminosity components.
-Their block order is `total`, `SNII`, `WR`, then `AGB`, independent of which
+Their block order is `total`, `SNII`, `WR`, `AGB`, then `SNIa`, independent of which
 feedback channels are enabled at runtime.
 
 Within each block, slots follow the configured tracked-isotope order. Names use
 `chem_birth_<block>_<isotope>`, for example `chem_birth_total_C12`,
-`chem_birth_SNII_C12`, `chem_birth_WR_C12`, and `chem_birth_AGB_C12`.
+`chem_birth_SNII_C12`, `chem_birth_WR_C12`, `chem_birth_AGB_C12`, and
+`chem_birth_SNIa_C12`.
 These fields store birth abundances, not the subsequently accumulated ejecta.
 
 `StochasticStellarPopParticleChemistryBlockCapacity<problem_t>()` is the storage

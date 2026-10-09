@@ -6,16 +6,43 @@ This is a development roadmap, not a description of implemented physics.
 SNII, WR, and AGB feedback were merged in
 [PR #1915](https://github.com/quokka-astro/quokka/pull/1915) and form the baseline.
 This follow-up tracks SNIa, oldAGB, and neutron-star merger (NSM) feedback.
-The initial draft changes documentation only; none of these additional channels
-is enabled or implemented by this commit.
+The initial PR commit contained documentation only. The working tree now has a
+selective SNIa prototype port, which has not been built or validated. SNIa remains
+disabled by default; oldAGB and NSM are not implemented.
 
 An unmerged local SNIa prototype exists on an older baseline. It contains
 event-based hydrodynamic and chemical deposition helpers, a SNIa yield-table
 extension, a single-event test, and a TallBox event-sampling experiment.
 It also changes stellar mass sampling and particle component layouts.
-These changes have not yet been ported or validated against the merged baseline.
-They must be reviewed selectively rather than replacing current source files.
+Only event deposition, SNIa table loading, channel storage, and a compact test
+have been adapted to the merged baseline. IMF changes, TallBox sampling,
+visualization scripts, and obsolete CTest fixtures were not ported.
 No oldAGB or NSM implementation has been identified in that prototype.
+
+### Current SNIa interface and limitations
+
+`particles/particle_snia_feedback.hpp` provides hydrodynamic event deposition
+and SNIa isotope deposition using the existing SN kernels. Both are collective
+operations: every rank must call them with the same ordered event list, including
+positions and velocities. Count agreement is checked, but matching coordinates
+remain the caller's responsibility. Events must lie inside the physical domain;
+the valid cell containing an event determines which rank deposits it. State ghost
+cells must be filled before hydrodynamic deposition. The interface is currently
+three-dimensional and does not provide AMR scheduling or an event-rate model.
+
+Call hydrodynamic and chemical deposition once each for a physical event; do not
+call them again during particle feedback or subcycling. The SNIa example uses a
+single unrefined periodic level and a replicated deterministic event. It includes
+assertions for empty event lists, event count, ejecta mass, isotope masses, and
+zero contribution to other channels, but these assertions have not been run.
+
+SNIa data are distributed as a separate CSV rather than replacing the existing
+yield archive. Particle history storage grows to five blocks for chemistry-enabled
+problems. Existing four-block checkpoints need an explicit migration strategy;
+only the repository's two yield-test ASCII fixtures are adapted here.
+
+Validation, formatting/lint checks, and numerical model review are pending. The
+port is not a completed or production-ready SNIa implementation.
 
 ## Implementation sequence
 

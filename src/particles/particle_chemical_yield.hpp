@@ -19,7 +19,8 @@ namespace quokka::ChemicalYieldLookup
 {
 
 constexpr int max_tracked_isotopes = 32;
-constexpr int max_tracked_channels = 3;
+constexpr int snia_channel_index = 3;
+constexpr int max_tracked_channels = snia_channel_index + 1;
 constexpr int chemical_yield_table_num_isotopes = 389;
 
 using FullChemicalYieldDataTable = quokka::DataTable<1, chemical_yield_table_num_isotopes, quokka::OutOfBounds::clamp>;
@@ -89,21 +90,22 @@ inline auto resolveInputPath(const std::string &filename) -> std::filesystem::pa
 
 inline auto channelName(int channel_index) -> std::string
 {
-	static const std::array<std::string, max_tracked_channels> names{"snii", "wr", "agb"};
+	static const std::array<std::string, max_tracked_channels> names{"snii", "wr", "agb", "snia"};
 	return names.at(static_cast<std::size_t>(channel_index));
 }
 
 inline auto channelTableName(int channel_index) -> std::string
 {
-	static const std::array<std::string, max_tracked_channels> names{"SNII_yield_table.csv", "WR_yield_table.csv", "AGB_yield_table.csv"};
+	static const std::array<std::string, max_tracked_channels> names{"SNII_yield_table.csv", "WR_yield_table.csv", "AGB_yield_table.csv",
+									 "SNIa_yield_table.csv"};
 	return names.at(static_cast<std::size_t>(channel_index));
 }
 
 inline auto requestedChannelMap(const std::vector<std::string> &tracked_channels) -> std::array<bool, max_tracked_channels>
 {
-	std::array<bool, max_tracked_channels> requested{true, true, true};
+	std::array<bool, max_tracked_channels> requested{true, true, true, false};
 	if (!tracked_channels.empty()) {
-		requested = {false, false, false};
+		requested.fill(false);
 		for (const auto &channel : tracked_channels) {
 			const std::string name = lowercase(channel);
 			for (int c = 0; c < max_tracked_channels; ++c) {
