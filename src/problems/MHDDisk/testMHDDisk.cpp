@@ -607,9 +607,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 
 	const auto dxvec = grid_elem.dx_;
 	const int subsample = initial_condition_subsamples;
-	const double dx = dxvec[0] / double(subsample);
-	const double dy = dxvec[1] / double(subsample);
-	const double dz = dxvec[2] / double(subsample);
+	const double dx = dxvec[0] / static_cast<double>(subsample);
+	const double dy = dxvec[1] / static_cast<double>(subsample);
+	const double dz = dxvec[2] / static_cast<double>(subsample);
 
 	const int turb_nx = userData_.turb_nx;
 	const int turb_ny = userData_.turb_ny;
@@ -775,8 +775,13 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	};
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		const auto n_samples = double(subsample * subsample * subsample);
-		double rho_samples = 0.0, px_samples = 0.0, py_samples = 0.0, pz_samples = 0.0, Etot_samples = 0.0, Eint_samples = 0.0;
+		const auto n_samples = static_cast<double>(subsample * subsample * subsample);
+		double rho_samples = 0.0;
+		double px_samples = 0.0;
+		double py_samples = 0.0;
+		double pz_samples = 0.0;
+		double Etot_samples = 0.0;
+		double Eint_samples = 0.0;
 
 		for (int a = 0; a < subsample; ++a) {
 			for (int b = 0; b < subsample; ++b) {
@@ -997,11 +1002,11 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(int lev, amrex::TagBoxA
 
 	amrex::ParmParse const pp("mhd_galaxy");
 	// clang-format off
-	amrex::Real refine_Rcyl; pp.get("refine_Rcyl_kpc",                  refine_Rcyl); refine_Rcyl *= 1.0e3 * C::parsec;
-	amrex::Real refine_Hcyl; pp.get("refine_Hcyl_kpc",                  refine_Hcyl); refine_Hcyl *= 1.0e3 * C::parsec;
-	amrex::Real shrink_Rcyl; pp.get("refine_Rcyl_shrink_per_level_kpc", shrink_Rcyl); shrink_Rcyl *= 1.0e3 * C::parsec;
-	amrex::Real shrink_Hcyl; pp.get("refine_Hcyl_shrink_per_level_kpc", shrink_Hcyl); shrink_Hcyl *= 1.0e3 * C::parsec;
-	amrex::Real Rcyl_inner;  pp.get("refine_Rcyl_inner_kpc",            Rcyl_inner ); Rcyl_inner  *= 1.0e3 * C::parsec;
+	amrex::Real refine_Rcyl = NAN; pp.get("refine_Rcyl_kpc",                  refine_Rcyl); refine_Rcyl *= 1.0e3 * C::parsec;
+	amrex::Real refine_Hcyl = NAN; pp.get("refine_Hcyl_kpc",                  refine_Hcyl); refine_Hcyl *= 1.0e3 * C::parsec;
+	amrex::Real shrink_Rcyl = NAN; pp.get("refine_Rcyl_shrink_per_level_kpc", shrink_Rcyl); shrink_Rcyl *= 1.0e3 * C::parsec;
+	amrex::Real shrink_Hcyl = NAN; pp.get("refine_Hcyl_shrink_per_level_kpc", shrink_Hcyl); shrink_Hcyl *= 1.0e3 * C::parsec;
+	amrex::Real Rcyl_inner  = NAN; pp.get("refine_Rcyl_inner_kpc",            Rcyl_inner ); Rcyl_inner  *= 1.0e3 * C::parsec;
 	// clang-format on
 
 	// Shrink the refinement cylinder at each successive level, floored at 30% of the
