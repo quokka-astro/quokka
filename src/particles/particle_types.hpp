@@ -1,13 +1,17 @@
 #ifndef PARTICLE_TYPES_HPP_
 #define PARTICLE_TYPES_HPP_
 
+#include <cmath>
+
 #include "AMReX_AmrParticles.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
 #include "AMReX_Vector.H"
 #include "particles/particle_chemical_yield.hpp"
 #include "particles/stellar_models.hpp"
 #include "physics_info.hpp"
+#include "util/time_units.hpp"
 
 #include <cstddef>
 #include <string>
@@ -581,6 +585,16 @@ inline auto get_units_data() -> const auto &
 // Disable SN feedback when a particle evolves from SNProgenitor to SNRemnant
 inline bool disable_SN_feedback = false; // NOLINT
 
+// Empirically motivated early feedback for StochasticStellarPop particles.
+inline bool EMF_enabled = false;				     // NOLINT
+inline amrex::Real EMF_p0_kmps = 377.0;				     // NOLINT [km/s]
+inline amrex::Real EMF_tFB_Myr = 3.3;				     // NOLINT [Myr]
+inline amrex::Real EMF_alpha = 1.0;				     // NOLINT
+inline amrex::Real EMF_max_velocity_kmps = 3000.0;		     // NOLINT [km/s]
+inline amrex::Real EMF_p0 = EMF_p0_kmps * 1.0e5;		     // NOLINT [cm/s]
+inline amrex::Real EMF_tFB = EMF_tFB_Myr * quokka::Myr_in_s;	     // NOLINT [s]
+inline amrex::Real EMF_max_velocity = EMF_max_velocity_kmps * 1.0e5; // NOLINT [cm/s]
+
 // Placeholder parameters for particles. Used in gravity_3d.cpp tests
 inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
@@ -659,6 +673,21 @@ template <typename problem_t> inline void particleParmParse()
 	// Parse particle parameters
 	const amrex::ParmParse pp("particles");
 	pp.query("disable_SN_feedback", disable_SN_feedback);
+	pp.query("EMF_enabled", EMF_enabled);
+	pp.query("EMF_p0_kmps", EMF_p0_kmps);
+	pp.query("EMF_tFB_Myr", EMF_tFB_Myr);
+	pp.query("EMF_alpha", EMF_alpha);
+	pp.query("EMF_max_velocity_kmps", EMF_max_velocity_kmps);
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMF_p0_kmps) && EMF_p0_kmps >= 0.0, "particles.EMF_p0_kmps must be finite and non-negative.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMF_tFB_Myr) && EMF_tFB_Myr > 0.0, "particles.EMF_tFB_Myr must be finite and positive.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMF_alpha) && EMF_alpha >= 0.5 && EMF_alpha <= 1.0,
+					 "particles.EMF_alpha must be finite and lie in [0.5, 1.0].");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMF_max_velocity_kmps) && EMF_max_velocity_kmps > 0.0,
+					 "particles.EMF_max_velocity_kmps must be finite and positive.");
+	EMF_p0 = EMF_p0_kmps * 1.0e5;
+	EMF_tFB = EMF_tFB_Myr * quokka::Myr_in_s;
+	EMF_max_velocity = EMF_max_velocity_kmps * 1.0e5;
 	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
 	pp.query("sink_max_alfven_speed", sink_max_alfven_speed);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sink_max_alfven_speed != 0.0, "particles.sink_max_alfven_speed must be negative (disabled) or positive (cm/s).");
