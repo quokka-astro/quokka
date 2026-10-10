@@ -202,8 +202,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// gas signal speed abort threshold in code units (default: 8e8 cm/s = 8000 km/s in CGS, disabled otherwise)
 	amrex::Real signalSpeedAbort_ = (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) ? 8.0e8 : -1.0;
 	amrex::Real particleSpeedAbort_ = -1.0;
-	static constexpr int signalSpeedAbortMaxSteps_ = 1000; // abort once the threshold is exceeded on more coarse steps than this
-	int signalSpeedExceededSteps_ = 0;		       // cumulative number of coarse steps with the gas signal speed above the threshold
+	// abort once the threshold is exceeded on more than max(signalSpeedAbortMinSteps_, signalSpeedAbortFraction_ * coarse steps so far) steps
+	static constexpr int signalSpeedAbortMinSteps_ = 100;
+	static constexpr amrex::Real signalSpeedAbortFraction_ = 1.0e-3;
+	int signalSpeedExceededSteps_ = 0; // cumulative number of coarse steps with the gas signal speed above the threshold
 
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
@@ -1511,8 +1513,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 
 template <typename problem_t> void AMRSimulation<problem_t>::checkSignalSpeedAbort()
 {
-	// a gas signal speed above signal_speed_abort almost always means an unphysical state, so abort once this has
-	// happened on more than signalSpeedAbortMaxSteps_ coarse steps (cumulative over the run, including restarts)
+	// a gas signal speed above signal_speed_abort almost always means an unphysical state; allow a few transient
+	// events, but abort once more than a small fraction of all coarse steps so far exceed it (cumulative, including restarts)
 	amrex::Real signal_max = 0.0;
 	int signal_max_level = 0;
 	for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1527,18 +1529,22 @@ template <typename problem_t> void AMRSimulation<problem_t>::checkSignalSpeedAbo
 	}
 
 	++signalSpeedExceededSteps_;
-	if (signalSpeedExceededSteps_ > signalSpeedAbortMaxSteps_) {
+	const int nsteps = istep[0] + 1; // coarse steps so far, including this one
+	const amrex::Real allowed_steps =
+	    std::max(static_cast<amrex::Real>(signalSpeedAbortMinSteps_), signalSpeedAbortFraction_ * static_cast<amrex::Real>(nsteps));
+	if (static_cast<amrex::Real>(signalSpeedExceededSteps_) > allowed_steps) {
 		const std::string units = (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) ? "cm/s" : "code units";
 		const std::string banner(100, '!');
 		amrex::Print() << "\n"
 			       << banner << "\n"
 			       << banner << "\n"
 			       << "[FATAL] SIGNAL SPEED LIMIT EXCEEDED -- ABORTING\n"
-			       << std::format("The maximum gas signal speed has exceeded signal_speed_abort = {:.3e} {} on {} coarse steps "
-					      "(cumulative; at most {} are allowed).\n",
-					      signalSpeedAbort_, units, signalSpeedExceededSteps_, signalSpeedAbortMaxSteps_)
+			       << std::format("The maximum gas signal speed has exceeded signal_speed_abort = {:.3e} {} on {} of {} coarse steps "
+					      "(cumulative; at most max({}, {:g} x steps so far) = {:.0f} are allowed).\n",
+					      signalSpeedAbort_, units, signalSpeedExceededSteps_, nsteps, signalSpeedAbortMinSteps_, signalSpeedAbortFraction_,
+					      allowed_steps)
 			       << std::format("Current maximum gas signal speed: {:.3e} {} on level {} at t = {:e} (coarse step {}).\n", signal_max, units,
-					      signal_max_level, tNew_[0], istep[0] + 1)
+					      signal_max_level, tNew_[0], nsteps)
 			       << "This almost always means the simulation has developed an unphysical state (e.g. runaway velocities or temperatures).\n"
 			       << "If such speeds are expected, raise signal_speed_abort in the inputs (or set it to -1 to disable this check).\n"
 			       << banner << "\n"
