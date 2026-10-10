@@ -753,6 +753,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("target_vdisp", turbParams_["target_vdisp"]);
 		hpp.query("ampl_factor", turbParams_["ampl_factor"]);
 		hpp.query("ampl_auto_adjust", turbParams_["ampl_auto_adjust"]);
+		hpp.query("ampl_auto_adjust_method", turbParams_["ampl_auto_adjust_method"]);
+		hpp.query("ampl_proportional_gain", turbParams_["ampl_proportional_gain"]);
+		hpp.query("ampl_max_amplitude", turbParams_["ampl_max_amplitude"]);
 		hpp.query("k_driv", turbParams_["k_driv"]);
 		hpp.query("k_min", turbParams_["k_min"]);
 		hpp.query("k_max", turbParams_["k_max"]);
@@ -765,6 +768,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		turbParams_["ndim"] = std::to_string(AMREX_SPACEDIM);
 
 		if (enableTurbulence_ == 1) {
+			int auto_adjust = 0;
+			hpp.query("ampl_auto_adjust", auto_adjust);
+			if (auto_adjust == 1 && turbParams_["ampl_auto_adjust_method"] == "proportional" && !this->restart_chkfile.empty()) {
+				amrex::Abort("Proportional turbulence control requires a fresh simulation: the held forcing state is not checkpointed.");
+			}
 			td = std::make_unique<quokka::turbulence::turbulentDriving<problem_t>>(turbParams_, removeMeanFlow_ == 1);
 		}
 	}
@@ -1240,6 +1248,9 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 
 	auto const applyTurbulence = [&]() {
 		if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
+			if (td->usesProportionalControl() && !this->restart_chkfile.empty()) {
+				amrex::Abort("Proportional turbulence control requires a fresh simulation: the held forcing state is not checkpointed.");
+			}
 			auto const &cellSizes = geom[lev].CellSizeArray();
 			auto const &probLo = geom[lev].ProbLoArray();
 			td->applyDriving(state, time, dt, cellSizes, probLo);
