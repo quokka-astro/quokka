@@ -29,6 +29,11 @@ using WRMassLossDistributionDataTable = quokka::DataTable<2, 1, quokka::OutOfBou
 struct ChemicalYieldGpuConstTables {
 	std::array<quokka::DataTableGpuConst<1, max_tracked_isotopes, quokka::OutOfBounds::clamp>, max_tracked_channels> channels{};
 	quokka::DataTableGpuConst<2, 1, quokka::OutOfBounds::clamp> wr_mass_loss_distribution{};
+	// Capture lookup metadata with the table view instead of registering inline managed globals with HIP.
+	bool tables_loaded = false;
+	bool wr_mass_loss_distribution_loaded = false;
+	int num_tracked_isotopes = 0;
+	amrex::GpuArray<int, max_tracked_channels> channel_enabled{};
 };
 
 class ChemicalYieldTables
@@ -36,6 +41,10 @@ class ChemicalYieldTables
       public:
 	std::array<SelectedChemicalYieldDataTable, max_tracked_channels> channels{};
 	WRMassLossDistributionDataTable wr_mass_loss_distribution;
+
+      private:
+	// Only the lookup wrapper may construct a raw view; it also populates the metadata.
+	friend auto constTables() -> ChemicalYieldGpuConstTables;
 
 	[[nodiscard]] auto const_tables() const -> ChemicalYieldGpuConstTables
 	{
@@ -48,11 +57,11 @@ class ChemicalYieldTables
 	}
 };
 
-inline ChemicalYieldTables *tables_ptr = nullptr;				       // NOLINT
-AMREX_GPU_MANAGED inline bool tables_loaded = false;				       // NOLINT
-AMREX_GPU_MANAGED inline bool wr_mass_loss_distribution_loaded = false;		       // NOLINT
-AMREX_GPU_MANAGED inline int num_tracked_isotopes = 0;				       // NOLINT
-AMREX_GPU_MANAGED inline amrex::GpuArray<int, max_tracked_channels> channel_enabled{}; // NOLINT
+inline ChemicalYieldTables *tables_ptr = nullptr;		     // NOLINT
+inline bool tables_loaded = false;				     // NOLINT
+inline bool wr_mass_loss_distribution_loaded = false;		     // NOLINT
+inline int num_tracked_isotopes = 0;				     // NOLINT
+inline amrex::GpuArray<int, max_tracked_channels> channel_enabled{}; // NOLINT
 
 inline auto mutableTables() -> ChemicalYieldTables &
 {
@@ -296,9 +305,22 @@ inline auto loadTable(const std::string &filename, const std::vector<std::string
 	return tables_loaded;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto isLoaded() -> bool { return tables_loaded && (num_tracked_isotopes > 0); }
+inline auto isLoaded() -> bool { return tables_loaded && (num_tracked_isotopes > 0); }
 
-inline auto constTables() -> ChemicalYieldGpuConstTables { return mutableTables().const_tables(); }
+inline void setLookupMetadata(ChemicalYieldGpuConstTables &tables)
+{
+	tables.tables_loaded = tables_loaded;
+	tables.wr_mass_loss_distribution_loaded = wr_mass_loss_distribution_loaded;
+	tables.num_tracked_isotopes = num_tracked_isotopes;
+	tables.channel_enabled = channel_enabled;
+}
+
+inline auto constTables() -> ChemicalYieldGpuConstTables
+{
+	auto tables = mutableTables().const_tables();
+	setLookupMetadata(tables);
+	return tables;
+}
 
 inline auto constTablesHost() -> ChemicalYieldGpuConstTables
 {
@@ -308,14 +330,15 @@ inline auto constTablesHost() -> ChemicalYieldGpuConstTables
 		host_tables.channels[static_cast<std::size_t>(c)] = tables.channels[static_cast<std::size_t>(c)].const_tables_host();
 	}
 	host_tables.wr_mass_loss_distribution = tables.wr_mass_loss_distribution.const_tables_host();
+	setLookupMetadata(host_tables);
 	return host_tables;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryYieldFraction(ChemicalYieldGpuConstTables const &tables, int channel_index, int isotope_index,
 								 amrex::Real mass_msun, amrex::Real /*metallicity*/) -> amrex::Real
 {
-	if (!isLoaded() || channel_index < 0 || isotope_index < 0 || channel_index >= max_tracked_channels || isotope_index >= num_tracked_isotopes ||
-	    channel_enabled[channel_index] == 0) {
+	if (!tables.tables_loaded || channel_index < 0 || isotope_index < 0 || channel_index >= max_tracked_channels ||
+	    isotope_index >= tables.num_tracked_isotopes || tables.channel_enabled[channel_index] == 0) {
 		return 0.0;
 	}
 
@@ -327,7 +350,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryYieldFraction(ChemicalYieldGp
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryWRMassLossCumulativeFraction(ChemicalYieldGpuConstTables const &tables, amrex::Real age,
 										amrex::Real mass_msun) -> amrex::Real
 {
-	if (!isLoaded() || !wr_mass_loss_distribution_loaded || mass_msun <= 0.0) {
+	if (!tables.tables_loaded || tables.num_tracked_isotopes <= 0 || !tables.wr_mass_loss_distribution_loaded || mass_msun <= 0.0) {
 		return 0.0;
 	}
 

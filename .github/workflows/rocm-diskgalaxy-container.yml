@@ -27,6 +27,7 @@ jobs:
     uses: ./.github/workflows/check_changes.yml
     with:
       workflow_file: '.github/workflows/rocm-diskgalaxy-container.yml'
+      additional_workflow_paths: '[".dockerignore", ".github/workflows/dockerfiles/ROCm-DiskGalaxy/**"]'
 
   build-and-push:
     runs-on: ubuntu-latest

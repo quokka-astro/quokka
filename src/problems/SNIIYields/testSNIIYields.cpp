@@ -16,10 +16,15 @@
 
 #include <format>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
 {
+
+// Raw views omit lookup metadata and must only be built by constTables().
+template <typename Tables> concept HasPublicRawTableView = requires(const Tables &tables) { tables.const_tables(); };
+static_assert(!HasPublicRawTableView<quokka::ChemicalYieldLookup::ChemicalYieldTables>);
 
 template <typename problem_t> [[nodiscard]] auto cellVolume(const QuokkaSimulation<problem_t> &sim) -> amrex::Real
 {
@@ -46,6 +51,15 @@ void validateSNIIYields(const QuokkaSimulation<problem_t> &sim, const std::vecto
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!records.empty(), "test_SNII_Yields requires at least one initial particle");
 
 	const auto tables = quokka::ChemicalYieldLookup::constTablesHost();
+	const auto device_tables = quokka::ChemicalYieldLookup::constTables();
+	AMREX_ALWAYS_ASSERT(tables.tables_loaded);
+	AMREX_ALWAYS_ASSERT(std::cmp_equal(tables.num_tracked_isotopes, isotopes.size()));
+	AMREX_ALWAYS_ASSERT(device_tables.tables_loaded == tables.tables_loaded);
+	AMREX_ALWAYS_ASSERT(device_tables.wr_mass_loss_distribution_loaded == tables.wr_mass_loss_distribution_loaded);
+	AMREX_ALWAYS_ASSERT(device_tables.num_tracked_isotopes == tables.num_tracked_isotopes);
+	for (int c = 0; c < quokka::ChemicalYieldLookup::max_tracked_channels; ++c) {
+		AMREX_ALWAYS_ASSERT(device_tables.channel_enabled[c] == tables.channel_enabled[c]);
+	}
 	const amrex::Real birth_mass = records.front()[static_cast<std::size_t>(AMREX_SPACEDIM + quokka::StochasticStellarPopParticleMassAtBirthIdx)];
 
 	amrex::Print() << "test_SNII_Yields simulated/table:\n";

@@ -7,6 +7,11 @@ on:
         description: "Specific workflow file to check for changes (optional)"
         required: false
         type: string
+      additional_workflow_paths:
+        description: "Additional workflow-specific paths as a JSON array"
+        required: false
+        type: string
+        default: '[]'
     outputs:
       has_docs_changes:
         value: ${{ jobs.check.outputs.has_docs_changes }}
@@ -82,7 +87,7 @@ jobs:
               - '.github/workflows/**/*.yaml'
             specific_workflow:
               - '${{ inputs.workflow_file }}'
-              - '.github/workflows/dockerfiles/ROCm-DiskGalaxy/**'
+              - ${{ inputs.additional_workflow_paths }}
 
       - id: set-output
         env:
