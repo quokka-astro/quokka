@@ -199,8 +199,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real stopTime_ = 1.0;	      // default
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real particleCflNumber_ = 0.5; // default
-	amrex::Real signalSpeedAbort_ = -1.0;
+	// gas signal speed abort threshold in code units (default: 8e8 cm/s = 8000 km/s in CGS, disabled otherwise)
+	amrex::Real signalSpeedAbort_ = (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) ? 8.0e8 : -1.0;
 	amrex::Real particleSpeedAbort_ = -1.0;
+	// abort once the threshold is exceeded on more than max(signalSpeedAbortMinSteps_, signalSpeedAbortFraction_ * coarse steps so far) steps
+	static constexpr int signalSpeedAbortMinSteps_ = 100;
+	static constexpr amrex::Real signalSpeedAbortFraction_ = 1.0e-3;
+	int signalSpeedExceededSteps_ = 0; // cumulative number of coarse steps with the gas signal speed above the threshold
+
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
 	amrex::Real initShrink_ = 1.0;	      // default: no shrink
@@ -295,11 +301,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void evolve();
 	void computeTimestep();
 	auto computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>;
+	void checkSignalSpeedAbort();
 
 	void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start, int srccomp_total) const;
 	virtual void setCustomGhostCells() {}
 
 	virtual void computeMaxSignalLocal(int level) = 0;
+	// maximum gas (hydro/MHD) signal speed on level 'lev', reduced over all MPI ranks; excludes radiation and diffusive speeds
+	virtual auto computeMaxHydroSignalSpeed(int /*lev*/) -> amrex::Real { return 0.0; }
 	virtual void printCellProperties(int lev, amrex::IntVect const &index) = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
 	virtual void preCalculateInitialConditions() = 0;
@@ -949,7 +958,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dt_override_count <= 1, "Specify at most one of init_shrink, initial_dt, or constant_dt in the inputs.");
 
-	// Abort when signal speed exceeds this threshold (in code units)
+	// Abort when the gas signal speed exceeds this threshold (in code units) on too many coarse steps
 	pp.query("signal_speed_abort", signalSpeedAbort_);
 	pp.query("particle_speed_abort", particleSpeedAbort_);
 
@@ -1271,13 +1280,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	computeMaxSignalLocal(lev);
 	const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
 	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
-	if (signalSpeedAbort_ > 0.0 && domain_signal_max > signalSpeedAbort_) {
-		const std::string abort_msg =
-		    std::format("[FATAL] Maximum signal speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}",
-				domain_signal_max, signalSpeedAbort_, lev, formatIntVect(domain_signal_maxloc));
-		printCellProperties(lev, domain_signal_maxloc);
-		amrex::Abort(abort_msg.c_str());
-	}
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 	// the signal speed is zero when no hyperbolic physics is enabled (e.g. self-gravity acting on
@@ -1509,6 +1511,49 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	}
 }
 
+template <typename problem_t> void AMRSimulation<problem_t>::checkSignalSpeedAbort()
+{
+	// a gas signal speed above signal_speed_abort almost always means an unphysical state; allow a few transient
+	// events, but abort once more than a small fraction of all coarse steps so far exceed it (cumulative, including restarts)
+	amrex::Real signal_max = 0.0;
+	int signal_max_level = 0;
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		const amrex::Real signal_lev = computeMaxHydroSignalSpeed(lev);
+		if (signal_lev > signal_max) {
+			signal_max = signal_lev;
+			signal_max_level = lev;
+		}
+	}
+	if (signal_max <= signalSpeedAbort_) {
+		return;
+	}
+
+	++signalSpeedExceededSteps_;
+	const int nsteps = istep[0] + 1; // coarse steps so far, including this one
+	const amrex::Real allowed_steps =
+	    std::max(static_cast<amrex::Real>(signalSpeedAbortMinSteps_), signalSpeedAbortFraction_ * static_cast<amrex::Real>(nsteps));
+	if (static_cast<amrex::Real>(signalSpeedExceededSteps_) > allowed_steps) {
+		const std::string units = (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) ? "cm/s" : "code units";
+		const std::string banner(100, '!');
+		amrex::Print() << "\n"
+			       << banner << "\n"
+			       << banner << "\n"
+			       << "[FATAL] SIGNAL SPEED LIMIT EXCEEDED -- ABORTING\n"
+			       << std::format("The maximum gas signal speed has exceeded signal_speed_abort = {:.3e} {} on {} of {} coarse steps "
+					      "(cumulative; at most max({}, {:g} x steps so far) = {:.0f} are allowed).\n",
+					      signalSpeedAbort_, units, signalSpeedExceededSteps_, nsteps, signalSpeedAbortMinSteps_, signalSpeedAbortFraction_,
+					      allowed_steps)
+			       << std::format("Current maximum gas signal speed: {:.3e} {} on level {} at t = {:e} (coarse step {}).\n", signal_max, units,
+					      signal_max_level, tNew_[0], nsteps)
+			       << "This almost always means the simulation has developed an unphysical state (e.g. runaway velocities or temperatures).\n"
+			       << "If such speeds are expected, raise signal_speed_abort in the inputs (or set it to -1 to disable this check).\n"
+			       << banner << "\n"
+			       << banner << "\n"
+			       << std::endl; // NOLINT(performance-avoid-endl)
+		amrex::Abort("[FATAL] Gas signal speed exceeded signal_speed_abort on too many coarse steps (see message above)");
+	}
+}
+
 template <typename problem_t> auto AMRSimulation<problem_t>::getWalltime() -> amrex::Real
 {
 	const static amrex::Real start_time = amrex::ParallelDescriptor::second(); // initialized on first call
@@ -1598,6 +1643,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 
 		computeTimestep();
+
+		// Abort runs whose gas signal speed stays above signal_speed_abort (safety feature)
+		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
+			if (signalSpeedAbort_ > 0.0) {
+				checkSignalSpeedAbort();
+			}
+		}
 
 		// Check for timestep drop (safety feature)
 		if (dtCutoff_ > 0.0) {
@@ -4982,6 +5034,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 		}
 	}
 
+	// keep the signal_speed_abort step count cumulative across restarts
+	simulationMetadata_["signal_speed_exceeded_steps"] = signalSpeedExceededSteps_;
+
 #if AMREX_SPACEDIM == 3
 	// Update SFH data in metadata before writing
 	particleRegister_.writeSFHToMetadata(simulationMetadata_, sn_count_cumulative_);
@@ -5411,6 +5466,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	}
 
 	ReadMetadataFile(restart_chkfile);
+	if (const YAML::Node &metadata = simulationMetadata_; metadata["signal_speed_exceeded_steps"]) {
+		signalSpeedExceededSteps_ = metadata["signal_speed_exceeded_steps"].as<int>();
+	}
 
 	// 5. Load MultiFab data with refinement handling
 	loadMultiFabData(refinement_context);
