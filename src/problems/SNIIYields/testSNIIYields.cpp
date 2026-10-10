@@ -16,6 +16,7 @@
 
 #include <format>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
@@ -52,7 +53,7 @@ void validateSNIIYields(const QuokkaSimulation<problem_t> &sim, const std::vecto
 	const auto tables = quokka::ChemicalYieldLookup::constTablesHost();
 	const auto device_tables = quokka::ChemicalYieldLookup::constTables();
 	AMREX_ALWAYS_ASSERT(tables.tables_loaded);
-	AMREX_ALWAYS_ASSERT(tables.num_tracked_isotopes == static_cast<int>(isotopes.size()));
+	AMREX_ALWAYS_ASSERT(std::cmp_equal(tables.num_tracked_isotopes, isotopes.size()));
 	AMREX_ALWAYS_ASSERT(device_tables.tables_loaded == tables.tables_loaded);
 	AMREX_ALWAYS_ASSERT(device_tables.wr_mass_loss_distribution_loaded == tables.wr_mass_loss_distribution_loaded);
 	AMREX_ALWAYS_ASSERT(device_tables.num_tracked_isotopes == tables.num_tracked_isotopes);
