@@ -1,4 +1,4 @@
-#include "../extern/turbulence/TurbGen.h"
+#include <TurbGen.h>
 
 #include <array>
 #include <cfenv>

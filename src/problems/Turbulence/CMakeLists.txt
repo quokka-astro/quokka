@@ -9,5 +9,8 @@ if (AMReX_SPACEDIM EQUAL 3)
     add_test(NAME TurbulenceAmplitudeController COMMAND TurbulenceAmplitudeControllerTest)
     add_executable(TurbGenProportionalTest
         ${QuokkaCode_SOURCE_DIR}/tests/test_turbgen_proportional.cpp)
+    # Match the production target's SYSTEM treatment of vendored TurbGen headers.
+    target_include_directories(TurbGenProportionalTest SYSTEM PRIVATE
+        ${QuokkaCode_SOURCE_DIR}/extern/turbulence)
     add_test(NAME TurbGenProportional COMMAND TurbGenProportionalTest)
 endif()
