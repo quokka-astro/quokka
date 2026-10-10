@@ -14,6 +14,9 @@
 #include "AMReX_REAL.H"
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <numbers>
 #include <string>
 #include <vector>
 
@@ -48,12 +51,18 @@ template <> void QuokkaSimulation<TurbulentBox>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
+	amrex::Real initial_dispersion = 0.0;
+	amrex::ParmParse("problem").query("initial_vdisp", initial_dispersion);
+	const auto dx = grid_elem.dx_;
+	const auto lo = grid_elem.prob_lo_;
+	const auto hi = grid_elem.prob_hi_;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::density_index) = 1.0;
-		state_cc(i, j, k, HydroSystem<TurbulentBox>::x1Momentum_index) = 0.0;
+		const double velocity = initial_dispersion * std::numbers::sqrt2 * std::sin(2.0 * M_PI * ((j + 0.5) * dx[1]) / (hi[1] - lo[1]));
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::x1Momentum_index) = velocity;
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::x2Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<TurbulentBox>::energy_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::energy_index) = 0.5 * velocity * velocity;
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::internalEnergy_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::scalar0_index) = 1.0;
 	});
@@ -125,6 +134,49 @@ auto problem_main() -> int
 			const double target_vdisp = std::stod(sim.turbParams_["target_vdisp"]);
 			const double rel_error = std::abs(target_vdisp - disp_last) / target_vdisp;
 			const double err_tol = 0.075;
+			bool check_startup = false;
+			bool output_dispersion = false;
+			amrex::ParmParse const pp("problem");
+			pp.query("check_startup", check_startup);
+			pp.query("output_dispersion", output_dispersion);
+			if (output_dispersion) {
+				std::ofstream diagnostics("dispersion.csv");
+				diagnostics << std::setprecision(17);
+				for (std::size_t i = 0; i < sim.userData_.t_vec_.size(); ++i) {
+					diagnostics << sim.userData_.t_vec_[i] << "," << sim.userData_.Disp3d_vec_[i] << "\n";
+				}
+			}
+			if (check_startup) {
+				const double tau = std::stod(sim.turbParams_["length"]) / std::stod(sim.turbParams_["k_driv"]) / target_vdisp;
+				double peak = 0.0;
+				double first_tau_dispersion = -1.0;
+				double integral = 0.0;
+				double duration = 0.0;
+				double previous_time = 0.0;
+				for (std::size_t i = 0; i < sim.userData_.t_vec_.size(); ++i) {
+					const double t = sim.userData_.t_vec_[i];
+					const double normalized = sim.userData_.Disp3d_vec_[i] / target_vdisp;
+					if (!std::isfinite(normalized)) {
+						status = 1;
+					}
+					peak = std::max(peak, normalized);
+					if (t >= tau && first_tau_dispersion < 0.0) {
+						first_tau_dispersion = normalized;
+					}
+					const double weight = std::max(0.0, t - std::max(previous_time, 2.0 * tau));
+					integral += weight * normalized;
+					duration += weight;
+					previous_time = t;
+				}
+				const double mean = duration > 0.0 ? integral / duration : 0.0;
+				amrex::Print() << "Startup peak / target: " << peak << "\n"
+					       << "Dispersion at one OU time / target: " << first_tau_dispersion << "\n"
+					       << "Mean dispersion after two OU times / target: " << mean << "\n";
+				if (peak > 1.15 || first_tau_dispersion < 0.9 || first_tau_dispersion > 1.15 || std::abs(mean - 1.0) > 0.075 ||
+				    sim.userData_.t_vec_.back() < 5.9 * tau) {
+					status = 1;
+				}
+			}
 
 			amrex::Print() << "\n" << "Target velocity dispersion: " << target_vdisp << "\n";
 			amrex::Print() << "Last calculated velocity dispersion: " << disp_last << "\n";
