@@ -81,6 +81,7 @@ jobs:
               - '.github/workflows/**/*.yml'
               - '.github/workflows/**/*.yaml'
             specific_workflow:
+              - '.dockerignore'
               - '${{ inputs.workflow_file }}'
               - '.github/workflows/dockerfiles/ROCm-DiskGalaxy/**'
 
