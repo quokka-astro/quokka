@@ -204,9 +204,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	static constexpr amrex::Real signalSpeedLimitCGS_ = 8.0e8; // hard limit on the gas signal speed in CGS runs (cm/s, i.e. 10^4 km/s)
 	static constexpr int signalSpeedLimitMaxSteps_ = 1000;	   // abort once the limit is exceeded on more coarse steps than this
 	int signalSpeedLimitSteps_ = 0;				   // cumulative number of coarse steps with the gas signal speed above the limit
-	amrex::Real dtToleranceFactor_ = 1.1; // default
-	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
-	amrex::Real initShrink_ = 1.0;	      // default: no shrink
+	amrex::Real dtToleranceFactor_ = 1.1;			   // default
+	amrex::Real dtCutoff_ = 0.0;				   // default: no cutoff (disabled when 0)
+	amrex::Real initShrink_ = 1.0;				   // default: no shrink
 	amrex::Long cycleCount_ = 0;
 	int printCycleTiming_ = 0;				     // default: don't print
 	amrex::Long maxTimesteps_ = std::numeric_limits<int>::max(); // default: no limit
