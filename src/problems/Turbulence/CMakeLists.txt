@@ -13,4 +13,6 @@ if (AMReX_SPACEDIM EQUAL 3)
     target_include_directories(TurbGenProportionalTest SYSTEM PRIVATE
         ${QuokkaCode_SOURCE_DIR}/extern/turbulence)
     add_test(NAME TurbGenProportional COMMAND TurbGenProportionalTest)
+    # Quick CI builds the problem target before running every test in this directory.
+    add_dependencies(Turbulence TurbulenceAmplitudeControllerTest TurbGenProportionalTest)
 endif()
