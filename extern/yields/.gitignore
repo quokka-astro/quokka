@@ -1,1 +1,2 @@
 *.csv
+!SNIa_yield_table.csv

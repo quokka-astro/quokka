@@ -454,7 +454,7 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 			}
 			return "unused_" + std::to_string(idx);
 		};
-		const std::array<std::string, ChemicalYieldLookup::max_tracked_channels> channel_names = {"SNII", "WR", "AGB"};
+		const std::array<std::string, ChemicalYieldLookup::max_tracked_channels> channel_names = {"SNII", "WR", "AGB", "SNIa"};
 		// Birth-abundance names use total/channel blocks, e.g. chem_birth_total_C12 and chem_birth_SNII_C12.
 		// Reserved slots use names such as chem_birth_total_unused_3; see docs/markdown/particles.md.
 		for (int block = 0; block < ChemicalYieldLookup::max_tracked_channels + 1; ++block) {
@@ -622,7 +622,8 @@ inline bool enable_chemical_feedback = false; // NOLINT
 inline bool enable_SNII_metal = true;	      // NOLINT
 inline bool enable_WR_metal = true;	      // NOLINT
 inline bool enable_AGB_metal = true;	      // NOLINT
-inline bool store_channel_fields = true;      // NOLINT
+inline bool enable_SNIa_metal = false;
+inline bool store_channel_fields = true; // NOLINT
 
 inline int chemical_scalar_offset = 0; // NOLINT
 inline int chemical_num_scalars = 1;   // NOLINT
@@ -696,6 +697,7 @@ template <typename problem_t> inline void particleParmParse()
 	pp.query("enable_SNII_metal", enable_SNII_metal);
 	pp.query("enable_WR_metal", enable_WR_metal);
 	pp.query("enable_AGB_metal", enable_AGB_metal);
+	pp.query("enable_SNIa_metal", enable_SNIa_metal);
 	pp.query("store_channel_fields", store_channel_fields);
 	pp.query("chemical_scalar_offset", chemical_scalar_offset);
 	pp.query("chemical_num_scalars", chemical_num_scalars);
