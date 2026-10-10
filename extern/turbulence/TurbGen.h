@@ -1183,7 +1183,7 @@ private:
       TurbGen_printf(FuncSig(__func__) + "entering.\n");
 
     int ikmin[3], ikmax[3], ik[3], tot_nmodes_full_sampling;
-    double k[3], ka, kc, amplitude, parab_prefact;
+    double k[3], ka, kc, amplitude = 0.0, parab_prefact;
 
     // applies in case of power law (spect_form == 2)
     int iang, nang;
