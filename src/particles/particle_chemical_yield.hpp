@@ -42,6 +42,10 @@ class ChemicalYieldTables
 	std::array<SelectedChemicalYieldDataTable, max_tracked_channels> channels{};
 	WRMassLossDistributionDataTable wr_mass_loss_distribution;
 
+      private:
+	// Only the lookup wrapper may construct a raw view; it also populates the metadata.
+	friend auto constTables() -> ChemicalYieldGpuConstTables;
+
 	[[nodiscard]] auto const_tables() const -> ChemicalYieldGpuConstTables
 	{
 		ChemicalYieldGpuConstTables tables{};
