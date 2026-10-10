@@ -6,6 +6,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <numbers>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -63,25 +64,25 @@ struct GeneratorState {
   auto operator==(const GeneratorState &) const -> bool = default;
 };
 
-class TurbGenProbe : public TurbGen {
+class TurbGenProbe final : public TurbGen {
 public:
   // A non-writing rank keeps this standalone test free of evolution files.
   TurbGenProbe() : TurbGen(1) { set_verbose(0); }
 
-  auto State() const -> GeneratorState {
-    return {{ampl_factor[0], ampl_factor[1], ampl_factor[2]},
-            OUphases,
-            {aka[0], aka[1], aka[2]},
-            {akb[0], akb[1], akb[2]},
-            seed,
-            step};
+  [[nodiscard]] auto State() const -> GeneratorState {
+    return {.amplitudes = {ampl_factor[0], ampl_factor[1], ampl_factor[2]},
+            .phases = OUphases,
+            .real = {aka[0], aka[1], aka[2]},
+            .imaginary = {akb[0], akb[1], akb[2]},
+            .randomSeed = seed,
+            .ouStep = step};
   }
 
-  auto UpdateInterval() const -> double { return dt; }
+  [[nodiscard]] auto UpdateInterval() const -> double { return dt; }
 };
 
 auto ComponentRms(const Components &values) -> double {
-  return std::hypot(values[0], values[1], values[2]) / std::sqrt(3.0);
+  return std::hypot(values[0], values[1], values[2]) / std::numbers::sqrt3;
 }
 
 void CheckSameOu(const GeneratorState &controlled,
@@ -219,7 +220,7 @@ void CheckRejected(const Parameters &params, const double time,
 
 void TestRejectedMeasurements() {
   for (int axis = 0; axis < 3; ++axis) {
-    for (double invalid :
+    for (const double invalid :
          {std::numeric_limits<double>::quiet_NaN(),
           std::numeric_limits<double>::infinity(), -2.0, -1.0}) {
       TurbGenProbe generator;
@@ -271,7 +272,9 @@ void TestRejectedInitialization() {
   for (const auto &[key, value] : invalid) {
     auto params = DrivingParameters();
     params[key] = value;
-    CheckRejected(params, 0.0, "reject invalid " + key + "=" + value);
+    std::string description = "reject invalid ";
+    description.append(key).append("=").append(value);
+    CheckRejected(params, 0.0, description);
   }
   CheckRejected(
       DrivingParameters(), 0.25,
