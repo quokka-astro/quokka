@@ -42,11 +42,16 @@ void printLowerDimBox(std::ostream &a_File, const amrex::Box &a_box, int skipDim
 
 void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagName)
 {
+	if constexpr (AMREX_SPACEDIM != 3) {
+		amrex::Abort("DiagFramePlane requires a 3D simulation.");
+	}
+
 	DiagBase::init(a_prefix, a_diagName);
 
-	if (m_filters.empty()) {
+	if (!m_filters.empty()) {
 		amrex::Print() << " Filters are not available on DiagFramePlane and will "
 				  "be discarded \n";
+		m_filters.clear();
 	}
 
 	amrex::ParmParse const pp(a_prefix);
