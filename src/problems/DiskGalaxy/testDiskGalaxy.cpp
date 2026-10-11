@@ -264,7 +264,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 
 		// the table is a cube; infer its side length from the file size
 		const std::size_t n_turb = std::filesystem::file_size(turb_vx_file) / sizeof(amrex::Real);
-		const auto n_side = static_cast<int>(std::cbrt(static_cast<double>(n_turb)) + 0.5);
+		const auto n_side = static_cast<int>(std::lround(std::cbrt(static_cast<double>(n_turb))));
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<std::size_t>(n_side) * n_side * n_side == n_turb && n_side > 1,
 						 "disk_galaxy.turb_vx_file is not a cube of double-precision values");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::filesystem::file_size(turb_vy_file) == std::filesystem::file_size(turb_vx_file) &&
