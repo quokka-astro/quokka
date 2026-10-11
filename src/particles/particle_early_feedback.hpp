@@ -301,11 +301,19 @@ void applyBuffer(amrex::MultiFab &state, amrex::MultiFab const &state_buffer, am
 		const auto local_state = state.array(mfi);
 		const auto local_buffer = state_buffer.const_array(mfi);
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			// The buffer's last component counts contributing particle stencils. Skip cells that received no feedback.
+			if (!(local_buffer(i, j, k, count_component) > 0.0)) {
+				return;
+			}
+			const amrex::Real rho = local_state(i, j, k, HydroSystem<problem_t>::density_index);
+			const amrex::Real px = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			const amrex::Real py = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			const amrex::Real pz = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			// The limiter must not clip pre-existing speeds down to the configured cap.
+			const amrex::Real cell_velocity_limit = std::max(velocity_limit, std::sqrt((px * px) + (py * py) + (pz * pz)) / rho);
 			addBufferToState<problem_t>(local_state, local_buffer, i, j, k, count_component);
-		});
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			limitVelocity<problem_t>(local_state, local_buffer, i, j, k, count_component, velocity_limit, clipped_cell_count, min_velocity_scale,
-						 max_velocity);
+			limitVelocity<problem_t>(local_state, local_buffer, i, j, k, count_component, cell_velocity_limit, clipped_cell_count,
+						 min_velocity_scale, max_velocity);
 		});
 	}
 }
@@ -331,8 +339,8 @@ auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, s
 	amrex::Gpu::Buffer<amrex::Real> max_velocity_buffer({0.0});
 
 	EarlyFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, birth_time_index, mass_at_birth_index,
-								      EMF_p0, EMF_tFB, EMF_alpha, active_particle_buffer.data(), scalar_momentum_buffer.data(),
-								      invalid_source_buffer.data());
+								      EMEF_p0, EMEF_tFB, EMEF_alpha, active_particle_buffer.data(),
+								      scalar_momentum_buffer.data(), invalid_source_buffer.data());
 
 	int invalid_sources = invalid_source_buffer.copyToHost()[0];
 	amrex::ParallelDescriptor::ReduceIntSum(invalid_sources);
@@ -342,7 +350,7 @@ auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, s
 
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
 	ParticleUtils::roundoffMultiFab(state_buffer);
-	EarlyFeedbackUtils::applyBuffer<problem_t>(state, state_buffer, EMF_max_velocity, clipped_cell_buffer.data(), min_velocity_scale_buffer.data(),
+	EarlyFeedbackUtils::applyBuffer<problem_t>(state, state_buffer, EMEF_max_velocity, clipped_cell_buffer.data(), min_velocity_scale_buffer.data(),
 						   max_velocity_buffer.data());
 
 	EarlyFeedbackStats stats;
