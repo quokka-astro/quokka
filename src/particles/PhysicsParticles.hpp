@@ -233,6 +233,9 @@ class PhysicsParticleDescriptorBase
 		return {0, 0.0_rt};
 	}
 
+	virtual void depositChemicalFeedback(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*time*/, amrex::Real /*dt*/)
+	{ /* Default empty implementation */ }
+
 	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */
@@ -254,6 +257,9 @@ class PhysicsParticleDescriptorBase
 
 	// Update particle properties (e.g., luminosity) based on current state
 	virtual void updateParticleProperties(amrex::Real current_time, Real dt) { /* Default empty implementation */ }
+
+	virtual void updateChemicalFeedback(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*current_time*/, amrex::Real /*dt*/)
+	{ /* Default empty implementation */ }
 };
 
 // Concrete implementation of particle descriptor for specific container types
@@ -824,6 +830,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		ParticlePropertyUpdateTraits<particleType>::template updateParticleProperties<problem_t, ContainerType>(this->container_, current_time, dt);
 	}
 
+	void updateChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) override
+	{
+		if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
+			ParticlePropertyUpdateTraits<particleType_>::template updateChemicalFeedback<problem_t, ContainerType>(this->container_, state, lev,
+															       current_time, dt);
+		}
+	}
+
 	// Implementation of supernova energy and momentum deposition from particles to grid
 	auto depositSN(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
 	    -> std::pair<int, amrex::Real> override
@@ -851,6 +865,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 
 		return {num_sn_explosions, max_velocity};
+	}
+
+	void depositChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) override
+	{
+		if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
+			ChemicalFeedbackDeposition<particleType_, ContainerType, problem_t>(this->container_, state, lev, time, dt);
+		}
 	}
 
 	// compute accretion rate
@@ -1065,6 +1086,14 @@ template <typename problem_t> class PhysicsParticleRegister
 		return {total_sn_explosions, max_velocity};
 	}
 
+	void depositChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::depositChemicalFeedback()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->depositChemicalFeedback(state, lev, time, dt);
+		}
+	}
+
 	// Implementation of computeSinkAccretion
 	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
 				  int lev, amrex::Real time, amrex::Real dt)
@@ -1270,6 +1299,14 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
+	void updateChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::updateChemicalFeedback()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->updateChemicalFeedback(state, lev, current_time, dt);
+		}
+	}
+
 	// Print particle statistics
 	void printParticleStatistics() const
 	{
@@ -1385,9 +1422,9 @@ template <typename problem_t> class PhysicsParticleRegister
 
 						for (const auto &entry : sfh_yaml) {
 							if (entry.IsSequence() && entry.size() == 3) {
-								const int nstep = entry[0].as<int>();
-								const auto time = entry[1].as<amrex::Real>();
-								const auto mass = entry[2].as<amrex::Real>();
+								const int nstep = entry[0].template as<int>();
+								const auto time = entry[1].template as<amrex::Real>();
+								const auto mass = entry[2].template as<amrex::Real>();
 								sfh_data_[type].emplace_back(nstep, time, mass);
 								last_time = time;
 							}
