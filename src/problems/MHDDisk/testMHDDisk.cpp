@@ -40,10 +40,10 @@ constexpr double target_beta_seed = 1.0e3;
 constexpr double axis_fallback_cells = 1.0;
 constexpr double turb_target_Mach = 0.5;
 
-constexpr double r_K_factor = 2.0;		// physical kernel radius, in units of dx (paper default 3.0)
-constexpr int omega_subsamples = 4;		// n_sub per dimension for boundary-cell overlap quadrature
+constexpr double r_K_factor = 2.0;              // physical kernel radius, in units of dx (paper default 3.0)
+constexpr int omega_subsamples = 4;             // n_sub per dimension for boundary-cell overlap quadrature
 constexpr int initial_condition_subsamples = 4; // per dimension samples. 4 means 4³ samples
-constexpr int refine_grid_subsamples = 4;	// per dimension samples. 4 means 4³ samples
+constexpr int refine_grid_subsamples = 4;       // per dimension samples. 4 means 4³ samples
 } // namespace
 
 struct MHDGalaxy {};
@@ -95,20 +95,21 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real seed_Rmax{};
 	amrex::Real seed_Lz{};
 	amrex::Real seed_B0_HL{};
-	std::string seed_str;		     // magnetic seed
+	std::string seed_str;                // magnetic seed
 	amrex::Vector<long long> turb_seeds; // NOLINT(google-runtime-int)
-					     // seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
+	                                     // seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
 
 	amrex::Gpu::DeviceVector<amrex::Real> Aphi_device;
 
+
 	// Supernova feedback parameters
 	amrex::Real sn_jeans_J{4.0};
-	amrex::Real sn_momentum{1.0e8};		       // in units of M_sun * km/s
+	amrex::Real sn_momentum{1.0e8};                // in units of M_sun * km/s
 	amrex::Real star_formation_efficiency{0.5};    // fraction of stellar mass that remains as a compact remnant
 	amrex::Real sn_cluster_momentum_exponent{0.0}; // exponent for scaling momentum injection with cluster mass
 	amrex::Real sn_mass_per_event_msun{100.0};
 	amrex::Long sn_trigger_count_cumulative{0}; // cumulative # of cells that crossed the Jeans trigger
-						    // (secondary diagnostic only; not checkpoint-persistent)
+                                                   // (secondary diagnostic only; not checkpoint-persistent)
 
 	// Owning GPU storage for the vx/vy/vz turbulence cubes loaded from binary files.
 	// The generator writes double-precision arrays with dimensions
@@ -388,14 +389,11 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	was_called = true;
 
 	amrex::ParmParse const pp("mhd_galaxy");
-	pp.get("Rc_kpc", userData_.Rc);
-	userData_.Rc *= 1.0e3 * C::parsec;
-	pp.get("Rd_kpc", userData_.Rd);
-	userData_.Rd *= 1.0e3 * C::parsec;
-	pp.get("Rmax_kpc", userData_.Rmax);
-	userData_.Rmax *= 1.0e3 * C::parsec;
-	pp.get("Rcutoff_kpc", userData_.Rcutoff);
-	userData_.Rcutoff *= 1.0e3 * C::parsec;
+	// clang-format off
+	pp.get("Rc_kpc",      userData_.Rc);	  userData_.Rc      *= 1.0e3 * C::parsec;
+	pp.get("Rd_kpc",      userData_.Rd);	  userData_.Rd      *= 1.0e3 * C::parsec;
+	pp.get("Rmax_kpc",    userData_.Rmax);	  userData_.Rmax    *= 1.0e3 * C::parsec;
+	pp.get("Rcutoff_kpc", userData_.Rcutoff); userData_.Rcutoff *= 1.0e3 * C::parsec;
 	pp.get("Mc", userData_.Mc);
 	pp.get("Q_mean", userData_.Q_mean);
 	pp.query("sn_jeans_J", userData_.sn_jeans_J);
@@ -403,6 +401,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.query("star_formation_efficiency", userData_.star_formation_efficiency);
 	pp.query("sn_mass_per_event_msun", userData_.sn_mass_per_event_msun);
 	pp.query("sn_cluster_momentum_exponent", userData_.sn_cluster_momentum_exponent);
+	// clang-format on
 
 	constexpr double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
 	constexpr double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
@@ -433,7 +432,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
 	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
 
-	// Load 2D Cylindrical A_phi Potential Table
+	//-------//
+	// A_phi // - Load 2D Cylindrical A_phi Potential Table
+	//-------//
 	std::string aphi_meta_file;
 	std::string aphi_data_file;
 	pp.get("aphi_meta_file", aphi_meta_file);
@@ -529,7 +530,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			       << "  B0_scale=" << userData_.seed_B0_HL << " G*cm (HL)\n";
 	}
 
-	// Turb Sampling
+	//---------------//
+	// Turb Sampling //
+	//---------------//
 	std::string turb_vx_file;
 	std::string turb_vy_file;
 	std::string turb_vz_file;
@@ -682,8 +685,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		return Aphi * (x_e / R_e) * taper;
 	};
 
-	auto sampleSubcell = [=] AMREX_GPU_DEVICE(int i, int j, int k, double &rho_samples, double &px_samples, double &py_samples, double &pz_samples,
-						  double &Etot_samples, double &Eint_samples) {
+	auto sampleSubcell = [=] AMREX_GPU_DEVICE(int i, int j, int k, double& rho_samples, double& px_samples, double& py_samples, double& pz_samples,
+	                                          double& Etot_samples, double& Eint_samples) {
 		const double x = prob_lo[0] + (i + 0.5) * dx;
 		const double y = prob_lo[1] + (j + 0.5) * dy;
 		const double z = prob_lo[2] + (k + 0.5) * dz;
@@ -788,7 +791,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 			for (int b = 0; b < subsample; ++b) {
 				for (int c = 0; c < subsample; ++c) {
 					sampleSubcell(subsample * i + a, subsample * j + b, subsample * k + c, rho_samples, px_samples, py_samples, pz_samples,
-						      Etot_samples, Eint_samples);
+					              Etot_samples, Eint_samples);
 				}
 			}
 		}
