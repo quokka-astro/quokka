@@ -16,10 +16,10 @@ max_timesteps = 0
 
 particles.disable_SN_feedback = true
 particles.disable_particle_drift = true
-particles.EMF_enabled = true
-particles.EMF_p0_kmps = 10.0
-particles.EMF_tFB_Myr = 4.0
-particles.EMF_alpha = 1.0
+particles.EMEF_enabled = true
+particles.EMEF_p0_kmps = 10.0
+particles.EMEF_tFB_Myr = 4.0
+particles.EMEF_alpha = 1.0
 particles.verbose = 0
 
 problem.particles_file = "../inputs/ParticleEarlyFeedback_particles.txt"

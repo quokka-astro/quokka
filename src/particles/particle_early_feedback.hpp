@@ -339,8 +339,8 @@ auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, s
 	amrex::Gpu::Buffer<amrex::Real> max_velocity_buffer({0.0});
 
 	EarlyFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, birth_time_index, mass_at_birth_index,
-								      EMF_p0, EMF_tFB, EMF_alpha, active_particle_buffer.data(), scalar_momentum_buffer.data(),
-								      invalid_source_buffer.data());
+								      EMEF_p0, EMEF_tFB, EMEF_alpha, active_particle_buffer.data(),
+								      scalar_momentum_buffer.data(), invalid_source_buffer.data());
 
 	int invalid_sources = invalid_source_buffer.copyToHost()[0];
 	amrex::ParallelDescriptor::ReduceIntSum(invalid_sources);
@@ -350,7 +350,7 @@ auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, s
 
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
 	ParticleUtils::roundoffMultiFab(state_buffer);
-	EarlyFeedbackUtils::applyBuffer<problem_t>(state, state_buffer, EMF_max_velocity, clipped_cell_buffer.data(), min_velocity_scale_buffer.data(),
+	EarlyFeedbackUtils::applyBuffer<problem_t>(state, state_buffer, EMEF_max_velocity, clipped_cell_buffer.data(), min_velocity_scale_buffer.data(),
 						   max_velocity_buffer.data());
 
 	EarlyFeedbackStats stats;

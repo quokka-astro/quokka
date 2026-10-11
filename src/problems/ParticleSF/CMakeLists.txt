@@ -13,7 +13,7 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   add_test(
     NAME ${JOB_NAME}EarlyFeedback
-    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml particles.EMF_enabled=true plotfile_interval=-1 checkpoint_interval=-1 ${QuokkaTestParams}
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml particles.EMEF_enabled=true plotfile_interval=-1 checkpoint_interval=-1 ${QuokkaTestParams}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
 	set_tests_properties(${JOB_NAME} PROPERTIES COST 100)

@@ -1102,12 +1102,12 @@ template <typename problem_t> class PhysicsParticleRegister
 				  amrex::Real dt) -> EarlyFeedbackStats
 	{
 		const BL_PROFILE("PhysicsParticleRegister::depositEarlyFeedback()");
-		if (!EMF_enabled) {
+		if (!EMEF_enabled) {
 			return {};
 		}
 		const auto descriptor = particleRegistry_.find(ParticleType::StochasticStellarPop);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(descriptor != particleRegistry_.end(),
-						 "particles.EMF_enabled=1 requires ParticleSwitch::StochasticStellarPop for this problem.");
+						 "particles.EMEF_enabled=1 requires ParticleSwitch::StochasticStellarPop for this problem.");
 		return descriptor->second->depositEarlyFeedback(state, state_fc, lev, time, dt);
 	}
 

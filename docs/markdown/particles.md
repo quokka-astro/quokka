@@ -248,7 +248,7 @@ A few implementation notes help interpret corner cases and limitations of the cu
 
 ## Empirically motivated early feedback
 
-The optional empirically motivated early-feedback (EMF) model follows Keller, Kruijssen & Chevance (2022). For a `StochasticStellarPop` particle with birth mass \\(M_{\\rm birth}\\), birth time \\(t_{\\rm birth}\\), step start \\(t\\), and timestep \\(\\Delta t\\), it requests the finite momentum increment
+The optional empirically motivated early-feedback (EMEF) model follows Keller, Kruijssen & Chevance (2022). For a `StochasticStellarPop` particle with birth mass \\(M_{\\rm birth}\\), birth time \\(t_{\\rm birth}\\), step start \\(t\\), and timestep \\(\\Delta t\\), it requests the finite momentum increment
 
 <script type="math/tex; mode=display">
 \Delta p = \alpha p_0 M_{\rm birth}\left[x_1^{4\alpha-1}-x_0^{4\alpha-1}\right],
@@ -260,9 +260,9 @@ x_1 = {\rm clamp}\!\left(\frac{t+\Delta t-t_{\rm birth}}{t_{\rm FB}},0,1\right).
 
 This is already a timestep-integrated impulse and is not multiplied by \\(\\Delta t\\) again. At \\(t=t_{\\rm birth}+t_{\\rm FB}\\), the integrated momentum is \\(\\alpha p_0 M_{\\rm birth}\\). The default values are \\(p_0=377\\) km s\\(^{-1}\\), \\(t_{\\rm FB}=3.3\\) Myr, and \\(\\alpha=1\\).
 
-All valid stellar-population representations participate while their age interval overlaps \\([0,t_{\\rm FB}]\\): `LowMassComposite`, `SNProgenitor`, `HighMassNonExploding`, and `SNRemnant`. This stage-independent rule makes a formation event's EMF budget proportional to the sum of its represented birth masses; later SN mass loss does not reduce the budget. Particle splitting divides both current mass and `mass_at_birth` among the children.
+All valid stellar-population representations participate while their age interval overlaps \\([0,t_{\\rm FB}]\\): `LowMassComposite`, `SNProgenitor`, `HighMassNonExploding`, and `SNRemnant`. This stage-independent rule makes a formation event's EMEF budget proportional to the sum of its represented birth masses; later SN mass loss does not reduce the budget. Particle splitting divides both current mass and `mass_at_birth` among the children.
 
-EMF uses the same normalized three-cell spherical weights and four-ghost-cell requirement as SN feedback, but it constructs corrected radial vectors for each particle. Before applying the cell-by-cell velocity limiter described below, subtracting the weighted mean direction and renormalizing the vector magnitudes enforces, to deposition roundoff,
+EMEF uses the same normalized three-cell spherical weights and four-ghost-cell requirement as SN feedback, but it constructs corrected radial vectors for each particle. Before applying the cell-by-cell velocity limiter described below, subtracting the weighted mean direction and renormalizing the vector magnitudes enforces, to deposition roundoff,
 
 <script type="math/tex; mode=display">
 \sum_j \Delta \boldsymbol{p}_j = 0,
@@ -272,7 +272,7 @@ EMF uses the same normalized three-cell spherical weights and four-ghost-cell re
 
 It injects no mass, metals, passive scalars, or radiation energy. After all particle events have been accumulated, each cell's total energy receives the exact kinetic-energy change associated with its net momentum change, leaving internal energy unchanged. For each individual event, negative work \\(\\sum_j \\boldsymbol{v}_j\\!\\cdot\\!\\Delta\\boldsymbol{p}_j\\) is added as thermal energy to the particle's host cell. Cancellation between separate particle events is represented by the aggregated kinetic-energy update; it does not receive an additional inter-event thermalization term.
 
-After simultaneous particle contributions have been accumulated, each affected cell independently caps its post-deposition bulk velocity at the larger of `particles.EMF_max_velocity_kmps` and its pre-feedback speed. The default limit is 3000 km s\\(^{-1}\\). Gas already above the configured limit is therefore not reduced to that limit by EMF. This post-hoc operation rescales the cell's total momentum and removes the corresponding kinetic energy while leaving internal energy unchanged. Because different cells generally receive different scale factors, this limiter deliberately gives up the uncapped stencil's exact zero-net-vector-momentum and uniform-boost invariants in exchange for preventing isolated low-density cells from controlling the hydrodynamic timestep. The limit is defined in the simulation frame.
+After simultaneous particle contributions have been accumulated, each affected cell independently caps its post-deposition bulk velocity at the larger of `particles.EMEF_max_velocity_kmps` and its pre-feedback speed. The default limit is 3000 km s\\(^{-1}\\). Gas already above the configured limit is therefore not reduced to that limit by EMEF. This post-hoc operation rescales the cell's total momentum and removes the corresponding kinetic energy while leaving internal energy unchanged. Because different cells generally receive different scale factors, this limiter deliberately gives up the uncapped stencil's exact zero-net-vector-momentum and uniform-boost invariants in exchange for preventing isolated low-density cells from controlling the hydrodynamic timestep. The limit is defined in the simulation frame.
 
 ### Deliberate differences from the published deposition algorithm
 
@@ -288,13 +288,13 @@ The operation occurs after end-of-step particle drift and star formation, and be
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `particles.EMF_enabled` | Boolean | `0` | Enable early feedback for `StochasticStellarPop` particles |
-| `particles.EMF_p0_kmps` | Real | `377.0` | Momentum normalization \\(p_0\\) in km s\\(^{-1}\\) |
-| `particles.EMF_tFB_Myr` | Real | `3.3` | Feedback duration in Myr |
-| `particles.EMF_alpha` | Real | `1.0` | Expansion exponent; must lie in \\([0.5,1.0]\\) |
-| `particles.EMF_max_velocity_kmps` | Real | `3000.0` | The post-feedback speed limit in km/s. Applied cell-by-cell as `max(v0, EMF_max_velocity_kmps)`, where `v0` is the pre-feedback speed in km/s |
+| `particles.EMEF_enabled` | Boolean | `0` | Enable early feedback for `StochasticStellarPop` particles |
+| `particles.EMEF_p0_kmps` | Real | `377.0` | Momentum normalization \\(p_0\\) in km s\\(^{-1}\\) |
+| `particles.EMEF_tFB_Myr` | Real | `3.3` | Feedback duration in Myr |
+| `particles.EMEF_alpha` | Real | `1.0` | Expansion exponent; must lie in \\([0.5,1.0]\\) |
+| `particles.EMEF_max_velocity_kmps` | Real | `3000.0` | The post-feedback speed limit in km/s. Applied cell-by-cell as `max(v0, EMEF_max_velocity_kmps)`, where `v0` is the pre-feedback speed in km/s |
 
-On a multilevel hierarchy, EMF follows the existing SN-feedback AMR policy: feedback is deposited only from particles stored on the finest AMR level, and particles stored on coarser levels are ignored. Both paths use a same-level feedback buffer without explicit coarse-fine source synchronization, so deposition can be inconsistent when a stencil crosses a coarse-fine boundary. An active particle whose stencil is not representable inside its particle grid or the physical domain still causes an abort. EMF is independent of `particles.disable_SN_feedback` and `particles.SN_scheme`, so EMF-only and SN-only controls are both available.
+On a multilevel hierarchy, EMEF follows the existing SN-feedback AMR policy: feedback is deposited only from particles stored on the finest AMR level, and particles stored on coarser levels are ignored. Both paths use a same-level feedback buffer without explicit coarse-fine source synchronization, so deposition can be inconsistent when a stencil crosses a coarse-fine boundary. An active particle whose stencil is not representable inside its particle grid or the physical domain still causes an abort. EMEF is independent of `particles.disable_SN_feedback` and `particles.SN_scheme`, so EMEF-only and SN-only controls are both available.
 
 ## Supernova Feedback
 
