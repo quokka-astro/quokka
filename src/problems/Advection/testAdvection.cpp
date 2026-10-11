@@ -34,6 +34,21 @@ template <> struct Physics_Traits<SawtoothProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = false;
 };
 
+// This problem uses the linear-advection solver, which advects a single scalar, so the cell-centred state
+// holds one component instead of the hydro state that Physics_Indices allocates for QuokkaSimulation problems.
+template <> struct Physics_Indices<SawtoothProblem> {
+	static constexpr int nvarTotal_cc = 1;
+	// cell-centered
+	static constexpr int hydroFirstIndex = 0;
+	static constexpr int pscalarFirstIndex = Physics_NumVars::numHydroVars;
+	static constexpr int dustFirstIndex = pscalarFirstIndex;
+	static constexpr int radFirstIndex = dustFirstIndex;
+	// face-centered
+	static constexpr int nvarPerDim_fc = 0;
+	static constexpr int nvarTotal_fc = 0;
+	static constexpr int mhdFirstIndex = 0;
+};
+
 AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
