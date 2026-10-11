@@ -27,6 +27,7 @@ do_subcycle = 0
 hydro.artificial_viscosity_coefficient = 0.1
 
 turbulence.enabled = 1
+turbulence.remove_mean_flow = 1
 turbulence.length = 1.0
 turbulence.target_vdisp = 1.0
 turbulence.ampl_factor = 0.5
