@@ -430,7 +430,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	integral *= h / 3.0;
 	// set densityProfile factor such that the integral equals Q_mean
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
-	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
+	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);  // rho_cgm such that equal pressure at boundary (~3.54e-32)
+	userData_.rho_cgm = std::max( userData_.rho_cgm, dustDensityFloor_ );  // cgm density is at least the density floor
 
 	//-------//
 	// A_phi // - Load 2D Cylindrical A_phi Potential Table
@@ -1531,7 +1532,7 @@ void QuokkaSimulation<MHDGalaxy>::ComputeDerivedVar(int lev, std::string const &
 		return;
 	}
 
-	// default case
+	// default case, set field NaN
 	auto out_arrs = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { out_arrs[bx](i, j, k, ncomp) = NAN; });
 	amrex::Gpu::streamSynchronize();
