@@ -60,7 +60,7 @@ function(quokka_add_problem)
     add_test(
       NAME ${QUOKKA_PROBLEM_JOB_NAME}
       COMMAND ${QUOKKA_PROBLEM_JOB_NAME} ../inputs/${QUOKKA_PROBLEM_INPUT_FILE} ${QUOKKA_PROBLEM_TEST_PARAMS}
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+      WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/tests)
 
     # Set test priority using COST property (higher COST = runs first)
     set_tests_properties(${QUOKKA_PROBLEM_JOB_NAME} PROPERTIES COST ${QUOKKA_PROBLEM_PRIORITY})
