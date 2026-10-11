@@ -95,21 +95,21 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real seed_Rmax{};
 	amrex::Real seed_Lz{};
 	amrex::Real seed_B0_HL{};
-	std::string seed_str;                // magnetic seed
-	amrex::Vector<long long> turb_seeds; // NOLINT(google-runtime-int)
-	                                     // seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
+	std::string seed_str; // magnetic seed
 
 	amrex::Gpu::DeviceVector<amrex::Real> Aphi_device;
 
-
 	// Supernova feedback parameters
-	amrex::Real sn_jeans_J{4.0};
-	amrex::Real sn_momentum{1.0e8};                // in units of M_sun * km/s
-	amrex::Real star_formation_efficiency{0.5};    // fraction of stellar mass that remains as a compact remnant
-	amrex::Real sn_cluster_momentum_exponent{0.0}; // exponent for scaling momentum injection with cluster mass
-	amrex::Real sn_mass_per_event_msun{100.0};
-	amrex::Long sn_trigger_count_cumulative{0}; // cumulative # of cells that crossed the Jeans trigger
-                                                   // (secondary diagnostic only; not checkpoint-persistent)
+	amrex::Real sn_jeans_J;
+	amrex::Real sn_momentum;
+	amrex::Real star_formation_efficiency;
+	amrex::Real sn_cluster_momentum_exponent;
+	amrex::Real sn_mass_per_event_msun;
+	amrex::Long sn_trigger_count_cumulative = 0; // cumulative no. of cells that crossed the Jeans trigger
+	                                             // (secondary diagnostic only; not checkpoint-persistent)
+
+	amrex::Vector<long long> turb_seeds; // NOLINT(google-runtime-int)
+	                                     // seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
 
 	// Owning GPU storage for the vx/vy/vz turbulence cubes loaded from binary files.
 	// The generator writes double-precision arrays with dimensions
@@ -396,11 +396,11 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.get("Rcutoff_kpc", userData_.Rcutoff); userData_.Rcutoff *= 1.0e3 * C::parsec;
 	pp.get("Mc", userData_.Mc);
 	pp.get("Q_mean", userData_.Q_mean);
-	pp.query("sn_jeans_J", userData_.sn_jeans_J);
-	pp.query("sn_momentum", userData_.sn_momentum);
-	pp.query("star_formation_efficiency", userData_.star_formation_efficiency);
-	pp.query("sn_mass_per_event_msun", userData_.sn_mass_per_event_msun);
-	pp.query("sn_cluster_momentum_exponent", userData_.sn_cluster_momentum_exponent);
+	pp.get("sn_jeans_J", userData_.sn_jeans_J);
+	pp.get("sn_momentum", userData_.sn_momentum);
+	pp.get("star_formation_efficiency", userData_.star_formation_efficiency);
+	pp.get("sn_mass_per_event_msun", userData_.sn_mass_per_event_msun);
+	pp.get("sn_cluster_momentum_exponent", userData_.sn_cluster_momentum_exponent);
 	// clang-format on
 
 	constexpr double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
