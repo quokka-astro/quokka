@@ -7,6 +7,12 @@
 
 All particle features can only be activated when compiled with `-DAMReX_SPACEDIM=3`.
 
+## Refined-restart particle splitting
+
+When a restart increases the root-grid resolution, CIC and CICRad particles split by default into `refinement_factor^3` children per parent. Set `particles.split_particles_on_restart_refine = 0` to retain the original particles. Other particle types do not opt into this restart policy.
+
+Splitting conserves total mass and momentum. CICRad luminosity is also extensive: each radiation group's luminosity is divided equally among the children. Positions and birth/death times are copied unchanged. Children receive random velocity kicks with the mean kick removed to conserve momentum; the current kick calculation requires CGS units. The splitting routine rejects nonpositive factors.
+
 ## Sink Particle Type
 
 Sink particles carry the following real-valued attributes:

@@ -1,0 +1,11 @@
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+quokka.bc = ["periodic", "periodic", "periodic"]
+amr.n_cell = [8, 8, 8]
+amr.max_level = 0
+amr.blocking_factor = 8
+max_timesteps = 0
+plotfile_interval = -1
+checkpoint_interval = -1
+suppress_output = 1
+do_subcycle = 0
