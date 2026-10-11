@@ -1,5 +1,11 @@
-// SPDX-FileCopyrightText: © The Quokka Authors
-// SPDX-License-Identifier: MIT
+// Athena++ astrophysical MHD code
+// Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
+// Licensed under the 3-clause BSD License, see LICENSE file for details
+//
+// This file is derived from lhlld.cpp: Low-dissipation HLLD (LHLLD) Riemann
+// solver for adiabatic MHD (Minoshima et al. 2021).
+//
+// Additional modifications SPDX-FileCopyrightText: © The Quokka Authors
 
 #ifndef HLLD_HPP_ // NOLINT
 #define HLLD_HPP_
