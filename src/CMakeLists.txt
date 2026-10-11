@@ -171,4 +171,6 @@ endif()
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
 
 add_subdirectory(problems)
-add_subdirectory(math/tests)
+if(BUILD_TESTING)
+  add_subdirectory(math/tests)
+endif()
