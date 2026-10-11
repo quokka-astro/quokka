@@ -55,12 +55,16 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	// kinetic energy
 	const double ke_L = 0.5 * (sL.rho * vel_magn_sq_L);
 	const double ke_R = 0.5 * (sR.rho * vel_magn_sq_R);
+	// isothermal EOS (gamma == 1): total energy is not evolved, so skip the
+	// singular P/(gamma-1) term and return a finite zero placeholder instead
+	bool const is_isothermal = (gamma == 1.0);
+
 	// set left conserved states
 	u_L.rho = sL.rho;
 	u_L.mx = sL.u * u_L.rho;
 	u_L.my = sL.v * u_L.rho;
 	u_L.mz = sL.w * u_L.rho;
-	u_L.E = ke_L + pb_L + sL.P / (gamma - 1.0); // TODO(neco): generalise EOS
+	u_L.E = is_isothermal ? 0.0 : (ke_L + pb_L + sL.P / (gamma - 1.0));
 	u_L.Eint = sL.Eint;
 	u_L.by = sL.by;
 	u_L.bz = sL.bz;
@@ -69,7 +73,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	u_R.mx = sR.u * u_R.rho;
 	u_R.my = sR.v * u_R.rho;
 	u_R.mz = sR.w * u_R.rho;
-	u_R.E = ke_R + pb_R + sR.P / (gamma - 1.0);
+	u_R.E = is_isothermal ? 0.0 : (ke_R + pb_R + sR.P / (gamma - 1.0));
 	u_R.Eint = sR.Eint;
 	u_R.by = sR.by;
 	u_R.bz = sR.bz;
