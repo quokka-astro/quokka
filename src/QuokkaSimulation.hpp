@@ -3251,8 +3251,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	amrex::MultiFab state_tmp1_cc(grids[lev], dmap[lev], state_new_cc_[lev].nComp(), nghost_cc_);
 
 	// Chemical (ionizing) bands are the last nGroups - nGroupsThermal groups. With photochemistry enabled, each
-	// substep first transports the chemical bands and injects their emission, then runs photochemistry on them, and
-	// finally runs the IMEX PD-ARS stages on the thermal groups only. This keeps the stiff photochemistry after the
+	// substep first runs the IMEX PD-ARS stages (transport + emission) on the chemical bands, then runs photochemistry
+	// on them, and finally runs the IMEX PD-ARS stages on the thermal groups only. This keeps the stiff photochemistry after the
 	// non-stiff transport of the chemical bands, and nothing is carried over between substeps. Otherwise the IMEX
 	// PD-ARS stages cover all groups.
 	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
@@ -3299,8 +3299,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		// Fill radEnergySource and radFluxSource with the radiation emitted by particles and by the user hook
 		// AddRadSource. Both implicit stages of the IMEX PD-ARS tableau have abscissa c = 1 (rows 2 and 3 of Aim each
-		// sum to 1), so every implicit source term is evaluated at the end of the step; the chemical-band emission
-		// injected before photochemistry uses the same time. If withChemBands is false, the chemical-band sources
+		// sum to 1), so every implicit source term is evaluated at the end of the step, for the thermal groups and
+		// the chemical bands alike. If withChemBands is false, the chemical-band sources
 		// are zeroed, so that AddSourceTermsMultiGroup and AddSourceTermsSingleGroup do not inject them again.
 		auto fillRadiationSources = [&](bool const withChemBands) {
 			radEnergySource.setVal(0.0);
@@ -3335,23 +3335,31 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 #ifdef PHOTOCHEMISTRY
 		if (enablePhotoChemistry_ == 1) {
 			if (chemBandsFirst) {
-				// === Step 1: transport the chemical bands, then inject their emission ===
+				// === Step 1: IMEX PD-ARS on the chemical bands (transport + emission) ===
 
-				// The explicit part of the IMEX PD-ARS tableau is SSP-RK2, so these are the explicit stages 2 and 3
-				// below, restricted to the chemical bands. The thermal groups are not touched here.
+				// These are stages 2 and 3 below, restricted to the chemical bands; the thermal groups are not touched
+				// here. Chemical bands do not couple to the thermal gas-radiation energy exchange, so their only
+				// implicit term is the emission, which does not depend on the state and is simply added with the
+				// implicit weights Aim_22 and Aim_33. The freshly emitted photons are thereby transported for part of
+				// the substep, as in the thermal groups, rather than waiting for the next substep.
+				fillRadiationSources(true);
+				auto addChemBandSources = [&](amrex::MultiFab &state, amrex::Real const dt_source) {
+					for (amrex::MFIter iter(state); iter.isValid(); ++iter) {
+						RadSystem<problem_t>::AddChemBandSources(state.array(iter), radEnergySource.const_array(iter),
+											 radFluxSource.const_array(iter), iter.validbox(), dt_source);
+					}
+				};
+
+				// stage 2: explicit forward Euler, then emission, on state_tmp1
 				amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
 				advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine,
 							     state_tmp1_cc, nGroupsThermal, nGroups);
+				addChemBandSources(state_tmp1_cc, IMEX_Aim_22 * dt_radiation);
+
+				// stage 3: explicit midpoint RK2 (Shu-Osher combination with state_tmp1), then emission, on state_new
 				advanceRadiationMidpointRK2(lev, time_subcycle, dt_radiation, i, nsubSteps, fr_as_crse, fr_as_fine, state_tmp1_cc,
 							    nGroupsThermal, nGroups);
-
-				// Chemical bands do not couple to the thermal gas-radiation energy exchange, so their emission is
-				// added directly, over the full substep, instead of in the IMEX stages.
-				fillRadiationSources(true);
-				for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
-					RadSystem<problem_t>::AddChemBandSources(state_new_cc_[lev].array(iter), radEnergySource.const_array(iter),
-										 radFluxSource.const_array(iter), iter.validbox(), dt_radiation);
-				}
+				addChemBandSources(state_new_cc_[lev], IMEX_Aim_33 * dt_radiation);
 			}
 
 			// === Step 2: photochemistry (on the chemical bands transported in step 1) ===
