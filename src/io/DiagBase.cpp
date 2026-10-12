@@ -84,7 +84,7 @@ auto DiagBase::doDiag(const amrex::Real &a_time, int a_nstep) -> bool
 			// Update next output time
 			m_next_output_time += m_time_interval;
 			// Handle case where multiple intervals have passed
-			while (m_next_output_time < a_time) {
+			while (m_next_output_time <= a_time) {
 				m_next_output_time += m_time_interval;
 			}
 			// Record this output step
