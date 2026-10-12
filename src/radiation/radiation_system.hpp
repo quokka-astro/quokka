@@ -474,10 +474,30 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		auto const kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, Tgas);
 		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(kappa_expo_and_lower_value[1][g] == 0.0,
-							 "A chemical band has a nonzero opacity. Chemical-band absorption is handled by photochemistry, "
+							 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through photochemistry, "
 							 "so DefineOpacityExponentsAndLowerValues must return 0 for groups g >= nGroupsThermal_.");
 		}
 		return kappa_expo_and_lower_value;
+	}
+
+	//! Check that the chemical bands have zero opacity when there are no thermal groups. With photochemistry enabled,
+	//! subcycleRadiationAtLevel then skips the thermal IMEX stages, so the checks in AddSourceTermsSingleGroup and
+	//! DefineThermalCouplingOpacityExponentsAndLowerValues never run; photochemistry calls this instead.
+	AMREX_GPU_HOST_DEVICE static void AssertChemBandOpacitiesAreZero(amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double rho, double Tgas)
+	{
+		if constexpr (nGroupsThermal_ == 0) {
+			if constexpr (nGroups_ == 1) {
+				amrex::ignore_unused(rad_boundaries);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ComputePlanckOpacity(rho, Tgas) == 0.0 && ComputeEnergyMeanOpacity(rho, Tgas) == 0.0 &&
+								     ComputeFluxMeanOpacity(rho, Tgas) == 0.0,
+								 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
+								 "photochemistry, so its Planck, energy-mean and flux-mean opacities must be 0.");
+			} else {
+				amrex::ignore_unused(DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, Tgas));
+			}
+		} else {
+			amrex::ignore_unused(rad_boundaries, rho, Tgas);
+		}
 	}
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> const &kappa_expo_and_lower_value,

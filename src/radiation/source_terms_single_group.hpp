@@ -198,7 +198,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					// A single chemical band does not take part in the thermal coupling (see
 					// DefineThermalCouplingOpacityExponentsAndLowerValues), so its opacity must be zero.
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE((nGroupsThermal_ > 0) || (kappaP == 0.0 && kappaE == 0.0),
-									 "A chemical band has a nonzero opacity. Chemical-band absorption is handled by "
+									 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
 									 "photochemistry, so its Planck and energy-mean opacities must be 0.");
 					if (kappaE > 0.0) {
 						kappaPoverE = kappaP / kappaE;
@@ -212,7 +212,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						AMREX_ASSERT(!std::isnan(kappaF));
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 						    (nGroupsThermal_ > 0) || (kappaF == 0.0),
-						    "A chemical band has a nonzero opacity. Chemical-band absorption is handled by "
+						    "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
 						    "photochemistry, so its flux-mean opacity must be 0.");
 
 						if constexpr ((beta_order_ != 0) && (include_work_term_in_source)) {
@@ -393,7 +393,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				T_d = T_gas;
 				kappaF = ComputeFluxMeanOpacity(rho, T_d);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE((nGroupsThermal_ > 0) || (kappaF == 0.0),
-								 "A chemical band has a nonzero opacity. Chemical-band absorption is handled by "
+								 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
 								 "photochemistry, so its flux-mean opacity must be 0.");
 
 				amrex::ignore_unused(p_iteration_counter_local);
