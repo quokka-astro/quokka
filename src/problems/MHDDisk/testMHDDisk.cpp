@@ -97,7 +97,7 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real seed_B0_HL{};
 	std::string seed_str;		     // magnetic seed
 	amrex::Vector<long long> turb_seeds; // NOLINT(google-runtime-int)
-									// seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
+					     // seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
 
 	amrex::Gpu::DeviceVector<amrex::Real> Aphi_device;
 
@@ -225,11 +225,11 @@ inline auto interpolate_turbulence(const amrex::Real *table, int nx, int ny, int
 	const int i0 = static_cast<int>(x);
 	const int j0 = static_cast<int>(y);
 	const int k0 = static_cast<int>(z);
-	
+
 	const int i1 = amrex::min(i0 + 1, nx - 1);
 	const int j1 = amrex::min(j0 + 1, ny - 1);
 	const int k1 = amrex::min(k0 + 1, nz - 1);
-	
+
 	const amrex::Real fx = x - i0;
 	const amrex::Real fy = y - j0;
 	const amrex::Real fz = z - k0;
@@ -314,7 +314,7 @@ inline auto load_bin_to_device(const std::string &path, std::size_t n_expect) ->
 
 inline auto load_turb_seeds(const std::string &path) -> amrex::Vector<long long>
 {
-	amrex::Vector<long long> seeds;  // NOLINT(google-runtime-int)
+	amrex::Vector<long long> seeds; // NOLINT(google-runtime-int)
 	std::ifstream f(path);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f, ("Cannot open turbulence seed file " + path).c_str());
 	std::string line;
