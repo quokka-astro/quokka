@@ -402,49 +402,39 @@ if [ "${COMPUTE_SANITIZER}" = true ]; then
     echo "COMPUTE-SANITIZER RESULTS"
     echo "=========================================="
     
-    # Check for race conditions by looking for actual hazards in the summary
-    if grep -q "RACECHECK SUMMARY:" racecheck_output.txt; then
-        # Extract the number of hazards from the summary line
-        HAZARD_COUNT=$(grep "RACECHECK SUMMARY:" racecheck_output.txt | grep -oE "[0-9]+ hazards" | grep -oE "[0-9]+" || echo "0")
-        if [ "${HAZARD_COUNT}" -gt 0 ]; then
-            echo "✗ RACE CONDITIONS DETECTED: ${HAZARD_COUNT} hazards found"
-            echo ""
-            echo "Race condition details saved in: ${TEMP_DIR}/run_sanitizer/racecheck_output.txt"
-            RACE_FOUND=true
-        else
-            echo "✓ No race conditions detected by racecheck"
-            RACE_FOUND=false
+    # A successful process and explicit clean summaries are both required.
+    # Missing, malformed, or nonzero summaries make the check inconclusive/failed.
+    sanitizer_passed() {
+        local tool="$1" exit_code="$2" output="$3" marker="$4" clean_pattern="$5"
+        local summaries
+        if [ "${exit_code}" -ne 0 ]; then
+            echo "✗ ${tool} process failed (exit code: ${exit_code})"
+            return 1
         fi
-    else
-        # If no summary line found, check for any error indicators
-        if grep -qE "ERROR|hazard|Hazard" racecheck_output.txt; then
-            echo "✗ RACE CONDITIONS DETECTED!"
-            echo ""
-            echo "Race condition details saved in: ${TEMP_DIR}/run_sanitizer/racecheck_output.txt"
-            RACE_FOUND=true
-        else
-            echo "✓ No race conditions detected by racecheck"
-            RACE_FOUND=false
+        if ! summaries=$(grep -F "${marker}" "${output}"); then
+            echo "✗ ${tool} did not produce an expected summary"
+            return 1
         fi
+        if printf '%s\n' "${summaries}" | grep -qEv "${clean_pattern}"; then
+            echo "✗ ${tool} reported issues or an unrecognized summary"
+            return 1
+        fi
+        echo "✓ ${tool} completed with a clean summary"
+        return 0
+    }
+
+    RACE_FOUND=true
+    if sanitizer_passed racecheck "${RACECHECK_EXIT_CODE}" racecheck_output.txt "RACECHECK SUMMARY:" \
+        '^=+ RACECHECK SUMMARY: 0 hazards displayed \(0 errors, 0 warnings\)[[:space:]]*$'; then
+        RACE_FOUND=false
     fi
-    
-    # Check for memory errors
-    if grep -q "ERROR SUMMARY" memcheck_output.txt; then
-        ERROR_COUNT=$(grep "ERROR SUMMARY" memcheck_output.txt | grep -oE "[0-9]+ errors" | grep -oE "[0-9]+")
-        if [ "${ERROR_COUNT}" -gt 0 ]; then
-            echo "✗ MEMORY ERRORS DETECTED: ${ERROR_COUNT} errors found"
-            echo ""
-            echo "Memory error details saved in: ${TEMP_DIR}/run_sanitizer/memcheck_output.txt"
-            MEM_ERROR_FOUND=true
-        else
-            echo "✓ No memory errors detected by memcheck"
-            MEM_ERROR_FOUND=false
-        fi
-    else
-        echo "✓ No memory errors detected by memcheck"
+
+    MEM_ERROR_FOUND=true
+    if sanitizer_passed memcheck "${MEMCHECK_EXIT_CODE}" memcheck_output.txt "ERROR SUMMARY:" \
+        '^=+ ERROR SUMMARY: 0 errors[[:space:]]*$'; then
         MEM_ERROR_FOUND=false
     fi
-    
+
     echo ""
     echo "Compute-sanitizer output saved in:"
     echo "- Race check: ${TEMP_DIR}/run_sanitizer/racecheck_output.txt"
@@ -453,7 +443,7 @@ if [ "${COMPUTE_SANITIZER}" = true ]; then
     
     # Exit with error if any issues found
     if [ "${RACE_FOUND}" = true ] || [ "${MEM_ERROR_FOUND}" = true ]; then
-        echo "Issues detected by compute-sanitizer. Please review the output files for details."
+        echo "Compute-sanitizer checks failed or were inconclusive. Please review the output files for details."
         exit 1
     else
         echo "No issues detected by compute-sanitizer."
