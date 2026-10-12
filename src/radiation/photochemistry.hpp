@@ -120,13 +120,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, Emag);
 
+			amrex::ignore_unused(radBoundaries);
 			if constexpr (RadSystem<problem_t>::nGroupsThermal_ == 0) {
 				// With no thermal groups the thermal IMEX stages are skipped, so check the chem-band opacities here.
 				const auto massScalars = RadSystem<problem_t>::ComputeMassScalars(state, i, j, k);
 				const Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 				RadSystem<problem_t>::AssertChemBandOpacitiesAreZero(radBoundaries, rho, Tgas);
-			} else {
-				amrex::ignore_unused(radBoundaries);
 			}
 
 			burn_t photochemstate;
