@@ -246,8 +246,13 @@ auto compute_shell_radius(amrex::Vector<amrex::MultiFab> const &state_cc, amrex:
 
 auto compute_group_energy(QuokkaSimulation<DTypeFront3D> &sim, int g) -> amrex::Real
 {
-	return amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(sim.getNewMF_cc()),
-					RadSystem<DTypeFront3D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g, sim.Geom(), sim.refRatio());
+	// only pass levels that currently exist; state_new_cc_ is sized max_level+1 and higher levels may be empty
+	const int nlev = sim.finestLevel() + 1;
+	amrex::Vector<amrex::MultiFab const *> mfs(nlev);
+	for (int lev = 0; lev < nlev; ++lev) {
+		mfs[lev] = &sim.getNewMF_cc()[lev];
+	}
+	return amrex::volumeWeightedSum(mfs, RadSystem<DTypeFront3D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g, sim.Geom(), sim.refRatio());
 }
 
 auto lambda_rec(double T) -> double
@@ -637,9 +642,12 @@ template <> void QuokkaSimulation<DTypeFront3D>::refineGrid(int lev, amrex::TagB
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const amrex::Real x0 = neutral_fraction(state, i, j, k);
 
-			const amrex::Real del_x = std::max(std::abs(neutral_fraction(state, i + 1, j, k) - x0), std::abs(x0 - neutral_fraction(state, i - 1, j, k)));
-			const amrex::Real del_y = std::max(std::abs(neutral_fraction(state, i, j + 1, k) - x0), std::abs(x0 - neutral_fraction(state, i, j - 1, k)));
-			const amrex::Real del_z = std::max(std::abs(neutral_fraction(state, i, j, k + 1) - x0), std::abs(x0 - neutral_fraction(state, i, j, k - 1)));
+			const amrex::Real del_x =
+			    std::max(std::abs(neutral_fraction(state, i + 1, j, k) - x0), std::abs(x0 - neutral_fraction(state, i - 1, j, k)));
+			const amrex::Real del_y =
+			    std::max(std::abs(neutral_fraction(state, i, j + 1, k) - x0), std::abs(x0 - neutral_fraction(state, i, j - 1, k)));
+			const amrex::Real del_z =
+			    std::max(std::abs(neutral_fraction(state, i, j, k + 1) - x0), std::abs(x0 - neutral_fraction(state, i, j, k - 1)));
 
 			if (std::max({del_x, del_y, del_z}) > x_HI_grad_threshold) {
 				tag(i, j, k) = amrex::TagBox::SET;
@@ -827,9 +835,9 @@ auto problem_main() -> int
 				const double T_median = (ntot % 2 == 0) ? 0.5 * (all_temps[ntot / 2 - 1] + all_temps[ntot / 2]) : all_temps[ntot / 2];
 				const double rel_err = std::abs(T_median - T_analytical) / T_analytical;
 				if (rel_err > 0.05) {
-					amrex::Print() << "Test FAILED: " << region_name << " median temperature " << T_median
-						       << " K differs from analytical equilibrium " << T_analytical << " K by " << 100.0 * rel_err
-						       << "% (tolerance: 5%).\n";
+					amrex::Print()
+					    << "Test FAILED: " << region_name << " median temperature " << T_median << " K differs from analytical equilibrium "
+					    << T_analytical << " K by " << 100.0 * rel_err << "% (tolerance: 5%).\n";
 					status = 1;
 				} else {
 					amrex::Print() << "Test passed: " << region_name << " median temperature " << T_median
