@@ -747,7 +747,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// source is injected directly into the radiation energy after the Newton solve (see the store
 		// below), so it is not subject to the thermal opacity coupling (which would drop it at zero
 		// opacity) and does not pollute the gas energy balance. Remove the chem-band source from the
-		// thermal solve here. When NChemBands == 0 this loop is empty and behaviour is unchanged.
+		// thermal solve here. When NChemBands == 0 this loop is empty and behaviour is unchanged. With
+		// photochemistry enabled, subcycleRadiationAtLevel injects the chem-band emission before
+		// photochemistry (RadSystem::AddChemBandSources) and passes zero chem-band sources here.
 		quokka::valarray<double, nGroups_> Src_chem{};
 		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
 			Src_chem[g] = Src[g];
