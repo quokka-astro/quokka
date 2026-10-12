@@ -3,6 +3,7 @@ Checks:          'clang-diagnostic-*,clang-analyzer-*,*,-fuchsia-*,-llvmlibc-*,-
 WarningsAsErrors: ''
 HeaderFilterRegex: ''
 FormatStyle:     none
+ExcludeFiles:    '.*fieldgen_mpi.*'
 User:            benwibking
 CheckOptions:
   - key:             abseil-string-find-startswith.AbseilStringsMatchHeader
