@@ -463,6 +463,23 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, double rho, double Tgas)
 	    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>;
 
+	// The opacities used by the thermal gas-radiation coupling (AddSourceTermsMultiGroup and the multigroup dust
+	// temperature). Chemical bands (g >= nGroupsThermal_) do not take part in it: their absorption is handled by
+	// photochemistry. Every group-mean opacity is proportional to the group's lower value, so requiring it to be zero
+	// guarantees that the coupling leaves the chemical bands untouched.
+	AMREX_GPU_HOST_DEVICE static auto DefineThermalCouplingOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, double rho,
+											      double Tgas)
+	    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+	{
+		auto const kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, Tgas);
+		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(kappa_expo_and_lower_value[1][g] == 0.0,
+							 "A chemical band has a nonzero opacity. Chemical-band absorption is handled by photochemistry, "
+							 "so DefineOpacityExponentsAndLowerValues must return 0 for groups g >= nGroupsThermal_.");
+		}
+		return kappa_expo_and_lower_value;
+	}
+
 	AMREX_GPU_HOST_DEVICE static auto ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> const &kappa_expo_and_lower_value,
 								  amrex::GpuArray<double, nGroups_> const &radBoundaryRatios,
 								  amrex::GpuArray<double, nGroups_> const &alpha_quant) -> quokka::valarray<double, nGroups_>;

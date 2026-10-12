@@ -13,7 +13,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP
 {
 	OpacityTerms<problem_t> result;
 
-	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
+	const auto kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
 
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 		for (int g = 0; g < nGroups_; ++g) {
@@ -67,7 +67,7 @@ RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(double const T, d
 							       quokka::valarray<double, nGroups_> const &fourPiBoverC, OpacityTerms<problem_t> &opacity_terms)
 {
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
-	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
+	const auto kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
 	for (int g = 0; g < nGroups_; ++g) {
 		auto const nu_L = rad_boundaries[g];
 		auto const nu_R = rad_boundaries[g + 1];
@@ -862,7 +862,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, updated_energy.T_d);
 			} else { // constexpr (gamma_ == 1.0)
-				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, NAN);
+				kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, NAN);
 				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 					for (int g = 0; g < nGroups_; ++g) {
 						updated_energy.opacity_terms.kappaF[g] = kappa_expo_and_lower_value[1][g];
