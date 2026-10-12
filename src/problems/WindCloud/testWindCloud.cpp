@@ -98,7 +98,7 @@ template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGrid(
 		amrex::Real rho;	  // g/cm^3
 		amrex::Real T;
 		amrex::Real vz;
-		amrex::Real cs_wind;
+		amrex::Real cs_wind = 0.0;
 		amrex::Real cloudTracer;
 		amrex::Real windTracer;
 		const amrex::Real cellVolume = dx[0] * dx[1] * dx[2];
@@ -126,12 +126,8 @@ template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGrid(
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
-		if(i==0 & j==0 & k==0 ){
-			amrex::Print() << "Initial conditions at the center of the domain: " << std::endl;
-			amrex::Print() << "Density: " << rho << std::endl;
-			amrex::Print() << "Temperature: " << T << std::endl;
-			amrex::Print() << "Internal Energy: " << Eint << std::endl;
-			amrex::Print() << "cs: " << cs_wind << ", vz:" << vz << std::endl;
+		if (i == 0 && j == 0 && k == 0) {
+			AMREX_DEVICE_PRINTF("Initial conditions at cell (0,0,0): rho = %g, T = %g, Eint = %g, cs = %g, vz = %g\n", rho, T, Eint, cs_wind, vz);
 		}
 		state_cc(i, j, k, HydroSystem<WindCloudProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<WindCloudProblem>::x3Momentum_index) = rho * vz;
