@@ -1,0 +1,8 @@
+add_executable(FextractTest testFextract.cpp ../fextract.cpp)
+target_link_libraries(FextractTest PRIVATE AMReX::amrex)
+target_include_directories(FextractTest PRIVATE ..)
+target_compile_features(FextractTest PRIVATE cxx_std_20)
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  setup_target_for_cuda_compilation(FextractTest)
+endif()
+add_test(NAME FextractTest COMMAND FextractTest)
