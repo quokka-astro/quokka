@@ -1,13 +1,13 @@
-#ifndef ELECTRON_CONDUCTION_HPP_ // NOLINT
-#define ELECTRON_CONDUCTION_HPP_
+#ifndef ISO_CONDUCTION_HPP_ // NOLINT
+#define ISO_CONDUCTION_HPP_
 
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file ElectronConduction.hpp
-/// \brief Explicit flux-limited electron thermal conduction update.
+/// \file IsoConduction.hpp
+/// \brief Explicit flux-limited isotropic thermal conduction update.
 
 #include <array>
 #include <cmath>
@@ -20,31 +20,30 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "conduction/conductivity.hpp"
 #include "hydro/hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 
 namespace quokka::conduction
 {
 
-struct ElectronConductionParams {
-	amrex::Real conductivity_prefactor = 3.e34; // units of erg cm^-1 s^-1 K^-1
+struct IsoConductionParams {
+	ConductivityParams conductivity{}; // prefactors for ConductionModel::constant/spitzer (see conductivity.hpp)
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
 	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
-	bool spitzer_scaling = true;	     // if true, kappa(T) = conductivity_prefactor * T^2.5 (Spitzer);
-					     // if false, kappa(T) = conductivity_prefactor (constant, isotropic)
 	int reconstruction_order = 3;	     // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM;
 	SlopeLimiter plm_limiter = SlopeLimiter::sweby;
 	int ng_reconstruct = 2; // number of ghost faces to reconstruct beyond the valid box
 };
 
-template <typename problem_t> class ElectronConduction
+template <typename problem_t> class IsoConduction
 {
       public:
 	// Reconstruct rho, T, and mass fractions at the interfaces
 	template <FluxDir DIR>
 	static void ReconstructPrimVar(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int ng_reconstruct,
-				       ElectronConductionParams const &params)
+				       IsoConductionParams const &params)
 	{
 		constexpr int nvars = 2 + Physics_Traits<problem_t>::numMassScalars;
 		if (params.reconstruction_order == 5) {
@@ -57,15 +56,31 @@ template <typename problem_t> class ElectronConduction
 		} else if (params.reconstruction_order == 1) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 		} else {
-			amrex::Abort("Invalid reconstruction order specified for electron conduction!");
+			amrex::Abort("Invalid reconstruction order specified for isotropic conduction!");
 		}
 	}
 
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
-				    amrex::Real dt, ElectronConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
+				    amrex::Real dt, IsoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
-		if ((dt <= 0.0) || (params.conductivity_prefactor <= 0.0)) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
+			heat_flux[idim].setVal(0.0);
+		}
+
+		constexpr ConductionModel model = Physics_Traits<problem_t>::conduction_model;
+		if constexpr (model == ConductionModel::none) {
+			amrex::ignore_unused(state, state_fc, geom, dt, params, heat_flux);
 			return;
+		}
+		if (dt <= 0.0) {
+			return;
+		}
+		if constexpr (model == ConductionModel::constant || model == ConductionModel::spitzer) {
+			if (params.conductivity.kappa0_par <= 0.0) {
+				return;
+			}
 		}
 
 		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
@@ -73,14 +88,15 @@ template <typename problem_t> class ElectronConduction
 			return;
 		}
 
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state.nGrow() >= 1, "Electron conduction requires at least 1 ghost cell.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state.nGrow() >= 1, "Isotropic conduction requires at least 1 ghost cell.");
 
 		const auto dx = geom.CellSizeArray();
 		const amrex::Real flux_limiter_phi = params.flux_limiter_phi;
 		const amrex::Real saturation_factor = params.saturation_factor;
 		const amrex::Real t_min = params.min_temperature;
-		const bool spitzer_scaling = params.spitzer_scaling;
-		const amrex::Real kappa0 = params.conductivity_prefactor;
+		const ConductivityParams conductivity_params = params.conductivity;
+		const amrex::Real mean_molecular_weight = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+		const amrex::Real k_B = quokka::EOS<problem_t>::boltzmann_constant_;
 		const amrex::Real small = std::numeric_limits<amrex::Real>::min();
 		constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 
@@ -144,8 +160,6 @@ template <typename problem_t> class ElectronConduction
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
 			leftState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2 + nmscalars_, ng_reconstruct);
 			rightState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2 + nmscalars_, ng_reconstruct);
-			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
-			heat_flux[idim].setVal(0.0);
 		}
 
 		AMREX_D_TERM(ReconstructPrimVar<FluxDir::X1>(primVar, leftState[0], rightState[0], ng_reconstruct, params);
@@ -173,7 +187,9 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real Pgas_face = ::quokka::EOS<problem_t>::ComputePressure(rho_face, Eint_face, massScalars);
 			const amrex::Real cs_face = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_face, Pgas_face, massScalars);
 
-			kappa_face = spitzer_scaling ? (kappa0 * std::pow(T_face, 2.5)) : kappa0;
+			// kappa = n k_B chi, with chi from the conductivity model; see conductivity.hpp
+			const amrex::Real chi_face = EvaluateDiffusivity<problem_t>(rho_face, T_face, conductivity_params)[0];
+			kappa_face = (rho_face / mean_molecular_weight) * k_B * chi_face;
 			qsat_face = amrex::max(saturation_factor * flux_limiter_phi * rho_face * cs_face * cs_face * cs_face, small);
 		};
 
@@ -291,4 +307,4 @@ template <typename problem_t> class ElectronConduction
 
 } // namespace quokka::conduction
 
-#endif // ELECTRON_CONDUCTION_HPP_
+#endif // ISO_CONDUCTION_HPP_

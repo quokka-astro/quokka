@@ -17,6 +17,7 @@
 - [Photoionization](photoionization.md)
 - [Dust Module (beta)](dust_module.md)
 - [Cooling Module](cooling_module.md)
+- [Thermal Conduction](conduction_module.md)
 
 # Simulation Gallery
 
