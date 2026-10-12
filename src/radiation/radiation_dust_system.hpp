@@ -292,9 +292,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	if (dust_model == 1) {
 		Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src)) + Q_dust;
 	} else {
-		// for dust_model == 2 (decoupled gas and dust), Egas0 is not involved in the iteration
-		const double fourPiBoverC = sum(ComputeThermalRadiationMultiGroup(T_d0, rad_boundaries));
-		Etot0 = std::abs(lambda_gd_times_dt) + fourPiBoverC + (sum(Erad0Vec) + sum(Src)) + Q_dust / cscale;
+		// Only the radiation and collisional exchange supply energy to decoupled dust. Its equilibrium
+		// Planck energy can greatly exceed the actual radiation energy in a thin cell; using that as a
+		// residual scale can accept spurious emission and corrupt the subsequent radiation force.
+		Etot0 = std::abs(lambda_gd_times_dt) + (sum(Erad0Vec) + sum(Src)) + Q_dust / cscale;
 	}
 
 	double T_gas = NAN;
@@ -707,6 +708,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	result.T_gas = T_gas;
 	result.T_d = T_d;
 	result.opacity_terms = opacity_terms;
+	result.gas_decoupled = (dust_model == 2);
 	return result;
 }
 
@@ -1109,6 +1111,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	result.T_gas = T_gas;
 	result.T_d = T_d;
 	result.opacity_terms = opacity_terms;
+	result.gas_decoupled = (dust_model == 2);
 	return result;
 }
 

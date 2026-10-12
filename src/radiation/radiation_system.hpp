@@ -84,16 +84,15 @@ static constexpr double newton_erad_base_tau_threshold = 1.0;
 //
 // Capping does not conserve energy. It is a known limitation of the lagged O(v/c) work term rather than a
 // symptom of too long a radiation timestep: the work term is lagged from the previous outer iteration while
-// dEkin_work is evaluated from the freshly updated momentum, so the two do not cancel exactly, and refining
-// dt does not help. Measured on DTypeFront1D, the fraction of radiation cell-updates that reach the cap is
-// invariant at ~27% across a fourfold refinement of dt (26.8% / 27.2% / 26.5% at 128 / 256 / 512 cells).
+// dEkin_work is evaluated from the freshly updated momentum, so the two do not cancel exactly.
 //
-// It is nonetheless benign, which is why it is left in place and not reported at runtime. The cap can only
-// bind where dEkin_work already exceeds the internal energy available, i.e. in cold cells the radiation has
-// evacuated, so Egas there is minuscule and the absolute energy discarded is negligible however many cells
-// are involved: DTypeFront1D closes its thermal-band energy budget to 1.0000000 with ~27% of its radiation
-// cell-updates capping. Counting them would mean an atomic on one address in a large fraction of every
-// radiation kernel, which is not worth paying for in a production GPU run.
+// The cap applies only where the energy exchange credited Egas with the work. With the dust thermally
+// decoupled from the gas the exchange leaves Egas out, and UpdateFlux takes the kinetic energy from the
+// radiation instead. Debiting Egas there was a bug rather than a lag effect, and it was not benign: it is
+// what put ~27% of DTypeFront1D's radiation cell-updates at this cap (a fraction that did not fall with dt),
+// and each binding removes 90% of the internal energy, which held the fully ionised, radiation-evacuated
+// cavity of DTypeFront3D near 1 K and hypersonic until it shocked. Capped updates are not counted at run
+// time: that would mean an atomic on one address in a large fraction of every radiation kernel.
 //
 // See https://github.com/quokka-astro/quokka/issues/2173 for the two candidate fixes.
 static constexpr double work_term_min_eint_fraction = 0.1;
@@ -162,6 +161,9 @@ template <typename problem_t> struct NewtonIterationResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;    // work term
 	OpacityTerms<problem_t> opacity_terms;
+	// True if Egas took no part in the energy exchange (dust thermally decoupled from the gas), so it was
+	// never credited with the work term and the radiation must pay for the kinetic energy it buys.
+	bool gas_decoupled = false;
 };
 
 // A struct to hold the results of ComputeJacobian functions, containing the following elements:
@@ -1963,20 +1965,24 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		return dLHS_dTd;
 	};
 
-	// Scale for the convergence test. The residual balances the radiative term against the gas-dust collisional
-	// term and the dust's chemical-band absorption, so the scale must contain all three: the collisional term
-	// vanishes identically when the gas-dust coupling coefficient N_d is zero, and a scale of zero would make
-	// the convergence test unsatisfiable.
+	// Measure the residual against the available heating (collisional, chemical-band absorption and radiative),
+	// with the same c_hat * dt * rho scaling as the RHS.
+	// Emission at the initial guess is not an appropriate scale: the gas can be much hotter than the dust,
+	// so it would permit a large imbalance at the root. In particular, adding an unweighted Planck energy
+	// accepts T_d_init outright when c_hat * dt * rho * kappa < rel_tol, even far from radiative equilibrium.
 	double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas + (c_hat_ / c_light_) * std::abs(Q_dust);
 	if constexpr (nGroups_ == 1) {
-		const auto fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d_init);
 		const auto kappaE = ComputeEnergyMeanOpacity(rho, T_d_init);
-		const auto kappaP = ComputePlanckOpacity(rho, T_d_init);
-		Lambda_compare += c_hat_ * dt * rho * (kappaE * Erad[0] + kappaP * fourPiBoverC) + fourPiBoverC;
+		Lambda_compare += c_hat_ * dt * rho * kappaE * Erad[0];
 	} else {
 		const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d_init, rad_boundaries);
 		const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d_init, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
-		Lambda_compare += c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad + opacity_terms.kappaP * fourPiBoverC) + sum(fourPiBoverC);
+		Lambda_compare += c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad);
+	}
+	// With no radiative or collisional exchange, every temperature is a solution. Preserve the guess
+	// without passing a zero convergence scale to the root finder.
+	if (Lambda_compare == 0.0 && rhs(T_d_init) == 0.0) {
+		return T_d_init;
 	}
 
 	const auto T_d = BackwardEulerOneVariable(rhs, jac, T_d_init, Lambda_compare);
