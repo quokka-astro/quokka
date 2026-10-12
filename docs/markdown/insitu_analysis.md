@@ -84,7 +84,7 @@ quokka.slice_z.field_names = gasDensity gasInternalEnergy temperature
 
 This adds histogram outputs (as fixed-width text files) at fixed timestep intervals as the simulation evolves. The quantity accumulated in each bin is the total mass, volume, or cell count summed over all cells not covered by refined grids over all AMR levels. If unspecified in the input parameters, the default is to accumulate the volume in each bin.
 
-By default, the bins extend over the full range of the data at a given timestep. The *range* parameter can instead specify the minimum and maximum extent for the bins. Bins can be optionally log-spaced by setting *log_spaced_bins = 1*.
+By default, the bins extend over the full range of the data at a given timestep. The *range* parameter can instead specify the minimum and maximum extent for the bins. The last bin includes the upper endpoint, for both automatic and explicit ranges. Values strictly outside an explicit range are excluded. Interior bin edges belong to the bin on their right. Bins can be optionally log-spaced by setting *log_spaced_bins = 1*.
 
 Normalization of the output is left up to the user.
 
