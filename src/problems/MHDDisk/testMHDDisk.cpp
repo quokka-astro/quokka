@@ -96,7 +96,8 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real seed_Lz{};
 	amrex::Real seed_B0_HL{};
 	std::string seed_str;		     // magnetic seed
-	amrex::Vector<long long> turb_seeds; // seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
+	amrex::Vector<long long> turb_seeds; // NOLINT(google-runtime-int)
+									// seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
 
 	amrex::Gpu::DeviceVector<amrex::Real> Aphi_device;
 
@@ -221,17 +222,17 @@ inline auto interpolate_turbulence(const amrex::Real *table, int nx, int ny, int
 	y = amrex::max(0.0, amrex::min(y, static_cast<amrex::Real>(ny - 1)));
 	z = amrex::max(0.0, amrex::min(z, static_cast<amrex::Real>(nz - 1)));
 
-	int i0 = static_cast<int>(x);
-	int j0 = static_cast<int>(y);
-	int k0 = static_cast<int>(z);
-
-	int i1 = amrex::min(i0 + 1, nx - 1);
-	int j1 = amrex::min(j0 + 1, ny - 1);
-	int k1 = amrex::min(k0 + 1, nz - 1);
-
-	amrex::Real fx = x - i0;
-	amrex::Real fy = y - j0;
-	amrex::Real fz = z - k0;
+	const int i0 = static_cast<int>(x);
+	const int j0 = static_cast<int>(y);
+	const int k0 = static_cast<int>(z);
+	
+	const int i1 = amrex::min(i0 + 1, nx - 1);
+	const int j1 = amrex::min(j0 + 1, ny - 1);
+	const int k1 = amrex::min(k0 + 1, nz - 1);
+	
+	const amrex::Real fx = x - i0;
+	const amrex::Real fy = y - j0;
+	const amrex::Real fz = z - k0;
 
 	// Row-major (C-order) with k fastest-varying, matching fieldgen_mpi/fieldgen3.c's
 	// writeData(): the loop nest is i (outer) -> j -> k (contiguous fwrite of `ngrid`
@@ -313,16 +314,16 @@ inline auto load_bin_to_device(const std::string &path, std::size_t n_expect) ->
 
 inline auto load_turb_seeds(const std::string &path) -> amrex::Vector<long long>
 {
-	amrex::Vector<long long> seeds;
+	amrex::Vector<long long> seeds;  // NOLINT(google-runtime-int)
 	std::ifstream f(path);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f, ("Cannot open turbulence seed file " + path).c_str());
 	std::string line;
 	while (std::getline(f, line)) {
-		std::size_t start = line.find_first_not_of(" \t\r\n");
+		const std::size_t start = line.find_first_not_of(" \t\r\n");
 		if (start == std::string::npos) {
 			continue;
 		}
-		std::size_t end = line.find_last_not_of(" \t\r\n");
+		const std::size_t end = line.find_last_not_of(" \t\r\n");
 		line = line.substr(start, end - start + 1);
 		if (line.empty() || line[0] == '#') {
 			continue;
@@ -717,7 +718,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		}
 		vx += dvx_pert;
 		vy += dvy_pert;
-		double vz = dvz_pert;
+		const double vz = dvz_pert;
 
 		const double pressure = rho * cs * cs;
 		const double Eint = pressure / (gamma - 1.0);
@@ -869,13 +870,13 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 			const double zk = prob_lo[2] + k * dx[2];
 			const double zkp = prob_lo[2] + (k + 1) * dx[2];
 
-			double Ay_j_kp = get_Ay_node(xf, yj, zkp);
-			double Ay_jp_kp = get_Ay_node(xf, yjp, zkp);
-			double Ay_j_k = get_Ay_node(xf, yj, zk);
-			double Ay_jp_k = get_Ay_node(xf, yjp, zk);
+			const double Ay_j_kp = get_Ay_node(xf, yj, zkp);
+			const double Ay_jp_kp = get_Ay_node(xf, yjp, zkp);
+			const double Ay_j_k = get_Ay_node(xf, yj, zk);
+			const double Ay_jp_k = get_Ay_node(xf, yjp, zk);
 
-			double Ay_xface_kp = 0.5 * (Ay_j_kp + Ay_jp_kp);
-			double Ay_xface_k = 0.5 * (Ay_j_k + Ay_jp_k);
+			const double Ay_xface_kp = 0.5 * (Ay_j_kp + Ay_jp_kp);
+			const double Ay_xface_k = 0.5 * (Ay_j_k + Ay_jp_k);
 
 			// Bx = -dAy/dz
 			B_face = -(Ay_xface_kp - Ay_xface_k) / dx[2];
@@ -895,13 +896,13 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 			const double zk = prob_lo[2] + k * dx[2];
 			const double zkp = prob_lo[2] + (k + 1) * dx[2];
 
-			double Ax_i_kp = get_Ax_node(xi, yf, zkp);
-			double Ax_ip_kp = get_Ax_node(xip, yf, zkp);
-			double Ax_i_k = get_Ax_node(xi, yf, zk);
-			double Ax_ip_k = get_Ax_node(xip, yf, zk);
+			const double Ax_i_kp = get_Ax_node(xi, yf, zkp);
+			const double Ax_ip_kp = get_Ax_node(xip, yf, zkp);
+			const double Ax_i_k = get_Ax_node(xi, yf, zk);
+			const double Ax_ip_k = get_Ax_node(xip, yf, zk);
 
-			double Ax_yface_kp = 0.5 * (Ax_i_kp + Ax_ip_kp);
-			double Ax_yface_k = 0.5 * (Ax_i_k + Ax_ip_k);
+			const double Ax_yface_kp = 0.5 * (Ax_i_kp + Ax_ip_kp);
+			const double Ax_yface_k = 0.5 * (Ax_i_k + Ax_ip_k);
 
 			// By = dAx/dz
 			B_face = (Ax_yface_kp - Ax_yface_k) / dx[2];
@@ -922,24 +923,24 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 			const double zf = prob_lo[2] + k * dx[2];
 
 			// dAy/dx term: difference over x, then average over y
-			double Ay_ip_j = get_Ay_node(xip, yj, zf);
-			double Ay_i_j = get_Ay_node(xi, yj, zf);
-			double Ay_ip_jp = get_Ay_node(xip, yjp, zf);
-			double Ay_i_jp = get_Ay_node(xi, yjp, zf);
+			const double Ay_ip_j = get_Ay_node(xip, yj, zf);
+			const double Ay_i_j = get_Ay_node(xi, yj, zf);
+			const double Ay_ip_jp = get_Ay_node(xip, yjp, zf);
+			const double Ay_i_jp = get_Ay_node(xi, yjp, zf);
 
-			double dAy_dx_j = (Ay_ip_j - Ay_i_j) / dx[0];
-			double dAy_dx_jp = (Ay_ip_jp - Ay_i_jp) / dx[0];
-			double dAy_dx_cc = 0.5 * (dAy_dx_j + dAy_dx_jp);
+			const double dAy_dx_j = (Ay_ip_j - Ay_i_j) / dx[0];
+			const double dAy_dx_jp = (Ay_ip_jp - Ay_i_jp) / dx[0];
+			const double dAy_dx_cc = 0.5 * (dAy_dx_j + dAy_dx_jp);
 
 			// dAx/dy term: difference over y, then average over x
-			double Ax_i_jp = get_Ax_node(xi, yjp, zf);
-			double Ax_i_j = get_Ax_node(xi, yj, zf);
-			double Ax_ip_jp = get_Ax_node(xip, yjp, zf);
-			double Ax_ip_j = get_Ax_node(xip, yj, zf);
+			const double Ax_i_jp = get_Ax_node(xi, yjp, zf);
+			const double Ax_i_j = get_Ax_node(xi, yj, zf);
+			const double Ax_ip_jp = get_Ax_node(xip, yjp, zf);
+			const double Ax_ip_j = get_Ax_node(xip, yj, zf);
 
-			double dAx_dy_i = (Ax_i_jp - Ax_i_j) / dx[1];
-			double dAx_dy_ip = (Ax_ip_jp - Ax_ip_j) / dx[1];
-			double dAx_dy_cc = 0.5 * (dAx_dy_i + dAx_dy_ip);
+			const double dAx_dy_i = (Ax_i_jp - Ax_i_j) / dx[1];
+			const double dAx_dy_ip = (Ax_ip_jp - Ax_ip_j) / dx[1];
+			const double dAx_dy_cc = 0.5 * (dAx_dy_i + dAx_dy_ip);
 
 			B_face = dAy_dx_cc - dAx_dy_cc;
 
