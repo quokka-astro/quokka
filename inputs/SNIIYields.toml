@@ -53,3 +53,5 @@ checkpoint_interval = -1
 
 plotfile_prefix = "test_SNII_Yields/plt"
 checkpoint_prefix = "test_SNII_Yields/chk"
+
+density_floor = 1e-1  # g cm^-3

@@ -28,3 +28,5 @@ mhd.update_initial_b_energy = 0
 
 plotfile_interval = -1
 checkpoint_interval = -1
+
+density_floor = 1e-8  # g cm^-3
