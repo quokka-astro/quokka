@@ -958,6 +958,14 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 	});
 }
 
+void cleanup(QuokkaSimulation<MHDGalaxy>& sim)
+{
+	sim.userData_.turb_vx_device = {};
+	sim.userData_.turb_vy_device = {};
+	sim.userData_.turb_vz_device = {};
+	sim.userData_.turb_seeds = {};
+}
+
 template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real /*time*/, amrex::Real dt_lev)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
@@ -1733,6 +1741,7 @@ auto problem_main() -> int
 	QuokkaSimulation<MHDGalaxy> sim(BCs_cc, BCs_fc);
 	sim.preCalculateInitialConditions();
 	sim.setInitialConditions();
+	cleanup(sim);
 	sim.evolve();
 	return 0;
 }
