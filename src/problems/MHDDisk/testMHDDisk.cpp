@@ -964,6 +964,7 @@ void cleanup(QuokkaSimulation<MHDGalaxy>& sim)
 	sim.userData_.turb_vy_device = {};
 	sim.userData_.turb_vz_device = {};
 	sim.userData_.turb_seeds = {};
+	sim.userData_.Aphi_device = {};
 }
 
 template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real /*time*/, amrex::Real dt_lev)
