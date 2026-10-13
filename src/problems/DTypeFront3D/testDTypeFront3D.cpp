@@ -40,7 +40,7 @@ struct DTypeFront3D {};
 
 constexpr double c_hat = C::c_light / 1000.0;
 constexpr double T_gas_limit = 5.0e4; // K; no cell may get hotter than this at any timestep
-// Check 2 tolerance on the effective ionized radius, in cells of the finest level.
+// Check 2 tolerance on the effective ionized radius and the max-density shell radius, in cells of the finest level.
 constexpr double front_radius_tol_cells = 4.0;
 constexpr double Erad_floor_ = 1.0e-10 * 13.6 * C::ev2erg; // erg cm^-3
 constexpr int group_ir = 0;
@@ -816,8 +816,8 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 	const int lev = 0;
 	const amrex::Real t = tNew_[lev];
 
-	// One bin per level-0 cell width along a radius.
-	const int n_bins = geom[lev].Domain().length(0) / 2;
+	// One bin per finest-level cell width along a radius, so the shell radius resolves the Check 2 tolerance.
+	const int n_bins = geom[finest_level].Domain().length(0) / 2;
 
 	const amrex::Real r_effective = compute_effective_radius(*this);
 	const amrex::Real r_shell = compute_shell_radius(state_new_cc_, geom, ref_ratio, finest_level, n_bins);
@@ -1028,8 +1028,10 @@ auto problem_main() -> int
 		compute_median_and_check(neutral_temps, T_neu_eq, "neutral");
 	}
 
-	// Check 2: the effective ionized radius against the integrated thin-shell solution that carries both the
-	// ionized-gas pressure and the radiation pressure.
+	// Check 2: the D-type front radius against the integrated thin-shell solution that carries both the
+	// ionized-gas pressure and the radiation pressure. Passes if either the effective ionized radius or the
+	// max-density shell radius matches, as in DTypeFront1D, since the thin-shell ODE collapses the ionization
+	// front and the shock into one surface, while the two can separate in the simulation.
 	if (sim.userData_.rode_vec_.empty()) {
 		amrex::Print() << "Test FAILED: no timestep was taken, so there is no front radius to check.\n";
 		status = 1;
@@ -1057,17 +1059,28 @@ auto problem_main() -> int
 			const double dx_finest = sim.geom[sim.maxLevel()].CellSize(0);
 			const double eff_cell_diff = (r_eff - r_ode) / dx_finest;
 			const double shell_cell_diff = (r_shell - r_ode) / dx_finest;
+			const bool eff_ok = std::abs(eff_cell_diff) <= front_radius_tol_cells;
+			const bool shell_ok = std::abs(shell_cell_diff) <= front_radius_tol_cells;
 
-			// Information only: the shell radius is binned at the level-0 cell width, and the shocked shell sits outside the ionization front.
-			amrex::Print() << "Max-density shell minus the integrated solution: " << shell_cell_diff << " finest cells.\n";
-
-			if (std::abs(eff_cell_diff) <= front_radius_tol_cells) {
+			if (eff_ok) {
 				amrex::Print() << "Test passed: the effective ionized radius matches the integrated radiation + gas pressure solution within "
 					       << front_radius_tol_cells << " finest cells (" << eff_cell_diff << " cells).\n";
 			} else {
-				amrex::Print()
-				    << "Test FAILED: the effective ionized radius differs from the integrated radiation + gas pressure solution by more than "
-				    << front_radius_tol_cells << " finest cells (" << eff_cell_diff << " cells).\n";
+				amrex::Print() << "The effective ionized radius differs from the integrated radiation + gas pressure solution by more than "
+					       << front_radius_tol_cells << " finest cells (" << eff_cell_diff << " cells).\n";
+			}
+
+			if (shell_ok) {
+				amrex::Print() << "Test passed: the max-density shell matches the integrated radiation + gas pressure solution within "
+					       << front_radius_tol_cells << " finest cells (" << shell_cell_diff << " cells).\n";
+			} else {
+				amrex::Print() << "The max-density shell differs from the integrated radiation + gas pressure solution by more than "
+					       << front_radius_tol_cells << " finest cells (" << shell_cell_diff << " cells).\n";
+			}
+
+			if (!eff_ok && !shell_ok) {
+				amrex::Print() << "Test FAILED: neither the effective ionized radius nor the max-density shell matches the integrated "
+						  "solution within tolerance.\n";
 				status = 1;
 			}
 		}
@@ -1104,6 +1117,7 @@ auto problem_main() -> int
 		const auto n = static_cast<int>(sim.userData_.t_vec_.size());
 		std::vector<amrex::Real> t_Myr(n);
 		std::vector<amrex::Real> r_eff_pc(n);
+		std::vector<amrex::Real> r_shell_pc(n);
 		std::vector<amrex::Real> r_spitzer_pc(n);
 		std::vector<amrex::Real> r_ode_pc(n);
 		// The Check 2 tolerance around the ODE solution.
@@ -1113,6 +1127,7 @@ auto problem_main() -> int
 		for (int i = 0; i < n; ++i) {
 			t_Myr[i] = sim.userData_.t_vec_[i] / seconds_per_Myr;
 			r_eff_pc[i] = sim.userData_.reff_vec_[i] / cm_per_pc;
+			r_shell_pc[i] = sim.userData_.rshell_vec_[i] / cm_per_pc;
 			r_spitzer_pc[i] = sim.userData_.rspitzer_vec_[i] / cm_per_pc;
 			r_ode_pc[i] = sim.userData_.rode_vec_[i] / cm_per_pc;
 			r_ode_lower_pc[i] = r_ode_pc[i] - band_pc;
@@ -1122,6 +1137,9 @@ auto problem_main() -> int
 		std::map<std::string, std::string> eff_args;
 		eff_args["label"] = "effective ionized radius";
 		eff_args["color"] = "C1";
+		std::map<std::string, std::string> shell_args;
+		shell_args["label"] = "max-density shell";
+		shell_args["color"] = "C0";
 		std::map<std::string, std::string> ode_band_args;
 		ode_band_args["label"] = "ODE +/- " + std::to_string(static_cast<int>(front_radius_tol_cells)) + " finest cells (Check 2 tolerance)";
 		ode_band_args["color"] = "#00000020";
@@ -1135,6 +1153,7 @@ auto problem_main() -> int
 		ode_args["linestyle"] = ":";
 		matplotlibcpp::fill_between(t_Myr, r_ode_lower_pc, r_ode_upper_pc, ode_band_args);
 		matplotlibcpp::plot(t_Myr, r_eff_pc, eff_args);
+		matplotlibcpp::plot(t_Myr, r_shell_pc, shell_args);
 		matplotlibcpp::plot(t_Myr, r_spitzer_pc, spitzer_args);
 		matplotlibcpp::plot(t_Myr, r_ode_pc, ode_args);
 		matplotlibcpp::xlabel("time (Myr)");
