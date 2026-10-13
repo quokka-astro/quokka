@@ -40,10 +40,10 @@ constexpr double target_beta_seed = 1.0e3;
 constexpr double axis_fallback_cells = 1.0;
 constexpr double turb_target_Mach = 0.5;
 
-constexpr double r_K_factor = 2.0;              // physical kernel radius, in units of dx (paper default 3.0)
-constexpr int omega_subsamples = 4;             // n_sub per dimension for boundary-cell overlap quadrature
+constexpr double r_K_factor = 2.0;		// physical kernel radius, in units of dx (paper default 3.0)
+constexpr int omega_subsamples = 4;		// n_sub per dimension for boundary-cell overlap quadrature
 constexpr int initial_condition_subsamples = 4; // per dimension samples. 4 means 4³ samples
-constexpr int refine_grid_subsamples = 4;       // per dimension samples. 4 means 4³ samples
+constexpr int refine_grid_subsamples = 4;	// per dimension samples. 4 means 4³ samples
 } // namespace
 
 struct MHDGalaxy {};
@@ -106,10 +106,10 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real sn_cluster_momentum_exponent;
 	amrex::Real sn_mass_per_event_msun;
 	amrex::Long sn_trigger_count_cumulative = 0; // cumulative no. of cells that crossed the Jeans trigger
-	                                             // (secondary diagnostic only; not checkpoint-persistent)
+						     // (secondary diagnostic only; not checkpoint-persistent)
 
 	amrex::Vector<long long> turb_seeds; // NOLINT(google-runtime-int)
-	                                     // seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
+					     // seeds recorded by fieldgen_mpi when generating turb_v{x,y,z}; printed for reproducibility only
 
 	// Owning GPU storage for the vx/vy/vz turbulence cubes loaded from binary files.
 	// The generator writes double-precision arrays with dimensions
@@ -430,8 +430,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	integral *= h / 3.0;
 	// set densityProfile factor such that the integral equals Q_mean
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
-	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);  // rho_cgm such that equal pressure at boundary (~3.54e-32)
-	userData_.rho_cgm = std::max( userData_.rho_cgm, dustDensityFloor_ );  // cgm density is at least the density floor
+	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm); // rho_cgm such that equal pressure at boundary (~3.54e-32)
+	userData_.rho_cgm = std::max(userData_.rho_cgm, dustDensityFloor_);	      // cgm density is at least the density floor
 
 	//-------//
 	// A_phi // - Load 2D Cylindrical A_phi Potential Table
@@ -686,8 +686,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		return Aphi * (x_e / R_e) * taper;
 	};
 
-	auto sampleSubcell = [=] AMREX_GPU_DEVICE(int i, int j, int k, double& rho_samples, double& px_samples, double& py_samples, double& pz_samples,
-	                                          double& Etot_samples, double& Eint_samples) {
+	auto sampleSubcell = [=] AMREX_GPU_DEVICE(int i, int j, int k, double &rho_samples, double &px_samples, double &py_samples, double &pz_samples,
+						  double &Etot_samples, double &Eint_samples) {
 		const double x = prob_lo[0] + (i + 0.5) * dx;
 		const double y = prob_lo[1] + (j + 0.5) * dy;
 		const double z = prob_lo[2] + (k + 0.5) * dz;
@@ -792,7 +792,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 			for (int b = 0; b < subsample; ++b) {
 				for (int c = 0; c < subsample; ++c) {
 					sampleSubcell(subsample * i + a, subsample * j + b, subsample * k + c, rho_samples, px_samples, py_samples, pz_samples,
-					              Etot_samples, Eint_samples);
+						      Etot_samples, Eint_samples);
 				}
 			}
 		}
@@ -958,7 +958,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 	});
 }
 
-void cleanup(QuokkaSimulation<MHDGalaxy>& sim)
+void cleanup(QuokkaSimulation<MHDGalaxy> &sim)
 {
 	sim.userData_.turb_vx_device = {};
 	sim.userData_.turb_vy_device = {};
