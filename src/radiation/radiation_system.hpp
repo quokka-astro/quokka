@@ -426,7 +426,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	//! Inject the emission of the chemical bands (g >= nGroupsThermal_) directly into the radiation state:
 	//! E_g += dt * radEnergySource_g and F_g += dt * radFluxSource_g. Chemical bands carry no c_hat / c
 	//! scaling, as in AddSourceTermsMultiGroup. The thermal groups are left unchanged.
-	static void AddChemBandSources(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
+	static void AddChemBandSources(amrex::MultiFab &state_mf, amrex::MultiFab const &radEnergySource_mf, amrex::MultiFab const &radFluxSource_mf,
 				       amrex::Real dt);
 
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
@@ -881,17 +881,21 @@ void RadSystem<problem_t>::MergeUserRadSource(array_t &radEnergySource, array_t 
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddChemBandSources(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
+void RadSystem<problem_t>::AddChemBandSources(amrex::MultiFab &state_mf, amrex::MultiFab const &radEnergySource_mf, amrex::MultiFab const &radFluxSource_mf,
 					      amrex::Real const dt)
 {
+	auto const &consVar = state_mf.arrays();
+	auto const &radEnergySource = radEnergySource_mf.const_arrays();
+	auto const &radFluxSource = radFluxSource_mf.const_arrays();
+
 	// Each source is physical on its own (E >= 0, |F| <= c E), and the sum of physical states is physical,
 	// so the injection keeps the state admissible (see MergeUserRadSource).
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
-			consVar(i, j, k, radEnergy_index + numRadVars_ * g) += dt * radEnergySource(i, j, k, g);
-			consVar(i, j, k, x1RadFlux_index + numRadVars_ * g) += dt * radFluxSource(i, j, k, 3 * g + 0);
-			consVar(i, j, k, x2RadFlux_index + numRadVars_ * g) += dt * radFluxSource(i, j, k, 3 * g + 1);
-			consVar(i, j, k, x3RadFlux_index + numRadVars_ * g) += dt * radFluxSource(i, j, k, 3 * g + 2);
+			consVar[bx](i, j, k, radEnergy_index + numRadVars_ * g) += dt * radEnergySource[bx](i, j, k, g);
+			consVar[bx](i, j, k, x1RadFlux_index + numRadVars_ * g) += dt * radFluxSource[bx](i, j, k, 3 * g + 0);
+			consVar[bx](i, j, k, x2RadFlux_index + numRadVars_ * g) += dt * radFluxSource[bx](i, j, k, 3 * g + 1);
+			consVar[bx](i, j, k, x3RadFlux_index + numRadVars_ * g) += dt * radFluxSource[bx](i, j, k, 3 * g + 2);
 		}
 	});
 }

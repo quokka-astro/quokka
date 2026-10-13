@@ -3342,23 +3342,17 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				// and Aim_33. The freshly emitted photons are thereby transported for part of the substep, as in the thermal groups, rather
 				// than waiting for the next substep.
 				fillRadiationSources(true);
-				auto addChemBandSources = [&](amrex::MultiFab &state, amrex::Real const dt_source) {
-					for (amrex::MFIter iter(state); iter.isValid(); ++iter) {
-						RadSystem<problem_t>::AddChemBandSources(state.array(iter), radEnergySource.const_array(iter),
-											 radFluxSource.const_array(iter), iter.validbox(), dt_source);
-					}
-				};
 
 				// stage 2: explicit forward Euler, then emission, on state_tmp1
 				amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
 				advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine,
 							     state_tmp1_cc, nGroupsThermal, nGroups);
-				addChemBandSources(state_tmp1_cc, IMEX_Aim_22 * dt_radiation);
+				RadSystem<problem_t>::AddChemBandSources(state_tmp1_cc, radEnergySource, radFluxSource, IMEX_Aim_22 * dt_radiation);
 
 				// stage 3: explicit midpoint RK2 (Shu-Osher combination with state_tmp1), then emission, on state_new
 				advanceRadiationMidpointRK2(lev, time_subcycle, dt_radiation, i, nsubSteps, fr_as_crse, fr_as_fine, state_tmp1_cc,
 							    nGroupsThermal, nGroups);
-				addChemBandSources(state_new_cc_[lev], IMEX_Aim_33 * dt_radiation);
+				RadSystem<problem_t>::AddChemBandSources(state_new_cc_[lev], radEnergySource, radFluxSource, IMEX_Aim_33 * dt_radiation);
 			}
 
 			// === Step 2: photochemistry (on the chemical bands transported in step 1) ===
