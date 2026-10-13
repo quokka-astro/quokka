@@ -28,3 +28,5 @@ plotfile_interval = -1
 checkpoint_interval = -1
 statistics_interval = -1
 tiny_profiler.enabled = 0
+
+density_floor = 1e-27  # g cm^-3

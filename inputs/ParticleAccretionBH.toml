@@ -39,3 +39,5 @@ particles.disable_particle_drift = false
 #restartfile = last_chk
 
 tiny_profiler.enabled = 0
+
+density_floor = 1e-31  # g cm^-3
