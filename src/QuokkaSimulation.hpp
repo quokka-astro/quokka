@@ -3251,7 +3251,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	amrex::MultiFab state_tmp1_cc(grids[lev], dmap[lev], state_new_cc_[lev].nComp(), nghost_cc_);
 
 	// Chemical (ionizing) bands are the last nGroups - nGroupsThermal groups. With photochemistry enabled, each
-	// substep first runs the IMEX PD-ARS stages (transport + emission) on the chemical bands, then runs photochemistry
+	// substep first runs RK2-SSP (transport + emission) on the chemical bands, then runs photochemistry
 	// on them, and finally runs the IMEX PD-ARS stages on the thermal groups only. This keeps the stiff photochemistry after the
 	// non-stiff transport of the chemical bands, and nothing is carried over between substeps. Otherwise the IMEX
 	// PD-ARS stages cover all groups.
@@ -3335,13 +3335,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 #ifdef PHOTOCHEMISTRY
 		if (enablePhotoChemistry_ == 1) {
 			if (chemBandsFirst) {
-				// === Step 1: IMEX PD-ARS on the chemical bands (transport + emission) ===
+				// === Step 1: RK2-SSP on chemical bands (transport + emission) ===
 
-				// These are stages 2 and 3 below, restricted to the chemical bands; the thermal groups are not touched
-				// here. Chemical bands do not couple to the thermal gas-radiation energy exchange, so their only
-				// implicit term is the emission, which does not depend on the state and is simply added with the
-				// implicit weights Aim_22 and Aim_33. The freshly emitted photons are thereby transported for part of
-				// the substep, as in the thermal groups, rather than waiting for the next substep.
+				// The thermal groups are not touched here. Chemical bands do not couple to the thermal gas-radiation energy exchange, so their
+				// only implicit term is the emission, which does not depend on the state and is simply added with the implicit weights Aim_22
+				// and Aim_33. The freshly emitted photons are thereby transported for part of the substep, as in the thermal groups, rather
+				// than waiting for the next substep.
 				fillRadiationSources(true);
 				auto addChemBandSources = [&](amrex::MultiFab &state, amrex::Real const dt_source) {
 					for (amrex::MFIter iter(state); iter.isValid(); ++iter) {
