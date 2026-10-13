@@ -328,6 +328,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void CheckHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc,
 			      std::source_location const &location = std::source_location::current());
 	void computeMaxSignalLocal(int level) override;
+	auto computeMaxHydroSignalSpeed(int lev) -> amrex::Real override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
@@ -982,6 +983,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 			}
 		}
 	}
+}
+
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeMaxHydroSignalSpeed(int const lev) -> amrex::Real
+{
+	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev], state_new_fc_[lev]);
+	amrex::ParallelDescriptor::ReduceRealMax(max_signal);
+	return max_signal;
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::printCellProperties(int lev, amrex::IntVect const &index)
