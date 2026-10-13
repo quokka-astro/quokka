@@ -39,7 +39,9 @@
 struct DTypeFront3D {};
 
 constexpr double c_hat = C::c_light / 1000.0;
-constexpr double T_gas_limit = 5.0e4;			   // K; no cell may get hotter than this at any timestep
+constexpr double T_gas_limit = 5.0e4; // K; no cell may get hotter than this at any timestep
+// Check 2 tolerance on the front radius, relative to the ODE solution. A relative tolerance does not depend on how deep the AMR goes.
+constexpr double front_radius_rel_tol = 0.05;
 constexpr double Erad_floor_ = 1.0e-10 * 13.6 * C::ev2erg; // erg cm^-3
 constexpr int group_ir = 0;
 constexpr int group_optical = 1;
@@ -113,7 +115,6 @@ template <> struct SimulationData<DTypeFront3D> {
 	amrex::Vector<amrex::Real> rshell_vec_;
 	amrex::Vector<amrex::Real> rspitzer_vec_;
 	amrex::Vector<amrex::Real> rode_vec_;
-	amrex::Vector<amrex::Real> dx_finest_vec_;
 	// Running state (R, v = dR/dt) of the front ODE, advanced one timestep at a time in computeAfterTimestep.
 	amrex::Real r_ode_last_t_{};
 	amrex::Real r_ode_last_R_{};
@@ -562,6 +563,14 @@ auto compute_driving_luminosities(amrex::Real flux_ion, amrex::Real flux_optical
 	return {flux_ion * eps_ion, flux_optical * eps_opt, flux_ion * eps_rec};
 }
 
+auto is_restart() -> bool
+{
+	std::string restartfile;
+	amrex::ParmParse const pp;
+	pp.query("restartfile", restartfile);
+	return !restartfile.empty();
+}
+
 } // namespace
 
 template <>
@@ -689,9 +698,14 @@ template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
 	// Called once per level built at t = 0. Reopening an open stream fails and silently drops every later write.
+	// A restart appends to the file the original run wrote.
 	if (amrex::ParallelDescriptor::IOProcessor() && !userData_.output_file_.is_open()) {
-		userData_.output_file_.open(std::string("dtype_front_3d_radii") + ".csv");
-		userData_.output_file_ << "time,r_effective,r_shell,r_spitzer,r_ode,E_opt_tot,E_ir_tot\n";
+		if (is_restart()) {
+			userData_.output_file_.open(std::string("dtype_front_3d_radii") + ".csv", std::ios::app);
+		} else {
+			userData_.output_file_.open(std::string("dtype_front_3d_radii") + ".csv");
+			userData_.output_file_ << "time,r_effective,r_shell,r_spitzer,r_ode,E_opt_tot,E_ir_tot\n";
+		}
 	}
 }
 
@@ -808,7 +822,6 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 	const amrex::Real r_effective = compute_effective_radius(*this);
 	const amrex::Real r_shell = compute_shell_radius(state_new_cc_, geom, ref_ratio, finest_level, n_bins);
 	const amrex::Real r_spitzer = spitzer_radius(t, userData_.flux_ion, userData_.n_HI_init, userData_.T_ionized);
-	const amrex::Real dx_finest = geom[finestLevel()].CellSizeArray()[0];
 
 	amrex::Real r_ode = std::numeric_limits<amrex::Real>::quiet_NaN();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -842,7 +855,6 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 	userData_.rshell_vec_.push_back(r_shell);
 	userData_.rspitzer_vec_.push_back(r_spitzer);
 	userData_.rode_vec_.push_back(r_ode);
-	userData_.dx_finest_vec_.push_back(dx_finest);
 
 	const auto [v_max, T_max] = compute_max_speed_and_temperature(*this);
 	userData_.v_max_run_ = std::max(userData_.v_max_run_, v_max);
@@ -870,6 +882,13 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<DTypeFront3D> sim;
 
+	// A restart reads the state from the checkpoint and skips preCalculateInitialConditions, which reads the problem
+	// parameters, initialises the EOS and network, and starts the front ODE at t = 0. The first computeAfterTimestep then
+	// integrates the ODE from t = 0 to the restart time. Checks 2 and 3 only see the timesteps after the restart.
+	if (is_restart()) {
+		sim.preCalculateInitialConditions();
+	}
+
 	// initialize
 	sim.setInitialConditions();
 	sim.radiationReconstructionOrder_ = 3; // PPM
@@ -880,7 +899,6 @@ auto problem_main() -> int
 
 	int status = 0;
 
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
 	const double r_domain = std::min({0.5 * (prob_hi[0] - prob_lo[0]), 0.5 * (prob_hi[1] - prob_lo[1]), 0.5 * (prob_hi[2] - prob_lo[2])});
@@ -980,13 +998,22 @@ auto problem_main() -> int
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				const int ntot = static_cast<int>(all_temps.size());
 				if (ntot == 0) {
-					amrex::Print() << "Warning: no " << region_name << " cells found.\n";
+					amrex::Print() << "Test FAILED: no " << region_name << " cells found.\n";
+					status = 1;
+					return;
+				}
+				// A NaN would also break std::sort's ordering, so reject non-finite temperatures before sorting.
+				const auto n_nonfinite = std::count_if(all_temps.begin(), all_temps.end(), [](double T) { return !std::isfinite(T); });
+				if (n_nonfinite > 0) {
+					amrex::Print() << "Test FAILED: " << n_nonfinite << " of " << ntot << " " << region_name
+						       << " cells have a non-finite temperature.\n";
+					status = 1;
 					return;
 				}
 				std::sort(all_temps.begin(), all_temps.end());
 				const double T_median = (ntot % 2 == 0) ? 0.5 * (all_temps[ntot / 2 - 1] + all_temps[ntot / 2]) : all_temps[ntot / 2];
 				const double rel_err = std::abs(T_median - T_analytical) / T_analytical;
-				if (rel_err > 0.05) {
+				if (!(rel_err <= 0.05)) {
 					amrex::Print()
 					    << "Test FAILED: " << region_name << " median temperature " << T_median << " K differs from analytical equilibrium "
 					    << T_analytical << " K by " << 100.0 * rel_err << "% (tolerance: 5%).\n";
@@ -1006,16 +1033,15 @@ auto problem_main() -> int
 	// ionized-gas pressure and the radiation pressure. Passes if either the effective ionized radius or the
 	// max-density shell radius matches, since the thin-shell ODE collapses the ionization front and the shock
 	// into one surface, while the two can separate in the simulation.
-	{
+	if (sim.userData_.rode_vec_.empty()) {
+		amrex::Print() << "Test FAILED: no timestep was taken, so there is no front radius to check.\n";
+		status = 1;
+	} else {
 		constexpr double cm_per_pc = 3.085677581491367e18;
 		const double r_eff = sim.userData_.reff_vec_.back();
 		const double r_shell = sim.userData_.rshell_vec_.back();
 		const double r_ode = sim.userData_.rode_vec_.back();
 		const double r_spitzer = sim.userData_.rspitzer_vec_.back();
-		const double cell_size = dx[0];
-
-		// The ionization front is smeared over a couple of cells, so allow a few cells of slack.
-		const double tol_cells = 4.0;
 
 		amrex::Print() << "Integrated solution (gas + radiation pressure): " << r_ode << " cm = " << r_ode / cm_per_pc << " pc\n";
 		amrex::Print() << "Spitzer solution (gas pressure only):           " << r_spitzer << " cm = " << r_spitzer / cm_per_pc << " pc\n";
@@ -1030,25 +1056,25 @@ auto problem_main() -> int
 			amrex::Print() << "Test FAILED: the integrated front has left the domain; reduce stop_time or enlarge the box.\n";
 			status = 1;
 		} else {
-			const double eff_cell_diff = (r_eff - r_ode) / cell_size;
-			const double shell_cell_diff = (r_shell - r_ode) / cell_size;
-			const bool eff_ok = std::abs(eff_cell_diff) <= tol_cells;
-			const bool shell_ok = std::abs(shell_cell_diff) <= tol_cells;
+			const double eff_rel_diff = (r_eff - r_ode) / r_ode;
+			const double shell_rel_diff = (r_shell - r_ode) / r_ode;
+			const bool eff_ok = std::abs(eff_rel_diff) <= front_radius_rel_tol;
+			const bool shell_ok = std::abs(shell_rel_diff) <= front_radius_rel_tol;
 
 			if (eff_ok) {
 				amrex::Print() << "Test passed: the effective ionized radius matches the integrated radiation + gas pressure solution within "
-					       << tol_cells << " cells (" << eff_cell_diff << " cells).\n";
+					       << 100.0 * front_radius_rel_tol << "% (" << 100.0 * eff_rel_diff << "%).\n";
 			} else {
 				amrex::Print() << "The effective ionized radius differs from the integrated radiation + gas pressure solution by more than "
-					       << tol_cells << " cells (" << eff_cell_diff << " cells).\n";
+					       << 100.0 * front_radius_rel_tol << "% (" << 100.0 * eff_rel_diff << "%).\n";
 			}
 
 			if (shell_ok) {
 				amrex::Print() << "Test passed: the max-density shell matches the integrated radiation + gas pressure solution within "
-					       << tol_cells << " cells (" << shell_cell_diff << " cells).\n";
+					       << 100.0 * front_radius_rel_tol << "% (" << 100.0 * shell_rel_diff << "%).\n";
 			} else {
 				amrex::Print() << "The max-density shell differs from the integrated radiation + gas pressure solution by more than "
-					       << tol_cells << " cells (" << shell_cell_diff << " cells).\n";
+					       << 100.0 * front_radius_rel_tol << "% (" << 100.0 * shell_rel_diff << "%).\n";
 			}
 
 			if (!eff_ok && !shell_ok) {
@@ -1092,25 +1118,24 @@ auto problem_main() -> int
 		std::vector<amrex::Real> r_eff_pc(n);
 		std::vector<amrex::Real> r_spitzer_pc(n);
 		std::vector<amrex::Real> r_ode_pc(n);
-		// +/- 3 cells of whatever level was finest at that timestep.
-		std::vector<amrex::Real> r_eff_lower_pc(n);
-		std::vector<amrex::Real> r_eff_upper_pc(n);
+		// The Check 2 tolerance around the ODE solution.
+		std::vector<amrex::Real> r_ode_lower_pc(n);
+		std::vector<amrex::Real> r_ode_upper_pc(n);
 		for (int i = 0; i < n; ++i) {
 			t_Myr[i] = sim.userData_.t_vec_[i] / seconds_per_Myr;
 			r_eff_pc[i] = sim.userData_.reff_vec_[i] / cm_per_pc;
 			r_spitzer_pc[i] = sim.userData_.rspitzer_vec_[i] / cm_per_pc;
 			r_ode_pc[i] = sim.userData_.rode_vec_[i] / cm_per_pc;
-			const amrex::Real band_pc = 3.0_rt * sim.userData_.dx_finest_vec_[i] / cm_per_pc;
-			r_eff_lower_pc[i] = r_eff_pc[i] - band_pc;
-			r_eff_upper_pc[i] = r_eff_pc[i] + band_pc;
+			r_ode_lower_pc[i] = (1.0_rt - front_radius_rel_tol) * r_ode_pc[i];
+			r_ode_upper_pc[i] = (1.0_rt + front_radius_rel_tol) * r_ode_pc[i];
 		}
 		matplotlibcpp::clf();
 		std::map<std::string, std::string> eff_args;
 		eff_args["label"] = "effective ionized radius";
 		eff_args["color"] = "C1";
-		std::map<std::string, std::string> eff_band_args;
-		eff_band_args["label"] = "effective radius +/- 3 dx (finest level)";
-		eff_band_args["color"] = "#ff7f0e40";
+		std::map<std::string, std::string> ode_band_args;
+		ode_band_args["label"] = "ODE +/- " + std::to_string(static_cast<int>(100.0 * front_radius_rel_tol)) + "% (Check 2 tolerance)";
+		ode_band_args["color"] = "#00000020";
 		std::map<std::string, std::string> spitzer_args;
 		spitzer_args["label"] = "Spitzer (gas pressure only, 4/7 law)";
 		spitzer_args["color"] = "k";
@@ -1119,7 +1144,7 @@ auto problem_main() -> int
 		ode_args["label"] = "ODE (gas + radiation pressure)";
 		ode_args["color"] = "k";
 		ode_args["linestyle"] = ":";
-		matplotlibcpp::fill_between(t_Myr, r_eff_lower_pc, r_eff_upper_pc, eff_band_args);
+		matplotlibcpp::fill_between(t_Myr, r_ode_lower_pc, r_ode_upper_pc, ode_band_args);
 		matplotlibcpp::plot(t_Myr, r_eff_pc, eff_args);
 		matplotlibcpp::plot(t_Myr, r_spitzer_pc, spitzer_args);
 		matplotlibcpp::plot(t_Myr, r_ode_pc, ode_args);
