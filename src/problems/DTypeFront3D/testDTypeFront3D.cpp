@@ -39,6 +39,7 @@
 struct DTypeFront3D {};
 
 constexpr double c_hat = C::c_light / 1000.0;
+constexpr double T_gas_limit = 5.0e4;			   // K; no cell may get hotter than this at any timestep
 constexpr double Erad_floor_ = 1.0e-10 * 13.6 * C::ev2erg; // erg cm^-3
 constexpr int group_ir = 0;
 constexpr int group_optical = 1;
@@ -117,6 +118,11 @@ template <> struct SimulationData<DTypeFront3D> {
 	amrex::Real r_ode_last_t_{};
 	amrex::Real r_ode_last_R_{};
 	amrex::Real r_ode_last_v_{};
+	// Largest gas speed and temperature over all cells and timesteps, and the time each first exceeded its limit (-1 if never).
+	amrex::Real v_max_run_{};
+	amrex::Real T_max_run_{};
+	amrex::Real t_first_v_violation_ = -1.0;
+	amrex::Real t_first_T_violation_ = -1.0;
 	std::ofstream output_file_;
 };
 
@@ -261,6 +267,36 @@ auto compute_group_energy(QuokkaSimulation<DTypeFront3D> &sim, int g) -> amrex::
 		mfs[lev] = &sim.getNewMF_cc()[lev];
 	}
 	return amrex::volumeWeightedSum(mfs, RadSystem<DTypeFront3D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g, sim.Geom(), sim.refRatio());
+}
+
+// Largest gas speed and temperature over the valid cells of all levels. A non-finite speed or temperature counts as infinite, so it fails the checks.
+auto compute_max_speed_and_temperature(QuokkaSimulation<DTypeFront3D> &sim) -> std::array<amrex::Real, 2>
+{
+	amrex::Real v_max = 0.0_rt;
+	amrex::Real T_max = 0.0_rt;
+	for (int lev = 0; lev <= sim.finestLevel(); ++lev) {
+		amrex::MultiFab const &state_mf = sim.getNewMF_cc()[lev];
+		auto const &state = state_mf.const_arrays();
+		const auto level_max = amrex::ParReduce(
+		    amrex::TypeList<amrex::ReduceOpMax, amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real, amrex::Real>{}, state_mf, amrex::IntVect(0),
+		    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real> {
+			    const amrex::Real rho = state[bx](i, j, k, HydroSystem<DTypeFront3D>::density_index);
+			    const amrex::Real px = state[bx](i, j, k, HydroSystem<DTypeFront3D>::x1Momentum_index);
+			    const amrex::Real py = state[bx](i, j, k, HydroSystem<DTypeFront3D>::x2Momentum_index);
+			    const amrex::Real pz = state[bx](i, j, k, HydroSystem<DTypeFront3D>::x3Momentum_index);
+			    const amrex::Real Eint = state[bx](i, j, k, RadSystem<DTypeFront3D>::gasInternalEnergy_index);
+			    const auto massScalars = RadSystem<DTypeFront3D>::ComputeMassScalars(state[bx], i, j, k);
+			    const amrex::Real v = std::sqrt(px * px + py * py + pz * pz) / rho;
+			    const amrex::Real T = quokka::EOS<DTypeFront3D>::ComputeTgasFromEint(rho, Eint, massScalars);
+			    constexpr amrex::Real inf = std::numeric_limits<amrex::Real>::infinity();
+			    return {std::isfinite(v) ? v : inf, std::isfinite(T) ? T : inf};
+		    });
+		v_max = std::max(v_max, amrex::get<0>(level_max));
+		T_max = std::max(T_max, amrex::get<1>(level_max));
+	}
+	amrex::ParallelDescriptor::ReduceRealMax(v_max);
+	amrex::ParallelDescriptor::ReduceRealMax(T_max);
+	return {v_max, T_max};
 }
 
 auto lambda_rec(double T) -> double
@@ -710,6 +746,16 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 	userData_.rode_vec_.push_back(r_ode);
 	userData_.dx_finest_vec_.push_back(dx_finest);
 
+	const auto [v_max, T_max] = compute_max_speed_and_temperature(*this);
+	userData_.v_max_run_ = std::max(userData_.v_max_run_, v_max);
+	userData_.T_max_run_ = std::max(userData_.T_max_run_, T_max);
+	if (v_max > c_hat && userData_.t_first_v_violation_ < 0.0_rt) {
+		userData_.t_first_v_violation_ = t;
+	}
+	if (T_max > T_gas_limit && userData_.t_first_T_violation_ < 0.0_rt) {
+		userData_.t_first_T_violation_ = t;
+	}
+
 	const amrex::Real E_opt_tot = compute_group_energy(*this, group_optical);
 	const amrex::Real E_ir_tot = compute_group_energy(*this, group_ir);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -912,6 +958,29 @@ auto problem_main() -> int
 						  "solution within tolerance.\n";
 				status = 1;
 			}
+		}
+	}
+
+	// Check 3: at the end of every coarse timestep, no cell on any level moved faster than the reduced speed of light
+	// or was hotter than T_gas_limit.
+	{
+		if (sim.userData_.t_first_v_violation_ >= 0.0) {
+			amrex::Print() << "Test FAILED: the gas speed exceeded the reduced speed of light (" << c_hat
+				       << " cm/s), first at t = " << sim.userData_.t_first_v_violation_ << " s; maximum " << sim.userData_.v_max_run_
+				       << " cm/s.\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: the gas speed stayed below the reduced speed of light (maximum " << sim.userData_.v_max_run_
+				       << " cm/s, " << sim.userData_.v_max_run_ / c_hat << " c_hat).\n";
+		}
+
+		if (sim.userData_.t_first_T_violation_ >= 0.0) {
+			amrex::Print() << "Test FAILED: the gas temperature exceeded " << T_gas_limit
+				       << " K, first at t = " << sim.userData_.t_first_T_violation_ << " s; maximum " << sim.userData_.T_max_run_ << " K.\n";
+			status = 1;
+		} else {
+			amrex::Print() << "Test passed: the gas temperature stayed below " << T_gas_limit << " K (maximum " << sim.userData_.T_max_run_
+				       << " K).\n";
 		}
 	}
 
