@@ -1,0 +1,8 @@
+*.vo
+*.vos
+*.vok
+*.glob
+.*.aux
+.lia.cache
+.nra.cache
+__pycache__/

@@ -1,0 +1,11 @@
+// Standalone audit of the arithmetic used to bound exp(b)-1.
+#include "../../src/radiation/nested/multigroup_solver.hpp"
+#include <iostream>
+auto main() -> int {
+  std::uint64_t b = 0;
+  while (std::cin >> b) {
+    std::cout << mgsolve::detail::rank(mgsolve::detail::relative_bound(
+                     mgsolve::detail::unrank(b)))
+              << "\n";
+  }
+}

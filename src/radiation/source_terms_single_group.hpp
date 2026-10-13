@@ -2,21 +2,22 @@
 #ifndef RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_
 
-#include "radiation/radiation_system.hpp" // IWYU pragma: keep
+// RadSystem member definitions intentionally include the guarded class declaration.
+#include "radiation/radiation_system.hpp" // IWYU pragma: keep // NOLINT(misc-header-include-cycle)
 
 #define LARGE 1.0e100
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
 						     Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/,
-						     double /*tempFloor*/, int *p_iteration_counter, int *p_iteration_failure_counter,
+						     double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
 	auto dt = dt_implicit;
 
-	// don't need radBoundaries_g for single-group
+	const auto rad_boundaries = radBoundaries_;
 
 	// Add source terms
 
@@ -33,6 +34,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const double chat = c_hat_;
 		const double dustGasCoeff_ = dustGasCoeff;
 		const double resid_tol = tol_h;
+		const double temperature_floor = tempFloor; // Capture outside constexpr-if for CUDA.
+		const auto boundaries = rad_boundaries;	    // Capture before constexpr-if for CUDA.
 
 		// load fluid properties
 		const double rho = consPrev(i, j, k, gasDensity_index);
@@ -114,7 +117,19 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 			Erad_guess = Erad0;
 
-			if constexpr (gamma_ != 1.0) {
+			if constexpr (NestedRadiationCoupling_Traits<problem_t>::enabled) {
+				auto const updated =
+				    SolveNestedRadiationCoupling(Egas0, quokka::valarray<double, 1>{Erad0}, rho, coeff_n, dt, massScalars,
+								 quokka::valarray<double, 1>{Src}, boundaries, temperature_floor, p_iteration_counter_local);
+				Egas_guess = updated.Egas;
+				Erad_guess = updated.EradVec[0];
+				T_gas = updated.T_gas;
+				T_d = updated.T_d;
+				kappaE = updated.opacity_terms.kappaE[0];
+				kappaP = updated.opacity_terms.kappaP[0];
+				kappaF = updated.opacity_terms.kappaF[0];
+				fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
+			} else if constexpr (gamma_ != 1.0) {
 				double tau0 = NAN;
 				double tau = NAN;
 
@@ -144,21 +159,23 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				// 1. Compute energy exchange
 
 				// BEGIN NEWTON-RAPHSON LOOP (this is written for multi-group, but it's valid for single-group if we set i == 0)
-				// Define the source term: S = dt chat gamma rho (kappa_P B - kappa_E E) + dt chat c^-2 gamma rho kappa_F v * F_i, where gamma =
-				// 1 / sqrt(1 - v^2 / c^2) is the Lorentz factor. Solve for the new radiation energy and gas internal energy using a
-				// Newton-Raphson method using the base variables (Egas, D_0, D_1,
-				// ...), where D_i = R_i / tau_i^(t) and tau_i^(t) = dt * chat * gamma * rho * kappa_{P,i}^(t) is the optical depth across chat
+				// Define the source term: S = dt chat gamma rho (kappa_P B - kappa_E E) + dt chat c^-2 gamma rho kappa_F v * F_i, where
+				// gamma = 1 / sqrt(1 - v^2 / c^2) is the Lorentz factor. Solve for the new radiation energy and gas internal energy
+				// using a Newton-Raphson method using the base variables (Egas, D_0, D_1,
+				// ...), where D_i = R_i / tau_i^(t) and tau_i^(t) = dt * chat * gamma * rho * kappa_{P,i}^(t) is the optical depth
+				// across chat
 				// * dt for group i at time t. Compared with the old base (Egas, Erad_0, Erad_1, ...), this new base is more stable and
-				// converges faster. Furthermore, the PlanckOpacityTempDerivative term is not needed anymore since we assume d/dT (kappa_P /
-				// kappa_E) = 0 in the calculation of the Jacobian. Note that this assumption only affects the convergence rate of the
-				// Newton-Raphson iteration and does not affect the result at all once the iteration is converged.
+				// converges faster. Furthermore, the PlanckOpacityTempDerivative term is not needed anymore since we assume d/dT
+				// (kappa_P / kappa_E) = 0 in the calculation of the Jacobian. Note that this assumption only affects the convergence
+				// rate of the Newton-Raphson iteration and does not affect the result at all once the iteration is converged.
 				//
 				// The Jacobian of F(E_g, D_i) is
 				//
 				// dF_G / dE_g = 1
 				// dF_G / dD_i = c / chat * tau0_i
 				// dF_{D,i} / dE_g = 1 / (chat * C_v) * (kappa_{P,i} / kappa_{E,i}) * d/dT (4 \pi B_i)
-				// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) * tau0_i
+				// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) *
+				// tau0_i
 
 				double F_G = NAN;
 				double deltaEgas = NAN;
@@ -249,10 +266,10 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, H_num_den)[0];
 					}
 
-					// Check for convergence. We need to take care of a special situation when tau is very small, in which case the source
-					// term won't be able to cancel the residual no matter how many iterations we try. This could happen when Src is
-					// non-zero or when the opacity is a sharp function of temperature. We set the criterion to be that: tau *
-					// std::max(a_rad * T_gas^4, E_tot0) < resid_tol * Etot0.
+					// Check for convergence. We need to take care of a special situation when tau is very small, in which case the
+					// source term won't be able to cancel the residual no matter how many iterations we try. This could happen when
+					// Src is non-zero or when the opacity is a sharp function of temperature. We set the criterion to be that: tau
+					// * std::max(a_rad * T_gas^4, E_tot0) < resid_tol * Etot0.
 
 					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
 					F_D = Erad_guess - Erad0 - (R + Src);
@@ -291,8 +308,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					AMREX_ASSERT(!std::isnan(d_fourpiboverc_d_t));
 
 					// compute Jacobian elements
-					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
-					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
+					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this
+					// assumption only affects the convergence rate of the Newton-Raphson iteration and does not affect the
+					// converged solution at all.
 
 					auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
 

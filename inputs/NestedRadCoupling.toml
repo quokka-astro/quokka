@@ -1,0 +1,2 @@
+# Manufactured live radiation source-update tests; the mesh is constructed in code.
+amrex.verbose = 0
