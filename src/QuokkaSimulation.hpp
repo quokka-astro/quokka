@@ -3297,40 +3297,32 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		amrex::MultiFab userEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
 		amrex::MultiFab userReducedFlux(grids[lev], dmap[lev], 3 * Physics_Traits<problem_t>::nGroups, nghost);
 
-		// Fill radEnergySource and radFluxSource with the radiation emitted by particles and by the user hook
-		// AddRadSource. Both implicit stages of the IMEX PD-ARS tableau have abscissa c = 1 (rows 2 and 3 of Aim each
-		// sum to 1), so every implicit source term is evaluated at the end of the step, for the thermal groups and
-		// the chemical bands alike. If withChemBands is false, the chemical-band sources
-		// are zeroed, so that AddSourceTermsMultiGroup and AddSourceTermsSingleGroup do not inject them again.
-		auto fillRadiationSources = [&](bool const withChemBands) {
-			radEnergySource.setVal(0.0);
-			radFluxSource.setVal(0.0);
-			userEnergySource.setVal(0.0);
-			userReducedFlux.setVal(0.0);
+		// Fill radEnergySource and radFluxSource, once per substep, with the radiation emitted by particles and by the user
+		// hook AddRadSource. Both implicit stages of the IMEX PD-ARS tableau have abscissa c = 1 (rows 2 and 3 of Aim each
+		// sum to 1), so every implicit source term is evaluated at the end of the step, for the thermal groups and the
+		// chemical bands alike. The sources then depend only on that time (particles do not move during the radiation
+		// subcycle), so every stage below reuses them.
+		radEnergySource.setVal(0.0);
+		radFluxSource.setVal(0.0);
+		userEnergySource.setVal(0.0);
+		userReducedFlux.setVal(0.0);
 
 #if AMREX_SPACEDIM == 3
-			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle + dt_radiation);
+		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle + dt_radiation);
 #endif
 
-			auto const &prob_lo = geom[lev].ProbLoArray();
-			auto const &prob_hi = geom[lev].ProbHiArray();
-			for (amrex::MFIter iter(radEnergySource); iter.isValid(); ++iter) {
-				const amrex::Box &indexRange = iter.validbox();
-				auto const &radEnergySource_arr = radEnergySource.array(iter);
-				auto const &radFluxSource_arr = radFluxSource.array(iter);
-				auto const &userEnergySource_arr = userEnergySource.array(iter);
-				auto const &userReducedFlux_arr = userReducedFlux.array(iter);
-				RadSystem<problem_t>::AddRadSource(userEnergySource_arr, userReducedFlux_arr, indexRange, dx, prob_lo, prob_hi,
-								   time_subcycle + dt_radiation);
-				RadSystem<problem_t>::MergeUserRadSource(radEnergySource_arr, radFluxSource_arr, userEnergySource_arr, userReducedFlux_arr,
-									 indexRange);
-			}
-
-			if (!withChemBands) {
-				radEnergySource.setVal(0.0, nGroupsThermal, nGroups - nGroupsThermal, nghost);
-				radFluxSource.setVal(0.0, 3 * nGroupsThermal, 3 * (nGroups - nGroupsThermal), nghost);
-			}
-		};
+		auto const &prob_lo = geom[lev].ProbLoArray();
+		auto const &prob_hi = geom[lev].ProbHiArray();
+		for (amrex::MFIter iter(radEnergySource); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &radEnergySource_arr = radEnergySource.array(iter);
+			auto const &radFluxSource_arr = radFluxSource.array(iter);
+			auto const &userEnergySource_arr = userEnergySource.array(iter);
+			auto const &userReducedFlux_arr = userReducedFlux.array(iter);
+			RadSystem<problem_t>::AddRadSource(userEnergySource_arr, userReducedFlux_arr, indexRange, dx, prob_lo, prob_hi,
+							   time_subcycle + dt_radiation);
+			RadSystem<problem_t>::MergeUserRadSource(radEnergySource_arr, radFluxSource_arr, userEnergySource_arr, userReducedFlux_arr, indexRange);
+		}
 
 #ifdef PHOTOCHEMISTRY
 		if (enablePhotoChemistry_ == 1) {
@@ -3341,7 +3333,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				// only implicit term is the emission, which does not depend on the state and is simply added with the implicit weights Aim_22
 				// and Aim_33. The freshly emitted photons are thereby transported for part of the substep, as in the thermal groups, rather
 				// than waiting for the next substep.
-				fillRadiationSources(true);
 
 				// stage 2: explicit forward Euler, then emission, on state_tmp1
 				amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
@@ -3374,6 +3365,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		// === Step 3: IMEX PD-ARS on groups [0, imexGroupEnd) ===
 		// With chemBandsFirst these are the thermal groups only; skip entirely if there are none.
 		if (imexGroupEnd > 0) {
+			if (chemBandsFirst) {
+				// The chemical-band emission was added in step 1; zero it so that AddSourceTermsMultiGroup and
+				// AddSourceTermsSingleGroup do not inject it again.
+				radEnergySource.setVal(0.0, nGroupsThermal, nGroups - nGroupsThermal, nghost);
+				radFluxSource.setVal(0.0, 3 * nGroupsThermal, 3 * (nGroups - nGroupsThermal), nghost);
+			}
 
 			// === Stage 1: trivial U^(1) = U^n; skipped ===
 
@@ -3394,8 +3391,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 							     state_tmp1_cc, 0, imexGroupEnd);
 
 				// Implicit source terms for stage 2
-				fillRadiationSources(!chemBandsFirst);
-
 				const amrex::Real dt_stage2_implicit = IMEX_Aim_22 * dt_radiation;
 
 				for (amrex::MFIter iter(state_tmp1_cc); iter.isValid(); ++iter) {
@@ -3492,8 +3487,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				}
 			}
 
-			// Implicit source terms for stage 3 (evaluated at the end of the step, as in stage 2 above)
-			fillRadiationSources(!chemBandsFirst);
+			// Implicit source terms for stage 3 (the same sources as in stage 2, evaluated at the end of the step)
 
 			const amrex::Real dt_stage3_implicit = IMEX_Aim_33 * dt_radiation;
 
