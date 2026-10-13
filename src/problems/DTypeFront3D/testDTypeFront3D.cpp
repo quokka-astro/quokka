@@ -405,6 +405,73 @@ auto stromgren_radius(amrex::Real flux_ion, amrex::Real n_0, amrex::Real T_i) ->
 	return std::cbrt((3.0_rt * flux_ion) / (4.0_rt * M_PI * recombination_coefficient(T_i) * n_0 * n_0));
 }
 
+auto ionizing_dust_kappa() -> amrex::Real
+{
+	if constexpr (RadSystem<DTypeFront3D>::dust_chemical_band_absorption_) {
+		return network_rp::dust_kappa;
+	} else {
+		return 0.0_rt;
+	}
+}
+
+// Spherical dust attenuation factor h(tau) = 3 int_0^1 x^2 e^(tau x) dx = 3 [e^tau (tau^2 - 2 tau + 2) - 2] / tau^3, the ratio of
+// the ionizing photon rate needed to keep a dusty sphere of optical radius tau ionized to that needed without dust. h(0) = 1.
+// Below tau = 1 the closed form cancels catastrophically, so the series 3 sum_n tau^n / (n! (n + 3)) is used instead.
+auto spherical_dust_attenuation_factor(amrex::Real tau) -> amrex::Real
+{
+	if (tau <= 0.0_rt) {
+		return 1.0_rt;
+	}
+	if (tau < 1.0_rt) {
+		amrex::Real sum = 0.0_rt;
+		amrex::Real tau_n_over_n_factorial = 1.0_rt;
+		for (int n = 0; n < 30; ++n) {
+			const amrex::Real term = tau_n_over_n_factorial / static_cast<amrex::Real>(n + 3);
+			sum += term;
+			if (term < 1.0e-17_rt * sum) {
+				break;
+			}
+			tau_n_over_n_factorial *= tau / static_cast<amrex::Real>(n + 1);
+		}
+		return 3.0_rt * sum;
+	}
+	return 3.0_rt * (std::exp(tau) * (tau * tau - 2.0_rt * tau + 2.0_rt) - 2.0_rt) / (tau * tau * tau);
+}
+
+// Ionized-to-ambient density ratio s from Q_ion = (4 pi / 3) alpha n_i^2 R^3 h(tau) with tau = kappa rho_0 s R,
+// i.e. (R_s / R)^3 = s^2 h(kappa rho_0 s R). The left side is fixed and the right increases with s, so bisect.
+auto ionized_density_ratio(amrex::Real R, amrex::Real R_s, amrex::Real kappa_rho_0) -> amrex::Real
+{
+	const amrex::Real target = std::pow(R_s / R, 3);
+	amrex::Real s_lo = 0.0_rt;
+	amrex::Real s_hi = std::sqrt(target); // the dust-free value, since h >= 1
+	for (int iter = 0; iter < 100; ++iter) {
+		const amrex::Real s = 0.5_rt * (s_lo + s_hi);
+		if (s * s * spherical_dust_attenuation_factor(kappa_rho_0 * s * R) > target) {
+			s_hi = s;
+		} else {
+			s_lo = s;
+		}
+	}
+	return 0.5_rt * (s_lo + s_hi);
+}
+
+// End of the R-type phase (s = 1): R_s^3 = R_d^3 h(kappa rho_0 R_d). Equal to R_s without dust.
+auto dusty_stromgren_radius(amrex::Real R_s, amrex::Real kappa_rho_0) -> amrex::Real
+{
+	amrex::Real R_lo = 0.0_rt;
+	amrex::Real R_hi = R_s;
+	for (int iter = 0; iter < 100; ++iter) {
+		const amrex::Real R = 0.5_rt * (R_lo + R_hi);
+		if (R * R * R * spherical_dust_attenuation_factor(kappa_rho_0 * R) > R_s * R_s * R_s) {
+			R_hi = R;
+		} else {
+			R_lo = R;
+		}
+	}
+	return 0.5_rt * (R_lo + R_hi);
+}
+
 // Classic spherical Spitzer D-type expansion law. Gas pressure only; reference curve.
 auto spitzer_radius(amrex::Real t, amrex::Real flux_ion, amrex::Real n_0, amrex::Real T_i) -> amrex::Real
 {
@@ -414,36 +481,44 @@ auto spitzer_radius(amrex::Real t, amrex::Real flux_ion, amrex::Real n_0, amrex:
 	return r_s * std::pow(1.0_rt + 7.0_rt * t / (4.0_rt * t_s), 4.0_rt / 7.0_rt);
 }
 
-// Numerically integrate the spherical thin-shell D-type front equation including radiation pressure,
+// Numerically integrate the spherical thin-shell D-type front equation including radiation pressure and dust absorption
+// of ionizing photons,
 //
 //   d/dt [ M(R) Rdot ] = 4 pi R^2 P_i  +  L_abs(R) / c,
 //
-// with M(R) = (4 pi / 3) rho_0 R^3 the swept-up mass and P_i = rho_0 (R_s/R)^{3/2} c_s^2 the ionized-gas pressure
-// from ionization balance inside the cavity. As the first-order system for y = (R, v):
+// with M(R) = (4 pi / 3) rho_0 R^3 the swept-up mass and P_i = s rho_0 c_s^2 the ionized-gas pressure. The density ratio
+// s = n_i / n_0 follows from ionization balance with dust (ionized_density_ratio); without dust s = (R_s/R)^{3/2}.
+// As the first-order system for y = (R, v):
 //
 //   dR/dt = v,
 //   dv/dt = [ 4 pi R^2 P_i  +  L_abs(R) / c  -  M'(R) v^2 ] / M(R).
 //
-// L_abs = L_ion + L_optical * (1 - exp(-kappa_opt * Sigma)), with Sigma = M / (4 pi R^2) the shell column.
+// L_abs = L_ion + (L_optical + L_rec f_rec) (1 - exp(-kappa_opt Sigma)), with Sigma = M / (4 pi R^2) the shell column and
+// f_rec = s^2 (R / R_s)^3 = 1 / h(tau) the fraction of ionizing photons that recombine rather than hit dust. All ionizing
+// photons are absorbed inside R, by gas or dust, so L_ion enters in full; the dust re-emits what it absorbs in the IR,
+// which the shell barely absorbs (kappa_ir is small), so it is left out.
 //
-// The integration starts at R = R_s moving at c_s, the end of the R-type phase.
+// The integration starts at the dusty Stromgren radius R_d moving at c_s, the end of the R-type phase.
 auto integrate_front(amrex::Real dt_target, amrex::Real R0, amrex::Real v0, amrex::Real R_s, amrex::Real rho_0, amrex::Real c_s, amrex::Real L_ion,
-		     amrex::Real L_optical, amrex::Real kappa_opt) -> amrex::GpuArray<amrex::Real, 2>
+		     amrex::Real L_optical, amrex::Real L_rec, amrex::Real kappa_opt, amrex::Real kappa_rho_0) -> amrex::GpuArray<amrex::Real, 2>
 {
 	if (dt_target <= 0.0_rt) {
 		return {R0, v0};
 	}
 
+	const amrex::Real R_d = dusty_stromgren_radius(R_s, kappa_rho_0);
 	auto rhs = [&](amrex::GpuArray<amrex::Real, 2> const &y) -> amrex::GpuArray<amrex::Real, 2> {
-		const amrex::Real R = std::max(y[0], R_s);
+		const amrex::Real R = std::max(y[0], R_d);
 		const amrex::Real v = y[1];
 		const amrex::Real area = 4.0_rt * M_PI * R * R;
 		const amrex::Real mass = (4.0_rt / 3.0_rt) * M_PI * R * R * R * rho_0;
 		const amrex::Real dmass_dR = area * rho_0;
-		const amrex::Real P_i = rho_0 * std::pow(R_s / R, 1.5_rt) * c_s * c_s;
+		const amrex::Real s = ionized_density_ratio(R, R_s, kappa_rho_0);
+		const amrex::Real P_i = s * rho_0 * c_s * c_s;
+		const amrex::Real f_rec = s * s * std::pow(R / R_s, 3);
 		const amrex::Real Sigma = mass / area;
 		const amrex::Real f_absorbed = -std::expm1(-kappa_opt * Sigma); // = 1 - exp(-tau), accurate for small tau
-		const amrex::Real L_abs = L_ion + L_optical * f_absorbed;
+		const amrex::Real L_abs = L_ion + (L_optical + L_rec * f_rec) * f_absorbed;
 		const amrex::Real force = area * P_i + L_abs / C::c_light - dmass_dR * v * v;
 		return {v, force / mass};
 	};
@@ -464,7 +539,7 @@ auto integrate_front(amrex::Real dt_target, amrex::Real R0, amrex::Real v0, amre
 			const auto k4 = rhs({y[0] + dt * k3[0], y[1] + dt * k3[1]});
 			y[0] += (dt / 6.0_rt) * (k1[0] + 2.0_rt * k2[0] + 2.0_rt * k3[0] + k4[0]);
 			y[1] += (dt / 6.0_rt) * (k1[1] + 2.0_rt * k2[1] + 2.0_rt * k3[1] + k4[1]);
-			y[0] = std::max(y[0], R_s);
+			y[0] = std::max(y[0], R_d);
 		}
 
 		if (iter > 0 && std::abs(y[0] - y_prev[0]) < tol) {
@@ -478,12 +553,13 @@ auto integrate_front(amrex::Real dt_target, amrex::Real R0, amrex::Real v0, amre
 	return y_prev; // unreachable
 }
 
-// The two luminosities [erg s^-1] driving the front ODE, returned as {L_ion, L_optical}.
+// The luminosities [erg s^-1] driving the front ODE, returned as {L_ion, L_optical, L_rec}. L_rec is the recombination
+// emission if every ionizing photon recombined; the network emits it into the optical band, and the ODE scales it by f_rec.
 auto compute_driving_luminosities(amrex::Real flux_ion, amrex::Real flux_optical, amrex::Real eps_ion, amrex::Real eps_opt, amrex::Real T_i)
-    -> amrex::GpuArray<amrex::Real, 2>
+    -> amrex::GpuArray<amrex::Real, 3>
 {
 	const amrex::Real eps_rec = 13.6 * C::ev2erg + lambda_rec(T_i) / recombination_coefficient(T_i);
-	return {flux_ion * eps_ion, flux_optical * eps_opt + flux_ion * eps_rec};
+	return {flux_ion * eps_ion, flux_optical * eps_opt, flux_ion * eps_rec};
 }
 
 } // namespace
@@ -603,10 +679,11 @@ template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 	{
 		const amrex::Real R_s = stromgren_radius(userData_.flux_ion, userData_.n_HI_init, userData_.T_ionized);
 		const amrex::Real c_s = ionized_sound_speed(userData_.T_ionized);
+		const amrex::Real R_d = dusty_stromgren_radius(R_s, ionizing_dust_kappa() * userData_.n_HI_init * spmasses[Species::H]);
 		userData_.r_ode_last_t_ = 0.0_rt;
-		userData_.r_ode_last_R_ = R_s;
+		userData_.r_ode_last_R_ = R_d;
 		userData_.r_ode_last_v_ = c_s;
-		amrex::Print() << "Stromgren radius R_s = " << R_s << " cm, ionized sound speed c_s = " << c_s << " cm/s\n";
+		amrex::Print() << "Stromgren radius R_s = " << R_s << " cm (with dust: " << R_d << " cm), ionized sound speed c_s = " << c_s << " cm/s\n";
 	}
 
 	eos_init(userData_.small_temp, userData_.small_dens);
@@ -721,17 +798,18 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 		const amrex::Real R_s = stromgren_radius(userData_.flux_ion, n_0, T_i);
 		const amrex::Real c_s = ionized_sound_speed(T_i);
 		const auto L_bands = compute_driving_luminosities(userData_.flux_ion, userData_.flux_optical, userData_.eps_ion, userData_.eps_opt, T_i);
+		const amrex::Real kappa_rho_0 = ionizing_dust_kappa() * rho_0;
 
 		amrex::Real dt_ode = t - userData_.r_ode_last_t_;
 		if (dt_ode < 0.0_rt) {
 			// time went backwards or was reset; restart the integration from the R-type endpoint
 			userData_.r_ode_last_t_ = 0.0_rt;
-			userData_.r_ode_last_R_ = R_s;
+			userData_.r_ode_last_R_ = dusty_stromgren_radius(R_s, kappa_rho_0);
 			userData_.r_ode_last_v_ = c_s;
 			dt_ode = t;
 		}
-		const auto y =
-		    integrate_front(dt_ode, userData_.r_ode_last_R_, userData_.r_ode_last_v_, R_s, rho_0, c_s, L_bands[0], L_bands[1], kappa_optical);
+		const auto y = integrate_front(dt_ode, userData_.r_ode_last_R_, userData_.r_ode_last_v_, R_s, rho_0, c_s, L_bands[0], L_bands[1], L_bands[2],
+					       kappa_optical, kappa_rho_0);
 		userData_.r_ode_last_t_ = t;
 		userData_.r_ode_last_R_ = y[0];
 		userData_.r_ode_last_v_ = y[1];
