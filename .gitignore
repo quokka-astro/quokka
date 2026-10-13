@@ -28,6 +28,9 @@ Backtrace.*
 /extern/agora_data/vcirc.dat
 /extern/agora_data/AgoraGalaxy_particles_LOW.txt
 
+# Local source data for chemical yield preprocessing
+/extern/mist_tracks/
+
 # Singularity Docker images
 *.sif
 
