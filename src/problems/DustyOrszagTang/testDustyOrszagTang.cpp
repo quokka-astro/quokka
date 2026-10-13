@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustyOrszagTang.cpp
 /// \brief Dusty Orszag-Tang vortex analogue inspired by Moseley et al. (2023), Section 3.4.
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testParticleSinkFormation.cpp
 /// \brief Defines a test problem for sink particle formation.
 ///

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef PARTICLE_UPDATE_HPP_
 #define PARTICLE_UPDATE_HPP_
 
