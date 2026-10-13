@@ -658,8 +658,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 				auto radEnergyNew = energy.EradVec[g] + dErad_work * energyLossFractions[g];
 				// AMREX_ASSERT(radEnergyNew > 0.0);
 				if (radEnergyNew < Erad_floor_) {
-					// return energy to Egas_guess
-					energy.Egas -= (Erad_floor_ - radEnergyNew) * (c_light_ / c_hat_);
+					// The radiation cannot pay for the kinetic energy, so the gas pays the shortfall. In a near-vacuum
+					// cell the dp^2/(2 rho) part of dEkin_work exceeds both reservoirs, so cap the debit as above to keep
+					// Egas positive. Not energy conserving; see work_term_min_eint_fraction and issue #2173.
+					const double refund = (Erad_floor_ - radEnergyNew) * (c_light_ / c_hat_);
+					energy.Egas -= std::min(refund, (1.0 - work_term_min_eint_fraction) * energy.Egas);
 					radEnergyNew = Erad_floor_;
 				}
 				updated_flux.Erad[g] = radEnergyNew;
