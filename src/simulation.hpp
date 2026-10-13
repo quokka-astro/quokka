@@ -1038,8 +1038,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// a CGS hydro run without a density floor can drive the density to zero or below, so require one
 	if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS && Physics_Traits<problem_t>::is_hydro_enabled) {
-		if (densityFloor_ <= 0.0) {
-			amrex::Abort("density_floor must be set to a positive value (in g cm^-3) when hydro is enabled in CGS units!");
+		if (!std::isfinite(densityFloor_) || densityFloor_ <= 0.0) {
+			amrex::Abort("density_floor must be set to a finite, positive value (in g cm^-3) when hydro is enabled in CGS units!");
 		}
 	}
 
