@@ -13,19 +13,22 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = [256, 256, 256]
-amr.max_level       = 0
-amr.max_grid_size   = 64
-amr.blocking_factor = 64
+amr.n_cell          = [64, 64, 64]
+amr.max_level       = 2
+amr.max_grid_size   = 128
+amr.blocking_factor = 32
 amr.n_error_buf     = 3
 amr.grid_eff        = 0.7
-regrid_interval     = 30
+# The D-type front moves at most ~0.12 cells of a level per step of that level (~12 km/s early on), so 10 steps keep it
+# well inside the 3-cell error buffer between regrids.
+regrid_interval     = 10
 
 do_reflux = 1
 do_subcycle = 1
 suppress_output = 0
 
 temperature_floor = 10.0
+density_floor = 1.0e-30
 
 stop_time = 3.15576e13
 max_timesteps = 200000

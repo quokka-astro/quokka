@@ -750,10 +750,19 @@ template <> void QuokkaSimulation<DTypeFront3D>::setInitialConditionsOnGrid(quok
 	});
 }
 
-template <> void QuokkaSimulation<DTypeFront3D>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<DTypeFront3D>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int /*ngrow*/)
 {
 	// Refine wherever the neutral fraction jumps by more than x_HI_grad_threshold between neighbouring cells.
 	const amrex::Real x_HI_grad_threshold = 0.3;
+
+	// The initial gas is uniformly neutral, so the gradient tags nothing at t = 0 and the R-type phase would run on the base
+	// grid until the first regrid. Refine the sphere the front reaches within the first few coarse steps (2 R_s) from the start.
+	const bool tag_source_region = (time <= 0.0_rt);
+	const amrex::Real r_tag = 2.0_rt * stromgren_radius(userData_.flux_ion, userData_.n_HI_init, userData_.T_ionized);
+	const amrex::Real r_tag2 = r_tag * r_tag;
+	const auto prob_lo = geom[lev].ProbLoArray();
+	const auto prob_hi = geom[lev].ProbHiArray();
+	const auto dx = geom[lev].CellSizeArray();
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
@@ -761,6 +770,16 @@ template <> void QuokkaSimulation<DTypeFront3D>::refineGrid(int lev, amrex::TagB
 		const auto tag = tags.array(mfi);
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			if (tag_source_region) {
+				const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5_rt) * dx[0] - 0.5_rt * (prob_lo[0] + prob_hi[0]);
+				const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5_rt) * dx[1] - 0.5_rt * (prob_lo[1] + prob_hi[1]);
+				const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5_rt) * dx[2] - 0.5_rt * (prob_lo[2] + prob_hi[2]);
+				if (x * x + y * y + z * z < r_tag2) {
+					tag(i, j, k) = amrex::TagBox::SET;
+					return;
+				}
+			}
+
 			const amrex::Real x0 = neutral_fraction(state, i, j, k);
 
 			const amrex::Real del_x =
