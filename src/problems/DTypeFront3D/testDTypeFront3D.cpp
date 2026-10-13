@@ -40,9 +40,7 @@ struct DTypeFront3D {};
 
 constexpr double c_hat = C::c_light / 1000.0;
 constexpr double T_gas_limit = 5.0e4; // K; no cell may get hotter than this at any timestep
-// Check 2 tolerance on the effective ionized radius, in cells of the finest level. The simulated front runs ahead of the ODE by
-// about 3 cells at max_level = 2: the thick, grid-aligned shell absorbs more of the optical light than the thin-shell column
-// rho_0 R / 3 the ODE assumes.
+// Check 2 tolerance on the effective ionized radius, in cells of the finest level.
 constexpr double front_radius_tol_cells = 4.0;
 constexpr double Erad_floor_ = 1.0e-10 * 13.6 * C::ev2erg; // erg cm^-3
 constexpr int group_ir = 0;
@@ -895,7 +893,6 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.radiationCflNumber_ = CFL_number;
-	sim.plotfileInterval_ = -1;
 
 	sim.evolve();
 
