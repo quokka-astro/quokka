@@ -688,7 +688,8 @@ template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
-	if (amrex::ParallelDescriptor::IOProcessor()) {
+	// Called once per level built at t = 0. Reopening an open stream fails and silently drops every later write.
+	if (amrex::ParallelDescriptor::IOProcessor() && !userData_.output_file_.is_open()) {
 		userData_.output_file_.open(std::string("dtype_front_3d_radii") + ".csv");
 		userData_.output_file_ << "time,r_effective,r_shell,r_spitzer,r_ode,E_opt_tot,E_ir_tot\n";
 	}
