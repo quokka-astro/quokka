@@ -288,6 +288,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_x_to_inf_ser
 	AMREX_ASSERT(x >= 0.);
 
 	const Real e = std::exp(-x);
+	if (e == 0.0) {
+		// Q has underflowed. Return before forming x^3, which overflows for very large x and gives 0 * inf at x = inf (T = 0).
+		return 0.0;
+	}
 	const Real x2 = x * x;
 	const Real x3 = x2 * x;
 	Real ek = e;

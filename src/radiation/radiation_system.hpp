@@ -787,13 +787,17 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 			bool in_tail = true;
 			if (g < nGroups_ - 1) {
 				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-				const amrex::Real kernel = (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
 				if (x >= X_TAIL) {
+					// x^4 / (e^x - 1) written with e^(-x) so that cold matter (x up to ~1e9 or inf) never forms e^x, which overflows
+					// past x ~ 710. Once e^(-x) underflows to 0 the kernel is 0; testing it first also avoids 0 * inf at x = inf.
+					const amrex::Real e = std::exp(-x);
+					const amrex::Real kernel = (e > 0.0) ? (x * x * x * x * e / (1.0 - e)) / gInf : 0.0;
 					const amrex::Real q = integrate_planck_from_x_to_inf_series(x);
 					d = 4. * (1.0 - q) - kernel;
 					u = 4. * q + kernel;
 				} else {
 					in_tail = false;
+					const amrex::Real kernel = (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
 					d = 4. * integrate_planck_from_0_to_x(x) - kernel;
 					u = 4.0 - d;
 				}
