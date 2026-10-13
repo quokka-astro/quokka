@@ -816,8 +816,8 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 	const int lev = 0;
 	const amrex::Real t = tNew_[lev];
 
-	// One bin per finest-level cell width along a radius, so the shell radius resolves the Check 2 tolerance.
-	const int n_bins = geom[finest_level].Domain().length(0) / 2;
+	// One bin per cell width of the finest level the inputs allow, the same cells Check 2 measures its tolerance in.
+	const int n_bins = geom[maxLevel()].Domain().length(0) / 2;
 
 	const amrex::Real r_effective = compute_effective_radius(*this);
 	const amrex::Real r_shell = compute_shell_radius(state_new_cc_, geom, ref_ratio, finest_level, n_bins);
