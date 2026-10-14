@@ -13,6 +13,7 @@ The following Quokka physics modules should currently be treated as **beta** bec
 | Dust | beta | Dedicated dust dynamics, dust-gas drag, and charged-dust Lorentz source terms | [Dust module](dust_module.md) |
 | Particles | beta | Particle-mesh gravity, sink particles, star formation, and feedback | [Particles](particles.md) |
 | Chemistry | beta | Primordial chemistry source terms | [Equations](equations.md), [Runtime parameters](parameters.md) |
+| Photoionization | beta | Hydrogen photoionization and photoheating of ionizing photons with the M1 closure | [Photoionization module](photoionization.md) |
 | Self-gravity | beta | Poisson solve for gas and particle mass | [Equations](equations.md) |
 
 Hydrodynamics and optically-thin cooling are not currently marked as beta.
