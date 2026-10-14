@@ -34,3 +34,5 @@ plotfile_interval = -1
 restartfile = "chk0000020"
 
 particles.split_particles_on_restart_refine = false
+
+density_floor = 1e-28  # g cm^-3
