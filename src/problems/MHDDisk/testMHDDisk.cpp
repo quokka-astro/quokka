@@ -433,17 +433,17 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	constexpr double µ = quokka::EOS_Traits<MHDGalaxy>::mean_molecular_weight;
 
 	// set cs or T from either T or cs, to ensure both are present
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(userData_.T_disk) != !std::isnan(userData_.cs_disk),
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isnan(userData_.T_disk) != std::isnan(userData_.cs_disk),
 					 "Must set exactly one of mhd_galaxy.T_disk or mhd_galaxy.cs_disk");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(userData_.T_cgm) != !std::isnan(userData_.cs_cgm),
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isnan(userData_.T_cgm) != std::isnan(userData_.cs_cgm),
 					 "Must set exactly one of mhd_galaxy.T_cgm or mhd_galaxy.cs_cgm");
 
-	if (!std::isnan(userData_.T_disk)) {
+	if (std::isnan(userData_.cs_disk)) {
 		userData_.cs_disk = std::sqrt(gamma * C::k_B * userData_.T_disk / µ);
 	} else {
 		userData_.T_disk = userData_.cs_disk * userData_.cs_disk * µ / (gamma * C::k_B);
 	}
-	if (!std::isnan(userData_.T_cgm)) {
+	if (std::isnan(userData_.cs_cgm)) {
 		userData_.cs_cgm = std::sqrt(gamma * C::k_B * userData_.T_cgm / µ);
 	} else {
 		userData_.T_cgm = userData_.cs_cgm * userData_.cs_cgm * µ / (gamma * C::k_B);
@@ -453,9 +453,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	const double cs_cgm = userData_.cs_cgm;
 
 	// set vc or Mc from either Mc or vc, to ensure both are present
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(userData_.vc) != !std::isnan(userData_.Mc),
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isnan(userData_.vc) != std::isnan(userData_.Mc),
 					 "Must set exactly one of mhd_galaxy.vc_kms or mhd_galaxy.Mc");
-	if (!std::isnan(userData_.vc)) {
+	if (std::isnan(userData_.vc)) {
 		userData_.vc = userData_.Mc * userData_.cs_disk;
 	} else {
 		userData_.Mc = userData_.vc / userData_.cs_disk;
