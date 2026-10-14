@@ -149,7 +149,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, do
 	return Sigma0 * std::exp(-x - beta_profile * std::exp(-alpha_profile * x));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Rc, double Rd, double Sigma0, double Mc, double cs) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Rc, double Rd, double Sigma0, double vc, double cs) -> double
 {
 	const double Sigma = surfaceDensityProfile(R, Rc, Rd, Sigma0);
 	if (Sigma <= 0.0) {
@@ -162,7 +162,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, doub
 	const double disk_factor = (sech * sech) / (2.0 * H);
 
 	const double denom = R * R + Rc * Rc;
-	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -Mc * Mc / 2.0);
+	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -(vc / cs) * (vc / cs) / 2.0);
 
 	return Sigma * disk_factor * halo_factor;
 }
@@ -560,12 +560,10 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	// => B_rms = cs * sqrt(2 rho_mid / (gamma * beta))
 	// => B0_scale = B_rms * Rmax
 	{
-		constexpr double cs = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-		constexpr double gam = quokka::EOS_Traits<MHDGalaxy>::gamma;
-		const double Sigma_Rd = surfaceDensityProfile(Rd, Rd, userData_.Sigma0);
-		const double rho_mid = (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * cs * cs);
+		const double Sigma_Rd = surfaceDensityProfile(Rd, Rc, Rd, userData_.Sigma0);
+		const double rho_mid = (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * cs_disk * cs_disk);
 		userData_.rho_mid = rho_mid;
-		const double B_rms_HL = cs * std::sqrt(2.0 * rho_mid / (gam * target_beta_seed));
+		const double B_rms_HL = cs_disk * std::sqrt(2.0 * rho_mid / (gamma * target_beta_seed));
 		userData_.seed_B0_HL = B_rms_HL * userData_.seed_Rmax;
 		amrex::Print() << "Seed field: target_beta=" << target_beta_seed << "  rho_mid=" << rho_mid << "  B_rms_HL=" << B_rms_HL
 			       << "  B0_scale=" << userData_.seed_B0_HL << " G*cm (HL)\n";
@@ -608,7 +606,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		amrex::Print() << "\n";
 	}
 
-	constexpr double turb_rescale = turb_target_Mach * quokka::EOS_Traits<MHDGalaxy>::cs_disk;
+	const double turb_rescale = turb_target_Mach * cs_disk;
 	userData_.turb_rescale_factor = turb_rescale;
 
 	amrex::Print() << "Turbulence loaded from binary files:\n"
@@ -633,13 +631,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const double vc = userData_.vc;
-	const double Mc = userData_.Mc;
 	const double Rc = userData_.Rc;
 	const double Rd = userData_.Rd;
 	const double Rcutoff = userData_.Rcutoff;
 	const double Sigma0 = userData_.Sigma0;
-	const double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-	const double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
+	const double cs_disk = userData_.cs_disk;
+	const double cs_cgm = userData_.cs_cgm;
 	const double rho_cgm = userData_.rho_cgm;
 	constexpr double gamma = quokka::EOS_Traits<MHDGalaxy>::gamma;
 
@@ -733,7 +730,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double z = prob_lo[2] + (k + 0.5) * dz;
 		const double R = std::sqrt(x * x + y * y + 1e-200);
 
-		const double rho_disc_raw = R < Rcutoff ? diskDensityAnalytic(R, z, Rc, Rd, Sigma0, Mc, cs_disk) : 0.0;
+		const double rho_disc_raw = R < Rcutoff ? diskDensityAnalytic(R, z, Rc, Rd, Sigma0, vc, cs_disk) : 0.0;
 		const bool in_disk = (rho_disc_raw > rho_transition);
 		const double rho = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
 		const double cs = in_disk ? cs_disk : cs_cgm;
@@ -1435,8 +1432,8 @@ template <>
 void QuokkaSimulation<MHDGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
 						    amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
-	constexpr double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-	constexpr double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
+	constexpr double cs_disk = userData_.cs_disk;
+	constexpr double cs_cgm = userData_.cs_cgm;
 
 	const int ncomp = ncomp_cc_in;
 	const auto prob_lo = geom[lev].ProbLoArray();
