@@ -156,15 +156,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, doub
 	}
 
 	const double H = cs * cs / (M_PI * C::Gconst * Sigma);
-	const double rho0 = (M_PI * C::Gconst * Sigma * Sigma) / (2.0 * cs * cs);
 
 	const double sech = 1.0 / std::cosh(z / H);
-	const double disk_factor = sech * sech;
+	const double disk_factor = (sech * sech) / (2.0 * H);
 
 	const double denom = R * R + Rc * Rc;
 	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -Mc * Mc / 2.0);
 
-	return rho0 * disk_factor * halo_factor;
+	return Sigma * disk_factor * halo_factor;
 }
 
 // 1D and 2D Interpolation Operators for Cylindrical A_phi Evaluation
