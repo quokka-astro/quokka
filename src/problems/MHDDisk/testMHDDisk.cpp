@@ -300,6 +300,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto get_taper_factor(double x, double y, do
 	return taper;
 }
 
+int getNoCells(QuokkaSimulation<MHDGalaxy>* sim) {
+	long cells = 0;
+	for (int level = 0; level <= sim->finestLevel(); ++level)
+		for (amrex::MFIter iter(sim->state_new_cc_[level]); iter.isValid(); ++iter)
+			cells += iter.validbox().numPts();
+	return cells;
+}
+
 inline auto load_bin_to_device(const std::string &path, std::size_t n_expect) -> amrex::Gpu::DeviceVector<amrex::Real>
 {
 	// Use amrex::Real so this remains compatible if you change precision
@@ -392,6 +400,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto cellSphereOverlapFraction(double di, do
 
 template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 {
+	amrex::Print() << std::format("{:6.3f}M cells\n", amrex::Real(getNoCells(this))/1e6);
+
 	// run only once
 	static bool was_called = false;
 	if (was_called) {
