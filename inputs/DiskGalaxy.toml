@@ -96,5 +96,21 @@ disk_galaxy.halo_vphi_expr = "R=sqrt(x*x+y*y); R0=1.4e3*3.085677581e18; Rt=15.0e
 disk_galaxy.magnetic_field_microgauss = 1.0 # B-field strength (microgauss)
 disk_galaxy.initial_scalar_density = 1.67e-35 # 1e-11 mH/cm^3
 
+
+###################################
+## Turbulence parameters
+###################################
+# Optional turbulent velocity perturbation of the disk gas. Generate the cubes with
+# src/problems/MHDDisk/fieldgen_mpi, e.g.  mpirun -np 8 ./fieldgen3 v.bin 256 4 64 -1.66667 1
+# (writes v.bin.1, v.bin.2, v.bin.3). The cube is mapped onto +/- turb_box_half_kpc around the
+# origin and scaled so that its 3D rms (with stddev = 1) equals turb_velocity_kms.
+# The remaining turb_* keys are required only when use_turbulence = true.
+disk_galaxy.use_turbulence = false
+#disk_galaxy.turb_vx_file = "v.bin.1"
+#disk_galaxy.turb_vy_file = "v.bin.2"
+#disk_galaxy.turb_vz_file = "v.bin.3"
+#disk_galaxy.turb_velocity_kms = 27.0        # <vx^2 + vy^2 + vz^2> km/s
+#disk_galaxy.turb_box_half_kpc = 2.0         # kpc
+
 particles.scalar_yield_per_SN = 1.99e33       # 1 Msun
 particles.SN_p_term_Msunkmps = 5.0e5	      # 500,000 Msun km/s
