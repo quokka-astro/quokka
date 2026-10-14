@@ -131,7 +131,18 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vcircAnalytic(double R, double z, 
 	return vc * R / D;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, double Rd, double Sigma0) -> double
+// Epicyclic frequency for Toomre condition matching
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto kappa(double R, double vc, double Rc) -> double
+{
+#define Ω(R) vcircAnalytic(R, 0.0, vc, Rc) / (R)
+	// const auto Ω = [=] AMREX_GPU_DEVICE(double R, double vc, double Rc) { return vcircAnalytic(R, 0.0, vc, Rc) / R; };
+	const double ε = 0.5e-5 * Rc;
+	const double dΩdR = (Ω(R + ε) - Ω(R - ε)) / (2.0 * ε); // numeric derivative of Ω
+	const double κ = std::sqrt(4.0 * Ω(R) * Ω(R) + 2.0 * R * Ω(R) * dΩdR);  // sqrt yields nan if κ negative
+	return κ;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, double Rc, double Rd, double Sigma0) -> double
 {
 	const double x = R / Rd;
 	return Sigma0 * std::exp(-x - beta_profile * std::exp(-alpha_profile * x));
@@ -139,7 +150,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, do
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Rc, double Rd, double Sigma0, double Mc, double cs) -> double
 {
-	const double Sigma = surfaceDensityProfile(R, Rd, Sigma0);
+	const double Sigma = surfaceDensityProfile(R, Rc, Rd, Sigma0);
 	if (Sigma <= 0.0) {
 		return 0.0;
 	}
@@ -414,11 +425,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 
 	// Sigma0 via Simpson integration of Toomre Q condition, accurate to 10 figures for the default functions
 	auto integrand = [=](double R) -> double {
-		const auto Ω = [=](double R) -> double { return vcircAnalytic(R, 0.0, vc, Rc) / R; };
-		const double ε = 0.5e-5 * Rmax;
-		const double dΩdR = (Ω(R + ε) - Ω(R - ε)) / (2.0 * ε); // numeric derivative of Ω
-		const double kappa = std::sqrt(std::max(4.0 * Ω(R) * Ω(R) + 2.0 * R * Ω(R) * dΩdR, 0.0));
-		return kappa * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, Rd, 1.0));
+		return kappa(R, vc, Rc) * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, Rc, Rd, 1.0));
 	};
 	constexpr int N = 100000;
 	static_assert(N % 2 == 0);
