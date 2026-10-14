@@ -54,9 +54,6 @@ template <> struct quokka::EOS_Traits<MHDGalaxy> {
 	static constexpr double gamma = 1.0001;
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
-	static constexpr double T_cgm = 1.0e7;
-	static constexpr double cs_cgm = gcem::sqrt(gamma * C::k_B * T_cgm / mean_molecular_weight);
-	static constexpr double cs_disk = 7.0e5; // sound speed 7 km/s
 };
 
 template <> struct HydroSystem_Traits<MHDGalaxy> {
@@ -78,16 +75,20 @@ template <> struct Physics_Traits<MHDGalaxy> : DefaultPhysicsTraits {
 };
 
 template <> struct SimulationData<MHDGalaxy> {
-	amrex::Real Rc{};
-	amrex::Real Rd{};
-	amrex::Real Rmax{};
-	amrex::Real Rcutoff{};
-	amrex::Real Q_mean{};
-	amrex::Real Mc{};
-	amrex::Real vc{};
-	amrex::Real Sigma0{};
-	amrex::Real rho_cgm{};
-	amrex::Real rho_mid{};
+	amrex::Real Rc;
+	amrex::Real Rd;
+	amrex::Real Rmax;
+	amrex::Real Rcutoff;
+	amrex::Real Q_mean;
+	amrex::Real Mc = NAN;  // one will be set
+	amrex::Real vc = NAN;  // the other will be calculated
+	amrex::Real Sigma0;
+	amrex::Real rho_cgm;
+	amrex::Real rho_mid;
+	amrex::Real T_disk = NAN;   // one will be set
+	amrex::Real cs_disk = NAN;  // the other will be calculated
+	amrex::Real T_cgm = NAN;    // for both disk
+	amrex::Real cs_cgm = NAN;   // and for cgm
 
 	// 2D Cylindrical potential field variables, read from metadata file
 	std::size_t seed_nR{};
@@ -404,7 +405,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.get("Rd_kpc",      userData_.Rd);	  userData_.Rd      *= 1.0e3 * C::parsec;
 	pp.get("Rmax_kpc",    userData_.Rmax);	  userData_.Rmax    *= 1.0e3 * C::parsec;
 	pp.get("Rcutoff_kpc", userData_.Rcutoff); userData_.Rcutoff *= 1.0e3 * C::parsec;
-	pp.get("Mc", userData_.Mc);
+	pp.query("vc_kms",    userData_.vc);      userData_.vc      *= 1e5;
+	pp.query("cs_disk_kms",userData_.cs_disk);userData_.cs_disk *= 1e5;
+	pp.query("cs_cgm_kms",userData_.cs_cgm);  userData_.cs_cgm  *= 1e5;
+	pp.query("Mc", userData_.Mc);
+	pp.query("T_disk", userData_.T_disk);
+	pp.query("T_cgm", userData_.T_cgm);
 	pp.get("Q_mean", userData_.Q_mean);
 	pp.get("sn_jeans_J", userData_.sn_jeans_J);
 	pp.get("sn_momentum", userData_.sn_momentum);
@@ -413,11 +419,39 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.get("sn_cluster_momentum_exponent", userData_.sn_cluster_momentum_exponent);
 	// clang-format on
 
-	constexpr double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-	constexpr double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
+	constexpr double gamma = quokka::EOS_Traits<MHDGalaxy>::gamma;
+	constexpr double µ = quokka::EOS_Traits<MHDGalaxy>::mean_molecular_weight;
 
-	userData_.vc = userData_.Mc * cs_disk;
+	// set cs or T from either T or cs, to ensure both are present
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(userData_.T_disk) != !std::isnan(userData_.cs_disk),
+					 "Must set exactly one of mhd_galaxy.T_disk or mhd_galaxy.cs_disk");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(userData_.T_cgm) != !std::isnan(userData_.cs_cgm),
+					 "Must set exactly one of mhd_galaxy.T_cgm or mhd_galaxy.cs_cgm");
+
+	if (!std::isnan(userData_.T_disk)) {
+		userData_.cs_disk = std::sqrt(gamma * C::k_B * userData_.T_disk / µ);
+	} else {
+		userData_.T_disk = userData_.cs_disk * userData_.cs_disk * µ / (gamma * C::k_B);
+	}
+	if (!std::isnan(userData_.T_cgm)) {
+		userData_.cs_cgm = std::sqrt(gamma * C::k_B * userData_.T_cgm / µ);
+	} else {
+		userData_.T_cgm = userData_.cs_cgm * userData_.cs_cgm * µ / (gamma * C::k_B);
+	}
+
+	const double cs_disk = userData_.cs_disk;
+	const double cs_cgm = userData_.cs_cgm;
+
+	// set vc or Mc from either Mc or vc, to ensure both are present
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(userData_.vc) != !std::isnan(userData_.Mc),
+					 "Must set exactly one of mhd_galaxy.vc_kms or mhd_galaxy.Mc");
+	if (!std::isnan(userData_.vc)) {
+		userData_.vc = userData_.Mc * userData_.cs_disk;
+	} else {
+		userData_.Mc = userData_.vc / userData_.cs_disk;
+	}
 	const double vc = userData_.vc;
+
 	const double Rc = userData_.Rc;
 	const double Rd = userData_.Rd;
 	const double Rmax = userData_.Rmax;
