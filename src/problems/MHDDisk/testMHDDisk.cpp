@@ -618,8 +618,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 
 	amrex::Print() << "MHDGalaxy init complete\n"
 		       << "Mc=" << userData_.Mc << " Q=" << userData_.Q_mean << " Sigma0=" << userData_.Sigma0
-		       << " Seed=" << (userData_.seed_str.empty() ? std::string("<not found>") : userData_.seed_str) << "\n"
-		       << "sn_mass_per_event_msun=" << userData_.sn_mass_per_event_msun
+		       << " Seed=" << (userData_.seed_str.empty() ? std::string("<not found>") : userData_.seed_str)
+		       << "\nsn_mass_per_event_msun=" << userData_.sn_mass_per_event_msun
 		       << " sn_cluster_momentum_exponent=" << userData_.sn_cluster_momentum_exponent << "\n"
 		       << "M_solar=" << C::M_solar << "\n";
 }
@@ -738,6 +738,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double vrot = vcircAnalytic(R, 0.0, vc, Rc);
 		double vx = 0.0;
 		double vy = 0.0;
+		double vz = 0.0;
 		if (in_disk) {
 			vx = -vrot * y / R;
 			vy = vrot * x / R;
@@ -759,7 +760,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		}
 		vx += dvx_pert;
 		vy += dvy_pert;
-		const double vz = dvz_pert;
+		vz += dvz_pert;
 
 		const double pressure = rho * cs * cs;
 		const double Eint = pressure / (gamma - 1.0);
@@ -1045,7 +1046,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 	}
 }
 
-template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(const int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx = geom[lev].CellSizeArray();
@@ -1198,7 +1199,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				const double rho = s(i, j, k, HydroSystem<MHDGalaxy>::density_index);
 
 				const double cs = HydroSystem<MHDGalaxy>::ComputeIsothermalSoundSpeed(s, i, j, k, &fab_fc);
-				const double plasma_beta = HydroSystem<MHDGalaxy>::ComputePlasmaBeta(s, i, j, k, &fab_fc);
+				const double plasma_beta = HydroSystem<MHDGalaxy>::ComputePlasmaBeta(s, i, j, k, &fab_fc);  // returns inf when mhd off
 				const double beta_safe = amrex::max(plasma_beta, 1.0e-10);
 				const double cs_eff_sq = cs * cs * (1.0 + 0.74 / beta_safe);
 				const double rho_J = M_PI * cs_eff_sq / (C::Gconst * sn_jeans_J * sn_jeans_J * (dx_max * dx_max));
