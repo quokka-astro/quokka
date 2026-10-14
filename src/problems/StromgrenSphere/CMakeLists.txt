@@ -18,8 +18,10 @@ if(AMReX_SPACEDIM EQUAL 3)
     ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
                 ../../radiation/photochemistry.cpp ${${microphysics_network_name}_sources})
 
+  set(STROMGREN_C_HAT_DIVISOR 1 CACHE STRING "StromgrenSphere reduced speed of light: c_hat = c / divisor")
+
   # this will add #define PHOTOCHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX)
+  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX C_HAT_DIVISOR=${STROMGREN_C_HAT_DIVISOR})
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})

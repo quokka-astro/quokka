@@ -19,8 +19,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iomanip>
 #include <limits>
 #include <string>
+#include <tuple>
+#include <utility>
 
 #include "actual_eos_data.H"
 #include "burn_type.H"
@@ -30,7 +33,7 @@
 
 struct StromgrenSphere {};
 
-constexpr double c_hat = C::c_light / 1.0;
+constexpr double c_hat = C::c_light / static_cast<double>(C_HAT_DIVISOR);
 constexpr double sigma_star_coeff = 1.5 / 16.0;
 constexpr double r_trunc_coeff = 2.5;
 
@@ -70,31 +73,40 @@ void RadSystem<StromgrenSphere>::AddRadSource(array_t &radEnergy, array_t & /*re
 	amrex::Real Q = 1.0e49_rt;
 	pp.query("Q", Q);
 
-	amrex::ParmParse const pp2("amr");
-	int n = 16;
-	pp2.query("n_cell", n);
-
 	const amrex::Real sigma_star = sigma_star_coeff * (prob_hi[0] - prob_lo[0]);
 	const amrex::Real r_trunc = r_trunc_coeff * sigma_star;
 	const amrex::Real L_star = Q * RadSystem<StromgrenSphere>::GetChemBandQuanta(0) / 8.0_rt;
 	const amrex::Real x0 = 0.0_rt;
 	const amrex::Real y0 = 0.0_rt;
 	const amrex::Real z0 = 0.0_rt;
-	amrex::Real sum = 0.0_rt;
-	for (int i = 0; i < n; ++i) {
-		for (int j = 0; j < n; ++j) {
-			for (int k = 0; k < n; ++k) {
-				amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-				amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
-				amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
-				amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
-				if (r <= r_trunc) {
-					sum += std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) * dx[0] * dx[1] * dx[2] /
-					       (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
+	// the normalisation depends only on the geometry: an O(n^3) host loop per box per call is prohibitive at high resolution
+	static const amrex::Real sum_cached = [&]() {
+		amrex::ParmParse const pp2("amr");
+		int n = 16;
+		pp2.query("n_cell", n);
+		// Neumaier-compensated: a plain sum over ~1e5 cells is off by ~1e-13, which would show up as a photon conservation error
+		amrex::Real s = 0.0_rt;
+		amrex::Real comp = 0.0_rt;
+		for (int i = 0; i < n; ++i) {
+			for (int j = 0; j < n; ++j) {
+				for (int k = 0; k < n; ++k) {
+					amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+					amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+					amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
+					amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
+					if (r <= r_trunc) {
+						amrex::Real const term = std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) * dx[0] * dx[1] * dx[2] /
+									 (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
+						amrex::Real const t = s + term;
+						comp += (std::abs(s) >= std::abs(term)) ? (s - t) + term : (term - t) + s;
+						s = t;
+					}
 				}
 			}
 		}
-	}
+		return s + comp;
+	}();
+	const amrex::Real sum = sum_cached; // a local copy, so the device lambda captures it by value
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 		amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
@@ -178,6 +190,9 @@ template <> struct SimulationData<StromgrenSphere> {
 	amrex::Real r_analytical_last_t{};
 	amrex::Real r_analytical_last_R{};
 	std::ofstream output_file_;
+	amrex::Real N_gamma0{};
+	amrex::Real N_e0{};
+	std::ofstream photon_file_;
 };
 
 template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialConditions()
@@ -217,7 +232,28 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 		std::string const filename = "stromgren_sphere_radii.csv";
 		userData_.output_file_.open(filename);
 		userData_.output_file_ << "time,r16,r50,r84,r_analytical\n";
+		if (userData_.recombination_switch == 0) {
+			userData_.photon_file_.open("stromgren_sphere_photons.csv");
+			userData_.photon_file_ << std::setprecision(17) << "time,N_injected,N_inflight,N_absorbed,rel_err\n";
+		}
 	}
+}
+
+// Domain totals of the photons stored in the chemical band and of the free electrons
+auto photon_budget(QuokkaSimulation<StromgrenSphere> &sim) -> std::pair<amrex::Real, amrex::Real>
+{
+	const amrex::Real quanta = RadSystem<StromgrenSphere>::GetChemBandQuanta(0);
+	const amrex::Real N_gamma =
+	    sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
+							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept {
+		    return state(i, j, k, RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
+	    });
+	const amrex::Real N_e =
+	    sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
+							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept {
+		    return state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::e)) / spmasses[Species::e];
+	    });
+	return {N_gamma, N_e};
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StromgrenSphere>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -278,6 +314,14 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 {
 	if (userData_.recombination_switch == 0) {
+		auto const [N_gamma, N_e] = photon_budget(*this);
+		const amrex::Real N_injected = userData_.Q * tNew_[0] / 8.0_rt;
+		const amrex::Real N_inflight = N_gamma - userData_.N_gamma0;
+		const amrex::Real N_absorbed = N_e - userData_.N_e0;
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			userData_.photon_file_ << tNew_[0] << ',' << N_injected << ',' << N_inflight << ',' << N_absorbed << ','
+					       << (N_injected - (N_inflight + N_absorbed)) / N_injected << '\n';
+		}
 		return;
 	}
 	const int lev = 0;
@@ -471,25 +515,17 @@ auto problem_main() -> int
 
 	int status = 0;
 	if (sim.userData_.recombination_switch == 0) {
-		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
-		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-		const amrex::Real quanta = RadSystem<StromgrenSphere>::GetChemBandQuanta(0);
-		const amrex::Real n_photon_sum0 = sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
-		const amrex::Real n_e_sum0 =
-		    sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::e)) / spmasses[Species::e];
+		std::tie(sim.userData_.N_gamma0, sim.userData_.N_e0) = photon_budget(sim);
 
 		sim.evolve();
 
 		const amrex::Real error_tol = 1e-6;
-		const amrex::Real n_photon_sum = sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
-		const amrex::Real n_e_sum =
-		    sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::e)) / spmasses[Species::e];
+		auto const [n_photon_sum, n_e_sum] = photon_budget(sim);
 		amrex::Print() << "Final total number of photons: " << n_photon_sum << '\n';
 		amrex::Print() << "Final total number of electrons: " << n_e_sum << '\n';
-		const amrex::Real n_photon_added = sim.userData_.Q * sim.userData_.tend / 8.0_rt;
-		const amrex::Real n_photon_inflight = (n_photon_sum - n_photon_sum0) * cell_vol;
-		const amrex::Real n_electron_added = (n_e_sum - n_e_sum0) * cell_vol;
-		const amrex::Real photon_absorbed = n_electron_added;
+		const amrex::Real n_photon_added = sim.userData_.Q * sim.tNew_[0] / 8.0_rt;
+		const amrex::Real n_photon_inflight = n_photon_sum - sim.userData_.N_gamma0;
+		const amrex::Real photon_absorbed = n_e_sum - sim.userData_.N_e0;
 
 		amrex::Real const photon_err = std::abs((n_photon_added - (n_photon_inflight + photon_absorbed)) / n_photon_added);
 		if (photon_err > error_tol) {

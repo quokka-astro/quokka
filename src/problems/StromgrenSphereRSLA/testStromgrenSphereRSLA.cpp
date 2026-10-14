@@ -19,9 +19,13 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
+#include <algorithm>
 #include <cmath>
+#include <iomanip>
+#include <ios>
 #include <map>
 #include <string>
+#include <utility>
 
 #include "actual_eos_data.H"
 #include "burn_type.H"
@@ -31,7 +35,7 @@
 
 struct StromgrenSphere {};
 
-constexpr double c_hat = C::c_light / 100.0;
+constexpr double c_hat = C::c_light / static_cast<double>(C_HAT_DIVISOR);
 constexpr double sigma_star_coeff = 1.5 / 16.0;
 constexpr double r_trunc_coeff = 2.5;
 
@@ -58,30 +62,35 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 namespace
 {
 
-auto compute_effective_radius(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> amrex::Real
+// Sphere-equivalent radii (8x the octant) of the ionized volume, int (1 - x_HI) dV, and of the region with x_HI < 1/2.
+// The first exceeds the Stromgren radius by the partially ionized front width; the second tracks the front itself.
+auto compute_effective_radii(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> std::pair<amrex::Real, amrex::Real>
 {
-	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
-	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+	amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum> reduce_op;
+	amrex::ReduceData<amrex::Real, amrex::Real> reduce_data(reduce_op);
 	auto const state = state_mf.const_arrays();
 	const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-		const amrex::Real n_HI =
-		    state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
-		const amrex::Real n_HII =
-		    state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
-		const amrex::Real denom = n_HI + n_HII;
-		if (denom <= 0.0_rt) {
-			return 0.0_rt;
-		}
-		const amrex::Real x_HI = n_HI / denom;
-		return cell_volume * (1.0_rt - x_HI);
-	});
+	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data,
+		       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real> {
+			       const amrex::Real n_HI =
+				   state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+			       const amrex::Real n_HII = state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H_p)) /
+							 spmasses[Species::H_p];
+			       const amrex::Real denom = n_HI + n_HII;
+			       if (denom <= 0.0_rt) {
+				       return {0.0_rt, 0.0_rt};
+			       }
+			       const amrex::Real x_HI = n_HI / denom;
+			       return {cell_volume * (1.0_rt - x_HI), (x_HI < 0.5_rt) ? cell_volume : 0.0_rt};
+		       });
 
 	auto const &hv = reduce_data.value(reduce_op);
 	amrex::Real total_ionized_volume = amrex::get<0>(hv);
+	amrex::Real half_ionized_volume = amrex::get<1>(hv);
 	amrex::ParallelAllReduce::Sum(total_ionized_volume, amrex::ParallelContext::CommunicatorSub());
-	return std::cbrt((3.0_rt * 8.0_rt * total_ionized_volume) / (4.0_rt * M_PI));
+	amrex::ParallelAllReduce::Sum(half_ionized_volume, amrex::ParallelContext::CommunicatorSub());
+	return {std::cbrt((3.0_rt * 8.0_rt * total_ionized_volume) / (4.0_rt * M_PI)), std::cbrt((3.0_rt * 8.0_rt * half_ionized_volume) / (4.0_rt * M_PI))};
 }
 
 auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B, amrex::Real n_HI0, amrex::Real c_light, amrex::Real R0, amrex::Real r_s_est)
@@ -138,31 +147,40 @@ void RadSystem<StromgrenSphere>::AddRadSource(array_t &radEnergy, array_t & /*re
 	amrex::Real Q = 1.0e49_rt;
 	pp.query("Q", Q);
 
-	amrex::ParmParse const pp2("amr");
-	int n = 16;
-	pp2.query("n_cell", n);
-
 	const amrex::Real sigma_star = sigma_star_coeff * (prob_hi[0] - prob_lo[0]);
 	const amrex::Real r_trunc = r_trunc_coeff * sigma_star;
 	const amrex::Real L_star = Q * RadSystem<StromgrenSphere>::GetChemBandQuanta(0) / 8.0_rt;
 	const amrex::Real x0 = 0.0_rt;
 	const amrex::Real y0 = 0.0_rt;
 	const amrex::Real z0 = 0.0_rt;
-	amrex::Real sum = 0.0_rt;
-	for (int i = 0; i < n; ++i) {
-		for (int j = 0; j < n; ++j) {
-			for (int k = 0; k < n; ++k) {
-				amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-				amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
-				amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
-				amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
-				if (r <= r_trunc) {
-					sum += std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) * dx[0] * dx[1] * dx[2] /
-					       (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
+	// the normalisation depends only on the geometry: an O(n^3) host loop per box per call is prohibitive at high resolution
+	static const amrex::Real sum_cached = [&]() {
+		amrex::ParmParse const pp2("amr");
+		int n = 16;
+		pp2.query("n_cell", n);
+		// Neumaier-compensated: a plain sum over ~1e5 cells is off by ~1e-13, which would show up as a photon conservation error
+		amrex::Real s = 0.0_rt;
+		amrex::Real comp = 0.0_rt;
+		for (int i = 0; i < n; ++i) {
+			for (int j = 0; j < n; ++j) {
+				for (int k = 0; k < n; ++k) {
+					amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+					amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+					amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
+					amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
+					if (r <= r_trunc) {
+						amrex::Real const term = std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) * dx[0] * dx[1] * dx[2] /
+									 (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
+						amrex::Real const t = s + term;
+						comp += (std::abs(s) >= std::abs(term)) ? (s - t) + term : (term - t) + s;
+						s = t;
+					}
 				}
 			}
 		}
-	}
+		return s + comp;
+	}();
+	const amrex::Real sum = sum_cached; // a local copy, so the device lambda captures it by value
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 		amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
@@ -228,10 +246,18 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	network_init();
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
+	std::string restart_chkfile;
+	amrex::ParmParse const pp_global;
+	pp_global.query("restartfile", restart_chkfile);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::string const filename = "stromgren_sphere_radii.csv";
-		userData_.output_file_.open(filename);
-		userData_.output_file_ << "time,r_effective,r_analytical\n";
+		if (restart_chkfile.empty()) {
+			userData_.output_file_.open(filename);
+			userData_.output_file_ << "time,r_effective,r_analytical,r_half\n";
+		} else {
+			userData_.output_file_.open(filename, std::ios::app);
+		}
+		userData_.output_file_ << std::setprecision(17);
 	}
 }
 
@@ -294,7 +320,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 {
 	const int lev = 0;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-	const amrex::Real r_effective = compute_effective_radius(state_new_cc_[lev], dx);
+	auto const [r_effective, r_half] = compute_effective_radii(state_new_cc_[lev], dx);
 	userData_.r_effective_vec_.push_back(r_effective);
 	userData_.t_vec_.push_back(tNew_[lev]);
 
@@ -302,20 +328,27 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 	const amrex::Real alpha_B = 2.63e-13;
 	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_HI0 * n_HI0), 1.0_rt / 3.0_rt);
 
-	amrex::Real dt = tNew_[lev] - userData_.r_analytical_last_t;
-	if (dt < 0.0_rt) {
+	if (tNew_[lev] < userData_.r_analytical_last_t) {
 		userData_.r_analytical_last_t = 0.0_rt;
 		userData_.r_analytical_last_R = 0.0_rt;
-		dt = tNew_[lev];
 	}
 
-	const amrex::Real r_new = integrate_radius(dt, userData_.Q, alpha_B, n_HI0, C::c_light, userData_.r_analytical_last_R, r_s);
+	// After a restart the ODE starts again from t = 0: catch up over intervals doubling from one timestep, so each call
+	// stays resolved. Otherwise this is a single call over the step just taken.
+	const amrex::Real first_interval = (dt_[lev] > 0.0_rt) ? dt_[lev] : tNew_[lev];
+	amrex::Real r_new = userData_.r_analytical_last_R;
+	amrex::Real t_ode = userData_.r_analytical_last_t;
+	while (t_ode < tNew_[lev]) {
+		const amrex::Real t_next = std::min(tNew_[lev], std::max(2.0_rt * t_ode, first_interval));
+		r_new = integrate_radius(t_next - t_ode, userData_.Q, alpha_B, n_HI0, C::c_light, r_new, r_s);
+		t_ode = t_next;
+	}
 	userData_.r_analytical_last_t = tNew_[lev];
 	userData_.r_analytical_last_R = r_new;
 	userData_.r_analytical_vec_.push_back(r_new);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		userData_.output_file_ << tNew_[lev] << ',' << r_effective << ',' << r_new << '\n';
+		userData_.output_file_ << tNew_[lev] << ',' << r_effective << ',' << r_new << ',' << r_half << '\n';
 	}
 }
 
@@ -328,6 +361,14 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<StromgrenSphere> sim;
+
+	// preCalculateInitialConditions() (parameters, EOS, network, output file) only runs when initialising from scratch
+	std::string restart_chkfile;
+	amrex::ParmParse const pp;
+	pp.query("restartfile", restart_chkfile);
+	if (!restart_chkfile.empty()) {
+		sim.preCalculateInitialConditions();
+	}
 
 	// initialize
 	sim.setInitialConditions();
