@@ -1,0 +1,45 @@
+--- a/extern/turbulence/TurbGen.h
++++ b/extern/turbulence/TurbGen.h
+@@ -552 +552,24 @@
+-    if ((ampl_auto_adjust == 1) && (v_turb[X] > 0)) {
++    // Experimental controller harness; removed before publication.
++    if (ampl_auto_adjust == 1 && std::getenv("PID_MODE") != nullptr) {
++      static double integral = 0.0, previous = 0.0, slope = 0.0;
++      static double initial[3] = {ampl_factor[0], ampl_factor[1], ampl_factor[2]};
++      static double last_time = -1.0;
++      auto param = [](const char *name, double fallback) { const char *v = std::getenv(name); return v ? std::atof(v) : fallback; };
++      const double h = last_time >= 0 ? (time-last_time)/t_decay : 0.0;
++      double measurement=0.0;
++      for (int d=0;d<ncmp;d++) measurement += v_turb[d]*v_turb[d];
++      measurement=std::sqrt(measurement)/velocity;
++      const double error=1.0-measurement;
++      if(h>0) {
++        const double alpha=h/(param("PID_FILTER",0.1)+h);
++        slope += alpha*((measurement-previous)/h-slope);
++      }
++      const double kp=param("PID_KP",1.0), ki=param("PID_KI",0.0), kd=param("PID_KD",0.0);
++      const double limit=param("PID_MAX",2.0), base=param("PID_BASE",1.0);
++      const double trial=integral+ki*h*error;
++      const double raw=base+kp*error+trial-kd*slope;
++      if ((raw>=0 && raw<=limit) || (raw>limit && error<0) || (raw<0 && error>0)) integral=trial;
++      const double gain=std::max(0.0,std::min(limit,base+kp*error+integral-kd*slope));
++      for (int d=0;d<ncmp;d++) ampl_factor[d]=initial[d]*gain;
++      previous=measurement;last_time=time;
++    } else if ((ampl_auto_adjust == 1) && (v_turb[X] > 0)) {
+--- a/src/problems/Turbulence/testTurbulence.cpp
++++ b/src/problems/Turbulence/testTurbulence.cpp
+@@ -15,0 +16,2 @@
++#include <fstream>
++#include <iomanip>
+@@ -50,0 +53,5 @@
++	amrex::Real initial_dispersion = 0.0;
++	amrex::ParmParse("problem").query("initial_vdisp", initial_dispersion);
++	const auto dx = grid_elem.dx_;
++	const auto lo = grid_elem.prob_lo_;
++	const auto hi = grid_elem.prob_hi_;
+@@ -53 +60 @@
+-		state_cc(i, j, k, HydroSystem<TurbulentBox>::x1Momentum_index) = 0.0;
++		state_cc(i, j, k, HydroSystem<TurbulentBox>::x1Momentum_index) = initial_dispersion * std::sqrt(2.0) * std::sin(2.0 * M_PI * ((j+0.5)*dx[1])/(hi[1]-lo[1]));
+@@ -100,0 +108,2 @@
++		static std::ofstream diagnostics("dispersion.csv");
++		diagnostics << std::setprecision(17) << tNew_[0] << "," << disp3d << "\n";
