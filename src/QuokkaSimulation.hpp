@@ -3255,7 +3255,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 	// Chemical (ionizing) bands are the last nGroups - nGroupsThermal groups. With photochemistry enabled, each
 	// substep first runs RK2-SSP (transport + emission) on the chemical bands, then runs photochemistry
-	// on them, and finally runs the IMEX PD-ARS stages on the thermal groups only. This keeps the stiff photochemistry after the
+	// on them (which also yields the chemical emission j_g into the thermal groups, injected as a source by the IMEX stages),
+	// and finally runs the IMEX PD-ARS stages on the thermal groups only. This keeps the stiff photochemistry after the
 	// non-stiff transport of the chemical bands, and nothing is carried over between substeps. Otherwise the IMEX
 	// PD-ARS stages cover all groups.
 	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
@@ -3304,7 +3305,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		// hook AddRadSource. Both implicit stages of the IMEX PD-ARS tableau have abscissa c = 1 (rows 2 and 3 of Aim each
 		// sum to 1), so every implicit source term is evaluated at the end of the step, for the thermal groups and the
 		// chemical bands alike. The sources then depend only on that time (particles do not move during the radiation
-		// subcycle), so every stage below reuses them.
+		// subcycle), so every stage below reuses them. With photochemistry, step 2 adds the chemical emission j_g into
+		// the thermal groups (averaged over the substep) to the same buffer, so the thermal IMEX stages inject it too.
 		radEnergySource.setVal(0.0);
 		radFluxSource.setVal(0.0);
 		userEnergySource.setVal(0.0);
@@ -3360,8 +3362,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				fc_ptrs[2] = &state_new_fc_[lev][2];
 #endif
 			}
+			// Also adds the thermal-band chemical emission j_g to radEnergySource, which step 3 consumes.
 			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
-										 min_density_allowed, dustHeatingSource);
+										 min_density_allowed, dustHeatingSource, radEnergySource);
 		}
 #endif
 
