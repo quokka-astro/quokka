@@ -92,7 +92,7 @@ template <> struct ISM_Traits<CoolingProblemMG> {
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblemMG>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/,
-											       amrex::Real const /*num_density*/) -> amrex::Real
+                                                                                               amrex::Real const /*num_density*/) -> amrex::Real
 {
 	return PE_rate / Erad_FUV;
 }
@@ -125,7 +125,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblemMG>::DefineCosmic
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<CoolingProblemMG>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-								  const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+                                                                  const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -291,9 +291,9 @@ auto problem_main() -> int
 	std::vector<double> Tgas_interp(t.size());
 	std::vector<double> Erad_line_interp(t.size());
 	interpolate_arrays(t.data(), Tgas_interp.data(), static_cast<int>(t.size()), t_exact_vec.data(), Tgas_exact_vec.data(),
-			   static_cast<int>(t_exact_vec.size()));
+	                   static_cast<int>(t_exact_vec.size()));
 	interpolate_arrays(t.data(), Erad_line_interp.data(), static_cast<int>(t.size()), t_exact_vec.data(), Erad_line_exact_vec.data(),
-			   static_cast<int>(t_exact_vec.size()));
+	                   static_cast<int>(t_exact_vec.size()));
 
 	// compute error norm
 	double err_norm = 0.;

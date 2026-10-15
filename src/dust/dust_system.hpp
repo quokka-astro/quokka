@@ -29,7 +29,7 @@ template <typename problem_t> class DustSystem
 		x3Momentum_index,
 		energy_index,
 		internalEnergy_index, // auxiliary internal energy (rho * e)
-		scalar0_index	      // first passive scalar (only present if nscalars > 0!)
+		scalar0_index         // first passive scalar (only present if nscalars > 0!)
 	};
 
 	enum primVarIndex { // NOLINT
@@ -38,7 +38,7 @@ template <typename problem_t> class DustSystem
 		x2Velocity_index,
 		x3Velocity_index,
 		pressure_index,
-		primEint_index,	   // auxiliary internal energy (rho * e)
+		primEint_index,    // auxiliary internal energy (rho * e)
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
 	};
 
@@ -55,14 +55,14 @@ template <typename problem_t> class DustSystem
 	// compute dust fluxes for all dust groups
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static void ComputeDustFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux, quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
-						       quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k);
+	                                               quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k);
 };
 
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeDustFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux,
-							       quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
-							       quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k)
+                                                               quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
+                                                               quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k)
 {
 	for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
 		// gather left- and right- density for dust

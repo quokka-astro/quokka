@@ -48,26 +48,26 @@ constexpr std::array<char const *, 3> slice_tags = {"xmax_slice", "ymin_slice", 
 constexpr std::array<double, 3> stage_times_over_ts0_default = {5.8, 7.5, 17.0};
 constexpr double history_dt_over_ts0_default = 0.1;
 
-double g_history_dt_over_ts0 = history_dt_over_ts0_default;		     // NOLINT
-double g_history_dt_code = history_dt_over_ts0_default;			     // NOLINT
-bool g_write_csv = true;						     // NOLINT
+double g_history_dt_over_ts0 = history_dt_over_ts0_default;                  // NOLINT
+double g_history_dt_code = history_dt_over_ts0_default;                      // NOLINT
+bool g_write_csv = true;                                                     // NOLINT
 std::array<double, 3> g_stage_times_over_ts0 = stage_times_over_ts0_default; // NOLINT
-std::array<double, 3> g_stage_target_times = {0.0, 0.0, 0.0};		     // NOLINT
-double g_equilibrium_ts = 0.0;						     // NOLINT
+std::array<double, 3> g_stage_target_times = {0.0, 0.0, 0.0};                // NOLINT
+double g_equilibrium_ts = 0.0;                                               // NOLINT
 
-AMREX_GPU_MANAGED double g_grain_radius = grain_radius_default;	      // NOLINT
+AMREX_GPU_MANAGED double g_grain_radius = grain_radius_default;       // NOLINT
 AMREX_GPU_MANAGED double g_grain_density = grain_density_default;     // NOLINT
 AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_default; // NOLINT
-AMREX_GPU_MANAGED int g_noise_seed = noise_seed_default;	      // NOLINT
-AMREX_GPU_MANAGED double g_Bx0 = 0.0;				      // NOLINT
-AMREX_GPU_MANAGED double g_By0 = 0.0;				      // NOLINT
-AMREX_GPU_MANAGED double g_Bz0 = 1.0;				      // NOLINT
-AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;			      // NOLINT
-AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;			      // NOLINT
-AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;			      // NOLINT
-AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;			      // NOLINT
-AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;			      // NOLINT
-AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;			      // NOLINT
+AMREX_GPU_MANAGED int g_noise_seed = noise_seed_default;              // NOLINT
+AMREX_GPU_MANAGED double g_Bx0 = 0.0;                                 // NOLINT
+AMREX_GPU_MANAGED double g_By0 = 0.0;                                 // NOLINT
+AMREX_GPU_MANAGED double g_Bz0 = 1.0;                                 // NOLINT
+AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;                             // NOLINT
+AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;                             // NOLINT
+AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;                             // NOLINT
+AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;                            // NOLINT
+AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;                            // NOLINT
+AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;                            // NOLINT
 
 struct EquilibriumState {
 	Vec3 drift_{};
@@ -121,7 +121,7 @@ struct DustMagnetizedRDIHistory {
 	std::vector<double> sigma_bmag_;
 	std::array<bool, 3> stage_written_ = {false, false, false};
 	std::array<double, 3> stage_times_ = {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(),
-					      std::numeric_limits<double>::quiet_NaN()};
+	                                      std::numeric_limits<double>::quiet_NaN()};
 	std::array<std::string, 3> stage_plotfiles_;
 };
 
@@ -225,23 +225,23 @@ void loadProblemParameters()
 	amrex::Vector<double> stage_times_over_ts0;
 	if (pp.queryarr("stage_times_over_ts0", stage_times_over_ts0) != 0) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stage_times_over_ts0.size() == static_cast<amrex::Long>(g_stage_times_over_ts0.size()),
-						 "problem.stage_times_over_ts0 must contain exactly 3 values.");
+		                                 "problem.stage_times_over_ts0 must contain exactly 3 values.");
 		for (std::size_t i = 0; i < g_stage_times_over_ts0.size(); ++i) {
 			g_stage_times_over_ts0[i] = stage_times_over_ts0[i];
 		}
 	}
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(g_history_dt_over_ts0) && g_history_dt_over_ts0 > 0.0,
-					 "problem.history_dt_over_ts0 must be finite and positive.");
+	                                 "problem.history_dt_over_ts0 must be finite and positive.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(g_noise_amplitude) && g_noise_amplitude >= 0.0,
-					 "problem.noise_amplitude must be finite and non-negative.");
+	                                 "problem.noise_amplitude must be finite and non-negative.");
 	for (double const stage_time : g_stage_times_over_ts0) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(stage_time) && stage_time > 0.0,
-						 "problem.stage_times_over_ts0 values must all be finite and positive.");
+		                                 "problem.stage_times_over_ts0 values must all be finite and positive.");
 	}
 	for (std::size_t i = 1; i < g_stage_times_over_ts0.size(); ++i) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(g_stage_times_over_ts0[i] > g_stage_times_over_ts0[i - 1],
-						 "problem.stage_times_over_ts0 values must be strictly increasing.");
+		                                 "problem.stage_times_over_ts0 values must be strictly increasing.");
 	}
 }
 
@@ -300,15 +300,15 @@ auto computeStd(double sum, double sum_sq, double count) -> double
 template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t> &sim) -> DiagnosticsRecord
 {
 	amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
-			 amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
-			 amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
-			 amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
-			 amrex::ReduceOpSum>
+	                 amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
+	                 amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
+	                 amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
+	                 amrex::ReduceOpSum>
 	    reduce_op;
 	using ReduceDataType =
 	    amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
-			      amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
-			      amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real>;
+	                      amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
+	                      amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real>;
 	ReduceDataType reduce_data(reduce_op);
 
 	auto &state_mf = sim.state_new_cc_[0];
@@ -323,9 +323,9 @@ template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t
 		reduce_op.eval(
 		    box, reduce_data,
 		    [=] AMREX_GPU_DEVICE(int i, int j, int k)
-			-> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
-					   amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
-					   amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+		        -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
+			                   amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
+			                   amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
 			    amrex::Real const rho_g = state(i, j, k, HydroSystem<problem_t>::density_index);
 			    amrex::Real const rho_d = state(i, j, k, HydroSystem<problem_t>::dustDensity_index);
 			    amrex::Real const vx_g = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho_g;
@@ -342,30 +342,30 @@ template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t
 			    amrex::Real const log_rho_d = std::log(rho_d);
 
 			    return {1.0_rt,
-				    log_rho_g,
-				    log_rho_g * log_rho_g,
-				    log_rho_d,
-				    log_rho_d * log_rho_d,
-				    vx_g,
-				    vx_g * vx_g,
-				    vy_g,
-				    vy_g * vy_g,
-				    vz_g,
-				    vz_g * vz_g,
-				    vx_d,
-				    vx_d * vx_d,
-				    vy_d,
-				    vy_d * vy_d,
-				    vz_d,
-				    vz_d * vz_d,
-				    bx,
-				    bx * bx,
-				    by,
-				    by * by,
-				    bz,
-				    bz * bz,
-				    bmag,
-				    bmag * bmag};
+			            log_rho_g,
+			            log_rho_g * log_rho_g,
+			            log_rho_d,
+			            log_rho_d * log_rho_d,
+			            vx_g,
+			            vx_g * vx_g,
+			            vy_g,
+			            vy_g * vy_g,
+			            vz_g,
+			            vz_g * vz_g,
+			            vx_d,
+			            vx_d * vx_d,
+			            vy_d,
+			            vy_d * vy_d,
+			            vz_d,
+			            vz_d * vz_d,
+			            bx,
+			            bx * bx,
+			            by,
+			            by * by,
+			            bz,
+			            bz * bz,
+			            bmag,
+			            bmag * bmag};
 		    });
 	}
 
@@ -374,7 +374,7 @@ template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t
 
 	amrex::GpuArray<amrex::Real, 25> reduced = {
 	    count,   sum_log_rho_g, sum_log_rho_g2, sum_log_rho_d, sum_log_rho_d2, sum_vgx, sum_vgx2, sum_vgy, sum_vgy2, sum_vgz, sum_vgz2, sum_vdx,  sum_vdx2,
-	    sum_vdy, sum_vdy2,	    sum_vdz,	    sum_vdz2,	   sum_bx,	   sum_bx2, sum_by,   sum_by2, sum_bz,	 sum_bz2, sum_bmag, sum_bmag2};
+	    sum_vdy, sum_vdy2,      sum_vdz,        sum_vdz2,      sum_bx,         sum_bx2, sum_by,   sum_by2, sum_bz,   sum_bz2, sum_bmag, sum_bmag2};
 	amrex::ParallelDescriptor::ReduceRealSum(reduced.data(), 25);
 
 	DiagnosticsRecord record;
@@ -393,9 +393,9 @@ template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t
 	record.sigma_bmag_ = computeStd(reduced[23], reduced[24], reduced[0]);
 
 	record.finite_ = std::isfinite(record.sigma_log_rho_g_) && std::isfinite(record.sigma_log_rho_d_) && std::isfinite(record.sigma_vgx_) &&
-			 std::isfinite(record.sigma_vgy_) && std::isfinite(record.sigma_vgz_) && std::isfinite(record.sigma_vdx_) &&
-			 std::isfinite(record.sigma_vdy_) && std::isfinite(record.sigma_vdz_) && std::isfinite(record.sigma_bx_) &&
-			 std::isfinite(record.sigma_by_) && std::isfinite(record.sigma_bz_) && std::isfinite(record.sigma_bmag_);
+	                 std::isfinite(record.sigma_vgy_) && std::isfinite(record.sigma_vgz_) && std::isfinite(record.sigma_vdx_) &&
+	                 std::isfinite(record.sigma_vdy_) && std::isfinite(record.sigma_vdz_) && std::isfinite(record.sigma_bx_) &&
+	                 std::isfinite(record.sigma_by_) && std::isfinite(record.sigma_bz_) && std::isfinite(record.sigma_bmag_);
 	return record;
 }
 
@@ -587,7 +587,7 @@ template <typename problem_t> auto extractOuterSlice(QuokkaSimulation<problem_t>
 	amrex::Gpu::HostVector<amrex::Real> magnetic_perturbation_magnitude(npts);
 	amrex::Gpu::HostVector<amrex::Real> dust_density_ratio(npts);
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, magnetic_perturbation_magnitude_d.begin(), magnetic_perturbation_magnitude_d.end(),
-			 magnetic_perturbation_magnitude.begin());
+	                 magnetic_perturbation_magnitude.begin());
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dust_density_ratio_d.begin(), dust_density_ratio_d.end(), dust_density_ratio.begin());
 	amrex::ParallelDescriptor::ReduceRealSum(magnetic_perturbation_magnitude.data(), npts);
 	amrex::ParallelDescriptor::ReduceRealSum(dust_density_ratio.data(), npts);
@@ -638,7 +638,7 @@ template <typename problem_t> void captureStage(QuokkaSimulation<problem_t> &sim
 	sim.userData_.stage_times_[stage_index] = time;
 	sim.userData_.stage_plotfiles_[stage_index] = plotfile;
 	amrex::Print() << std::format("Captured DustMagnetizedRDI stage '{}' at t = {:.6f} = {:.3f} t_s^0\n", stage_labels[stage_index], time,
-				      time / std::max(g_equilibrium_ts, tiny_number));
+	                              time / std::max(g_equilibrium_ts, tiny_number));
 }
 
 template <typename problem_t> void recordHistory(QuokkaSimulation<problem_t> &sim, DiagnosticsRecord const &diagnostics, bool force = false)
@@ -702,7 +702,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeReciprocalStop
 	amrex::GpuArray<amrex::Real, nDustGroups_> const grain_radius = {g_grain_radius};
 	amrex::GpuArray<amrex::Real, nDustGroups_> const grain_density = {g_grain_density};
 	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, grain_radius, grain_density,
-						 true);
+	                                         true);
 }
 
 template <>
@@ -871,7 +871,7 @@ auto problem_main() -> int
 
 	auto BCs_cc = quokka::BC<DustMagnetizedRDI>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 	auto BCs_fc = quokka::BC_fc<DustMagnetizedRDI>(quokka::BCType::mathematicalBndryTypes::periodic, quokka::BCType::mathematicalBndryTypes::periodic,
-						       quokka::BCType::mathematicalBndryTypes::periodic);
+	                                               quokka::BCType::mathematicalBndryTypes::periodic);
 	QuokkaSimulation<DustMagnetizedRDI> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 2;
@@ -886,9 +886,9 @@ auto problem_main() -> int
 	for (int i = 0; i < 3; ++i) {
 		if (!sim.userData_.stage_written_[i]) {
 			amrex::Print() << std::format("Warning: DustMagnetizedRDI stage '{}' was not reached: target t = {:.6f} ({:.3f} t_s^0), final t = "
-						      "{:.6f} ({:.3f} t_s^0). No stage output was written.\n",
-						      stage_labels[i], g_stage_target_times[i], g_stage_times_over_ts0[i], final_diagnostics.time_,
-						      final_diagnostics.time_ / equilibrium.stop_time_);
+			                              "{:.6f} ({:.3f} t_s^0). No stage output was written.\n",
+			                              stage_labels[i], g_stage_target_times[i], g_stage_times_over_ts0[i], final_diagnostics.time_,
+			                              final_diagnostics.time_ / equilibrium.stop_time_);
 		}
 	}
 

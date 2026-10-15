@@ -117,7 +117,7 @@ auto problem_main() -> int
 	constexpr amrex::Real tol = 1.0e-12;
 	if (max_diff > tol * delta || energy_rel_diff > tol) {
 		amrex::Print() << "ISSUE #2210 REPRODUCED: RemakeLevel discarded the level's existing fine mhd "
-				  "face field instead of preserving it across the remake.\n";
+		                  "face field instead of preserving it across the remake.\n";
 		return 1;
 	}
 	amrex::Print() << "Test passed: fine mhd face field preserved across RemakeLevel.\n";

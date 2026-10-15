@@ -121,6 +121,6 @@ Standard: c++17
 StatementMacros:
   - Q_UNUSED
   - QT_REQUIRE_VERSION
-UseTab:          Always
+UseTab: ForIndentation
 ...
 

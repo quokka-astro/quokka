@@ -32,10 +32,10 @@ constexpr bool simulate_full_box = false;
 
 constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light;
-constexpr double a0 = 2.0e5;	   // ('reference' sound speed) [cm s^-1]
+constexpr double a0 = 2.0e5;       // ('reference' sound speed) [cm s^-1]
 constexpr double chat = 860. * a0; // cm s^-1
-constexpr double k_B = C::k_B;	   // erg K^-1
-constexpr double m_H = C::m_u;	   // atomic mass unit
+constexpr double k_B = C::k_B;     // erg K^-1
+constexpr double m_H = C::m_u;     // atomic mass unit
 constexpr double gamma_gas = 5. / 3.;
 
 template <> struct quokka::EOS_Traits<ShellProblem> {
@@ -59,27 +59,27 @@ template <> struct Physics_Traits<ShellProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_radiation_enabled = true;
 };
 
-constexpr amrex::Real Msun = C::M_solar;	// g
+constexpr amrex::Real Msun = C::M_solar;        // g
 constexpr amrex::Real parsec_in_cm = C::parsec; // cm
 
-constexpr amrex::Real specific_luminosity = 2000.;			   // erg s^-1 g^-1
-constexpr amrex::Real GMC_mass = 1.0e6 * Msun;				   // g
-constexpr amrex::Real epsilon = 0.5;					   // dimensionless
-constexpr amrex::Real M_shell = (1 - epsilon) * GMC_mass;		   // g
+constexpr amrex::Real specific_luminosity = 2000.;                         // erg s^-1 g^-1
+constexpr amrex::Real GMC_mass = 1.0e6 * Msun;                             // g
+constexpr amrex::Real epsilon = 0.5;                                       // dimensionless
+constexpr amrex::Real M_shell = (1 - epsilon) * GMC_mass;                  // g
 constexpr amrex::Real L_star = (epsilon * GMC_mass) * specific_luminosity; // erg s^-1
 
 constexpr amrex::Real r_0 = 5.0 * parsec_in_cm; // cm
-constexpr amrex::Real sigma_star = 0.3 * r_0;	// cm
-constexpr amrex::Real H_shell = 0.3 * r_0;	// cm
-constexpr amrex::Real kappa0 = 20.0;		// specific opacity [cm^2 g^-1]
+constexpr amrex::Real sigma_star = 0.3 * r_0;   // cm
+constexpr amrex::Real H_shell = 0.3 * r_0;      // cm
+constexpr amrex::Real kappa0 = 20.0;            // specific opacity [cm^2 g^-1]
 
 constexpr amrex::Real rho_0 = M_shell / ((4. / 3.) * M_PI * r_0 * r_0 * r_0); // g cm^-3
 constexpr amrex::Real c_v = k_B / ((2.2 * m_H) * (gamma_gas - 1.0));
 
 template <>
 void RadSystem<ShellProblem>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	// point-like radiation source
 
@@ -246,7 +246,7 @@ template <> void QuokkaSimulation<ShellProblem>::refineGrid(int lev, amrex::TagB
 {
 	// tag cells for refinement
 
-	const amrex::Real eta_threshold = 0.1;	    // gradient refinement threshold
+	const amrex::Real eta_threshold = 0.1;      // gradient refinement threshold
 	const amrex::Real rho_min = 1.0e-2 * rho_0; // minimum density for refinement
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {

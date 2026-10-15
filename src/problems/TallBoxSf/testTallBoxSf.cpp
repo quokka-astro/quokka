@@ -31,8 +31,8 @@ template <> struct SimulationData<TheProblem> {
 	Real initial_scalar_density = NAN; // scalar density in cgs units
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
-	std::string stars_file;	     // default: no stars
-	std::string IC_file;	     // Initial disk vertical structure
+	std::string stars_file;      // default: no stars
+	std::string IC_file;         // Initial disk vertical structure
 
 	// Initial conditions table: z -> (g_1, g_ext, phi_tot)
 	quokka::DataTable<1, 3, quokka::OutOfBounds::clamp> ic_table;
@@ -214,7 +214,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 template <>
 void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
-						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+                                                     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	const int ncomp = ncomp_in;
 	auto const &output = mf.arrays();
@@ -467,9 +467,9 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 // Diode BC: allows outflow, prevents inflow by reflecting the z-momentum
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-												const Real /*time*/, const amrex::BCRec * /*bcr*/,
-												int /*bcomp*/, int /*orig_comp*/)
+                                                                                                int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+                                                                                                const Real /*time*/, const amrex::BCRec * /*bcr*/,
+                                                                                                int /*bcomp*/, int /*orig_comp*/)
 {
 	// Apply diode boundary conditions in z-direction (direction 2)
 	setDiodeBCLo<2>(iv, consVar, geom);
@@ -506,7 +506,7 @@ auto problem_main() -> int
 	AMREX_ALWAYS_ASSERT(!std::isnan(scalar_yield_per_SN));
 	const Real SNR_volume = std::pow(128.0 * C::parsec, 3);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_yield_per_SN > sim.userData_.initial_scalar_density * SNR_volume,
-					 "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
+	                                 "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
 
 	// preCalculate must be explicitly called here to ensure
 	// ic_table is initialized even when restarting from checkpoint

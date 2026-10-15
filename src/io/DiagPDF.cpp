@@ -44,7 +44,7 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 			m_highBnd[n] = std::max(range[0], range[1]);
 			if (m_useLogSpacedBins[n] != 0) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE((m_lowBnd[n] > 0) && (m_highBnd[n] > 0),
-								 "For log-spaced bins, histogram bounds must be positive!");
+				                                 "For log-spaced bins, histogram bounds must be positive!");
 			}
 			m_useFieldMinMax[n] = false;
 		} else {
@@ -66,7 +66,7 @@ void DiagPDF::addVars(amrex::Vector<std::string> &a_varList)
 }
 
 void DiagPDF::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
-		      const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames)
+                      const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames)
 {
 	if (first_time) {
 		DiagBase::prepare(a_nlevels, a_geoms, a_grids, a_dmap, a_varNames);
@@ -152,9 +152,9 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 
 		// write cycle and simulation time
 		pdfFile << "# " << std::setw(width) << "time:"
-			<< " " << std::setw(width) << std::setprecision(prec) << std::scientific << a_time << "\n";
+		        << " " << std::setw(width) << std::setprecision(prec) << std::scientific << a_time << "\n";
 		pdfFile << "# " << std::setw(width) << "cycle:"
-			<< " " << std::setw(width) << a_nstep << "\n";
+		        << " " << std::setw(width) << a_nstep << "\n";
 
 		// write variable names
 		pdfFile << "# " << std::setw(width) << "variables:";
@@ -173,7 +173,7 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 		// write column names for variables
 		for (int n = 0; n < nvars; ++n) {
 			pdfFile << std::setw(widths[n][0]) << m_varNames[n] + "_idx" << " " << std::setw(widths[n][0]) << m_varNames[n] + "_min" << " "
-				<< std::setw(widths[n][1]) << m_varNames[n] + "_max";
+			        << std::setw(widths[n][1]) << m_varNames[n] + "_max";
 		}
 		// write out column name for histogram value: "mass_sum", "volume_sum", or "cell_counts_sum"
 		pdfFile << " " << std::setw(width) << m_weightType + "_sum" << "\n";
@@ -216,7 +216,7 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 			// write out bin edges
 			for (int n = 0; n < nvars; ++n) {
 				pdfFile << std::setw(width) << idxVec[n] << " " << std::setw(widths[n][0]) << std::setprecision(prec) << std::scientific
-					<< bin_min[n] << " " << std::setw(widths[n][1]) << std::setprecision(prec) << std::scientific << bin_max[n] << " ";
+				        << bin_min[n] << " " << std::setw(widths[n][1]) << std::setprecision(prec) << std::scientific << bin_max[n] << " ";
 			}
 
 			// write histogram value (i.e., un-normalized probability *mass* function)

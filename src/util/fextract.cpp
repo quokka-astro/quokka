@@ -116,8 +116,8 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 			const int local_len = bx.length(idir);
 			amrex::LoopOnCpu(bx, [problo, dx, idir, offset, start_dir, local_len, &pos](int i, int j, int k) {
 				Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i + 0.5) * dx[0],
-									      problo[1] + static_cast<Real>(j + 0.5) * dx[1],
-									      problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
+				                                              problo[1] + static_cast<Real>(j + 0.5) * dx[1],
+				                                              problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
 				int idx = offset;
 				if (idir == 0) {
 					idx += i - start_dir;

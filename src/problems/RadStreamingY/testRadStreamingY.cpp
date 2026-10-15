@@ -23,8 +23,8 @@ struct StreamingProblem {};
 
 constexpr double initial_Erad = 1.0e-5;
 constexpr double initial_Egas = 1.0e-5;
-constexpr double c = 1.0;	   // speed of light
-constexpr double chat = 0.3;	   // reduced speed of light
+constexpr double c = 1.0;          // speed of light
+constexpr double chat = 0.3;       // reduced speed of light
 constexpr double kappa0 = 1.0e-10; // opacity
 constexpr double rho = 1.0;
 
@@ -87,8 +87,8 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+                                                             int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+                                                             const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<StreamingProblem>::nvarTotal_cc;

@@ -49,13 +49,13 @@ template <> struct Physics_Traits<MHDFCQuantities> : DefaultPhysicsTraits {
 	static constexpr bool is_mhd_enabled = true;
 };
 
-constexpr double rho0 = 1.0;						// background density
+constexpr double rho0 = 1.0;                                            // background density
 constexpr double P0 = 1.0 / quokka::EOS_Traits<MHDFCQuantities>::gamma; // background pressure
-constexpr double v0 = 0.;						// background velocity
-constexpr double amp = 1.0e-6;						// perturbation amplitude
+constexpr double v0 = 0.;                                               // background velocity
+constexpr double amp = 1.0e-6;                                          // perturbation amplitude
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+                                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const amrex::Real x_L = prob_lo[0] + (i + static_cast<amrex::Real>(0.0)) * dx[0];
 	const amrex::Real x_R = prob_lo[0] + (i + static_cast<amrex::Real>(1.0)) * dx[0];
@@ -128,7 +128,7 @@ template <> void QuokkaSimulation<MHDFCQuantities>::setInitialConditionsOnGridFa
 		});
 	} else if (dir == quokka::direction::z) {
 		amrex::ParallelFor(indexRange,
-				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<MHDFCQuantities>::bfield_index) = 0.0; });
+		                   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<MHDFCQuantities>::bfield_index) = 0.0; });
 	}
 }
 
@@ -187,20 +187,20 @@ void checkEnforceLimitsPreservesMagneticEnergy()
 	// this should raise the temperature from temp_cold to temp_floor,
 	// while leaving the magnetic energy unchanged
 	HydroSystem<MHDFCQuantities>::EnforceLimits(0.0, 0.0, temp_floor, state_cc, state_fc, geom,
-						    [] AMREX_GPU_DEVICE(amrex::Real /*x*/, amrex::Real /*y*/, amrex::Real /*z*/,
-									amrex::Real base_density_floor) noexcept -> amrex::Real { return base_density_floor; });
+	                                            [] AMREX_GPU_DEVICE(amrex::Real /*x*/, amrex::Real /*y*/, amrex::Real /*z*/,
+	                                                                amrex::Real base_density_floor) noexcept -> amrex::Real { return base_density_floor; });
 	amrex::Gpu::streamSynchronizeAll();
 
 	amrex::Real const expected_Etot = Eint_floor + Emag;
 	amrex::Real const actual_Etot = state_cc.min(HydroSystem<MHDFCQuantities>::energy_index);
 	amrex::Real const Etot_rel_error = std::abs(actual_Etot - expected_Etot) / std::max(std::abs(expected_Etot), 1.0);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Etot_rel_error <= 1000.0 * std::numeric_limits<amrex::Real>::epsilon(),
-					 std::format("MHD temperature floor total energy mismatch: got {}, expected {}", actual_Etot, expected_Etot));
+	                                 std::format("MHD temperature floor total energy mismatch: got {}, expected {}", actual_Etot, expected_Etot));
 
 	amrex::Real const actual_aux_eint = state_cc.min(HydroSystem<MHDFCQuantities>::internalEnergy_index);
 	amrex::Real const aux_rel_error = std::abs(actual_aux_eint - Eint_floor) / std::max(std::abs(Eint_floor), 1.0);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(aux_rel_error <= 1000.0 * std::numeric_limits<amrex::Real>::epsilon(),
-					 std::format("MHD auxiliary internal energy floor mismatch: got {}, expected {}", actual_aux_eint, Eint_floor));
+	                                 std::format("MHD auxiliary internal energy floor mismatch: got {}, expected {}", actual_aux_eint, Eint_floor));
 }
 
 void checkDivFreeRestart(QuokkaSimulation<MHDFCQuantities> const &sim)
@@ -233,7 +233,7 @@ void checkDivFreeRestart(QuokkaSimulation<MHDFCQuantities> const &sim)
 	amrex::Real const tolerance = 1000.0 * std::numeric_limits<amrex::Real>::epsilon();
 	amrex::Print() << "Max |div B| * dx / |B| = " << max_div_ratio << "\n\n";
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_div_ratio <= tolerance,
-					 std::format("Face-centered divergence exceeds tolerance: {} > {}", max_div_ratio, tolerance));
+	                                 std::format("Face-centered divergence exceeds tolerance: {} > {}", max_div_ratio, tolerance));
 }
 
 auto problem_main() -> int

@@ -31,12 +31,12 @@
 
 struct BinaryOrbit {};
 
-static bool do_split_particles = false;	    // NOLINT
-static int split_factor = 8;		    // NOLINT
+static bool do_split_particles = false;     // NOLINT
+static int split_factor = 8;                // NOLINT
 static bool verify_particle_layout = false; // NOLINT
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
-	static constexpr double gamma = 1.0;	       // isothermal
+	static constexpr double gamma = 1.0;           // isothermal
 	static constexpr double cs_isothermal = 1.3e7; // cm s^{-1}
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -93,8 +93,8 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 
 template <>
 void QuokkaSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-						      amrex::MultiFab const & /*state_cc*/,
-						      amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+                                                      amrex::MultiFab const & /*state_cc*/,
+                                                      amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
@@ -111,7 +111,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 		bool layout_matches = CICParticles->GetParGDB() == GetParGDB();
 		for (int lev = 0; lev <= finestLevel(); ++lev) {
 			layout_matches = layout_matches && CICParticles->ParticleBoxArray(lev).CellEqual(boxArray(lev)) &&
-					 CICParticles->ParticleDistributionMap(lev) == DistributionMap(lev);
+			                 CICParticles->ParticleDistributionMap(lev) == DistributionMap(lev);
 		}
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(layout_matches, "Particle container does not track the AMR hierarchy after restart refinement");
 	}
@@ -203,7 +203,7 @@ auto problem_main() -> int
 
 		if (!sim.userData_.dist.empty()) {
 			auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
-						       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
+			                               [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
 			max_deviation = std::abs(*result);
 			amrex::Print() << "max deviation from initial particle separation = " << max_deviation << " cell widths.\n";
 		} else {

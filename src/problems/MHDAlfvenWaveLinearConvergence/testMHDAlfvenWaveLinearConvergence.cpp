@@ -68,7 +68,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeCrossProduct(const std::arr
     -> std::array<amrex::Real, 3>
 {
 	return {vfield1[1] * vfield2[2] - vfield1[2] * vfield2[1], vfield1[2] * vfield2[0] - vfield1[0] * vfield2[2],
-		vfield1[0] * vfield2[1] - vfield1[1] * vfield2[0]};
+	        vfield1[0] * vfield2[1] - vfield1[1] * vfield2[0]};
 }
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::Real, 3> &vfield)
@@ -85,7 +85,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 
 // rotation from the problem reference frame (PRF) to the MRF
-AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;	// NOLINT
+AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;    // NOLINT
 AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0; // NOLINT
 
 //------------------------------------------------------------------------------
@@ -133,8 +133,8 @@ AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0; // NOLINT
 // row 0: e1 = k_dir_prf (propagation)
 // row 1: e2 = inplane_dir_prf (k-b0 plane)
 // row 2: e3 = outofplane_dir_prf (perpendicular to that plane)
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};		// NOLINT
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};          // NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};    // NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
 
 // wavefront
@@ -156,8 +156,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<amr
 {
 	// v_mrf[i] = e_i^T * v_prf  (i = 0:k, 1:in-plane, 2:out-of-plane)
 	return {vec_prf[0] * k_dir_prf[0] + vec_prf[1] * k_dir_prf[1] + vec_prf[2] * k_dir_prf[2],
-		vec_prf[0] * inplane_dir_prf[0] + vec_prf[1] * inplane_dir_prf[1] + vec_prf[2] * inplane_dir_prf[2],
-		vec_prf[0] * outofplane_dir_prf[0] + vec_prf[1] * outofplane_dir_prf[1] + vec_prf[2] * outofplane_dir_prf[2]};
+	        vec_prf[0] * inplane_dir_prf[0] + vec_prf[1] * inplane_dir_prf[1] + vec_prf[2] * inplane_dir_prf[2],
+	        vec_prf[0] * outofplane_dir_prf[0] + vec_prf[1] * outofplane_dir_prf[1] + vec_prf[2] * outofplane_dir_prf[2]};
 }
 
 /// \brief Rotate a vector from MRF back to PRF by multiplying with R^T.
@@ -168,19 +168,19 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amr
 {
 	// v_prf = k_dir_prf * v_mrf[0] + inplane_dir_prf * v_mrf[1] + outofplane_dir_prf * v_mrf[2]
 	return {vec_mrf[0] * k_dir_prf[0] + vec_mrf[1] * inplane_dir_prf[0] + vec_mrf[2] * outofplane_dir_prf[0],
-		vec_mrf[0] * k_dir_prf[1] + vec_mrf[1] * inplane_dir_prf[1] + vec_mrf[2] * outofplane_dir_prf[1],
-		vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
+	        vec_mrf[0] * k_dir_prf[1] + vec_mrf[1] * inplane_dir_prf[1] + vec_mrf[2] * outofplane_dir_prf[1],
+	        vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time,
-									     const int icomp) -> double
+                                                                             const int icomp) -> double
 {
 	// Computes A in PRF by:
 	// 1. rotating x_vec from PRF->MRF,
 	// 2. building A in MRF,
 	// 3. rotating A back MRF->PRF and selecting the relevant component.
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2,
-					 "computeVectorPotentialComponent_prf(): icomp must be an integer in {0, 1, 2}");
+	                                 "computeVectorPotentialComponent_prf(): icomp must be an integer in {0, 1, 2}");
 	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
 	const double b0_x1_mrf = b0_magn * std::cos(angle_between_k_b0_rad);
 	const double b0_x2_mrf = b0_magn * std::sin(angle_between_k_b0_rad);
@@ -217,7 +217,7 @@ AMREX_GPU_DEVICE inline auto Az_prf(const double x1_prf, const double x2_prf, co
 
 AMREX_GPU_DEVICE
 void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir, amrex::Real time)
+                         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir, amrex::Real time)
 {
 	const amrex::Real x1_prf_L = prob_lo[0] + i * dx[0];
 	const amrex::Real x2_prf_L = prob_lo[1] + j * dx[1];
@@ -336,7 +336,7 @@ template <> void QuokkaSimulation<MHDAlfvenWaveLinear>::setInitialConditionsOnGr
 
 template <>
 void QuokkaSimulation<MHDAlfvenWaveLinear>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+                                                                     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -355,8 +355,8 @@ void QuokkaSimulation<MHDAlfvenWaveLinear>::computeReferenceSolution(amrex::Mult
 
 template <>
 void QuokkaSimulation<MHDAlfvenWaveLinear>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-									amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-									quokka::direction const dir)
+                                                                        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+                                                                        quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -390,13 +390,13 @@ void configureResistiveParameters()
 	const double Rm = (resistive_decay_rate > 0.0) ? omega0 / resistive_decay_rate : std::numeric_limits<double>::infinity();
 	if (Rm < 1.0) {
 		amrex::Abort("Resistive Alfven wave is overdamped (Rm < 1); the sinusoidal initial condition is not a normal mode. Reduce eta or "
-			     "increase vA*|cos(theta)|/k.");
+		             "increase vA*|cos(theta)|/k.");
 	}
 	omega_real_alfven = std::sqrt(omega0 * omega0 - resistive_decay_rate * resistive_decay_rate);
 	resistive_phase_lag = std::atan2(resistive_decay_rate, omega_real_alfven); // phi = arctan(gamma/omega_real)
 	if (eta > 0.0) {
 		amrex::Print() << "Alfven wave (resistive): omega_0=" << omega0 << " gamma=" << resistive_decay_rate << " omega_real=" << omega_real_alfven
-			       << " Rm=" << Rm << " phi=" << resistive_phase_lag << " rad\n";
+		               << " Rm=" << Rm << " phi=" << resistive_phase_lag << " rad\n";
 	}
 }
 
@@ -439,7 +439,7 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 
 	// we assume box length = 1.0
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
-						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
+	                                              2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
 	const double max_time = computeWavePeriod();
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
@@ -525,8 +525,8 @@ auto problem_main() -> int
 		double unused_num_periods = 0.0;
 		if (run_convergence && !run_sim && (pp.query("num_periods", unused_num_periods) != 0)) {
 			amrex::Abort("setup.num_periods has no effect when setup.run_convergence=true and setup.run_sim=false; the "
-				     "convergence sweep always uses a fixed one-period run length. Remove setup.num_periods or set "
-				     "setup.run_sim=true.");
+			             "convergence sweep always uses a fixed one-period run length. Remove setup.num_periods or set "
+			             "setup.run_sim=true.");
 		}
 	}
 
@@ -551,8 +551,8 @@ auto problem_main() -> int
 			}
 
 			const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x),
-								      2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
-								      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
+			                                              2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
+			                                              2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 			k_magn = computeMagnitude(k_vec_prf);
 			k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
@@ -595,7 +595,7 @@ auto problem_main() -> int
 			double unused_stop_time = 0.0;
 			if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
 				amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
-					     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
+				             "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
 			}
 		}
 		sim.stopTime_ = num_periods * computeWavePeriod();

@@ -82,8 +82,8 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+                                                             int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+                                                             const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
@@ -129,7 +129,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 
 template <>
 void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+                                                                  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 
 	auto const box = geom[0].Domain();

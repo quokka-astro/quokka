@@ -24,7 +24,7 @@ struct ParticleRadiationSlugProblem {};
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double rho0 = 1.0e-8 * C::m_p; // g cm^-3
-constexpr double T0 = 10.0;		 // K
+constexpr double T0 = 10.0;              // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
 constexpr double dt_ = 0.1 * quokka::seconds_per_year;
@@ -35,7 +35,7 @@ constexpr double chat_over_c = 1.0;
 // (node 10 is 1e6 yr) and whose mass axis is log-spaced over [2.1, 120] Msun with 21 points
 // (node 20 is 120 Msun).
 constexpr double stellar_age = 1.0e6 * quokka::seconds_per_year; // s
-constexpr double stellar_mass = 120.0 * C::M_solar;		 // g
+constexpr double stellar_mass = 120.0 * C::M_solar;              // g
 
 // Luminosities of a 120 Msun star at an age of 1 Myr, in erg/s, taken directly from slug2:
 //   SLUG_DIR=<slug2> write_isochrone -m0 60 -m1 120 -nm 2
@@ -81,7 +81,7 @@ template <> struct RadSystem_Traits<ParticleRadiationSlugProblem> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<ParticleRadiationSlugProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-									      const double /*Tgas*/)
+                                                                              const double /*Tgas*/)
     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};

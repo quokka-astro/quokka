@@ -248,7 +248,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE T cubic_interpolate(const T &a, const T
 	// interpolation in case of an erroneous result.
 	//
 	BOOST_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b << " d = " << d << " e = " << e << " fa = " << fa << " fb = " << fb << " fd = " << fd
-					   << " fe = " << fe);
+	                                   << " fe = " << fe);
 	T q11 = (d - e) * fd / (fe - fd);
 	T q21 = (b - d) * fb / (fd - fb);
 	T q31 = (a - b) * fa / (fb - fa);
@@ -266,8 +266,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE T cubic_interpolate(const T &a, const T
 		// Out of bounds step, fall back to quadratic interpolation:
 		c = quadratic_interpolate(a, b, d, fa, fb, fd, 3);
 		BOOST_MATH_INSTRUMENT_CODE("Out of bounds interpolation, falling back to "
-					   "quadratic interpolation. c = "
-					   << c);
+		                           "quadratic interpolation. c = "
+		                           << c);
 	}
 
 	return c;
@@ -348,7 +348,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 		//
 		T min_diff = std::numeric_limits<T>::min() * 32;
 		bool prof = (fabs(fa - fb) < min_diff) || (fabs(fa - fd) < min_diff) || (fabs(fa - fe) < min_diff) || (fabs(fb - fd) < min_diff) ||
-			    (fabs(fb - fe) < min_diff) || (fabs(fd - fe) < min_diff);
+		            (fabs(fb - fe) < min_diff) || (fabs(fd - fe) < min_diff);
 		if (prof) {
 			c = detail::quadratic_interpolate(a, b, d, fa, fb, fd, 2);
 			BOOST_MATH_INSTRUMENT_CODE("Can't take cubic step!!!!");

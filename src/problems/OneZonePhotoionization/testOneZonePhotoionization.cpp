@@ -35,7 +35,7 @@ struct PhotoionizationStreamingProblem {};
 
 constexpr double c = C::c_light;    // speed of light
 constexpr double chat = C::c_light; // reduced speed of light
-constexpr double kappa0 = 0;	    // opacity
+constexpr double kappa0 = 0;        // opacity
 
 template <> struct quokka::EOS_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -45,7 +45,7 @@ template <> struct quokka::EOS_Traits<PhotoionizationStreamingProblem> {
 template <> struct Physics_Traits<PhotoionizationStreamingProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
+	static constexpr int numMassScalars = NumSpec;               // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 };

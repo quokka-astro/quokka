@@ -33,7 +33,7 @@ struct ShockProblem {}; // dummy type to allow compile-type polymorphism via tem
 
 constexpr double a_rad = C::a_rad; // erg cm^-3 K^-4
 constexpr double c = C::c_light;   // cm s^-1
-constexpr double k_B = C::k_B;	   // erg K^-1
+constexpr double k_B = C::k_B;     // erg K^-1
 
 // constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
 // constexpr double sigma_a = 1.0e6;	// absorption cross section
@@ -45,22 +45,22 @@ constexpr double gamma_gas = (5. / 3.);
 constexpr double c_v = k_B / ((C::m_p + C::m_e) * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
 
 constexpr double T_low = 2.18e6; // K
-constexpr double rho0 = 5.69;	 // g cm^-3
-constexpr double v0 = 5.19e7;	 // cm s^-1
+constexpr double rho0 = 5.69;    // g cm^-3
+constexpr double v0 = 5.19e7;    // cm s^-1
 
 constexpr double T_hi = 7.98e6; // K [7.98297e6]
-constexpr double rho1 = 17.1;	// g cm^-3 [17.08233]
-constexpr double v1 = 1.73e7;	// cm s^-1 [1.72875e7]
+constexpr double rho1 = 17.1;   // g cm^-3 [17.08233]
+constexpr double v1 = 1.73e7;   // cm s^-1 [1.72875e7]
 
 constexpr double chat = 10.0 * (v0 + c_s0); // reduced speed of light
 
 constexpr double Erad0 = a_rad * (T_low * T_low * T_low * T_low); // erg cm^-3
-constexpr double Egas0 = rho0 * c_v * T_low;			  // erg cm^-3
-constexpr double Erad1 = a_rad * (T_hi * T_hi * T_hi * T_hi);	  // erg cm^-3
-constexpr double Egas1 = rho1 * c_v * T_hi;			  // erg cm^-3
+constexpr double Egas0 = rho0 * c_v * T_low;                      // erg cm^-3
+constexpr double Erad1 = a_rad * (T_hi * T_hi * T_hi * T_hi);     // erg cm^-3
+constexpr double Egas1 = rho1 * c_v * T_hi;                       // erg cm^-3
 
 constexpr double shock_position = 0.01305; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
-					   // we initialize slightly to the left...)
+                                           // we initialize slightly to the left...)
 constexpr double Lx = 0.01575; // cm
 
 template <> struct RadSystem_Traits<ShockProblem> {
@@ -81,9 +81,9 @@ template <> struct Physics_Traits<ShockProblem> : DefaultPhysicsTraits {
 	// face-centred
 	// A custom unit system is used here to replicate the CGS units, for testing units conversion
 	static constexpr UnitSystem unit_system = UnitSystem::CUSTOM;
-	static constexpr double unit_length = 1.0;	// cm
-	static constexpr double unit_mass = 1.0;	// g
-	static constexpr double unit_time = 1.0;	// s
+	static constexpr double unit_length = 1.0;      // cm
+	static constexpr double unit_mass = 1.0;        // g
+	static constexpr double unit_time = 1.0;        // s
 	static constexpr double unit_temperature = 1.0; // K
 };
 
@@ -105,8 +105,8 @@ template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
-							 int /*orig_comp*/)
+                                                         amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
+                                                         int /*orig_comp*/)
 {
 	if ((bcr->lo(0) != quokka::BCType::ext_dir) && (bcr->hi(0) != quokka::BCType::ext_dir)) {
 		return;
@@ -264,7 +264,7 @@ auto problem_main() -> int
 			xs.at(i) = x; // cm
 
 			const double Erad_t = values.at(RadSystem<ShockProblem>::radEnergy_index)[i];
-			Erad.at(i) = Erad_t / a_rad;				// scaled
+			Erad.at(i) = Erad_t / a_rad;                            // scaled
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_low; // dimensionless
 
 			const double Etot_t = values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];
@@ -317,7 +317,7 @@ auto problem_main() -> int
 			amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << '\n';
 
 			interpolate_arrays(xs_exact.data(), Trad_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Trad.data(),
-					   static_cast<int>(xs.size()));
+			                   static_cast<int>(xs.size()));
 
 			double err_norm = 0.;
 			double sol_norm = 0.;

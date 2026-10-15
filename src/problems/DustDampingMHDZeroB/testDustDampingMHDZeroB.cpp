@@ -188,10 +188,10 @@ auto E_gas_analytic(double t) -> double
 		double const vd2_2 = v_dust2_analytic(t2);
 
 		double const term1 = (rho_dust1 * (vd1_1 - vg1) / TS1 * vg1 + rho_dust2 * (vd2_1 - vg1) / TS2 * vg1 +
-				      OMEGA * (rho_dust1 * std::pow(vd1_1 - vg1, 2) / TS1 + rho_dust2 * std::pow(vd2_1 - vg1, 2) / TS2));
+		                      OMEGA * (rho_dust1 * std::pow(vd1_1 - vg1, 2) / TS1 + rho_dust2 * std::pow(vd2_1 - vg1, 2) / TS2));
 
 		double const term2 = (rho_dust1 * (vd1_2 - vg2) / TS1 * vg2 + rho_dust2 * (vd2_2 - vg2) / TS2 * vg2 +
-				      OMEGA * (rho_dust1 * std::pow(vd1_2 - vg2, 2) / TS1 + rho_dust2 * std::pow(vd2_2 - vg2, 2) / TS2));
+		                      OMEGA * (rho_dust1 * std::pow(vd1_2 - vg2, 2) / TS1 + rho_dust2 * std::pow(vd2_2 - vg2, 2) / TS2));
 
 		integral += 0.5 * (term1 + term2) * dt;
 	}
@@ -336,13 +336,13 @@ auto problem_main() -> int
 		const double rel_err_tol = 0.03;
 		for (auto const &run : runs) {
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas vx    = " << run.rel_err_gas_vx
-				       << "\n";
+			               << "\n";
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust1 vx  = " << run.rel_err_dust1_vx
-				       << "\n";
+			               << "\n";
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust2 vx  = " << run.rel_err_dust2_vx
-				       << "\n";
+			               << "\n";
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas E     = " << run.rel_err_gas_E
-				       << "\n";
+			               << "\n";
 			if (!std::isfinite(run.rel_err_gas_vx) || !std::isfinite(run.rel_err_dust1_vx) || !std::isfinite(run.rel_err_dust2_vx) ||
 			    !std::isfinite(run.rel_err_gas_E) || (run.rel_err_gas_vx > rel_err_tol) || (run.rel_err_dust1_vx > rel_err_tol) ||
 			    (run.rel_err_dust2_vx > rel_err_tol) || (run.rel_err_gas_E > rel_err_tol)) {
@@ -371,11 +371,11 @@ auto problem_main() -> int
 			for (size_t idx = 0; idx < runs.size(); ++idx) {
 				auto const &series = series_accessor(runs[idx].data);
 				matplotlibcpp::plot(runs[idx].data.t_vec_, series,
-						    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
-						     {"color", scheme_colors[idx]},
-						     {"linestyle", "-"},
-						     {"marker", scheme_markers[idx]},
-						     {"markersize", "3"}});
+				                    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
+				                     {"color", scheme_colors[idx]},
+				                     {"linestyle", "-"},
+				                     {"marker", scheme_markers[idx]},
+				                     {"markersize", "3"}});
 			}
 		};
 

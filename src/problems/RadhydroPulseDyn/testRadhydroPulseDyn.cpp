@@ -26,14 +26,14 @@ constexpr double T_hi = 2.0e7; // K (temperature)
 constexpr double rho0 = 1.2;   // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light; // speed of light (cgs)
-constexpr double width = 24.0;	 // cm, width of the pulse
+constexpr double width = 24.0;   // cm, width of the pulse
 constexpr double erad_floor = a_rad * T_lo * T_lo * T_lo * T_lo * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 
 // Default parameters: dynamic diffusion, tau = 1e4, beta = 1e-3, beta tau = 10.
 // Width of the pulse = sqrt(c max_time / kappa0) = 85 if max_time = 2.4e-4
-AMREX_GPU_MANAGED double kappa0 = 500.;	 // NOLINT
+AMREX_GPU_MANAGED double kappa0 = 500.;  // NOLINT
 AMREX_GPU_MANAGED double v0_adv = 3.0e7; // NOLINT
 // AMREX_GPU_MANAGED double max_time = 4.8e-6;
 

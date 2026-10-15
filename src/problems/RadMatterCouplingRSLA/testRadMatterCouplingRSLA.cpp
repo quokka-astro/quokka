@@ -67,7 +67,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeFluxMe
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<CouplingProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
-						  [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
+                                                  [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
@@ -75,7 +75,7 @@ quokka::EOS<CouplingProblem>::ComputeTgasFromEint([[maybe_unused]] const double 
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<CouplingProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
-						  [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
+                                                  [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
@@ -83,7 +83,7 @@ quokka::EOS<CouplingProblem>::ComputeEintFromTgas([[maybe_unused]] const double 
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<CouplingProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-							quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
+                                                        quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -97,8 +97,8 @@ quokka::EOS<CouplingProblem>::ComputeEintTempDerivative(const double /*rho*/, co
 }
 
 constexpr double Erad0 = 1.0e12; // erg cm^-3
-constexpr double Egas0 = 1.0e2;	 // erg cm^-3
-constexpr double rho0 = 1.0e-7;	 // g cm^-3
+constexpr double Egas0 = 1.0e2;  // erg cm^-3
+constexpr double rho0 = 1.0e-7;  // g cm^-3
 
 template <> void QuokkaSimulation<CouplingProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -190,8 +190,8 @@ auto problem_main() -> int
 			const double E0_rsla = ((c / c_rsla) * Erad0 + Egas0) / (a_rad + (c_rsla / c) * alpha_SuOlson / 4.0);
 
 			const double T4_rsla = (T0_4 - (c_rsla / c) * E0_rsla) *
-						   std::exp(-(4. / alpha_SuOlson) * (a_rad + (c_rsla / c) * alpha_SuOlson / 4.0) * kappa * rho0 * c * time_t) +
-					       (c_rsla / c) * E0_rsla;
+			                           std::exp(-(4. / alpha_SuOlson) * (a_rad + (c_rsla / c) * alpha_SuOlson / 4.0) * kappa * rho0 * c * time_t) +
+			                       (c_rsla / c) * E0_rsla;
 
 			const double T_gas_rsla = std::pow(T4_rsla, 1. / 4.);
 

@@ -32,11 +32,11 @@ template <> struct quokka::EOS_Traits<MHDSmallScaleDynamo> {
 template <> struct Physics_Traits<MHDSmallScaleDynamo> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true; // solve the Euler equations
 	static constexpr bool is_mhd_enabled = true;   // solve the MHD equations
-	static constexpr int nDustGroups = 0;	       // no dust groups
+	static constexpr int nDustGroups = 0;          // no dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr amrex::Real gravitational_constant = 1.0;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::constant; // eta from mhd.resistivity in the TOML; defaults to 0
-	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant;	  // shear/bulk viscosity from the TOML; both default to 0
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant;       // shear/bulk viscosity from the TOML; both default to 0
 };
 
 // isothermal EOS has no internal energy to reconstruct; pressure computed directly from rho
@@ -130,13 +130,13 @@ auto problem_main() -> int
 	pp.query("seed_b_fraction", seed_b_fraction);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(seed_b_wavenumber > 0, "setup.seed_b_wavenumber must be a positive integer");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(seed_b_fraction > 0.0,
-					 "setup.seed_b_fraction must be a positive value; the default of 0 runs with zero magnetic seed field (pure-hydro)");
+	                                 "setup.seed_b_fraction must be a positive value; the default of 0 runs with zero magnetic seed field (pure-hydro)");
 
 	amrex::ParmParse const pp_turb("turbulence");
 	pp_turb.query("target_vdisp", target_vdisp);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(target_vdisp > 0.0,
-					 "turbulence.target_vdisp must be a positive value; the default of 0 leaves the velocity field to decay "
-					 "(and thus the magnetic field, too)");
+	                                 "turbulence.target_vdisp must be a positive value; the default of 0 leaves the velocity field to decay "
+	                                 "(and thus the magnetic field, too)");
 
 	amrex::ParmParse const pp_geom("geometry");
 	amrex::Vector<amrex::Real> prob_lo_vec;
@@ -145,22 +145,22 @@ auto problem_main() -> int
 	pp_geom.getarr("prob_hi", prob_hi_vec);
 	const double box_length = prob_hi_vec[0] - prob_lo_vec[0];
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(box_length - (prob_hi_vec[1] - prob_lo_vec[1])) < 1e-10 * box_length &&
-					     std::abs(box_length - (prob_hi_vec[2] - prob_lo_vec[2])) < 1e-10 * box_length,
-					 "geometry.prob_hi - geometry.prob_lo must be equal in all three dimensions; both the seed field and "
-					 "turbulence driving assume a cubic box");
+	                                     std::abs(box_length - (prob_hi_vec[2] - prob_lo_vec[2])) < 1e-10 * box_length,
+	                                 "geometry.prob_hi - geometry.prob_lo must be equal in all three dimensions; both the seed field and "
+	                                 "turbulence driving assume a cubic box");
 
 	double turbulence_length = 0.0;
 	pp_turb.query("length", turbulence_length);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(box_length - turbulence_length) < 1e-10 * turbulence_length,
-					 "turbulence.length must match the box length (geometry.prob_hi[0] - geometry.prob_lo[0]); the seed "
-					 "field and turbulence driving must agree on the box length");
+	                                 "turbulence.length must match the box length (geometry.prob_hi[0] - geometry.prob_lo[0]); the seed "
+	                                 "field and turbulence driving must agree on the box length");
 
 	int ampl_auto_adjust = 0;
 	pp_turb.query("ampl_auto_adjust", ampl_auto_adjust);
 	if (ampl_auto_adjust == 1) {
 		amrex::Print() << "WARNING: turbulence.ampl_auto_adjust = 1 is set. The driving amplitude will vary over time, "
-				  "which makes it harder to interpret the dynamo growth rate. Consider setting ampl_auto_adjust = 0 "
-				  "and tuning ampl_factor manually to achieve the desired velocity dispersion.\n";
+		                  "which makes it harder to interpret the dynamo growth rate. Consider setting ampl_auto_adjust = 0 "
+		                  "and tuning ampl_factor manually to achieve the desired velocity dispersion.\n";
 	}
 
 	auto BCs_cc = quokka::BC<MHDSmallScaleDynamo>(quokka::BCType::int_dir);

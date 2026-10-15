@@ -13,7 +13,7 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 	void init(const std::string &a_prefix, std::string_view a_diagName) override;
 
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
-		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
+	             const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
 	// Template implementation - called from AMRSimulation::doDiagnostics()
 	template <typename problem_t> void processDiag(int a_nstep, const amrex::Real &a_time);
@@ -30,7 +30,7 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 	// PDF properties
 	std::string m_weightType{"volume"};    // Weighting types: "volume", "mass", "cell_counts"
 	std::vector<std::string> m_varNames{}; // Variable names
-	std::vector<int> m_nBins{};	       // Number of bins
+	std::vector<int> m_nBins{};            // Number of bins
 	std::vector<int> m_useLogSpacedBins{}; // Use log-spaced bins
 	std::vector<bool> m_useFieldMinMax{};  // Use min/max from field
 	std::vector<amrex::Real> m_lowBnd{};   // User-defined low bound
@@ -45,14 +45,14 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 	static auto getIdxVec(int linidx, std::vector<int> const &nBins) -> std::vector<int>;
 
 	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto getBinIndex1D(const amrex::Real &realInputVal, const amrex::Real &transformedLowBnd,
-								     const amrex::Real &transformedBinWidth, bool doLog) -> int;
+	                                                             const amrex::Real &transformedBinWidth, bool doLog) -> int;
 
 	AMREX_GPU_HOST_DEVICE AMREX_INLINE auto getTotalBinCount() -> amrex::Long;
 };
 
 // Inline member function implementations
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto DiagPDF::getBinIndex1D(const amrex::Real &realInputVal, const amrex::Real &transformedLowBnd,
-							       const amrex::Real &transformedBinWidth, const bool doLog) -> int
+                                                               const amrex::Real &transformedBinWidth, const bool doLog) -> int
 {
 	amrex::Real const val = doLog ? std::log10(realInputVal) : realInputVal;
 	int const cbin = static_cast<int>(std::floor((val - transformedLowBnd) / transformedBinWidth));
@@ -125,9 +125,9 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 		    *a_state[lev], amrex::IntVect(0), [=, nFilters = m_filters.size()] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
 			    for (int f{0}; f < nFilters; ++f) {
 				    amrex::Real const fval =
-					sarrs[box_no](i, j, k, fdata_p[f].m_filterVarIdx); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-				    if (fval < fdata_p[f].m_low_val ||			   // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					fval > fdata_p[f].m_high_val) {			   // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+				        sarrs[box_no](i, j, k, fdata_p[f].m_filterVarIdx); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+				    if (fval < fdata_p[f].m_low_val ||                     // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+				        fval > fdata_p[f].m_high_val) {                    // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					    marrs[box_no](i, j, k) = 0;
 				    }
 			    }
@@ -185,7 +185,7 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 				for (int n = 0; n < nvars; ++n) {
 					// compute 1D index
 					const int bin = getBinIndex1D(sarrs[box_no](i, j, k, idx_p[n]), lowBnd_p[n], binWidth_p[n], doLog_p[n]); // NOLINT
-					if (bin < 0 || bin >= nbins_p[n]) {									 // NOLINT
+					if (bin < 0 || bin >= nbins_p[n]) {                                                                      // NOLINT
 						within_range = false;
 					}
 					// compute linear index in N-D histogram

@@ -32,12 +32,12 @@ static bool refine_half_domain = false; // NOLINT
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 const double rho0 = 1.0 * C::m_p; // g cm^-3
-const double T0 = 10.0;		  // K
+const double T0 = 10.0;           // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 const double dt_init = 2.0 * year;
 constexpr double B0 = 3.715708546e-08; // constant background field [Gauss-equivalent units]. Set a precise value so that
-				       // beta = 2.0
+                                       // beta = 2.0
 
 static std::string particles_file = "sink4.txt"; // NOLINT
 
@@ -115,7 +115,7 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 	const double Emag = 0.5 * background_magnetic_field * background_magnetic_field;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
 	const double v2 = (userData_.boost_velocity[0] * userData_.boost_velocity[0]) + (userData_.boost_velocity[1] * userData_.boost_velocity[1]) +
-			  (userData_.boost_velocity[2] * userData_.boost_velocity[2]);
+	                  (userData_.boost_velocity[2] * userData_.boost_velocity[2]);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -175,9 +175,9 @@ auto problem_main() -> int
 	QuokkaSimulation<SinkProblem> sim;
 
 	sim.reconstructionOrder_ = 3;  // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	       // *must* be less than 1/3 in 3D!
+	sim.cflNumber_ = 0.3;          // *must* be less than 1/3 in 3D!
 	sim.stopTime_ = 1000.0 * year; // 1000 years
-	sim.tempFloor_ = 10.0;	       // K
+	sim.tempFloor_ = 10.0;         // K
 
 	// initialize
 	sim.setInitialConditions();
@@ -253,7 +253,7 @@ auto problem_main() -> int
 		for (int pi = 0; std::cmp_less(pi, real_data_ste1.size()); ++pi) {
 			const auto &p = real_data_ste1[pi];
 			amrex::Print() << std::format("Particle {} angular momentum: Lx={:.4e} Ly={:.4e} Lz={:.4e}\n", pi, p[Lx_offset], p[Lx_offset + 1],
-						      p[Lx_offset + 2]);
+			                              p[Lx_offset + 2]);
 			ang_mom_phase1.push_back({p[Lx_offset], p[Lx_offset + 1], p[Lx_offset + 2]});
 			pos_phase1.push_back({p[0], p[1], p[2]});
 		}
@@ -362,7 +362,7 @@ auto problem_main() -> int
 	sim2.reconstructionOrder_ = 3;
 	sim2.cflNumber_ = 0.3;
 	sim2.stopTime_ = 1000.0 * year; // 1000 years
-	sim2.initDt_ = dt_init;		// set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim2.initDt_ = dt_init;         // set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim2.tempFloor_ = 10.0;
 
 	// initialize
@@ -524,7 +524,7 @@ auto problem_main() -> int
 		for (int pi = 0; std::cmp_less(pi, real_data_phase3.size()); ++pi) {
 			const auto &p = real_data_phase3[pi];
 			amrex::Print() << std::format("Particle {} angular momentum: Lx={:.4e} Ly={:.4e} Lz={:.4e}\n", pi, p[Lx_offset], p[Lx_offset + 1],
-						      p[Lx_offset + 2]);
+			                              p[Lx_offset + 2]);
 		}
 
 		amrex::Print() << "\nPhase 3 mass conservation check:\n";
@@ -595,7 +595,7 @@ auto problem_main() -> int
 	const double alfven_density_floor = alfven_test_field * alfven_test_field / (max_alfven_speed * max_alfven_speed);
 	const double phase5_dt = 1.0e17;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alfven_density_floor > parser_density_floor,
-					 "The Alfven floor must exceed the parser floor for this test to exercise the limiter");
+	                                 "The Alfven floor must exceed the parser floor for this test to exercise the limiter");
 	// Add the runtime parameter only after Phases 1--4 have initialized, so this
 	// phase exercises particleParmParse without enabling the limiter earlier.
 	{

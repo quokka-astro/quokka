@@ -99,10 +99,10 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::createInitialTestP
 
 		// Active particle.
 		outFile << 0.25 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 10.0 << " "
-			<< 0.0 << "\n";
+		        << 0.0 << "\n";
 		// Not-yet-active particle: birth_time is beyond stop_time.
 		outFile << 0.75 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 1.0 << " " << 10.0 << " "
-			<< 0.0 << "\n";
+		        << 0.0 << "\n";
 		outFile.close();
 	}
 	amrex::ParallelDescriptor::Barrier();
@@ -127,7 +127,7 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimest
 	quokka::depositParticleMassDensity(CICParticles.get(), massField, lev, quokka::CICParticleMassIdx, 0);
 	ageFilteredTestMassField.setVal(0.0);
 	particleRegister_.depositParticleMassDensity("Test", false, ageFilteredTestMassField, lev, 0, std::numeric_limits<amrex::Real>::lowest(),
-						     std::numeric_limits<amrex::Real>::max(), true, tNew_[lev], 10.0);
+	                                             std::numeric_limits<amrex::Real>::max(), true, tNew_[lev], 10.0);
 
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const amrex::Real cellVol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
@@ -144,8 +144,8 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimest
 
 template <>
 void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int /*ncomp*/,
-								    amrex::MultiFab const & /*state_cc*/,
-								    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+                                                                    amrex::MultiFab const & /*state_cc*/,
+                                                                    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 #if AMREX_SPACEDIM == 3
 	if (dname == "particle_mass_density") {
@@ -191,7 +191,7 @@ auto problem_main() -> int
 	}
 	if (std::abs(finalAgeFilteredTestMass - expectedAgeFilteredTestMass) > massTolerance) {
 		amrex::Print() << "ERROR: Age-filtered mass deposition failed! Expected " << expectedAgeFilteredTestMass << ", got " << finalAgeFilteredTestMass
-			       << "\n";
+		               << "\n";
 		return 1;
 	}
 

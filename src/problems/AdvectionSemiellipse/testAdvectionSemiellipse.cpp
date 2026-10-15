@@ -46,7 +46,7 @@ template <> struct Physics_Indices<SemiellipseProblem> {
 };
 
 AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 	double dens = 0.0;
@@ -70,8 +70,8 @@ template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOn
 
 template <>
 void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/)
+                                                                       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+                                                                       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/)
 {
 
 	// fill reference solution multifab
@@ -81,7 +81,7 @@ void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(amrex::Mu
 		auto const ncomp = ref.nComp();
 
 		amrex::ParallelFor(indexRange, ncomp,
-				   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept { ComputeExactSolution(i, j, k, n, stateExact, dx, prob_lo); });
+		                   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept { ComputeExactSolution(i, j, k, n, stateExact, dx, prob_lo); });
 	}
 
 	// Plot results

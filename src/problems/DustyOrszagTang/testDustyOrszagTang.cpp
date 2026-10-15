@@ -30,10 +30,10 @@ constexpr double first_snapshot_time = 0.25;
 constexpr double second_snapshot_time = 0.5;
 constexpr double shock_window_ymax = 0.3;
 
-AMREX_GPU_MANAGED double g_initial_dust_density = 1.0e-1;					     // NOLINT
-AMREX_GPU_MANAGED double g_stopping_time = stopping_time0;					     // NOLINT
+AMREX_GPU_MANAGED double g_initial_dust_density = 1.0e-1;                                            // NOLINT
+AMREX_GPU_MANAGED double g_stopping_time = stopping_time0;                                           // NOLINT
 AMREX_GPU_MANAGED double g_dimensionless_charge_to_mass_ratio = dimensionless_charge_to_mass_ratio0; // NOLINT
-std::string g_active_case_tag;									     // NOLINT
+std::string g_active_case_tag;                                                                       // NOLINT
 
 // input parameters for one dusty Orszag-Tang run
 struct CaseConfig {
@@ -205,7 +205,7 @@ template <typename problem_t> auto makePeriodicBCsCC() -> amrex::Vector<amrex::B
 template <typename problem_t> auto makePeriodicBCsFC() -> amrex::Vector<amrex::BCRec>
 {
 	return quokka::BC_fc<problem_t>(quokka::BCType::mathematicalBndryTypes::periodic, quokka::BCType::mathematicalBndryTypes::periodic,
-					quokka::BCType::mathematicalBndryTypes::periodic);
+	                                quokka::BCType::mathematicalBndryTypes::periodic);
 }
 
 template <typename problem_t> auto extractSlice(QuokkaSimulation<problem_t> &sim, const CaseConfig &config, double time) -> SliceData

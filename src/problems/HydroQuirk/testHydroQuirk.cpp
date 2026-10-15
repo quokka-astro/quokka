@@ -187,8 +187,8 @@ template <> void QuokkaSimulation<QuirkProblem>::computeAfterEvolve(amrex::Vecto
 			amrex::Abort("Carbuncle detected!");
 		} else {
 			amrex::Print() << "The scheme looks stable against the Carbuncle phenomenon : "
-					  "max delta s = "
-				       << deltas << "\n\n";
+			                  "max delta s = "
+			               << deltas << "\n\n";
 		}
 	}
 }
@@ -196,8 +196,8 @@ template <> void QuokkaSimulation<QuirkProblem>::computeAfterEvolve(amrex::Vecto
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-							 int /*bcomp*/, int /*orig_comp*/)
+                                                         amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
+                                                         int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<QuirkProblem>::nvarTotal_cc;

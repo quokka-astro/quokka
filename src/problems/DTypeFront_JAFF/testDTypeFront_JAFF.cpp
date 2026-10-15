@@ -45,7 +45,7 @@ template <> struct quokka::EOS_Traits<DTypeFront_JAFF> {
 template <> struct Physics_Traits<DTypeFront_JAFF> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
+	static constexpr int numMassScalars = NumSpec;               // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 };
@@ -190,7 +190,7 @@ auto compute_equilibrium_temperature_neutral(double n_HI) -> double
 	double T_lo = 1;
 	double T_hi = 1000;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(net_energy_neutral(T_lo, n_HI) > 0.0 && net_energy_neutral(T_hi, n_HI) < 0.0,
-					 "compute_equilibrium_temperature_neutral: brackets do not straddle a root");
+	                                 "compute_equilibrium_temperature_neutral: brackets do not straddle a root");
 	int const max_iter = 10000;
 	for (int iter = 0; iter < max_iter; ++iter) {
 		const double T_mid = 0.5 * (T_lo + T_hi);
@@ -211,7 +211,7 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 	double T_lo = 1000.0;
 	double T_hi = 1.0e5;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(net_energy_ionized(T_lo, n_e) > 0.0 && net_energy_ionized(T_hi, n_e) < 0.0,
-					 "compute_equilibrium_temperature_ionized: brackets do not straddle a root");
+	                                 "compute_equilibrium_temperature_ionized: brackets do not straddle a root");
 	int const max_iter = 10000;
 	for (int iter = 0; iter < max_iter; ++iter) {
 		const double T_mid = 0.5 * (T_lo + T_hi);
@@ -246,7 +246,7 @@ auto rosenbrock_tableau_name(int tableau) -> char const *
 void print_microphysics_integrator()
 {
 	amrex::Print() << "DTypeFront_JAFF microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
-		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
+	               << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
 }
 
 } // namespace
@@ -261,9 +261,9 @@ AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
 
 template <>
 void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
+                                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+                                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+                                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
@@ -506,10 +506,10 @@ auto problem_main() -> int
 				status = 1;
 			} else if (gas_regime) {
 				amrex::Print() << "Test passed: D-type front effective radius matches analytical radius within " << tol_cells
-					       << " cell sizes at end of simulation.\n";
+				               << " cell sizes at end of simulation.\n";
 			} else {
 				amrex::Print() << "Test passed: D-type front effective radius matches analytical radius within " << tol_percent
-					       << " percent at end of simulation.\n";
+				               << " percent at end of simulation.\n";
 			}
 		}
 	}
@@ -620,7 +620,7 @@ auto problem_main() -> int
 					status = 1;
 				} else {
 					amrex::Print() << "Test passed: " << region_name << " median temperature " << T_median
-						       << " K is within 5% of analytical equilibrium " << T_analytical << " K (" << ntot << " cells).\n";
+					               << " K is within 5% of analytical equilibrium " << T_analytical << " K (" << ntot << " cells).\n";
 				}
 			}
 		};

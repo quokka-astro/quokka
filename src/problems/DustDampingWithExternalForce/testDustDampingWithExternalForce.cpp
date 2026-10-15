@@ -96,7 +96,7 @@ template <> void QuokkaSimulation<DustDampingWithExternalForce>::setInitialCondi
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto vx0 = v0;	    // gas velocity = 2.0
+	const auto vx0 = v0;        // gas velocity = 2.0
 	const auto vx_dust1 = 0.1;  // dust1 velocity
 	const auto vx_dust2 = -0.5; // dust2 velocity
 
@@ -194,12 +194,12 @@ auto E_gas_analytic(double t) -> double
 		double const vd2_2 = v_dust2_analytic(t2);
 
 		double const term1 = (rho_dust1 * (vd1_1 - vg1) / TS1 * vg1 + rho_dust2 * (vd2_1 - vg1) / TS2 * vg1 +
-				      OMEGA * (rho_dust1 * std::pow(vd1_1 - vg1, 2) / TS1 + rho_dust2 * std::pow(vd2_1 - vg1, 2) / TS2)) +
-				     EXTERNAL_FORCE * rho_gas * vg1;
+		                      OMEGA * (rho_dust1 * std::pow(vd1_1 - vg1, 2) / TS1 + rho_dust2 * std::pow(vd2_1 - vg1, 2) / TS2)) +
+		                     EXTERNAL_FORCE * rho_gas * vg1;
 
 		double const term2 = (rho_dust1 * (vd1_2 - vg2) / TS1 * vg2 + rho_dust2 * (vd2_2 - vg2) / TS2 * vg2 +
-				      OMEGA * (rho_dust1 * std::pow(vd1_2 - vg2, 2) / TS1 + rho_dust2 * std::pow(vd2_2 - vg2, 2) / TS2)) +
-				     EXTERNAL_FORCE * rho_gas * vg2;
+		                      OMEGA * (rho_dust1 * std::pow(vd1_2 - vg2, 2) / TS1 + rho_dust2 * std::pow(vd2_2 - vg2, 2) / TS2)) +
+		                     EXTERNAL_FORCE * rho_gas * vg2;
 
 		integral += 0.5 * (term1 + term2) * dt;
 	}
@@ -374,19 +374,19 @@ auto problem_main() -> int
 		matplotlibcpp::plot(t_dense, rel_v_d1_exact_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}});
 		matplotlibcpp::plot(t_dense, rel_v_d2_exact_dense, {{"color", "k"}, {"linestyle", "--"}});
 		matplotlibcpp::plot(t, rel_v_d1,
-				    {{"label", R"($|v_g - v_{d,1}|$)"},
-				     {"color", "orange"},
-				     {"linestyle", "None"},
-				     {"marker", "o"},
-				     {"markerfacecolor", "none"},
-				     {"markersize", "4"}});
+		                    {{"label", R"($|v_g - v_{d,1}|$)"},
+		                     {"color", "orange"},
+		                     {"linestyle", "None"},
+		                     {"marker", "o"},
+		                     {"markerfacecolor", "none"},
+		                     {"markersize", "4"}});
 		matplotlibcpp::plot(t, rel_v_d2,
-				    {{"label", R"($|v_g - v_{d,2}|$)"},
-				     {"color", "blue"},
-				     {"linestyle", "None"},
-				     {"marker", "o"},
-				     {"markerfacecolor", "none"},
-				     {"markersize", "4"}});
+		                    {{"label", R"($|v_g - v_{d,2}|$)"},
+		                     {"color", "blue"},
+		                     {"linestyle", "None"},
+		                     {"marker", "o"},
+		                     {"markerfacecolor", "none"},
+		                     {"markersize", "4"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($|v_g - v_d|$)");
