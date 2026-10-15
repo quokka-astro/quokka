@@ -41,15 +41,20 @@ derived_vars        = ["gpot", "pressure", "radius_sph", "radial_velocity", "cir
 # *****************************************************************
 # Problem parameters (Table 1, Q1_M29)
 # *****************************************************************
-mhd_galaxy.Rc_kpc    = 2.0   # gravitational binding inner cutoff spherical radius
-mhd_galaxy.Rd_kpc    = 3.0   # galactic disk characteristic radius
-mhd_galaxy.Rmax_kpc  = 8.0   # Maximum radius for enforcing Toomre condition
+mhd_galaxy.Rc_kpc      = 2.0   # gravitational binding inner cutoff spherical radius
+mhd_galaxy.Rd_kpc      = 3.0   # galactic disk characteristic radius
+mhd_galaxy.Rmax_kpc    = 8.0   # Maximum radius for enforcing Toomre condition
 mhd_galaxy.Rcutoff_kpc = 1e100 # hard cutoff for galactic disk
-mhd_galaxy.Q_mean    = 0.96  # target Tomre condition
-mhd_galaxy.Mc        = 28.6  # orbital speed, in mach
-mhd_galaxy.sn_jeans_J = 4.0 # value from Truelove et al. 1997 - higher means more SN, set to -1 (or 0) to disable SN
+mhd_galaxy.Q_mean      = 0.96  # target Tomre condition
+mhd_galaxy.Mc          = 28.6  # orbital speed, in mach (set either Mc or vc)
+#mhd_galaxy.vc_kms     = 200   # orbital speed, in km/s (set either Mc or vc)
+#mhd_galaxy.T_disk     = 3.5e3 # temperature of the disk (set either T or cs)
+mhd_galaxy.cs_disk_kms = 7.0   # sound speed of disk, in km/s (set either T or cs)
+mhd_galaxy.T_cgm       = 1e7   # temperature of the surrounding background medium (set either T or cs)
+#mhd_galaxy.cs_cgm_kms = 3.7e2 # sound speed of surrounding medium, in km/s (set either T or cs)
+mhd_galaxy.sn_jeans_J  = 4.0   # value from Truelove et al. 1997 - higher means more SN, set to -1 (or 0) to disable SN
 mhd_galaxy.star_formation_efficiency = 0.5 # fraction of stellar mass that remains as a compact remnant
-mhd_galaxy.sn_momentum = 1.0e8  # SN bubble enhancement estimate, in M_sun * km/s
+mhd_galaxy.sn_momentum = 1.0e8 # SN bubble enhancement estimate, in M_sun * km/s
 mhd_galaxy.sn_mass_per_event_msun = 100.0
 mhd_galaxy.sn_cluster_momentum_exponent = 0.0 # exponent for scaling momentum injection with cluster mass
 # optional fine tuning: change sn_momentum to 2.3e5, and make exponent ~1.1-1.3
