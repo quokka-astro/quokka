@@ -37,7 +37,7 @@ template <> struct SimulationData<MHDTallBoxSf> {
 	Real initial_scalar_density = NAN; // scalar density in cgs units
 
 	std::string stars_file; // default: no stars
-	std::string IC_file;	// Initial disk vertical structure
+	std::string IC_file;    // Initial disk vertical structure
 
 	// Initial conditions table: z -> (g_1, g_ext, phi_tot)
 	quokka::DataTable<1, 3, quokka::OutOfBounds::clamp> ic_table;
@@ -207,7 +207,7 @@ template <> void QuokkaSimulation<MHDTallBoxSf>::setInitialConditionsOnGridFaceV
 
 template <>
 void QuokkaSimulation<MHDTallBoxSf>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
-						       amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+                                                       amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	const int ncomp = ncomp_in;
 	auto const &output = mf.arrays();
@@ -252,18 +252,18 @@ template <> void QuokkaSimulation<MHDTallBoxSf>::computeAfterTimestep()
 
 	auto const [mdot_gas, mdot_metal] =
 	    amrex::ParReduce(amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum>{}, amrex::TypeList<amrex::Real, amrex::Real>{}, state_new_cc_[0],
-			     amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real> {
-				     Real const z_lo = prob_lo[2] + k * dx[2];
-				     Real const z_c = z_lo + 0.5 * dx[2];
-				     bool const in_plane = ((z_lo <= z_out) && (z_out < z_lo + dx[2])) || ((z_lo <= -z_out) && (-z_out < z_lo + dx[2]));
-				     if (!in_plane) {
-					     return {0.0, 0.0};
-				     }
-				     Real const rho = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::density_index);
-				     Real const vz_out = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::x3Momentum_index) / rho * std::copysign(1.0, z_c);
-				     Real const area = dx[0] * dx[1];
-				     return {rho * vz_out * area, state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::scalar0_index) * vz_out * area};
-			     });
+	                     amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real> {
+		                     Real const z_lo = prob_lo[2] + k * dx[2];
+		                     Real const z_c = z_lo + 0.5 * dx[2];
+		                     bool const in_plane = ((z_lo <= z_out) && (z_out < z_lo + dx[2])) || ((z_lo <= -z_out) && (-z_out < z_lo + dx[2]));
+		                     if (!in_plane) {
+			                     return {0.0, 0.0};
+		                     }
+		                     Real const rho = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::density_index);
+		                     Real const vz_out = state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::x3Momentum_index) / rho * std::copysign(1.0, z_c);
+		                     Real const area = dx[0] * dx[1];
+		                     return {rho * vz_out * area, state[bx](i, j, k, HydroSystem<MHDTallBoxSf>::scalar0_index) * vz_out * area};
+	                     });
 	std::array<amrex::Real, 2> rates = {mdot_gas, mdot_metal};
 	amrex::ParallelDescriptor::ReduceRealSum(rates.data(), static_cast<int>(rates.size()));
 
@@ -308,8 +308,8 @@ template <> void QuokkaSimulation<MHDTallBoxSf>::addStrangSplitSources(amrex::Mu
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<MHDTallBoxSf>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-							 int /*orig_comp*/)
+                                                         amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+                                                         int /*orig_comp*/)
 {
 	setDiodeBCLo<2>(iv, consVar, geom);
 	setDiodeBCHi<2>(iv, consVar, geom);
@@ -348,7 +348,7 @@ auto problem_main() -> int
 	pp_particles.query("scalar_yield_per_SN", scalar_yield_per_SN);
 	AMREX_ALWAYS_ASSERT(!std::isnan(scalar_yield_per_SN));
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_yield_per_SN > sim.userData_.initial_scalar_density * std::pow(128.0 * C::parsec, 3),
-					 "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
+	                                 "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
 
 	// ic_table must be initialised even when restarting from a checkpoint
 	sim.preCalculateInitialConditions();
@@ -367,12 +367,12 @@ auto problem_main() -> int
 	auto const &by = sim.state_new_fc_[0][1].const_arrays();
 	auto const &bz = sim.state_new_fc_[0][2].const_arrays();
 	amrex::Real divB = amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{}, sim.state_new_cc_[0], amrex::IntVect(0),
-					    [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
-						    amrex::Real const div = (bx[box](i + 1, j, k, bIdx) - bx[box](i, j, k, bIdx)) / dx[0] +
-									    (by[box](i, j + 1, k, bIdx) - by[box](i, j, k, bIdx)) / dx[1] +
-									    (bz[box](i, j, k + 1, bIdx) - bz[box](i, j, k, bIdx)) / dx[2];
-						    return {std::abs(div)};
-					    });
+	                                    [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
+		                                    amrex::Real const div = (bx[box](i + 1, j, k, bIdx) - bx[box](i, j, k, bIdx)) / dx[0] +
+						                            (by[box](i, j + 1, k, bIdx) - by[box](i, j, k, bIdx)) / dx[1] +
+						                            (bz[box](i, j, k + 1, bIdx) - bz[box](i, j, k, bIdx)) / dx[2];
+		                                    return {std::abs(div)};
+	                                    });
 	amrex::ParallelDescriptor::ReduceRealMax(divB);
 	const amrex::Real divB_rel = divB * dx[0] / (sim.userData_.B0_uG * microgauss_to_code);
 

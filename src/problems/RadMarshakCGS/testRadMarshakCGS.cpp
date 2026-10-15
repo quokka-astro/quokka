@@ -30,11 +30,11 @@
 struct SuOlsonProblemCgs {}; // dummy type to allow compile-type polymorphism via template specialization
 
 // Su & Olson (1997) parameters
-constexpr double eps_SuOlson = 1.0;	  // dimensionless
-constexpr double kappa = 577.0;		  // g cm^-2 (opacity)
-constexpr double rho0 = 10.0;		  // g cm^-3 (matter density)
+constexpr double eps_SuOlson = 1.0;       // dimensionless
+constexpr double kappa = 577.0;           // g cm^-2 (opacity)
+constexpr double rho0 = 10.0;             // g cm^-3 (matter density)
 constexpr double T_hohlraum = 3.481334e6; // K
-constexpr double a_rad = C::a_rad;	  // erg cm^-3 K^-4
+constexpr double a_rad = C::a_rad;        // erg cm^-3 K^-4
 // constexpr double c = 2.99792458e10;	  // cm s^-1
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 constexpr double T_initial = 1.0e4; // K
@@ -70,7 +70,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeFlux
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
-						    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
+                                                    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
@@ -78,7 +78,7 @@ quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint([[maybe_unused]] const doubl
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
-						    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
+                                                    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
@@ -86,7 +86,7 @@ quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas([[maybe_unused]] const doubl
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<SuOlsonProblemCgs>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-							  quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
+                                                          quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -103,8 +103,8 @@ quokka::EOS<SuOlsonProblemCgs>::ComputeEintTempDerivative(const double /*rho*/, 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							      int /*numcomp*/, amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/,
-							      const amrex::BCRec *bcr, int /*bcomp*/, int /*orig_comp*/)
+                                                              int /*numcomp*/, amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/,
+                                                              const amrex::BCRec *bcr, int /*bcomp*/, int /*orig_comp*/)
 {
 	if ((bcr->lo(0) != quokka::BCType::ext_dir) && (bcr->hi(0) != quokka::BCType::ext_dir)) {
 		return;
@@ -194,11 +194,11 @@ auto problem_main() -> int
 	// const double initial_dtau = 1e-9; // dimensionless time
 	// const double max_dtau = 1e-3;	  // dimensionless time
 	constexpr double max_tau = 10.0; // dimensionless time
-	constexpr double Lz = 20.0;	 // dimensionless length
+	constexpr double Lz = 20.0;      // dimensionless length
 
 	// Su & Olson (1997) parameters
-	constexpr double chi = rho0 * kappa;					  // cm^-1 (total matter opacity)
-	constexpr double Lx = Lz / chi;						  // cm
+	constexpr double chi = rho0 * kappa;                                      // cm^-1 (total matter opacity)
+	constexpr double Lx = Lz / chi;                                           // cm
 	constexpr double max_time = max_tau / (eps_SuOlson * c_light_cgs_ * chi); // s
 	// const double max_dt = max_dtau / (eps_SuOlson * c * chi);  // s
 	// const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
@@ -250,8 +250,8 @@ auto problem_main() -> int
 			Erad.at(i) = Erad_t;
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
-			const double Etot_t = values.at(RadSystem<SuOlsonProblemCgs>::gasEnergy_index)[i];	 // NOLINT(cppcoreguidelines-init-variables)
-			const double rho = values.at(RadSystem<SuOlsonProblemCgs>::gasDensity_index)[i];	 // NOLINT(cppcoreguidelines-init-variables)
+			const double Etot_t = values.at(RadSystem<SuOlsonProblemCgs>::gasEnergy_index)[i];       // NOLINT(cppcoreguidelines-init-variables)
+			const double rho = values.at(RadSystem<SuOlsonProblemCgs>::gasDensity_index)[i];         // NOLINT(cppcoreguidelines-init-variables)
 			const double x1GasMom = values.at(RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
 			const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 
@@ -342,7 +342,7 @@ auto problem_main() -> int
 
 		matplotlibcpp::xlabel("length x (cm)");
 		matplotlibcpp::ylabel("temperature (Kelvins)");
-		matplotlibcpp::xlim(0.4 / chi, 100. / chi);	  // cm
+		matplotlibcpp::xlim(0.4 / chi, 100. / chi);       // cm
 		matplotlibcpp::ylim(0.1 * T_initial, T_hohlraum); // K
 		matplotlibcpp::xscale("log");
 		// matplotlibcpp::yscale("log");

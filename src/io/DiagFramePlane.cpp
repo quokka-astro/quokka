@@ -46,7 +46,7 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 
 	if (m_filters.empty()) {
 		amrex::Print() << " Filters are not available on DiagFramePlane and will "
-				  "be discarded \n";
+		                  "be discarded \n";
 	}
 
 	amrex::ParmParse const pp(a_prefix);
@@ -102,7 +102,7 @@ void DiagFramePlane::addVars(amrex::Vector<std::string> &a_varList)
 }
 
 void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
-			     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames)
+                             const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames)
 {
 	if (first_time) {
 		for (auto const &field : m_fieldNames) {
@@ -211,9 +211,9 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 }
 
 void DiagFramePlane::Write2DMultiLevelPlotfile(const std::string &a_pltfile, int a_nlevels, const amrex::Vector<const amrex::MultiFab *> &a_slice,
-					       const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms,
-					       const amrex::Real &a_time, const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref,
-					       const YAML::Node &simulationMetadata)
+                                               const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms,
+                                               const amrex::Real &a_time, const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref,
+                                               const YAML::Node &simulationMetadata)
 {
 	const std::string levelPrefix = "Level_";
 	const std::string mfPrefix = "Cell";
@@ -282,9 +282,9 @@ void DiagFramePlane::Write2DMultiLevelPlotfile(const std::string &a_pltfile, int
 }
 
 void DiagFramePlane::Write2DPlotfileHeader(std::ostream &HeaderFile, int nlevels, const amrex::Vector<amrex::BoxArray> &bArray,
-					   const amrex::Vector<std::string> &varnames, const amrex::Vector<amrex::Geometry> &geom, const amrex::Real &time,
-					   const amrex::Vector<int> &level_steps, const amrex::Vector<amrex::IntVect> &ref_ratio,
-					   const std::string &versionName, const std::string &levelPrefix, const std::string &mfPrefix)
+                                           const amrex::Vector<std::string> &varnames, const amrex::Vector<amrex::Geometry> &geom, const amrex::Real &time,
+                                           const amrex::Vector<int> &level_steps, const amrex::Vector<amrex::IntVect> &ref_ratio,
+                                           const std::string &versionName, const std::string &levelPrefix, const std::string &mfPrefix)
 {
 	int const finest_level(nlevels - 1);
 	HeaderFile.precision(17);
@@ -460,7 +460,7 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 				}
 #endif
 				nfi.Stream().write(reinterpret_cast<const char *>(fabdata), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-						   writeDataSize);
+				                   writeDataSize);
 				nfi.Stream().flush();
 			}
 		}
@@ -541,7 +541,7 @@ void DiagFramePlane::Write2DMFHeader(const std::string &a_mf_name, amrex::VisMF:
 }
 
 void DiagFramePlane::Find2FOffsets(const amrex::FabArray<amrex::FArrayBox> &mf, const std::string &filePrefix, amrex::VisMF::Header &hdr,
-				   amrex::VisMF::Header::Version /*whichVersion*/, amrex::NFilesIter &nfi, int nOutFiles, MPI_Comm comm)
+                                   amrex::VisMF::Header::Version /*whichVersion*/, amrex::NFilesIter &nfi, int nOutFiles, MPI_Comm comm)
 {
 	bool const groupSets = false;
 

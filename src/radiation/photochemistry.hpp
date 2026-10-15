@@ -35,7 +35,7 @@ AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
-			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource) -> bool
+                           const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource) -> bool
 {
 	amrex::ignore_unused(dustHeatingSource);
 
@@ -48,18 +48,18 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	int num_failed = 0;
 
 	const int firstChemIndex = RadSystem<problem_t>::radEnergy_index +
-				   RadSystem<problem_t>::numRadVars_ * (RadSystem<problem_t>::nGroups_ - RadSystem_NChemBands<problem_t>::value);
+	                           RadSystem<problem_t>::numRadVars_ * (RadSystem<problem_t>::nGroups_ - RadSystem_NChemBands<problem_t>::value);
 	const int firstChemFxIndex = firstChemIndex + 1;
 	const int firstChemFyIndex = firstChemFxIndex + 1;
 	const int firstChemFzIndex = firstChemFyIndex + 1;
 
 	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
-		      "NumThermalBands (set for this network in NetworkRegistry.cmake) must equal RadSystem<problem_t>::nGroupsThermal_ "
-		      "(nGroups_ - NChemBands) when ISM_Traits::thermal_band_photochemistry is true.");
+	              "NumThermalBands (set for this network in NetworkRegistry.cmake) must equal RadSystem<problem_t>::nGroupsThermal_ "
+	              "(nGroups_ - NChemBands) when ISM_Traits::thermal_band_photochemistry is true.");
 #ifndef DUST_CHEMICAL_BAND_ABSORPTION
 	static_assert(!RadSystem<problem_t>::dust_chemical_band_absorption_,
-		      "ISM_Traits::dust_chemical_band_absorption is true but DUST_CHEMICAL_BAND_ABSORPTION is not defined: "
-		      "the network does not compute e_dust_absorbed, so Q_dust would always be zero.");
+	              "ISM_Traits::dust_chemical_band_absorption is true but DUST_CHEMICAL_BAND_ABSORPTION is not defined: "
+	              "the network does not compute e_dust_absorbed, so Q_dust would always be zero.");
 #endif
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
@@ -256,8 +256,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 #ifdef DUST_CHEMICAL_BAND_ABSORPTION
 			static_assert(RadSystem<problem_t>::dust_chemical_band_absorption_,
-				      "DUST_CHEMICAL_BAND_ABSORPTION is defined but ISM_Traits::dust_chemical_band_absorption is false: "
-				      "the dust-absorbed photon energy would be silently dropped.");
+			              "DUST_CHEMICAL_BAND_ABSORPTION is defined but ISM_Traits::dust_chemical_band_absorption is false: "
+			              "the dust-absorbed photon energy would be silently dropped.");
 			dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / dt;
 #endif
 
@@ -291,8 +291,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				if constexpr (debit_work_term_from_radiation) {
 					if (dMomMagSum > 0.0_rt) {
 						const Real dEkin = (xmom_new * xmom_new + ymom_new * ymom_new + zmom_new * zmom_new -
-								    (xmom * xmom + ymom * ymom + zmom * zmom)) /
-								   (2.0_rt * rho);
+						                    (xmom * xmom + ymom * ymom + zmom * zmom)) /
+						                   (2.0_rt * rho);
 						const Real E_debit = (C::c_light / photochemstate.c_hat) * dEkin;
 						for (int nn = 0; nn < NumChemBands; ++nn) {
 							const int eIdx = firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn;

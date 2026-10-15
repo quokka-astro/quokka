@@ -58,7 +58,7 @@ struct ToyStellarModel {
 	//   dt:       [in]     timestep
 	// The toy model is stateless, so it only reads mass/mdot and writes radius/lum.
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void evolve(amrex::Real *rdata, [[maybe_unused]] int *idata, int n_groups,
-								    [[maybe_unused]] amrex::Real dt)
+	                                                            [[maybe_unused]] amrex::Real dt)
 	{
 		const amrex::Real mass = rdata[StarParticleMassIdx];
 		const amrex::Real mdot = rdata[StarParticleMdotIdx];

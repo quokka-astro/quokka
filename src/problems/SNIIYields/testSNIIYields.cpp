@@ -77,8 +77,8 @@ struct test_SNII_Yields {};
 
 constexpr Real gamma_ = 5. / 3.;
 constexpr Real year = 3.15576e+07;
-static Real n0 = 1.0e4;									// NOLINT
-static Real Tamb = 10.0;								// NOLINT
+static Real n0 = 1.0e4;                                                                 // NOLINT
+static Real Tamb = 10.0;                                                                // NOLINT
 static std::string initial_particles_file = "../inputs/test_SNII_Yields_particles.txt"; // NOLINT
 
 template <> struct quokka::EOS_Traits<test_SNII_Yields> {
@@ -108,10 +108,10 @@ template <> struct Physics_Traits<YieldStorageDisabled> : Physics_Traits<test_SN
 
 static_assert(quokka::StochasticStellarPopParticleChemistryBlockCapacity<YieldStorageDisabled>() == 0);
 static_assert(quokka::StochasticStellarPopParticleRealComps<YieldStorageDisabled> ==
-	      quokka::StochasticStellarPopParticleLumIdx + Physics_Traits<YieldStorageDisabled>::nGroups);
+              quokka::StochasticStellarPopParticleLumIdx + Physics_Traits<YieldStorageDisabled>::nGroups);
 static_assert(quokka::StochasticStellarPopParticleRealComps<test_SNII_Yields> ==
-	      quokka::StochasticStellarPopParticleRealComps<YieldStorageDisabled> +
-		  (quokka::ChemicalYieldLookup::max_tracked_channels + 1) * Physics_Traits<test_SNII_Yields>::numPassiveScalars);
+              quokka::StochasticStellarPopParticleRealComps<YieldStorageDisabled> +
+                  (quokka::ChemicalYieldLookup::max_tracked_channels + 1) * Physics_Traits<test_SNII_Yields>::numPassiveScalars);
 
 template <> void QuokkaSimulation<test_SNII_Yields>::createInitialStochasticStellarPopParticles()
 {

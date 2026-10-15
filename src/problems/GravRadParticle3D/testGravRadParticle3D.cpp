@@ -28,8 +28,8 @@ constexpr int nGroups_ = 1;
 constexpr double erad_floor = 1.0e-15;
 constexpr double initial_Erad = erad_floor;
 constexpr double initial_Egas = 1.0e-5;
-constexpr double c = 100.0;	   // speed of light
-constexpr double chat = 2.0;	   // reduced speed of light
+constexpr double c = 100.0;        // speed of light
+constexpr double chat = 2.0;       // reduced speed of light
 constexpr double kappa0 = 1.0e-20; // opacity
 constexpr double rho0 = 1.0e-8;
 constexpr double m_H = C::m_p + C::m_e;
@@ -158,9 +158,9 @@ auto checkGasDensityProjection(const QuokkaSimulation<ParticleProblem> &sim) -> 
 		const char dir_name = "xyz"[dir_index];
 
 		amrex::Print() << "Projected gasDensity statistics along " << dir_name << ": min=" << projection_min << " max=" << projection_max
-			       << " sum=" << projection_sum << "\n";
+		               << " sum=" << projection_sum << "\n";
 		amrex::Print() << "Expected gasDensity projection along " << dir_name << ": value=" << expected_projection << " sum=" << expected_projection_sum
-			       << "\n";
+		               << "\n";
 
 		if (std::abs(projection_min - expected_projection) > projection_tol || std::abs(projection_max - expected_projection) > projection_tol ||
 		    std::abs(projection_sum - expected_projection_sum) > projection_sum_tol) {
@@ -204,9 +204,9 @@ auto problem_main() -> int
 	const double dvol = dx * dy * dz;
 	const double total_Erad = total_Erad_over_vol * dvol;
 	const double t_sim = sim.tNew_[0];
-	const double t_alive = std::min(0.5, t_sim);		     // particles only live for 0.5 time units
+	const double t_alive = std::min(0.5, t_sim);                 // particles only live for 0.5 time units
 	double total_Erad_exact = 2.0 * lum1 * t_alive * (chat / c); // two particles with luminosity lum1
-	total_Erad_exact *= 2.0;				     // two particle system (Rad + CICRad)
+	total_Erad_exact *= 2.0;                                     // two particle system (Rad + CICRad)
 	const auto total_num_of_cells = sim.Geom(0).Domain().volume();
 	total_Erad_exact += static_cast<double>(total_num_of_cells) * dvol * initial_Erad;
 
@@ -330,7 +330,7 @@ auto problem_main() -> int
 
 		// Cleanup and exit
 		amrex::Print() << "Finished."
-			       << "\n";
+		               << "\n";
 	}
 
 	return status;

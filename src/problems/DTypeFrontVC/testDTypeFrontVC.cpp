@@ -80,9 +80,9 @@ template <> struct SimulationData<DTypeFrontVC> {
 
 template <>
 void RadSystem<DTypeFrontVC>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/,
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { radEnergy(i, j, k) = 0.0_rt; });
 }
@@ -190,14 +190,14 @@ auto compute_momentum_check(amrex::MultiFab const &state_mf, amrex::GpuArray<amr
 	const amrex::Real inv_c2 = 1.0_rt / (C::c_light * C::c_light);
 
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data,
-		       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
-			       const amrex::Real gas_px = cell_volume * state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x1GasMomentum_index);
-			       const amrex::Real gas_py = cell_volume * state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x2GasMomentum_index);
-			       const amrex::Real gas_pz = cell_volume * state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x3GasMomentum_index);
-			       const amrex::Real flux_x_after = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x1RadFlux_index);
-			       const amrex::Real expected_px = cell_volume * (initial_flux_x - flux_x_after) * inv_c2;
-			       return {gas_px, gas_py, gas_pz, expected_px};
-		       });
+	               [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+		               const amrex::Real gas_px = cell_volume * state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x1GasMomentum_index);
+		               const amrex::Real gas_py = cell_volume * state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x2GasMomentum_index);
+		               const amrex::Real gas_pz = cell_volume * state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x3GasMomentum_index);
+		               const amrex::Real flux_x_after = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x1RadFlux_index);
+		               const amrex::Real expected_px = cell_volume * (initial_flux_x - flux_x_after) * inv_c2;
+		               return {gas_px, gas_py, gas_pz, expected_px};
+	               });
 
 	auto [gas_px, gas_py, gas_pz, expected_px] = reduce_data.value();
 	amrex::ParallelAllReduce::Sum(gas_px, amrex::ParallelContext::CommunicatorSub());
@@ -215,16 +215,16 @@ auto compute_energy_check(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex
 	const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data,
-		       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real> {
-			       const amrex::Real rho = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::gasDensity_index);
-			       const amrex::Real px = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x1GasMomentum_index);
-			       const amrex::Real py = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x2GasMomentum_index);
-			       const amrex::Real pz = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x3GasMomentum_index);
-			       const amrex::Real kinetic = (px * px + py * py + pz * pz) / (2.0_rt * rho);
-			       const amrex::Real gas_energy = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::gasEnergy_index);
-			       const amrex::Real gas_internal_energy = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::gasInternalEnergy_index);
-			       return {cell_volume * gas_energy, cell_volume * gas_internal_energy, cell_volume * kinetic};
-		       });
+	               [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real> {
+		               const amrex::Real rho = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::gasDensity_index);
+		               const amrex::Real px = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x1GasMomentum_index);
+		               const amrex::Real py = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x2GasMomentum_index);
+		               const amrex::Real pz = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x3GasMomentum_index);
+		               const amrex::Real kinetic = (px * px + py * py + pz * pz) / (2.0_rt * rho);
+		               const amrex::Real gas_energy = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::gasEnergy_index);
+		               const amrex::Real gas_internal_energy = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::gasInternalEnergy_index);
+		               return {cell_volume * gas_energy, cell_volume * gas_internal_energy, cell_volume * kinetic};
+	               });
 
 	auto [gas_energy, gas_internal_energy, gas_kinetic_energy] = reduce_data.value();
 	amrex::ParallelAllReduce::Sum(gas_energy, amrex::ParallelContext::CommunicatorSub());
@@ -248,7 +248,7 @@ auto problem_main() -> int
 	std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const fc_ptrs{};
 	amrex::MultiFab dustHeatingSource;
 	static_cast<void>(quokka::photochemistry::computePhotoChemistry<DTypeFrontVC>(sim.state_new_cc_[0], fc_ptrs, burn_dt,
-										      std::numeric_limits<amrex::Real>::max(), 0.0_rt, dustHeatingSource));
+	                                                                              std::numeric_limits<amrex::Real>::max(), 0.0_rt, dustHeatingSource));
 
 	const MomentumCheck check = compute_momentum_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray(), initial_flux_x);
 	const EnergyCheck energy_after = compute_energy_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray());

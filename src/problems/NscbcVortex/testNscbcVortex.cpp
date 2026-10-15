@@ -59,12 +59,12 @@ template <> struct Physics_Traits<Vortex> : DefaultPhysicsTraits {
 namespace
 {
 const bool outflow_boundary_along_x_axis = true;
-amrex::Real G_vortex = NAN;						      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real T_ref = NAN;				      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real P_ref = NAN;				      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real u0 = NAN;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real v0 = NAN;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real w0 = NAN;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real G_vortex = NAN;                                                   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real T_ref = NAN;                                    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real P_ref = NAN;                                    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real u0 = NAN;                                       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real v0 = NAN;                                       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real w0 = NAN;                                       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED amrex::GpuArray<Real, HydroSystem<Vortex>::nscalars_> s0{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 }; // namespace
 
@@ -89,7 +89,7 @@ template <> void QuokkaSimulation<Vortex>::setInitialConditionsOnGrid(quokka::gr
 		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 
 		Real const P = P_ref + -0.5 * std::pow(G, 2) * P_ref * gamma * std::exp((-std::pow(x, 2) - std::pow(y, 2)) / std::pow(R_v, 2)) /
-					   (std::pow(R_v, 2) * std::pow(c, 2));
+		                           (std::pow(R_v, 2) * std::pow(c, 2));
 
 		Real const rho = P / (R * T_ref);
 		Real const u = u0 + -G * y * std::exp(-1.0 / 2.0 * (std::pow(x, 2) + std::pow(y, 2)) / std::pow(R_v, 2)) / std::pow(R_v, 2);
@@ -116,9 +116,9 @@ template <> void QuokkaSimulation<Vortex>::setInitialConditionsOnGrid(quokka::gr
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Vortex>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-											    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-											    const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-											    int /*orig_comp*/)
+                                                                                            int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+                                                                                            const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+                                                                                            int /*orig_comp*/)
 {
 	auto [i, j, k] = iv.dim3();
 	amrex::Box const &box = geom.Domain();
@@ -172,8 +172,8 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("vortex");
 	// initial condition parameters
 	pp.query("strength", ::G_vortex); // vortex strength
-	pp.query("Tgas0", ::T_ref);	  // initial temperature [K]
-	pp.query("P0", ::P_ref);	  // initial pressure [erg cm^-3]
+	pp.query("Tgas0", ::T_ref);       // initial temperature [K]
+	pp.query("P0", ::P_ref);          // initial pressure [erg cm^-3]
 	// boundary condition parameters
 	pp.query("u_inflow", ::u0);    // inflow velocity along x-axis [cm/s]
 	pp.query("v_inflow", ::v0);    // transverse inflow velocity (v_y) [cm/s]

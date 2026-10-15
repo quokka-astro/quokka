@@ -39,8 +39,8 @@ constexpr size_t tracer_particle_count = 64;
 constexpr int numerical_tracer_substeps = 8;
 constexpr int reference_dense_history_points = 1001;
 
-AMREX_GPU_MANAGED double g_epsilon = 0.01;		       // NOLINT
-AMREX_GPU_MANAGED double g_stopping_time = 0.1;		       // NOLINT
+AMREX_GPU_MANAGED double g_epsilon = 0.01;                     // NOLINT
+AMREX_GPU_MANAGED double g_stopping_time = 0.1;                // NOLINT
 AMREX_GPU_MANAGED double g_omega_l_target = -alfven_frequency; // NOLINT
 
 // input parameter table for a test case
@@ -233,19 +233,19 @@ auto referenceRhs(const ReferenceState &state, const CaseConfig &config) -> Refe
 auto operator+(const ReferenceState &a, const ReferenceState &b) -> ReferenceState
 {
 	return {.gas_perp_ = a.gas_perp_ + b.gas_perp_,
-		.b_perp_ = a.b_perp_ + b.b_perp_,
-		.dust_perp_ = a.dust_perp_ + b.dust_perp_,
-		.gas_z_ = a.gas_z_ + b.gas_z_,
-		.dust_z_ = a.dust_z_ + b.dust_z_};
+	        .b_perp_ = a.b_perp_ + b.b_perp_,
+	        .dust_perp_ = a.dust_perp_ + b.dust_perp_,
+	        .gas_z_ = a.gas_z_ + b.gas_z_,
+	        .dust_z_ = a.dust_z_ + b.dust_z_};
 }
 
 auto operator*(double scale, const ReferenceState &state) -> ReferenceState
 {
 	return {.gas_perp_ = scale * state.gas_perp_,
-		.b_perp_ = scale * state.b_perp_,
-		.dust_perp_ = scale * state.dust_perp_,
-		.gas_z_ = scale * state.gas_z_,
-		.dust_z_ = scale * state.dust_z_};
+	        .b_perp_ = scale * state.b_perp_,
+	        .dust_perp_ = scale * state.dust_perp_,
+	        .gas_z_ = scale * state.gas_z_,
+	        .dust_z_ = scale * state.dust_z_};
 }
 
 auto rk4Step(const ReferenceState &state, const CaseConfig &config, double dt) -> ReferenceState
@@ -264,11 +264,11 @@ auto evaluateReference(const ReferenceState &state, double z) -> ReferencePoint
 	const std::complex<double> dust = state.dust_perp_ * phase;
 	const std::complex<double> bfield = state.b_perp_ * phase;
 	return {.gas_vx = std::real(gas),
-		.gas_vy = std::imag(gas),
-		.dust_vx = std::real(dust),
-		.dust_vy = std::imag(dust),
-		.bx = std::real(bfield),
-		.by = std::imag(bfield)};
+	        .gas_vy = std::imag(gas),
+	        .dust_vx = std::real(dust),
+	        .dust_vy = std::imag(dust),
+	        .bx = std::real(bfield),
+	        .by = std::imag(bfield)};
 }
 
 auto integrateReferenceToTimes(const CaseConfig &config, const std::vector<double> &times, double sample_z, int reference_steps)
@@ -314,8 +314,8 @@ auto makeNumericalFieldHistory(const CaseHistory &history) -> std::vector<Helica
 	samples.reserve(history.t_.size());
 	for (size_t i = 0; i < history.t_.size(); ++i) {
 		samples.push_back(makeFieldSample(history.t_[i], std::complex<double>(history.gas_amp_re_[i], history.gas_amp_im_[i]),
-						  std::complex<double>(history.b_amp_re_[i], history.b_amp_im_[i]), history.gas_vz_mean_[i],
-						  history.bz_mean_[i]));
+		                                  std::complex<double>(history.b_amp_re_[i], history.b_amp_im_[i]), history.gas_vz_mean_[i],
+		                                  history.bz_mean_[i]));
 	}
 	return samples;
 }
@@ -348,9 +348,9 @@ auto interpolateFieldHistory(const std::vector<HelicalFieldSample> &samples, dou
 	const double weight = (dt > 0.0) ? (t - samples[lower].t_) / dt : 0.0;
 
 	return makeFieldSample(t, (1.0 - weight) * samples[lower].gas_perp_ + weight * samples[upper].gas_perp_,
-			       (1.0 - weight) * samples[lower].b_perp_ + weight * samples[upper].b_perp_,
-			       (1.0 - weight) * samples[lower].gas_z_ + weight * samples[upper].gas_z_,
-			       (1.0 - weight) * samples[lower].b_z_ + weight * samples[upper].b_z_);
+	                       (1.0 - weight) * samples[lower].b_perp_ + weight * samples[upper].b_perp_,
+	                       (1.0 - weight) * samples[lower].gas_z_ + weight * samples[upper].gas_z_,
+	                       (1.0 - weight) * samples[lower].b_z_ + weight * samples[upper].b_z_);
 }
 
 // HelicalFieldSample = mode amplitude at a time point, EvaluatedField = local gas/B at this time point and position
@@ -372,7 +372,7 @@ auto evaluateFieldAtPosition(const HelicalFieldSample &sample, double z) -> Eval
 }
 
 void fillTracerProfileColumns(const std::vector<TracerState> &particles, const HelicalFieldSample &field, std::vector<double> &z_out,
-			      std::vector<double> &gas_vx_out, std::vector<double> &dust_vx_out)
+                              std::vector<double> &gas_vx_out, std::vector<double> &dust_vx_out)
 {
 	std::vector<std::tuple<double, double, double>> rows;
 	rows.reserve(particles.size());
@@ -410,13 +410,13 @@ auto tracerRhs(const TracerState &state, const HelicalFieldSample &field, const 
 	const double cross_z = wx * local.by_ - wy * local.bx_;
 
 	return {.z_ = state.vz_,
-		.vx_ = -alpha * wx + dimensionless_charge_to_mass_ratio * cross_x,
-		.vy_ = -alpha * wy + dimensionless_charge_to_mass_ratio * cross_y,
-		.vz_ = -alpha * wz + dimensionless_charge_to_mass_ratio * cross_z};
+	        .vx_ = -alpha * wx + dimensionless_charge_to_mass_ratio * cross_x,
+	        .vy_ = -alpha * wy + dimensionless_charge_to_mass_ratio * cross_y,
+	        .vz_ = -alpha * wz + dimensionless_charge_to_mass_ratio * cross_z};
 }
 
 void rk4StepTracersWithSampledFields(std::vector<TracerState> &particles, double t, double dt, const std::vector<HelicalFieldSample> &field_history,
-				     const CaseConfig &config)
+                                     const CaseConfig &config)
 {
 	const HelicalFieldSample field1 = interpolateFieldHistory(field_history, t);
 	const HelicalFieldSample field2 = interpolateFieldHistory(field_history, t + 0.5 * dt);
@@ -433,7 +433,7 @@ void rk4StepTracersWithSampledFields(std::vector<TracerState> &particles, double
 }
 
 auto integrateTracerThroughSampledFields(const CaseConfig &config, const std::vector<HelicalFieldSample> &field_history,
-					 const std::vector<double> &sample_times) -> std::pair<std::vector<double>, ParticleProfile>
+                                         const std::vector<double> &sample_times) -> std::pair<std::vector<double>, ParticleProfile>
 {
 	std::vector<TracerState> particles = makeInitialTracers();
 	std::vector<double> tracer_dust_vx;
@@ -792,7 +792,7 @@ auto runCase(const CaseConfig &config, int reference_steps) -> CaseResult
 
 	auto BCs_cc = quokka::BC<DustyAlfvenWave>(quokka::BCType::int_dir);
 	auto BCs_fc = quokka::BC_fc<DustyAlfvenWave>(quokka::BCType::mathematicalBndryTypes::periodic, quokka::BCType::mathematicalBndryTypes::periodic,
-						     quokka::BCType::mathematicalBndryTypes::periodic);
+	                                             quokka::BCType::mathematicalBndryTypes::periodic);
 	QuokkaSimulation<DustyAlfvenWave> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 2;
@@ -847,15 +847,15 @@ auto runCase(const CaseConfig &config, int reference_steps) -> CaseResult
 auto makeEpsilonCases() -> std::vector<CaseConfig>
 {
 	return {{"epsilon", "epsilon0", "epsilon = 0", 0.0, -alfven_frequency, stop_time_default},
-		{"epsilon", "epsilon0p1", "epsilon = 0.1", 0.1, -alfven_frequency, stop_time_default},
-		{"epsilon", "epsilon1", "epsilon = 1", 1.0, -alfven_frequency, stop_time_default}};
+	        {"epsilon", "epsilon0p1", "epsilon = 0.1", 0.1, -alfven_frequency, stop_time_default},
+	        {"epsilon", "epsilon1", "epsilon = 1", 1.0, -alfven_frequency, stop_time_default}};
 }
 
 auto makeOmegaCases() -> std::vector<CaseConfig>
 {
 	return {{"omega", "omega_high", "-Omega_L/Omega_AW = 10", 0.01, -10.0 * alfven_frequency, stop_time_default},
-		{"omega", "omega_resonant", "-Omega_L/Omega_AW = 1", 0.01, -alfven_frequency, stop_time_default},
-		{"omega", "omega_low", "-Omega_L/Omega_AW = 0.1", 0.01, -0.1 * alfven_frequency, stop_time_default}};
+	        {"omega", "omega_resonant", "-Omega_L/Omega_AW = 1", 0.01, -alfven_frequency, stop_time_default},
+	        {"omega", "omega_low", "-Omega_L/Omega_AW = 0.1", 0.01, -0.1 * alfven_frequency, stop_time_default}};
 }
 } // namespace
 

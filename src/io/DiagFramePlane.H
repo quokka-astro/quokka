@@ -22,7 +22,7 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 	void init(const std::string &a_prefix, std::string_view a_diagName) override;
 
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
-		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
+	             const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
 	// Template implementation - called from AMRSimulation::doDiagnostics()
 	template <typename problem_t> void processDiag(int a_nstep, const amrex::Real &a_time);
@@ -33,23 +33,23 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
 
 	void Write2DMultiLevelPlotfile(const std::string &a_pltfile, int a_nlevels, const amrex::Vector<const amrex::MultiFab *> &a_slice,
-				       const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
-				       const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref, const YAML::Node &simulationMetadata);
+	                               const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
+	                               const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref, const YAML::Node &simulationMetadata);
 
 	static void VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_mf_name);
 
 	static void Write2DMFHeader(const std::string &a_mf_name, amrex::VisMF::Header &hdr, int coordinatorProc, MPI_Comm comm);
 
 	static void Find2FOffsets(const amrex::FabArray<amrex::FArrayBox> &mf, const std::string &filePrefix, amrex::VisMF::Header &hdr,
-				  amrex::VisMF::Header::Version /*whichVersion*/, amrex::NFilesIter &nfi, int nOutFile, MPI_Comm comm);
+	                          amrex::VisMF::Header::Version /*whichVersion*/, amrex::NFilesIter &nfi, int nOutFile, MPI_Comm comm);
 
 	static void write_2D_header(std::ostream &os, const amrex::FArrayBox &f, int nvar);
 
 	static void Write2DPlotfileHeader(std::ostream &HeaderFile, int nlevels, const amrex::Vector<amrex::BoxArray> &bArray,
-					  const amrex::Vector<std::string> &varnames, const amrex::Vector<amrex::Geometry> &geom, const amrex::Real &time,
-					  const amrex::Vector<int> &level_steps, const amrex::Vector<amrex::IntVect> &ref_ratio,
-					  const std::string &versionName = "HyperCLaw-V1.1", const std::string &levelPrefix = "Level_",
-					  const std::string &mfPrefix = "Cell");
+	                                  const amrex::Vector<std::string> &varnames, const amrex::Vector<amrex::Geometry> &geom, const amrex::Real &time,
+	                                  const amrex::Vector<int> &level_steps, const amrex::Vector<amrex::IntVect> &ref_ratio,
+	                                  const std::string &versionName = "HyperCLaw-V1.1", const std::string &levelPrefix = "Level_",
+	                                  const std::string &mfPrefix = "Cell");
 
 	void close() override {}
 
@@ -104,19 +104,19 @@ template <typename problem_t> void DiagFramePlane::processDiag(int a_nstep, cons
 				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 					int const stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					plane(i, j, k, n) = intwgt[0] * state(p0 - 1, i, j, stIdx) + intwgt[1] * state(p0, i, j, stIdx) +
-							    intwgt[2] * state(p0 + 1, i, j, stIdx);
+					                    intwgt[2] * state(p0 + 1, i, j, stIdx);
 				});
 			} else if (m_normal == 1) {
 				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 					int const stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					plane(i, j, k, n) = intwgt[0] * state(i, p0 - 1, j, stIdx) + intwgt[1] * state(i, p0, j, stIdx) +
-							    intwgt[2] * state(i, p0 + 1, j, stIdx);
+					                    intwgt[2] * state(i, p0 + 1, j, stIdx);
 				});
 			} else if (m_normal == 2) {
 				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 					int const stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					plane(i, j, k, n) = intwgt[0] * state(i, j, p0 - 1, stIdx) + intwgt[1] * state(i, j, p0, stIdx) +
-							    intwgt[2] * state(i, j, p0 + 1, stIdx);
+					                    intwgt[2] * state(i, j, p0 + 1, stIdx);
 				});
 			}
 		}
@@ -145,7 +145,7 @@ template <typename problem_t> void DiagFramePlane::processDiag(int a_nstep, cons
 		std::string const diagfile = amrex::Concatenate(m_diagfile, a_nstep, 7);
 		amrex::Vector<int> const step_array(nlevs, a_nstep);
 		Write2DMultiLevelPlotfile(diagfile, nlevs, GetVecOfConstPtrs(planeData), m_fieldNames, pltGeoms, a_time, step_array, ref_ratio,
-					  simulationMetadata);
+		                          simulationMetadata);
 
 		// If particles are requested, write them
 #if AMREX_SPACEDIM == 3

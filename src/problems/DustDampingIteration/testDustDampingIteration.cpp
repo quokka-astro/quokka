@@ -94,7 +94,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithCorrection>::ComputeRecipr
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, g_dust_grain_radius,
-						 g_dust_grain_density, enable_supersonic_correction_with);
+	                                         g_dust_grain_density, enable_supersonic_correction_with);
 }
 
 template <>
@@ -102,7 +102,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithoutCorrection>::ComputeRec
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, g_dust_grain_radius,
-						 g_dust_grain_density, enable_supersonic_correction_without);
+	                                         g_dust_grain_density, enable_supersonic_correction_without);
 }
 
 template <> void QuokkaSimulation<DustDampingWithCorrection>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -110,8 +110,8 @@ template <> void QuokkaSimulation<DustDampingWithCorrection>::setInitialConditio
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto vx0 = v0;		 // gas velocity
-	const auto vx_dust1 = 2 * v0;	 // dust1 velocity
+	const auto vx0 = v0;             // gas velocity
+	const auto vx_dust1 = 2 * v0;    // dust1 velocity
 	const auto vx_dust2 = 10.0 * v0; // dust2 velocity
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -147,8 +147,8 @@ template <> void QuokkaSimulation<DustDampingWithoutCorrection>::setInitialCondi
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto vx0 = v0;		 // gas velocity
-	const auto vx_dust1 = 2 * v0;	 // dust1 velocity
+	const auto vx0 = v0;             // gas velocity
+	const auto vx_dust1 = 2 * v0;    // dust1 velocity
 	const auto vx_dust2 = 10.0 * v0; // dust2 velocity
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -377,7 +377,7 @@ auto run_iterative_without_correction() -> SimulationData<DustDampingWithoutCorr
 }
 
 auto compute_relative_error(const std::vector<double> &t_test, const std::vector<double> &v_test, const std::vector<double> &t_ref,
-			    const std::vector<double> &v_ref) -> double
+                            const std::vector<double> &v_ref) -> double
 {
 	if (t_ref.empty() || t_test.empty()) {
 		return 1.0;
@@ -469,10 +469,10 @@ auto problem_main() -> int
 		const double rel_err_tol = 0.01;
 
 		bool const with_corr_passed = (rel_err_with_corr_gas_vx <= rel_err_tol) && (rel_err_with_corr_dust1_vx <= rel_err_tol) &&
-					      (rel_err_with_corr_dust2_vx <= rel_err_tol) && (rel_err_with_corr_gas_E <= rel_err_tol);
+		                              (rel_err_with_corr_dust2_vx <= rel_err_tol) && (rel_err_with_corr_gas_E <= rel_err_tol);
 
 		bool const without_corr_passed = (rel_err_without_corr_gas_vx <= rel_err_tol) && (rel_err_without_corr_dust1_vx <= rel_err_tol) &&
-						 (rel_err_without_corr_dust2_vx <= rel_err_tol) && (rel_err_without_corr_gas_E <= rel_err_tol);
+		                                 (rel_err_without_corr_dust2_vx <= rel_err_tol) && (rel_err_without_corr_gas_E <= rel_err_tol);
 
 		if (!with_corr_passed || !without_corr_passed) {
 			status = 1;
@@ -491,11 +491,11 @@ auto problem_main() -> int
 		// gas velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_,
-				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		                    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_gas_vec_,
-				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+		                    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_gas_vec_,
-				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+		                    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_g$)");
@@ -506,11 +506,11 @@ auto problem_main() -> int
 		// dust1 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_,
-				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		                    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust1_vec_,
-				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+		                    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust1_vec_,
-				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+		                    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,1}$)");
@@ -521,11 +521,11 @@ auto problem_main() -> int
 		// dust2 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_,
-				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		                    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust2_vec_,
-				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+		                    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust2_vec_,
-				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+		                    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,2}$)");
@@ -536,11 +536,11 @@ auto problem_main() -> int
 		// gas energy
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
-				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		                    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.E_gas_vec_,
-				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+		                    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.E_gas_vec_,
-				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+		                    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($E_g$)");

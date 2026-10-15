@@ -22,8 +22,8 @@ struct AdvPulseProblem {};
 constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 
 constexpr double T_low = 1.0e7; // K (temperature)
-constexpr double T_hi = 2.0e7;	// K (temperature)
-constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
+constexpr double T_hi = 2.0e7;  // K (temperature)
+constexpr double rho0 = 1.2;    // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light; // speed of light (cgs)
 constexpr double chat = c;
@@ -33,7 +33,7 @@ constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 
 // Default parameters: static diffusion, tau = 2e3, beta = 3e-5, beta tau = 6e-2
-AMREX_GPU_MANAGED double kappa0 = 100.;	 // NOLINT
+AMREX_GPU_MANAGED double kappa0 = 100.;  // NOLINT
 AMREX_GPU_MANAGED double v0_adv = 1.0e6; // NOLINT
 // AMREX_GPU_MANAGED double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 

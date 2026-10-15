@@ -348,7 +348,7 @@ void printParticleStatistics(ContainerType *container, int massIndex, int evolut
 				for (; i < n_print; ++i) {
 					if (evolutionStageIndex >= 0) {
 						amrex::Print() << std::format("\t{:20.13e} | {:>20}\n", real_data[i][AMREX_SPACEDIM + massIndex],
-									      int_data[i][evolutionStageIndex]);
+						                              int_data[i][evolutionStageIndex]);
 					} else {
 						amrex::Print() << std::format("\t{:20.13e}\n", real_data[i][AMREX_SPACEDIM + massIndex]);
 					}

@@ -38,16 +38,16 @@ struct TubeProblem {};
 constexpr amrex::Real kappa0 = 5.0;  // cm^2 g^-1
 constexpr double mu = 2.33 * C::m_u; // g
 constexpr double gamma_gas = 1.0;    // isothermal gas EOS
-constexpr double a0 = 0.2e5;	     // cm s^-1
-constexpr double tau = 1.0e-6;	     // optical depth (dimensionless)
+constexpr double a0 = 0.2e5;         // cm s^-1
+constexpr double tau = 1.0e-6;       // optical depth (dimensionless)
 
 constexpr double rho0 = 1.0e5 * mu; // g cm^-3
-constexpr double Mach0 = 1.1;	    // Mach number at wind base
+constexpr double Mach0 = 1.1;       // Mach number at wind base
 constexpr double Mach1 = 2.128410288469465339;
 
 constexpr double Frad0 = rho0 * a0 * c_light_cgs_ / tau; // erg cm^-2 s^-1
-constexpr double g0 = kappa0 * Frad0 / c_light_cgs_;	 // cm s^{-2}
-constexpr double Lx = (a0 * a0) / g0;			 // cm
+constexpr double g0 = kappa0 * Frad0 / c_light_cgs_;     // cm s^{-2}
+constexpr double Lx = (a0 * a0) / g0;                    // cm
 
 template <> struct quokka::EOS_Traits<TubeProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -113,8 +113,8 @@ template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokk
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-							int /*bcomp*/, int /*orig_comp*/)
+                                                        amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
+                                                        int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<TubeProblem>::nvarTotal_cc;
@@ -184,7 +184,7 @@ auto problem_main() -> int
 	QuokkaSimulation<TubeProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.reconstructionOrder_ = 3;	       // PPM
+	sim.reconstructionOrder_ = 3;          // PPM
 	sim.stopTime_ = tmax;
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;
@@ -238,7 +238,7 @@ auto problem_main() -> int
 		for (double value = NAN; iss >> value;) {
 			values.push_back(value);
 		}
-		auto x = values.at(0);	  // position
+		auto x = values.at(0);    // position
 		auto rho = values.at(1);  // density
 		auto Mach = values.at(2); // Mach number
 

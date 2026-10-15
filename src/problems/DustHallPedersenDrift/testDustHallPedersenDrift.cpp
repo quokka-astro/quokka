@@ -230,7 +230,7 @@ auto analyticRelativeDrift(double t) -> DriftState
 	const double sin_term = std::sin(omega_rel * t);
 
 	return {.wx = steady.wx + decay * (delta_wx0 * cos_term + delta_wy0 * sin_term),
-		.wy = steady.wy + decay * (-delta_wx0 * sin_term + delta_wy0 * cos_term)};
+	        .wy = steady.wy + decay * (-delta_wx0 * sin_term + delta_wy0 * cos_term)};
 }
 
 auto relativeDriftL2Error(SimulationData<DustHallPedersenDrift> const &data) -> double
@@ -293,10 +293,10 @@ void plotRelativeDrift(SimulationData<DustHallPedersenDrift> const &data)
 	matplotlibcpp::clf();
 	matplotlibcpp::plot(t_dense, wx_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
 	matplotlibcpp::plot(data.t_vec_, data.wx_vec_,
-			    {{"label", R"($w_x$)"}, {"color", "C0"}, {"linestyle", "None"}, {"marker", "o"}, {"markerfacecolor", "none"}, {"markersize", "4"}});
+	                    {{"label", R"($w_x$)"}, {"color", "C0"}, {"linestyle", "None"}, {"marker", "o"}, {"markerfacecolor", "none"}, {"markersize", "4"}});
 	matplotlibcpp::plot(t_dense, wy_dense, {{"color", "k"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
 	matplotlibcpp::plot(data.t_vec_, data.wy_vec_,
-			    {{"label", R"($w_y$)"}, {"color", "C1"}, {"linestyle", "None"}, {"marker", "o"}, {"markerfacecolor", "none"}, {"markersize", "4"}});
+	                    {{"label", R"($w_y$)"}, {"color", "C1"}, {"linestyle", "None"}, {"marker", "o"}, {"markerfacecolor", "none"}, {"markersize", "4"}});
 	matplotlibcpp::legend();
 	matplotlibcpp::tick_params({{"labelsize", "13"}});
 	matplotlibcpp::xlabel("t", {{"fontsize", "15"}});

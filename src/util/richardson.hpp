@@ -85,7 +85,7 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 
 		if (nx == params.nx_max) {
 			amrex::Print() << std::format("\nReached maximum resolution (nx = {}) without achieving the target error {:.3e}\n", params.nx_max,
-						      params.machine_precision_target);
+			                              params.machine_precision_target);
 			break;
 		}
 	}
@@ -147,7 +147,7 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 	if (convergence_passed) {
 		if (reached_target) {
 			amrex::Print() << std::format("\n✓ Richardson convergence test PASSED (target error {:.3e} reached)\n",
-						      params.machine_precision_target);
+			                              params.machine_precision_target);
 		} else {
 			amrex::Print() << "\n✓ Richardson convergence test PASSED\n";
 		}

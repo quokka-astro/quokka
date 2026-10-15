@@ -17,14 +17,14 @@ namespace quokka
 namespace BCType
 {
 enum mathematicalBndryTypesInteger : int { // NOLINT
-	// Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
+        // Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
 	bogus = amrex::BCType::bogus,
 	reflect_odd = amrex::BCType::reflect_odd,
 	int_dir = amrex::BCType::int_dir, // interior/periodic
 	reflect_even = amrex::BCType::reflect_even,
-	foextrap = amrex::BCType::foextrap,	// first order extrapolation
-	ext_dir = amrex::BCType::ext_dir,	// external Dirichlet
-	hoextrap = amrex::BCType::hoextrap,	// higher order extrapolation
+	foextrap = amrex::BCType::foextrap,     // first order extrapolation
+	ext_dir = amrex::BCType::ext_dir,       // external Dirichlet
+	hoextrap = amrex::BCType::hoextrap,     // higher order extrapolation
 	hoextrapcc = amrex::BCType::hoextrapcc, // higher order extrapolation to cell center
 	ext_dir_cc = amrex::BCType::ext_dir_cc, // external Dirichlet at cell center
 	direction_dependent = amrex::BCType::direction_dependent,
@@ -34,32 +34,32 @@ enum mathematicalBndryTypesInteger : int { // NOLINT
 
 	// Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
 	reflecting = 8881, // Special: uses reflect_odd/reflect_even based on component
-			   // outflow_nscbc = 8882, // Future: NSCBC outflow
-			   // inflow_nscbc = 8883, // Future: NSCBC inflow
-			   // custom_wall = 8884  // Future: custom wall treatment
+	                   // outflow_nscbc = 8882, // Future: NSCBC outflow
+	                   // inflow_nscbc = 8883, // Future: NSCBC inflow
+	                   // custom_wall = 8884  // Future: custom wall treatment
 };
 
 // Quokka boundary conditions
 // NOTE: Standard BC values must match amrex::BCType exactly (verified by static_assert below)
 // AMREX_ENUM requires literal integers for runtime string parsing to work
 AMREX_ENUM(mathematicalBndryTypes, // NOLINT
-				   // Standard AMReX boundary conditions (literal values from AMReX_BC_TYPES.H)
-	   bogus = -666, reflect_odd = -1,
-	   periodic = 0, // corresponds to amrex::BCType::int_dir (interior/periodic); this conversion of int_dir to periodic requires enforcing
-			 // geometry.is_periodic in main.cpp
-	   reflect_even = 1,
-	   foextrap = 2,   // first order extrapolation
-	   ext_dir = 3,	   // external Dirichlet
-	   hoextrap = 4,   // higher order extrapolation
-	   hoextrapcc = 5, // higher order extrapolation to cell center
-	   ext_dir_cc = 6, // external Dirichlet at cell center
-	   direction_dependent = 7, user_1 = 1001, user_2 = 1002, user_3 = 1003,
+                                   // Standard AMReX boundary conditions (literal values from AMReX_BC_TYPES.H)
+           bogus = -666, reflect_odd = -1,
+           periodic = 0, // corresponds to amrex::BCType::int_dir (interior/periodic); this conversion of int_dir to periodic requires enforcing
+                         // geometry.is_periodic in main.cpp
+           reflect_even = 1,
+           foextrap = 2,   // first order extrapolation
+           ext_dir = 3,    // external Dirichlet
+           hoextrap = 4,   // higher order extrapolation
+           hoextrapcc = 5, // higher order extrapolation to cell center
+           ext_dir_cc = 6, // external Dirichlet at cell center
+           direction_dependent = 7, user_1 = 1001, user_2 = 1002, user_3 = 1003,
 
-	   // Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
-	   reflecting = 8881 // Special: uses reflect_odd/reflect_even based on component
-			     // outflow_nscbc = 8882, // Future: NSCBC outflow
-			     // inflow_nscbc = 8883, // Future: NSCBC inflow
-			     // custom_wall = 8884  // Future: custom wall treatment
+           // Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
+           reflecting = 8881 // Special: uses reflect_odd/reflect_even based on component
+                             // outflow_nscbc = 8882, // Future: NSCBC outflow
+                             // inflow_nscbc = 8883, // Future: NSCBC inflow
+                             // custom_wall = 8884  // Future: custom wall treatment
 );
 
 // Compile-time verification that our values match AMReX's BCType values

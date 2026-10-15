@@ -10,14 +10,14 @@ namespace quokka
 // Every Star particle has StarParticleFixedComps fixed scalars followed by
 // nGroups luminosity slots and model-defined extras (nExtraReal / nExtraInt).
 AMREX_ENUM(StarParticleDataIdx, // NOLINT
-	   mass,		// Mass of the particle
-	   vx,			// Velocity x
-	   vy,			// Velocity y
-	   vz,			// Velocity z
-	   birth_time,		// Simulation time when the particle was created
-	   mdot,		// Current mass accretion rate (set by the accretion module)
-	   radius,		// Stellar radius (set by the stellar-evolution model)
-	   lum			// Base index for luminosity components (MUST be last; expands to lum_0, lum_1, ... for nGroups)
+           mass,                // Mass of the particle
+           vx,                  // Velocity x
+           vy,                  // Velocity y
+           vz,                  // Velocity z
+           birth_time,          // Simulation time when the particle was created
+           mdot,                // Current mass accretion rate (set by the accretion module)
+           radius,              // Stellar radius (set by the stellar-evolution model)
+           lum                  // Base index for luminosity components (MUST be last; expands to lum_0, lum_1, ... for nGroups)
 );
 
 constexpr int StarParticleMassIdx = static_cast<int>(StarParticleDataIdx::mass);
@@ -39,7 +39,7 @@ constexpr int StarParticleFixedComps = 7;
 // When nExtraInt > 0, the component names expand from the stage entry below
 // (e.g. stage_0, stage_1, ... for multiple evolutionary stages).
 AMREX_ENUM(StarParticleIntIdx, // NOLINT
-	   stage	       // Evolutionary stage (expands to stage_0, stage_1, ... for nExtraInt > 1)
+           stage               // Evolutionary stage (expands to stage_0, stage_1, ... for nExtraInt > 1)
 );
 
 } // namespace quokka

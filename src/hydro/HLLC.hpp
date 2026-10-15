@@ -20,7 +20,7 @@ namespace quokka::Riemann
 //
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
-					      const double gamma, const double du, const double dw) -> quokka::valarray<double, fluxdim>
+                                              const double gamma, const double du, const double dw) -> quokka::valarray<double, fluxdim>
 {
 	// compute Roe averages
 

@@ -89,24 +89,24 @@ template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quo
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	// parameters for soundwave damping test
-	const double L = 1.0;		  // domain length
+	const double L = 1.0;             // domain length
 	const double kk = 2.0 * M_PI / L; // wave number k=2π/L
 
 	const double rho_g0 = 1.0;  // gas base density
 	const double rho_d0 = 2.24; // dust base density
 
 	const double A_rho = A * rho_g0; // density perturbation amplitude A*ρ_g^0
-	const double A_vel = A * cs;	 // velocity perturbation amplitude A*c_s
+	const double A_vel = A * cs;     // velocity perturbation amplitude A*c_s
 
-	const double Re_rho_g = 1.0;	 // Re(δρ_g^)
-	const double Im_rho_g = 0.0;	 // Im(δρ_g^)
+	const double Re_rho_g = 1.0;     // Re(δρ_g^)
+	const double Im_rho_g = 0.0;     // Im(δρ_g^)
 	const double Re_u_g = -0.701960; // Re(δu_g^)
 	const double Im_u_g = -0.304924; // Im(δu_g^)
 
 	const double Re_rho_d = 0.165251;  // Re(δρ_d^)
 	const double Im_rho_d = -1.247801; // Im(δρ_d^)
 	const double Re_u_d = -0.221645;   // Re(δu_d^)
-	const double Im_u_d = 0.368534;	   // Im(δu_d^)
+	const double Im_u_d = 0.368534;    // Im(δu_d^)
 
 	// get geometry information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = Geom(0).CellSizeArray();
@@ -305,10 +305,10 @@ auto problem_main() -> int
 
 	matplotlibcpp::clf();
 	matplotlibcpp::plot(t_vec_plot, norm_v_gas_plot,
-			    {{"label", "gas (numerical)"}, {"color", "blue"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
+	                    {{"label", "gas (numerical)"}, {"color", "blue"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
 	matplotlibcpp::plot(t_dense, norm_v_gas_dense, {{"label", "gas (analytic)"}, {"color", "blue"}, {"linestyle", "--"}});
 	matplotlibcpp::plot(t_vec_plot, norm_v_dust_plot,
-			    {{"label", "dust (numerical)"}, {"color", "red"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
+	                    {{"label", "dust (numerical)"}, {"color", "red"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
 	matplotlibcpp::plot(t_dense, norm_v_dust_dense, {{"label", "dust (analytic)"}, {"color", "red"}, {"linestyle", "--"}});
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("Time");
@@ -319,10 +319,10 @@ auto problem_main() -> int
 
 	matplotlibcpp::clf();
 	matplotlibcpp::plot(t_vec_plot, norm_rho_gas_plot,
-			    {{"label", "gas (numerical)"}, {"color", "blue"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
+	                    {{"label", "gas (numerical)"}, {"color", "blue"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
 	matplotlibcpp::plot(t_dense, norm_rho_gas_dense, {{"label", "gas (analytic)"}, {"color", "blue"}, {"linestyle", "--"}});
 	matplotlibcpp::plot(t_vec_plot, norm_rho_dust_plot,
-			    {{"label", "dust (numerical)"}, {"color", "red"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
+	                    {{"label", "dust (numerical)"}, {"color", "red"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
 	matplotlibcpp::plot(t_dense, norm_rho_dust_dense, {{"label", "dust (analytic)"}, {"color", "red"}, {"linestyle", "--"}});
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("Time");

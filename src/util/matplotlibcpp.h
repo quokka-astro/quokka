@@ -124,8 +124,8 @@ struct _interpreter {
 	{
 		fenv_t orig_feenv;
 		feholdexcept(&orig_feenv); // disable FPE for importing numpy
-		import_array();		   // initialize C-API
-		fesetenv(&orig_feenv);	   // restore FPE
+		import_array();            // initialize C-API
+		fesetenv(&orig_feenv);     // restore FPE
 
 		return NULL;
 	}
@@ -394,7 +394,7 @@ template <typename Numeric> bool plot(const std::vector<Numeric> &x, const std::
 #ifndef WITHOUT_NUMPY
 template <typename Numeric>
 void plot_surface(const std::vector<::std::vector<Numeric>> &x, const std::vector<::std::vector<Numeric>> &y, const std::vector<::std::vector<Numeric>> &z,
-		  const std::map<std::string, std::string> &keywords = std::map<std::string, std::string>())
+                  const std::map<std::string, std::string> &keywords = std::map<std::string, std::string>())
 {
 	// We lazily load the modules here the first time this function is called
 	// because I'm not sure that we can assume "matplotlib installed" implies
@@ -548,7 +548,7 @@ template <typename Numeric> bool fill(const std::vector<Numeric> &x, const std::
 
 template <typename Numeric>
 bool fill_between(const std::vector<Numeric> &x, const std::vector<Numeric> &y1, const std::vector<Numeric> &y2,
-		  const std::map<std::string, std::string> &keywords)
+                  const std::map<std::string, std::string> &keywords)
 {
 	assert(x.size() == y1.size());
 	assert(x.size() == y2.size());
@@ -679,8 +679,8 @@ void imshow(const cv::Mat &image, const std::map<std::string, std::string> &keyw
 
 template <typename NumericX, typename NumericY>
 bool scatter(const std::vector<NumericX> &x, const std::vector<NumericY> &y,
-	     const double s = 1.0, // The marker size in points**2
-	     const std::unordered_map<std::string, std::string> &keywords = {})
+             const double s = 1.0, // The marker size in points**2
+             const std::unordered_map<std::string, std::string> &keywords = {})
 {
 	assert(x.size() == y.size());
 
@@ -709,7 +709,7 @@ bool scatter(const std::vector<NumericX> &x, const std::vector<NumericY> &y,
 
 template <typename Numeric>
 bool bar(const std::vector<Numeric> &x, const std::vector<Numeric> &y, std::string ec = "black", std::string ls = "-", double lw = 1.0,
-	 const std::map<std::string, std::string> &keywords = {})
+         const std::map<std::string, std::string> &keywords = {})
 {
 	PyObject *xarray = get_array(x);
 	PyObject *yarray = get_array(y);
@@ -740,7 +740,7 @@ bool bar(const std::vector<Numeric> &x, const std::vector<Numeric> &y, std::stri
 
 template <typename Numeric>
 bool bar(const std::vector<Numeric> &y, std::string ec = "black", std::string ls = "-", double lw = 1.0,
-	 const std::map<std::string, std::string> &keywords = {})
+         const std::map<std::string, std::string> &keywords = {})
 {
 	using T = typename std::remove_reference<decltype(y)>::type::value_type;
 
@@ -820,7 +820,7 @@ template <typename NumericX, typename NumericY> bool plot(const std::vector<Nume
 
 template <typename NumericX, typename NumericY, typename NumericU, typename NumericW>
 bool quiver(const std::vector<NumericX> &x, const std::vector<NumericY> &y, const std::vector<NumericU> &u, const std::vector<NumericW> &w,
-	    const std::map<std::string, std::string> &keywords = {})
+            const std::map<std::string, std::string> &keywords = {})
 {
 	assert(x.size() == y.size() && x.size() == u.size() && u.size() == w.size());
 
@@ -945,7 +945,7 @@ template <typename NumericX, typename NumericY> bool loglog(const std::vector<Nu
 
 template <typename NumericX, typename NumericY>
 bool errorbar(const std::vector<NumericX> &x, const std::vector<NumericY> &y, const std::vector<NumericX> &yerr,
-	      const std::map<std::string, std::string> &keywords = {})
+              const std::map<std::string, std::string> &keywords = {})
 {
 	assert(x.size() == y.size());
 

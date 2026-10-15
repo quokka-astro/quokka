@@ -50,9 +50,9 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e16, 1e1
 //        1.00000000e+19};
 
 constexpr double kappa0 = 100.; // cm^2 g^-1
-constexpr double T_lo = 1.0e7;	// K (temperature)
-constexpr double T_hi = 2.0e7;	// K (temperature)
-constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
+constexpr double T_lo = 1.0e7;  // K (temperature)
+constexpr double T_hi = 2.0e7;  // K (temperature)
+constexpr double rho0 = 1.2;    // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double width = 24.0; // cm, width of the pulse
 constexpr double Erad0 = a_rad * T_lo * T_lo * T_lo * T_lo;
@@ -63,7 +63,7 @@ constexpr double k_B = C::k_B;
 
 // testing parameters:
 // dynamic diffusion limit: tau = 2e3, beta = 7e-3, beta tau = 14
-constexpr double v0 = 2.0e8;	       // advecting speed
+constexpr double v0 = 2.0e8;           // advecting speed
 constexpr double max_time = 4.8e-5;    // diffusion distance is about a few pulse width
 constexpr int64_t max_timesteps = 1e2; // for fast testing
 
@@ -172,7 +172,7 @@ template <> struct RadSystem_Traits<MGproblem> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<MGproblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const /* rad_boundaries */, const double /* rho */,
-							   const double /* Tgas */) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+                                                           const double /* Tgas */) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<double, nGroups_ + 1> exponents{};
 	amrex::GpuArray<double, nGroups_ + 1> kappa_lower{};
@@ -253,7 +253,7 @@ template <> struct RadSystem_Traits<MGproblemMHD> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<MGproblemMHD>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const /* rad_boundaries */, const double /* rho */,
-							      const double /* Tgas */) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+                                                              const double /* Tgas */) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<double, nGroups_ + 1> exponents{};
 	amrex::GpuArray<double, nGroups_ + 1> kappa_lower{};
@@ -456,7 +456,7 @@ auto problem_main() -> int
 	// Problem 3: advecting pulse with MHD + multigroup radiation
 	auto BCs_cc3 = quokka::BC<MGproblemMHD>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
 	auto BCs_fc3 = quokka::BC_fc<MGproblemMHD>(quokka::BCType::mathematicalBndryTypes::foextrap, quokka::BCType::mathematicalBndryTypes::periodic,
-						   quokka::BCType::mathematicalBndryTypes::periodic);
+	                                           quokka::BCType::mathematicalBndryTypes::periodic);
 
 	QuokkaSimulation<MGproblemMHD> sim3(BCs_cc3, BCs_fc3);
 

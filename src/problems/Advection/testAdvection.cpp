@@ -50,8 +50,8 @@ template <> struct Physics_Indices<SawtoothProblem> {
 };
 
 AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
 	// compute exact solution
 	amrex::Real const x_length = prob_hi[0] - prob_lo[0];
@@ -71,13 +71,13 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditionsOnGri
 	const int ncomp_cc = Physics_Indices<SawtoothProblem>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, ncomp_cc,
-			   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) { ComputeExactSolution(i, j, k, n, state_cc, dx, prob_lo, prob_hi); });
+	                   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) { ComputeExactSolution(i, j, k, n, state_cc, dx, prob_lo, prob_hi); });
 }
 
 template <>
 void AdvectionSimulation<SawtoothProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
+                                                                    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+                                                                    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
 
 	// fill reference solution multifab

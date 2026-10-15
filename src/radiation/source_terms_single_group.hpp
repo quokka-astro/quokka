@@ -8,9 +8,9 @@
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
-						     Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/,
-						     double /*tempFloor*/, int *p_iteration_counter, int *p_iteration_failure_counter,
-						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
+                                                     Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/,
+                                                     double /*tempFloor*/, int *p_iteration_counter, int *p_iteration_failure_counter,
+                                                     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -26,7 +26,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		auto p_iteration_counter_local = p_iteration_counter;		      // NOLINT
+		auto p_iteration_counter_local = p_iteration_counter;                 // NOLINT
 		auto p_iteration_failure_counter_local = p_iteration_failure_counter; // NOLINT
 
 		const double c = c_light_;
@@ -198,8 +198,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					// A single chemical band does not take part in the thermal coupling (see
 					// DefineThermalCouplingOpacityExponentsAndLowerValues), so its opacity must be zero.
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE((nGroupsThermal_ > 0) || (kappaP == 0.0 && kappaE == 0.0),
-									 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
-									 "photochemistry, so its Planck and energy-mean opacities must be 0.");
+					                                 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
+					                                 "photochemistry, so its Planck and energy-mean opacities must be 0.");
 					if (kappaE > 0.0) {
 						kappaPoverE = kappaP / kappaE;
 					} else {
@@ -380,7 +380,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				if constexpr (!add_line_cooling_to_radiation_in_jac) {
 					const auto cooling_tend = DefineNetCoolingRate(T_gas, H_num_den)[0] * dt;
 					AMREX_ASSERT_WITH_MESSAGE(cooling_tend >= 0.,
-								  "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
+					                          "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
 					// TODO(CCH): potential GPU-related issue here.
 					Erad_guess += (1 / cscale) * cooling_tend;
 				}
@@ -393,8 +393,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				T_d = T_gas;
 				kappaF = ComputeFluxMeanOpacity(rho, T_d);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE((nGroupsThermal_ > 0) || (kappaF == 0.0),
-								 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
-								 "photochemistry, so its flux-mean opacity must be 0.");
+				                                 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
+				                                 "photochemistry, so its flux-mean opacity must be 0.");
 
 				amrex::ignore_unused(p_iteration_counter_local);
 				amrex::ignore_unused(Ekin0);

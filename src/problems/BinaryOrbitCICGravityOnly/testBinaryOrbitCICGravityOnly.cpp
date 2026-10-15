@@ -26,7 +26,7 @@
 struct BinaryOrbitGravityOnly {};
 
 template <> struct quokka::EOS_Traits<BinaryOrbitGravityOnly> {
-	static constexpr double gamma = 1.0;	       // isothermal
+	static constexpr double gamma = 1.0;           // isothermal
 	static constexpr double cs_isothermal = 1.3e7; // cm s^{-1}
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -71,8 +71,8 @@ template <> void QuokkaSimulation<BinaryOrbitGravityOnly>::createInitialCICParti
 
 template <>
 void QuokkaSimulation<BinaryOrbitGravityOnly>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-								 amrex::MultiFab const & /*state_cc*/,
-								 amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+                                                                 amrex::MultiFab const & /*state_cc*/,
+                                                                 amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
@@ -153,7 +153,7 @@ auto problem_main() -> int
 		double max_deviation = 1.0;
 		if (!sim.userData_.dist.empty()) {
 			auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
-						       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
+			                               [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
 			max_deviation = std::abs(*result);
 			amrex::Print() << "max deviation from initial particle separation = " << max_deviation << " cell widths.\n";
 		} else {

@@ -25,9 +25,9 @@ constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_full_spectrum;
 
 constexpr double kappa0 = 2000.0;   // cm^2 g^-1 (opacity).
 constexpr double nu_pivot = 4.0e13; // Powerlaw, kappa = kappa0 (nu/nu_pivot)^{-2}
-constexpr int n_coll = 4;	    // number of collections = 6, to align with Vaytet
+constexpr int n_coll = 4;           // number of collections = 6, to align with Vaytet
 constexpr int the_model = 10; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity
-			      // (Vaytet et al. Sec 3.2.3)
+                              // (Vaytet et al. Sec 3.2.3)
 // 10: bin-centered method with opacities propto nu^-2
 
 // OLD
@@ -46,11 +46,11 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = []() constexpr {
 		return amrex::GpuArray<double, 5>{6.0e10, 6.0e11, 6.0e12, 6.0e13, 6.0e14};
 	} else if constexpr (n_groups_ == 8) {
 		return amrex::GpuArray<double, 9>{6.0000000e+10, 1.8973666e+11, 6.0000000e+11, 1.8973666e+12, 6.0000000e+12,
-						  1.8973666e+13, 6.0000000e+13, 1.8973666e+14, 6.0000000e+14};
+		                                  1.8973666e+13, 6.0000000e+13, 1.8973666e+14, 6.0000000e+14};
 	} else if constexpr (n_groups_ == 16) {
 		return amrex::GpuArray<double, 17>{6.00000000e+10, 1.06696765e+11, 1.89736660e+11, 3.37404795e+11, 6.00000000e+11, 1.06696765e+12,
-						   1.89736660e+12, 3.37404795e+12, 6.00000000e+12, 1.06696765e+13, 1.89736660e+13, 3.37404795e+13,
-						   6.00000000e+13, 1.06696765e+14, 1.89736660e+14, 3.37404795e+14, 6.00000000e+14};
+		                                   1.89736660e+12, 3.37404795e+12, 6.00000000e+12, 1.06696765e+13, 1.89736660e+13, 3.37404795e+13,
+		                                   6.00000000e+13, 1.06696765e+14, 1.89736660e+14, 3.37404795e+14, 6.00000000e+14};
 	} else if constexpr (n_groups_ == 64) {
 		return amrex::GpuArray<double, 65>{
 		    6.00000000e+10, 6.92869191e+10, 8.00112859e+10, 9.23955916e+10, 1.06696765e+11, 1.23211502e+11, 1.42282422e+11, 1.64305178e+11,
@@ -89,10 +89,10 @@ constexpr amrex::GpuArray<double, n_groups_> group_opacities_{};
 struct SuOlsonProblemCgs {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int max_step_ = 1e6;
-constexpr double rho0 = 1.0e-3;	    // g cm^-3
+constexpr double rho0 = 1.0e-3;     // g cm^-3
 constexpr double T_initial = 300.0; // K
-constexpr double T_L = 1000.0;	    // K
-constexpr double T_R = 300.0;	    // K
+constexpr double T_L = 1000.0;      // K
+constexpr double T_R = 300.0;       // K
 constexpr double rho_C_V = 1.0e-3;  // erg cm^-3 K^-1
 constexpr double c_v = rho_C_V / rho0;
 constexpr double mu = 1.0 / (5. / 3. - 1.) * C::k_B / c_v;
@@ -125,7 +125,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, const double /*rho*/,
-								   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+                                                                   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -165,8 +165,8 @@ RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArr
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							      int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							      const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+                                                              int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+                                                              const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables
 	constexpr int nvar = Physics_Indices<SuOlsonProblemCgs>::nvarTotal_cc;
@@ -254,7 +254,7 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		BCs_cc[n].setLo(0,
-				amrex::BCType::ext_dir);     // custom (Marshak) x1
+		                amrex::BCType::ext_dir);     // custom (Marshak) x1
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
@@ -449,7 +449,7 @@ auto problem_main() -> int
 		// // Tgas_exact_args["marker"] = "x";
 		// matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
 
-		matplotlibcpp::xlim(0.0, 12.0);	  // cm
+		matplotlibcpp::xlim(0.0, 12.0);   // cm
 		matplotlibcpp::ylim(0.0, 1000.0); // K
 		matplotlibcpp::xlabel("length x (cm)");
 		matplotlibcpp::ylabel("temperature (K)");
