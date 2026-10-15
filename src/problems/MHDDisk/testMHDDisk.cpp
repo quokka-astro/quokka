@@ -80,15 +80,15 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real Rmax;
 	amrex::Real Rcutoff;
 	amrex::Real Q_mean;
-	amrex::Real Mc = NAN;  // one will be set
-	amrex::Real vc = NAN;  // the other will be calculated
+	amrex::Real Mc = NAN; // one will be set
+	amrex::Real vc = NAN; // the other will be calculated
 	amrex::Real Sigma0;
 	amrex::Real rho_cgm;
 	amrex::Real rho_mid;
-	amrex::Real T_disk = NAN;   // one will be set
-	amrex::Real cs_disk = NAN;  // the other will be calculated
-	amrex::Real T_cgm = NAN;    // for both disk
-	amrex::Real cs_cgm = NAN;   // and for cgm
+	amrex::Real T_disk = NAN;  // one will be set
+	amrex::Real cs_disk = NAN; // the other will be calculated
+	amrex::Real T_cgm = NAN;   // for both disk
+	amrex::Real cs_cgm = NAN;  // and for cgm
 
 	// 2D Cylindrical potential field variables, read from metadata file
 	std::size_t seed_nR{};
@@ -138,8 +138,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto kappa(double R, double vc, double 
 #define Ω(R) vcircAnalytic(R, 0.0, vc, Rc) / (R)
 	// const auto Ω = [=] AMREX_GPU_DEVICE(double R, double vc, double Rc) { return vcircAnalytic(R, 0.0, vc, Rc) / R; };
 	const double ε = 0.5e-5 * Rc;
-	const double dΩdR = (Ω(R + ε) - Ω(R - ε)) / (2.0 * ε); // numeric derivative of Ω
-	const double κ = std::sqrt(4.0 * Ω(R) * Ω(R) + 2.0 * R * Ω(R) * dΩdR);  // sqrt yields nan if κ negative
+	const double dΩdR = (Ω(R + ε) - Ω(R - ε)) / (2.0 * ε);		       // numeric derivative of Ω
+	const double κ = std::sqrt(4.0 * Ω(R) * Ω(R) + 2.0 * R * Ω(R) * dΩdR); // sqrt yields nan if κ negative
 	return κ;
 }
 
@@ -300,10 +300,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto get_taper_factor(double x, double y, do
 	return taper;
 }
 
-int getNoCells(QuokkaSimulation<MHDGalaxy>* sim) {
+inline int getNoCells(QuokkaSimulation<MHDGalaxy> &sim)
+{
 	long cells = 0;
-	for (int level = 0; level <= sim->finestLevel(); ++level)
-		for (amrex::MFIter iter(sim->state_new_cc_[level]); iter.isValid(); ++iter)
+	for (int level = 0; level <= sim.finestLevel(); ++level)
+		for (amrex::MFIter iter(sim.state_new_cc_[level]); iter.isValid(); ++iter)
 			cells += iter.validbox().numPts();
 	return cells;
 }
@@ -400,7 +401,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto cellSphereOverlapFraction(double di, do
 
 template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 {
-	amrex::Print() << std::format("{:6.3f}M cells\n", amrex::Real(getNoCells(this))/1e6);
+	amrex::Print() << std::format("{:6.3f}M cells\n", amrex::Real(getNoCells(this)) / 1e6);
 
 	// run only once
 	static bool was_called = false;
@@ -453,8 +454,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	const double cs_cgm = userData_.cs_cgm;
 
 	// set vc or Mc from either Mc or vc, to ensure both are present
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isnan(userData_.vc) != std::isnan(userData_.Mc),
-					 "Must set exactly one of mhd_galaxy.vc_kms or mhd_galaxy.Mc");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isnan(userData_.vc) != std::isnan(userData_.Mc), "Must set exactly one of mhd_galaxy.vc_kms or mhd_galaxy.Mc");
 	if (std::isnan(userData_.vc)) {
 		userData_.vc = userData_.Mc * userData_.cs_disk;
 	} else {
@@ -467,9 +467,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	const double Rmax = userData_.Rmax;
 
 	// Sigma0 via Simpson integration of Toomre Q condition, accurate to 10 figures for the default functions
-	auto integrand = [=](double R) -> double {
-		return kappa(R, vc, Rc) * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, Rc, Rd, 1.0));
-	};
+	auto integrand = [=](double R) -> double { return kappa(R, vc, Rc) * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, Rc, Rd, 1.0)); };
 	constexpr int N = 100000;
 	static_assert(N % 2 == 0);
 	const double h = Rmax / N;
@@ -1209,7 +1207,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				const double rho = s(i, j, k, HydroSystem<MHDGalaxy>::density_index);
 
 				const double cs = HydroSystem<MHDGalaxy>::ComputeIsothermalSoundSpeed(s, i, j, k, &fab_fc);
-				const double plasma_beta = HydroSystem<MHDGalaxy>::ComputePlasmaBeta(s, i, j, k, &fab_fc);  // returns inf when mhd off
+				const double plasma_beta = HydroSystem<MHDGalaxy>::ComputePlasmaBeta(s, i, j, k, &fab_fc); // returns inf when mhd off
 				const double beta_safe = amrex::max(plasma_beta, 1.0e-10);
 				const double cs_eff_sq = cs * cs * (1.0 + 0.74 / beta_safe);
 				const double rho_J = M_PI * cs_eff_sq / (C::Gconst * sn_jeans_J * sn_jeans_J * (dx_max * dx_max));
