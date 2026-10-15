@@ -300,7 +300,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto get_taper_factor(double x, double y, do
 	return taper;
 }
 
-inline int getNoCells(QuokkaSimulation<MHDGalaxy> &sim)
+inline int getNoCells(const QuokkaSimulation<MHDGalaxy> &sim)
 {
 	long cells = 0;
 	for (int level = 0; level <= sim.finestLevel(); ++level)
@@ -401,7 +401,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto cellSphereOverlapFraction(double di, do
 
 template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 {
-	amrex::Print() << std::format("{:6.3f}M cells\n", amrex::Real(getNoCells(this)) / 1e6);
+	amrex::Print() << std::format("{:6.3f}M cells\n", amrex::Real(getNoCells(*this)) / 1e6);
 
 	// run only once
 	static bool was_called = false;
