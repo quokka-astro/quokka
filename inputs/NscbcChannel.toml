@@ -44,3 +44,5 @@ channel.u_inflow = 4.0e3  # cm/s
 channel.v_inflow = 0.0  # cm/s
 channel.w_inflow = 0.0  # cm/s
 channel.s_inflow = 1.0  # dimensionless
+
+density_floor = 1e-9  # g cm^-3

@@ -49,3 +49,5 @@ checkpoint_interval = -1
 
 plotfile_prefix = "WRAGBYields/plt"
 checkpoint_prefix = "WRAGBYields/chk"
+
+density_floor = 1e-1  # g cm^-3
