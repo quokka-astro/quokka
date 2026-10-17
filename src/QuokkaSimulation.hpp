@@ -939,6 +939,32 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 	// set cosmology runtime parameters
 	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+
+		// --- cosmology guards: physics that is not formulated in comoving coordinates ---
+		static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cosmology is not supported with MHD (comoving induction equation not implemented).");
+		static_assert(!Physics_Traits<problem_t>::is_radiation_enabled, "Cosmology is not supported with radiation (comoving transport not implemented).");
+		static_assert(!Physics_Traits<problem_t>::is_dust_enabled, "Cosmology is not supported with dust (comoving dust fluxes and drag not implemented).");
+		static_assert(Particle_Traits<problem_t>::particle_switch == ParticleSwitch::None || Particle_Traits<problem_t>::particle_switch == ParticleSwitch::CIC,
+			      "Cosmology supports only CIC (dark matter) particles: star formation, accretion and feedback are not comoving.");
+
+		// --- cosmology guards: runtime options not consistent with a single global scale factor ---
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_level == 0,
+						 "Cosmology requires amr.max_level = 0: a_now_ is global and is advanced once per level update.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(this->restart_chkfile.empty(),
+						 "Restart is not supported with cosmology: the scale factor is not read back from the checkpoint.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableElectronConduction_ == 0, "Electron conduction is not supported with cosmology.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableChemistry_ == 0, "Chemistry is not supported with cosmology: rates need physical densities.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableTurbulence_ == 0, "Turbulence driving is not supported with cosmology.");
+		if constexpr (quokka::EOS<problem_t>::is_tabulated) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableCooling_ == 0, "Cooling is not supported with cosmology: rates need physical densities.");
+		}
+		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(this->poissonSupercycleInterval_ == 1,
+							 "Cosmology requires poisson_supercycle_interval = 1: phi must be solved with the current a.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(geom[0].isAllPeriodic(),
+							 "Cosmology with self-gravity requires periodic boundaries (mean-subtracted comoving Poisson equation).");
+		}
+
 		amrex::ParmParse const cpp("cosmology");
 		amrex::Real omega_m = Physics_Traits<problem_t>::omega_m;
 		amrex::Real omega_r = Physics_Traits<problem_t>::omega_r;
@@ -956,6 +982,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		cpp.query("hubble_constant", h);
 		cpp.query("a_init", a_now_);
 		cpp.query("dt_limit", cosmology_dt_limit_);
+
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(a_now_ > 0.0, "cosmology.a_init must be positive.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(cosmology_dt_limit_ > 0.0, "cosmology.dt_limit must be positive.");
 
 		// convert h to H0 [s^-1]
 		const amrex::Real Mpc_to_cm = C::parsec * 1.0e6;
@@ -2434,6 +2463,8 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 
 	amrex::MultiFab accepted_state_cc(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	amrex::Copy(accepted_state_cc, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+	// scale factor consistent with accepted_state_cc: restored together with the hydro state on a failed attempt
+	amrex::Real accepted_a = a_now_;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> accepted_state_fc;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2444,6 +2475,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 	}
 
 	auto restoreHydroState = [&]() {
+		a_now_ = accepted_a;
 		amrex::Copy(state_new_cc_[lev], accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2453,6 +2485,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 	};
 
 	auto updateAcceptedHydroState = [&]() {
+		accepted_a = a_now_;
 		amrex::Copy(accepted_state_cc, state_new_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
