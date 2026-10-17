@@ -44,3 +44,4 @@ problem.vz0   = 5.77e4
 # *****************************************************************
 plotfile_interval = 500         # save a plotfile every plotfile_interval timesteps
 amr.v = 1                       # AMReX verbosity level: 0=quiet, 1=verbose, 2=very verbose
+density_floor = 1e-40           # g cm^-3 (comoving), well below rho0 = 1e-30
