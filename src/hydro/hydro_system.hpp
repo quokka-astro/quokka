@@ -1187,7 +1187,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 	auto rhs = rhs_mf.arrays();
 
 	// comoving coordinates: the P dV term is (p_c / a) div_x v
-	const amrex::Real inv_a = 1.0 / a_cosmo; 
+	const amrex::Real inv_a = 1.0 / a_cosmo;
 
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		// get cell-centered pressure
