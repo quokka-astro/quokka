@@ -1646,7 +1646,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 #if AMREX_SPACEDIM == 3
 		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
-			// do particle leapfrog (first kick at time t)
+			// --- Cosmological KDK leapfrog ---
+			//
+			// The scale factor a(t) is updated inside timeStepWithSubcycling (via
+			// addStrangSplitSourcesWithBuiltin), so we must capture a_half = a(t+dt/2) BEFORE
+			// the hydro advance. This ensures:
+			//   Drift  : delta_x = v_pec * dt / a_half   (midpoint rule, 2nd-order accurate)
+			//   Drag   : v *= a_old/a_half  (pre),  v *= a_half/a_new (post)
+			// a_half_ is stored in QuokkaSimulation and retrieved via getCosmologyScaleFactorHalf().
+			if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+				// Integrate a from t_n to t_n+dt/2 and cache as a_half_.
+				// Must be called before timeStepWithSubcycling modifies a_now_.
+				particleCosmologyComputeHalfStep(dt_[0]);
+				// Pre-kick Hubble drag: v *= a_old / a_half  (1st half of Strang split)
+				particleCosmologyPreKick(dt_[0]);
+			}
+
+			// do particle leapfrog (first kick at time t).
+			// 1st half-kick: v += 0.5*dt * g(x_n) / a_old
 			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 				kickParticlesAllLevels(dt_[0]);
 			}
@@ -1663,21 +1680,31 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #if AMREX_SPACEDIM == 3
 		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
 			if (particleRegister_.HasMassiveParticles()) {
-				// drift particles from t to (t + dt)
+				// Full drift: x_{n+1} = x_n + v_{n+1/2} * dt / a_{n+1/2}
+				// Use a_half (midpoint) for 2nd-order accuracy in comoving coordinates.
+				// a_half was computed and cached before the hydro advance above.
 				// N.B.: MUST be done *before* Poisson solve at new time!
-				particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
+				const amrex::Real a_cosmo_half = getCosmologyScaleFactorHalf();
+				particleRegister_.driftParticlesAllLevels(dt_[0], finest_level, a_cosmo_half);
 			}
 		}
 #endif
 
 		// elliptic solve over entire AMR grid (post-timestep)
+		// Poisson RHS uses a_new (particles are now at t+dt positions)
 		ellipticSolveAllLevels(dt_[0]);
 
 		// do particle leapfrog (second kick at t + dt)
 #if AMREX_SPACEDIM == 3
 		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			// 2nd half-kick: v += 0.5*dt * g(x_{n+1}) / a_new
 			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 				kickParticlesAllLevels(dt_[0]);
+			}
+			// Post-kick Hubble drag: v *= a_half / a_new  (2nd half of Strang split)
+			// Uses the same a_half_ cached before the hydro advance for bitwise consistency.
+			if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+				particleCosmologyPostKick(dt_[0]);
 			}
 
 			// Stellar evolution and SN deposition; only apply to star particles
@@ -1936,7 +1963,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				}
 
 				// deposit mass into temporary buffer
-				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs_buffer), finest_level, Gconst_);
+				const amrex::Real a_cosmo = getCosmologyScaleFactor(); // a at the time of the Poisson solve
+				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs_buffer), finest_level, Gconst_, a_cosmo);
 
 				// apply roundoff to buffer before adding to rhs
 				for (int lev = 0; lev <= finest_level; ++lev) {
@@ -2247,6 +2275,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 		// accel_cc is guaranteed to be free of NaN as long as phi_extended does not contain NaN.
 
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			accel_cc.mult(1.0 / getCosmologyScaleFactor());
+		}
 		// Kick particles using the acceleration field
 		particleRegister_.kickParticlesAtLevel(lev, dt, accel_cc);
 	}

@@ -270,6 +270,35 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		}
 		return 1.0;
 	}
+
+	// Integrate a from t_n to t_n+dt/2 and store the result in a_half_.
+	// Called once per coarse step, BEFORE timeStepWithSubcycling modifies a_now_.
+	void particleCosmologyComputeHalfStep(amrex::Real dt) override
+	{
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			a_half_ = quokka::cosmology::evolveScaleFactor(a_now_, 0.5 * dt, cosmology_params_);
+		}
+	}
+
+	// Pre-kick Hubble drag: v_pec *= a_old / a_half  (1st half of Strang split)
+	// Uses a_half_ cached by particleCosmologyComputeHalfStep — no recomputation.
+	void particleCosmologyPreKick(amrex::Real /*dt*/) override
+	{
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			this->particleRegister_.applyHubbleDragAllLevels(this->finest_level, a_now_, a_half_);
+		}
+	}
+
+	// Post-kick Hubble drag: v_pec *= a_half / a_new  (2nd half of Strang split)
+	// Reuses the same a_half_ stored in the pre-kick step for bitwise consistency:
+	// both halves of the Strang split operate on exactly the same midpoint value.
+	void particleCosmologyPostKick(amrex::Real /*dt*/) override
+	{
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			// a_now_ here is a_new (updated by addStrangSplitSourcesWithBuiltin)
+			this->particleRegister_.applyHubbleDragAllLevels(this->finest_level, a_half_, a_now_);
+		}
+	}
 #endif // AMREX_SPACEDIM == 3
 
 	// member functions
@@ -336,6 +365,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(useDualEnergy_ == 0,
 								 "Physical viscosity requires use_dual_energy = 0: viscous heating is not yet "
 								 "added to the auxiliary energy equation.");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!Physics_Traits<problem_t>::is_cosmology_enabled,
+								 "Physical viscosity is not supported with cosmology: the comoving viscous terms "
+								 "(1/a^2 scaling) are not implemented.");
 			}
 		}
 	}
@@ -2519,6 +2551,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::isCflViolated(in
 	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev], state_new_fc_[lev]);
 	amrex::ParallelDescriptor::ReduceRealMax(max_signal);
 
+	// comoving coordinates: the signal crosses (|v| + c_s) / a comoving lengths per unit time,
+	// consistent with the 1/a rescaling of max_signal_speed_ in computeMaxSignalLocal
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		max_signal = max_signal / a_now_;
+	}
+
 	// compute dt_cfl
 	auto dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
@@ -2593,6 +2631,10 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		return burn_success_first;
 	}
 	ApplyHydroStateFixup(state_old_cc_tmp, state_old_fc_tmp, lev);
+
+	// scale factor used by the hydro update: after the first Strang half-step a_now_ = a(t + dt/2).
+	// Saved here because the second Strang half-step will overwrite a_now_ with a(t + dt).
+	const amrex::Real a_hydro = Physics_Traits<problem_t>::is_cosmology_enabled ? a_now_ : 1.0;
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -2698,7 +2740,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			redoFlag.setVal(quokka::redoFlag::none);
 
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag, a_hydro);
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, nvars_, redoFlag);
 
 			// LOW LEVEL DEBUGGING: output rhs
@@ -2751,7 +2793,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 				// re-do RK update
 				HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
-				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag);
+				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag, a_hydro);
 				HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, nvars_, redoFlag);
 
 				amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -2842,7 +2884,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			redoFlag.setVal(quokka::redoFlag::none);
 
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, nvars_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag, a_hydro);
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag);
 
 			// do first-order flux correction (FOFC)
@@ -2868,7 +2910,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 				// re-do RK update
 				HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, nvars_);
-				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag);
+				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag, a_hydro);
 				HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag);
 
 				amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -2944,6 +2986,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 
 	if (Physics_Traits<problem_t>::is_hydro_enabled && do_tracers != 0 && final_success) {
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			// comoving drift: dx/dt = v / a, evaluated at the hydro midpoint a(t + dt/2)
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				avgFaceVel[idim].mult(1.0 / a_hydro, 0, 1, avgFaceVel[idim].nGrow());
+			}
+		}
 		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
 	}
 
@@ -3134,6 +3182,13 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		     , hydroFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2], rightState_bfield[2],
 						      flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2],
 						      reconstructGhost, nvars, nghost_Riemann, dx);)
+
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		const amrex::Real a = a_now_; // here a_now_ = a_half, as updated by first Strang Splitting step; consistent with RK
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			flux[idim].mult(1.0 / a);
+		}
+	}
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -3328,6 +3383,13 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 							flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, reconstructRange, nvars, nghost_Riemann, dx);
 		     , hydroFOFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2], rightState_bfield[2],
 							flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructRange, nvars, nghost_Riemann, dx);)
+
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		const amrex::Real a = a_now_;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			flux[idim].mult(1.0 / a);
+		}
+	}
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
