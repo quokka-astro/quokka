@@ -1,4 +1,4 @@
-# Minimal build of the vendored, parse-only subset of yaml-cpp (see QUOKKA_VENDOR.md).
+# Minimal build of the vendored subset of yaml-cpp (see QUOKKA_VENDOR.md).
 file(GLOB yaml-cpp-sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 
 add_library(yaml-cpp STATIC ${yaml-cpp-sources})
