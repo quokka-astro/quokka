@@ -227,6 +227,9 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 	return 0.5 * (T_lo + T_hi);
 }
 
+#ifdef DTYPEFRONT_JAFF_VODE
+void print_microphysics_integrator() { amrex::Print() << "DTypeFront_JAFF microphysics integrator: VODE\n"; }
+#else
 auto rosenbrock_tableau_name(int tableau) -> char const *
 {
 	switch (tableau) {
@@ -248,6 +251,7 @@ void print_microphysics_integrator()
 	amrex::Print() << "DTypeFront_JAFF microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
 		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
 }
+#endif
 
 } // namespace
 

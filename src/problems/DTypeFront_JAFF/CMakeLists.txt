@@ -1,8 +1,11 @@
 if(AMReX_SPACEDIM EQUAL 3)
+  set(DTypeFront_JAFF_INTEGRATOR "Rosenbrock" CACHE STRING "Microphysics integrator for DTypeFront_JAFF (Rosenbrock or VODE)")
+  set_property(CACHE DTypeFront_JAFF_INTEGRATOR PROPERTY STRINGS Rosenbrock VODE)
+
   set(microphysics_network_name "photoionization_H_caseB")
   setup_target_for_microphysics_compilation(${microphysics_network_name}
                                             "${CMAKE_CURRENT_BINARY_DIR}/"
-                                            INTEGRATOR "Rosenbrock")
+                                            INTEGRATOR "${DTypeFront_JAFF_INTEGRATOR}")
 
   set(JOB_NAME DTypeFront_JAFF)
 
@@ -16,6 +19,9 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   # this will add #define PHOTOCHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
+  if(DTypeFront_JAFF_INTEGRATOR STREQUAL "VODE")
+    target_compile_definitions(${JOB_NAME} PUBLIC DTYPEFRONT_JAFF_VODE)
+  endif()
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
