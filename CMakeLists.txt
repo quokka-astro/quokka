@@ -30,22 +30,6 @@ set(AMReX_AMRLEVEL OFF CACHE BOOL "" FORCE)
 set(AMReX_PROBINIT OFF CACHE BOOL "" FORCE)
 set(AMReX_TINY_PROFILE ON CACHE BOOL "" FORCE)
 
-# Configure AMReX-Hydro to match the AMReX build that Quokka uses
-if(NOT DEFINED AMReX_GPU_BACKEND)
-  set(AMReX_GPU_BACKEND NONE CACHE STRING "" FORCE)
-endif()
-
-set(QUOKKA_ENABLE_AMREX_HYDRO OFF)
-if(AMReX_SPACEDIM EQUAL 3)
-  set(QUOKKA_ENABLE_AMREX_HYDRO ON)
-  set(HYDRO_SPACEDIM ${AMReX_SPACEDIM} CACHE STRING "" FORCE)
-  set(HYDRO_MPI ${AMReX_MPI} CACHE BOOL "" FORCE)
-  set(HYDRO_PROJECTIONS ON CACHE BOOL "" FORCE)
-  set(HYDRO_EB OFF CACHE BOOL "" FORCE)
-  set(HYDRO_NO_EB ON CACHE BOOL "" FORCE)
-  set(HYDRO_GPU_BACKEND ${AMReX_GPU_BACKEND} CACHE STRING "" FORCE)
-endif()
-
 ## a Python installation can be specified with Python_ROOT_DIR
 ##   see: https://cmake.org/cmake/help/latest/module/FindPython.html#hints
 ## NumPy and Matplotlib can be installed with `python3 -m pip install numpy matplotlib --user`
@@ -135,16 +119,6 @@ else()
     set(MICROPHYSICS_GIT_HASH "unknown")
 endif()
 
-if(EXISTS "${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro/.git")
-    execute_process(COMMAND git rev-parse HEAD
-        WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro
-        OUTPUT_VARIABLE AMREX_HYDRO_GIT_HASH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-else()
-    set(AMREX_HYDRO_GIT_HASH "unknown")
-endif()
-
 if(EXISTS "${QuokkaCode_SOURCE_DIR}/extern/turbulence/.git")
     execute_process(COMMAND git rev-parse HEAD
         WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/turbulence
@@ -177,19 +151,14 @@ endif()
 add_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
 add_definitions(-DAMREX_GIT_HASH="${AMREX_GIT_HASH}")
 add_definitions(-DMICROPHYSICS_GIT_HASH="${MICROPHYSICS_GIT_HASH}")
-add_definitions(-DAMREX_HYDRO_GIT_HASH="${AMREX_HYDRO_GIT_HASH}")
 add_definitions(-DTURBULENCE_GIT_HASH="${TURBULENCE_GIT_HASH}")
 message(STATUS "Quokka git branch: ${QUOKKA_GIT_BRANCH}")
 message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
 message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
 message(STATUS "Microphysics git commit hash: ${MICROPHYSICS_GIT_HASH}")
-message(STATUS "AMReX-Hydro git commit hash: ${AMREX_HYDRO_GIT_HASH}")
 message(STATUS "turbulence git commit hash: ${TURBULENCE_GIT_HASH}")
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
-if(QUOKKA_ENABLE_AMREX_HYDRO)
-  add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro ${QuokkaCode_BINARY_DIR}/AMReX-Hydro)
-endif()
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DIR}/yaml-cpp)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/turbulence/plugins/AMReX ${QuokkaCode_BINARY_DIR}/turbulence)
 
