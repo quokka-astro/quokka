@@ -297,14 +297,15 @@ struct DeuteriumBurningStellarModel {
 		// evaluated at the mass at its start, changes r by more than max_dr_fraction (the contraction and accretion
 		// terms nearly cancel while the star contracts, so the net rate alone does not bound the step). The part of dt
 		// left after max_substeps sub-steps is not integrated.
+		const amrex::Real m_min = StellarPhysics::M_rad_min; // local copy: std::max takes references
 		for (int k = 0; k < max_substeps && t_left > 0.0; ++k) {
 			amrex::Real h = t_left;
 			RadiusRate rate{0.0, 0.0};
 			if (state != MainSequence) {
-				const amrex::Real m_start = std::max(m - mdot * t_left, StellarPhysics::M_rad_min);
+				const amrex::Real m_start = std::max(m - mdot * t_left, m_min);
 				h = std::min(t_left, max_dr_fraction * r / radiusRate(state, m_start, r, n, mdot).scale);
 			}
-			const amrex::Real ms = std::max(m - mdot * (t_left - h), StellarPhysics::M_rad_min);
+			const amrex::Real ms = std::max(m - mdot * (t_left - h), m_min);
 			if (state != MainSequence) {
 				rate = radiusRate(state, ms, r, n, mdot);
 			}
