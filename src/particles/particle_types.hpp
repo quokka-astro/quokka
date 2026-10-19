@@ -385,17 +385,13 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 #include "particles/star_particle_indices.H"
 
-// Number of components = fixed scalars (mass, vx, vy, vz, birth_time, death_time, amx, amy,
-// amz, mdeut, n, mdot, radius) + nGroups luminosity slots + model-defined extras.
+// Number of components = fixed scalars + nGroups luminosity slots + model extras.
 template <typename problem_t>
 constexpr int StarParticleRealComps = StarParticleFixedComps + Physics_Traits<problem_t>::nGroups + Particle_Traits<problem_t>::stellar_model::nExtraReal;
-template <typename problem_t> constexpr int StarParticleIntComps = StarParticleFixedIntComps + Particle_Traits<problem_t>::stellar_model::nExtraInt;
+template <typename problem_t> constexpr int StarParticleIntComps = Particle_Traits<problem_t>::stellar_model::nExtraInt;
 
 template <typename problem_t> using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
 template <typename problem_t> using StarParticleIterator = amrex::ParIter<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
-
-// States for the deuterium-burning state machine tracked by StarParticleIntIdx::burnState
-enum burningState { Uninitialized, None, VariableCoreDeuterium, SteadyCoreDeuterium, ShellDeuterium, ZAMS };
 
 //-------------------- Component Names for I/O --------------------
 
@@ -476,7 +472,10 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 		// Include chemistry-history particle components added for tracked passive scalars.
 		return names;
 	} else if constexpr (particleType == ParticleType::Star) {
-		return expandEnumNames<StarParticleDataIdx, StarParticleRealComps<problem_t>, true>();
+		using Model = typename Particle_Traits<problem_t>::stellar_model;
+		auto names = expandEnumNames<StarParticleDataIdx, StarParticleFixedComps + Physics_Traits<problem_t>::nGroups, true>();
+		names.insert(names.end(), Model::extraRealNames.begin(), Model::extraRealNames.end());
+		return names;
 	} else if constexpr (particleType == ParticleType::Sink) {
 		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Test) {
@@ -498,14 +497,14 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 								     // No integer components
 	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
 								     // No integer components
+	} else if constexpr (particleType == ParticleType::Star) {
+		using Model = typename Particle_Traits<problem_t>::stellar_model;
+		names.insert(names.end(), Model::extraIntNames.begin(), Model::extraIntNames.end());
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
 	} else if constexpr (particleType == ParticleType::Sink) { // NOLINT
 								   // No integer components
-	} else if constexpr (particleType == ParticleType::Star) {
-		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StarParticleIntIdx>();
-		names = {enum_names.begin(), enum_names.end()};
 	} else if constexpr (particleType == ParticleType::Test) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
@@ -554,13 +553,10 @@ inline auto get_units_data() -> const auto &
 	       {"vz", {0, 1, -1, 0}},
 	       {"birth_time", {0, 0, 1, 0}},
 	       {"death_time", {0, 0, 1, 0}},
-	       {"amx", {1, 2, -1, 0}},
-	       {"amy", {1, 2, -1, 0}},
-	       {"amz", {1, 2, -1, 0}},
-	       {"mdeut", {1, 0, 0, 0}},
-	       {"n", {0, 0, 0, 0}},
 	       {"mdot", {1, 0, -1, 0}},
 	       {"radius", {0, 1, 0, 0}},
+	       {"mdeut", {1, 0, 0, 0}},
+	       {"n", {0, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Sink,
 	     {{{"mass", {1, 0, 0, 0}},

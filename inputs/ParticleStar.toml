@@ -31,6 +31,8 @@ plotfile_interval = -1
 
 tiny_profiler.enabled = 0
 
+density_floor = 1e-30  # g cm^-3
+
 # quokka.diagnostics = ["plt", "slice_z", "slice_x", "part"]
 
 # quokka.plt.type = "PlotFile"  # pltfile for the whole box

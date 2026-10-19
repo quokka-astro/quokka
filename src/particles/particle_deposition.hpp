@@ -178,7 +178,7 @@ static AMREX_GPU_CONSTANT const
 				  {0.00000000000000, 0.00000000000000, 0.00000000000000, 0.00000000000000}}}}};
 
 constexpr double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
-using C::m_u;
+constexpr double m_u = C::m_u;
 
 //-------------------- Radiation depositions --------------------
 

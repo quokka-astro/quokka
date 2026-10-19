@@ -148,179 +148,6 @@ The `ParticleSink` test validates Bondi-Hoyle accretion, Galilean invariance, de
 4. **Parser-derived density floor**: Applies sink accretion and verifies that the minimum density equals the spatially configured floor.
 5. **Alfvén-speed limiter**: Enables a limiting speed whose implied density floor exceeds the parser floor, then validates both the final minimum density and total mass conservation.
 
-## Star Particle Type
-
-Star particles model individual protostars forming from gravitational collapse. Unlike `StochasticStellarPop` particles, each Star particle represents a single star and evolves through a physically-detailed protostellar model tracking deuterium burning, radius evolution, and luminosity.
-
-### Particle Attributes
-
-Each Star particle stores $13 + N_\text{groups}$ real-valued components and 1 integer component, where $N_\text{groups}$ is the number of radiation frequency groups:
-
-| Index | Name | Description |
-|-------|------|-------------|
-| 0 | `mass` | Current particle mass ($M_\star$) |
-| 1 | `vx` | Velocity $x$-component |
-| 2 | `vy` | Velocity $y$-component |
-| 3 | `vz` | Velocity $z$-component |
-| 4 | `birth_time` | Simulation time when the particle formed |
-| 5 | `death_time` | Reserved for future use (initialized to $-1$) |
-| 6 | `amx` | Angular momentum $x$-component |
-| 7 | `amy` | Angular momentum $y$-component |
-| 8 | `amz` | Angular momentum $z$-component |
-| 9 | `mdeut` | Deuterium mass reservoir |
-| 10 | `n` | Polytropic index ($1.5 \leq n \leq 3.0$) |
-| 11 | `mdot` | Mass accretion rate (set by the accretion module) |
-| 12 | `radius` | Stellar radius $R_\star$ (persistent; updated by state transitions) |
-| 13 … $12 + N_\text{groups}$ | `lum`, `lum_1`, … | Luminosity per radiation group (updated every timestep) |
-
-The `lum` field occupies the last $N_\text{groups}$ slots, matching the layout convention of `CICRad` particles.
-
-The integer component stores the **burning state** (index 0):
-
-| Value | Name | Description |
-|-------|------|-------------|
-| 0 | `Uninitialized` | Newly created; stellar model not yet started |
-| 1 | `None` | Gravitational contraction; no nuclear burning |
-| 2 | `VariableCoreDeuterium` | Core deuterium burning at variable rate |
-| 3 | `SteadyCoreDeuterium` | Steady-state core deuterium burning |
-| 4 | `ShellDeuterium` | Shell deuterium burning; inflated radius |
-| 5 | `ZAMS` | Zero-Age Main Sequence reached |
-
-### Formation
-
-Star particles form from Jeans-unstable cells using the same instability criterion as Sink particles: a cell is eligible when its density exceeds the local Jeans density,
-
-$$
-\rho_J = \frac{\pi c_s^2}{G \lambda_J^2} \quad \text{with} \quad \lambda_J = J \cdot \Delta x, \quad J = 0.25.
-$$
-
-When formation triggers, the excess mass $(\rho_\text{cell} - \rho_J) \Delta V$ is removed from the gas and placed in a new Star particle at the cell center. The particle is initialized with `burn_state = Uninitialized`, `mdeut = mass`, `n = 1.5`, and `mdot = 0`.
-
-### Stellar Structure Model
-
-The stellar interior is approximated by a **polytropic model** with index $n$. The polytropic index traces the internal entropy state of the star and lies in the range $[1.5, 3.0]$:
-
-- $n = 1.5$: fully convective (pre-main-sequence default)
-- $n = 3.0$: radiation-pressure dominated (near ZAMS for massive stars)
-
-**Radius initialization.** When a particle first leaves the `Uninitialized` state, the stellar radius is initialized from the accretion rate using an empirical fit:
-
-$$
-R_\star = R_\odot \cdot \max\!\left(2,\; 2.5 \left(\frac{\dot{M}}{10^{-5}\,M_\odot\,\text{yr}^{-1}}\right)^{0.2}\right).
-$$
-
-The radius is stored as a persistent particle field (`radius`, index 13) and subsequently modified only by specific state transitions (see below), not recomputed every timestep.
-
-**Polytropic index initialization.** The initial $n$ is set from the accretion rate:
-
-$$
-\alpha_G = 1.475 + 0.07 \log_{10}\!\left(\frac{\dot{M}}{M_\odot\,\text{yr}^{-1}}\right), \quad n = \text{clamp}\!\left(5 - \frac{3}{\alpha_G},\; 1.5,\; 3.0\right).
-$$
-
-**Central conditions.** Given the polytropic structure, the central density and pressure are obtained from pre-tabulated Lane-Emden factors $(\rho_\text{mean}/\rho_c)$ and $(P_c / (G M^2 / R^4))$ interpolated over $n \in [1.5, 3.0]$. The central temperature is then solved from the full equation of state
-
-$$
-P_c = \frac{\rho_c k_B T_c}{\mu m_H} + \frac{a T_c^4}{3}
-$$
-
-using a bisection solver.
-
-### Burning State Transitions
-
-The protostellar evolution advances through the following state machine each timestep. The stellar model activates once $M_\star \geq M_\text{rad,min} = 0.01\,M_\odot$ and $\dot{M} > 0$:
-
-```mermaid
-flowchart TD
-    A[Uninitialized]
-    B[None]
-    C[VariableCoreDeuterium -- mdeut depletes at 10% of Ṁ per step]
-    D[SteadyCoreDeuterium -- mdeut = 0]
-    E[ShellDeuterium -- n → 3, R → shell_factor × R]
-    F[ZAMS -- R = R_ZAMS]
-
-    A -- "M ≥ M_rad_min and ṁ > 0\n(initialize n, R from Ṁ)" --> B
-    B -- "T_c > T_D = 1.5 × 10⁶ K" --> C
-    C -- "mdeut ≤ Ṁ Δt" --> D
-    D -- "L_star < F_rad × L_ZAMS(M)" --> E
-    E -- "R ≤ R_ZAMS(M)" --> F
-```
-
-The radius $R_\star$ is updated at three transition points only:
-- **Uninitialized → None**: $R_\star$ is initialized with the empirical fit from $\dot{M}$.
-- **SteadyCoreDeuterium → ShellDeuterium**: $R_\star \mathrel{\times}= \text{shell\_factor} = 2.1$ (inflated radius for shell burning).
-- **ShellDeuterium → ZAMS**: $R_\star = R_\text{ZAMS}(M)$ (Tout et al. 1996 fitting formula).
-
-Key parameters:
-
-| Symbol | Value | Description |
-|--------|-------|-------------|
-| $T_D$ | $1.5 \times 10^6$ K | Deuterium ignition temperature |
-| $F_\text{rad}$ | $0.33$ | Radiative barrier fraction |
-| shell_factor | $2.1$ | Radius inflation in shell-burning phase |
-| $M_\text{rad,min}$ | $0.01\,M_\odot$ | Minimum mass to start stellar model |
-
-### Luminosity
-
-The total luminosity stored in `lum` is updated at the end of every stellar property update:
-
-$$
-L_\text{total} = L_\star + L_\text{disk}
-$$
-
-**Stellar luminosity** combines the ZAMS luminosity with accretion heating, clamped at the Hayashi limit ($T_\text{Hayashi} = 3000$ K):
-
-$$
-L_\star = \max\!\left(L_\text{ZAMS}(M) + F_\text{acc} F_k \frac{G M \dot{M}}{R},\quad 4\pi R^2 \sigma_\text{SB} T_\text{Hayashi}^4\right)
-$$
-
-where $F_\text{acc} = 0.5$ is the fraction of accreted energy radiated and $F_k = 0.5$ is the fraction of accretion energy intercepted from the inner disk.
-
-**Disk luminosity** from the outer disk:
-$$
-L_\text{disk} = (1 - F_k) \frac{G M \dot{M}}{R}
-$$
-
-**ZAMS luminosity and radius** follow the polynomial fitting formulae of Tout et al. (1996).
-
-Luminosity is zero for `Uninitialized` particles. It becomes non-zero once the stellar model activates and is stored in the `lum` particle field after each call to `updateStellarProperties`.
-
-### Update Sequence
-
-The stellar property update is operator-split from the hydrodynamics and runs once per coarse timestep:
-
-1. Hydrodynamics advances the gas state by $\Delta t$
-2. Accretion computes the new $\dot{M}$ and updates $M_\star$
-3. `updateStellarProperties` runs per-particle:
-   - Reads current $M$, $\dot{M}$, $n$, $R_\star$, `mdeut`, `burn_state`
-   - If `Uninitialized` and conditions not met: returns early (no state change)
-   - On first activation: initializes $n$ and $R_\star$ from $\dot{M}$
-   - Advances `burn_state`; updates `mdeut`; updates $R_\star$ at state transitions
-   - Computes and stores luminosity in `lum` and radius in `radius`
-4. Radiation from the luminosity is deposited into the radiation field
-
-### Physical Model Parameters
-
-| Parameter | Symbol | Value | Description |
-|-----------|--------|-------|-------------|
-| $F_\text{acc}$ | — | $0.5$ | Fraction of accreted energy radiated by the star |
-| $F_k$ | — | $0.5$ | Fraction of accretion energy from inner disk |
-| $F_\text{rad}$ | — | $0.33$ | Radiative barrier for ZAMS transition |
-| $T_D$ | — | $1.5 \times 10^6$ K | Deuterium ignition temperature |
-| $T_\text{Hayashi}$ | — | $3000$ K | Hayashi track temperature limit |
-| shell_factor | — | $2.1$ | Radius multiplier entering shell-burning phase |
-| $\mu$ | — | $0.613$ | Mean molecular weight |
-
-### Test Problem
-
-The `ParticleStar` problem provides a canonical validation test. A $32^3$ uniform grid with one super-Jeans-density cell creates a single Star particle in the first timestep. The test validates:
-
-- Mass conservation to machine precision during formation and accretion
-- Correct burn state progression from `Uninitialized` after accretion begins
-- Stored luminosity consistency with the `StellarPhysics` recomputation (within 1% to account for the one-timestep lag between accretion and the property update)
-- Polytropic index remaining in the valid range $[1.5, 3.0]$
-
----
-
 ## StochasticStellarPop Particle Type
 
 StochasticStellarPop particles carry the following real-valued attributes:
@@ -669,38 +496,72 @@ for three tracked isotopes, the next total-block component is
 
 ## Star Particle Type (modular stellar evolution)
 
-Star particles (`ParticleSwitch::Star`) represent individual stars whose radius and
-luminosity evolve through a **pluggable stellar-evolution model** selected at compile time.
+Star particles (`ParticleSwitch::Star`) represent individual stars whose radius and luminosity evolve through a **pluggable stellar-evolution model** selected at compile time.
 
 ### Particle attributes
 
-Real components: `mass`, `vx`, `vy`, `vz`, `birth_time`, `mdot` (accretion rate, set by the
-accretion module), `radius` (set by the stellar model), and `lum` (luminosity per radiation
-group; occupies the last `nGroups` slots). A model may declare extra real/integer components
-via `nExtraReal` / `nExtraInt`.
+Real components: `mass`, `vx`, `vy`, `vz`, `birth_time`, `death_time` (\\(-1\\) while unset), `mdot` (accretion rate, set by the accretion module), `radius` (set by the stellar model), `lum_0`, ..., `lum_<nGroups-1>` (luminosity per radiation group), followed by the model's extra real components. A model declares its extra components with `nExtraReal` / `nExtraInt` and names them with `extraRealNames` / `extraIntNames`; the integer components of a Star particle are all model-defined.
 
 ### Choosing a model
 
-The model is selected via `Particle_Traits<problem_t>::stellar_model`, which defaults to
-`ToyStellarModel` through `DefaultParticleTraits`. A problem can override it by adding
-`using stellar_model = MyModel;` to its `Particle_Traits` specialization. A model is a struct
-of GPU device functions; the dispatcher `StellarUpdate::updateStellarProperties` reads the
-particle's `mass` and `mdot`, calls the model, and stores `radius` and `lum` once per coarse
-step (operator-split, after accretion).
+The model is selected via `Particle_Traits<problem_t>::stellar_model`, which defaults to `ToyStellarModel` through `DefaultParticleTraits`. A problem can override it by adding `using stellar_model = MyModel;` to its `Particle_Traits` specialization. A model is a struct of GPU device functions; the dispatcher `StellarUpdate::updateStellarProperties` passes the particle's real and integer data to `Model::evolve`, which stores `radius` and `lum` once per coarse step. The update runs before the accretion step of the same coarse step, so it uses the mass and accretion rate from the previous step's accretion.
+
+### Formation
+
+Star particles form from Jeans-unstable cells with the same criterion and mass removal as Sink particles (see [Sink Particle Formation](#sink-particle-formation)). A new particle has `birth_time` set to the current time and `death_time = -1`; all other components except mass and velocity start at zero, which the models treat as "not yet started".
 
 ### Toy model
 
 `ToyStellarModel` is stateless:
 
-- Radius: $R = R_\odot (M/M_\odot)^{0.4}$
-- Stellar luminosity: $L_\star = L_\odot (M/M_\odot)^{3.5}$
-- Accretion luminosity: $L_\mathrm{acc} = G M \dot{M} / R$
-- Stored luminosity: $L = L_\star + L_\mathrm{acc}$
+- Radius: \\(R = R\_\odot (M/M\_\odot)^{0.4}\\)
+- Stellar luminosity: \\(L\_\star = L\_\odot (M/M\_\odot)^{3.5}\\)
+- Accretion luminosity: \\(L\_\mathrm{acc} = G M \dot{M} / R\\)
+- Stored luminosity: \\(L = L\_\star + L\_\mathrm{acc}\\)
 
-### Validation test
+### Deuterium-burning model
 
-`ParticleStarEvolution` places one Star particle in a uniform medium and lets it accrete via
-the grid Bondi accretion module (small-mass regime, $\dot{M}\approx$ const). It asserts, each
-step, that the particle's stored radius and luminosity match the closed-form laws above
-within ~2% (the tolerance absorbing the one-timestep lag between accretion and the stellar
-update), and reports the mean accretion rate against the analytic Bondi value.
+`DeuteriumBurningStellarModel` (`src/particles/deuterium_stellar_model.hpp`) is the one-zone protostellar model of Offner et al. (2009, ApJ 703, 131, Appendix B), based on Nakano et al. (1995, 2000) and Tan & McKee (2004). The update follows the ORION2 star particle module (`StarParticleData`). The star is a polytrope of index \\(n\\) whose radius follows from energy conservation. Each particle carries the extra reals `mdeut` (mass of accreted gas whose deuterium is not yet burned, \\(m\_d\\)) and `n`, and the extra integer `burn_state`:
+
+| `burn_state` | Phase | Deuterium luminosity \\(L\_D\\) |
+|---|---|---|
+| 0 | `PreCollapse`: \\(m < 0.01\\,M\_\odot\\) or no accretion yet; \\(L = 0\\) | 0 |
+| 1 | `NoBurning`: contraction before deuterium ignition | 0 |
+| 2 | `CoreDeuteriumFixedTc`: deuterium burning holds \\(T\_c\\) fixed | Eq. (3) |
+| 3 | `CoreDeuteriumVariableTc`: deuterium burned as fast as it is accreted | \\(\dot{m}\\,\psi\_D\\) |
+| 4 | `ShellDeuterium`: radiative core, deuterium burned in a shell | \\(\dot{m}\\,\psi\_D\\) |
+| 5 | `MainSequence`: \\(r = R\_{\rm ZAMS}(m)\\) | 0 |
+
+**Start.** The model starts once \\(m \geq 0.01\\,M\_\odot\\) and \\(\dot{m} > 0\\), with \\(r = 2.5\\,R\_\odot\\,(\dot{m}/10^{-5}\\,M\_\odot\\,{\rm yr}^{-1})^{0.2}\\) and
+
+<script type="math/tex; mode=display">
+n = 5 - 3\left[1.475 + 0.07\log_{10}\left(8\times10^{-5}\,\frac{\dot{m}}{M_\odot\,{\rm yr}^{-1}}\right)\right]^{-1}, \qquad 1.5 \le n \le 3. \tag{1}
+</script>
+
+**Radius.** Before the main sequence, the radius changes over a time \\(\Delta t\\) in which the star gains \\(\Delta m = \dot{m}\Delta t\\) by (Nakano et al. 2000, Eq. 5.8)
+
+<script type="math/tex; mode=display">
+\Delta r = 2\frac{\Delta m}{m}\left(1 - \frac{1-f_k}{a_g\beta} + \frac{1}{2}\frac{d\log\beta}{d\log m}\right) r - \frac{2\Delta t}{a_g\beta}\frac{r^2}{G m^2}\left(L_\star + L_I - L_D\right), \tag{2}
+</script>
+
+with \\(a\_g = 3/(5-n)\\), \\(f\_k = 0.5\\), \\(L\_I = \dot{m}\\,\psi\_I\\), \\(\psi\_I = 17\\,{\rm eV}\\) and \\(\psi\_D = 100\\,{\rm eV}\\) per \\(m\_u\\) of gas, and \\(L\_\star = \max(L\_{\rm ZAMS} + L\_{\rm acc},\\, 4\pi r^2\sigma\_{\rm SB}T\_H^4)\\), \\(T\_H = 3000\\) K. \\(L\_{\rm ZAMS}\\) and \\(R\_{\rm ZAMS}\\) are the Tout et al. (1996) solar-metallicity fits. The mean gas-pressure fraction \\(\beta\\) is 1 below \\(5\\,M\_\odot\\), comes from a table in \\((m, n)\\) above, and from the Eddington quartic for \\(n = 3\\). The central density and pressure come from tabulated Lane-Emden factors, and the central temperature \\(T\_c\\) from \\(P\_c = \rho\_c k\_B T\_c/(\mu m\_H) + a T\_c^4/3\\) with \\(\mu = 0.613\\). In the fixed-\\(T\_c\\) phase, deuterium burning supplies
+
+<script type="math/tex; mode=display">
+L_D = L_\star + L_I + \frac{G m \dot{m}}{r}\left\{1 - f_k - \frac{a_g\beta}{2}\left[1 + \frac{d\log(\beta/\beta_c)}{d\log m}\right]\right\}, \tag{3}
+</script>
+
+where \\(\beta\_c = \rho\_c k\_B T\_c/(\mu m\_H P\_c)\\), and \\(m\_d\\) changes by \\(\Delta m - L\_D\Delta t/\psi\_D\\).
+
+**Phase changes.** `NoBurning` \\(\to\\) `CoreDeuteriumFixedTc` when \\(T\_c > 1.5\times10^6\\) K (then \\(n = 1.5\\)); \\(\to\\) `CoreDeuteriumVariableTc` when \\(m\_d \le \Delta m\\) (core deuterium exhausted); \\(\to\\) `ShellDeuterium` when \\(L\_D \le f\_{\rm rad} L\_{\rm ZAMS}\\) with \\(f\_{\rm rad} = 0.18\\) (then \\(n = 3\\) and \\(r \to 2.1\\,r\\), once); \\(\to\\) `MainSequence` when \\(r \le R\_{\rm ZAMS}(m)\\).
+
+**Luminosity.** The stored luminosity is \\(L = L\_\star + L\_{\rm disk}\\) with \\(L\_{\rm disk} = (1-f\_k)\\,G m\dot{m}/r\\) and \\(L\_\star\\) as above, which includes the accretion-shock luminosity \\(L\_{\rm acc} = f\_{\rm acc} f\_k\\,G m \dot{m}/r\\), \\(f\_{\rm acc} = 0.5\\). It goes to `lum_0`; the other groups are zero.
+
+**Differences from the text of Offner et al. (2009).** The model follows the ORION2 code, which differs from the published appendix in four places: the shell-burning test is \\(L\_D \le 0.18\\,L\_{\rm ZAMS}\\) (the appendix writes \\(L\_D/L\_{\rm ms} > 0.33\\), which would start shell burning at once); \\(L\_\star\\) includes \\(L\_{\rm acc}\\) inside the Hayashi maximum, both in Eq. (2) and in \\(L\\); Eq. (1) has the factor \\(8\times10^{-5}\\); and \\(\psi\_I\\), \\(\psi\_D\\) are 17 and 100 eV per \\(m\_u\\) instead of \\(2.5\\) and \\(15\\,L\_\odot\\) per \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) (8% and 6% larger).
+
+**Time integration.** Eq. (2) is explicit. Each coarse step is split into sub-steps so that neither the accretion term nor the luminosity term of Eq. (2) changes \\(r\\) by more than 1% per sub-step; the mass grows linearly across the step, and each sub-step uses the mass at its end. On the step in which the model starts, only the time after \\(m\\) passed \\(0.01\\,M\_\odot\\) is integrated. For steps that are small compared with the contraction time, as in ORION2, no sub-steps are taken.
+
+### Validation tests
+
+`ParticleStarEvolution` places one Star particle in a uniform medium and lets it accrete via the grid Bondi accretion module (small-mass regime, \\(\dot{M}\approx\\) const). It asserts, each step, that the particle's stored radius and luminosity match the closed-form laws of the toy model within ~2% (the tolerance absorbing the one-timestep lag between accretion and the stellar update), and reports the mean accretion rate against the analytic Bondi value.
+
+`ParticleStar` tests the deuterium-burning model. It first evolves the model alone at constant \\(\dot{m} = 10^{-5}\\) and \\(10^{-4}\\,M\_\odot\\,{\rm yr}^{-1}\\), with the steps of the ORION2 driver, and compares radius, luminosity, \\(n\\), \\(m\_d\\) and phase with reference tracks computed by the ORION2 code (stored in `src/problems/ParticleStar/`; radius and luminosity agree within 0.75%). It then runs a \\(32^3\\) MHD simulation with self-gravity in which one Jeans-unstable cell forms a Star particle, and checks mass conservation in the formation step (to \\(10^{-14}\\)) and during accretion (to \\(10^{-13}\\)), and that the model has started and gives \\(1.5 \le n \le 3\\) and a positive luminosity.

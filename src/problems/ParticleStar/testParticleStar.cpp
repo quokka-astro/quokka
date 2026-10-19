@@ -1,6 +1,15 @@
 /// \file testParticleStar.cpp
-/// \brief Defines a test problem for star particles.
+/// \brief Test problem for Star particles with the deuterium-burning protostellar model: formation from a
+/// Jeans-unstable cell, accretion with mass conservation, and the stellar evolution checked against reference
+/// tracks from the ORION2 protostellar model (see README.md in this directory).
 ///
+
+#include <array>
+#include <cmath>
+#include <fstream>
+#include <numeric>
+#include <sstream>
+#include <string>
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -8,37 +17,30 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
-#include "util/fextract.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "particles/deuterium_stellar_model.hpp"
 #include "particles/particle_types.hpp"
-#include "particles/starparticle_radiation.hpp"
 #include "util/BC.hpp"
-
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
 
 struct ParticleStar {
 };
 
-constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 const double rho0 = 1.0 * C::m_p; // g cm^-3
 const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
-const double year = 3.15576e+07;			// in seconds
 const double cs = std::sqrt(gamma_ * C::k_B * T0 / mu); // NOLINT
 constexpr double B0 = 1.0e-7;				// uniform background field
 
+using StellarModel = quokka::DeuteriumBurningStellarModel;
+
 template <> struct Particle_Traits<ParticleStar> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
-	// This test validates the deuterium-burning polytropic model directly (see below),
-	// so it must select the model that implements that physics rather than the toy default.
-	using stellar_model = quokka::DeuteriumBurningStellarModel;
+	using stellar_model = StellarModel;
 };
 
 template <> struct quokka::EOS_Traits<ParticleStar> {
@@ -57,13 +59,15 @@ template <> struct Physics_Traits<ParticleStar> : DefaultPhysicsTraits {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
+
+constexpr int n_groups = Physics_Traits<ParticleStar>::nGroups;
+constexpr int mdeut_idx = quokka::StarParticleFixedComps + n_groups; // first model extra
+constexpr int n_poly_idx = mdeut_idx + 1;
 
 template <> void QuokkaSimulation<ParticleStar>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -110,251 +114,172 @@ template <> void QuokkaSimulation<ParticleStar>::setInitialConditionsOnGridFaceV
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<ParticleStar>::mhdFirstIndex) = B_val; });
 }
 
-template <> void QuokkaSimulation<ParticleStar>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+// Evolve the stellar model on the host with the constant-accretion-rate steps of an ORION2 reference run
+// (m0 = 1e-3 M_sun, dm = 1e-4 M_sun per step) and compare with the stored reference track.
+auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per_yr) -> int
 {
-	// tag cells for refinement: static mesh refinement for the whole domain
-
-	// auto const &dx = geom[lev].CellSizeArray();
-	// auto const &plo = geom[lev].ProbLoArray();
-	// auto const &phi = geom[lev].ProbHiArray();
-
-	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.validbox();
-		const auto tag = tags.array(mfi);
-
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
+	std::ifstream input(filename);
+	if (!input) {
+		amrex::Print() << "FAIL: cannot open reference track " << filename << "\n";
+		return 1;
 	}
+
+	const double dm = 1.0e-4 * C::M_solar;
+	const double mdot = mdot_Msun_per_yr * C::M_solar / quokka::yr_in_s;
+	const double dt = dm / mdot;
+	std::array<amrex::Real, quokka::StarParticleFixedComps + n_groups + StellarModel::nExtraReal> rdata{};
+	std::array<int, StellarModel::nExtraInt> idata{};
+	rdata[quokka::StarParticleMassIdx] = 1.0e-3 * C::M_solar;
+	rdata[quokka::StarParticleMdotIdx] = mdot;
+
+	int n_rows = 0;
+	int n_state_mismatch = 0;
+	bool phase_jump = false;
+	double max_err_r = 0.0;
+	double max_err_L = 0.0;
+	double max_err_n = 0.0;
+	double max_err_mdeut = 0.0;
+	long step = 0;
+	std::string line;
+	while (std::getline(input, line)) {
+		if (line.empty() || line[0] == '#') {
+			continue;
+		}
+		std::istringstream row(line);
+		long ref_step = 0;
+		double m_ref = NAN;
+		double r_ref = NAN;
+		double n_ref = NAN;
+		double mdeut_ref = NAN;
+		int state_ref = -1;
+		double L_ref = NAN;
+		row >> ref_step >> m_ref >> r_ref >> n_ref >> mdeut_ref >> state_ref >> L_ref;
+		for (; step < ref_step; ++step) {
+			rdata[quokka::StarParticleMassIdx] += dm;
+			StellarModel::evolve(rdata.data(), idata.data(), n_groups, dt);
+		}
+		++n_rows;
+
+		// Transitions may land a few steps apart, so a row next to a transition can be one phase off.
+		if (idata[0] != state_ref) {
+			++n_state_mismatch;
+			phase_jump = phase_jump || (std::abs(idata[0] - state_ref) > 1);
+			continue;
+		}
+		max_err_r = std::max(max_err_r, std::abs(rdata[quokka::StarParticleRadiusIdx] / r_ref - 1.0));
+		max_err_L = std::max(max_err_L, std::abs(rdata[quokka::StarParticleLumIdx] / L_ref - 1.0));
+		max_err_n = std::max(max_err_n, std::abs(rdata[n_poly_idx] - n_ref));
+		max_err_mdeut = std::max(max_err_mdeut, std::abs(rdata[mdeut_idx] - mdeut_ref) / m_ref);
+	}
+
+	// Relative tolerance for r and L: Quokka sub-cycles the radius update, so it differs from the reference
+	// (itself ~0.3% from its converged solution) by up to ~1.5% just after the model starts at 0.01 M_sun.
+	const double tol_rL = 2.0e-2;
+	const bool passed = (n_rows > 0) && (n_state_mismatch <= 4) && !phase_jump && (max_err_r < tol_rL) && (max_err_L < tol_rL) && (max_err_n < 1.0e-10) &&
+			    (max_err_mdeut < 1.0e-2);
+	amrex::Print() << "Reference track " << filename << ": " << n_rows << " rows, " << n_state_mismatch
+		       << " rows one phase apart, max |r/r_ref - 1| = " << max_err_r << ", max |L/L_ref - 1| = " << max_err_L
+		       << ", max |n - n_ref| = " << max_err_n << ", max |mdeut - mdeut_ref| / m = " << max_err_mdeut << (passed ? "  PASS" : "  FAIL")
+		       << "\n";
+	return passed ? 0 : 1;
 }
 
 auto problem_main() -> int
 {
-	// Problem initialization
+	int status = 0;
+
+	// Stellar evolution against the ORION2 reference model
+	status += compareWithReferenceTrack("../src/problems/ParticleStar/orion2_track_mdot1e-5.dat", 1.0e-5);
+	status += compareWithReferenceTrack("../src/problems/ParticleStar/orion2_track_mdot1e-4.dat", 1.0e-4);
+
 	QuokkaSimulation<ParticleStar> sim;
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 1.0e7 * year; // 1 Myr
+	sim.stopTime_ = 1.0e7 * quokka::yr_in_s;
 
-	// initialize
 	sim.setInitialConditions();
 
-	const auto [position0, values0] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
-	const int nx = static_cast<int>(position0.size());
-
-	// get total gas mass of the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Real const m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<ParticleStar>::density_index) * vol;
+	amrex::Real const m_tot_init = sim.state_new_cc_[0].sum(HydroSystem<ParticleStar>::density_index) * vol;
 
-	int status = 0;
+	// getParticleDataAtAllLevels returns [pos_x, pos_y, pos_z, rdata...] per particle
+	auto star_data = [&sim]() {
+		const auto [ids, real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtAllLevels();
+		return std::make_pair(real_data, int_data);
+	};
+	auto total_mass = [&](auto const &real_data) {
+		const double m_stars = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &particle) {
+			return sum + particle[AMREX_SPACEDIM + quokka::StarParticleMassIdx];
+		});
+		return sim.state_new_cc_[0].sum(HydroSystem<ParticleStar>::density_index) * vol + m_stars;
+	};
 
-	// evolve to step 1
+	// Formation: one Star particle forms in the first step, conserving mass
 	sim.maxTimesteps_ = 1;
 	sim.evolve();
-
-	// get total particle mass of the initial state
-	const int mass_index = quokka::StarParticleMassIdx;
-	const int radius_index = quokka::StarParticleRadiusIdx;
-	[[maybe_unused]] const auto [ids_init, real_data_init, int_data_init] =
-	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtAllLevels();
-	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
-							 [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
-	amrex::Real const m_radius_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
-							  [radius_index](double sum, const auto &particle) { return sum + particle[radius_index]; });
-	const double m_tot_init = m_gas_init + m_stars_init;
-
-	// get total gas mass after step 1
-	amrex::Real const m_gas_step1 = sim.state_new_cc_[0].sum(HydroSystem<ParticleStar>::density_index) * vol;
-
-	// get total particle mass after step 1
-	[[maybe_unused]] const auto [ids_step1, real_data_step1, int_data_step1] =
-	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtAllLevels();
-	const int n_stars_step1 = static_cast<int>(real_data_step1.size());
-
-	if (n_stars_step1 != 1) {
-		status = 1;
-		amrex::Print() << "Test failed: expected number of particles created in the formation step is 1, but got " << n_stars_step1 << "\n";
-		return status;
+	const auto [real_data_step1, int_data_step1] = star_data();
+	if (real_data_step1.size() != 1) {
+		amrex::Print() << "FAIL: expected 1 Star particle after the formation step, got " << real_data_step1.size() << "\n";
+		return 1;
+	}
+	const double rel_err_step1 = std::abs(total_mass(real_data_step1) / m_tot_init - 1.0);
+	amrex::Print() << "Formation step: relative change of total mass = " << rel_err_step1 << "\n";
+	if (!(rel_err_step1 < 1.0e-14)) {
+		amrex::Print() << "FAIL: mass not conserved in the formation step\n";
+		status += 1;
 	}
 
-	amrex::Real const m_stars_step1 = std::accumulate(real_data_step1.begin(), real_data_step1.end(), 0.0,
-							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
-	const double m_tot_step1 = m_gas_step1 + m_stars_step1;
-
-	amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
-	// amrex::Print() << "Initial total mass = " << m_tot_init << "\n";
-
-	// Check relative error in the formation step and confirm mass is conserved to machine precision
-	const double rel_error_gas_mass_step1 = std::abs(m_tot_init - m_tot_step1) / m_tot_init;
-	amrex::Print() << "Step 1: total mass = " << m_tot_step1 << "\n";
-	amrex::Print() << "Step 1: (total_mass - initial_total_mass) / initial_total_mass = " << rel_error_gas_mass_step1 << "\n";
-	amrex::Print() << "Step 1: particle mass = " << m_stars_init << "\n";
-	amrex::Print() << "Step 1: particle radius = " << m_radius_init << "\n";
-	const double rel_error_total_mass_step1 = 1.0e-14;
-	if (!(rel_error_gas_mass_step1 < rel_error_total_mass_step1)) {
-		status = 1;
-		amrex::Print() << "Test failed: mass not conserved to machine precision in the formation step !!!\n";
-	}
-
-	// return status;
-
-	// evolve to the end
+	// Accretion: total mass conserved
 	sim.maxTimesteps_ = 20;
 	sim.evolve();
-
-	// get total gas mass after the end
-	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<ParticleStar>::density_index) * vol;
-
-	// get total particle mass after the end
-	[[maybe_unused]] const auto [ids_final, real_data_final, int_data_final] =
-	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtAllLevels();
-	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
-							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
-	amrex::Real const m_radius_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
-							   [radius_index](double sum, const auto &particle) { return sum + particle[radius_index]; });
-	const double m_tot_final = m_gas_final + m_stars_final;
-
-	// Check relative error in the accretion step and confirm mass is conserved to machine precision
-	const double rel_error_gas_mass_final = std::abs(m_tot_init - m_tot_final) / m_tot_init;
-	amrex::Print() << "Final: rel_err(total_mass) = " << rel_error_gas_mass_final << "\n";
-	const double rel_error_total_mass_final = 1.0e-13;
-	int status_final = 1;
-	if (rel_error_gas_mass_final < rel_error_total_mass_final) {
-		status_final = 0;
-	}
-	status += status_final;
-
-	// find ratio of particle mass to gas mass
-	const double mass_ratio = m_stars_final / m_gas_final;
-	amrex::Print() << "particle mass / gas mass = " << mass_ratio << "\n";
-
-	if (status > 0) {
-		amrex::Print() << "Test failed: mass not conserved to machine precision in the accretion step !!!\n";
-	} else {
-		amrex::Print() << "Mass conservation test passed\n";
+	const auto [real_data, int_data] = star_data();
+	const double rel_err_final = std::abs(total_mass(real_data) / m_tot_init - 1.0);
+	amrex::Print() << "After " << sim.maxTimesteps_ << " steps: relative change of total mass = " << rel_err_final << "\n";
+	if (!(rel_err_final < 1.0e-13)) {
+		amrex::Print() << "FAIL: mass not conserved during accretion\n";
+		status += 1;
 	}
 
-	// ============================================================
-	// Validate stellar property updates (burn state, luminosity, polytropic index)
-	// ============================================================
-	amrex::Print() << "\n=== Stellar property validation ===\n";
-
+	// Stellar properties of the accreting star
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// Offsets: getParticleDataAtAllLevels returns [pos_x, pos_y, pos_z, rdata[0], rdata[1], ...]
-		constexpr int pos_offset = AMREX_SPACEDIM; // 3 position components precede rdata
+		for (size_t p = 0; p < real_data.size(); ++p) {
+			const auto &rdata = real_data[p];
+			const double mass = rdata[AMREX_SPACEDIM + quokka::StarParticleMassIdx];
+			const double mdot = rdata[AMREX_SPACEDIM + quokka::StarParticleMdotIdx];
+			const double radius = rdata[AMREX_SPACEDIM + quokka::StarParticleRadiusIdx];
+			const double lum = rdata[AMREX_SPACEDIM + quokka::StarParticleLumIdx];
+			const double n_poly = rdata[AMREX_SPACEDIM + n_poly_idx];
+			const int state = int_data[p][0];
+			amrex::Print() << "Star " << p << ": m = " << mass / C::M_solar << " M_sun, mdot = " << mdot * quokka::yr_in_s / C::M_solar
+				       << " M_sun/yr, r = " << radius / C::R_solar << " R_sun, n = " << n_poly << ", L = " << lum / quokka::StellarPhysics::L_solar
+				       << " L_sun, burn_state = " << state << "\n";
 
-		for (size_t p = 0; p < real_data_final.size(); ++p) {
-			const auto &rdata = real_data_final[p];
-			const auto &idata = int_data_final[p];
-
-			const double p_mass = rdata[pos_offset + quokka::StarParticleMassIdx];
-			const double p_mdot = rdata[pos_offset + quokka::StarParticleMdotIdx];
-			const double p_n = rdata[pos_offset + quokka::StarParticleNIdx];
-			const double p_mdeut = rdata[pos_offset + quokka::StarParticleMdeutIdx];
-			const double p_lum = rdata[pos_offset + quokka::StarParticleLumIdx];
-			const auto p_burn_state = static_cast<quokka::burningState>(idata[quokka::StarParticleBurnStateIdx]);
-
-			amrex::Print() << "Particle " << p << ":\n";
-			amrex::Print() << "  mass     = " << p_mass << " g (" << p_mass / C::M_solar << " M_sun)\n";
-			amrex::Print() << "  mdot     = " << p_mdot << " g/s\n";
-			amrex::Print() << "  n        = " << p_n << "\n";
-			amrex::Print() << "  mdeut    = " << p_mdeut << " g\n";
-			amrex::Print() << "  lum      = " << p_lum << " erg/s\n";
-			amrex::Print() << "  burnState = " << static_cast<int>(p_burn_state) << "\n";
-
-			// Check 1: burn_state should have progressed from Uninitialized if mdot > 0
-			if (p_mdot > 0.0 && p_mass >= quokka::StellarConstants::M_rad_min) {
-				if (p_burn_state == quokka::burningState::Uninitialized) {
-					status += 1;
-					amrex::Print() << "  FAIL: burn_state is still Uninitialized despite mdot > 0 and mass >= M_rad_min\n";
-				} else {
-					amrex::Print() << "  PASS: burn_state has progressed from Uninitialized\n";
-				}
-			}
-
-			// Check 2: luminosity should be stored and match recomputation
-			// Note: luminosity is computed before accretion in each timestep, so the stored
-			// luminosity uses the mass/mdot from before the last accretion step. We allow
-			// a loose tolerance (1%) to account for this one-step lag.
-			const double radius = quokka::StellarPhysics::rad_init(p_mdot > 0.0 ? p_mdot : 1.0e-10);
-			const double expected_lum = quokka::StellarPhysics::luminosity_total(p_mass, radius, p_mdot, p_burn_state);
-
-			amrex::Print() << "  expected_lum = " << expected_lum << " erg/s\n";
-
-			if (expected_lum > 0.0) {
-				const double lum_rel_error = std::abs(p_lum - expected_lum) / expected_lum;
-				amrex::Print() << "  lum rel_error = " << lum_rel_error << "\n";
-				const double lum_tol = 1.0e-2; // 1% tolerance for one-step lag
-				if (lum_rel_error > lum_tol) {
-					status += 1;
-					amrex::Print() << "  FAIL: stored luminosity differs from expected by more than " << lum_tol * 100 << "%\n";
-				} else {
-					amrex::Print() << "  PASS: stored luminosity is consistent with expected value\n";
-				}
-			} else if (p_burn_state == quokka::burningState::Uninitialized) {
-				// Luminosity should be 0 for uninitialized particles
-				if (p_lum != 0.0) {
-					status += 1;
-					amrex::Print() << "  FAIL: luminosity should be 0 for Uninitialized burn_state\n";
-				} else {
-					amrex::Print() << "  PASS: luminosity is 0 for Uninitialized burn_state\n";
-				}
-			}
-
-			// Check: luminosity should be positive for active particles
-			if (p_burn_state != quokka::burningState::Uninitialized && p_lum <= 0.0) {
+			if (mass >= quokka::StellarPhysics::M_rad_min && mdot > 0.0 && state == StellarModel::PreCollapse) {
+				amrex::Print() << "FAIL: the stellar model did not start although m >= 0.01 M_sun and mdot > 0\n";
 				status += 1;
-				amrex::Print() << "  FAIL: luminosity should be positive for active burn_state\n";
 			}
-
-			// Check 3: polytropic index should be in valid range [1.5, 3.0]
-			if (p_burn_state != quokka::burningState::Uninitialized) {
-				if (p_n < 1.5 || p_n > 3.0) {
+			if (state != StellarModel::PreCollapse) {
+				if (!(n_poly >= 1.5 && n_poly <= 3.0)) {
+					amrex::Print() << "FAIL: polytropic index outside [1.5, 3]\n";
 					status += 1;
-					amrex::Print() << "  FAIL: polytropic index n = " << p_n << " is outside valid range [1.5, 3.0]\n";
-				} else {
-					amrex::Print() << "  PASS: polytropic index n is in valid range\n";
+				}
+				if (!(lum > 0.0 && std::isfinite(lum) && radius > 0.0 && std::isfinite(radius))) {
+					amrex::Print() << "FAIL: luminosity and radius must be positive and finite\n";
+					status += 1;
+				}
+				// The radius is evolved, not reset to the initial value each step
+				if (radius == quokka::StellarPhysics::radInit(mdot)) {
+					amrex::Print() << "FAIL: radius equals its initial value from the accretion rate\n";
+					status += 1;
 				}
 			}
 		}
 	}
 
 	if (status == 0) {
-		amrex::Print() << "\n=== All tests passed ===\n";
-	} else {
-		amrex::Print() << "\n=== Test failed (status = " << status << ") ===\n";
+		amrex::Print() << "All ParticleStar checks passed\n";
 	}
-
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
-
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::vector<double> xs(nx);
-		std::vector<double> rho_x(nx);
-		std::vector<double> rho0_x(nx);
-		for (int i = 0; i < nx; ++i) {
-			xs[i] = position[i];
-			rho_x[i] = values.at(HydroSystem<ParticleStar>::density_index)[i];
-			rho0_x[i] = values0.at(HydroSystem<ParticleStar>::density_index)[i];
-		}
-
-#ifdef HAVE_PYTHON
-		matplotlibcpp::clf();
-		std::map<std::string, std::string> rho0_args;
-		rho0_args["label"] = "rho0";
-		rho0_args["color"] = "blue";
-		matplotlibcpp::plot(xs, rho0_x, rho0_args);
-		std::map<std::string, std::string> rho_args;
-		rho_args["label"] = "rho";
-		rho_args["color"] = "red";
-		rho_args["linestyle"] = "--";
-		matplotlibcpp::plot(xs, rho_x, rho_args);
-		matplotlibcpp::xlabel("x (cm)");
-		matplotlibcpp::ylabel("rho (g cm^-3)");
-		matplotlibcpp::title(std::format("t = {:.2e}", sim.tNew_[0]));
-		matplotlibcpp::legend();
-		matplotlibcpp::save("./star_particle_density.pdf");
-#endif
-	}
-
 	return status;
 }
