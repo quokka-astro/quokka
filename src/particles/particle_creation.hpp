@@ -3,6 +3,7 @@
 
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
+#include "gcem.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particle_types.hpp"
@@ -62,7 +63,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const auto index = box.index(iv);
 					// Check if we should create a particle at this location and time
 					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr =
-					    (has_face_centered_state) ? &fab_fc : nullptr;
+					    has_face_centered_state ? &fab_fc : nullptr;
 					pcounts[index] = particle_checker(state_arr, accretion_rate_arr, i, j, k, dx, fab_fc_ptr, engine); // NOLINT
 				});
 
@@ -97,7 +98,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr =
-					    (has_face_centered_state) ? &fab_fc : nullptr;
+					    has_face_centered_state ? &fab_fc : nullptr;
 
 					if (pcounts[index] > 0) {			  // NOLINT
 						const int num_particles = pcounts[index]; // NOLINT
@@ -311,15 +312,28 @@ AMREX_GPU_DEVICE inline void initializeSinkLikeParticles(PType *particles, int n
 			p.rdata(mass_idx + 2) = vy;
 			p.rdata(mass_idx + 3) = vz;
 		}
+
+		// Zero the remaining real components (mdot, Lx, Ly, Lz for sinks). Angular momentum is
+		// accumulated with += in ComputeAccretionInBox(), so these must start at zero rather than
+		// at whatever the recycled arena block happened to contain.
+		for (int n = mass_idx + 4; n < PType::NReal; ++n) {
+			p.rdata(n) = 0.0;
+		}
 	}
 
 	// update cell density to be the threshold density
 	const amrex::Real scale_factor = rho_J / cell_density;
+	// The magnetic energy density is unchanged when a particle forms, so the total energy is reduced only by the
+	// internal and kinetic energy carried away with the mass. Both are proportional to density at fixed
+	// temperature and velocity, so they shrink by (1 - scale_factor). This must be evaluated before the
+	// momentum and internal energy are rescaled below.
+	const amrex::Real removed_kinetic_energy = (1.0 - scale_factor) * 0.5 * cell_density * (vx * vx + vy * vy + vz * vz);
+	const amrex::Real removed_internal_energy = (1.0 - scale_factor) * state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+	state_arr(i, j, k, HydroSystem<problem_t>::energy_index) -= removed_kinetic_energy + removed_internal_energy;
 	state_arr(i, j, k, HydroSystem<problem_t>::density_index) = rho_J;
 	state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= scale_factor;
 	state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= scale_factor;
 	state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= scale_factor;
-	state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= scale_factor;
 	state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= scale_factor;
 	// scale passive scalars to conserve mass fractions
 	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
@@ -443,6 +457,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc,
 						 amrex::RandomEngine const &engine) const -> int
 		{
+			if (eps_ff_ <= 0.0) {
+				return 0;
+			}
+
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
@@ -493,6 +511,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real eps_ff_ = eps_ff;
 		amrex::Real stellar_velocity_limit_ = stellar_velocity_limit;
 		amrex::Real low_mass_composite_max_mass_ = low_mass_composite_max_mass;
+		int chemical_scalar_offset_ = chemical_scalar_offset;
+		int chemical_num_scalars_ = chemical_num_scalars;
+		bool store_channel_fields_ = store_channel_fields;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
@@ -656,6 +677,35 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					if (mass_at_birth_idx >= 0) {
 						p.rdata(mass_at_birth_idx) = p.rdata(mass_idx);
 					}
+
+					if constexpr (StochasticStellarPopParticleChemistryBlockCapacity<problem_t>() > 0) {
+						const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
+						const int chem_block_size = StochasticStellarPopParticleChemistryBlockCapacity<problem_t>();
+						const int scalar_offset = std::max(0, chemical_scalar_offset_);
+						const int nchem = std::max(0, std::min(chemical_num_scalars_, nscalars - scalar_offset));
+
+						for (int block = 0; block < ChemicalYieldLookup::max_tracked_channels + 1; ++block) {
+							for (int nn = 0; nn < nscalars; ++nn) {
+								p.rdata(chem_base + block * chem_block_size + nn) = 0.0;
+							}
+						}
+
+						for (int nn = 0; nn < nchem; ++nn) {
+							const int total_scalar = HydroSystem<problem_t>::scalar0_index + scalar_offset + nn;
+							p.rdata(chem_base + nn) = std::max<amrex::Real>(0.0, state_arr(i, j, k, total_scalar) / cell_density);
+
+							if (store_channel_fields_) {
+								for (int block = 1; block < ChemicalYieldLookup::max_tracked_channels + 1; ++block) {
+									const int channel_scalar =
+									    HydroSystem<problem_t>::scalar0_index + scalar_offset + block * nchem + nn;
+									if (channel_scalar < HydroSystem<problem_t>::scalar0_index + nscalars) {
+										p.rdata(chem_base + block * chem_block_size + nn) = std::max<amrex::Real>(
+										    0.0, state_arr(i, j, k, channel_scalar) / cell_density);
+									}
+								}
+							}
+						}
+					}
 				}
 
 				// Update momentum of the low mass composite star particles if there is(are) high mass star(s)
@@ -714,6 +764,16 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					// 	NOT the actual mass of the stochastically created particles, to update the hydro state.)
 					const double factor = (1. - particle_mass / cell_mass);
 
+					// Update the total energy. The magnetic energy density is unchanged when a particle
+					// forms, so the total energy is reduced only by the internal and kinetic energy carried
+					// away with the mass. Both are proportional to density at fixed temperature and velocity,
+					// so they shrink by (1 - factor). This must be evaluated before the density, momentum,
+					// and internal energy are rescaled below.
+					const amrex::Real removed_kinetic_energy = (1. - factor) * 0.5 * cell_density * (vx * vx + vy * vy + vz * vz);
+					const amrex::Real removed_internal_energy =
+					    (1. - factor) * state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+					state_arr(i, j, k, HydroSystem<problem_t>::energy_index) -= removed_kinetic_energy + removed_internal_energy;
+
 					// Update the cell density to reflect mass conversion into stars
 					state_arr(i, j, k, HydroSystem<problem_t>::density_index) *= factor;
 
@@ -724,9 +784,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 					// Update internal energy to reflect mass change
 					state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= factor;
-
-					// Update total energy
-					state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= factor;
 
 					// Update mass scalars including passive scalars
 					if (nscalars > 0) {

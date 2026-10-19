@@ -1,0 +1,63 @@
+cff-version: 1.2.0
+title: "TurbGen — Turbulence Generator"
+message: >-
+  TurbGen generates a time sequence of random Fourier modes via an
+  Ornstein-Uhlenbeck (OU) process to drive turbulence in hydrodynamical
+  simulation codes. It can also generate single turbulent realisations.
+  If you use TurbGen, please cite Federrath et al. (2010) and the ASCL entry.
+
+authors:
+  - family-names: Federrath
+    given-names: Christoph
+    email: christoph.federrath@anu.edu.au
+    affiliation: Australian National University
+    orcid: "https://orcid.org/0000-0002-0706-2306"
+
+license: MIT
+repository-code: "https://github.com/chfeder/turbulence_generator"
+
+preferred-citation:
+  type: article
+  title: "Comparing the statistics of interstellar turbulence in simulations and observations: Solenoidal versus compressive turbulence forcing"
+  authors:
+    - family-names: Federrath
+      given-names: Christoph
+    - family-names: Roman-Duval
+      given-names: Julia
+    - family-names: Klessen
+      given-names: Ralf S.
+    - family-names: Schmidt
+      given-names: Wolfram
+    - family-names: Mac Low
+      given-names: Mordecai-Mark
+  journal: "Astronomy & Astrophysics"
+  year: 2010
+  volume: "512"
+  pages: "A81"
+  start: "A81"
+  doi: "10.1051/0004-6361/200912437"
+  url: "https://ui.adsabs.harvard.edu/abs/2010A%26A...512A..81F/abstract"
+
+references:
+  - type: software
+    title: "TurbGen: Turbulence generator"
+    authors:
+      - family-names: Federrath
+        given-names: Christoph
+      - family-names: Roman-Duval
+        given-names: Julia
+      - family-names: Klessen
+        given-names: Ralf S.
+      - family-names: Schmidt
+        given-names: Wolfram
+      - family-names: Mac Low
+        given-names: Mordecai-Mark
+    year: 2022
+    ascl-id: "2204.001"
+    url: "https://ascl.net/2204.001"
+    repository-code: "https://github.com/chfeder/turbulence_generator"
+
+keywords:
+  - Turbulence
+  - Fourier transformation
+  - Hydrodynamics

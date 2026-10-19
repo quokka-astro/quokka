@@ -24,8 +24,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct ContactProblem {
-};
+struct ContactProblem {};
 
 template <> struct quokka::EOS_Traits<ContactProblem> {
 	static constexpr double gamma = 1.4;
@@ -33,6 +32,7 @@ template <> struct quokka::EOS_Traits<ContactProblem> {
 };
 
 template <> struct Physics_Traits<ContactProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numPassiveScalars = numMassScalars + 2; // number of passive scalars

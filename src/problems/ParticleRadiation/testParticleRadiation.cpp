@@ -14,8 +14,7 @@
 #include "util/BC.hpp"
 #include "util/DataTable.hpp"
 
-struct ParticleRadiationProblem {
-};
+struct ParticleRadiationProblem {};
 
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;

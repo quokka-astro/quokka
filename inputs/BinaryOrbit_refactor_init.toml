@@ -32,3 +32,5 @@ checkpoint_interval = 20
 max_timesteps = 20
 plotfile_interval = -1
 #restartfile = last_chk
+
+density_floor = 1e-28  # g cm^-3

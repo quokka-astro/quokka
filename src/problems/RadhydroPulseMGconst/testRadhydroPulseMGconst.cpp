@@ -18,14 +18,11 @@
 #include <fstream>
 
 // Single-group problem
-struct SGProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct SGProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 // Multi-group problem
-struct MGproblem {
-};
+struct MGproblem {};
 // Multi-group problem with MHD
-struct MGproblemMHD {
-};
+struct MGproblemMHD {};
 
 // constexpr int n_groups_ = 1;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};

@@ -17,8 +17,7 @@
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 
-struct ParticleSFProblem {
-};
+struct ParticleSFProblem {};
 
 constexpr Real mu = 1.0 * C::m_p;
 constexpr Real gamma_ = 5. / 3.;

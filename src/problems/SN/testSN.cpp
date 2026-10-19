@@ -26,8 +26,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct SNProblem {
-};
+struct SNProblem {};
 
 static bool refine_half_domain = false; // NOLINT
 

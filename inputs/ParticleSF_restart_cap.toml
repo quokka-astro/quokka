@@ -54,3 +54,5 @@ sfh_time_interval = 4e10  # years
 sf_area_kpc2 = 1.0  # kpc^2
 
 problem.validate_initial_imf_stats = false
+
+density_floor = 1e-29  # g cm^-3

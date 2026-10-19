@@ -99,11 +99,13 @@ The accretion rate deposited in each cell is \\(-\dot{M} \, w_i / \sum_i w_i\\) 
 
 ### Accretion limiters
 
-Two corrections are applied to the per-cell accretion rate, in the following order:
+The following corrections are applied to the per-cell accretion rate, in order:
 
 1. **Mass removal cap**: No more than 25% of a cell's mass may be removed in a single timestep (Krumholz et al. 2004). This prevents artificial sound waves from being launched by rapid density changes.
 
 2. **Jeans density floor**: If the post-accretion cell density would still exceed the Jeans density \\(\rho_J\\), the accretion rate is increased so that the final density equals \\(\rho_J\\). This is safe because such cells are at the centre of highly supersonic convergence and are causally disconnected from their surroundings.
+
+3. **Configured density and Alfvén-speed floors**: Accretion cannot reduce a cell below its configured local density floor. For MHD runs with a positive `particles.sink_max_alfven_speed`, the final density is also constrained by \\(\rho \geq B'^2/v_{A,\max}^2 = 2E_B/v_{A,\max}^2\\), where Quokka stores \\(B'=B/\sqrt{4\pi}\\). A negative value disables the Alfvén limiter.
 
 ### Momentum accretion
 
@@ -124,6 +126,7 @@ The accretion rate is computed using gas velocities in the particle frame (\\(\v
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `particles.sink_particle_use_uniform_kernel` | Boolean | `0` | Use uniform accretion kernel (for testing) |
+| `particles.sink_max_alfven_speed` | Float | `-1.0` | Maximum post-accretion Alfvén speed in cm/s. A negative value disables the limiter; zero is invalid. |
 
 ### Examples
 
@@ -137,11 +140,13 @@ The `ParticleSinkFormation` test validates combined sink particle formation and 
 
 #### ParticleSink Test
 
-The `ParticleSink` test validates Bondi-Hoyle accretion and Galilean invariance. It runs in three phases:
+The `ParticleSink` test validates Bondi-Hoyle accretion, Galilean invariance, density floors, and the Alfvén-speed limiter. It runs in five phases:
 
 1. **Base simulation**: Runs with zero boost velocity and validates the density profile against an analytical solution.
 2. **Boosted simulation**: Runs with a boost velocity of \\(10^8\\) cm/s and verifies that the density profile matches the analytical solution, demonstrating Galilean invariance.
 3. **Multi-timestep evolution**: Continues the boosted simulation for additional timesteps and validates total mass conservation to machine precision.
+4. **Parser-derived density floor**: Applies sink accretion and verifies that the minimum density equals the spatially configured floor.
+5. **Alfvén-speed limiter**: Enables a limiting speed whose implied density floor exceeds the parser floor, then validates both the final minimum density and total mass conservation.
 
 ## Star Particle Type
 
@@ -334,6 +339,32 @@ Each particle also stores an integer **evolution stage** that tracks its lifecyc
 - `LowMassStar`: Low-mass star that will not explode (not used in the current star formation implementation)
 - `LowMassComposite`: Composite particle representing a population of low-mass stars
 
+### Stellar luminosity table
+
+When radiation is enabled, the luminosity of a StochasticStellarPop particle is read from a table instead of being computed from a closed-form law. The table is a [DataTable](data_table.md) with two inputs and one output per radiation group: the first input is the stellar age in years, the second is the stellar mass in solar masses, and each output is a band luminosity in erg/s. Quokka checks these names and units when it loads the file, so they must be written exactly as `age`, `mass`, `year`, `Msun`, and `erg/s`. Set the file with `particles.rad_table` and the interpolation of the outputs with `particles.rad_table_output_transform`; see [Runtime parameters](parameters.md).
+
+The script `scripts/python/slug_luminosity_table_for_quokka.py` builds such a table from the [slug2](https://bitbucket.org/krumholz/slug2) stellar population synthesis code. It runs slug2's `write_isochrone` utility with one top-hat filter per radiation group, then converts the output to the CSV format read by `CSVReader`. Point the script at a slug2 installation with `--slug-path`, or with the `slug2_path` environment variable:
+
+```bash
+export slug2_path="/path/to/slug2"
+
+# two bands, given as photon-energy ranges in eV
+scripts/python/slug_luminosity_table_for_quokka.py PE-and-LW.csv --eV 6 11.2 --eV 11.2 13.6
+
+# one band, given as a wavelength range in Angstroms
+scripts/python/slug_luminosity_table_for_quokka.py single-band.csv --lambda 1000 1200
+
+# a coarse FUV + Lyman continuum table on an explicit grid
+scripts/python/slug_luminosity_table_for_quokka.py FUV-and-LyC.csv --eV 6 13.6 --eV 13.6 54.4 \
+    --m0 2.1 --m1 120 --nm 21 --t0 1e5 --t1 1e8 --nt 31
+```
+
+Bands appear in the table in the order the `--eV` and `--lambda` options are given, so the first option becomes radiation group 0. They must be given in order of increasing photon energy, and adjacent bands must share a boundary: that is the layout of Quokka's radiation-group energy edges. A gap such as `--eV 6 11 --eV 11.2 13.6`, or a sequence that goes to lower energy, is rejected. The defaults cover ages from \\(10^5\\) to \\(2 \times 10^8\\) yr and masses from 2.1 to 120 \\(M\_\odot\\) on the `mist_2016_vvcrit_40` track set. Earlier ages are not useful: the tracks do not extend there, and the properties of a star that young depend on its accretion history rather than on its mass alone.
+
+`write_isochrone` samples both axes logarithmically, which is why the generated table declares `log` spacing for both inputs. Two features of its output are handled by the script. A star that no longer exists at a given age is printed as `--`, and is written to the table as zero luminosity. A band with essentially no flux can integrate to a small negative number, which is zero to within the tolerance of the numerical integration, and is also floored. Because a table produced this way contains zeros, use `particles.rad_table_output_transform = "linear"`. For a log transform, pass `--floor` with a small positive value instead.
+
+The `ParticleRadiationSlug` test validates this path end to end. A single 120 \\(M\_\odot\\) star of age 1 Myr, placed exactly on a node of both table axes, radiates into an FUV band (6 to 13.6 eV) and a Lyman continuum band (13.6 to 54.4 eV); the test checks that the radiation energy deposited on the grid equals the luminosity that slug2 prints for that star multiplied by the timestep.
+
 ## Star Formation
 
 ### Overview
@@ -388,6 +419,55 @@ A few implementation notes help interpret corner cases and limitations of the cu
 - Star formation is operator-split from the hydrodynamics. When \\(t_{ff}\\) is unresolved (\\(\Delta t \gtrsim t_{ff}\\)), the true star formation rate is not captured, and this scheme provides one possible approximation; no explicit limiter is enforced beyond the CFL-controlled hydro step.
 - All spawned particles are inserted at the cell centre. Other physics modules are responsible for any subsequent repositioning or feedback coupling.
 
+## Empirically motivated early feedback
+
+The optional empirically motivated early-feedback (EMEF) model follows Keller, Kruijssen & Chevance (2022). For a `StochasticStellarPop` particle with birth mass \\(M_{\\rm birth}\\), birth time \\(t_{\\rm birth}\\), step start \\(t\\), and timestep \\(\\Delta t\\), it requests the finite momentum increment
+
+<script type="math/tex; mode=display">
+\Delta p = \alpha p_0 M_{\rm birth}\left[x_1^{4\alpha-1}-x_0^{4\alpha-1}\right],
+\qquad
+x_0 = {\rm clamp}\!\left(\frac{t-t_{\rm birth}}{t_{\rm FB}},0,1\right),
+\qquad
+x_1 = {\rm clamp}\!\left(\frac{t+\Delta t-t_{\rm birth}}{t_{\rm FB}},0,1\right).
+</script>
+
+This is already a timestep-integrated impulse and is not multiplied by \\(\\Delta t\\) again. At \\(t=t_{\\rm birth}+t_{\\rm FB}\\), the integrated momentum is \\(\\alpha p_0 M_{\\rm birth}\\). The default values are \\(p_0=377\\) km s\\(^{-1}\\), \\(t_{\\rm FB}=3.3\\) Myr, and \\(\\alpha=1\\).
+
+All valid stellar-population representations participate while their age interval overlaps \\([0,t_{\\rm FB}]\\): `LowMassComposite`, `SNProgenitor`, `HighMassNonExploding`, and `SNRemnant`. This stage-independent rule makes a formation event's EMEF budget proportional to the sum of its represented birth masses; later SN mass loss does not reduce the budget. Particle splitting divides both current mass and `mass_at_birth` among the children.
+
+EMEF uses the same normalized three-cell spherical weights and four-ghost-cell requirement as SN feedback, but it constructs corrected radial vectors for each particle. Before applying the cell-by-cell velocity limiter described below, subtracting the weighted mean direction and renormalizing the vector magnitudes enforces, to deposition roundoff,
+
+<script type="math/tex; mode=display">
+\sum_j \Delta \boldsymbol{p}_j = 0,
+\qquad
+\sum_j \left|\Delta \boldsymbol{p}_j\right| = \Delta p.
+</script>
+
+It injects no mass, metals, passive scalars, or radiation energy. After all particle events have been accumulated, each cell's total energy receives the exact kinetic-energy change associated with its net momentum change, leaving internal energy unchanged. For each individual event, negative work \\(\\sum_j \\boldsymbol{v}_j\\!\\cdot\\!\\Delta\\boldsymbol{p}_j\\) is added as thermal energy to the particle's host cell. Cancellation between separate particle events is represented by the aggregated kinetic-energy update; it does not receive an additional inter-event thermalization term.
+
+After simultaneous particle contributions have been accumulated, each affected cell independently caps its post-deposition bulk velocity at the larger of `particles.EMEF_max_velocity_kmps` and its pre-feedback speed. The default limit is 3000 km s\\(^{-1}\\). Gas already above the configured limit is therefore not reduced to that limit by EMEF. This post-hoc operation rescales the cell's total momentum and removes the corresponding kinetic energy while leaving internal energy unchanged. Because different cells generally receive different scale factors, this limiter deliberately gives up the uncapped stencil's exact zero-net-vector-momentum and uniform-boost invariants in exchange for preventing isolated low-density cells from controlling the hydrodynamic timestep. The limit is defined in the simulation frame.
+
+### Deliberate differences from the published deposition algorithm
+
+Quokka adopts equation 10 and the observational parameters of Keller, Kruijssen & Chevance (2022), but its mesh coupling is an accepted numerical adaptation rather than an exact reproduction of the paper's AREPO implementation:
+
+- The paper distributes an event over the host cell's face-sharing neighbours, weighted by shared face area and directed along the face normals. Quokka instead reuses its normalized three-cell spherical feedback kernel. For an off-centre particle this kernel can deposit into the host cell and into cells that do not share a face with it, so the coupling radius and angular distribution differ from the published algorithm.
+- The paper's face-area vectors have zero sum by the divergence theorem. Before velocity limiting, Quokka obtains the same zero-net-vector and prescribed-scalar-momentum invariants by subtracting the kernel's weighted mean direction and renormalizing the corrected vectors. The corrected vectors therefore need not coincide with Cartesian face normals or exact cell-centre radial directions.
+- Quokka evaluates \\(\\sum_j \\boldsymbol{v}_j\\!\\cdot\\!\\Delta\\boldsymbol{p}_j\\) once per particle and thermalizes it in the host cell only when this event-wide sum is negative. Negative work in one recipient cell can therefore be offset by positive work in another. Momentum increments from different particles are buffered together, and cancellation between those increments is not separately thermalized. The paper does not specify simultaneous-event ordering in enough detail to establish a unique inter-event convention.
+
+These choices are intentional: they retain Quokka's existing feedback support scale and GPU-friendly buffered deposition while enforcing the paper's total scalar- and vector-momentum constraints whenever the velocity limiter is inactive. They can nevertheless change small-scale coupling and heating relative to the published face-weighted scheme. The focused `ParticleEarlyFeedback` tests validate equation 10, the uncapped momentum and uniform-boost invariants, energy-state consistency, the adopted event-wide negative-work convention, and capped states with and without a pre-existing uniform velocity; they do not claim cell-by-cell equivalence with the paper's deposition geometry or cancellation treatment.
+
+The operation occurs after end-of-step particle drift and star formation, and before SN deposition. A newborn particle therefore receives the clipped increment for the current \\([t,t+\\Delta t]\\) interval at its end-of-step position. This is a first-order operator split.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `particles.EMEF_enabled` | Boolean | `0` | Enable early feedback for `StochasticStellarPop` particles |
+| `particles.EMEF_p0_kmps` | Real | `377.0` | Momentum normalization \\(p_0\\) in km s\\(^{-1}\\) |
+| `particles.EMEF_tFB_Myr` | Real | `3.3` | Feedback duration in Myr |
+| `particles.EMEF_alpha` | Real | `1.0` | Expansion exponent; must lie in \\([0.5,1.0]\\) |
+| `particles.EMEF_max_velocity_kmps` | Real | `3000.0` | The post-feedback speed limit in km/s. Applied cell-by-cell as `max(v0, EMEF_max_velocity_kmps)`, where `v0` is the pre-feedback speed in km/s |
+
+On a multilevel hierarchy, EMEF follows the existing SN-feedback AMR policy: feedback is deposited only from particles stored on the finest AMR level, and particles stored on coarser levels are ignored. Both paths use a same-level feedback buffer without explicit coarse-fine source synchronization, so deposition can be inconsistent when a stencil crosses a coarse-fine boundary. An active particle whose stencil is not representable inside its particle grid or the physical domain still causes an abort. EMEF is independent of `particles.disable_SN_feedback` and `particles.SN_scheme`, so EMEF-only and SN-only controls are both available.
 
 ## Supernova Feedback
 
@@ -412,10 +492,10 @@ When a progenitor star reaches its death time, it explodes as a Type II supernov
 The terminal momentum is density-dependent and scales as:
 
 <script type="math/tex; mode=display">
-p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{-0.17}
+p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{\alpha_p}
 </script>
 
-where \\(n_{\text{H}}\\) is the ambient hydrogen number density averaged over the deposition kernel.
+where \\(n_{\text{H}}\\) is the ambient hydrogen number density averaged over the deposition kernel and \\(\alpha_p = -0.17\\) by default (configurable via `particles.SN_p_term_exponent`).
 
 #### Deposition Kernel
 
@@ -499,6 +579,7 @@ The cross term <script type="math/tex">\vec{v}_{\text{COM}} \cdot \vec{p}_{\text
 |-----------|------|---------|-------------|
 | `particles.SN_scheme` | String | `SN_thermal_or_thermal_momentum` | Feedback scheme (see above) |
 | `particles.SN_p_term_Msunkmps` | Float | `2.8e5` | Terminal momentum \\(p_{\text{snr},0}\\) in units of \\(M_\odot\,\mathrm{km\,s}^{-1}\\). The shell-formation mass \\(M_\mathrm{sf}\\) is scaled as \\((p/p_\mathrm{canonical})^2\\) to preserve the kinetic energy \\(p^2/(2M_\mathrm{sf})\\). |
+| `particles.SN_p_term_exponent` | Float | `-0.17` | Exponent \\(\alpha_p\\) of the ambient-density scaling of the terminal momentum, \\(p_{\text{snr}} = p_{\text{snr},0} \, n_{\text{H}}^{\alpha_p}\\). |
 | `particles.disable_SN_feedback` | Boolean | `0` | Disable SN feedback entirely |
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
 | `particles.stellar_velocity_limit` | Float | \\(10^8\\) cm/s | Maximum allowed stellar velocity (aborts if exceeded) |
@@ -566,6 +647,25 @@ In each of the three tests, the simulation is run twice, one initially at rest a
 #### Random Blast Test
 
 The `RandomBlast` problem provides a testbed for multiple SN explosions with various ambient conditions and bulk flows.
+
+## Stochastic stellar population chemistry components
+
+When `Particle_Traits<problem_t>::enable_chemical_feedback` is enabled, chemistry
+components follow the ordinary particle fields and any luminosity components.
+Their block order is `total`, `SNII`, `WR`, then `AGB`, independent of which
+feedback channels are enabled at runtime.
+
+Within each block, slots follow the configured tracked-isotope order. Names use
+`chem_birth_<block>_<isotope>`, for example `chem_birth_total_C12`,
+`chem_birth_SNII_C12`, `chem_birth_WR_C12`, and `chem_birth_AGB_C12`.
+These fields store birth abundances, not the subsequently accumulated ejecta.
+
+`StochasticStellarPopParticleChemistryBlockCapacity<problem_t>()` is the storage
+stride of each block, equal to `numPassiveScalars` when chemical feedback storage
+is enabled, and zero otherwise. It is not the number of tracked isotopes. Reserved
+slots beyond the isotope list use `unused_<index>`, with a zero-based slot index;
+for three tracked isotopes, the next total-block component is
+`chem_birth_total_unused_3`.
 
 ## Star Particle Type (modular stellar evolution)
 

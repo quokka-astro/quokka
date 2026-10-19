@@ -33,8 +33,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct TubeProblem {
-};
+struct TubeProblem {};
 
 constexpr amrex::Real kappa0 = 5.0;  // cm^2 g^-1
 constexpr double mu = 2.33 * C::m_u; // g

@@ -69,8 +69,7 @@ auto v_dust1_analytic(double t) -> double;
 auto v_dust2_analytic(double t) -> double;
 auto E_gas_analytic(double t) -> double;
 
-struct DustDamping {
-};
+struct DustDamping {};
 
 template <> struct SimulationData<DustDamping> {
 	std::vector<double> t_vec_;
@@ -104,8 +103,7 @@ template <> struct Physics_Traits<DustDamping> : DefaultPhysicsTraits {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDamping>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-										   amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDamping>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 2> alpha{};

@@ -27,8 +27,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct SuOlsonProblemCgs {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct SuOlsonProblemCgs {}; // dummy type to allow compile-type polymorphism via template specialization
 
 // Su & Olson (1997) parameters
 constexpr double eps_SuOlson = 1.0;	  // dimensionless

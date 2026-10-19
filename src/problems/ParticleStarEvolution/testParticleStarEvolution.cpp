@@ -23,8 +23,7 @@
 
 using amrex::Real;
 
-struct StarEvolutionProblem {
-};
+struct StarEvolutionProblem {};
 
 // Ambient medium (matches ParticleAccretion: cold, dense, isothermal)
 constexpr double T0 = 10.0;	      // K

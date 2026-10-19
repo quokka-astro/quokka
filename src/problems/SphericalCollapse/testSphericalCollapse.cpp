@@ -23,8 +23,7 @@ struct GlobalConfig {
 int GlobalConfig::num_particles = 1000;
 int GlobalConfig::seed = 42;
 
-struct CollapseProblem {
-};
+struct CollapseProblem {};
 
 template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double gamma = 5. / 3.;

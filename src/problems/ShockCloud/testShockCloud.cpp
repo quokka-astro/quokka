@@ -38,8 +38,7 @@
 
 using amrex::Real;
 
-struct ShockCloud {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct ShockCloud {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double seconds_in_year = 3.1536e7;
 constexpr double parsec_in_cm = C::parsec;	  // cm == 1 pc

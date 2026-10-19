@@ -36,4 +36,4 @@ hydro.use_dual_energy = 0
 setup.vortex_Mach = 0.1
 setup.vortex_b_magn = 0.1
 setup.advection = 1
-setup.num_orbits = 3
+setup.num_periods = 3

@@ -7,9 +7,9 @@
 #define LARGE 1.0e100
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_implicit,
-						     double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/,
-						     int *p_iteration_counter, int *p_iteration_failure_counter,
+void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
+						     Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/,
+						     double /*tempFloor*/, int *p_iteration_counter, int *p_iteration_failure_counter,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
@@ -57,9 +57,16 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
 		// Single-group: if ChemBands is defined the only group is an ionizing photon group (no cscale).
 		// For thermal groups, radEnergySource must be scaled by chat/c (= 1/cscale).
-		const double Src = RadSystem_Has_ChemBands<problem_t>::value ? radEnergySource(i, j, k, 0) * dt : radEnergySource(i, j, k, 0) * dt / cscale;
+		const double src_scale = RadSystem_Has_ChemBands<problem_t>::value ? dt : dt / cscale;
+		const double Src = src_scale * radEnergySource(i, j, k, 0);
 		if constexpr (gamma_ != 1.0) {
 			AMREX_ASSERT(Src >= 0.0);
+		}
+
+		// load the radiation flux source term, scaled exactly like the energy source above; unit: erg cm^-2 s^-2
+		amrex::GpuArray<amrex::Real, 3> Src_flux{};
+		for (int n = 0; n < 3; ++n) {
+			Src_flux[n] = src_scale * radFluxSource(i, j, k, n);
 		}
 
 		double Egas0 = NAN;
@@ -169,14 +176,18 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						T_d = T_gas;
 					} else {
 						const quokka::valarray<double, 1> Erad_guess_vec{Erad_guess};
-						T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n);
+						// Q_dust defaults to zero here: ISM_Traits::dust_chemical_band_absorption requires a
+						// chemical band, which never coexists with nGroups_ <= 1.
+						T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n, 0.0);
 						AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 						if (T_d < 0.0) {
 							amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[1], 1); // NOLINT
 						}
 					}
 
-					fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
+					// A single chemical (ionizing) band emits no blackbody radiation (nGroupsThermal_ == 0);
+					// its source is injected directly via the negligible-optical-depth branch below.
+					fourPiBoverC = (nGroupsThermal_ == 0) ? 0.0 : ComputeThermalRadiationSingleGroup(T_d);
 
 					kappaP = ComputePlanckOpacity(rho, T_d);
 					kappaE = ComputeEnergyMeanOpacity(rho, T_d);
@@ -184,6 +195,11 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					AMREX_ASSERT(!std::isnan(kappaE));
 					AMREX_ASSERT(kappaP >= 0.0);
 					AMREX_ASSERT(kappaE >= 0.0);
+					// A single chemical band does not take part in the thermal coupling (see
+					// DefineThermalCouplingOpacityExponentsAndLowerValues), so its opacity must be zero.
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE((nGroupsThermal_ > 0) || (kappaP == 0.0 && kappaE == 0.0),
+									 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
+									 "photochemistry, so its Planck and energy-mean opacities must be 0.");
 					if (kappaE > 0.0) {
 						kappaPoverE = kappaP / kappaE;
 					} else {
@@ -194,6 +210,10 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					if (n == 0) {
 						kappaF = ComputeFluxMeanOpacity(rho, T_d);
 						AMREX_ASSERT(!std::isnan(kappaF));
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    (nGroupsThermal_ > 0) || (kappaF == 0.0),
+						    "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
+						    "photochemistry, so its flux-mean opacity must be 0.");
 
 						if constexpr ((beta_order_ != 0) && (include_work_term_in_source)) {
 							// compute the work term at the old state
@@ -372,6 +392,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			} else { // if constexpr gamma_ == 1.0
 				T_d = T_gas;
 				kappaF = ComputeFluxMeanOpacity(rho, T_d);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE((nGroupsThermal_ > 0) || (kappaF == 0.0),
+								 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
+								 "photochemistry, so its flux-mean opacity must be 0.");
 
 				amrex::ignore_unused(p_iteration_counter_local);
 				amrex::ignore_unused(Ekin0);
@@ -390,9 +413,11 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			amrex::GpuArray<amrex::Real, 3> Frad_t0{};
 			dMomentum = {0., 0., 0.};
 
-			Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index);
-			Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index);
-			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index);
+			// The user-defined flux source is added to the old-time flux, so the implicit absorption below acts
+			// on the freshly injected radiation as well.
+			Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index) + Src_flux[0];
+			Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index) + Src_flux[1];
+			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index) + Src_flux[2];
 
 			if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
 				auto erad = Erad_guess;
@@ -498,7 +523,14 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				if constexpr (include_work_term_in_source) {
 					// New scheme: the work term is included in the source terms. The work done by radiation went to internal energy, but it
 					// should go to the kinetic energy. Remove the work term from internal energy.
-					Egas_guess -= dEkin_work;
+					// Cap the transfer exactly as the multigroup solver does: in a cold, strongly driven cell
+					// dEkin_work can exceed the internal energy available, and subtracting it unclamped leaves
+					// Egas negative, which the EOS rejects. The failure mode is not multigroup-specific, so the
+					// guard is not either. The cap does not conserve energy; see
+					// work_term_min_eint_fraction and issue #2173 for why that is acceptable and what the
+					// real fix would be.
+					const double max_eint_transfer = (1.0 - work_term_min_eint_fraction) * Egas_guess;
+					Egas_guess -= std::min(dEkin_work, max_eint_transfer);
 				} else {
 					// Old scheme: since the source term does not include work term, add the work term to radiation energy.
 

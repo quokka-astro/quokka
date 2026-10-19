@@ -25,8 +25,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct ShockProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct ShockProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double a_rad = 1.0e-4;  // equal to P_0 in dimensionless units
 constexpr double sigma_a = 1.0e6; // absorption cross section
