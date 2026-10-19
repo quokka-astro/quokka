@@ -29,37 +29,35 @@ constexpr amrex::Real mu = 0.613;	  // mean molecular weight of fully ionized ga
 constexpr amrex::Real m_H = C::m_p;	  // hydrogen mass used with mu
 
 // Model parameters
-constexpr amrex::Real M_rad_min = 0.01 * C::M_solar;		  // minimum mass at which the model is used
-constexpr amrex::Real f_acc = 0.5;				  // fraction of accretion power radiated rather than driving a wind
-constexpr amrex::Real f_k = 0.5;				  // fraction of infall kinetic energy radiated in the inner disk
-constexpr amrex::Real f_rad = 0.18;				  // shell burning starts when L_D <= f_rad L_ZAMS
-constexpr amrex::Real shell_factor = 2.1;			  // radius increase when shell burning starts
-constexpr amrex::Real T_Hayashi = 3000.0;			  // Hayashi-track surface temperature (K)
-constexpr amrex::Real T_deut = 1.5e6;				  // central temperature for deuterium ignition (K)
-constexpr amrex::Real psi_ion = 17.0 * C::ev2erg * C::n_A;	  // energy per gram to dissociate and ionize the accreted gas
+constexpr amrex::Real M_rad_min = 0.01 * C::M_solar;	     // minimum mass at which the model is used
+constexpr amrex::Real f_acc = 0.5;			     // fraction of accretion power radiated rather than driving a wind
+constexpr amrex::Real f_k = 0.5;			     // fraction of infall kinetic energy radiated in the inner disk
+constexpr amrex::Real f_rad = 0.18;			     // shell burning starts when L_D <= f_rad L_ZAMS
+constexpr amrex::Real shell_factor = 2.1;		     // radius increase when shell burning starts
+constexpr amrex::Real T_Hayashi = 3000.0;		     // Hayashi-track surface temperature (K)
+constexpr amrex::Real T_deut = 1.5e6;			     // central temperature for deuterium ignition (K)
+constexpr amrex::Real psi_ion = 17.0 * C::ev2erg * C::n_A;   // energy per gram to dissociate and ionize the accreted gas
 constexpr amrex::Real psi_deut = 100.0 * C::ev2erg * C::n_A; // energy per gram released by burning its deuterium
-constexpr amrex::Real dlogm = 1.0e-3;				  // fractional mass step of the numerical d/dlog(m)
+constexpr amrex::Real dlogm = 1.0e-3;			     // fractional mass step of the numerical d/dlog(m)
 
 // Lane-Emden factors rho_mean/rho_c and P_c/(G m^2/r^4) for n = 1.5, 1.6, ..., 3.1 (Kippenhahn & Weigert)
 constexpr int n_poly_table = 17;
-static AMREX_GPU_CONSTANT const amrex::GpuArray<amrex::Real, n_poly_table> rho_factor_table = {
-    0.166931, 0.14742, 0.129933, 0.114265, 0.100242, 0.0877, 0.0764968, 0.0665109, 0.0576198,
-    0.0497216, 0.0427224, 0.0365357, 0.0310837, 0.0262952, 0.0221057, 0.0184553, 0.01529};
+static AMREX_GPU_CONSTANT const amrex::GpuArray<amrex::Real, n_poly_table> rho_factor_table = {0.166931,  0.14742,   0.129933,	0.114265,  0.100242,  0.0877,
+											       0.0764968, 0.0665109, 0.0576198, 0.0497216, 0.0427224, 0.0365357,
+											       0.0310837, 0.0262952, 0.0221057, 0.0184553, 0.01529};
 static AMREX_GPU_CONSTANT const amrex::GpuArray<amrex::Real, n_poly_table> pressure_factor_table = {
-    0.770087, 0.889001, 1.02979, 1.19731, 1.39753, 1.63818, 1.92909, 2.2825, 2.71504,
-    3.24792, 3.90921, 4.73657, 5.78067, 7.11088, 8.82286, 11.0515, 13.9885};
+    0.770087, 0.889001, 1.02979, 1.19731, 1.39753, 1.63818, 1.92909, 2.2825, 2.71504, 3.24792, 3.90921, 4.73657, 5.78067, 7.11088, 8.82286, 11.0515, 13.9885};
 
 // Mean gas-pressure fraction beta of a polytrope for m = 5, 7.5, ..., 50 M_sun (rows) and n = 1.5, 2, 2.5, 3 (columns)
 constexpr int n_beta_mass = 19;
 constexpr int n_beta_poly = 4;
 static AMREX_GPU_CONSTANT const amrex::GpuArray<amrex::Real, n_beta_mass * n_beta_poly> beta_table = {
-    0.98785,  0.988928, 0.98947,  0.989634, 0.97438,  0.976428, 0.977462, 0.977774, 0.957927, 0.960895, 0.962397, 0.962846,
-    0.939787, 0.943497, 0.945369, 0.945922, 0.92091,  0.925151, 0.927276, 0.927896, 0.901932, 0.906512, 0.908785, 0.909436,
-    0.883254, 0.888017, 0.890353, 0.891013, 0.865111, 0.86994,	0.872277, 0.872927, 0.847635, 0.852445, 0.854739, 0.855367,
-    0.830886, 0.835619, 0.837842, 0.838441, 0.814885, 0.8195,	0.821635, 0.822201, 0.799625, 0.804095, 0.806133, 0.806664,
-    0.785082, 0.789394, 0.791328, 0.791825, 0.771226, 0.775371, 0.777202, 0.777665, 0.758022, 0.761997, 0.763726, 0.764156,
-    0.745433, 0.749238, 0.750869, 0.751268, 0.733423, 0.73706,	0.738596, 0.738966, 0.721954, 0.725429, 0.726874, 0.727216,
-    0.710993, 0.714311, 0.715671, 0.715987};
+    0.98785,  0.988928, 0.98947,  0.989634, 0.97438,  0.976428, 0.977462, 0.977774, 0.957927, 0.960895, 0.962397, 0.962846, 0.939787,
+    0.943497, 0.945369, 0.945922, 0.92091,  0.925151, 0.927276, 0.927896, 0.901932, 0.906512, 0.908785, 0.909436, 0.883254, 0.888017,
+    0.890353, 0.891013, 0.865111, 0.86994,  0.872277, 0.872927, 0.847635, 0.852445, 0.854739, 0.855367, 0.830886, 0.835619, 0.837842,
+    0.838441, 0.814885, 0.8195,	  0.821635, 0.822201, 0.799625, 0.804095, 0.806133, 0.806664, 0.785082, 0.789394, 0.791328, 0.791825,
+    0.771226, 0.775371, 0.777202, 0.777665, 0.758022, 0.761997, 0.763726, 0.764156, 0.745433, 0.749238, 0.750869, 0.751268, 0.733423,
+    0.73706,  0.738596, 0.738966, 0.721954, 0.725429, 0.726874, 0.727216, 0.710993, 0.714311, 0.715671, 0.715987};
 
 // Initial polytropic index from the accretion rate, clamped to [1.5, 3]
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto nInit(amrex::Real mdot) -> amrex::Real
@@ -179,7 +177,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto radiusZAMS(amrex::Real m) -> amrex
 	const amrex::Real x = m / C::M_solar;
 	const amrex::Real num = 1.71535900 * std::pow(x, 2.5) + 6.59778800 * std::pow(x, 6.5) + 10.08855000 * std::pow(x, 11.0) +
 				1.01249500 * std::pow(x, 19.0) + 0.07490166 * std::pow(x, 19.5);
-	const amrex::Real den = 0.01077422 + 3.08223400 * std::pow(x, 2.0) + 17.84778000 * std::pow(x, 8.5) + std::pow(x, 18.5) + 0.00022582 * std::pow(x, 19.5);
+	const amrex::Real den =
+	    0.01077422 + 3.08223400 * std::pow(x, 2.0) + 17.84778000 * std::pow(x, 8.5) + std::pow(x, 18.5) + 0.00022582 * std::pow(x, 19.5);
 	return num / den * C::R_solar;
 }
 
@@ -232,7 +231,9 @@ struct DeuteriumBurningStellarModel {
 		if (state == CoreDeuteriumFixedTc) {
 			const amrex::Real beta1 = StellarPhysics::beta(m, r, n);
 			return StellarPhysics::luminosityStar(m, r, mdot) + mdot * StellarPhysics::psi_ion +
-			       C::Gconst * m * mdot / r * (1.0 - StellarPhysics::f_k - StellarPhysics::aG(n) * beta1 / 2.0 * (1.0 + StellarPhysics::dlogBetaOverBetac_dlogM(m, r, n, beta1)));
+			       C::Gconst * m * mdot / r *
+				   (1.0 - StellarPhysics::f_k -
+				    StellarPhysics::aG(n) * beta1 / 2.0 * (1.0 + StellarPhysics::dlogBetaOverBetac_dlogM(m, r, n, beta1)));
 		}
 		if (state == CoreDeuteriumVariableTc || state == ShellDeuterium) {
 			return mdot * StellarPhysics::psi_deut;
@@ -246,8 +247,7 @@ struct DeuteriumBurningStellarModel {
 	};
 
 	// dr/dt from the discretized Nakano et al. (2000) Eq. 5.8
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto radiusRate(int state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot)
-	    -> RadiusRate
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto radiusRate(int state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot) -> RadiusRate
 	{
 		const amrex::Real beta1 = StellarPhysics::beta(m, r, n);
 		const amrex::Real aGb = StellarPhysics::aG(n) * beta1;
@@ -257,7 +257,8 @@ struct DeuteriumBurningStellarModel {
 		const amrex::Real l_star = StellarPhysics::luminosityStar(m, r, mdot);
 		const amrex::Real l_ion = mdot * StellarPhysics::psi_ion;
 		const amrex::Real l_deut = luminosityDeut(state, m, r, n, mdot);
-		return {accretion_term - lum_coef * (l_star + l_ion - l_deut), std::max(std::abs(accretion_term), lum_coef * (l_star + l_ion + std::abs(l_deut)))};
+		return {accretion_term - lum_coef * (l_star + l_ion - l_deut),
+			std::max(std::abs(accretion_term), lum_coef * (l_star + l_ion + std::abs(l_deut)))};
 	}
 
 	// Stellar-evolution step over dt, using the mass and accretion rate set by the accretion module.

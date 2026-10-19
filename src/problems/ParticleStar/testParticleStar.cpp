@@ -25,8 +25,7 @@
 #include "particles/particle_types.hpp"
 #include "util/BC.hpp"
 
-struct ParticleStar {
-};
+struct ParticleStar {};
 
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
@@ -179,8 +178,7 @@ auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per
 			    (max_err_mdeut < 1.0e-2);
 	amrex::Print() << "Reference track " << filename << ": " << n_rows << " rows, " << n_state_mismatch
 		       << " rows one phase apart, max |r/r_ref - 1| = " << max_err_r << ", max |L/L_ref - 1| = " << max_err_L
-		       << ", max |n - n_ref| = " << max_err_n << ", max |mdeut - mdeut_ref| / m = " << max_err_mdeut << (passed ? "  PASS" : "  FAIL")
-		       << "\n";
+		       << ", max |n - n_ref| = " << max_err_n << ", max |mdeut - mdeut_ref| / m = " << max_err_mdeut << (passed ? "  PASS" : "  FAIL") << "\n";
 	return passed ? 0 : 1;
 }
 
@@ -253,8 +251,8 @@ auto problem_main() -> int
 			const double n_poly = rdata[AMREX_SPACEDIM + n_poly_idx];
 			const int state = int_data[p][0];
 			amrex::Print() << "Star " << p << ": m = " << mass / C::M_solar << " M_sun, mdot = " << mdot * quokka::yr_in_s / C::M_solar
-				       << " M_sun/yr, r = " << radius / C::R_solar << " R_sun, n = " << n_poly << ", L = " << lum / quokka::StellarPhysics::L_solar
-				       << " L_sun, burn_state = " << state << "\n";
+				       << " M_sun/yr, r = " << radius / C::R_solar << " R_sun, n = " << n_poly
+				       << ", L = " << lum / quokka::StellarPhysics::L_solar << " L_sun, burn_state = " << state << "\n";
 
 			if (mass >= quokka::StellarPhysics::M_rad_min && mdot > 0.0 && state == StellarModel::PreCollapse) {
 				amrex::Print() << "FAIL: the stellar model did not start although m >= 0.01 M_sun and mdot > 0\n";
