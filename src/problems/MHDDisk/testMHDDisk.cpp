@@ -54,9 +54,6 @@ template <> struct quokka::EOS_Traits<MHDGalaxy> {
 	static constexpr double gamma = 1.0001;
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
-	static constexpr double T_cgm = 1.0e7;
-	static constexpr double cs_cgm = gcem::sqrt(gamma * C::k_B * T_cgm / mean_molecular_weight);
-	static constexpr double cs_disk = 7.0e5; // sound speed 7 km/s
 };
 
 template <> struct HydroSystem_Traits<MHDGalaxy> {
@@ -78,16 +75,20 @@ template <> struct Physics_Traits<MHDGalaxy> : DefaultPhysicsTraits {
 };
 
 template <> struct SimulationData<MHDGalaxy> {
-	amrex::Real Rc{};
-	amrex::Real Rd{};
-	amrex::Real Rmax{};
-	amrex::Real Rcutoff{};
-	amrex::Real Q_mean{};
-	amrex::Real Mc{};
-	amrex::Real vc{};
-	amrex::Real Sigma0{};
-	amrex::Real rho_cgm{};
-	amrex::Real rho_mid{};
+	amrex::Real Rc;
+	amrex::Real Rd;
+	amrex::Real Rmax;
+	amrex::Real Rcutoff;
+	amrex::Real Q_mean;
+	amrex::Real Mc = NAN; // one will be set
+	amrex::Real vc = NAN; // the other will be calculated
+	amrex::Real Sigma0;
+	amrex::Real rho_cgm;
+	amrex::Real rho_mid;
+	amrex::Real T_disk = NAN;  // one will be set
+	amrex::Real cs_disk = NAN; // the other will be calculated
+	amrex::Real T_cgm = NAN;   // for both disk
+	amrex::Real cs_cgm = NAN;  // and for cgm
 
 	// 2D Cylindrical potential field variables, read from metadata file
 	std::size_t seed_nR{};
@@ -131,29 +132,39 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vcircAnalytic(double R, double z, 
 	return vc * R / D;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, double Rd, double Sigma0) -> double
+// Epicyclic frequency for Toomre condition matching
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto kappa(double R, double vc, double Rc) -> double
+{
+#define Ω(R) vcircAnalytic(R, 0.0, vc, Rc) / (R)
+	// const auto Ω = [=] AMREX_GPU_DEVICE(double R, double vc, double Rc) { return vcircAnalytic(R, 0.0, vc, Rc) / R; };
+	const double ε = 0.5e-5 * Rc;
+	const double dΩdR = (Ω(R + ε) - Ω(R - ε)) / (2.0 * ε);		       // numeric derivative of Ω
+	const double κ = std::sqrt(4.0 * Ω(R) * Ω(R) + 2.0 * R * Ω(R) * dΩdR); // sqrt yields nan if κ negative
+	return κ;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityProfile(double R, double Rc, double Rd, double Sigma0) -> double
 {
 	const double x = R / Rd;
 	return Sigma0 * std::exp(-x - beta_profile * std::exp(-alpha_profile * x));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Rc, double Rd, double Sigma0, double Mc, double cs) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, double z, double Rc, double Rd, double Sigma0, double vc, double cs) -> double
 {
-	const double Sigma = surfaceDensityProfile(R, Rd, Sigma0);
+	const double Sigma = surfaceDensityProfile(R, Rc, Rd, Sigma0);
 	if (Sigma <= 0.0) {
 		return 0.0;
 	}
 
 	const double H = cs * cs / (M_PI * C::Gconst * Sigma);
-	const double rho0 = (M_PI * C::Gconst * Sigma * Sigma) / (2.0 * cs * cs);
 
 	const double sech = 1.0 / std::cosh(z / H);
-	const double disk_factor = sech * sech;
+	const double disk_factor = (sech * sech) / (2.0 * H);
 
 	const double denom = R * R + Rc * Rc;
-	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -Mc * Mc / 2.0);
+	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -(vc / cs) * (vc / cs) / 2.0);
 
-	return rho0 * disk_factor * halo_factor;
+	return Sigma * disk_factor * halo_factor;
 }
 
 // 1D and 2D Interpolation Operators for Cylindrical A_phi Evaluation
@@ -289,6 +300,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto get_taper_factor(double x, double y, do
 	return taper;
 }
 
+inline int getNoCells(const QuokkaSimulation<MHDGalaxy> &sim)
+{
+	long cells = 0;
+	for (int level = 0; level <= sim.finestLevel(); ++level)
+		for (amrex::MFIter iter(sim.state_new_cc_[level]); iter.isValid(); ++iter)
+			cells += iter.validbox().numPts();
+	return cells;
+}
+
 inline auto load_bin_to_device(const std::string &path, std::size_t n_expect) -> amrex::Gpu::DeviceVector<amrex::Real>
 {
 	// Use amrex::Real so this remains compatible if you change precision
@@ -381,6 +401,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto cellSphereOverlapFraction(double di, do
 
 template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 {
+	amrex::Print() << std::format("{:6.3f}M cells\n", amrex::Real(getNoCells(*this)) / 1e6);
+
 	// run only once
 	static bool was_called = false;
 	if (was_called) {
@@ -394,7 +416,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.get("Rd_kpc",      userData_.Rd);	  userData_.Rd      *= 1.0e3 * C::parsec;
 	pp.get("Rmax_kpc",    userData_.Rmax);	  userData_.Rmax    *= 1.0e3 * C::parsec;
 	pp.get("Rcutoff_kpc", userData_.Rcutoff); userData_.Rcutoff *= 1.0e3 * C::parsec;
-	pp.get("Mc", userData_.Mc);
+	pp.query("vc_kms",    userData_.vc);      userData_.vc      *= 1e5;
+	pp.query("cs_disk_kms",userData_.cs_disk);userData_.cs_disk *= 1e5;
+	pp.query("cs_cgm_kms",userData_.cs_cgm);  userData_.cs_cgm  *= 1e5;
+	pp.query("Mc", userData_.Mc);
+	pp.query("T_disk", userData_.T_disk);
+	pp.query("T_cgm", userData_.T_cgm);
 	pp.get("Q_mean", userData_.Q_mean);
 	pp.get("sn_jeans_J", userData_.sn_jeans_J);
 	pp.get("sn_momentum", userData_.sn_momentum);
@@ -403,23 +430,44 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.get("sn_cluster_momentum_exponent", userData_.sn_cluster_momentum_exponent);
 	// clang-format on
 
-	constexpr double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-	constexpr double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
+	constexpr double gamma = quokka::EOS_Traits<MHDGalaxy>::gamma;
+	constexpr double µ = quokka::EOS_Traits<MHDGalaxy>::mean_molecular_weight;
 
-	userData_.vc = userData_.Mc * cs_disk;
+	// set cs or T from either T or cs, to ensure both are present
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isnan(userData_.T_disk) != std::isnan(userData_.cs_disk),
+					 "Must set exactly one of mhd_galaxy.T_disk or mhd_galaxy.cs_disk");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isnan(userData_.T_cgm) != std::isnan(userData_.cs_cgm),
+					 "Must set exactly one of mhd_galaxy.T_cgm or mhd_galaxy.cs_cgm");
+
+	if (std::isnan(userData_.cs_disk)) {
+		userData_.cs_disk = std::sqrt(gamma * C::k_B * userData_.T_disk / µ);
+	} else {
+		userData_.T_disk = userData_.cs_disk * userData_.cs_disk * µ / (gamma * C::k_B);
+	}
+	if (std::isnan(userData_.cs_cgm)) {
+		userData_.cs_cgm = std::sqrt(gamma * C::k_B * userData_.T_cgm / µ);
+	} else {
+		userData_.T_cgm = userData_.cs_cgm * userData_.cs_cgm * µ / (gamma * C::k_B);
+	}
+
+	const double cs_disk = userData_.cs_disk;
+	const double cs_cgm = userData_.cs_cgm;
+
+	// set vc or Mc from either Mc or vc, to ensure both are present
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isnan(userData_.vc) != std::isnan(userData_.Mc), "Must set exactly one of mhd_galaxy.vc_kms or mhd_galaxy.Mc");
+	if (std::isnan(userData_.vc)) {
+		userData_.vc = userData_.Mc * userData_.cs_disk;
+	} else {
+		userData_.Mc = userData_.vc / userData_.cs_disk;
+	}
 	const double vc = userData_.vc;
+
 	const double Rc = userData_.Rc;
 	const double Rd = userData_.Rd;
 	const double Rmax = userData_.Rmax;
 
 	// Sigma0 via Simpson integration of Toomre Q condition, accurate to 10 figures for the default functions
-	auto integrand = [=](double R) -> double {
-		const auto Ω = [=](double R) -> double { return vcircAnalytic(R, 0.0, vc, Rc) / R; };
-		const double ε = 0.5e-5 * Rmax;
-		const double dΩdR = (Ω(R + ε) - Ω(R - ε)) / (2.0 * ε); // numeric derivative of Ω
-		const double kappa = std::sqrt(std::max(4.0 * Ω(R) * Ω(R) + 2.0 * R * Ω(R) * dΩdR, 0.0));
-		return kappa * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, Rd, 1.0));
-	};
+	auto integrand = [=](double R) -> double { return kappa(R, vc, Rc) * cs_disk / (M_PI * C::Gconst * surfaceDensityProfile(R, Rc, Rd, 1.0)); };
 	constexpr int N = 100000;
 	static_assert(N % 2 == 0);
 	const double h = Rmax / N;
@@ -520,12 +568,10 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	// => B_rms = cs * sqrt(2 rho_mid / (gamma * beta))
 	// => B0_scale = B_rms * Rmax
 	{
-		constexpr double cs = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-		constexpr double gam = quokka::EOS_Traits<MHDGalaxy>::gamma;
-		const double Sigma_Rd = surfaceDensityProfile(Rd, Rd, userData_.Sigma0);
-		const double rho_mid = (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * cs * cs);
+		const double Sigma_Rd = surfaceDensityProfile(Rd, Rc, Rd, userData_.Sigma0);
+		const double rho_mid = (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * cs_disk * cs_disk);
 		userData_.rho_mid = rho_mid;
-		const double B_rms_HL = cs * std::sqrt(2.0 * rho_mid / (gam * target_beta_seed));
+		const double B_rms_HL = cs_disk * std::sqrt(2.0 * rho_mid / (gamma * target_beta_seed));
 		userData_.seed_B0_HL = B_rms_HL * userData_.seed_Rmax;
 		amrex::Print() << "Seed field: target_beta=" << target_beta_seed << "  rho_mid=" << rho_mid << "  B_rms_HL=" << B_rms_HL
 			       << "  B0_scale=" << userData_.seed_B0_HL << " G*cm (HL)\n";
@@ -568,7 +614,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		amrex::Print() << "\n";
 	}
 
-	constexpr double turb_rescale = turb_target_Mach * quokka::EOS_Traits<MHDGalaxy>::cs_disk;
+	const double turb_rescale = turb_target_Mach * cs_disk;
 	userData_.turb_rescale_factor = turb_rescale;
 
 	amrex::Print() << "Turbulence loaded from binary files:\n"
@@ -580,8 +626,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 
 	amrex::Print() << "MHDGalaxy init complete\n"
 		       << "Mc=" << userData_.Mc << " Q=" << userData_.Q_mean << " Sigma0=" << userData_.Sigma0
-		       << " Seed=" << (userData_.seed_str.empty() ? std::string("<not found>") : userData_.seed_str) << "\n"
-		       << "sn_mass_per_event_msun=" << userData_.sn_mass_per_event_msun
+		       << " Seed=" << (userData_.seed_str.empty() ? std::string("<not found>") : userData_.seed_str)
+		       << "\nsn_mass_per_event_msun=" << userData_.sn_mass_per_event_msun
 		       << " sn_cluster_momentum_exponent=" << userData_.sn_cluster_momentum_exponent << "\n"
 		       << "M_solar=" << C::M_solar << "\n";
 }
@@ -593,13 +639,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const double vc = userData_.vc;
-	const double Mc = userData_.Mc;
 	const double Rc = userData_.Rc;
 	const double Rd = userData_.Rd;
 	const double Rcutoff = userData_.Rcutoff;
 	const double Sigma0 = userData_.Sigma0;
-	const double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-	const double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
+	const double cs_disk = userData_.cs_disk;
+	const double cs_cgm = userData_.cs_cgm;
 	const double rho_cgm = userData_.rho_cgm;
 	constexpr double gamma = quokka::EOS_Traits<MHDGalaxy>::gamma;
 
@@ -693,7 +738,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double z = prob_lo[2] + (k + 0.5) * dz;
 		const double R = std::sqrt(x * x + y * y + 1e-200);
 
-		const double rho_disc_raw = R < Rcutoff ? diskDensityAnalytic(R, z, Rc, Rd, Sigma0, Mc, cs_disk) : 0.0;
+		const double rho_disc_raw = R < Rcutoff ? diskDensityAnalytic(R, z, Rc, Rd, Sigma0, vc, cs_disk) : 0.0;
 		const bool in_disk = (rho_disc_raw > rho_transition);
 		const double rho = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
 		const double cs = in_disk ? cs_disk : cs_cgm;
@@ -701,6 +746,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double vrot = vcircAnalytic(R, 0.0, vc, Rc);
 		double vx = 0.0;
 		double vy = 0.0;
+		double vz = 0.0;
 		if (in_disk) {
 			vx = -vrot * y / R;
 			vy = vrot * x / R;
@@ -722,7 +768,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		}
 		vx += dvx_pert;
 		vy += dvy_pert;
-		const double vz = dvz_pert;
+		vz += dvz_pert;
 
 		const double pressure = rho * cs * cs;
 		const double Eint = pressure / (gamma - 1.0);
@@ -1008,7 +1054,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 	}
 }
 
-template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(const int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx = geom[lev].CellSizeArray();
@@ -1161,7 +1207,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 				const double rho = s(i, j, k, HydroSystem<MHDGalaxy>::density_index);
 
 				const double cs = HydroSystem<MHDGalaxy>::ComputeIsothermalSoundSpeed(s, i, j, k, &fab_fc);
-				const double plasma_beta = HydroSystem<MHDGalaxy>::ComputePlasmaBeta(s, i, j, k, &fab_fc);
+				const double plasma_beta = HydroSystem<MHDGalaxy>::ComputePlasmaBeta(s, i, j, k, &fab_fc); // returns inf when mhd off
 				const double beta_safe = amrex::max(plasma_beta, 1.0e-10);
 				const double cs_eff_sq = cs * cs * (1.0 + 0.74 / beta_safe);
 				const double rho_J = M_PI * cs_eff_sq / (C::Gconst * sn_jeans_J * sn_jeans_J * (dx_max * dx_max));
@@ -1395,8 +1441,8 @@ template <>
 void QuokkaSimulation<MHDGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
 						    amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
-	constexpr double cs_disk = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
-	constexpr double cs_cgm = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
+	constexpr double cs_disk = userData_.cs_disk;
+	constexpr double cs_cgm = userData_.cs_cgm;
 
 	const int ncomp = ncomp_cc_in;
 	const auto prob_lo = geom[lev].ProbLoArray();
