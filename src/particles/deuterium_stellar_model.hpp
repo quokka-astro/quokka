@@ -247,7 +247,8 @@ struct DeuteriumBurningStellarModel {
 	};
 
 	// dr/dt from the discretized Nakano et al. (2000) Eq. 5.8
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto radiusRate(BurnState state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot) -> RadiusRate
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto radiusRate(BurnState state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot)
+	    -> RadiusRate
 	{
 		const amrex::Real beta1 = StellarPhysics::beta(m, r, n);
 		const amrex::Real aGb = StellarPhysics::aG(n) * beta1;
