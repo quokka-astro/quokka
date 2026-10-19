@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <numeric>
 #include <sstream>
@@ -138,14 +139,14 @@ auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per
 	double max_err_L = 0.0;
 	double max_err_n = 0.0;
 	double max_err_mdeut = 0.0;
-	long step = 0;
+	int64_t step = 0;
 	std::string line;
 	while (std::getline(input, line)) {
 		if (line.empty() || line[0] == '#') {
 			continue;
 		}
 		std::istringstream row(line);
-		long ref_step = 0;
+		int64_t ref_step = 0;
 		double m_ref = NAN;
 		double r_ref = NAN;
 		double n_ref = NAN;
@@ -259,11 +260,11 @@ auto problem_main() -> int
 				status += 1;
 			}
 			if (state != StellarModel::BurnState::PreCollapse) {
-				if (!(n_poly >= 1.5 && n_poly <= 3.0)) {
+				if (n_poly < 1.5 || n_poly > 3.0) {
 					amrex::Print() << "FAIL: polytropic index outside [1.5, 3]\n";
 					status += 1;
 				}
-				if (!(lum > 0.0 && std::isfinite(lum) && radius > 0.0 && std::isfinite(radius))) {
+				if (lum <= 0.0 || !std::isfinite(lum) || radius <= 0.0 || !std::isfinite(radius)) {
 					amrex::Print() << "FAIL: luminosity and radius must be positive and finite\n";
 					status += 1;
 				}
