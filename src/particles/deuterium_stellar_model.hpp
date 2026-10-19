@@ -212,7 +212,7 @@ struct DeuteriumBurningStellarModel {
 	static constexpr std::array<const char *, nExtraReal> extraRealNames = {"mdeut", "n"};
 	static constexpr std::array<const char *, nExtraInt> extraIntNames = {"burn_state"};
 
-	enum BurnState : int {
+	enum class BurnState : int {
 		PreCollapse = 0,	 // m < 0.01 M_sun or no accretion yet; model not started
 		NoBurning,		 // contraction before deuterium ignition
 		CoreDeuteriumFixedTc,	 // deuterium burning holds T_c at T_deut until the core supply is exhausted
@@ -225,17 +225,17 @@ struct DeuteriumBurningStellarModel {
 	static constexpr int max_substeps = 10000;
 
 	// Deuterium-burning luminosity
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto luminosityDeut(int state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot)
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto luminosityDeut(BurnState state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot)
 	    -> amrex::Real
 	{
-		if (state == CoreDeuteriumFixedTc) {
+		if (state == BurnState::CoreDeuteriumFixedTc) {
 			const amrex::Real beta1 = StellarPhysics::beta(m, r, n);
 			return StellarPhysics::luminosityStar(m, r, mdot) + mdot * StellarPhysics::psi_ion +
 			       C::Gconst * m * mdot / r *
 				   (1.0 - StellarPhysics::f_k -
 				    StellarPhysics::aG(n) * beta1 / 2.0 * (1.0 + StellarPhysics::dlogBetaOverBetac_dlogM(m, r, n, beta1)));
 		}
-		if (state == CoreDeuteriumVariableTc || state == ShellDeuterium) {
+		if (state == BurnState::CoreDeuteriumVariableTc || state == BurnState::ShellDeuterium) {
 			return mdot * StellarPhysics::psi_deut;
 		}
 		return 0.0;
@@ -247,7 +247,7 @@ struct DeuteriumBurningStellarModel {
 	};
 
 	// dr/dt from the discretized Nakano et al. (2000) Eq. 5.8
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto radiusRate(int state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot) -> RadiusRate
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto radiusRate(BurnState state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot) -> RadiusRate
 	{
 		const amrex::Real beta1 = StellarPhysics::beta(m, r, n);
 		const amrex::Real aGb = StellarPhysics::aG(n) * beta1;
@@ -257,8 +257,8 @@ struct DeuteriumBurningStellarModel {
 		const amrex::Real l_star = StellarPhysics::luminosityStar(m, r, mdot);
 		const amrex::Real l_ion = mdot * StellarPhysics::psi_ion;
 		const amrex::Real l_deut = luminosityDeut(state, m, r, n, mdot);
-		return {accretion_term - lum_coef * (l_star + l_ion - l_deut),
-			std::max(std::abs(accretion_term), lum_coef * (l_star + l_ion + std::abs(l_deut)))};
+		return {.drdt = accretion_term - lum_coef * (l_star + l_ion - l_deut),
+			.scale = std::max(std::abs(accretion_term), lum_coef * (l_star + l_ion + std::abs(l_deut)))};
 	}
 
 	// Stellar-evolution step over dt, using the mass and accretion rate set by the accretion module.
@@ -274,20 +274,20 @@ struct DeuteriumBurningStellarModel {
 		amrex::Real &r = rdata[StarParticleRadiusIdx];
 		amrex::Real &mdeut = rdata[StarParticleFixedComps + n_groups];
 		amrex::Real &n = rdata[StarParticleFixedComps + n_groups + 1];
-		int &state = idata[0];
+		auto state = static_cast<BurnState>(idata[0]);
 		amrex::Real *lum = &rdata[StarParticleLumIdx];
 
 		for (int g = 0; g < n_groups; ++g) {
 			lum[g] = 0.0;
 		}
 		amrex::Real t_left = dt;
-		if (state == PreCollapse) {
+		if (state == BurnState::PreCollapse) {
 			if (m < StellarPhysics::M_rad_min || mdot <= 0.0) {
 				return;
 			}
 			n = StellarPhysics::nInit(mdot);
 			r = StellarPhysics::radInit(mdot);
-			state = NoBurning;
+			state = BurnState::NoBurning;
 			// the model starts when the mass passes M_rad_min, part way through this step
 			t_left = std::min(dt, (m - StellarPhysics::M_rad_min) / mdot);
 		}
@@ -300,56 +300,57 @@ struct DeuteriumBurningStellarModel {
 		const amrex::Real m_min = StellarPhysics::M_rad_min; // local copy: std::max takes references
 		for (int k = 0; k < max_substeps && t_left > 0.0; ++k) {
 			amrex::Real h = t_left;
-			RadiusRate rate{0.0, 0.0};
-			if (state != MainSequence) {
+			RadiusRate rate{.drdt = 0.0, .scale = 0.0};
+			if (state != BurnState::MainSequence) {
 				const amrex::Real m_start = std::max(m - mdot * t_left, m_min);
 				h = std::min(t_left, max_dr_fraction * r / radiusRate(state, m_start, r, n, mdot).scale);
 			}
 			const amrex::Real ms = std::max(m - mdot * (t_left - h), m_min);
-			if (state != MainSequence) {
+			if (state != BurnState::MainSequence) {
 				rate = radiusRate(state, ms, r, n, mdot);
 			}
 			t_left -= h;
 			r += rate.drdt * h;
 
 			switch (state) {
-				case NoBurning:
+				case BurnState::NoBurning:
 					mdeut = ms;
 					n = StellarPhysics::nInit(mdot);
 					if (StellarPhysics::temperatureCentral(ms, r, n) > StellarPhysics::T_deut) {
-						state = CoreDeuteriumFixedTc;
+						state = BurnState::CoreDeuteriumFixedTc;
 						n = 1.5; // the star becomes fully convective
 					}
 					break;
-				case CoreDeuteriumFixedTc:
+				case BurnState::CoreDeuteriumFixedTc:
 					mdeut += mdot * h - luminosityDeut(state, ms, r, n, mdot) * h / StellarPhysics::psi_deut;
 					if (mdeut <= mdot * h) {
-						state = CoreDeuteriumVariableTc; // core deuterium exhausted
+						state = BurnState::CoreDeuteriumVariableTc; // core deuterium exhausted
 						mdeut = 0.0;
 					}
 					break;
-				case CoreDeuteriumVariableTc:
+				case BurnState::CoreDeuteriumVariableTc:
 					mdeut = 0.0;
 					if (luminosityDeut(state, ms, r, n, mdot) <= StellarPhysics::f_rad * StellarPhysics::luminosityZAMS(ms)) {
-						state = ShellDeuterium; // a radiative barrier forms
+						state = BurnState::ShellDeuterium; // a radiative barrier forms
 						n = 3.0;
 						r *= StellarPhysics::shell_factor;
 					}
 					break;
-				case ShellDeuterium:
+				case BurnState::ShellDeuterium:
 					mdeut = 0.0;
 					if (r <= StellarPhysics::radiusZAMS(ms)) {
-						state = MainSequence;
+						state = BurnState::MainSequence;
 						r = StellarPhysics::radiusZAMS(ms);
 					}
 					break;
-				default: // MainSequence
+				default: // BurnState::MainSequence
 					mdeut = 0.0;
 					r = StellarPhysics::radiusZAMS(ms);
 					break;
 			}
 		}
 
+		idata[0] = static_cast<int>(state);
 		if (n_groups > 0) {
 			lum[0] = StellarPhysics::luminosityStar(m, r, mdot) + StellarPhysics::luminosityDisk(m, r, mdot);
 		}

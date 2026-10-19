@@ -249,16 +249,16 @@ auto problem_main() -> int
 			const double radius = rdata[AMREX_SPACEDIM + quokka::StarParticleRadiusIdx];
 			const double lum = rdata[AMREX_SPACEDIM + quokka::StarParticleLumIdx];
 			const double n_poly = rdata[AMREX_SPACEDIM + n_poly_idx];
-			const int state = int_data[p][0];
+			const auto state = static_cast<StellarModel::BurnState>(int_data[p][0]);
 			amrex::Print() << "Star " << p << ": m = " << mass / C::M_solar << " M_sun, mdot = " << mdot * quokka::yr_in_s / C::M_solar
 				       << " M_sun/yr, r = " << radius / C::R_solar << " R_sun, n = " << n_poly
-				       << ", L = " << lum / quokka::StellarPhysics::L_solar << " L_sun, burn_state = " << state << "\n";
+				       << ", L = " << lum / quokka::StellarPhysics::L_solar << " L_sun, burn_state = " << static_cast<int>(state) << "\n";
 
-			if (mass >= quokka::StellarPhysics::M_rad_min && mdot > 0.0 && state == StellarModel::PreCollapse) {
+			if (mass >= quokka::StellarPhysics::M_rad_min && mdot > 0.0 && state == StellarModel::BurnState::PreCollapse) {
 				amrex::Print() << "FAIL: the stellar model did not start although m >= 0.01 M_sun and mdot > 0\n";
 				status += 1;
 			}
-			if (state != StellarModel::PreCollapse) {
+			if (state != StellarModel::BurnState::PreCollapse) {
 				if (!(n_poly >= 1.5 && n_poly <= 3.0)) {
 					amrex::Print() << "FAIL: polytropic index outside [1.5, 3]\n";
 					status += 1;
