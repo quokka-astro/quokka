@@ -42,3 +42,5 @@ max_dt = 5.0e14  # the CFL condition is far weaker than this in such a large box
 # Check that the heated half stays much hotter than the cooled half
 # *****************************************************************
 cooling_test.min_spatial_heating_T_ratio = 10.0
+
+density_floor = 1e-32  # g cm^-3
