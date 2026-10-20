@@ -702,38 +702,6 @@ The \\(n = 3\\) column is used only to interpolate for \\(2.5 < n < 3\\); at \\(
 
 Orion2007 predates the published appendix and differs from it in four places: the shell-burning test is \\(L\_D \le 0.18\\,L\_{\rm ZAMS}\\) (the appendix writes \\(L\_D/L\_{\rm ms} > 0.33\\), which would start shell burning at once); \\(L\_\star\\) contains \\(L\_{\rm acc}\\) inside the Hayashi maximum, in Eqs. (9)–(10) and in \\(L\\) (the appendix uses \\(\max(L\_{\rm ms}, L\_H)\\)); Eq. (2) has the factor \\(8\times10^{-5}\\); and \\(\psi\_I\\), \\(\psi\_D\\) are 17 and 100 eV per \\(m\_u\\) instead of 2.5 and \\(15\\,L\_\odot\\) per \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) (8% and 6% larger). In addition, \\(\beta\_c\\) uses the \\(T\_c\\) of Eq. (4), not \\(T\_D\\).
 
-#### Plan: the Orion2 model (Offner et al. 2009)
-
-`Orion2007StellarModel` stays as it is, a faithful port of Orion2007 that serves as the reference solution. The later Orion2 implementation of the ORION star particle code dates from after Offner et al. (2009), and a second model, `Orion2StellarModel`, will follow their Appendix B as published. If the Orion2 source becomes available, it should replace the published text as the reference for this model, as the Orion2007 code does for the first. Nothing in this subsection is implemented yet.
-
-| # | Item | Orion2007 (current) | Orion2, Offner et al. (2009) (planned) |
-|---|---|---|---|
-| 1 | initial \\(n\\), Eq. (2) | argument of the log is \\(8\times10^{-5}\\,\dot m\\) | argument is \\(\dot m\\): \\(n\_{\rm init} = 2.33\\) instead of 1.5 at \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) |
-| 2 | \\(n\\) during `NoBurning` | reset to \\(n\_{\rm init}(\dot m)\\) every sub-step | kept at its initial value ("an accreting polytrope of fixed index") |
-| 3 | interior luminosity in Eqs. (9)–(10) | \\(L\_\star = \max(L\_{\rm ZAMS} + L\_{\rm acc}, L\_H)\\) | \\(L\_{\rm int} = \max(L\_{\rm ZAMS}, L\_H)\\) |
-| 4 | stored luminosity | \\(L\_\star + L\_{\rm disk}\\) | \\(L\_{\rm int} + L\_{\rm acc} + L\_{\rm disk}\\) |
-| 5 | \\(L\_I\\) | \\(\dot m \times 17\\,{\rm eV}/m\_u\\) | \\(2.5\\,L\_\odot\\,(\dot m/10^{-5}\\,M\_\odot\\,{\rm yr}^{-1})\\) |
-| 6 | \\(L\_D\\) in phases 3–4 and in the \\(m\_d\\) update (\\(\psi\_D\\)) | \\(100\\,{\rm eV}/m\_u\\) | \\(15\\,L\_\odot\\) per \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) |
-| 7 | shell-burning test | \\(L\_D \le 0.18\\,L\_{\rm ZAMS}\\) | \\(f\_{\rm rad} = 0.33\\); the printed \\(L\_D/L\_{\rm ms} > 0.33\\) would start shell burning on the first step of phase 3 (at \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\), \\(L\_D/L\_{\rm ZAMS} \approx 460\\) there), so implement \\(L\_D \le 0.33\\,L\_{\rm ZAMS}\\) |
-| 8 | core deuterium exhausted | \\(m\_d \le \dot m h\\), then \\(m\_d = 0\\) | \\(m\_d < 0\\) after the update |
-| 9 | order within a step | phase change, then \\(L\\) | update \\(r\\) and \\(m\_d\\), then \\(L\\), then the phase change |
-
-Items 3–4 matter most: at \\(0.1\\,M\_\odot\\) on the \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) track, \\(L\_{\rm int} = 0.034\\,L\_\odot\\) while \\(L\_\star = 11.5\\,L\_\odot\\), so the contraction term \\(B\\) of Eq. (10) drops by a factor of about 340. Item 1 changes \\(a\_g\\) and the Lane-Emden factors from the start.
-
-**Code.** Make the update algorithm a template on a parameter struct that holds the constants and switches of the table (\\(\psi\_I\\), \\(\psi\_D\\), \\(f\_{\rm rad}\\), the \\(n\_{\rm init}\\) factor, and flags for items 2–4, 8 and 9). `Orion2007StellarModel` becomes the first instance, and a new `Orion2StellarModel` is the second. Both share the structure functions, tables, sub-stepping, extras and output names; a problem picks one through `Particle_Traits<problem_t>::stellar_model`.
-
-**Validation.**
-
-- `Orion2007StellarModel` must still pass the existing `ParticleStar` comparison with the Orion2007 tracks, unchanged.
-- For `Orion2StellarModel`, write a short standalone Python implementation of the published equations from this page, generate constant-\\(\dot m\\) tracks at \\(10^{-5}\\) and \\(10^{-4}\\,M\_\odot\\,{\rm yr}^{-1}\\), store them in `src/problems/ParticleStar/`, and compare them in `ParticleStar` like the Orion2007 tracks. If the Orion2 source is available, generate the tracks from it instead.
-- Check the Orion2 tracks against the Palla & Stahler (1991, 1992) protostellar radii to which the model is calibrated (Offner et al. report about 10% agreement), and report the phase-change masses of both models side by side.
-
-**Decisions needed.**
-
-- Item 7: the direction of the shell-burning test (\\(\le\\) as proposed).
-- Item 9: whether \\(L\\) is computed before or after the phase change.
-- Whether to use the recalibrated parameters of Hosokawa & Omukai (2009), which Offner et al. recommend for future work; this would be a third parameter set.
-
 ### Validation tests
 
 `ParticleStarEvolution` places one Star particle in a uniform medium and lets it accrete via the grid Bondi accretion module (small-mass regime, \\(\dot{M}\approx\\) const). It asserts, each step, that the particle's stored radius and luminosity match the closed-form laws of the toy model within ~2% (the tolerance absorbing the one-timestep lag between accretion and the stellar update), and reports the mean accretion rate against the analytic Bondi value.
