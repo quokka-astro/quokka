@@ -1,4 +1,4 @@
-# ORION2 StarParticleData protostellar model with Quokka physical constants (see README.md)
+# Orion2007 (standalone ORION StarParticleData, 2007) protostellar model with Quokka physical constants (see README.md)
 # m0 = 1e-3 Msun, mdot = 0.0001 Msun/yr, dm = 0.0001 Msun per step, dt = dm/mdot; one row every 200 steps
 # state: 0 PreCollapse, 1 NoBurning, 2 CoreDeuteriumFixedTc, 3 CoreDeuteriumVariableTc, 4 ShellDeuterium, 5 MainSequence
 # step  m[g]  r[cm]  n  mdeut[g]  state  L[erg/s]

@@ -2,8 +2,9 @@
 #define DEUTERIUM_STELLAR_MODEL_HPP_
 
 /// \file deuterium_stellar_model.hpp
-/// \brief One-zone protostellar evolution model with deuterium burning (Offner et al. 2009, Appendix B;
-/// Nakano et al. 1995, 2000; Tan & McKee 2004). The update follows the ORION2 StarParticleData module.
+/// \brief One-zone protostellar evolution models with deuterium burning (Nakano et al. 1995, 2000; Tan & McKee 2004).
+/// Orion2007StellarModel follows the 2007 standalone ORION StarParticleData code ("Orion2007"), an earlier version of
+/// the model published by Offner et al. (2009, Appendix B).
 
 #include <algorithm>
 #include <array>
@@ -203,10 +204,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosityStar(amrex::Real m, amre
 }
 } // namespace StellarPhysics
 
-/// Deuterium-burning protostellar model. The star is a polytrope of index n whose radius follows from energy
+/// Orion2007 deuterium-burning protostellar model. The star is a polytrope of index n whose radius follows from energy
 /// conservation; it evolves through the phases of BurnState. Per-particle state: mdeut and n (extra reals) and
 /// burn_state (extra int). A zero-initialized particle starts in PreCollapse with zero luminosity.
-struct DeuteriumBurningStellarModel {
+struct Orion2007StellarModel {
 	static constexpr int nExtraReal = 2; // mdeut, n
 	static constexpr int nExtraInt = 1;  // burn_state
 	static constexpr std::array<const char *, nExtraReal> extraRealNames = {"mdeut", "n"};
