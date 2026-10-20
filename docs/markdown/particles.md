@@ -519,9 +519,9 @@ Star particles form from Jeans-unstable cells with the same criterion and mass r
 - Accretion luminosity: \\(L\_\mathrm{acc} = G M \dot{M} / R\\)
 - Stored luminosity: \\(L = L\_\star + L\_\mathrm{acc}\\)
 
-### Deuterium-burning model
+### Deuterium-burning model (Orion2007)
 
-`DeuteriumBurningStellarModel` (`src/particles/deuterium_stellar_model.hpp`) is the one-zone protostellar model of Offner et al. (2009, ApJ 703, 131, Appendix B), which builds on Nakano et al. (1995, 2000) and Tan & McKee (2004). The update reproduces the ORION2 star particle module (`StarParticleData`). The star is a polytrope of index \\(n\\) whose radius \\(r\\) follows from energy conservation, and it passes through six phases. This section contains everything needed to reimplement the model.
+`Orion2007StellarModel` (`src/particles/deuterium_stellar_model.hpp`) is a one-zone protostellar model based on Nakano et al. (1995, 2000) and Tan & McKee (2004). It reproduces Orion2007, the 2007 standalone version of the ORION star particle module (`StarParticleData`), which is an earlier version of the model published by Offner et al. (2009, ApJ 703, 131, Appendix B). The star is a polytrope of index \\(n\\) whose radius \\(r\\) follows from energy conservation, and it passes through six phases. This section contains everything needed to reimplement the model.
 
 #### State, phases and parameters
 
@@ -584,7 +584,7 @@ The mean gas-pressure fraction \\(\beta(m, r, n)\\) is: for \\(n = 3\\), the roo
 P_c^3 = \frac{3}{a}\left(\frac{k_B \rho_c}{\mu m_H}\right)^4 \frac{1-\beta}{\beta^4}; \tag{5}
 </script>
 
-otherwise 1 for \\(m < 5\\,M\_\odot\\), and for \\(m \geq 5\\,M\_\odot\\) bilinear interpolation, linear in \\(m\\) and \\(n\\), in Table B (below); masses beyond \\(50\\,M\_\odot\\) use the last row. Following ORION2, \\(\beta\\) jumps from 1 to 0.988 at \\(5\\,M\_\odot\\), so Eq. (6) gives \\(d\log\beta/d\log m \approx -12\\) for \\(5/(1+\delta) \le m/M\_\odot < 5\\) when \\(n < 3\\). The mass derivatives are one-sided differences at fixed \\(r\\) and \\(n\\):
+otherwise 1 for \\(m < 5\\,M\_\odot\\), and for \\(m \geq 5\\,M\_\odot\\) bilinear interpolation, linear in \\(m\\) and \\(n\\), in Table B (below); masses beyond \\(50\\,M\_\odot\\) use the last row. Following Orion2007, \\(\beta\\) jumps from 1 to 0.988 at \\(5\\,M\_\odot\\), so Eq. (6) gives \\(d\log\beta/d\log m \approx -12\\) for \\(5/(1+\delta) \le m/M\_\odot < 5\\) when \\(n < 3\\). The mass derivatives are one-sided differences at fixed \\(r\\) and \\(n\\):
 
 <script type="math/tex; mode=display">
 \frac{d\log\beta}{d\log m} = \frac{1}{\delta}\left[\frac{\beta(m(1+\delta))}{\beta(m)} - 1\right], \qquad \frac{d\log(\beta/\beta_c)}{d\log m} = \frac{1}{\delta}\left[\frac{(\beta/\beta_c)(m(1+\delta))}{(\beta/\beta_c)(m)} - 1\right], \tag{6}
@@ -648,7 +648,7 @@ Each coarse step calls `evolve` once with the step \\(\Delta t\\), the current m
       - `MainSequence`: \\(m\_d = 0\\), \\(r = R\_{\rm ZAMS}\\).
 4. Store \\(L = L\_\star + L\_{\rm disk}\\) (Eq. 8) at the final \\(m\\) and \\(r\\).
 
-When \\(\epsilon r/S \geq \Delta t\\) there is one sub-step with \\(m\_s = m\\), and step 3 is the same as ORION2's `updateState` with \\(\Delta m = \dot m\Delta t\\). This is the case for steps small compared with the contraction time, as in ORION2. Without sub-steps, explicit steps of \\(\Delta m = 0.01\\,M\_\odot\\) at \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) already give radii off by 20%; with them the error stays below 5% even at \\(\Delta m = 1\\,M\_\odot\\) per step. The model update runs before the accretion step of the same coarse step, so it lags the accretion by one step.
+When \\(\epsilon r/S \geq \Delta t\\) there is one sub-step with \\(m\_s = m\\), and step 3 is the same as Orion2007's `updateState` with \\(\Delta m = \dot m\Delta t\\). This is the case for steps small compared with the contraction time, as in Orion2007. Without sub-steps, explicit steps of \\(\Delta m = 0.01\\,M\_\odot\\) at \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) already give radii off by 20%; with them the error stays below 5% even at \\(\Delta m = 1\\,M\_\odot\\) per step. The model update runs before the accretion step of the same coarse step, so it lags the accretion by one step.
 
 #### Tables
 
@@ -700,7 +700,7 @@ The \\(n = 3\\) column is used only to interpolate for \\(2.5 < n < 3\\); at \\(
 
 #### Differences from the text of Offner et al. (2009)
 
-The model follows the ORION2 code, which differs from the published appendix in four places: the shell-burning test is \\(L\_D \le 0.18\\,L\_{\rm ZAMS}\\) (the appendix writes \\(L\_D/L\_{\rm ms} > 0.33\\), which would start shell burning at once); \\(L\_\star\\) contains \\(L\_{\rm acc}\\) inside the Hayashi maximum, in Eqs. (9)–(10) and in \\(L\\) (the appendix uses \\(\max(L\_{\rm ms}, L\_H)\\)); Eq. (2) has the factor \\(8\times10^{-5}\\); and \\(\psi\_I\\), \\(\psi\_D\\) are 17 and 100 eV per \\(m\_u\\) instead of 2.5 and \\(15\\,L\_\odot\\) per \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) (8% and 6% larger). In addition, \\(\beta\_c\\) uses the \\(T\_c\\) of Eq. (4), not \\(T\_D\\).
+Orion2007 predates the published appendix and differs from it in four places: the shell-burning test is \\(L\_D \le 0.18\\,L\_{\rm ZAMS}\\) (the appendix writes \\(L\_D/L\_{\rm ms} > 0.33\\), which would start shell burning at once); \\(L\_\star\\) contains \\(L\_{\rm acc}\\) inside the Hayashi maximum, in Eqs. (9)–(10) and in \\(L\\) (the appendix uses \\(\max(L\_{\rm ms}, L\_H)\\)); Eq. (2) has the factor \\(8\times10^{-5}\\); and \\(\psi\_I\\), \\(\psi\_D\\) are 17 and 100 eV per \\(m\_u\\) instead of 2.5 and \\(15\\,L\_\odot\\) per \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) (8% and 6% larger). In addition, \\(\beta\_c\\) uses the \\(T\_c\\) of Eq. (4), not \\(T\_D\\).
 
 #### Plan: a model that follows Offner et al. (2009)
 
@@ -738,4 +738,4 @@ Items 3–4 matter most: at \\(0.1\\,M\_\odot\\) on the \\(10^{-5}\\,M\_\odot\\,
 
 `ParticleStarEvolution` places one Star particle in a uniform medium and lets it accrete via the grid Bondi accretion module (small-mass regime, \\(\dot{M}\approx\\) const). It asserts, each step, that the particle's stored radius and luminosity match the closed-form laws of the toy model within ~2% (the tolerance absorbing the one-timestep lag between accretion and the stellar update), and reports the mean accretion rate against the analytic Bondi value.
 
-`ParticleStar` tests the deuterium-burning model. It first evolves the model alone at constant \\(\dot{m} = 10^{-5}\\) and \\(10^{-4}\\,M\_\odot\\,{\rm yr}^{-1}\\), with the steps of the ORION2 driver, and compares radius, luminosity, \\(n\\), \\(m\_d\\) and phase with reference tracks computed by the ORION2 code (stored in `src/problems/ParticleStar/`; radius and luminosity agree within 0.75%). It then runs a \\(32^3\\) MHD simulation with self-gravity in which one Jeans-unstable cell forms a Star particle, and checks mass conservation in the formation step (to \\(10^{-14}\\)) and during accretion (to \\(10^{-13}\\)), and that the model has started and gives \\(1.5 \le n \le 3\\) and a positive luminosity.
+`ParticleStar` tests `Orion2007StellarModel`. It first evolves the model alone at constant \\(\dot{m} = 10^{-5}\\) and \\(10^{-4}\\,M\_\odot\\,{\rm yr}^{-1}\\), with the steps of the Orion2007 driver, and compares radius, luminosity, \\(n\\), \\(m\_d\\) and phase with reference tracks computed by the Orion2007 code (stored in `src/problems/ParticleStar/`; radius and luminosity agree within 0.75%). It then runs a \\(32^3\\) MHD simulation with self-gravity in which one Jeans-unstable cell forms a Star particle, and checks mass conservation in the formation step (to \\(10^{-14}\\)) and during accretion (to \\(10^{-13}\\)), and that the model has started and gives \\(1.5 \le n \le 3\\) and a positive luminosity.

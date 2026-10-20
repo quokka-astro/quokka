@@ -1,7 +1,7 @@
 /// \file testParticleStar.cpp
 /// \brief Test problem for Star particles with the deuterium-burning protostellar model: formation from a
 /// Jeans-unstable cell, accretion with mass conservation, and the stellar evolution checked against reference
-/// tracks from the ORION2 protostellar model (see README.md in this directory).
+/// tracks from the Orion2007 protostellar model (see README.md in this directory).
 ///
 
 #include <array>
@@ -36,7 +36,7 @@ const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double cs = std::sqrt(gamma_ * C::k_B * T0 / mu); // NOLINT
 constexpr double B0 = 1.0e-7;				// uniform background field
 
-using StellarModel = quokka::DeuteriumBurningStellarModel;
+using StellarModel = quokka::Orion2007StellarModel;
 
 template <> struct Particle_Traits<ParticleStar> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
@@ -114,7 +114,7 @@ template <> void QuokkaSimulation<ParticleStar>::setInitialConditionsOnGridFaceV
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<ParticleStar>::mhdFirstIndex) = B_val; });
 }
 
-// Evolve the stellar model on the host with the constant-accretion-rate steps of an ORION2 reference run
+// Evolve the stellar model on the host with the constant-accretion-rate steps of an Orion2007 reference run
 // (m0 = 1e-3 M_sun, dm = 1e-4 M_sun per step) and compare with the stored reference track.
 auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per_yr) -> int
 {
@@ -187,9 +187,9 @@ auto problem_main() -> int
 {
 	int status = 0;
 
-	// Stellar evolution against the ORION2 reference model
-	status += compareWithReferenceTrack("../src/problems/ParticleStar/orion2_track_mdot1e-5.dat", 1.0e-5);
-	status += compareWithReferenceTrack("../src/problems/ParticleStar/orion2_track_mdot1e-4.dat", 1.0e-4);
+	// Stellar evolution against the Orion2007 reference model
+	status += compareWithReferenceTrack("../src/problems/ParticleStar/orion2007_track_mdot1e-5.dat", 1.0e-5);
+	status += compareWithReferenceTrack("../src/problems/ParticleStar/orion2007_track_mdot1e-4.dat", 1.0e-4);
 
 	QuokkaSimulation<ParticleStar> sim;
 
