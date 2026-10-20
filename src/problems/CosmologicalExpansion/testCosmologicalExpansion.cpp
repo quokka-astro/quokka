@@ -60,8 +60,8 @@ template <> void QuokkaSimulation<ExpansionProblem>::setInitialConditionsOnGrid(
 	pp.query("vy0", vy);
 	pp.query("vz0", vz);
 
-	const amrex::Box &indexRange = grid_elem.indexRange_;	       // set of the indices of the grid patch (e.g. from 0 to 31 in x, y, z)
-	const amrex::Array4<amrex::Real> &state_cc = grid_elem.array_; // Array4 is a pointer to the data
+	const amrex::Box &indexRange = grid_elem.indexRange_;	       
+	const amrex::Array4<amrex::Real> &state_cc = grid_elem.array_; 
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state_cc(i, j, k, HydroSystem<ExpansionProblem>::density_index) = rho;
