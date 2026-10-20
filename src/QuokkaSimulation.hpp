@@ -942,9 +942,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 		// --- cosmology guards: physics that is not formulated in comoving coordinates ---
 		static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cosmology is not supported with MHD (comoving induction equation not implemented).");
-		static_assert(!Physics_Traits<problem_t>::is_radiation_enabled, "Cosmology is not supported with radiation (comoving transport not implemented).");
-		static_assert(!Physics_Traits<problem_t>::is_dust_enabled, "Cosmology is not supported with dust (comoving dust fluxes and drag not implemented).");
-		static_assert(Particle_Traits<problem_t>::particle_switch == ParticleSwitch::None || Particle_Traits<problem_t>::particle_switch == ParticleSwitch::CIC,
+		static_assert(!Physics_Traits<problem_t>::is_radiation_enabled,
+			      "Cosmology is not supported with radiation (comoving transport not implemented).");
+		static_assert(!Physics_Traits<problem_t>::is_dust_enabled,
+			      "Cosmology is not supported with dust (comoving dust fluxes and drag not implemented).");
+		static_assert(Particle_Traits<problem_t>::particle_switch == ParticleSwitch::None ||
+				  Particle_Traits<problem_t>::particle_switch == ParticleSwitch::CIC,
 			      "Cosmology supports only CIC (dark matter) particles: star formation, accretion and feedback are not comoving.");
 
 		// --- cosmology guards: runtime options not consistent with a single global scale factor ---
@@ -961,8 +964,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(this->poissonSupercycleInterval_ == 1,
 							 "Cosmology requires poisson_supercycle_interval = 1: phi must be solved with the current a.");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(geom[0].isAllPeriodic(),
-							 "Cosmology with self-gravity requires periodic boundaries (mean-subtracted comoving Poisson equation).");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    geom[0].isAllPeriodic(), "Cosmology with self-gravity requires periodic boundaries (mean-subtracted comoving Poisson equation).");
 		}
 
 		amrex::ParmParse const cpp("cosmology");
