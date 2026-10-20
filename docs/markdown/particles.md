@@ -521,44 +521,186 @@ Star particles form from Jeans-unstable cells with the same criterion and mass r
 
 ### Deuterium-burning model
 
-`DeuteriumBurningStellarModel` (`src/particles/deuterium_stellar_model.hpp`) is the one-zone protostellar model of Offner et al. (2009, ApJ 703, 131, Appendix B), based on Nakano et al. (1995, 2000) and Tan & McKee (2004). The update follows the ORION2 star particle module (`StarParticleData`). The star is a polytrope of index \\(n\\) whose radius follows from energy conservation. Each particle carries the extra reals `mdeut` (mass of accreted gas whose deuterium is not yet burned, \\(m\_d\\)) and `n`, and the extra integer `burn_state`:
+`DeuteriumBurningStellarModel` (`src/particles/deuterium_stellar_model.hpp`) is the one-zone protostellar model of Offner et al. (2009, ApJ 703, 131, Appendix B), which builds on Nakano et al. (1995, 2000) and Tan & McKee (2004). The update reproduces the ORION2 star particle module (`StarParticleData`). The star is a polytrope of index \\(n\\) whose radius \\(r\\) follows from energy conservation, and it passes through six phases. This section contains everything needed to reimplement the model.
 
-| `burn_state` | Phase | Deuterium luminosity \\(L\_D\\) |
+#### State, phases and parameters
+
+Each particle stores its mass \\(m\\) and accretion rate \\(\dot m\\) (both set by the accretion module), the radius \\(r\\), and the model extras `mdeut` (\\(m\_d\\), the mass of accreted gas whose deuterium is not yet burned), `n` and `burn_state`. A particle that starts with all of these at zero is in `PreCollapse`.
+
+| `burn_state` | Phase | \\(L\_D\\) |
 |---|---|---|
-| 0 | `PreCollapse`: \\(m < 0.01\\,M\_\odot\\) or no accretion yet; \\(L = 0\\) | 0 |
+| 0 | `PreCollapse`: model not started; \\(L = 0\\) | 0 |
 | 1 | `NoBurning`: contraction before deuterium ignition | 0 |
-| 2 | `CoreDeuteriumFixedTc`: deuterium burning holds \\(T\_c\\) fixed | Eq. (3) |
-| 3 | `CoreDeuteriumVariableTc`: deuterium burned as fast as it is accreted | \\(\dot{m}\\,\psi\_D\\) |
-| 4 | `ShellDeuterium`: radiative core, deuterium burned in a shell | \\(\dot{m}\\,\psi\_D\\) |
+| 2 | `CoreDeuteriumFixedTc`: core deuterium burning holds \\(T\_c\\) fixed | Eq. (9) |
+| 3 | `CoreDeuteriumVariableTc`: core deuterium burned as fast as it is accreted | \\(\dot m\\,\psi\_D\\) |
+| 4 | `ShellDeuterium`: radiative core, deuterium burned in a shell | \\(\dot m\\,\psi\_D\\) |
 | 5 | `MainSequence`: \\(r = R\_{\rm ZAMS}(m)\\) | 0 |
 
-**Start.** The model starts once \\(m \geq 0.01\\,M\_\odot\\) and \\(\dot{m} > 0\\), with \\(r = 2.5\\,R\_\odot\\,(\dot{m}/10^{-5}\\,M\_\odot\\,{\rm yr}^{-1})^{0.2}\\) and
+| Parameter | Value |
+|---|---|
+| minimum mass \\(M\_{\rm min}\\) | \\(0.01\\,M\_\odot\\) |
+| mean molecular weight \\(\mu\\), hydrogen mass \\(m\_H\\) | 0.613, \\(m\_p\\) |
+| fraction of infall energy radiated in the inner disk \\(f\_k\\) | 0.5 |
+| fraction of accretion power radiated \\(f\_{\rm acc}\\) | 0.5 |
+| shell-burning threshold \\(f\_{\rm rad}\\) | 0.18 |
+| radius factor entering shell burning | 2.1 |
+| Hayashi temperature \\(T\_H\\), deuterium ignition temperature \\(T\_D\\) | 3000 K, \\(1.5\times10^6\\) K |
+| \\(\psi\_I\\) (dissociation and ionization), \\(\psi\_D\\) (deuterium burning) | 17 eV and 100 eV per \\(m\_u\\), i.e. \\(17\\,{\rm eV}\\,N\_A\\) and \\(100\\,{\rm eV}\\,N\_A\\) per gram |
+| \\(L\_\odot\\), year | \\(3.828\times10^{33}\\) erg s\\(^{-1}\\), \\(3.15576\times10^7\\) s |
+| finite-difference step \\(\delta\\) | \\(10^{-3}\\) |
+| sub-step limit \\(\epsilon\\), maximum number of sub-steps | 0.01, \\(10^4\\) |
+
+Physical constants (CGS, Quokka's values): \\(G = 6.67428\times10^{-8}\\), \\(k\_B = 1.380649\times10^{-16}\\), \\(m\_p = 1.67262192595\times10^{-24}\\), \\(\sigma\_{\rm SB} = 5.670374419\times10^{-5}\\), \\(a = 4\sigma\_{\rm SB}/c\\) with \\(c = 2.99792458\times10^{10}\\), \\(M\_\odot = 1.9884\times10^{33}\\), \\(R\_\odot = 6.957\times10^{10}\\), \\(1\\,{\rm eV} = 1.602176634\times10^{-12}\\) erg, \\(N\_A = 6.02214076\times10^{23}\\).
+
+#### Initial radius and polytropic index
+
+With \\(\dot m\\) in \\(M\_\odot\\,{\rm yr}^{-1}\\) in both equations,
 
 <script type="math/tex; mode=display">
-n = 5 - 3\left[1.475 + 0.07\log_{10}\left(8\times10^{-5}\,\frac{\dot{m}}{M_\odot\,{\rm yr}^{-1}}\right)\right]^{-1}, \qquad 1.5 \le n \le 3. \tag{1}
+r_{\rm init} = 2.5\,R_\odot\left(10^5\,\dot m\right)^{0.2}, \tag{1}
 </script>
-
-**Radius.** Before the main sequence, the radius changes over a time \\(\Delta t\\) in which the star gains \\(\Delta m = \dot{m}\Delta t\\) by (Nakano et al. 2000, Eq. 5.8)
 
 <script type="math/tex; mode=display">
-\Delta r = 2\frac{\Delta m}{m}\left(1 - \frac{1-f_k}{a_g\beta} + \frac{1}{2}\frac{d\log\beta}{d\log m}\right) r - \frac{2\Delta t}{a_g\beta}\frac{r^2}{G m^2}\left(L_\star + L_I - L_D\right), \tag{2}
+n_{\rm init} = 5 - \frac{3}{1.475 + 0.07\log_{10}\left(8\times10^{-5}\,\dot m\right)}, \quad\text{clamped to } [1.5, 3]; \qquad n_{\rm init} = 1.5 \text{ if } \dot m \le 0. \tag{2}
 </script>
 
-with \\(a\_g = 3/(5-n)\\), \\(f\_k = 0.5\\), \\(L\_I = \dot{m}\\,\psi\_I\\), \\(\psi\_I = 17\\,{\rm eV}\\) and \\(\psi\_D = 100\\,{\rm eV}\\) per \\(m\_u\\) of gas, and \\(L\_\star = \max(L\_{\rm ZAMS} + L\_{\rm acc},\\, 4\pi r^2\sigma\_{\rm SB}T\_H^4)\\), \\(T\_H = 3000\\) K. \\(L\_{\rm ZAMS}\\) and \\(R\_{\rm ZAMS}\\) are the Tout et al. (1996) solar-metallicity fits. The mean gas-pressure fraction \\(\beta\\) is 1 below \\(5\\,M\_\odot\\), comes from a table in \\((m, n)\\) above, and from the Eddington quartic for \\(n = 3\\). The central density and pressure come from tabulated Lane-Emden factors, and the central temperature \\(T\_c\\) from \\(P\_c = \rho\_c k\_B T\_c/(\mu m\_H) + a T\_c^4/3\\) with \\(\mu = 0.613\\). In the fixed-\\(T\_c\\) phase, deuterium burning supplies
+#### Polytrope structure
 
 <script type="math/tex; mode=display">
-L_D = L_\star + L_I + \frac{G m \dot{m}}{r}\left\{1 - f_k - \frac{a_g\beta}{2}\left[1 + \frac{d\log(\beta/\beta_c)}{d\log m}\right]\right\}, \tag{3}
+a_g = \frac{3}{5-n}, \qquad \rho_c = \frac{3m}{4\pi r^3 f_\rho(n)}, \qquad P_c = f_P(n)\,\frac{G m^2}{r^4}, \tag{3}
 </script>
 
-where \\(\beta\_c = \rho\_c k\_B T\_c/(\mu m\_H P\_c)\\), and \\(m\_d\\) changes by \\(\Delta m - L\_D\Delta t/\psi\_D\\).
+where \\(f\_\rho = \bar\rho/\rho\_c\\) and \\(f\_P\\) are interpolated linearly in \\(n\\) from Table A, on the interval \\(i = \lfloor (n - 1.5)/0.1 \rfloor\\) clamped to \\([0, 15]\\). The central temperature \\(T\_c\\) is the root of
 
-**Phase changes.** `NoBurning` \\(\to\\) `CoreDeuteriumFixedTc` when \\(T\_c > 1.5\times10^6\\) K (then \\(n = 1.5\\)); \\(\to\\) `CoreDeuteriumVariableTc` when \\(m\_d \le \Delta m\\) (core deuterium exhausted); \\(\to\\) `ShellDeuterium` when \\(L\_D \le f\_{\rm rad} L\_{\rm ZAMS}\\) with \\(f\_{\rm rad} = 0.18\\) (then \\(n = 3\\) and \\(r \to 2.1\\,r\\), once); \\(\to\\) `MainSequence` when \\(r \le R\_{\rm ZAMS}(m)\\).
+<script type="math/tex; mode=display">
+P_c = \frac{\rho_c k_B T_c}{\mu m_H} + \frac{a}{3}T_c^4 \tag{4}
+</script>
 
-**Luminosity.** The stored luminosity is \\(L = L\_\star + L\_{\rm disk}\\) with \\(L\_{\rm disk} = (1-f\_k)\\,G m\dot{m}/r\\) and \\(L\_\star\\) as above, which includes the accretion-shock luminosity \\(L\_{\rm acc} = f\_{\rm acc} f\_k\\,G m \dot{m}/r\\), \\(f\_{\rm acc} = 0.5\\). It goes to `lum_0`; the other groups are zero.
+on \\([0, \max(T\_{\rm gas}, T\_{\rm rad})]\\), with \\(T\_{\rm gas} = P\_c\mu m\_H/(k\_B\rho\_c)\\) and \\(T\_{\rm rad} = (3P\_c/a)^{1/4}\\); Quokka solves this and Eq. (5) with TOMS 748 to a relative tolerance of \\(10^{-12}\\), which keeps Eq. (6) accurate. The central gas-pressure fraction is \\(\beta\_c = \rho\_c k\_B T\_c/(\mu m\_H P\_c)\\).
 
-**Differences from the text of Offner et al. (2009).** The model follows the ORION2 code, which differs from the published appendix in four places: the shell-burning test is \\(L\_D \le 0.18\\,L\_{\rm ZAMS}\\) (the appendix writes \\(L\_D/L\_{\rm ms} > 0.33\\), which would start shell burning at once); \\(L\_\star\\) includes \\(L\_{\rm acc}\\) inside the Hayashi maximum, both in Eq. (2) and in \\(L\\); Eq. (1) has the factor \\(8\times10^{-5}\\); and \\(\psi\_I\\), \\(\psi\_D\\) are 17 and 100 eV per \\(m\_u\\) instead of \\(2.5\\) and \\(15\\,L\_\odot\\) per \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) (8% and 6% larger).
+The mean gas-pressure fraction \\(\beta(m, r, n)\\) is: for \\(n = 3\\), the root in \\([10^{-4}, 1]\\) of the Eddington quartic
 
-**Time integration.** Eq. (2) is explicit. Each coarse step is split into sub-steps so that neither the accretion term nor the luminosity term of Eq. (2) changes \\(r\\) by more than 1% per sub-step; the mass grows linearly across the step, and each sub-step uses the mass at its end. On the step in which the model starts, only the time after \\(m\\) passed \\(0.01\\,M\_\odot\\) is integrated. For steps that are small compared with the contraction time, as in ORION2, no sub-steps are taken.
+<script type="math/tex; mode=display">
+P_c^3 = \frac{3}{a}\left(\frac{k_B \rho_c}{\mu m_H}\right)^4 \frac{1-\beta}{\beta^4}; \tag{5}
+</script>
+
+otherwise 1 for \\(m < 5\\,M\_\odot\\), and for \\(m \geq 5\\,M\_\odot\\) bilinear interpolation, linear in \\(m\\) and \\(n\\), in Table B (below); masses beyond \\(50\\,M\_\odot\\) use the last row. Following ORION2, \\(\beta\\) jumps from 1 to 0.988 at \\(5\\,M\_\odot\\), so Eq. (6) gives \\(d\log\beta/d\log m \approx -12\\) for \\(5/(1+\delta) \le m/M\_\odot < 5\\) when \\(n < 3\\). The mass derivatives are one-sided differences at fixed \\(r\\) and \\(n\\):
+
+<script type="math/tex; mode=display">
+\frac{d\log\beta}{d\log m} = \frac{1}{\delta}\left[\frac{\beta(m(1+\delta))}{\beta(m)} - 1\right], \qquad \frac{d\log(\beta/\beta_c)}{d\log m} = \frac{1}{\delta}\left[\frac{(\beta/\beta_c)(m(1+\delta))}{(\beta/\beta_c)(m)} - 1\right], \tag{6}
+</script>
+
+and the second one is 0 for \\(n = 3\\).
+
+#### Luminosities
+
+The zero-age main-sequence fits of Tout et al. (1996) at solar metallicity, with \\(x = m/M\_\odot\\) and the coefficients of Table C, are
+
+<script type="math/tex; mode=display">
+\frac{L_{\rm ZAMS}}{L_\odot} = \frac{c_1 x^{5.5} + c_2 x^{11}}{c_3 + x^3 + c_4 x^5 + c_5 x^7 + c_6 x^8 + c_7 x^{9.5}}, \qquad
+\frac{R_{\rm ZAMS}}{R_\odot} = \frac{d_1 x^{2.5} + d_2 x^{6.5} + d_3 x^{11} + d_4 x^{19} + d_5 x^{19.5}}{d_6 + d_7 x^2 + d_8 x^{8.5} + x^{18.5} + d_9 x^{19.5}}. \tag{7}
+</script>
+
+The accretion-shock, inner-disk, protostellar and ionization luminosities are
+
+<script type="math/tex; mode=display">
+L_{\rm acc} = f_{\rm acc} f_k \frac{G m\dot m}{r}, \quad L_{\rm disk} = (1-f_k)\frac{G m\dot m}{r}, \quad L_\star = \max\left(L_{\rm ZAMS} + L_{\rm acc},\ 4\pi r^2\sigma_{\rm SB}T_H^4\right), \quad L_I = \dot m\,\psi_I. \tag{8}
+</script>
+
+The deuterium luminosity \\(L\_D\\) depends on the phase (table above). In `CoreDeuteriumFixedTc` it is the value that keeps \\(T\_c\\) fixed (Nakano et al. 2000, Eq. 5.13):
+
+<script type="math/tex; mode=display">
+L_D = L_\star + L_I + \frac{G m\dot m}{r}\left\{1 - f_k - \frac{a_g\beta}{2}\left[1 + \frac{d\log(\beta/\beta_c)}{d\log m}\right]\right\}. \tag{9}
+</script>
+
+The stored luminosity is \\(L = L\_\star + L\_{\rm disk}\\) in `lum_0` (the other groups are zero), and \\(L = 0\\) in `PreCollapse`.
+
+#### Radius evolution
+
+Before the main sequence, the radius follows (Nakano et al. 2000, Eq. 5.8)
+
+<script type="math/tex; mode=display">
+\frac{dr}{dt} = \underbrace{\frac{2\dot m\,r}{m}\left(1 - \frac{1-f_k}{a_g\beta} + \frac{1}{2}\frac{d\log\beta}{d\log m}\right)}_{A} - \underbrace{\frac{2r^2}{a_g\beta\,G m^2}\left(L_\star + L_I - L_D\right)}_{B}, \tag{10}
+</script>
+
+integrated with forward Euler, \\(r \leftarrow r + h\\,(A - B)\\). For the sub-step size, the rate scale is
+
+<script type="math/tex; mode=display">
+S = \max\left(|A|,\ \frac{2r^2}{a_g\beta\,G m^2}\left(L_\star + L_I + |L_D|\right)\right). \tag{11}
+</script>
+
+Using the individual terms matters: while the star contracts, \\(A\\) and \\(B\\) nearly cancel, so \\(|A - B|\\) does not limit the step.
+
+#### Update algorithm
+
+Each coarse step calls `evolve` once with the step \\(\Delta t\\), the current mass \\(m\\) (already including the accreted mass) and \\(\dot m\\):
+
+1. Set all `lum` groups to 0 and \\(t\_{\rm left} = \Delta t\\).
+2. If the phase is `PreCollapse`: return if \\(m < M\_{\rm min}\\) or \\(\dot m \le 0\\). Otherwise set \\(r = r\_{\rm init}\\), \\(n = n\_{\rm init}\\) (Eqs. 1–2), the phase to `NoBurning`, and \\(t\_{\rm left} = \min(\Delta t, (m - M\_{\rm min})/\dot m)\\): the model starts when the mass passed \\(M\_{\rm min}\\).
+3. Repeat while \\(t\_{\rm left} > 0\\), at most \\(10^4\\) times (any time left after that is not integrated). The mass is assumed to grow linearly in time, and each sub-step uses the mass at its end.
+   1. Sub-step: \\(h = t\_{\rm left}\\). Outside the main sequence, \\(h = \min(t\_{\rm left}, \epsilon r/S)\\) with \\(S\\) (Eq. 11) evaluated with the current \\(r\\), \\(n\\) and phase at the mass at the start of the sub-step, \\(\max(m - \dot m\\,t\_{\rm left}, M\_{\rm min})\\).
+   2. Sub-step mass \\(m\_s = \max(m - \dot m\\,(t\_{\rm left} - h), M\_{\rm min})\\). Outside the main sequence, \\(r \leftarrow r + h\\,(A - B)\\) with Eq. (10) at \\(m\_s\\) and the current \\(r\\), \\(n\\), phase. Then \\(t\_{\rm left} \leftarrow t\_{\rm left} - h\\).
+   3. Phase update, using \\(m\_s\\) and the new \\(r\\); at most one phase change per sub-step:
+      - `NoBurning`: \\(m\_d = m\_s\\), \\(n = n\_{\rm init}(\dot m)\\). If \\(T\_c > T\_D\\) (Eq. 4), go to `CoreDeuteriumFixedTc` and set \\(n = 1.5\\).
+      - `CoreDeuteriumFixedTc`: \\(m\_d \leftarrow m\_d + \dot m h - L\_D h/\psi\_D\\) with \\(L\_D\\) from Eq. (9). If \\(m\_d \le \dot m h\\), the core deuterium is exhausted: go to `CoreDeuteriumVariableTc` and set \\(m\_d = 0\\).
+      - `CoreDeuteriumVariableTc`: \\(m\_d = 0\\). If \\(\dot m\\,\psi\_D \le f\_{\rm rad} L\_{\rm ZAMS}\\), a radiative barrier forms: go to `ShellDeuterium`, set \\(n = 3\\) and \\(r \leftarrow 2.1\\,r\\) (once).
+      - `ShellDeuterium`: \\(m\_d = 0\\). If \\(r \le R\_{\rm ZAMS}\\), go to `MainSequence` and set \\(r = R\_{\rm ZAMS}\\).
+      - `MainSequence`: \\(m\_d = 0\\), \\(r = R\_{\rm ZAMS}\\).
+4. Store \\(L = L\_\star + L\_{\rm disk}\\) (Eq. 8) at the final \\(m\\) and \\(r\\).
+
+When \\(\epsilon r/S \geq \Delta t\\) there is one sub-step with \\(m\_s = m\\), and step 3 is the same as ORION2's `updateState` with \\(\Delta m = \dot m\Delta t\\). This is the case for steps small compared with the contraction time, as in ORION2. Without sub-steps, explicit steps of \\(\Delta m = 0.01\\,M\_\odot\\) at \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) already give radii off by 20%; with them the error stays below 5% even at \\(\Delta m = 1\\,M\_\odot\\) per step. The model update runs before the accretion step of the same coarse step, so it lags the accretion by one step.
+
+#### Tables
+
+**Table A.** Lane-Emden factors \\(f\_\rho = \bar\rho/\rho\_c\\) and \\(f\_P = P\_c/(Gm^2/r^4)\\) (Kippenhahn & Weigert).
+
+| \\(n\\) | 1.5 | 1.6 | 1.7 | 1.8 | 1.9 | 2.0 | 2.1 | 2.2 | 2.3 |
+|---|---|---|---|---|---|---|---|---|---|
+| \\(f\_\rho\\) | 0.166931 | 0.14742 | 0.129933 | 0.114265 | 0.100242 | 0.0877 | 0.0764968 | 0.0665109 | 0.0576198 |
+| \\(f\_P\\) | 0.770087 | 0.889001 | 1.02979 | 1.19731 | 1.39753 | 1.63818 | 1.92909 | 2.2825 | 2.71504 |
+
+| \\(n\\) | 2.4 | 2.5 | 2.6 | 2.7 | 2.8 | 2.9 | 3.0 | 3.1 |
+|---|---|---|---|---|---|---|---|---|
+| \\(f\_\rho\\) | 0.0497216 | 0.0427224 | 0.0365357 | 0.0310837 | 0.0262952 | 0.0221057 | 0.0184553 | 0.01529 |
+| \\(f\_P\\) | 3.24792 | 3.90921 | 4.73657 | 5.78067 | 7.11088 | 8.82286 | 11.0515 | 13.9885 |
+
+**Table B.** Mean gas-pressure fraction \\(\beta\\) of a polytrope.
+
+| \\(m/M\_\odot\\) | \\(n = 1.5\\) | \\(n = 2\\) | \\(n = 2.5\\) | \\(n = 3\\) |
+|---|---|---|---|---|
+| 5 | 0.98785 | 0.988928 | 0.98947 | 0.989634 |
+| 7.5 | 0.97438 | 0.976428 | 0.977462 | 0.977774 |
+| 10 | 0.957927 | 0.960895 | 0.962397 | 0.962846 |
+| 12.5 | 0.939787 | 0.943497 | 0.945369 | 0.945922 |
+| 15 | 0.92091 | 0.925151 | 0.927276 | 0.927896 |
+| 17.5 | 0.901932 | 0.906512 | 0.908785 | 0.909436 |
+| 20 | 0.883254 | 0.888017 | 0.890353 | 0.891013 |
+| 22.5 | 0.865111 | 0.86994 | 0.872277 | 0.872927 |
+| 25 | 0.847635 | 0.852445 | 0.854739 | 0.855367 |
+| 27.5 | 0.830886 | 0.835619 | 0.837842 | 0.838441 |
+| 30 | 0.814885 | 0.8195 | 0.821635 | 0.822201 |
+| 32.5 | 0.799625 | 0.804095 | 0.806133 | 0.806664 |
+| 35 | 0.785082 | 0.789394 | 0.791328 | 0.791825 |
+| 37.5 | 0.771226 | 0.775371 | 0.777202 | 0.777665 |
+| 40 | 0.758022 | 0.761997 | 0.763726 | 0.764156 |
+| 42.5 | 0.745433 | 0.749238 | 0.750869 | 0.751268 |
+| 45 | 0.733423 | 0.73706 | 0.738596 | 0.738966 |
+| 47.5 | 0.721954 | 0.725429 | 0.726874 | 0.727216 |
+| 50 | 0.710993 | 0.714311 | 0.715671 | 0.715987 |
+
+The \\(n = 3\\) column is used only to interpolate for \\(2.5 < n < 3\\); at \\(n = 3\\) Eq. (5) is used.
+
+**Table C.** Coefficients of Eq. (7).
+
+| \\(c\_1\\) | \\(c\_2\\) | \\(c\_3\\) | \\(c\_4\\) | \\(c\_5\\) | \\(c\_6\\) | \\(c\_7\\) | | |
+|---|---|---|---|---|---|---|---|---|
+| 0.39704170 | 8.52762600 | 0.00025546 | 5.43288900 | 5.56357900 | 0.78866060 | 0.00586685 | | |
+| \\(d\_1\\) | \\(d\_2\\) | \\(d\_3\\) | \\(d\_4\\) | \\(d\_5\\) | \\(d\_6\\) | \\(d\_7\\) | \\(d\_8\\) | \\(d\_9\\) |
+| 1.71535900 | 6.59778800 | 10.08855000 | 1.01249500 | 0.07490166 | 0.01077422 | 3.08223400 | 17.84778000 | 0.00022582 |
+
+#### Differences from the text of Offner et al. (2009)
+
+The model follows the ORION2 code, which differs from the published appendix in four places: the shell-burning test is \\(L\_D \le 0.18\\,L\_{\rm ZAMS}\\) (the appendix writes \\(L\_D/L\_{\rm ms} > 0.33\\), which would start shell burning at once); \\(L\_\star\\) contains \\(L\_{\rm acc}\\) inside the Hayashi maximum, in Eqs. (9)–(10) and in \\(L\\) (the appendix uses \\(\max(L\_{\rm ms}, L\_H)\\)); Eq. (2) has the factor \\(8\times10^{-5}\\); and \\(\psi\_I\\), \\(\psi\_D\\) are 17 and 100 eV per \\(m\_u\\) instead of 2.5 and \\(15\\,L\_\odot\\) per \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) (8% and 6% larger). In addition, \\(\beta\_c\\) uses the \\(T\_c\\) of Eq. (4), not \\(T\_D\\).
 
 ### Validation tests
 
