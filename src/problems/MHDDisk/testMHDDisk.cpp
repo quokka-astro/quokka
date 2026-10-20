@@ -11,10 +11,10 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArrayBase.H"
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
-#include <filesystem>
 
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
@@ -631,7 +631,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	const double turb_rescale = turb_target_Mach * cs_disk;
 	userData_.turb_rescale_factor = turb_rescale;
 
-
 	amrex::Print() << "Turbulence loaded from binary files:\n"
 		       << " vx = " << turb_vx_file << "\n"
 		       << " vy = " << turb_vy_file << "\n"
@@ -1076,9 +1075,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(const int lev, amrex::T
 	const auto dx = geom[lev].CellSizeArray();
 	const auto tag = tags.arrays();
 
-	const amrex::Real refine_Rcyl   = userData_.refine_Rcyl;
-	const amrex::Real refine_Hcyl   = userData_.refine_Hcyl;
-	const amrex::Real Rcyl_inner    = userData_.refine_Rcyl_inner;
+	const amrex::Real refine_Rcyl = userData_.refine_Rcyl;
+	const amrex::Real refine_Hcyl = userData_.refine_Hcyl;
+	const amrex::Real Rcyl_inner = userData_.refine_Rcyl_inner;
 
 	// Shrink the refinement cylinder at each successive level, floored at 30% of the
 	// base size, so finer levels progressively focus on the disk core instead of all
