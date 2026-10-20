@@ -37,7 +37,8 @@ state machine to Offner (§2b)**.
 
 Offner's deuterium burning proceeds **fixed-$T_c$ first, then variable-$T_c$**; the stale enum order
 (`VariableCoreDeuterium` $\to$ `SteadyCoreDeuterium`) is reversed, and its shell-transition test
-($L_{\star} < 0.33\,L_{\rm ZAMS}$) is **not** Offner's ($L_D / L_{\rm ms} > 0.33$). This spec adopts Offner's
+($L_{\star} < 0.33\,L_{\rm ZAMS}$) is **not** ~~Offner's ($L_D / L_{\rm ms} > 0.33$)~~ the ORION2 test ($L_D \le 0.18\,L_{\rm ZAMS}$; Offner's printed
+$L_D / L_{\rm ms} > 0.33$ has the inequality reversed and would start shell burning at once). This spec adopts Offner's
 exact stages and transitions (§4.8).
 
 ---
@@ -115,7 +116,7 @@ Model parameters (Offner Appendix B; stale `StellarConstants`):
 |---|---|---|
 | $f_k$ | $0.5$ | fraction of infall kinetic energy radiated in the inner disk before reaching the surface |
 | $f_{\rm acc}$ | $0.5$ | fraction of accretion power radiated (rest drives a wind) |
-| $f_{\rm rad}$ | $0.33$ | $L_D/L_{\rm ms}$ threshold for radiative-barrier (shell) transition |
+| $f_{\rm rad}$ | ~~$0.33$~~ $0.18$ | ~~$L_D/L_{\rm ms}$ threshold for radiative-barrier (shell) transition~~ shell burning starts when $L_D \le f_{\rm rad}\,L_{\rm ZAMS}$ (ORION2) |
 | $T_H$ | $3000$ K | Hayashi-track surface temperature floor |
 | $T_D$ | $1.5\times10^{6}$ K | deuterium ignition / thermostat temperature |
 | $M_{\rm rad,min}$ | $0.01\,M_\odot$ | minimum mass to activate the model |
@@ -332,7 +333,7 @@ flowchart TD
     P -->|"m >= 0.01 M_sun AND mdot > 0  (init R,n,m_d via Eqs.20-22)"| N
     N -->|"T_c >= 1.5e6 K (Eq.4)   (set n = 1.5)"| F
     F -->|"m_d < 0 after Eq.19   (core D exhausted)"| V
-    V -->|"L_D / L_ms > f_rad = 0.33   (set n = 3, R x= 2.1)"| S
+    V -->|"~~L_D / L_ms > f_rad = 0.33~~ L_D <= f_rad L_ZAMS, f_rad = 0.18   (set n = 3, R x= 2.1)"| S
     S -->|"R <= R_ZAMS(m)   (set R = R_ZAMS)"| M
 ```
 
@@ -355,6 +356,8 @@ $$
 $$
 m_d = m. \tag{22}
 $$
+
+At the transition from ~~VariableCoreDeuterium to SteadyCoreDeuterium, the burnState is changed to ShellDeuterium.~~ `CoreDeuteriumVariableTc` to `ShellDeuterium` (ORION2 names: `SteadyCoreDeuterium` to `ShellDeuterium`), radius becomes $2.1\times r$ and $n = 3$.  The factor 2.1 is applied only once to the radius.
 
 > **Deviation note (flag §4.10-c).** The stale `rad_init` wraps (20) in $\max(\cdot,\,2R_\odot)$; Offner Eq. B1 has
 > no floor. Use the pure Offner form; add a floor only as a documented $\dot m \to 0$ guard.
