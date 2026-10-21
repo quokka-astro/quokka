@@ -165,20 +165,34 @@ template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGridF
 
 template <> void QuokkaSimulation<WindCloudProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	auto const &state = state_new_cc_[lev].const_arrays();
 	auto const tag = tags.arrays();
 
-	const amrex::Real C_lo = 0.1;   // lowest cloud fraction counted as tail
-	const amrex::Real C_hi = 0.9;      // above this = core, don't tag
+	// Cloud-based refinement (disabled in favour of static refinement below)
+	// auto const &state = state_new_cc_[lev].const_arrays();
+	//
+	// const amrex::Real C_lo = 0.1;   // lowest cloud fraction counted as tail
+	// const amrex::Real C_hi = 0.9;      // above this = core, don't tag
+	//
+	// amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	//     amrex::Real const rho = state[bx](i, j, k, HydroSystem<WindCloudProblem>::density_index);
+	//     amrex::Real const C = state[bx](i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) / rho;
+	//
+	//     if (C > C_lo && C < C_hi) {
+	//         tag[bx](i, j, k) = amrex::TagBox::SET;
+	//     }
+	// });
 
-amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-    amrex::Real const rho = state[bx](i, j, k, HydroSystem<WindCloudProblem>::density_index);
-    amrex::Real const C = state[bx](i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) / rho;
+	// Static refinement: tag all cells with |x| < 2 kpc
+	const amrex::Real x_refine = 2.0e3 * C::parsec;
+	auto const prob_lo = geom[lev].ProbLoArray();
+	auto const dx = geom[lev].CellSizeArray();
 
-    if (C > C_lo && C < C_hi) {
-        tag[bx](i, j, k) = amrex::TagBox::SET;
-    }
-});
+	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
+		if (std::abs(x) < x_refine) {
+			tag[bx](i, j, k) = amrex::TagBox::SET;
+		}
+	});
 	amrex::Gpu::streamSynchronize();
 }
 
