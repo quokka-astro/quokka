@@ -12,8 +12,8 @@
 #include "cosmology/Cosmology.hpp"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
-#include <cmath>
 #include <array>
+#include <cmath>
 #include <tuple>
 
 struct ExpansionProblem {};
@@ -38,8 +38,8 @@ template <> struct Physics_Traits<ExpansionProblem> : DefaultPhysicsTraits {
 	static constexpr amrex::Real cosmology_dt_limit = 1e-2; // = default; exact source terms, dt only sets the round-off accumulation
 };
 
-/// Initial state of the uniform gas. 
-struct ExpansionIC { // default
+/// Initial state of the uniform gas.
+struct ExpansionIC {		   // default
 	amrex::Real rho = 1.0e-30; // comoving density [g cm^-3]
 	amrex::Real P = 1.0e-25;   // pressure [erg cm^-3]
 	amrex::Real vx = 5.77e4;   // 10^5/sqrt(3): |v| = 1 km/s, equal on the three axes
@@ -184,7 +184,7 @@ auto problem_main() -> int
 	sim.evolve();
 	amrex::Print() << "\nExpansion Test Results:\n";
 	const amrex::Real a_f = sim.a_now_; // final simulation scale factor (read AFTER evolve, otherwise it would still be the initial value)
-	const amrex::Real a_rel_err = std::abs(a_f - a_final) / a_final; 
+	const amrex::Real a_rel_err = std::abs(a_f - a_final) / a_final;
 	amrex::Print() << "  Final a = " << a_f << "\n";
 	amrex::Print() << "  a_final relative error (a_sim_fin - a_fin) / a_fin  = " << a_rel_err << "\n";
 
@@ -193,27 +193,27 @@ auto problem_main() -> int
 	const auto comp_errors = sim.computeComponentErrors();
 	// each element is a tuple (name, abs_err, rel_err, ref_norm); index = component index
 	// get<2> extract third component of the tuple, the rel err = |sim − ref| / |ref|
-	const auto rel_L1 = [&](int idx) { return std::get<2>(comp_errors[idx]); }; 
+	const auto rel_L1 = [&](int idx) { return std::get<2>(comp_errors[idx]); };
 
 	struct Check {
-		const char *name; 
-		int idx; 
+		const char *name;
+		int idx;
 		amrex::Real tol;
 	};
-	const std::array<Check, 6> checks{{{.name = "density", .idx = rho_idx, .tol = 1e-12}, // reference run: 0.0
-					{.name = "internal energy", .idx = eint_idx, .tol = 1e-10}, // reference run: 3.0e-14
-					{.name = "total energy", .idx = etot_idx, .tol = 1e-10}, // reference run: 6.2e-15
-					{.name = "momentum x", .idx = momx_idx, .tol = 1e-10}, // reference run: 3.0e-15
-					{.name = "momentum y", .idx = momy_idx, .tol = 1e-10}, // reference run: 3.0e-15
-					{.name = "momentum z", .idx = momz_idx, .tol = 1e-10}}}; // reference run: 3.0e-15
+	const std::array<Check, 6> checks{{{.name = "density", .idx = rho_idx, .tol = 1e-12},	       // reference run: 0.0
+					   {.name = "internal energy", .idx = eint_idx, .tol = 1e-10}, // reference run: 3.0e-14
+					   {.name = "total energy", .idx = etot_idx, .tol = 1e-10},    // reference run: 6.2e-15
+					   {.name = "momentum x", .idx = momx_idx, .tol = 1e-10},      // reference run: 3.0e-15
+					   {.name = "momentum y", .idx = momy_idx, .tol = 1e-10},      // reference run: 3.0e-15
+					   {.name = "momentum z", .idx = momz_idx, .tol = 1e-10}}};    // reference run: 3.0e-15
 
-	const amrex::Real tol_fried = 1e-8; // = rtol of evolveScaleFactor; measured 5.4e-10
+	const amrex::Real tol_fried = 1e-8;	    // = rtol of evolveScaleFactor; measured 5.4e-10
 	const bool a_ok = (a_rel_err <= tol_fried); // false also when a_rel_err is NaN
 	amrex::Print() << "  scale factor a(t_f): relative error = " << a_rel_err << " (tol " << tol_fried << ") " << (a_ok ? "PASS" : "FAIL") << "\n";
 	bool passed = a_ok;
-	for (const auto &c : checks) { // range-based for on the elements of checks
+	for (const auto &c : checks) {		       // range-based for on the elements of checks
 		const amrex::Real err = rel_L1(c.idx); // call the lambda that captures the relative error via its index
-		const bool ok = (err <= c.tol); // false also when err is NaN
+		const bool ok = (err <= c.tol);	       // false also when err is NaN
 		passed = passed && ok;
 		amrex::Print() << "  " << c.name << ": relative L1 = " << err << " (tol " << c.tol << ") " << (ok ? "PASS" : "FAIL") << "\n";
 	}
