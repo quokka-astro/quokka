@@ -1,5 +1,10 @@
 # Photoionization Module
 
+> **Warning: Beta feature**
+>
+> The photoionization module has not yet been exercised in a published science application with Quokka and should currently be treated as **beta**.
+>
+
 **Reference:** Aubert & Teyssier (2008), "A radiative transfer scheme for cosmological
 reionization based on a local Eddington tensor" (ATON paper, arXiv:0709.1544)
 
