@@ -1448,7 +1448,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	}
 
 	// set default subcycling pattern
-	amrex::Vector<int> nsubsteps_max(max_level);	
+	amrex::Vector<int> nsubsteps_max(max_level + 1, 1); // default: no subcycling (1 substep per level)
 	if (do_subcycle == 1) {
 		for (int lev = 1; lev <= max_level; ++lev) {
 			nsubsteps_max[lev] = std::pow(MaxRefRatio(lev - 1), 2);
