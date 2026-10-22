@@ -140,9 +140,6 @@ set(microphysics_output_dir "${CMAKE_CURRENT_BINARY_DIR}/")
 setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_CURRENT_BINARY_DIR}/")
 include_directories(${${microphysics_network_name}_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
 
-if(TARGET amrex_hydro_api)
-  link_libraries(amrex_hydro_api)
-endif()
 link_libraries(AMReX::amrex)
 link_libraries(${HDF5_LIBRARIES})
 link_libraries(yaml-cpp::yaml-cpp)
@@ -166,6 +163,7 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 if(AMReX_SPACEDIM EQUAL 3)
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
+  list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/hydro/MacProjector.cpp")
 endif()
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
