@@ -179,7 +179,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F const &rhs
 
 				// compute new timestep with 'I' controller
 				// https://sundials.readthedocs.io/en/latest/arkode/Mathematics_link.html#i-controller
-				eta = std::pow(epsilon, -1.0 / static_cast<Real>(p));
+				// (a zero error would give pow(0, -1/p) = inf and a divide-by-zero FPE; inf is capped at eta_max below anyway)
+				eta = (epsilon == 0.0) ? eta_max : std::pow(epsilon, -1.0 / static_cast<Real>(p));
 
 				if (epsilon < 1.0) { // error passed
 					y = ynew;
