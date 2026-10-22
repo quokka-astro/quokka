@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 //==============================================================================
 // Shared Richardson convergence driver
 //==============================================================================

@@ -1,11 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef ELECTRON_CONDUCTION_HPP_ // NOLINT
 #define ELECTRON_CONDUCTION_HPP_
-
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file ElectronConduction.hpp
 /// \brief Explicit flux-limited electron thermal conduction update.
 

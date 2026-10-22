@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef PARTICLE_RADIATION_HPP_
 #define PARTICLE_RADIATION_HPP_
 

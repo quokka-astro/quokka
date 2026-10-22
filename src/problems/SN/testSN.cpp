@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testSN.cpp
 /// \brief Defines a test problem for supernova feedback.
 /// In this test, two supernovae explode and in the end the gas temperature and velocity is checked for

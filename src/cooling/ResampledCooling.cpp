@@ -1,10 +1,8 @@
 // ABOUTME: Implementation for resampled cooling tables that interpolate on (rho, e_int) grid
 // ABOUTME: Reads HDF5-format tables produced by extern/cooling/resample_grackle_cooling_tables.py
-//==============================================================================
-//  TwoMomentRad - a radiation transport library for patch-based AMR codes
-//  Copyright 2020 Benjamin Wibking.
-//  Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file ResampledCooling.cpp
 /// \brief Implements methods for interpolating cooling rates from resampled
 /// tables.

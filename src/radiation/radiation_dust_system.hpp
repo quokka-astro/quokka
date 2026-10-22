@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 // IWYU pragma: private; include "radiation/radiation_system.hpp"
 #ifndef RADIATION_DUST_SYSTEM_HPP_
 #define RADIATION_DUST_SYSTEM_HPP_
