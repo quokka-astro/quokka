@@ -37,7 +37,7 @@ $A set KERNEL_RE='HydroSystem<.*>::ComputeFluxes'
 $A deadline set-in 240            # optional
 $A target 1.3                     # optional: stop at 1.3x the baseline
 $A eval "baseline"                # seed vs itself: noise floor and acceptance bar
-claude "Read $A/../program.md and run the campaign."
+claude "Read $(dirname "$A")/program.md and run the campaign."
 ```
 
 `init` options:
