@@ -15,7 +15,10 @@ PYTHON=python3
 # runs pin to two node-1 cores.
 BUILD_PREFIX=(taskset -c 0-23)
 BUILD_JOBS=24
-GPU_PREFIX=(taskset -c 46,47)
+# A singleton OpenMPI rank forks orted, which waits for the rank to exit while
+# rocprofv3 waits for orted: launching with mpirun avoids the deadlock.
+# --bind-to none keeps the taskset pinning.
+GPU_PREFIX=(taskset -c 46,47 mpirun -np 1 --bind-to none)
 CONFIGURE_ARGS=(-DCMAKE_MAKE_PROGRAM="$V/ninja"
   -DCMAKE_C_COMPILER="$ROCM/llvm/bin/clang" -DCMAKE_CXX_COMPILER="$ROCM/llvm/bin/clang++"
   -DCMAKE_PREFIX_PATH="$ROCM")

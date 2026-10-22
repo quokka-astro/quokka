@@ -66,7 +66,7 @@ claude "Read $(dirname "$A")/program.md and run the campaign."
 `ar set KEY=VALUE` changes `SITE PROBLEM DIM KERNEL_RE EDIT_PATHS CHECK_ARGS
 TIME_ARGS CMAKE_ARGS RUN_PREFIX` until the baseline is recorded. Changing
 `SITE`, `PROBLEM`, `DIM` or `CMAKE_ARGS` needs another `ar setup`. `RUN_PREFIX` goes
-in front of rocprofv3, for example `mpirun -np 1` if singleton MPI fails.
+in front of rocprofv3, after the site's own launcher (on moth, `mpirun -np 1`).
 
 State lives in `.notes/autoresearch/<TAG>/` in the checkout that holds `ar`
 (`results.tsv`, `notes.md`, `campaign.env`, `best.env`, `kernels.txt`,
@@ -178,23 +178,24 @@ transport layer, since one rank never sends device buffers).
 
 ## Requirements on moth
 
-These were in place on 2026-10-22, though they haven't been exercised by
-this harness yet:
+A smoke campaign (HydroShocktube, 1D) ran end to end on 2026-10-22 with:
 - ROCm 10.1 at `/opt/rocm/core-10.1`, with `rocprofv3`, `amd-smi` and
   `llvm/bin/clang++`;
 - system HDF5 (`/usr/include/hdf5.h`, `/usr/lib64/libhdf5*`), which Quokka
   requires;
 - OpenMPI at `/usr/lib64/openmpi/bin`, since Quokka forces `AMReX_MPI=ON`.
   remote.sh puts it on `PATH`. MPICH is also at `/usr/lib64/mpich`;
-- `/mnt/data/bwibking/venv-py312` (cmake, ninja, Python 3.12), plus
-  `rsync`.
+- `/mnt/data/bwibking/venv-py312` (cmake 4.4.4, ninja, Python 3.12), plus
+  `rsync`;
+- the conda GCC 14 at `/mnt/data/bwibking/gcc14`. Quokka includes
+  `<format>`, which needs libstdc++ from GCC 13 or later, and moth has only
+  GCC 11 and gcc-toolset-12. `sites/moth.sh` points clang at it with
+  `--gcc-install-dir` and adds its `lib` to the executable's rpath.
 
-The first `ar setup` is the validation step. The likely problems:
-- **configure:** HIP detection with ROCm 10.1's clang, or MPI. Add flags
-  through `ar set CMAKE_ARGS=...`.
-- **singleton MPI start-up:** try `RUN_PREFIX='mpirun -np 1'`.
-- **rocprofv3 CSV column names:** analyze.py looks columns up tolerantly,
-  but check one `kernels.txt`.
+`sites/moth.sh` launches every profiled run with `mpirun -np 1`. A
+singleton OpenMPI rank forks `orted`, which waits for the rank to exit,
+while rocprofv3 waits for `orted`: the run finishes and then hangs until
+the timeout.
 
 On gfx90a, rocprofv3's VGPR column is wrong for kernels whose
 `ACCUM_OFFSET` is above 128 (ROCm/rocm-systems#13686). Treat `vgpr` as a
