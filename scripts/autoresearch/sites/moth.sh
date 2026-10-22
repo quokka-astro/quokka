@@ -24,6 +24,12 @@ site_env() {
   export XDG_CACHE_HOME=$R/cache TMPDIR=$R/tmp PYTHONPYCACHEPREFIX=$R/cache/pycache
   # Quokka forces AMReX_MPI=ON; moth's OpenMPI is not on the default PATH.
   export PIP_NO_CACHE_DIR=1 PATH=/usr/lib64/openmpi/bin:$V:$PATH
+  # Quokka needs <format> (GCC 13+); the system GCC is 11 and gcc-toolset-12
+  # lacks it. clang takes libstdc++ from a conda GCC 14 instead, and the
+  # executable finds its runtime by rpath.
+  local gcc=$R/gcc14
+  export CFLAGS="--gcc-install-dir=$gcc/lib/gcc/x86_64-conda-linux-gnu/14.4.0" LDFLAGS="-Wl,-rpath,$gcc/lib"
+  export CXXFLAGS=$CFLAGS
 }
 site_enter() { :; }  # ssh already lands on the GPU host
 site_check() { :; }  # the GPU never goes away
