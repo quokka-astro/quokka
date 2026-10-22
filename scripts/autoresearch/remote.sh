@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# moth side of the Quokka kernel autoresearch harness. Only `ar` calls this,
-# over one ssh session per command; see README.md.
+# Remote side of the Quokka kernel autoresearch harness. Only `ar` calls this,
+# over one ssh session per command; see README.md. bin/site.sh (a copy of
+# sites/SITE.sh) supplies the machine: toolchain, CPU pinning, the GPU lock,
+# and on batch systems the hop from the login node to the job's node.
 #
 # SETTINGS is the campaign's settings as eight words:
 #   PROBLEM DIM KERNEL_RE EDIT_PATHS CHECK_ARGS TIME_ARGS CMAKE_ARGS RUN_PREFIX
@@ -16,33 +18,18 @@
 # follows the log, so a dropped connection loses nothing and `ar resume`
 # reattaches. Progress goes to stderr; stdout carries only data.
 set -uo pipefail
-R=${AR_DATA:-/mnt/data/bwibking}
-ROOT=$R/ar-quokka
-# Shared with the chemistry harness ($R/ar): one GPU job at a time on moth.
-GPU_LOCK=$R/ar/gpu.lock
-V=$R/venv-py312/bin
-ROCM=/opt/rocm/core-10.1
-ROCPROF=$ROCM/bin/rocprofv3
-AMDSMI=$ROCM/bin/amd-smi
-# Quokka forces AMReX_MPI=ON; moth's OpenMPI is not on the default PATH.
-MPI_BIN=/usr/lib64/openmpi/bin
+# This script lives in the campaign directory's bin/.
+D=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 TARGET=gfx90a
-# The MI210 sits on NUMA node 1 (CPUs 24-47). Builds stay on node 0; timing
-# runs pin to two node-1 cores.
-BUILD_CPUS=0-23
-BUILD_JOBS=24
-TIMING_CPUS=46,47
 BUILD_TIMEOUT=7200
 CHECK_TIMEOUT=1800
 TIME_TIMEOUT=900
-export XDG_CACHE_HOME=$R/cache TMPDIR=$R/tmp PYTHONPYCACHEPREFIX=$R/cache/pycache
-export PIP_NO_CACHE_DIR=1 PATH=$MPI_BIN:$V:$PATH
-mkdir -p "$TMPDIR" "$(dirname "$GPU_LOCK")"
+# shellcheck source=sites/moth.sh
+source "$D/bin/site.sh"
 
 cmd=${1:?command}; tag=${2:?tag}; shift 2
 [[ $tag =~ ^[A-Za-z0-9._-]+$ ]] || { echo "bad tag: $tag" >&2; exit 2; }
-D=$ROOT/$tag
-pin=(taskset -c "$BUILD_CPUS")
+[[ $(basename "$D") == "$tag" ]] || { echo "remote.sh is in $D, not in campaign $tag" >&2; exit 2; }
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
@@ -53,23 +40,48 @@ settings() {  # settings WORDS... : the eight campaign settings
 detach() {  # detach NAME ARGS... : run `remote.sh ARGS...` detached
   mkdir -p "$D/jobs"
   setsid nohup bash "$D/bin/remote.sh" "${@:2}" > "$D/jobs/$1.log" 2>&1 < /dev/null &
-  echo $! > "$D/jobs/$1.pid"
+  echo "$! $(hostname)" > "$D/jobs/$1.pid"
 }
 
 follow() {  # follow NAME : stream the job log to stderr until the job exits
-  local pid
-  pid=$(cat "$D/jobs/$1.pid" 2>/dev/null) || { echo "no job $1" >&2; return 1; }
-  tail -n +1 -f --pid="$pid" "$D/jobs/$1.log" >&2
+  local pid host
+  read -r pid host < "$D/jobs/$1.pid" 2>/dev/null || { echo "no job $1" >&2; return 1; }
+  if [[ $host == "$(hostname)" ]]; then
+    tail -n +1 -f --pid="$pid" "$D/jobs/$1.log" >&2
+  else
+    # A batch job that ended took the detached job with it; a new one may be
+    # on another node.
+    echo "job $1 ran on $host, not $(hostname); it ended with its batch job" >&2
+    cat "$D/jobs/$1.log" >&2
+  fi
+}
+
+salvage() {  # salvage RUN : a result for a run whose job died before finishing
+  local out=$D/runs/$1
+  [[ -f $out/bundle.tgz ]] && return 0
+  mkdir -p "$out"
+  echo "RESULT status=harness-fail reason=job-died" > "$out/result.txt"
+  (cd "$out" && tar czf bundle.tgz result.txt)
+}
+
+early_result() {  # early_result STATUS KEY=VALUE... : a bundle for an eval that never started
+  local tmp
+  tmp=$(mktemp -d)
+  echo "RESULT status=$*" | tee "$tmp/result.txt" >&2
+  (cd "$tmp" && tar czf - result.txt)
+  rm -rf "$tmp"
+  exit 0
 }
 
 foreign_gpu_procs() {  # GPU processes; called only while none of ours runs
+  [[ -n $AMDSMI ]] || return 0
   "$AMDSMI" process 2>/dev/null | awk '/NAME:/{n=$2} /PID:/{print $2 " " n}' || true
 }
 
 build_key() { echo "problem=$PROBLEM dim=$DIM cmake_args=$CMAKE_ARGS"; }
 
 build_problem() {  # build_problem LOG : incremental build of the problem target
-  "${pin[@]}" timeout $BUILD_TIMEOUT "$V/cmake" --build "$D/build" --target "$PROBLEM" -j $BUILD_JOBS > "$1" 2>&1
+  "${BUILD_PREFIX[@]}" timeout $BUILD_TIMEOUT cmake --build "$D/build" --target "$PROBLEM" -j "$BUILD_JOBS" > "$1" 2>&1
 }
 
 problem_exe() { find "$D/build" -type f -name "$PROBLEM" -perm -u+x | head -1; }
@@ -99,12 +111,12 @@ run_profiled() {
   eval "prefix=($RUN_PREFIX)"
   mkdir -p "$dir"
   work=$(mktemp -d "$D/src/arwork.XXXXXX")
-  (cd "$work" && timeout "$limit" taskset -c "$TIMING_CPUS" "${prefix[@]}" \
+  (cd "$work" && timeout "$limit" "${GPU_PREFIX[@]}" "${prefix[@]}" \
      "$ROCPROF" --kernel-trace --output-format csv -d "$dir/prof" -o trace -- "$exe" "${argv[@]}") > "$dir/app.log" 2>&1
   rc=$?
   rm -rf "$work"
-  python3 "$D/bin/analyze.py" metric "$dir/prof" "$KERNEL_RE" > "$dir/metric.txt" 2>&1
-  python3 "$D/bin/analyze.py" kernels "$dir/prof" > "$dir/kernels.txt" 2>&1
+  $PYTHON "$D/bin/analyze.py" metric "$dir/prof" "$KERNEL_RE" > "$dir/metric.txt" 2>&1
+  $PYTHON "$D/bin/analyze.py" kernels "$dir/prof" > "$dir/kernels.txt" 2>&1
   rm -rf "$dir/prof"
   return $rc
 }
@@ -117,14 +129,11 @@ setup_job() {  # setup_job SEED SETTINGS...
   mkdir -p "$s" "$D/harness" "$D/runs" "$D/inbox"
   tar xzf "$D/src.tar.gz" -C "$s" || { echo "SETUP fail untar"; return 1; }
   rm -f "$D/src.tar.gz"
-  command -v mpicc > /dev/null || { log "no mpicc on PATH ($MPI_BIN)"; echo "SETUP fail mpi"; return 1; }
   log "configure"
   # shellcheck disable=SC2086  # CMAKE_ARGS is a word list
-  "$V/cmake" -G Ninja -S "$s" -B "$b" \
-    -DCMAKE_MAKE_PROGRAM="$V/ninja" -DCMAKE_BUILD_TYPE=Release \
+  cmake -G Ninja -S "$s" -B "$b" -DCMAKE_BUILD_TYPE=Release \
     -DAMReX_SPACEDIM="$DIM" -DAMReX_GPU_BACKEND=HIP -DAMReX_AMD_ARCH=$TARGET \
-    -DCMAKE_C_COMPILER="$ROCM/llvm/bin/clang" -DCMAKE_CXX_COMPILER="$ROCM/llvm/bin/clang++" \
-    -DCMAKE_PREFIX_PATH="$ROCM" -DQUOKKA_PYTHON=OFF \
+    -DQUOKKA_PYTHON=OFF "${CONFIGURE_ARGS[@]}" \
     $CMAKE_ARGS > "$D/jobs/configure.log" 2>&1 ||
     { tail -40 "$D/jobs/configure.log"; echo "SETUP fail configure"; return 1; }
   log "build $PROBLEM (full build)"
@@ -143,7 +152,7 @@ setup_job() {  # setup_job SEED SETTINGS...
   flock -u 9
   [[ $rc == 0 ]] || { tail -30 "$D/harness/seed-profile/app.log"; echo "SETUP fail seed run rc=$rc"; return 1; }
   echo "KERNELS"; cat "$D/harness/seed-profile/kernels.txt"; echo "END KERNELS"
-  echo "seed=$seed problem=$PROBLEM dim=$DIM host=$(hostname)" > "$D/setup.ok"
+  echo "seed=$seed problem=$PROBLEM dim=$DIM site=$SITE host=$(hostname)" > "$D/setup.ok"
   log "setup done: $(cat "$D/setup.ok")"
   echo "SETUP ok"
 }
@@ -236,8 +245,11 @@ eval_job() {  # eval_job RUN BEST PAIRS BAR CONTENDED GPU_WAIT SETTINGS...
   local t=$out/timing ref=$D/runs/$best/exe idx=0 p
   [[ $best == none ]] && ref=$out/exe  # baseline: A/A pairs measure the noise floor
   mkdir -p "$t"; : > "$t/runs.txt"
-  PYTHONUNBUFFERED=1 "$AMDSMI" monitor -p -u -t -w 1 --csv > "$t/telemetry.csv" 2>/dev/null &
-  local tel=$!
+  local tel=""
+  if [[ -n $AMDSMI ]]; then
+    PYTHONUNBUFFERED=1 "$AMDSMI" monitor -p -u -t -w 1 --csv > "$t/telemetry.csv" 2>/dev/null &
+    tel=$!
+  fi
   pair() {  # odd pairs run candidate first, even pairs best first
     if (( $1 % 2 )); then idx=$((idx+1)); time_one $idx cand "$out/exe" "$t"; idx=$((idx+1)); time_one $idx best "$ref" "$t"
     else idx=$((idx+1)); time_one $idx best "$ref" "$t"; idx=$((idx+1)); time_one $idx cand "$out/exe" "$t"; fi
@@ -245,16 +257,16 @@ eval_job() {  # eval_job RUN BEST PAIRS BAR CONTENDED GPU_WAIT SETTINGS...
   log "timing: $pairs interleaved pairs against $([[ $best == none ]] && echo "itself (A/A)" || echo "$best")"
   for ((p = 1; p <= pairs; ++p)); do pair $p; done
   sleep 2
-  python3 "$D/bin/analyze.py" verdict "$t" "$bar" "$contended" > "$t/summary.txt"
+  $PYTHON "$D/bin/analyze.py" verdict "$t" "$bar" "$contended" > "$t/summary.txt"
   local extra
   extra=$(sed -nE 's/^FLAGGED_PAIRS ([0-9]+)$/\1/p' "$t/summary.txt")
   if (( ${extra:-0} > 0 )); then
     log "re-timing $extra flagged pair(s)"
     for ((p = pairs + 1; p <= pairs + extra && p <= pairs + 3; ++p)); do pair $p; done
     sleep 2
-    python3 "$D/bin/analyze.py" verdict "$t" "$bar" "$contended" > "$t/summary.txt"
+    $PYTHON "$D/bin/analyze.py" verdict "$t" "$bar" "$contended" > "$t/summary.txt"
   fi
-  kill $tel 2>/dev/null
+  [[ -n $tel ]] && kill "$tel" 2>/dev/null
   flock -u 9
   cat "$t/summary.txt"
   local res verdict
@@ -269,22 +281,38 @@ eval_job() {  # eval_job RUN BEST PAIRS BAR CONTENDED GPU_WAIT SETTINGS...
   finish $verdict $res
 }
 
+# On a batch system, site_enter re-runs the command on the GPU job's node.
+case $cmd in
+  setup-start|eval-start|resume)
+    site_enter "$cmd" "$tag" "$@" || case $cmd in
+      setup-start) echo "SETUP fail gpu-job"; exit 1 ;;
+      eval-start) early_result harness-fail reason=gpu-job ;;
+      resume) exit 1 ;;
+    esac ;;
+esac
+site_env
+mkdir -p "${TMPDIR:-/tmp}" "$(dirname "$GPU_LOCK")"
+
 case $cmd in
   setup-start)
+    site_check || { echo "SETUP fail gpu-job"; exit 1; }
     detach setup setup-job "$tag" "$@"
     follow setup ;;
   setup-job) setup_job "$@"; echo "JOB-EXIT $?" ;;
   eval-start)
     run=$1
-    [[ -f $D/setup.ok ]] || { echo "RESULT status=harness-fail reason=no-setup" >&2; exit 1; }
-    [[ -e $D/runs/$run ]] && { echo "RESULT status=harness-fail reason=run-exists" >&2; exit 1; }
+    [[ -f $D/setup.ok ]] || early_result harness-fail reason=no-setup
+    [[ -e $D/runs/$run ]] && early_result harness-fail reason=run-exists
+    site_check || early_result harness-fail reason=gpu-job
     mkdir -p "$D/inbox"; cat > "$D/inbox/$run.tgz"
     detach "eval-$run" eval-job "$tag" "$@"
     follow "eval-$run"
-    cat "$D/runs/$run/bundle.tgz" 2>/dev/null ;;
+    salvage "$run"
+    cat "$D/runs/$run/bundle.tgz" ;;
   eval-job) eval_job "$@"; echo "JOB-EXIT $?" ;;
   resume)
     follow "eval-$1"
-    cat "$D/runs/$1/bundle.tgz" 2>/dev/null ;;
+    salvage "$1"
+    cat "$D/runs/$1/bundle.tgz" ;;
   *) echo "unknown command $cmd" >&2; exit 2 ;;
 esac

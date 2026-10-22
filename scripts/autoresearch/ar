@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # ar: local driver for kernel autoresearch campaigns on Quokka GPU kernels.
-# Builds and times on moth's MI210 (gfx90a). See README.md (humans) and
+# Builds and times on a gfx90a GPU at a remote site: moth's MI210, or an
+# MI250X GCD in an interactive Setonix gpu-dev job. See README.md (humans) and
 # program.md (the agent).
 #
 #   ar init TAG --problem NAME --edit "PATH..." [--kernel REGEX] [--dim N]
-#           [--check-args "ARGS"] [--time-args "ARGS"]
+#           [--site moth|setonix] [--check-args "ARGS"] [--time-args "ARGS"]
 #                               worktree + branch autoresearch/TAG at HEAD
 #   ar set KEY=VALUE...         change campaign settings (before the baseline)
-#   ar setup                    configure + build the seed on moth, list kernels
+#   ar setup                    configure + build the seed remotely, list kernels
 #   ar kernels                  the seed's GPU kernels by total time (from setup)
 #   ar eval "DESCRIPTION" [--pairs N] [--bar X] [--contended]
 #           [--gpu-wait SECONDS]
@@ -20,23 +21,30 @@
 #                               times faster than the baseline on the kernel
 #
 # TAG comes from `ar init`, then from $AR_TAG or the current branch name.
-# Works with macOS bash 3.2.
+# Runs on macOS (bash 3.2, BSD tools) or Linux (GNU tools).
 set -uo pipefail
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-host=${AR_HOST:-moth}
-remote_root=${AR_REMOTE_ROOT:-/mnt/data/bwibking/ar-quokka}
 main=$(git -C "$here" rev-parse --show-toplevel) || exit 1
 # A run with one of these statuses is discarded: its commit is tagged and the
 # worktree is reset to the best commit.
 DISCARD_STATUSES=" discard identical incorrect hang build-fail launch-mismatch "
 # Settings `ar set` may change before the baseline.
-SETTABLE=" PROBLEM DIM KERNEL_RE EDIT_PATHS CHECK_ARGS TIME_ARGS CMAKE_ARGS RUN_PREFIX "
+SETTABLE=" SITE PROBLEM DIM KERNEL_RE EDIT_PATHS CHECK_ARGS TIME_ARGS CMAKE_ARGS RUN_PREFIX "
 
 die() { echo "ar: $*" >&2; exit 1; }
-# One plain `ssh moth` connection per command (moth's firewall dislikes bursts).
-ssh_moth() {
-  ssh -o WarnWeakCrypto=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 "$host" "$@"
+# One plain ssh connection per command (moth's firewall dislikes bursts).
+ssh_remote() {
+  # WarnWeakCrypto is OpenSSH 10.1+; IgnoreUnknown keeps older clients from rejecting it.
+  ssh -o IgnoreUnknown=WarnWeakCrypto -o WarnWeakCrypto=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 "$host" "$@"
 }
+# GNU date (Linux) and BSD date (macOS) spell epoch formatting and parsing differently.
+if date --version >/dev/null 2>&1; then
+  epoch_fmt() { date -d "@$1" "+$2"; }                      # epoch_fmt EPOCH FORMAT
+  epoch_parse() { date -d "$1" +%s; }                       # epoch_parse "YYYY-MM-DD HH:MM"
+else
+  epoch_fmt() { date -r "$1" "+$2"; }
+  epoch_parse() { date -j -f '%Y-%m-%d %H:%M:%S' "$1:00" +%s; }  # -j takes unset fields from now
+fi
 kv() {  # kv KEY LINE : value of KEY=VALUE in a RESULT line, or "-"
   local v
   v=$(sed -nE "s/.* $1=([^ ]*).*/\1/p" <<<"$2" | head -1)
@@ -59,6 +67,26 @@ resolve_tag() {
   BEST_RUN=none; BEST_SHA=$SEED
   # shellcheck disable=SC1091
   [[ -f $C/best.env ]] && source "$C/best.env"
+  SITE=${SITE:-moth}
+  site_remote
+}
+
+site_remote() {  # the ssh host and the campaigns' root there, for SITE
+  case $SITE in
+    moth) host=${AR_HOST:-moth}; remote_root=${AR_REMOTE_ROOT:-/mnt/data/bwibking/ar-quokka} ;;
+    # Expanded by the remote shell. remote.sh hops from the login node to the
+    # node of the running gpu-dev job (AR_JOBID picks one of several).
+    setonix) host=${AR_HOST:-setonix}; remote_root=${AR_REMOTE_ROOT:-'$MYSCRATCH/ar-quokka'} ;;
+    *) die "unknown site $SITE (sites: $(cd "$here/sites" && ls | sed 's/\.sh$//' | tr '\n' ' '))" ;;
+  esac
+}
+
+remote_sh() {  # the command that runs remote.sh with the settings it reads from the environment
+  local v env=""
+  for v in AR_JOBID AR_MIN_JOB_MINUTES; do
+    [[ -n ${!v:-} ]] && env+="$v=$(q "${!v}") "
+  done
+  echo "${env}bash $remote_root/$TAG/bin/remote.sh"
 }
 
 set_env() {  # set_env KEY VALUE : replace KEY in campaign.env
@@ -70,13 +98,14 @@ set_env() {  # set_env KEY VALUE : replace KEY in campaign.env
 cmd_init() {
   tag=${1:?usage: ar init TAG --problem NAME --edit \"PATH...\" [options]}; shift
   [[ $tag =~ ^[A-Za-z0-9._-]+$ ]] || die "TAG may use letters, digits, . _ -"
-  local problem="" edit="" kernel="" dim=3 check="" timeargs=""
+  local problem="" edit="" kernel="" dim=3 check="" timeargs="" site=moth
   while (($#)); do
     case $1 in
       --problem) problem=$2; shift ;;
       --edit) edit=$2; shift ;;
       --kernel) kernel=$2; shift ;;
       --dim) dim=$2; shift ;;
+      --site) site=$2; shift ;;
       --check-args) check=$2; shift ;;
       --time-args) timeargs=$2; shift ;;
       *) die "unknown option $1" ;;
@@ -85,6 +114,7 @@ cmd_init() {
   done
   [[ -n $problem && -n $edit ]] || die "--problem and --edit are required"
   [[ $dim =~ ^[123]$ ]] || die "--dim must be 1, 2 or 3"
+  [[ -f $here/sites/$site.sh ]] || die "--site: no $here/sites/$site.sh"
   local p
   for p in $edit; do
     [[ -e $main/$p ]] || die "--edit path $p does not exist in $main"
@@ -104,11 +134,14 @@ cmd_init() {
   base=$(git -C "$main" rev-parse HEAD)
   wt=${AR_WORKTREE:-$(cd "$main/.." && pwd)/quokka-ar-$tag}
   git -C "$main" worktree add --quiet -b "autoresearch/$tag" "$wt" "$base" || die "worktree add failed"
-  echo "fetching submodules into $wt (setup ships them to moth)"
-  git -C "$wt" submodule update --init --recursive --quiet || die "submodule update failed in $wt"
+  echo "fetching submodules into $wt (setup ships them to $site)"
+  # Submodule URLs may point at a local clone, which git refuses by default.
+  git -C "$wt" -c protocol.file.allow=always submodule update --init --recursive --quiet ||
+    die "submodule update failed in $wt"
   mkdir -p "$C/runs"
   {
     echo "TAG=$tag"
+    echo "SITE=$(q "$site")"
     echo "BASE=$base"
     echo "SEED=$base"
     echo "WORKTREE=$(q "$wt")"
@@ -137,7 +170,8 @@ cmd_set() {
     [[ $arg == *=* && $SETTABLE == *" $key "* ]] || die "set KEY=VALUE, KEY one of:$SETTABLE"
     set_env "$key" "${arg#*=}"
     echo "$key=${arg#*=}"
-    [[ $key == PROBLEM || $key == DIM || $key == CMAKE_ARGS ]] && rebuild=1
+    [[ $key == SITE ]] && { [[ -f $here/sites/${arg#*=}.sh ]] || die "no site ${arg#*=}"; }
+    [[ $key == SITE || $key == PROBLEM || $key == DIM || $key == CMAKE_ARGS ]] && rebuild=1
   done
   ((rebuild)) && echo "build settings changed: re-run ar setup"
   return 0
@@ -155,9 +189,10 @@ cmd_setup() {
   stage=$(mktemp -d "${TMPDIR:-/tmp}/ar-setup.XXXXXX")
   mkdir -p "$stage/bin"
   cp "$here/remote.sh" "$here/analyze.py" "$stage/bin/"
+  cp "$here/sites/$SITE.sh" "$stage/bin/site.sh"
   if [[ ${1:-} == --bin-only ]]; then
     COPYFILE_DISABLE=1 tar --no-xattrs -C "$stage" -cf - bin |
-      ssh_moth "mkdir -p $remote_root/$TAG && tar -xf - -C $remote_root/$TAG && echo bin updated"
+      ssh_remote "mkdir -p $remote_root/$TAG && tar -xf - -C $remote_root/$TAG && echo bin updated"
     rm -rf "$stage"; return
   fi
   # The seed tree, submodules included: git archive skips submodules, so each
@@ -169,9 +204,9 @@ cmd_setup() {
     'git archive HEAD | tar -xf - -C "'"$stage"'/src/$displaypath"' || die "submodule archive failed"
   COPYFILE_DISABLE=1 tar --no-xattrs -C "$stage/src" -czf "$stage/src.tar.gz" . || die "tar failed"
   rm -rf "$stage/src"
-  echo "setup $TAG on $host: $PROBLEM (${DIM}D) from ${SEED:0:10} (a full HIP build takes a while)"
+  echo "setup $TAG on $SITE ($host): $PROBLEM (${DIM}D) from ${SEED:0:10} (a full HIP build takes a while)"
   COPYFILE_DISABLE=1 tar --no-xattrs -C "$stage" -cf - bin src.tar.gz |
-    ssh_moth "mkdir -p $remote_root/$TAG && tar -xf - -C $remote_root/$TAG && bash $remote_root/$TAG/bin/remote.sh setup-start $TAG $SEED $(remote_settings)" 2>&1 |
+    ssh_remote "mkdir -p $remote_root/$TAG && tar -xf - -C $remote_root/$TAG && $(remote_sh) setup-start $TAG $SEED $(remote_settings)" 2>&1 |
     tee "$C/setup.log"
   rm -rf "$stage"
   grep -q '^SETUP ok' "$C/setup.log" || die "setup failed; see $C/setup.log"
@@ -193,9 +228,9 @@ clock_line() {  # print local time and minutes left, so agents never estimate th
   now=$(date +%s)
   if [[ -f $C/deadline ]]; then
     end=$(cat "$C/deadline")
-    echo "ar: clock $(date -r "$now" '+%F %H:%M %Z'); deadline $(date -r "$end" '+%H:%M %Z'), $(( (end - now) / 60 )) min left"
+    echo "ar: clock $(epoch_fmt "$now" '%F %H:%M %Z'); deadline $(epoch_fmt "$end" '%H:%M %Z'), $(( (end - now) / 60 )) min left"
   else
-    echo "ar: clock $(date -r "$now" '+%F %H:%M %Z'); no deadline"
+    echo "ar: clock $(epoch_fmt "$now" '%F %H:%M %Z'); no deadline"
   fi
 }
 
@@ -210,7 +245,7 @@ deadline_check() {  # refuse to start an eval after the target or deadline
   need=$(awk -F'\t' 'NR > 1 && $13 ~ /^[0-9]+$/ {print $13}' "$C/results.tsv" | tail -3 | sort -n |
     awk '{a[NR] = $1} END {print (NR ? a[int((NR + 1) / 2)] : 10)}')
   if (( now + need * 60 > end )); then
-    echo "ar: deadline $(date -r "$end" '+%F %T') leaves $(( (end - now) / 60 )) min; an eval needs ~$need min. Campaign over." >&2
+    echo "ar: deadline $(epoch_fmt "$end" '%F %T') leaves $(( (end - now) / 60 )) min; an eval needs ~$need min. Campaign over." >&2
     exit 3
   fi
 }
@@ -315,11 +350,11 @@ cmd_eval() {
   while [[ -e $C/runs/$run ]]; do n=$((n + 1)); run=$(printf 'e%03d' "$n"); done
   d=$C/runs/$run; mkdir -p "$d"
   printf 'sha=%s\ndesc=%s\nbest=%s\nstarted=%s\n' "$sha" "$(printf '%s' "$desc" | tr '\t\n' '  ')" "$BEST_RUN" "$(date '+%F %T')" > "$d/meta"
-  echo "eval $run ${sha:0:10} vs ${BEST_RUN} on $host (pairs=$pairs bar=$bar): $desc"
-  # The editable paths only; moth overlays them on its copy of the seed tree.
+  echo "eval $run ${sha:0:10} vs ${BEST_RUN} on $SITE (pairs=$pairs bar=$bar): $desc"
+  # The editable paths only; the remote side overlays them on its copy of the seed tree.
   # shellcheck disable=SC2086
   { git archive --format=tar.gz "$sha" -- $EDIT_PATHS |
-      ssh_moth "bash $remote_root/$TAG/bin/remote.sh eval-start $TAG $run $BEST_RUN $pairs $bar $contended $gpu_wait $(remote_settings)" \
+      ssh_remote "$(remote_sh) eval-start $TAG $run $BEST_RUN $pairs $bar $contended $gpu_wait $(remote_settings)" \
       > "$d/bundle.tgz"; } 2>&1 | tee "$d/eval.log"
   record "$run"
 }
@@ -332,7 +367,7 @@ cmd_resume() {
   grep -q "^$run"$'\t' "$C/results.tsv" && die "$run is already recorded"
   mkdir "$C/lock" 2>/dev/null || die "another eval holds $C/lock"
   trap 'rmdir "$C/lock" 2>/dev/null; clock_line' EXIT
-  { ssh_moth "bash $remote_root/$TAG/bin/remote.sh resume $TAG $run" > "$d/bundle.tgz"; } 2>&1 | tee -a "$d/eval.log"
+  { ssh_remote "$(remote_sh) resume $TAG $run" > "$d/bundle.tgz"; } 2>&1 | tee -a "$d/eval.log"
   record "$run"
 }
 
@@ -340,7 +375,7 @@ cmd_status() {
   resolve_tag
   column -t -s $'\t' "$C/results.tsv"
   echo
-  echo "campaign $TAG  problem $PROBLEM (${DIM}D)  worktree $WORKTREE  HEAD $(git -C "$WORKTREE" rev-parse --short=10 HEAD)"
+  echo "campaign $TAG  site $SITE  problem $PROBLEM (${DIM}D)  worktree $WORKTREE  HEAD $(git -C "$WORKTREE" rev-parse --short=10 HEAD)"
   echo "kernel /${KERNEL_RE:-(not chosen)}/  editable: $EDIT_PATHS"
   echo "best $BEST_RUN (${BEST_SHA:0:10})  bar ${BAR:-1.02 (until baseline)}  baseline ${BASELINE_MS:--} ms"
   clock_line
@@ -365,7 +400,7 @@ cmd_deadline() {
   resolve_tag
   case ${1:-show} in
     set-in) [[ ${2:-} =~ ^[0-9]+$ ]] || die "set-in MINUTES"; echo $(( $(date +%s) + $2 * 60 )) > "$C/deadline" ;;
-    set-at) date -j -f '%Y-%m-%d %H:%M' "${2:-}" +%s > "$C/deadline.new" 2>/dev/null ||
+    set-at) [[ ${2:-} =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}$ ]] && epoch_parse "$2" > "$C/deadline.new" 2>/dev/null ||
               { rm -f "$C/deadline.new"; die "set-at \"YYYY-MM-DD HH:MM\""; }
             mv "$C/deadline.new" "$C/deadline" ;;
     clear) rm -f "$C/deadline"; echo "no deadline"; return ;;
@@ -373,7 +408,7 @@ cmd_deadline() {
     *) die "deadline set-in MINUTES | set-at \"YYYY-MM-DD HH:MM\" | show | clear" ;;
   esac
   if [[ -f $C/deadline ]]; then
-    echo "deadline $(date -r "$(cat "$C/deadline")" '+%F %T') ($(( ($(cat "$C/deadline") - $(date +%s)) / 60 )) min left)"
+    echo "deadline $(epoch_fmt "$(cat "$C/deadline")" '%F %T') ($(( ($(cat "$C/deadline") - $(date +%s)) / 60 )) min left)"
   else
     echo "no deadline"
   fi

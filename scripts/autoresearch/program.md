@@ -1,8 +1,9 @@
 # Autoresearch: make one Quokka GPU kernel faster
 
 You are an autonomous performance researcher. Your goal is to make one Quokka
-GPU kernel run faster on moth's AMD Instinct MI210 (gfx90a), built with
-ROCm's HIP compiler. The kernel is every launch whose name matches the
+GPU kernel run faster on a gfx90a GPU, built with ROCm's HIP compiler. The
+campaign's site (`ar status` shows it) is moth's AMD Instinct MI210 or one
+MI250X GCD in an interactive Setonix gpu-dev job. The kernel is every launch whose name matches the
 campaign's `KERNEL_RE`, while the campaign's problem runs. You may change
 only the campaign's editable paths. The compiler, the problem's test, its
 inputs and the measurement harness stay fixed.
@@ -33,14 +34,14 @@ away, and repeat until the deadline passes or a human stops you.
 ## What an eval does
 
 `ar eval "one-line description"` measures the worktree's HEAD commit over
-one ssh session to moth. An incremental HIP build of a Quokka problem takes
+one ssh session to the site. An incremental HIP build of a Quokka problem takes
 from about a minute to tens of minutes, depending on which headers you
 touch. Watch the `build_s` line in `runs/<RUN>/provenance.txt` and prefer
 edits that rebuild less when you're iterating. In order, an eval:
 
 1. **Checks the commit.** Only the editable paths may differ from the seed,
    and the commit must be clean.
-2. **Builds.** It overlays your editable paths on moth's copy of the seed
+2. **Builds.** It overlays your editable paths on the site's copy of the seed
    tree and rebuilds the problem target with the campaign's fixed CMake
    configuration. If the build fails, the verdict is `build-fail`; the
    errors are in `build.log.gz`.
@@ -71,8 +72,10 @@ edits that rebuild less when you're iterating. In order, an eval:
 - **discard, identical, incorrect, hang, build-fail, launch-mismatch:** the
   commit is saved as tag `ar/<TAG>/<RUN>-<status>`, and the worktree is
   reset to the best commit.
-- **gpu-busy, harness-fail:** nothing changes. Re-run `ar eval` on the same
-  commit later.
+- **gpu-busy, harness-fail:** nothing changes. `harness-fail
+  reason=gpu-job` means there is no Setonix job with enough time left:
+  note it in `notes.md` and stop, because only a human can start one.
+  Otherwise re-run `ar eval` on the same commit later.
 
 Read the `RESULT` line and the `VERDICT` line. Never reset the branch
 yourself, and never edit `results.tsv` or `best.env`.
@@ -113,9 +116,10 @@ Scratch is reliable.
 4. **Use one commit per experiment.** Edit, then `git commit` with a short
    message that says what changed and why. Then run `ar eval "<same idea in
    one line>"`. Never run two evals at once.
-5. **Don't touch moth directly.** Every remote action goes through `ar`.
-   Don't run ssh, scp or rsync yourself. moth sits behind a firewall that
-   punishes bursts of connections, and its GPU is shared with other users.
+5. **Don't touch the site directly.** Every remote action goes through
+   `ar`. Don't run ssh, scp or rsync yourself. moth sits behind a firewall
+   that punishes bursts of connections, and its GPU is shared with other
+   users; on Setonix only the human's batch job can reach the GPU.
 6. **Respect the deadline and the target.** `ar status` shows both. The
    campaign ends at the deadline, or as soon as a kept run reaches the
    target speedup over the baseline. When `ar eval` prints "TARGET
@@ -130,7 +134,7 @@ Scratch is reliable.
    - Before stopping for any reason other than `ar` printing "Campaign
      over" or "TARGET REACHED", run `date`. Quote its output in your final
      report and in the summary in `notes.md`.
-8. **Build only on moth, only through `ar`.** Don't configure or build
+8. **Build only on the site, only through `ar`.** Don't configure or build
    Quokka on the local machine. Small host-only tools, such as a validator
    for a numerical rewrite, are fine, one at a time.
 
