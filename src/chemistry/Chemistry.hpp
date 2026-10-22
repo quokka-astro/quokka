@@ -59,7 +59,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				chem[nn] = state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) /
-					   rho; // state has partial densities, so divide by rho to get mass fractions
+				           rho; // state has partial densities, so divide by rho to get mass fractions
 			}
 
 			// do chemistry using microphysics
@@ -148,7 +148,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 	if (!burn_success) {
 		// amrex::Abort("Burn failed in the integrator. Aborting.");
 		amrex::Print() << "\t>> WARNING: Unsuccessful burn. Retrying hydro step."
-			       << "\n";
+		               << "\n";
 	}
 
 	return burn_success;

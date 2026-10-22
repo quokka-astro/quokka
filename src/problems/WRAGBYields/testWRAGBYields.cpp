@@ -98,8 +98,8 @@ void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::vect
 struct WRAGBYields {};
 
 constexpr Real gamma_ = 5. / 3.;
-static Real n0 = 1.0e4;									  // NOLINT
-static Real Tamb = 10.0;								  // NOLINT
+static Real n0 = 1.0e4;                                                                   // NOLINT
+static Real Tamb = 10.0;                                                                  // NOLINT
 static std::string initial_particles_file = "../inputs/test_WR_AGB_yields_particles.txt"; // NOLINT
 
 template <> struct quokka::EOS_Traits<WRAGBYields> {

@@ -98,8 +98,8 @@ template <> void QuokkaSimulation<IsothermalMHDShockTube>::setInitialConditionsO
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<IsothermalMHDShockTube>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-								   int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-								   const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+                                                                   int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+                                                                   const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	constexpr int nvar = Physics_Indices<IsothermalMHDShockTube>::nvarTotal_cc;
 
@@ -117,8 +117,8 @@ template <>
 template <quokka::direction dir>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<IsothermalMHDShockTube>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, int /*dcomp*/,
-									  int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-									  const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+                                                                          int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+                                                                          const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	const amrex::GpuArray<amrex::Real, 3> low_bdr_values = {Bx, By_L, Bz};
 	const amrex::GpuArray<amrex::Real, 3> high_bdr_values = {Bx, By_R, Bz};

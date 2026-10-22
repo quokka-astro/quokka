@@ -135,8 +135,8 @@ template <> void QuokkaSimulation<MHDBrioWuShockTube>::setInitialConditionsOnGri
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<MHDBrioWuShockTube>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							       int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							       const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+                                                               int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+                                                               const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<MHDBrioWuShockTube>::nvarTotal_cc;
@@ -180,8 +180,8 @@ template <>
 template <quokka::direction dir>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<MHDBrioWuShockTube>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, int /*dcomp*/,
-								      int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-								      const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+                                                                      int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+                                                                      const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Prepare boundary values for each face direction: {x-face, y-face, z-face}
 	// For low boundary (left side)
@@ -201,7 +201,7 @@ template <> void QuokkaSimulation<MHDBrioWuShockTube>::refineGrid(int lev, amrex
 	// tag cells for refinement
 
 	const Real eta_threshold = 0.1; // gradient refinement threshold
-	const Real rho_min = 0.01;	// minimum rho for refinement
+	const Real rho_min = 0.01;      // minimum rho for refinement
 	auto const &dx = geom[lev].CellSizeArray();
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {

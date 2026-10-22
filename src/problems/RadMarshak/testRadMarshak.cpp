@@ -28,7 +28,7 @@ struct SuOlsonProblem {}; // dummy type to allow compile-type polymorphism via t
 // Su & Olson (1997) parameters
 constexpr double eps_SuOlson = 1.0;
 constexpr double kappa = 1.0;
-constexpr double rho0 = 1.0;	   // g cm^-3 (matter density)
+constexpr double rho0 = 1.0;       // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.0; // dimensionless
 constexpr double a_rad = 1.0;
 constexpr double c = 1.0;
@@ -74,7 +74,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeFluxMea
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<SuOlsonProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
-						 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
+                                                 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
@@ -82,7 +82,7 @@ quokka::EOS<SuOlsonProblem>::ComputeTgasFromEint([[maybe_unused]] const double r
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<SuOlsonProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
-						 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
+                                                 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
@@ -90,7 +90,7 @@ quokka::EOS<SuOlsonProblem>::ComputeEintFromTgas([[maybe_unused]] const double r
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<SuOlsonProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-						       quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
+                                                       quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -107,8 +107,8 @@ quokka::EOS<SuOlsonProblem>::ComputeEintTempDerivative(const double /*rho*/, con
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							   amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/, const amrex::BCRec *bcr,
-							   int /*bcomp*/, int /*orig_comp*/)
+                                                           amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/, const amrex::BCRec *bcr,
+                                                           int /*bcomp*/, int /*orig_comp*/)
 {
 	if ((bcr->lo(0) != quokka::BCType::ext_dir) && (bcr->hi(0) != quokka::BCType::ext_dir)) {
 		return;
@@ -240,8 +240,8 @@ auto problem_main() -> int
 			Erad.at(i) = Erad_t;
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
-			const double Etot_t = values.at(RadSystem<SuOlsonProblem>::gasEnergy_index)[i];	      // NOLINT(cppcoreguidelines-init-variables)
-			const double rho = values.at(RadSystem<SuOlsonProblem>::gasDensity_index)[i];	      // NOLINT(cppcoreguidelines-init-variables)
+			const double Etot_t = values.at(RadSystem<SuOlsonProblem>::gasEnergy_index)[i];       // NOLINT(cppcoreguidelines-init-variables)
+			const double rho = values.at(RadSystem<SuOlsonProblem>::gasDensity_index)[i];         // NOLINT(cppcoreguidelines-init-variables)
 			const double x1GasMom = values.at(RadSystem<SuOlsonProblem>::x1GasMomentum_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
 			const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 
@@ -283,7 +283,7 @@ auto problem_main() -> int
 
 		std::vector<double> Trad_exact_interp(xs.size());
 		interpolate_arrays(xs.data(), Trad_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), Trad_exact.data(),
-				   static_cast<int>(xs_exact.size()));
+		                   static_cast<int>(xs_exact.size()));
 
 		double err_norm = 0.;
 		double sol_norm = 0.;
@@ -321,7 +321,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("temperature (dimensionless)");
 		matplotlibcpp::xlim(0.4, 100.); // dimensionless
-		matplotlibcpp::ylim(0.0, 1.0);	// dimensionless
+		matplotlibcpp::ylim(0.0, 1.0);  // dimensionless
 		matplotlibcpp::xscale("log");
 		matplotlibcpp::legend();
 		matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));
@@ -341,7 +341,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("temperature (dimensionless)");
 		matplotlibcpp::xlim(0.4, 100.); // dimensionless
-		matplotlibcpp::ylim(0.0, 1.0);	// dimensionless
+		matplotlibcpp::ylim(0.0, 1.0);  // dimensionless
 		matplotlibcpp::xscale("log");
 		matplotlibcpp::legend();
 		matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));

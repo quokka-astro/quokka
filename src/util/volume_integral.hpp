@@ -40,8 +40,8 @@ namespace quokka
 /// @return The volume-weighted sum of user_f over all cells and levels
 template <typename problem_t, typename F>
 auto computeVolumeIntegral(int finest_level, amrex::Vector<amrex::MultiFab> const &state_cc,
-			   amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_fc, amrex::Vector<amrex::Geometry> const &geom,
-			   amrex::Vector<amrex::IntVect> const &ref_ratio, F const &user_f) -> amrex::Real
+                           amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_fc, amrex::Vector<amrex::Geometry> const &geom,
+                           amrex::Vector<amrex::IntVect> const &ref_ratio, F const &user_f) -> amrex::Real
 {
 	const BL_PROFILE("quokka::computeVolumeIntegral()"); // NOLINT(misc-const-correctness)
 

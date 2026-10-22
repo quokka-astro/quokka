@@ -30,11 +30,11 @@ struct SNProblem {};
 
 static bool refine_half_domain = false; // NOLINT
 
-static double max_Eint_global = 0.0;	       // NOLINT
+static double max_Eint_global = 0.0;           // NOLINT
 static std::vector<double> max_Eint_history{}; // NOLINT
-static std::vector<double> t_history{};	       // NOLINT
+static std::vector<double> t_history{};        // NOLINT
 
-static std::string SN_particles_file = "";	    // NOLINT
+static std::string SN_particles_file = "";          // NOLINT
 static std::string coolingTableType_ = "resampled"; // NOLINT
 
 constexpr double mu = 1.0 * C::m_u;
@@ -43,7 +43,7 @@ constexpr double gamma_ = 5. / 3.;
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 const double year = 3.15576e+07; // in seconds
-constexpr double B0 = 1.0e-7;	 // uniform background field for MHD variant
+constexpr double B0 = 1.0e-7;    // uniform background field for MHD variant
 
 static double n_amb = 1.0; // ambient density (g cm^-3) // NOLINT
 
@@ -108,15 +108,15 @@ template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 
 template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	std::vector<double> const n_amb_list = {0.1,	     0.12589254, 0.15848932,  0.19952623,  0.25118864,	0.31622777,  0.39810717,  0.50118723,
-						0.63095734,  0.79432823, 1.,	      1.25892541,  1.58489319,	1.99526231,  2.51188643,  3.16227766,
-						3.98107171,  5.01187234, 6.30957344,  7.94328235,  10.,		12.58925412, 15.84893192, 19.95262315,
-						25.11886432, 31.6227766, 39.81071706, 50.11872336, 63.09573445, 79.43282347, 100.};
+	std::vector<double> const n_amb_list = {0.1,         0.12589254, 0.15848932,  0.19952623,  0.25118864,  0.31622777,  0.39810717,  0.50118723,
+	                                        0.63095734,  0.79432823, 1.,          1.25892541,  1.58489319,  1.99526231,  2.51188643,  3.16227766,
+	                                        3.98107171,  5.01187234, 6.30957344,  7.94328235,  10.,         12.58925412, 15.84893192, 19.95262315,
+	                                        25.11886432, 31.6227766, 39.81071706, 50.11872336, 63.09573445, 79.43282347, 100.};
 	std::vector<double> const T_amb_list = {5802.24013246, 5654.93628944, 5453.30579455, 5213.67068722, 4869.63642975, 4149.54099069, 3907.79953306,
-						3583.30375005, 3075.83243575, 1040.16133059, 718.24569694,  664.12747722,  609.83449913,  549.88018839,
-						476.83284222,  377.69995731,  359.34890804,  340.22591449,  318.36683039,  289.56818245,  245.82521174,
-						236.69671661,  227.20779715,  215.57381444,  200.14862878,  174.5847715,   168.91080447,  162.96050543,
-						155.58880555,  144.9653022,   128.3144137};
+	                                        3583.30375005, 3075.83243575, 1040.16133059, 718.24569694,  664.12747722,  609.83449913,  549.88018839,
+	                                        476.83284222,  377.69995731,  359.34890804,  340.22591449,  318.36683039,  289.56818245,  245.82521174,
+	                                        236.69671661,  227.20779715,  215.57381444,  200.14862878,  174.5847715,   168.91080447,  162.96050543,
+	                                        155.58880555,  144.9653022,   128.3144137};
 
 	// manual clamp
 	Real T_amb = NAN;
@@ -138,7 +138,7 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 	const double Emag = 0.5 * B0 * B0;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
 	const double v2 = (userData_.boost_velocity[0] * userData_.boost_velocity[0]) + (userData_.boost_velocity[1] * userData_.boost_velocity[1]) +
-			  (userData_.boost_velocity[2] * userData_.boost_velocity[2]);
+	                  (userData_.boost_velocity[2] * userData_.boost_velocity[2]);
 
 	amrex::Real initial_scalar_density = 0.0;
 	if constexpr (Physics_Traits<SNProblem>::numPassiveScalars > 0) {

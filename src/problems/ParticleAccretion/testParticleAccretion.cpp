@@ -25,9 +25,9 @@
 
 using amrex::Real;
 
-bool turnon_fextract = false;		       // NOLINT
+bool turnon_fextract = false;                  // NOLINT
 constexpr bool particle_in_cell_center = true; // NOLINT
-bool return_1_at_fail = false;		       // NOLINT
+bool return_1_at_fail = false;                 // NOLINT
 std::string sink_file = "../inputs/sink.txt";  // NOLINT
 
 struct AccretionProblem {};
@@ -38,14 +38,14 @@ constexpr double T0 = 10.0;
 constexpr double mu = 2.33 * C::m_p;
 constexpr double k_B = C::k_B;
 constexpr double cs0 = gcem::sqrt(k_B * T0 / mu); // = 18821.95750 cm / s for T = 10 K
-constexpr double B0 = 1.0e-7;			  // constant background field [Gauss-equivalent units]
+constexpr double B0 = 1.0e-7;                     // constant background field [Gauss-equivalent units]
 
-double rho0 = C::m_p;				 // NOLINT
-double t_end_over_t_b = 10.0;			 // NOLINT
-AMREX_GPU_MANAGED double M_star_in_Msun = 1.0;	 // NOLINT
+double rho0 = C::m_p;                            // NOLINT
+double t_end_over_t_b = 10.0;                    // NOLINT
+AMREX_GPU_MANAGED double M_star_in_Msun = 1.0;   // NOLINT
 AMREX_GPU_MANAGED double uniform_density = -1.0; // NOLINT. Default is not using uniform density. If set to a positive value, the density will be set to this
-						 // value instead of an exact solution to the Bondi problem.
-bool refine_center = true;			 // NOLINT
+                                                 // value instead of an exact solution to the Bondi problem.
+bool refine_center = true;                       // NOLINT
 
 // constexpr double r_B = C::Gconst * C::M_solar / (cs0 * cs0);
 
@@ -365,7 +365,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGridF
 	const double B_val = (dir == quokka::direction::x) ? B0 : 0.0;
 
 	amrex::ParallelFor(indexRange,
-			   [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<AccretionProblem>::mhdFirstIndex) = B_val; });
+	                   [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<AccretionProblem>::mhdFirstIndex) = B_val; });
 }
 
 template <> void QuokkaSimulation<AccretionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
@@ -434,7 +434,7 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim;
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
+	sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!
 	// sim.initDt_ = 3.0e10;	      // ~1 kyr
 	sim.tempFloor_ = 10.0; // K
 	sim.stopTime_ = t_end;

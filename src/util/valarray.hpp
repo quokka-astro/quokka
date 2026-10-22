@@ -32,7 +32,7 @@ template <typename T, int d> class valarray
 		const size_t max_count = std::min(list.size(), static_cast<size_t>(d));
 
 		T const *input = std::data(list); // requires nvcc to be in C++17 mode (or newer)! (if it fails, the
-						  // compiler flags are wrong, probably due to a CMake issue.)
+		                                  // compiler flags are wrong, probably due to a CMake issue.)
 
 		for (size_t i = 0; i < max_count; ++i) {
 			values[i] = input[i]; // NOLINT

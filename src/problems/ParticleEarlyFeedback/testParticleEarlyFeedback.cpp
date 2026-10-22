@@ -172,9 +172,9 @@ auto problem_main() -> int
 	const amrex::Real stellar_mass_after_split = stellar_descriptor->computeStellarMass();
 	const amrex::Real stellar_birth_mass_after_split = stellar_descriptor->computeStellarMassAtBirth();
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(stellar_mass_after_split, stellar_mass_before_split),
-					 "Particle splitting did not conserve current stellar mass.");
+	                                 "Particle splitting did not conserve current stellar mass.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(stellar_birth_mass_after_split, stellar_birth_mass_before_split),
-					 "Particle splitting did not conserve stellar mass_at_birth.");
+	                                 "Particle splitting did not conserve stellar mass_at_birth.");
 
 	const auto cell_size = simulation.geom[0].CellSizeArray();
 	const amrex::Real cell_volume = AMREX_D_TERM(cell_size[0], *cell_size[1], *cell_size[2]);
@@ -208,7 +208,7 @@ auto problem_main() -> int
 		    const amrex::Real inverse_radius = (radius > 0.0) ? 1.0 / radius : 0.0;
 		    const amrex::Real rho = state(i, j, k, HydroSystem<ParticleEarlyFeedback>::density_index);
 		    const amrex::Real px =
-			state(i, j, k, HydroSystem<ParticleEarlyFeedback>::x1Momentum_index) - rho * (boost_velocity - inflow_speed * delta_x * inverse_radius);
+		        state(i, j, k, HydroSystem<ParticleEarlyFeedback>::x1Momentum_index) - rho * (boost_velocity - inflow_speed * delta_x * inverse_radius);
 		    const amrex::Real py = state(i, j, k, HydroSystem<ParticleEarlyFeedback>::x2Momentum_index) + rho * inflow_speed * delta_y * inverse_radius;
 		    const amrex::Real pz = state(i, j, k, HydroSystem<ParticleEarlyFeedback>::x3Momentum_index) + rho * inflow_speed * delta_z * inverse_radius;
 		    return std::sqrt((px * px) + (py * py) + (pz * pz));
@@ -231,52 +231,52 @@ auto problem_main() -> int
 	const amrex::Real final_total_energy = simulation.state_new_cc_[0].sum(HydroSystem<ParticleEarlyFeedback>::energy_index) * cell_volume;
 
 	amrex::Print() << "EMEF requested scalar momentum = " << stats.scalar_momentum << " g cm/s (expected " << expected_momentum << ")\n"
-		       << "EMEF deposited scalar impulse = " << scalar_impulse << " g cm/s\n"
-		       << "EMEF net vector momentum = (" << momentum_x << ", " << momentum_y << ", " << momentum_z << ") g cm/s\n"
-		       << "EMEF clipped cells = " << stats.clipped_cells << ", minimum velocity scale = " << stats.min_velocity_scale
-		       << ", maximum velocity = " << stats.max_velocity << " cm/s\n";
+	               << "EMEF deposited scalar impulse = " << scalar_impulse << " g cm/s\n"
+	               << "EMEF net vector momentum = (" << momentum_x << ", " << momentum_y << ", " << momentum_z << ") g cm/s\n"
+	               << "EMEF clipped cells = " << stats.clipped_cells << ", minimum velocity scale = " << stats.min_velocity_scale
+	               << ", maximum velocity = " << stats.max_velocity << " cm/s\n";
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.active_particles == 6, "EMEF must include split composite, individual high-mass, and remnant particles.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(stats.scalar_momentum, expected_momentum),
-					 "Equation-10 requested momentum does not use the summed birth mass.");
+	                                 "Equation-10 requested momentum does not use the summed birth mass.");
 	if (simulation.userData_.expectPreservedBoost) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_total_energy, initial_total_energy),
-						 "Tiny EMEF braked pre-existing gas kinetic energy.");
+		                                 "Tiny EMEF braked pre-existing gas kinetic energy.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(momentum_x) <= 2.0e-12 * std::abs(initial_momentum_x),
-						 "Tiny EMEF clipped pre-existing gas momentum.");
+		                                 "Tiny EMEF clipped pre-existing gas momentum.");
 	} else if (!simulation.userData_.expectClipping) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.clipped_cells == 0, "Nominal EMEF test unexpectedly activated the velocity limiter.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(scalar_impulse, expected_momentum, deposition_tolerance),
-						 "Deposited scalar impulse does not equal the Equation-10 request.");
+		                                 "Deposited scalar impulse does not equal the Equation-10 request.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(momentum_x) <= deposition_tolerance * expected_momentum &&
-						     std::abs(momentum_y) <= deposition_tolerance * expected_momentum &&
-						     std::abs(momentum_z) <= deposition_tolerance * expected_momentum,
-						 "Unclipped early-feedback stencil does not have zero net vector momentum.");
+		                                     std::abs(momentum_y) <= deposition_tolerance * expected_momentum &&
+		                                     std::abs(momentum_z) <= deposition_tolerance * expected_momentum,
+		                                 "Unclipped early-feedback stencil does not have zero net vector momentum.");
 	} else {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.clipped_cells > 0, "Extreme EMEF test did not activate the velocity limiter.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.min_velocity_scale < 1.0, "Clipped EMEF cells did not report a reduced velocity scale.");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_impulse < expected_momentum, "Clipped EMEF did not reduce the deposited scalar impulse.");
 	}
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stats.max_velocity <= std::max(quokka::EMEF_max_velocity, std::abs(boost_velocity) + inflow_speed) * (1.0 + 2.0e-12),
-					 "EMEF raised the speed above both the configured cap and the pre-feedback speed.");
+	                                 "EMEF raised the speed above both the configured cap and the pre-feedback speed.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_gas_mass, initial_gas_mass), "EMEF changed gas mass.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_scalar_mass, initial_scalar_mass), "EMEF changed a MassScalar.");
 	if (simulation.userData_.inflowSpeed > 0.0) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(final_internal_energy > initial_internal_energy,
-						 "Negative gas-motion work was not thermalized into the host cell.");
+		                                 "Negative gas-motion work was not thermalized into the host cell.");
 	} else if (simulation.userData_.expectClipping) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(final_internal_energy >= initial_internal_energy, "Limited EMEF produced negative thermal energy.");
 	} else {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(approximatelyEqual(final_internal_energy, initial_internal_energy),
-						 "A uniform gas boost spuriously changed internal energy.");
+		                                 "A uniform gas boost spuriously changed internal energy.");
 	}
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(energy_consistency_error <= deposition_tolerance * final_total_energy,
-					 "EMEF total-energy update is inconsistent with its kinetic-energy change.");
+	                                 "EMEF total-energy update is inconsistent with its kinetic-energy change.");
 
 	quokka::EMEF_enabled = false;
 	const auto disabled_stats = simulation.particleRegister_.depositEarlyFeedback(simulation.state_new_cc_[0], nullptr, 0, step_time, dt);
 	const amrex::Real disabled_total_energy = simulation.state_new_cc_[0].sum(HydroSystem<ParticleEarlyFeedback>::energy_index) * cell_volume;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(disabled_stats.active_particles == 0 && disabled_stats.scalar_momentum == 0.0,
-					 "Disabled EMEF reported active sources.");
+	                                 "Disabled EMEF reported active sources.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(disabled_total_energy == final_total_energy, "Disabled EMEF changed the gas state.");
 	return 0;
 }

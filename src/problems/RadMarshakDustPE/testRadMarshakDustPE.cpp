@@ -21,7 +21,7 @@
 
 struct MarshakProblem {};
 
-constexpr double PE_rate = 1.0;	       // photoelectric heating rate in s^-1 (actual rate is PE_rate * E_FUV)
+constexpr double PE_rate = 1.0;        // photoelectric heating rate in s^-1 (actual rate is PE_rate * E_FUV)
 AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR. NOLINT
 AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV. NOLINT
 
@@ -82,7 +82,7 @@ template <> struct ISM_Traits<MarshakProblem> {
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/,
-											     amrex::Real const /*num_density*/) -> amrex::Real
+                                                                                             amrex::Real const /*num_density*/) -> amrex::Real
 {
 	// Values in cgs units from Bate & Keto (2015), Eq. 26.
 	// const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
@@ -97,7 +97,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::DefinePhotoelectricHeating
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<MarshakProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-								const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+                                                                const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -138,8 +138,8 @@ template <> void QuokkaSimulation<MarshakProblem>::setInitialConditionsOnGrid(qu
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<MarshakProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							   amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-							   int /*bcomp*/, int /*orig_comp*/)
+                                                           amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
+                                                           int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<MarshakProblem>::nvarTotal_cc;

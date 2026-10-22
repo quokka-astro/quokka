@@ -99,7 +99,7 @@ template <> struct Physics_Traits<ResampledCoolingTest> : DefaultPhysicsTraits {
 };
 
 // Initial conditions: hot gas that will cool down
-constexpr double T_initial = 1.0e7;	// K
+constexpr double T_initial = 1.0e7;     // K
 constexpr double rho_initial = 1.0e-26; // g cm^-3 (constant density for isochoric)
 constexpr double mu_initial = 0.6 * quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
 constexpr double pressure_initial = rho_initial * C::k_B * T_initial / mu_initial;
@@ -236,7 +236,7 @@ auto problem_main() -> int
 			    quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[i_last], Etot[i_last] - active_magnetic_energy_initial);
 			const double T_ratio_x = T_last / T_first;
 			amrex::Print() << "Spatial heating check: T(x_last)/T(x_first) = " << T_ratio_x << " (required > " << min_spatial_heating_T_ratio
-				       << ")\n";
+			               << ")\n";
 			if (!(T_ratio_x > min_spatial_heating_T_ratio)) { // negated so that a NaN ratio also fails
 				amrex::Print() << "ERROR: external heating rate does not vary with position!\n";
 				status = 1;
@@ -263,7 +263,7 @@ auto problem_main() -> int
 				// Interpolate reference solution onto simulation timesteps
 				std::vector<double> T_ref_interp(sim.userData_.t_vec_.size());
 				interpolate_arrays(sim.userData_.t_vec_.data(), T_ref_interp.data(), static_cast<int>(sim.userData_.t_vec_.size()),
-						   t_ref.data(), T_ref.data(), static_cast<int>(t_ref.size()));
+				                   t_ref.data(), T_ref.data(), static_cast<int>(t_ref.size()));
 
 				// Compute L1 error norm
 				double err_norm = 0.; // NOLINT(misc-const-correctness)

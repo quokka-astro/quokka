@@ -202,8 +202,8 @@ template <> void QuokkaSimulation<OrszagTang>::computeAfterEvolve(amrex::Vector<
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(num_diffs == 0, "OrszagTang rot180 symmetry check failed: the MHD solver broke bit-exact point-reflection "
-								 "symmetry (see PR #1997); this indicates a regression in floating-point term-pairing for "
-								 "WENO reconstruction, EMF averaging, or HLLD.");
+		                                                 "symmetry (see PR #1997); this indicates a regression in floating-point term-pairing for "
+		                                                 "WENO reconstruction, EMF averaging, or HLLD.");
 	}
 }
 

@@ -33,7 +33,7 @@ void DiagBase::init(const std::string &a_prefix, std::string_view a_diagName)
 }
 
 void DiagBase::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometry> & /*a_geoms*/, const amrex::Vector<amrex::BoxArray> & /*a_grids*/,
-		       const amrex::Vector<amrex::DistributionMapping> & /*a_dmap*/, const amrex::Vector<std::string> &a_varNames)
+                       const amrex::Vector<amrex::DistributionMapping> & /*a_dmap*/, const amrex::Vector<std::string> &a_varNames)
 {
 	if (first_time) {
 		int const nFilters = static_cast<int>(m_filters.size());

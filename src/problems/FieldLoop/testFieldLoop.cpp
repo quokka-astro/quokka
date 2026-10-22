@@ -55,12 +55,12 @@ AMREX_GPU_MANAGED double advection_vy = 0.0; // NOLINT
 AMREX_GPU_MANAGED double advection_vz = 1.0; // NOLINT
 
 // static refinement region: a 3D box, defaulting to the full domain in z unless set
-AMREX_GPU_MANAGED double region_lo_x = 0.4;					 // NOLINT
-AMREX_GPU_MANAGED double region_hi_x = 0.6;					 // NOLINT
-AMREX_GPU_MANAGED double region_lo_y = -0.23125;				 // NOLINT
-AMREX_GPU_MANAGED double region_hi_y = 0.23125;					 // NOLINT
+AMREX_GPU_MANAGED double region_lo_x = 0.4;                                      // NOLINT
+AMREX_GPU_MANAGED double region_hi_x = 0.6;                                      // NOLINT
+AMREX_GPU_MANAGED double region_lo_y = -0.23125;                                 // NOLINT
+AMREX_GPU_MANAGED double region_hi_y = 0.23125;                                  // NOLINT
 AMREX_GPU_MANAGED double region_lo_z = -std::numeric_limits<double>::infinity(); // NOLINT
-AMREX_GPU_MANAGED double region_hi_z = std::numeric_limits<double>::infinity();	 // NOLINT
+AMREX_GPU_MANAGED double region_hi_z = std::numeric_limits<double>::infinity();  // NOLINT
 
 template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -183,7 +183,7 @@ template <> void QuokkaSimulation<FieldLoop>::refineGrid(int lev, amrex::TagBoxA
 
 template <>
 void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp,
-						    amrex::MultiFab const & /*state_cc*/, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+                                                    amrex::MultiFab const & /*state_cc*/, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "magnetic_divergence") {
@@ -261,7 +261,7 @@ auto problem_main() -> int
 		double unused_stop_time = 0.0;
 		if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
 			amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
-				     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
+			             "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
 		}
 	}
 	const double domain_diagonal = std::hypot(sim.geom[0].ProbLength(0), sim.geom[0].ProbLength(1));

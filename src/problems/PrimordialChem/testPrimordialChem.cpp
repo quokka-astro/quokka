@@ -46,7 +46,7 @@ struct PrimordialChemTest {}; // dummy type to allow compile-type polymorphism v
 template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = NumSpec;		     // number of chemical species
+	static constexpr int numMassScalars = NumSpec;               // number of chemical species
 	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
 };
 

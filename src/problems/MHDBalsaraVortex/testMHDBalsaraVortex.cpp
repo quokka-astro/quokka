@@ -78,7 +78,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto Az(const double x1, const double x2) ->
 
 AMREX_GPU_DEVICE
 void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir)
+                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir)
 {
 	// lower-left corner
 	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
@@ -179,7 +179,7 @@ template <> void QuokkaSimulation<MHDBalsaraVortex>::setInitialConditionsOnGridF
 
 template <>
 void QuokkaSimulation<MHDBalsaraVortex>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+                                                                  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -197,7 +197,7 @@ void QuokkaSimulation<MHDBalsaraVortex>::computeReferenceSolution(amrex::MultiFa
 
 template <>
 void QuokkaSimulation<MHDBalsaraVortex>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+                                                                     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -236,7 +236,7 @@ auto problem_main() -> int
 		double unused_stop_time = 0.0;
 		if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
 			amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
-				     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
+			             "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
 		}
 	}
 

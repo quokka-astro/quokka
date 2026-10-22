@@ -23,7 +23,7 @@
 
 struct RandomBlast {}; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
+constexpr double m_H = C::m_p + C::m_e;      // mass of hydrogen atom
 constexpr double seconds_per_year = 3.154e7; // seconds per year
 
 template <> struct Physics_Traits<RandomBlast> : DefaultPhysicsTraits {
@@ -134,7 +134,7 @@ template <> void QuokkaSimulation<RandomBlast>::computeAfterTimestep()
 
 template <>
 void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-						      amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+                                                      amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
@@ -179,7 +179,7 @@ auto problem_main() -> int
 		amrex::Abort("boost_velocity must be specified in the input file.");
 	} else {
 		amrex::Print() << "boost_velocity: " << sim.userData_.boost_velocity[0] << ", " << sim.userData_.boost_velocity[1] << ", "
-			       << sim.userData_.boost_velocity[2] << "\n";
+		               << sim.userData_.boost_velocity[2] << "\n";
 	}
 
 	// Set initial conditions

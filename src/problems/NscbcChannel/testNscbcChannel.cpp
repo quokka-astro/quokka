@@ -59,14 +59,14 @@ template <> struct Physics_Traits<Channel> : DefaultPhysicsTraits {
 };
 
 // global variables needed for Dirichlet boundary condition and initial conditions
-Real rho0 = NAN;										// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-Real u0 = NAN;											// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-Real s0 = NAN;											// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real Tgas0 = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real P_outflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real u_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real v_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real w_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real rho0 = NAN;                                                                                // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real u0 = NAN;                                                                                  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real s0 = NAN;                                                                                  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real Tgas0 = NAN;                                                      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real P_outflow = NAN;                                                  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real u_inflow = NAN;                                                   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real v_inflow = NAN;                                                   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real w_inflow = NAN;                                                   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED amrex::GpuArray<Real, Physics_Traits<Channel>::numPassiveScalars> s_inflow{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -97,9 +97,9 @@ template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::g
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-											     int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-											     const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-											     int /*orig_comp*/)
+                                                                                             int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+                                                                                             const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+                                                                                             int /*orig_comp*/)
 {
 	auto [i, j, k] = iv.dim3();
 	amrex::Box const &box = geom.Domain();
@@ -124,8 +124,8 @@ auto problem_main() -> int
 	// initial condition parameters
 	pp.query("rho0", ::rho0);   // initial density [g/cc]
 	pp.query("Tgas0", ::Tgas0); // initial temperature [K]
-	pp.query("u0", ::u0);	    // initial velocity [cm/s]
-	pp.query("s0", ::s0);	    // initial passive scalar [dimensionless]
+	pp.query("u0", ::u0);       // initial velocity [cm/s]
+	pp.query("s0", ::s0);       // initial passive scalar [dimensionless]
 	// boundary condition parameters
 	pp.query("u_inflow", ::u_inflow);    // inflow velocity along x-axis [cm/s]
 	pp.query("v_inflow", ::v_inflow);    // transverse inflow velocity (v_y) [cm/s]
@@ -204,7 +204,7 @@ auto problem_main() -> int
 #ifdef HAVE_PYTHON
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Plot results
-		const int skip = 4;	  // only plot every 8 elements of exact solution
+		const int skip = 4;       // only plot every 8 elements of exact solution
 		const double msize = 5.0; // marker size
 		using mpl_arg = std::map<std::string, std::string>;
 		using mpl_sarg = std::unordered_map<std::string, std::string>;

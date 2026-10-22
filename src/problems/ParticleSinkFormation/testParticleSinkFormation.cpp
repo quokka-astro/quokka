@@ -28,11 +28,11 @@ constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 const double rho0 = 1.0 * C::m_p; // g cm^-3
-const double T0 = 10.0;		  // K
+const double T0 = 10.0;           // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
-const double year = 3.15576e+07;			// in seconds
+const double year = 3.15576e+07;                        // in seconds
 const double cs = std::sqrt(gamma_ * C::k_B * T0 / mu); // NOLINT
-constexpr double B0 = 1.0e-7;				// uniform background field
+constexpr double B0 = 1.0e-7;                           // uniform background field
 
 template <> struct Particle_Traits<SinkProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -77,7 +77,7 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 			// this is the cell with peak density
 			rho = 1.2 * jeans_density;
 		} else if (x - 2 * dx[0] <= sf_cell_loc && x - dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc &&
-			   z + dx[2] > sf_cell_loc) {
+		           z + dx[2] > sf_cell_loc) {
 			// this is the cell that is 2 cells left of the peak density cell
 			rho = 1.1 * jeans_density;
 		}
@@ -123,7 +123,7 @@ auto problem_main() -> int
 	QuokkaSimulation<SinkProblem> sim;
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
+	sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!
 	sim.stopTime_ = 1.0e7 * year; // 1 Myr
 
 	// initialize
@@ -142,7 +142,7 @@ auto problem_main() -> int
 	[[maybe_unused]] const auto [ids_init, real_data_init, int_data_init] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtAllLevels();
 	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
-							 [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	                                                 [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	const double m_tot_init = m_gas_init + m_stars_init;
 
 	int status = 0;
@@ -166,7 +166,7 @@ auto problem_main() -> int
 	}
 
 	amrex::Real const m_stars_step1 = std::accumulate(real_data_step1.begin(), real_data_step1.end(), 0.0,
-							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	                                                  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	const double m_tot_step1 = m_gas_step1 + m_stars_step1;
 
 	amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
@@ -196,7 +196,7 @@ auto problem_main() -> int
 	[[maybe_unused]] const auto [ids_final, real_data_final, int_data_final] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtAllLevels();
 	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
-							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	                                                  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	const double m_tot_final = m_gas_final + m_stars_final;
 
 	// Check relative error in the accretion step and confirm mass is conserved to machine precision

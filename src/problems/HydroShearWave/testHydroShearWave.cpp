@@ -44,7 +44,7 @@ AMREX_GPU_MANAGED int shear_flow_axis = 0; // NOLINT
 AMREX_GPU_MANAGED int shear_grad_axis = 1; // NOLINT
 
 AMREX_GPU_DEVICE void computeShearSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
 {
 	amrex::GpuArray<int, 3> const cell_idx{i, j, k};
 	const amrex::Real pos_C = prob_lo[shear_grad_axis] + (cell_idx[shear_grad_axis] + static_cast<amrex::Real>(0.5)) * dx[shear_grad_axis];
@@ -89,7 +89,7 @@ void configureShearViscousParameters()
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shear_flow_axis >= 0 && shear_flow_axis < AMREX_SPACEDIM, "setup.shear_flow_axis must be a valid spatial axis.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shear_grad_axis >= 0 && shear_grad_axis < AMREX_SPACEDIM, "setup.shear_grad_axis must be a valid spatial axis.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(shear_flow_axis != shear_grad_axis,
-					 "setup.shear_flow_axis must differ from setup.shear_grad_axis (else div(v) != 0).");
+	                                 "setup.shear_flow_axis must differ from setup.shear_grad_axis (else div(v) != 0).");
 
 	double shearViscosity = 0.0;
 	amrex::ParmParse const hpp("hydro");
@@ -99,13 +99,13 @@ void configureShearViscousParameters()
 	shear_decay_rate = shearViscosity * k_magn * k_magn / rho0;
 	if (shearViscosity > 0.0) {
 		amrex::Print() << "Hydro shear wave (viscous): flow_axis=" << shear_flow_axis << " grad_axis=" << shear_grad_axis
-			       << " decay_rate=" << shear_decay_rate << "\n";
+		               << " decay_rate=" << shear_decay_rate << "\n";
 	}
 }
 
 // fills every cell of mf with the analytic shear solution at the given time
 void fillShearSolutionState(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
+                            amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
 {
 	const int ncomp = mf.nComp();
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {

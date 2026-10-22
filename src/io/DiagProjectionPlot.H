@@ -27,7 +27,7 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 	void init(const std::string &a_prefix, std::string_view a_diagName) override;
 
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
-		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
+	             const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
@@ -40,9 +40,9 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
 
       private:
-	std::vector<std::string> m_particleTypes;	// List of particle types to include (default: empty)
+	std::vector<std::string> m_particleTypes;       // List of particle types to include (default: empty)
 	std::vector<amrex::Direction> m_projectionDirs; // Projection directions (x, y, z)
-	std::vector<std::string> m_fieldNames;		// Projection field names
+	std::vector<std::string> m_fieldNames;          // Projection field names
 };
 
 // Template implementation
@@ -65,7 +65,7 @@ template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, 
 		for (const auto &field : m_fieldNames) {
 			const int comp = getFieldIndex(field, *m_diagVars);
 			proj[field] = quokka::diagnostics::ComputePlaneProjectionFromMultiFab(*m_diagMF, sim->finestLevel(), *m_geoms, *m_refRatio,
-											      max_grid_size, dir, comp);
+			                                                                      max_grid_size, dir, comp);
 		}
 
 		// Skip if no projection data

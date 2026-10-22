@@ -33,7 +33,7 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	void init(const std::string &a_prefix, std::string_view a_diagName) override;
 
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
-		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
+	             const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
@@ -50,9 +50,9 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 
       private:
 	std::vector<std::string> m_particleTypes; // List of particle types to include (empty means all)
-	std::vector<std::string> m_varNames;	  // Selected cc field names (empty = all)
-	bool m_includeFcFields{true};		  // Whether to write fc_vars (default: true)
-	int m_nfiles{-1};			  // Number of files for output (-1 means default)
+	std::vector<std::string> m_varNames;      // Selected cc field names (empty = all)
+	bool m_includeFcFields{true};             // Whether to write fc_vars (default: true)
+	int m_nfiles{-1};                         // Number of files for output (-1 means default)
 
 	// Helper function to write metadata file
 	static void WriteMetadataFile(const std::string &metadataFilename, const YAML::Node &simulationMetadata);

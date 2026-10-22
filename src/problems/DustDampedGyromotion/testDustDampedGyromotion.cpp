@@ -32,7 +32,7 @@ constexpr double dynamic_charge_offset = 0.95;
 constexpr double default_coefficient_tolerance = 1.0e-6;
 constexpr double convergence_coefficient_tolerance = 1.0e-12;
 
-AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_radius = {default_grain_radius};	  // NOLINT
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_radius = {default_grain_radius};   // NOLINT
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_density = {default_grain_density}; // NOLINT
 
 constexpr double gas_velocity_x0 = -epsilon * initial_drift / (1.0 + epsilon);
@@ -201,7 +201,7 @@ AMREX_GPU_HOST_DEVICE auto computeDustGyroReciprocalStoppingTime(typename DustSo
 {
 	if constexpr (GyroCaseParams<problem_t>::enable_epstein_drag) {
 		return DustSources<problem_t>::ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed,
-										 g_dust_grain_radius, g_dust_grain_density, true);
+		                                                                 g_dust_grain_radius, g_dust_grain_density, true);
 	} else {
 		amrex::GpuArray<amrex::Real, 1> alpha{};
 		alpha.fill(0.0);
@@ -465,8 +465,8 @@ auto analyticDynamicChargeDrift(double t) -> DriftState
 	const double inverse_speed_scale = std::sqrt(eta) / sound_speed;
 	const double magnetic_field = GyroCaseParams<DustGyroDynamicCharge>::magnetic_field_z;
 	const double phase = magnetic_field / (alpha0 * initial_drift * inverse_speed_scale) *
-				 (std::asinh(inverse_speed_scale * initial_drift) - std::asinh(inverse_speed_scale * amplitude)) -
-			     (1.0 + epsilon) * magnetic_field * dynamic_charge_offset * t;
+	                         (std::asinh(inverse_speed_scale * initial_drift) - std::asinh(inverse_speed_scale * amplitude)) -
+	                     (1.0 + epsilon) * magnetic_field * dynamic_charge_offset * t;
 	return {.wx = amplitude * std::cos(phase), .wy = -amplitude * std::sin(phase)};
 }
 
@@ -530,7 +530,7 @@ auto maxAbsVectorComponent(const std::vector<double> &values) -> double
 auto maxConservationError(const DustGyroHistory &data) -> double
 {
 	return std::max({maxAbsVectorComponent(data.center_momentum_x_vec_), maxAbsVectorComponent(data.center_momentum_y_vec_),
-			 maxAbsVectorComponent(data.center_momentum_z_vec_), maxAbsVectorComponent(data.wz_vec_)});
+	                 maxAbsVectorComponent(data.center_momentum_z_vec_), maxAbsVectorComponent(data.wz_vec_)});
 }
 
 auto maxRelativeHistoryDifference(const DustGyroHistory &first, const DustGyroHistory &second) -> double
@@ -561,7 +561,7 @@ auto computeRunResult(ResolvedRkScheme scheme, SimulationData<problem_t> data, A
 
 template <typename AnalyticFn>
 void fillDenseDriftXData(const DustGyroHistory &data, AnalyticFn analytic, double x_scale, std::vector<double> &t_dense, std::vector<double> &x_dense,
-			 std::vector<double> &wx_dense)
+                         std::vector<double> &wx_dense)
 {
 	const size_t n_dense = 1000;
 	t_dense.resize(n_dense);
@@ -731,8 +731,8 @@ auto stronglyUnresolvedGyromotionOperatorPasses() -> bool
 	};
 	auto const finite_vector = [](DustSystem::Vec3 const &vec) { return std::isfinite(vec[0]) && std::isfinite(vec[1]) && std::isfinite(vec[2]); };
 	bool const finite = finite_operator(ops.P1) && finite_operator(ops.P2) && finite_operator(ops.X1) && finite_operator(ops.X2) &&
-			    finite_operator(ops.Y1) && finite_operator(ops.Y2) && finite_vector(gas_stage.k1) && finite_vector(gas_stage.k2) &&
-			    finite_vector(dust_stage1) && finite_vector(dust_stage2);
+	                    finite_operator(ops.Y1) && finite_operator(ops.Y2) && finite_vector(gas_stage.k1) && finite_vector(gas_stage.k2) &&
+	                    finite_vector(dust_stage1) && finite_vector(dust_stage2);
 	double const parallel_rate = std::max({std::abs(gas_stage.k1[2]), std::abs(gas_stage.k2[2]), std::abs(dust_stage1[2]), std::abs(dust_stage2[2])});
 	return finite && (parallel_rate < 1.0e-14);
 }
@@ -761,32 +761,32 @@ auto problem_main() -> int
 
 	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
 		epstein_no_b_runs.push_back(computeRunResult(scheme,
-							     runDustGyroSimulation<DustGyroEpsteinNoB>(scheme, GyroCaseParams<DustGyroEpsteinNoB>::constant_dt,
-												       GyroCaseParams<DustGyroEpsteinNoB>::stop_time, true,
-												       default_coefficient_tolerance),
-							     epstein_no_b_exact));
+		                                             runDustGyroSimulation<DustGyroEpsteinNoB>(scheme, GyroCaseParams<DustGyroEpsteinNoB>::constant_dt,
+		                                                                                       GyroCaseParams<DustGyroEpsteinNoB>::stop_time, true,
+		                                                                                       default_coefficient_tolerance),
+		                                             epstein_no_b_exact));
 		gyro_no_drag_runs.push_back(
 		    computeRunResult(scheme,
-				     runDustGyroSimulation<DustGyroNoDrag>(scheme, GyroCaseParams<DustGyroNoDrag>::constant_dt,
-									   GyroCaseParams<DustGyroNoDrag>::stop_time, true, default_coefficient_tolerance),
-				     gyro_no_drag_exact));
+		                     runDustGyroSimulation<DustGyroNoDrag>(scheme, GyroCaseParams<DustGyroNoDrag>::constant_dt,
+		                                                           GyroCaseParams<DustGyroNoDrag>::stop_time, true, default_coefficient_tolerance),
+		                     gyro_no_drag_exact));
 		epstein_with_b_picard_runs.push_back(computeRunResult(
 		    scheme,
 		    runDustGyroSimulation<DustGyroEpsteinWithB>(scheme, GyroCaseParams<DustGyroEpsteinWithB>::constant_dt,
-								GyroCaseParams<DustGyroEpsteinWithB>::stop_time, true, default_coefficient_tolerance),
+		                                                GyroCaseParams<DustGyroEpsteinWithB>::stop_time, true, default_coefficient_tolerance),
 		    epstein_with_b_exact));
 		epstein_with_b_frozen_runs.push_back(computeRunResult(
 		    scheme,
 		    runDustGyroSimulation<DustGyroEpsteinWithB>(scheme, GyroCaseParams<DustGyroEpsteinWithB>::constant_dt,
-								GyroCaseParams<DustGyroEpsteinWithB>::stop_time, false, default_coefficient_tolerance),
+		                                                GyroCaseParams<DustGyroEpsteinWithB>::stop_time, false, default_coefficient_tolerance),
 		    epstein_with_b_exact));
 	}
 	auto dynamic_charge_picard_run =
 	    runDustGyroSimulation<DustGyroDynamicCharge>(ResolvedRkScheme::GL4, GyroCaseParams<DustGyroDynamicCharge>::constant_dt,
-							 GyroCaseParams<DustGyroDynamicCharge>::stop_time, true, default_coefficient_tolerance);
+	                                                 GyroCaseParams<DustGyroDynamicCharge>::stop_time, true, default_coefficient_tolerance);
 	auto dynamic_charge_frozen_run =
 	    runDustGyroSimulation<DustGyroDynamicCharge>(ResolvedRkScheme::GL4, GyroCaseParams<DustGyroDynamicCharge>::constant_dt,
-							 GyroCaseParams<DustGyroDynamicCharge>::stop_time, false, default_coefficient_tolerance);
+	                                                 GyroCaseParams<DustGyroDynamicCharge>::stop_time, false, default_coefficient_tolerance);
 
 	constexpr std::array<int, 5> convergence_step_counts = {20, 40, 80, 160, 320};
 	constexpr double convergence_stop_time = 2.0;
@@ -850,9 +850,9 @@ auto problem_main() -> int
 		bool passed = stronglyUnresolvedGyromotionOperatorPasses();
 		for (auto const &run : epstein_no_b_runs) {
 			amrex::Print() << "[Pure Damping][" << quokka::dust::resolvedRkSchemeName(run.scheme)
-				       << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
+			               << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
 			amrex::Print() << "[Pure Damping][" << quokka::dust::resolvedRkSchemeName(run.scheme)
-				       << "] Conservation error     = " << run.conservation_error << "\n";
+			               << "] Conservation error     = " << run.conservation_error << "\n";
 			if ((run.drift_l2_error > epstein_no_b_tol) || (run.conservation_error > conservation_tol)) {
 				passed = false;
 			}
@@ -861,11 +861,11 @@ auto problem_main() -> int
 		for (auto const &run : gyro_no_drag_runs) {
 			const double drift_tol = (run.scheme == ResolvedRkScheme::Midpoint) ? gyro_no_drag_midpoint_tol : gyro_no_drag_tol;
 			amrex::Print() << "[Undamped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
-				       << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
+			               << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
 			amrex::Print() << "[Undamped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
-				       << "] Relative amplitude error = " << run.amplitude_error << "\n";
+			               << "] Relative amplitude error = " << run.amplitude_error << "\n";
 			amrex::Print() << "[Undamped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
-				       << "] Conservation error       = " << run.conservation_error << "\n";
+			               << "] Conservation error       = " << run.conservation_error << "\n";
 			if ((run.drift_l2_error > drift_tol) || (run.amplitude_error > gyro_amplitude_tol) || (run.conservation_error > conservation_tol)) {
 				passed = false;
 			}
@@ -873,9 +873,9 @@ auto problem_main() -> int
 
 		for (auto const &run : epstein_with_b_picard_runs) {
 			amrex::Print() << "[Damped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
-				       << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
+			               << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
 			amrex::Print() << "[Damped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
-				       << "] Conservation error     = " << run.conservation_error << "\n";
+			               << "] Conservation error     = " << run.conservation_error << "\n";
 			if ((run.drift_l2_error > epstein_with_b_tol) || (run.conservation_error > conservation_tol)) {
 				passed = false;
 			}
@@ -887,8 +887,8 @@ auto problem_main() -> int
 		}
 		for (auto const &point : dynamic_epstein_convergence) {
 			amrex::Print() << "[Dynamic Epstein Convergence][" << quokka::dust::resolvedRkSchemeName(point.scheme) << "] steps = " << point.steps
-				       << ", frozen error/order = " << point.frozen_error << "/" << point.frozen_order
-				       << ", Picard error/order = " << point.picard_error << "/" << point.picard_order << "\n";
+			               << ", frozen error/order = " << point.frozen_error << "/" << point.frozen_order
+			               << ", Picard error/order = " << point.picard_error << "/" << point.picard_order << "\n";
 			if (point.steps == convergence_step_counts.back()) {
 				double const minimum_picard_order = (point.scheme == ResolvedRkScheme::GL4) ? 3.8 : 1.8;
 				if ((point.picard_order < minimum_picard_order) || (point.picard_error >= point.frozen_error)) {
@@ -916,7 +916,7 @@ auto problem_main() -> int
 		amrex::Print() << "[Dynamic Charge] Frozen-coefficient conservation error = " << dynamic_charge_frozen_conservation_error << "\n";
 		for (auto const &point : dynamic_charge_convergence) {
 			amrex::Print() << "[Dynamic Charge Convergence] steps = " << point.steps << ", frozen error/order = " << point.frozen_error << "/"
-				       << point.frozen_order << ", Picard error/order = " << point.picard_error << "/" << point.picard_order << "\n";
+			               << point.frozen_order << ", Picard error/order = " << point.picard_error << "/" << point.picard_order << "\n";
 		}
 		if (!dynamic_charge_sign_changed || (dynamic_charge_drift_error > dynamic_charge_drift_tol) ||
 		    (dynamic_charge_change < dynamic_charge_minimum_change) || (dynamic_charge_conservation_error > conservation_tol) ||

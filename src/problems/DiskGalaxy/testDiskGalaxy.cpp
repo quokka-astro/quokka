@@ -106,7 +106,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 	auto const halo_table_const = halo_table.const_tables_host();
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.sizes[0] > 0, "disk_galaxy.vcirc_file contained no numeric rows.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.spacing_types[0] == quokka::TransformType::linear,
-					 "disk_galaxy.vcirc_file must use linear spacing for the radius coordinate.");
+	                                 "disk_galaxy.vcirc_file must use linear spacing for the radius coordinate.");
 
 	// 2. copy data to simData_.radius and simData_.vcirc
 	const auto N = static_cast<size_t>(halo_table_const.sizes[0]);
@@ -117,7 +117,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 	userData_.temp_halo.resize(N);
 
 	const double length_unit = 1.0e3 * C::parsec; // kpc
-	const double vel_unit = 1.0e5;		      // km/s
+	const double vel_unit = 1.0e5;                // km/s
 	for (size_t i = 0; i < N; ++i) {
 		amrex::Real const radius = halo_table_const.coord_min[0] + static_cast<amrex::Real>(i) * halo_table_const.dcoord[0];
 		userData_.radius[i] = radius * length_unit;
@@ -172,9 +172,9 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 
 	// disc parameters
 	double disk_gas_mass_Msun = NAN;     // disk mass
-	double disk_Rscale_kpc = NAN;	     // disk scale length
-	double disk_zscale_kpc = NAN;	     // disk scale height
-	double T_disk = NAN;		     // K
+	double disk_Rscale_kpc = NAN;        // disk scale length
+	double disk_zscale_kpc = NAN;        // disk scale height
+	double T_disk = NAN;                 // K
 	double disk_perturb_amplitude = NAN; // amplitude of harmonic mode perturbation
 	double disk_perturb_Rmax_kpc = NAN;  // max radius (in kpc) for harmonic mode perturbations
 	double initial_scalar_density = NAN; // scalar density at cgs units (cm^-3)
@@ -242,7 +242,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	AMREX_ALWAYS_ASSERT(!std::isnan(scalar_yield_per_SN));
 	const Real SNR_volume = std::pow(128.0 * C::parsec, 3);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_yield_per_SN > initial_scalar_density * SNR_volume,
-					 "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
+	                                 "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
@@ -559,7 +559,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::refineGrid(int lev, amrex::TagBox
 
 template <>
 void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+                                                     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
@@ -747,7 +747,7 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 
 	const amrex::Real cold_mass =
 	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
+	                                               std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
 		    const Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
 		    const Real Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &state_fc);
 		    const Real Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint);
@@ -768,7 +768,7 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 				flux_mask[lev].setVal(1);
 			} else {
 				flux_mask[lev] = amrex::makeFineMask(state_new_cc_[lev], state_new_cc_[lev + 1], amrex::IntVect(0), ref_ratio[lev],
-								     geom[lev].periodicity(), 1, 0);
+				                                     geom[lev].periodicity(), 1, 0);
 			}
 		}
 
@@ -826,7 +826,7 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 				    const amrex::Real energy_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::energy_index);
 				    const amrex::Real scalar_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::scalar0_index);
 				    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
-					AMREX_D_DECL(state_fc_x[bx], state_fc_y[bx], state_fc_z[bx])};
+				        AMREX_D_DECL(state_fc_x[bx], state_fc_y[bx], state_fc_z[bx])};
 				    const amrex::Real Pgas = HydroSystem<DiskGalaxy>::ComputePressure(state[bx], i, j, k, &cons_fc);
 				    const amrex::Real Emag = HydroSystem<DiskGalaxy>::ComputeMagneticEnergy(i, j, k, &cons_fc);
 				    const amrex::Real Ehydro = energy_density - Emag;
@@ -851,7 +851,7 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 				    }
 
 				    return {mass_flux_density * area, hydro_energy_flux_density * area, mhd_energy_flux_density * area,
-					    (scalar_density * vr) * area};
+				            (scalar_density * vr) * area};
 			    });
 
 			mass_flux_sphere += amrex::get<0>(level_flux);

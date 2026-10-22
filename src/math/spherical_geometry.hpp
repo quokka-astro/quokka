@@ -37,7 +37,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto maxDistSqToInterval(amrex::Real co
 
 template <unsigned int MaxPts>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::GpuArray<Point, MaxPts> &pts, int &npts, amrex::Real x, amrex::Real y, amrex::Real z,
-							     amrex::Real tol) -> void
+                                                             amrex::Real tol) -> void
 {
 	const amrex::Real tol2 = tol * tol;
 	for (int i = 0; i < npts; ++i) {
@@ -55,17 +55,17 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::GpuArray<Poi
 }
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real const x0, amrex::Real const x1, amrex::Real const y0, amrex::Real const y1,
-								  amrex::Real const z0, amrex::Real const z1, amrex::Real const nx, amrex::Real const ny,
-								  amrex::Real const nz, amrex::Real const d) -> amrex::Real
+                                                                  amrex::Real const z0, amrex::Real const z1, amrex::Real const nx, amrex::Real const ny,
+                                                                  amrex::Real const nz, amrex::Real const d) -> amrex::Real
 {
 	// Plane: n·x = d. Compute exact area of intersection polygon with an axis-aligned box.
 	const amrex::Real scale = (std::abs(x0) + std::abs(x1) + std::abs(y0) + std::abs(y1) + std::abs(z0) + std::abs(z1) + std::abs(d) + 1.0);
 	const amrex::Real tol = 1.0e-12 * scale;
 
 	const amrex::GpuArray<Point, 8> verts{Point{x0, y0, z0}, Point{x1, y0, z0}, Point{x0, y1, z0}, Point{x1, y1, z0},
-					      Point{x0, y0, z1}, Point{x1, y0, z1}, Point{x0, y1, z1}, Point{x1, y1, z1}};
+	                                      Point{x0, y0, z1}, Point{x1, y0, z1}, Point{x0, y1, z1}, Point{x1, y1, z1}};
 	const amrex::GpuArray<Edge, 12> edges{Edge{0, 1}, Edge{2, 3}, Edge{4, 5}, Edge{6, 7}, Edge{0, 2}, Edge{1, 3},
-					      Edge{4, 6}, Edge{5, 7}, Edge{0, 4}, Edge{1, 5}, Edge{2, 6}, Edge{3, 7}};
+	                                      Edge{4, 6}, Edge{5, 7}, Edge{0, 4}, Edge{1, 5}, Edge{2, 6}, Edge{3, 7}};
 
 	amrex::GpuArray<Point, 16> pts{};
 	int npts = 0;
@@ -190,7 +190,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real co
 } // namespace detail
 
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto sphericalSectionAreaInCell(amrex::Real const R, amrex::Real const x0, amrex::Real const x1, amrex::Real const y0,
-								    amrex::Real const y1, amrex::Real const z0, amrex::Real const z1) -> amrex::Real
+                                                                    amrex::Real const y1, amrex::Real const z0, amrex::Real const z1) -> amrex::Real
 {
 	// Approximate the spherical section area by the exact area of the tangent
 	// plane section through the cell, using the sphere normal at the cell center.

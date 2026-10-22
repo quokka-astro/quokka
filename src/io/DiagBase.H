@@ -28,7 +28,7 @@ class DiagBase : public quokka::Factory<DiagBase>
 	virtual auto doDiag(const amrex::Real &a_time, int a_nstep) -> bool;
 
 	virtual void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
-			     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames);
+	                     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames);
 
 	// Type for projection data (used by DiagProjectionPlot)
 	using ProjectionData = std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>;
@@ -46,7 +46,7 @@ class DiagBase : public quokka::Factory<DiagBase>
 	// Set diagnostic data - called by AMRSimulation::doDiagnostics()
 	template <typename problem_t>
 	void setDiagData(AMRSimulation<problem_t> *sim, const amrex::Vector<const amrex::MultiFab *> *diagMF, const amrex::Vector<std::string> *diagVars,
-			 const amrex::Vector<amrex::Geometry> *geoms, const amrex::Vector<amrex::IntVect> *refRatio, const YAML::Node *metadata)
+	                 const amrex::Vector<amrex::Geometry> *geoms, const amrex::Vector<amrex::IntVect> *refRatio, const YAML::Node *metadata)
 	{
 		m_simulation = sim;
 		m_diagMF = diagMF;
@@ -63,7 +63,7 @@ class DiagBase : public quokka::Factory<DiagBase>
 	amrex::Real m_time_interval{-1.0};
 	int m_interval{-1};
 	amrex::Real m_next_output_time{0.0}; // Track when next time-based output should occur
-	int m_last_output_step{-1};	     // Track the last step we decided to output
+	int m_last_output_step{-1};          // Track the last step we decided to output
 	bool m_did_output_this_step{false};  // Flag to ensure consistent return value for multiple calls per step
 	bool need_update{true};
 	bool first_time{true};

@@ -42,7 +42,7 @@
 struct SubcycleProblem {};
 namespace
 {
-bool density_refinement_enabled = true;	    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+bool density_refinement_enabled = true;     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 bool hierarchy_ready_before_advance = true; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 
@@ -171,8 +171,8 @@ auto problem_main() -> int
 
 	if (finest < sim.max_level || data_finest.size() < data_all.size()) {
 		amrex::Print() << "ISSUE #1957 REPRODUCED: particle did not reach finest level under "
-				  "do_subcycle=1 + max_level="
-			       << sim.max_level << "\n";
+		                  "do_subcycle=1 + max_level="
+		               << sim.max_level << "\n";
 		return 1;
 	}
 	amrex::Print() << "Test passed: particle is on finest level\n";

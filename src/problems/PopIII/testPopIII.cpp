@@ -45,7 +45,7 @@ template <> struct Physics_Traits<PopIII> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
-	static constexpr int numMassScalars = NumSpec;		     // number of chemical species
+	static constexpr int numMassScalars = NumSpec;               // number of chemical species
 	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
 };
 
@@ -360,7 +360,7 @@ template <> void QuokkaSimulation<PopIII>::refineGrid(int lev, amrex::TagBoxArra
 
 template <>
 void QuokkaSimulation<PopIII>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-						 amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+                                                 amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {

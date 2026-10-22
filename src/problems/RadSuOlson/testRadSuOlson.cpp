@@ -36,16 +36,16 @@ struct MarshakProblem {}; // dummy type to allow compile-type polymorphism via t
 // Su & Olson (1997) parameters
 constexpr double eps_SuOlson = 1.0;
 constexpr double kappa = 1.0;
-constexpr double rho0 = 1.0;	   // g cm^-3 (matter density)
+constexpr double rho0 = 1.0;       // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.0; // dimensionless
-constexpr double x0 = 0.5;	   // dimensionless length scale
-constexpr double t0 = 10.0;	   // dimensionless time scale
+constexpr double x0 = 0.5;         // dimensionless length scale
+constexpr double t0 = 10.0;        // dimensionless time scale
 
 constexpr double a_rad = 1.0;
 constexpr double c = 1.0;
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
-constexpr double Q = (1.0 / (2.0 * x0));						    // do NOT change this
+constexpr double Q = (1.0 / (2.0 * x0));                                                    // do NOT change this
 constexpr double S = c * Q * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum)); // erg cm^{-3}
 
 template <> struct RadSystem_Traits<MarshakProblem> {
@@ -88,7 +88,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMea
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<MarshakProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
-						 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
+                                                 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
@@ -96,7 +96,7 @@ quokka::EOS<MarshakProblem>::ComputeTgasFromEint([[maybe_unused]] const double r
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<MarshakProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
-						 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
+                                                 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return (alpha_SuOlson / 4.0) * (Tgas * Tgas * Tgas * Tgas);
 }
@@ -104,7 +104,7 @@ quokka::EOS<MarshakProblem>::ComputeEintFromTgas([[maybe_unused]] const double r
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<MarshakProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-						       quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
+                                                       quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -122,9 +122,9 @@ const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum
 
 template <>
 void RadSystem<MarshakProblem>::AddRadSource(array_t &radEnergySource, array_t & /*reducedFluxSource*/, amrex::Box const &indexRange,
-					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
-					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time)
+                                             amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+                                             amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
+                                             amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const xl = (i + 0.) * dx[0];
@@ -211,9 +211,9 @@ auto problem_main() -> int
 
 		for (int i = 0; i < nx; ++i) {
 			xs.at(i) = position[i];
-			const auto Erad_t = values.at(RadSystem<MarshakProblem>::radEnergy_index)[i];	    // NOLINT(cppcoreguidelines-init-variables)
-			const auto Etot_t = values.at(RadSystem<MarshakProblem>::gasEnergy_index)[i];	    // NOLINT(cppcoreguidelines-init-variables)
-			const auto rho = values.at(RadSystem<MarshakProblem>::gasDensity_index)[i];	    // NOLINT(cppcoreguidelines-init-variables)
+			const auto Erad_t = values.at(RadSystem<MarshakProblem>::radEnergy_index)[i];       // NOLINT(cppcoreguidelines-init-variables)
+			const auto Etot_t = values.at(RadSystem<MarshakProblem>::gasEnergy_index)[i];       // NOLINT(cppcoreguidelines-init-variables)
+			const auto rho = values.at(RadSystem<MarshakProblem>::gasDensity_index)[i];         // NOLINT(cppcoreguidelines-init-variables)
 			const auto x1GasMom = values.at(RadSystem<MarshakProblem>::x1GasMomentum_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
 
 			Erad.at(i) = Erad_t;
@@ -227,29 +227,29 @@ auto problem_main() -> int
 		std::vector<double> xs_exact = {0.01, 0.1, 0.17783, 0.31623, 0.45, 0.5, 0.56234, 0.75, 1.0, 1.33352, 1.77828, 3.16228, 5.62341};
 
 		std::vector<double> const Erad_diffusion_exact_0p1 = {0.09403, 0.09326, 0.09128, 0.08230, 0.06086, 0.04766, 0.03171,
-								      0.00755, 0.00064, 0.,	 0.,	  0.,	   0.};
+		                                                      0.00755, 0.00064, 0.,      0.,      0.,      0.};
 		std::vector<double> const Erad_transport_exact_0p1 = {0.09531, 0.09531, 0.09532, 0.09529, 0.08823, 0.04765, 0.00375, 0., 0., 0., 0., 0., 0.};
 
 		std::vector<double> const Erad_diffusion_exact_1p0 = {0.50359, 0.49716, 0.48302, 0.43743, 0.36656, 0.33271, 0.29029,
-								      0.18879, 0.10150, 0.04060, 0.01011, 0.00003, 0.};
+		                                                      0.18879, 0.10150, 0.04060, 0.01011, 0.00003, 0.};
 		std::vector<double> Erad_transport_exact_1p0 = {0.64308, 0.63585, 0.61958, 0.56187, 0.44711, 0.35801, 0.25374,
-								0.11430, 0.03648, 0.00291, 0.,	    0.,	     0.};
+		                                                0.11430, 0.03648, 0.00291, 0.,      0.,      0.};
 
 		std::vector<double> Egas_transport_exact_1p0 = {0.27126, 0.26839, 0.26261, 0.23978, 0.18826, 0.14187, 0.08838,
-								0.03014, 0.00625, 0.00017, 0.,	    0.,	     0.};
+		                                                0.03014, 0.00625, 0.00017, 0.,      0.,      0.};
 
 		std::vector<double> const Erad_diffusion_exact_3p1 = {0.95968, 0.95049, 0.93036, 0.86638, 0.76956, 0.72433,
-								      0.66672, 0.51507, 0.35810, 0.21309, 0.10047, 0.00634};
+		                                                      0.66672, 0.51507, 0.35810, 0.21309, 0.10047, 0.00634};
 		std::vector<double> const Erad_transport_exact_3p1 = {1.20052, 1.18869, 1.16190, 1.07175, 0.90951, 0.79902,
-								      0.66678, 0.44675, 0.27540, 0.14531, 0.05968, 0.00123};
+		                                                      0.66678, 0.44675, 0.27540, 0.14531, 0.05968, 0.00123};
 
 		std::vector<double> const Erad_diffusion_exact_10p0 = {1.86585, 1.85424, 1.82889, 1.74866, 1.62824, 1.57237, 1.50024,
-								       1.29758, 1.06011, 0.79696, 0.52980, 0.12187, 0.00445};
+		                                                       1.29758, 1.06011, 0.79696, 0.52980, 0.12187, 0.00445};
 		std::vector<double> Erad_transport_exact_10p0 = {2.23575, 2.21944, 2.18344, 2.06448, 1.86072, 1.73178, 1.57496,
-								 1.27398, 0.98782, 0.70822, 0.45016, 0.09673, 0.00375};
+		                                                 1.27398, 0.98782, 0.70822, 0.45016, 0.09673, 0.00375};
 
 		std::vector<double> Egas_transport_exact_10p0 = {2.11186, 2.09585, 2.06052, 1.94365, 1.74291, 1.61536, 1.46027,
-								 1.16591, 0.88992, 0.62521, 0.38688, 0.07642, 0.00253};
+		                                                 1.16591, 0.88992, 0.62521, 0.38688, 0.07642, 0.00253};
 
 		std::vector<double> Trad_exact_10(Erad_transport_exact_10p0);
 		std::vector<double> Trad_exact_1(Erad_transport_exact_1p0);
@@ -269,7 +269,7 @@ auto problem_main() -> int
 
 		std::vector<double> Tgas_numerical_interp(xs_exact.size());
 		interpolate_arrays(xs_exact.data(), Tgas_numerical_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Tgas.data(),
-				   static_cast<int>(xs.size()));
+		                   static_cast<int>(xs.size()));
 
 		// compute L1 error norm
 		double err_norm = 0.;
@@ -280,7 +280,7 @@ auto problem_main() -> int
 		}
 		const double rel_error = err_norm / sol_norm;
 		const double error_tol = 0.03; // this will not agree to better than this, due to
-					       // not being able to capture fEdd < 1/3 behavior
+		                               // not being able to capture fEdd < 1/3 behavior
 		amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 		if (rel_error > error_tol) {
 			status = 1;

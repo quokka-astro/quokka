@@ -75,8 +75,8 @@ void printLowerDimBox(std::ostream &a_File, const amrex::Box &a_box, int skipDim
 }
 
 void Write2DMultiLevelPlotfile(const std::string &a_pltfile, int a_nlevels, const amrex::Vector<const amrex::MultiFab *> &a_slice,
-			       const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
-			       const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref)
+                               const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
+                               const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref)
 {
 	// Write a 2D AMReX Plotfile with the contents of the vector of MultiFabs `a_slice'.
 
@@ -116,9 +116,9 @@ void Write2DMultiLevelPlotfile(const std::string &a_pltfile, int a_nlevels, cons
 }
 
 void Write2DPlotfileHeader(std::ostream &HeaderFile, int nlevels, const amrex::Vector<amrex::BoxArray> &bArray, const amrex::Vector<std::string> &varnames,
-			   const amrex::Vector<amrex::Geometry> &geom, const amrex::Real &time, const amrex::Vector<int> &level_steps,
-			   const amrex::Vector<amrex::IntVect> &ref_ratio, const std::string &versionName, const std::string &levelPrefix,
-			   const std::string &mfPrefix)
+                           const amrex::Vector<amrex::Geometry> &geom, const amrex::Real &time, const amrex::Vector<int> &level_steps,
+                           const amrex::Vector<amrex::IntVect> &ref_ratio, const std::string &versionName, const std::string &levelPrefix,
+                           const std::string &mfPrefix)
 {
 	int const finest_level(nlevels - 1);
 	HeaderFile.precision(17);
@@ -294,7 +294,7 @@ void VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_mf_name)
 				}
 #endif
 				nfi.Stream().write(reinterpret_cast<const char *>(fabdata), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-						   writeDataSize);
+				                   writeDataSize);
 				nfi.Stream().flush();
 			}
 		}
@@ -375,7 +375,7 @@ void Write2DMFHeader(const std::string &a_mf_name, amrex::VisMF::Header &hdr, in
 }
 
 void Find2FOffsets(const amrex::FabArray<amrex::FArrayBox> &mf, const std::string &filePrefix, amrex::VisMF::Header &hdr,
-		   amrex::VisMF::Header::Version /*whichVersion*/, amrex::NFilesIter &nfi, int nOutFiles, MPI_Comm comm)
+                   amrex::VisMF::Header::Version /*whichVersion*/, amrex::NFilesIter &nfi, int nOutFiles, MPI_Comm comm)
 {
 	bool const groupSets = false;
 
@@ -539,8 +539,8 @@ auto transform_ref_ratio_to_2D(amrex::Direction const &dir, amrex::IntVect const
 } // namespace detail
 
 void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
-		     amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Real time, int istep,
-		     const std::string &basename, const YAML::Node &simulationMetadata)
+                     amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Real time, int istep,
+                     const std::string &basename, const YAML::Node &simulationMetadata)
 {
 	// write projections to plotfile
 	auto const &firstVec = proj.begin()->second;
@@ -595,7 +595,7 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 			mf_all[lev].setVal(0.0);
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				amrex::Print() << "Warning: projection components use different BoxArrays at level " << lev
-					       << "; using a union BoxArray for output.\n";
+				               << "; using a union BoxArray for output.\n";
 			}
 		} else {
 			mf_all[lev].define(example_mf.boxArray(), example_mf.DistributionMap(), ncomp, 0);

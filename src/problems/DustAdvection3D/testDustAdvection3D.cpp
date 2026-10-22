@@ -47,7 +47,7 @@ template <> void QuokkaSimulation<DustAdvection3D>::setInitialConditionsOnGrid(q
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const auto Egas0 = initial_Egas;
-	const auto v_gas = v0;	     // gas velocity in all directions
+	const auto v_gas = v0;       // gas velocity in all directions
 	const auto v_dust = dust_v0; // dust velocity in all directions
 
 	// get geometry information
@@ -85,7 +85,7 @@ template <> void QuokkaSimulation<DustAdvection3D>::setInitialConditionsOnGrid(q
 
 template <>
 void QuokkaSimulation<DustAdvection3D>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+                                                                 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const auto Egas0 = initial_Egas;
 	const auto v_gas = v0;
@@ -118,7 +118,7 @@ void QuokkaSimulation<DustAdvection3D>::computeReferenceSolution(amrex::MultiFab
 			}
 
 			const double r2_gas = (x_gas_initial - xc) * (x_gas_initial - xc) + (y_gas_initial - yc) * (y_gas_initial - yc) +
-					      (z_gas_initial - zc) * (z_gas_initial - zc);
+			                      (z_gas_initial - zc) * (z_gas_initial - zc);
 			amrex::Real const rho_gas_exact = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 			// exact dust density (shifted by v_dust * t in all directions)
@@ -137,7 +137,7 @@ void QuokkaSimulation<DustAdvection3D>::computeReferenceSolution(amrex::MultiFab
 			}
 
 			const double r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + (y_dust_initial - yc) * (y_dust_initial - yc) +
-					       (z_dust_initial - zc) * (z_dust_initial - zc);
+			                       (z_dust_initial - zc) * (z_dust_initial - zc);
 			amrex::Real const rho_dust_exact = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
 
 			// clear all components

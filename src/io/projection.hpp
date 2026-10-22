@@ -48,28 +48,28 @@ void printLowerDimIntVect(std::ostream &a_File, const amrex::IntVect &a_IntVect,
 void printLowerDimBox(std::ostream &a_File, const amrex::Box &a_box, int skipDim);
 
 void Write2DMultiLevelPlotfile(const std::string &a_pltfile, int a_nlevels, const amrex::Vector<const amrex::MultiFab *> &a_slice,
-			       const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
-			       const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref);
+                               const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
+                               const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref);
 
 void Write2DPlotfileHeader(std::ostream &HeaderFile, int nlevels, const amrex::Vector<amrex::BoxArray> &bArray, const amrex::Vector<std::string> &varnames,
-			   const amrex::Vector<amrex::Geometry> &geom, const amrex::Real &time, const amrex::Vector<int> &level_steps,
-			   const amrex::Vector<amrex::IntVect> &ref_ratio, const std::string &versionName, const std::string &levelPrefix,
-			   const std::string &mfPrefix);
+                           const amrex::Vector<amrex::Geometry> &geom, const amrex::Real &time, const amrex::Vector<int> &level_steps,
+                           const amrex::Vector<amrex::IntVect> &ref_ratio, const std::string &versionName, const std::string &levelPrefix,
+                           const std::string &mfPrefix);
 
 void VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_mf_name);
 
 void Write2DMFHeader(const std::string &a_mf_name, amrex::VisMF::Header &hdr, int coordinatorProc, MPI_Comm comm);
 
 void Find2FOffsets(const amrex::FabArray<amrex::FArrayBox> &mf, const std::string &filePrefix, amrex::VisMF::Header &hdr,
-		   amrex::VisMF::Header::Version /*whichVersion*/, amrex::NFilesIter &nfi, int nOutFiles, MPI_Comm comm);
+                   amrex::VisMF::Header::Version /*whichVersion*/, amrex::NFilesIter &nfi, int nOutFiles, MPI_Comm comm);
 
 void write_2D_header(std::ostream &os, const amrex::FArrayBox &f, int nvar);
 
 } // namespace detail
 
 inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::MultiFab *> &mfs, const int finest_level,
-					       amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio,
-					       amrex::Vector<amrex::IntVect> const &max_grid_size, const amrex::Direction dir, const int comp)
+                                               amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio,
+                                               amrex::Vector<amrex::IntVect> const &max_grid_size, const amrex::Direction dir, const int comp)
     -> amrex::Vector<amrex::MultiFab>
 {
 	// compute plane-parallel projection of a single MultiFab component along the given axis.
@@ -101,12 +101,12 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		plane_max_grid_size[static_cast<int>(dir)] = 1;
 
 		auto plane_pair = amrex::ReduceToPlaneMF2Patchy<amrex::ReduceOpSum>(static_cast<int>(dir), geom[lev].Domain(), *mfs[lev], plane_max_grid_size,
-										    [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-											    if (mask_arr[box_no](i, j, k) == 0) {
-												    return 0.0;
-											    }
-											    return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
-										    });
+		                                                                    [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+			                                                                    if (mask_arr[box_no](i, j, k) == 0) {
+				                                                                    return 0.0;
+			                                                                    }
+			                                                                    return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
+		                                                                    });
 		auto &plane_global = plane_pair.second;
 		const auto &plane_ba = plane_global.boxArray();
 		amrex::BoxList bl2d(plane_ba.ixType());
@@ -155,7 +155,7 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		}
 
 		amrex::MultiFab coarse_on_fine_layout(amrex::coarsen(projections_accum[lev + 1].boxArray(), rr_2d),
-						      projections_accum[lev + 1].DistributionMap(), 1, 0);
+		                                      projections_accum[lev + 1].DistributionMap(), 1, 0);
 		coarse_on_fine_layout.ParallelCopy(projections_accum[lev], 0, 0, 1, 0, 0);
 
 		auto const &coarse_arr = coarse_on_fine_layout.const_arrays();
@@ -179,15 +179,15 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 }
 
 void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
-		     amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Real time, int istep,
-		     const std::string &basename, const YAML::Node &simulationMetadata);
+                     amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Real time, int istep,
+                     const std::string &basename, const YAML::Node &simulationMetadata);
 
 // Overload with particle support
 template <typename problem_t>
 void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
-		     amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Real time, int istep,
-		     const std::string &basename, quokka::PhysicsParticleRegister<problem_t> &particleRegister, const std::vector<std::string> &particleTypes,
-		     const YAML::Node &simulationMetadata)
+                     amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Real time, int istep,
+                     const std::string &basename, quokka::PhysicsParticleRegister<problem_t> &particleRegister, const std::vector<std::string> &particleTypes,
+                     const YAML::Node &simulationMetadata)
 {
 	const BL_PROFILE("quokka::diagnostics::WriteProjection(with particles)");
 

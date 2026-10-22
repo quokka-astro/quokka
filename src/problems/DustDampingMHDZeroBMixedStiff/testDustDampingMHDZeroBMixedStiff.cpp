@@ -130,12 +130,12 @@ auto E_gas_analytic(double t) -> double
 		double const term1 =
 		    (rho_dust1 * (state1.v_dust1 - state1.v_gas) / TS1 * state1.v_gas + rho_dust2 * (state1.v_dust2 - state1.v_gas) / TS2 * state1.v_gas +
 		     OMEGA_DRAG *
-			 (rho_dust1 * std::pow(state1.v_dust1 - state1.v_gas, 2) / TS1 + rho_dust2 * std::pow(state1.v_dust2 - state1.v_gas, 2) / TS2));
+		         (rho_dust1 * std::pow(state1.v_dust1 - state1.v_gas, 2) / TS1 + rho_dust2 * std::pow(state1.v_dust2 - state1.v_gas, 2) / TS2));
 
 		double const term2 =
 		    (rho_dust1 * (state2.v_dust1 - state2.v_gas) / TS1 * state2.v_gas + rho_dust2 * (state2.v_dust2 - state2.v_gas) / TS2 * state2.v_gas +
 		     OMEGA_DRAG *
-			 (rho_dust1 * std::pow(state2.v_dust1 - state2.v_gas, 2) / TS1 + rho_dust2 * std::pow(state2.v_dust2 - state2.v_gas, 2) / TS2));
+		         (rho_dust1 * std::pow(state2.v_dust1 - state2.v_gas, 2) / TS1 + rho_dust2 * std::pow(state2.v_dust2 - state2.v_gas, 2) / TS2));
 
 		integral += 0.5 * (term1 + term2) * dt;
 	}
@@ -420,9 +420,9 @@ void writeHistoryCsv(const std::vector<SchemeRunResult> &runs)
 	const size_t n_samples = runs.front().data.t_vec_.size();
 	for (auto const &run : runs) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(run.data.t_vec_.size() == n_samples && run.data.v_gas_vec_.size() == n_samples &&
-						     run.data.v_dust1_vec_.size() == n_samples && run.data.v_dust2_vec_.size() == n_samples &&
-						     run.data.E_gas_vec_.size() == n_samples,
-						 "DustDampingMHDZeroBMixedStiff histories must have equal lengths.");
+		                                     run.data.v_dust1_vec_.size() == n_samples && run.data.v_dust2_vec_.size() == n_samples &&
+		                                     run.data.E_gas_vec_.size() == n_samples,
+		                                 "DustDampingMHDZeroBMixedStiff histories must have equal lengths.");
 	}
 
 	std::ofstream file("dust_damping_mhd_zero_b_mixed_stiff_history.csv");
@@ -514,13 +514,13 @@ auto problem_main() -> int
 		for (auto const &run : runs) {
 			SchemeErrorTolerance const tol = resolvedRkSchemeTolerance(run.scheme);
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas vx    = " << run.rel_err_gas_vx
-				       << "\n";
+			               << "\n";
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust1 vx  = " << run.rel_err_dust1_vx
-				       << "\n";
+			               << "\n";
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust2 vx  = " << run.rel_err_dust2_vx
-				       << "\n";
+			               << "\n";
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas E     = " << run.rel_err_gas_E
-				       << "\n";
+			               << "\n";
 			if (!std::isfinite(run.rel_err_gas_vx) || !std::isfinite(run.rel_err_dust1_vx) || !std::isfinite(run.rel_err_dust2_vx) ||
 			    !std::isfinite(run.rel_err_gas_E) || (run.rel_err_gas_vx > tol.rel_err_gas_vx) || (run.rel_err_dust1_vx > tol.rel_err_dust1_vx) ||
 			    (run.rel_err_dust2_vx > tol.rel_err_dust2_vx) || (run.rel_err_gas_E > tol.rel_err_gas_E)) {

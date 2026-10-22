@@ -46,7 +46,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Rea
 	amrex::Real ev_avg = NAN;
 	if (std::isinf(ev_high)) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alpha < 0.0, "get_ionizing_band_photon_energy: an open-topped chemistry band only has a "
-							      "finite average photon energy for power_law_index < 0");
+		                                              "finite average photon energy for power_law_index < 0");
 		ev_avg = ev_low * (1.0 - 1.0 / alpha);
 	} else if (alpha == 0.0) {
 		ev_avg = ev_low * ev_high * std::log(ev_high / ev_low) / (ev_high - ev_low);
@@ -54,7 +54,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Rea
 		ev_avg = (ev_high - ev_low) / std::log(ev_high / ev_low);
 	} else {
 		ev_avg = ((alpha - 1.0) / alpha) * (std::pow(ev_high, alpha) - std::pow(ev_low, alpha)) /
-			 (std::pow(ev_high, alpha - 1.0) - std::pow(ev_low, alpha - 1.0));
+		         (std::pow(ev_high, alpha - 1.0) - std::pow(ev_low, alpha - 1.0));
 	}
 
 	return ev_avg * C::ev2erg;
@@ -106,7 +106,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_KI_cooling_coefficient(Real T) -> Re
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dKI_cooling_coefficient_dT(Real T) -> Real
 {
 	return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) * 118400.0 / ((T + 1.0e3) * (T + 1.0e3)) +
-			  1.4e-2 * (0.5 / std::sqrt(T) * std::exp(-92.0 / T) + std::sqrt(T) * std::exp(-92.0 / T) * 92.0 / (T * T)));
+	                  1.4e-2 * (0.5 / std::sqrt(T) * std::exp(-92.0 / T) + std::sqrt(T) * std::exp(-92.0 / T) * 92.0 / (T * T)));
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_cooling_coefficient(Real T) -> Real
@@ -311,9 +311,9 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(iHp, i_ngamma) = jac(ie, i_ngamma);
 
 	jac(net_ienuc, ie) = energy_switch *
-			     (-recombination_cooling_switch * Lambda_rec * n_HII - ion_ff_cooling_switch * Lambda_ff * n_HII -
-			      RydbergEnergy * collisional_ionization_switch * n_HI * sigma_coll) /
-			     state.rho;
+	                     (-recombination_cooling_switch * Lambda_rec * n_HII - ion_ff_cooling_switch * Lambda_ff * n_HII -
+	                      RydbergEnergy * collisional_ionization_switch * n_HI * sigma_coll) /
+	                     state.rho;
 	jac(net_ienuc, iH) =
 	    energy_switch *
 	    (photoheating_switch * Gamma_photo * chat_sigma_photo * n_gamma + molecular_process_switch * KI_heating_switch * Gamma_KI -
@@ -321,8 +321,8 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	    state.rho;
 	jac(net_ienuc, iHp) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_e - ion_ff_cooling_switch * Lambda_ff * n_e) / state.rho;
 	jac(net_ienuc, net_ienuc) = energy_switch *
-				    (-d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT - RydbergEnergy * d_collisional_ionization_term_dT) *
-				    dTde / state.rho;
+	                            (-d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT - RydbergEnergy * d_collisional_ionization_term_dT) *
+	                            dTde / state.rho;
 	jac(net_ienuc, i_ngamma) = energy_switch * (photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) * n_gamma_active / state.rho;
 
 	jac(i_ngamma, ie) = 0.0_rt;

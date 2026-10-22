@@ -37,7 +37,7 @@ void DiagParticleTxt::init(const std::string &a_prefix, std::string_view a_diagN
 }
 
 void DiagParticleTxt::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometry> & /*a_geoms*/, const amrex::Vector<amrex::BoxArray> & /*a_grids*/,
-			      const amrex::Vector<amrex::DistributionMapping> & /*a_dmap*/, const amrex::Vector<std::string> & /*a_varNames*/)
+                              const amrex::Vector<amrex::DistributionMapping> & /*a_dmap*/, const amrex::Vector<std::string> & /*a_varNames*/)
 {
 	// DiagParticleTxt doesn't need special preparation
 	// The base class prepare() handles filter setup if needed

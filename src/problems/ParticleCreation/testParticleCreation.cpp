@@ -16,18 +16,18 @@ struct TestParticle {};
 constexpr double rho0 = 1.0e-5;
 constexpr double dt_ = 0.001;
 static bool refine_half_domain = false; // NOLINT
-constexpr double B0 = 1.0e-7;		// uniform background field
+constexpr double B0 = 1.0e-7;           // uniform background field
 
 // locations of the particles: a 2x2x2 grids of particles
 constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
 // need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
 constexpr double particle_offset_from_center_ = 0.01;
-const static double SN_mass = 1.0e-5;	    // mass of SNProgenitor particles
+const static double SN_mass = 1.0e-5;       // mass of SNProgenitor particles
 constexpr int n_test_particles_init = 8;    // 8 test particles created at the start of the simulation
 constexpr int n_test_particles_created = 8; // 8 test particles created and live to the end
 
 template <> struct quokka::EOS_Traits<TestParticle> {
-	static constexpr double gamma = 1.0;	     // isothermal
+	static constexpr double gamma = 1.0;         // isothermal
 	static constexpr double cs_isothermal = 3.0; //
 	static constexpr double mean_molecular_weight = 1.0;
 };
@@ -116,10 +116,10 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const & /*state_arr*/,
-						 amrex::Array4<const amrex::Real> const & /*state_accretion_rate_arr*/, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/,
-						 amrex::RandomEngine const & /*engine*/) const -> int
+		                                 amrex::Array4<const amrex::Real> const & /*state_accretion_rate_arr*/, int i, int j, int k,
+		                                 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+		                                 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/,
+		                                 amrex::RandomEngine const & /*engine*/) const -> int
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
@@ -154,7 +154,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
-				int evolution_stage_index, int /*mass_at_birth_index*/, amrex::Real current_time, amrex::Real dt)
+		                int evolution_stage_index, int /*mass_at_birth_index*/, amrex::Real current_time, amrex::Real dt)
 		    : mass_idx(mass_index), birth_time_index(birth_time_index), death_time_index(death_time_index),
 		      evolution_stage_index(evolution_stage_index), cpu_id(processor_id), pid_start(particle_id_start), current_time(current_time), dt(dt)
 		{
@@ -163,9 +163,9 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		template <typename ParticleType, typename StateArray>
 		AMREX_GPU_DEVICE void
 		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*state_accretion_rate_arr*/, int i,
-			   int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/, amrex::Long base_offset,
-			   amrex::RandomEngine const & /*engine*/) const
+		           int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+		           std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/, amrex::Long base_offset,
+		           amrex::RandomEngine const & /*engine*/) const
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
@@ -212,12 +212,12 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev,
-				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index, int death_time_index,
-				    int mass_at_birth_index, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
+	                            amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index, int death_time_index,
+	                            int mass_at_birth_index, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
-							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(
+		                                          ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(
 		    container, mass_idx, state, state_accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, death_time_index,
 		    mass_at_birth_index, state_fc, verbose);
 	}

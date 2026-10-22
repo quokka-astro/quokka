@@ -41,10 +41,10 @@ using amrex::Real;
 struct ShockCloud {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double seconds_in_year = 3.1536e7;
-constexpr double parsec_in_cm = C::parsec;	  // cm == 1 pc
-constexpr double solarmass_in_g = C::M_solar;	  // g == 1 Msun
+constexpr double parsec_in_cm = C::parsec;        // cm == 1 pc
+constexpr double solarmass_in_g = C::M_solar;     // g == 1 Msun
 constexpr double keV_in_ergs = 1000. * C::ev2erg; // ergs == 1 keV
-constexpr double m_H = C::m_p + C::m_e;		  // mass of hydrogen atom
+constexpr double m_H = C::m_p + C::m_e;           // mass of hydrogen atom
 
 template <> struct Physics_Traits<ShockCloud> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
@@ -63,18 +63,18 @@ bool sharp_cloud_edge = false; // NOLINT(cppcoreguidelines-avoid-non-const-globa
 bool do_frame_shift = true;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // Cloud parameters (set inside problem_main())
-AMREX_GPU_MANAGED Real rho0 = NAN;	     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real rho1 = NAN;	     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P0 = NAN;	     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real R_cloud = NAN;	     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real rho0 = NAN;           // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real rho1 = NAN;           // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P0 = NAN;             // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real R_cloud = NAN;        // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real cloud_relpos_x = 0.5; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // cloud-tracking variables needed for Dirichlet boundary condition
 AMREX_GPU_MANAGED Real shock_crossing_time = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real rho_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real v_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real delta_vx = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real rho_wind = 0;            // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real v_wind = 0;              // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P_wind = 0;              // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real delta_vx = 0;            // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid const &grid)
 {
@@ -133,16 +133,16 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 		state(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
 		state(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
 		state(i, j, k, RadSystem<ShockCloud>::scalar0_index) = C;
-		state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = C * rho;	    // cloud partial density
+		state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = C * rho;         // cloud partial density
 		state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = (1.0 - C) * rho; // non-cloud partial density
 	});
 }
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-												const Real time, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-												int /*orig_comp*/)
+                                                                                                int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+                                                                                                const Real time, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+                                                                                                int /*orig_comp*/)
 {
 	auto [i, j, k] = iv.toArray();
 
@@ -237,7 +237,7 @@ template <> void QuokkaSimulation<ShockCloud>::computeAfterTimestep()
 
 		const Real v_wind = ::v_wind;
 		amrex::Print() << "[Cloud Tracking] Delta x = " << (delta_x / parsec_in_cm) << " pc," << " Delta vx = " << (delta_vx / 1.0e5) << " km/s,"
-			       << " Inflow velocity = " << ((v_wind - delta_vx) / 1.0e5) << " km/s\n";
+		               << " Inflow velocity = " << ((v_wind - delta_vx) / 1.0e5) << " km/s\n";
 
 		// If we are moving faster than the wind, we should abort the simulation.
 		// (otherwise, the boundary conditions become inconsistent.)
@@ -269,7 +269,7 @@ template <> void QuokkaSimulation<ShockCloud>::computeAfterTimestep()
 
 template <>
 void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
-						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+                                                     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 
@@ -510,8 +510,8 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	const Real dvx_cgs = simulationMetadata_["delta_vx"].as<Real>();
 	const Real v_wind = ::v_wind;
 
-	stats["delta_x"] = dx_cgs / parsec_in_cm;	 // pc
-	stats["delta_vx"] = dvx_cgs / 1.0e5;		 // km/s
+	stats["delta_x"] = dx_cgs / parsec_in_cm;        // pc
+	stats["delta_vx"] = dvx_cgs / 1.0e5;             // km/s
 	stats["inflow_vx"] = (v_wind - dvx_cgs) / 1.0e5; // km/s
 
 	// save total simulation mass
@@ -734,7 +734,7 @@ auto problem_main() -> int
 
 	// cloud radius
 	pp.query("R_cloud_pc", ::R_cloud); // pc
-	::R_cloud *= parsec_in_cm;	   // convert to cm
+	::R_cloud *= parsec_in_cm;         // convert to cm
 
 	// cloud position (relative to box length)
 	pp.query("cloud_relpos_x", ::cloud_relpos_x); // dimensionless
@@ -754,7 +754,7 @@ auto problem_main() -> int
 	auto cooling_tables = sim.resampledTables_.const_tables_host();
 	// compute mass density of background, cloud
 	Real const H_mass_fraction = cooling_tables.cloudy_H_mass_fraction;
-	::rho0 = nH_bg * m_H / H_mass_fraction;	   // g cm^-3
+	::rho0 = nH_bg * m_H / H_mass_fraction;    // g cm^-3
 	::rho1 = nH_cloud * m_H / H_mass_fraction; // g cm^-3
 
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho0));
