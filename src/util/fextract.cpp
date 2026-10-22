@@ -1,3 +1,4 @@
+#include "fextract.hpp"
 #include <algorithm>
 #include <limits>
 #include <numeric>
@@ -14,71 +15,33 @@
 
 using namespace amrex; // NOLINT
 
-auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coord, const bool center = false)
+auto fextract(MultiFab &mf, Geometry &geom, const int idir, const GpuArray<Real, AMREX_SPACEDIM> &slice_coords, const bool center)
     -> std::tuple<Vector<Real>, Vector<Gpu::HostVector<Real>>>
 {
-	AMREX_D_TERM(Real xcoord = slice_coord;, Real ycoord = slice_coord;, Real zcoord = slice_coord;)
-
-	GpuArray<Real, AMREX_SPACEDIM> problo = geom.ProbLoArray();
-	GpuArray<Real, AMREX_SPACEDIM> dx0 = geom.CellSizeArray();
-	Box probdom0 = geom.Domain();
-	const auto lo0 = amrex::lbound(probdom0);
-	const auto hi0 = amrex::ubound(probdom0);
-
-	// compute the index of the center or lower left of the domain on the
-	// coarse grid.  These are used to set the position of the slice in
-	// the transverse direction.
-
-	AMREX_D_TERM(int iloc = 0;, int jloc = 0;, int kloc = 0;)
-	if (center) {
-		AMREX_D_TERM(iloc = (hi0.x - lo0.x + 1) / 2 + lo0.x;, jloc = (hi0.y - lo0.y + 1) / 2 + lo0.y;, kloc = (hi0.z - lo0.z + 1) / 2 + lo0.z;)
-	}
-
-	if (idir == 0) {
-		// we specified the x value to pass through
-		iloc = hi0.x;
-		for (int i = lo0.x; i <= hi0.x; ++i) {
-			amrex::Real xc = problo[0] + (i + 0.5) * dx0[0];
-			if (xc > xcoord) {
-				iloc = i;
-				break;
-			}
-		}
-	}
-
-#if AMREX_SPACEDIM >= 2
-	if (idir == 1) {
-		// we specified the y value to pass through
-		jloc = hi0.y;
-		for (int j = lo0.y; j <= hi0.y; ++j) {
-			amrex::Real yc = problo[1] + (j + 0.5) * dx0[1];
-			if (yc > ycoord) {
-				jloc = j;
-				break;
-			}
-		}
-	}
-#endif
-
-#if AMREX_SPACEDIM == 3
-	if (idir == 2) {
-		// we specified the z value to pass through
-		kloc = hi0.z;
-		for (int k = lo0.z; k <= hi0.z; ++k) {
-			amrex::Real zc = problo[2] + (k + 0.5) * dx0[2];
-			if (zc > zcoord) {
-				kloc = k;
-				break;
-			}
-		}
-	}
-#endif
-
 	if (idir < 0 || idir >= AMREX_SPACEDIM) {
-		amrex::Abort("invalid direction!");
+		amrex::Abort("fextract: invalid direction");
 	}
-
-	const IntVect ivloc{AMREX_D_DECL(iloc, jloc, kloc)};
+	const auto problo = geom.ProbLoArray();
+	const auto dx0 = geom.CellSizeArray();
+	const auto probdom0 = geom.Domain();
+	const auto lo0 = amrex::lbound(probdom0);
+	IntVect ivloc = probdom0.smallEnd();
+	for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
+		if (dim == idir) {
+			continue;
+		}
+		const int lower = probdom0.smallEnd(dim);
+		const int upper = probdom0.bigEnd(dim);
+		if (center) {
+			ivloc[dim] = lower + probdom0.length(dim) / 2;
+		} else {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(slice_coords[dim]), "fextract: transverse coordinates must be finite");
+			// Select the cell containing the coordinate. Clamp before conversion
+			// to avoid overflow for coordinates far outside the physical domain.
+			const Real offset = std::floor((slice_coords[dim] - problo[dim]) / dx0[dim]);
+			ivloc[dim] = lower + static_cast<int>(amrex::Clamp(offset, Real(0), static_cast<Real>(upper - lower)));
+		}
+	}
 
 	Vector<Real> pos;
 	Vector<Gpu::HostVector<Real>> data(mf.nComp());
@@ -114,10 +77,10 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 			const int offset = offsets[box_idx];
 			const int start_dir = bx.smallEnd(idir);
 			const int local_len = bx.length(idir);
-			amrex::LoopOnCpu(bx, [problo, dx, idir, offset, start_dir, local_len, &pos](int i, int j, int k) {
-				Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i + 0.5) * dx[0],
-									      problo[1] + static_cast<Real>(j + 0.5) * dx[1],
-									      problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
+			amrex::LoopOnCpu(bx, [problo, dx, lo0, idir, offset, start_dir, local_len, &pos](int i, int j, int k) {
+				Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i - lo0.x + 0.5) * dx[0],
+									      problo[1] + static_cast<Real>(j - lo0.y + 0.5) * dx[1],
+									      problo[2] + static_cast<Real>(k - lo0.z + 0.5) * dx[2])};
 				int idx = offset;
 				if (idir == 0) {
 					idx += i - start_dir;
@@ -249,4 +212,12 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 		}
 	}
 	return std::make_tuple(pos, data);
+}
+
+auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coord, const bool center)
+    -> std::tuple<Vector<Real>, Vector<Gpu::HostVector<Real>>>
+{
+	GpuArray<Real, AMREX_SPACEDIM> coordinates{};
+	coordinates.fill(slice_coord);
+	return fextract(mf, geom, idir, coordinates, center);
 }
