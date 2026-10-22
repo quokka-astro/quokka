@@ -125,6 +125,8 @@ struct DustGyroPhysicsTraits {
 	static constexpr int nDustGroups = 1;
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1;
+	static constexpr bool is_cosmology_enabled = false;
+	static constexpr amrex::Real cosmology_dt_limit = 0.01;
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;

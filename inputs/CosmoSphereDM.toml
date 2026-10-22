@@ -1,0 +1,77 @@
+# *****************************************************************
+# Problem size and geometry (1 Mpc = 3.08567758e24 cm)
+# *****************************************************************
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.543e24, 1.543e24, 1.543e24]  # 0.5 Mpc
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [256, 256, 256]
+amr.max_level       = 0            # number of levels = max_level + 1
+amr.blocking_factor = 32           # grid size must be divisible by this
+amr.max_grid_size   = 128          # at least 128 for GPUs
+
+max_timesteps  = 20000000
+stop_time      = 3.16e17           # 10 Gyr
+cfl            = 0.3
+temperature_floor = 0              # avoid interfaces with internal energy
+
+# Domain resolution regression (0.5 Mpc)
+# 512  ->  0.98  kpc
+# 256  ->  1.95  kpc
+# 128  ->  3.91  kpc
+# 64   ->  7.81  kpc
+# 32   ->  15.63 kpc
+# 16   ->  31.25 kpc  (blocking_factor = 16)
+# 8    ->  62.50 kpc  (blocking_factor = 8)
+
+
+# *****************************************************************
+# Cosmology
+# *****************************************************************
+cosmology.hubble_constant = 0.7
+#cosmology.omega_m         = 0.30966       # LCDM
+#cosmology.omega_r         = 9.13896e-05  
+#cosmology.omega_lambda    = 0.68885
+#cosmology.omega_b         = 0.17
+#cosmology.omega_dm        = 0.83
+#cosmology.a_init          = 0.00001
+
+
+# *****************************************************************
+# Hydro floor, sphere and control
+# *****************************************************************
+sphere.R_sphere   = 3.086e23     # 100 kpc 
+sphere.R_smooth   = 6.172e22     # 1/5 R_sphere (20 kpc)
+density_floor     = 1e-40        # g cm^-3 (comoving), well below rho0 = 1e-30
+hydro.use_dual_energy = 1 
+
+# Dual energy must stay ON (already the default; explicit on purpose).
+# The flow is hypersonic: v = 1e8 cm/s vs c_s = 1.3e5 (sphere) / 4e6 cm/s (background) -> Mach ~ 770 / 25.
+# With P = 1e-14 erg/cm^3: eint/Etot = 3e-6 in the sphere, 3e-3 in the background.
+
+
+# Sphere radius regression
+# 3.086e23     # 100 kpc    6.172e22     # 1/5 R_sphere (20 kpc)
+# 2.7774e23    # 90 kpc     5.5548e22    # 1/5 R_sphere (18 kpc)
+# 2.4688e23    # 80 kpc     4.9376e22    # 1/5 R_sphere (16 kpc)
+# 2.1602e23    # 70 kpc     4.3204e22    # 1/5 R_sphere (14 kpc)
+# 1.8516e23    # 60 kpc     3.7032e22    # 1/5 R_sphere (12 kpc)
+# 1.5430e23    # 50 kpc     3.0860e22    # 1/5 R_sphere (10 kpc)
+# 1.2344e23    # 40 kpc     2.4688e22    # 1/5 R_sphere (8 kpc)
+# 9.2580e22    # 30 kpc     1.8516e22    # 1/5 R_sphere (6 kpc)
+# 6.1720e22    # 20 kpc     1.2344e22    # 1/5 R_sphere (4 kpc)
+# 3.0860e22    # 10 kpc     6.1720e21    # 1/5 R_sphere (2 kpc)
+# 1.5430e22    # 5 kpc      3.0860e21    # 1/5 R_sphere (1 kpc)
+
+
+# *****************************************************************
+# Simulation control
+# *****************************************************************
+plotfile_interval = 25            # save a plotfile every plotfile_interval 
+particles.v = 1                   # specific verbosity for the ParticleContainer
+amr.v = 1                         # AMReX verbosity level: 0=quiet, 1=verbose, 2=very verbose
+tiny_profiler.enabled = 1         # AMReX profiles the performances
+#quokka.derived_vars = gpot        # keep track of the gravitational potential
