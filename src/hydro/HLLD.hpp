@@ -130,16 +130,19 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	// MK5: S_i - u_i (for i=L or R)
 	const double siui_L = spds[0] - sL.u;
 	const double siui_R = spds[4] - sR.u;
-	// carbuncle detector
+	// Use the Minoshima & Miyoshi (2021), Eq. 10 shock sensor to blend toward
+	// the more diffusive two-wave HLL flux below (Step 6). Do not suppress
+	// the normal total-pressure jump in spds[2]: transverse compression can
+	// also occur next to a genuine pressure-driven flow.
 	const double para_v_jump = sR.u - sL.u; // negative -> compression
-	// tp := shock anisotropy, clamped to [0, 1], with theta = tp^4
 	const double denom_tp = std::max(1e-14, spd_fms_max - std::min(perp_v_jump, 0.0));
 	double tp = (spd_fms_max - std::min(para_v_jump, 0.0)) / denom_tp;
 	tp = amrex::Clamp(tp, 0.0, 1.0);
 	const double theta = SQUARE(SQUARE(tp));
-	// modified middle speed S_M from MK5 eqn 38 with theta from MM21 eqn 9
+
+	// modified middle speed S_M from MK5 eqn 38, with the full total-pressure jump
 	const double sm_denom = (siui_R * u_R.rho - siui_L * u_L.rho);
-	spds[2] = (siui_R * u_R.mx - siui_L * u_L.mx + theta * (ptot_L - ptot_R)) / sm_denom;
+	spds[2] = (siui_R * u_R.mx - siui_L * u_L.mx + (ptot_L - ptot_R)) / sm_denom;
 	// S_i - S_M (for i=L or R)
 	const double sism_L = spds[0] - spds[2];
 	const double sism_R = spds[4] - spds[2];
@@ -347,6 +350,15 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	} else {
 		// return u_star_R
 		F_x = F_R_array + U_star_R_array;
+	}
+
+	// Both solvers reduce to the same upwind flux outside the Riemann fan.
+	// Within the fan, blend the entire flux vector using the same face
+	// weight. No pressure-jump threshold switches off this correction.
+	if ((theta < 1.0) && (spds[0] < 0.0) && (spds[4] > 0.0)) {
+		const quokka::valarray<double, fluxdim> F_HLL =
+		    (spds[4] * F_L_array - spds[0] * F_R_array + spds[0] * spds[4] * (U_R_array - U_L_array)) / (spds[4] - spds[0]);
+		F_x = theta * F_x + (1.0 - theta) * F_HLL;
 	}
 
 	return std::make_tuple(std::move(F_x), fspd_m, fspd_p);
