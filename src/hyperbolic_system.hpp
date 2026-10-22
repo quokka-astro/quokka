@@ -35,6 +35,11 @@
 namespace quokka
 {
 enum redoFlag { none = 0, redo = 1 };
+
+// Default policy for signed reconstruction variables (velocity, magnetic field, etc.).
+struct SignedReconstruction {
+	AMREX_GPU_HOST_DEVICE constexpr auto operator()(int /*component*/) const -> bool { return false; }
+};
 } // namespace quokka
 
 // Define enum for slope limiter type
@@ -159,20 +164,20 @@ template <typename problem_t> class HyperbolicSystem
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto ComputeWENO(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k, int n)
 	    -> std::pair<amrex::Real, amrex::Real>;
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename Positivity = quokka::SignedReconstruction>
 	static void ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
-					    int iReadFrom = 0, int iWriteFrom = 0);
+					    int iReadFrom = 0, int iWriteFrom = 0, Positivity isPositive = {});
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename Positivity = quokka::SignedReconstruction>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
 										     amrex::Box const &cellRange, amrex::Box const &interfaceRange, int nvars,
-										     int iReadFrom = 0, int iWriteFrom = 0);
+										     int iReadFrom = 0, int iWriteFrom = 0, Positivity isPositive = {});
 
-	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q,
-										     quokka::Array4View<amrex::Real, DIR> const &leftState,
-										     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
-										     int j_in, int k_in, int iReadFrom = 0, int iWriteFrom = 0);
+	template <FluxDir DIR, typename Positivity = quokka::SignedReconstruction>
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
+	ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
+				quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in, int iReadFrom = 0,
+				int iWriteFrom = 0, Positivity isPositive = {});
 
 	template <typename F>
 #if defined(__x86_64__)
@@ -598,9 +603,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWEN
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Positivity>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-							  const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
+							  const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom, Positivity isPositive)
 {
 	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(MultiFabs)");
 
@@ -616,15 +621,16 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const 
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom,
+										   isPositive);
 	});
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Positivity>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
 										amrex::Box const &cellRange, amrex::Box const &interfaceRange, const int nvars,
-										const int iReadFrom, const int iWriteFrom)
+										const int iReadFrom, const int iWriteFrom, Positivity isPositive)
 {
 	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
 	HyperbolicSystem<problem_t>::template AssertReconstructionRanges<DIR>(cellRange, interfaceRange);
@@ -636,16 +642,17 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(
 
 	// cell-centered kernel
 	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom,
+										   isPositive);
 	});
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Positivity>
 AMREX_GPU_HOST_DEVICE void
 HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 						     quokka::Array4View<amrex::Real, DIR> const &rightState, const int n, const int i_in, const int j_in,
-						     const int k_in, const int iReadFrom, const int iWriteFrom)
+						     const int k_in, const int iReadFrom, const int iWriteFrom, Positivity isPositive)
 {
 	/// Extrema-preserving hybrid PPM-WENO from Rider, Greenough & Kamm (2007).
 
@@ -705,6 +712,18 @@ HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amrex::R
 		}
 	}
 
+	// Reject inadmissible final candidates only for designated positive quantities.
+	// Use the monotone reconstruction as the fallback instead of scaling toward
+	// vacuum. Already-positive edges (including smooth extrema) are untouched.
+	if (isPositive(iReadFrom + n) && (new_a_minus <= 0.0 || new_a_plus <= 0.0)) {
+		const auto [safe_minus, safe_plus] = MonotonizeEdges(a_minus, a_plus, a, am, ap);
+		if (new_a_minus <= 0.0) {
+			new_a_minus = safe_minus;
+		}
+		if (new_a_plus <= 0.0) {
+			new_a_plus = safe_plus;
+		}
+	}
 	rightState(i, j, k, iWriteFrom + n) = new_a_minus;
 	leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
 }
