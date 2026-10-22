@@ -149,11 +149,13 @@ as on moth.
    python3 -m venv $MYSOFTWARE/ar-quokka/venv-rocm-10.1
    V=$MYSOFTWARE/ar-quokka/venv-rocm-10.1/bin
    $V/python -s -m pip install --index-url https://stable.repo.amd.com/rocm/whl-next/ \
-     "rocm[libraries,devel,device-gfx90a]==10.1.0"
+     "rocm[libraries,devel,device-gfx90a]==10.1.0" "cmake>=3.31" ninja
    $V/rocm-sdk init        # expands the devel tree: headers, CMake packages
    ```
 
    `PYTHONNOUSERSITE` and `-s` keep packages in `~/.local` out of the venv.
+   Quokka needs CMake 3.31 or later (policy CMP0179); with the 3.30 module
+   the HIP device link sees libamrex twice and fails on duplicate symbols.
 2. **Start a job** before `ar setup` or `ar eval`. It can be an interactive
    shell (`salloc` in tmux) or a bare allocation:
 

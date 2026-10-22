@@ -60,7 +60,7 @@ site_env() {
   {
     source /opt/cray/pe/cpe/25.03/restore_lmod_system_defaults.sh
     module load cpe/25.03 pawseyenv/2025.08 PrgEnv-cray craype-x86-trento cray-mpich cce/19.0.0 \
-      hdf5/1.14.5-parallel-api-v112 cmake/3.30.5 ninja/1.12.1
+      hdf5/1.14.5-parallel-api-v112
   } > /dev/null 2>&1
   export PYTHONNOUSERSITE=1 TMPDIR=$MYSCRATCH/ar-quokka/tmp XDG_CACHE_HOME=$MYSCRATCH/ar-quokka/cache
   ROCM=$(PYTHONNOUSERSITE=1 "$VENV/bin/rocm-sdk" path --root) || { echo "no ROCm in $VENV (see README.md)" >&2; exit 1; }
@@ -68,6 +68,8 @@ site_env() {
   # Inside the job, amd-smi sees only the job's GCD: its clocks, and any
   # other process of yours using it.
   AMDSMI=$ROCM/bin/amd-smi
+  # cmake and ninja come from pip too: Quokka needs CMake 3.31+ (policy
+  # CMP0179) to keep the HIP device link from seeing libamrex twice.
   export PATH=$VENV/bin:$PATH LD_LIBRARY_PATH=$ROCM/lib:$CRAY_LD_LIBRARY_PATH:${LD_LIBRARY_PATH:-}
   # Quokka forces AMReX_MPI=ON. These flags let the plain compiler find
   # cray-mpich, as the profile does; the system gcc is too old for C++20.
