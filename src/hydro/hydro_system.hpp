@@ -156,16 +156,16 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX3(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
-	AMREX_GPU_DEVICE static auto isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool;
+	AMREX_GPU_DEVICE static auto isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k, amrex::Real densityFloorThreshold) -> bool;
 
 	static void ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int nvars);
 
 	static void PredictStep(amrex::MultiFab const &consVarOld, amrex::MultiFab &consVarNew, amrex::MultiFab const &rhs, double dt, int nvars,
-				amrex::iMultiFab &redoFlag_mf);
+				amrex::iMultiFab &redoFlag_mf, amrex::Real densityFloorThreshold);
 
 	static void AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf, double dt,
-				 int nvars, amrex::iMultiFab &redoFlag_mf);
+				 int nvars, amrex::iMultiFab &redoFlag_mf, amrex::Real densityFloorThreshold);
 
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
@@ -736,11 +736,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocity
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+									      amrex::Real const densityFloorThreshold) -> bool
 {
 	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
-	bool isDensityPositive = (rho > 0.);
+	bool isDensityPositive = (rho > densityFloorThreshold);
 
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 		for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
@@ -796,7 +797,7 @@ void HydroSystem<problem_t>::ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::
 
 template <typename problem_t>
 void HydroSystem<problem_t>::PredictStep(amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf, amrex::MultiFab const &rhs_mf, const double dt,
-					 const int nvars, amrex::iMultiFab &redoFlag_mf)
+					 const int nvars, amrex::iMultiFab &redoFlag_mf, amrex::Real const densityFloorThreshold)
 {
 	const BL_PROFILE("HydroSystem::PredictStep()");
 
@@ -810,7 +811,7 @@ void HydroSystem<problem_t>::PredictStep(amrex::MultiFab const &consVarOld_mf, a
 			consVarNew[bx](i, j, k, n) = consVarOld[bx](i, j, k, n) + dt * rhs[bx](i, j, k, n);
 		}
 		// check if state is valid -- flag for re-do if not
-		if (!isStateValid(consVarNew[bx], i, j, k)) {
+		if (!isStateValid(consVarNew[bx], i, j, k, densityFloorThreshold)) {
 			redoFlag[bx](i, j, k) = quokka::redoFlag::redo;
 		} else {
 			redoFlag[bx](i, j, k) = quokka::redoFlag::none;
@@ -820,7 +821,7 @@ void HydroSystem<problem_t>::PredictStep(amrex::MultiFab const &consVarOld_mf, a
 
 template <typename problem_t>
 void HydroSystem<problem_t>::AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf,
-					  const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf)
+					  const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf, amrex::Real const densityFloorThreshold)
 {
 	const BL_PROFILE("HydroSystem::AddFluxesRK2()");
 
@@ -842,7 +843,7 @@ void HydroSystem<problem_t>::AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::Multi
 		}
 
 		// check if state is valid -- flag for re-do if not
-		if (!isStateValid(U_new[bx], i, j, k)) {
+		if (!isStateValid(U_new[bx], i, j, k, densityFloorThreshold)) {
 			redoFlag[bx](i, j, k) = quokka::redoFlag::redo;
 		} else {
 			redoFlag[bx](i, j, k) = quokka::redoFlag::none;
