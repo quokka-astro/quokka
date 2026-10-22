@@ -69,4 +69,5 @@ jobs:
       run: |
         export PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
         export LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
-        python3 scripts/nvcc_ptx_check.py build -j $(nproc)
+        # AMReX's own sources are checked upstream; Quokka's sources still instantiate its headers.
+        python3 scripts/nvcc_ptx_check.py build -j $(nproc) --exclude extern/amrex

@@ -7,7 +7,8 @@ runs only cudafe++ and cicc: no ptxas, host compile, device link or link. This c
 code that nvcc rejects while taking a fraction of the time of a full build.
 
 Compiles that differ only in their output paths (the same source rebuilt for each
-problem target with identical flags) are run once.
+problem target with identical flags) are run once. Sources under an --exclude directory
+(for example a submodule tested upstream) are skipped.
 """
 
 from __future__ import annotations
@@ -71,16 +72,25 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("build_dir", type=Path, help="configured build directory with compile_commands.json")
     parser.add_argument("-j", "--jobs", type=int, default=os.cpu_count(), help="parallel compiles (default: all CPUs)")
+    parser.add_argument("--exclude", action="append", default=[], type=Path, metavar="DIR",
+                        help="skip sources under DIR (repeatable)")
     args = parser.parse_args()
+    excluded = [d.resolve() for d in args.exclude]
 
     entries = json.loads((args.build_dir / "compile_commands.json").read_text())
     unique = {}
+    skipped = 0
     for entry in entries:
+        source = Path(entry["directory"], entry["file"]).resolve()
+        if any(source.is_relative_to(d) for d in excluded):
+            skipped += 1
+            continue
         ptx = ptx_command(entry)
         if ptx is not None:
             unique.setdefault(ptx[0], (entry["directory"], ptx[1], entry["file"]))
     items = list(unique.values())
-    print(f"{len(items)} unique nvcc compiles (of {len(entries)} compile commands), {args.jobs} at a time", flush=True)
+    print(f"{len(items)} unique nvcc compiles (of {len(entries)} compile commands, {skipped} excluded), "
+          f"{args.jobs} at a time", flush=True)
 
     started = time.monotonic()
     failures, killed, times = [], [], []
