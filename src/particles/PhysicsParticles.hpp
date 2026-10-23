@@ -417,16 +417,13 @@ template <typename problem_t, ParticleType particleType> class PhysicsParticleDe
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			// zero_out_input is false because we want to accumulate mass
 			// vol_weight is false because MassDeposition does the volume weighting
-			amrex::ParticleToMesh(
-			    *container_, rhs, 0, finest_lev,
-			    ParticleMeshFunctor{.function = MassDeposition{Gconst, this->getMassIndex(), 0, 1}, .layout = container_->Layout()}, false, false);
+			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev,
+					      ParticleMeshFunctor{MassDeposition{Gconst, this->getMassIndex(), 0, 1}, container_->Layout()}, false, false);
 
 			// Deposit count into the last component of rhs
 			const int count_comp = 1; // Second component is the count
-			amrex::ParticleToMesh(
-			    *container_, rhs, 0, finest_lev,
-			    ParticleMeshFunctor{.function = DepositionCount{this->getMassIndex(), count_comp, 1}, .layout = container_->Layout()}, false,
-			    false);
+			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev,
+					      ParticleMeshFunctor{DepositionCount{this->getMassIndex(), count_comp, 1}, container_->Layout()}, false, false);
 		}
 	}
 
@@ -696,8 +693,7 @@ template <typename problem_t, ParticleType particleType> class PhysicsParticleDe
 		if (container_ != nullptr && this->getLumIndex() >= 0) {
 			amrex::ParticleToMesh(
 			    *container_, radEnergySource, lev,
-			    ParticleMeshFunctor{.function = RadDeposition{current_time, this->getLumIndex(), 0, nGroups, this->getBirthTimeIndex()},
-						.layout = container_->Layout()},
+			    ParticleMeshFunctor{RadDeposition{current_time, this->getLumIndex(), 0, nGroups, this->getBirthTimeIndex()}, container_->Layout()},
 			    false);
 		}
 	}
