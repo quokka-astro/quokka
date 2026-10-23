@@ -92,7 +92,7 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
                 ../../radiation/photochemistry.cpp ${photoionization_sources})
 
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
-  target_include_directories(${JOB_NAME} PUBLIC IMEX_PHOTOCHEMISTRY)
+  target_compile_definitions(${JOB_NAME} PUBLIC IMEX_PHOTOCHEMISTRY)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})

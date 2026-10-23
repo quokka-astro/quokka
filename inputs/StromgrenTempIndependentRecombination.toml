@@ -45,6 +45,8 @@ integrator.rtol_spec     = 1e-2
 integrator.rtol_rad_num  = 1e-2
 integrator.rtol_enuc     = 1e-2
 
+integrator.rosenbrock_tableau = 1
+
 plotfile_interval = 100000
 plotfile_prefix = "StrmConstRec"
 
