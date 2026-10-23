@@ -2,6 +2,14 @@
 
 > **Note: Purpose**
 >
+
+## ADR Catalog
+
+| ADR | Status | Decision |
+|---|---|---|
+| [ADR-0001](adrs/ADR-0001-runtime-problem-architecture.md) | Proposed | Replace per-problem template specialization with runtime state and particle schemas plus an operator graph, expose the solver through a WarpX-style pybind11/pyAMReX stack, follow AMReX's generic PureSoA particle roadmap, and replace Microphysics with a vendored Rosenbrock integrator plus Quokka-owned network interfaces. |
+
+ADR numbers are assigned monotonically and are never reused. Keep rejected or superseded ADRs in this catalog so the reasoning remains discoverable.
 > ADRs document important technical decisions so future contributors understand the problem we solved, the options we evaluated, and how to revisit the choice if assumptions change.
 >
 
@@ -24,7 +32,7 @@ Write an ADR whenever a change has broad impact, is hard to reverse, or triggers
 ### PR-Initiated ADR (resolving review disagreements)
 
 1. Distil blocking PR comments into 3–5 explicit questions.
-2. Create `docs/adrs/ADR-xxxx-title.md` and link it from the PR.
+2. Create `docs/markdown/adrs/ADR-xxxx-title.md`, add it to this catalog and `SUMMARY.md`, and link it from the PR.
 3. Assign 2–3 maintainers (include numerics + GPU expertise) as reviewers.
 4. Provide evidence: options/trade-offs, CPU + CUDA/HIP benchmarks, accuracy/tolerance notes, portability, migration impact.
 5. Time-box discussion to **≤10 business days**; schedule an optional 30–45 minute design call if needed.
@@ -34,7 +42,7 @@ Write an ADR whenever a change has broad impact, is hard to reverse, or triggers
 ### Proactive ADR (not tied to a PR)
 
 1. Open an issue labeled `type:ADR-proposal` outlining Problem, Goals/Non-goals, Affected modules, and Risks.
-2. Draft the ADR in `docs/adrs/ADR-xxxx-title.md`; include a short rollout roadmap (milestones, owners).
+2. Draft the ADR in `docs/markdown/adrs/ADR-xxxx-title.md`, add it to this catalog and `SUMMARY.md`, and include a short rollout roadmap (milestones, owners).
 3. Set roles: **Driver** (author), **Reviewers** (numerics + GPU/AMReX), **Consulted** (downstream users if affected).
 4. Add prototypes or microbenchmarks when helpful (CPU + CUDA/HIP).
 5. Leave a **≤21 day** comment window (to accommodate academic schedules) or close earlier with explicit sign-off.
