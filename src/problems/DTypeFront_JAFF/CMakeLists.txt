@@ -1,6 +1,8 @@
 if(AMReX_SPACEDIM EQUAL 3)
   set(DTypeFront_JAFF_INTEGRATOR "Rosenbrock" CACHE STRING "Microphysics integrator for DTypeFront_JAFF (Rosenbrock or VODE)")
   set_property(CACHE DTypeFront_JAFF_INTEGRATOR PROPERTY STRINGS Rosenbrock VODE)
+  set(DTypeFront_JAFF_C_HAT_DIVISOR 1000 CACHE STRING "DTypeFront_JAFF reduced speed of light: c_hat = c / divisor")
+  option(DTypeFront_JAFF_NO_RADIATION "DTypeFront_JAFF without radiation transport (and so without photochemistry)" OFF)
 
   set(microphysics_network_name "photoionization_H_caseB")
   setup_target_for_microphysics_compilation(${microphysics_network_name}
@@ -18,9 +20,12 @@ if(AMReX_SPACEDIM EQUAL 3)
                 ../../radiation/photochemistry.cpp ${${microphysics_network_name}_sources})
 
   # this will add #define PHOTOCHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
+  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY C_HAT_DIVISOR=${DTypeFront_JAFF_C_HAT_DIVISOR})
   if(DTypeFront_JAFF_INTEGRATOR STREQUAL "VODE")
     target_compile_definitions(${JOB_NAME} PUBLIC DTYPEFRONT_JAFF_VODE)
+  endif()
+  if(DTypeFront_JAFF_NO_RADIATION)
+    target_compile_definitions(${JOB_NAME} PUBLIC DTYPEFRONT_JAFF_NO_RADIATION)
   endif()
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
