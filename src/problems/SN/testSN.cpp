@@ -86,7 +86,7 @@ template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 		auto &particles = TestParticles->GetParticles(lev);
 
 		for (auto &kv : particles) {
-			const int np = kv.second.numParticles();
+			const auto np = kv.second.numParticles();
 			const auto data = kv.second.getParticleTileData();
 			const auto layout = TestParticles->Layout();
 			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;

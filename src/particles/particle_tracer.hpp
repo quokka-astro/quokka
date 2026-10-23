@@ -36,16 +36,16 @@ inline void AdvectTracers(ParticleContainer &particles, amrex::MultiFab *umac, i
 			arrays[d] = (*velocity[d])[pti.index()].const_array();
 		}
 		amrex::ParallelFor(tile.numParticles(), [=] AMREX_GPU_DEVICE(int i) {
-			ParticleView p(data, i, layout);
+			const ParticleView p(data, i, layout);
 			if (!p.id().is_valid()) {
 				return;
 			}
-			amrex::GpuArray<amrex::ParticleReal, AMREX_SPACEDIM> oldPosition;
-			amrex::GpuArray<amrex::ParticleReal, AMREX_SPACEDIM> v;
+			amrex::GpuArray<amrex::ParticleReal, AMREX_SPACEDIM> oldPosition{};
+			amrex::GpuArray<amrex::ParticleReal, AMREX_SPACEDIM> v{};
 			amrex::mac_interpolate(p, plo, dxi, arrays, v.data());
 			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 				oldPosition[d] = p.pos(d);
-				p.pos(d) += static_cast<amrex::ParticleReal>(amrex::ParticleReal(0.5) * dt * v[d]);
+				p.pos(d) += static_cast<amrex::ParticleReal>(amrex::ParticleReal{0.5} * dt * v[d]);
 			}
 			amrex::mac_interpolate(p, plo, dxi, arrays, v.data());
 			for (int d = 0; d < AMREX_SPACEDIM; ++d) {

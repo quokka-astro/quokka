@@ -83,7 +83,7 @@ template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 		for (auto &kv : particles) {
 			auto &particle_tile = kv.second;
 			const auto layout = SinkParticles->Layout();
-			const int np = particle_tile.numParticles();
+			const auto np = particle_tile.numParticles();
 			const auto data = particle_tile.getParticleTileData();
 			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
 

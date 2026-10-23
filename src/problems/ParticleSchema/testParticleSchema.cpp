@@ -4,6 +4,7 @@
 #include "particles/particle_IO.hpp"
 #include "particles/particle_container.hpp"
 #include "particles/particle_schema_traits.hpp"
+#include <array>
 
 #include <fstream>
 #include <functional>
@@ -53,6 +54,10 @@ void RequireFatalRejected(const std::function<void()> &operation, const std::str
 {
 	struct ExceptionMode {
 		bool previous = amrex::system::throw_exception;
+		ExceptionMode(const ExceptionMode &) = delete;
+		auto operator=(const ExceptionMode &) -> ExceptionMode & = delete;
+		ExceptionMode(ExceptionMode &&) = delete;
+		auto operator=(ExceptionMode &&) -> ExceptionMode & = delete;
 		ExceptionMode() { amrex::system::throw_exception = true; }
 		~ExceptionMode() { amrex::system::throw_exception = previous; }
 	};
@@ -196,7 +201,7 @@ void CheckPopulationIO(const amrex::Geometry &geom, const amrex::DistributionMap
 	quokka::ParticleContainer::FinalizeRestarts();
 	AMREX_ALWAYS_ASSERT(restored.TotalNumberOfParticles() == count);
 	AMREX_ALWAYS_ASSERT(particle_test::CaptureRecords(original) == particle_test::CaptureRecords(restored));
-	quokka::ParticleContainer empty(schema, geoms, maps, boxes, ratios);
+	const quokka::ParticleContainer empty(schema, geoms, maps, boxes, ratios);
 	empty.Checkpoint(checkpoint + "_empty", schema.Name());
 	quokka::ParticleContainer emptyRestored(schema, geoms, maps, boxes, ratios);
 	emptyRestored.Restart(checkpoint + "_empty", schema.Name());
@@ -204,31 +209,31 @@ void CheckPopulationIO(const amrex::Geometry &geom, const amrex::DistributionMap
 	AMREX_ALWAYS_ASSERT(emptyRestored.TotalNumberOfParticles() == 0);
 
 	constexpr int legacyReals = [] {
-		using namespace quokka;
+		using quokka::ParticleType;
 		if constexpr (population == ParticleType::Rad) {
-			return RadParticleRealComps<Problem>;
+			return quokka::RadParticleRealComps<Problem>;
 		} else if constexpr (population == ParticleType::CIC) {
-			return CICParticleRealComps;
+			return quokka::CICParticleRealComps;
 		} else if constexpr (population == ParticleType::CICRad) {
-			return CICRadParticleRealComps<Problem>;
+			return quokka::CICRadParticleRealComps<Problem>;
 		} else if constexpr (population == ParticleType::Test) {
-			return TestParticleRealComps<Problem>;
+			return quokka::TestParticleRealComps<Problem>;
 		} else if constexpr (population == ParticleType::Sink) {
-			return SinkParticleRealComps;
+			return quokka::SinkParticleRealComps;
 		} else if constexpr (population == ParticleType::Star) {
-			return StarParticleRealComps<Problem>;
+			return quokka::StarParticleRealComps<Problem>;
 		} else if constexpr (population == ParticleType::StochasticStellarPop) {
-			return StochasticStellarPopParticleRealComps<Problem>;
+			return quokka::StochasticStellarPopParticleRealComps<Problem>;
 		} else {
 			return AMREX_SPACEDIM;
 		}
 	}();
 	constexpr int legacyInts = [] {
-		using namespace quokka;
+		using quokka::ParticleType;
 		if constexpr (population == ParticleType::Test || population == ParticleType::StochasticStellarPop) {
 			return 1;
 		} else if constexpr (population == ParticleType::Star) {
-			return StarParticleIntComps<Problem>;
+			return quokka::StarParticleIntComps<Problem>;
 		} else {
 			return 0;
 		}
@@ -270,8 +275,8 @@ void CheckPopulationIO(const amrex::Geometry &geom, const amrex::DistributionMap
 }
 } // namespace
 
-int main(int argc, char **argv)
-{
+auto main(int argc, char **argv) -> int
+try {
 	amrex::Initialize(argc, argv);
 	{
 		const auto schema = SchemaWithDefaults();
@@ -316,8 +321,8 @@ int main(int argc, char **argv)
 			bounds.setLo(d, 0);
 			bounds.setHi(d, 1);
 		}
-		const int periodic[AMREX_SPACEDIM] = {AMREX_D_DECL(0, 0, 0)};
-		const amrex::Geometry geom(domain, &bounds, 0, periodic);
+		const std::array<int, AMREX_SPACEDIM> periodic = {AMREX_D_DECL(0, 0, 0)};
+		const amrex::Geometry geom(domain, &bounds, 0, periodic.data());
 		amrex::BoxArray ba(domain);
 		ba.maxSize(2);
 		const amrex::DistributionMapping dm(ba);
@@ -481,10 +486,10 @@ int main(int argc, char **argv)
 		amrex::ParallelDescriptor::ReduceLongMax(expectedNext);
 		quokka::ParticleContainer::ParticleType::NextID(700);
 		cic.Checkpoint("rtsoa_ids", cic.Schema().Name());
-		quokka::ParticleContainer empty(schema, geom, dm, ba);
+		const quokka::ParticleContainer empty(schema, geom, dm, ba);
 		quokka::ParticleContainer::ParticleType::NextID(900);
 		empty.Checkpoint("rtsoa_ids", empty.Schema().Name());
-		for (bool reverse : {false, true}) {
+		for (const bool reverse : {false, true}) {
 			quokka::ParticleContainer first(cic.Schema(), geom, dm, ba);
 			quokka::ParticleContainer second(schema, geom, dm, ba);
 			quokka::ParticleContainer::ParticleType::NextID(1);
@@ -504,4 +509,7 @@ int main(int argc, char **argv)
 		amrex::Print() << "Particle schema, defaults, logical indexing, introspection and I/O checks passed\n";
 	}
 	amrex::Finalize();
+} catch (const std::exception &error) {
+	amrex::Abort(error.what());
+	return 1;
 }
