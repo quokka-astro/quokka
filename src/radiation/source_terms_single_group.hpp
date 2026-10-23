@@ -176,7 +176,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						T_d = T_gas;
 					} else {
 						const quokka::valarray<double, 1> Erad_guess_vec{Erad_guess};
-						T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n);
+						// Q_dust defaults to zero here: ISM_Traits::dust_chemical_band_absorption requires a
+						// chemical band, which never coexists with nGroups_ <= 1.
+						T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n, 0.0);
 						AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 						if (T_d < 0.0) {
 							amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[1], 1); // NOLINT
@@ -193,6 +195,11 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					AMREX_ASSERT(!std::isnan(kappaE));
 					AMREX_ASSERT(kappaP >= 0.0);
 					AMREX_ASSERT(kappaE >= 0.0);
+					// A single chemical band does not take part in the thermal coupling (see
+					// DefineThermalCouplingOpacityExponentsAndLowerValues), so its opacity must be zero.
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE((nGroupsThermal_ > 0) || (kappaP == 0.0 && kappaE == 0.0),
+									 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
+									 "photochemistry, so its Planck and energy-mean opacities must be 0.");
 					if (kappaE > 0.0) {
 						kappaPoverE = kappaP / kappaE;
 					} else {
@@ -203,6 +210,10 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					if (n == 0) {
 						kappaF = ComputeFluxMeanOpacity(rho, T_d);
 						AMREX_ASSERT(!std::isnan(kappaF));
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    (nGroupsThermal_ > 0) || (kappaF == 0.0),
+						    "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
+						    "photochemistry, so its flux-mean opacity must be 0.");
 
 						if constexpr ((beta_order_ != 0) && (include_work_term_in_source)) {
 							// compute the work term at the old state
@@ -381,6 +392,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			} else { // if constexpr gamma_ == 1.0
 				T_d = T_gas;
 				kappaF = ComputeFluxMeanOpacity(rho, T_d);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE((nGroupsThermal_ > 0) || (kappaF == 0.0),
+								 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through "
+								 "photochemistry, so its flux-mean opacity must be 0.");
 
 				amrex::ignore_unused(p_iteration_counter_local);
 				amrex::ignore_unused(Ekin0);

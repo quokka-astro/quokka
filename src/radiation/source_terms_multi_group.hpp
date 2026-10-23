@@ -13,7 +13,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP
 {
 	OpacityTerms<problem_t> result;
 
-	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
+	const auto kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
 
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 		for (int g = 0; g < nGroups_; ++g) {
@@ -67,7 +67,7 @@ RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(double const T, d
 							       quokka::valarray<double, nGroups_> const &fourPiBoverC, OpacityTerms<problem_t> &opacity_terms)
 {
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
-	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
+	const auto kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
 	// A band that does not emit has no thermal emission for the Doppler shift to act on, so its
 	// momentum-of-emission and group-coupling terms are zero by construction; both delta terms are left at
 	// zero here. Computing them anyway from the Planck function, as the code used to, injects a spurious
@@ -823,7 +823,8 @@ template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
 						    amrex::Real dt_implicit, double gas_update_factor_in, double dustGasCoeff, double const tol_h,
 						    double const tol_rel_h, double const tempFloor_local, int *p_iteration_counter,
-						    int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
+						    int *p_iteration_failure_counter, amrex::Array4<const amrex::Real> const &dustHeatingSource,
+						    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
@@ -852,6 +853,13 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		const double c = c_light_;
 		const double chat = c_hat_;
 		const double dustGasCoeff_local = dustGasCoeff;
+		const double dt_local = dt;
+		auto const &dustHeatingSource_local = dustHeatingSource; // NOLINT
+
+		double Q_dust = 0.0;
+		if constexpr (dust_chemical_band_absorption_) {
+			Q_dust = dustHeatingSource_local(i, j, k) * dt_local;
+		}
 
 		// load fluid properties
 		const double rho = consPrev(i, j, k, gasDensity_index);
@@ -893,7 +901,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// source is injected directly into the radiation energy after the Newton solve (see the store
 		// below), so it is not subject to the thermal opacity coupling (which would drop it at zero
 		// opacity) and does not pollute the gas energy balance. Remove the chem-band source from the
-		// thermal solve here. When NChemBands == 0 this loop is empty and behaviour is unchanged.
+		// thermal solve here. When NChemBands == 0 this loop is empty and behaviour is unchanged. With
+		// photochemistry enabled, subcycleRadiationAtLevel injects the chem-band emission before
+		// photochemistry (RadSystem::AddChemBandSources) and passes zero chem-band sources here.
 		quokka::valarray<double, nGroups_> Src_chem{};
 		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
 			Src_chem[g] = Src[g];
@@ -992,13 +1002,13 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					if constexpr (!enable_photoelectric_heating_) {
 						// gas + radiation + dust
 						updated_energy = SolveGasDustRadiationEnergyExchange(
-						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy, tol,
-						    tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
+						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, Q_dust, radBoundaries_g_copy,
+						    tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 					} else {
 						// gas + radiation + dust + photoelectric heating
 						updated_energy = SolveGasDustRadiationEnergyExchangeWithPE(
-						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy, tol,
-						    tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
+						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, Q_dust, radBoundaries_g_copy,
+						    tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 					}
 				}
 
@@ -1011,7 +1021,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, updated_energy.T_d);
 			} else { // constexpr (gamma_ == 1.0)
-				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, NAN);
+				kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, NAN);
 				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 					for (int g = 0; g < nGroups_; ++g) {
 						updated_energy.opacity_terms.kappaF[g] = kappa_expo_and_lower_value[1][g];

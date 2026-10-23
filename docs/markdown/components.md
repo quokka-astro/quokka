@@ -25,7 +25,7 @@ Defined in `src/physics_info.hpp`. User-specialized per problem to enable/disabl
 
 | Field                                                                           | Meaning                                                                             |
 | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `is_hydro_enabled`                                                              | Enable hydrodynamics                                                                |
+| `is_hydro_enabled`                                                              | Advect the gas with the hydro solver. When `false`, the gas state is still allocated and Strang-split sources still act on it, but it is not advected (see below) |
 | `is_radiation_enabled`                                                          | Enable radiation transport                                                          |
 | `is_dust_enabled`                                                               | Enable dust dynamics                                                                |
 | `is_mhd_enabled`                                                                | Enable MHD (face-centred magnetic fields)                                           |
@@ -76,7 +76,7 @@ Notes:
 - `Cooling + particles` is exercised by `ParticleSF`, `TallBoxSf`, `RandomBlast`, and `DiskGalaxy` through their input files.
 - `Hydro + dust` is exercised by the dust dynamics problems `DustAdvection*`, `DustDamping*`, `DustSoundwave`, and `DustyShock`.
 - `MHD + dust` is exercised by charged-dust and dust-MHD problems including `DustDampedGyromotion`, `DustDampingMHDZeroB`, `DustHallPedersenDrift`, `DustLorentzShock`, `DustMagnetizedRDI`, `DustyAlfvenWave`, and `DustyOrszagTang`.
-- `Self-gravity + particles` with **no** hyperbolic module is supported: a problem may set `is_hydro_enabled = false` and `is_radiation_enabled = false` while keeping `is_self_gravity_enabled = true`, in which case the timestep is set by the particle CFL condition alone. This is tested by `BinaryOrbitCICGravityOnly`, which reproduces the `BinaryOrbitCIC` orbit without any gas.
+- `is_hydro_enabled = false` switches off advection only. The gas state is always allocated, and each step still applies the first Strang-split half-step (cooling, chemistry, turbulence driving, dust drag, conduction and `addStrangSplitSources()`), copies the state old→new in place of the RK2 update, and applies the second Strang-split half-step. Hydro floors, self-gravity (both the gas density in the Poisson source and the gravitational kick on the gas) and radiation coupling act on the gas as usual. The hydro CFL condition and tracer-particle advection are skipped, so if no other enabled module (radiation, particles) constrains the timestep, `constant_dt` or `max_dt` must be set in the input file; otherwise Quokka aborts with `No enabled physics module constrains the timestep!`.
 
 
 ## Cell-centred state vector layout
@@ -90,7 +90,6 @@ Defined in `src/physics_info.hpp`. Computes starting indices and total component
 
 | Constant            | Definition                                                             | Meaning                                                                      |
 | ------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `nvarTotal_cc_adv`  | 1                                                                      | Number of cc variables for a pure advection problem (no hydro, no radiation) |
 | `nvarTotal_cc`      | (see below)                                                            | Total number of cell-centred components in the state vector                  |
 | `hydroFirstIndex`   | 0                                                                      | Starting index of hydro variables                                            |
 | `pscalarFirstIndex` | `numHydroVars` (= 6)                                                   | Starting index of passive scalars                                            |
@@ -103,8 +102,9 @@ Defined in `src/physics_info.hpp`. Computes starting indices and total component
 
 **`nvarTotal_cc` calculation:**
 
-- If neither hydro nor radiation is enabled: `nvarTotal_cc = nvarTotal_cc_adv` (= 1). In `AdvectionSimulation` this single component is the advected density; in `QuokkaSimulation` (e.g. a gravity-only problem with particles) nothing evolves it, and it is named `placeholder` in plotfiles and conservation sums.
-- Otherwise: `nvarTotal_cc = numHydroVars + numPassiveScalars + numDustVarsPerGroup * nDustGroups * is_dust_enabled + numRadVarsPerGroup * nGroups * is_radiation_enabled`.
+`nvarTotal_cc = numHydroVars + numPassiveScalars + numDustVarsPerGroup * nDustGroups * is_dust_enabled + numRadVarsPerGroup * nGroups * is_radiation_enabled`.
+
+The hydro variables are always allocated, independent of `is_hydro_enabled` (which only controls advection), so passive scalars and dust always have a gas state to live in.
 
 ## Cell-centred component map
 

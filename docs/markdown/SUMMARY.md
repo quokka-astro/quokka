@@ -14,8 +14,9 @@
 
 - [Radiation Hydrodynamics (beta)](radiation_hydrodynamics.md)
 - [Magnetohydrodynamics (beta)](mhd_module.md)
+- [Radiation Hydrodynamics (beta)](radiation_hydrodynamics.md)
+- [Photoionization (beta)](photoionization.md)
 - [Star Formation and Feedback (beta)](particles.md)
-- [Photoionization](photoionization.md)
 - [Dust Module (beta)](dust_module.md)
 - [Cooling Module](cooling_module.md)
 
