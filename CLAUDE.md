@@ -45,6 +45,7 @@ What `--help` does not cover:
   - `CMakeLists.txt`: Defines executable target
 - Problems use template specialization pattern for `QuokkaSimulation<ProblemName>`
 - Input files (`.toml`) in `inputs/` configure geometry, AMR, physics parameters
+- **Write test problems in CGS.** Set `Physics_Traits::unit_system = UnitSystem::CGS` and use physical values. Do not write a test in `UnitSystem::CONSTANTS` or `CUSTOM` unless it is absolutely necessary and the user has said so; dimensionless units cannot exercise any empirically calibrated constant.
 
 ## Key Dependencies
 - **AMReX**: Underlying AMR framework (external submodule)
