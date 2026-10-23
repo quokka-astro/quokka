@@ -86,18 +86,19 @@ template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPop
 	// particle container. See https://github.com/AMReX-Codes/amrex/issues/4896
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
-			auto &particle_array = ikv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
+			auto &particle_tile = ikv.second;
+			const auto layout = StochasticStellarPopParticles->Layout();
+			const auto np = particle_tile.numParticles();
 
 			if (np == 0) {
 				continue;
 			}
 
-			auto *pdata = particle_array().data();
+			const auto data = particle_tile.getParticleTileData();
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
+				auto p = quokka::ParticleView(data, i, layout); // NOLINT
 				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 			});
 		}
