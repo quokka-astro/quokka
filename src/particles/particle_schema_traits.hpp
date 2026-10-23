@@ -10,7 +10,8 @@ template <ParticleType population, typename problem_t> struct ParticleSchemaTrai
 	[[nodiscard]] static auto Create() -> ParticleSchema
 	{
 		amrex::Vector<std::string> reals;
-		amrex::Vector<std::string> integers;
+		// Mutated only in populations with integer fields.
+		amrex::Vector<std::string> integers; // NOLINT(misc-const-correctness)
 		std::string name;
 		ParticleLayout layout;
 		if constexpr (population != ParticleType::Tracer) {

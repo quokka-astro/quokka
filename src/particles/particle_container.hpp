@@ -59,12 +59,12 @@ class ParticleContainer : public amrex::ParticleContainerRTSoA<>
 	// ID/CPU allocation is left to the caller's one allocation per new particle.
 	void ResizeAndInitialize(ParticleTileType &tile, amrex::Long size)
 	{
-		BL_PROFILE("ParticleContainer::ResizeAndInitialize()");
+		BL_PROFILE("ParticleContainer::ResizeAndInitialize()"); // NOLINT(misc-const-correctness)
 		RequireCreationReady();
 		AMREX_ALWAYS_ASSERT(size >= 0);
 		const auto oldSize = tile.size();
 		{
-			BL_PROFILE("ParticleStorage::resize()");
+			BL_PROFILE("ParticleStorage::resize()"); // NOLINT(misc-const-correctness)
 			tile.resize(size);
 		}
 		if (size <= oldSize) {
@@ -73,7 +73,7 @@ class ParticleContainer : public amrex::ParticleContainerRTSoA<>
 		const auto data = tile.getParticleTileData();
 		const int rank = amrex::ParallelDescriptor::MyProc();
 		{
-			BL_PROFILE("ParticleContainer::InitializeIdentity()");
+			BL_PROFILE("ParticleContainer::InitializeIdentity()"); // NOLINT(misc-const-correctness)
 			amrex::ParallelFor(size - oldSize, [=] AMREX_GPU_DEVICE(amrex::Long offset) noexcept {
 				const auto i = offset + oldSize;
 				data.id(i) = 0;
@@ -148,7 +148,7 @@ class ParticleContainer : public amrex::ParticleContainerRTSoA<>
 					[=] AMREX_GPU_DEVICE(int i) -> Tuple { return {data.id(i).is_valid() ? static_cast<amrex::Long>(data.id(i)) : 0}; });
 			}
 		}
-		const auto maximum = std::max(amrex::Long(0), amrex::get<0>(result.value(op)));
+		const auto maximum = std::max(static_cast<amrex::Long>(0), amrex::get<0>(result.value(op)));
 		pendingNextID_ = std::max(pendingNextID_, maximum + 1);
 	}
 	[[nodiscard]] auto RestartNextID() const -> amrex::Long { return restartNextID_; }
@@ -198,7 +198,7 @@ class ParticleContainer : public amrex::ParticleContainerRTSoA<>
 	}
 	void SetDefaults(ParticleTileType &tile, amrex::Long begin, amrex::Long end, int firstReal)
 	{
-		BL_PROFILE("ParticleContainer::SetDefaults()");
+		BL_PROFILE("ParticleContainer::SetDefaults()"); // NOLINT(misc-const-correctness)
 		const auto data = tile.getParticleTileData();
 		for (int c = firstReal; c < Layout().numReal; ++c) {
 			const auto value = schema_.RealDefaults()[c];

@@ -13,6 +13,7 @@ inline auto Records(const std::vector<int64_t> &ids, const std::vector<int> &cpu
 	AMREX_ALWAYS_ASSERT(ids.size() == cpus.size() && ids.size() == reals.size());
 	AMREX_ALWAYS_ASSERT(integers.empty() || integers.size() == ids.size());
 	std::vector<Record> rows;
+	rows.reserve(ids.size());
 	for (size_t i = 0; i < ids.size(); ++i) {
 		rows.emplace_back(ids[i], cpus[i], reals[i], integers.empty() ? std::vector<int>{} : integers[i]);
 	}
@@ -31,7 +32,7 @@ inline auto CaptureRecords(quokka::ParticleContainer &pc) -> std::vector<Record>
 			const auto count = tile.numParticles();
 			amrex::Gpu::DeviceVector<int> packed(2 * count);
 			auto *out = packed.data();
-			amrex::ParallelFor(count, [=] AMREX_GPU_DEVICE(int i) {
+			amrex::ParallelFor(count, [=] AMREX_GPU_DEVICE(amrex::Long i) {
 				out[2 * i] = data.id(i).is_valid();
 				out[2 * i + 1] = data.cpu(i);
 			});
@@ -51,7 +52,8 @@ inline auto CaptureRecords(quokka::ParticleContainer &pc) -> std::vector<Record>
 template <typename Legacy> auto CaptureLegacyRecords(const Legacy &pc) -> std::vector<Record>
 {
 	std::vector<int64_t> ids;
-	std::vector<int> cpus, integers;
+	std::vector<int> cpus;
+	std::vector<int> integers;
 	std::vector<double> reals;
 	constexpr int nr = AMREX_SPACEDIM + Legacy::ParticleType::NReal;
 	constexpr int ni = Legacy::ParticleType::NInt;
@@ -84,7 +86,8 @@ template <typename Legacy> auto CaptureLegacyRecords(const Legacy &pc) -> std::v
 	reals = quokka::particle_io::gatherBuffer(reals);
 	integers = quokka::particle_io::gatherBuffer(integers);
 	std::vector<std::vector<double>> realRows(ids.size());
-	std::vector<std::vector<int>> intRows(ni > 0 ? ids.size() : 0);
+	// Mutated only by legacy populations with integer fields.
+	std::vector<std::vector<int>> intRows(ni > 0 ? ids.size() : 0); // NOLINT(misc-const-correctness)
 	for (size_t i = 0; i < ids.size(); ++i) {
 		realRows[i].assign(reals.begin() + i * nr, reals.begin() + (i + 1) * nr);
 		if constexpr (ni > 0) {

@@ -123,7 +123,11 @@ class ParticleSchema
 		for (const int index : {layout_.mass, layout_.birthTime, layout_.deathTime, layout_.massAtBirth, layout_.accretionRate}) {
 			check(index, layout_.numReal);
 		}
+#if AMREX_SPACEDIM == 3
+		check(layout_.velocity, layout_.numReal, 3);
+#else
 		check(layout_.velocity, layout_.numReal, population_ == ParticleType::Tracer ? AMREX_SPACEDIM : 3);
+#endif
 		check(layout_.angularMomentum, layout_.numReal, 3);
 		check(layout_.evolutionStage, layout_.numInt);
 		if (layout_.numLuminosities < 0 || ((layout_.luminosity == -1) != (layout_.numLuminosities == 0))) {

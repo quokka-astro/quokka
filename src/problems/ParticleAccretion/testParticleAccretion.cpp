@@ -96,7 +96,7 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 		for (auto &ikv : kv) {
 			auto &particle_tile = ikv.second;
 			const auto layout = SinkParticles->Layout();
-			const int np = particle_tile.numParticles();
+			const auto np = particle_tile.numParticles();
 
 			if (np == 0) {
 				continue;

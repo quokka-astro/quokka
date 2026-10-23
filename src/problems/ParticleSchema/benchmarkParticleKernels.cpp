@@ -3,9 +3,10 @@
 #include "AMReX.H"
 #include "AMReX_ParmParse.H"
 #include "particles/PhysicsParticles.hpp"
+#include <array>
 #if __has_include("particles/particle_container.hpp")
 #include "particles/particle_schema_traits.hpp"
-#define QUOKKA_BENCHMARK_RTSOA 1
+#define QUOKKA_BENCHMARK_RTSOA
 #endif
 
 struct ParticleBenchmarkProblem {};
@@ -45,11 +46,11 @@ auto MakeContainer(const amrex::Geometry &geom, const amrex::DistributionMapping
 #endif
 }
 
-template <typename F> void Measure(const std::string &name, int iterations, F &&function)
+template <typename F> void Measure(const std::string &name, int iterations, const F &function)
 {
 	amrex::Gpu::streamSynchronize();
 	amrex::ParallelDescriptor::Barrier();
-	BL_PROFILE(name);
+	BL_PROFILE(name); // NOLINT(misc-const-correctness)
 	for (int i = 0; i < iterations; ++i) {
 		function(i);
 	}
@@ -103,8 +104,8 @@ void BenchmarkAccretion(int cells, int iterations)
 	using Hydro = HydroSystem<SinkBenchmarkProblem>;
 	const amrex::Box domain(amrex::IntVect(0), amrex::IntVect(cells - 1));
 	const amrex::RealBox bounds({0., 0., 0.}, {1.e20, 1.e20, 1.e20});
-	const int periodic[] = {1, 1, 1};
-	const amrex::Geometry geom(domain, &bounds, 0, periodic);
+	const std::array<int, 3> periodic = {1, 1, 1};
+	const amrex::Geometry geom(domain, &bounds, 0, periodic.data());
 	const amrex::BoxArray ba(domain);
 	const amrex::DistributionMapping dm(ba);
 #ifdef QUOKKA_BENCHMARK_RTSOA
@@ -284,12 +285,12 @@ void BenchmarkLuminosity(const amrex::Geometry &geom, const amrex::DistributionM
 }
 } // namespace
 
-int main(int argc, char **argv)
-{
+auto main(int argc, char **argv) -> int
+try {
 	amrex::Initialize(argc, argv);
 	{
 		static_assert(AMREX_SPACEDIM == 3);
-		amrex::ParmParse pp("benchmark");
+		const amrex::ParmParse pp("benchmark");
 		int cells = 64;
 		int iterations = 20;
 		int ioIterations = 3;
@@ -299,8 +300,8 @@ int main(int argc, char **argv)
 		AMREX_ALWAYS_ASSERT(cells >= 4 && cells % 2 == 0 && iterations > 0 && ioIterations > 0);
 		const amrex::Box domain(amrex::IntVect(0), amrex::IntVect(cells - 1));
 		const amrex::RealBox bounds({0., 0., 0.}, {1., 1., 1.});
-		const int periodic[] = {1, 1, 1};
-		const amrex::Geometry geom(domain, &bounds, 0, periodic);
+		const std::array<int, 3> periodic = {1, 1, 1};
+		const amrex::Geometry geom(domain, &bounds, 0, periodic.data());
 		amrex::BoxArray ba(domain);
 		ba.maxSize(32);
 		const amrex::DistributionMapping dm(ba);
@@ -383,4 +384,7 @@ int main(int argc, char **argv)
 		}
 	}
 	amrex::Finalize();
+} catch (const std::exception &error) {
+	amrex::Abort(error.what());
+	return 1;
 }
