@@ -170,8 +170,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
 	template <typename DensityFloorFunc>
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf,
-				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, bool floorPreserveEint,
+				  amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
 				  DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
@@ -1021,7 +1021,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 template <typename problem_t>
 template <typename DensityFloorFunc>
 void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const dustDensityFloor, amrex::Real const tempFloor,
-					   amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf,
+					   bool const floorPreserveEint, amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf,
 					   amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
@@ -1050,7 +1050,12 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 		amrex::Real localDensityFloor = density_floor_func(x, y, z, densityFloor);
 
-		// Enforce density floor (do not adjust energies here!!)
+		// Enforce density floor. By default energies are not adjusted, which conserves total energy:
+		// raising rho at fixed momentum lowers the kinetic energy p^2/(2 rho), and with E unchanged that
+		// difference becomes internal energy, heating the cell by 0.5 v^2 (rho_floor/rho - 1) per unit
+		// mass. For fast gas that undershoots the floor, and gamma close to 1, this reaches 1e9-1e11 K.
+		// With floorPreserveEint the difference is removed from E instead, so the cell's internal
+		// energy (and the auxiliary internal energy) are unchanged.
 		amrex::Real rho_new = NAN;
 		{
 			amrex::Real const rho = state[bx](i, j, k, density_index);
@@ -1058,6 +1063,12 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 			if (rho < localDensityFloor) {
 				rho_new = localDensityFloor;
+				if (floorPreserveEint && rho > 0.0) {
+					amrex::Real const px = state[bx](i, j, k, x1Momentum_index);
+					amrex::Real const py = state[bx](i, j, k, x2Momentum_index);
+					amrex::Real const pz = state[bx](i, j, k, x3Momentum_index);
+					state[bx](i, j, k, energy_index) -= 0.5 * (px * px + py * py + pz * pz) * (1.0 / rho - 1.0 / rho_new);
+				}
 				state[bx](i, j, k, density_index) = rho_new;
 
 				if (nscalars_ > 0) {

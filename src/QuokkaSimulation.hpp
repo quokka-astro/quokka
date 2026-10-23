@@ -137,6 +137,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::dustDensityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
+	using AMRSimulation<problem_t>::floorPreserveEint_;
 
 	using AMRSimulation<problem_t>::max_level;
 	using AMRSimulation<problem_t>::n_error_buf;
@@ -2089,16 +2090,19 @@ template <typename problem_t>
 void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev)
 {
 	// Apply the hydro floors after any operator-split state update before the next operator consumes the state.
+	bool const floor_preserve_eint = (floorPreserveEint_ != 0);
 	if (this->useDensityFloorParser_) {
 		auto const density_floor_parser = this->densityFloorParserExe_.value();
 		auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, floor_preserve_eint, state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	} else {
 		auto const density_floor_func = QuokkaDensityFloorFunctor<problem_t>{};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, floor_preserve_eint, state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	}
 
 	if (useDualEnergy_ == 1) {

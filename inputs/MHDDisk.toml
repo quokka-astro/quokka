@@ -52,6 +52,7 @@ mhd_galaxy.Mc          = 28.6  # orbital speed, in mach (set either Mc or vc)
 mhd_galaxy.cs_disk_kms = 7.0   # sound speed of disk, in km/s (set either T or cs)
 mhd_galaxy.T_cgm       = 1e7   # temperature of the surrounding background medium (set either T or cs)
 #mhd_galaxy.cs_cgm_kms = 3.7e2 # sound speed of surrounding medium, in km/s (set either T or cs)
+#mhd_galaxy.hydrostatic_cgm = 1 # start the surrounding medium in hydrostatic equilibrium with the halo instead of at uniform density
 mhd_galaxy.sn_jeans_J  = 4.0   # value from Truelove et al. 1997 - higher means more SN, set to -1 (or 0) to disable SN
 mhd_galaxy.star_formation_efficiency = 0.5 # fraction of stellar mass that remains as a compact remnant
 mhd_galaxy.sn_momentum = 1.0e8 # SN bubble enhancement estimate, in M_sun * km/s

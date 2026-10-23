@@ -85,6 +85,7 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real vc = NAN; // the other will be calculated
 	amrex::Real Sigma0;
 	amrex::Real rho_cgm;
+	int hydrostatic_cgm = 0; // if 1, start the CGM in hydrostatic equilibrium (cgmDensityHydrostatic)
 	amrex::Real rho_mid;
 	amrex::Real T_disk = NAN;  // one will be set
 	amrex::Real cs_disk = NAN; // the other will be calculated
@@ -174,6 +175,20 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, doub
 	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -(vc / cs) * (vc / cs) / 2.0);
 
 	return Sigma * disk_factor * halo_factor;
+}
+
+// CGM density for mhd_galaxy.hydrostatic_cgm: isothermal gas (P = rho cs^2) in hydrostatic equilibrium with
+// the halo potential applied in addStrangSplitSources, Phi = vc^2/2 ln(R^2 + Rc^2 + z^2/q^2), i.e.
+// rho proportional to exp(-Phi/cs^2) = D^(-(vc/cs)^2/2) -- the same form as the disk's halo_factor. Normalised to rho_ref
+// in the midplane at R_ref (the disk's outer edge), where the uniform CGM is in pressure balance with the
+// disk; elsewhere that balance is only approximate. Disk self-gravity is not included. Without this, the
+// uniform CGM has no pressure gradient to hold it up against the halo and falls onto the disk from t = 0.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cgmDensityHydrostatic(double R, double z, double Rc, double vc, double cs, double R_ref, double rho_ref)
+    -> double
+{
+	const double D = R * R + Rc * Rc + (z / q_flatten) * (z / q_flatten);
+	const double D_ref = R_ref * R_ref + Rc * Rc;
+	return rho_ref * pow(D / D_ref, -(vc / cs) * (vc / cs) / 2.0);
 }
 
 // 1D and 2D Interpolation Operators for Cylindrical A_phi Evaluation
@@ -431,6 +446,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.query("Mc", userData_.Mc);
 	pp.query("T_disk", userData_.T_disk);
 	pp.query("T_cgm", userData_.T_cgm);
+	pp.query("hydrostatic_cgm", userData_.hydrostatic_cgm);
 	pp.get("Q_mean", userData_.Q_mean);
 	pp.get("sn_jeans_J", userData_.sn_jeans_J);
 	pp.get("sn_momentum", userData_.sn_momentum);
@@ -493,7 +509,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	// set densityProfile factor such that the integral equals Q_mean
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
 	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm); // rho_cgm such that equal pressure at boundary (~3.54e-32)
-	userData_.rho_cgm = std::max(userData_.rho_cgm, dustDensityFloor_);	      // cgm density is at least the density floor
+	userData_.rho_cgm = std::max(userData_.rho_cgm, densityFloor_);		      // cgm density is at least the density floor
 
 	//-------//
 	// A_phi // - Load 2D Cylindrical A_phi Potential Table
@@ -660,6 +676,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	const double cs_disk = userData_.cs_disk;
 	const double cs_cgm = userData_.cs_cgm;
 	const double rho_cgm = userData_.rho_cgm;
+	const bool hydrostatic_cgm = (userData_.hydrostatic_cgm != 0);
 	constexpr double gamma = quokka::EOS_Traits<MHDGalaxy>::gamma;
 
 	const double B0_scale = userData_.seed_B0_HL;
@@ -754,7 +771,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 
 		const double rho_disc_raw = R < Rcutoff ? diskDensityAnalytic(R, z, Rc, Rd, Sigma0, vc, cs_disk) : 0.0;
 		const bool in_disk = (rho_disc_raw > rho_transition);
-		const double rho = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
+		const double rho_cgm_here = hydrostatic_cgm ? cgmDensityHydrostatic(R, z, Rc, vc, cs_cgm, Rcutoff, rho_cgm) : rho_cgm;
+		const double rho = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm_here;
 		const double cs = in_disk ? cs_disk : cs_cgm;
 
 		const double vrot = vcircAnalytic(R, 0.0, vc, Rc);

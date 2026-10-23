@@ -244,6 +244,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// rescales temperature by Physics_Traits::unit_temperature. Such problems should set
 	// temperature_floor explicitly.
 	amrex::Real tempFloor_ = (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) ? 2.7 : 0.0; // K (CGS only)
+	// if 1, the density floor keeps each floored cell's internal energy fixed instead of its total
+	// energy (see HydroSystem::EnforceLimits); off by default, which conserves total energy
+	int floorPreserveEint_ = 0;
 	bool useDensityFloorParser_ = false;
 	std::string densityFloorExpr_;
 	std::optional<amrex::Parser> densityFloorParser_;
@@ -1045,6 +1048,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// read temperature floor in K
 	pp.query("temperature_floor", tempFloor_);
+
+	// keep internal energy fixed when the density floor raises rho (0 == off, the default)
+	pp.query("floor_preserve_eint", floorPreserveEint_);
 
 	// optional density floor expression (variables: x, y, z, base_density_floor)
 	densityFloorExpr_.clear();
