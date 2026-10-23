@@ -668,7 +668,7 @@ template <typename problem_t, ParticleType particleType> class PhysicsParticleDe
 					    const amrex::Real vy = ParticleView(p_type, i, layout).rdata(mass_idx + 2);
 					    const amrex::Real vz = ParticleView(p_type, i, layout).rdata(mass_idx + 3);
 					    const amrex::Real v2 = (vx * vx) + (vy * vy) + (vz * vz);
-					    const amrex::RealVect pos{p_type[i].pos(0), p_type[i].pos(1), p_type[i].pos(2)};
+					    const amrex::RealVect pos{AMREX_D_DECL(p_type[i].pos(0), p_type[i].pos(1), p_type[i].pos(2))};
 					    return amrex::ValLocPair<amrex::Real, amrex::RealVect>{.value = std::sqrt(v2), .index = pos};
 				    },
 				    reduce_ops);

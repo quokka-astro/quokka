@@ -81,6 +81,9 @@ namespace filesystem = experimental::filesystem;
 
 #include <yaml-cpp/yaml.h>
 
+#include "particles/particle_schema_traits.hpp"
+#include "particles/particle_tracer.hpp"
+
 #if AMREX_SPACEDIM == 3
 #include "AMReX_MLLinOp.H"
 #include "AMReX_MLMG.H"
@@ -90,8 +93,6 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
 #include "particles/particle_deposition.hpp"
-#include "particles/particle_schema_traits.hpp"
-#include "particles/particle_tracer.hpp"
 #include "particles/particle_utils.hpp"
 #endif // AMREX_SPACEDIM == 3
 

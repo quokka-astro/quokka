@@ -178,5 +178,6 @@ template <typename F> struct ParticleMeshFunctor {
 		function(ParticleView(data, i, layout), mesh, plo, dxi);
 	}
 };
+template <typename F> ParticleMeshFunctor(F, ParticleLayout) -> ParticleMeshFunctor<F>;
 } // namespace quokka
 #endif
