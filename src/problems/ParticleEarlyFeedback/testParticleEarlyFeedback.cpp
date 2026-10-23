@@ -128,7 +128,7 @@ template <> void QuokkaSimulation<ParticleEarlyFeedback>::createInitialStochasti
 		for (auto &tile_entry : level_entry) {
 			auto &particle_tile = tile_entry.second;
 			const auto layout = StochasticStellarPopParticles->Layout();
-			const int num_particles = particle_tile.numParticles();
+			const int num_particles = static_cast<int>(particle_tile.numParticles());
 			if (num_particles == 0) {
 				continue;
 			}
