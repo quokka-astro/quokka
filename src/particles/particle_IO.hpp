@@ -10,7 +10,9 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 #include "particle_types.hpp"
+#include "particles/particle_container.hpp"
 #include <format>
+#include <limits>
 
 namespace quokka
 {
@@ -21,262 +23,111 @@ template <typename problem_t> class PhysicsParticleRegister;
 namespace particle_io
 {
 
-// Get positions and fields data from all particles across all levels and gather them on rank 0.
-// This method creates a temporary particle container on all ranks (though only rank 0 will contain
-// particles after redistribution) and copies all particles from all levels into it.
-//
-// The returned data for each particle contains:
-// - first: vector of particle IDs
-// - second:
-//   - First AMREX_SPACEDIM elements are positions [x,y,z]
-//   - Remaining elements are particle data (e.g., mass, velocities, etc.)
-// - third:
-//   - Integer data (e.g., type, etc.)
-//
-// Only rank 0 will return the actual particle data, other ranks return empty vectors.
-// @return: tuple of vectors containing particle data on rank 0, empty vectors on other ranks
+// Gather flat host buffers without constructing or redistributing an analysis
+// particle container. Every rank participates, including ranks with no particles.
+template <typename T> auto gatherBuffer(const std::vector<T> &local) -> std::vector<T>
+{
+	AMREX_ALWAYS_ASSERT(local.size() <= static_cast<size_t>(std::numeric_limits<int>::max()));
+	const int root = amrex::ParallelDescriptor::IOProcessorNumber();
+	const auto counts = amrex::ParallelDescriptor::Gather(static_cast<int>(local.size()), root);
+	std::vector<int> offsets(counts.size());
+	size_t total = 0;
+	for (size_t rank = 0; rank < counts.size(); ++rank) {
+		AMREX_ALWAYS_ASSERT(total + counts[rank] <= static_cast<size_t>(std::numeric_limits<int>::max()));
+		offsets[rank] = static_cast<int>(total);
+		total += counts[rank];
+	}
+	std::vector<T> gathered(total);
+	amrex::ParallelDescriptor::Gatherv(local.data(), static_cast<int>(local.size()), gathered.data(), counts, offsets, root);
+	return gathered;
+}
+
+// Rows preserve the existing diagnostic convention: positions followed by
+// logical real fields, with integer fields in a separate row. Invalid particles
+// are omitted, matching the previous analysis container's redistribution.
+template <typename ContainerType>
+[[nodiscard]] auto gatherParticleData(ContainerType *container, int firstLevel, int lastLevel)
+    -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>>
+{
+	if (container == nullptr) {
+		return {};
+	}
+	const auto layout = container->Layout();
+	const int nr = AMREX_SPACEDIM + layout.numReal;
+	const int ni = layout.numInt;
+	std::vector<int64_t> ids;
+	std::vector<double> reals;
+	std::vector<int> integers;
+	for (int lev = firstLevel; lev <= lastLevel; ++lev) {
+		for (auto &[key, tile] : container->GetParticles(lev)) {
+			amrex::ignore_unused(key);
+			const auto np = tile.numParticles();
+			const auto data = tile.getParticleTileData();
+			amrex::Gpu::DeviceVector<int64_t> deviceIDs(np);
+			amrex::Gpu::DeviceVector<double> deviceReals(static_cast<size_t>(np) * nr);
+			amrex::Gpu::DeviceVector<int> deviceInts(static_cast<size_t>(np) * ni);
+			auto *idOut = deviceIDs.data();
+			auto *realOut = deviceReals.data();
+			auto *intOut = deviceInts.data();
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(amrex::Long i) noexcept {
+				const auto p = ParticleView(data, i, layout);
+				idOut[i] = p.id();
+				for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+					realOut[i * nr + d] = p.pos(d);
+				}
+				for (int c = 0; c < layout.numReal; ++c) {
+					realOut[i * nr + AMREX_SPACEDIM + c] = p.rdata(c);
+				}
+				for (int c = 0; c < ni; ++c) {
+					intOut[i * ni + c] = p.idata(c);
+				}
+			});
+			std::vector<int64_t> hostIDs(deviceIDs.size());
+			std::vector<double> hostReals(deviceReals.size());
+			std::vector<int> hostInts(deviceInts.size());
+			amrex::Gpu::copy(amrex::Gpu::deviceToHost, deviceIDs.begin(), deviceIDs.end(), hostIDs.begin());
+			amrex::Gpu::copy(amrex::Gpu::deviceToHost, deviceReals.begin(), deviceReals.end(), hostReals.begin());
+			amrex::Gpu::copy(amrex::Gpu::deviceToHost, deviceInts.begin(), deviceInts.end(), hostInts.begin());
+			for (amrex::Long i = 0; i < np; ++i) {
+				if (hostIDs[i] <= 0) {
+					continue;
+				}
+				ids.push_back(hostIDs[i]);
+				reals.insert(reals.end(), hostReals.begin() + i * nr, hostReals.begin() + (i + 1) * nr);
+				integers.insert(integers.end(), hostInts.begin() + i * ni, hostInts.begin() + (i + 1) * ni);
+			}
+		}
+	}
+	ids = gatherBuffer(ids);
+	reals = gatherBuffer(reals);
+	integers = gatherBuffer(integers);
+	std::vector<std::vector<double>> realRows(ids.size());
+	std::vector<std::vector<int>> intRows(ni > 0 ? ids.size() : 0);
+	for (size_t i = 0; i < ids.size(); ++i) {
+		realRows[i].assign(reals.begin() + i * nr, reals.begin() + (i + 1) * nr);
+		if (ni > 0) {
+			intRows[i].assign(integers.begin() + i * ni, integers.begin() + (i + 1) * ni);
+		}
+	}
+	return {std::move(ids), std::move(realRows), std::move(intRows)};
+}
+
 template <typename ContainerType>
 [[nodiscard]] auto getParticleDataAtAllLevels(ContainerType *container)
     -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>>
 {
-	std::vector<int64_t> particle_ids;
-	std::vector<std::vector<double>> real_data;
-	std::vector<std::vector<int>> int_data;
-
-	if (container != nullptr) {
-		// Create single-box particle container for analysis on all ranks
-		ContainerType analysisPC{};
-		// Define a single box [0,1]^3 that will hold all particles on rank 0
-		amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
-		amrex::Geometry const geom(box);
-		amrex::BoxArray const boxArray(box);
-		// Force all particles to rank 0 by using a single-rank distribution
-		amrex::Vector<int> const ranks({0});
-		amrex::DistributionMapping const dmap(ranks);
-
-		// Initialize the analysis container
-		analysisPC.Define(geom, dmap, boxArray);
-
-		// Create a single destination tile on rank 0
-		auto &dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
-
-		// Count total particles across all levels
-		int total_np = 0;
-		for (int lev = 0; lev <= container->finestLevel(); ++lev) {
-			const auto &particles = container->GetParticles(lev);
-			for (const auto &kv : particles) {
-				total_np += kv.second.numParticles();
-			}
-		}
-
-		// Pre-size the destination tile
-		dst_tile.resize(total_np);
-
-		// Copy particles from all levels to the destination tile
-		int particle_offset = 0;
-		for (int lev = 0; lev <= container->finestLevel(); ++lev) {
-			const auto &particles = container->GetParticles(lev);
-
-			for (const auto &kv : particles) {
-				const auto &src_tile = kv.second;
-				const int np = src_tile.numParticles();
-				if (np > 0) {
-					const auto &src_aos = src_tile.GetArrayOfStructs();
-					auto &dst_aos = dst_tile.GetArrayOfStructs();
-					amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + particle_offset);
-					particle_offset += np;
-				}
-			}
-		}
-
-		// Now use MPI to gather all particles to rank 0
-		analysisPC.Redistribute(); // This handles the MPI communication
-
-		// Only rank 0 processes the particles since they're all gathered there
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			// Get iterator for the single box on rank 0
-			typename ContainerType::ParIterType const pIter(analysisPC, 0);
-			if (pIter.isValid()) {
-				const amrex::Long np = pIter.numParticles();
-				auto &particles = pIter.GetArrayOfStructs();
-
-				// Transfer particle data from GPU to CPU for analysis
-				typename ContainerType::ParticleType *pData = particles().data();
-				amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
-				amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
-
-				// Check if particles have integer components
-				constexpr bool has_int_components = (ContainerType::ParticleType::NInt > 0);
-
-				// Pre-size vectors to avoid reallocations
-				particle_ids.reserve(np);
-				real_data.reserve(np);
-				if constexpr (has_int_components) {
-					int_data.reserve(np);
-				}
-
-				// Process each particle
-				for (int i = 0; i < np; ++i) {
-					const auto &p = pData_h[i];
-
-					// Get particle ID
-					particle_ids.push_back(p.id());
-
-					// Process real data (positions and rdata)
-					std::vector<double> r_data;
-					// Pre-allocate to avoid reallocations
-					r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
-
-					// Add position components
-					for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-						r_data.push_back(p.pos(d));
-					}
-
-					// Add all real components
-					for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
-						r_data.push_back(p.rdata(d));
-					}
-
-					real_data.push_back(std::move(r_data));
-
-					// Process integer data if particles have integer components
-					if constexpr (has_int_components) {
-						std::vector<int> i_data;
-						// Pre-allocate to avoid reallocations
-						i_data.reserve(ContainerType::ParticleType::NInt);
-
-						for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
-							i_data.push_back(p.idata(d));
-						}
-
-						int_data.push_back(std::move(i_data));
-					}
-				}
-			}
-		}
-	}
-
-	return {particle_ids, real_data, int_data}; // Empty vectors on non-root ranks
+	return gatherParticleData(container, 0, container != nullptr ? container->finestLevel() : -1);
 }
 
-// Get particle data at a specific level
 template <typename ContainerType>
 [[nodiscard]] auto getParticleDataAtLevel(ContainerType *container, int lev) -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>>
 {
-	std::vector<std::vector<double>> real_data;
-	std::vector<std::vector<int>> int_data;
-
-	if (container != nullptr) {
-		// Create single-box particle container for analysis on all ranks
-		ContainerType analysisPC{};
-		// Define a single box [0,1]^3 that will hold all particles on rank 0
-		amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
-		amrex::Geometry const geom(box);
-		amrex::BoxArray const boxArray(box);
-		// Force all particles to rank 0 by using a single-rank distribution
-		amrex::Vector<int> const ranks({0});
-		amrex::DistributionMapping const dmap(ranks);
-
-		// Initialize the analysis container
-		analysisPC.Define(geom, dmap, boxArray);
-
-		// Create a single destination tile on rank 0
-		auto &dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
-
-		// Get particles only from the specified level
-		const auto &particles = container->GetParticles(lev);
-
-		// First count total particles at this level
-		int total_np = 0;
-		for (const auto &kv : particles) {
-			total_np += kv.second.numParticles();
-		}
-
-		// Pre-size the destination tile
-		dst_tile.resize(total_np);
-
-		// Copy particles from each tile
-		int particle_offset = 0;
-		for (const auto &kv : particles) {
-			const auto &src_tile = kv.second;
-			const int np = src_tile.numParticles();
-			if (np > 0) {
-				const auto &src_aos = src_tile.GetArrayOfStructs();
-				auto &dst_aos = dst_tile.GetArrayOfStructs();
-				amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + particle_offset);
-				particle_offset += np;
-			}
-		}
-
-		// Now use MPI to gather all particles to rank 0
-		analysisPC.Redistribute(); // This handles the MPI communication
-
-		// Only rank 0 processes the particles since they're all gathered there
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			// Get iterator for the single box on rank 0
-			typename ContainerType::ParIterType const pIter(analysisPC, 0);
-			if (pIter.isValid()) {
-				const amrex::Long np = pIter.numParticles();
-				auto &particles = pIter.GetArrayOfStructs();
-
-				// Transfer particle data from GPU to CPU for analysis
-				typename ContainerType::ParticleType *pData = particles().data();
-				amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
-				amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
-
-				// Check if particles have integer components
-				constexpr bool has_int_components = (ContainerType::ParticleType::NInt > 0);
-
-				// Pre-size vectors to avoid reallocations
-				real_data.reserve(np);
-				if constexpr (has_int_components) {
-					int_data.reserve(np);
-				}
-
-				// Process each particle
-				for (int i = 0; i < np; ++i) {
-					const auto &p = pData_h[i];
-
-					// Process real data (positions and rdata)
-					std::vector<double> r_data;
-					// Pre-allocate to avoid reallocations
-					r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
-
-					// Add position components
-					for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-						r_data.push_back(p.pos(d));
-					}
-
-					// Add all real components
-					for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
-						r_data.push_back(p.rdata(d));
-					}
-
-					real_data.push_back(std::move(r_data));
-
-					// Process integer data if particles have integer components
-					if constexpr (has_int_components) {
-						std::vector<int> i_data;
-						// Pre-allocate to avoid reallocations
-						i_data.reserve(ContainerType::ParticleType::NInt);
-
-						for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
-							i_data.push_back(p.idata(d));
-						}
-
-						int_data.push_back(std::move(i_data));
-					}
-				}
-			}
-		}
-	}
-
-	return {real_data, int_data}; // Empty vectors on non-root ranks
+	auto [ids, reals, integers] = gatherParticleData(container, lev, lev);
+	return {std::move(reals), std::move(integers)};
 }
 
 // Write units info of particles to checkpoint/plotfile
-template <typename ContainerType, typename problem_t, ParticleType particleType>
-void writeUnitsFile(ContainerType *container, const std::string &snapshot_name, const std::string &name)
+inline void writeUnitsFile(ParticleContainer *container, const std::string &snapshot_name, const std::string &name)
 {
 	if (container != nullptr) {
 		// Only write on rank 0
@@ -297,18 +148,10 @@ void writeUnitsFile(ContainerType *container, const std::string &snapshot_name, 
 				amrex::Abort("Error opening file for writing: " + filename);
 			}
 
-			// Get the units data for this particle type
-			const auto &unitsData = get_units_data();
-			if (!unitsData.contains(particleType)) {
-				amrex::Abort(
-				    "Error: Particle type not defined in units data map. Please add units for this particle type in get_units_data().");
-			}
-
-			const auto &typeData = unitsData.at(particleType);
-			if (!typeData.empty()) {
+			const auto &definitions = container->Schema().UnitDefinitions();
+			if (!definitions.empty()) {
 				outFile << "# field: [M, L, T, Θ]\n";
-				// Write each field's units to the YAML file
-				for (const auto &[fieldName, units] : typeData[0]) {
+				for (const auto &[fieldName, units] : definitions) {
 					outFile << fieldName << ": [" << units[0] << ", " << units[1] << ", " << units[2] << ", " << units[3] << "]\n";
 				}
 			}
@@ -394,7 +237,7 @@ template <typename ContainerType> auto saveParticleDataToTxtFile(ContainerType *
 			}
 
 			// Write integer components
-			if constexpr (ContainerType::ParticleType::NInt > 1) {
+			if (!int_data.empty()) {
 				for (size_t j = 1; j < int_data[i].size(); ++j) {
 					outFile << int_data[i][j] << " ";
 				}

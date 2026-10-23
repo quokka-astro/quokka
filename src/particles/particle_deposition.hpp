@@ -17,6 +17,7 @@
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
 #include "math/quadrature.hpp"
+#include "particles/particle_container.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 
@@ -214,8 +215,8 @@ struct RadDeposition {
 
 // Functor for depositing particle mass density onto the grid
 struct ParticleMassDensityDeposition {
-	int mass_comp{};
-	int birth_time_comp{-1};
+	int mass_storage_comp{};
+	int birth_time_storage_comp{-1};
 	int start_mesh_comp{};
 	int num_comp{};
 	amrex::Real mass_min{std::numeric_limits<amrex::Real>::lowest()};
@@ -224,35 +225,37 @@ struct ParticleMassDensityDeposition {
 	amrex::Real current_time{};
 	amrex::Real age_max{std::numeric_limits<amrex::Real>::max()};
 
-	template <typename ContainerType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &deposition_array,
+	template <typename TileData>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const TileData &data, int index, amrex::Array4<amrex::Real> const &deposition_array,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
+		const auto p = data[index];
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		const auto massMin = mass_min;
 		const auto massMax = mass_max;
-		const auto birthTimeComp = birth_time_comp;
+		const auto birthTimeComp = birth_time_storage_comp;
 		const auto useAgeFilter = use_age_filter;
 		const auto currentTime = current_time;
 		const auto ageMax = age_max;
-		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-			const auto mass = part.rdata(comp);
-			if (mass < massMin || mass > massMax) {
-				return 0.0;
-			}
-			if (useAgeFilter) {
-				const auto birthTime = part.rdata(birthTimeComp);
-				if (currentTime < birthTime) {
-					return 0.0;
-				}
-				const auto age = currentTime - birthTime;
-				if (age > ageMax) {
-					return 0.0;
-				}
-			}
-			return mass * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-		});
+		interp.ParticleToMesh(p, deposition_array, mass_storage_comp, start_mesh_comp, num_comp,
+				      [=] AMREX_GPU_DEVICE(const decltype(p) &part, int comp) {
+					      const auto mass = part.rdata(comp);
+					      if (mass < massMin || mass > massMax) {
+						      return 0.0;
+					      }
+					      if (useAgeFilter) {
+						      const auto birthTime = part.rdata(birthTimeComp);
+						      if (currentTime < birthTime) {
+							      return 0.0;
+						      }
+						      const auto age = currentTime - birthTime;
+						      if (age > ageMax) {
+							      return 0.0;
+						      }
+					      }
+					      return mass * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+				      });
 	}
 };
 
@@ -268,8 +271,8 @@ void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &depos
 	}
 
 	ParticleMassDensityDeposition deposition_functor;
-	deposition_functor.mass_comp = mass_comp;
-	deposition_functor.birth_time_comp = birth_time_comp;
+	deposition_functor.mass_storage_comp = container->Layout().RealStorage(mass_comp);
+	deposition_functor.birth_time_storage_comp = use_age_filter ? container->Layout().RealStorage(birth_time_comp) : -1;
 	deposition_functor.start_mesh_comp = start_mesh_comp;
 	deposition_functor.num_comp = 1;
 	deposition_functor.mass_min = mass_min;
@@ -577,9 +580,9 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 
 	// Step 1: Local deposition within each box
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-		// Get the particle array of structs
-		auto &particles = pti.GetArrayOfStructs();
-		auto *pData = particles().data();
+		// Get tile data and the logical field layout
+		const auto data = pti.GetParticleTile().getParticleTileData();
+		const auto layout = container->Layout();
 		const amrex::Long np = pti.numParticles();
 
 		// Get the local deposit array for this box
@@ -602,7 +605,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 
 		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			auto p = ParticleView(data, idx, layout); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 			auto const local_state_capture = local_state;
 			auto const plo_capture = plo;
 			auto const dxi_capture = dxi;
@@ -921,8 +924,8 @@ void updateEvolutionStageAndDeathDensity(ContainerType *container, amrex::MultiF
 	}
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-		auto &particles = pti.GetArrayOfStructs();
-		auto *pData = particles().data();
+		const auto data = pti.GetParticleTile().getParticleTileData();
+		const auto layout = container->Layout();
 		const amrex::Long np = pti.numParticles();
 
 		const auto &local_state = state.array(pti);
@@ -931,7 +934,7 @@ void updateEvolutionStageAndDeathDensity(ContainerType *container, amrex::MultiF
 		const auto dxi = geom.InvCellSizeArray();
 
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			auto p = ParticleView(data, idx, layout); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 			auto const local_state_capture = local_state;
 			auto const plo_capture = plo;
 			auto const dxi_capture = dxi;
@@ -972,12 +975,12 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 
 	for (int lev = lev_min; lev <= container->finestLevel(); ++lev) {
 		for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-			auto &particles = pti.GetArrayOfStructs();
-			auto *pData = particles().data();
+			const auto data = pti.GetParticleTile().getParticleTileData();
+			const auto layout = container->Layout();
 			const amrex::Long np = pti.numParticles();
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+				auto p = ParticleView(data, idx, layout); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 				// Check if this is a supernova progenitor
 				const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
@@ -1137,8 +1140,8 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 	state_buffer.setVal(0.0);
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-		auto &particles = pti.GetArrayOfStructs();
-		auto *pData = particles().data();
+		const auto data = pti.GetParticleTile().getParticleTileData();
+		const auto layout = container->Layout();
 		const amrex::Long np = pti.numParticles();
 
 		const auto &local_buffer = state_buffer.array(pti);
@@ -1157,7 +1160,7 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 		constexpr int W_stencil_N = 2;
 
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			auto p = ParticleView(data, idx, layout); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 			const amrex::Real mass_birth = std::max<amrex::Real>(0.0, p.rdata(StochasticStellarPopParticleMassAtBirthIdx));
 			const amrex::Real mass_birth_msun = mass_birth / C::M_solar;

@@ -90,6 +90,8 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
 #include "particles/particle_deposition.hpp"
+#include "particles/particle_schema_traits.hpp"
+#include "particles/particle_tracer.hpp"
 #include "particles/particle_utils.hpp"
 #endif // AMREX_SPACEDIM == 3
 
@@ -555,12 +557,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void loadMultiFabData(const RefinementContext &context);
 	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
 
-	template <typename ParticleContainer>
-	void restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
+	void restartParticleContainerWithRefinement(std::unique_ptr<quokka::ParticleContainer> &particles, std::string const &restart_chkfile,
 						    std::string const &particle_type_name, amrex::Vector<amrex::BoxArray> const &header_box_arrays);
 
-	template <quokka::ParticleType particle_type, typename ContainerType>
-	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, amrex::Vector<amrex::BoxArray> const &header_box_arrays);
+	template <quokka::ParticleType particle_type>
+	void initializeParticleContainerFromCheckpoint(std::unique_ptr<quokka::ParticleContainer> &container,
+						       amrex::Vector<amrex::BoxArray> const &header_box_arrays);
 
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
@@ -714,17 +716,17 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
       protected:
 	void InitParticles(); // create tracer particles
-	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
+	std::unique_ptr<quokka::ParticleContainer> TracerPC;
 
 #if AMREX_SPACEDIM == 3
 	void InitPhyParticles(amrex::Vector<amrex::BoxArray> const *header_box_arrays = nullptr); // create PhysicsParticles or load from checkpoint
-	std::unique_ptr<quokka::RadParticleContainer<problem_t>> RadParticles;
-	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
-	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
-	std::unique_ptr<quokka::StochasticStellarPopParticleContainer<problem_t>> StochasticStellarPopParticles;
-	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
-	std::unique_ptr<quokka::StarParticleContainer<problem_t>> StarParticles;
-	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
+	std::unique_ptr<quokka::ParticleContainer> RadParticles;
+	std::unique_ptr<quokka::ParticleContainer> CICParticles;
+	std::unique_ptr<quokka::ParticleContainer> CICRadParticles;
+	std::unique_ptr<quokka::ParticleContainer> StochasticStellarPopParticles;
+	std::unique_ptr<quokka::ParticleContainer> SinkParticles;
+	std::unique_ptr<quokka::ParticleContainer> StarParticles;
+	std::unique_ptr<quokka::ParticleContainer> TestParticles;
 
 	// Add PhysicsParticleRegister member
 	quokka::PhysicsParticleRegister<problem_t> particleRegister_;
@@ -3890,14 +3892,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 	const BL_PROFILE("AMRSimulation::InitParticles()");
 	if (do_tracers != 0) {
 		AMREX_ASSERT(TracerPC == nullptr);
-		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
+		TracerPC = std::make_unique<quokka::ParticleContainer>(quokka::ParticleSchemaTraits<quokka::ParticleType::Tracer, problem_t>::Create(), this);
 
-		const amrex::AmrTracerParticleContainer::ParticleInitData pdata = {
-		    .real_struct_data = {AMREX_D_DECL(0.0, 0.0, 0.0)},
-		    .int_struct_data = {},
-		    .real_array_data = {},
-		    .int_array_data = {},
-		};
+		const quokka::ParticleContainer::ParticleInitData pdata{};
 
 		TracerPC->SetVerbose(0);
 		TracerPC->InitOnePerCell(0.5, 0.5, 0.5, pdata);
@@ -3936,7 +3933,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 			AMREX_ASSERT(RadParticles == nullptr);
 
 			// Create particle container
-			RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
+			RadParticles =
+			    std::make_unique<quokka::ParticleContainer>(quokka::ParticleSchemaTraits<quokka::ParticleType::Rad, problem_t>::Create(), this);
 			RadParticles->SetVerbose(0);
 
 			// Register with particle register - Rad particles do not allow creation
@@ -3954,7 +3952,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 			AMREX_ASSERT(CICParticles == nullptr);
 
 			// Create particle container
-			CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
+			CICParticles =
+			    std::make_unique<quokka::ParticleContainer>(quokka::ParticleSchemaTraits<quokka::ParticleType::CIC, problem_t>::Create(), this);
 			CICParticles->SetVerbose(0);
 
 			// Register with particle register - CIC particles allow creation
@@ -3972,7 +3971,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 			AMREX_ASSERT(CICRadParticles == nullptr);
 
 			// Create particle container
-			CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
+			CICRadParticles =
+			    std::make_unique<quokka::ParticleContainer>(quokka::ParticleSchemaTraits<quokka::ParticleType::CICRad, problem_t>::Create(), this);
 			CICRadParticles->SetVerbose(0);
 
 			// Register with particle register - CICRad particles do not allow creation
@@ -3993,7 +3993,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 			static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for StochasticStellarPop particles");
 
 			// Create particle container
-			StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
+			StochasticStellarPopParticles = std::make_unique<quokka::ParticleContainer>(
+			    quokka::ParticleSchemaTraits<quokka::ParticleType::StochasticStellarPop, problem_t>::Create(), this);
 			StochasticStellarPopParticles->SetVerbose(0);
 
 			// Register with particle register - StochasticStellarPop particles allow creation
@@ -4011,7 +4012,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 			AMREX_ASSERT(StarParticles == nullptr);
 			static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for Star particles");
 
-			StarParticles = std::make_unique<quokka::StarParticleContainer<problem_t>>(this);
+			StarParticles =
+			    std::make_unique<quokka::ParticleContainer>(quokka::ParticleSchemaTraits<quokka::ParticleType::Star, problem_t>::Create(), this);
 			StarParticles->SetVerbose(0);
 
 			particleRegister_.template registerParticleType<quokka::ParticleType::Star>(StarParticles.get());
@@ -4026,7 +4028,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 			AMREX_ASSERT(SinkParticles == nullptr);
 
 			// Create particle container
-			SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
+			SinkParticles =
+			    std::make_unique<quokka::ParticleContainer>(quokka::ParticleSchemaTraits<quokka::ParticleType::Sink, problem_t>::Create(), this);
 			SinkParticles->SetVerbose(0);
 
 			// Register with particle register - Sink particles allow creation
@@ -4051,7 +4054,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 			AMREX_ASSERT(TestParticles == nullptr);
 
 			// Create particle container
-			TestParticles = std::make_unique<quokka::TestParticleContainer<problem_t>>(this);
+			TestParticles =
+			    std::make_unique<quokka::ParticleContainer>(quokka::ParticleSchemaTraits<quokka::ParticleType::Test, problem_t>::Create(), this);
 			TestParticles->SetVerbose(0);
 
 			// Register with particle register - Test particles have all features enabled
@@ -4062,6 +4066,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 		}
 	}
 
+	quokka::ParticleContainer::FinalizeRestarts();
+	// Splitting allocates IDs, so it must wait until every population has
+	// contributed its checkpoint and restored-record ID requirements.
+	if (is_restart && restartRefineFactor_ > 1 && splitParticlesOnRestartRefine_) {
+		const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
+		const auto split = [&]<quokka::ParticleType type>(const auto &container) {
+			if constexpr (quokka::ParticleTypeTraits<type>::allow_restart_refine_splitting) {
+				if (container) {
+					amrex::Print()
+					    << std::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(type), split_factor);
+					for (int lev = 0; lev <= finestLevel(); ++lev) {
+						particleRegister_.getParticleDescriptor(type)->splitParticles(lev, split_factor);
+					}
+				}
+			}
+		};
+		split.template operator()<quokka::ParticleType::CIC>(CICParticles);
+		split.template operator()<quokka::ParticleType::CICRad>(CICRadParticles);
+	}
 	particleRegister_.redistribute(0);
 }
 #endif // AMREX_SPACEDIM == 3
@@ -5473,7 +5496,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	// read particle data
 	if (do_tracers != 0) {
 		AMREX_ASSERT(TracerPC == nullptr);
-		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
+		TracerPC = std::make_unique<quokka::ParticleContainer>(quokka::ParticleSchemaTraits<quokka::ParticleType::Tracer, problem_t>::Create(), this);
 		restartParticleContainerWithRefinement(TracerPC, restart_chkfile, "tracer_particles", header_box_arrays);
 	}
 
@@ -5484,14 +5507,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	// Read SFH data from metadata
 	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_, sn_count_cumulative_);
+#else
+	quokka::ParticleContainer::FinalizeRestarts();
 #endif // AMREX_SPACEDIM == 3
 
 	areInitialConditionsDefined_ = true;
 }
 
 template <typename problem_t>
-template <typename ParticleContainer>
-void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
+void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<quokka::ParticleContainer> &particles, std::string const &restart_chkfile,
 								      std::string const &particle_type_name,
 								      amrex::Vector<amrex::BoxArray> const &header_box_arrays)
 {
@@ -5506,32 +5530,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 		return;
 	}
 
-	// Check for subdirectories with "Level_" prefix
-	int has_level_dirs = 0;
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// Check for Level_N directories from 0 to finestLevel
-		const int finest_level = finestLevel();
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			std::string const level_path = pc_path + "/Level_" + std::to_string(lev);
-			if (amrex::FileSystem::Exists(level_path)) {
-				has_level_dirs = 1;
-				break;
-			}
-		}
-	}
-
-	// Broadcast the result to all processors
-	// (NOTE: ParallelDescriptor does not support Bcast for bool types, so we use int instead.)
-	amrex::ParallelDescriptor::Bcast(&has_level_dirs, 1, amrex::ParallelDescriptor::IOProcessorNumber());
-
-	// If no Level_ directories found, there are no particles to read
-	if (!has_level_dirs) {
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			amrex::Print() << "WARNING: No particle data found in checkpoint (no Level_* directories) in " << pc_path << "\n";
-		}
-		return;
-	}
-
+	// Empty populations still have a header whose schema and next ID must be restored.
 	if (restartRefineFactor_ > 1) {
 		// Save current geometry for all levels
 		amrex::Vector<amrex::Geometry> current_geom(finest_level + 1);
@@ -5587,31 +5586,18 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 
 #if AMREX_SPACEDIM == 3
 template <typename problem_t>
-template <quokka::ParticleType particle_type, typename ContainerType>
-void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container,
+template <quokka::ParticleType particle_type>
+void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<quokka::ParticleContainer> &container,
 									 amrex::Vector<amrex::BoxArray> const &header_box_arrays)
 {
 	AMREX_ASSERT(container == nullptr);
-	container = std::make_unique<ContainerType>(this);
+	container = std::make_unique<quokka::ParticleContainer>(quokka::ParticleSchemaTraits<particle_type, problem_t>::Create(), this);
 
 	// Register container
 	particleRegister_.template registerParticleType<particle_type>(container.get());
 
 	// Read particles
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);
-
-	// Split particles
-	if constexpr (quokka::ParticleTypeTraits<particle_type>::allow_restart_refine_splitting) {
-		if (restartRefineFactor_ > 1 && splitParticlesOnRestartRefine_) {
-			const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
-			amrex::Print() << std::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type),
-						      split_factor);
-			auto descriptor = particleRegister_.getParticleDescriptor(particle_type);
-			for (int lev = 0; lev <= finestLevel(); ++lev) {
-				descriptor->splitParticles(lev, split_factor);
-			}
-		}
-	}
 }
 #endif // AMREX_SPACEDIM == 3
 

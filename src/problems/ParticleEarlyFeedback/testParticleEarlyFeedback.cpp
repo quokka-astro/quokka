@@ -126,15 +126,16 @@ template <> void QuokkaSimulation<ParticleEarlyFeedback>::createInitialStochasti
 	int particle_offset = 0;
 	for (auto &level_entry : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &tile_entry : level_entry) {
-			auto &particle_array = tile_entry.second.GetArrayOfStructs();
-			const int num_particles = particle_array.numParticles();
+			auto &particle_tile = tile_entry.second;
+			const auto layout = StochasticStellarPopParticles->Layout();
+			const int num_particles = particle_tile.numParticles();
 			if (num_particles == 0) {
 				continue;
 			}
-			auto *particles = particle_array().data();
+			const auto data = particle_tile.getParticleTileData();
 			const int first_particle = particle_offset;
 			amrex::ParallelFor(num_particles, [=] AMREX_GPU_DEVICE(int index) noexcept {
-				auto &particle = particles[index]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+				auto particle = quokka::ParticleView(data, index, layout); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				const int global_index = first_particle + index;
 				if (global_index == 0) {
 					particle.idata(quokka::StochasticStellarPopParticleStageIdx) =
