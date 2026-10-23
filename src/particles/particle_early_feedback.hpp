@@ -19,6 +19,7 @@
 #include "AMReX_REAL.H"
 
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_container.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 #include "physics_info.hpp"
@@ -72,8 +73,8 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 	constexpr auto stencil_weights = ParticleUtils::kernel_spherical_3_weights_normalized;
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-		auto &particles = pti.GetArrayOfStructs();
-		auto *particle_data = particles().data();
+		const auto data = pti.GetParticleTile().getParticleTileData();
+		const auto layout = container->Layout();
 		const amrex::Long num_particles = pti.numParticles();
 		const auto local_state = state.const_array(pti);
 		const auto local_buffer = state_buffer.array(pti);
@@ -92,7 +93,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		const int count_component = state_buffer.nComp() - 1;
 
 		amrex::ParallelFor(num_particles, [=] AMREX_GPU_DEVICE(int64_t particle_index) noexcept {
-			const auto &particle = particle_data[particle_index]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			const auto particle = ParticleView(data, particle_index, layout); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 			if (particle.id() <= 0) {
 				return;
 			}

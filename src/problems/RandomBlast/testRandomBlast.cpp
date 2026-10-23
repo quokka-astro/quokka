@@ -106,21 +106,23 @@ template <> void QuokkaSimulation<RandomBlast>::createInitialStochasticStellarPo
 	// Set integer components (evolution stage) - initialize all as SNProgenitor
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
-			auto &particle_array = ikv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
+			auto &particle_tile = ikv.second;
+			const auto layout = StochasticStellarPopParticles->Layout();
+			const int np = particle_tile.numParticles();
 
 			if (np == 0) {
 				continue;
 			}
 
-			auto *idata = particle_array().data();
+			const auto data = particle_tile.getParticleTileData();
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				idata[i].m_idata[quokka::StochasticStellarPopParticleStageIdx] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-				idata[i].m_rdata[quokka::StochasticStellarPopParticleVxIdx] += vx;
-				idata[i].m_rdata[quokka::StochasticStellarPopParticleVyIdx] += vy;
-				idata[i].m_rdata[quokka::StochasticStellarPopParticleVzIdx] += vz;
+				quokka::ParticleView(data, i, layout).idata(quokka::StochasticStellarPopParticleStageIdx) =
+				    static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				quokka::ParticleView(data, i, layout).rdata(quokka::StochasticStellarPopParticleVxIdx) += vx;
+				quokka::ParticleView(data, i, layout).rdata(quokka::StochasticStellarPopParticleVyIdx) += vy;
+				quokka::ParticleView(data, i, layout).rdata(quokka::StochasticStellarPopParticleVzIdx) += vz;
 			});
 		}
 	}

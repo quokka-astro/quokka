@@ -9,6 +9,8 @@
 #include "AMReX_ParIter.H"
 #include "AMReX_Vector.H"
 #include "particles/particle_chemical_yield.hpp"
+#include "particles/particle_container.hpp"
+#include "particles/particle_schema.hpp"
 #include "particles/stellar_models.hpp"
 #include "physics_info.hpp"
 #include "util/time_units.hpp"
@@ -93,17 +95,6 @@ inline auto chemicalTrackedIsotopeList() -> const std::vector<std::string> & { r
 
 inline auto chemicalTrackedChannelList() -> const std::vector<std::string> & { return chemical_tracked_channel_list; }
 
-// Enum class to identify different particle types
-enum class ParticleType {
-	Rad,		      // Radiation particles
-	CIC,		      // Gravitating particles
-	CICRad,		      // Gravitating radiation particles
-	StochasticStellarPop, // Stellar population particles
-	Sink,		      // Sink particles
-	Test,		      // Test particles with all features enabled
-	Star		      // Star particles
-};
-
 // Compile-time particle metadata.
 // Default policy: do not split particles during restart refinement unless explicitly enabled.
 template <ParticleType particleType> struct ParticleTypeTraits {
@@ -151,8 +142,6 @@ constexpr int RadParticleRealComps = []() constexpr {
 }();
 
 // Type definitions for Rad_particles container and iterator
-template <typename problem_t> using RadParticleContainer = amrex::AmrParticleContainer<RadParticleRealComps<problem_t>>;
-template <typename problem_t> using RadParticleIterator = amrex::ParIter<RadParticleRealComps<problem_t>>;
 
 //-------------------- Gravitating particles --------------------
 
@@ -174,8 +163,6 @@ constexpr int CICParticleVzIdx = static_cast<int>(CICParticleRealIdx::vz);
 constexpr int CICParticleRealComps = 4;
 
 // Type definitions for CIC_particles container and iterator
-using CICParticleContainer = amrex::AmrParticleContainer<CICParticleRealComps>;
-using CICParticleIterator = amrex::ParIter<CICParticleRealComps>;
 
 //-------------------- Gravitating radiation particles --------------------
 
@@ -210,8 +197,6 @@ constexpr int CICRadParticleRealComps = []() constexpr {
 }();
 
 // Type definitions for CICRad_particles container and iterator
-template <typename problem_t> using CICRadParticleContainer = amrex::AmrParticleContainer<CICRadParticleRealComps<problem_t>>;
-template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICRadParticleRealComps<problem_t>>;
 
 //-------------------- Stellar evolution stage enum --------------------
 
@@ -296,11 +281,6 @@ constexpr int StochasticStellarPopParticleRealComps =
 constexpr int StochasticStellarPopParticleIntComps = 1; // evolution stage
 
 // Type definitions for StochasticStellarPop_particles container and iterator
-template <typename problem_t>
-using StochasticStellarPopParticleContainer =
-    amrex::AmrParticleContainer<StochasticStellarPopParticleRealComps<problem_t>, StochasticStellarPopParticleIntComps>;
-template <typename problem_t>
-using StochasticStellarPopParticleIterator = amrex::ParIter<StochasticStellarPopParticleRealComps<problem_t>, StochasticStellarPopParticleIntComps>;
 
 //-------------------- Test particles --------------------
 
@@ -345,8 +325,6 @@ constexpr int TestParticleRealComps = []() constexpr {
 constexpr int TestParticleIntComps = 1; // stellar evolution stage
 
 // Type definitions for Test_particles container and iterator
-template <typename problem_t> using TestParticleContainer = amrex::AmrParticleContainer<TestParticleRealComps<problem_t>, TestParticleIntComps>;
-template <typename problem_t> using TestParticleIterator = amrex::ParIter<TestParticleRealComps<problem_t>, TestParticleIntComps>;
 
 //-------------------- Sink particles --------------------
 
@@ -376,8 +354,6 @@ constexpr int SinkParticleLzIdx = static_cast<int>(SinkParticleRealIdx::Lz);
 constexpr int SinkParticleRealComps = 8; // mass, vx, vy, vz, mdot, Lx, Ly, Lz
 
 // Type definitions for Sink_particles container and iterator
-using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
-using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 //-------------------- Star particles --------------------
 // The layout enum and index constants live in a standalone header so that stellar
@@ -390,9 +366,6 @@ template <typename problem_t>
 constexpr int StarParticleRealComps = StarParticleFixedComps + Physics_Traits<problem_t>::nGroups + Particle_Traits<problem_t>::stellar_model::nExtraReal;
 template <typename problem_t> constexpr int StarParticleIntComps = Particle_Traits<problem_t>::stellar_model::nExtraInt;
 template <typename problem_t> constexpr int StarParticleIntegerComps = StarParticleIntComps<problem_t>;
-
-template <typename problem_t> using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
-template <typename problem_t> using StarParticleIterator = amrex::ParIter<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
 
 //-------------------- Component Names for I/O --------------------
 
