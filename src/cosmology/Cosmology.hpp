@@ -105,7 +105,7 @@ struct FriedmannRhsFunctor {
 	// Data member for the ODE
 	CosmologyParams const &cosmo;
 
-	// Constructor (explicit to prevent accidental data coversion)
+	// Constructor (explicit to prevent accidental data conversion)
 	AMREX_GPU_HOST_DEVICE explicit FriedmannRhsFunctor(CosmologyParams const &cosmo_in) : cosmo(cosmo_in) {}
 
 	// Functor for the Friedmann rhs: overloading of the () operator:

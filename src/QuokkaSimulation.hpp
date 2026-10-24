@@ -1144,7 +1144,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 	}
 }
 
-// Ovveriding from AMRSimulation (simulation.hpp) to exploit member cosmological data for
+// Overriding from AMRSimulation (simulation.hpp) to exploit member cosmological data for
 // constraining cosmological timestep
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
 {
