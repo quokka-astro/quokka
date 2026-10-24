@@ -1,0 +1,112 @@
+name: ChemReproDiagnose
+
+# Temporary diagnostic: why does src/turbulence/perturbation.py write a different
+# zdrv.hdf5 on different ubuntu-24.04 runners? Records each runner's CPU, numpy's SIMD
+# dispatch, per-operation hashes and the zdrv.hdf5 hash, with numpy's default dispatch,
+# with its AVX-512 paths disabled, and with every dispatched path disabled.
+
+on:
+  push:
+    branches: [ ci/chem-repro-diagnose ]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y python3-numpy python3-h5py
+
+    - name: Diagnose
+      shell: bash
+      run: |
+        set -euo pipefail
+        out="$RUNNER_TEMP/diag"
+        mkdir -p "$out"
+        {
+          echo "sample ${{ matrix.sample }}"
+          echo "region $(curl -s -H Metadata:true --max-time 5 'http://169.254.169.254/metadata/instance/compute/location?api-version=2021-02-01&format=text' || echo unknown)"
+          echo "vmsize $(curl -s -H Metadata:true --max-time 5 'http://169.254.169.254/metadata/instance/compute/vmSize?api-version=2021-02-01&format=text' || echo unknown)"
+          echo "cpu $(lscpu | sed -n 's/^Model name: *//p')"
+          echo "avx512_flags $(grep -o 'avx512[a-z_0-9]*' /proc/cpuinfo | sort -u | tr '\n' ' ')"
+          echo "packages $(dpkg-query -W -f='${Package}=${Version} ' python3-numpy python3-h5py libhdf5-103-1t64 2>/dev/null || true)"
+        } | tee "$out/machine.txt"
+        python3 -I -c 'import numpy; numpy.show_runtime()' | tee "$out/show_runtime.txt"
+
+        cat > "$RUNNER_TEMP/ops.py" <<'EOF'
+        import hashlib
+        import numpy as np
+
+        def h(a):
+            return hashlib.sha256(np.ascontiguousarray(a).tobytes()).hexdigest()[:16]
+
+        rs = np.random.RandomState(0)
+        x = rs.uniform(0.0, 2.0 * np.pi, 1 << 20)
+        pos = rs.uniform(0.5, 20.0, 1 << 20)
+        c = rs.normal(size=(16, 16, 16)) + 1j * rs.normal(size=(16, 16, 16))
+        ops = {
+            "random": x,
+            "cos": np.cos(x),
+            "sin": np.sin(x),
+            "pow": pos ** -(0.5 * 1.8),
+            "sqrt": np.sqrt(pos),
+            "exp": np.exp(-x),
+            "log": np.log(pos),
+            "sum": np.array(np.sum(pos)),
+            "abs2": np.abs(c) ** 2,
+            "ifftn": np.fft.ifftn(c),
+        }
+        for name, value in ops.items():
+            print(f"op {name} {h(value)}")
+        EOF
+
+        cat > "$RUNNER_TEMP/zdrv.py" <<'EOF'
+        import hashlib
+        import sys
+        import h5py
+        import numpy as np
+
+        with h5py.File(sys.argv[1], "r") as f:
+            def visit(name, obj):
+                if isinstance(obj, h5py.Dataset):
+                    print(f"dataset {name} {hashlib.sha256(np.ascontiguousarray(obj[()]).tobytes()).hexdigest()[:16]}")
+            f.visititems(visit)
+        EOF
+
+        # Features numpy dispatches to on this machine, from numpy itself.
+        dispatch="$(python3 -I -c 'from numpy.core._multiarray_umath import __cpu_dispatch__ as d, __cpu_features__ as f; print(" ".join(x for x in d if f.get(x)))')"
+        avx512="$(echo "$dispatch" | tr ' ' '\n' | grep '^AVX512' | tr '\n' ' ' || true)"
+        echo "dispatch_on_this_machine $dispatch" | tee -a "$out/machine.txt"
+
+        run_variant() {
+          local name="$1" disabled="$2"
+          local dir="$out/$name"
+          mkdir -p "$dir"
+          echo "=== variant $name (NPY_DISABLE_CPU_FEATURES='$disabled')"
+          (
+            cd "$dir"
+            export NPY_DISABLE_CPU_FEATURES="$disabled"
+            python3 -I "$RUNNER_TEMP/ops.py"
+            python3 -I "$GITHUB_WORKSPACE/src/turbulence/perturbation.py" --kmin=2 --kmax=8 --size=16 --alpha=1.8 --f_solenoidal=0.66667 >perturbation.log 2>&1
+            echo "zdrv_file $(sha256sum zdrv.hdf5 | cut -d' ' -f1)"
+            python3 -I "$RUNNER_TEMP/zdrv.py" zdrv.hdf5
+          ) | tee "$dir/hashes.txt"
+        }
+        run_variant default ""
+        run_variant no_avx512 "$avx512"
+        run_variant no_dispatch "$dispatch"
+
+    - name: Upload
+      if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: diag-${{ matrix.sample }}
+        path: ${{ runner.temp }}/diag
