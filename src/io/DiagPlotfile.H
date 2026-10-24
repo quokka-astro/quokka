@@ -124,7 +124,9 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 
 #ifdef QUOKKA_USE_OPENPMD
 	// Write using OpenPMD format
-	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, geoms, m_diagfile, a_time, sim->istep[0]);
+	quokka::OpenPMDOutput::WriteFile(
+	    varnames_out, finest_level + 1, mf_cc_out_ptr, geoms, m_diagfile, a_time, sim->istep[0],
+	    [sim, this](openPMD::Series &series, openPMD::Iteration &iteration) { sim->WriteOpenPMDParticles(series, iteration, m_particleTypes); });
 
 	// Write metadata file (outside the plotfile directory for OpenPMD)
 	WriteMetadataFile(plotfilename + ".yaml", sim->simulationMetadata_);
