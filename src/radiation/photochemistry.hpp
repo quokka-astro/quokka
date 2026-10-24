@@ -16,6 +16,7 @@
 #include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "microphysics/burner.hpp"
 #include "network_properties.H"
 #include "physics_numVars.hpp"
 
@@ -30,8 +31,6 @@ namespace quokka::photochemistry
 // conservation. Conserving the ionizing photon budget is the more important property for correct
 // ionization-front propagation, so it is the default.
 static constexpr bool debit_work_term_from_radiation = false;
-
-AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
@@ -173,9 +172,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			eos(eos_input_re, photochemstate);
 
 			// do the actual integration
-			// do it in .cpp so that it is not built at compile time for all tests
-			// which would otherwise slow down compilation due to the large RHS file
-			photochem_burner(photochemstate, dt);
+			quokka::microphysics::Burn<problem_t>(photochemstate, dt);
 
 			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
 				amrex::Abort("Burner returned NAN");

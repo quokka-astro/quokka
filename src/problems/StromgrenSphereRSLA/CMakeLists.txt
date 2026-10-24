@@ -16,7 +16,7 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   add_executable(
     ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
-                ../../radiation/photochemistry.cpp ${${microphysics_network_name}_sources})
+                ${${microphysics_network_name}_sources})
 
   # this will add #define CHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)

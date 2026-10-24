@@ -10,7 +10,7 @@
 #include <extern_parameters.H>
 #include <jacobian_utilities.H>
 
-using namespace amrex;
+using amrex::Real;
 using namespace network_rp;
 using namespace eos_rp;
 using namespace C;
@@ -190,7 +190,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) 
 	return 1.3 * 1.427e-27 * 0.5 / std::sqrt(T) + d_cle_term_dT;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Array1D<Real, 1, INT_NEQS> &ydot)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, amrex::Array1D<Real, 1, INT_NEQS> &ydot)
 {
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
