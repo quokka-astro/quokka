@@ -39,6 +39,12 @@ void WriteFile(const std::vector<std::string> &varnames, int output_levels, cons
 	       const amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real time, int file_number,
 	       const std::function<void(openPMD::Series &, openPMD::Iteration &)> &writeParticles = {});
 
+// Restart payloads preserve patch storage (including duplicate faces) exactly.
+void WriteCheckpointMultiFab(const amrex::MultiFab &mf, const std::string &path);
+void ReadCheckpointMultiFab(amrex::MultiFab &mf, const std::string &path, int expectedComponents);
+void WriteCheckpointParticles(const ParticleContainer &particles, const std::string &directory, const std::string &name);
+void ReadCheckpointParticles(ParticleContainer &particles, const std::string &directory, const std::string &name);
+
 // Base units in SI, ordered mass, length, time, temperature. NaN denotes unknown units.
 void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, const ParticleContainer &particles, const std::string &name,
 		    const std::array<double, 4> &units);

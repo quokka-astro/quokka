@@ -17,6 +17,7 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 | skip_initial_plotfile       | Boolean (0/1) | `0` (False)       | Skip writing the initial plotfile at t=0.                                                                                                                                             |
 | statistics_interval         | Integer       | `-1` (Disabled)   | The number of coarse timesteps between statistics outputs.                                                                                                                            |
 | checkpoint_interval         | Integer       | `-1` (Disabled)   | The number of coarse timesteps between checkpoint outputs.                                                                                                                            |
+| checkpoint_format           | String        | `"amrex"`        | Checkpoint payload format: `amrex` or `openpmd`. The latter requires `QUOKKA_OPENPMD=ON`. Restart detects the saved format automatically. |
 | checkpointtime_interval     | Float         | `-1.0` (Disabled) | The time interval (in simulated time) between checkpoint outputs.                                                                                                                     |
 | do_reflux                   | Boolean (0/1) | `1` (Enabled)     | This turns on refluxing at coarse-fine boundaries (1) or turns it off (0). Except for debugging, this should always be on when AMR is used.                                           |
 | do_tracers                  | Boolean (0/1) | `0` (Disabled)    | This turns on tracer particles. They are initialized one-per-cell and they follow the fluid velocity.                                                                                 |
@@ -228,3 +229,37 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | sfh_to_pe_heating_table          | String        | **Required** if `use_sfh_based_pe_heating = 1` | Path to the table converting star formation history to photoelectric heating.                   |
 | sf_area_kpc2                     | Float         | **Required** if `use_sfh_based_pe_heating = 1` and `const_sfr_Msun_per_year_per_kpc2 < 0` | Area of the star formation region in kpc^2.                                                     |
 | const_sfr_Msun_per_year_per_kpc2 | Float         | `-1.0`                                                                                    | Constant star formation rate in Msun/year/kpc^2. If non-negative, overrides the simulation SFR. |
+
+## openPMD checkpoints
+
+Build with `-DQUOKKA_OPENPMD=ON`, then set these top-level input parameters:
+
+```toml
+checkpoint_format = "openpmd"
+checkpoint_interval = 10
+```
+
+Restart with `restartfile=chk0000010` (or `restartfile=last_chk`). Supply the
+same problem, physics, physical domain, and refinement ratios as the original
+run. The restart can use a different MPI rank count or grid decomposition and
+supports the existing uniform-refinement restart path. `checkpoint_format`
+controls subsequent writes; it does not select the format to read. The default
+remains `amrex`, so an openPMD restart can write native AMReX checkpoints.
+
+Keep the entire checkpoint directory. `Header` stores the AMR hierarchy, time,
+step counters, timestep sizes, and field names. `metadata.yaml` retains simulation
+metadata, including particle history. Each level stores cell and face data in
+`Cell.bp` and `Face_*.bp`. Each particle population stores `particles.bp` in its
+own directory, including empty populations. The payloads use ADIOS2 through
+openPMD and preserve the simulation's floating-point precision.
+
+Mesh records contain packed patch arrays with a `quokka_boxes` attribute that
+specifies their spatial layout. They preserve every valid cell and face,
+including separate copies of shared faces. Ghost zones are rebuilt on restart.
+Particle records preserve positions, packed AMReX ID/creation-rank values, all
+schema fields, and the next-ID counter. Particles are redistributed onto the
+restart hierarchy. These versioned restart records are distinct from openPMD
+plotfiles; plotfiles cannot be used as checkpoints.
+
+Mesh I/O stages one level and centering in pinned host memory. Particle reads
+stage each rank's share of a population in host memory before redistribution.

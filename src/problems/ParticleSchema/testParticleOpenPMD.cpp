@@ -59,6 +59,21 @@ auto main(int argc, char **argv) -> int
 		}
 		amrex::Gpu::streamSynchronize();
 		quokka::ParticleContainer empty(schema, geom, dm, boxes);
+		int checkpoint = 0;
+		pp.query("checkpoint", checkpoint);
+		quokka::ParticleContainer restored(schema, geoms, maps, grids, amrex::Vector<amrex::IntVect>{amrex::IntVect(2)});
+		quokka::ParticleContainer restoredEmpty(schema, geom, dm, boxes);
+		if (checkpoint != 0) {
+			amrex::UtilCreateCleanDirectory("particle_checkpoint", true);
+			quokka::OpenPMDOutput::WriteCheckpointParticles(particles, "particle_checkpoint", "test");
+			quokka::OpenPMDOutput::WriteCheckpointParticles(empty, "particle_checkpoint", "empty");
+			quokka::OpenPMDOutput::ReadCheckpointParticles(restored, "particle_checkpoint", "test");
+			quokka::OpenPMDOutput::ReadCheckpointParticles(restoredEmpty, "particle_checkpoint", "empty");
+			AMREX_ALWAYS_ASSERT(restoredEmpty.TotalNumberOfParticles() == 0);
+			quokka::ParticleContainer::FinalizeRestarts();
+			const auto next = quokka::ParticleContainer::ReserveIDs(1);
+			AMREX_ALWAYS_ASSERT(next >= restored.RestartNextID() && next >= restoredEmpty.RestartNextID());
+		}
 #if openPMD_HAVE_ADIOS2
 		const std::string path = "particle_openpmd_%T.bp";
 #else
@@ -71,7 +86,7 @@ auto main(int argc, char **argv) -> int
 			openPMD::Series output(path, openPMD::Access::CREATE);
 #endif
 			auto iteration = output.iterations[0];
-			quokka::OpenPMDOutput::WriteParticles(output, iteration, particles, "test", {0.001, 0.01, 1., 1.});
+			quokka::OpenPMDOutput::WriteParticles(output, iteration, checkpoint != 0 ? restored : particles, "test", {0.001, 0.01, 1., 1.});
 			quokka::OpenPMDOutput::WriteParticles(output, iteration, empty, "empty", {1., 1., 1., 1.});
 			output.close();
 		}
@@ -131,6 +146,20 @@ auto main(int argc, char **argv) -> int
 				cells.insert(cell);
 			}
 			AMREX_ALWAYS_ASSERT(unique.size() == count && cells.size() == count);
+			if (checkpoint != 0) {
+				openPMD::Series saved("particle_checkpoint/test/particles.bp", openPMD::Access::READ_ONLY);
+				auto savedSpecies = saved.iterations.at(0).particles.at("test");
+				const auto savedIDs = savedSpecies["id"][scalar].loadChunk<std::uint64_t>();
+				const auto savedMass = savedSpecies["mass"][scalar].loadChunk<amrex::ParticleReal>();
+				saved.flush();
+				std::map<std::uint64_t, amrex::ParticleReal> identity;
+				for (unsigned i = 0; i < count; ++i) {
+					identity.emplace(savedIDs.get()[i], savedMass.get()[i]);
+				}
+				for (unsigned i = 0; i < count; ++i) {
+					AMREX_ALWAYS_ASSERT(identity.at(ids.get()[i]) == mass.get()[i]);
+				}
+			}
 		}
 	}
 	amrex::Finalize();

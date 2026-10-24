@@ -562,6 +562,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	};
 
 	void ReadCheckpointFile();
+	void readCheckpointMultiFab(amrex::MultiFab &mf, const std::string &path, int expectedComponents);
+	std::string checkpointFormat_ = "amrex";
+	bool restartOpenPMD_ = false;
 
 	// Helper methods for checkpoint restart refactoring
 	auto detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) -> RefinementContext;
@@ -1009,6 +1012,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default checkpoint prefix
 	pp.query("checkpoint_prefix", chk_file);
+	pp.query("checkpoint_format", checkpointFormat_);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(checkpointFormat_ == "amrex" || checkpointFormat_ == "openpmd", "checkpoint_format must be amrex or openpmd");
+#ifndef QUOKKA_USE_OPENPMD
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(checkpointFormat_ != "openpmd", "openPMD checkpoints require QUOKKA_OPENPMD=ON");
+#endif
 
 	// Default statistics file name
 	pp.query("statistics_file", stats_file);
@@ -5014,7 +5022,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 		HeaderFile.precision(17);
 
 		// write out title line
-		HeaderFile << "Checkpoint file for QuokkaCode\n";
+		HeaderFile << (checkpointFormat_ == "openpmd" ? "Checkpoint file for QuokkaCode openPMD v1\n" : "Checkpoint file for QuokkaCode\n");
 
 		// write out finest_level
 		HeaderFile << finest_level << "\n";
@@ -5042,6 +5050,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 			boxArray(lev).writeOn(HeaderFile);
 			HeaderFile << '\n';
 		}
+		if (checkpointFormat_ == "openpmd") {
+			const auto writeNames = [&](const auto &names) {
+				HeaderFile << names.size() << '\n';
+				for (const auto &name : names) {
+					HeaderFile << std::quoted(name) << '\n';
+				}
+			};
+			writeNames(componentNames_cc_);
+			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+				writeNames(componentNames_fc_[d]);
+			}
+		}
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -5062,7 +5082,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::MultiFab chkMF(state_new_cc_[lev].boxArray(), state_new_cc_[lev].DistributionMap(), state_new_cc_[lev].nComp(), 0);
 		amrex::MultiFab::Copy(chkMF, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
-		amrex::VisMF::Write(chkMF, amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
+		const auto path = amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell");
+#ifdef QUOKKA_USE_OPENPMD
+		if (checkpointFormat_ == "openpmd") {
+			quokka::OpenPMDOutput::WriteCheckpointMultiFab(chkMF, path + ".bp");
+		} else
+#endif
+		{
+			amrex::VisMF::Write(chkMF, path);
+		}
 		amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 	}
 
@@ -5073,8 +5101,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 				amrex::MultiFab chkMF(state_new_fc_[lev][idim].boxArray(), state_new_fc_[lev][idim].DistributionMap(),
 						      state_new_fc_[lev][idim].nComp(), 0);
 				amrex::MultiFab::Copy(chkMF, state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), 0);
-				amrex::VisMF::Write(
-				    chkMF, amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+				const auto path =
+				    amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", std::string("Face_") + quokka::face_dir_str[idim]);
+#ifdef QUOKKA_USE_OPENPMD
+				if (checkpointFormat_ == "openpmd") {
+					quokka::OpenPMDOutput::WriteCheckpointMultiFab(chkMF, path + ".bp");
+				} else
+#endif
+				{
+					amrex::VisMF::Write(chkMF, path);
+				}
 				amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 			}
 		}
@@ -5082,13 +5118,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 
 	// write particle data
 	if (do_tracers != 0) {
-		TracerPC->Checkpoint(checkpointname, "tracer_particles", true);
+#ifdef QUOKKA_USE_OPENPMD
+		if (checkpointFormat_ == "openpmd") {
+			quokka::OpenPMDOutput::WriteCheckpointParticles(*TracerPC, checkpointname, "tracer_particles");
+		} else
+#endif
+		{
+			TracerPC->Checkpoint(checkpointname, "tracer_particles", true);
+		}
 	}
 
 #if AMREX_SPACEDIM == 3
 	// write all particles in particleRegister_ to checkpoint file
 	particleRegister_.redistribute(0, 0);
-	particleRegister_.writeCheckpoint(checkpointname, true);
+	particleRegister_.writeCheckpoint(checkpointname, true, checkpointFormat_ == "openpmd");
 #endif // AMREX_SPACEDIM == 3
 
 	// create symlink and point it at this checkpoint dir
@@ -5156,6 +5199,11 @@ template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeade
 
 	// read in title line
 	std::getline(is, line);
+	restartOpenPMD_ = line == "Checkpoint file for QuokkaCode openPMD v1";
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(restartOpenPMD_ || line == "Checkpoint file for QuokkaCode", "Unknown checkpoint format/version");
+#ifndef QUOKKA_USE_OPENPMD
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!restartOpenPMD_, "openPMD restart requires QUOKKA_OPENPMD=ON");
+#endif
 
 	// read in finest_level
 	is >> finest_level;
@@ -5201,6 +5249,23 @@ template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeade
 		ba[lev].readFrom(is);
 		GotoNextLine(is);
 	}
+	if (restartOpenPMD_) {
+		const auto checkNames = [&](const auto &names) {
+			std::size_t count = 0;
+			is >> count;
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(count == names.size(), "Checkpoint field count does not match this executable");
+			for (const auto &name : names) {
+				std::string saved;
+				is >> std::quoted(saved);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(saved == name, "Checkpoint field names/order do not match this executable");
+			}
+		};
+		checkNames(componentNames_cc_);
+		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+			checkNames(componentNames_fc_[d]);
+		}
+	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!is.fail(), "Truncated checkpoint header");
 	return ba;
 }
 
@@ -5240,8 +5305,9 @@ void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const
 		// (See https://github.com/quokka-astro/quokka/issues/1868.)
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab tmp_read;
-			amrex::VisMF::Read(tmp_read,
-					   amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+			readCheckpointMultiFab(tmp_read,
+					       amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]),
+					       Physics_Indices<problem_t>::nvarPerDim_fc);
 			state_new_fc_[lev][idim].ParallelCopy(tmp_read, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, amrex::IntVect(0), amrex::IntVect(0));
 			AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 		}
@@ -5352,8 +5418,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 			for (int chklev = 0; chklev <= finest_level; ++chklev) {
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					amrex::MultiFab tmp_read;
-					amrex::VisMF::Read(tmp_read, amrex::MultiFabFileFullPrefix(chklev, restart_chkfile, "Level_",
-												   std::string("Face_") + quokka::face_dir_str[idim]));
+					readCheckpointMultiFab(
+					    tmp_read,
+					    amrex::MultiFabFileFullPrefix(chklev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]),
+					    Physics_Indices<problem_t>::nvarPerDim_fc);
 					restart_fc[chklev][idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), 0);
 					restart_fc[chklev][idim].ParallelCopy(tmp_read, 0, 0, tmp_read.nComp(), amrex::IntVect(0), amrex::IntVect(0));
 					AMREX_ALWAYS_ASSERT(!restart_fc[chklev][idim].contains_nan(0, restart_fc[chklev][idim].nComp())); // check valid faces
@@ -5372,7 +5440,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 
 		// cell-centred data
 		amrex::MultiFab tmp;
-		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+		readCheckpointMultiFab(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"), Physics_Indices<problem_t>::nvarTotal_cc);
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp())); // check valid cells
 
@@ -5411,6 +5479,18 @@ template <typename problem_t> auto AMRSimulation<problem_t>::loadBalanceOnRestar
 	amrex::BoxArray ba_lev = input_ba;
 	ChopGrids(lev, ba_lev, amrex::ParallelDescriptor::NProcs());
 	return ba_lev;
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::readCheckpointMultiFab(amrex::MultiFab &mf, const std::string &path, int expectedComponents)
+{
+#ifdef QUOKKA_USE_OPENPMD
+	if (restartOpenPMD_) {
+		quokka::OpenPMDOutput::ReadCheckpointMultiFab(mf, path + ".bp", expectedComponents);
+		return;
+	}
+#endif
+	amrex::VisMF::Read(mf, path);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mf.nComp() == expectedComponents, "Checkpoint component count does not match this executable");
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile()
@@ -5534,11 +5614,19 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 
 	// Check if the particle checkpoint directory exists
 	if (!amrex::FileSystem::Exists(pc_path)) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!restartOpenPMD_, "Missing openPMD checkpoint particle population");
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			amrex::Print() << "WARNING: Particle checkpoint directory not found: " << pc_path << "\n";
 		}
 		return;
 	}
+
+#ifdef QUOKKA_USE_OPENPMD
+	if (restartOpenPMD_) {
+		quokka::OpenPMDOutput::ReadCheckpointParticles(*particles, restart_chkfile, particle_type_name);
+		return;
+	}
+#endif
 
 	// Empty populations still have a header whose schema and next ID must be restored.
 	if (restartRefineFactor_ > 1) {
