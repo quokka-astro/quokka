@@ -22,7 +22,7 @@ if(AMReX_SPACEDIM EQUAL 3)
   add_executable(
     ${JOB_NAME}
     testPopIII.cpp "${QuokkaSourcesNoEOS}" ../../turbulence/TurbDataReader.cpp
-    ../../chemistry/Chemistry.cpp ${primordial_chem_sources})
+    ${primordial_chem_sources})
   target_compile_definitions(${JOB_NAME} PUBLIC CHEMISTRY) # this will add
                                                            # #define CHEMISTRY
 

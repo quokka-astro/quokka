@@ -144,12 +144,12 @@ VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will
 | `integrator.call_eos_in_rhs` | Boolean (0/1) | `1` | If 1, call EOS in the RHS to update temperature from internal energy. Must be `1` for Quokka. |
 | `integrator.integrate_energy` | Boolean (0/1) | `1` | If 1, enable energy integration; if 0, freeze energy. Not recommended for use with number densities. |
 | `integrator.scale_system` | Boolean (0/1) | `0` | If 1, scale the ODE system to be O(1). Does not work with number densities — leave at `0`. |
-| `integrator.use_burn_retry` | Boolean (0/1) | `0` | If 1, retry failed burns with swapped Jacobian or relaxed tolerances. |
-| `integrator.retry_swap_jacobian` | Boolean (0/1) | `1` | If 1, swap Jacobian type (analytic to numerical) on retry. |
 | `integrator.burner_verbose` | Boolean (0/1) | `0` | If 1, print diagnostic output after each burn. |
 | `integrator.SMALL_X_SAFE` | Float | `1.e-30` | Species floor to prevent underflow in the integrator. |
 | `integrator.X_reject_buffer` | Float | `1.0` | Buffer factor for the species change-factor rejection threshold. Only meaningful for mass fractions; has no effect with number densities. Set to `1e100` to disable. |
 | `integrator.do_corrector_validation` | Boolean (0/1) | `1` | If 1, check predicted state validity before calling RHS. |
+
+Burn retry is not a runtime parameter. A problem enables it at compile time with `Microphysics_Traits<problem_t>::burn_retry` (default `false`, see `src/microphysics/microphysics_traits.hpp`). The retry itself is not implemented yet, so with it enabled a failed burn aborts the run.
 
 ## Dust
 
