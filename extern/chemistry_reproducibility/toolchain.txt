@@ -1,0 +1,14 @@
+arch x86_64
+os Linux
+libc ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39
+cxx /usr/bin/g++-13: g++-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+cmake CMAKE_BUILD_TYPE=Release
+cmake CMAKE_CXX_FLAGS=
+cmake CMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG
+cmake AMReX_SPACEDIM=3
+cmake AMReX_PRECISION=DOUBLE
+cmake AMReX_MPI=ON
+cmake AMReX_OMP=OFF
+cmake AMReX_GPU_BACKEND=NONE
+python 3.12.3 numpy 1.26.4
+h5py 3.10.0
