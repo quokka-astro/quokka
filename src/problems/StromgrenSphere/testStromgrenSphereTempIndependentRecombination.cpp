@@ -14,6 +14,8 @@ struct StromgrenSphereTempIndependentRecombination {};
 using StromgrenSphereProblem = StromgrenSphereTempIndependentRecombination; // StromgrenSphere.hpp is written against this alias
 
 template <> struct Microphysics_Traits<StromgrenSphereTempIndependentRecombination> : DefaultMicrophysicsTraits {
+	// ROS2S is too slow for this problem
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::Rodas4P>;
 	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
 };
 

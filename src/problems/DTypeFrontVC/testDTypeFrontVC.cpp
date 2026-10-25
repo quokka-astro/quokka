@@ -14,6 +14,7 @@
 #include "AMReX_Reduce.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/microphysics_traits.hpp"
 #include "physics_info.hpp"
 #include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
@@ -67,6 +68,10 @@ template <> struct RadSystem_Traits<DTypeFrontVC> {
 	static constexpr int beta_order = 1;
 	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
 	static constexpr auto ChemBands() { return ChemBandsHeader(); }
+};
+
+template <> struct Microphysics_Traits<DTypeFrontVC> : DefaultMicrophysicsTraits {
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
 };
 
 template <> struct SimulationData<DTypeFrontVC> {

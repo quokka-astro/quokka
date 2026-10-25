@@ -14,6 +14,7 @@ namespace quokka::microphysics
 using amrex::literals::operator""_rt;
 
 struct ROS2S {
+	static constexpr const char *name = "ROS2S";
 	static constexpr int stages = 3;
 	static constexpr amrex::Real gamma = 0.292893218813452_rt;
 
@@ -71,6 +72,7 @@ struct ROS2S {
 };
 
 struct Rodas3P {
+	static constexpr const char *name = "Rodas3P";
 	static constexpr int stages = 5;
 	static constexpr amrex::Real gamma = 1.0_rt / 3.0_rt;
 
@@ -167,6 +169,7 @@ struct Rodas3P {
 };
 
 struct Rodas5P {
+	static constexpr const char *name = "Rodas5P";
 	static constexpr int stages = 8;
 	static constexpr amrex::Real gamma = 0.21193756319429014_rt;
 
@@ -359,6 +362,7 @@ struct Rodas5P {
 };
 
 struct Rodas4P {
+	static constexpr const char *name = "Rodas4P";
 	static constexpr int stages = 6;
 	static constexpr amrex::Real gamma = 0.25_rt;
 

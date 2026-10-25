@@ -13,6 +13,7 @@ struct StromgrenSphere {};
 using StromgrenSphereProblem = StromgrenSphere; // StromgrenSphere.hpp is written against this alias
 
 template <> struct Microphysics_Traits<StromgrenSphere> : DefaultMicrophysicsTraits {
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
 	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
 };
 
