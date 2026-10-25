@@ -8,7 +8,13 @@
 /// inputs/StromgrenSphereTempIndependentRecombination.toml.
 ///
 
+#include "microphysics/microphysics_traits.hpp"
+
 struct StromgrenSphereTempIndependentRecombination {};
 using StromgrenSphereProblem = StromgrenSphereTempIndependentRecombination; // StromgrenSphere.hpp is written against this alias
+
+template <> struct Microphysics_Traits<StromgrenSphereTempIndependentRecombination> : DefaultMicrophysicsTraits {
+	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
+};
 
 #include "StromgrenSphere.hpp"

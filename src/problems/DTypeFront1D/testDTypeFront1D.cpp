@@ -14,6 +14,7 @@
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/microphysics_traits.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_dust_system.hpp"
 #include "radiation/radiation_system.hpp"
@@ -89,6 +90,10 @@ template <> struct ISM_Traits<DTypeFront1D> {
 #else
 	    false;
 #endif
+};
+
+template <> struct Microphysics_Traits<DTypeFront1D> : DefaultMicrophysicsTraits {
+	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
 };
 
 template <> struct SimulationData<DTypeFront1D> {

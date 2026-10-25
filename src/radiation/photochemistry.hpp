@@ -56,6 +56,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
 		      "NumThermalBands (set for this network in NetworkRegistry.cmake) must equal RadSystem<problem_t>::nGroupsThermal_ "
 		      "(nGroups_ - NChemBands) when ISM_Traits::thermal_band_photochemistry is true.");
+	static_assert(Microphysics_Traits<problem_t>::integrate_rad_flux == (MicrophysicsNumChemRadVarsPerGroup == 2),
+		      "Microphysics_Traits::integrate_rad_flux must be false exactly when the problem is built with SKIP_PHOTOCHEMFLUX.");
 #ifndef DUST_CHEMICAL_BAND_ABSORPTION
 	static_assert(!RadSystem<problem_t>::dust_chemical_band_absorption_,
 		      "ISM_Traits::dust_chemical_band_absorption is true but DUST_CHEMICAL_BAND_ABSORPTION is not defined: "

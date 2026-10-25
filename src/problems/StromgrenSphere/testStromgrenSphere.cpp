@@ -7,7 +7,13 @@
 /// \brief Defines a test problem for the static Stromgren sphere with no temperature dependence.
 ///
 
+#include "microphysics/microphysics_traits.hpp"
+
 struct StromgrenSphere {};
 using StromgrenSphereProblem = StromgrenSphere; // StromgrenSphere.hpp is written against this alias
+
+template <> struct Microphysics_Traits<StromgrenSphere> : DefaultMicrophysicsTraits {
+	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
+};
 
 #include "StromgrenSphere.hpp"
