@@ -4831,6 +4831,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #endif // AMREX_SPACEDIM == 3
 
 #ifdef QUOKKA_USE_OPENPMD
+#if AMREX_SPACEDIM == 3
+	particleRegister_.redistribute(0, 0);
+#endif // AMREX_SPACEDIM == 3
 	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, Geom(), plot_file, tNew_[0], istep[0],
 					 [this](openPMD::Series &series, openPMD::Iteration &iteration) { WriteOpenPMDParticles(series, iteration); });
 	WriteMetadataFile(plotfilename + ".yaml");
@@ -5205,7 +5208,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteOpenPMDCheckpo
 template <typename problem_t> auto AMRSimulation<problem_t>::readOpenPMDCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>
 {
 	auto iteration = quokka::OpenPMDOutput::CheckpointIteration(*restartSeries_);
-	finest_level = iteration.getAttribute("quokka_finest_level").get<int>();
+	finest_level = iteration.getAttribute("quokka_finest_level").template get<int>();
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(finest_level <= max_level,
 					 std::format("Checkpoint '{}' contains AMR levels 0-{}, but the restart input configured amr.max_level = {}. "
 						     "Restart with amr.max_level >= {} or use a checkpoint with fewer levels.",
@@ -5536,7 +5539,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	// Native checkpoints are directories containing a Header; openPMD checkpoints
 	// are <name>.bp series files (restartfile may name either form, or last_chk).
-	std::filesystem::path openpmd_path(restart_chkfile);
+	std::filesystem::path openpmd_path = std::filesystem::path(restart_chkfile).lexically_normal();
+	if (!openpmd_path.has_filename()) {
+		// a trailing separator (e.g. "name.bp/") leaves an empty filename and extension
+		openpmd_path = openpmd_path.parent_path();
+	}
 	if (!std::filesystem::exists(openpmd_path / "Header")) {
 		if (std::filesystem::is_symlink(openpmd_path)) {
 			openpmd_path = openpmd_path.parent_path() / std::filesystem::read_symlink(openpmd_path);
@@ -5674,6 +5681,12 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 	if (restartOpenPMD_) {
 		// Particles are redistributed onto the current, possibly refined, hierarchy.
 		auto iteration = quokka::OpenPMDOutput::CheckpointIteration(*restartSeries_);
+		if (!quokka::OpenPMDOutput::HasCheckpointParticles(iteration, particle_type_name)) {
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				amrex::Print() << "WARNING: Particle population not found in openPMD checkpoint: " << particle_type_name << "\n";
+			}
+			return;
+		}
 		quokka::OpenPMDOutput::ReadCheckpointParticles(iteration, *particles, particle_type_name);
 		return;
 	}
