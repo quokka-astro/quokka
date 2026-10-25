@@ -101,8 +101,6 @@ integrator.jacobian = 1
 
 # do you want to normalize abundances within the integrator? (you don't!)
 integrator.renormalize_abundances = 0
-# 0 = Rodas5P Rosenbrock tableau
-integrator.rosenbrock_tableau = 0
 # tolerances
 integrator.rtol_spec = 1.0e-4
 integrator.atol_spec = 1.0e-4

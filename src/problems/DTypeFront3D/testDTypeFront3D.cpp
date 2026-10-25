@@ -98,6 +98,7 @@ template <> struct ISM_Traits<DTypeFront3D> {
 };
 
 template <> struct Microphysics_Traits<DTypeFront3D> : DefaultMicrophysicsTraits {
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
 	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
 };
 
