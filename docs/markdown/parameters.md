@@ -17,7 +17,7 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 | skip_initial_plotfile       | Boolean (0/1) | `0` (False)       | Skip writing the initial plotfile at t=0.                                                                                                                                             |
 | statistics_interval         | Integer       | `-1` (Disabled)   | The number of coarse timesteps between statistics outputs.                                                                                                                            |
 | checkpoint_interval         | Integer       | `-1` (Disabled)   | The number of coarse timesteps between checkpoint outputs.                                                                                                                            |
-| checkpoint_format           | String        | `"amrex"`        | Checkpoint payload format: `amrex` or `openpmd`. The latter requires `QUOKKA_OPENPMD=ON`. Restart detects the saved format automatically. |
+| checkpoint_format           | String        | `"amrex"`        | Checkpoint payload format: `amrex` or `openpmd`. The latter requires `QUOKKA_OPENPMD=ON`. Restart detects the saved format automatically. See [Checkpoint and restart](checkpoint_restart.md). |
 | checkpointtime_interval     | Float         | `-1.0` (Disabled) | The time interval (in simulated time) between checkpoint outputs.                                                                                                                     |
 | do_reflux                   | Boolean (0/1) | `1` (Enabled)     | This turns on refluxing at coarse-fine boundaries (1) or turns it off (0). Except for debugging, this should always be on when AMR is used.                                           |
 | do_tracers                  | Boolean (0/1) | `0` (Disabled)    | This turns on tracer particles. They are initialized one-per-cell and they follow the fluid velocity.                                                                                 |
@@ -229,39 +229,3 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | sfh_to_pe_heating_table          | String        | **Required** if `use_sfh_based_pe_heating = 1` | Path to the table converting star formation history to photoelectric heating.                   |
 | sf_area_kpc2                     | Float         | **Required** if `use_sfh_based_pe_heating = 1` and `const_sfr_Msun_per_year_per_kpc2 < 0` | Area of the star formation region in kpc^2.                                                     |
 | const_sfr_Msun_per_year_per_kpc2 | Float         | `-1.0`                                                                                    | Constant star formation rate in Msun/year/kpc^2. If non-negative, overrides the simulation SFR. |
-
-## openPMD checkpoints
-
-Build with `-DQUOKKA_OPENPMD=ON`, then set these top-level input parameters:
-
-```toml
-checkpoint_format = "openpmd"
-checkpoint_interval = 10
-```
-
-Each checkpoint is written as `chk0000010.bp`, with simulation metadata
-(including particle history) in `chk0000010.yaml`, the same as an openPMD
-plotfile. The checkpoints form a file-based openPMD series whose iteration
-number is the coarse step. Restart with `restartfile=chk0000010` (or
-`restartfile=chk0000010.bp` or `restartfile=last_chk`). Supply the same problem,
-physics, physical domain, and refinement ratios as the original run. The restart
-can use a different MPI rank count or grid decomposition and supports the
-existing uniform-refinement restart path. `checkpoint_format` controls
-subsequent writes; it does not select the format to read. The default remains
-`amrex`, so an openPMD restart can write native AMReX checkpoints.
-
-The layout follows openPMD plotfiles. Each state variable is a mesh per level
-named as in plotfiles (for example `gasDensity` and `gasDensity_lvl1`), holding
-only valid cells. Face-centered variables (for example `x_BField`) are staggered
-meshes whose `position` is 0 along the face normal. A face shared by two patches
-is a single dataset element, so both patches restore the same value. Particle populations use the
-plotfile species, including packed AMReX ID/creation-rank values in `id`.
-Iteration attributes prefixed with `quokka_` hold the extra state needed to
-restart: the patch layout of each level, step counters, timestep sizes and times
-for every level, field names, and each population's schema, count, and next-ID
-counter (also for empty populations, which have no species). Ghost zones are
-rebuilt on restart. Particles are redistributed onto the restart hierarchy.
-Plotfiles lack these attributes, so they cannot be used as checkpoints.
-
-Mesh I/O stages one level and centering in pinned host memory. Particle reads
-stage each rank's share of a population in host memory before redistribution.
