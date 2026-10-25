@@ -17,11 +17,13 @@
 #include "microphysics/microphysics_traits.hpp"
 #include "microphysics/rosenbrock/rosenbrock_state.hpp"
 
-// still from extern/Microphysics: burn_t, net_ienuc, the integrator parameters, integrator_neqs, rhs and jac
+// still from extern/Microphysics: burn_t, net_ienuc, the integrator parameters, integrator_neqs, the error codes,
+// setup, backup, cleanup, rhs and jac
 #include "burn_type.H"
 #include "extern_parameters.H"
 #include "integrator_data.H"
 #include "integrator_rhs_strang.H"
+#include "integrator_setup_strang.H"
 
 namespace quokka::microphysics
 {
@@ -304,7 +306,237 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void solve(RosenbrockState<int_neqs, st
 	}
 }
 
+template <typename problem_t, typename Tableau, typename BurnT>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state, RosenbrockState<integrator_neqs<BurnT>(), Tableau::stages> &rstate) -> int
+{
+	using Layout = IntegratorLayout<problem_t, BurnT>;
+	constexpr int int_neqs = integrator_neqs<BurnT>();
+
+	if (rstate.tout == rstate.t) {
+		return IERR_SUCCESS;
+	}
+
+	for (int n = 1; n <= int_neqs; ++n) {
+		if (atol_for<Layout>(rstate, n) <= 0.0_rt || rtol_for<Layout>(rstate, n) <= 10.0_rt * std::numeric_limits<amrex::Real>::epsilon()) {
+			return IERR_TOO_MUCH_ACCURACY_REQUESTED;
+		}
+	}
+
+	rstate.n_rhs = 0;
+	rstate.n_jac = 0;
+	rstate.n_step = 0;
+
+	rstate.dt = rstate.tout - rstate.t;
+
+	const amrex::Real posneg = rstate.tout >= rstate.t ? 1.0_rt : -1.0_rt;
+	const amrex::Real hmax = amrex::min(integrator_rp::ode_max_dt, std::abs(rstate.tout - rstate.t));
+	amrex::Real h = amrex::min(std::abs(rstate.dt), hmax) * posneg;
+	if (std::abs(h) <= 10.0_rt * std::numeric_limits<amrex::Real>::epsilon()) {
+		h = 1.e-6_rt * posneg;
+	}
+
+	bool reject = false;
+	bool last = false;
+	int nsing = 0;
+	int n_reject = 0;
+	amrex::Real facold = 1.0_rt;
+	amrex::Real errold = 1.0_rt;
+	amrex::Real hopt = h;
+	amrex::Real x = rstate.t;
+	amrex::Array1D<amrex::Real, 1, int_neqs> rhs_tmp{};
+
+	// main evolution loop
+
+	// within this loop, x will be the current time and h will be the
+	// step size we are attempting.  The solution at the current time
+	// is rstate.y().
+
+	while (true) {
+
+		if (rstate.n_step > integrator_rp::ode_max_steps) {
+			rstate.t = x;
+			rstate.dt = h;
+			return IERR_TOO_MANY_STEPS;
+		}
+
+		if (0.1_rt * std::abs(h) <= std::abs(x) * std::numeric_limits<amrex::Real>::epsilon()) {
+			rstate.t = x;
+			rstate.dt = h;
+			return IERR_DT_UNDERFLOW;
+		}
+
+		if (last) {
+			rstate.t = x;
+			rstate.dt = hopt;
+			return IERR_SUCCESS;
+		}
+
+		hopt = h;
+		if ((x + h * (1.0_rt + timestep_safety_factor) - rstate.tout) * posneg >= 0.0_rt) {
+			h = rstate.tout - x;
+			last = true;
+		}
+
+		// take a step -- this loop will keep trying until a step is
+		// successful or a catastrophic error is encountered.
+
+		while (true) {
+			rstate.dt = h;
+
+			if (0.1_rt * std::abs(h) <= std::abs(x) * std::numeric_limits<amrex::Real>::epsilon()) {
+				rstate.t = x;
+				rstate.dt = h;
+				return IERR_DT_UNDERFLOW;
+			}
+
+			const amrex::Real fac = 1.0_rt / (h * Tableau::gamma);
+			evaluate_jacobian<Layout>(state, rstate, x);
+			const int ierr_linpack = decompose(rstate, fac);
+
+			if (ierr_linpack != 0) {
+				nsing += 1;
+				if (nsing >= 5) {
+					rstate.t = x;
+					rstate.dt = h;
+					return IERR_LU_DECOMPOSITION_ERROR;
+				}
+				h *= 0.5_rt;
+				reject = true;
+				last = false;
+				continue;
+			}
+
+			solve(rstate, rstate.k[0]);
+
+			bool valid_stage_state = true;
+			for (int istage = 2; istage <= Tableau::stages; ++istage) {
+				for (int n = 1; n <= int_neqs; ++n) {
+					rstate.ynew(n) = rstate.y(n);
+					rstate.k[istage - 1](n) = 0.0_rt;
+
+					for (int jstage = 1; jstage < istage; ++jstage) {
+						const amrex::Real akj = rstate.k[jstage - 1](n);
+						rstate.ynew(n) += Tableau::a(istage, jstage) * akj;
+						rstate.k[istage - 1](n) += (Tableau::c(istage, jstage) / h) * akj;
+					}
+				}
+
+				if (!valid_integrator_state<Layout>(rstate.ynew)) {
+					h *= 0.25_rt;
+					reject = true;
+					n_reject += 1;
+					last = false;
+					valid_stage_state = false;
+					break;
+				}
+
+				rhs_at(x + Tableau::ct(istage) * h, state, rstate, rstate.ynew, rhs_tmp);
+				rstate.n_rhs += 1;
+
+				for (int n = 1; n <= int_neqs; ++n) {
+					rstate.k[istage - 1](n) += rhs_tmp(n);
+				}
+				solve(rstate, rstate.k[istage - 1]);
+			}
+
+			if (!valid_stage_state) {
+				continue;
+			}
+
+			for (int n = 1; n <= int_neqs; ++n) {
+				amrex::Real y_update = 0.0_rt;
+				amrex::Real err = 0.0_rt;
+
+				for (int istage = 1; istage <= Tableau::stages; ++istage) {
+					const amrex::Real aki = rstate.k[istage - 1](n);
+					y_update += Tableau::b(istage) * aki;
+					err += Tableau::e(istage) * aki;
+				}
+
+				rstate.ynew(n) = rstate.y(n) + y_update;
+				rstate.work(n) = err;
+			}
+
+			rstate.n_step += 1;
+
+			const bool valid_state = valid_integrator_state<Layout>(rstate.ynew);
+			if (!valid_state) {
+				reject = true;
+				n_reject += 1;
+				last = false;
+				h *= 0.25_rt;
+				continue;
+			}
+
+			const bool valid_update = species_change_valid(rstate);
+			constexpr amrex::Real err_min = 1.e-10_rt;
+			const amrex::Real err = error_norm<Layout>(rstate);
+			const amrex::Real controller_fac =
+			    amrex::Clamp(std::pow(1.0_rt / amrex::max(err, err_min), 1.0_rt / (integrator_rp::h211b_b * integrator_rp::h211b_k)) *
+					     std::pow(1.0_rt / amrex::max(errold, err_min), 1.0_rt / (integrator_rp::h211b_b * integrator_rp::h211b_k)) *
+					     std::pow(facold, -1.0_rt / integrator_rp::h211b_b),
+					 integrator_rp::h211b_fac_min, integrator_rp::h211b_fac_max);
+			facold = controller_fac;
+			errold = err;
+
+			amrex::Real hnew = h * controller_fac;
+
+			// update the starting time and state for the next step
+			// and predict the next timestep
+
+			if (err <= 1.0_rt && valid_update) {
+				for (int n = 1; n <= int_neqs; ++n) {
+					rstate.y(n) = rstate.ynew(n);
+				}
+				x += h;
+
+				if (std::abs(hnew) > hmax) {
+					hnew = posneg * hmax;
+				}
+				if (reject) {
+					hnew = posneg * amrex::min(std::abs(hnew), std::abs(h));
+				}
+				reject = false;
+				n_reject = 0;
+				h = hnew;
+				break;
+			}
+
+			// if we made it here, then we've failed
+			// cut the timestep in prep for trying again
+
+			reject = true;
+			n_reject += 1;
+			last = false;
+			if (n_reject >= 2) {
+				hnew *= integrator_rp::h211b_reduction_fac;
+			}
+			if (valid_update) {
+				h = posneg * amrex::min(std::abs(hnew), integrator_rp::h211b_reduction_fac * std::abs(h));
+			} else {
+				h *= 0.25_rt;
+			}
+		}
+	}
+}
+
 } // namespace rosenbrock
+
+template <typename Tableau> struct Rosenbrock {
+	using tableau = Tableau;
+
+	template <typename problem_t, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE static void Integrate(BurnT &state, const amrex::Real dt)
+	{
+		constexpr int int_neqs = integrator_neqs<BurnT>();
+
+		auto rosenbrock_state = integrator_setup<BurnT, RosenbrockState<int_neqs, Tableau::stages>>(state, dt, false);
+		auto state_save = integrator_backup(state);
+
+		const int istate = rosenbrock::rosenbrock_integrator<problem_t, Tableau>(state, rosenbrock_state);
+
+		integrator_cleanup(rosenbrock_state, state, istate, state_save, dt);
+	}
+};
 
 } // namespace quokka::microphysics
 
