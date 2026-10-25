@@ -9,8 +9,13 @@
 ///
 
 #include "StromgrenSphere.hpp"
+#include "microphysics/microphysics_traits.hpp"
 
 struct StromgrenSphereTempIndependentRecombination {};
+
+template <> struct Microphysics_Traits<StromgrenSphereTempIndependentRecombination> : DefaultMicrophysicsTraits {
+	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
+};
 
 template <> struct quokka::EOS_Traits<StromgrenSphereTempIndependentRecombination> : stromgren_sphere::EOSTraits {};
 template <> struct Physics_Traits<StromgrenSphereTempIndependentRecombination> : stromgren_sphere::PhysicsTraits {};
