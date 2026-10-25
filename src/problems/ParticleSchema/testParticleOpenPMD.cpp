@@ -1,5 +1,6 @@
 #include "AMReX_ParmParse.H"
 #include "io/openPMD.hpp"
+#include <limits>
 #include <set>
 
 auto main(int argc, char **argv) -> int
@@ -64,11 +65,20 @@ auto main(int argc, char **argv) -> int
 		quokka::ParticleContainer restored(schema, geoms, maps, grids, amrex::Vector<amrex::IntVect>{amrex::IntVect(2)});
 		quokka::ParticleContainer restoredEmpty(schema, geom, dm, boxes);
 		if (checkpoint != 0) {
-			amrex::UtilCreateCleanDirectory("particle_checkpoint", true);
-			quokka::OpenPMDOutput::WriteCheckpointParticles(particles, "particle_checkpoint", "test");
-			quokka::OpenPMDOutput::WriteCheckpointParticles(empty, "particle_checkpoint", "empty");
-			quokka::OpenPMDOutput::ReadCheckpointParticles(restored, "particle_checkpoint", "test");
-			quokka::OpenPMDOutput::ReadCheckpointParticles(restoredEmpty, "particle_checkpoint", "empty");
+			{
+				auto series = quokka::OpenPMDOutput::CreateCheckpointSeries("particle_checkpoint");
+				auto iteration = series.iterations[3];
+				quokka::OpenPMDOutput::SetCheckpointVersion(iteration);
+				const auto nan = std::numeric_limits<double>::quiet_NaN();
+				quokka::OpenPMDOutput::WriteParticles(series, iteration, particles, "test", {nan, nan, nan, nan}, true);
+				quokka::OpenPMDOutput::WriteParticles(series, iteration, empty, "empty", {nan, nan, nan, nan}, true);
+				series.close();
+			}
+			auto series = quokka::OpenPMDOutput::OpenCheckpointSeries("particle_checkpoint0000003.bp");
+			auto iteration = quokka::OpenPMDOutput::CheckpointIteration(series);
+			quokka::OpenPMDOutput::ReadCheckpointParticles(iteration, restored, "test");
+			quokka::OpenPMDOutput::ReadCheckpointParticles(iteration, restoredEmpty, "empty");
+			series.close();
 			AMREX_ALWAYS_ASSERT(restoredEmpty.TotalNumberOfParticles() == 0);
 			quokka::ParticleContainer::FinalizeRestarts();
 			const auto next = quokka::ParticleContainer::ReserveIDs(1);
@@ -147,8 +157,10 @@ auto main(int argc, char **argv) -> int
 			}
 			AMREX_ALWAYS_ASSERT(unique.size() == count && cells.size() == count);
 			if (checkpoint != 0) {
-				openPMD::Series saved("particle_checkpoint/test/particles.bp", openPMD::Access::READ_ONLY);
-				auto savedSpecies = saved.iterations.at(0).particles.at("test");
+				// Checkpoint species match plotfile species; empty populations have none.
+				openPMD::Series saved("particle_checkpoint0000003.bp", openPMD::Access::READ_ONLY);
+				AMREX_ALWAYS_ASSERT(!saved.iterations.at(3).particles.contains("empty"));
+				auto savedSpecies = saved.iterations.at(3).particles.at("test");
 				const auto savedIDs = savedSpecies["id"][scalar].loadChunk<std::uint64_t>();
 				const auto savedMass = savedSpecies["mass"][scalar].loadChunk<amrex::ParticleReal>();
 				saved.flush();

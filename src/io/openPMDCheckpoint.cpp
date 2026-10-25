@@ -1,4 +1,3 @@
-#include "AMReX_FileSystem.H"
 #include "io/openPMD.hpp"
 #include <iomanip>
 #include <sstream>
@@ -7,22 +6,6 @@ namespace quokka::OpenPMDOutput
 {
 namespace
 {
-auto OpenSeries(const std::string &path, openPMD::Access access) -> openPMD::Series
-{
-#ifdef AMREX_USE_MPI
-	return {path, access, amrex::ParallelDescriptor::Communicator()};
-#else
-	return {path, access};
-#endif
-}
-auto PatchOffsets(const amrex::BoxArray &boxes) -> std::vector<std::uint64_t>
-{
-	std::vector<std::uint64_t> offsets(boxes.size() + 1, 0);
-	for (int i = 0; i < boxes.size(); ++i) {
-		offsets[i + 1] = offsets[i] + boxes[i].numPts();
-	}
-	return offsets;
-}
 auto EncodeNames(const amrex::Vector<std::string> &names) -> std::string
 {
 	std::ostringstream encoded;
@@ -31,114 +14,158 @@ auto EncodeNames(const amrex::Vector<std::string> &names) -> std::string
 	}
 	return encoded.str();
 }
-void CheckVersion(openPMD::Iteration &iteration)
+auto LevelKey(const std::string &key, int lev) -> std::string { return "quokka_" + key + "_lvl" + std::to_string(lev); }
+auto ParticleKey(const std::string &name, const std::string &key) -> std::string { return "quokka_particles_" + name + "_" + key; }
+// Offset and extent of a box within the level's dataset, in openPMD (C) order.
+auto ChunkOffset(const amrex::Box &box, const amrex::Box &domain) -> openPMD::Offset { return detail::getReversedVec(box.smallEnd() - domain.smallEnd()); }
+auto ChunkExtent(const amrex::Box &box) -> openPMD::Extent { return detail::getReversedVec(box.size()); }
+} // namespace
+
+auto CreateCheckpointSeries(const std::string &basename) -> openPMD::Series
 {
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(iteration.getAttribute("quokka_checkpoint_version").get<int>() == 1, "Unsupported openPMD checkpoint version");
-	AMREX_ALWAYS_ASSERT(iteration.getAttribute("quokka_spacedim").get<int>() == AMREX_SPACEDIM);
+	// Pad like native checkpoint names, e.g. chk0000010.bp.
+	const std::string filename = basename + "%07T.bp";
+#ifdef AMREX_USE_MPI
+	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
+#else
+	auto series = openPMD::Series(filename, openPMD::Access::CREATE);
+#endif
+	series.setSoftware("Quokka", "1.0");
+	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
+	return series;
 }
-void SetVersion(openPMD::Iteration &iteration)
+
+auto OpenCheckpointSeries(const std::string &path) -> openPMD::Series
+{
+	// An explicit file name opens only this checkpoint of the file-based series.
+#ifdef AMREX_USE_MPI
+	return {path, openPMD::Access::READ_ONLY, amrex::ParallelDescriptor::Communicator()};
+#else
+	return {path, openPMD::Access::READ_ONLY};
+#endif
+}
+
+auto CheckpointIteration(openPMD::Series &series) -> openPMD::Iteration
+{
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(series.iterations.size() == 1, "openPMD checkpoint must contain exactly one iteration");
+	auto iteration = series.iterations.begin()->second;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(iteration.containsAttribute("quokka_checkpoint_version") &&
+					     iteration.getAttribute("quokka_checkpoint_version").get<int>() == 1,
+					 "Not a supported Quokka openPMD checkpoint (plotfiles cannot be used as checkpoints)");
+	AMREX_ALWAYS_ASSERT(iteration.getAttribute("quokka_spacedim").get<int>() == AMREX_SPACEDIM);
+	return iteration;
+}
+
+void SetCheckpointVersion(openPMD::Iteration &iteration)
 {
 	iteration.setAttribute("quokka_checkpoint_version", 1);
 	iteration.setAttribute("quokka_spacedim", AMREX_SPACEDIM);
-	iteration.setTime(0.0);
 }
-} // namespace
 
-void WriteCheckpointMultiFab(const amrex::MultiFab &mf, const std::string &path)
+void WriteCheckpointNames(openPMD::Iteration &iteration, const std::string &key, const amrex::Vector<std::string> &names)
 {
-	auto series = OpenSeries(path, openPMD::Access::CREATE);
-	auto iteration = series.iterations[0];
-	SetVersion(iteration);
+	iteration.setAttribute("quokka_" + key, EncodeNames(names));
+}
+
+auto CheckpointNamesMatch(openPMD::Iteration &iteration, const std::string &key, const amrex::Vector<std::string> &names) -> bool
+{
+	return iteration.getAttribute("quokka_" + key).get<std::string>() == EncodeNames(names);
+}
+
+auto ReadCheckpointBoxArray(openPMD::Iteration &iteration, int lev) -> amrex::BoxArray
+{
+	std::istringstream input(iteration.getAttribute(LevelKey("boxes", lev)).get<std::string>());
+	amrex::BoxArray boxes;
+	boxes.readFrom(input);
+	AMREX_ALWAYS_ASSERT(boxes.size() > 0);
+	return boxes;
+}
+
+void WriteCheckpointMesh(openPMD::Iteration &iteration, const amrex::MultiFab &mf, const amrex::Geometry &geom, int lev,
+			 const amrex::Vector<std::string> &names)
+{
+	AMREX_ALWAYS_ASSERT(mf.nComp() == static_cast<int>(names.size()));
+	const auto ixType = mf.ixType();
+	const auto domain = amrex::convert(geom.Domain(), ixType);
+	// Every centering on a level shares the cell-centered hierarchy recorded here.
 	std::ostringstream boxes;
-	mf.boxArray().writeOn(boxes);
-	iteration.setAttribute("quokka_boxes", boxes.str());
-	iteration.setAttribute("quokka_ncomp", mf.nComp());
-	const auto offsets = PatchOffsets(mf.boxArray());
-	// A packed patch array avoids overlapping writes of shared faces and holes
-	// in refined levels. BoxArray metadata defines the spatial interpretation.
+	amrex::convert(mf.boxArray(), amrex::IndexType::TheCellType()).writeOn(boxes);
+	iteration.setAttribute(LevelKey("boxes", lev), boxes.str());
+	// Stage one level and centering in pinned memory. Holes in refined levels
+	// stay unwritten; shared faces are written by every patch that holds them.
 	amrex::MultiFab host(mf.boxArray(), mf.DistributionMap(), mf.nComp(), 0, amrex::MFInfo().SetArena(amrex::The_Pinned_Arena()));
 	amrex::MultiFab::Copy(host, mf, 0, 0, mf.nComp(), 0);
 	amrex::Gpu::streamSynchronize();
 	for (int c = 0; c < mf.nComp(); ++c) {
-		auto mesh = iteration.meshes["component_" + std::to_string(c)];
-		mesh.setAxisLabels({"patch_cell"});
-		mesh.setGridSpacing(std::vector<double>{1.0});
-		mesh.setGridGlobalOffset({0.0});
-		auto record = mesh[openPMD::RecordComponent::SCALAR];
-		record.setPosition(std::vector<double>{0.0});
-		record.resetDataset(openPMD::Dataset(openPMD::determineDatatype<amrex::Real>(), {offsets.back()}));
+		const auto meshName = detail::GetMeshComponentName(lev, names[c]);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!iteration.meshes.contains(meshName), "Duplicate checkpoint mesh name " + meshName);
+		auto mesh = iteration.meshes[meshName];
+		detail::SetupMeshComponent(mesh, geom, ixType);
+		auto record = mesh[openPMD::MeshRecordComponent::SCALAR];
 		for (amrex::MFIter mfi(host); mfi.isValid(); ++mfi) {
-			const auto i = mfi.index();
-			record.storeChunkRaw(host[mfi].dataPtr(c), {offsets[i]}, {offsets[i + 1] - offsets[i]});
+			const auto &box = mfi.validbox();
+			record.storeChunkRaw(host[mfi].dataPtr(c), ChunkOffset(box, domain), ChunkExtent(box));
 		}
 	}
-	series.close();
+	iteration.seriesFlush();
 }
 
-void ReadCheckpointMultiFab(amrex::MultiFab &mf, const std::string &path, int expectedComponents)
+void ReadCheckpointMesh(openPMD::Iteration &iteration, amrex::MultiFab &mf, const amrex::Box &cellDomain, int lev, amrex::IndexType ixType,
+			const amrex::Vector<std::string> &names)
 {
-	auto series = OpenSeries(path, openPMD::Access::READ_ONLY);
-	auto iteration = series.iterations.at(0);
-	CheckVersion(iteration);
-	const auto ncomp = iteration.getAttribute("quokka_ncomp").get<int>();
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ncomp == expectedComponents, "Checkpoint component count does not match this executable");
-	std::istringstream input(iteration.getAttribute("quokka_boxes").get<std::string>());
-	amrex::BoxArray boxes;
-	boxes.readFrom(input);
-	AMREX_ALWAYS_ASSERT(boxes.size() > 0);
-	const auto offsets = PatchOffsets(boxes);
+	const auto boxes = amrex::convert(ReadCheckpointBoxArray(iteration, lev), ixType);
+	const auto domain = amrex::convert(cellDomain, ixType);
+	const auto ncomp = static_cast<int>(names.size());
 	const amrex::DistributionMapping dm(boxes);
 	amrex::MultiFab host(boxes, dm, ncomp, 0, amrex::MFInfo().SetArena(amrex::The_Pinned_Arena()));
 	for (int c = 0; c < ncomp; ++c) {
-		auto record = iteration.meshes.at("component_" + std::to_string(c))[openPMD::RecordComponent::SCALAR];
-		AMREX_ALWAYS_ASSERT(record.getExtent() == openPMD::Extent{offsets.back()});
+		const auto meshName = detail::GetMeshComponentName(lev, names[c]);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(iteration.meshes.contains(meshName), "Checkpoint is missing mesh " + meshName);
+		auto record = iteration.meshes.at(meshName)[openPMD::MeshRecordComponent::SCALAR];
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(record.getExtent() == ChunkExtent(domain),
+						 "Checkpoint mesh " + meshName + " does not match the restart domain");
 		AMREX_ALWAYS_ASSERT(record.getDatatype() == openPMD::determineDatatype<amrex::Real>());
 		for (amrex::MFIter mfi(host); mfi.isValid(); ++mfi) {
-			const auto i = mfi.index();
-			record.loadChunkRaw(host[mfi].dataPtr(c), {offsets[i]}, {offsets[i + 1] - offsets[i]});
+			const auto &box = mfi.validbox();
+			record.loadChunkRaw(host[mfi].dataPtr(c), ChunkOffset(box, domain), ChunkExtent(box));
 		}
 	}
-	series.close();
+	iteration.seriesFlush();
 	mf.define(boxes, dm, ncomp, 0);
 	amrex::MultiFab::Copy(mf, host, 0, 0, ncomp, 0);
 	amrex::Gpu::streamSynchronize();
 }
 
-void WriteCheckpointParticles(const ParticleContainer &particles, const std::string &directory, const std::string &name)
+namespace detail
 {
-	const auto path = directory + "/" + name;
-	amrex::UtilCreateCleanDirectory(path, true);
-	auto series = OpenSeries(path + "/particles.bp", openPMD::Access::CREATE);
-	auto iteration = series.iterations[0];
-	SetVersion(iteration);
+void WriteCheckpointParticleAttributes(openPMD::Iteration &iteration, const ParticleContainer &particles, const std::string &name, std::uint64_t total)
+{
+	// Record even empty populations, which have no species in the iteration.
 	const auto &schema = particles.Schema();
-	// Store even empty schemas and populations; plotfiles omit empty species.
-	iteration.setAttribute("quokka_real_names", EncodeNames(schema.RealNames()));
-	iteration.setAttribute("quokka_int_names", EncodeNames(schema.IntNames()));
+	iteration.setAttribute(ParticleKey(name, "real_names"), EncodeNames(schema.RealNames()));
+	iteration.setAttribute(ParticleKey(name, "int_names"), EncodeNames(schema.IntNames()));
 	auto next = ParticleContainer::ParticleType::NextID();
 	ParticleContainer::ParticleType::NextID(next);
 	amrex::ParallelDescriptor::ReduceLongMax(next);
-	iteration.setAttribute("quokka_next_id", static_cast<std::int64_t>(next));
-	iteration.setAttribute("quokka_count", static_cast<std::uint64_t>(particles.TotalNumberOfParticles()));
-	const auto unknown = std::numeric_limits<double>::quiet_NaN();
-	WriteParticles(series, iteration, particles, name, {unknown, unknown, unknown, unknown});
-	series.close();
+	iteration.setAttribute(ParticleKey(name, "next_id"), static_cast<std::int64_t>(next));
+	iteration.setAttribute(ParticleKey(name, "count"), total);
 }
+} // namespace detail
 
-void ReadCheckpointParticles(ParticleContainer &particles, const std::string &directory, const std::string &name)
+auto HasCheckpointParticles(openPMD::Iteration &iteration, const std::string &name) -> bool { return iteration.containsAttribute(ParticleKey(name, "count")); }
+
+void ReadCheckpointParticles(openPMD::Iteration &iteration, ParticleContainer &particles, const std::string &name)
 {
 	AMREX_ALWAYS_ASSERT(particles.TotalNumberOfParticles(false) == 0);
-	auto series = OpenSeries(directory + "/" + name + "/particles.bp", openPMD::Access::READ_ONLY);
-	auto iteration = series.iterations.at(0);
-	CheckVersion(iteration);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(HasCheckpointParticles(iteration, name), "Missing openPMD checkpoint particle population " + name);
 	const auto &schema = particles.Schema();
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(iteration.getAttribute("quokka_real_names").get<std::string>() == EncodeNames(schema.RealNames()) &&
-					     iteration.getAttribute("quokka_int_names").get<std::string>() == EncodeNames(schema.IntNames()),
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(iteration.getAttribute(ParticleKey(name, "real_names")).get<std::string>() == EncodeNames(schema.RealNames()) &&
+					     iteration.getAttribute(ParticleKey(name, "int_names")).get<std::string>() == EncodeNames(schema.IntNames()),
 					 "Particle restart field names/order do not match the population schema");
 	const auto &reals = schema.RealNames();
 	const auto &ints = schema.IntNames();
-	const auto total = iteration.getAttribute("quokka_count").get<std::uint64_t>();
-	const auto next = iteration.getAttribute("quokka_next_id").get<std::int64_t>();
+	const auto total = iteration.getAttribute(ParticleKey(name, "count")).get<std::uint64_t>();
+	const auto next = iteration.getAttribute(ParticleKey(name, "next_id")).get<std::int64_t>();
 	const auto rank = static_cast<std::uint64_t>(amrex::ParallelDescriptor::MyProc());
 	const auto ranks = static_cast<std::uint64_t>(amrex::ParallelDescriptor::NProcs());
 	const auto begin = total / ranks * rank + std::min(total % ranks, rank);
@@ -170,7 +197,7 @@ void ReadCheckpointParticles(ParticleContainer &particles, const std::string &di
 			load(species[ints[c]][openPMD::RecordComponent::SCALAR], intData[c]);
 		}
 	}
-	series.close();
+	iteration.seriesFlush();
 	amrex::Long maximum = 0;
 	for (const auto id : ids) {
 		const auto unpacked = amrex::particle_impl::unpack_id(id);

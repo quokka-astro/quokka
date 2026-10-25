@@ -189,12 +189,13 @@ class PhysicsParticleDescriptorBase
 
 // Write particle data to plot file
 #ifdef QUOKKA_USE_OPENPMD
-	virtual void writeOpenPMD(openPMD::Series &series, openPMD::Iteration &iteration, const std::string &name, const std::array<double, 4> &units) = 0;
+	virtual void writeOpenPMD(openPMD::Series &series, openPMD::Iteration &iteration, const std::string &name, const std::array<double, 4> &units,
+				  bool restart) = 0;
 #endif
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 
 	// Write particle data to checkpoint file
-	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header, bool openpmd) = 0;
+	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
 
 	// Write units info of particles to checkpoint/plotfile
 	virtual void writeUnitsFile(const std::string &snapshot_name, const std::string &name) = 0;
@@ -730,10 +731,11 @@ template <typename problem_t, ParticleType particleType> class PhysicsParticleDe
 
 	// The instance schema supplies the exact names and field order for output.
 #ifdef QUOKKA_USE_OPENPMD
-	void writeOpenPMD(openPMD::Series &series, openPMD::Iteration &iteration, const std::string &name, const std::array<double, 4> &units) override
+	void writeOpenPMD(openPMD::Series &series, openPMD::Iteration &iteration, const std::string &name, const std::array<double, 4> &units,
+			  bool restart) override
 	{
 		if (container_ != nullptr) {
-			OpenPMDOutput::WriteParticles(series, iteration, *container_, name, units);
+			OpenPMDOutput::WriteParticles(series, iteration, *container_, name, units, restart);
 		}
 	}
 #endif
@@ -744,16 +746,9 @@ template <typename problem_t, ParticleType particleType> class PhysicsParticleDe
 		}
 	}
 
-	void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header, bool openpmd) override
+	void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) override
 	{
 		if (container_ != nullptr) {
-#ifdef QUOKKA_USE_OPENPMD
-			if (openpmd) {
-				quokka::OpenPMDOutput::WriteCheckpointParticles(*container_, checkpointname, name);
-				return;
-			}
-#endif
-			amrex::ignore_unused(openpmd);
 			container_->Checkpoint(checkpointname, name, include_header);
 		}
 	}
@@ -1187,12 +1182,12 @@ template <typename problem_t> class PhysicsParticleRegister
 
 #ifdef QUOKKA_USE_OPENPMD
 	void writeOpenPMD(openPMD::Series &series, openPMD::Iteration &iteration, const std::array<double, 4> &units,
-			  const std::vector<std::string> &names = {})
+			  const std::vector<std::string> &names = {}, bool restart = false) const
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			const auto name = getParticleTypeName(type);
 			if (names.empty() || std::ranges::find(names, name) != names.end()) {
-				descriptor->writeOpenPMD(series, iteration, name, units);
+				descriptor->writeOpenPMD(series, iteration, name, units, restart);
 			}
 		}
 	}
@@ -1252,11 +1247,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Write all particle data to checkpoint file
-	void writeCheckpoint(const std::string &checkpointname, bool include_header, bool openpmd = false) const
+	void writeCheckpoint(const std::string &checkpointname, bool include_header) const
 	{
 		const BL_PROFILE("PhysicsParticleRegister::writeCheckpoint()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->writeCheckpoint(checkpointname, getParticleTypeName(type), include_header, openpmd);
+			descriptor->writeCheckpoint(checkpointname, getParticleTypeName(type), include_header);
 			descriptor->writeUnitsFile(checkpointname, getParticleTypeName(type));
 		}
 	}

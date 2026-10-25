@@ -32,7 +32,6 @@ auto ParticleValues(const quokka::ParticleContainer &particles) -> std::map<std:
 
 void CompareTracers(const std::string &reference, const std::string &candidate, int levels)
 {
-	AMREX_ALWAYS_ASSERT(amrex::ParallelDescriptor::NProcs() == 1);
 	amrex::Vector<amrex::Geometry> geoms;
 	amrex::Vector<amrex::BoxArray> grids;
 	amrex::Vector<amrex::DistributionMapping> maps;
@@ -62,61 +61,94 @@ void CompareTracers(const std::string &reference, const std::string &candidate, 
 	actual.Restart(candidate, "tracer_particles");
 	quokka::ParticleContainer::FinalizeRestarts();
 	AMREX_ALWAYS_ASSERT(expected.RestartNextID() == actual.RestartNextID());
-	AMREX_ALWAYS_ASSERT(ParticleValues(expected) == ParticleValues(actual));
+	// Both populations share grids and ownership, so each rank compares its own particles.
+	bool same = ParticleValues(expected) == ParticleValues(actual);
+	amrex::ParallelDescriptor::ReduceBoolAnd(same);
+	AMREX_ALWAYS_ASSERT(same);
+}
+
+// Values depend only on position, so shared faces hold identical copies.
+void FillMesh(amrex::MultiFab &mf)
+{
+	for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
+		const auto a = mf.array(mfi);
+		amrex::ParallelFor(mfi.validbox(), mf.nComp(),
+				   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) { a(i, j, k, n) = 100000 * n + 1000 * k + 100 * j + 10 * i; });
+	}
+}
+
+auto MeshNames(int direction) -> amrex::Vector<std::string>
+{
+	// The dash exercises the plotfile name conversion.
+	const auto suffix = "_" + std::to_string(direction + 1);
+	return {"a" + suffix, "b-c" + suffix, "d" + suffix};
 }
 
 void CheckMeshes()
 {
-	amrex::BoxArray boxes(amrex::Box(amrex::IntVect(-2), amrex::IntVect(5)));
-	boxes.maxSize(4);
-	// Cover cells and all face directions, including distinct duplicate faces.
-	for (int direction = -1; direction < AMREX_SPACEDIM; ++direction) {
-		auto ba = boxes;
-		if (direction >= 0) {
-			ba.convert(amrex::IntVect::TheDimensionVector(direction));
-		}
-		// Deliberately put every write patch on rank zero; the reader balances.
-		const amrex::DistributionMapping dm(amrex::Vector<int>(ba.size(), 0));
-		amrex::MultiFab source(ba, dm, 3, 2);
-		source.setVal(-9999.);
-		for (amrex::MFIter mfi(source); mfi.isValid(); ++mfi) {
-			const auto a = source.array(mfi);
-			const auto patch = mfi.index();
-			amrex::ParallelFor(mfi.validbox(), 3, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-				a(i, j, k, n) = 100000 * n + 10000 * patch + 100 * k + 10 * j + i;
-			});
-		}
-		const auto path = "mesh_" + std::to_string(direction + 1) + ".bp";
-		quokka::OpenPMDOutput::WriteCheckpointMultiFab(source, path);
-		amrex::MultiFab restored;
-		quokka::OpenPMDOutput::ReadCheckpointMultiFab(restored, path, 3);
-		if (direction == -1) {
-			const bool previous = amrex::system::throw_exception;
-			amrex::system::throw_exception = true;
-			bool rejected = false;
-			try {
-				amrex::MultiFab incompatible;
-				quokka::OpenPMDOutput::ReadCheckpointMultiFab(incompatible, path, 4);
-			} catch (const std::exception &) {
-				rejected = true;
+	const amrex::Box domain(amrex::IntVect(-2), amrex::IntVect(5));
+	const amrex::RealBox bounds({AMREX_D_DECL(0., 0., 0.)}, {AMREX_D_DECL(1., 1., 1.)});
+	const std::array<int, AMREX_SPACEDIM> periodic{};
+	// Level 1 covers only part of its domain, leaving holes in its datasets.
+	const std::array<amrex::Box, 2> domains{domain, amrex::refine(domain, 2)};
+	std::array<amrex::BoxArray, 2> boxes{amrex::BoxArray(domain), amrex::BoxArray(amrex::Box(amrex::IntVect(0), amrex::IntVect(7)))};
+	for (auto &ba : boxes) {
+		ba.maxSize(4);
+	}
+	const auto ixType = [](int direction) {
+		return direction < 0 ? amrex::IndexType::TheCellType() : amrex::IndexType(amrex::IntVect::TheDimensionVector(direction));
+	};
+	{
+		auto series = quokka::OpenPMDOutput::CreateCheckpointSeries("mesh");
+		auto iteration = series.iterations[7];
+		quokka::OpenPMDOutput::SetCheckpointVersion(iteration);
+		for (int lev = 0; lev < 2; ++lev) {
+			const amrex::Geometry geom(domains[lev], &bounds, 0, periodic.data());
+			// Cover cells and all face directions.
+			for (int direction = -1; direction < AMREX_SPACEDIM; ++direction) {
+				const auto ba = amrex::convert(boxes[lev], ixType(direction));
+				// Deliberately put every write patch on rank zero; the reader balances.
+				const amrex::DistributionMapping dm(amrex::Vector<int>(ba.size(), 0));
+				amrex::MultiFab source(ba, dm, 3, 2);
+				source.setVal(-9999.);
+				FillMesh(source);
+				quokka::OpenPMDOutput::WriteCheckpointMesh(iteration, source, geom, lev, MeshNames(direction));
 			}
-			amrex::system::throw_exception = previous;
-			AMREX_ALWAYS_ASSERT(rejected);
 		}
-		AMREX_ALWAYS_ASSERT(restored.boxArray() == ba && restored.nGrow() == 0);
-		amrex::MultiFab expected(ba, restored.DistributionMap(), 3, 0);
-		for (amrex::MFIter mfi(expected); mfi.isValid(); ++mfi) {
-			const auto a = expected.array(mfi);
-			const auto patch = mfi.index();
-			amrex::ParallelFor(mfi.validbox(), 3, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-				a(i, j, k, n) = 100000 * n + 10000 * patch + 100 * k + 10 * j + i;
-			});
+		series.close();
+	}
+	auto series = quokka::OpenPMDOutput::OpenCheckpointSeries("mesh0000007.bp");
+	AMREX_ALWAYS_ASSERT(series.iterationEncoding() == openPMD::IterationEncoding::fileBased);
+	auto iteration = quokka::OpenPMDOutput::CheckpointIteration(series);
+	AMREX_ALWAYS_ASSERT(iteration.meshes.contains("b_c_0") && iteration.meshes.contains("b_c_0_lvl1"));
+	{
+		const bool previous = amrex::system::throw_exception;
+		amrex::system::throw_exception = true;
+		bool rejected = false;
+		try {
+			amrex::MultiFab missing;
+			quokka::OpenPMDOutput::ReadCheckpointMesh(iteration, missing, domain, 0, ixType(-1), {"missing"});
+		} catch (const std::exception &) {
+			rejected = true;
 		}
-		amrex::MultiFab::Subtract(restored, expected, 0, 0, 3, 0);
-		for (int n = 0; n < 3; ++n) {
-			AMREX_ALWAYS_ASSERT(restored.norm0(n) == 0.);
+		amrex::system::throw_exception = previous;
+		AMREX_ALWAYS_ASSERT(rejected);
+	}
+	for (int lev = 0; lev < 2; ++lev) {
+		AMREX_ALWAYS_ASSERT(quokka::OpenPMDOutput::ReadCheckpointBoxArray(iteration, lev) == boxes[lev]);
+		for (int direction = -1; direction < AMREX_SPACEDIM; ++direction) {
+			amrex::MultiFab restored;
+			quokka::OpenPMDOutput::ReadCheckpointMesh(iteration, restored, domains[lev], lev, ixType(direction), MeshNames(direction));
+			AMREX_ALWAYS_ASSERT(restored.boxArray() == amrex::convert(boxes[lev], ixType(direction)) && restored.nGrow() == 0);
+			amrex::MultiFab expected(restored.boxArray(), restored.DistributionMap(), 3, 0);
+			FillMesh(expected);
+			amrex::MultiFab::Subtract(restored, expected, 0, 0, 3, 0);
+			for (int n = 0; n < 3; ++n) {
+				AMREX_ALWAYS_ASSERT(restored.norm0(n) == 0.);
+			}
 		}
 	}
+	series.close();
 }
 } // namespace
 auto main(int argc, char **argv) -> int

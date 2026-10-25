@@ -60,9 +60,9 @@ auto getReversedVec(const amrex::Real *v) -> std::vector<double>
 	return u;
 }
 
-void SetupMeshComponent(openPMD::Mesh &mesh, amrex::Geometry &full_geom)
+void SetupMeshComponent(openPMD::Mesh &mesh, const amrex::Geometry &full_geom, amrex::IndexType ixType)
 {
-	amrex::Box const &global_box = full_geom.Domain();
+	amrex::Box const global_box = amrex::convert(full_geom.Domain(), ixType);
 	auto global_size = getReversedVec(global_box.size());
 	std::vector<double> const grid_spacing = getReversedVec(full_geom.CellSize());
 	std::vector<double> const global_offset = getReversedVec(full_geom.ProbLo());
@@ -79,7 +79,10 @@ void SetupMeshComponent(openPMD::Mesh &mesh, amrex::Geometry &full_geom)
 	auto mesh_comp = mesh[openPMD::MeshRecordComponent::SCALAR];
 	auto const dataset = openPMD::Dataset(openPMD::determineDatatype<amrex::Real>(), global_size);
 	mesh_comp.resetDataset(dataset);
-	std::vector<amrex::Real> const relativePosition{0.5, 0.5, 0.5}; // cell-centered only (for now)
+	// staggering in units of the cell size: 0.5 for cell-centered axes, 0 for nodal ones
+	std::vector<amrex::Real> relativePosition{
+	    AMREX_D_DECL(ixType.cellCentered(0) ? 0.5 : 0.0, ixType.cellCentered(1) ? 0.5 : 0.0, ixType.cellCentered(2) ? 0.5 : 0.0)};
+	std::reverse(relativePosition.begin(), relativePosition.end());
 	mesh_comp.setPosition(relativePosition);
 }
 
@@ -315,7 +318,7 @@ void SetParticleUnits(openPMD::Record record, const std::array<int, 4> &powers, 
 } // namespace
 
 void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, const ParticleContainer &particles, const std::string &name,
-		    const std::array<double, 4> &units)
+		    const std::array<double, 4> &units, bool restart)
 {
 	const auto &schema = particles.Schema();
 	const auto layout = particles.Layout();
@@ -357,6 +360,9 @@ void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, cons
 #endif
 	const auto total = std::accumulate(counts.begin(), counts.end(), std::uint64_t{0});
 	auto offset = std::accumulate(counts.begin(), counts.begin() + amrex::ParallelDescriptor::MyProc(), std::uint64_t{0});
+	if (restart) {
+		detail::WriteCheckpointParticleAttributes(iteration, particles, name, total);
+	}
 	// An absent species represents a globally empty population.
 	if (total == 0) {
 		return;

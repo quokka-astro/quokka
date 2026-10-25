@@ -239,27 +239,29 @@ checkpoint_format = "openpmd"
 checkpoint_interval = 10
 ```
 
-Restart with `restartfile=chk0000010` (or `restartfile=last_chk`). Supply the
-same problem, physics, physical domain, and refinement ratios as the original
-run. The restart can use a different MPI rank count or grid decomposition and
-supports the existing uniform-refinement restart path. `checkpoint_format`
-controls subsequent writes; it does not select the format to read. The default
-remains `amrex`, so an openPMD restart can write native AMReX checkpoints.
+Each checkpoint is written as `chk0000010.bp`, with simulation metadata
+(including particle history) in `chk0000010.yaml`, the same as an openPMD
+plotfile. The checkpoints form a file-based openPMD series whose iteration
+number is the coarse step. Restart with `restartfile=chk0000010` (or
+`restartfile=chk0000010.bp` or `restartfile=last_chk`). Supply the same problem,
+physics, physical domain, and refinement ratios as the original run. The restart
+can use a different MPI rank count or grid decomposition and supports the
+existing uniform-refinement restart path. `checkpoint_format` controls
+subsequent writes; it does not select the format to read. The default remains
+`amrex`, so an openPMD restart can write native AMReX checkpoints.
 
-Keep the entire checkpoint directory. `Header` stores the AMR hierarchy, time,
-step counters, timestep sizes, and field names. `metadata.yaml` retains simulation
-metadata, including particle history. Each level stores cell and face data in
-`Cell.bp` and `Face_*.bp`. Each particle population stores `particles.bp` in its
-own directory, including empty populations. The payloads use ADIOS2 through
-openPMD and preserve the simulation's floating-point precision.
-
-Mesh records contain packed patch arrays with a `quokka_boxes` attribute that
-specifies their spatial layout. They preserve every valid cell and face,
-including separate copies of shared faces. Ghost zones are rebuilt on restart.
-Particle records preserve positions, packed AMReX ID/creation-rank values, all
-schema fields, and the next-ID counter. Particles are redistributed onto the
-restart hierarchy. These versioned restart records are distinct from openPMD
-plotfiles; plotfiles cannot be used as checkpoints.
+The layout follows openPMD plotfiles. Each state variable is a mesh per level
+named as in plotfiles (for example `gasDensity` and `gasDensity_lvl1`), holding
+only valid cells. Face-centered variables (for example `x_BField`) are staggered
+meshes whose `position` is 0 along the face normal. A face shared by two patches
+is a single dataset element, so both patches restore the same value. Particle populations use the
+plotfile species, including packed AMReX ID/creation-rank values in `id`.
+Iteration attributes prefixed with `quokka_` hold the extra state needed to
+restart: the patch layout of each level, step counters, timestep sizes and times
+for every level, field names, and each population's schema, count, and next-ID
+counter (also for empty populations, which have no species). Ghost zones are
+rebuilt on restart. Particles are redistributed onto the restart hierarchy.
+Plotfiles lack these attributes, so they cannot be used as checkpoints.
 
 Mesh I/O stages one level and centering in pinned host memory. Particle reads
 stage each rank's share of a population in host memory before redistribution.
