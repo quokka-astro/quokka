@@ -3,8 +3,16 @@
 /// \file microphysics_traits.hpp
 /// \brief Compile-time microphysics settings, chosen per problem through Microphysics_Traits.
 
+#include "microphysics/rosenbrock/tableaus.hpp"
+
+namespace quokka::microphysics
+{
+template <typename Tableau> struct Rosenbrock;
+} // namespace quokka::microphysics
+
 /// Default values for all Microphysics_Traits fields.
 struct DefaultMicrophysicsTraits {
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::Rodas5P>;
 	/// Retry a failed burn. Replaces the runtime parameter integrator.use_burn_retry. The retry itself is not
 	/// implemented yet, so with this set a failed burn aborts.
 	static constexpr bool burn_retry = false;
