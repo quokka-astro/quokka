@@ -14,17 +14,19 @@ if(AMReX_SPACEDIM EQUAL 3)
                                             "${CMAKE_CURRENT_BINARY_DIR}/"
                                             INTEGRATOR "Rosenbrock")
 
-  add_executable(
-    ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
+  # two executables built from StromgrenSphere.hpp, each with its own test and input
+  foreach(target ${JOB_NAME} ${JOB_NAME}TempIndependentRecombination)
+    add_executable(
+      ${target} test${target}.cpp "${QuokkaSourcesNoEOS}"
                 ${${microphysics_network_name}_sources})
 
-  # this will add #define PHOTOCHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX)
+    # this will add #define PHOTOCHEMISTRY
+    target_compile_definitions(${target} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX)
 
-  if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(${JOB_NAME})
-  endif(AMReX_GPU_BACKEND MATCHES "CUDA")
+    if(AMReX_GPU_BACKEND MATCHES "CUDA")
+      setup_target_for_cuda_compilation(${target})
+    endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  add_test(NAME ${JOB_NAME}TempIndependentRecombination COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}TempIndependentRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ${target} COMMAND ${target} ../inputs/${target}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  endforeach()
 endif()
