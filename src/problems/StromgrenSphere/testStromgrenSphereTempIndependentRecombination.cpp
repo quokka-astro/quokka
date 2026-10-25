@@ -1,0 +1,14 @@
+//==============================================================================
+// TwoMomentRad - a radiation transport library for patch-based AMR codes
+// Copyright 2020 Benjamin Wibking.
+// Released under the MIT license. See LICENSE file included in the GitHub repo.
+//==============================================================================
+/// \file testStromgrenSphereTempIndependentRecombination.cpp
+/// \brief The static Stromgren sphere problem of testStromgrenSphere.cpp, built as its own executable for
+/// inputs/StromgrenSphereTempIndependentRecombination.toml.
+///
+
+struct StromgrenSphereTempIndependentRecombination {};
+using StromgrenSphereProblem = StromgrenSphereTempIndependentRecombination; // StromgrenSphere.hpp is written against this alias
+
+#include "StromgrenSphere.hpp"
