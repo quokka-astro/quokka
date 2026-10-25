@@ -1,5 +1,8 @@
 #include "io/openPMD.hpp"
+#include <functional>
 #include <iomanip>
+#include <memory>
+#include <numeric>
 #include <sstream>
 
 namespace quokka::OpenPMDOutput
@@ -19,6 +22,29 @@ auto ParticleKey(const std::string &name, const std::string &key) -> std::string
 // Offset and extent of a box within the level's dataset, in openPMD (C) order.
 auto ChunkOffset(const amrex::Box &box, const amrex::Box &domain) -> openPMD::Offset { return detail::getReversedVec(box.smallEnd() - domain.smallEnd()); }
 auto ChunkExtent(const amrex::Box &box) -> openPMD::Extent { return detail::getReversedVec(box.size()); }
+// Loads floating-point data stored as float or double into host memory at dest,
+// converting when the stored precision differs from T. A conversion is returned
+// as a callback to run after the next flush; it is empty when the data loads directly.
+template <typename T>
+auto LoadReal(openPMD::RecordComponent record, T *dest, const openPMD::Offset &offset, const openPMD::Extent &extent) -> std::function<void()>
+{
+	const auto type = record.getDatatype();
+	if (type == openPMD::determineDatatype<T>()) {
+		record.loadChunkRaw(dest, offset, extent);
+		return {};
+	}
+	const auto convert = [&]<typename Stored>() -> std::function<void()> {
+		const auto n = std::accumulate(extent.begin(), extent.end(), std::uint64_t{1}, std::multiplies<>());
+		auto stored = std::make_shared<std::vector<Stored>>(n);
+		record.loadChunkRaw(stored->data(), offset, extent);
+		return [stored, dest] { std::copy(stored->begin(), stored->end(), dest); };
+	};
+	if (type == openPMD::Datatype::FLOAT) {
+		return convert.template operator()<float>();
+	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(type == openPMD::Datatype::DOUBLE, "openPMD checkpoint floating-point data must be stored as float or double");
+	return convert.template operator()<double>();
+}
 } // namespace
 
 auto CreateCheckpointSeries(const std::string &basename) -> openPMD::Series
@@ -91,7 +117,9 @@ void WriteCheckpointMesh(openPMD::Iteration &iteration, const amrex::MultiFab &m
 	std::ostringstream boxes;
 	amrex::convert(mf.boxArray(), amrex::IndexType::TheCellType()).writeOn(boxes);
 	iteration.setAttribute(LevelKey("boxes", lev), boxes.str());
-	// Stage one level and centering in pinned memory. Holes in refined levels
+	// Stage one level and centering in pinned memory. Device pointers cannot be
+	// passed instead: GPU-enabled ADIOS2 treats GPU buffers as column-major and
+	// reverses the dimensions of multidimensional chunks. Holes in refined levels
 	// stay unwritten; shared faces are written by every patch that holds them.
 	amrex::MultiFab host(mf.boxArray(), mf.DistributionMap(), mf.nComp(), 0, amrex::MFInfo().SetArena(amrex::The_Pinned_Arena()));
 	amrex::MultiFab::Copy(host, mf, 0, 0, mf.nComp(), 0);
@@ -117,20 +145,26 @@ void ReadCheckpointMesh(openPMD::Iteration &iteration, amrex::MultiFab &mf, cons
 	const auto domain = amrex::convert(cellDomain, ixType);
 	const auto ncomp = static_cast<int>(names.size());
 	const amrex::DistributionMapping dm(boxes);
+	// Stage in pinned memory, for the same reason as WriteCheckpointMesh.
 	amrex::MultiFab host(boxes, dm, ncomp, 0, amrex::MFInfo().SetArena(amrex::The_Pinned_Arena()));
+	std::vector<std::function<void()>> conversions;
 	for (int c = 0; c < ncomp; ++c) {
 		const auto meshName = detail::GetMeshComponentName(lev, names[c]);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(iteration.meshes.contains(meshName), "Checkpoint is missing mesh " + meshName);
 		auto record = iteration.meshes.at(meshName)[openPMD::MeshRecordComponent::SCALAR];
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(record.getExtent() == ChunkExtent(domain),
 						 "Checkpoint mesh " + meshName + " does not match the restart domain");
-		AMREX_ALWAYS_ASSERT(record.getDatatype() == openPMD::determineDatatype<amrex::Real>());
 		for (amrex::MFIter mfi(host); mfi.isValid(); ++mfi) {
 			const auto &box = mfi.validbox();
-			record.loadChunkRaw(host[mfi].dataPtr(c), ChunkOffset(box, domain), ChunkExtent(box));
+			if (auto convert = LoadReal(record, host[mfi].dataPtr(c), ChunkOffset(box, domain), ChunkExtent(box))) {
+				conversions.push_back(std::move(convert));
+			}
 		}
 	}
 	iteration.seriesFlush();
+	for (const auto &convert : conversions) {
+		convert();
+	}
 	mf.define(boxes, dm, ncomp, 0);
 	amrex::MultiFab::Copy(mf, host, 0, 0, ncomp, 0);
 	amrex::Gpu::streamSynchronize();
@@ -175,14 +209,23 @@ void ReadCheckpointParticles(openPMD::Iteration &iteration, ParticleContainer &p
 	std::vector<std::uint64_t> ids(count);
 	std::vector<std::vector<amrex::ParticleReal>> realData(particles.NumRealComps(), std::vector<amrex::ParticleReal>(count));
 	std::vector<std::vector<int>> intData(particles.NumIntComps(), std::vector<int>(count));
+	std::vector<std::function<void()>> conversions;
 	if (total > 0) {
 		auto species = iteration.particles.at(name);
 		const auto load = [&](openPMD::RecordComponent record, auto &data) {
 			using Value = typename std::decay_t<decltype(data)>::value_type;
 			AMREX_ALWAYS_ASSERT(record.getExtent() == openPMD::Extent{total});
-			AMREX_ALWAYS_ASSERT(record.getDatatype() == openPMD::determineDatatype<Value>());
-			if (count > 0) {
-				record.loadChunkRaw(data.data(), {begin}, {count});
+			if constexpr (std::is_floating_point_v<Value>) {
+				if (count > 0) {
+					if (auto convert = LoadReal(record, data.data(), {begin}, {count})) {
+						conversions.push_back(std::move(convert));
+					}
+				}
+			} else {
+				AMREX_ALWAYS_ASSERT(record.getDatatype() == openPMD::determineDatatype<Value>());
+				if (count > 0) {
+					record.loadChunkRaw(data.data(), {begin}, {count});
+				}
 			}
 		};
 		load(species["id"][openPMD::RecordComponent::SCALAR], ids);
@@ -198,6 +241,9 @@ void ReadCheckpointParticles(openPMD::Iteration &iteration, ParticleContainer &p
 		}
 	}
 	iteration.seriesFlush();
+	for (const auto &convert : conversions) {
+		convert();
+	}
 	amrex::Long maximum = 0;
 	for (const auto id : ids) {
 		const auto unpacked = amrex::particle_impl::unpack_id(id);

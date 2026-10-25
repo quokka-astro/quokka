@@ -1,4 +1,6 @@
 # Integration: AMR + tracers, native compatibility, and continued field equality.
+# Start clean: a stale native checkpoint with an openPMD name would take precedence on restart.
+file(REMOVE_RECURSE "${RUN_DIR}")
 file(MAKE_DIRECTORY "${RUN_DIR}")
 set(common "${INPUT}" "amr.n_cell=16 16 16" amr.max_grid_size=8
   amr.blocking_factor=8 amr.max_level=1 max_timesteps=2 checkpoint_interval=1

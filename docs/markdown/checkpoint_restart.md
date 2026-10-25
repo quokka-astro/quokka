@@ -51,3 +51,5 @@ Plotfiles lack these attributes, so they cannot be used as checkpoints.
 
 Mesh I/O stages one level and centering in pinned host memory. Particle reads
 stage each rank's share of a population in host memory before redistribution.
+Mesh and particle floating-point data stored as `float` or `double` is converted
+on read to the build's precision.

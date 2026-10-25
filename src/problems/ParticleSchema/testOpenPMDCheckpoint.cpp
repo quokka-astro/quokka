@@ -84,7 +84,9 @@ auto MeshNames(int direction) -> amrex::Vector<std::string>
 	return {"a" + suffix, "b-c" + suffix, "d" + suffix};
 }
 
-void CheckMeshes()
+// With writeCheckpoint == 0, read an existing checkpoint, e.g. one written by a
+// build of the other floating-point precision.
+void CheckMeshes(int writeCheckpoint)
 {
 	const amrex::Box domain(amrex::IntVect(-2), amrex::IntVect(5));
 	const amrex::RealBox bounds({AMREX_D_DECL(0., 0., 0.)}, {AMREX_D_DECL(1., 1., 1.)});
@@ -98,7 +100,7 @@ void CheckMeshes()
 	const auto ixType = [](int direction) {
 		return direction < 0 ? amrex::IndexType::TheCellType() : amrex::IndexType(amrex::IntVect::TheDimensionVector(direction));
 	};
-	{
+	if (writeCheckpoint != 0) {
 		auto series = quokka::OpenPMDOutput::CreateCheckpointSeries("mesh");
 		auto iteration = series.iterations[7];
 		quokka::OpenPMDOutput::SetCheckpointVersion(iteration);
@@ -159,7 +161,9 @@ auto main(int argc, char **argv) -> int
 		amrex::ParmParse pp;
 		pp.query("reference", reference);
 		if (reference.empty()) {
-			CheckMeshes();
+			int writeCheckpoint = 1;
+			pp.query("write_checkpoint", writeCheckpoint);
+			CheckMeshes(writeCheckpoint);
 		} else {
 			std::string candidate;
 			pp.get("candidate", candidate);

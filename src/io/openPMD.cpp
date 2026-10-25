@@ -20,6 +20,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Reduce.H"
+#include "AMReX_Scan.H"
 
 // openPMD headers
 #include "openPMD/IterationEncoding.hpp"
@@ -80,8 +81,8 @@ void SetupMeshComponent(openPMD::Mesh &mesh, const amrex::Geometry &full_geom, a
 	auto const dataset = openPMD::Dataset(openPMD::determineDatatype<amrex::Real>(), global_size);
 	mesh_comp.resetDataset(dataset);
 	// staggering in units of the cell size: 0.5 for cell-centered axes, 0 for nodal ones
-	std::vector<amrex::Real> relativePosition{
-	    AMREX_D_DECL(ixType.cellCentered(0) ? 0.5 : 0.0, ixType.cellCentered(1) ? 0.5 : 0.0, ixType.cellCentered(2) ? 0.5 : 0.0)};
+	const auto stagger = [&](int d) { return ixType.cellCentered(d) ? amrex::Real(0.5) : amrex::Real(0.0); };
+	std::vector<amrex::Real> relativePosition{AMREX_D_DECL(stagger(0), stagger(1), stagger(2))};
 	std::reverse(relativePosition.begin(), relativePosition.end());
 	mesh_comp.setPosition(relativePosition);
 }
@@ -178,7 +179,6 @@ struct ParticleTileOutput {
 	amrex::Gpu::DeviceVector<amrex::ParticleReal> deviceReals;
 	amrex::Gpu::DeviceVector<int> deviceInts;
 	amrex::Gpu::DeviceVector<std::uint64_t> deviceIDs;
-	amrex::Gpu::DeviceVector<amrex::Long> deviceIndices;
 	std::vector<amrex::ParticleReal> hostReals;
 	std::vector<int> hostInts;
 	std::vector<std::uint64_t> hostIDs;
@@ -196,9 +196,7 @@ struct ParticleTileOutput {
 		integers.resize(layout.numInt);
 		const bool compact = count != static_cast<std::uint64_t>(n);
 		const auto bytes =
-		    count * sizeof(int) +
-		    (compact ? count * (nr * sizeof(amrex::ParticleReal) + layout.numInt * sizeof(int) + sizeof(std::uint64_t)) + (n + 1) * sizeof(amrex::Long)
-			     : 0);
+		    count * sizeof(int) + (compact ? count * (nr * sizeof(amrex::ParticleReal) + layout.numInt * sizeof(int) + sizeof(std::uint64_t)) : 0);
 		try {
 			// A configurable scratch limit also allows deterministic fallback tests.
 			if (bufferLimit >= 0 && bytes > static_cast<std::uint64_t>(bufferLimit)) {
@@ -208,7 +206,6 @@ struct ParticleTileOutput {
 			if (compact) {
 				deviceReals.resize(count * nr);
 				deviceIDs.resize(count);
-				deviceIndices.resize(n + 1);
 			}
 			// Finish all allocations before launching kernels, so an allocation
 			// failure can release partial buffers without waiting on their use.
@@ -225,28 +222,27 @@ struct ParticleTileOutput {
 					integers[c] = soa.GetIntData(c).data();
 				}
 			} else {
-				auto *indices = deviceIndices.data();
 				const auto data = tile.getConstParticleTileData();
-				amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) { indices[n] = 0; });
-				amrex::ParallelFor(n, [=] AMREX_GPU_DEVICE(int i) {
-					indices[i] = data.id(i) > 0 ? amrex::Gpu::Atomic::Add(&indices[n], amrex::Long{1}) : -1;
-				});
 				auto *outReals = deviceReals.data();
 				auto *outIDs = deviceIDs.data();
 				const auto *inIDs = soa.GetIdCPUData().data();
 				const int ni = layout.numInt;
-				amrex::ParallelFor(n, [=] AMREX_GPU_DEVICE(int i) {
-					const auto j = indices[i];
-					if (j >= 0) {
-						outIDs[j] = inIDs[i];
-						for (int c = 0; c < nr; ++c) {
-							outReals[c * count + j] = data.rdata(c, i);
-						}
-						for (int c = 0; c < ni; ++c) {
-							outInts[(c + 1) * count + j] = data.idata(c, i);
-						}
-					}
-				});
+				// An exclusive prefix sum over the valid mask keeps the tile's particle
+				// order, so output is reproducible from run to run.
+				amrex::Scan::PrefixSum<amrex::Long>(
+				    n, [=] AMREX_GPU_DEVICE(int i) -> amrex::Long { return data.id(i) > 0 ? 1 : 0; },
+				    [=] AMREX_GPU_DEVICE(int i, amrex::Long const &j) {
+					    if (data.id(i) > 0) {
+						    outIDs[j] = inIDs[i];
+						    for (int c = 0; c < nr; ++c) {
+							    outReals[c * count + j] = data.rdata(c, i);
+						    }
+						    for (int c = 0; c < ni; ++c) {
+							    outInts[(c + 1) * count + j] = data.idata(c, i);
+						    }
+					    }
+				    },
+				    amrex::Scan::Type::exclusive, amrex::Scan::noRetSum);
 				ids = outIDs;
 				for (int c = 0; c < nr; ++c) {
 					reals[c] = outReals + c * count;
@@ -263,7 +259,6 @@ struct ParticleTileOutput {
 			amrex::Gpu::DeviceVector<amrex::ParticleReal>().swap(deviceReals);
 			amrex::Gpu::DeviceVector<int>().swap(deviceInts);
 			amrex::Gpu::DeviceVector<std::uint64_t>().swap(deviceIDs);
-			amrex::Gpu::DeviceVector<amrex::Long>().swap(deviceIndices);
 		}
 		const auto identity = HostCopy(soa.GetIdCPUData(), n);
 		std::vector<int> valid;
@@ -396,15 +391,36 @@ void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, cons
 	}
 	// Define the same datasets on every rank before submitting any chunks.
 	series.flush();
-	auto rounds = static_cast<amrex::Long>(tiles.size());
-	amrex::ParallelDescriptor::ReduceLongMax(rounds);
 	const auto rankEnd = offset + local;
 	amrex::Long bufferLimit = -1;
 	amrex::ParmParse("openpmd").query("particle_device_buffer_bytes", bufferLimit);
+	// Group tiles into flush rounds of up to flushBytes of particle data per rank,
+	// so the number of collective flushes follows data volume rather than the
+	// number of tiles. A tile larger than the budget gets a round of its own.
+	amrex::Long flushBytes = amrex::Long{256} << 20;
+	amrex::ParmParse("openpmd").query("particle_flush_bytes", flushBytes);
+	const auto recordBytes = (AMREX_SPACEDIM + layout.numReal) * sizeof(amrex::ParticleReal) + (layout.numInt + 1) * sizeof(int) + sizeof(std::uint64_t);
+	std::vector<std::size_t> roundStart;
+	std::uint64_t roundBytes = 0;
+	for (std::size_t t = 0; t < tiles.size(); ++t) {
+		const auto bytes = tiles[t].count * recordBytes;
+		if (roundStart.empty() || roundBytes + bytes > static_cast<std::uint64_t>(flushBytes)) {
+			roundStart.push_back(t);
+			roundBytes = 0;
+		}
+		roundBytes += bytes;
+	}
+	const auto localRounds = static_cast<amrex::Long>(roundStart.size());
+	roundStart.push_back(tiles.size());
+	auto rounds = localRounds;
+	amrex::ParallelDescriptor::ReduceLongMax(rounds);
 	for (amrex::Long round = 0; round < rounds; ++round) {
-		ParticleTileOutput buffers;
-		if (round < static_cast<amrex::Long>(tiles.size())) {
-			const auto &[lev, tile, count] = tiles[round];
+		const auto first = round < localRounds ? roundStart[round] : tiles.size();
+		const auto last = round < localRounds ? roundStart[round + 1] : tiles.size();
+		std::vector<ParticleTileOutput> roundBuffers(last - first);
+		for (auto t = first; t < last; ++t) {
+			auto &buffers = roundBuffers[t - first];
+			const auto &[lev, tile, count] = tiles[t];
 			buffers.Prepare(*tile, lev, count, layout, bufferLimit);
 			const auto store = [&](openPMD::RecordComponent component, const auto *values) { component.storeChunkRaw(values, {offset}, {count}); };
 			for (int d = 0; d < AMREX_SPACEDIM; ++d) {

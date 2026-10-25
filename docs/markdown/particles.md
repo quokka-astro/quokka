@@ -23,14 +23,18 @@ between outputs; match particles using `id`, which stores AMReX's packed
 
 Particle output borrows each tile's arrays directly, including device pointers
 when ADIOS2 is built with the matching CUDA/HIP support. Tiles containing invalid
-particles are compacted in device memory. The generated `amr_level` array also
+particles are compacted in device memory, preserving particle order. The generated `amr_level` array also
 uses a tile-sized device buffer. If these scratch allocations fail, that tile
 falls back to host staging. `openpmd.particle_device_buffer_bytes` limits scratch
 bytes per tile (`-1`, the default, imposes no limit; `0` forces host fallback).
 This limit excludes small reduction workspaces and backend-owned buffers.
 
-Each tile is flushed before its scratch buffers are freed. MPI ranks participate
-in matching flush rounds even when their tile counts differ. BP5 flushes request
+Tiles are grouped into flush rounds of up to `openpmd.particle_flush_bytes` of
+particle data per rank (default 256 MiB); a larger tile gets a round of its own.
+Each round is flushed before its scratch buffers are freed, so this budget bounds
+scratch and backend buffer memory while keeping the number of collective flushes
+proportional to data volume. MPI ranks participate in matching flush rounds even
+when their round counts differ. BP5 flushes request
 disk drainage to avoid retaining a whole population in backend buffers. Backend
 configuration overrides can change this buffering behavior. The fallback handles
 Quokka scratch allocation failures; it cannot safely retry an ADIOS2 failure
