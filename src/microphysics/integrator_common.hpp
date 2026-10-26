@@ -45,6 +45,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto counts_toward_error(cons
 }
 
 template <typename problem_t, typename BurnT> struct IntegratorLayout {
+	using traits = Microphysics_Traits<problem_t>;
+
 	static constexpr bool photochemistry = requires { &BurnT::rn; };
 
 	static constexpr auto NumChemRadEqs() -> int
@@ -76,7 +78,7 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	///
 	/// Port-only exception, removed by the post-port cleanup PR: rtol_for and atol_for (rosenbrock.hpp) should switch
 	/// over the role, but a switch breaks bitwise identity with Microphysics, which we need during the port but not at
-	/// the end. Without photochemistry the switch does not reduce to one select, so evaluate_jacobian's ewt loop becomes
+	/// the end. Without photochemistry the switch does not reduce to one select, so numerical_jacobian's ewt loop becomes
 	/// too big for Apple clang to unroll fully for PrimordialChem (15 entries). The loop vectorizer then sums fac without
 	/// the fused multiply-adds of Microphysics' fully unrolled loop, and the finite-difference Jacobian changes in the
 	/// last bits. So they keep Microphysics' shape (energy first, the photon branch only with photochemistry) for now.
@@ -127,7 +129,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state
 
 	// Get T from e (also updates composition quantities).
 
-	if (integrator_rp::call_eos_in_rhs) {
+	if constexpr (Layout::traits::call_eos_in_rhs) {
 		eos(eos_input_re, state);
 	}
 
@@ -203,7 +205,7 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 			case VarRole::Species:
 				// Ensure that mass fractions always stay positive and less than or
 				// equal to 1.
-				if (integrator_rp::do_species_clip) {
+				if constexpr (Layout::traits::do_species_clip) {
 					int_state.y(n) = amrex::Clamp(int_state.y(n), integrator_rp::SMALL_X_SAFE, 1.0_rt);
 				}
 				// for primordial chem, just enforce positivity
@@ -226,7 +228,7 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 
 	// Renormalize the abundances as necessary.
 
-	if (integrator_rp::renormalize_abundances) {
+	if constexpr (Layout::traits::renormalize_abundances) {
 		amrex::Real sum = 0.0_rt;
 
 		for (int n = 1; n <= NumSpec; ++n) {
@@ -258,7 +260,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 	// Only do the burn if the incoming temperature is within the temperature
 	// bounds. Otherwise set the RHS to zero and return.
 
-	if (state.T <= EOSData::mintemp || state.T >= integrator_rp::MAX_TEMP) {
+	if (state.T <= EOSData::mintemp || state.T >= Layout::traits::max_temp) {
 
 		for (int n = 1; n <= int_neqs; ++n) {
 			ydot(n) = 0.0_rt;
@@ -291,7 +293,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 
 	// Allow energy integration to be disabled.
 
-	if (!integrator_rp::integrate_energy) {
+	if constexpr (!Layout::traits::integrate_energy) {
 		ydot(net_ienuc) = 0.0_rt;
 	}
 
@@ -314,7 +316,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 	// Only do the burn if the incoming temperature is within the temperature
 	// bounds. Otherwise set the Jacobian to zero and return.
 
-	if (state.T <= EOSData::mintemp || state.T >= integrator_rp::MAX_TEMP) {
+	if (state.T <= EOSData::mintemp || state.T >= Layout::traits::max_temp) {
 		pd.zero();
 		return;
 	}
@@ -359,7 +361,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 
 	// Allow temperature and energy integration to be disabled.
 
-	if (!integrator_rp::integrate_energy) {
+	if constexpr (!Layout::traits::integrate_energy) {
 		for (int j = 1; j <= int_neqs; ++j) {
 			pd(net_ienuc, j) = 0.0_rt;
 		}
@@ -399,9 +401,6 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amr
 		int_state.atol_rad_num = integrator_rp::atol_rad_num; // radiation number density
 		int_state.rtol_rad_num = integrator_rp::rtol_rad_num; // radiation number density
 	}
-
-	// set the Jacobian type
-	int_state.jacobian_type = static_cast<std::int16_t>(integrator_rp::jacobian);
 
 	// Start off by assuming a successful burn.
 

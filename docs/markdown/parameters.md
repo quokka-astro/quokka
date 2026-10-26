@@ -136,13 +136,9 @@ VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will
 
 | Parameter Name | Type | Default | Description |
 |---|---|---|---|
-| `integrator.jacobian` | Integer | `1` | Jacobian type: `1` = analytical, `2` = numerical. |
 | `integrator.ode_max_steps` | Integer | `150000` | Maximum number of VODE internal steps per burn call. |
-| `integrator.ode_max_dt` | Float | `1.e30` | Maximum internal timestep for VODE. |
 | `integrator.use_number_densities` | Boolean (0/1) | `1` | If 1, evolve species as number densities instead of mass fractions. Must be `1` for Quokka. |
 | `integrator.subtract_internal_energy` | Boolean (0/1) | `1` | If 1, subtract internal energy before integration. Must be `0` for Quokka. |
-| `integrator.call_eos_in_rhs` | Boolean (0/1) | `1` | If 1, call EOS in the RHS to update temperature from internal energy. Must be `1` for Quokka. |
-| `integrator.integrate_energy` | Boolean (0/1) | `1` | If 1, enable energy integration; if 0, freeze energy. Not recommended for use with number densities. |
 | `integrator.scale_system` | Boolean (0/1) | `0` | If 1, scale the ODE system to be O(1). Does not work with number densities — leave at `0`. |
 | `integrator.burner_verbose` | Boolean (0/1) | `0` | If 1, print diagnostic output after each burn. |
 | `integrator.SMALL_X_SAFE` | Float | `1.e-30` | Species floor to prevent underflow in the integrator. |
@@ -150,6 +146,21 @@ VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will
 | `integrator.do_corrector_validation` | Boolean (0/1) | `1` | If 1, check predicted state validity before calling RHS. |
 
 Burn retry is not a runtime parameter. A problem enables it at compile time with `Microphysics_Traits<problem_t>::burn_retry` (default `false`, see `src/microphysics/microphysics_traits.hpp`). The retry itself is not implemented yet, so with it enabled a failed burn aborts the run.
+
+These integrator settings are not runtime parameters either. Each is a field of `Microphysics_Traits<problem_t>`, set to the default of the runtime parameter it replaces:
+
+| Trait | Default | Replaces |
+|---|---|---|
+| `analytic_jacobian` | `true` | `integrator.jacobian = 1`. With `false`, the Jacobian always comes from finite differences. |
+| `numerical_jacobian_fallback` | `true` | Nothing (new). With `analytic_jacobian`, an analytic Jacobian with a non-finite entry is replaced by finite differences, as before. With `false`, the finite-difference Jacobian is not compiled and such a burn fails with error code `-9`. |
+| `linalg_do_pivoting` | `true` | `integrator.linalg_do_pivoting` |
+| `call_eos_in_rhs` | `true` | `integrator.call_eos_in_rhs` |
+| `integrate_energy` | `true` | `integrator.integrate_energy` |
+| `do_species_clip` | `false` | `integrator.do_species_clip` |
+| `renormalize_abundances` | `false` | `integrator.renormalize_abundances` |
+| `max_temp` | `1.0e11` | `integrator.MAX_TEMP` |
+| `ode_max_dt` | `1.e30` | `integrator.ode_max_dt` |
+| `h211b_b`, `h211b_k`, `h211b_fac_min`, `h211b_fac_max`, `h211b_reduction_fac` | `4.0`, `2.5`, `0.2`, `6.0`, `0.5` | `integrator.h211b_*` (Rosenbrock step-size controller) |
 
 ## Dust
 
