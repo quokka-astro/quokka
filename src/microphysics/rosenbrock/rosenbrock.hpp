@@ -31,24 +31,17 @@ using amrex::literals::operator""_rt;
 namespace rosenbrock
 {
 
-/// Only chemical band photon number densities participate in error control.
-template <typename Layout> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rad_eq_in_error_control(const int n) -> bool
-{
-	if (n > net_ienuc + Layout::num_chem_rad_eqs) {
-		return false;
-	}
-	const int group_offset = (n - net_ienuc - 1) % Layout::vars_per_group;
-	return group_offset == 0;
-}
-
+// rtol_for and atol_for keep the shape of Microphysics' versions instead of switching over the role, during the port
+// only. See IntegratorLayout::role().
 template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rtol_for(const RosenbrockT &rstate, const int n) -> amrex::Real
 {
-	if (n == net_ienuc) {
+	const VarRole role = Layout::role(n);
+	if (role == VarRole::Energy) {
 		return rstate.rtol_enuc;
 	}
 	if constexpr (Layout::photochemistry) {
-		if (n > net_ienuc) {
-			return rad_eq_in_error_control<Layout>(n) ? rstate.rtol_rad_num : 1.0e30;
+		if (role != VarRole::Species) {
+			return role == VarRole::ChemPhotonNumber ? rstate.rtol_rad_num : 1.0e30;
 		}
 	}
 	return rstate.rtol_spec;
@@ -56,12 +49,13 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 
 template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto atol_for(const RosenbrockT &rstate, const int n) -> amrex::Real
 {
-	if (n == net_ienuc) {
+	const VarRole role = Layout::role(n);
+	if (role == VarRole::Energy) {
 		return rstate.atol_enuc;
 	}
 	if constexpr (Layout::photochemistry) {
-		if (n > net_ienuc) {
-			return rad_eq_in_error_control<Layout>(n) ? rstate.atol_rad_num : 1.0e30;
+		if (role != VarRole::Species) {
+			return role == VarRole::ChemPhotonNumber ? rstate.atol_rad_num : 1.0e30;
 		}
 	}
 	return rstate.atol_spec;
@@ -73,16 +67,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto error_norm(const RosenbrockState<i
 	amrex::Real err = 0.0_rt;
 	for (int n = 1; n <= int_neqs; ++n) {
 		const amrex::Real sk = atol_for<Layout>(rstate, n) + rtol_for<Layout>(rstate, n) * amrex::max(std::abs(rstate.y(n)), std::abs(rstate.ynew(n)));
-		amrex::Real term{};
-		if constexpr (Layout::photochemistry) {
-			if (n > net_ienuc && !rad_eq_in_error_control<Layout>(n)) {
-				term = 0.0_rt;
-			} else {
-				term = rstate.work(n) / sk;
-			}
-		} else {
-			term = rstate.work(n) / sk;
-		}
+		const amrex::Real term = counts_toward_error(Layout::role(n)) ? rstate.work(n) / sk : 0.0_rt;
 		err += term * term;
 	}
 	// Known bug, kept for bitwise identity with Microphysics and to be fixed later: the sum should be divided by the
@@ -134,26 +119,31 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex
 		}
 	}
 
-	for (int n = 1; n <= NumSpec; ++n) {
-		if (y(n) < -integrator_rp::atol_spec) {
-			return false;
+	for (int n = 1; n <= int_neqs; ++n) {
+		switch (Layout::role(n)) {
+			case VarRole::Species:
+				if (y(n) < -integrator_rp::atol_spec) {
+					return false;
+				}
+				if (!integrator_rp::use_number_densities && y(n) > 1.0_rt) {
+					return false;
+				}
+				break;
+			case VarRole::Energy:
+				if (y(n) <= 0.0_rt) {
+					return false;
+				}
+				break;
+			case VarRole::ChemPhotonNumber:
+				if (y(n) < -integrator_rp::atol_rad_num) {
+					return false;
+				}
+				break;
+			case VarRole::ChemPhotonFlux:
+			case VarRole::ThermalBandEnergy:
+			case VarRole::DustAbsorbedEnergy:
+				break;
 		}
-
-		if (!integrator_rp::use_number_densities && y(n) > 1.0_rt) {
-			return false;
-		}
-	}
-
-	if constexpr (Layout::photochemistry) {
-		for (int n = net_ienuc + 1; n <= net_ienuc + Layout::num_chem_rad_eqs; n += Layout::vars_per_group) {
-			if (y(n) < -integrator_rp::atol_rad_num) {
-				return false;
-			}
-		}
-	}
-
-	if (y(net_ienuc) <= 0.0_rt) {
-		return false;
 	}
 
 	return true;
