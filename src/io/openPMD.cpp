@@ -137,8 +137,6 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 				detail::SetupMeshComponent(mesh, full_geom);
 			}
 		}
-		// Acquiring a span can be collective while dataset definitions are pending.
-		series.flush();
 
 		// pass data pointers for each box to ADIOS
 		for (int icomp = 0; icomp < ncomp; icomp++) {
@@ -159,8 +157,10 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 			}
 		}
 
-		// Flush this level to disk. A rank without patches on this level has nothing
-		// new to flush, and openPMD would skip its part of BP5's collective write.
+		// Flush this level to disk once its staged copies are complete. A rank without
+		// patches on this level has nothing new to flush, and openPMD would skip its
+		// part of BP5's collective write.
+		amrex::Gpu::streamSynchronize();
 		series_iteration.touch();
 		series.flush();
 	}
@@ -455,10 +455,12 @@ void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, cons
 			}
 			offset += count;
 		}
-		// All borrowed pointers and scratch buffers remain alive through this
-		// collective flush, including on ranks that have already run out of tiles.
+		// Staged copies must be complete, and all borrowed pointers and scratch buffers
+		// remain alive through this collective flush, including on ranks that have
+		// already run out of tiles.
 		// Otherwise openPMD can skip a clean iteration on an idle rank,
 		// leaving other ranks inside BP5's collective PerformDataWrite.
+		amrex::Gpu::streamSynchronize();
 		iteration.touch();
 		series.flush(R"({"adios2": {"engine": {"preferred_flush_target": "disk"}}})");
 	}

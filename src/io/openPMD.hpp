@@ -15,6 +15,7 @@
 #include <string>
 
 // AMReX headers
+#include "AMReX_Arena.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_IntVect.H"
@@ -35,20 +36,20 @@ auto getReversedVec(const amrex::Real *v) -> std::vector<double>;
 void SetupMeshComponent(openPMD::Mesh &mesh, const amrex::Geometry &full_geom, amrex::IndexType ixType = amrex::IndexType::TheCellType());
 auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::string;
 // Stores n contiguous values from data (device memory in GPU builds) as one chunk.
+// The copy is asynchronous: call amrex::Gpu::streamSynchronize() before the next flush.
 //
 // Device pointers must not reach ADIOS2. GPU-enabled ADIOS2 treats GPU buffers as
 // column-major and reverses the dimensions of multidimensional chunks
 // (ornladios/ADIOS2#5241), and ADIOS2 without GPU support reads them from the CPU,
-// which is very slow on AMD GPUs. As in WarpX, copy straight into a span of the
-// backend's own buffer instead. Without span support, openPMD queues a plain host
-// buffer from this allocator.
+// which is very slow on AMD GPUs. As in WarpX, stage the data in pinned host memory,
+// which openPMD keeps alive until the flush. Copies into pinned memory are much
+// faster than into the backend's pageable buffers, especially on AMD GPUs.
 template <typename T>
 void StoreDeviceChunk(openPMD::RecordComponent &record, const T *data, std::size_t n, const openPMD::Offset &offset, const openPMD::Extent &extent)
 {
-	auto view = record.storeChunk<T>(offset, extent, [](std::size_t size) { return std::shared_ptr<T>(new T[size], std::default_delete<T[]>()); });
-	// The span is valid until the next storeChunk, so copy synchronously.
-	auto span = view.currentBuffer();
-	amrex::Gpu::dtoh_memcpy(span.data(), data, n * sizeof(T));
+	auto *staged = static_cast<T *>(amrex::The_Pinned_Arena()->alloc(n * sizeof(T)));
+	amrex::Gpu::dtoh_memcpy_async(staged, data, n * sizeof(T));
+	record.storeChunk(std::shared_ptr<T>(staged, [](T *p) { amrex::The_Pinned_Arena()->free(p); }), offset, extent);
 }
 // Creates a file-based series for writing, e.g. filename = "plt%05T.bp".
 auto CreateSeries(const std::string &filename) -> openPMD::Series;

@@ -49,9 +49,9 @@ counter (also for empty populations, which have no species). Ghost zones are
 rebuilt on restart. Particles are redistributed onto the restart hierarchy.
 Plotfiles lack these attributes, so they cannot be used as checkpoints.
 
-Mesh data is copied from device memory directly into the I/O backend's buffers,
-packing one patch at a time when the state has ghost zones. Restart reads each
-patch through a host buffer, then copies it to device memory. Particle reads
-stage each rank's share of a population in host memory before redistribution.
-Mesh and particle floating-point data stored as `float` or `double` is converted
-on read to the build's precision.
+Mesh data is copied from device memory into pinned host buffers for the I/O
+backend, packing one patch at a time when the state has ghost zones. Restart
+reads each patch through a host buffer, then copies it to device memory.
+Particle reads stage each rank's share of a population in host memory before
+redistribution. Mesh and particle floating-point data stored as `float` or
+`double` is converted on read to the build's precision.

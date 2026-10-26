@@ -133,11 +133,9 @@ void WriteCheckpointMesh(openPMD::Iteration &iteration, const amrex::MultiFab &m
 		detail::SetupMeshComponent(mesh, geom, ixType);
 		records.push_back(mesh[openPMD::MeshRecordComponent::SCALAR]);
 	}
-	// Acquiring a span can be collective while dataset definitions are pending.
-	iteration.seriesFlush();
-	// Copy each patch's valid data from device memory into the backend's buffers.
-	// Holes in refined levels stay unwritten; shared faces are written by every
-	// patch that holds them.
+	// Stage each patch's valid data from device memory for the backend. Holes in
+	// refined levels stay unwritten; shared faces are written by every patch that
+	// holds them.
 	const bool ghosted = mf.nGrowVect() != amrex::IntVect(0);
 	for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
 		const auto &box = mfi.validbox();
@@ -152,8 +150,9 @@ void WriteCheckpointMesh(openPMD::Iteration &iteration, const amrex::MultiFab &m
 			detail::StoreDeviceChunk(records[c], source.dataPtr(c), box.numPts(), ChunkOffset(box, domain), ChunkExtent(box));
 		}
 	}
-	// A rank without patches has nothing new to flush, and openPMD would skip its
-	// part of BP5's collective write.
+	// Flush once the staged copies are complete. A rank without patches has nothing
+	// new to flush, and openPMD would skip its part of BP5's collective write.
+	amrex::Gpu::streamSynchronize();
 	iteration.touch();
 	iteration.seriesFlush();
 }

@@ -21,8 +21,8 @@ are excluded. Globally empty populations are omitted. Array order can change
 between outputs; match particles using `id`, which stores AMReX's packed
 64-bit ID and creation-rank pair.
 
-In GPU builds, each tile's arrays are copied from device memory straight into
-the I/O backend's buffers; device pointers are never passed to ADIOS2. In CPU
+In GPU builds, each tile's arrays are copied from device memory into pinned host
+buffers for the I/O backend; device pointers are never passed to ADIOS2. In CPU
 builds, the arrays are passed to the backend directly. Tiles containing invalid
 particles are compacted in device memory, preserving particle order. The generated `amr_level` array also
 uses a tile-sized device buffer. If these scratch allocations fail, that tile
