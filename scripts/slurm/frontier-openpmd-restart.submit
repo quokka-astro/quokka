@@ -38,6 +38,12 @@
 # Submit from the repository root:
 #   sbatch scripts/slurm/frontier-openpmd-restart.submit
 #
+# Or run from the rocm-diskgalaxy container image, which includes HydroBlast3D and
+# OpenPMDCheckpoint built with openPMD (no build needed):
+#   apptainer pull quokka_rocm-diskgalaxy.sif docker://ghcr.io/quokka-astro/quokka:<tag>
+#   sbatch --export=ALL,CONTAINER=$PWD/quokka_rocm-diskgalaxy.sif scripts/slurm/frontier-openpmd-restart.submit
+# In container mode the environment follows scripts/slurm/frontier-container.submit.
+#
 # Overrides (environment variables, e.g. `sbatch --export=ALL,NCELL=4096 -N 512 ...`):
 #   NCELL          cells per dimension in x and y (default 2048; 2048^3 fits 64 nodes)
 #   NCELL_Z        cells in z (default NCELL; set differently for a non-cubic domain)
@@ -48,9 +54,11 @@
 #   CONTROL        1 to also restart from the native checkpoint (default 1)
 #   PLOTFILE       1 to also measure openPMD plotfile output (default 1)
 #   AGGREGATION    openpmd.aggregation modes to compare (default "off on")
-#   BUILD_DIR      build directory (default build/3d-hip)
+#   BUILD_DIR      build directory (default build/3d-hip; ignored with CONTAINER)
+#   CONTAINER      Apptainer image to run instead of a build directory
 #   RUN_DIR        output directory on Orion (default under the project scratch)
-#   PROFILE        environment script to source (default scripts/hpc_profiles/frontier.profile)
+#   PROFILE        environment script to source (default scripts/hpc_profiles/frontier.profile;
+#                  ignored with CONTAINER)
 #
 # Each checkpoint is about 100 bytes per cell (cell data and tracers), so
 # 2048^3 produces roughly 0.9 TB per checkpoint. Step-0, unused and compared
@@ -58,9 +66,23 @@
 
 QUOKKA_ROOT=${SLURM_SUBMIT_DIR:-$(pwd)}
 cd "${QUOKKA_ROOT}" || exit 1
-# Source before enabling strict mode: the module scripts reference unset variables.
-# shellcheck source=/dev/null
-. "${PROFILE:-scripts/hpc_profiles/frontier.profile}"
+CONTAINER=${CONTAINER:-}
+# Set up the environment before enabling strict mode: the module scripts reference
+# unset variables.
+if [[ -n ${CONTAINER} ]]; then
+	# As in scripts/slurm/frontier-container.submit.
+	module load rocm/7.2.0
+	module load cray-mpich-abi/9.1.0
+	export MPICH_GPU_SUPPORT_ENABLED=1
+	export MPICH_SMP_SINGLE_COPY_MODE=NONE # temporary workaround
+	export APPTAINERENV_LD_LIBRARY_PATH="$CRAY_MPICH_ROOTDIR/gtl/lib:/opt/rocm/lib:/opt/rocm/lib64:$CRAY_LD_LIBRARY_PATH:$LD_LIBRARY_PATH:/opt/cray/pe/lib64"
+	export APPTAINER_CONTAINLIBS="/usr/lib64/libcxi.so.1,/usr/lib64/libjson-c.so.5,/lib64/libtinfo.so.6,/usr/lib64/libnl-3.so.200,/usr/lib64/libgfortran.so.5,/usr/lib64/libjansson.so.4,/usr/lib64/libxpmem.so.0,/usr/lib64/libatomic.so.1"
+	export APPTAINERENV_LD_PRELOAD=$CRAY_MPICH_ROOTDIR/gtl/lib/libmpi_gtl_hsa.so.0:
+	proj=${proj:-ast236}
+else
+	# shellcheck source=/dev/null
+	. "${PROFILE:-scripts/hpc_profiles/frontier.profile}"
+fi
 set -euo pipefail
 export OMP_NUM_THREADS=1
 
@@ -75,17 +97,33 @@ RESTART_NODES=${RESTART_NODES:-$(((NODES + 1) / 2))}
 CONTROL=${CONTROL:-1}
 PLOTFILE=${PLOTFILE:-1}
 read -r -a AGGREGATION <<<"${AGGREGATION:-off on}"
-BUILD_DIR=$(realpath -m "${BUILD_DIR:-build/3d-hip}")
 RUN_DIR=${RUN_DIR:-/lustre/orion/${proj}/scratch/${USER}/quokka-openpmd-restart/${SLURM_JOB_ID}}
 
-SIM=${BUILD_DIR}/src/problems/HydroBlast3D/HydroBlast3D
-COMPARE=${BUILD_DIR}/src/problems/ParticleSchema/OpenPMDCheckpoint
-for exe in "${SIM}" "${COMPARE}"; do
-	[[ -x ${exe} ]] || {
-		echo "missing executable: ${exe}" >&2
+if [[ -n ${CONTAINER} ]]; then
+	CONTAINER=$(realpath "${CONTAINER}")
+	[[ -f ${CONTAINER} ]] || {
+		echo "missing container image: ${CONTAINER}" >&2
 		exit 1
 	}
-done
+	SIM=/opt/quokka/bin/HydroBlast3D
+	COMPARE=/opt/quokka/bin/OpenPMDCheckpoint
+	INPUT=/opt/quokka/share/quokka/inputs/HydroBlast3D.toml
+	# Every step runs inside the image, with the run directory bound into it.
+	export APPTAINER_BINDPATH=/usr/share/libdrm,/var/spool/slurmd,/opt/cray,${RUN_DIR}
+	launch=(apptainer exec --workdir "${RUN_DIR}" --rocm "${CONTAINER}")
+else
+	BUILD_DIR=$(realpath -m "${BUILD_DIR:-build/3d-hip}")
+	SIM=${BUILD_DIR}/src/problems/HydroBlast3D/HydroBlast3D
+	COMPARE=${BUILD_DIR}/src/problems/ParticleSchema/OpenPMDCheckpoint
+	INPUT=${QUOKKA_ROOT}/inputs/HydroBlast3D.toml
+	for exe in "${SIM}" "${COMPARE}"; do
+		[[ -x ${exe} ]] || {
+			echo "missing executable: ${exe}" >&2
+			exit 1
+		}
+	done
+	launch=()
+fi
 if ((RESTART_NODES < 1 || RESTART_NODES > NODES)); then
 	echo "RESTART_NODES=${RESTART_NODES} must be between 1 and ${NODES}" >&2
 	exit 1
@@ -112,7 +150,7 @@ print(total)' "$@"
 elapsed() { awk '/^elapsed time:/ { print $3 }' "$1.log"; }
 region() { awk -v name="$2" '/Incl\. Min/ { incl = 1 } incl && $1 == name { print $5; exit }' "$1.log"; }
 
-common=("${QUOKKA_ROOT}/inputs/HydroBlast3D.toml"
+common=("${INPUT}"
 	"amr.n_cell=${NCELL} ${NCELL} ${NCELL_Z}" amr.max_level="${MAX_LEVEL}"
 	amr.max_grid_size="${MAX_GRID_SIZE}" amr.blocking_factor="${MAX_GRID_SIZE}"
 	do_tracers=1 quokka.slice_z.int=-1 blast_problem.check_solution=0 tiny_profiler.enabled=1)
@@ -125,7 +163,7 @@ run() {
 	shift 3
 	echo "=== ${label}: ${nodes} nodes from node ${first}, $((nodes * 8)) ranks"
 	if ! srun -N "${nodes}" -n $((nodes * 8)) --relative="${first}" --ntasks-per-node=8 --cpus-per-task=7 --gpus-per-task=1 \
-		--gpu-bind=closest "$@" >"${label}.log" 2>&1; then
+		--gpu-bind=closest ${launch[@]+"${launch[@]}"} "$@" >"${label}.log" 2>&1; then
 		echo "${label} FAILED; see ${RUN_DIR}/${label}.log"
 		tail -n 30 "${label}.log"
 		exit 1
@@ -150,7 +188,11 @@ measure() {
 
 echo "NCELL=${NCELL}x${NCELL}x${NCELL_Z} MAX_LEVEL=${MAX_LEVEL} CHK_STEP=${CHK_STEP} NODES=${NODES} RESTART_NODES=${RESTART_NODES}"
 echo "RUN_DIR=${RUN_DIR}"
-echo "quokka $(git -C "${QUOKKA_ROOT}" rev-parse --short HEAD)"
+if [[ -n ${CONTAINER} ]]; then
+	echo "container ${CONTAINER}"
+else
+	echo "quokka $(git -C "${QUOKKA_ROOT}" rev-parse --short HEAD)"
+fi
 
 # Write runs.
 steps=(max_timesteps="${FINAL_STEP}")
