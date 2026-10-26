@@ -81,7 +81,13 @@ if [[ -n ${CONTAINER} ]]; then
 	fi
 	export MPICH_GPU_SUPPORT_ENABLED=1
 	export MPICH_SMP_SINGLE_COPY_MODE=NONE # temporary workaround
-	export APPTAINERENV_LD_LIBRARY_PATH="$CRAY_MPICH_ROOTDIR/gtl/lib:/opt/rocm/lib:/opt/rocm/lib64:$CRAY_LD_LIBRARY_PATH:$LD_LIBRARY_PATH:/opt/cray/pe/lib64"
+	# APPTAINERENV_LD_LIBRARY_PATH replaces the image's library path, so append the
+	# image's own path, which holds libopenPMD and ADIOS2.
+	image_ld_path=$(apptainer exec "${CONTAINER}" printenv LD_LIBRARY_PATH) || {
+		echo "cannot read LD_LIBRARY_PATH from ${CONTAINER}" >&2
+		exit 1
+	}
+	export APPTAINERENV_LD_LIBRARY_PATH="$CRAY_MPICH_ROOTDIR/gtl/lib:/opt/rocm/lib:/opt/rocm/lib64:$CRAY_LD_LIBRARY_PATH:$LD_LIBRARY_PATH:/opt/cray/pe/lib64:${image_ld_path}"
 	# Apptainer refuses to start if a listed library is missing, and the compute
 	# nodes no longer have libxpmem, so pass only the host libraries that exist.
 	containlibs=()

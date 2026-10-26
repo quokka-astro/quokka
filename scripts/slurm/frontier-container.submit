@@ -17,8 +17,11 @@ export MPICH_GPU_SUPPORT_ENABLED=1
 export MPICH_SMP_SINGLE_COPY_MODE=NONE # temporary workaround
 
 ## import shared libraries from host filesystem
+# APPTAINERENV_LD_LIBRARY_PATH replaces the image's library path, so append the
+# image's own path, which holds libopenPMD and ADIOS2.
+image_ld_path=$(apptainer exec quokka_rocm-diskgalaxy.sif printenv LD_LIBRARY_PATH)
 export APPTAINER_BINDPATH=/usr/share/libdrm,/var/spool/slurmd,/opt/cray,${PWD}
-export APPTAINERENV_LD_LIBRARY_PATH="$CRAY_MPICH_ROOTDIR/gtl/lib:/opt/rocm/lib:/opt/rocm/lib64:$CRAY_LD_LIBRARY_PATH:$LD_LIBRARY_PATH:/opt/cray/pe/lib64"
+export APPTAINERENV_LD_LIBRARY_PATH="$CRAY_MPICH_ROOTDIR/gtl/lib:/opt/rocm/lib:/opt/rocm/lib64:$CRAY_LD_LIBRARY_PATH:$LD_LIBRARY_PATH:/opt/cray/pe/lib64:${image_ld_path}"
 # The compute nodes no longer have libxpmem, and Cray MPICH 9.1.0 does not need it.
 export APPTAINER_CONTAINLIBS="/usr/lib64/libcxi.so.1,/usr/lib64/libjson-c.so.5,/lib64/libtinfo.so.6,/usr/lib64/libnl-3.so.200,/usr/lib64/libgfortran.so.5,/usr/lib64/libjansson.so.4,/usr/lib64/libatomic.so.1"
 export APPTAINERENV_LD_PRELOAD=$CRAY_MPICH_ROOTDIR/gtl/lib/libmpi_gtl_hsa.so.0:
