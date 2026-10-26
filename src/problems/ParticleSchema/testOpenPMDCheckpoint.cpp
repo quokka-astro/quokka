@@ -84,6 +84,41 @@ auto MeshNames(int direction) -> amrex::Vector<std::string>
 	return {"a" + suffix, "b-c" + suffix, "d" + suffix};
 }
 
+// Plotfile meshes take the same device-to-backend path as checkpoints. A
+// non-cubic domain split into non-cubic patches catches reversed chunk dimensions.
+void CheckPlotfileMesh()
+{
+	const amrex::Box domain(amrex::IntVect(0), amrex::IntVect(AMREX_D_DECL(7, 3, 5)));
+	const amrex::RealBox bounds({AMREX_D_DECL(0., 0., 0.)}, {AMREX_D_DECL(1., 1., 1.)});
+	const std::array<int, AMREX_SPACEDIM> periodic{};
+	const amrex::Geometry geom(domain, &bounds, 0, periodic.data());
+	amrex::BoxArray ba(domain);
+	ba.maxSize(amrex::IntVect(AMREX_D_DECL(4, 2, 3)));
+	amrex::MultiFab mf(ba, amrex::DistributionMapping(ba), 3, 0);
+	FillMesh(mf);
+	const std::vector<std::string> names{"a", "b", "c"};
+	quokka::OpenPMDOutput::WriteFile(names, 1, {&mf}, {geom}, "mesh_plt", 0., 5);
+	amrex::ParallelDescriptor::Barrier();
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		openPMD::Series series("mesh_plt00005.bp", openPMD::Access::READ_ONLY);
+		auto iteration = series.iterations[5];
+		const auto n = domain.length();
+		for (int c = 0; c < 3; ++c) {
+			auto record = iteration.meshes[names[c]][openPMD::MeshRecordComponent::SCALAR];
+			AMREX_ALWAYS_ASSERT(record.getExtent() == quokka::OpenPMDOutput::detail::getReversedVec(domain.size()));
+			const auto data = record.loadChunk<amrex::Real>();
+			series.flush();
+			// C order: x varies fastest.
+			for (amrex::Long idx = 0; idx < domain.numPts(); ++idx) {
+				const auto i = idx % n[0];
+				const auto j = AMREX_SPACEDIM > 1 ? (idx / n[0]) % n[1] : 0;
+				const auto k = AMREX_SPACEDIM > 2 ? idx / (n[0] * n[1]) : 0;
+				AMREX_ALWAYS_ASSERT(data.get()[idx] == 100000 * c + 1000 * k + 100 * j + 10 * i);
+			}
+		}
+	}
+}
+
 // With writeCheckpoint == 0, read an existing checkpoint, e.g. one written by a
 // build of the other floating-point precision.
 void CheckMeshes(int writeCheckpoint)
@@ -164,6 +199,7 @@ auto main(int argc, char **argv) -> int
 			int writeCheckpoint = 1;
 			pp.query("write_checkpoint", writeCheckpoint);
 			CheckMeshes(writeCheckpoint);
+			CheckPlotfileMesh();
 		} else {
 			std::string candidate;
 			pp.get("candidate", candidate);

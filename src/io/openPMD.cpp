@@ -87,6 +87,19 @@ void SetupMeshComponent(openPMD::Mesh &mesh, const amrex::Geometry &full_geom, a
 	mesh_comp.setPosition(relativePosition);
 }
 
+void StoreMeshChunk(openPMD::RecordComponent &record, const amrex::Real *data, std::size_t numPts, const openPMD::Offset &offset, const openPMD::Extent &extent)
+{
+	// Device pointers must not reach ADIOS2: GPU-enabled ADIOS2 treats GPU buffers
+	// as column-major and reverses the dimensions of multidimensional chunks. As
+	// in WarpX, copy straight into a span of the backend's own buffer instead.
+	// Without span support, openPMD queues a plain host buffer from this allocator.
+	auto view = record.storeChunk<amrex::Real>(
+	    offset, extent, [](std::size_t size) { return std::shared_ptr<amrex::Real>(new amrex::Real[size], std::default_delete<amrex::Real[]>()); });
+	// The span is valid until the next storeChunk, so copy synchronously.
+	auto span = view.currentBuffer();
+	amrex::Gpu::dtoh_memcpy(span.data(), data, numPts * sizeof(amrex::Real));
+}
+
 auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::string
 {
 	std::string new_field_name = field_name;
@@ -132,6 +145,8 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 				detail::SetupMeshComponent(mesh, full_geom);
 			}
 		}
+		// Acquiring a span can be collective while dataset definitions are pending.
+		series.flush();
 
 		// pass data pointers for each box to ADIOS
 		for (int icomp = 0; icomp < ncomp; icomp++) {
@@ -148,9 +163,7 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 				auto chunk_offset = detail::getReversedVec(box_offset); // this overflows if ghost zones are used (!)
 				auto chunk_size = detail::getReversedVec(local_box.size());
 
-				// pass device pointer directly to ADIOS
-				amrex::Real const *local_data = fab.dataPtr(icomp);
-				mesh.storeChunkRaw(local_data, chunk_offset, chunk_size);
+				detail::StoreMeshChunk(mesh, fab.dataPtr(icomp), local_box.numPts(), chunk_offset, chunk_size);
 			}
 		}
 

@@ -32,6 +32,9 @@ auto getReversedVec(const amrex::IntVect &v) -> std::vector<std::uint64_t>;
 auto getReversedVec(const amrex::Real *v) -> std::vector<double>;
 void SetupMeshComponent(openPMD::Mesh &mesh, const amrex::Geometry &full_geom, amrex::IndexType ixType = amrex::IndexType::TheCellType());
 auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::string;
+// Stores numPts contiguous values from data (device memory in GPU builds) as one chunk.
+void StoreMeshChunk(openPMD::RecordComponent &record, const amrex::Real *data, std::size_t numPts, const openPMD::Offset &offset,
+		    const openPMD::Extent &extent);
 void WriteCheckpointParticleAttributes(openPMD::Iteration &iteration, const ParticleContainer &particles, const std::string &name, std::uint64_t total);
 
 } // namespace detail
