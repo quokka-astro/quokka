@@ -2,16 +2,22 @@
 #define MICROPHYSICS_INTEGRATOR_COMMON_HPP_
 /// \file integrator_common.hpp
 /// \brief The parts every Strang integrator shares. Ported from Microphysics' integration/integrator_type.H,
-/// integration/integrator_type_strang.H and integration/integrator_rhs_strang.H.
+/// integration/integrator_type_strang.H, integration/integrator_rhs_strang.H and integration/integrator_setup_strang.H.
 
+#include <cstdint>
+#include <iomanip>
+#include <iostream>
+#include <limits>
 #include <type_traits>
 
+#include "AMReX_ANSIEscCode.H"
 #include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
+#include "microphysics/integrator_errors.hpp"
 #include "microphysics/microphysics_traits.hpp"
 
 // still from extern/Microphysics: burn_t, net_ienuc, aion, eos(), the network's actual_rhs and actual_jac, the
@@ -322,6 +328,247 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 			pd(net_ienuc, j) = 0.0_rt;
 		}
 	}
+}
+
+/// for outputting the burn state failure, use enough precision to be reproducible (not guaranteed for std::fixed)
+constexpr int OUTDIGITS = std::numeric_limits<amrex::Real>::max_digits10;
+
+/// The initial composition and thermodynamic state, saved for diagnostics.
+template <typename Layout> struct StateBackup {
+	amrex::Real T_in{};
+	amrex::Real e_in{};
+#ifndef AMREX_USE_GPU
+	amrex::GpuArray<amrex::Real, NumSpec> xn_in{};
+	amrex::GpuArray<amrex::Real, Layout::num_chem_rad_eqs> rn_in{};
+	amrex::GpuArray<amrex::Real, Layout::num_thermal_bands> re_thermal_in{};
+	amrex::Real c_hat{};
+	amrex::Real e_dust_absorbed_in{};
+#endif
+};
+
+/// Set up the integrator state from the burn state.
+template <typename Layout, typename IntegratorT, typename BurnT>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amrex::Real dt) -> IntegratorT
+{
+	IntegratorT int_state{};
+
+	// Set the tolerances.
+
+	int_state.atol_spec = integrator_rp::atol_spec; // mass fractions
+	int_state.atol_enuc = integrator_rp::atol_enuc; // energy generated
+
+	int_state.rtol_spec = integrator_rp::rtol_spec; // mass fractions
+	int_state.rtol_enuc = integrator_rp::rtol_enuc; // energy generated
+	if constexpr (Layout::photochemistry) {
+		int_state.atol_rad_num = integrator_rp::atol_rad_num; // radiation number density
+		int_state.rtol_rad_num = integrator_rp::rtol_rad_num; // radiation number density
+		if constexpr (Layout::vars_per_group == 2) {
+			int_state.atol_rad_flux = integrator_rp::atol_rad_flux; // radiation flux
+			int_state.rtol_rad_flux = integrator_rp::rtol_rad_flux; // radiation flux
+		}
+	}
+
+	// set the Jacobian type
+	int_state.jacobian_type = static_cast<std::int16_t>(integrator_rp::jacobian);
+
+	// Start off by assuming a successful burn.
+
+	state.success = true;
+
+	// Initialize the integration time.
+
+	int_state.t = 0.0_rt;
+	int_state.tout = dt;
+
+	// Initialize ydot to zero for Strang burn.
+
+	for (int n = 0; n < SVAR; ++n) {
+		state.ydot_a[n] = 0;
+	}
+
+	// We assume that (rho, T) coming in are valid, do an EOS call
+	// to fill the rest of the thermodynamic variables.
+
+	eos(eos_input_rt, state);
+
+	// set the scaling for energy if we integrate it dimensionlessly
+	state.e_scale = state.e;
+
+	if (integrator_rp::scale_system) {
+		// the absolute tol for energy needs to reflect the scaled
+		// energy the integrator sees
+		int_state.atol_enuc /= state.e_scale;
+	}
+
+	if constexpr (Layout::q_dust) {
+		state.e_dust_absorbed = 0.0_rt;
+	}
+
+	// Fill in the initial integration state.
+
+	burn_to_integrator<Layout>(state, int_state);
+
+	return int_state;
+}
+
+/// Save the initial composition and thermodynamic state for diagnostics.
+template <typename Layout, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_backup(const BurnT &state) -> StateBackup<Layout>
+{
+	StateBackup<Layout> state_save;
+
+#ifndef AMREX_USE_GPU
+	for (int n = 0; n < NumSpec; ++n) {
+		state_save.xn_in[n] = state.xn[n];
+	}
+	if constexpr (Layout::photochemistry) {
+		for (int n = 0; n < Layout::num_chem_rad_eqs; ++n) {
+			state_save.rn_in[n] = state.rn[n];
+		}
+		for (int n = 0; n < Layout::num_thermal_bands; ++n) {
+			state_save.re_thermal_in[n] = state.re_thermal[n];
+		}
+		state_save.c_hat = state.c_hat;
+		if constexpr (Layout::q_dust) {
+			state_save.e_dust_absorbed_in = state.e_dust_absorbed;
+		}
+	}
+#endif
+	state_save.T_in = state.T;
+	state_save.e_in = state.e;
+
+	return state_save;
+}
+
+/// Copy the integrator state back to the burn state and check the result.
+template <typename Layout, typename IntegratorT, typename BurnT>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_state, BurnT &state, const int istate, const StateBackup<Layout> &state_save,
+							   const amrex::Real dt)
+{
+	// Copy the integration data back to the burn state.
+
+	integrator_to_burn<Layout>(int_state, state);
+
+	// Subtract off the initial energy (the application codes expect
+	// to get back only the generated energy during the burn).
+
+	if (integrator_rp::subtract_internal_energy) {
+		state.e -= state_save.e_in;
+	}
+
+	// Normalize the final abundances (except if they are number
+	// densities)
+
+	if (!integrator_rp::use_number_densities) {
+		normalize_abundances_burn(state);
+	}
+
+	// Get the number of RHS and Jacobian evaluations.
+
+	state.n_rhs = int_state.n_rhs;
+	state.n_jac = int_state.n_jac;
+	state.n_step = int_state.n_step;
+
+	state.error_code = static_cast<std::int16_t>(istate);
+
+	// The integrator may not always fail even though it can lead to
+	// unphysical states.  Add some checks that indicate a burn fail
+	// even if the integrator thinks the integration was successful.
+
+	if (istate != IERR_SUCCESS) {
+		state.success = false;
+	}
+
+	for (int n = 1; n <= NumSpec; ++n) {
+		if (int_state.y(n) < -integrator_rp::species_failure_tolerance) {
+			state.success = false;
+		}
+
+		// Don't enforce a max if we are evolving number densities
+
+		if (!integrator_rp::use_number_densities) {
+			if (int_state.y(n) > 1.0_rt + integrator_rp::species_failure_tolerance) {
+				state.success = false;
+			}
+		}
+	}
+	if constexpr (Layout::photochemistry) {
+		for (int n = net_ienuc + 1; n <= net_ienuc + Layout::num_chem_rad_eqs; n += Layout::vars_per_group) {
+			if (int_state.y(n) < -integrator_rp::radiation_failure_tolerance) {
+				state.success = false;
+			}
+		}
+	}
+
+#ifndef AMREX_USE_GPU
+	if (integrator_rp::burner_verbose) {
+		// Print out some integration statistics, if desired.
+		std::cout << "integration summary: " << '\n';
+		std::cout << "dens: " << state.rho << " temp: " << state.T << '\n';
+		std::cout << " energy released: " << state.e << '\n';
+		std::cout << "number of steps taken: " << state.n_step << '\n';
+		std::cout << "number of f evaluations: " << state.n_rhs << '\n' << std::flush;
+	}
+
+	// If we failed, print out the current state of the integration.
+
+	if (!state.success) {
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay,hicpp-no-array-decay): AMReX's escape codes are char arrays
+		std::cout << amrex::Font::Bold << amrex::FGColor::Red << "[ERROR] integration failed in net" << amrex::ResetDisplay << '\n';
+		std::cout << "istate = " << istate << '\n';
+		if (istate == IERR_SUCCESS) {
+			std::cout << "  Integration exited successfully, but a check on the data values failed" << '\n';
+		}
+		std::cout << "zone = (" << state.i << ", " << state.j << ", " << state.k << ")" << '\n';
+		std::cout << "time = " << int_state.t << '\n';
+		std::cout << "dt = " << std::setprecision(OUTDIGITS) << dt << '\n';
+		std::cout << "temp start = " << std::setprecision(OUTDIGITS) << state_save.T_in << '\n';
+		std::cout << "xn start = ";
+		for (int n = 0; n < NumSpec; ++n) {
+			std::cout << std::scientific << std::setprecision(OUTDIGITS) << state_save.xn_in[n] << " ";
+		}
+		if constexpr (Layout::photochemistry) {
+			std::cout << '\n';
+			std::cout << "rn start = ";
+			for (int n = 0; n < Layout::num_chem_rad_eqs; ++n) {
+				std::cout << std::scientific << std::setprecision(OUTDIGITS) << state_save.rn_in[n] << " ";
+			}
+			std::cout << '\n';
+			std::cout << "re_thermal start = ";
+			for (int n = 0; n < Layout::num_thermal_bands; ++n) {
+				std::cout << std::scientific << std::setprecision(OUTDIGITS) << state_save.re_thermal_in[n] << " ";
+			}
+			if constexpr (Layout::q_dust) {
+				std::cout << '\n';
+				std::cout << "e_dust_absorbed start = " << std::scientific << std::setprecision(OUTDIGITS) << state_save.e_dust_absorbed_in;
+			}
+		}
+		std::cout << '\n';
+		std::cout << "dens current = " << std::setprecision(OUTDIGITS) << state.rho << '\n';
+		std::cout << "temp current = " << std::setprecision(OUTDIGITS) << state.T << '\n';
+		std::cout << "xn current = ";
+		for (const double X : state.xn) {
+			std::cout << std::scientific << std::setprecision(OUTDIGITS) << X << " ";
+		}
+		if constexpr (Layout::photochemistry) {
+			std::cout << '\n';
+			std::cout << "rn current = ";
+			for (const double X : state.rn) {
+				std::cout << std::scientific << std::setprecision(OUTDIGITS) << X << " ";
+			}
+			std::cout << '\n';
+			std::cout << "re_thermal current = ";
+			for (const double X : state.re_thermal) {
+				std::cout << std::scientific << std::setprecision(OUTDIGITS) << X << " ";
+			}
+			if constexpr (Layout::q_dust) {
+				std::cout << '\n';
+				std::cout << "e_dust_absorbed current = " << std::scientific << std::setprecision(OUTDIGITS) << state.e_dust_absorbed;
+			}
+		}
+		std::cout << '\n';
+		std::cout << "energy generated = " << state.e << '\n' << std::flush;
+	}
+#endif
 }
 
 } // namespace quokka::microphysics
