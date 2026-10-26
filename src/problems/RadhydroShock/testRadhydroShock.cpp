@@ -31,14 +31,14 @@ constexpr double a_rad = 1.0e-4;  // equal to P_0 in dimensionless units
 constexpr double sigma_a = 1.0e6; // absorption cross section
 constexpr double Mach0 = 3.0;
 
-constexpr double c_s0 = 1.0;		 // adiabatic sound speed
+constexpr double c_s0 = 1.0;             // adiabatic sound speed
 constexpr double c = 1732.0508075688772; // std::sqrt(3.0*sigma_a) * c_s0; //
-					 // dimensionless speed of light
-constexpr double k_B = (c_s0 * c_s0);	 // required to make temperature and sound speed consistent
+                                         // dimensionless speed of light
+constexpr double k_B = (c_s0 * c_s0);    // required to make temperature and sound speed consistent
 
 const amrex::Real kappa = sigma_a * (c_s0 / c); // opacity [cm^-1]
 constexpr double gamma_gas = (5. / 3.);
-constexpr double mu = gamma_gas;		       // mean molecular weight (required s.t. c_s0 == 1)
+constexpr double mu = gamma_gas;                       // mean molecular weight (required s.t. c_s0 == 1)
 constexpr double c_v = k_B / (mu * (gamma_gas - 1.0)); // specific heat
 
 constexpr double T_lo = 1.0;
@@ -59,8 +59,8 @@ constexpr double Erad1 = a_rad * (T_hi * T_hi * T_hi * T_hi);
 constexpr double Egas1 = rho1 * c_v * T_hi;
 
 constexpr double shock_position = 0.0130; // 0.0132; // cm
-					  // (shock position drifts to the right
-					  // slightly during the simulation, so
+                                          // (shock position drifts to the right
+                                          // slightly during the simulation, so
 // we initialize slightly to the left...)
 
 template <> struct RadSystem_Traits<ShockProblem> {
@@ -104,8 +104,8 @@ template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
-							 int /*orig_comp*/)
+                                                         amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
+                                                         int /*orig_comp*/)
 {
 	if ((bcr->lo(0) != quokka::BCType::ext_dir) && (bcr->hi(0) != quokka::BCType::ext_dir)) {
 		return;
@@ -214,7 +214,7 @@ auto problem_main() -> int
 
 	// const double initial_dtau = 1.0e-3;		// initial timestep
 	// [dimensionless]
-	const double max_dtau = 1.0e-3;		// maximum timestep [dimensionless]
+	const double max_dtau = 1.0e-3;         // maximum timestep [dimensionless]
 	const double max_tau = 3.0 * (Lx / v0); // 3 shock crossing times [dimensionless]
 
 	// const double initial_dt = initial_dtau / c_s0;
@@ -255,7 +255,7 @@ auto problem_main() -> int
 			xs.at(i) = x; // cm
 
 			const double Erad_t = values.at(RadSystem<ShockProblem>::radEnergy_index)[i];
-			Erad.at(i) = Erad_t / a_rad;			       // scaled
+			Erad.at(i) = Erad_t / a_rad;                           // scaled
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_lo; // dimensionless
 
 			const double Etot_t = values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];

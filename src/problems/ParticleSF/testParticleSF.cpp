@@ -21,9 +21,9 @@ struct ParticleSFProblem {};
 
 constexpr Real mu = 1.0 * C::m_p;
 constexpr Real gamma_ = 5. / 3.;
-constexpr Real year = 3.15576e+07;	       // in seconds
-static Real n0 = 1.0e4;			       // NOLINT
-static Real Tamb = 10.0;		       // NOLINT
+constexpr Real year = 3.15576e+07;             // in seconds
+static Real n0 = 1.0e4;                        // NOLINT
+static Real Tamb = 10.0;                       // NOLINT
 static bool validate_initial_imf_stats = true; // NOLINT
 
 template <> struct Particle_Traits<ParticleSFProblem> : DefaultParticleTraits {
@@ -100,7 +100,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 		const amrex::Real prob_star_formation = (eps_ff / eps_star) * (initDt_ / t_ff);
 		amrex::Print() << "Probability of star formation = " << prob_star_formation << "\n";
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
-						 "Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
+		                                 "Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
 
 		const auto n_cells = CountCells(0);
 		const auto [real_data_final, idata_final] =
@@ -113,7 +113,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			const double exp_Mstar_high_mean = 19.39; // Msun
-			const double exp_fstar_high = 0.220;	  // fraction of mass in high mass stars
+			const double exp_fstar_high = 0.220;      // fraction of mass in high mass stars
 
 			const amrex::Real exp_m_star_per_cell = rho0 * cell_volume * eps_star;
 			const amrex::Real exp_m_star_high_per_cell = exp_m_star_per_cell * exp_fstar_high;
@@ -151,7 +151,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 			double vmin = 3.e5;  // minimum velocity in km/s
 			double vmax = -3.e5; // maximum velocity in km/s
 			const int n_bins = 20;
-			const double log_v_min = std::log(3.0);	  // minimum velocity of the input distribution
+			const double log_v_min = std::log(3.0);   // minimum velocity of the input distribution
 			const double log_v_max = std::log(385.0); // maximum velocity of the input distributions
 			const double bin_width = (log_v_max - log_v_min) / n_bins;
 			std::vector<int> hist(n_bins, 0);
@@ -183,10 +183,10 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 			const double m_gas_change = userData_.m_gas_init - m_gas_final;
 
 			amrex::Print() << "Mass of high-mass stars [expected]   = " << m_star_high_tot / C::M_solar << " ["
-				       << exp_m_star_high_total / C::M_solar << "] M_sol \n";
+			               << exp_m_star_high_total / C::M_solar << "] M_sol \n";
 			amrex::Print() << "Number of high-mass stars [expected]   = " << n_star_high << " [" << exp_n_star_high_total << "] \n";
 			amrex::Print() << "Mean mass of high-mass stars [expected]   = " << mean_mass_high_mass_stars / C::M_solar << " ["
-				       << exp_Mstar_high_mean << "] M_sol \n";
+			               << exp_Mstar_high_mean << "] M_sol \n";
 			amrex::Print() << "Number of low-mass stars [expected]   = " << n_star_low << " [" << exp_n_star_low_total << "] \n";
 			amrex::Print() << "Mass of all stars [expected]   = " << m_star_tot / C::M_solar << " [" << m_gas_change / C::M_solar << "] M_sol \n";
 
@@ -224,7 +224,7 @@ auto problem_main() -> int
 	QuokkaSimulation<ParticleSFProblem> sim;
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
+	sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!
 	sim.stopTime_ = 1.0e7 * year; // 10 Myr
 
 	// set random state
@@ -272,7 +272,7 @@ auto problem_main() -> int
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			for (std::size_t i = 0; i < real_data_restart.size(); ++i) {
 				const bool is_low_mass_composite = (idata_restart[i][quokka::StochasticStellarPopParticleStageIdx] ==
-								    static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite));
+				                                    static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite));
 				if (is_low_mass_composite) {
 					num_low_mass_particles++;
 					if (real_data_restart[i][quokka::StochasticStellarPopParticleMassIdx] > (low_mass_cap + mass_tol)) {
@@ -282,7 +282,7 @@ auto problem_main() -> int
 			}
 
 			amrex::Print() << "Restart low-mass cap validation: LowMassComposite particles = " << num_low_mass_particles
-				       << ", cap violations = " << num_cap_violations << ", cap = " << low_mass_cap / C::M_solar << " Msun\n";
+			               << ", cap violations = " << num_cap_violations << ", cap = " << low_mass_cap / C::M_solar << " Msun\n";
 			if (num_low_mass_particles == 0 || num_cap_violations != 0) {
 				restart_validation_status = 1;
 			}
@@ -310,7 +310,7 @@ auto problem_main() -> int
 		const double m_gas_final2 = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
 		const double m_gas_change2 = sim.userData_.m_gas_init - m_gas_final2;
 		amrex::Print() << std::format("Mass of all stars [expected]   = {:.6e} [{:.6e}] M_sol \n", m_star_tot2 / C::M_solar,
-					      m_gas_change2 / C::M_solar);
+		                              m_gas_change2 / C::M_solar);
 
 		const double tol_m_star_tot2 = 0.1;
 		if (!((m_star_tot2 - m_gas_change2) / m_star_tot2 < tol_m_star_tot2)) {

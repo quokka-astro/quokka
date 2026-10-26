@@ -44,7 +44,7 @@ template <> void QuokkaSimulation<DustAdvection>::setInitialConditionsOnGrid(quo
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const auto Egas0 = initial_Egas;
-	const auto vx0 = v0;	      // gas velocity
+	const auto vx0 = v0;          // gas velocity
 	const auto vx_dust = dust_v0; // dust velocity
 
 	// get geometry information
@@ -81,7 +81,7 @@ template <> void QuokkaSimulation<DustAdvection>::setInitialConditionsOnGrid(quo
 
 template <>
 void QuokkaSimulation<DustAdvection>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-							       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+                                                               amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const auto Egas0 = initial_Egas;
 	const auto vx0 = v0;

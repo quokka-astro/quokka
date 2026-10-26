@@ -34,7 +34,7 @@ template <typename problem_t> class DustSources
 		x3Momentum_index,
 		energy_index,
 		internalEnergy_index, // auxiliary internal energy (rho * e)
-		scalar0_index	      // first passive scalar (only present if nscalars > 0!)
+		scalar0_index         // first passive scalar (only present if nscalars > 0!)
 	};
 
 	enum primVarIndex { // NOLINT
@@ -43,7 +43,7 @@ template <typename problem_t> class DustSources
 		x2Velocity_index,
 		x3Velocity_index,
 		pressure_index,
-		primEint_index,	   // auxiliary internal energy (rho * e)
+		primEint_index,    // auxiliary internal energy (rho * e)
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
 	};
 
@@ -102,11 +102,11 @@ template <typename problem_t> class DustSources
 			amrex::Real const x_parallel = b_hat.dot(x);
 			Vec3 result = Vec3::Zero();
 			result[0] = coeffPerpendicular * (x[0] - x_parallel * b_hat[0]) + coeffCross * (x[1] * b_hat[2] - x[2] * b_hat[1]) +
-				    coeffParallel * x_parallel * b_hat[0];
+			            coeffParallel * x_parallel * b_hat[0];
 			result[1] = coeffPerpendicular * (x[1] - x_parallel * b_hat[1]) + coeffCross * (x[2] * b_hat[0] - x[0] * b_hat[2]) +
-				    coeffParallel * x_parallel * b_hat[1];
+			            coeffParallel * x_parallel * b_hat[1];
 			result[2] = coeffPerpendicular * (x[2] - x_parallel * b_hat[2]) + coeffCross * (x[0] * b_hat[1] - x[1] * b_hat[0]) +
-				    coeffParallel * x_parallel * b_hat[2];
+			            coeffParallel * x_parallel * b_hat[2];
 			return result;
 		}
 	};
@@ -141,48 +141,48 @@ template <typename problem_t> class DustSources
 		amrex::Real soundSpeed;
 	};
 	AMREX_GPU_HOST_DEVICE static auto BuildDustCoefficientState(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> const &rho_d, Vec3 const &p_g,
-								    amrex::GpuArray<Vec3, nDustGroups_> const &p_d, amrex::Real sound_speed)
+	                                                            amrex::GpuArray<Vec3, nDustGroups_> const &p_d, amrex::Real sound_speed)
 	    -> DustCoefficientState;
 
 	// compute reciprocal of dust stopping time
 	AMREX_GPU_HOST_DEVICE static auto ComputeReciprocalStoppingTime(DustCoefficientState const &state) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
 
 	static AMREX_GPU_HOST_DEVICE auto ComputeReciprocalStoppingTimeKwok(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-									    amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs,
-									    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
-									    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
-									    bool enable_supersonic_correction) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
+	                                                                    amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs,
+	                                                                    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
+	                                                                    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
+	                                                                    bool enable_supersonic_correction) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeSoundSpeedFromGasState(amrex::Real rho_g, amrex::Real gas_momentum_sq, amrex::Real E_tot_g,
-									amrex::Real magnetic_energy,
-									amrex::GpuArray<amrex::Real, nMassScalars_> const &massScalars) -> amrex::Real;
+	                                                                amrex::Real magnetic_energy,
+	                                                                amrex::GpuArray<amrex::Real, nMassScalars_> const &massScalars) -> amrex::Real;
 	AMREX_GPU_HOST_DEVICE static auto BuildCellCenteredMagneticField(int i, int j, int k,
-									 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> Vec3;
+	                                                                 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> Vec3;
 	// compute dimensionless charge-to-mass ratio xi_i = q_i L_0 sqrt(rho_0) / (m_i c), where q_i is the Heaviside--Lorentz charge
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const &state)
 	    -> amrex::GpuArray<amrex::Real, nDustGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustStageAffineOperators(amrex::Real alpha1, amrex::Real omega_L1, amrex::Real alpha2, amrex::Real omega_L2,
-									  amrex::Real epsilon, amrex::Real dt,
-									  // NOLINTNEXTLINE(misc-confusable-identifiers)
-									  amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
+	                                                                  amrex::Real epsilon, amrex::Real dt,
+	                                                                  // NOLINTNEXTLINE(misc-confusable-identifiers)
+	                                                                  amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
 	    -> DustStageAffineOperators;
 	AMREX_GPU_HOST_DEVICE static auto SolveGasStageRates(amrex::GpuArray<DustStageAffineOperators, nDustGroups_> const &ops,
-							     amrex::GpuArray<Vec3, nDustGroups_> const &q_n, Vec3 const &b_hat) -> GasStageRates;
+	                                                     amrex::GpuArray<Vec3, nDustGroups_> const &q_n, Vec3 const &b_hat) -> GasStageRates;
 	AMREX_GPU_HOST_DEVICE static auto SelectGirkCoefficients(bool resolved_branch, quokka::dust::ResolvedRkScheme resolved_rk_scheme) -> GirkCoefficients;
 	AMREX_GPU_HOST_DEVICE static auto ComputeMaximumDustSourceTimescale(amrex::GpuArray<amrex::Real, nDustGroups_> const &rho_d,
-									    amrex::GpuArray<amrex::Real, nDustGroups_> const &alpha1,
-									    amrex::GpuArray<amrex::Real, nDustGroups_> const &omega_L1,
-									    amrex::GpuArray<amrex::Real, nDustGroups_> const &alpha2,
-									    amrex::GpuArray<amrex::Real, nDustGroups_> const &omega_L2) -> amrex::Real;
+	                                                                    amrex::GpuArray<amrex::Real, nDustGroups_> const &alpha1,
+	                                                                    amrex::GpuArray<amrex::Real, nDustGroups_> const &omega_L1,
+	                                                                    amrex::GpuArray<amrex::Real, nDustGroups_> const &alpha2,
+	                                                                    amrex::GpuArray<amrex::Real, nDustGroups_> const &omega_L2) -> amrex::Real;
 	// compute dust source terms and update conserved variables
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-				    amrex::Real dust_omega_drag_, quokka::dust::CoefficientIterationConfig iteration_config, bool print_dust_counter_);
+	                            amrex::Real dust_omega_drag_, quokka::dust::CoefficientIterationConfig iteration_config, bool print_dust_counter_);
 	static void computeDustDragAndLorentz(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-					      amrex::Real dust_omega_drag_, amrex::Real dust_omega_gyro_res_,
-					      quokka::dust::ResolvedRkScheme resolved_rk_scheme_, quokka::dust::CoefficientIterationConfig iteration_config,
-					      bool print_dust_counter_);
+	                                      amrex::Real dust_omega_drag_, amrex::Real dust_omega_gyro_res_,
+	                                      quokka::dust::ResolvedRkScheme resolved_rk_scheme_, quokka::dust::CoefficientIterationConfig iteration_config,
+	                                      bool print_dust_counter_);
 	static void computeDustSource(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-				      amrex::Real dust_omega_drag_, amrex::Real dust_omega_gyro_res_, quokka::dust::ResolvedRkScheme resolved_rk_scheme_,
-				      quokka::dust::CoefficientIterationConfig iteration_config, bool print_dust_counter_, bool include_lorentz_force);
+	                              amrex::Real dust_omega_drag_, amrex::Real dust_omega_gyro_res_, quokka::dust::ResolvedRkScheme resolved_rk_scheme_,
+	                              quokka::dust::CoefficientIterationConfig iteration_config, bool print_dust_counter_, bool include_lorentz_force);
 };
 
 template <typename problem_t>
@@ -196,8 +196,8 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeReciprocalStoppingTime
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::BuildDustCoefficientState(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> const &rho_d,
-									     Vec3 const &p_g, amrex::GpuArray<Vec3, nDustGroups_> const &p_d,
-									     amrex::Real sound_speed) -> DustCoefficientState
+                                                                             Vec3 const &p_g, amrex::GpuArray<Vec3, nDustGroups_> const &p_d,
+                                                                             amrex::Real sound_speed) -> DustCoefficientState
 {
 	DustCoefficientState state{rho_g, rho_d, {}, sound_speed};
 	Vec3 v_g = Vec3::Zero();
@@ -218,10 +218,10 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::BuildDustCoefficientState(amr
 // compute reciprocal of physical dust stopping time following Kwok 1975 with optional supersonic correction
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeReciprocalStoppingTimeKwok(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-										     amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs,
-										     amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
-										     amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
-										     bool enable_supersonic_correction)
+                                                                                     amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs,
+                                                                                     amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
+                                                                                     amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
+                                                                                     bool enable_supersonic_correction)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> alpha{};
@@ -233,10 +233,10 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeReciprocalStoppingTime
 		}
 		// compute stopping time t_s with/without supersonic correction
 		amrex::Real const t_s_sub = std::sqrt(M_PI * ::quokka::EOS_Traits<problem_t>::gamma) * dust_grain_radius[g] * dust_grain_density[g] /
-					    (2.0 * std::numbers::sqrt2 * rho_g * cs);
+		                            (2.0 * std::numbers::sqrt2 * rho_g * cs);
 		amrex::Real const correction = 1.0 + static_cast<int>(enable_supersonic_correction) *
-							 (9.0 * M_PI * ::quokka::EOS_Traits<problem_t>::gamma / 128.0) *
-							 (rel_vel_mag[g] * rel_vel_mag[g] / (cs * cs));
+		                                         (9.0 * M_PI * ::quokka::EOS_Traits<problem_t>::gamma / 128.0) *
+		                                         (rel_vel_mag[g] * rel_vel_mag[g] / (cs * cs));
 		amrex::Real const t_s_fin = t_s_sub / std::sqrt(correction);
 
 		alpha[g] = (t_s_fin > 0.0) ? 1.0 / t_s_fin : 0.0;
@@ -247,8 +247,8 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeReciprocalStoppingTime
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeSoundSpeedFromGasState(amrex::Real rho_g, amrex::Real gas_momentum_sq, amrex::Real E_tot_g,
-										 amrex::Real magnetic_energy,
-										 amrex::GpuArray<amrex::Real, nMassScalars_> const &massScalars) -> amrex::Real
+                                                                                 amrex::Real magnetic_energy,
+                                                                                 amrex::GpuArray<amrex::Real, nMassScalars_> const &massScalars) -> amrex::Real
 {
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 		amrex::ignore_unused(rho_g);
@@ -268,18 +268,18 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeSoundSpeedFromGasState
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::BuildCellCenteredMagneticField(int i, int j, int k,
-										  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
+                                                                                  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
     -> Vec3
 {
 	Vec3 B = Vec3::Zero();
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(cons_fc != nullptr, "BuildCellCenteredMagneticField called without face-centered magnetic fields.");
 		B[0] = 0.5 * ((*cons_fc)[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-			      (*cons_fc)[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
+		              (*cons_fc)[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
 		B[1] = 0.5 * ((*cons_fc)[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-			      (*cons_fc)[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
+		              (*cons_fc)[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
 		B[2] = 0.5 * ((*cons_fc)[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-			      (*cons_fc)[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
+		              (*cons_fc)[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
 	}
 	return B;
 }
@@ -295,9 +295,9 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustDimensionlessCharg
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustStageAffineOperators(amrex::Real alpha1, amrex::Real omega_L1, amrex::Real alpha2,
-										   amrex::Real omega_L2, amrex::Real epsilon, amrex::Real dt,
-										   // NOLINTNEXTLINE(misc-confusable-identifiers)
-										   amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
+                                                                                   amrex::Real omega_L2, amrex::Real epsilon, amrex::Real dt,
+                                                                                   // NOLINTNEXTLINE(misc-confusable-identifiers)
+                                                                                   amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
     -> DustStageAffineOperators
 {
 	DustStageAffineOperators ops{};
@@ -329,7 +329,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustStageAffineOperato
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::SolveGasStageRates(amrex::GpuArray<DustStageAffineOperators, nDustGroups_> const &ops,
-								      amrex::GpuArray<Vec3, nDustGroups_> const &q_n, Vec3 const &b_hat) -> GasStageRates
+                                                                      amrex::GpuArray<Vec3, nDustGroups_> const &q_n, Vec3 const &b_hat) -> GasStageRates
 {
 	GasStageRates rates{Vec3::Zero(), Vec3::Zero()};
 	ReducedOperator lambda11{1.0, 0.0, 1.0};
@@ -378,10 +378,10 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::SelectGirkCoefficients(bool r
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeMaximumDustSourceTimescale(amrex::GpuArray<amrex::Real, nDustGroups_> const &rho_d,
-										     amrex::GpuArray<amrex::Real, nDustGroups_> const &alpha1,
-										     amrex::GpuArray<amrex::Real, nDustGroups_> const &omega_L1,
-										     amrex::GpuArray<amrex::Real, nDustGroups_> const &alpha2,
-										     amrex::GpuArray<amrex::Real, nDustGroups_> const &omega_L2) -> amrex::Real
+                                                                                     amrex::GpuArray<amrex::Real, nDustGroups_> const &alpha1,
+                                                                                     amrex::GpuArray<amrex::Real, nDustGroups_> const &omega_L1,
+                                                                                     amrex::GpuArray<amrex::Real, nDustGroups_> const &alpha2,
+                                                                                     amrex::GpuArray<amrex::Real, nDustGroups_> const &omega_L2) -> amrex::Real
 {
 	amrex::Real maximum_timescale = 0.0;
 	for (int g = 0; g < nDustGroups_; ++g) {
@@ -399,27 +399,27 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeMaximumDustSourceTimes
 
 template <typename problem_t>
 void DustSources<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-					     amrex::Real dust_omega_drag_, quokka::dust::CoefficientIterationConfig iteration_config, bool print_dust_counter_)
+                                             amrex::Real dust_omega_drag_, quokka::dust::CoefficientIterationConfig iteration_config, bool print_dust_counter_)
 {
 	computeDustSource(consVar_cc_mf, consVar_fc_mf, dt, dust_omega_drag_, 0.0, quokka::dust::ResolvedRkScheme::TP2025, iteration_config,
-			  print_dust_counter_, false);
+	                  print_dust_counter_, false);
 }
 
 template <typename problem_t>
 void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf,
-						       amrex::Real dt, amrex::Real dust_omega_drag_, amrex::Real dust_omega_gyro_res_,
-						       quokka::dust::ResolvedRkScheme resolved_rk_scheme_,
-						       quokka::dust::CoefficientIterationConfig iteration_config, bool print_dust_counter_)
+                                                       amrex::Real dt, amrex::Real dust_omega_drag_, amrex::Real dust_omega_gyro_res_,
+                                                       quokka::dust::ResolvedRkScheme resolved_rk_scheme_,
+                                                       quokka::dust::CoefficientIterationConfig iteration_config, bool print_dust_counter_)
 {
 	computeDustSource(consVar_cc_mf, consVar_fc_mf, dt, dust_omega_drag_, dust_omega_gyro_res_, resolved_rk_scheme_, iteration_config, print_dust_counter_,
-			  true);
+	                  true);
 }
 
 template <typename problem_t>
 void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-					       amrex::Real dust_omega_drag_, amrex::Real dust_omega_gyro_res_,
-					       quokka::dust::ResolvedRkScheme resolved_rk_scheme_, quokka::dust::CoefficientIterationConfig iteration_config,
-					       bool print_dust_counter_, bool include_lorentz_force)
+                                               amrex::Real dust_omega_drag_, amrex::Real dust_omega_gyro_res_,
+                                               quokka::dust::ResolvedRkScheme resolved_rk_scheme_, quokka::dust::CoefficientIterationConfig iteration_config,
+                                               bool print_dust_counter_, bool include_lorentz_force)
 {
 	amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0, 0}); // [sum of iterations, number of cells, max iterations in any cell, unconverged cells]
 	int *p_iteration_counter = iteration_counter.data();
@@ -538,7 +538,7 @@ void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, s
 			amrex::GpuArray<DustStageAffineOperators, nDustGroups_> ops{};
 			for (int g = 0; g < nDustGroups_; ++g) {
 				ops[g] = ComputeDustStageAffineOperators(alpha1[g], omega_L1[g], alpha2[g], omega_L2[g], epsilon[g], dt, coefficients.gamma1,
-									 coefficients.gamma2, coefficients.beta1, coefficients.beta2);
+				                                         coefficients.gamma2, coefficients.beta1, coefficients.beta2);
 			}
 
 			GasStageRates const gas_stage = SolveGasStageRates(ops, q_n, b_hat);
@@ -671,13 +671,13 @@ void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, s
 					continue;
 				}
 				alpha_converged = alpha_converged && (std::abs(alpha1_new[g] - alpha1[g]) <= alpha_relative_tolerance * alpha1[g]) &&
-						  (std::abs(alpha2_new[g] - alpha2[g]) <= alpha_relative_tolerance * alpha2[g]);
+				                  (std::abs(alpha2_new[g] - alpha2[g]) <= alpha_relative_tolerance * alpha2[g]);
 				if (include_lorentz_force && B_mag > 0.0) {
 					charge_converged = charge_converged &&
-							   (std::abs(charge1_new[g] - charge1[g]) <=
-							    charge_absolute_tolerance + charge_relative_tolerance * std::abs(charge1[g])) &&
-							   (std::abs(charge2_new[g] - charge2[g]) <=
-							    charge_absolute_tolerance + charge_relative_tolerance * std::abs(charge2[g]));
+					                   (std::abs(charge1_new[g] - charge1[g]) <=
+					                    charge_absolute_tolerance + charge_relative_tolerance * std::abs(charge1[g])) &&
+					                   (std::abs(charge2_new[g] - charge2[g]) <=
+					                    charge_absolute_tolerance + charge_relative_tolerance * std::abs(charge2[g]));
 				}
 			}
 			amrex::Real const maximum_source_timescale_new =
@@ -707,7 +707,7 @@ void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, s
 
 		if (print_dust_counter_) {
 			amrex::Gpu::Atomic::Add(&p_iteration_counter[0], cell_iteration_count); // sum of iterations
-			amrex::Gpu::Atomic::Add(&p_iteration_counter[1], 1);			// number of cells
+			amrex::Gpu::Atomic::Add(&p_iteration_counter[1], 1);                    // number of cells
 			amrex::Gpu::Atomic::Max(&p_iteration_counter[2], cell_iteration_count); // max iterations in any cell
 		}
 		if (!iteration_converged) {
@@ -721,7 +721,7 @@ void DustSources<problem_t>::computeDustSource(amrex::MultiFab &consVar_cc_mf, s
 			amrex::ParallelDescriptor::ReduceIntSum(unconverged_cells);
 			if (amrex::ParallelDescriptor::IOProcessor() && unconverged_cells > 0) {
 				amrex::Print() << "WARNING: Dust " << (include_lorentz_force ? "drag and Lorentz" : "drag")
-					       << " Picard iteration did not converge in " << unconverged_cells << " cell(s); using the final iterate.\n";
+				               << " Picard iteration did not converge in " << unconverged_cells << " cell(s); using the final iterate.\n";
 			}
 		}
 		if (print_dust_counter_) {

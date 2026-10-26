@@ -51,7 +51,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real co
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, resampledGpuConstTables const &tables,
-								   Real const_heating_rate = 0.0) -> Real
+                                                                   Real const_heating_rate = 0.0) -> Real
 {
 	// Compute cooling length l_cool = c_s * t_cool
 	const Real eint = Eint / rho;
@@ -137,7 +137,7 @@ struct ResampledCoolingFunctor {
 // external_heating: optional position-dependent heating rate added to it, unit erg/s/H
 template <typename problem_t>
 auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &mf_fc, const Real dt_in, resampled_tables &resampledTables,
-		    const Real temp_floor, const Real const_heating_rate_per_H, ExternalHeatingRate const &external_heating = {}) -> bool
+                    const Real temp_floor, const Real const_heating_rate_per_H, ExternalHeatingRate const &external_heating = {}) -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
@@ -170,9 +170,9 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			// cooling function
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
-			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p;			      // unit: cm^-3
+			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p;                         // unit: cm^-3
 			const Real heating_rate_per_H = const_heating_rate_per_H + external_heating(i, j, k); // unit: erg/s/H
-			const ResampledCoolingFunctor user_rhs(rho, tables, heating_rate_per_H * nH);	      // unit: erg/cm^3/s
+			const ResampledCoolingFunctor user_rhs(rho, tables, heating_rate_per_H * nH);         // unit: erg/cm^3/s
 
 			// state vector
 			const Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(state, i, j, k, &state_fc);

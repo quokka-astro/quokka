@@ -119,24 +119,24 @@ template <typename problem_t> class PhysicsParticleRegister;
 class PhysicsParticleDescriptorBase
 {
       protected:
-	int massIndex_{-1};		// Index for particle mass (-1 if not used)
-	int lumIndex_{-1};		// Index for radiation luminosity (-1 if not used)
-	int birthTimeIndex_{-1};	// Index for birth time (-1 if not used)
-	int deathTimeIndex_{-1};	// Index for death time (-1 if not used)
-	bool allowsCreation_{false};	// Whether particles can be created during simulation
+	int massIndex_{-1};             // Index for particle mass (-1 if not used)
+	int lumIndex_{-1};              // Index for radiation luminosity (-1 if not used)
+	int birthTimeIndex_{-1};        // Index for birth time (-1 if not used)
+	int deathTimeIndex_{-1};        // Index for death time (-1 if not used)
+	bool allowsCreation_{false};    // Whether particles can be created during simulation
 	bool allowsDestruction_{false}; // Whether particles can be destroyed during simulation
-	int evolutionStageIndex_{-1};	// Index for evolution stage (-1 if not used)
-	bool allowsAccretion_{false};	// Whether particles can accrete gas
+	int evolutionStageIndex_{-1};   // Index for evolution stage (-1 if not used)
+	bool allowsAccretion_{false};   // Whether particles can accrete gas
 
 	int massAtBirthIndex_{-1};     // Index for particle mass at birth (-1 if not used)
 	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
-	int mdotIndex_{-1};	       // Index for accretion rate (-1 if not used)
-	int angMomIndex_{-1};	       // Index for angular momentum x-component (-1 if not used; Ly=+1, Lz=+2)
+	int mdotIndex_{-1};            // Index for accretion rate (-1 if not used)
+	int angMomIndex_{-1};          // Index for angular momentum x-component (-1 if not used; Ly=+1, Lz=+2)
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, int death_time_idx, bool allows_creation, bool allows_destruction = false,
-				      int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1, int mdot_idx = -1,
-				      int ang_mom_idx = -1)
+	                              int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1, int mdot_idx = -1,
+	                              int ang_mom_idx = -1)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), deathTimeIndex_(death_time_idx), allowsCreation_(allows_creation),
 	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx), allowsAccretion_(allows_accretion),
 	      massAtBirthIndex_(mass_at_birth_idx), mdotIndex_(mdot_idx), angMomIndex_(ang_mom_idx)
@@ -209,7 +209,7 @@ class PhysicsParticleDescriptorBase
 
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void depositParticleMassDensity(amrex::MultiFab &deposition_field, int lev, int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max,
-						bool use_age_filter, amrex::Real current_time, amrex::Real age_max, bool deposit_birth_mass) const = 0;
+	                                        bool use_age_filter, amrex::Real current_time, amrex::Real age_max, bool deposit_birth_mass) const = 0;
 
 	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
@@ -229,13 +229,13 @@ class PhysicsParticleDescriptorBase
 	//----- Methods that are implemented for some but not all particle types, so they cannot be pure virtual -----
 
 	virtual auto depositSN(amrex::MultiFab & /*state*/, std::array<amrex::MultiFab, AMREX_SPACEDIM> const * /*state_fc*/, int /*lev*/, amrex::Real /*time*/,
-			       amrex::Real /*dt*/) -> std::pair<int, amrex::Real>
+	                       amrex::Real /*dt*/) -> std::pair<int, amrex::Real>
 	{
 		return {0, 0.0_rt};
 	}
 
 	virtual auto depositEarlyFeedback(amrex::MultiFab & /*state*/, std::array<amrex::MultiFab, AMREX_SPACEDIM> const * /*state_fc*/, int /*lev*/,
-					  amrex::Real /*time*/, amrex::Real /*dt*/) -> EarlyFeedbackStats
+	                                  amrex::Real /*time*/, amrex::Real /*dt*/) -> EarlyFeedbackStats
 	{
 		return {};
 	}
@@ -244,7 +244,7 @@ class PhysicsParticleDescriptorBase
 	{ /* Default empty implementation */ }
 
 	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
+	                                  std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */
 	}
 
@@ -252,13 +252,13 @@ class PhysicsParticleDescriptorBase
 	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call in order to
 	// make particle-mesh interaction work.
 	virtual void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int verbose)
+	                                      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int verbose)
 	{ /* Default empty implementation */
 	}
 
 	virtual void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
-					std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time,
-					amrex::Real dt, amrex::MultiFab const &density_floor)
+	                                std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time,
+	                                amrex::Real dt, amrex::MultiFab const &density_floor)
 	{ /* Default empty implementation */
 	}
 
@@ -284,10 +284,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, int death_time_idx, bool allows_creation,
-				  bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1,
-				  int mdot_idx = -1, int ang_mom_idx = -1)
+	                          bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1,
+	                          int mdot_idx = -1, int ang_mom_idx = -1)
 	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, death_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
-					    allows_accretion, mass_at_birth_idx, mdot_idx, ang_mom_idx),
+	                                    allows_accretion, mass_at_birth_idx, mdot_idx, ang_mom_idx),
 	      container_(container)
 	{
 	}
@@ -422,7 +422,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	void depositParticleMassDensity(amrex::MultiFab &deposition_field, int lev, int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max,
-					bool use_age_filter, amrex::Real current_time, amrex::Real age_max, bool deposit_birth_mass) const override
+	                                bool use_age_filter, amrex::Real current_time, amrex::Real age_max, bool deposit_birth_mass) const override
 	{
 		const std::string particle_type_name{getParticleTypeShortName(particleType_)};
 
@@ -441,13 +441,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			birth_time_comp = this->getBirthTimeIndex();
 			if (birth_time_comp < 0) {
 				amrex::Abort("Derived field age filter (t_age) is not supported for particle type " + particle_type_name +
-					     " (missing birth_time).");
+				             " (missing birth_time).");
 			}
 		}
 
 		if (container_ != nullptr) {
 			quokka::depositParticleMassDensity(container_, deposition_field, lev, mass_comp, start_mesh_comp, mass_min, mass_max, use_age_filter,
-							   birth_time_comp, current_time, age_max);
+			                                   birth_time_comp, current_time, age_max);
 		}
 	}
 
@@ -528,8 +528,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void splitParticles(int const lev, int const splitFactor) override
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
-						 "The current implementation of velocity kick in particle splitting assumes cgs units."
-						 "Please implement the appropriate scaling for other unit systems.");
+		                                 "The current implementation of velocity kick in particle splitting assumes cgs units."
+		                                 "Please implement the appropriate scaling for other unit systems.");
 
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
@@ -685,7 +685,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		if (container_ != nullptr && this->getLumIndex() >= 0) {
 			amrex::ParticleToMesh(*container_, radEnergySource, lev,
-					      RadDeposition{current_time, this->getLumIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
+			                      RadDeposition{current_time, this->getLumIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
 		}
 	}
 
@@ -804,8 +804,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						continue;
 					}
 					const amrex::IntVect cell(AMREX_D_DECL(static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0])),
-									       static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1])),
-									       static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]))));
+					                                       static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1])),
+					                                       static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]))));
 					if (geom_lev.Domain().contains(cell)) {
 						cross_level_boxes.emplace_back(cell, cell);
 					}
@@ -844,14 +844,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// Implementation of empirically motivated early-feedback deposition from particles to grid
 	auto depositEarlyFeedback(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time,
-				  amrex::Real dt) -> EarlyFeedbackStats override
+	                          amrex::Real dt) -> EarlyFeedbackStats override
 	{
 		if constexpr (particleType == ParticleType::StochasticStellarPop) {
 			if (this->container_ != nullptr) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
-								 "Empirically motivated early feedback requires CGS units.");
+				                                 "Empirically motivated early feedback requires CGS units.");
 				return EarlyFeedbackDeposition<ContainerType, problem_t>(this->container_, state, state_fc, lev, time, dt,
-											 this->getBirthTimeIndex(), this->getMassAtBirthIndex());
+				                                                         this->getBirthTimeIndex(), this->getMassAtBirthIndex());
 			}
 		}
 		return {};
@@ -861,7 +861,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
 			ParticlePropertyUpdateTraits<particleType_>::template updateChemicalFeedback<problem_t, ContainerType>(this->container_, state, lev,
-															       current_time, dt);
+			                                                                                                       current_time, dt);
 		}
 	}
 
@@ -876,12 +876,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			if (!quokka::disable_SN_feedback) {
 				// Requires CGS units
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
-								 "UnitSystem must be CGS for particleMeshInteraction");
+				                                 "UnitSystem must be CGS for particleMeshInteraction");
 
 				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
 				auto [sn_count, vel] =
 				    SNDeposition<particleType, ContainerType, problem_t>(this->container_, state, state_fc, lev, time, dt, this->getMassIndex(),
-											 this->getEvolutionStageIndex(), this->getBirthTimeIndex());
+				                                                         this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 				num_sn_explosions = sn_count;
 				max_velocity = vel;
 			} else {
@@ -903,22 +903,22 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// compute accretion rate
 	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
-				  int lev, amrex::Real time, amrex::Real dt) override
+	                          int lev, amrex::Real time, amrex::Real dt) override
 	{
 		SinkAccretionUtils::computeAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, state_fc, lev, time, dt,
-									       this->getMassIndex());
+		                                                               this->getMassIndex());
 	}
 
 	// apply accretion
 	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
-				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt, amrex::MultiFab const &density_floor) override
+	                        const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt, amrex::MultiFab const &density_floor) override
 	{
 		SinkAccretionUtils::applyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, state_fc, geom, lev, time, dt,
-									     this->getMassIndex(), density_floor, this->getMdotIndex(), this->getAngMomIndex());
+		                                                             this->getMassIndex(), density_floor, this->getMdotIndex(), this->getAngMomIndex());
 	}
 
 	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int verbose) override
+	                              std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int verbose) override
 	{
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType>::template createParticles<problem_t, ContainerType>(
@@ -1015,7 +1015,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, RadParticleDeathTimeIdx, false, false);
 		} else if constexpr (particleType == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(container, CICParticleMassIdx, -1,
-															      -1, -1, false, false);
+			                                                                                                      -1, -1, false, false);
 		} else if constexpr (particleType == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
 			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, CICRadParticleDeathTimeIdx, false, false);
@@ -1079,8 +1079,8 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	void depositParticleMassDensity(std::string_view particle_type_name, bool deposit_birth_mass, amrex::MultiFab &deposition_field, int lev,
-					int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max, bool use_age_filter, amrex::Real current_time,
-					amrex::Real age_max) const
+	                                int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max, bool use_age_filter, amrex::Real current_time,
+	                                amrex::Real age_max) const
 	{
 		auto const particle_type = parseParticleTypeShortName(particle_type_name);
 		if (!particle_type.has_value()) {
@@ -1090,16 +1090,16 @@ template <typename problem_t> class PhysicsParticleRegister
 		auto it = particleRegistry_.find(*particle_type);
 		if (it == particleRegistry_.end()) {
 			amrex::Abort("Derived field requested particle type " + std::string(particle_type_name) + ", but " +
-				     std::string(getParticleSwitchName(*particle_type)) + " is not enabled for this problem.");
+			             std::string(getParticleSwitchName(*particle_type)) + " is not enabled for this problem.");
 		}
 
 		it->second->depositParticleMassDensity(deposition_field, lev, start_mesh_comp, mass_min, mass_max, use_age_filter, current_time, age_max,
-						       deposit_birth_mass);
+		                                       deposit_birth_mass);
 	}
 
 	// Deposit empirically motivated early feedback from the stochastic stellar population
 	auto depositEarlyFeedback(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time,
-				  amrex::Real dt) -> EarlyFeedbackStats
+	                          amrex::Real dt) -> EarlyFeedbackStats
 	{
 		const BL_PROFILE("PhysicsParticleRegister::depositEarlyFeedback()");
 		if (!EMEF_enabled) {
@@ -1107,7 +1107,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 		const auto descriptor = particleRegistry_.find(ParticleType::StochasticStellarPop);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(descriptor != particleRegistry_.end(),
-						 "particles.EMEF_enabled=1 requires ParticleSwitch::StochasticStellarPop for this problem.");
+		                                 "particles.EMEF_enabled=1 requires ParticleSwitch::StochasticStellarPop for this problem.");
 		return descriptor->second->depositEarlyFeedback(state, state_fc, lev, time, dt);
 	}
 
@@ -1137,7 +1137,7 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Implementation of computeSinkAccretion
 	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
-				  int lev, amrex::Real time, amrex::Real dt)
+	                          int lev, amrex::Real time, amrex::Real dt)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::computeSinkAccretion()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
@@ -1149,7 +1149,7 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Implementation of applySinkAccretion
 	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
-				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt, amrex::MultiFab const &density_floor)
+	                        const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt, amrex::MultiFab const &density_floor)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::applySinkAccretion()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
@@ -1266,7 +1266,7 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Create particles based on particle type
 	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
+	                              std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::createParticlesFromState()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
@@ -1481,7 +1481,7 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Compute Photoelectric heating rate from the contribution of all stars
 	auto computePhotoelectricHeatingRate(amrex::Real current_time, quokka::PeHeatingGpuConstTables<quokka::OutOfBounds::clamp> const &gpu_tables,
-					     amrex::Real sfh_area_kpc2) -> Real
+	                                     amrex::Real sfh_area_kpc2) -> Real
 	{
 		Real heating_rate = 0.0;
 

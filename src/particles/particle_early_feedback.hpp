@@ -35,8 +35,8 @@ struct EarlyFeedbackStats {
 };
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto earlyFeedbackMomentumIncrement(amrex::Real step_time, amrex::Real dt, amrex::Real birth_time,
-									     amrex::Real birth_mass, amrex::Real p0, amrex::Real t_fb,
-									     amrex::Real alpha) noexcept -> amrex::Real
+                                                                             amrex::Real birth_mass, amrex::Real p0, amrex::Real t_fb,
+                                                                             amrex::Real alpha) noexcept -> amrex::Real
 {
 	if (!(birth_mass > 0.0) || !(dt > 0.0) || !(p0 > 0.0) || !(t_fb > 0.0) || !(alpha > 0.25) || !amrex::Math::isfinite(step_time) ||
 	    !amrex::Math::isfinite(dt) || !amrex::Math::isfinite(birth_time) || !amrex::Math::isfinite(birth_mass) || !amrex::Math::isfinite(p0) ||
@@ -64,8 +64,8 @@ constexpr int stencil_size = ParticleUtils::stencil_size;
 
 template <typename ContainerType, typename problem_t>
 void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
-		     int birth_time_index, int mass_at_birth_index, amrex::Real p0, amrex::Real t_fb, amrex::Real alpha, int *active_particle_count,
-		     amrex::Real *scalar_momentum, int *invalid_source_count)
+                     int birth_time_index, int mass_at_birth_index, amrex::Real p0, amrex::Real t_fb, amrex::Real alpha, int *active_particle_count,
+                     amrex::Real *scalar_momentum, int *invalid_source_count)
 {
 	const BL_PROFILE("EarlyFeedbackUtils::depositToBuffer()");
 	static_assert(AMREX_SPACEDIM == 3 || dependent_false_v<problem_t>, "Empirically motivated early feedback is currently implemented only in 3D.");
@@ -111,11 +111,11 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 			const int host_k = static_cast<int>(amrex::Math::floor((pos_z - prob_lo[2]) * inv_dx[2]));
 
 			const bool stencil_outside_fab = host_i - stencil_size < fab_lo.x || host_i + stencil_size > fab_hi.x ||
-							 host_j - stencil_size < fab_lo.y || host_j + stencil_size > fab_hi.y ||
-							 host_k - stencil_size < fab_lo.z || host_k + stencil_size > fab_hi.z;
+			                                 host_j - stencil_size < fab_lo.y || host_j + stencil_size > fab_hi.y ||
+			                                 host_k - stencil_size < fab_lo.z || host_k + stencil_size > fab_hi.z;
 			const bool stencil_outside_domain = (!is_periodic[0] && (host_i - stencil_size < domain_lo.x || host_i + stencil_size > domain_hi.x)) ||
-							    (!is_periodic[1] && (host_j - stencil_size < domain_lo.y || host_j + stencil_size > domain_hi.y)) ||
-							    (!is_periodic[2] && (host_k - stencil_size < domain_lo.z || host_k + stencil_size > domain_hi.z));
+			                                    (!is_periodic[1] && (host_j - stencil_size < domain_lo.y || host_j + stencil_size > domain_hi.y)) ||
+			                                    (!is_periodic[2] && (host_k - stencil_size < domain_lo.z || host_k + stencil_size > domain_hi.z));
 			if (stencil_outside_fab || stencil_outside_domain) {
 				amrex::Gpu::Atomic::AddNoRet(invalid_source_count, 1);
 				return;
@@ -234,7 +234,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addBufferToState(amrex::Array4<amrex::Real> const &state, amrex::Array4<const amrex::Real> const &buffer, int i, int j,
-							  int k, int count_component) noexcept
+                                                          int k, int count_component) noexcept
 {
 	if (!(buffer(i, j, k, count_component) > 0.0)) {
 		return;
@@ -260,8 +260,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addBufferToState(amrex::Array4<amrex::R
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void limitVelocity(amrex::Array4<amrex::Real> const &state, amrex::Array4<const amrex::Real> const &buffer, int i, int j,
-						       int k, int count_component, amrex::Real velocity_limit, int *clipped_cell_count,
-						       amrex::Real *min_velocity_scale, amrex::Real *max_velocity) noexcept
+                                                       int k, int count_component, amrex::Real velocity_limit, int *clipped_cell_count,
+                                                       amrex::Real *min_velocity_scale, amrex::Real *max_velocity) noexcept
 {
 	if (!(buffer(i, j, k, count_component) > 0.0)) {
 		return;
@@ -292,7 +292,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void limitVelocity(amrex::Array4<amrex::Real
 
 template <typename problem_t>
 void applyBuffer(amrex::MultiFab &state, amrex::MultiFab const &state_buffer, amrex::Real velocity_limit, int *clipped_cell_count,
-		 amrex::Real *min_velocity_scale, amrex::Real *max_velocity)
+                 amrex::Real *min_velocity_scale, amrex::Real *max_velocity)
 {
 	const BL_PROFILE("EarlyFeedbackUtils::applyBuffer()");
 	const int count_component = state_buffer.nComp() - 1;
@@ -313,7 +313,7 @@ void applyBuffer(amrex::MultiFab &state, amrex::MultiFab const &state_buffer, am
 			const amrex::Real cell_velocity_limit = std::max(velocity_limit, std::sqrt((px * px) + (py * py) + (pz * pz)) / rho);
 			addBufferToState<problem_t>(local_state, local_buffer, i, j, k, count_component);
 			limitVelocity<problem_t>(local_state, local_buffer, i, j, k, count_component, cell_velocity_limit, clipped_cell_count,
-						 min_velocity_scale, max_velocity);
+			                         min_velocity_scale, max_velocity);
 		});
 	}
 }
@@ -322,12 +322,12 @@ void applyBuffer(amrex::MultiFab &state, amrex::MultiFab const &state_buffer, am
 
 template <typename ContainerType, typename problem_t>
 auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const * /*state_fc*/, int lev,
-			     amrex::Real time, amrex::Real dt, int birth_time_index, int mass_at_birth_index) -> EarlyFeedbackStats
+                             amrex::Real time, amrex::Real dt, int birth_time_index, int mass_at_birth_index) -> EarlyFeedbackStats
 {
 	const BL_PROFILE("[particle_early_feedback] EarlyFeedbackDeposition()");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state.nGrowVect().allGE(4), "Early feedback requires at least four cell-centered ghost cells.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(birth_time_index >= 0 && mass_at_birth_index >= 0,
-					 "Early feedback requires valid birth_time and mass_at_birth particle components.");
+	                                 "Early feedback requires valid birth_time and mass_at_birth particle components.");
 
 	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
 	state_buffer.setVal(0.0);
@@ -339,8 +339,8 @@ auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, s
 	amrex::Gpu::Buffer<amrex::Real> max_velocity_buffer({0.0});
 
 	EarlyFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, birth_time_index, mass_at_birth_index,
-								      EMEF_p0, EMEF_tFB, EMEF_alpha, active_particle_buffer.data(),
-								      scalar_momentum_buffer.data(), invalid_source_buffer.data());
+	                                                              EMEF_p0, EMEF_tFB, EMEF_alpha, active_particle_buffer.data(),
+	                                                              scalar_momentum_buffer.data(), invalid_source_buffer.data());
 
 	int invalid_sources = invalid_source_buffer.copyToHost()[0];
 	amrex::ParallelDescriptor::ReduceIntSum(invalid_sources);
@@ -351,7 +351,7 @@ auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, s
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
 	ParticleUtils::roundoffMultiFab(state_buffer);
 	EarlyFeedbackUtils::applyBuffer<problem_t>(state, state_buffer, EMEF_max_velocity, clipped_cell_buffer.data(), min_velocity_scale_buffer.data(),
-						   max_velocity_buffer.data());
+	                                           max_velocity_buffer.data());
 
 	EarlyFeedbackStats stats;
 	stats.active_particles = active_particle_buffer.copyToHost()[0];

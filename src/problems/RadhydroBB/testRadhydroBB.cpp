@@ -41,11 +41,11 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexp
 		return amrex::GpuArray<double, 5>{1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};
 	} else if constexpr (n_groups_ == 8) {
 		return amrex::GpuArray<double, 9>{1.00000000e-03, 4.21696503e-03, 1.77827941e-02, 7.49894209e-02, 3.16227766e-01,
-						  1.33352143e+00, 5.62341325e+00, 2.37137371e+01, 1.00000000e+02};
+		                                  1.33352143e+00, 5.62341325e+00, 2.37137371e+01, 1.00000000e+02};
 	} else if constexpr (n_groups_ == 16) {
 		return amrex::GpuArray<double, 17>{1.00000000e-03, 2.05352503e-03, 4.21696503e-03, 8.65964323e-03, 1.77827941e-02, 3.65174127e-02,
-						   7.49894209e-02, 1.53992653e-01, 3.16227766e-01, 6.49381632e-01, 1.33352143e+00, 2.73841963e+00,
-						   5.62341325e+00, 1.15478198e+01, 2.37137371e+01, 4.86967525e+01, 1.00000000e+02};
+		                                   7.49894209e-02, 1.53992653e-01, 3.16227766e-01, 6.49381632e-01, 1.33352143e+00, 2.73841963e+00,
+		                                   5.62341325e+00, 1.15478198e+01, 2.37137371e+01, 4.86967525e+01, 1.00000000e+02};
 	} else if constexpr (n_groups_ == 64) {
 		return amrex::GpuArray<double, 65>{
 		    1.00000000e-03, 1.19708503e-03, 1.43301257e-03, 1.71543790e-03, 2.05352503e-03, 2.45824407e-03, 2.94272718e-03, 3.52269465e-03,
@@ -135,7 +135,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<PulseProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+                                                              const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -259,8 +259,8 @@ auto problem_main() -> int
 	}
 
 	// compute spectrum
-	std::vector<double> E_r{};	// radiation energy density
-	std::vector<double> F_r{};	// flux density
+	std::vector<double> E_r{};      // radiation energy density
+	std::vector<double> F_r{};      // flux density
 	std::vector<double> E_r_spec{}; // specific radiation energy density
 	std::vector<double> F_r_spec{}; // specific flux density
 	std::vector<double> bin_center{};

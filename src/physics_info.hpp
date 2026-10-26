@@ -16,15 +16,15 @@ enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 
 // enum for MHD resistivity model
 enum class ResistivityModel {
-	none,		 // no physical resistivity model
-	constant,	 // uniform Ohmic resistivity; eta read from mhd.resistivity in the TOML input file
+	none,            // no physical resistivity model
+	constant,        // uniform Ohmic resistivity; eta read from mhd.resistivity in the TOML input file
 	problem_defined, // per-cell Ohmic resistivity; eta returned by a problem-specific computeResistivity device function
 };
 
 // enum for hydro (shear + bulk) viscosity model
 enum class ViscosityModel {
-	none,		 // no physical viscosity model
-	constant,	 // uniform shear/bulk viscosity; read from hydro.shear_viscosity / hydro.bulk_viscosity in the TOML input file
+	none,            // no physical viscosity model
+	constant,        // uniform shear/bulk viscosity; read from hydro.shear_viscosity / hydro.bulk_viscosity in the TOML input file
 	problem_defined, // per-cell viscosity; returned by a problem-specific computeViscosity device function
 };
 
@@ -46,10 +46,10 @@ struct DefaultPhysicsTraits {
 	static constexpr int nGroups = 1;     // number of radiation groups
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
-	static constexpr double boltzmann_constant = C::k_B;	    // Hydro, EOS
+	static constexpr double boltzmann_constant = C::k_B;        // Hydro, EOS
 	static constexpr double gravitational_constant = C::Gconst; // gravity
-	static constexpr double c_light = C::c_light;		    // radiation
-	static constexpr double radiation_constant = C::a_rad;	    // radiation
+	static constexpr double c_light = C::c_light;               // radiation
+	static constexpr double radiation_constant = C::a_rad;      // radiation
 	static constexpr double unit_length = 1.0;
 	static constexpr double unit_mass = 1.0;
 	static constexpr double unit_time = 1.0;
@@ -74,7 +74,7 @@ template <typename problem_t> struct Physics_Indices {
 	static constexpr int pscalarFirstIndex = Physics_NumVars::numHydroVars;
 	static constexpr int dustFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
 	static constexpr int radFirstIndex = dustFirstIndex + Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups *
-								  static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled);
+	                                                          static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled);
 	// face-centered
 	static constexpr int nvarPerDim_fc = Physics_NumVars::numMHDVars_per_dim * static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled);
 	static constexpr int nvarTotal_fc = AMREX_SPACEDIM * nvarPerDim_fc;
@@ -86,7 +86,7 @@ template <typename problem_t> struct Physics_Indices {
 // that disallows first-capturing variables in constexpr-if contexts inside extended device lambdas.
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellCenteredMagneticEnergy(int i, int j, int k,
-									   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> double
+                                                                           std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> double
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		constexpr int mhdIdx = Physics_Indices<problem_t>::mhdFirstIndex;

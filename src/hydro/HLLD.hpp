@@ -19,7 +19,7 @@ constexpr double DELTA = 1.0e-4;
 // Corrections based on Minoshima & Miyoshi (2021), hereafter MM21.
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
-					      const double gamma, const double bx, const double perp_v_jump)
+                                              const double gamma, const double bx, const double perp_v_jump)
     -> std::tuple<quokka::valarray<double, fluxdim>, double, double>
 {
 	//--- Step 1. Compute L/R states
@@ -260,7 +260,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	// MK5: eqn (59)
 	double tmp = rho_sum_inv *
-		     (rho_sqrt_L * (u_star_L.my * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.my * u_star_rho_inv_R) + bx_sign * (u_star_R.by - u_star_L.by));
+	             (rho_sqrt_L * (u_star_L.my * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.my * u_star_rho_inv_R) + bx_sign * (u_star_R.by - u_star_L.by));
 	u_dstar_L.my = u_dstar_L.rho * tmp;
 	u_dstar_R.my = u_dstar_R.rho * tmp;
 
@@ -272,19 +272,19 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	// MK5: eqn (61)
 	tmp = rho_sum_inv * (rho_sqrt_L * u_star_R.by + rho_sqrt_R * u_star_L.by +
-			     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.my * u_star_rho_inv_R) - (u_star_L.my * u_star_rho_inv_L)));
+	                     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.my * u_star_rho_inv_R) - (u_star_L.my * u_star_rho_inv_L)));
 	u_dstar_L.by = tmp;
 	u_dstar_R.by = tmp;
 
 	// MK5: eqn (62)
 	tmp = rho_sum_inv * (rho_sqrt_L * u_star_R.bz + rho_sqrt_R * u_star_L.bz +
-			     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.mz * u_star_rho_inv_R) - (u_star_L.mz * u_star_rho_inv_L)));
+	                     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.mz * u_star_rho_inv_R) - (u_star_L.mz * u_star_rho_inv_L)));
 	u_dstar_L.bz = tmp;
 	u_dstar_R.bz = tmp;
 
 	// MK5: eqn (63); average the L/R evaluations of the shared dot(v, b) for floating-point associativity symmetry
 	tmp = spds[2] * bx + 0.5 * ((u_dstar_L.my * u_dstar_L.by + u_dstar_L.mz * u_dstar_L.bz) / u_dstar_L.rho +
-				    (u_dstar_R.my * u_dstar_R.by + u_dstar_R.mz * u_dstar_R.bz) / u_dstar_R.rho);
+	                            (u_dstar_R.my * u_dstar_R.by + u_dstar_R.mz * u_dstar_R.bz) / u_dstar_R.rho);
 	u_dstar_L.E = u_star_L.E - rho_sqrt_L * bx_sign * (vb_star_L - tmp);
 	u_dstar_R.E = u_star_R.E + rho_sqrt_R * bx_sign * (vb_star_R - tmp);
 

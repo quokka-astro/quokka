@@ -22,7 +22,7 @@
 
 struct SuOlsonProblemCgs {}; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double kappa = 300.0;		      // cm^-1 (opacity)
+constexpr double kappa = 300.0;               // cm^-1 (opacity)
 constexpr double rho0 = 2.0879373766122384;   // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.1604448449e7; // K (1 keV)
 constexpr double T_initial = T_hohlraum * 0.001;
@@ -52,7 +52,7 @@ template <> struct Physics_Traits<SuOlsonProblemCgs> : DefaultPhysicsTraits {
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho, const double Tgas) -> amrex::Real
 {
 	auto sigma = kappa * std::pow(Tgas / T_hohlraum, -3); // cm^-1
-	return sigma / rho;				      // cm^2 g^-1
+	return sigma / rho;                                   // cm^2 g^-1
 }
 
 template <>
@@ -69,8 +69,8 @@ template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProbl
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							      int /*numcomp*/, amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/,
-							      const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+                                                              int /*numcomp*/, amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/,
+                                                              const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	auto const [i, j, k] = iv.dim3();
 
@@ -186,7 +186,7 @@ auto problem_main() -> int
 	// Problem parameters
 	const int max_timesteps = 1e6;
 	const double CFL_number = 10.0;
-	const double max_dt = 5.0;	 // s
+	const double max_dt = 5.0;       // s
 	const double max_time = 10.0e-9; // s
 	// const int nx = 60; // [18 == matches resolution of McClarren & Lowrie (2008)]
 	// const double Lx = 0.66; // cm
@@ -195,7 +195,7 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		BCs_cc[n].setLo(0,
-				amrex::BCType::ext_dir);     // custom (Marshak) x1
+		                amrex::BCType::ext_dir);     // custom (Marshak) x1
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
@@ -307,7 +307,7 @@ auto problem_main() -> int
 	matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
 	matplotlibcpp::scatter(xs, Tgas_keV, 20.0, Tgas_args);
 
-	matplotlibcpp::ylim(0.0, 1.0);	// keV
+	matplotlibcpp::ylim(0.0, 1.0);  // keV
 	matplotlibcpp::xlim(0.0, 0.55); // cm
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (keV)");

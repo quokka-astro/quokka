@@ -14,7 +14,7 @@ namespace quokka::Riemann
 // Local Lax-Friedrichs (LLF) / Rusanov solver
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF_MHD(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
-						 const double gamma, const double bx) -> std::tuple<quokka::valarray<double, fluxdim>, double, double>
+                                                 const double gamma, const double bx) -> std::tuple<quokka::valarray<double, fluxdim>, double, double>
 {
 	// initialize left and right conserved states
 	ConsHydro1D<N_scalars> u_L{};

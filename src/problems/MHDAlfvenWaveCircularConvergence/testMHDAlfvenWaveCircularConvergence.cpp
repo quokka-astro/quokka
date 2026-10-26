@@ -74,8 +74,8 @@ AMREX_GPU_DEVICE auto computeMagneticVectorPotential_y(double x1, double /*x2*/,
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double /*x1*/, double x2, double /*x3*/, double /*time*/) -> double { return bg_mag_amplitude * x2; }
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
-					  double time)
+                                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
+                                          double time)
 {
 	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
 	const amrex::Real x2_L = prob_lo[1] + j * dx[1];
@@ -113,23 +113,23 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 		state(i, j, k, HydroSystem<MHDAlfvenWaveCircular>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
 		const double x1mag = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) -
-				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) /
-					 dx[1] -
-				     (computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) -
-				      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) /
-					 dx[2];
+		                      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) /
+		                         dx[1] -
+		                     (computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) -
+		                      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) /
+		                         dx[2];
 		const double x2mag = (computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L + dx[2], time) -
-				      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) /
-					 dx[2] -
-				     (computeMagneticVectorPotential_z(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) -
-				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) /
-					 dx[0];
+		                      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) /
+		                         dx[2] -
+		                     (computeMagneticVectorPotential_z(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) -
+		                      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) /
+		                         dx[0];
 		const double x3mag = (computeMagneticVectorPotential_y(x1_L + dx[0], x2_L + dx[1] / 2.0, x3_L, time) -
-				      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) /
-					 dx[0] -
-				     (computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) -
-				      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) /
-					 dx[1];
+		                      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) /
+		                         dx[0] -
+		                     (computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) -
+		                      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) /
+		                         dx[1];
 		if (dir == quokka::direction::x) {
 			state(i, j, k, MHDSystem<MHDAlfvenWaveCircular>::bfield_index) = x1mag;
 		} else if (dir == quokka::direction::y) {
@@ -182,7 +182,7 @@ template <> void QuokkaSimulation<MHDAlfvenWaveCircular>::setInitialConditionsOn
 
 template <>
 void QuokkaSimulation<MHDAlfvenWaveCircular>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+                                                                       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const amrex::Real time = tNew_[0];
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -201,8 +201,8 @@ void QuokkaSimulation<MHDAlfvenWaveCircular>::computeReferenceSolution(amrex::Mu
 
 template <>
 void QuokkaSimulation<MHDAlfvenWaveCircular>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-									  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-									  quokka::direction const dir)
+                                                                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+                                                                          quokka::direction const dir)
 {
 	const amrex::Real time = tNew_[0];
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -295,8 +295,8 @@ auto problem_main() -> int
 		double unused_num_periods = 0.0;
 		if (run_convergence && !run_sim && (pp.query("num_periods", unused_num_periods) != 0)) {
 			amrex::Abort("setup.num_periods has no effect when setup.run_convergence=true and setup.run_sim=false; the "
-				     "convergence sweep always uses a fixed one-period run length. Remove setup.num_periods or set "
-				     "setup.run_sim=true.");
+			             "convergence sweep always uses a fixed one-period run length. Remove setup.num_periods or set "
+			             "setup.run_sim=true.");
 		}
 	}
 
@@ -308,7 +308,7 @@ auto problem_main() -> int
 		mhd_pp.query("resistivity", eta);
 		if (eta != 0.0) {
 			amrex::Abort("MHDAlfvenWaveCircularConvergence does not support mhd.resistivity != 0; use MHDAlfvenWaveLinearConvergence "
-				     "for resistivity validation.");
+			             "for resistivity validation.");
 		}
 	}
 
@@ -339,7 +339,7 @@ auto problem_main() -> int
 			double unused_stop_time = 0.0;
 			if (amrex::ParmParse const pp_root; pp_root.query("stop_time", unused_stop_time) != 0) {
 				amrex::Abort("stop_time is set explicitly, which will override setup.num_periods (see "
-					     "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
+				             "AMRSimulation::rereadRuntimeParameters()). Remove stop_time and use setup.num_periods instead.");
 			}
 		}
 		sim.stopTime_ = num_periods * computeWavePeriod();

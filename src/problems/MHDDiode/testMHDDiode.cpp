@@ -125,8 +125,8 @@ template <> void QuokkaSimulation<MHDDiode>::setInitialConditionsOnGridFaceVars(
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<MHDDiode>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-						     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-						     int /*orig_comp*/)
+                                                     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+                                                     int /*orig_comp*/)
 {
 	setDiodeBCLo<0>(iv, consVar, geom);
 	setDiodeBCHi<0>(iv, consVar, geom);
@@ -136,11 +136,11 @@ template <> auto AMRSimulation<MHDDiode>::isMHDDiodeBoundary(int dir, int /*side
 
 namespace
 {
-amrex::Real initial_mass = NAN;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-amrex::Real previous_mass = NAN;				      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-amrex::Real max_mass_err = 0.;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-amrex::Real max_mass_gain = 0.;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-amrex::Real max_divB = 0.;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real initial_mass = NAN;                                       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real previous_mass = NAN;                                      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real max_mass_err = 0.;                                        // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real max_mass_gain = 0.;                                       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real max_divB = 0.;                                            // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 amrex::Real min_inflow_mom = std::numeric_limits<amrex::Real>::max(); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 
@@ -158,15 +158,15 @@ template <> void QuokkaSimulation<MHDDiode>::computeAfterTimestep()
 	auto const domain = geom[0].Domain();
 	auto const &st = state_new_cc_[0].const_arrays();
 	amrex::Real min_mom = amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::Real>{}, state_new_cc_[0], amrex::IntVect(0),
-					       [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
-						       if (i == domain.smallEnd(0)) {
-							       return {st[box](i, j, k, HydroSystem<MHDDiode>::x1Momentum_index)};
-						       }
-						       if (i == domain.bigEnd(0)) {
-							       return {-st[box](i, j, k, HydroSystem<MHDDiode>::x1Momentum_index)};
-						       }
-						       return {std::numeric_limits<amrex::Real>::max()};
-					       });
+	                                       [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
+		                                       if (i == domain.smallEnd(0)) {
+			                                       return {st[box](i, j, k, HydroSystem<MHDDiode>::x1Momentum_index)};
+		                                       }
+		                                       if (i == domain.bigEnd(0)) {
+			                                       return {-st[box](i, j, k, HydroSystem<MHDDiode>::x1Momentum_index)};
+		                                       }
+		                                       return {std::numeric_limits<amrex::Real>::max()};
+	                                       });
 	amrex::ParallelDescriptor::ReduceRealMin(min_mom);
 	min_inflow_mom = std::min(min_inflow_mom, min_mom);
 	previous_mass = mass;
@@ -182,7 +182,7 @@ template <> void QuokkaSimulation<MHDDiode>::computeAfterTimestep()
 	fillBoundaryConditions(cc, cc, 0, tNew_[0], quokka::centering::cc, quokka::direction::na, InterpHookNone, InterpHookNone);
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		fillBoundaryConditions(fc[idim], fc[idim], 0, tNew_[0], quokka::centering::fc, static_cast<quokka::direction>(idim), InterpHookNone,
-				       InterpHookNone, FillPatchType::fillpatch_function);
+		                       InterpHookNone, FillPatchType::fillpatch_function);
 	}
 	applyMHDDiodeBC(cc, fc, 0);
 
@@ -191,12 +191,12 @@ template <> void QuokkaSimulation<MHDDiode>::computeAfterTimestep()
 	auto const &by = fc[1].const_arrays();
 	auto const &bz = fc[2].const_arrays();
 	amrex::Real divB = amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{}, cc, cc.nGrowVect(),
-					    [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
-						    amrex::Real const div = (bx[box](i + 1, j, k, bIdx) - bx[box](i, j, k, bIdx)) / dx[0] +
-									    (by[box](i, j + 1, k, bIdx) - by[box](i, j, k, bIdx)) / dx[1] +
-									    (bz[box](i, j, k + 1, bIdx) - bz[box](i, j, k, bIdx)) / dx[2];
-						    return {std::abs(div)};
-					    });
+	                                    [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
+		                                    amrex::Real const div = (bx[box](i + 1, j, k, bIdx) - bx[box](i, j, k, bIdx)) / dx[0] +
+						                            (by[box](i, j + 1, k, bIdx) - by[box](i, j, k, bIdx)) / dx[1] +
+						                            (bz[box](i, j, k + 1, bIdx) - bz[box](i, j, k, bIdx)) / dx[2];
+		                                    return {std::abs(div)};
+	                                    });
 	amrex::ParallelDescriptor::ReduceRealMax(divB);
 	// normalise by |B| / dx
 	max_divB = std::max(max_divB, divB * dx[0] / std::sqrt(Bx0 * Bx0 + By0 * By0));
@@ -225,7 +225,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	amrex::Print() << "\nMHDDiode (" << flow << "): max |dM|/M = " << max_mass_err << ", max mass gain per step = " << max_mass_gain
-		       << ", max dx |div B| / |B| (valid + ghost) = " << max_divB << "\n";
+	               << ", max dx |div B| / |B| (valid + ghost) = " << max_divB << "\n";
 
 	constexpr double divB_tol = 1.0e-12;
 	constexpr double mass_tol = 1.0e-12;

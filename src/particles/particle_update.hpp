@@ -55,7 +55,7 @@ template <ParticleType particleType> struct ParticlePropertyUpdateBase {
 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 					auto &p = pData[idx]; // NOLINT
 					ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t, typename ContainerType::ParticleType,
-													      nGroups>(p, current_time, dt);
+					                                                                      nGroups>(p, current_time, dt);
 				});
 			}
 		}
@@ -82,7 +82,7 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits : Parti
 
 	template <typename problem_t, typename ContainerType>
 	static void updateChemicalFeedback(ContainerType * /*container*/, amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*current_time*/,
-					   amrex::Real /*dt*/) noexcept
+	                                   amrex::Real /*dt*/) noexcept
 	{
 		// Default implementation does nothing
 	}
@@ -186,8 +186,8 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 					amrex::Real y_wr = 0.0;
 					if (enable_WR_metal_d) {
 						const bool wr_stage = ((stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) ||
-								       (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding))) &&
-								      (mass_birth_msun >= 9.0);
+						                       (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding))) &&
+						                      (mass_birth_msun >= 9.0);
 						const amrex::Real wr_lifetime =
 						    p.rdata(StochasticStellarPopParticleDeathTimeIdx) - p.rdata(StochasticStellarPopParticleBirthTimeIdx);
 						const bool wr_active = (age < wr_lifetime) && (wr_lifetime > 0.0);
@@ -239,8 +239,8 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 									// WR metals are injected with the stellar-wind kernel, matching the continuous WR
 									// feedback channel.
 									amrex::Gpu::Atomic::AddNoRet(&local_state(interp.index[0] + ii, interp.index[1] + jj,
-														  interp.index[2] + kk, total_comp),
-												     total_val);
+									                                          interp.index[2] + kk, total_comp),
+									                             total_val);
 
 									if (store_channel_fields_d && enable_WR_metal_d && y_wr > 0.0) {
 										const int wr_comp =
@@ -248,7 +248,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 										if (wr_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
 											amrex::Gpu::Atomic::AddNoRet(
 											    &local_state(interp.index[0] + ii, interp.index[1] + jj,
-													 interp.index[2] + kk, wr_comp),
+											                 interp.index[2] + kk, wr_comp),
 											    wt * y_wr * vol_inverse);
 										}
 									}

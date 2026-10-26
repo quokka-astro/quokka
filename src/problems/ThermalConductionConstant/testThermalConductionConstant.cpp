@@ -25,9 +25,9 @@ same Gaussian profile with a diffusion width that grows with time.
 Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does
 not have time to move and the energy evolution is purely due to conduction. */
 
-constexpr double Eint0 = 2.505e-8;	     // Gaussian peak (equivalent to T = 2.e8 K)
-constexpr double Efloor = 2.505e-11;	     // equivalent to T = 2.e6 K
-const double rho0 = 0.1;		     // 1/cm^3
+constexpr double Eint0 = 2.505e-8;           // Gaussian peak (equivalent to T = 2.e8 K)
+constexpr double Efloor = 2.505e-11;         // equivalent to T = 2.e6 K
+const double rho0 = 0.1;                     // 1/cm^3
 constexpr double sigma = 2.410685615625e+17; // width of the initial Gaussian, in cm (amr2-branch value)
 constexpr double D = 4.396303164750053e+28;  // fixed diffusion coefficient for the Gaussian solution, in cm^2/s (amr2-branch value)
 struct ThermalConductionConstantProblem {};
@@ -54,7 +54,7 @@ template <> void QuokkaSimulation<ThermalConductionConstantProblem>::setInitialC
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const amrex::Real rho = rho0 * C::m_p;	    // g/cm^3
+	const amrex::Real rho = rho0 * C::m_p;      // g/cm^3
 	const amrex::Real sigma2_t = sigma * sigma; // t = 0
 
 	// loop over the grid and set the initial condition
@@ -77,7 +77,7 @@ template <> void QuokkaSimulation<ThermalConductionConstantProblem>::setInitialC
 
 template <>
 void QuokkaSimulation<ThermalConductionConstantProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-										  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+                                                                                  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const amrex::Real t = tNew_[0];
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3

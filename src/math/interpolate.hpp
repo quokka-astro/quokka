@@ -14,7 +14,7 @@ constexpr int LIKELY_IN_CACHE_SIZE = 8;
 // Boundary policies for interpolation
 enum class BoundaryPolicy {
 	ErrorOnBounds, // Return NAN and assert on out-of-bounds (default behavior)
-	Clamp,	       // Return first/last element on out-of-bounds
+	Clamp,         // Return first/last element on out-of-bounds
 	Extrapolation  // Linear extrapolation beyond bounds
 };
 
@@ -112,7 +112,7 @@ AMREX_GPU_HOST_DEVICE inline auto binary_search_with_guess(const double key, con
 AMREX_GPU_HOST_DEVICE inline void interpolate_arrays(double *x, double *y, int len, double *arr_x, const double *arr_y, int arr_len)
 {
 	/* Note: arr_x must be sorted in ascending order,
-		and arr_len must be >= 3. */
+	        and arr_len must be >= 3. */
 
 	// check if x is within the range of arr_x
 	AMREX_ASSERT(x[0] >= arr_x[0] && x[len - 1] <= arr_x[arr_len - 1]);
@@ -139,7 +139,7 @@ template <BoundaryPolicy Policy = BoundaryPolicy::ErrorOnBounds>
 AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len) -> double
 {
 	/* Note: arr_x must be sorted in ascending order,
-		and arr_len must be >= 3. */
+	        and arr_len must be >= 3. */
 
 	AMREX_ASSERT(!std::isnan(x));
 

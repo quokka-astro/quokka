@@ -15,7 +15,7 @@
 #include "AMReX_TableData.H"
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate2d(double x, double y, amrex::Table1D<const double> const &xv, amrex::Table1D<const double> const &yv,
-							    amrex::Table2D<const double> const &table) -> double
+                                                            amrex::Table2D<const double> const &table) -> double
 {
 	// return the bilinearly-interpolated value in table
 	// NOTE: table must be uniformly spaced in xv and yv

@@ -33,7 +33,7 @@ constexpr double seconds_in_year = 3.154e7;
 
 using amrex::Real;
 
-constexpr double Tgas0 = 6000.;			  // K
+constexpr double Tgas0 = 6000.;                   // K
 constexpr double rho0 = 0.01 * (C::m_p + C::m_e); // g cm^-3
 
 template <> struct quokka::EOS_Traits<ODETest> {
@@ -257,7 +257,7 @@ auto TestRootFinding() -> int
 		const int iter_limit = tc.smooth ? max_iter_smooth : max_iter_budget - 1;
 		const bool ok = (err_h <= reltol) && (err_d <= reltol) && (host[n].iter <= iter_limit) && (dev[n].iter <= iter_limit);
 		std::cout << std::format("{:<24}{:<9}{:>6}{:>6}{:>12.2e}{:>12.2e}{}\n", tc.name, solver_names[n % nsolver], host[n].iter, dev[n].iter, err_h,
-					 err_d, ok ? "" : "  FAIL");
+		                         err_d, ok ? "" : "  FAIL");
 		if (!ok) {
 			status = 1;
 		}

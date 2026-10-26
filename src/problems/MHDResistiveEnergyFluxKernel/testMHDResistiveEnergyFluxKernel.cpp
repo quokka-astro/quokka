@@ -113,7 +113,7 @@ auto problem_main() -> int
 		const double computed = fc_a4_flux(pt.i, pt.j, pt.k, energy_idx);
 		const double rel_err = std::abs(computed - pt.flux_eta) / std::abs(pt.flux_eta);
 		amrex::Print() << "(i,j,k)=(" << pt.i << "," << pt.j << "," << pt.k << "): computed=" << computed << " expected=" << pt.flux_eta
-			       << " rel_err=" << rel_err << "\n";
+		               << " rel_err=" << rel_err << "\n";
 		if (!(rel_err < reltol)) {
 			all_ok = false;
 		}

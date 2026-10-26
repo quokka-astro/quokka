@@ -23,9 +23,9 @@ namespace detail
 {
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<Real, HydroSystem<problem_t>::nvar_> const &Q,
-							       quokka::valarray<Real, HydroSystem<problem_t>::nvar_> const &dQ_dx_data, const Real T_t,
-							       const Real u_t, const Real v_t, const Real w_t,
-							       amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t, const Real L_x)
+                                                               quokka::valarray<Real, HydroSystem<problem_t>::nvar_> const &dQ_dx_data, const Real T_t,
+                                                               const Real u_t, const Real v_t, const Real w_t,
+                                                               amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t, const Real L_x)
     -> quokka::valarray<Real, HydroSystem<problem_t>::nvar_>
 {
 	// return dQ/dx corresponding to subsonic inflow on the x1 lower boundary
@@ -74,11 +74,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	quokka::valarray<Real, HydroSystem<problem_t>::nvar_> dQ_dx{};
 	if (u != 0.) {
 		dQ_dx[0] = 0.5 *
-			   (L_x * u * (c + u) * (-c * du_dx * rho + dP_dx) - 2 * R * c * eta_2 * rho * (c + u) * (T - T_t) -
-			    std::pow(c, 2) * eta_5 * rho * u * (std::pow(M, 2) - 1) * (u - u_t)) /
-			   (L_x * std::pow(c, 2) * u * (c + u));
+		           (L_x * u * (c + u) * (-c * du_dx * rho + dP_dx) - 2 * R * c * eta_2 * rho * (c + u) * (T - T_t) -
+		            std::pow(c, 2) * eta_5 * rho * u * (std::pow(M, 2) - 1) * (u - u_t)) /
+		           (L_x * std::pow(c, 2) * u * (c + u));
 		dQ_dx[1] = 0.5 * (L_x * (c + u) * (c * du_dx * rho - dP_dx) - std::pow(c, 2) * eta_5 * rho * (std::pow(M, 2) - 1) * (u - u_t)) /
-			   (L_x * c * rho * (c + u));
+		           (L_x * c * rho * (c + u));
 		dQ_dx[2] = c * eta_3 * (v - v_t) / (L_x * u);
 		dQ_dx[3] = c * eta_4 * (w - w_t) / (L_x * u);
 		dQ_dx[4] =
@@ -105,8 +105,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1Lower(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom,
-							  const amrex::Real T_t, const amrex::Real u_t, const amrex::Real v_t, const amrex::Real w_t,
-							  amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t)
+                                                          const amrex::Real T_t, const amrex::Real u_t, const amrex::Real v_t, const amrex::Real w_t,
+                                                          amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t)
 {
 	// x1 upper boundary -- subsonic outflow
 	auto [i, j, k] = iv.dim3();
@@ -166,9 +166,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1Lower(const amrex::IntVect &
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1LowerLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-								  amrex::GeometryData const &geom, const amrex::Real T_t, const amrex::Real u_t,
-								  const amrex::Real v_t, const amrex::Real w_t,
-								  amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t)
+                                                                  amrex::GeometryData const &geom, const amrex::Real T_t, const amrex::Real u_t,
+                                                                  const amrex::Real v_t, const amrex::Real w_t,
+                                                                  amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t)
 {
 	// x1 upper boundary -- subsonic outflow
 	auto [i, j, k] = iv.dim3();
@@ -198,7 +198,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1LowerLowOrder(const amrex::I
 	Q_im1[2] = v_t;
 	Q_im1[3] = w_t;
 	Q_im1[4] = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars); // prescribe temperature
-	Q_im1[5] = Eint;							      // prescribe temperature
+	Q_im1[5] = Eint;                                                              // prescribe temperature
 	for (int i = 0; i < HydroSystem<problem_t>::nscalars_; ++i) {
 		Q_im1[6 + i] = s_t[i]; // prescribe passive scalars
 	}

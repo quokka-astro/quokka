@@ -94,7 +94,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingDragReference>::ComputeRecipro
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, g_dust_grain_radius,
-						 g_dust_grain_density, enable_supersonic_correction);
+	                                         g_dust_grain_density, enable_supersonic_correction);
 }
 
 template <>
@@ -102,7 +102,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroCharge>::ComputeRecipro
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, g_dust_grain_radius,
-						 g_dust_grain_density, enable_supersonic_correction);
+	                                         g_dust_grain_density, enable_supersonic_correction);
 }
 
 template <>
@@ -271,7 +271,7 @@ auto run_mhd_zero_charge_simulation() -> SimulationData<DustDampingMHDZeroCharge
 }
 
 auto compute_relative_error(const std::vector<double> &t_test, const std::vector<double> &v_test, const std::vector<double> &t_ref,
-			    const std::vector<double> &v_ref) -> double
+                            const std::vector<double> &v_ref) -> double
 {
 	if (t_ref.empty() || t_test.empty()) {
 		return 1.0;
@@ -332,7 +332,7 @@ auto problem_main() -> int
 
 	double const max_transverse_velocity =
 	    std::max({max_abs_component(mhd_data.v_gas_y_vec_), max_abs_component(mhd_data.v_gas_z_vec_), max_abs_component(mhd_data.v_dust1_y_vec_),
-		      max_abs_component(mhd_data.v_dust1_z_vec_), max_abs_component(mhd_data.v_dust2_y_vec_), max_abs_component(mhd_data.v_dust2_z_vec_)});
+	              max_abs_component(mhd_data.v_dust1_z_vec_), max_abs_component(mhd_data.v_dust2_y_vec_), max_abs_component(mhd_data.v_dust2_z_vec_)});
 
 	amrex::Print() << "\nMHD zero-charge dust damping comparison:\n";
 	amrex::Print() << "  B = (" << B_X << ", " << B_Y << ", " << B_Z << ")\n";
@@ -347,7 +347,7 @@ auto problem_main() -> int
 		const double rel_err_tol = 0.01;
 		const double transverse_velocity_tol = 1.0e-12;
 		bool const passed = (rel_err_gas_vx <= rel_err_tol) && (rel_err_dust1_vx <= rel_err_tol) && (rel_err_dust2_vx <= rel_err_tol) &&
-				    (rel_err_gas_E <= rel_err_tol) && (max_transverse_velocity <= transverse_velocity_tol);
+		                    (rel_err_gas_E <= rel_err_tol) && (max_transverse_velocity <= transverse_velocity_tol);
 
 		if (!passed) {
 			status = 1;
@@ -360,9 +360,9 @@ auto problem_main() -> int
 		// gas x-velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_x_vec_,
-				    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		                    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.v_gas_x_vec_,
-				    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		                    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{g,x}$)");
@@ -373,9 +373,9 @@ auto problem_main() -> int
 		// dust1 x-velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_x_vec_,
-				    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		                    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.v_dust1_x_vec_,
-				    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		                    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d1,x}$)");
@@ -386,9 +386,9 @@ auto problem_main() -> int
 		// dust2 x-velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_x_vec_,
-				    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		                    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.v_dust2_x_vec_,
-				    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		                    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d2,x}$)");
@@ -399,9 +399,9 @@ auto problem_main() -> int
 		// gas energy
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
-				    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		                    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.E_gas_vec_,
-				    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		                    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($E_g$)");

@@ -25,8 +25,8 @@ struct StreamingProblem {};
 
 constexpr double initial_Erad = 1.0e-5;
 constexpr double initial_Egas = 1.0e-5;
-constexpr double c = 1.0;	   // speed of light
-constexpr double chat = 0.2;	   // reduced speed of light
+constexpr double c = 1.0;          // speed of light
+constexpr double chat = 0.2;       // reduced speed of light
 constexpr double kappa0 = 1.0e-10; // opacity
 constexpr double rho = 1.0;
 
@@ -77,9 +77,9 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxM
 
 template <>
 void RadSystem<StreamingProblem>::AddRadSource(array_t &radEnergySource, array_t &reducedFluxSource, amrex::Box const &indexRange,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
+                                               amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+                                               amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+                                               amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
 {
 	if (use_flux_source == 0) {
 		return; // the default variant injects the beam through the left boundary instead
@@ -130,8 +130,8 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+                                                             int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+                                                             const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<StreamingProblem>::nvarTotal_cc;

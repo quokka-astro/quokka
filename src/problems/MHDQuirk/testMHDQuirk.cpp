@@ -223,8 +223,8 @@ template <> void QuokkaSimulation<MHDQuirk>::computeAfterEvolve(amrex::Vector<am
 			amrex::Abort("Carbuncle detected!");
 		} else {
 			amrex::Print() << "The scheme looks stable against the Carbuncle phenomenon : "
-					  "late-time max delta s = "
-				       << max_delta_s << "\n\n";
+			                  "late-time max delta s = "
+			               << max_delta_s << "\n\n";
 		}
 	}
 }
@@ -232,8 +232,8 @@ template <> void QuokkaSimulation<MHDQuirk>::computeAfterEvolve(amrex::Vector<am
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<MHDQuirk>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-						     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-						     int /*orig_comp*/)
+                                                     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+                                                     int /*orig_comp*/)
 {
 	// Number of variables
 	constexpr int nvar = Physics_Indices<MHDQuirk>::nvarTotal_cc;
@@ -266,8 +266,8 @@ auto problem_main() -> int
 {
 	// Boundary conditions: ext_dir in x, periodic in y and z
 	auto BCs_cc = quokka::BC<MHDQuirk>(quokka::BCType::ext_dir,  // x: outflow
-					   quokka::BCType::int_dir,  // y: periodic
-					   quokka::BCType::int_dir); // z: periodic
+	                                   quokka::BCType::int_dir,  // y: periodic
+	                                   quokka::BCType::int_dir); // z: periodic
 
 	const int nvars_fc = Physics_Indices<MHDQuirk>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);

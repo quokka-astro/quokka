@@ -96,7 +96,7 @@ RadSystem<DustProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<dou
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationMultiGroup(amrex::Real temperature,
-										     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
+                                                                                     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
 	quokka::valarray<amrex::Real, nGroups_> Erad_g{};
@@ -108,7 +108,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationMultiG
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real /*temperature*/,
-												   amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
+                                                                                                   amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
 	quokka::valarray<amrex::Real, nGroups_> d_power_dt{};
@@ -257,9 +257,9 @@ auto problem_main() -> int
 	Texact_args["color"] = "k";
 	// plot exact solution; skip the first point because it has t = 0
 	matplotlibcpp::plot(std::vector<double>(ts_exact.begin() + 1, ts_exact.end()), std::vector<double>(Tgas_exact.begin() + 1, Tgas_exact.end()),
-			    Texact_args);
+	                    Texact_args);
 	matplotlibcpp::plot(std::vector<double>(ts_exact.begin() + 1, ts_exact.end()), std::vector<double>(Trad_exact.begin() + 1, Trad_exact.end()),
-			    Tradexact_args);
+	                    Tradexact_args);
 	matplotlibcpp::plot(t, Tgas, Tgas_args);
 	matplotlibcpp::plot(t, Trad, Trad_args);
 	matplotlibcpp::xlabel("t (dimensionless)");

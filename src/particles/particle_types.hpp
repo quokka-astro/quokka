@@ -27,14 +27,14 @@ template <unsigned int position> constexpr auto bitflag() -> unsigned int { retu
 // To check if CIC particles are enabled:
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
 enum class ParticleSwitch : unsigned int {
-	None = 0U,			     // No particles, = 0b0000
-	CIC = bitflag<1>(),		     // Cloud-In-Cell (gravitating) particles, = 0b0001
-	Rad = bitflag<2>(),		     // Radiation particles, = 0b0010
-	CICRad = bitflag<3>(),		     // Combined gravitating-radiating particles, = 0b0100
+	None = 0U,                           // No particles, = 0b0000
+	CIC = bitflag<1>(),                  // Cloud-In-Cell (gravitating) particles, = 0b0001
+	Rad = bitflag<2>(),                  // Radiation particles, = 0b0010
+	CICRad = bitflag<3>(),               // Combined gravitating-radiating particles, = 0b0100
 	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
-	Sink = bitflag<5>(),		     // Sink particles, = 0b10000
-	Test = bitflag<6>(),		     // Test particles with all features enabled, = 0b100000
-	Star = bitflag<7>()		     // Star particles, = 0b1000000
+	Sink = bitflag<5>(),                 // Sink particles, = 0b10000
+	Test = bitflag<6>(),                 // Test particles with all features enabled, = 0b100000
+	Star = bitflag<7>()                  // Star particles, = 0b1000000
 };
 
 // Enable bitwise operations on the enum class
@@ -64,7 +64,7 @@ constexpr auto operator&(ParticleSwitch flags, ParticleSwitch flag) -> bool
 struct DefaultParticleTraits {
 	static constexpr bool enable_chemical_feedback = false;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None; // Determines which particle types are enabled using bitwise flags.
-	using stellar_model = quokka::ToyStellarModel;				// Default stellar-evolution model
+	using stellar_model = quokka::ToyStellarModel;                          // Default stellar-evolution model
 };
 
 // This struct should be specialized by the user application code to configure particle behavior.
@@ -78,8 +78,8 @@ template <typename problem_t> constexpr void verify_particle_switch_type()
 {
 	// This will fail to compile if particle_switch is not of type ParticleSwitch
 	static_assert(std::is_same_v<decltype(Particle_Traits<problem_t>::particle_switch), const ParticleSwitch>,
-		      "ERROR: Particle_Traits::particle_switch must be of type ParticleSwitch. "
-		      "Use any of the members of ParticleSwitch enum class, or combinations with '|'");
+	              "ERROR: Particle_Traits::particle_switch must be of type ParticleSwitch. "
+	              "Use any of the members of ParticleSwitch enum class, or combinations with '|'");
 }
 } // namespace detail
 
@@ -95,13 +95,13 @@ inline auto chemicalTrackedChannelList() -> const std::vector<std::string> & { r
 
 // Enum class to identify different particle types
 enum class ParticleType {
-	Rad,		      // Radiation particles
-	CIC,		      // Gravitating particles
-	CICRad,		      // Gravitating radiation particles
+	Rad,                  // Radiation particles
+	CIC,                  // Gravitating particles
+	CICRad,               // Gravitating radiation particles
 	StochasticStellarPop, // Stellar population particles
-	Sink,		      // Sink particles
-	Test,		      // Test particles with all features enabled
-	Star		      // Star particles
+	Sink,                 // Sink particles
+	Test,                 // Test particles with all features enabled
+	Star                  // Star particles
 };
 
 // Compile-time particle metadata.
@@ -119,20 +119,20 @@ template <> struct ParticleTypeTraits<ParticleType::CICRad> {
 };
 
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
-AMREX_ENUM(SNScheme,				   // NOLINT
-	   SN_thermal_only,			   // pure thermal
-	   SN_thermal_or_thermal_momentum,	   // pure thermal (RM<1) or thermal+momentum (RM>=1)
-	   SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
-	   SN_pure_kinetic_or_thermal_momentum	   // pure kinetic (RM<1) or thermal+momentum (RM>=1)
+AMREX_ENUM(SNScheme,                               // NOLINT
+           SN_thermal_only,                        // pure thermal
+           SN_thermal_or_thermal_momentum,         // pure thermal (RM<1) or thermal+momentum (RM>=1)
+           SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
+           SN_pure_kinetic_or_thermal_momentum     // pure kinetic (RM<1) or thermal+momentum (RM>=1)
 );
 
 //-------------------- Radiation particles --------------------
 
 // Indices for radiation particles (Rad_particles) using AMREX_ENUM for automatic string conversion
 AMREX_ENUM(RadParticleRealIdx, // NOLINT
-	   birth_time,	       // Time when particle becomes active
-	   death_time,	       // Time when particle becomes inactive
-	   luminosity	       // Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
+           birth_time,         // Time when particle becomes active
+           death_time,         // Time when particle becomes inactive
+           luminosity          // Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
 );
 
 // Backward compatibility aliases for existing code
@@ -158,10 +158,10 @@ template <typename problem_t> using RadParticleIterator = amrex::ParIter<RadPart
 
 // Indices for gravitating particles (CIC_particles) using AMREX_ENUM for automatic string conversion
 AMREX_ENUM(CICParticleRealIdx, // NOLINT
-	   mass,	       // Mass of the particle
-	   vx,		       // Velocity in x direction
-	   vy,		       // Velocity in y direction
-	   vz		       // Velocity in z direction
+           mass,               // Mass of the particle
+           vx,                 // Velocity in x direction
+           vy,                 // Velocity in y direction
+           vz                  // Velocity in z direction
 );
 
 // Backward compatibility aliases for existing code
@@ -181,13 +181,13 @@ using CICParticleIterator = amrex::ParIter<CICParticleRealComps>;
 
 // Indices for gravitating radiation particles (CICRad_particles) using AMREX_ENUM for automatic string conversion
 AMREX_ENUM(CICRadParticleRealIdx, // NOLINT
-	   mass,		  // Mass of the particle
-	   vx,			  // Velocity in x direction
-	   vy,			  // Velocity in y direction
-	   vz,			  // Velocity in z direction
-	   birth_time,		  // Time when particle becomes active
-	   death_time,		  // Time when particle becomes inactive
-	   luminosity		  // Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
+           mass,                  // Mass of the particle
+           vx,                    // Velocity in x direction
+           vy,                    // Velocity in y direction
+           vz,                    // Velocity in z direction
+           birth_time,            // Time when particle becomes active
+           death_time,            // Time when particle becomes inactive
+           luminosity             // Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
 );
 
 // Backward compatibility aliases for existing code
@@ -227,26 +227,26 @@ enum class StellarEvolutionStage { HighMassNonExploding, SNProgenitor, SNRemnant
 
 // Indices for StochasticStellarPop_particles using AMREX_ENUM for automatic string conversion
 AMREX_ENUM(StochasticStellarPopParticleRealIdx, // NOLINT
-	   mass,				// Mass of the particle
-	   vx,					// Velocity in x direction
-	   vy,					// Velocity in y direction
-	   vz,					// Velocity in z direction
-	   birth_time,				// Time when particle becomes active
-	   death_time,				// Time when particle becomes inactive
-	   birth_x,				// Birth position x
-	   birth_y,				// Birth position y
-	   birth_z,				// Birth position z
-	   death_x,				// Death position x
-	   death_y,				// Death position y
-	   death_z,				// Death position z
-	   death_density,			// Density at death
-	   mass_at_birth,			// Particle mass at birth
-	   luminosity				// Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
+           mass,                                // Mass of the particle
+           vx,                                  // Velocity in x direction
+           vy,                                  // Velocity in y direction
+           vz,                                  // Velocity in z direction
+           birth_time,                          // Time when particle becomes active
+           death_time,                          // Time when particle becomes inactive
+           birth_x,                             // Birth position x
+           birth_y,                             // Birth position y
+           birth_z,                             // Birth position z
+           death_x,                             // Death position x
+           death_y,                             // Death position y
+           death_z,                             // Death position z
+           death_density,                       // Density at death
+           mass_at_birth,                       // Particle mass at birth
+           luminosity                           // Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
 );
 
 // Integer component indices using AMREX_ENUM
 AMREX_ENUM(StochasticStellarPopParticleIntIdx, // NOLINT
-	   evolution_stage		       // Evolution stage of the particle
+           evolution_stage                     // Evolution stage of the particle
 );
 
 // Backward compatibility aliases for existing code
@@ -307,18 +307,18 @@ using StochasticStellarPopParticleIterator = amrex::ParIter<StochasticStellarPop
 // Indices for test particles (Test_particles) using AMREX_ENUM for automatic string conversion
 // The enum values are short names that will appear directly in the Header file
 AMREX_ENUM(TestParticleRealIdx, // NOLINT
-	   mass,		// Mass of the particle
-	   vx,			// Velocity in x direction
-	   vy,			// Velocity in y direction
-	   vz,			// Velocity in z direction
-	   birth_time,		// Time when particle becomes active
-	   death_time,		// Time when particle becomes inactive
-	   luminosity		// Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
+           mass,                // Mass of the particle
+           vx,                  // Velocity in x direction
+           vy,                  // Velocity in y direction
+           vz,                  // Velocity in z direction
+           birth_time,          // Time when particle becomes active
+           death_time,          // Time when particle becomes inactive
+           luminosity           // Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
 );
 
 // Integer component indices using AMREX_ENUM
 AMREX_ENUM(TestParticleIntIdx, // NOLINT
-	   evolution_stage     // Evolution stage of the particle
+           evolution_stage     // Evolution stage of the particle
 );
 
 // Backward compatibility aliases for existing code
@@ -352,14 +352,14 @@ template <typename problem_t> using TestParticleIterator = amrex::ParIter<TestPa
 
 // Indices for Sink_particles using AMREX_ENUM for automatic string conversion
 AMREX_ENUM(SinkParticleRealIdx, // NOLINT
-	   mass,		// Mass of the particle
-	   vx,			// Velocity in x direction
-	   vy,			// Velocity in y direction
-	   vz,			// Velocity in z direction
-	   mdot,		// Current mass accretion rate
-	   Lx,			// Angular momentum in x direction
-	   Ly,			// Angular momentum in y direction
-	   Lz			// Angular momentum in z direction
+           mass,                // Mass of the particle
+           vx,                  // Velocity in x direction
+           vy,                  // Velocity in y direction
+           vz,                  // Velocity in z direction
+           mdot,                // Current mass accretion rate
+           Lx,                  // Angular momentum in x direction
+           Ly,                  // Angular momentum in y direction
+           Lz                   // Angular momentum in z direction
 );
 
 // Backward compatibility aliases for existing code
@@ -489,19 +489,19 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 {
 	amrex::Vector<std::string> names;
 
-	if constexpr (particleType == ParticleType::Rad) {	     // NOLINT
-								     // No integer components
+	if constexpr (particleType == ParticleType::Rad) {           // NOLINT
+	                                                             // No integer components
 	} else if constexpr (particleType == ParticleType::CIC) {    // NOLINT
-								     // No integer components
+	                                                             // No integer components
 	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
-								     // No integer components
+	                                                             // No integer components
 	} else if constexpr (particleType == ParticleType::Star) {   // NOLINT
 		return expandEnumNames<StarParticleIntIdx, StarParticleIntegerComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
 	} else if constexpr (particleType == ParticleType::Sink) { // NOLINT
-								   // No integer components
+	                                                           // No integer components
 	} else if constexpr (particleType == ParticleType::Test) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
@@ -586,13 +586,13 @@ inline auto get_units_data() -> const auto &
 inline bool disable_SN_feedback = false; // NOLINT
 
 // Empirically motivated early feedback for StochasticStellarPop particles.
-inline bool EMEF_enabled = false;				       // NOLINT
-inline amrex::Real EMEF_p0_kmps = 377.0;			       // NOLINT [km/s]
-inline amrex::Real EMEF_tFB_Myr = 3.3;				       // NOLINT [Myr]
-inline amrex::Real EMEF_alpha = 1.0;				       // NOLINT
-inline amrex::Real EMEF_max_velocity_kmps = 3000.0;		       // NOLINT [km/s]
-inline amrex::Real EMEF_p0 = EMEF_p0_kmps * 1.0e5;		       // NOLINT [cm/s]
-inline amrex::Real EMEF_tFB = EMEF_tFB_Myr * quokka::Myr_in_s;	       // NOLINT [s]
+inline bool EMEF_enabled = false;                                      // NOLINT
+inline amrex::Real EMEF_p0_kmps = 377.0;                               // NOLINT [km/s]
+inline amrex::Real EMEF_tFB_Myr = 3.3;                                 // NOLINT [Myr]
+inline amrex::Real EMEF_alpha = 1.0;                                   // NOLINT
+inline amrex::Real EMEF_max_velocity_kmps = 3000.0;                    // NOLINT [km/s]
+inline amrex::Real EMEF_p0 = EMEF_p0_kmps * 1.0e5;                     // NOLINT [cm/s]
+inline amrex::Real EMEF_tFB = EMEF_tFB_Myr * quokka::Myr_in_s;         // NOLINT [s]
 inline amrex::Real EMEF_max_velocity = EMEF_max_velocity_kmps * 1.0e5; // NOLINT [cm/s]
 
 // Placeholder parameters for particles. Used in gravity_3d.cpp tests
@@ -600,7 +600,7 @@ inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
 
 inline amrex::Real particle_param3 = -1.0; // NOLINT
-inline amrex::Real eps_ff = 0.01;	   // NOLINT
+inline amrex::Real eps_ff = 0.01;          // NOLINT
 
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
@@ -633,9 +633,9 @@ inline amrex::Real scalar_yield_per_SN = 1.0; // NOLINT
 
 // Chemical feedback controls
 inline bool enable_chemical_feedback = false; // NOLINT
-inline bool enable_SNII_metal = true;	      // NOLINT
-inline bool enable_WR_metal = true;	      // NOLINT
-inline bool enable_AGB_metal = true;	      // NOLINT
+inline bool enable_SNII_metal = true;         // NOLINT
+inline bool enable_WR_metal = true;           // NOLINT
+inline bool enable_AGB_metal = true;          // NOLINT
 inline bool store_channel_fields = true;      // NOLINT
 
 inline int chemical_scalar_offset = 0; // NOLINT
@@ -650,7 +650,7 @@ inline amrex::Real wr_age_end = 0.;    // NOLINT [s]
 inline amrex::Real agb_age_start = 0.; // NOLINT [s]
 inline amrex::Real agb_age_end = 0.;   // NOLINT [s]
 
-inline bool use_table_driven_chemical_yield = true;	 // NOLINT
+inline bool use_table_driven_chemical_yield = true;      // NOLINT
 inline std::string chemical_yield_table_file = "yields"; // NOLINT
 inline amrex::Real stellar_metallicity_fraction = 0.014; // NOLINT
 
@@ -682,9 +682,9 @@ template <typename problem_t> inline void particleParmParse()
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMEF_p0_kmps) && EMEF_p0_kmps >= 0.0, "particles.EMEF_p0_kmps must be finite and non-negative.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMEF_tFB_Myr) && EMEF_tFB_Myr > 0.0, "particles.EMEF_tFB_Myr must be finite and positive.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMEF_alpha) && EMEF_alpha >= 0.5 && EMEF_alpha <= 1.0,
-					 "particles.EMEF_alpha must be finite and lie in [0.5, 1.0].");
+	                                 "particles.EMEF_alpha must be finite and lie in [0.5, 1.0].");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(EMEF_max_velocity_kmps) && EMEF_max_velocity_kmps > 0.0,
-					 "particles.EMEF_max_velocity_kmps must be finite and positive.");
+	                                 "particles.EMEF_max_velocity_kmps must be finite and positive.");
 	EMEF_p0 = EMEF_p0_kmps * 1.0e5;
 	EMEF_tFB = EMEF_tFB_Myr * quokka::Myr_in_s;
 	EMEF_max_velocity = EMEF_max_velocity_kmps * 1.0e5;
@@ -721,7 +721,7 @@ template <typename problem_t> inline void particleParmParse()
 
 	pp.query("enable_chemical_feedback", enable_chemical_feedback);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!enable_chemical_feedback || Particle_Traits<problem_t>::enable_chemical_feedback,
-					 "Chemical feedback requires Particle_Traits<problem_t>::enable_chemical_feedback = true at compile time.");
+	                                 "Chemical feedback requires Particle_Traits<problem_t>::enable_chemical_feedback = true at compile time.");
 	pp.query("enable_SNII_metal", enable_SNII_metal);
 	pp.query("enable_WR_metal", enable_WR_metal);
 	pp.query("enable_AGB_metal", enable_AGB_metal);
@@ -752,7 +752,7 @@ template <typename problem_t> inline void particleParmParse()
 		const bool loaded = ChemicalYieldLookup::loadTable(chemical_yield_table_file, chemical_tracked_isotope_list, chemical_tracked_channel_list);
 		if (!loaded) {
 			amrex::Print() << "WARNING: failed to load chemical yield table '" << chemical_yield_table_file
-				       << "'. Falling back to parameterized yields.\n";
+			               << "'. Falling back to parameterized yields.\n";
 		}
 	}
 

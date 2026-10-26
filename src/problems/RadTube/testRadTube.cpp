@@ -32,12 +32,12 @@
 
 struct TubeProblem {};
 
-constexpr double kappa0 = 100.;	     // cm^2 g^-1
+constexpr double kappa0 = 100.;      // cm^2 g^-1
 constexpr double mu = 2.33 * C::m_u; // g
 constexpr double gamma_gas = 5. / 3.;
 
-constexpr double rho0 = 1.0;		      // g cm^-3
-constexpr double T_lo = 2.75e7;		      // K
+constexpr double rho0 = 1.0;                  // g cm^-3
+constexpr double T_lo = 2.75e7;               // K
 constexpr double rho1 = 2.1940476649492044;   // g cm^-3
 constexpr double T_hi = 2.2609633884436745e7; // K
 constexpr double a_rad = C::a_rad;
@@ -73,7 +73,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<TubeProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-							     const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+                                                             const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -110,7 +110,7 @@ template <> void QuokkaSimulation<TubeProblem>::preCalculateInitialConditions()
 		for (double value = NAN; iss >> value;) {
 			values.push_back(value);
 		}
-		auto x = values.at(0);	  // position
+		auto x = values.at(0);    // position
 		auto rho = values.at(1);  // density
 		auto Pgas = values.at(2); // gas pressure
 		auto Erad = values.at(3); // radiation energy density
@@ -183,8 +183,8 @@ template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokk
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-							int /*bcomp*/, int /*orig_comp*/)
+                                                        amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
+                                                        int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<TubeProblem>::nvarTotal_cc;
@@ -253,7 +253,7 @@ auto problem_main() -> int
 	QuokkaSimulation<TubeProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.reconstructionOrder_ = 3;	       // PPM
+	sim.reconstructionOrder_ = 3;          // PPM
 	sim.stopTime_ = tmax;
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;
@@ -333,31 +333,31 @@ auto problem_main() -> int
 
 	// define xs_exact, E1_exact, E2_exact
 	std::vector<double> xs_exact = {5.00000000000000e-01, 5.50000000000000e+00, 1.05000000000000e+01, 1.55000000000000e+01, 2.05000000000000e+01,
-					2.55000000000000e+01, 3.05000000000000e+01, 3.55000000000000e+01, 4.05000000000000e+01, 4.55000000000000e+01,
-					5.05000000000000e+01, 5.55000000000000e+01, 6.05000000000000e+01, 6.55000000000000e+01, 7.05000000000000e+01,
-					7.55000000000000e+01, 8.05000000000000e+01, 8.55000000000000e+01, 9.05000000000000e+01, 9.55000000000000e+01,
-					1.00500000000000e+02, 1.05500000000000e+02, 1.10500000000000e+02, 1.15500000000000e+02, 1.20500000000000e+02,
-					1.25500000000000e+02};
+	                                2.55000000000000e+01, 3.05000000000000e+01, 3.55000000000000e+01, 4.05000000000000e+01, 4.55000000000000e+01,
+	                                5.05000000000000e+01, 5.55000000000000e+01, 6.05000000000000e+01, 6.55000000000000e+01, 7.05000000000000e+01,
+	                                7.55000000000000e+01, 8.05000000000000e+01, 8.55000000000000e+01, 9.05000000000000e+01, 9.55000000000000e+01,
+	                                1.00500000000000e+02, 1.05500000000000e+02, 1.10500000000000e+02, 1.15500000000000e+02, 1.20500000000000e+02,
+	                                1.25500000000000e+02};
 	std::vector<double> const E1_exact = {1.97806231974620e+15, 1.96003267738932e+15, 1.94139375399209e+15, 1.92211477326756e+15, 1.90216201239978e+15,
-					      1.88149879792274e+15, 1.86008566953792e+15, 1.83786164032564e+15, 1.81475431543605e+15, 1.79075351115540e+15,
-					      1.76583321387339e+15, 1.73994821924481e+15, 1.71303490596213e+15, 1.68501210246915e+15, 1.65578211109368e+15,
-					      1.62523187429012e+15, 1.59323434543658e+15, 1.55965009717319e+15, 1.52432919817267e+15, 1.48711344303233e+15,
-					      1.44783897852076e+15, 1.40633941779824e+15, 1.36244954047942e+15, 1.31590909579761e+15, 1.26631043035030e+15,
-					      1.21323876205627e+15};
+	                                      1.88149879792274e+15, 1.86008566953792e+15, 1.83786164032564e+15, 1.81475431543605e+15, 1.79075351115540e+15,
+	                                      1.76583321387339e+15, 1.73994821924481e+15, 1.71303490596213e+15, 1.68501210246915e+15, 1.65578211109368e+15,
+	                                      1.62523187429012e+15, 1.59323434543658e+15, 1.55965009717319e+15, 1.52432919817267e+15, 1.48711344303233e+15,
+	                                      1.44783897852076e+15, 1.40633941779824e+15, 1.36244954047942e+15, 1.31590909579761e+15, 1.26631043035030e+15,
+	                                      1.21323876205627e+15};
 	std::vector<double> const E2_exact = {2.34197994225380e+15, 2.29654950261068e+15, 2.25010503500791e+15, 2.20262123173244e+15, 2.15407068960022e+15,
-					      2.10442459607726e+15, 2.05365387846208e+15, 2.00168645967436e+15, 1.94843446056395e+15, 1.89396262984460e+15,
-					      1.83830481312661e+15, 1.78145970875519e+15, 1.72339649303787e+15, 1.66406088653085e+15, 1.60338168190632e+15,
-					      1.54127777970988e+15, 1.47766576756342e+15, 1.41246806782681e+15, 1.34562168082733e+15, 1.27708749196767e+15,
-					      1.20686010247924e+15, 1.13497806420176e+15, 1.06153434252058e+15, 9.86527809202386e+14, 9.09819537649705e+14,
-					      8.31394523943729e+14};
+	                                      2.10442459607726e+15, 2.05365387846208e+15, 2.00168645967436e+15, 1.94843446056395e+15, 1.89396262984460e+15,
+	                                      1.83830481312661e+15, 1.78145970875519e+15, 1.72339649303787e+15, 1.66406088653085e+15, 1.60338168190632e+15,
+	                                      1.54127777970988e+15, 1.47766576756342e+15, 1.41246806782681e+15, 1.34562168082733e+15, 1.27708749196767e+15,
+	                                      1.20686010247924e+15, 1.13497806420176e+15, 1.06153434252058e+15, 9.86527809202386e+14, 9.09819537649705e+14,
+	                                      8.31394523943729e+14};
 
 	// interpolate numerical solution onto exact solution tabulated points
 	std::vector<double> Erad_arr_numerical_interp_at_group_1(xs_exact.size());
 	std::vector<double> Erad_arr_numerical_interp_at_group_2(xs_exact.size());
 	interpolate_arrays(xs_exact.data(), Erad_arr_numerical_interp_at_group_1.data(), static_cast<int>(xs_exact.size()), xs.data(),
-			   Erad_arr_at_group[0].data(), static_cast<int>(xs.size()));
+	                   Erad_arr_at_group[0].data(), static_cast<int>(xs.size()));
 	interpolate_arrays(xs_exact.data(), Erad_arr_numerical_interp_at_group_2.data(), static_cast<int>(xs_exact.size()), xs.data(),
-			   Erad_arr_at_group[1].data(), static_cast<int>(xs.size()));
+	                   Erad_arr_at_group[1].data(), static_cast<int>(xs.size()));
 
 	double err_norm = 0.;
 	double sol_norm = 0.;

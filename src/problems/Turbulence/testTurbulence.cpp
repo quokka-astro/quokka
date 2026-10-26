@@ -105,9 +105,9 @@ template <> void QuokkaSimulation<TurbulentBox>::computeAfterTimestep()
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<TurbulentBox>(quokka::BCType::int_dir,	 // x: periodic
-					       quokka::BCType::int_dir,	 // y: periodic
-					       quokka::BCType::int_dir); // z: periodic
+	auto BCs_cc = quokka::BC<TurbulentBox>(quokka::BCType::int_dir,  // x: periodic
+	                                       quokka::BCType::int_dir,  // y: periodic
+	                                       quokka::BCType::int_dir); // z: periodic
 
 	QuokkaSimulation<TurbulentBox> sim(BCs_cc);
 

@@ -65,7 +65,7 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	static constexpr int beta_order = 1;
 	static constexpr double energy_unit = C::ev2erg;
 	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{1.0e-6, 0.413567, ChemBandsHeader().arr[0],
-													  ChemBandsHeader().arr[1]};
+	                                                                                                  ChemBandsHeader().arr[1]};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
 	static constexpr auto ChemBands() { return ChemBandsHeader(); }
@@ -120,7 +120,7 @@ namespace
 {
 
 auto make_level_mask(amrex::Vector<amrex::MultiFab> const &state_cc, amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio,
-		     int lev, int finest_level) -> amrex::iMultiFab
+                     int lev, int finest_level) -> amrex::iMultiFab
 {
 	if (lev == finest_level) {
 		amrex::iMultiFab mask(state_cc[lev].boxArray(), state_cc[lev].DistributionMap(), 1, 0);
@@ -132,7 +132,7 @@ auto make_level_mask(amrex::Vector<amrex::MultiFab> const &state_cc, amrex::Vect
 
 // Position of the dense shocked shell on the +x side of the source, returned as a distance from the source.
 auto compute_shell_position(amrex::Vector<amrex::MultiFab> const &state_cc, amrex::Vector<amrex::Geometry> const &geom,
-			    amrex::Vector<amrex::IntVect> const &ref_ratio, int finest_level, amrex::Real x_source) -> amrex::Real
+                            amrex::Vector<amrex::IntVect> const &ref_ratio, int finest_level, amrex::Real x_source) -> amrex::Real
 {
 	using ValLoc = amrex::ValLocPair<amrex::Real, amrex::Real>; // .value = density, .index = x position
 
@@ -148,16 +148,16 @@ auto compute_shell_position(amrex::Vector<amrex::MultiFab> const &state_cc, amre
 
 		const ValLoc level_shell =
 		    amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<ValLoc>{}, state_mf, amrex::IntVect(0),
-				     [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> ValLoc {
-					     if (mask_arr[box_no](i, j, k) == 0) {
-						     return ValLoc::lowest();
-					     }
-					     const amrex::Real x = x_lo + (static_cast<amrex::Real>(i) + 0.5_rt) * cell_length;
-					     if (x <= x_source) {
-						     return ValLoc::lowest();
-					     }
-					     return ValLoc{.value = state[box_no](i, j, k, HydroSystem<DTypeFront1D>::density_index), .index = x};
-				     });
+		                     [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> ValLoc {
+			                     if (mask_arr[box_no](i, j, k) == 0) {
+				                     return ValLoc::lowest();
+			                     }
+			                     const amrex::Real x = x_lo + (static_cast<amrex::Real>(i) + 0.5_rt) * cell_length;
+			                     if (x <= x_source) {
+				                     return ValLoc::lowest();
+			                     }
+			                     return ValLoc{.value = state[box_no](i, j, k, HydroSystem<DTypeFront1D>::density_index), .index = x};
+		                     });
 
 		if (level_shell.value > shell.value) {
 			shell = level_shell;
@@ -235,7 +235,7 @@ auto compute_equilibrium_temperature_neutral(double n_HI) -> double
 	double T_lo = 1;
 	double T_hi = 1000;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(net_energy_neutral(T_lo, n_HI) > 0.0 && net_energy_neutral(T_hi, n_HI) < 0.0,
-					 "compute_equilibrium_temperature_neutral: brackets do not straddle a root");
+	                                 "compute_equilibrium_temperature_neutral: brackets do not straddle a root");
 	int const max_iter = 10000;
 	for (int iter = 0; iter < max_iter; ++iter) {
 		const double T_mid = 0.5 * (T_lo + T_hi);
@@ -257,7 +257,7 @@ auto compute_equilibrium_temperature_ionized(double n_e, double eps_ion) -> doub
 	double T_lo = 1000.0;
 	double T_hi = 1.0e5;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(net_energy_ionized(T_lo, n_e, eps_ion) > 0.0 && net_energy_ionized(T_hi, n_e, eps_ion) < 0.0,
-					 "compute_equilibrium_temperature_ionized: brackets do not straddle a root");
+	                                 "compute_equilibrium_temperature_ionized: brackets do not straddle a root");
 	int const max_iter = 10000;
 	for (int iter = 0; iter < max_iter; ++iter) {
 		const double T_mid = 0.5 * (T_lo + T_hi);
@@ -325,7 +325,7 @@ auto dusty_stromgren_column(amrex::Real l_s, amrex::Real kappa_rho_0) -> amrex::
 // Integrated as the first-order system for y = (l, u) with u = l * ldot.
 // The natural start is the end of the R-type phase, l = dusty_stromgren_column moving at c_s.
 auto integrate_front(amrex::Real dt_target, amrex::Real l0, amrex::Real u0, amrex::Real l_s, amrex::Real c_s, amrex::Real Xi, amrex::Real Xi_rec,
-		     amrex::Real kappa_rho_0) -> amrex::GpuArray<amrex::Real, 2>
+                     amrex::Real kappa_rho_0) -> amrex::GpuArray<amrex::Real, 2>
 {
 	if (dt_target <= 0.0_rt) {
 		return {l0, u0};
@@ -372,8 +372,8 @@ auto integrate_front(amrex::Real dt_target, amrex::Real l0, amrex::Real u0, amre
 
 template <>
 void RadSystem<DTypeFront1D>::AddRadSource(array_t &radEnergy, array_t &reducedFlux, const amrex::Box &indexRange,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+                                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("photoionize");
 	amrex::Real flux_optical = 1.0e11_rt;
@@ -459,7 +459,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 
 	userData_.T_ionized = compute_equilibrium_temperature_ionized(userData_.n_HI_init, userData_.eps_ion);
 	amrex::Print() << "Band mean photon energies: IR " << userData_.eps_ir / C::ev2erg << " eV, optical " << userData_.eps_opt / C::ev2erg
-		       << " eV, ionizing " << userData_.eps_ion / C::ev2erg << " eV\n";
+	               << " eV, ionizing " << userData_.eps_ion / C::ev2erg << " eV\n";
 	amrex::Print() << "Photoionization-equilibrium temperature of the ionized gas: " << userData_.T_ionized << " K\n";
 
 	{
@@ -479,7 +479,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<DTypeFront1D>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+                                                              const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	const amrex::GpuArray<double, nGroups_> kappa_g{kappa_ir, kappa_optical, 0.0};
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
@@ -549,10 +549,10 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 	const amrex::Real transverse_area = AMREX_D_TERM(1.0_rt, *(prob_hi[1] - prob_lo[1]), *(prob_hi[2] - prob_lo[2]));
 	const amrex::Real ionized_volume_integral = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
-				 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
+	                         std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
 		    const amrex::Real n_HI = state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
 		    const amrex::Real n_HII =
-			state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+		        state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
 		    const amrex::Real denom = n_HI + n_HII;
 		    if (denom <= 0.0_rt) {
 			    return 0.0_rt;
@@ -565,11 +565,11 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 	const amrex::Real chat_kappa_over_eps = c_hat * network_rp::dust_kappa / userData_.eps_ion;
 	userData_.N_gamma_dust_ +=
 	    dt_[lev] * computeVolumeIntegral(
-			   [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
-						std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
-				   return chat_kappa_over_eps * state(i, j, k, HydroSystem<DTypeFront1D>::density_index) *
-					  state(i, j, k, RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ionizing);
-			   });
+	                   [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
+			                        std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
+		                   return chat_kappa_over_eps * state(i, j, k, HydroSystem<DTypeFront1D>::density_index) *
+				          state(i, j, k, RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ionizing);
+	                   });
 
 	amrex::Real x_ode = std::numeric_limits<amrex::Real>::quiet_NaN();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -690,7 +690,7 @@ auto problem_main() -> int
 		}
 
 		auto compute_median_and_check = [&](std::vector<double> &local_temps, double T_analytical, const char *region_name, const char *quantity_name,
-						    const char *unit) {
+		                                    const char *unit) {
 			const int num_local = static_cast<int>(local_temps.size());
 			auto num_local_vec = amrex::ParallelDescriptor::Gather(num_local, amrex::ParallelDescriptor::IOProcessorNumber());
 
@@ -733,12 +733,12 @@ auto problem_main() -> int
 				const double rel_err = std::abs(T_median - T_analytical) / T_analytical;
 				if (rel_err > 0.05) {
 					amrex::Print() << "Test FAILED: " << region_name << " median " << quantity_name << " " << T_median << unit
-						       << " differs from analytical equilibrium " << T_analytical << unit << " by " << 100.0 * rel_err
-						       << "% (tolerance: 5%).\n";
+					               << " differs from analytical equilibrium " << T_analytical << unit << " by " << 100.0 * rel_err
+					               << "% (tolerance: 5%).\n";
 					status = 1;
 				} else {
 					amrex::Print() << "Test passed: " << region_name << " median " << quantity_name << " " << T_median << unit
-						       << " is within 5% of analytical equilibrium " << T_analytical << unit << " (" << ntot << " cells).\n";
+					               << " is within 5% of analytical equilibrium " << T_analytical << unit << " (" << ntot << " cells).\n";
 				}
 			}
 		};
@@ -772,25 +772,25 @@ auto problem_main() -> int
 
 			if (eff_ok) {
 				amrex::Print() << "Test passed: D-type I front matches the integrated radiation + gas pressure solution within "
-					       << 100.0 * tol_rel << "% (" << 100.0 * rel_diff << "%).\n";
+				               << 100.0 * tol_rel << "% (" << 100.0 * rel_diff << "%).\n";
 			} else {
 				amrex::Print() << "D-type I front differs from the integrated radiation + gas pressure solution by more than "
-					       << 100.0 * tol_rel << "% (" << 100.0 * rel_diff << "%).\n";
+				               << 100.0 * tol_rel << "% (" << 100.0 * rel_diff << "%).\n";
 			}
 
 			amrex::Print() << "Numerical max-density shell position: " << x_shell << " cm\n";
 
 			if (shell_ok) {
 				amrex::Print() << "Test passed: max-density shell matches the integrated radiation + gas pressure solution within "
-					       << 100.0 * tol_rel << "% (" << 100.0 * shell_rel_diff << "%).\n";
+				               << 100.0 * tol_rel << "% (" << 100.0 * shell_rel_diff << "%).\n";
 			} else {
 				amrex::Print() << "max-density shell differs from the integrated radiation + gas pressure solution by more than "
-					       << 100.0 * tol_rel << "% (" << 100.0 * shell_rel_diff << "%).\n";
+				               << 100.0 * tol_rel << "% (" << 100.0 * shell_rel_diff << "%).\n";
 			}
 
 			if (!eff_ok && !shell_ok) {
 				amrex::Print() << "Test FAILED: neither the effective ionized length nor the max-density shell matches the integrated "
-						  "solution within tolerance.\n";
+				                  "solution within tolerance.\n";
 				status = 1;
 			}
 		}
@@ -823,14 +823,14 @@ auto problem_main() -> int
 
 		if (ir_fraction < min_ir_fraction) {
 			amrex::Print() << "Test FAILED: only " << 100.0 * ir_fraction
-				       << "% of the injected optical energy is present in the IR band; "
-					  "expected at least "
-				       << 100.0 * min_ir_fraction << "%.\n";
+			               << "% of the injected optical energy is present in the IR band; "
+			                  "expected at least "
+			               << 100.0 * min_ir_fraction << "%.\n";
 			status = 1;
 		} else if (ir_fraction > max_ir_fraction) {
 			amrex::Print() << "Test FAILED: " << 100.0 * ir_fraction
-				       << "% of the injected optical energy is present in the IR band; the injected optical + ionizing energy allows at most "
-				       << 100.0 * max_ir_fraction << "%.\n";
+			               << "% of the injected optical energy is present in the IR band; the injected optical + ionizing energy allows at most "
+			               << 100.0 * max_ir_fraction << "%.\n";
 			status = 1;
 		} else {
 			amrex::Print() << "Test passed: " << 100.0 * ir_fraction << "% of the injected optical energy is present in the sourceless IR band.\n";
@@ -884,11 +884,11 @@ auto problem_main() -> int
 
 		if (std::abs(ratio - 1.0) > tol_ratio) {
 			amrex::Print() << "Test FAILED: measured network thermal-band emission is " << ratio
-				       << " times the prediction (tolerance: " << 100.0 * tol_ratio << "%).\n";
+			               << " times the prediction (tolerance: " << 100.0 * tol_ratio << "%).\n";
 			status = 1;
 		} else {
 			amrex::Print() << "Test passed: measured network thermal-band emission matches the prediction within " << 100.0 * tol_ratio << "% ("
-				       << 100.0 * (ratio - 1.0) << "%).\n";
+			               << 100.0 * (ratio - 1.0) << "%).\n";
 		}
 	}
 

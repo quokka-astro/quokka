@@ -117,8 +117,8 @@ template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokk
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto vx0 = v0;		// gas velocity
-	const auto vx_dust1 = 2 * v0;	// dust1 velocity
+	const auto vx0 = v0;            // gas velocity
+	const auto vx_dust1 = 2 * v0;   // dust1 velocity
 	const auto vx_dust2 = 0.5 * v0; // dust2 velocity
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -213,10 +213,10 @@ auto E_gas_analytic(double t) -> double
 		double const vd2_2 = v_dust2_analytic(t2);
 
 		double const term1 = (rho_dust1 * (vd1_1 - vg1) / TS1 * vg1 + rho_dust2 * (vd2_1 - vg1) / TS2 * vg1 +
-				      OMEGA * (rho_dust1 * std::pow(vd1_1 - vg1, 2) / TS1 + rho_dust2 * std::pow(vd2_1 - vg1, 2) / TS2));
+		                      OMEGA * (rho_dust1 * std::pow(vd1_1 - vg1, 2) / TS1 + rho_dust2 * std::pow(vd2_1 - vg1, 2) / TS2));
 
 		double const term2 = (rho_dust1 * (vd1_2 - vg2) / TS1 * vg2 + rho_dust2 * (vd2_2 - vg2) / TS2 * vg2 +
-				      OMEGA * (rho_dust1 * std::pow(vd1_2 - vg2, 2) / TS1 + rho_dust2 * std::pow(vd2_2 - vg2, 2) / TS2));
+		                      OMEGA * (rho_dust1 * std::pow(vd1_2 - vg2, 2) / TS1 + rho_dust2 * std::pow(vd2_2 - vg2, 2) / TS2));
 
 		integral += 0.5 * (term1 + term2) * dt;
 	}

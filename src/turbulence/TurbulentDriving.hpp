@@ -45,7 +45,7 @@ namespace quokka::turbulence
 {
 /// Mass-weighted mean velocity and velocity dispersion of the computational domain.
 struct VelocityMoments {
-	amrex::GpuArray<amrex::Real, 3> mean;	    ///< mass-weighted mean velocity, per component
+	amrex::GpuArray<amrex::Real, 3> mean;       ///< mass-weighted mean velocity, per component
 	amrex::GpuArray<amrex::Real, 3> dispersion; ///< mass-weighted velocity dispersion, per component
 };
 
@@ -54,7 +54,7 @@ template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) 
 
 /// Domain totals of density and density-weighted forcing, used to correct the forcing's own mean bias.
 struct ForcingTotals {
-	amrex::Real total_density;					///< sum of rho over the domain
+	amrex::Real total_density;                                      ///< sum of rho over the domain
 	amrex::GpuArray<amrex::Real, 3> total_density_weighted_forcing; ///< sum of rho*a_turb, per component
 };
 
@@ -84,16 +84,16 @@ template <typename problem_t> class turbulentDriving
 
 			const amrex::Real forcing_bias_magnitude =
 			    std::sqrt(accumulated_forcing_bias[0] * accumulated_forcing_bias[0] + accumulated_forcing_bias[1] * accumulated_forcing_bias[1] +
-				      accumulated_forcing_bias[2] * accumulated_forcing_bias[2]);
+			              accumulated_forcing_bias[2] * accumulated_forcing_bias[2]);
 			const amrex::Real dispersion_magnitude =
 			    std::sqrt(velocity_dispersion[0] * velocity_dispersion[0] + velocity_dispersion[1] * velocity_dispersion[1] +
-				      velocity_dispersion[2] * velocity_dispersion[2]);
+			              velocity_dispersion[2] * velocity_dispersion[2]);
 
 			if (forcing_bias_magnitude > mean_flow_to_dispersion_threshold * dispersion_magnitude) {
 				const std::string msg =
 				    std::format("TurbulentDriving: accumulated forcing bias ({:.3e}) exceeds {:.0f}% of the velocity dispersion "
-						"({:.3e}) at time {:.3e}; the density-weighted forcing has injected a net bulk flow.",
-						forcing_bias_magnitude, mean_flow_to_dispersion_threshold * 100.0, dispersion_magnitude, time);
+				                "({:.3e}) at time {:.3e}; the density-weighted forcing has injected a net bulk flow.",
+				                forcing_bias_magnitude, mean_flow_to_dispersion_threshold * 100.0, dispersion_magnitude, time);
 				if (remove_mean_flow) {
 					amrex::Abort(("[FATAL] " + msg).c_str());
 				} else {
@@ -112,7 +112,7 @@ template <typename problem_t> class turbulentDriving
 	}
 
 	auto applyDriving(amrex::MultiFab &state, const amrex::Real time, const amrex::Real dt_in,
-			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &probLo) -> bool
+	                  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &probLo) -> bool
 	{
 		update(time, state);
 		const amrex::Real dt = dt_in;
@@ -132,12 +132,12 @@ template <typename problem_t> class turbulentDriving
 			auto const &ax = forcing.const_array(mf);
 
 			reduce_op.eval(bx, reduce_data,
-				       [=] AMREX_GPU_DEVICE(int i, int j, int k) -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
-					       const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
+			               [=] AMREX_GPU_DEVICE(int i, int j, int k) -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+				               const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
 
-					       return {rho, rho * ax(i, j, k, 0), (AMREX_SPACEDIM > 1) ? rho * ax(i, j, k, 1) : 0.0,
-						       (AMREX_SPACEDIM > 2) ? rho * ax(i, j, k, 2) : 0.0};
-				       });
+				               return {rho, rho * ax(i, j, k, 0), (AMREX_SPACEDIM > 1) ? rho * ax(i, j, k, 1) : 0.0,
+					               (AMREX_SPACEDIM > 2) ? rho * ax(i, j, k, 2) : 0.0};
+			               });
 		}
 
 		const auto [sum_rho, sum_rax, sum_ray, sum_raz] = reduce_data.value();
@@ -200,7 +200,7 @@ template <typename problem_t> class turbulentDriving
 template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> VelocityMoments
 {
 	amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
-			 amrex::ReduceOpSum>
+	                 amrex::ReduceOpSum>
 	    reduce_op;
 	amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> reduce_data(reduce_op);
 
@@ -209,19 +209,19 @@ template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) 
 		auto const &data = state.array(mfi);
 
 		reduce_op.eval(bx, reduce_data,
-			       [=] AMREX_GPU_DEVICE(int i, int j, int k)
-				   -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
-				       const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
-				       const amrex::Real px = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-				       const amrex::Real py = data(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-				       const amrex::Real pz = data(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+		               [=] AMREX_GPU_DEVICE(int i, int j, int k)
+		                   -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+			               const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
+			               const amrex::Real px = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			               const amrex::Real py = data(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			               const amrex::Real pz = data(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 
-				       const amrex::Real vx = px / rho;
-				       const amrex::Real vy = py / rho;
-				       const amrex::Real vz = pz / rho;
+			               const amrex::Real vx = px / rho;
+			               const amrex::Real vy = py / rho;
+			               const amrex::Real vz = pz / rho;
 
-				       return {rho, px, py, pz, px * vx, py * vy, pz * vz};
-			       });
+			               return {rho, px, py, pz, px * vx, py * vy, pz * vz};
+		               });
 	}
 
 	auto [sum_rho, sum_px, sum_py, sum_pz, sum_pvx, sum_pvy, sum_pvz] = reduce_data.value();

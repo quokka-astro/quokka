@@ -23,10 +23,10 @@ namespace detail
 {
 template <typename problem_t, BoundarySide SIDE>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q,
-						       quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &dQ_dx_data,
-						       quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &dQ_dy_data,
-						       quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &dQ_dz_data, const amrex::Real P_t,
-						       const amrex::Real L_x) -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
+                                                       quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &dQ_dx_data,
+                                                       quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &dQ_dy_data,
+                                                       quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &dQ_dz_data, const amrex::Real P_t,
+                                                       const amrex::Real L_x) -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
 {
 	// return dQ/dx corresponding to subsonic outflow at the (SIDE) boundary
 
@@ -108,7 +108,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 
 template <typename problem_t, BoundarySide SIDE>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_xdir_dQ_data(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-								 amrex::GeometryData const &geom)
+                                                                 amrex::GeometryData const &geom)
     -> std::tuple<quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>, quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>>
 {
 	auto [i, j, k] = iv.dim3();
@@ -142,7 +142,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_xdir_dQ_data(const amrex::In
 
 template <typename problem_t, BoundarySide SIDE>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_ydir_dQ_data(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-								 amrex::GeometryData const &geom)
+                                                                 amrex::GeometryData const &geom)
     -> std::tuple<quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>, quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>>
 {
 	auto [i, j, k] = iv.dim3();
@@ -175,7 +175,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_ydir_dQ_data(const amrex::In
 
 template <typename problem_t, BoundarySide SIDE>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_zdir_dQ_data(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-								 amrex::GeometryData const &geom)
+                                                                 amrex::GeometryData const &geom)
     -> std::tuple<quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>, quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>>
 {
 	auto [i, j, k] = iv.dim3();
@@ -261,7 +261,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto unpermute_vel(quokka::valarray<amrex::R
 
 template <typename problem_t, FluxDir DIR, BoundarySide SIDE>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-							    amrex::GeometryData const &geom, const amrex::Real P_outflow)
+                                                            amrex::GeometryData const &geom, const amrex::Real P_outflow)
 {
 	// subsonic outflow on the DIR SIDE boundary
 
@@ -366,7 +366,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 
 template <typename problem_t, FluxDir DIR, BoundarySide SIDE>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-								    amrex::GeometryData const &geom, const amrex::Real P_outflow)
+                                                                    amrex::GeometryData const &geom, const amrex::Real P_outflow)
 {
 	// subsonic outflow on the DIR SIDE boundary
 

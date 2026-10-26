@@ -35,17 +35,17 @@ template <> struct Physics_Traits<WaveProblem> : DefaultPhysicsTraits {
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear/bulk default to 0; no-op unless set
 };
 
-constexpr double rho0 = 1.0;					    // background density
+constexpr double rho0 = 1.0;                                        // background density
 constexpr double P0 = 1.0 / quokka::EOS_Traits<WaveProblem>::gamma; // background pressure
-constexpr double v0 = 0.;					    // background velocity
-constexpr double amp = 1.0e-6;					    // perturbation amplitude
+constexpr double v0 = 0.;                                           // background velocity
+constexpr double amp = 1.0e-6;                                      // perturbation amplitude
 
 // viscous decay rate for the wave analytic solution: (4/3*shear + bulk)*k^2/(2*rho0), for the single
 // hardcoded mode k=2*pi below; zero (no decay) unless hydro.shear_viscosity/hydro.bulk_viscosity are set
 AMREX_GPU_MANAGED double viscous_decay_rate = 0.0; // NOLINT
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
+                                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
 {
 	const amrex::Real x_L = prob_lo[0] + (i + static_cast<amrex::Real>(0.0)) * dx[0];
 	const amrex::Real x_R = prob_lo[0] + (i + static_cast<amrex::Real>(1.0)) * dx[0];
@@ -105,7 +105,7 @@ void configureViscousParameters()
 
 // fills every cell of mf with the analytic wave solution at the given time
 void fillWaveSolutionState(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
+                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real time)
 {
 	const int ncomp = mf.nComp();
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {

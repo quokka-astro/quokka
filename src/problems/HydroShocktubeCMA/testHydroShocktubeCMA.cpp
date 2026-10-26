@@ -34,7 +34,7 @@ struct ShocktubeProblem {};
 bool consv_test_passes = true; // if mass scalar conservation check fails, set to false. NOLINT
 
 template <> struct SimulationData<ShocktubeProblem> {
-	std::vector<double> t_vec_;	      // stores the time array
+	std::vector<double> t_vec_;           // stores the time array
 	std::vector<double> delta_eps_t_vec_; // stores sum of mass fractions at each time
 };
 
@@ -47,7 +47,7 @@ template <> struct Physics_Traits<ShocktubeProblem> : DefaultPhysicsTraits {
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 3;		     // number of mass scalars
+	static constexpr int numMassScalars = 3;                     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 };
 
@@ -122,8 +122,8 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+                                                             int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+                                                             const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
@@ -173,7 +173,7 @@ template <> void QuokkaSimulation<ShocktubeProblem>::refineGrid(int lev, amrex::
 	// tag cells for refinement
 
 	const Real eta_threshold = 0.1; // gradient refinement threshold
-	const Real rho_min = 0.01;	// minimum rho for refinement
+	const Real rho_min = 0.01;      // minimum rho for refinement
 	auto const &dx = geom[lev].CellSizeArray();
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {

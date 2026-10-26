@@ -29,19 +29,19 @@ struct ShockProblem {}; // dummy type to allow compile-type polymorphism via tem
 
 constexpr double a_rad = C::a_rad; // erg cm^-3 K^-4
 constexpr double c = C::c_light;   // cm s^-1
-constexpr double k_B = C::k_B;	   // erg K^-1
+constexpr double k_B = C::k_B;     // erg K^-1
 
 constexpr double c_s0 = 1.73e7; // adiabatic sound speed [cm s^-1]
 constexpr double kappa = 577.0; // "opacity" == rho*kappa [cm^-1] (!!)
 constexpr double gamma_gas = (5. / 3.);
 constexpr double c_v = k_B / ((C::m_p + C::m_e) * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
-constexpr double T_lo = 2.18e6;					      // K
-constexpr double rho0 = 5.69;					      // g cm^-3
-constexpr double v0 = 5.19e7;					      // cm s^-1
-constexpr double T_hi = 7.98e6;					      // K [7.98297e6]
-constexpr double rho1 = 17.1;					      // g cm^-3 [17.08233]
-constexpr double v1 = 1.73e7;					      // cm s^-1 [1.72875e7]
-constexpr double chat = 10.0 * (v0 + c_s0);			      // reduced speed of light
+constexpr double T_lo = 2.18e6;                                       // K
+constexpr double rho0 = 5.69;                                         // g cm^-3
+constexpr double v0 = 5.19e7;                                         // cm s^-1
+constexpr double T_hi = 7.98e6;                                       // K [7.98297e6]
+constexpr double rho1 = 17.1;                                         // g cm^-3 [17.08233]
+constexpr double v1 = 1.73e7;                                         // cm s^-1 [1.72875e7]
+constexpr double chat = 10.0 * (v0 + c_s0);                           // reduced speed of light
 
 constexpr double Erad0 = a_rad * (T_lo * T_lo * T_lo * T_lo); // erg cm^-3
 constexpr double Erad_floor_ = Erad0 * 1e-12;
@@ -49,8 +49,8 @@ constexpr double Egas0 = rho0 * c_v * T_lo; // erg cm^-3
 constexpr double Egas1 = rho1 * c_v * T_hi; // erg cm^-3
 
 constexpr double shock_position = 0.0130; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
-					  // we initialize slightly to the left...)
-constexpr double Lx = 0.01575;		  // cm
+                                          // we initialize slightly to the left...)
+constexpr double Lx = 0.01575;            // cm
 
 template <> struct Physics_Traits<ShockProblem> : DefaultPhysicsTraits {
 	// cell-centred
@@ -65,7 +65,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
 	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{1.00000000e+15, 1.00000000e+16, 1.00000000e+17,
-													  1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
+	                                                                                                  1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
 	static constexpr int beta_order = 1;
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
@@ -98,8 +98,8 @@ template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
-							 int /*orig_comp*/)
+                                                         amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
+                                                         int /*orig_comp*/)
 {
 	if (!((bcr->lo(0) == quokka::BCType::ext_dir) || (bcr->hi(0) == quokka::BCType::ext_dir))) { // NOLINT
 		return;
@@ -227,7 +227,7 @@ auto problem_main() -> int
 	QuokkaSimulation<ShockProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.reconstructionOrder_ = 3;	       // PPM
+	sim.reconstructionOrder_ = 3;          // PPM
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
@@ -259,7 +259,7 @@ auto problem_main() -> int
 			for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
 				Erad_t += values.at(RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
 			}
-			Erad.at(i) = Erad_t / a_rad;			       // scaled
+			Erad.at(i) = Erad_t / a_rad;                           // scaled
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_lo; // dimensionless
 
 			const double Etot_t = values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];
@@ -312,7 +312,7 @@ auto problem_main() -> int
 			amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << '\n';
 
 			interpolate_arrays(xs_exact.data(), Trad_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Trad.data(),
-					   static_cast<int>(xs.size()));
+			                   static_cast<int>(xs.size()));
 
 			double err_norm = 0.;
 			double sol_norm = 0.;

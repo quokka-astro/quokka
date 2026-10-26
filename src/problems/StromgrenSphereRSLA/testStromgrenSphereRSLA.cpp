@@ -43,7 +43,7 @@ template <> struct quokka::EOS_Traits<StromgrenSphere> {
 template <> struct Physics_Traits<StromgrenSphere> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
+	static constexpr int numMassScalars = NumSpec;               // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 };
@@ -130,9 +130,9 @@ auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B,
 
 template <>
 void RadSystem<StromgrenSphere>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+                                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+                                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+                                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;

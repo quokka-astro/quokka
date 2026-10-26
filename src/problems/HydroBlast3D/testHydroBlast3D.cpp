@@ -44,7 +44,7 @@ template <> struct Physics_Traits<SedovProblem> : DefaultPhysicsTraits {
 };
 
 // declare global variables
-const double rho = 1.0;	   // g cm^-3
+const double rho = 1.0;    // g cm^-3
 double E_blast = 0.851072; // ergs. NOLINT
 
 template <> void QuokkaSimulation<SedovProblem>::preCalculateInitialConditions()
@@ -72,7 +72,7 @@ template <> void QuokkaSimulation<SedovProblem>::setInitialConditionsOnGrid(quok
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		static_assert(!simulate_full_box, "single-cell initialization is only "
-						  "implemented for octant symmetry!");
+		                                  "implemented for octant symmetry!");
 		double rho_e = NAN;
 		if ((i == 0) && (j == 0) && (k == 0)) {
 			rho_e = E_blast_copy / cell_vol;

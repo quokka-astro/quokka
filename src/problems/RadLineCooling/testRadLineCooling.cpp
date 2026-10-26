@@ -128,7 +128,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblem>::ComputeFluxMea
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<CoolingProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-								const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+                                                                const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -222,7 +222,7 @@ auto problem_main() -> int
 	std::vector<double> Erad_exact_vec{};
 	for (const auto &t_exact : t_sim) {
 		const double Egas_exact_solution = std::exp(-cooling_rate * t_exact) *
-						   (cooling_rate * T0 - CR_heating_rate + CR_heating_rate * std::exp(cooling_rate * t_exact)) / cooling_rate;
+		                                   (cooling_rate * T0 - CR_heating_rate + CR_heating_rate * std::exp(cooling_rate * t_exact)) / cooling_rate;
 		const double T_exact_solution = Egas_exact_solution / C_V;
 		Tgas_exact_vec.push_back(T_exact_solution);
 		const double Erad_exact_solution = -(Egas_exact_solution - C_V * T0 - CR_heating_rate * t_exact) * (chat / c);
