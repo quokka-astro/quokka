@@ -18,13 +18,13 @@
 #include "microphysics/microphysics_traits.hpp"
 #include "microphysics/rosenbrock/rosenbrock_state.hpp"
 
-// still from extern/Microphysics: burn_t, net_ienuc, the integrator parameters, integrator_neqs, setup, backup,
-// cleanup, rhs and jac
+// still from extern/Microphysics: burn_t, net_ienuc, the integrator parameters, integrator_neqs, setup, backup and
+// cleanup (with the state copies they call)
 #include "burn_type.H"
 #include "extern_parameters.H"
 #include "integrator_data.H"
-#include "integrator_rhs_strang.H"
 #include "integrator_setup_strang.H"
+#include "integrator_type_strang.H"
 
 namespace quokka::microphysics
 {
@@ -165,13 +165,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex
 template <typename Layout, typename BurnT, int int_neqs, int stages>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void evaluate_jacobian(BurnT &state, RosenbrockState<int_neqs, stages> &rstate, const amrex::Real time)
 {
-	constexpr bool in_jacobian = true;
-
-	::rhs(time, state, rstate, rstate.k[0], in_jacobian);
+	rhs<Layout>(time, state, rstate, rstate.k[0]);
 	rstate.n_rhs += 1;
 
 	if (rstate.jacobian_type == 1) {
-		::jac(time, state, rstate, rstate.jac);
+		jac<Layout>(state, rstate, rstate.jac);
 		rstate.n_jac += 1;
 
 		if (matrix_is_finite<decltype(rstate.jac), int_neqs>(rstate.jac)) {
@@ -208,7 +206,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void evaluate_jacobian(BurnT &state, Ro
 		}
 		rstate.y(j) += R;
 
-		::rhs(time, state, rstate, rstate.work, in_jacobian);
+		rhs<Layout>(time, state, rstate, rstate.work);
 
 		fac = 1.0_rt / R;
 		for (int i = 1; i <= int_neqs; ++i) {
@@ -224,7 +222,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void evaluate_jacobian(BurnT &state, Ro
 	rstate.n_jac += 1;
 }
 
-template <typename BurnT, int int_neqs, int stages>
+template <typename Layout, typename BurnT, int int_neqs, int stages>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_at(const amrex::Real time, BurnT &state, RosenbrockState<int_neqs, stages> &rstate,
 						     const amrex::Array1D<amrex::Real, 1, int_neqs> &y, amrex::Array1D<amrex::Real, 1, int_neqs> &ydot)
 {
@@ -235,7 +233,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_at(const amrex::Real time, Bur
 		rstate.y(n) = y(n);
 	}
 
-	::rhs(time, state, rstate, ydot);
+	rhs<Layout>(time, state, rstate, ydot);
 
 	for (int n = 1; n <= int_neqs; ++n) {
 		rstate.y(n) = ysave(n);
@@ -400,7 +398,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 					break;
 				}
 
-				rhs_at(x + Tableau::ct(istage) * h, state, rstate, rstate.ynew, rhs_tmp);
+				rhs_at<Layout>(x + Tableau::ct(istage) * h, state, rstate, rstate.ynew, rhs_tmp);
 				rstate.n_rhs += 1;
 
 				for (int n = 1; n <= int_neqs; ++n) {
