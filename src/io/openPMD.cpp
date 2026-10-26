@@ -106,7 +106,9 @@ auto NodeCount() -> int
 
 // openPMD options for every output series. openpmd.aggregation (auto, on or off)
 // selects ADIOS2 BP5 aggregation: on keeps BP5's default (TwoLevelShm, one
-// aggregator per node), off lets every rank write its own subfile. Without
+// aggregator per node), off lets every rank write its own subfile. EveryoneWrites
+// alone still shares one subfile per node, so off also sets one aggregator per
+// rank; a shared subfile sits on a single OST on Lustre. Without
 // aggregation, writes are faster on a single node (about 2.4x on one CUDA node),
 // but the number of files grows with the rank count. auto aggregates from
 // openpmd.aggregation_min_nodes nodes upward; the default of 32 nodes (256
@@ -125,7 +127,11 @@ auto SeriesOptions() -> const std::string &
 		const bool aggregate = mode == "on" || (mode == "auto" && nodes >= minNodes);
 		amrex::Print() << "openPMD: ADIOS2 aggregation " << (aggregate ? "on" : "off") << " (openpmd.aggregation = " << mode << ", " << nodes
 			       << " node(s), openpmd.aggregation_min_nodes = " << minNodes << ")\n";
-		return aggregate ? std::string("{}") : std::string(R"({"adios2": {"engine": {"parameters": {"AggregationType": "EveryoneWrites"}}}})");
+		if (aggregate) {
+			return std::string("{}");
+		}
+		return R"({"adios2": {"engine": {"parameters": {"AggregationType": "EveryoneWrites", "NumAggregators": ")" +
+		       std::to_string(amrex::ParallelDescriptor::NProcs()) + R"("}}}})";
 	}();
 	return options;
 }
