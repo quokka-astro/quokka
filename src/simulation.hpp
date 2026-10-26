@@ -1232,19 +1232,23 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 
 	if (restart_chkfile.empty()) {
 		// start simulation from the beginning
-		const amrex::Real time = 0.0;
-		InitFromScratch(time);
-		AverageDown();
+		{
+			// Profiled as one region, the counterpart of ReadCheckpointFile() in a restart.
+			BL_PROFILE("AMRSimulation::InitialConditionsFromScratch()"); // NOLINT(misc-const-correctness)
+			const amrex::Real time = 0.0;
+			InitFromScratch(time);
+			AverageDown();
 
-		postInitialization();
+			postInitialization();
 
-		if (do_tracers != 0) {
-			InitParticles();
-		}
+			if (do_tracers != 0) {
+				InitParticles();
+			}
 
 #if AMREX_SPACEDIM == 3
-		InitPhyParticles();
+			InitPhyParticles();
 #endif // AMREX_SPACEDIM == 3
+		}
 
 		if (checkpointInterval_ > 0) {
 			WriteCheckpointFile();
