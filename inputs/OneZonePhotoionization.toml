@@ -22,9 +22,6 @@ suppress_output = 0
 
 photochemistry.enabled = 1
 integrator.use_number_densities = 1
-integrator.do_species_clip = 0
-integrator.jacobian = 1
-integrator.renormalize_abundances = 0
 integrator.subtract_internal_energy = 0
 
 photoionization.n_e_init = 1e-10

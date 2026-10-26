@@ -45,8 +45,6 @@ template <int int_neqs, int stages> struct RosenbrockState {
 
 	MathArray2D<int_neqs> jac;
 	amrex::Array1D<std::int16_t, 1, int_neqs> pivot;
-
-	std::int16_t jacobian_type;
 };
 
 } // namespace quokka::microphysics
