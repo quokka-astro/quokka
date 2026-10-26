@@ -87,12 +87,55 @@ void SetupMeshComponent(openPMD::Mesh &mesh, const amrex::Geometry &full_geom, a
 	mesh_comp.setPosition(relativePosition);
 }
 
+// Number of nodes (shared-memory domains) in the job.
+auto NodeCount() -> int
+{
+#ifdef AMREX_USE_MPI
+	MPI_Comm node = MPI_COMM_NULL;
+	MPI_Comm_split_type(amrex::ParallelDescriptor::Communicator(), MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &node);
+	int nodeRank = 0;
+	MPI_Comm_rank(node, &nodeRank);
+	MPI_Comm_free(&node);
+	int nodes = nodeRank == 0 ? 1 : 0;
+	MPI_Allreduce(MPI_IN_PLACE, &nodes, 1, MPI_INT, MPI_SUM, amrex::ParallelDescriptor::Communicator());
+	return nodes;
+#else
+	return 1;
+#endif
+}
+
+// openPMD options for every output series. openpmd.aggregation (auto, on or off)
+// selects ADIOS2 BP5 aggregation: on keeps BP5's default (TwoLevelShm, one
+// aggregator per node), off lets every rank write its own subfile. Without
+// aggregation, writes are faster on a single node (about 2.4x on one CUDA node),
+// but the number of files grows with the rank count. auto aggregates from
+// openpmd.aggregation_min_nodes nodes upward; the default of 32 nodes (256
+// ranks at 8 per node) caps subfiles at AMReX's default of 256 files per
+// MultiFab for native output. Evaluated once, collectively.
+auto SeriesOptions() -> const std::string &
+{
+	static const std::string options = [] {
+		const amrex::ParmParse pp("openpmd");
+		std::string mode = "auto";
+		pp.query("aggregation", mode);
+		int minNodes = 32;
+		pp.query("aggregation_min_nodes", minNodes);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mode == "auto" || mode == "on" || mode == "off", "openpmd.aggregation must be auto, on or off");
+		const int nodes = NodeCount();
+		const bool aggregate = mode == "on" || (mode == "auto" && nodes >= minNodes);
+		amrex::Print() << "openPMD: ADIOS2 aggregation " << (aggregate ? "on" : "off") << " (openpmd.aggregation = " << mode << ", " << nodes
+			       << " node(s), openpmd.aggregation_min_nodes = " << minNodes << ")\n";
+		return aggregate ? std::string("{}") : std::string(R"({"adios2": {"engine": {"parameters": {"AggregationType": "EveryoneWrites"}}}})");
+	}();
+	return options;
+}
+
 auto CreateSeries(const std::string &filename) -> openPMD::Series
 {
 #ifdef AMREX_USE_MPI
-	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
+	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator(), SeriesOptions());
 #else
-	auto series = openPMD::Series(filename, openPMD::Access::CREATE);
+	auto series = openPMD::Series(filename, openPMD::Access::CREATE, SeriesOptions());
 #endif
 	series.setSoftware("Quokka", "1.0");
 	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);

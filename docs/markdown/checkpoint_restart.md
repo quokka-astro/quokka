@@ -55,3 +55,23 @@ reads each patch through a host buffer, then copies it to device memory.
 Particle reads stage each rank's share of a population in host memory before
 redistribution. Mesh and particle floating-point data stored as `float` or
 `double` is converted on read to the build's precision.
+
+## ADIOS2 aggregation
+
+openPMD output (checkpoints and plotfiles) goes through the ADIOS2 BP5 engine.
+`openpmd.aggregation` controls whether BP5 aggregates writes:
+
+| Parameter                       | Type    | Default  | Description |
+|---------------------------------|---------|----------|-------------|
+| `openpmd.aggregation`           | String  | `"auto"` | `on` keeps BP5's default aggregation (one aggregator per node, writing one subfile per node). `off` makes every rank write its own subfile. `auto` turns aggregation on from `openpmd.aggregation_min_nodes` nodes upward. |
+| `openpmd.aggregation_min_nodes` | Integer | `32`     | Node count from which `auto` aggregates. |
+
+The choice is printed once at the first openPMD output.
+
+Without aggregation, writes are faster on a single node: about 2.4 times faster
+on one CUDA node in our tests, matching native AMReX checkpoints. But the
+number of files then grows with the rank count. The default threshold of 32
+nodes is 256 ranks at 8 ranks per node, which matches native AMReX's default
+of at most 256 files per MultiFab. This threshold is provisional. Measure both
+modes on your machine with `scripts/slurm/frontier-openpmd-restart.submit`,
+which compares them on Frontier.

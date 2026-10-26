@@ -10,28 +10,24 @@
 # At-scale openPMD checkpoint/restart test and I/O bandwidth estimate
 # (HydroBlast3D with tracers and one AMR level).
 #
+# openPMD runs are repeated for each ADIOS2 aggregation mode in AGGREGATION
+# (openpmd.aggregation = off or on), written <mode> below.
 # Write runs, on all nodes, 2K steps each:
-#   base       no output (baseline for the write runs)
-#   reference  native AMReX checkpoints at steps 0, K and 2K
-#   openpmd    openPMD checkpoints at steps 0, K and 2K
-#   plotfile   openPMD plotfiles at steps K and 2K (PLOTFILE=1)
+#   reference       native AMReX checkpoints at steps 0, K and 2K
+#   openpmd_<mode>  openPMD checkpoints at steps 0, K and 2K
+#   plotfile_<mode> openPMD plotfiles at steps K and 2K (PLOTFILE=1)
 # Read runs, on the last RESTART_NODES nodes (away from the writers' page cache):
-#   setup         initial conditions only, no steps (baseline for the read runs, with
-#                 the initial-condition setup time removed)
-#   read_openpmd  restart from the openPMD checkpoint at K, no steps
-#   read_native   restart from the native checkpoint at K, no steps
+#   read_openpmd_<mode> restart from that mode's openPMD checkpoint at K, no steps
+#   read_native         restart from the native checkpoint at K, no steps
 # Correctness, on the first RESTART_NODES nodes (a different rank count):
-#   restart         restart from the openPMD checkpoint at K, native checkpoint at 2K
+#   restart_<mode>  restart from that mode's openPMD checkpoint at K, native checkpoint at 2K
 #   native_restart  the same from the native checkpoint (CONTROL=1)
 #   compare         cell data (all levels) and tracers at 2K must match the reference bit for bit
 #
-# Effective bandwidth = bytes written or read / (elapsed time - baseline elapsed time),
-# using the "elapsed time" each run prints (max over ranks, excluding job launch).
-# A restart replaces the initial-condition setup (including tracer creation) with the
-# checkpoint read, so the read baseline is the setup run's elapsed time minus its
-# AMRSimulation::InitialConditionsFromScratch() profiler time. The TinyProfiler time of
-# each run's I/O region is printed alongside as a cross-check. Each figure comes from
-# a single pair of runs, so repeat the job to judge run-to-run variation.
+# Effective bandwidth = bytes written or read / TinyProfiler time (inclusive, max over
+# ranks) of the run's AMRSimulation::WriteCheckpointFile(), WritePlotFile() or
+# ReadCheckpointFile() region. Each figure comes from a single run, so repeat the job
+# to judge run-to-run variation.
 #
 # Build first (on a login node), from the repository root:
 #   quokka config -d 3d-hip --source scripts/hpc_profiles/frontier.profile --root . \
@@ -51,13 +47,14 @@
 #   RESTART_NODES  nodes for the read and restart runs (default: half the allocation)
 #   CONTROL        1 to also restart from the native checkpoint (default 1)
 #   PLOTFILE       1 to also measure openPMD plotfile output (default 1)
+#   AGGREGATION    openpmd.aggregation modes to compare (default "off on")
 #   BUILD_DIR      build directory (default build/3d-hip)
 #   RUN_DIR        output directory on Orion (default under the project scratch)
 #   PROFILE        environment script to source (default scripts/hpc_profiles/frontier.profile)
 #
 # Each checkpoint is about 100 bytes per cell (cell data and tracers), so
-# 2048^3 produces roughly 0.9 TB per checkpoint. Step-0 and unused
-# checkpoints are deleted once measured; peak usage is about 5 TB.
+# 2048^3 produces roughly 0.9 TB per checkpoint. Step-0, unused and compared
+# checkpoints are deleted once measured; peak usage is about 6 TB.
 
 QUOKKA_ROOT=${SLURM_SUBMIT_DIR:-$(pwd)}
 cd "${QUOKKA_ROOT}" || exit 1
@@ -77,6 +74,7 @@ NODES=${SLURM_JOB_NUM_NODES}
 RESTART_NODES=${RESTART_NODES:-$(((NODES + 1) / 2))}
 CONTROL=${CONTROL:-1}
 PLOTFILE=${PLOTFILE:-1}
+read -r -a AGGREGATION <<<"${AGGREGATION:-off on}"
 BUILD_DIR=$(realpath -m "${BUILD_DIR:-build/3d-hip}")
 RUN_DIR=${RUN_DIR:-/lustre/orion/${proj}/scratch/${USER}/quokka-openpmd-restart/${SLURM_JOB_ID}}
 
@@ -137,20 +135,15 @@ run() {
 	echo "${label} finished${t:+, elapsed ${t} s}"
 }
 
-# Print one bandwidth line: label, direction, bytes, run, baseline run, profiler region,
-# and optionally a profiler region whose time is removed from the baseline.
+# Record one bandwidth line: label, direction, bytes, run, TinyProfiler region.
 summary=()
 measure() {
-	local label=$1 direction=$2 size=$3 log=$4 base=$5 name=$6 exclude=${7:-}
+	local label=$1 direction=$2 size=$3 log=$4 name=$5
 	local line
-	line=$(awk -v label="${label}" -v dir="${direction}" -v size="${size}" -v t="$(elapsed "${log}")" -v t0="$(elapsed "${base}")" \
-		-v tx="${exclude:+$(region "${base}" "${exclude}")}" -v tp="$(region "${log}" "${name}")" 'BEGIN {
-		t0 -= tx
-		dt = t - t0
-		bw = dt > 0 ? sprintf("%10.2f", size / dt / 1e9) : "       n/a"
-		ptime = tp == "" ? "n/a" : tp
-		pbw = tp > 0 ? sprintf("%.2f", size / tp / 1e9) : "n/a"
-		printf "%-22s %-5s %10.3f %9.2f %9.2f %8.2f %s %10s %8s\n", label, dir, size / 1e9, t, t0, dt, bw, ptime, pbw
+	line=$(awk -v label="${label}" -v dir="${direction}" -v size="${size}" -v t="$(region "${log}" "${name}")" 'BEGIN {
+		time = t == "" ? "n/a" : t
+		bw = t > 0 ? sprintf("%.2f", size / t / 1e9) : "n/a"
+		printf "%-26s %-5s %10.3f %10s %10s\n", label, dir, size / 1e9, time, bw
 	}')
 	summary+=("${line}")
 }
@@ -159,51 +152,61 @@ echo "NCELL=${NCELL}x${NCELL}x${NCELL_Z} MAX_LEVEL=${MAX_LEVEL} CHK_STEP=${CHK_S
 echo "RUN_DIR=${RUN_DIR}"
 echo "quokka $(git -C "${QUOKKA_ROOT}" rev-parse --short HEAD)"
 
-# Write runs. Every run takes 2K steps so that all share one baseline.
+# Write runs.
 steps=(max_timesteps="${FINAL_STEP}")
-run base "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" "${no_output[@]}"
 run reference "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
 	checkpoint_format=amrex checkpoint_prefix=reference
-run openpmd "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
-	checkpoint_format=openpmd checkpoint_prefix=openpmd
 native_written=()
-openpmd_written=()
 for step in 0 "${CHK_STEP}" "${FINAL_STEP}"; do
 	native_written+=("$(chk reference "${step}")")
-	openpmd_written+=("$(chk openpmd "${step}").bp" "$(chk openpmd "${step}").yaml")
 done
-measure "native checkpoint" write "$(bytes "${native_written[@]}")" reference base "AMRSimulation::WriteCheckpointFile()"
-measure "openPMD checkpoint" write "$(bytes "${openpmd_written[@]}")" openpmd base "AMRSimulation::WriteCheckpointFile()"
-# Keep only the checkpoints needed below: native at K and 2K, openPMD at K.
-rm -rf "$(chk reference 0)" "$(chk openpmd 0).bp" "$(chk openpmd 0).yaml" "$(chk openpmd "${FINAL_STEP}").bp" \
-	"$(chk openpmd "${FINAL_STEP}").yaml"
+measure "native checkpoint" write "$(bytes "${native_written[@]}")" reference "AMRSimulation::WriteCheckpointFile()"
+# Keep only the native checkpoints at K and 2K.
+rm -rf "$(chk reference 0)"
+for mode in "${AGGREGATION[@]}"; do
+	prefix=openpmd_${mode}
+	run "${prefix}" "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
+		checkpoint_format=openpmd checkpoint_prefix="${prefix}" openpmd.aggregation="${mode}"
+	openpmd_written=()
+	for step in 0 "${CHK_STEP}" "${FINAL_STEP}"; do
+		openpmd_written+=("$(chk "${prefix}" "${step}").bp" "$(chk "${prefix}" "${step}").yaml")
+	done
+	measure "openPMD checkpoint (${mode})" write "$(bytes "${openpmd_written[@]}")" "${prefix}" "AMRSimulation::WriteCheckpointFile()"
+	# Keep only the openPMD checkpoint at K.
+	rm -rf "$(chk "${prefix}" 0).bp" "$(chk "${prefix}" 0).yaml" "$(chk "${prefix}" "${FINAL_STEP}").bp" \
+		"$(chk "${prefix}" "${FINAL_STEP}").yaml"
 
-if ((PLOTFILE)); then
-	run plotfile "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval=-1 plotfile_interval="${CHK_STEP}" \
-		skip_initial_plotfile=1
-	measure "openPMD plotfile" write "$(bytes plt*.bp plt*.yaml)" plotfile base "AMRSimulation::WritePlotFile()"
-	rm -rf plt*.bp plt*.yaml
-fi
+	if ((PLOTFILE)); then
+		run "plotfile_${mode}" "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval=-1 \
+			plotfile_interval="${CHK_STEP}" skip_initial_plotfile=1 openpmd.aggregation="${mode}"
+		measure "openPMD plotfile (${mode})" write "$(bytes plt*.bp plt*.yaml)" "plotfile_${mode}" "AMRSimulation::WritePlotFile()"
+		rm -rf plt*.bp plt*.yaml
+	fi
+done
 
 # Read runs, on the last RESTART_NODES nodes.
 read_first=$((NODES - RESTART_NODES))
-# With no steps, HydroBlast3D skips its solution check and returns nonzero; ignore that.
-run setup "${RESTART_NODES}" "${read_first}" "${SIM}" "${common[@]}" max_timesteps=0 "${no_output[@]}" ignore_return=1
-run read_openpmd "${RESTART_NODES}" "${read_first}" "${SIM}" "${common[@]}" max_timesteps="${CHK_STEP}" "${no_output[@]}" \
-	restartfile="$(chk openpmd "${CHK_STEP}")"
+for mode in "${AGGREGATION[@]}"; do
+	prefix=openpmd_${mode}
+	run "read_${prefix}" "${RESTART_NODES}" "${read_first}" "${SIM}" "${common[@]}" max_timesteps="${CHK_STEP}" "${no_output[@]}" \
+		restartfile="$(chk "${prefix}" "${CHK_STEP}")"
+	measure "openPMD checkpoint (${mode})" read "$(bytes "$(chk "${prefix}" "${CHK_STEP}").bp" "$(chk "${prefix}" "${CHK_STEP}").yaml")" \
+		"read_${prefix}" "AMRSimulation::ReadCheckpointFile()"
+done
 run read_native "${RESTART_NODES}" "${read_first}" "${SIM}" "${common[@]}" max_timesteps="${CHK_STEP}" "${no_output[@]}" \
 	restartfile="$(chk reference "${CHK_STEP}")"
-ics="AMRSimulation::InitialConditionsFromScratch()"
-measure "openPMD checkpoint" read "$(bytes "$(chk openpmd "${CHK_STEP}").bp" "$(chk openpmd "${CHK_STEP}").yaml")" read_openpmd setup \
-	"AMRSimulation::ReadCheckpointFile()" "${ics}"
-measure "native checkpoint" read "$(bytes "$(chk reference "${CHK_STEP}")")" read_native setup "AMRSimulation::ReadCheckpointFile()" "${ics}"
+measure "native checkpoint" read "$(bytes "$(chk reference "${CHK_STEP}")")" read_native "AMRSimulation::ReadCheckpointFile()"
 
 # Correctness: restarts on a different rank count must reproduce step 2K exactly.
 levels=$((MAX_LEVEL + 1))
 restart_common=("${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 checkpoint_format=amrex)
-run restart "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix=restarted restartfile="$(chk openpmd "${CHK_STEP}")"
-run compare "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" candidate="$(chk restarted "${FINAL_STEP}")" \
-	levels="${levels}"
+for mode in "${AGGREGATION[@]}"; do
+	run "restart_${mode}" "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix="restarted_${mode}" \
+		restartfile="$(chk "openpmd_${mode}" "${CHK_STEP}")"
+	run "compare_${mode}" "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" \
+		candidate="$(chk "restarted_${mode}" "${FINAL_STEP}")" levels="${levels}"
+	rm -rf "$(chk "restarted_${mode}" "${FINAL_STEP}")"
+done
 if ((CONTROL)); then
 	run native_restart "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix=native_restarted \
 		restartfile="$(chk reference "${CHK_STEP}")"
@@ -212,12 +215,11 @@ if ((CONTROL)); then
 fi
 
 echo
-echo "Effective I/O bandwidth (GB = 1e9 bytes; elapsed times in s; write runs on ${NODES} nodes, reads on ${RESTART_NODES})"
-printf "%-22s %-5s %10s %9s %9s %8s %10s %10s %8s\n" output dir GB elapsed baseline diff GB/s profiler GB/s
+echo "Effective I/O bandwidth (GB = 1e9 bytes; TinyProfiler times in s; write runs on ${NODES} nodes, reads on ${RESTART_NODES})"
+printf "%-26s %-5s %10s %10s %10s\n" output dir GB time GB/s
 for line in "${summary[@]}"; do
 	echo "${line}"
 done
-echo "(read baselines exclude the setup run's initial-condition time, ${ics})"
-echo "(profiler = TinyProfiler inclusive max time of the run's write or read region, and the bandwidth it implies)"
+echo "(time = inclusive max time of the run's WriteCheckpointFile, WritePlotFile or ReadCheckpointFile region)"
 echo
-echo "PASS: openPMD restart at step ${CHK_STEP} reproduces step ${FINAL_STEP} exactly"
+echo "PASS: openPMD restarts at step ${CHK_STEP} (aggregation: ${AGGREGATION[*]}) reproduce step ${FINAL_STEP} exactly"
