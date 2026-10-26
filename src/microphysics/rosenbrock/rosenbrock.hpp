@@ -5,7 +5,6 @@
 
 #include <cmath>
 #include <limits>
-#include <type_traits>
 
 #include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
@@ -14,6 +13,7 @@
 #include "AMReX_REAL.H"
 
 #include "math/linear_algebra.hpp"
+#include "microphysics/integrator_common.hpp"
 #include "microphysics/integrator_errors.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "microphysics/rosenbrock/rosenbrock_state.hpp"
@@ -30,37 +30,6 @@ namespace quokka::microphysics
 {
 
 using amrex::literals::operator""_rt;
-
-template <typename problem_t, typename BurnT> struct IntegratorLayout {
-	static constexpr bool photochemistry = requires { &BurnT::rn; };
-
-	static constexpr auto NumChemRadEqs() -> int
-	{
-		if constexpr (photochemistry) {
-			return static_cast<int>(std::extent_v<decltype(BurnT::rn)>);
-		} else {
-			return 0;
-		}
-	}
-
-	static constexpr auto NumThermalBands() -> int
-	{
-		if constexpr (photochemistry) {
-			return static_cast<int>(std::extent_v<decltype(BurnT::re_thermal)>);
-		} else {
-			return 0;
-		}
-	}
-
-	static constexpr int num_chem_rad_eqs = NumChemRadEqs();
-	static constexpr int num_thermal_bands = NumThermalBands();
-	static constexpr int vars_per_group = Microphysics_Traits<problem_t>::integrate_rad_flux ? 2 : 1;
-	static constexpr bool q_dust = requires { &BurnT::e_dust_absorbed; };
-
-	static_assert(num_chem_rad_eqs % vars_per_group == 0, "every chemical band must have vars_per_group variables");
-	static_assert(integrator_neqs<BurnT>() == NumSpec + 1 + num_chem_rad_eqs + num_thermal_bands + (q_dust ? 1 : 0),
-		      "the layout must match Microphysics' integrator_neqs");
-};
 
 namespace rosenbrock
 {
