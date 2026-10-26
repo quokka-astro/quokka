@@ -33,12 +33,9 @@ template <int int_neqs, int stages> struct RosenbrockState {
 	amrex::Real atol_enuc;
 	amrex::Real rtol_enuc;
 
-	// Used only with photochemistry, where Microphysics' setup sets them. The integrator never reads the rad_flux
-	// tolerances.
+	// Used only with photochemistry, where the setup sets them.
 	amrex::Real atol_rad_num;
 	amrex::Real rtol_rad_num;
-	amrex::Real atol_rad_flux;
-	amrex::Real rtol_rad_flux;
 	amrex::Real c_hat;
 
 	amrex::Array1D<amrex::Real, 1, int_neqs> y;
