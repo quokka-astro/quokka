@@ -14,11 +14,12 @@
 #include "AMReX_REAL.H"
 
 #include "math/linear_algebra.hpp"
+#include "microphysics/integrator_errors.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "microphysics/rosenbrock/rosenbrock_state.hpp"
 
-// still from extern/Microphysics: burn_t, net_ienuc, the integrator parameters, integrator_neqs, the error codes,
-// setup, backup, cleanup, rhs and jac
+// still from extern/Microphysics: burn_t, net_ienuc, the integrator parameters, integrator_neqs, setup, backup,
+// cleanup, rhs and jac
 #include "burn_type.H"
 #include "extern_parameters.H"
 #include "integrator_data.H"
