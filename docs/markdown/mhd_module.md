@@ -131,3 +131,15 @@ more detail in [Runtime parameters](parameters.md):
 - `artificial_viscosity_k` – optional scalar viscosity coefficient that adds a
   diffusive flux to the momentum equations and can damp post-shock oscillations.
 - `quokka.bc` – (required) choose `periodic` or `reflecting` for the boundary conditions. For reflecting boundaries, we use `amrex::BCType::reflect_even` for all magnetic field components. Support for properly reflecting magnetic field boundaries will be added in the future.
+
+## Derived output fields
+
+Every MHD problem can write the current density \\(\mathbf{j} = \nabla \times \mathbf{b}\\) to plotfiles. List the components you want in `derived_vars`:
+
+```toml
+derived_vars = ["x-CurrentDensity", "y-CurrentDensity", "z-CurrentDensity"]
+```
+
+Each component is computed on the cell edges it is aligned with, from differences of the face-centred magnetic field, and then averaged over the four edges bounding each cell. This mirrors how the face-centred magnetic field is averaged onto cell centres for output. On every AMR level, the current density is computed at that level's own resolution.
+
+These fields need plotfiles written with ghost cells, so they are not available with openPMD output.
