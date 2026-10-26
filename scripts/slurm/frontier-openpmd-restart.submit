@@ -71,12 +71,33 @@ CONTAINER=${CONTAINER:-}
 # unset variables.
 if [[ -n ${CONTAINER} ]]; then
 	# As in scripts/slurm/frontier-container.submit.
+	# cray-mpich-abi needs a compiler module loaded first.
+	module load amd/7.2.0
 	module load rocm/7.2.0
 	module load cray-mpich-abi/9.1.0
+	if [[ -z ${CRAY_MPICH_ROOTDIR:-} ]]; then
+		echo "cray-mpich-abi/9.1.0 did not load" >&2
+		exit 1
+	fi
 	export MPICH_GPU_SUPPORT_ENABLED=1
 	export MPICH_SMP_SINGLE_COPY_MODE=NONE # temporary workaround
 	export APPTAINERENV_LD_LIBRARY_PATH="$CRAY_MPICH_ROOTDIR/gtl/lib:/opt/rocm/lib:/opt/rocm/lib64:$CRAY_LD_LIBRARY_PATH:$LD_LIBRARY_PATH:/opt/cray/pe/lib64"
-	export APPTAINER_CONTAINLIBS="/usr/lib64/libcxi.so.1,/usr/lib64/libjson-c.so.5,/lib64/libtinfo.so.6,/usr/lib64/libnl-3.so.200,/usr/lib64/libgfortran.so.5,/usr/lib64/libjansson.so.4,/usr/lib64/libxpmem.so.0,/usr/lib64/libatomic.so.1"
+	# Apptainer refuses to start if a listed library is missing, and the compute
+	# nodes no longer have libxpmem, so pass only the host libraries that exist.
+	containlibs=()
+	for lib in /usr/lib64/libcxi.so.1 /usr/lib64/libjson-c.so.5 /lib64/libtinfo.so.6 /usr/lib64/libnl-3.so.200 \
+		/usr/lib64/libgfortran.so.5 /usr/lib64/libjansson.so.4 /usr/lib64/libxpmem.so.0 /usr/lib64/libatomic.so.1; do
+		if [[ -e ${lib} ]]; then
+			containlibs+=("${lib}")
+		else
+			echo "note: ${lib} not found on this node; not passed to the container"
+		fi
+	done
+	APPTAINER_CONTAINLIBS=$(
+		IFS=,
+		echo "${containlibs[*]}"
+	)
+	export APPTAINER_CONTAINLIBS
 	export APPTAINERENV_LD_PRELOAD=$CRAY_MPICH_ROOTDIR/gtl/lib/libmpi_gtl_hsa.so.0:
 	proj=${proj:-ast236}
 else

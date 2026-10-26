@@ -7,6 +7,8 @@
 #SBATCH -e logs/%x_%j.out
 #SBATCH --gpu-bind=closest
 
+# cray-mpich-abi needs a compiler module loaded first.
+module load amd/7.2.0
 module load rocm/7.2.0
 module load cray-mpich-abi/9.1.0
 
@@ -17,7 +19,8 @@ export MPICH_SMP_SINGLE_COPY_MODE=NONE # temporary workaround
 ## import shared libraries from host filesystem
 export APPTAINER_BINDPATH=/usr/share/libdrm,/var/spool/slurmd,/opt/cray,${PWD}
 export APPTAINERENV_LD_LIBRARY_PATH="$CRAY_MPICH_ROOTDIR/gtl/lib:/opt/rocm/lib:/opt/rocm/lib64:$CRAY_LD_LIBRARY_PATH:$LD_LIBRARY_PATH:/opt/cray/pe/lib64"
-export APPTAINER_CONTAINLIBS="/usr/lib64/libcxi.so.1,/usr/lib64/libjson-c.so.5,/lib64/libtinfo.so.6,/usr/lib64/libnl-3.so.200,/usr/lib64/libgfortran.so.5,/usr/lib64/libjansson.so.4,/usr/lib64/libxpmem.so.0,/usr/lib64/libatomic.so.1"
+# The compute nodes no longer have libxpmem, and Cray MPICH 9.1.0 does not need it.
+export APPTAINER_CONTAINLIBS="/usr/lib64/libcxi.so.1,/usr/lib64/libjson-c.so.5,/lib64/libtinfo.so.6,/usr/lib64/libnl-3.so.200,/usr/lib64/libgfortran.so.5,/usr/lib64/libjansson.so.4,/usr/lib64/libatomic.so.1"
 export APPTAINERENV_LD_PRELOAD=$CRAY_MPICH_ROOTDIR/gtl/lib/libmpi_gtl_hsa.so.0:
 
 ## Run the simulation
