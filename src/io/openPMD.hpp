@@ -35,6 +35,8 @@ auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::
 // Stores numPts contiguous values from data (device memory in GPU builds) as one chunk.
 void StoreMeshChunk(openPMD::RecordComponent &record, const amrex::Real *data, std::size_t numPts, const openPMD::Offset &offset,
 		    const openPMD::Extent &extent);
+// Creates a file-based series for writing, e.g. filename = "plt%05T.bp".
+auto CreateSeries(const std::string &filename) -> openPMD::Series;
 void WriteCheckpointParticleAttributes(openPMD::Iteration &iteration, const ParticleContainer &particles, const std::string &name, std::uint64_t total);
 
 } // namespace detail

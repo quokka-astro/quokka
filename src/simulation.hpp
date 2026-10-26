@@ -564,12 +564,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	void ReadCheckpointFile();
 	// Reads cell (idim < 0) or face data for one level of the restart checkpoint.
-	void readCheckpointMultiFab(amrex::MultiFab &mf, int lev, int idim, int expectedComponents);
+	void ReadCheckpointMultiFab(amrex::MultiFab &mf, int lev, int idim, int expectedComponents);
 	std::string checkpointFormat_ = "amrex";
 	bool restartOpenPMD_ = false;
 #ifdef QUOKKA_USE_OPENPMD
 	void WriteOpenPMDCheckpointFile(std::string const &checkpointname) const;
-	auto readOpenPMDCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>;
+	auto ReadOpenPMDCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>;
 	std::optional<openPMD::Series> restartSeries_; // open while restarting from an openPMD checkpoint
 #endif
 
@@ -5205,7 +5205,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteOpenPMDCheckpo
 	SetLastCheckpointSymlink(checkpointname + ".bp");
 }
 
-template <typename problem_t> auto AMRSimulation<problem_t>::readOpenPMDCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>
+template <typename problem_t> auto AMRSimulation<problem_t>::ReadOpenPMDCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>
 {
 	auto iteration = quokka::OpenPMDOutput::CheckpointIteration(*restartSeries_);
 	finest_level = iteration.getAttribute("quokka_finest_level").template get<int>();
@@ -5239,7 +5239,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeade
 {
 #ifdef QUOKKA_USE_OPENPMD
 	if (restartOpenPMD_) {
-		return readOpenPMDCheckpointHeader(restart_file);
+		return ReadOpenPMDCheckpointHeader(restart_file);
 	}
 #endif
 	// Header
@@ -5341,7 +5341,7 @@ void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const
 		// (See https://github.com/quokka-astro/quokka/issues/1868.)
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab tmp_read;
-			readCheckpointMultiFab(tmp_read, lev, idim, Physics_Indices<problem_t>::nvarPerDim_fc);
+			ReadCheckpointMultiFab(tmp_read, lev, idim, Physics_Indices<problem_t>::nvarPerDim_fc);
 			state_new_fc_[lev][idim].ParallelCopy(tmp_read, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, amrex::IntVect(0), amrex::IntVect(0));
 			AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 		}
@@ -5452,7 +5452,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 			for (int chklev = 0; chklev <= finest_level; ++chklev) {
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					amrex::MultiFab tmp_read;
-					readCheckpointMultiFab(tmp_read, chklev, idim, Physics_Indices<problem_t>::nvarPerDim_fc);
+					ReadCheckpointMultiFab(tmp_read, chklev, idim, Physics_Indices<problem_t>::nvarPerDim_fc);
 					restart_fc[chklev][idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), 0);
 					restart_fc[chklev][idim].ParallelCopy(tmp_read, 0, 0, tmp_read.nComp(), amrex::IntVect(0), amrex::IntVect(0));
 					AMREX_ALWAYS_ASSERT(!restart_fc[chklev][idim].contains_nan(0, restart_fc[chklev][idim].nComp())); // check valid faces
@@ -5471,7 +5471,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 
 		// cell-centred data
 		amrex::MultiFab tmp;
-		readCheckpointMultiFab(tmp, lev, -1, Physics_Indices<problem_t>::nvarTotal_cc);
+		ReadCheckpointMultiFab(tmp, lev, -1, Physics_Indices<problem_t>::nvarTotal_cc);
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp())); // check valid cells
 
@@ -5512,7 +5512,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::loadBalanceOnRestar
 	return ba_lev;
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::readCheckpointMultiFab(amrex::MultiFab &mf, int lev, int idim, int expectedComponents)
+template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointMultiFab(amrex::MultiFab &mf, int lev, int idim, int expectedComponents)
 {
 #ifdef QUOKKA_USE_OPENPMD
 	if (restartOpenPMD_) {

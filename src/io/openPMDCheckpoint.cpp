@@ -66,15 +66,7 @@ auto LoadReal(openPMD::RecordComponent record, T *dest, const openPMD::Offset &o
 auto CreateCheckpointSeries(const std::string &basename) -> openPMD::Series
 {
 	// Pad like native checkpoint names, e.g. chk0000010.bp.
-	const std::string filename = basename + "%07T.bp";
-#ifdef AMREX_USE_MPI
-	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
-#else
-	auto series = openPMD::Series(filename, openPMD::Access::CREATE);
-#endif
-	series.setSoftware("Quokka", "1.0");
-	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
-	return series;
+	return detail::CreateSeries(basename + "%07T.bp");
 }
 
 auto OpenCheckpointSeries(const std::string &path) -> openPMD::Series
@@ -252,8 +244,9 @@ void ReadCheckpointParticles(openPMD::Iteration &iteration, ParticleContainer &p
 		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 			load(species["position"][axes[d]], realData[d]);
 		}
-		for (int c = 0; c < particles.Layout().numReal; ++c) {
-			load(species[reals[c]][openPMD::RecordComponent::SCALAR], realData[AMREX_SPACEDIM + c]);
+		const auto layout = particles.Layout();
+		for (int c = 0; c < layout.numReal; ++c) {
+			load(species[reals[c]][openPMD::RecordComponent::SCALAR], realData[layout.RealStorage(c)]);
 		}
 		for (int c = 0; c < particles.NumIntComps(); ++c) {
 			load(species[ints[c]][openPMD::RecordComponent::SCALAR], intData[c]);

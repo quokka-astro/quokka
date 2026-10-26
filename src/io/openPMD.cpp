@@ -100,6 +100,18 @@ void StoreMeshChunk(openPMD::RecordComponent &record, const amrex::Real *data, s
 	amrex::Gpu::dtoh_memcpy(span.data(), data, numPts * sizeof(amrex::Real));
 }
 
+auto CreateSeries(const std::string &filename) -> openPMD::Series
+{
+#ifdef AMREX_USE_MPI
+	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
+#else
+	auto series = openPMD::Series(filename, openPMD::Access::CREATE);
+#endif
+	series.setSoftware("Quokka", "1.0");
+	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
+	return series;
+}
+
 auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::string
 {
 	std::string new_field_name = field_name;
@@ -118,14 +130,7 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 	       const std::function<void(openPMD::Series &, openPMD::Iteration &)> &writeParticles)
 {
 	// open file
-	std::string const filename = output_basename + "%05T.bp";
-#ifdef AMREX_USE_MPI
-	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
-#else
-	auto series = openPMD::Series(filename, openPMD::Access::CREATE);
-#endif
-	series.setSoftware("Quokka", "1.0");
-	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
+	auto series = detail::CreateSeries(output_basename + "%05T.bp");
 
 	auto series_iteration = series.iterations[file_number];
 	series_iteration.open();
@@ -442,7 +447,7 @@ void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, cons
 			store(species["id"][openPMD::RecordComponent::SCALAR], buffers.ids);
 			store(species["amr_level"][openPMD::RecordComponent::SCALAR], buffers.levels);
 			for (int c = 0; c < layout.numReal; ++c) {
-				store(species[schema.RealNames()[c]][openPMD::RecordComponent::SCALAR], buffers.reals[AMREX_SPACEDIM + c]);
+				store(species[schema.RealNames()[c]][openPMD::RecordComponent::SCALAR], buffers.reals[layout.RealStorage(c)]);
 			}
 			for (int c = 0; c < layout.numInt; ++c) {
 				store(species[schema.IntNames()[c]][openPMD::RecordComponent::SCALAR], buffers.integers[c]);
