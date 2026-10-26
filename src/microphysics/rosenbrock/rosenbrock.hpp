@@ -18,13 +18,10 @@
 #include "microphysics/microphysics_traits.hpp"
 #include "microphysics/rosenbrock/rosenbrock_state.hpp"
 
-// still from extern/Microphysics: burn_t, net_ienuc, the integrator parameters, integrator_neqs, setup, backup and
-// cleanup (with the state copies they call)
+// still from extern/Microphysics: burn_t, net_ienuc, the integrator parameters and integrator_neqs
 #include "burn_type.H"
 #include "extern_parameters.H"
 #include "integrator_data.H"
-#include "integrator_setup_strang.H"
-#include "integrator_type_strang.H"
 
 namespace quokka::microphysics
 {
@@ -495,14 +492,15 @@ template <typename Tableau> struct Rosenbrock {
 
 	template <typename problem_t, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE static void Integrate(BurnT &state, const amrex::Real dt)
 	{
+		using Layout = IntegratorLayout<problem_t, BurnT>;
 		constexpr int int_neqs = integrator_neqs<BurnT>();
 
-		auto rosenbrock_state = integrator_setup<BurnT, RosenbrockState<int_neqs, Tableau::stages>>(state, dt, false);
-		auto state_save = integrator_backup(state);
+		auto rosenbrock_state = integrator_setup<Layout, RosenbrockState<int_neqs, Tableau::stages>>(state, dt);
+		const auto state_save = integrator_backup<Layout>(state);
 
 		const int istate = rosenbrock::rosenbrock_integrator<problem_t, Tableau>(state, rosenbrock_state);
 
-		integrator_cleanup(rosenbrock_state, state, istate, state_save, dt);
+		integrator_cleanup<Layout>(rosenbrock_state, state, istate, state_save, dt);
 	}
 };
 
