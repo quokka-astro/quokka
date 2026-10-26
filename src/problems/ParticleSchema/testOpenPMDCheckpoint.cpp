@@ -86,6 +86,8 @@ auto MeshNames(int direction) -> amrex::Vector<std::string>
 
 // Plotfile meshes take the same device-to-backend path as checkpoints. A
 // non-cubic domain split into non-cubic patches catches reversed chunk dimensions.
+// All patches are on rank zero, so other ranks must still join every collective
+// flush; the particle callback's barrier stands in for WriteParticles' collectives.
 void CheckPlotfileMesh()
 {
 	const amrex::Box domain(amrex::IntVect(0), amrex::IntVect(AMREX_D_DECL(7, 3, 5)));
@@ -94,10 +96,11 @@ void CheckPlotfileMesh()
 	const amrex::Geometry geom(domain, &bounds, 0, periodic.data());
 	amrex::BoxArray ba(domain);
 	ba.maxSize(amrex::IntVect(AMREX_D_DECL(4, 2, 3)));
-	amrex::MultiFab mf(ba, amrex::DistributionMapping(ba), 3, 0);
+	amrex::MultiFab mf(ba, amrex::DistributionMapping(amrex::Vector<int>(ba.size(), 0)), 3, 0);
 	FillMesh(mf);
 	const std::vector<std::string> names{"a", "b", "c"};
-	quokka::OpenPMDOutput::WriteFile(names, 1, {&mf}, {geom}, "mesh_plt", 0., 5);
+	quokka::OpenPMDOutput::WriteFile(names, 1, {&mf}, {geom}, "mesh_plt", 0., 5,
+					 [](openPMD::Series & /*series*/, openPMD::Iteration & /*iteration*/) { amrex::ParallelDescriptor::Barrier(); });
 	amrex::ParallelDescriptor::Barrier();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		openPMD::Series series("mesh_plt00005.bp", openPMD::Access::READ_ONLY);

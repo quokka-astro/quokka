@@ -23,7 +23,7 @@ auto ParticleKey(const std::string &name, const std::string &key) -> std::string
 auto ChunkOffset(const amrex::Box &box, const amrex::Box &domain) -> openPMD::Offset { return detail::getReversedVec(box.smallEnd() - domain.smallEnd()); }
 auto ChunkExtent(const amrex::Box &box) -> openPMD::Extent { return detail::getReversedVec(box.size()); }
 // Loads floating-point data stored as float or double into dest, converting when
-// the stored precision differs from T. Like writes (see detail::StoreMeshChunk),
+// the stored precision differs from T. Like writes (see detail::StoreDeviceChunk),
 // reads never hand device memory to ADIOS2, so a device destination is filled from
 // a host buffer. Any such copy is returned as a callback to run after the next
 // flush; it is empty when the data loads directly into host memory.
@@ -149,9 +149,12 @@ void WriteCheckpointMesh(openPMD::Iteration &iteration, const amrex::MultiFab &m
 		}
 		const auto &source = ghosted ? packed : mf[mfi];
 		for (int c = 0; c < mf.nComp(); ++c) {
-			detail::StoreMeshChunk(records[c], source.dataPtr(c), box.numPts(), ChunkOffset(box, domain), ChunkExtent(box));
+			detail::StoreDeviceChunk(records[c], source.dataPtr(c), box.numPts(), ChunkOffset(box, domain), ChunkExtent(box));
 		}
 	}
+	// A rank without patches has nothing new to flush, and openPMD would skip its
+	// part of BP5's collective write.
+	iteration.touch();
 	iteration.seriesFlush();
 }
 

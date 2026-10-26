@@ -87,19 +87,6 @@ void SetupMeshComponent(openPMD::Mesh &mesh, const amrex::Geometry &full_geom, a
 	mesh_comp.setPosition(relativePosition);
 }
 
-void StoreMeshChunk(openPMD::RecordComponent &record, const amrex::Real *data, std::size_t numPts, const openPMD::Offset &offset, const openPMD::Extent &extent)
-{
-	// Device pointers must not reach ADIOS2: GPU-enabled ADIOS2 treats GPU buffers
-	// as column-major and reverses the dimensions of multidimensional chunks. As
-	// in WarpX, copy straight into a span of the backend's own buffer instead.
-	// Without span support, openPMD queues a plain host buffer from this allocator.
-	auto view = record.storeChunk<amrex::Real>(
-	    offset, extent, [](std::size_t size) { return std::shared_ptr<amrex::Real>(new amrex::Real[size], std::default_delete<amrex::Real[]>()); });
-	// The span is valid until the next storeChunk, so copy synchronously.
-	auto span = view.currentBuffer();
-	amrex::Gpu::dtoh_memcpy(span.data(), data, numPts * sizeof(amrex::Real));
-}
-
 auto CreateSeries(const std::string &filename) -> openPMD::Series
 {
 #ifdef AMREX_USE_MPI
@@ -168,11 +155,13 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 				auto chunk_offset = detail::getReversedVec(box_offset); // this overflows if ghost zones are used (!)
 				auto chunk_size = detail::getReversedVec(local_box.size());
 
-				detail::StoreMeshChunk(mesh, fab.dataPtr(icomp), local_box.numPts(), chunk_offset, chunk_size);
+				detail::StoreDeviceChunk(mesh, fab.dataPtr(icomp), local_box.numPts(), chunk_offset, chunk_size);
 			}
 		}
 
-		// flush this level to disk
+		// Flush this level to disk. A rank without patches on this level has nothing
+		// new to flush, and openPMD would skip its part of BP5's collective write.
+		series_iteration.touch();
 		series.flush();
 	}
 
@@ -204,6 +193,9 @@ struct ParticleTileOutput {
 	std::vector<const int *> integers;
 	const std::uint64_t *ids = nullptr;
 	const int *levels = nullptr;
+	// Whether the pointers above refer to host memory (the host fallback) rather
+	// than device memory.
+	bool onHost = false;
 
 	void Prepare(const ParticleContainer::ParticleTileType &tile, int lev, std::uint64_t count, ParticleLayout layout, amrex::Long bufferLimit)
 	{
@@ -278,6 +270,7 @@ struct ParticleTileOutput {
 			amrex::Gpu::DeviceVector<int>().swap(deviceInts);
 			amrex::Gpu::DeviceVector<std::uint64_t>().swap(deviceIDs);
 		}
+		onHost = true;
 		const auto identity = HostCopy(soa.GetIdCPUData(), n);
 		std::vector<int> valid;
 		valid.reserve(count);
@@ -440,7 +433,15 @@ void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, cons
 			auto &buffers = roundBuffers[t - first];
 			const auto &[lev, tile, count] = tiles[t];
 			buffers.Prepare(*tile, lev, count, layout, bufferLimit);
-			const auto store = [&](openPMD::RecordComponent component, const auto *values) { component.storeChunkRaw(values, {offset}, {count}); };
+			const auto store = [&](openPMD::RecordComponent component, const auto *values) {
+#ifdef AMREX_USE_GPU
+				if (!buffers.onHost) {
+					detail::StoreDeviceChunk(component, values, count, {offset}, {count});
+					return;
+				}
+#endif
+				component.storeChunkRaw(values, {offset}, {count});
+			};
 			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 				store(species["position"][axes[d]], buffers.reals[d]);
 			}

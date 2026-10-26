@@ -11,10 +11,12 @@
 #include "particles/particle_container.hpp"
 #include <array>
 #include <functional>
+#include <memory>
 #include <string>
 
 // AMReX headers
 #include "AMReX_Geometry.H"
+#include "AMReX_GpuDevice.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include <AMReX.H>
@@ -32,9 +34,22 @@ auto getReversedVec(const amrex::IntVect &v) -> std::vector<std::uint64_t>;
 auto getReversedVec(const amrex::Real *v) -> std::vector<double>;
 void SetupMeshComponent(openPMD::Mesh &mesh, const amrex::Geometry &full_geom, amrex::IndexType ixType = amrex::IndexType::TheCellType());
 auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::string;
-// Stores numPts contiguous values from data (device memory in GPU builds) as one chunk.
-void StoreMeshChunk(openPMD::RecordComponent &record, const amrex::Real *data, std::size_t numPts, const openPMD::Offset &offset,
-		    const openPMD::Extent &extent);
+// Stores n contiguous values from data (device memory in GPU builds) as one chunk.
+//
+// Device pointers must not reach ADIOS2. GPU-enabled ADIOS2 treats GPU buffers as
+// column-major and reverses the dimensions of multidimensional chunks
+// (ornladios/ADIOS2#5241), and ADIOS2 without GPU support reads them from the CPU,
+// which is very slow on AMD GPUs. As in WarpX, copy straight into a span of the
+// backend's own buffer instead. Without span support, openPMD queues a plain host
+// buffer from this allocator.
+template <typename T>
+void StoreDeviceChunk(openPMD::RecordComponent &record, const T *data, std::size_t n, const openPMD::Offset &offset, const openPMD::Extent &extent)
+{
+	auto view = record.storeChunk<T>(offset, extent, [](std::size_t size) { return std::shared_ptr<T>(new T[size], std::default_delete<T[]>()); });
+	// The span is valid until the next storeChunk, so copy synchronously.
+	auto span = view.currentBuffer();
+	amrex::Gpu::dtoh_memcpy(span.data(), data, n * sizeof(T));
+}
 // Creates a file-based series for writing, e.g. filename = "plt%05T.bp".
 auto CreateSeries(const std::string &filename) -> openPMD::Series;
 void WriteCheckpointParticleAttributes(openPMD::Iteration &iteration, const ParticleContainer &particles, const std::string &name, std::uint64_t total);

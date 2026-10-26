@@ -21,8 +21,9 @@ are excluded. Globally empty populations are omitted. Array order can change
 between outputs; match particles using `id`, which stores AMReX's packed
 64-bit ID and creation-rank pair.
 
-Particle output borrows each tile's arrays directly, including device pointers
-when ADIOS2 is built with the matching CUDA/HIP support. Tiles containing invalid
+In GPU builds, each tile's arrays are copied from device memory straight into
+the I/O backend's buffers; device pointers are never passed to ADIOS2. In CPU
+builds, the arrays are passed to the backend directly. Tiles containing invalid
 particles are compacted in device memory, preserving particle order. The generated `amr_level` array also
 uses a tile-sized device buffer. If these scratch allocations fail, that tile
 falls back to host staging. `openpmd.particle_device_buffer_bytes` limits scratch
