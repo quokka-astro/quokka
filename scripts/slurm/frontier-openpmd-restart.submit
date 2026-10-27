@@ -6,6 +6,7 @@
 #SBATCH -t 01:00:00
 #SBATCH -p batch
 #SBATCH -N 64
+#SBATCH -C nvme
 
 # At-scale openPMD checkpoint/restart test and I/O bandwidth estimate
 # (HydroBlast3D with tracers and one AMR level).
@@ -42,7 +43,8 @@
 # OpenPMDCheckpoint built with openPMD (no build needed):
 #   apptainer pull quokka_rocm-diskgalaxy.sif docker://ghcr.io/quokka-astro/quokka:<tag>
 #   sbatch --export=ALL,CONTAINER=$PWD/quokka_rocm-diskgalaxy.sif scripts/slurm/frontier-openpmd-restart.submit
-# In container mode the environment follows scripts/slurm/frontier-container.submit.
+# In container mode the environment follows scripts/slurm/frontier-container.submit, and
+# the image is copied to each node's NVMe (hence -C nvme) instead of being read from Orion.
 #
 # Overrides (environment variables, e.g. `sbatch --export=ALL,NCELL=4096 -N 512 ...`):
 #   NCELL          cells per dimension in x and y (default 2048; 2048^3 fits 64 nodes)
@@ -51,6 +53,8 @@
 #   MAX_GRID_SIZE  maximum grid size and blocking factor (default 128)
 #   CHK_STEP       K, the step of the checkpoint used for restart (default 10)
 #   RESTART_NODES  nodes for the read and restart runs (default: half the allocation)
+#   NATIVE_NFILES  files per MultiFab and particle files for native output (default: the
+#                  node count, as in production; -1 for one file per rank)
 #   CONTROL        1 to also restart from the native checkpoint (default 1)
 #   PLOTFILE       1 to also measure openPMD plotfile output (default 1)
 #   AGGREGATION    openpmd.aggregation modes to compare (default "off on")
@@ -112,6 +116,10 @@ else
 fi
 set -euo pipefail
 export OMP_NUM_THREADS=1
+# As in production runs: avoids network flakiness above 1000 nodes, and gives MPI
+# startup more time at scale.
+export FI_CXI_RX_MATCH_MODE=software
+export PMI_MMAP_SYNC_WAIT_TIME=1800
 
 NCELL=${NCELL:-2048}
 NCELL_Z=${NCELL_Z:-${NCELL}}
@@ -121,6 +129,7 @@ CHK_STEP=${CHK_STEP:-10}
 FINAL_STEP=$((2 * CHK_STEP))
 NODES=${SLURM_JOB_NUM_NODES}
 RESTART_NODES=${RESTART_NODES:-$(((NODES + 1) / 2))}
+NATIVE_NFILES=${NATIVE_NFILES:-${NODES}}
 CONTROL=${CONTROL:-1}
 PLOTFILE=${PLOTFILE:-1}
 read -r -a AGGREGATION <<<"${AGGREGATION:-off on}"
@@ -132,6 +141,12 @@ if [[ -n ${CONTAINER} ]]; then
 		echo "missing container image: ${CONTAINER}" >&2
 		exit 1
 	}
+	# Thousands of ranks reading the image from Orion can keep a job from starting, so
+	# copy it to each node's NVMe first.
+	image_nvme=/mnt/bb/${USER}/$(basename "${CONTAINER}")
+	echo "copying ${CONTAINER} to ${image_nvme} on every node"
+	sbcast -pf "${CONTAINER}" "${image_nvme}"
+	CONTAINER=${image_nvme}
 	SIM=/opt/quokka/bin/HydroBlast3D
 	COMPARE=/opt/quokka/bin/OpenPMDCheckpoint
 	INPUT=/opt/quokka/share/quokka/inputs/HydroBlast3D.toml
@@ -183,7 +198,10 @@ common=("${INPUT}"
 	do_tracers=1 quokka.slice_z.int=-1 blast_problem.check_solution=0 tiny_profiler.enabled=1
 	# Native particle restarts read with at most 64 ranks by default, which runs out
 	# of memory at scale; AMReX caps this at the rank count.
-	particles.nreaders=1000000)
+	particles.nreaders=1000000
+	# Native output as in production runs.
+	amr.checkpoint_nfiles="${NATIVE_NFILES}" amr.plot_nfiles="${NATIVE_NFILES}"
+	particles.particles_nfiles="${NATIVE_NFILES}" vismf.noflushafterwrite=1)
 no_output=(checkpoint_interval=-1 plotfile_interval=-1)
 
 # Run one step of the test on $2 nodes, starting at node $3 of the allocation
@@ -216,7 +234,7 @@ measure() {
 	summary+=("${line}")
 }
 
-echo "NCELL=${NCELL}x${NCELL}x${NCELL_Z} MAX_LEVEL=${MAX_LEVEL} CHK_STEP=${CHK_STEP} NODES=${NODES} RESTART_NODES=${RESTART_NODES}"
+echo "NCELL=${NCELL}x${NCELL}x${NCELL_Z} MAX_LEVEL=${MAX_LEVEL} CHK_STEP=${CHK_STEP} NODES=${NODES} RESTART_NODES=${RESTART_NODES} NATIVE_NFILES=${NATIVE_NFILES}"
 echo "RUN_DIR=${RUN_DIR}"
 if [[ -n ${CONTAINER} ]]; then
 	echo "container ${CONTAINER}"
