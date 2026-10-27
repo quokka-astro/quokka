@@ -28,7 +28,10 @@
 # Effective bandwidth = bytes written or read / TinyProfiler time (inclusive, max over
 # ranks) of the run's AMRSimulation::WriteCheckpointFile(), WritePlotFile() or
 # ReadCheckpointFile() region. Each figure comes from a single run, so repeat the job
-# to judge run-to-run variation.
+# to judge run-to-run variation. Sizes come from each output's metadata (see bytes())
+# and are measured once: openPMD sizes come from the first aggregation mode (the modes
+# differ by a few bytes of metadata), and reads reuse the size of the checkpoint at K
+# measured after writing it.
 #
 # Build first (on a login node), from the repository root:
 #   quokka config -d 3d-hip --source scripts/hpc_profiles/frontier.profile --root . \
@@ -178,16 +181,66 @@ cd "${RUN_DIR}"
 
 chk() { printf '%s%07d' "$1" "$2"; }
 
-# Total apparent size in bytes of the given files and directories.
+# Print a timestamped progress line.
+stamp() { echo "[$(date +%T)] $*" >&2; }
+
+# Remove output, with timestamps.
+clean() {
+	stamp "removing $*"
+	rm -rf "$@"
+	stamp "removed"
+}
+
+# Bytes in the given native checkpoints and openPMD series (.bp), from their own
+# metadata, with timestamps. Never stat the data files: sizing thousands of freshly
+# written files on Lustre took up to 49 minutes at 1024 nodes. openPMD sizes are the
+# bytes each rank wrote (ADIOS2's profiling.json); native sizes are the cell and
+# particle data in the FAB and particle headers (double precision, without the small
+# headers themselves).
 bytes() {
-	python3 -c 'import os, sys
-total = 0
-for path in sys.argv[1:]:
-    if os.path.isdir(path):
-        total += sum(os.path.getsize(os.path.join(root, name)) for root, _, names in os.walk(path) for name in names)
-    else:
-        total += os.path.getsize(path)
-print(total)' "$@"
+	stamp "measuring size of $*"
+	python3 -c 'import json, os, re, sys
+
+def openpmd(path):
+    with open(os.path.join(path, "profiling.json")) as f:
+        ranks = json.load(f)
+    return sum(v["wbytes"] for rank in ranks for k, v in rank.items() if k.startswith("transport_"))
+
+def fabs(header):
+    with open(header) as f:
+        lines = f.read().split("\n")
+    ncomp = int(lines[2])
+    total = 0
+    for line in lines:
+        m = re.fullmatch(r"\(\(([-\d,]+)\) \(([-\d,]+)\) \([\d,]+\)\)", line)
+        if m:
+            cells = 1
+            for lo, hi in zip(m[1].split(","), m[2].split(",")):
+                cells *= int(hi) - int(lo) + 1
+            total += cells * ncomp * 8
+    return total
+
+def particles(header):
+    with open(header) as f:
+        lines = f.read().split("\n")
+    real = 8 if lines[0].endswith("_double") else 4
+    dim, nreal = int(lines[1]), int(lines[2])
+    nint = int(lines[3 + nreal])
+    assert lines[4 + nreal + nint] == "1", header + " is not a checkpoint"
+    # Checkpoints add two ints (id and cpu) per particle.
+    return int(lines[5 + nreal + nint]) * ((dim + nreal) * real + (2 + nint) * 4)
+
+def native(path):
+    total = 0
+    for entry in os.scandir(path):
+        if entry.name.startswith("Level_"):
+            total += sum(fabs(h.path) for h in os.scandir(entry.path) if h.name.endswith("_H"))
+        elif entry.is_dir():
+            total += particles(os.path.join(entry.path, "Header"))
+    return total
+
+print(sum(openpmd(p) if p.endswith(".bp") else native(p) for p in sys.argv[1:]))' "$@"
+	stamp "measured"
 }
 
 # The elapsed time (s) a run reports, and the inclusive max time (s) of a TinyProfiler region.
@@ -213,7 +266,7 @@ no_output=(checkpoint_interval=-1 plotfile_interval=-1)
 run() {
 	local label=$1 nodes=$2 first=$3
 	shift 3
-	echo "=== ${label}: ${nodes} nodes from node ${first}, $((nodes * 8)) ranks"
+	echo "=== [$(date +%T)] ${label}: ${nodes} nodes from node ${first}, $((nodes * 8)) ranks"
 	if ! srun -N "${nodes}" -n $((nodes * 8)) --relative="${first}" --ntasks-per-node=8 --cpus-per-task=7 --gpus-per-task=1 \
 		--gpu-bind=closest ${launch[@]+"${launch[@]}"} "$@" >"${label}.log" 2>&1; then
 		echo "${label} FAILED; see ${RUN_DIR}/${label}.log"
@@ -222,7 +275,7 @@ run() {
 	fi
 	local t
 	t=$(elapsed "${label}")
-	echo "${label} finished${t:+, elapsed ${t} s}"
+	echo "[$(date +%T)] ${label} finished${t:+, elapsed ${t} s}"
 }
 
 # Record one bandwidth line: label, direction, bytes, run, TinyProfiler region.
@@ -250,31 +303,33 @@ fi
 steps=(max_timesteps="${FINAL_STEP}")
 run reference "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
 	checkpoint_format=amrex checkpoint_prefix=reference
-native_written=()
-for step in 0 "${CHK_STEP}" "${FINAL_STEP}"; do
-	native_written+=("$(chk reference "${step}")")
-done
-measure "native checkpoint" write "$(bytes "${native_written[@]}")" reference "AMRSimulation::WriteCheckpointFile()"
+native_k=$(bytes "$(chk reference "${CHK_STEP}")")
+native_other=$(bytes "$(chk reference 0)" "$(chk reference "${FINAL_STEP}")")
+measure "native checkpoint" write $((native_k + native_other)) reference "AMRSimulation::WriteCheckpointFile()"
 # Keep only the native checkpoints at K and 2K.
-rm -rf "$(chk reference 0)"
+clean "$(chk reference 0)"
+openpmd_k='' openpmd_other='' plotfile_size=''
 for mode in "${AGGREGATION[@]}"; do
 	prefix=openpmd_${mode}
 	run "${prefix}" "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
 		checkpoint_format=openpmd checkpoint_prefix="${prefix}" openpmd.aggregation="${mode}"
-	openpmd_written=()
-	for step in 0 "${CHK_STEP}" "${FINAL_STEP}"; do
-		openpmd_written+=("$(chk "${prefix}" "${step}").bp" "$(chk "${prefix}" "${step}").yaml")
-	done
-	measure "openPMD checkpoint (${mode})" write "$(bytes "${openpmd_written[@]}")" "${prefix}" "AMRSimulation::WriteCheckpointFile()"
+	if [[ -z ${openpmd_k} ]]; then
+		openpmd_k=$(bytes "$(chk "${prefix}" "${CHK_STEP}").bp")
+		openpmd_other=$(bytes "$(chk "${prefix}" 0).bp" "$(chk "${prefix}" "${FINAL_STEP}").bp")
+	fi
+	measure "openPMD checkpoint (${mode})" write $((openpmd_k + openpmd_other)) "${prefix}" "AMRSimulation::WriteCheckpointFile()"
 	# Keep only the openPMD checkpoint at K.
-	rm -rf "$(chk "${prefix}" 0).bp" "$(chk "${prefix}" 0).yaml" "$(chk "${prefix}" "${FINAL_STEP}").bp" \
+	clean "$(chk "${prefix}" 0).bp" "$(chk "${prefix}" 0).yaml" "$(chk "${prefix}" "${FINAL_STEP}").bp" \
 		"$(chk "${prefix}" "${FINAL_STEP}").yaml"
 
 	if ((PLOTFILE)); then
 		run "plotfile_${mode}" "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval=-1 \
 			plotfile_interval="${CHK_STEP}" skip_initial_plotfile=1 openpmd.aggregation="${mode}"
-		measure "openPMD plotfile (${mode})" write "$(bytes plt*.bp plt*.yaml)" "plotfile_${mode}" "AMRSimulation::WritePlotFile()"
-		rm -rf plt*.bp plt*.yaml
+		if [[ -z ${plotfile_size} ]]; then
+			plotfile_size=$(bytes plt*.bp)
+		fi
+		measure "openPMD plotfile (${mode})" write "${plotfile_size}" "plotfile_${mode}" "AMRSimulation::WritePlotFile()"
+		clean plt*.bp plt*.yaml
 	fi
 done
 
@@ -284,12 +339,11 @@ for mode in "${AGGREGATION[@]}"; do
 	prefix=openpmd_${mode}
 	run "read_${prefix}" "${RESTART_NODES}" "${read_first}" "${SIM}" "${common[@]}" max_timesteps="${CHK_STEP}" "${no_output[@]}" \
 		restartfile="$(chk "${prefix}" "${CHK_STEP}")"
-	measure "openPMD checkpoint (${mode})" read "$(bytes "$(chk "${prefix}" "${CHK_STEP}").bp" "$(chk "${prefix}" "${CHK_STEP}").yaml")" \
-		"read_${prefix}" "AMRSimulation::ReadCheckpointFile()"
+	measure "openPMD checkpoint (${mode})" read "${openpmd_k}" "read_${prefix}" "AMRSimulation::ReadCheckpointFile()"
 done
 run read_native "${RESTART_NODES}" "${read_first}" "${SIM}" "${common[@]}" max_timesteps="${CHK_STEP}" "${no_output[@]}" \
 	restartfile="$(chk reference "${CHK_STEP}")"
-measure "native checkpoint" read "$(bytes "$(chk reference "${CHK_STEP}")")" read_native "AMRSimulation::ReadCheckpointFile()"
+measure "native checkpoint" read "${native_k}" read_native "AMRSimulation::ReadCheckpointFile()"
 
 # Correctness: restarts on a different rank count must reproduce step 2K exactly.
 levels=$((MAX_LEVEL + 1))
@@ -300,7 +354,7 @@ if ((VERIFY)); then
 			restartfile="$(chk "openpmd_${mode}" "${CHK_STEP}")"
 		run "compare_${mode}" "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" \
 			candidate="$(chk "restarted_${mode}" "${FINAL_STEP}")" levels="${levels}" "${native_read[@]}"
-		rm -rf "$(chk "restarted_${mode}" "${FINAL_STEP}")"
+		clean "$(chk "restarted_${mode}" "${FINAL_STEP}")"
 	done
 	if ((CONTROL)); then
 		run native_restart "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix=native_restarted \
