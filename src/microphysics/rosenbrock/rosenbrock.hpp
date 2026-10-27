@@ -125,9 +125,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex
 				if (y(n) < -integrator_rp::atol_spec) {
 					return false;
 				}
-				if (!integrator_rp::use_number_densities && y(n) > 1.0_rt) {
-					return false;
-				}
 				break;
 			case VarRole::Energy:
 				if (y(n) <= 0.0_rt) {

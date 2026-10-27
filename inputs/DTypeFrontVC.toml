@@ -25,8 +25,6 @@ photoionization_momentum.n_HI_init = 1.0e2
 photoionization_momentum.n_HII_init = 1.0e-10
 photoionization_momentum.temperature = 1.0e3
 
-integrator.use_number_densities = 1
-integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 integrator.ode_max_steps = 50000
 
