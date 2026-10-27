@@ -15,6 +15,7 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/jaff_network_adapter.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"

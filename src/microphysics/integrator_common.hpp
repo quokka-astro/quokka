@@ -44,6 +44,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto counts_toward_error(cons
 	return role == VarRole::Species || role == VarRole::Energy || role == VarRole::ChemPhotonNumber;
 }
 
+/// The length of an array member of a burn state: a C array in Microphysics' burn_t, an amrex::GpuArray in BurnState.
+/// Transitional: it goes with burn_t, once the primordial problems use BurnState.
+template <typename ArrayT> constexpr auto burn_array_size() -> int
+{
+	if constexpr (std::is_array_v<ArrayT>) {
+		return static_cast<int>(std::extent_v<ArrayT>);
+	} else {
+		return static_cast<int>(ArrayT::size());
+	}
+}
+
 template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	using traits = Microphysics_Traits<problem_t>;
 
@@ -52,7 +63,7 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	static constexpr auto NumChemRadEqs() -> int
 	{
 		if constexpr (photochemistry) {
-			return static_cast<int>(std::extent_v<decltype(BurnT::rn)>);
+			return burn_array_size<decltype(BurnT::rn)>();
 		} else {
 			return 0;
 		}
@@ -61,7 +72,7 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	static constexpr auto NumThermalBands() -> int
 	{
 		if constexpr (photochemistry) {
-			return static_cast<int>(std::extent_v<decltype(BurnT::re_thermal)>);
+			return burn_array_size<decltype(BurnT::re_thermal)>();
 		} else {
 			return 0;
 		}
@@ -133,11 +144,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state
 
 	if constexpr (Layout::traits::call_eos_in_rhs) {
 		eos(eos_input_re, state);
-	}
-
-	// override T if we are fixing it
-	if (state.T_fixed > 0.0_rt) {
-		state.T = state.T_fixed;
 	}
 }
 
@@ -350,12 +356,6 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amr
 
 	int_state.t = 0.0_rt;
 	int_state.tout = dt;
-
-	// Initialize ydot to zero for Strang burn.
-
-	for (int n = 0; n < SVAR; ++n) {
-		state.ydot_a[n] = 0;
-	}
 
 	// We assume that (rho, T) coming in are valid, do an EOS call
 	// to fill the rest of the thermodynamic variables.
