@@ -16,6 +16,23 @@ If a particle population enabled in the restarted run (for example tracers
 turned on with `do_tracers=1`) is not in the checkpoint, Quokka prints a
 warning and starts that population empty.
 
+## Native particle restarts at scale
+
+AMReX reads native particle checkpoints with at most `particles.nreaders` ranks
+(default 64), so each reading rank holds `1/nreaders` of every particle
+population before the particles are redistributed. On large runs with many
+particles this can exhaust GPU memory: a 4096-rank tracer restart on Frontier
+ran out of memory in `ParticleContainer::ReadParticles()`. Set
+`particles.nreaders` to the number of ranks or higher (AMReX caps it at the
+rank count) so every rank reads its share:
+
+```
+particles.nreaders = 1000000
+```
+
+openPMD checkpoints don't need this, because every rank reads its own share of
+each particle population.
+
 ## openPMD checkpoints
 
 Build with `-DQUOKKA_OPENPMD=ON`, then set these top-level input parameters:
