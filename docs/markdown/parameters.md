@@ -115,7 +115,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 ## Integrator (VODE)
 
-These parameters control the VODE ODE integrator used for chemistry and photochemistry source terms. The generated code reads them via `init_extern_parameters()` from the `integrator` prefix. See also `docs/markdown/photoionization.md`.
+These parameters control the VODE ODE integrator used for chemistry and photochemistry source terms. They are read from the `integrator` prefix by `readIntegratorParams()` in `src/microphysics/integrator_params.hpp`. See also `docs/markdown/photoionization.md`.
 
 VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will cause the integrator to stall. Users must explicitly set the tolerances below.
 

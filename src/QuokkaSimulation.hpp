@@ -76,6 +76,7 @@ namespace filesystem = experimental::filesystem;
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
 #include "hyperbolic_system.hpp"
+#include "microphysics/integrator_params.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 #include "radiation/photochemistry.hpp"
@@ -833,6 +834,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
 	}
 #endif
+
+	// set the runtime parameters of the chemistry and photochemistry integrators
+	quokka::microphysics::integrator_params::readIntegratorParams();
 
 	// set dust runtime parameters
 	{
