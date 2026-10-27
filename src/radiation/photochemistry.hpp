@@ -13,9 +13,9 @@
 
 #ifdef PHOTOCHEMISTRY
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/burner.hpp"
 #include "network_properties.H"
 #include "physics_numVars.hpp"
@@ -134,7 +134,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				RadSystem<problem_t>::AssertChemBandOpacitiesAreZero(radBoundaries, rho, Tgas);
 			}
 
-			burn_t photochemstate;
+			quokka::microphysics::BurnState<problem_t> photochemstate;
 			photochemstate.success = true;
 			int burn_failed = 0;
 			photochemstate.c_hat = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
