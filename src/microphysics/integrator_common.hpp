@@ -100,6 +100,10 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 		return VarRole::DustAbsorbedEnergy;
 	}
 
+	static_assert(traits::photochemistry == photochemistry,
+		      "Microphysics_Traits::photochemistry must be true exactly when the problem is built with PHOTOCHEMISTRY");
+	static_assert(traits::dust_band_absorption == q_dust,
+		      "Microphysics_Traits::dust_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
 	static_assert(net_ienuc == NumSpec + 1, "the energy must follow the species");
 	static_assert(num_chem_rad_eqs % vars_per_group == 0, "every chemical band must have vars_per_group variables");
 	static_assert(integrator_neqs<BurnT>() == neqs, "the layout must match Microphysics' integrator_neqs");
