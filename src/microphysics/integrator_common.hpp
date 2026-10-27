@@ -123,10 +123,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state
 		state.c_hat = int_state.c_hat;
 	}
 
-	if (integrator_rp::scale_system) {
-		state.e *= state.e_scale;
-	}
-
 	// Get T from e (also updates composition quantities).
 
 	if constexpr (Layout::traits::call_eos_in_rhs) {
@@ -162,10 +158,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void integrator_to_burn(const Integrato
 		}
 	}
 
-	if (integrator_rp::scale_system) {
-		state.e *= state.e_scale;
-	}
-
 	state.time = int_state.t;
 }
 
@@ -190,10 +182,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void burn_to_integrator(const BurnT &st
 		if constexpr (Layout::q_dust) {
 			int_state.y(net_ienuc + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1) = state.e_dust_absorbed;
 		}
-	}
-
-	if (integrator_rp::scale_system) {
-		int_state.y(net_ienuc) /= state.e_scale;
 	}
 }
 
@@ -276,23 +264,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 
 	actual_rhs(state, ydot);
 
-	// scale the energy
-	if (integrator_rp::scale_system) {
-		ydot(net_ienuc) /= state.e_scale;
-	}
-
 	// Allow energy integration to be disabled.
 
 	if constexpr (!Layout::traits::integrate_energy) {
 		ydot(net_ienuc) = 0.0_rt;
-	}
-
-	// apply fudge factor:
-
-	if (integrator_rp::react_boost > 0.0_rt) {
-		for (int n = 1; n <= int_neqs; ++n) {
-			ydot(n) *= integrator_rp::react_boost;
-		}
 	}
 }
 
@@ -318,25 +293,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 	pd.zero();
 
 	actual_jac(state, pd);
-
-	// scale the energy derivatives
-
-	if (integrator_rp::scale_system) {
-		// first the row de/dX
-		for (int j = 1; j <= int_neqs; ++j) {
-			pd(net_ienuc, j) /= state.e_scale;
-		}
-
-		// now the column dX/de
-		for (int i = 1; i <= int_neqs; ++i) {
-			pd(i, net_ienuc) *= state.e_scale;
-		}
-	}
-
-	// apply fudge factor:
-	if (integrator_rp::react_boost > 0.0_rt) {
-		pd.mul(integrator_rp::react_boost);
-	}
 
 	// Allow temperature and energy integration to be disabled.
 
@@ -399,15 +355,6 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amr
 	// to fill the rest of the thermodynamic variables.
 
 	eos(eos_input_rt, state);
-
-	// set the scaling for energy if we integrate it dimensionlessly
-	state.e_scale = state.e;
-
-	if (integrator_rp::scale_system) {
-		// the absolute tol for energy needs to reflect the scaled
-		// energy the integrator sees
-		int_state.atol_enuc /= state.e_scale;
-	}
 
 	if constexpr (Layout::q_dust) {
 		state.e_dust_absorbed = 0.0_rt;
