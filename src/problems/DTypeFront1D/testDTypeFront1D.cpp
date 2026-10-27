@@ -94,7 +94,9 @@ template <> struct ISM_Traits<DTypeFront1D> {
 
 template <> struct Microphysics_Traits<DTypeFront1D> : DefaultMicrophysicsTraits {
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
+	static constexpr bool photochemistry = true;	   // built with PHOTOCHEMISTRY
+	static constexpr bool dust_band_absorption = true; // built with DUST_CHEMICAL_BAND_ABSORPTION
+	static constexpr bool integrate_rad_flux = false;  // built with SKIP_PHOTOCHEMFLUX
 };
 
 template <> struct SimulationData<DTypeFront1D> {
