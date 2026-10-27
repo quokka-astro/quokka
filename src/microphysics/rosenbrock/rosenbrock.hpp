@@ -15,12 +15,12 @@
 #include "math/linear_algebra.hpp"
 #include "microphysics/integrator_common.hpp"
 #include "microphysics/integrator_errors.hpp"
+#include "microphysics/integrator_params.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "microphysics/rosenbrock/rosenbrock_state.hpp"
 
-// still from extern/Microphysics: burn_t, net_ienuc, the integrator parameters and integrator_neqs
+// still from extern/Microphysics: burn_t, net_ienuc and integrator_neqs
 #include "burn_type.H"
-#include "extern_parameters.H"
 #include "integrator_data.H"
 
 namespace quokka::microphysics
@@ -84,8 +84,8 @@ template <int int_neqs, int stages> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE aut
 	constexpr amrex::Real decrease_change_factor = 0.25_rt;
 
 	for (int i = 1; i <= NumSpec; ++i) {
-		if (std::abs(rstate.y(i)) > integrator_rp::X_reject_buffer * rstate.atol_spec &&
-		    std::abs(rstate.ynew(i)) > integrator_rp::X_reject_buffer * rstate.atol_spec &&
+		if (std::abs(rstate.y(i)) > integrator_params::X_reject_buffer * rstate.atol_spec &&
+		    std::abs(rstate.ynew(i)) > integrator_params::X_reject_buffer * rstate.atol_spec &&
 		    (std::abs(rstate.ynew(i)) > increase_change_factor * std::abs(rstate.y(i)) ||
 		     std::abs(rstate.ynew(i)) < decrease_change_factor * std::abs(rstate.y(i)))) {
 			return false;
@@ -122,7 +122,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex
 	for (int n = 1; n <= int_neqs; ++n) {
 		switch (Layout::role(n)) {
 			case VarRole::Species:
-				if (y(n) < -integrator_rp::atol_spec) {
+				if (y(n) < -integrator_params::atol_spec) {
 					return false;
 				}
 				break;
@@ -132,7 +132,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex
 				}
 				break;
 			case VarRole::ChemPhotonNumber:
-				if (y(n) < -integrator_rp::atol_rad_num) {
+				if (y(n) < -integrator_params::atol_rad_num) {
 					return false;
 				}
 				break;
@@ -310,7 +310,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 
 	while (true) {
 
-		if (rstate.n_step > integrator_rp::ode_max_steps) {
+		if (rstate.n_step > integrator_params::ode_max_steps) {
 			rstate.t = x;
 			rstate.dt = h;
 			return IERR_TOO_MANY_STEPS;

@@ -18,14 +18,14 @@
 #include "AMReX_REAL.H"
 
 #include "microphysics/integrator_errors.hpp"
+#include "microphysics/integrator_params.hpp"
 #include "microphysics/microphysics_traits.hpp"
 
-// still from extern/Microphysics: burn_t, net_ienuc, eos(), the network's actual_rhs and actual_jac, the
-// integrator parameters and integrator_neqs
+// still from extern/Microphysics: burn_t, net_ienuc, eos(), the network's actual_rhs and actual_jac, and
+// integrator_neqs
 #include "actual_rhs.H"
 #include "burn_type.H"
 #include "eos.H"
-#include "extern_parameters.H"
 #include "integrator_data.H"
 #include "network.H"
 
@@ -194,14 +194,14 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 				// Ensure that mass fractions always stay positive and less than or
 				// equal to 1.
 				if constexpr (Layout::traits::do_species_clip) {
-					int_state.y(n) = amrex::Clamp(int_state.y(n), integrator_rp::SMALL_X_SAFE, 1.0_rt);
+					int_state.y(n) = amrex::Clamp(int_state.y(n), integrator_params::SMALL_X_SAFE, 1.0_rt);
 				}
 				// enforce positivity of the number densities
-				int_state.y(n) = amrex::max(int_state.y(n), integrator_rp::SMALL_X_SAFE);
+				int_state.y(n) = amrex::max(int_state.y(n), integrator_params::SMALL_X_SAFE);
 				break;
 			case VarRole::ChemPhotonNumber:
 			case VarRole::ThermalBandEnergy:
-				int_state.y(n) = amrex::max(int_state.y(n), integrator_rp::SMALL_X_SAFE);
+				int_state.y(n) = amrex::max(int_state.y(n), integrator_params::SMALL_X_SAFE);
 				break;
 			case VarRole::DustAbsorbedEnergy:
 				int_state.y(n) = amrex::max(int_state.y(n), 0.0_rt);
@@ -326,14 +326,14 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amr
 
 	// Set the tolerances.
 
-	int_state.atol_spec = integrator_rp::atol_spec; // mass fractions
-	int_state.atol_enuc = integrator_rp::atol_enuc; // energy generated
+	int_state.atol_spec = integrator_params::atol_spec; // mass fractions
+	int_state.atol_enuc = integrator_params::atol_enuc; // energy generated
 
-	int_state.rtol_spec = integrator_rp::rtol_spec; // mass fractions
-	int_state.rtol_enuc = integrator_rp::rtol_enuc; // energy generated
+	int_state.rtol_spec = integrator_params::rtol_spec; // mass fractions
+	int_state.rtol_enuc = integrator_params::rtol_enuc; // energy generated
 	if constexpr (Layout::photochemistry) {
-		int_state.atol_rad_num = integrator_rp::atol_rad_num; // radiation number density
-		int_state.rtol_rad_num = integrator_rp::rtol_rad_num; // radiation number density
+		int_state.atol_rad_num = integrator_params::atol_rad_num; // radiation number density
+		int_state.rtol_rad_num = integrator_params::rtol_rad_num; // radiation number density
 	}
 
 	// Start off by assuming a successful burn.
@@ -422,12 +422,12 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 	for (int n = 1; n <= Layout::neqs; ++n) {
 		switch (Layout::role(n)) {
 			case VarRole::Species:
-				if (int_state.y(n) < -integrator_rp::species_failure_tolerance) {
+				if (int_state.y(n) < -integrator_params::species_failure_tolerance) {
 					state.success = false;
 				}
 				break;
 			case VarRole::ChemPhotonNumber:
-				if (int_state.y(n) < -integrator_rp::radiation_failure_tolerance) {
+				if (int_state.y(n) < -integrator_params::radiation_failure_tolerance) {
 					state.success = false;
 				}
 				break;
@@ -440,7 +440,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 	}
 
 #ifndef AMREX_USE_GPU
-	if (integrator_rp::burner_verbose) {
+	if (integrator_params::burner_verbose) {
 		// Print out some integration statistics, if desired.
 		std::cout << "integration summary: " << '\n';
 		std::cout << "dens: " << state.rho << " temp: " << state.T << '\n';
