@@ -59,6 +59,10 @@
 #   NATIVE_NFILES  files per MultiFab and particle files for native output (default -1,
 #                  one file per rank; production runs use the node count)
 #   VERIFY         0 to skip the restart and compare runs, measuring bandwidth only (default 1)
+#   READS_ONLY     1 to skip the write runs and reuse the checkpoints at K (and 2K, with
+#                  VERIFY=1) of an earlier job; set RUN_DIR to that job's run directory
+#                  (default 0). Its read logs are overwritten.
+#   MATCH_MODE     FI_CXI_RX_MATCH_MODE for every run (default software, as in production)
 #   CONTROL        1 to also restart from the native checkpoint (default 1)
 #   PLOTFILE       1 to also measure openPMD plotfile output (default 1)
 #   AGGREGATION    openpmd.aggregation modes to compare (default "off on")
@@ -121,8 +125,9 @@ fi
 set -euo pipefail
 export OMP_NUM_THREADS=1
 # As in production runs: avoids network flakiness above 1000 nodes, and gives MPI
-# startup more time at scale.
-export FI_CXI_RX_MATCH_MODE=software
+# startup more time at scale. MATCH_MODE overrides the match mode, for example
+# hybrid to test whether software matching causes stalls in MPI waits.
+export FI_CXI_RX_MATCH_MODE=${MATCH_MODE:-software}
 export PMI_MMAP_SYNC_WAIT_TIME=1800
 
 NCELL=${NCELL:-2048}
@@ -137,6 +142,7 @@ NATIVE_NFILES=${NATIVE_NFILES:--1}
 VERIFY=${VERIFY:-1}
 CONTROL=${CONTROL:-1}
 PLOTFILE=${PLOTFILE:-1}
+READS_ONLY=${READS_ONLY:-0}
 read -r -a AGGREGATION <<<"${AGGREGATION:-off on}"
 RUN_DIR=${RUN_DIR:-/lustre/orion/${proj}/scratch/${USER}/quokka-openpmd-restart/${SLURM_JOB_ID}}
 
@@ -292,6 +298,7 @@ measure() {
 }
 
 echo "NCELL=${NCELL}x${NCELL}x${NCELL_Z} MAX_LEVEL=${MAX_LEVEL} CHK_STEP=${CHK_STEP} NODES=${NODES} RESTART_NODES=${RESTART_NODES} NATIVE_NFILES=${NATIVE_NFILES} VERIFY=${VERIFY}"
+echo "READS_ONLY=${READS_ONLY} FI_CXI_RX_MATCH_MODE=${FI_CXI_RX_MATCH_MODE}"
 echo "RUN_DIR=${RUN_DIR}"
 if [[ -n ${CONTAINER} ]]; then
 	echo "container ${CONTAINER}"
@@ -299,39 +306,44 @@ else
 	echo "quokka $(git -C "${QUOKKA_ROOT}" rev-parse --short HEAD)"
 fi
 
-# Write runs.
 steps=(max_timesteps="${FINAL_STEP}")
-run reference "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
-	checkpoint_format=amrex checkpoint_prefix=reference
-native_k=$(bytes "$(chk reference "${CHK_STEP}")")
-native_other=$(bytes "$(chk reference 0)" "$(chk reference "${FINAL_STEP}")")
-measure "native checkpoint" write $((native_k + native_other)) reference "AMRSimulation::WriteCheckpointFile()"
-# Keep only the native checkpoints at K and 2K.
-clean "$(chk reference 0)"
-openpmd_k='' openpmd_other='' plotfile_size=''
-for mode in "${AGGREGATION[@]}"; do
-	prefix=openpmd_${mode}
-	run "${prefix}" "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
-		checkpoint_format=openpmd checkpoint_prefix="${prefix}" openpmd.aggregation="${mode}"
-	if [[ -z ${openpmd_k} ]]; then
-		openpmd_k=$(bytes "$(chk "${prefix}" "${CHK_STEP}").bp")
-		openpmd_other=$(bytes "$(chk "${prefix}" 0).bp" "$(chk "${prefix}" "${FINAL_STEP}").bp")
-	fi
-	measure "openPMD checkpoint (${mode})" write $((openpmd_k + openpmd_other)) "${prefix}" "AMRSimulation::WriteCheckpointFile()"
-	# Keep only the openPMD checkpoint at K.
-	clean "$(chk "${prefix}" 0).bp" "$(chk "${prefix}" 0).yaml" "$(chk "${prefix}" "${FINAL_STEP}").bp" \
-		"$(chk "${prefix}" "${FINAL_STEP}").yaml"
-
-	if ((PLOTFILE)); then
-		run "plotfile_${mode}" "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval=-1 \
-			plotfile_interval="${CHK_STEP}" skip_initial_plotfile=1 openpmd.aggregation="${mode}"
-		if [[ -z ${plotfile_size} ]]; then
-			plotfile_size=$(bytes plt*.bp)
+if ((READS_ONLY)); then
+	native_k=$(bytes "$(chk reference "${CHK_STEP}")")
+	openpmd_k=$(bytes "$(chk "openpmd_${AGGREGATION[0]}" "${CHK_STEP}").bp")
+else
+	# Write runs.
+	run reference "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
+		checkpoint_format=amrex checkpoint_prefix=reference
+	native_k=$(bytes "$(chk reference "${CHK_STEP}")")
+	native_other=$(bytes "$(chk reference 0)" "$(chk reference "${FINAL_STEP}")")
+	measure "native checkpoint" write $((native_k + native_other)) reference "AMRSimulation::WriteCheckpointFile()"
+	# Keep only the native checkpoints at K and 2K.
+	clean "$(chk reference 0)"
+	openpmd_k='' openpmd_other='' plotfile_size=''
+	for mode in "${AGGREGATION[@]}"; do
+		prefix=openpmd_${mode}
+		run "${prefix}" "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
+			checkpoint_format=openpmd checkpoint_prefix="${prefix}" openpmd.aggregation="${mode}"
+		if [[ -z ${openpmd_k} ]]; then
+			openpmd_k=$(bytes "$(chk "${prefix}" "${CHK_STEP}").bp")
+			openpmd_other=$(bytes "$(chk "${prefix}" 0).bp" "$(chk "${prefix}" "${FINAL_STEP}").bp")
 		fi
-		measure "openPMD plotfile (${mode})" write "${plotfile_size}" "plotfile_${mode}" "AMRSimulation::WritePlotFile()"
-		clean plt*.bp plt*.yaml
-	fi
-done
+		measure "openPMD checkpoint (${mode})" write $((openpmd_k + openpmd_other)) "${prefix}" "AMRSimulation::WriteCheckpointFile()"
+		# Keep only the openPMD checkpoint at K.
+		clean "$(chk "${prefix}" 0).bp" "$(chk "${prefix}" 0).yaml" "$(chk "${prefix}" "${FINAL_STEP}").bp" \
+			"$(chk "${prefix}" "${FINAL_STEP}").yaml"
+
+		if ((PLOTFILE)); then
+			run "plotfile_${mode}" "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval=-1 \
+				plotfile_interval="${CHK_STEP}" skip_initial_plotfile=1 openpmd.aggregation="${mode}"
+			if [[ -z ${plotfile_size} ]]; then
+				plotfile_size=$(bytes plt*.bp)
+			fi
+			measure "openPMD plotfile (${mode})" write "${plotfile_size}" "plotfile_${mode}" "AMRSimulation::WritePlotFile()"
+			clean plt*.bp plt*.yaml
+		fi
+	done
+fi
 
 # Read runs, on the last RESTART_NODES nodes.
 read_first=$((NODES - RESTART_NODES))
