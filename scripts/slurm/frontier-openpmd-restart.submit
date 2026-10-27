@@ -192,13 +192,15 @@ print(total)' "$@"
 elapsed() { awk '/^elapsed time:/ { print $3 }' "$1.log"; }
 region() { awk -v name="$2" '/Incl\. Min/ { incl = 1 } incl && $1 == name { print $5; exit }' "$1.log"; }
 
+# Native particle restarts read with at most 64 ranks by default, which runs out of
+# memory at scale; AMReX caps this at the rank count. The compare runs read native
+# tracers too.
+native_read=(particles.nreaders=1000000)
 common=("${INPUT}"
 	"amr.n_cell=${NCELL} ${NCELL} ${NCELL_Z}" amr.max_level="${MAX_LEVEL}"
 	amr.max_grid_size="${MAX_GRID_SIZE}" amr.blocking_factor="${MAX_GRID_SIZE}"
 	do_tracers=1 quokka.slice_z.int=-1 blast_problem.check_solution=0 tiny_profiler.enabled=1
-	# Native particle restarts read with at most 64 ranks by default, which runs out
-	# of memory at scale; AMReX caps this at the rank count.
-	particles.nreaders=1000000
+	"${native_read[@]}"
 	# Native output as in production runs.
 	amr.checkpoint_nfiles="${NATIVE_NFILES}" amr.plot_nfiles="${NATIVE_NFILES}"
 	particles.particles_nfiles="${NATIVE_NFILES}" vismf.noflushafterwrite=1)
@@ -294,14 +296,14 @@ for mode in "${AGGREGATION[@]}"; do
 	run "restart_${mode}" "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix="restarted_${mode}" \
 		restartfile="$(chk "openpmd_${mode}" "${CHK_STEP}")"
 	run "compare_${mode}" "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" \
-		candidate="$(chk "restarted_${mode}" "${FINAL_STEP}")" levels="${levels}"
+		candidate="$(chk "restarted_${mode}" "${FINAL_STEP}")" levels="${levels}" "${native_read[@]}"
 	rm -rf "$(chk "restarted_${mode}" "${FINAL_STEP}")"
 done
 if ((CONTROL)); then
 	run native_restart "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix=native_restarted \
 		restartfile="$(chk reference "${CHK_STEP}")"
 	run native_compare "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" \
-		candidate="$(chk native_restarted "${FINAL_STEP}")" levels="${levels}"
+		candidate="$(chk native_restarted "${FINAL_STEP}")" levels="${levels}" "${native_read[@]}"
 fi
 
 echo
