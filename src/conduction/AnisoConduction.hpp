@@ -16,7 +16,7 @@
 ///        (selected by AnisoConductionParams::flux_limiter_type). Both terms read bhat/kappa at
 ///        mesh vertices ("corners") and gradT via direct two-point differences of cell-centered T,
 ///        never a precomputed face/corner gradT field. kappa_par and kappa_perp are stored at each
-///        corner, kappa = n k_B chi (Sharma & Hammett's n chi), with chi from EvaluateDiffusivity
+///        corner, kappa = n k_B chi (Sharma & Hammett's n chi), from EvaluateConductivity
 ///        (conductivity.hpp) evaluated at the corner-averaged (rho, T). The flux is
 ///        q = -kappa_perp grad T - (kappa_par - kappa_perp) bhat (bhat . grad T): the diagonal and
 ///        cross terms above carry (kappa_par - kappa_perp), and the isotropic kappa_perp term is an
@@ -423,7 +423,7 @@ template <typename problem_t> void ComputeCornerFC(amrex::MultiFab &bhat_corner_
 // Estimate kappa and qsat at mesh vertices ("corners") from CELL-CENTERED input data (primVar), on the
 // same fully-nodal box array and vertex-indexing convention as ComputeCornerFC (vertex (i,j,k) draws
 // from the 8 (3D) or 4 (2D) cells with indices in {i-1,i}x{j-1,j}x{k-1,k}). (rho,T,massScalars) are
-// the plain average over those cells; kappa = n k_B (chi_parallel, chi_perp) with chi from EvaluateDiffusivity, and
+// the plain average over those cells; (kappa_parallel, kappa_perp) come from EvaluateConductivity, and
 // qsat follows the same EOS chain as ComputeFaceNumberDensityAndSaturationFlux (Cowie & McKee 1977). gradT is intentionally not computed
 // here -- ComputeAnisotropicFlux differences primVar directly (see ComputeDiagTerm/ComputeCrossTerm).
 template <typename problem_t>
@@ -436,8 +436,6 @@ void ComputeCornerCC(amrex::MultiFab &kappa_corner_mf, amrex::MultiFab &qsat_cor
 
 	auto const &primVar_in = primVar.const_arrays();
 	const ConductivityParams conductivity_params = conductivity;
-	const amrex::Real mean_molecular_weight = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-	const amrex::Real k_B = quokka::EOS<problem_t>::boltzmann_constant_;
 	auto kappa_out = kappa_corner_mf.arrays();
 	auto qsat_out = qsat_corner_mf.arrays();
 
@@ -461,13 +459,12 @@ void ComputeCornerCC(amrex::MultiFab &kappa_corner_mf, amrex::MultiFab &qsat_cor
 		const amrex::Real T_corner = corner_avg(T_comp);
 
 		// kappa = n k_B chi (Sharma & Hammett's n chi); see conductivity.hpp
-		const auto chi_corner = EvaluateDiffusivity<problem_t>(rho_corner, T_corner, conductivity_params);
-		const amrex::Real nkB_corner = (rho_corner / mean_molecular_weight) * k_B;
-		kappa_out[bx](i, j, k, 0) = nkB_corner * chi_corner[0];
+		const auto kappa_corner = EvaluateConductivity<problem_t>(rho_corner, T_corner, conductivity_params);
+		kappa_out[bx](i, j, k, 0) = kappa_corner[0];
 		// the L2-limited (kappa_par - kappa_perp) b_n^2 term must stay non-negative; the input-file prefactors are
 		// asserted at startup, so this can only fire with ConductionModel::problem_defined (debug builds only)
-		AMREX_ASSERT(chi_corner[1] <= chi_corner[0]);
-		kappa_out[bx](i, j, k, 1) = nkB_corner * chi_corner[1];
+		AMREX_ASSERT(kappa_corner[1] <= kappa_corner[0]);
+		kappa_out[bx](i, j, k, 1) = kappa_corner[1];
 
 		amrex::GpuArray<amrex::Real, nmscalars_> massArray_corner{};
 		for (int n = 0; n < nmscalars_; ++n) {
@@ -536,8 +533,7 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 		const amrex::Real qsat_face = 0.5 * (qsat_in[bx](corner_lo, 0) + qsat_in[bx](corner_hi, 0));
 #else // AMREX_SPACEDIM == 3
 
-		// Cyclic transverse-axis convention (matches ComputeFaceUnitBField elsewhere in this file):
-		// X1 -> (y,z), X2 -> (z,x), X3 -> (x,y).
+		// Cyclic transverse-axis convention: X1 -> (y,z), X2 -> (z,x), X3 -> (x,y).
 		constexpr int Ax0 = (static_cast<int>(DIR) + 1) % 3;
 		constexpr int Ax1 = (static_cast<int>(DIR) + 2) % 3;
 		const amrex::Real dx0 = dx[Ax0];
@@ -546,8 +542,11 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 		amrex::IntVect const corner_1 = corner_lo + AxisUnit<Ax1>();
 		amrex::IntVect const corner_01 = UpperCorner<DIR>(i, j, k); // == corner_0 + AxisUnit<Ax1>()
 
-		const amrex::Real q_xx = 0.5 * (ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx_n, l2_alpha) +
-						ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_1, dx_n, l2_alpha));
+		// Limit the normal gradient along both transverse axes (each corner appears once per axis), mirroring q_cross0/q_cross1.
+		const amrex::Real q_xx = 0.25 * (ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx_n, l2_alpha) +
+						 ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_1, dx_n, l2_alpha) +
+						 ComputeDiagTerm<DIR, Ax1>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx_n, l2_alpha) +
+						 ComputeDiagTerm<DIR, Ax1>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_0, dx_n, l2_alpha));
 		const amrex::Real q_cross0 =
 		    0.5 * (ComputeCrossTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx0, limiter_type) +
 			   ComputeCrossTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_1, dx0, limiter_type));

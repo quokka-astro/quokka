@@ -95,8 +95,6 @@ template <typename problem_t> class IsoConduction
 		const amrex::Real saturation_factor = params.saturation_factor;
 		const amrex::Real t_min = params.min_temperature;
 		const ConductivityParams conductivity_params = params.conductivity;
-		const amrex::Real mean_molecular_weight = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-		const amrex::Real k_B = quokka::EOS<problem_t>::boltzmann_constant_;
 		const amrex::Real small = std::numeric_limits<amrex::Real>::min();
 		constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 
@@ -187,9 +185,8 @@ template <typename problem_t> class IsoConduction
 			const amrex::Real Pgas_face = ::quokka::EOS<problem_t>::ComputePressure(rho_face, Eint_face, massScalars);
 			const amrex::Real cs_face = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_face, Pgas_face, massScalars);
 
-			// kappa = n k_B chi, with chi from the conductivity model; see conductivity.hpp
-			const amrex::Real chi_face = EvaluateDiffusivity<problem_t>(rho_face, T_face, conductivity_params)[0];
-			kappa_face = (rho_face / mean_molecular_weight) * k_B * chi_face;
+			// kappa from the conductivity model; see conductivity.hpp
+			kappa_face = EvaluateConductivity<problem_t>(rho_face, T_face, conductivity_params)[0];
 			qsat_face = amrex::max(saturation_factor * flux_limiter_phi * rho_face * cs_face * cs_face * cs_face, small);
 		};
 
