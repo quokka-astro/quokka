@@ -55,6 +55,7 @@
 #   RESTART_NODES  nodes for the read and restart runs (default: half the allocation)
 #   NATIVE_NFILES  files per MultiFab and particle files for native output (default: the
 #                  node count, as in production; -1 for one file per rank)
+#   VERIFY         0 to skip the restart and compare runs, measuring bandwidth only (default 1)
 #   CONTROL        1 to also restart from the native checkpoint (default 1)
 #   PLOTFILE       1 to also measure openPMD plotfile output (default 1)
 #   AGGREGATION    openpmd.aggregation modes to compare (default "off on")
@@ -130,6 +131,7 @@ FINAL_STEP=$((2 * CHK_STEP))
 NODES=${SLURM_JOB_NUM_NODES}
 RESTART_NODES=${RESTART_NODES:-$(((NODES + 1) / 2))}
 NATIVE_NFILES=${NATIVE_NFILES:-${NODES}}
+VERIFY=${VERIFY:-1}
 CONTROL=${CONTROL:-1}
 PLOTFILE=${PLOTFILE:-1}
 read -r -a AGGREGATION <<<"${AGGREGATION:-off on}"
@@ -236,7 +238,7 @@ measure() {
 	summary+=("${line}")
 }
 
-echo "NCELL=${NCELL}x${NCELL}x${NCELL_Z} MAX_LEVEL=${MAX_LEVEL} CHK_STEP=${CHK_STEP} NODES=${NODES} RESTART_NODES=${RESTART_NODES} NATIVE_NFILES=${NATIVE_NFILES}"
+echo "NCELL=${NCELL}x${NCELL}x${NCELL_Z} MAX_LEVEL=${MAX_LEVEL} CHK_STEP=${CHK_STEP} NODES=${NODES} RESTART_NODES=${RESTART_NODES} NATIVE_NFILES=${NATIVE_NFILES} VERIFY=${VERIFY}"
 echo "RUN_DIR=${RUN_DIR}"
 if [[ -n ${CONTAINER} ]]; then
 	echo "container ${CONTAINER}"
@@ -292,18 +294,20 @@ measure "native checkpoint" read "$(bytes "$(chk reference "${CHK_STEP}")")" rea
 # Correctness: restarts on a different rank count must reproduce step 2K exactly.
 levels=$((MAX_LEVEL + 1))
 restart_common=("${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 checkpoint_format=amrex)
-for mode in "${AGGREGATION[@]}"; do
-	run "restart_${mode}" "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix="restarted_${mode}" \
-		restartfile="$(chk "openpmd_${mode}" "${CHK_STEP}")"
-	run "compare_${mode}" "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" \
-		candidate="$(chk "restarted_${mode}" "${FINAL_STEP}")" levels="${levels}" "${native_read[@]}"
-	rm -rf "$(chk "restarted_${mode}" "${FINAL_STEP}")"
-done
-if ((CONTROL)); then
-	run native_restart "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix=native_restarted \
-		restartfile="$(chk reference "${CHK_STEP}")"
-	run native_compare "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" \
-		candidate="$(chk native_restarted "${FINAL_STEP}")" levels="${levels}" "${native_read[@]}"
+if ((VERIFY)); then
+	for mode in "${AGGREGATION[@]}"; do
+		run "restart_${mode}" "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix="restarted_${mode}" \
+			restartfile="$(chk "openpmd_${mode}" "${CHK_STEP}")"
+		run "compare_${mode}" "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" \
+			candidate="$(chk "restarted_${mode}" "${FINAL_STEP}")" levels="${levels}" "${native_read[@]}"
+		rm -rf "$(chk "restarted_${mode}" "${FINAL_STEP}")"
+	done
+	if ((CONTROL)); then
+		run native_restart "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix=native_restarted \
+			restartfile="$(chk reference "${CHK_STEP}")"
+		run native_compare "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" \
+			candidate="$(chk native_restarted "${FINAL_STEP}")" levels="${levels}" "${native_read[@]}"
+	fi
 fi
 
 echo
@@ -314,4 +318,8 @@ for line in "${summary[@]}"; do
 done
 echo "(time = inclusive max time of the run's WriteCheckpointFile, WritePlotFile or ReadCheckpointFile region)"
 echo
-echo "PASS: openPMD restarts at step ${CHK_STEP} (aggregation: ${AGGREGATION[*]}) reproduce step ${FINAL_STEP} exactly"
+if ((VERIFY)); then
+	echo "PASS: openPMD restarts at step ${CHK_STEP} (aggregation: ${AGGREGATION[*]}) reproduce step ${FINAL_STEP} exactly"
+else
+	echo "restart compares skipped (VERIFY=0)"
+fi
