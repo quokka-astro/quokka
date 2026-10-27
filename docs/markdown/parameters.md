@@ -137,7 +137,6 @@ VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will
 | Parameter Name | Type | Default | Description |
 |---|---|---|---|
 | `integrator.ode_max_steps` | Integer | `150000` | Maximum number of VODE internal steps per burn call. |
-| `integrator.scale_system` | Boolean (0/1) | `0` | If 1, scale the ODE system to be O(1). Does not work with number densities — leave at `0`. |
 | `integrator.burner_verbose` | Boolean (0/1) | `0` | If 1, print diagnostic output after each burn. |
 | `integrator.SMALL_X_SAFE` | Float | `1.e-30` | Species floor to prevent underflow in the integrator. |
 | `integrator.X_reject_buffer` | Float | `1.0` | Buffer factor for the species change-factor rejection threshold. Only meaningful for mass fractions; has no effect with number densities. Set to `1e100` to disable. |
