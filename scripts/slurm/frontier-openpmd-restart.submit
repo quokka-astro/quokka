@@ -61,7 +61,7 @@
 #   VERIFY         0 to skip the restart and compare runs, measuring bandwidth only (default 1)
 #   READS_ONLY     1 to skip the write runs and reuse the checkpoints at K (and 2K, with
 #                  VERIFY=1) of an earlier job; set RUN_DIR to that job's run directory
-#                  (default 0). Its read logs are overwritten.
+#                  (default 0). Logs are kept per job, in $RUN_DIR/logs/<job id>.
 #   MATCH_MODE     FI_CXI_RX_MATCH_MODE for every run (default software, as in production)
 #   CONTROL        1 to also restart from the native checkpoint (default 1)
 #   PLOTFILE       1 to also measure openPMD plotfile output (default 1)
@@ -182,7 +182,9 @@ if ((RESTART_NODES < 1 || RESTART_NODES > NODES)); then
 	exit 1
 fi
 
-mkdir -p "${RUN_DIR}"
+# Logs go in a per-job directory, so jobs sharing RUN_DIR (READS_ONLY) keep their own.
+LOG_DIR=${RUN_DIR}/logs/${SLURM_JOB_ID}
+mkdir -p "${LOG_DIR}"
 cd "${RUN_DIR}"
 
 chk() { printf '%s%07d' "$1" "$2"; }
@@ -250,8 +252,8 @@ print(sum(openpmd(p) if p.endswith(".bp") else native(p) for p in sys.argv[1:]))
 }
 
 # The elapsed time (s) a run reports, and the inclusive max time (s) of a TinyProfiler region.
-elapsed() { awk '/^elapsed time:/ { print $3 }' "$1.log"; }
-region() { awk -v name="$2" '/Incl\. Min/ { incl = 1 } incl && $1 == name { print $5; exit }' "$1.log"; }
+elapsed() { awk '/^elapsed time:/ { print $3 }' "${LOG_DIR}/$1.log"; }
+region() { awk -v name="$2" '/Incl\. Min/ { incl = 1 } incl && $1 == name { print $5; exit }' "${LOG_DIR}/$1.log"; }
 
 # Native particle restarts read with at most 64 ranks by default, which runs out of
 # memory at scale; AMReX caps this at the rank count. The compare runs read native
@@ -268,15 +270,15 @@ common=("${INPUT}"
 no_output=(checkpoint_interval=-1 plotfile_interval=-1)
 
 # Run one step of the test on $2 nodes, starting at node $3 of the allocation
-# (default 0); output goes to <label>.log.
+# (default 0); output goes to $LOG_DIR/<label>.log.
 run() {
 	local label=$1 nodes=$2 first=$3
 	shift 3
 	echo "=== [$(date +%T)] ${label}: ${nodes} nodes from node ${first}, $((nodes * 8)) ranks"
 	if ! srun -N "${nodes}" -n $((nodes * 8)) --relative="${first}" --ntasks-per-node=8 --cpus-per-task=7 --gpus-per-task=1 \
-		--gpu-bind=closest ${launch[@]+"${launch[@]}"} "$@" >"${label}.log" 2>&1; then
-		echo "${label} FAILED; see ${RUN_DIR}/${label}.log"
-		tail -n 30 "${label}.log"
+		--gpu-bind=closest ${launch[@]+"${launch[@]}"} "$@" >"${LOG_DIR}/${label}.log" 2>&1; then
+		echo "${label} FAILED; see ${LOG_DIR}/${label}.log"
+		tail -n 30 "${LOG_DIR}/${label}.log"
 		exit 1
 	fi
 	local t
@@ -300,6 +302,7 @@ measure() {
 echo "NCELL=${NCELL}x${NCELL}x${NCELL_Z} MAX_LEVEL=${MAX_LEVEL} CHK_STEP=${CHK_STEP} NODES=${NODES} RESTART_NODES=${RESTART_NODES} NATIVE_NFILES=${NATIVE_NFILES} VERIFY=${VERIFY}"
 echo "READS_ONLY=${READS_ONLY} FI_CXI_RX_MATCH_MODE=${FI_CXI_RX_MATCH_MODE}"
 echo "RUN_DIR=${RUN_DIR}"
+echo "LOG_DIR=${LOG_DIR}"
 if [[ -n ${CONTAINER} ]]; then
 	echo "container ${CONTAINER}"
 else
