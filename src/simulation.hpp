@@ -1319,8 +1319,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			const amrex::Real cfl = conductionCFL;
 			const amrex::Real t_min = tempFloor_;
 			const quokka::conduction::ConductivityParams conductivity_params = conductivityParams_;
-			const amrex::Real mean_molecular_weight = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-			const amrex::Real k_B = quokka::EOS<problem_t>::boltzmann_constant_;
 
 			// Use amrex::ParReduce to find the minimum dt and its location across all GPU threads
 			auto r = amrex::ParReduce(
@@ -1353,15 +1351,14 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 				    auto const massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 				    const amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars));
 
-				    // kappa = n k_B chi, with chi from the conductivity model; see conductivity.hpp
-				    const auto chi = quokka::conduction::EvaluateDiffusivity<problem_t>(rho, T, conductivity_params);
-				    amrex::Real chi_eff = chi[0];
+				    // kappa from the conductivity model; see conductivity.hpp
+				    const auto kappa = quokka::conduction::EvaluateConductivity<problem_t>(rho, T, conductivity_params);
+				    amrex::Real kappa_eff = kappa[0];
 				    if constexpr (Physics_Traits<problem_t>::conduction_geometry == ConductionGeometry::anisotropic) {
-					    // bound the largest eigenvalue of the conductivity tensor by chi_par + chi_perp, keeping the
+					    // bound the largest eigenvalue of the conductivity tensor by kappa_par + kappa_perp, keeping the
 					    // factor-of-2 safety margin previously used for the anisotropic scheme
-					    chi_eff = 2.0 * (chi[0] + chi[1]);
+					    kappa_eff = 2.0 * (kappa[0] + kappa[1]);
 				    }
-				    const amrex::Real kappa_eff = (rho / mean_molecular_weight) * k_B * chi_eff;
 				    const amrex::Real heat_capacity = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T, massScalars);
 				    const amrex::Real diffusion_coefficient = kappa_eff / heat_capacity;
 
