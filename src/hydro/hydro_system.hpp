@@ -176,7 +176,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
+					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf,
+					 amrex::Real a_cosmo = 1.0);
 
 	static void SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &faceVar_mf);
 
@@ -1164,7 +1165,8 @@ template <typename problem_t>
 void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
 						  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
-						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf)
+						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf,
+						  amrex::Real const a_cosmo)
 {
 	// compute P dV source term for the internal energy equation,
 	// using the face-centered velocities in faceVelArray and the pressure
@@ -1183,6 +1185,9 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 	auto const &consVar = consVar_mf.const_arrays();
 	auto const &redoFlag = redoFlag_mf.const_arrays();
 	auto rhs = rhs_mf.arrays();
+
+	// comoving coordinates: the P dV term is (p_c / a) div_x v
+	const amrex::Real inv_a = 1.0 / a_cosmo;
 
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		// get cell-centered pressure
@@ -1212,7 +1217,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 		}
 
 		// add P dV term to rhs array
-		rhs[bx](i, j, k, internalEnergy_index) += -Pgas * div_v;
+		rhs[bx](i, j, k, internalEnergy_index) += -Pgas * div_v * inv_a;
 	});
 }
 

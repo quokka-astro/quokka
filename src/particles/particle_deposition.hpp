@@ -308,10 +308,11 @@ void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &depos
 
 // Functor for depositing particle mass onto the grid
 struct MassDeposition {
-	amrex::Real Gconst{};  // Gravitational constant
-	int start_part_comp{}; // Starting component in particle data
-	int start_mesh_comp{}; // Starting component in mesh data
-	int num_comp{};	       // Number of components to deposit
+	amrex::Real Gconst{};	  // Gravitational constant
+	int start_part_comp{};	  // Starting component in particle data
+	int start_mesh_comp{};	  // Starting component in mesh data
+	int num_comp{};		  // Number of components to deposit
+	amrex::Real a_cosmo{1.0}; // Cosmological scale factor
 
 	// Operator to perform mass deposition using linear interpolation
 	template <typename ContainerType>
@@ -321,7 +322,9 @@ struct MassDeposition {
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		const amrex::Real gConstLocal = Gconst;
-		const amrex::Real cellVolumeFactor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		// Include the cosmological 1/a scale factor since the Poisson RHS
+		// for comoving coordinates is 4*pi*G*rho_comoving / a.
+		const amrex::Real cellVolumeFactor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2])) / a_cosmo;
 		// Deposit mass weighted by 4 pi G
 		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
 			return 4.0 * M_PI * gConstLocal * part.rdata(comp) * cellVolumeFactor;

@@ -207,12 +207,13 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto computeStellarMassAtBirth() const -> amrex::Real = 0;
 	[[nodiscard]] virtual auto computeStellarMassAtBirthBornByTime(amrex::Real time) const -> amrex::Real = 0;
 
-	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
+	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst, amrex::Real a_cosmo = 1.0) = 0;
 	virtual void depositParticleMassDensity(amrex::MultiFab &deposition_field, int lev, int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max,
 						bool use_age_filter, amrex::Real current_time, amrex::Real age_max, bool deposit_birth_mass) const = 0;
 
 	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
-	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
+	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt, amrex::Real a_cosmo = 1.0) const = 0;
+	virtual void applyHubbleDrag(int lev_min, int lev_max, amrex::Real a_old, amrex::Real a_new) = 0;
 
 	// Kick particles at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) = 0;
@@ -408,12 +409,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Implementation of mass deposition from particles to grid
-	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) override
+	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst, amrex::Real a_cosmo = 1.0) override
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			// zero_out_input is false because we want to accumulate mass
 			// vol_weight is false because MassDeposition does the volume weighting
-			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, false, false);
+			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1, a_cosmo}, false, false);
 
 			// Deposit count into the last component of rhs
 			const int count_comp = 1; // Second component is the count
@@ -451,12 +452,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	void driftParticles(int lev_min, int lev_max, amrex::Real dt) const override
+	void driftParticles(int lev_min, int lev_max, amrex::Real dt, amrex::Real a_cosmo = 1.0) const override
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
 
 			if (mass_idx >= 0) {
+				const amrex::Real dt_a = dt / a_cosmo;
 				for (int lev = lev_min; lev <= lev_max; ++lev) {
 					for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
 						auto &particles = pIter.GetArrayOfStructs();
@@ -468,7 +470,34 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							// update particle position based on velocity components
 							for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 								if (mass_idx + 1 + i < ContainerType::ParticleType::NReal) {
-									p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+									p.pos(i) += dt_a * p.rdata(mass_idx + 1 + i);
+								}
+							}
+						});
+					}
+				}
+			}
+		}
+	}
+
+	void applyHubbleDrag(int lev_min, int lev_max, amrex::Real a_old, amrex::Real a_new) override
+	{
+		if (container_ != nullptr && a_old != a_new) {
+			const int mass_idx = this->getMassIndex();
+
+			if (mass_idx >= 0) {
+				const amrex::Real mom_ratio = a_old / a_new;
+				for (int lev = lev_min; lev <= lev_max; ++lev) {
+					for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+						auto &particles = pIter.GetArrayOfStructs();
+						auto *pData = particles().data();
+						const amrex::Long np = pIter.numParticles();
+
+						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+							auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+							for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+								if (mass_idx + 1 + i < ContainerType::ParticleType::NReal) {
+									p.rdata(mass_idx + 1 + i) *= mom_ratio;
 								}
 							}
 						});
@@ -1068,12 +1097,12 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Deposit mass from all massive particles
-	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst)
+	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst, amrex::Real a_cosmo = 1.0)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::depositMass()");
-		for (const auto &[type, descriptor] : particleRegistry_) {
+		for (auto const &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
-				descriptor->depositMass(rhs, finest_lev, Gconst);
+				descriptor->depositMass(rhs, finest_lev, Gconst, a_cosmo);
 			}
 		}
 	}
@@ -1241,14 +1270,24 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Update positions of all massive particles
-	void driftParticlesAllLevels(amrex::Real dt, int lev_max)
+	void driftParticlesAllLevels(amrex::Real dt, int lev_max, amrex::Real a_cosmo = 1.0)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::driftParticlesAllLevels()");
 		if (!quokka::disable_particle_drift) {
 			for (const auto &[type, descriptor] : particleRegistry_) {
 				if (descriptor->getMassIndex() >= 0) {
-					descriptor->driftParticles(0, lev_max, dt);
+					descriptor->driftParticles(0, lev_max, dt, a_cosmo);
 				}
+			}
+		}
+	}
+
+	void applyHubbleDragAllLevels(int lev_max, amrex::Real a_old, amrex::Real a_new)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::applyHubbleDragAllLevels()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getMassIndex() >= 0) {
+				descriptor->applyHubbleDrag(0, lev_max, a_old, a_new);
 			}
 		}
 	}

@@ -70,6 +70,7 @@ namespace filesystem = experimental::filesystem;
 #include "chemistry/Chemistry.hpp"
 #include "conduction/ElectronConduction.hpp"
 #include "cooling/ResampledCooling.hpp"
+#include "cosmology/Cosmology.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
 #include "eos.H"
@@ -248,6 +249,58 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	enum class SourceOrder { forward, reverse };
 
+	// cosmological members
+	quokka::cosmology::CosmologyParams cosmology_params_;
+	amrex::Real a_now_ = 1.0;
+	amrex::Real comoving_mean_density_ = 0.0;
+	amrex::Real cosmology_dt_limit_ = Physics_Traits<problem_t>::cosmology_dt_limit;
+	// a_half_ = a(t_n + dt/2): cached by particleCosmologyComputeHalfStep() before the hydro
+	// advance so that the drift and the Strang-split post-kick drag can both use the same
+	// bitwise-identical midpoint scale factor.
+	amrex::Real a_half_ = 1.0;
+
+#if AMREX_SPACEDIM == 3
+	// overrides of the particle cosmology hooks, declared in AMRSimulation only in 3D
+	auto getCosmologyScaleFactor() const -> amrex::Real override { return a_now_; }
+
+	auto getCosmologyScaleFactorHalf() const -> amrex::Real override
+	{
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			return a_half_;
+		}
+		return 1.0;
+	}
+
+	// Integrate a from t_n to t_n+dt/2 and store the result in a_half_.
+	// Called once per coarse step, BEFORE timeStepWithSubcycling modifies a_now_.
+	void particleCosmologyComputeHalfStep(amrex::Real dt) override
+	{
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			a_half_ = quokka::cosmology::evolveScaleFactor(a_now_, 0.5 * dt, cosmology_params_);
+		}
+	}
+
+	// Pre-kick Hubble drag: v_pec *= a_old / a_half  (1st half of Strang split)
+	// Uses a_half_ cached by particleCosmologyComputeHalfStep — no recomputation.
+	void particleCosmologyPreKick(amrex::Real /*dt*/) override
+	{
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			this->particleRegister_.applyHubbleDragAllLevels(this->finest_level, a_now_, a_half_);
+		}
+	}
+
+	// Post-kick Hubble drag: v_pec *= a_half / a_new  (2nd half of Strang split)
+	// Reuses the same a_half_ stored in the pre-kick step for bitwise consistency:
+	// both halves of the Strang split operate on exactly the same midpoint value.
+	void particleCosmologyPostKick(amrex::Real /*dt*/) override
+	{
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			// a_now_ here is a_new (updated by addStrangSplitSourcesWithBuiltin)
+			this->particleRegister_.applyHubbleDragAllLevels(this->finest_level, a_half_, a_now_);
+		}
+	}
+#endif // AMREX_SPACEDIM == 3
+
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
@@ -312,6 +365,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(useDualEnergy_ == 0,
 								 "Physical viscosity requires use_dual_energy = 0: viscous heating is not yet "
 								 "added to the auxiliary energy equation.");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!Physics_Traits<problem_t>::is_cosmology_enabled,
+								 "Physical viscosity is not supported with cosmology: the comoving viscous terms "
+								 "(1/a^2 scaling) are not implemented.");
 			}
 		}
 	}
@@ -328,6 +384,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void CheckHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc,
 			      std::source_location const &location = std::source_location::current());
 	void computeMaxSignalLocal(int level) override;
+	auto computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
@@ -488,6 +545,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			 amrex::iMultiFab &redoFlag);
 
 	// void PrintRadEnergySource(amrex::MultiFab const &radEnergySource);
+	void WritePlotFile() override;
 };
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentNames()
@@ -878,6 +936,102 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		rpp.query("iteration_tolerance", radiation_iteration_tolerance_);
 		rpp.query("iteration_tolerance_rel", radiation_iteration_tolerance_rel_);
 	}
+
+	// set cosmology runtime parameters
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+
+		// --- cosmology guards: physics that is not formulated in comoving coordinates ---
+		static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cosmology is not supported with MHD (comoving induction equation not implemented).");
+		static_assert(!Physics_Traits<problem_t>::is_radiation_enabled,
+			      "Cosmology is not supported with radiation (comoving transport not implemented).");
+		static_assert(!Physics_Traits<problem_t>::is_dust_enabled,
+			      "Cosmology is not supported with dust (comoving dust fluxes and drag not implemented).");
+		static_assert(Particle_Traits<problem_t>::particle_switch == ParticleSwitch::None ||
+				  Particle_Traits<problem_t>::particle_switch == ParticleSwitch::CIC,
+			      "Cosmology supports only CIC (dark matter) particles: star formation, accretion and feedback are not comoving.");
+
+		// --- cosmology guards: runtime options not consistent with a single global scale factor ---
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_level == 0,
+						 "Cosmology requires amr.max_level = 0: a_now_ is global and is advanced once per level update.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(this->restart_chkfile.empty(),
+						 "Restart is not supported with cosmology: the scale factor is not read back from the checkpoint.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableElectronConduction_ == 0, "Electron conduction is not supported with cosmology.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableChemistry_ == 0, "Chemistry is not supported with cosmology: rates need physical densities.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableTurbulence_ == 0, "Turbulence driving is not supported with cosmology.");
+		if constexpr (quokka::EOS<problem_t>::is_tabulated) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableCooling_ == 0, "Cooling is not supported with cosmology: rates need physical densities.");
+		}
+		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(this->poissonSupercycleInterval_ == 1,
+							 "Cosmology requires poisson_supercycle_interval = 1: phi must be solved with the current a.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    geom[0].isAllPeriodic(), "Cosmology with self-gravity requires periodic boundaries (mean-subtracted comoving Poisson equation).");
+		}
+
+		amrex::ParmParse const cpp("cosmology");
+		amrex::Real omega_m = Physics_Traits<problem_t>::omega_m;
+		amrex::Real omega_r = Physics_Traits<problem_t>::omega_r;
+		amrex::Real omega_lambda = Physics_Traits<problem_t>::omega_lambda;
+		amrex::Real omega_b = Physics_Traits<problem_t>::omega_b;
+		amrex::Real omega_dm = Physics_Traits<problem_t>::omega_dm;
+		amrex::Real h = Physics_Traits<problem_t>::hubble_constant;
+		a_now_ = Physics_Traits<problem_t>::a_init;
+
+		cpp.query("omega_m", omega_m);
+		cpp.query("omega_r", omega_r);
+		cpp.query("omega_lambda", omega_lambda);
+		cpp.query("omega_b", omega_b);
+		cpp.query("omega_dm", omega_dm);
+		cpp.query("hubble_constant", h);
+		cpp.query("a_init", a_now_);
+		cpp.query("dt_limit", cosmology_dt_limit_);
+
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(a_now_ > 0.0, "cosmology.a_init must be positive.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(cosmology_dt_limit_ > 0.0, "cosmology.dt_limit must be positive.");
+
+		// convert h to H0 [s^-1]
+		const amrex::Real Mpc_to_cm = C::parsec * 1.0e6;
+		const amrex::Real H0_cgs = (h * 100.0 * 1e5) / Mpc_to_cm;
+
+		// Sanity check for Poisson solver consistency
+		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+			if (!cpp.contains("omega_m")) {
+				omega_m = omega_b + omega_dm;
+			}
+		}
+
+		// fill the struct of cosmological params defined in Cosmology.hpp and member of
+		// the class accounting for user inputs
+		cosmology_params_ = {.H0 = H0_cgs, .Omega_m = omega_m, .Omega_r = omega_r, .Omega_L = omega_lambda, .Omega_b = omega_b, .Omega_dm = omega_dm};
+
+		// Assertion with the validate method of the Cosmology.hpp struct cosmology_params
+		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+			cosmology_params_.validate(); // assert if (omega_b + omega_dm - omega_m) < 1e-6
+		}
+
+		cpp.query("comoving_mean_density", comoving_mean_density_);
+		if (comoving_mean_density_ == 0) { // as from member initialization
+			// rho_crit = 3 H0^2 / (8 pi G)
+			const amrex::Real rho_crit_0 = 3.0 * H0_cgs * H0_cgs / (8.0 * M_PI * C::Gconst);
+			comoving_mean_density_ = omega_m * rho_crit_0;
+		}
+
+		// persisting cosmological parameters in simulation metadata, constant throughout
+		// the run and written to metadata.yaml at every plotfile/checkpoint
+		this->simulationMetadata_["cosmology"]["H0"] = H0_cgs;
+		this->simulationMetadata_["cosmology"]["hubble_constant"] = h;
+		this->simulationMetadata_["cosmology"]["comoving_mean_density"] = comoving_mean_density_;
+		this->simulationMetadata_["cosmology"]["Omega_m"] = omega_m;
+		this->simulationMetadata_["cosmology"]["Omega_r"] = omega_r;
+		this->simulationMetadata_["cosmology"]["Omega_dm"] = omega_dm;
+		this->simulationMetadata_["cosmology"]["Omega_b"] = omega_b;
+		this->simulationMetadata_["cosmology"]["Omega_Lambda"] = omega_lambda;
+		this->simulationMetadata_["cosmology"]["Omega_k"] = 1.0 - omega_m - omega_r - omega_lambda;
+		this->simulationMetadata_["cosmology"]["a_init"] = a_now_;
+
+		// informative print on the logs
+		quokka::cosmology::printCosmologyInfo(cosmology_params_, a_now_);
+	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::rereadRuntimeParameters()
@@ -945,6 +1099,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { maxSignal(i, j, k) = 0.0; });
 		}
 	}
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		max_signal_speed_[level].mult(1.0 / a_now_);
+	}
 
 	// diffusive CFL constraint for Ohmic resistivity: dt <= cfl * dx^2 / (2*eta)
 	// in N dimensions the true stability limit requires cfl < 1/N, so for 3D use cfl < 1/3
@@ -985,6 +1142,22 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 			}
 		}
 	}
+}
+
+// Ovveriding from AMRSimulation (simulation.hpp) to exploit member cosmological data for
+// constraining cosmological timestep
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
+{
+	auto dt_loc = AMRSimulation<problem_t>::computeTimestepAtLevel(lev);
+
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		const amrex::Real a = a_now_;
+		const amrex::Real H = quokka::cosmology::HubbleFactor(a, cosmology_params_) * cosmology_params_.H0;
+		if (H > 0) {
+			dt_loc.value = std::min(dt_loc.value, cosmology_dt_limit_ / H);
+		}
+	}
+	return dt_loc;
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::printCellProperties(int lev, amrex::IntVect const &index)
@@ -1295,12 +1468,22 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		}
 	};
 
+	// cosmology: Strang splitting for a_half and consequently hydro Hubble drag and adiabatic cooling
+	auto const applyCosmology = [&]() {
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			amrex::Real a_end = quokka::cosmology::applyCosmologyHalfStep<problem_t>(state, a_now_, dt, cosmology_params_);
+			a_now_ = a_end;
+			// N.B.: a_end as intermediate for not touching the member a_now_, since
+			// AMR still to be implemented for cosmology!
+		}
+	};
+
 	auto const applyUserSources = [&]() {
 		// compute user-specified sources
 		addStrangSplitSources(state, lev, time, dt);
 	};
 
-	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyConduction, applyUserSources);
+	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyConduction, applyCosmology, applyUserSources);
 
 	return (burn_success && cool_success);
 }
@@ -1734,11 +1917,30 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 	auto rhs = rhs_mf.arrays();
 	const Real G = Gconst_;
 
-	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// *add* density to rhs_mf
-		// (N.B. particles **will not work** if you overwrite the density here!)
-		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
-	});
+	// gravity rhs fork: cosmological or not cosmological Poisson equation
+	// OBS. NVCC 13 limitation: any variable whose *first use* in a __device__ lambda falls inside
+	// an `if constexpr` block triggers error 20178 / "first-capture in constexpr-if context".
+	// The only safe pattern is to put `if constexpr` OUTSIDE the lambda, giving each branch
+	// its own dedicated kernel. At most one branch is compiled per instantiation (zero cost).
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		// Comoving Poisson equation: nabla^2 phi = 4*pi*G * (rho_c - rho_bar_c) / a
+		// rho_c is the comoving density stored in the state, rho_bar_c is the mean.
+		const amrex::Real a_cosmo = a_now_;
+		const amrex::Real rho_mean_cosmo = comoving_mean_density_;
+		amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real const rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			rhs[bx](i, j, k) += 4.0 * M_PI * G * (rho - rho_mean_cosmo) / a_cosmo;
+		});
+	} else {
+		amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			// *add* density to rhs_mf
+			// (N.B. particles **will not work** if you overwrite the density here!)
+			rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		});
+	}
+	// For periodic BCs: when cosmology is enabled, RHS = 4*pi*G*(rho_c - rho_bar_c)/a
+	// sums to zero by construction. When cosmology is disabled, MLMG handles the
+	// null-space projection internally. Either way, we do not subtract the mean here.
 	amrex::Gpu::streamSynchronizeAll();
 }
 
@@ -1750,30 +1952,51 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 	auto const &phi = phi_mf.const_arrays();
 	auto state = state_new_cc_[lev].arrays();
 
-	amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// add operator-split gravitational acceleration
-		const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
-		amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-		amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-		amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-		const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
-
-		// g = -grad \phi
-		amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
-		amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
-		amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
-
-		px += dt * rho * gx;
-		py += dt * rho * gy;
-		pz += dt * rho * gz;
-		const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
-		const amrex::Real dKE = KE_new - KE_old;
-
-		state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
-		state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
-		state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
-		state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
-	});
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		// In comoving coordinates the peculiar acceleration is g_pec = -nabla_x phi / a
+		const amrex::Real a_cosmo = a_now_;
+		amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
+			// g = -grad phi / a  (comoving peculiar acceleration)
+			const amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / (dx[0] * a_cosmo);
+			const amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / (dx[1] * a_cosmo);
+			const amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / (dx[2] * a_cosmo);
+			px += dt * rho * gx;
+			py += dt * rho * gy;
+			pz += dt * rho * gz;
+			const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
+			const amrex::Real dKE = KE_new - KE_old;
+			state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
+			state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
+			state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
+			state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
+		});
+	} else {
+		amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
+			// g = -grad phi  (standard Newtonian acceleration)
+			const amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
+			const amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
+			const amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
+			px += dt * rho * gx;
+			py += dt * rho * gy;
+			pz += dt * rho * gz;
+			const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
+			const amrex::Real dKE = KE_new - KE_old;
+			state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
+			state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
+			state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
+			state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
+		});
+	}
 #else
 	amrex::ignore_unused(phi_mf, lev, dt);
 #endif // (AMREX_SPACEDIM == 3)
@@ -2246,6 +2469,8 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 
 	amrex::MultiFab accepted_state_cc(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	amrex::Copy(accepted_state_cc, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+	// scale factor consistent with accepted_state_cc: restored together with the hydro state on a failed attempt
+	amrex::Real accepted_a = a_now_;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> accepted_state_fc;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2256,6 +2481,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 	}
 
 	auto restoreHydroState = [&]() {
+		a_now_ = accepted_a;
 		amrex::Copy(state_new_cc_[lev], accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2265,6 +2491,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 	};
 
 	auto updateAcceptedHydroState = [&]() {
+		accepted_a = a_now_;
 		amrex::Copy(accepted_state_cc, state_new_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2363,6 +2590,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::isCflViolated(in
 	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev], state_new_fc_[lev]);
 	amrex::ParallelDescriptor::ReduceRealMax(max_signal);
 
+	// comoving coordinates: the signal crosses (|v| + c_s) / a comoving lengths per unit time,
+	// consistent with the 1/a rescaling of max_signal_speed_ in computeMaxSignalLocal
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		max_signal = max_signal / a_now_;
+	}
+
 	// compute dt_cfl
 	auto dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
@@ -2437,6 +2670,10 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		return burn_success_first;
 	}
 	ApplyHydroStateFixup(state_old_cc_tmp, state_old_fc_tmp, lev);
+
+	// scale factor used by the hydro update: after the first Strang half-step a_now_ = a(t + dt/2).
+	// Saved here because the second Strang half-step will overwrite a_now_ with a(t + dt).
+	const amrex::Real a_hydro = Physics_Traits<problem_t>::is_cosmology_enabled ? a_now_ : 1.0;
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -2542,7 +2779,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			redoFlag.setVal(quokka::redoFlag::none);
 
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag, a_hydro);
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, nvars_, redoFlag);
 
 			// LOW LEVEL DEBUGGING: output rhs
@@ -2595,7 +2832,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 				// re-do RK update
 				HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
-				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag);
+				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag, a_hydro);
 				HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, nvars_, redoFlag);
 
 				amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -2686,7 +2923,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			redoFlag.setVal(quokka::redoFlag::none);
 
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, nvars_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag, a_hydro);
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag);
 
 			// do first-order flux correction (FOFC)
@@ -2712,7 +2949,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 				// re-do RK update
 				HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, nvars_);
-				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag);
+				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag, a_hydro);
 				HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag);
 
 				amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -2788,6 +3025,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 
 	if (Physics_Traits<problem_t>::is_hydro_enabled && do_tracers != 0 && final_success) {
+		if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+			// comoving drift: dx/dt = v / a, evaluated at the hydro midpoint a(t + dt/2)
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				avgFaceVel[idim].mult(1.0 / a_hydro, 0, 1, avgFaceVel[idim].nGrow());
+			}
+		}
 		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
 	}
 
@@ -2978,6 +3221,13 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		     , hydroFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2], rightState_bfield[2],
 						      flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2],
 						      reconstructGhost, nvars, nghost_Riemann, dx);)
+
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		const amrex::Real a = a_now_; // here a_now_ = a_half, as updated by first Strang Splitting step; consistent with RK
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			flux[idim].mult(1.0 / a);
+		}
+	}
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -3172,6 +3422,13 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 							flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, reconstructRange, nvars, nghost_Riemann, dx);
 		     , hydroFOFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2], rightState_bfield[2],
 							flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructRange, nvars, nghost_Riemann, dx);)
+
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		const amrex::Real a = a_now_;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			flux[idim].mult(1.0 / a);
+		}
+	}
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -3842,6 +4099,42 @@ void QuokkaSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::
 	}
 	const auto plotfile_name = CustomPlotFileName(plotfile_prefix.c_str(), istep[lev]);
 	WriteSingleLevelPlotfile(plotfile_name, mf, compNames, geom[lev], tNew_[lev], istep[lev]);
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::WritePlotFile()
+{
+	if constexpr (Physics_Traits<problem_t>::is_cosmology_enabled) {
+		// Calculate the current dimensionless factors E(a) and H(a)
+		const amrex::Real E_a = quokka::cosmology::HubbleFactor(a_now_, cosmology_params_);
+		const amrex::Real H_cgs = cosmology_params_.H0 * E_a;
+		const amrex::Real H_km_s_Mpc = H_cgs * (C::parsec * 1.0e6) / 1.0e5; // convert to (km/s) / Mpc
+		const amrex::Real E2 = E_a * E_a;
+		const amrex::Real a2 = a_now_ * a_now_;
+		const amrex::Real a3 = a2 * a_now_;
+		const amrex::Real a4 = a2 * a2;
+
+		// Scale the densities according to the cosmic epoch
+		const amrex::Real Omega_m_a = cosmology_params_.Omega_m / (a3 * E2);
+		const amrex::Real Omega_b_a = cosmology_params_.Omega_b / (a3 * E2);
+		const amrex::Real Omega_dm_a = cosmology_params_.Omega_dm / (a3 * E2);
+		const amrex::Real Omega_r_a = cosmology_params_.Omega_r / (a4 * E2);
+		const amrex::Real Omega_L_a = cosmology_params_.Omega_L / E2;
+		const amrex::Real Omega_k_a = (1.0 - cosmology_params_.Omega_m - cosmology_params_.Omega_r - cosmology_params_.Omega_L) / (a2 * E2);
+
+		// update dynamic cosmological state for this output
+		this->simulationMetadata_["cosmology"]["a"] = a_now_;
+		this->simulationMetadata_["cosmology"]["z"] = (1.0 / a_now_) - 1.0;
+		this->simulationMetadata_["cosmology"]["H_cgs"] = H_cgs;
+		this->simulationMetadata_["cosmology"]["H_km_s_Mpc"] = H_km_s_Mpc;
+		this->simulationMetadata_["cosmology"]["Omega_m_current"] = Omega_m_a;
+		this->simulationMetadata_["cosmology"]["Omega_b_current"] = Omega_b_a;
+		this->simulationMetadata_["cosmology"]["Omega_dm_current"] = Omega_dm_a;
+		this->simulationMetadata_["cosmology"]["Omega_r_current"] = Omega_r_a;
+		this->simulationMetadata_["cosmology"]["Omega_Lambda_current"] = Omega_L_a;
+		this->simulationMetadata_["cosmology"]["Omega_k_current"] = Omega_k_a;
+		this->simulationMetadata_["cosmology"]["comoving_mean_density"] = comoving_mean_density_;
+	}
+	AMRSimulation<problem_t>::WritePlotFile();
 }
 
 #endif // RADIATION_SIMULATION_HPP_
