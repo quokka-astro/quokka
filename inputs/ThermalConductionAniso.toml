@@ -39,8 +39,3 @@ conduction.kappaPar = 0.01
 conduction.kappaPerp = 0.0
 conduction.aniso_flux_limiter = "mc"
 suppress_output = 0
-
-conduction.conduction_type = "constant"
-conduction.conductivity_prefactor = 0.6113916490935586e12
-
-density_floor = 1e-31  # g cm^-3
