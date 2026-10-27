@@ -30,8 +30,6 @@ stromgen.Q = 4e46
 stromgen.temperature = 37.11
 
 photochemistry.enabled = 1
-integrator.use_number_densities = 1
-integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 integrator.ode_max_steps = 50000
 

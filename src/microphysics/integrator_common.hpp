@@ -20,7 +20,7 @@
 #include "microphysics/integrator_errors.hpp"
 #include "microphysics/microphysics_traits.hpp"
 
-// still from extern/Microphysics: burn_t, net_ienuc, aion, eos(), the network's actual_rhs and actual_jac, the
+// still from extern/Microphysics: burn_t, net_ienuc, eos(), the network's actual_rhs and actual_jac, the
 // integrator parameters and integrator_neqs
 #include "actual_rhs.H"
 #include "burn_type.H"
@@ -208,10 +208,8 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 				if constexpr (Layout::traits::do_species_clip) {
 					int_state.y(n) = amrex::Clamp(int_state.y(n), integrator_rp::SMALL_X_SAFE, 1.0_rt);
 				}
-				// for primordial chem, just enforce positivity
-				if (integrator_rp::use_number_densities) {
-					int_state.y(n) = amrex::max(int_state.y(n), integrator_rp::SMALL_X_SAFE);
-				}
+				// enforce positivity of the number densities
+				int_state.y(n) = amrex::max(int_state.y(n), integrator_rp::SMALL_X_SAFE);
 				break;
 			case VarRole::ChemPhotonNumber:
 			case VarRole::ThermalBandEnergy:
@@ -278,14 +276,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 
 	actual_rhs(state, ydot);
 
-	// We integrate X, not Y
-	// turn it off for primordial chem
-	if (!integrator_rp::use_number_densities) {
-		for (int n = 1; n <= NumSpec; ++n) {
-			ydot(n) *= aion[n - 1];
-		}
-	}
-
 	// scale the energy
 	if (integrator_rp::scale_system) {
 		ydot(net_ienuc) /= state.e_scale;
@@ -329,17 +319,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 
 	actual_jac(state, pd);
 
-	// We integrate X, not Y
-	// turn it off for primordial chem
-	if (!integrator_rp::use_number_densities) {
-		for (int j = 1; j <= NumSpec; ++j) {
-			for (int i = 1; i <= int_neqs; ++i) {
-				pd.mul(j, i, aion[j - 1]);
-				pd.mul(i, j, aion_inv[j - 1]);
-			}
-		}
-	}
-
 	// scale the energy derivatives
 
 	if (integrator_rp::scale_system) {
@@ -374,7 +353,6 @@ constexpr int OUTDIGITS = std::numeric_limits<amrex::Real>::max_digits10;
 /// The initial composition and thermodynamic state, saved for diagnostics.
 template <typename Layout> struct StateBackup {
 	amrex::Real T_in{};
-	amrex::Real e_in{};
 #ifndef AMREX_USE_GPU
 	amrex::GpuArray<amrex::Real, NumSpec> xn_in{};
 	amrex::GpuArray<amrex::Real, Layout::num_chem_rad_eqs> rn_in{};
@@ -465,7 +443,6 @@ template <typename Layout, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE au
 	}
 #endif
 	state_save.T_in = state.T;
-	state_save.e_in = state.e;
 
 	return state_save;
 }
@@ -478,20 +455,6 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 	// Copy the integration data back to the burn state.
 
 	integrator_to_burn<Layout>(int_state, state);
-
-	// Subtract off the initial energy (the application codes expect
-	// to get back only the generated energy during the burn).
-
-	if (integrator_rp::subtract_internal_energy) {
-		state.e -= state_save.e_in;
-	}
-
-	// Normalize the final abundances (except if they are number
-	// densities)
-
-	if (!integrator_rp::use_number_densities) {
-		normalize_abundances_burn(state);
-	}
 
 	// Get the number of RHS and Jacobian evaluations.
 
@@ -514,14 +477,6 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 			case VarRole::Species:
 				if (int_state.y(n) < -integrator_rp::species_failure_tolerance) {
 					state.success = false;
-				}
-
-				// Don't enforce a max if we are evolving number densities
-
-				if (!integrator_rp::use_number_densities) {
-					if (int_state.y(n) > 1.0_rt + integrator_rp::species_failure_tolerance) {
-						state.success = false;
-					}
 				}
 				break;
 			case VarRole::ChemPhotonNumber:

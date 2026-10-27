@@ -47,10 +47,6 @@ primordial_chem.primary_species_14 = 0.0775e0
 
 
 # integrator runtime parameters
-# are we using primordial chemistry? then we use number densities
-integrator.use_number_densities = 1
-# we do not want to subtract the internal energy
-integrator.subtract_internal_energy = 0
 # minimum positive value of number densities
 integrator.SMALL_X_SAFE = 1e-100
 integrator.burner_verbose = 0
