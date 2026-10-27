@@ -22,7 +22,7 @@ void actual_rhs_init();
 // ydot()/jac() are 1-indexed, so the same species use index+1 there.
 // net_ienuc (= NumSpec + 1) is the specific internal energy row/column.
 // Radiation rows/columns follow net_ienuc: photon number density, then
-// (unless SKIP_PHOTOCHEMFLUX) photon flux.
+// (with Microphysics_Traits::integrate_rad_flux) photon flux.
 constexpr int e_idx = static_cast<int>(Species::e);
 constexpr int H_idx = static_cast<int>(Species::H);
 constexpr int Hp_idx = static_cast<int>(Species::H_p);
@@ -192,9 +192,6 @@ template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_r
 	const amrex::Real n_HII = state.xn[Hp_idx];
 	const amrex::Real n_gamma =
 	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
-#ifndef SKIP_PHOTOCHEMFLUX
-	const amrex::Real n_gamma_flux = state.rn[1];
-#endif
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
@@ -232,9 +229,10 @@ template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_r
 	energy_source -= collisional_ionization_cooling_rate;
 	ydot(net_ienuc) = energy_source / state.rho;
 	ydot(i_ngamma) = -photoionization_term;
-#ifndef SKIP_PHOTOCHEMFLUX
-	ydot(i_ngamma_flux) = -chat_sigma_photo * n_HI * n_gamma_flux;
-#endif
+	if constexpr (BurnT::traits::integrate_rad_flux) {
+		const amrex::Real n_gamma_flux = state.rn[1];
+		ydot(i_ngamma_flux) = -chat_sigma_photo * n_HI * n_gamma_flux;
+	}
 }
 
 template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const BurnT &state, MatrixType &jac)
@@ -272,9 +270,6 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	// Gate for column-5 Jacobian entries: when rn[0] < 0 the clamp makes the RHS
 	// independent of rn[0], so all derivatives w.r.t. rn[0] are zero.
 	const amrex::Real n_gamma_active = (state.rn[0] >= 0.0_rt) ? 1.0_rt : 0.0_rt;
-#ifndef SKIP_PHOTOCHEMFLUX
-	const amrex::Real n_gamma_flux = state.rn[1];
-#endif
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
@@ -331,19 +326,20 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	jac(i_ngamma, net_ienuc) = 0.0_rt;
 	jac(i_ngamma, i_ngamma) = -n_gamma_active * chat_sigma_photo * n_HI;
 
-#ifndef SKIP_PHOTOCHEMFLUX
-	jac(ie, i_ngamma_flux) = 0.0_rt;
-	jac(iH, i_ngamma_flux) = -jac(ie, i_ngamma_flux);
-	jac(iHp, i_ngamma_flux) = jac(ie, i_ngamma_flux);
-	jac(net_ienuc, i_ngamma_flux) = 0.0_rt;
-	jac(i_ngamma, i_ngamma_flux) = 0.0_rt;
-	jac(i_ngamma_flux, ie) = 0.0_rt;
-	jac(i_ngamma_flux, iH) = -chat_sigma_photo * n_gamma_flux;
-	jac(i_ngamma_flux, iHp) = 0.0_rt;
-	jac(i_ngamma_flux, net_ienuc) = 0.0_rt;
-	jac(i_ngamma_flux, i_ngamma) = 0.0_rt;
-	jac(i_ngamma_flux, i_ngamma_flux) = -n_HI * chat_sigma_photo;
-#endif
+	if constexpr (BurnT::traits::integrate_rad_flux) {
+		const amrex::Real n_gamma_flux = state.rn[1];
+		jac(ie, i_ngamma_flux) = 0.0_rt;
+		jac(iH, i_ngamma_flux) = -jac(ie, i_ngamma_flux);
+		jac(iHp, i_ngamma_flux) = jac(ie, i_ngamma_flux);
+		jac(net_ienuc, i_ngamma_flux) = 0.0_rt;
+		jac(i_ngamma, i_ngamma_flux) = 0.0_rt;
+		jac(i_ngamma_flux, ie) = 0.0_rt;
+		jac(i_ngamma_flux, iH) = -chat_sigma_photo * n_gamma_flux;
+		jac(i_ngamma_flux, iHp) = 0.0_rt;
+		jac(i_ngamma_flux, net_ienuc) = 0.0_rt;
+		jac(i_ngamma_flux, i_ngamma) = 0.0_rt;
+		jac(i_ngamma_flux, i_ngamma_flux) = -n_HI * chat_sigma_photo;
+	}
 }
 
 #endif
