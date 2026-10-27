@@ -180,7 +180,10 @@ region() { awk -v name="$2" '/Incl\. Min/ { incl = 1 } incl && $1 == name { prin
 common=("${INPUT}"
 	"amr.n_cell=${NCELL} ${NCELL} ${NCELL_Z}" amr.max_level="${MAX_LEVEL}"
 	amr.max_grid_size="${MAX_GRID_SIZE}" amr.blocking_factor="${MAX_GRID_SIZE}"
-	do_tracers=1 quokka.slice_z.int=-1 blast_problem.check_solution=0 tiny_profiler.enabled=1)
+	do_tracers=1 quokka.slice_z.int=-1 blast_problem.check_solution=0 tiny_profiler.enabled=1
+	# Native particle restarts read with at most 64 ranks by default, which runs out
+	# of memory at scale; AMReX caps this at the rank count.
+	particles.nreaders=1000000)
 no_output=(checkpoint_interval=-1 plotfile_interval=-1)
 
 # Run one step of the test on $2 nodes, starting at node $3 of the allocation
