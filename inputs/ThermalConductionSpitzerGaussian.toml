@@ -31,4 +31,7 @@ conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
 suppress_output = 0
 
-# the conductivity (kappa0 = 5.40e-10) is set by computeConductivity in the problem file (ConductionModel::problem_defined)
+conduction.conduction_type = "spitzer"
+conduction.conductivity_prefactor = 5.40e-10
+
+density_floor = 1e-31  # g cm^-3

@@ -13,7 +13,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP
 {
 	OpacityTerms<problem_t> result;
 
-	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
+	const auto kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
 
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 		for (int g = 0; g < nGroups_; ++g) {
@@ -67,7 +67,7 @@ RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(double const T, d
 							       quokka::valarray<double, nGroups_> const &fourPiBoverC, OpacityTerms<problem_t> &opacity_terms)
 {
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
-	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
+	const auto kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
 	for (int g = 0; g < nGroups_; ++g) {
 		auto const nu_L = rad_boundaries[g];
 		auto const nu_R = rad_boundaries[g + 1];
@@ -590,6 +590,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 		amrex::Real const Ekin1 = Egastot1 - energy.Egas;
 		amrex::Real const dEkin_work = Ekin1 - Ekin0;
 
+		// The kinetic energy must be paid for by whichever reservoir the energy exchange credited with the work.
+		bool work_from_radiation = true;
 		if constexpr (include_work_term_in_source) {
 			// New scheme: the work term is included in the source terms. The work done by radiation went to internal energy, but it
 			// should go to the kinetic energy. Remove the work term from internal energy.
@@ -604,8 +606,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 			// it can only bind where the transfer already exceeds the internal energy available, i.e. in
 			// cold cells the radiation has evacuated, where Egas and hence the discarded energy are
 			// minuscule. See work_term_min_eint_fraction and issue #2173.
-			const double max_eint_transfer = (1.0 - work_term_min_eint_fraction) * energy.Egas;
-			energy.Egas -= std::min(dEkin_work, max_eint_transfer);
+			// Gas thermally decoupled from the dust is the exception: the decoupled solve leaves Egas out of the
+			// exchange, work term included, so Egas holds no work to give up. Debiting it anyway takes the kinetic
+			// energy from the gas's own heat; in an evacuated, radiation-driven cell that exceeds the heat at every
+			// stage, and the cap then pins fully ionised gas near 1 K. There the radiation pays instead (below).
+			work_from_radiation = energy.gas_decoupled;
+			if (!energy.gas_decoupled) {
+				const double max_eint_transfer = (1.0 - work_term_min_eint_fraction) * energy.Egas;
+				energy.Egas -= std::min(dEkin_work, max_eint_transfer);
+			}
 			// The work term is included in the source term, but it is lagged. We update the work term here.
 			for (int g = 0; g < nGroups_; ++g) {
 				// compute new work term from the updated radiation flux and velocity
@@ -620,8 +629,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 							 (c_light_ * c_light_) * dt;
 				}
 			}
-		} else {
-			// Old scheme: the source term does not include the work term, so we add the work term to the Erad.
+		}
+		if (work_from_radiation) {
+			// Old scheme (the source term does not include the work term), or gas decoupled from the dust (the work
+			// term never reached Egas): the kinetic energy comes out of the radiation, so add the work term to the Erad.
 
 			// compute loss of radiation energy to gas kinetic energy
 			auto dErad_work = -(c_hat_ / c_light_) * dEkin_work;
@@ -647,8 +658,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 				auto radEnergyNew = energy.EradVec[g] + dErad_work * energyLossFractions[g];
 				// AMREX_ASSERT(radEnergyNew > 0.0);
 				if (radEnergyNew < Erad_floor_) {
-					// return energy to Egas_guess
-					energy.Egas -= (Erad_floor_ - radEnergyNew) * (c_light_ / c_hat_);
+					// The radiation cannot pay for the kinetic energy, so the gas pays the shortfall. In a near-vacuum
+					// cell the dp^2/(2 rho) part of dEkin_work exceeds both reservoirs, so cap the debit as above to keep
+					// Egas positive. Not energy conserving; see work_term_min_eint_fraction and issue #2173.
+					const double refund = (Erad_floor_ - radEnergyNew) * (c_light_ / c_hat_);
+					energy.Egas -= std::min(refund, (1.0 - work_term_min_eint_fraction) * energy.Egas);
 					radEnergyNew = Erad_floor_;
 				}
 				updated_flux.Erad[g] = radEnergyNew;
@@ -747,7 +761,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// source is injected directly into the radiation energy after the Newton solve (see the store
 		// below), so it is not subject to the thermal opacity coupling (which would drop it at zero
 		// opacity) and does not pollute the gas energy balance. Remove the chem-band source from the
-		// thermal solve here. When NChemBands == 0 this loop is empty and behaviour is unchanged.
+		// thermal solve here. When NChemBands == 0 this loop is empty and behaviour is unchanged. With
+		// photochemistry enabled, subcycleRadiationAtLevel injects the chem-band emission before
+		// photochemistry (RadSystem::AddChemBandSources) and passes zero chem-band sources here.
 		quokka::valarray<double, nGroups_> Src_chem{};
 		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
 			Src_chem[g] = Src[g];
@@ -860,7 +876,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, updated_energy.T_d);
 			} else { // constexpr (gamma_ == 1.0)
-				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, NAN);
+				kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, NAN);
 				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 					for (int g = 0; g < nGroups_; ++g) {
 						updated_energy.opacity_terms.kappaF[g] = kappa_expo_and_lower_value[1][g];

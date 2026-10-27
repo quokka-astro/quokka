@@ -32,3 +32,5 @@ conduction.conduction_cfl = 0.1
 suppress_output = 0
 
 conduction.conductivity_prefactor = 5.40e-10
+
+density_floor = 1e-31  # g cm^-3

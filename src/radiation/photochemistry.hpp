@@ -35,9 +35,10 @@ AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
-			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource) -> bool
+			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource, amrex::MultiFab &radEnergySource)
+    -> bool
 {
-	amrex::ignore_unused(dustHeatingSource);
+	amrex::ignore_unused(dustHeatingSource, radEnergySource);
 
 	// Start off by assuming a successful burn.
 	int photochem_burn_success = 1;
@@ -72,6 +73,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		invChemBandQuanta[nn] = 1.0_rt / chemBandQuanta[nn];
 	}
 
+	// copied to a local so the device lambda below captures it by value
+	const amrex::GpuArray<double, RadSystem<problem_t>::nGroups_ + 1> radBoundaries = RadSystem<problem_t>::radBoundaries_;
+
 	// Cells the burn skips (rho < min_density_allowed) must read zero, not the previous substep's deposit.
 	if constexpr (RadSystem<problem_t>::dust_chemical_band_absorption_) {
 		dustHeatingSource.setVal(0.0);
@@ -85,6 +89,10 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		amrex::Array4<amrex::Real> dustHeatingSource_arr{};
 		if constexpr (RadSystem<problem_t>::dust_chemical_band_absorption_) {
 			dustHeatingSource_arr = dustHeatingSource.array(iter);
+		}
+		amrex::Array4<amrex::Real> radEnergySource_arr{};
+		if constexpr (RadSystem<problem_t>::thermal_band_photochemistry_) {
+			radEnergySource_arr = radEnergySource.array(iter);
 		}
 
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
@@ -116,6 +124,14 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			const Real Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, cons_fc);
 
 			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, Emag);
+
+			amrex::ignore_unused(radBoundaries, radEnergySource_arr);
+			if constexpr (RadSystem<problem_t>::nGroupsThermal_ == 0) {
+				// With no thermal groups the thermal IMEX stages are skipped, so check the chem-band opacities here.
+				const auto massScalars = RadSystem<problem_t>::ComputeMassScalars(state, i, j, k);
+				const Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
+				RadSystem<problem_t>::AssertChemBandOpacitiesAreZero(radBoundaries, rho, Tgas);
+			}
 
 			burn_t photochemstate;
 			photochemstate.success = true;
@@ -236,10 +252,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			if constexpr (RadSystem<problem_t>::thermal_band_photochemistry_) {
 				// Flux of thermal band is unchanged after burn since we assume isotropic emission.
 				for (int nn = 0; nn < NumThermalBands; ++nn) {
-					const Real dE_thermal = photochemstate.re_thermal[nn] - re_thermal_initial[nn];
-					const int eIdx = RadSystem<problem_t>::radEnergy_index + RadSystem<problem_t>::numRadVars_ * nn;
-					state(i, j, k, eIdx) =
-					    amrex::max(state(i, j, k, eIdx) + RadSystem_Traits<problem_t>::c_hat_over_c * dE_thermal, small_x);
+					radEnergySource_arr(i, j, k, nn) += (photochemstate.re_thermal[nn] - re_thermal_initial[nn]) / dt;
 				}
 			}
 
