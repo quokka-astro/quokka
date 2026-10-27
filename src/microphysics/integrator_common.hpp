@@ -22,7 +22,7 @@
 #include "microphysics/microphysics_traits.hpp"
 
 // still from extern/Microphysics: burn_t, net_ienuc, eos(), the network's actual_rhs and actual_jac, and
-// integrator_neqs
+// integrator_neqs (only to check the layout)
 #include "actual_rhs.H"
 #include "burn_type.H"
 #include "eos.H"
@@ -47,7 +47,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto counts_toward_error(cons
 template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	using traits = Microphysics_Traits<problem_t>;
 
-	static constexpr bool photochemistry = requires { &BurnT::rn; };
+	static constexpr bool photochemistry = traits::photochemistry;
 
 	static constexpr auto NumChemRadEqs() -> int
 	{
@@ -70,7 +70,7 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	static constexpr int num_chem_rad_eqs = NumChemRadEqs();
 	static constexpr int num_thermal_bands = NumThermalBands();
 	static constexpr int vars_per_group = Microphysics_Traits<problem_t>::integrate_rad_flux ? 2 : 1;
-	static constexpr bool q_dust = requires { &BurnT::e_dust_absorbed; };
+	static constexpr bool q_dust = traits::dust_band_absorption;
 	static constexpr int neqs = NumSpec + 1 + num_chem_rad_eqs + num_thermal_bands + (q_dust ? 1 : 0);
 
 	/// The role of entry n (1-based) of y: the species, then the energy, then a photon number (and with
@@ -100,10 +100,12 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 		return VarRole::DustAbsorbedEnergy;
 	}
 
-	static_assert(traits::photochemistry == photochemistry,
-		      "Microphysics_Traits::photochemistry must be true exactly when the problem is built with PHOTOCHEMISTRY");
-	static_assert(traits::dust_band_absorption == q_dust,
-		      "Microphysics_Traits::dust_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
+	static_assert(
+	    photochemistry == requires { &BurnT::rn; },
+	    "Microphysics_Traits::photochemistry must be true exactly when the problem is built with PHOTOCHEMISTRY");
+	static_assert(
+	    q_dust == requires { &BurnT::e_dust_absorbed; },
+	    "Microphysics_Traits::dust_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
 	static_assert(net_ienuc == NumSpec + 1, "the energy must follow the species");
 	static_assert(num_chem_rad_eqs % vars_per_group == 0, "every chemical band must have vars_per_group variables");
 	static_assert(integrator_neqs<BurnT>() == neqs, "the layout must match Microphysics' integrator_neqs");
@@ -280,7 +282,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 template <typename Layout, typename BurnT, typename IntegratorT, typename MatrixType>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int_state, MatrixType &pd)
 {
-	constexpr int int_neqs = integrator_neqs<BurnT>();
+	constexpr int int_neqs = Layout::neqs;
 
 	// Only do the burn if the incoming temperature is within the temperature
 	// bounds. Otherwise set the Jacobian to zero and return.
