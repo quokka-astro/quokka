@@ -18,6 +18,11 @@ struct DefaultMicrophysicsTraits {
 	/// Retry a failed burn. Replaces the runtime parameter integrator.use_burn_retry. The retry itself is not
 	/// implemented yet, so with this set a failed burn aborts.
 	static constexpr bool burn_retry = false;
+	/// Enable photochemistry.
+	/// Must match the PHOTOCHEMISTRY build macro while Microphysics' burn_t still depends on it.
+	static constexpr bool photochemistry = false;
+	/// Dust absorption in chemical bands.
+	static constexpr bool dust_band_absorption = false;
 	/// Whether to integrate the photon flux equations or determine them algebraically.
 	static constexpr bool integrate_rad_flux = true;
 
