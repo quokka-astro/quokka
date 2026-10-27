@@ -78,17 +78,24 @@ redistribution. Mesh and particle floating-point data stored as `float` or
 openPMD output (checkpoints and plotfiles) goes through the ADIOS2 BP5 engine.
 `openpmd.aggregation` controls whether BP5 aggregates writes:
 
-| Parameter                       | Type    | Default  | Description |
-|---------------------------------|---------|----------|-------------|
-| `openpmd.aggregation`           | String  | `"auto"` | `on` keeps BP5's default aggregation (one aggregator per node, writing one subfile per node). `off` makes every rank write its own subfile. `auto` turns aggregation on from `openpmd.aggregation_min_nodes` nodes upward. |
-| `openpmd.aggregation_min_nodes` | Integer | `32`     | Node count from which `auto` aggregates. |
+| Parameter             | Type   | Default | Description |
+|-----------------------|--------|---------|-------------|
+| `openpmd.aggregation` | String | `"off"` | `off` makes every rank write its own subfile. `on` keeps BP5's default aggregation (one aggregator per node, writing one subfile per node). |
 
 The choice is printed once at the first openPMD output.
 
-Without aggregation, writes are faster on a single node: about 2.4 times faster
-on one CUDA node in our tests, matching native AMReX checkpoints. But the
-number of files then grows with the rank count. The default threshold of 32
-nodes is 256 ranks at 8 ranks per node, which matches native AMReX's default
-of at most 256 files per MultiFab. This threshold is provisional. Measure both
-modes on your machine with `scripts/slurm/frontier-openpmd-restart.submit`,
-which compares them on Frontier.
+Without aggregation, the number of files grows with the rank count, but writes
+and reads are usually faster. On Frontier (8 ranks per node),
+`scripts/slurm/frontier-openpmd-restart.submit` gave these bandwidths for a
+4096³ grid on 512 nodes and a 4096² × 8192 grid on 1024 nodes:
+
+| Nodes | Output                         | Aggregation off | Aggregation on |
+|-------|--------------------------------|-----------------|----------------|
+| 512   | checkpoint write               | 2263 GB/s       | 673 GB/s       |
+| 512   | plotfile write                 | 2043 GB/s       | 706 GB/s       |
+| 1024  | checkpoint write               | 1190 GB/s       | 1372 GB/s      |
+| 1024  | plotfile write                 | 2162 GB/s       | 1362 GB/s      |
+| 1024  | checkpoint read (on 512 nodes) | 299 GB/s        | 43 GB/s        |
+
+Read bandwidth varied by several times between identical runs. Measure both
+modes on your machine with that script before switching to `on`.
