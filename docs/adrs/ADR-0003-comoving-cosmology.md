@@ -22,7 +22,7 @@ Out of scope: radiation. Comoving radiation transport ($`c/a`$, photon redshift)
 - **Option A: $`1/a`$ at each call site (current branch).** Works on one level, but every new flux path or operator must find its own factors, and the mutable `a_now_` blocks AMR, restart and retries.
 - **Option B: Supercomoving coordinates** (Martel & Shapiro 1998). These remove $`a`$ from the equations only for $`\gamma = 5/3`$. Quokka supports a general EOS.
 - **Option C: Comoving variables with a fixed set of hooks** (this ADR), storing the magnetic field as $`\tilde B = a^{3/2} B_\mathrm{phys}`$ with a $`-\tfrac12 H \tilde B`$ expansion term. This is the Li, Li & Cen (2008) form. It breaks $`\nabla\cdot B = 0`$ under AMR subcycling (see [Why a factor on B breaks ∇·B](#why-a-factor-on-b-breaks-b-at-sync)).
-- **Option D: As C, but storing the flux-frozen field $`B_c = a^2 B_\mathrm{phys}`$** (Collins et al. 2010) and converting to $`\tilde B`$ only at the solver boundary.
+- **Option D: As C, but storing the flux-frozen field $`B_c = a^2 B_\mathrm{phys}`$** (Collins et al. 2010) and supplying $`\tilde B`$ through a view to every consumer that expects magnetic pressure in comoving energy units.
 
 ## Decision
 Choose Option D.
@@ -34,22 +34,23 @@ Use comoving coordinates $`x`$, peculiar velocity $`v`$, and comoving conserved 
 
 Consequences of that principle:
 
-1. **$`a(t)`$ is a function.** The cosmology module provides `scaleFactorAt(t)` and `dtau(t, dt)` $`= \int dt'/a(t')`$, both evaluated from a table built from the cosmological parameters alone (see [Restart and reproducibility](#restart-and-reproducibility)). Every caller asks for $`a`$ at the time it needs. AMR subcycling, retries and restart need no special handling (`tNew_` is already checkpointed).
+1. **$`a(t)`$ is a function.** The cosmology module provides `scaleFactorAt(t)` and `dtau(t, dt)` $`= \int dt'/a(t')`$, evaluated from a table built from the cosmological parameters alone, or directly as $`a_\mathrm{init}`$ and $`dt/a_\mathrm{init}`$ when $`H_0 = 0`$ (see [Restart and reproducibility](#restart-and-reproducibility)). Every caller asks for $`a`$ at the time it needs. AMR subcycling, retries and restart need no special handling (`tNew_` is already checkpointed).
 2. **Transport runs on the clock $`\tau`$.** Every term that moves material through comoving space carries the same $`1/a`$, so it is advanced with $`d\tau`$ instead of $`dt`$.
 3. **Expansion is one Strang-split operator** on the physical $`dt`$, and the only code that knows about $`\dot a/a`$.
-4. **Local and diffusive physics run unmodified** inside a physical-frame wrapper. Diffusive terms that live inside the transport step (viscosity, resistivity) use physical-frame gradients and coefficients there.
+4. **Local and diffusive physics run unmodified** inside a physical-frame wrapper. Diffusive terms that live inside the transport step (viscosity, resistivity) use physical-frame gradients and coefficients, with their returned fluxes converted to the transport frame.
 
 ### The hooks
-These six hooks are the complete list of places where $`a`$ appears outside `src/cosmology/`.
+These seven hooks are the complete list of places where $`a`$ appears outside `src/cosmology/`.
 
 | Hook | Location | Covers |
 |---|---|---|
-| `dtau` | `advanceHydroAtLevel` (PredictStep, AddFluxesRK2, `SolveInductionEqn`, flux and EMF registers, tracers, $`B_c \leftrightarrow \tilde B`$ conversion at the solver, `PhysicalDx` and physical coefficients for viscous and resistive terms); `applyPoissonGravityAtLevel`; particle kick and drift | Flux divergence, $`P\,dV`$, induction, viscosity, resistivity, gravity on gas and particles, particle drift, tracers |
-| `dt_cfl = a * dtau_cfl` | `computeTimestepAtLevel` | Hydro, MHD and particle CFL |
+| `dtau` | `advanceHydroAtLevel` (PredictStep, AddFluxesRK2, `SolveInductionEqn`, flux and EMF registers, tracers, magnetic view and EMF conversion, `PhysicalDx` and coefficient/flux conversions for viscous and resistive terms); `applyPoissonGravityAtLevel`; particle kick and drift | Flux divergence, $`P\,dV`$, induction, viscosity, resistivity, gravity on gas and particles, particle drift, tracers |
+| Timestep conversion: `dt_cfl = a * dtau_cfl` for hyperbolic transport; physical diffusive limits | `computeTimestepAtLevel`; `computeMaxSignalLocal` | Hydro, MHD and particle CFL; viscous and resistive stability |
 | Expansion operator | Strang source chain; particle velocity drag | All $`\dot a/a`$ terms, including general EOS ($`B_c`$ has none) |
 | `inPhysicalFrame(op)`, plus $`dx \cdot a`$ for diffusion | Strang source chain | Cooling, chemistry, photoelectric heating, electron conduction, future Strang-split local or diffusive physics |
 | $`G/a`$ and $`\bar\rho`$ | `fillPoissonRhsAtLevel`; particle `depositMass`; $`\bar\rho`$ from the level-0 composite field after average-down | Comoving Poisson equation |
 | EOS view (`a3`) | EOS calls in hydro | Non-ideal EOS |
+| Magnetic view ($`B_c/\sqrt a`$) | Transport, CFL estimation, initialization, state fixups and diagnostics that consume magnetic energy | Consistent magnetic pressure, energy and wavespeeds at each consumer's evaluation time |
 
 In `advanceHydroAtLevel`, `dtau_lev` is used only for the update itself. Time labels (`fillBoundaryConditions(time + dt_lev)`, the Strang source calls, `tNew_`) stay on the physical `dt_lev`. Any hyperbolic term later added to the hydro RHS inherits the correct factor automatically; diffusive terms need the treatment below.
 
@@ -59,9 +60,22 @@ Hydro and particles use the same $`d\tau`$ for each step, which keeps gas and da
 Physical viscosity is computed inside `HydroSystem::ComputeFluxes`, and Ohmic resistivity inside the EMF computation and `MHDSystem::AddResistiveEnergyFlux`. Only electron conduction is Strang-split. A diffusive term needs $`1/a^2`$, but running on $`d\tau`$ supplies only one factor, so the transport hook also:
 
 - computes gradients inside diffusive fluxes with $`dx_\mathrm{phys} = a(t+\Delta t/2)\,dx`$, while the flux divergence keeps the comoving $`dx`$;
-- converts coefficients to the physical frame: dynamic viscosity $`\mu`$ scales like a density ($`k = 3`$); resistivity $`\eta`$ is a diffusivity and is unchanged.
+- evaluates coefficients from physical state: dynamic shear and bulk viscosities have $`\mu_c = a^3\mu_\mathrm{phys}`$; resistivity $`\eta`$ is a diffusivity and is unchanged;
+- converts the physical viscous momentum and energy fluxes back by $`a^3`$ before adding them to the comoving fluxes in `ComputeFluxes`. Equivalently, supply $`a^3\mu_\mathrm{phys}`$ (for both shear and bulk viscosity) to `ComputeViscousFlux` with physical velocity gradients. Apply exactly one of these conversions: $`d\tau`$ supplies the coordinate/time factor, not the flux-unit conversion;
+- evaluates resistive EMFs and energy fluxes using $`\tilde B`$, physical spacing and unchanged $`\eta`$. The energy flux is then already in comoving units because it is quadratic in $`\tilde B`$; multiply the EMF by $`\sqrt a`$ when returning to the stored $`B_c`$ update.
 
 `ComovingDx` and `PhysicalDx` are distinct types, so passing the comoving spacing to a diffusive gradient does not compile.
+
+### Timestep limits
+The hyperbolic conversion $`dt_\mathrm{cfl} = a\,d\tau_\mathrm{cfl}`$ assumes physical characteristic speeds, obtained with the magnetic and EOS views at the state evaluation time. Diffusive limits must also use physical spacing and physical state/coefficient values. For constant coefficients, the existing limits become
+
+```math
+\Delta t_\eta \le C\,\frac{(a\,dx)^2}{2\eta}, \qquad
+\Delta t_\mu \le C\,\frac{(a\,dx)^2\rho_\mathrm{phys}}{2\left(\tfrac43\mu_\mathrm{phys}+\zeta_\mathrm{phys}\right)}, \qquad
+\rho_\mathrm{phys}=\rho_c/a^3,
+```
+
+where $`\mu`$ and $`\zeta`$ are shear and bulk dynamic viscosity and $`C`$ retains the existing CFL and dimensional restrictions. Take the minimum of the hyperbolic and diffusive limits in physical time. If `computeMaxSignalLocal` continues to combine them as effective speeds, use $`2\eta/(a\,dx)`$ and $`2(\tfrac43\mu_\mathrm{phys}+\zeta_\mathrm{phys})/(\rho_\mathrm{phys}\,a\,dx)`$ before the final multiplication by $`a`$. Do not multiply a timestep computed with the old $`2\eta/dx`$ by $`a`$: that gives $`a\,dx^2/(2\eta)`$, ten times too large at $`a=0.1`$. Apply the same physical-frame rule to any additional explicit diffusion limit; reevaluate stability for the state and scale factor used by the transport update.
 
 ### Scaling exponents
 A single per-component table in `src/cosmology/` gives each conserved component two exponents:
@@ -105,7 +119,8 @@ Store the flux-frozen field $`B_c = a^2 B_\mathrm{phys}`$ (Collins et al. 2010, 
 \frac{\partial B_c}{\partial t} = \frac{1}{a}\,\nabla_x \times \left(v \times B_c\right)
 ```
 
-- **Solver frame.** At the transport hook the solver receives $`\tilde B = B_c/\sqrt{a(t+\Delta t/2)} = a^{3/2} B_\mathrm{phys}`$, so magnetic pressure scales like gas pressure. The Alfvén and fast speeds from $`\tilde B`$ and $`\rho_c`$ equal the physical speeds, so HLLD, fast wavespeeds and CFL are unchanged. The EMF is scaled back by $`\sqrt a`$ before updating $`B_c`$. Enzo does the same conversion around its solver (Collins et al. 2010, Eqs. 30–31).
+- **Solver frame.** At the transport hook the solver receives $`\tilde B = B_c/\sqrt{a(t+\Delta t/2)} = a^{3/2} B_\mathrm{phys}`$, so magnetic pressure scales like gas pressure. The Alfvén and fast speeds from $`\tilde B`$ and $`\rho_c`$ equal the physical speeds, so the HLLD and wavespeed kernels can be reused with this view. The EMF is scaled back by $`\sqrt a`$ before updating $`B_c`$. Enzo does the same conversion around its solver (Collins et al. 2010, Eqs. 30–31).
+- **Other magnetic consumers.** The same view is required everywhere that combines stored faces with comoving cell energies or densities. `computeMaxSignalLocal` uses $`a`$ at the time of the state being estimated. `updateInitialMagneticEnergyFromFaceField` uses $`a_\mathrm{init}`$, so it adds $`B_c^2/(2a_\mathrm{init})`$. `ApplyHydroStateFixup` (including floors and `SyncDualEnergy`) uses the scale factor of the state being repaired: the frozen midpoint frame inside transport, the endpoint after the second expansion half-step, and $`a(t_\mathrm{sync})`$ for `FixupState` after AMR synchronization. Pass that evaluation time/frame explicitly; a level number alone is insufficient. Energy diagnostics require the same view. These routines may retain their existing $`B^2/2`$ expressions only when given $`\tilde B`$; passing stored $`B_c`$ would subtract the wrong magnetic energy and can overwrite internal or total energy. Use a temporary view without rescaling stored faces; AMR face operations continue to act on $`B_c`$.
 - **Transport.** The curl update runs on $`d\tau`$, like the hydro fluxes.
 - **No expansion factor on $`B`$.** The expansion operator never touches $`B_c`$. A multiplicative factor preserves $`\nabla\cdot B`$ on one level, but under subcycling the two levels apply different factor histories to the field, and sync assembles coarse cells at the interface from both (next section). Collins et al. (2010, §2.4) report exactly this for the source-term form of Li et al. (2008), and "greatly improved divergence" with $`B_c`$.
 - **AMR consistency.** Because $`B_c`$ evolves only through the curl, divergence-free prolongation, time interpolation and EMF reflux stay exact. Every grid sharing a face must still compute identical face EMFs (Collins et al. 2010, §2.4).
@@ -202,7 +217,9 @@ What would break it:
 - Restoring $`a`$ from `metadata.yaml`. yaml-cpp does not guarantee round-trip precision, and the stored value carries the history anyway. Metadata $`a`$, $`z`$ and $`H`$ are diagnostics only.
 - A running sum of $`d\tau`$ over steps.
 
-Implementation, based on the two integrals
+**Zero expansion.** For $`H_0 = 0`$, take an explicit constant-scale-factor branch: require $`a_\mathrm{init}>0`$, return `scaleFactorAt(t) = a_init`, `H(t) = 0` and `dtau(t, dt) = dt / a_init` for every interval. Do not construct or invert a table: the integrands below are singular, and a constant $`a`$ cannot parameterize elapsed time. Expansion is an identity operation (skip its ODE and energy reconstruction), reflux weights are one, and any timestep bound proportional to $`1/H`$ is inactive. This branch supports both frozen-$`a`$ and identity tests, including half-kicks, subcycling, retries and restart, without accumulating a transport clock.
+
+For an expanding cosmology with $`H(a)>0`$ throughout the table domain, implementation is based on the two integrals
 
 ```math
 t(a) = \int \frac{da}{a\,H(a)}, \qquad \tau(a) = \int \frac{da}{a^2 H(a)}
@@ -212,13 +229,13 @@ t(a) = \int \frac{da}{a\,H(a)}, \qquad \tau(a) = \int \frac{da}{a^2 H(a)}
 2. **$`a(t)`$ by interpolation.** Cubic Hermite on the table using the exact derivative $`da/dt = a\,H(a)`$, optionally followed by a fixed number of Newton iterations on $`t(a) - t`$.
 3. **$`d\tau`$ as a difference.** $`d\tau(t_1, t_2) = \tau(a(t_2)) - \tau(a(t_1))`$. Nothing accumulates, and hydro, MHD and particles see the same value.
 4. **Host only.** $`a`$, $`d\tau`$ and $`H`$ are computed on the host and captured as scalars, so GPU and CPU builds and all MPI ranks agree without a broadcast.
-5. **Parameter check.** The checkpoint stores the cosmological parameters and a hash of the table. Restart aborts with an error if the inputs file has changed them.
+5. **Parameter check.** The checkpoint stores the cosmological parameters and a hash of the table, or a constant-scale-factor mode marker when $`H_0=0`$ (no table). Restart checks the mode and parameters, including $`a_\mathrm{init}`$, and the table hash when present; it aborts with an error on a mismatch.
 
 Bitwise reproducibility holds for the same binary on the same machine. A different compiler, FMA contraction or libm can change the last bits of $`H(a)`$, as it can for the hydro update. The time sequence also has to match; it does, because restart restores `dt_` and the cosmological timestep limit depends only on $`H(a(t))`$.
 
 ### Rules for new physics
-1. **Every operator declares its frame.** A transport operator runs inside the $`d\tau`$ step. A Strang-split local or diffusive operator is wrapped in `inPhysicalFrame`. A diffusive term inside the transport step uses `PhysicalDx` and physical-frame coefficients. Only the expansion operator acts directly on comoving state. An undeclared operator fails to compile.
-2. **No $`a`$ inside kernels.** Outside `src/cosmology/`, the scale factor appears only in the six hooks. The type system and the AST check enforce this.
+1. **Every operator declares its frame.** A transport operator runs inside the $`d\tau`$ step. A Strang-split local or diffusive operator is wrapped in `inPhysicalFrame`. A diffusive term inside the transport step uses `PhysicalDx`, coefficients evaluated in the physical frame and fluxes converted back to transport units; its stability limit follows the same frame convention. Magnetic energy and wavespeed consumers use the magnetic view at their evaluation time. Only the expansion operator acts directly on comoving state. An undeclared operator fails to compile.
+2. **No $`a`$ inside kernels.** Outside `src/cosmology/`, the scale factor appears only in the seven hooks. The type system and the AST check enforce this.
 3. **New fields get exponents.** Add one entry, with $`k`$ and $`m`$, to the exponent table; the wrapper, expansion operator, reflux weights and tests pick it up.
 
 ### Enforcement
@@ -243,6 +260,7 @@ class HookKey { // passkey: only the hooks can construct one
 	friend class PhysicalFrame;   // inPhysicalFrame, dx * a
 	friend class ComovingPoisson; // G/a, rho_bar
 	friend class EOSView;         // a3, private inside the view
+	friend class MagneticView;    // B_c / sqrt(a), at the consumer's evaluation time
 };
 } // namespace quokka::cosmology
 ```
@@ -264,27 +282,27 @@ AST matching is deterministic but needs a configured build, so it is too slow fo
 
 ## Consequences
 - **Accuracy.** Expansion source terms are exact for any EOS given $`a(t)`$; transport uses the exact $`\int dt/a`$. Momentum reflux becomes exact under subcycling; total-energy reflux carries an $`O(H\Delta t)`$ error in the correction term.
-- **Performance.** Negligible: a few host-side scalars per level step, one table built at startup, and per-group scaling of flux-register deposits.
-- **Portability.** $`a`$, $`d\tau`$ and $`H`$ are host-only; kernels receive scalars. No new device code paths beyond the expansion operator and the EOS view.
-- **Maintenance.** Factors of $`a`$ are confined to `src/cosmology/` and six hooks, enforced by types and CI. New physics declares its frame instead of locating factors by hand.
+- **Performance.** A few host-side scalars per level step, one table built at startup for expanding runs, per-group scaling of flux-register deposits, and magnetic views for transport and other consumers. The cost of materializing temporary magnetic views must be measured during implementation.
+- **Portability.** $`a`$, $`d\tau`$ and $`H`$ are host-only; kernels receive scalars or converted data. The expansion operator, EOS view and magnetic view must support CPU and GPU execution.
+- **Maintenance.** Factors of $`a`$ are confined to `src/cosmology/` and seven hooks, enforced by types and CI. New physics declares its frame instead of locating factors by hand.
 - **Problem files.** Initial conditions are comoving, including $`B_c = a_\mathrm{init}^2 B_\mathrm{Gauss}/\sqrt{4\pi}`$. `Physics_Traits` keeps only `is_cosmology_enabled`; cosmological numbers become `cosmology.*` runtime parameters.
 - **Output.** No format change. Current $`a`$, $`z`$ and $`H`$ are written to `metadata.yaml` for plotfiles and checkpoints as diagnostics.
 
 ## Rollout & Testing
 Migration from the current branch:
 
-- [ ] Add the parameter-only $`a(t)`$ and $`\tau(a)`$ table with `scaleFactorAt(t)` and `dtau(t, dt)` to `src/cosmology/`; remove `a_now_`, `a_half_` and the retry save/restore.
+- [ ] Add the parameter-only $`a(t)`$ and $`\tau(a)`$ table with `scaleFactorAt(t)` and `dtau(t, dt)` to `src/cosmology/`, plus the table-free $`H_0=0`$ branch returning $`a_\mathrm{init}`$ and $`dt/a_\mathrm{init}`$; remove `a_now_`, `a_half_` and the retry save/restore.
 - [ ] Replace the five particle cosmology virtuals on `AMRSimulation` with direct calls (or one `scaleFactorAt` virtual).
 - [ ] Pass `dtau_lev` through `advanceHydroAtLevel`; remove the $`1/a`$ in both flux functions, `AddInternalEnergyPdV`, tracers, `computeMaxSignalLocal` and `isCflViolated`.
-- [ ] Apply `dt_cfl = a * dtau_cfl` once in `computeTimestepAtLevel`, for hydro and particles.
+- [ ] Apply `dt_cfl = a * dtau_cfl` to hyperbolic hydro/MHD and particle limits; convert the viscous and resistive limits in `computeMaxSignalLocal` using physical spacing, state and coefficients before combining limits in physical time.
 - [ ] Merge the duplicated kernels in `applyPoissonGravityAtLevel` and `fillPoissonRhsAtLevel` into one each, with host-computed scalars; compute $`\bar\rho`$ from the level-0 composite field after average-down at each solve.
 - [ ] Rewrite the expansion operator for general EOS, including magnetic energy $`\tfrac12 B_c^2/a`$ in the total.
-- [ ] Store $`B_c = a^2 B_\mathrm{phys}`$; convert to $`\tilde B`$ at the solver and scale the EMF by $`\sqrt a`$ in the transport hook.
+- [ ] Store $`B_c = a^2 B_\mathrm{phys}`$; supply $`\tilde B`$ through the magnetic view to transport, CFL estimation, initialization, `ApplyHydroStateFixup`/`SyncDualEnergy` (including post-AMR `FixupState`) and energy diagnostics at their evaluation times. Scale the EMF by $`\sqrt a`$ in the transport hook; keep stored faces in $`B_c`$ units.
 - [ ] Add the exponent table ($`k`$ and $`m`$) and `inPhysicalFrame`; lift the cooling and chemistry guards by wrapping those operators.
-- [ ] Pass `PhysicalDx` and physical-frame $`\mu`$ to the viscous terms in `ComputeFluxes`, and to the resistive EMF and `AddResistiveEnergyFlux`; then lift the viscosity guard.
+- [ ] Pass `PhysicalDx` and $`a^3\mu_\mathrm{phys}`$ (both shear and bulk) to the viscous terms in `ComputeFluxes`, or multiply their physical fluxes by $`a^3`$. Use `PhysicalDx`, $`\tilde B`$ and unchanged $`\eta`$ for the resistive EMF and `AddResistiveEnergyFlux`; then lift the viscosity guard.
 - [ ] Move cosmological numbers out of `Physics_Traits` into runtime parameters; keep only `is_cosmology_enabled`.
 - [ ] Write current $`a`$, $`z`$ and $`H`$ into metadata for checkpoints as well as plotfiles.
-- [ ] Write the cosmological parameters and table hash to the checkpoint and check them on restart; then lift the restart guard.
+- [ ] Write the cosmological parameters and table hash (or constant-scale-factor mode marker) to the checkpoint and check them on restart; then lift the restart guard.
 - [ ] Weight flux register deposits; then lift the `max_level = 0` guard.
 - [ ] Add the EOS view; then lift the scale-invariant-EOS guard.
 - [ ] Introduce `ScaleFactor`, `HookKey`, `TransportDt`/`PhysicalDt`, `ComovingDx`/`PhysicalDx` and the operator frame wrappers; add `src/cosmology/` to CODEOWNERS.
@@ -297,6 +315,9 @@ Verification (all in CTest, CPU and at least one GPU backend; the current proble
 |---|---|---|
 | Frozen-$`a`$ equivalence | Cosmology on, $`H_0 = 0`$, $`a = 0.1`$, compared with a non-cosmological run with box $`\times a`$, densities $`\times a^{-3}`$, $`B \times a^{-2}`$ (code units, $`B_\mathrm{Gauss}/\sqrt{4\pi}`$); one per operator | Any missing or extra factor of $`a`$ in any operator |
 | Identity | Cosmology on, $`H_0 = 0`$, $`a = 1`$ | Must match the non-cosmological run bitwise |
+| Frozen-$`a`$ diffusion | $`H_0=0`$, $`a=0.1`$, nonzero shear/bulk viscosity and, separately, constant resistivity; choose parameters so diffusion limits the timestep | Match physical-box momentum/energy fluxes and decay rates, and physical timesteps proportional to $`a^2 dx^2`$ at fixed physical diffusivity |
+| Frozen-$`a`$ magnetic consumers | $`H_0=0`$, $`a=0.1`$, nonzero $`B_c`$; exercise initialization, CFL, floors and both dual-energy branches, including after AMR synchronization | Magnetic energy $`B_c^2/(2a)`$, physical wavespeeds, and internal/total energy agreement with the physical-box run |
+| Constant-scale-factor clock | $`H_0=0`$, $`a_\mathrm{init}=0.1`$ and $`1`$; query whole steps and half-intervals, repeat after restart | No table construction or inversion; constant $`a`$, zero $`H`$, and nonzero $`d\tau=dt/a_\mathrm{init}`$ for nonzero $`dt`$ |
 | `CosmologicalExpansion` | Uniform box against the Einstein–de Sitter solution; also a non-ideal EOS once the view exists | Expansion operator, $`a(t)`$ table |
 | Zel'dovich pancake | Hydro, gravity and CIC particles together | Coupling of $`d\tau`$, Poisson RHS and particle kicks |
 | Restart | $`N`$ steps, compared with $`N/2`$ steps, restart, $`N/2`$ steps | Bitwise match of $`a`$, $`d\tau`$ and the final state; also covers the existing hydro restart path |
