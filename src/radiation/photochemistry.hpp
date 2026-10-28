@@ -11,6 +11,18 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 
+namespace quokka::photochemistry
+{
+template <typename problem_t>
+auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, amrex::Real dt,
+			   amrex::Real max_density_allowed, amrex::Real min_density_allowed, amrex::MultiFab &dustHeatingSource,
+			   amrex::MultiFab &radEnergySource) -> bool;
+} // namespace quokka::photochemistry
+
+// The definition is compiled only in builds with photochemistry, because it uses names that only those builds have: the
+// photochemistry constants of the generated network_properties.H (NumChemBands, NumChemRadEqs, NumThermalBands), and spmasses
+// and eos() from Microphysics' photoionization EOS. Callers use Microphysics_Traits<problem_t>::photochemistry. This guard
+// goes when the network constants and the EOS are in Quokka.
 #ifdef PHOTOCHEMISTRY
 #include "actual_eos_data.H"
 #include "eos.H"
