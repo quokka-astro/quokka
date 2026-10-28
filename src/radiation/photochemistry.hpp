@@ -3,6 +3,7 @@
 
 #include <array>
 #include <iostream>
+#include <type_traits>
 
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
@@ -70,6 +71,24 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		      "(nGroups_ - NChemBands) when ISM_Traits::thermal_band_photochemistry is true.");
 	static_assert(Microphysics_Traits<problem_t>::integrate_rad_flux == (MicrophysicsNumChemRadVarsPerGroup == 2),
 		      "Microphysics_Traits::integrate_rad_flux must be false exactly when the problem is built with SKIP_PHOTOCHEMFLUX.");
+
+	// Transitional, until Microphysics' generated network_properties.H goes: the problem's network type must agree with the
+	// constants generated for its network. DTypeFront_JAFF names no network type yet.
+	using Network = typename Microphysics_Traits<problem_t>::Network;
+	if constexpr (!std::is_same_v<Network, quokka::networks::None>) {
+		static_assert(Network::NumSpec == NumSpec);
+		static_assert(Network::NumChemBands == NumChemBands);
+		static_assert([] {
+			for (int nn = 0; nn <= NumChemBands; ++nn) {
+				if (Network::ChemBands().arr[nn] != ChemBandsHeader().arr[nn]) {
+					return false;
+				}
+			}
+			return true;
+		}());
+		static_assert(Network::ChemBandsPowerLawIndex == ChemBandsPowerLawIndex_);
+		static_assert(Network::NumThermalBands == NumThermalBands);
+	}
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.

@@ -16,6 +16,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "microphysics/microphysics_traits.hpp"
+#include "networks/thermophotochemistry_handwritten/network.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_dust_system.hpp"
 #include "radiation/radiation_system.hpp"
@@ -85,6 +86,7 @@ template <> struct ISM_Traits<DTypeFront3D> {
 };
 
 template <> struct Microphysics_Traits<DTypeFront3D> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::Thermophotochemistry;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
 	static constexpr bool photochemistry = true;		    // built with PHOTOCHEMISTRY
 	static constexpr bool dust_chemical_band_absorption = true; // built with DUST_CHEMICAL_BAND_ABSORPTION
