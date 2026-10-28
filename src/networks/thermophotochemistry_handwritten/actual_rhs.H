@@ -6,6 +6,8 @@
 #include "burn_type.H"
 #include "fundamental_constants.H"
 #include "integrator_data.H"
+#include "microphysics/integrator_layout.hpp"
+#include "networks/thermophotochemistry_handwritten/network.hpp"
 #include <actual_network.H>
 #include <extern_parameters.H>
 #include <jacobian_utilities.H>
@@ -17,28 +19,24 @@ using namespace C;
 
 void actual_rhs_init();
 
-// Species indices (0-indexed, xn[]/spmasses[]) come from the SPECIES_ENUM
-// set in this problem's CMakeLists.txt, via Species::NetworkSpecies.
+// Species indices (0-indexed, xn[]/spmasses[]) come from the Species enum in network.hpp.
 // ydot()/jac() are 1-indexed, so the same species use index+1 there.
 // net_ienuc (= NumSpec + 1) is the specific internal energy row/column.
 // Radiation rows/columns follow net_ienuc: photon number density, then
 // (with Microphysics_Traits::integrate_rad_flux) photon flux.
-constexpr int e_idx = static_cast<int>(Species::e);
-constexpr int H_idx = static_cast<int>(Species::H);
-constexpr int Hp_idx = static_cast<int>(Species::H_p);
+constexpr int e_idx = static_cast<int>(quokka::networks::Thermophotochemistry::Species::e);
+constexpr int H_idx = static_cast<int>(quokka::networks::Thermophotochemistry::Species::H);
+constexpr int Hp_idx = static_cast<int>(quokka::networks::Thermophotochemistry::Species::H_p);
 constexpr int ie = e_idx + 1;
 constexpr int iH = H_idx + 1;
 constexpr int iHp = Hp_idx + 1;
 constexpr int i_ngamma = net_ienuc + 1;
 constexpr int i_ngamma_flux = net_ienuc + 2;
-// Thermal-band rows follow the chemistry-band rows, whose count (NumChemRadEqs) already accounts for
-// whether each band carries a flux variable. Band 0 is the IR, band 1 the optical; the order matches
-// group_ir / group_optical on the Quokka side, which reads these back into the radiation state.
-static_assert(NumThermalBands == 2, "thermophotochemistry_handwritten emits into exactly two thermal bands (IR, optical)");
-constexpr int i_ir = net_ienuc + NumChemRadEqs + 1;
-constexpr int i_optical = net_ienuc + NumChemRadEqs + 2;
-// the dust-absorbed energy (Q_dust), with Microphysics_Traits::dust_chemical_band_absorption
-constexpr int i_dust = net_ienuc + NumChemRadEqs + NumThermalBands + 1;
+// The thermal-band and dust rows come from the integrator's layout (IntegratorLayout::thermal_band_row and dust_row).
+// Band 0 is the IR, band 1 the optical; the order matches group_ir / group_optical on the Quokka side, which reads
+// these back into the radiation state.
+static_assert(quokka::networks::Thermophotochemistry::NumThermalBands == 2,
+	      "thermophotochemistry_handwritten emits into exactly two thermal bands (IR, optical)");
 
 constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
 
@@ -46,10 +44,10 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) 
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Real
 {
-	auto const ev_bounds = ChemBandsHeader();
+	auto const ev_bounds = quokka::networks::Thermophotochemistry::ChemBands();
 	const amrex::Real ev_low = ev_bounds[0];
 	const amrex::Real ev_high = ev_bounds[1];
-	const amrex::Real alpha = ChemBandsPowerLawIndex_;
+	const amrex::Real alpha = quokka::networks::Thermophotochemistry::ChemBandsPowerLawIndex;
 
 	amrex::Real ev_avg = NAN;
 	if (std::isinf(ev_high)) {
@@ -191,6 +189,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) 
 
 template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const BurnT &state, amrex::Array1D<Real, 1, INT_NEQS> &ydot)
 {
+	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
+	constexpr int i_ir = Layout::thermal_band_row;
+	constexpr int i_optical = Layout::thermal_band_row + 1;
+	constexpr int i_dust = Layout::dust_row;
+
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
 	const amrex::Real sigma_coll = (collisional_ionization_switch != 0) ? get_collisional_ionization_coefficient(state.T) : 0.0_rt;
@@ -258,6 +261,11 @@ template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_r
 
 template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const BurnT &state, MatrixType &jac)
 {
+	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
+	constexpr int i_ir = Layout::thermal_band_row;
+	constexpr int i_optical = Layout::thermal_band_row + 1;
+	constexpr int i_dust = Layout::dust_row;
+
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
 	amrex::Real sigma_coll = 0.0_rt;
