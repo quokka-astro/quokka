@@ -121,12 +121,13 @@ Whether a problem compiles chemistry or photochemistry at all is set by fields o
 
 | Trait | Default | Description |
 |---|---|---|
+| `Network` | `quokka::networks::None` | The species network, a type from `src/networks/<network>/network.hpp`, e.g. `quokka::networks::PhotoionizationHCaseB` or `quokka::networks::Thermophotochemistry`. It supplies the species, the chemical and thermal bands, and the network's runtime parameters (prefix `network`), which `QuokkaSimulation` reads at start-up. |
 | `chemistry` | `false` | Compile the chemistry source term. Also makes `EOSMicrophysics` the default EOS backend. |
 | `photochemistry` | `false` | Compile photochemistry in the radiation substeps. Also makes `EOSMicrophysics` the default EOS backend. |
 | `dust_chemical_band_absorption` | `false` | Dust absorbs chemical-band photons (`Q_dust`): the network carries the absorbed energy, which heats the dust. Requires `ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model = true`. |
 | `integrate_rad_flux` | `true` | With photochemistry, integrate the photon flux equations in the network. With `false`, the flux is determined algebraically. |
 
-While the Microphysics submodule is still used, the problem's `CMakeLists.txt` must also define the build macros that Microphysics reads: `CHEMISTRY` with `chemistry`, `PHOTOCHEMISTRY` with `photochemistry`, `DUST_CHEMICAL_BAND_ABSORPTION` with `dust_chemical_band_absorption`, and `SKIP_PHOTOCHEMFLUX` with `integrate_rad_flux = false`. A trait that does not match its macro is a compile error.
+While the Microphysics submodule is still used, the problem's `CMakeLists.txt` must also define the build macros that Microphysics reads: `CHEMISTRY` with `chemistry`, `PHOTOCHEMISTRY` with `photochemistry`, `DUST_CHEMICAL_BAND_ABSORPTION` with `dust_chemical_band_absorption`, and `SKIP_PHOTOCHEMFLUX` with `integrate_rad_flux = false`. A trait that does not match its macro is a compile error. Likewise, `microphysics_network_name` in `CMakeLists.txt` must name the directory of `Network`, and the executable must compile that network's `network.cpp`; photochemistry checks the network type against the constants Microphysics generates for that directory.
 
 ## Integrator (VODE)
 
