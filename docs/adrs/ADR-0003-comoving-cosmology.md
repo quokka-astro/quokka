@@ -54,7 +54,7 @@ These seven hooks are the complete list of places where $`a`$ appears outside `s
 
 In `advanceHydroAtLevel`, `dtau_lev` is used only for the update itself. Time labels (`fillBoundaryConditions(time + dt_lev)`, the Strang source calls, `tNew_`) stay on the physical `dt_lev`. A physical time label does not identify the expansion frame of a split-stage state: ghost filling must also receive the explicit stage frame described below. Any hyperbolic term later added to the hydro RHS inherits the correct factor automatically; diffusive terms need the treatment below.
 
-Hydro and particles use the same $`d\tau`$ for each step, which keeps gas and dark matter moving together (the property `CosmoSphereDM` tests). The particle drift uses $`d\tau`$ over the whole step; each half-kick uses $`d\tau`$ over its own half-interval, $`\tau(t+\Delta t/2) - \tau(t)`$ and $`\tau(t+\Delta t) - \tau(t+\Delta t/2)`$. The midpoint value $`\Delta t/a(t+\Delta t/2)`$ is second-order; the exact integral is preferred.
+Hydro and particles use the same $`d\tau`$ for each step, which keeps gas and dark matter moving together (the property `CosmoSphereDM` tests). The particle drift uses $`d\tau`$ over the whole step; each half-kick uses $`d\tau`$ over its own half-interval, $`\tau(t+\Delta t/2) - \tau(t)`$ and $`\tau(t+\Delta t) - \tau(t+\Delta t/2)`$. The midpoint value $`\Delta t/a(t+\Delta t/2)`$ is second-order; the exact integral is preferred. Particles use the same symmetric operator order as gas: velocity drag for the first expansion half-step ($`a(t) \to a(t+\Delta t/2)`$), half-kick, drift, half-kick, then velocity drag for the second expansion half-step ($`a(t+\Delta t/2) \to a(t+\Delta t)`$). The kick–drift–kick sequence sits between the two drag half-steps, as gas transport and gravity sit between the two expansion half-steps. Applying a drag inside the kick sequence instead is first-order and dephases gas and dark matter.
 
 ### Expansion-aware ghost filling
 Both RK transport stages use the frozen expansion frame $`a_\star = a(t_\mathrm{lev}+\Delta t_\mathrm{lev}/2)`$, even though their physical time labels differ. The first stage's interior has already undergone the first expansion half-step. `fillBoundaryConditions` currently obtains coarse endpoints through `GetData` at the requested physical time; copying those endpoints unchanged would leave a uniform gas's ghosts warmer than its interior. `PreInterpState`/`PostInterpState` only change the energy representation for interpolation and do not apply expansion.
@@ -89,8 +89,8 @@ Keep the two half-step contributions separate until unit conversion and expansio
 Physical viscosity is computed inside `HydroSystem::ComputeFluxes`, and Ohmic resistivity inside the EMF computation and `MHDSystem::AddResistiveEnergyFlux`. Only electron conduction is Strang-split. A diffusive term needs $`1/a^2`$, but running on $`d\tau`$ supplies only one factor, so the transport hook also:
 
 - computes gradients inside diffusive fluxes with $`dx_\mathrm{phys} = a(t+\Delta t/2)\,dx`$, while the flux divergence keeps the comoving $`dx`$;
-- evaluates coefficients from physical state: dynamic shear and bulk viscosities have $`\mu_c = a^3\mu_\mathrm{phys}`$; resistivity $`\eta`$ is a diffusivity and is unchanged;
-- converts the physical viscous momentum and energy fluxes back by $`a^3`$ before adding them to the comoving fluxes in `ComputeFluxes`. Equivalently, supply $`a^3\mu_\mathrm{phys}`$ (for both shear and bulk viscosity) to `ComputeViscousFlux` with physical velocity gradients. Apply exactly one of these conversions: $`d\tau`$ supplies the coordinate/time factor, not the flux-unit conversion;
+- evaluates coefficients from physical state: the dynamic shear and bulk viscosities $`\mu_\mathrm{phys}`$ and $`\zeta_\mathrm{phys}`$ use physical density and temperature; resistivity $`\eta`$ is a diffusivity and is unchanged;
+- converts the viscous momentum and energy fluxes to comoving units with exactly one factor of $`a^3`$, by **one** of: (a) computing physical fluxes in `ComputeViscousFlux` from $`\mu_\mathrm{phys}`$, $`\zeta_\mathrm{phys}`$ and physical velocity gradients, then multiplying them by $`a^3`$ before adding them to the comoving fluxes in `ComputeFluxes`; or (b) passing the comoving coefficients $`a^3\mu_\mathrm{phys}`$ and $`a^3\zeta_\mathrm{phys}`$ with physical velocity gradients and using the result unchanged. Doing both applies $`a^3`$ twice. $`d\tau`$ supplies the coordinate/time factor, not this flux-unit conversion;
 - evaluates resistive EMFs and energy fluxes using $`\tilde B`$, physical spacing and unchanged $`\eta`$. The energy flux is then already in comoving units because it is quadratic in $`\tilde B`$; multiply the EMF by $`\sqrt a`$ when returning to the stored $`B_c`$ update.
 
 `ComovingDx` and `PhysicalDx` are distinct types, so passing the comoving spacing to a diffusive gradient does not compile.
@@ -118,7 +118,7 @@ A new field needs one entry with both.
 |---|---|---|---|
 | Density, partial densities, passive scalars | 3 | 0 | none ($`\rho_c`$ constant) |
 | Momentum density | 3 | 1 | $`\times\, a_\mathrm{old}/a_\mathrm{new}`$ |
-| Internal energy density | 3 | $`3(\gamma-1)`$ | EOS ODE (below); the power law for an ideal gas |
+| Internal energy density | 3 | $`3(\gamma-1)`$ (ideal gas); 2 for reflux with a general EOS (see [reflux](#amr-subcycling-and-reflux)) | EOS ODE (below); the power law for an ideal gas |
 | Magnetic field $`B_c`$ (face-centred, stored) | 2 | 0 | none (pure curl evolution) |
 | Solver-frame field $`\tilde B = B_c/\sqrt a`$ (not stored) | 3/2 | — | not stored |
 | Total energy | 3 | ≈ 2 (reflux only) | recomputed: $`e_\mathrm{int} + \mathrm{KE} + \tfrac12 B_c^2/a`$ |
@@ -129,15 +129,17 @@ The expansion operator is Strang-split around the transport step and uses the ph
 
 ```math
 \begin{aligned}
-\text{momentum:}\quad & p \leftarrow p\,\frac{a_\mathrm{old}}{a_\mathrm{new}} && \text{(gas and particles, exact for any EOS)} \\
-\text{internal:}\quad & \frac{\partial E_{\mathrm{int},c}}{\partial t} = -3H\,p_c, \qquad p_c = a^3\,p\!\left(\rho_c/a^3,\ e\right) \\
-\text{as ODE:}\quad & \frac{de}{d\ln a} = -3\left(\frac{p}{\rho}\right)_\mathrm{phys}\!\left(\rho_c/a^3,\ e\right) && \text{at fixed } \rho_c \\
+\text{momentum:}\quad & (\rho v)_c \leftarrow (\rho v)_c\,\frac{a_\mathrm{old}}{a_\mathrm{new}} && \text{(gas and particles, exact for any EOS)} \\
+\text{internal:}\quad & \frac{\partial E_{\mathrm{int},c}}{\partial t} = -3H\,P_c, \qquad P_c = a^3\,P\!\left(\rho_c/a^3,\ e\right) \\
+\text{as ODE:}\quad & \frac{de}{d\ln a} = -3\left(\frac{P}{\rho}\right)_\mathrm{phys}\!\left(\rho_c/a^3,\ e\right) && \text{at fixed } \rho_c \\
 \text{magnetic:}\quad & B_c \text{ unchanged} \\
-\text{total:}\quad & E \leftarrow E_\mathrm{int} + \tfrac12 |p|^2/\rho + \tfrac12 |B_c|^2/a_\mathrm{new}
+\text{total:}\quad & E \leftarrow E_\mathrm{int} + \tfrac12 |(\rho v)_c|^2/\rho_c + \tfrac12 |B_c|^2/a_\mathrm{new}
 \end{aligned}
 ```
 
-For a general EOS the internal-energy ODE is solved with the existing RK integrator. For an ideal gas it reduces to the closed-form power law the branch uses today.
+Here $`(\rho v)_c`$ is comoving momentum density and $`P`$ is pressure. For a general EOS the internal-energy ODE is solved with the existing RK integrator. For an ideal gas it reduces to the closed-form power law the branch uses today.
+
+Reconstructing $`E`$ from $`E_\mathrm{int}`$ is safe only because each half-step starts from a dual-energy-synchronized state: `ApplyHydroStateFixup` (including `SyncDualEnergy`) runs at the end of every hydro step and after transport, before the second half-step. On entry $`E_\mathrm{int}`$ therefore equals $`E - \mathrm{KE} - \tfrac12 B_c^2/a_\mathrm{old}`$, and no shock heating recorded only in $`E`$ is lost. Any reordering that puts an unsynchronized state into the expansion operator must instead apply $`E \mathrel{+}= \Delta E_\mathrm{int} + \Delta\mathrm{KE} + \Delta\mathrm{ME}`$.
 
 ### Magnetic field
 **Notation.** Throughout this ADR, $`B`$ is Quokka's code field $`B' = B_\mathrm{Gauss}/\sqrt{4\pi}`$, so magnetic energy is $`\tfrac12 B^2`$ and the Alfvén speed is $`B/\sqrt\rho`$. The factor $`\sqrt{4\pi}`$ is independent of $`a`$, so every exponent and equation here holds unchanged for $`B'`$. Enzo absorbs the same factor (Collins et al. 2010, Eq. 5), so their equations match term for term.
@@ -239,6 +241,8 @@ Collins et al. (2010, Appendix D) apply the flux correction after the expansion 
 
 Total energy has no single exact weight, since kinetic, magnetic and internal parts scale differently. Use $`m = 2`$ (exact for $`\gamma = 5/3`$ without $`B`$) and accept an $`O(H\Delta t)`$ error in the energy correction. Energy is not conserved in an expanding box (Layzer–Irvine), so consistency is the requirement; `FixupState` and dual-energy sync recompute $`E_\mathrm{int}`$.
 
+Internal energy has no single exponent for a general EOS, because its dilution follows the EOS ODE rather than a power law. Once the EOS view lifts the scale-invariant guard, weight internal-energy register deposits with $`m = 2`$ (the $`\gamma = 5/3`$ value, the same approximation as total energy) and accept the same $`O(H\Delta t)`$ error in the correction; the ideal-gas exponent $`3(\gamma-1)`$ remains exact for an ideal gas. Validate both under the AMR conservation test with a non-ideal EOS.
+
 ### Restart and reproducibility
 $`a(t)`$ is a pure function of the cosmological parameters and $`t`$. `WriteCheckpointFile` already stores `tNew_` and `dt_` with `precision(17)`, which round-trips doubles exactly, so a restarted run reproduces $`a`$, $`d\tau`$ and $`H`$ bitwise with no cosmology state of its own.
 
@@ -259,14 +263,14 @@ t(a) = \int \frac{da}{a\,H(a)}, \qquad \tau(a) = \int \frac{da}{a^2 H(a)}
 1. **Table from parameters only.** At startup, tabulate $`t(a)`$ and $`\tau(a)`$ on a fixed grid uniform in $`\ln a`$, with fixed-order Gauss–Legendre quadrature per interval. Nothing adaptive, nothing history-dependent; the table is rebuilt identically on restart.
 2. **$`a(t)`$ by interpolation.** Cubic Hermite on the table using the exact derivative $`da/dt = a\,H(a)`$, optionally followed by a fixed number of Newton iterations on $`t(a) - t`$.
 3. **$`d\tau`$ as a difference.** $`d\tau(t_1, t_2) = \tau(a(t_2)) - \tau(a(t_1))`$. Nothing accumulates, and hydro, MHD and particles see the same value.
-4. **Host only.** $`a`$, $`d\tau`$ and $`H`$ are computed on the host and captured as scalars, so GPU and CPU builds and all MPI ranks agree without a broadcast.
-5. **Parameter check.** The checkpoint stores the cosmological parameters and a hash of the table, or a constant-scale-factor mode marker when $`H_0=0`$ (no table). Restart checks the mode and parameters, including $`a_\mathrm{init}`$, and the table hash when present; it aborts with an error on a mismatch.
+4. **Host only.** $`a`$, $`d\tau`$ and $`H`$ are computed on the host and captured as scalars, so all MPI ranks of one binary agree without a broadcast. Different builds (CPU and GPU, or different compilers) may differ in the last bits, as noted below.
+5. **Parameter check.** The checkpoint stores the cosmological parameters, or a constant-scale-factor mode marker when $`H_0=0`$ (no table). Restart checks the mode and parameters, including $`a_\mathrm{init}`$, exactly, and aborts with an error on a mismatch. The table itself is not hashed: it is a deterministic function of the parameters, and a hash would reject restarts across compilers or machines whose tables differ only in the last bits (below).
 
-Bitwise reproducibility holds for the same binary on the same machine. A different compiler, FMA contraction or libm can change the last bits of $`H(a)`$, as it can for the hydro update. The time sequence also has to match; it does, because restart restores `dt_` and the cosmological timestep limit depends only on $`H(a(t))`$.
+Bitwise reproducibility holds for the same binary on the same machine. A different compiler, FMA contraction or libm can change the last bits of $`H(a)`$, as it can for the hydro update; such a restart is valid but not bitwise. The time sequence also has to match; it does, because restart restores `dt_` and the cosmological timestep limit depends only on $`H(a(t))`$.
 
 ### Rules for new physics
 1. **Every operator declares its frame.** A transport operator runs inside the $`d\tau`$ step. A Strang-split local or diffusive operator is wrapped in `inPhysicalFrame`, including conversion and source-stage expansion weighting of any returned flux-register contributions. Ghost fills carry the consuming stage's expansion frame separately from physical time. A diffusive term inside the transport step uses `PhysicalDx`, coefficients evaluated in the physical frame and fluxes converted back to transport units; its stability limit follows the same frame convention. Magnetic energy and wavespeed consumers use the magnetic view at their evaluation time. Only the expansion operator acts directly on comoving state. An undeclared operator fails to compile.
-2. **No $`a`$ inside kernels.** Outside `src/cosmology/`, the scale factor appears only in the seven hooks. The type system and the AST check enforce this.
+2. **No $`a`$ inside kernels.** Outside `src/cosmology/`, the scale factor appears only in the seven hooks. Diagnostic output of $`a`$, $`z`$ and $`H`$ is written by a function in `src/cosmology/` that takes the simulation time and the metadata node; its call site in the output path is the only non-hook allowlist entry. The type system and the AST check enforce this.
 3. **New fields get exponents.** Add one entry, with $`k`$ and $`m`$, to the exponent table; the wrapper, expansion operator, reflux weights and tests pick it up.
 
 ### Enforcement
@@ -276,6 +280,10 @@ Three layers, from hardest to softest: types make misuse a compile error, an AST
 
 ```cpp
 namespace quokka::cosmology {
+class HookKey;
+class ScaleFactor;
+auto scaleFactorAt(amrex::Real t) -> ScaleFactor; // host-only; the only way to obtain a ScaleFactor
+
 class ScaleFactor {
       public:
 	auto value(HookKey /*key*/) const -> amrex::Real { return a_; } // host-only, needs a key
@@ -303,7 +311,7 @@ class HookKey { // passkey: only the hooks can construct one
 - The `HookKey` friend list is the allowlist. `src/cosmology/` is a CODEOWNERS path, so adding a friend requires review.
 
 **2. AST check (CI gate).** A `clang-query` matcher script runs against `compile_commands.json` in a CI job next to the existing clang-tidy workflow. It exits non-zero with file:line on any of:
-1. a reference to `quokka::cosmology::*` (`HubbleFactor`, `scaleFactorAt`, `CosmologyParams` members) outside `src/cosmology/` and the allowlisted hook functions;
+1. a reference to `quokka::cosmology::*` (`HubbleFactor`, `scaleFactorAt`, `CosmologyParams` members) outside `src/cosmology/`, the allowlisted hook functions and the metadata-writer call;
 2. a hook-output type (`inv_a`, `sqrt_a`, `a3`) used inside a lambda body outside an allowlisted function;
 3. `ScaleFactor`, `HookKey` or a hook-output type in a `HydroSystem`, `MHDSystem` or operator signature.
 
@@ -323,7 +331,7 @@ AST matching is deterministic but needs a configured build, so it is too slow fo
 Migration from the current branch:
 
 - [ ] Add the parameter-only $`a(t)`$ and $`\tau(a)`$ table with `scaleFactorAt(t)` and `dtau(t, dt)` to `src/cosmology/`, plus the table-free $`H_0=0`$ branch returning $`a_\mathrm{init}`$ and $`dt/a_\mathrm{init}`$; remove `a_now_`, `a_half_` and the retry save/restore.
-- [ ] Replace the five particle cosmology virtuals on `AMRSimulation` with direct calls (or one `scaleFactorAt` virtual).
+- [ ] Replace the five particle cosmology virtuals on `AMRSimulation` with the `dtau` and expansion hooks; `AMRSimulation` gets no scale-factor accessor.
 - [ ] Pass `dtau_lev` through `advanceHydroAtLevel`; remove the $`1/a`$ in both flux functions, `AddInternalEnergyPdV`, tracers, `computeMaxSignalLocal` and `isCflViolated`.
 - [ ] Apply `dt_cfl = a * dtau_cfl` to hyperbolic hydro/MHD and particle limits; convert the viscous and resistive limits in `computeMaxSignalLocal` using physical spacing, state and coefficients before combining limits in physical time.
 - [ ] Merge the duplicated kernels in `applyPoissonGravityAtLevel` and `fillPoissonRhsAtLevel` into one each, with host-computed scalars; compute $`\bar\rho`$ from the level-0 composite field after average-down at each solve.
@@ -333,8 +341,8 @@ Migration from the current branch:
 - [ ] Convert each conduction half-step's returned heat flux to an integrated comoving register contribution and apply its remaining source-stage expansion weight before combining with hydro. Validate frozen-$`a`$ AMR equivalence and expanding source-stage weights before enabling conduction with cosmological AMR.
 - [ ] Pass `PhysicalDx` and $`a^3\mu_\mathrm{phys}`$ (both shear and bulk) to the viscous terms in `ComputeFluxes`, or multiply their physical fluxes by $`a^3`$. Use `PhysicalDx`, $`\tilde B`$ and unchanged $`\eta`$ for the resistive EMF and `AddResistiveEnergyFlux`; then lift the viscosity guard.
 - [ ] Move cosmological numbers out of `Physics_Traits` into runtime parameters; keep only `is_cosmology_enabled`.
-- [ ] Write current $`a`$, $`z`$ and $`H`$ into metadata for checkpoints as well as plotfiles.
-- [ ] Write the cosmological parameters and table hash (or constant-scale-factor mode marker) to the checkpoint and check them on restart; then lift the restart guard.
+- [ ] Write current $`a`$, $`z`$ and $`H`$ into metadata for checkpoints as well as plotfiles, through the `src/cosmology/` metadata writer.
+- [ ] Write the cosmological parameters (or constant-scale-factor mode marker) to the checkpoint and check them on restart; then lift the restart guard.
 - [ ] Add explicit expansion-frame metadata to stage ghost fills; map coarse endpoints before time interpolation and prescribed boundary data before use, including physical-frame source fills. Pass the refined homogeneous-expansion test with subcycling and physical boundaries.
 - [ ] Weight flux register deposits and pass the AMR conservation test. Lift the `max_level = 0` guard only after the expansion-aware ghost-fill requirements also pass; conduction with AMR additionally requires the flux-conversion tests above.
 - [ ] Add the EOS view; then lift the scale-invariant-EOS guard.
@@ -364,4 +372,4 @@ Verification (all in CTest, CPU and at least one GPU backend; the current proble
 - Li, S., Li, H., & Cen, R. 2008, ApJS, 174, 1. *CosmoMHD*: the source-term formulation of magnetic dilution.
 - Martel, H., & Shapiro, P. R. 1998, MNRAS, 297, 467. Supercomoving variables.
 - [#2340](https://github.com/quokka-astro/quokka/pull/2340): CI test PR for the `mfulghieri/test-cosmology` branch.
-- `src/cosmology/Cosmology.hpp`, `src/QuokkaSimulation.hpp`, `src/simulation.hpp`, `src/particles/PhysicsParticles.hpp`, `src/hydro/hydro_system.hpp`
+- `src/cosmology/Cosmology.hpp` (on the `mfulghieri/test-cosmology` branch; not yet on `development`), `src/QuokkaSimulation.hpp`, `src/simulation.hpp`, `src/particles/PhysicsParticles.hpp`, `src/hydro/hydro_system.hpp`
