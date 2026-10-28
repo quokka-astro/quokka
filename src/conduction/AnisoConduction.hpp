@@ -38,7 +38,6 @@
 #include "AMReX_SPACE.H"
 #include "conduction/conductivity.hpp"
 #include "hydro/hydro_system.hpp"
-#include "hyperbolic_system.hpp"
 
 namespace quokka::conduction
 {
@@ -52,11 +51,8 @@ struct AnisoConductionParams {
 	ConductivityParams conductivity{}; // prefactors for ConductionModel::constant/spitzer (see conductivity.hpp)
 	amrex::Real l2_alpha = 2.0;	   // bias factor for the L2 limiter (Sharma & Hammett 2007 Eq. 21) applied to the normal (q_xx-type) term
 	amrex::Real flux_limiter_phi = 0.1;
-	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
-	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
-	int reconstruction_order = 3;	     // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM;
-	SlopeLimiter plm_limiter = SlopeLimiter::sweby;
-	int ng_reconstruct = 2;						   // number of ghost faces to reconstruct beyond the valid box
+	amrex::Real saturation_factor = 5.0;				   // refer to equation 8 of Cowie & McKee 1977
+	amrex::Real min_temperature = 0.0;				   // default value will be overwritten by tempFloor_ during initialization
 	AnisoFluxLimiterType flux_limiter_type = AnisoFluxLimiterType::mc; // transverse-gradient limiter (conduction.aniso_flux_limiter)
 };
 
