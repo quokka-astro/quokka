@@ -464,7 +464,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	{
 		const amrex::Real l_s = stromgren_column(userData_.flux_ion, userData_.n_HI_init, userData_.T_ionized);
 		const amrex::Real c_s = ionized_sound_speed(userData_.T_ionized);
-		const amrex::Real l_d = dusty_stromgren_column(l_s, network_rp::dust_kappa * userData_.n_HI_init * spmasses[Network::Species::H]);
+		const amrex::Real l_d = dusty_stromgren_column(l_s, Network::DustKappa() * userData_.n_HI_init * spmasses[Network::Species::H]);
 		userData_.l_ode_last_t_ = 0.0_rt;
 		userData_.l_ode_last_l_ = l_d;
 		userData_.l_ode_last_u_ = l_d * c_s;
@@ -562,7 +562,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 	    });
 	const amrex::Real x_eff = ionized_volume_integral / transverse_area / 2.0_rt;
 
-	const amrex::Real chat_kappa_over_eps = c_hat * network_rp::dust_kappa / userData_.eps_ion;
+	const amrex::Real chat_kappa_over_eps = c_hat * Network::DustKappa() / userData_.eps_ion;
 	userData_.N_gamma_dust_ +=
 	    dt_[lev] * computeVolumeIntegral(
 			   [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
@@ -583,7 +583,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 		const amrex::Real eps_rec = 13.6 * C::ev2erg + lambda_rec(T_i) / recombination_coefficient(T_i);
 		const amrex::Real Xi = (userData_.flux_ion * userData_.eps_ion + userData_.flux_optical * userData_.eps_opt) / (rho_0 * C::c_light);
 		const amrex::Real Xi_rec = userData_.flux_ion * eps_rec / (rho_0 * C::c_light);
-		const amrex::Real kappa_rho_0 = network_rp::dust_kappa * rho_0;
+		const amrex::Real kappa_rho_0 = Network::DustKappa() * rho_0;
 
 		amrex::Real dt_ode = t - userData_.l_ode_last_t_;
 		if (dt_ode < 0.0_rt) {
