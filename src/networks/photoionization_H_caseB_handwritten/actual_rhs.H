@@ -6,6 +6,7 @@
 #include "burn_type.H"
 #include "fundamental_constants.H"
 #include "integrator_data.H"
+#include "networks/photoionization_H_caseB_handwritten/network.hpp"
 #include <actual_network.H>
 #include <extern_parameters.H>
 #include <jacobian_utilities.H>
@@ -17,15 +18,14 @@ using namespace C;
 
 void actual_rhs_init();
 
-// Species indices (0-indexed, xn[]/spmasses[]) come from the SPECIES_ENUM
-// set in this problem's CMakeLists.txt, via Species::NetworkSpecies.
+// Species indices (0-indexed, xn[]/spmasses[]) come from the Species enum in network.hpp.
 // ydot()/jac() are 1-indexed, so the same species use index+1 there.
 // net_ienuc (= NumSpec + 1) is the specific internal energy row/column.
 // Radiation rows/columns follow net_ienuc: photon number density, then
 // (with Microphysics_Traits::integrate_rad_flux) photon flux.
-constexpr int e_idx = static_cast<int>(Species::e);
-constexpr int H_idx = static_cast<int>(Species::H);
-constexpr int Hp_idx = static_cast<int>(Species::H_p);
+constexpr int e_idx = static_cast<int>(quokka::networks::PhotoionizationHCaseB::Species::e);
+constexpr int H_idx = static_cast<int>(quokka::networks::PhotoionizationHCaseB::Species::H);
+constexpr int Hp_idx = static_cast<int>(quokka::networks::PhotoionizationHCaseB::Species::H_p);
 constexpr int ie = e_idx + 1;
 constexpr int iH = H_idx + 1;
 constexpr int iHp = Hp_idx + 1;
@@ -38,10 +38,10 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) 
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Real
 {
-	auto const ev_bounds = ChemBandsHeader();
+	auto const ev_bounds = quokka::networks::PhotoionizationHCaseB::ChemBands();
 	const amrex::Real ev_low = ev_bounds[0];
 	const amrex::Real ev_high = ev_bounds[1];
-	const amrex::Real alpha = ChemBandsPowerLawIndex_;
+	const amrex::Real alpha = quokka::networks::PhotoionizationHCaseB::ChemBandsPowerLawIndex;
 
 	amrex::Real ev_avg = NAN;
 	if (std::isinf(ev_high)) {
