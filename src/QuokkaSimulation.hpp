@@ -692,15 +692,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 	}
 
-#ifdef PHOTOCHEMISTRY
 	// set photochemistry runtime parameters
 	{
 		amrex::ParmParse const hpp("photochemistry");
 		hpp.query("enabled", enablePhotoChemistry_);
-		hpp.query("max_density_allowed", max_density_allowed);
-		hpp.query("min_density_allowed", min_density_allowed); // don't do photochemistry in cells with densities below the minimum density specified
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enablePhotoChemistry_ != 1 || Microphysics_Traits<problem_t>::photochemistry,
+						 "photochemistry.enabled = 1 requires Microphysics_Traits<problem_t>::photochemistry = true at compile time.");
+		if constexpr (Microphysics_Traits<problem_t>::photochemistry) {
+			hpp.query("max_density_allowed", max_density_allowed);
+			hpp.query("min_density_allowed",
+				  min_density_allowed); // don't do photochemistry in cells with densities below the minimum density specified
+		}
 	}
-#endif
 
 	// set cooling runtime parameters
 	bool cooling_table_include_pe = false;
@@ -714,7 +717,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			coolingTableType_ = "resampled";
 		}
 		if constexpr (quokka::EOS<problem_t>::is_tabulated) {
-#ifdef PHOTOCHEMISTRY
 			// Resampled cooling and photoionization chemistry both model H thermochemistry
 			// (heating, recombination cooling, collisional ionization cooling). Enabling both
 			// simultaneously double-counts these terms. See docs/markdown/photoionization.md §4.1.
@@ -723,7 +725,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 					     "Photoionization handles its own H thermochemistry; the resampled cooling table "
 					     "would double-count those terms. See docs/markdown/photoionization.md.");
 			}
-#endif
 		}
 		if (quokka::EOS<problem_t>::is_tabulated || (alwaysReadTables == 1)) {
 			hpp.query("hdf5_data_file", coolingTableFilename_);
@@ -836,15 +837,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		quokka::g_pe_heating_tables_ptr<> = &peHeatingTables_;
 	}
 
-#ifdef CHEMISTRY
 	// set chemistry runtime parameters
 	{
 		amrex::ParmParse const hpp("chemistry");
 		hpp.query("enabled", enableChemistry_);
-		hpp.query("max_density_allowed", max_density_allowed); // chemistry is not accurate for densities > 3e-6
-		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableChemistry_ != 1 || Microphysics_Traits<problem_t>::chemistry,
+						 "chemistry.enabled = 1 requires Microphysics_Traits<problem_t>::chemistry = true at compile time.");
+		if constexpr (Microphysics_Traits<problem_t>::chemistry) {
+			hpp.query("max_density_allowed", max_density_allowed); // chemistry is not accurate for densities > 3e-6
+			hpp.query("min_density_allowed",
+				  min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
+		}
 	}
-#endif
 
 	// set the runtime parameters of the chemistry and photochemistry integrators
 	quokka::microphysics::integrator_params::readIntegratorParams();
@@ -1244,12 +1248,12 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	// start by assuming chemistry burn is successful.
 	bool burn_success = true; // NOLINT
 	auto const applyChemistry = [&]() {
-#ifdef CHEMISTRY
-		if (enableChemistry_ == 1) {
-			// compute chemistry
-			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+		if constexpr (Microphysics_Traits<problem_t>::chemistry) {
+			if (enableChemistry_ == 1) {
+				// compute chemistry
+				burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+			}
 		}
-#endif
 	};
 
 	auto const applyTurbulence = [&]() {
@@ -3272,11 +3276,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	// PD-ARS stages cover all groups.
 	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
 	constexpr int nGroupsThermal = RadSystem<problem_t>::nGroupsThermal_;
-#ifdef PHOTOCHEMISTRY
-	const bool chemBandsFirst = (nGroupsThermal < nGroups) && (enablePhotoChemistry_ == 1);
-#else
-	const bool chemBandsFirst = false;
-#endif
+	const bool chemBandsFirst = Microphysics_Traits<problem_t>::photochemistry && (nGroupsThermal < nGroups) && (enablePhotoChemistry_ == 1);
 	const int imexGroupEnd = chemBandsFirst ? nGroupsThermal : nGroups;
 
 	amrex::MultiFab dustHeatingSource;
@@ -3340,44 +3340,45 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			RadSystem<problem_t>::MergeUserRadSource(radEnergySource_arr, radFluxSource_arr, userEnergySource_arr, userReducedFlux_arr, indexRange);
 		}
 
-#ifdef PHOTOCHEMISTRY
-		if (enablePhotoChemistry_ == 1) {
-			if (chemBandsFirst) {
-				// === Step 1: RK2-SSP on chemical bands (transport + emission) ===
+		if constexpr (Microphysics_Traits<problem_t>::photochemistry) {
+			if (enablePhotoChemistry_ == 1) {
+				if (chemBandsFirst) {
+					// === Step 1: RK2-SSP on chemical bands (transport + emission) ===
 
-				// The thermal groups are not touched here. Chemical bands do not couple to the thermal gas-radiation energy exchange, so their
-				// only implicit term is the emission, which does not depend on the state and is simply added with the implicit weights Aim_22
-				// and Aim_33. The freshly emitted photons are thereby transported for part of the substep, as in the thermal groups, rather
-				// than waiting for the next substep.
+					// The thermal groups are not touched here. Chemical bands do not couple to the thermal gas-radiation energy exchange,
+					// so their only implicit term is the emission, which does not depend on the state and is simply added with the implicit
+					// weights Aim_22 and Aim_33. The freshly emitted photons are thereby transported for part of the substep, as in the
+					// thermal groups, rather than waiting for the next substep.
 
-				// stage 2: explicit forward Euler, then emission, on state_tmp1
-				amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
-				advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine,
-							     state_tmp1_cc, nGroupsThermal, nGroups);
-				RadSystem<problem_t>::AddChemBandSources(state_tmp1_cc, radEnergySource, radFluxSource, IMEX_Aim_22 * dt_radiation);
+					// stage 2: explicit forward Euler, then emission, on state_tmp1
+					amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
+					advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine,
+								     state_tmp1_cc, nGroupsThermal, nGroups);
+					RadSystem<problem_t>::AddChemBandSources(state_tmp1_cc, radEnergySource, radFluxSource, IMEX_Aim_22 * dt_radiation);
 
-				// stage 3: explicit midpoint RK2 (Shu-Osher combination with state_tmp1), then emission, on state_new
-				advanceRadiationMidpointRK2(lev, time_subcycle, dt_radiation, i, nsubSteps, fr_as_crse, fr_as_fine, state_tmp1_cc,
-							    nGroupsThermal, nGroups);
-				RadSystem<problem_t>::AddChemBandSources(state_new_cc_[lev], radEnergySource, radFluxSource, IMEX_Aim_33 * dt_radiation);
-			}
+					// stage 3: explicit midpoint RK2 (Shu-Osher combination with state_tmp1), then emission, on state_new
+					advanceRadiationMidpointRK2(lev, time_subcycle, dt_radiation, i, nsubSteps, fr_as_crse, fr_as_fine, state_tmp1_cc,
+								    nGroupsThermal, nGroups);
+					RadSystem<problem_t>::AddChemBandSources(state_new_cc_[lev], radEnergySource, radFluxSource,
+										 IMEX_Aim_33 * dt_radiation);
+				}
 
-			// === Step 2: photochemistry (on the chemical bands transported in step 1) ===
-			std::array<amrex::MultiFab const *, AMREX_SPACEDIM> fc_ptrs{};
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				fc_ptrs[0] = &state_new_fc_[lev][0];
+				// === Step 2: photochemistry (on the chemical bands transported in step 1) ===
+				std::array<amrex::MultiFab const *, AMREX_SPACEDIM> fc_ptrs{};
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					fc_ptrs[0] = &state_new_fc_[lev][0];
 #if (AMREX_SPACEDIM >= 2)
-				fc_ptrs[1] = &state_new_fc_[lev][1];
+					fc_ptrs[1] = &state_new_fc_[lev][1];
 #endif
 #if (AMREX_SPACEDIM == 3)
-				fc_ptrs[2] = &state_new_fc_[lev][2];
+					fc_ptrs[2] = &state_new_fc_[lev][2];
 #endif
+				}
+				// Also adds the thermal-band chemical emission j_g to radEnergySource, which step 3 consumes.
+				quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
+											 min_density_allowed, dustHeatingSource, radEnergySource);
 			}
-			// Also adds the thermal-band chemical emission j_g to radEnergySource, which step 3 consumes.
-			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
-										 min_density_allowed, dustHeatingSource, radEnergySource);
 		}
-#endif
 
 		// === Step 3: IMEX PD-ARS on groups [0, imexGroupEnd) ===
 		// With chemBandsFirst these are the thermal groups only; skip entirely if there are none.
