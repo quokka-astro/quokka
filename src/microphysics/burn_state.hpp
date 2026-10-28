@@ -20,16 +20,16 @@ namespace quokka::microphysics
 namespace detail
 {
 /// The members for the dust absorption of chemical-band photons (Q_dust), present only with
-/// Microphysics_Traits::dust_band_absorption.
-template <bool dust_band_absorption> struct DustBandAbsorptionState {};
+/// Microphysics_Traits::dust_chemical_band_absorption.
+template <bool dust_chemical_band_absorption> struct DustChemicalBandAbsorptionState {};
 
-template <> struct DustBandAbsorptionState<true> {
+template <> struct DustChemicalBandAbsorptionState<true> {
 	amrex::Real dust_kappa{};      ///< dust opacity to chemical-band photons
 	amrex::Real e_dust_absorbed{}; ///< energy density [erg cm^-3] of the chemical-band photons absorbed by dust during the burn
 };
 } // namespace detail
 
-template <typename problem_t> struct BurnState : detail::DustBandAbsorptionState<Microphysics_Traits<problem_t>::dust_band_absorption> {
+template <typename problem_t> struct BurnState : detail::DustChemicalBandAbsorptionState<Microphysics_Traits<problem_t>::dust_chemical_band_absorption> {
 	using traits = Microphysics_Traits<problem_t>;
 	static_assert(traits::photochemistry, "BurnState is used by the photochemistry problems only, for now");
 

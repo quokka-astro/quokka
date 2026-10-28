@@ -81,7 +81,7 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	static constexpr int num_chem_rad_eqs = NumChemRadEqs();
 	static constexpr int num_thermal_bands = NumThermalBands();
 	static constexpr int vars_per_group = Microphysics_Traits<problem_t>::integrate_rad_flux ? 2 : 1;
-	static constexpr bool q_dust = traits::dust_band_absorption;
+	static constexpr bool q_dust = traits::dust_chemical_band_absorption;
 	static constexpr int neqs = NumSpec + 1 + num_chem_rad_eqs + num_thermal_bands + (q_dust ? 1 : 0);
 
 	/// The role of entry n (1-based) of y: the species, then the energy, then a photon number (and with
@@ -116,7 +116,7 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	    "Microphysics_Traits::photochemistry must be true exactly when the problem is built with PHOTOCHEMISTRY");
 	static_assert(
 	    q_dust == requires { &BurnT::e_dust_absorbed; },
-	    "Microphysics_Traits::dust_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
+	    "Microphysics_Traits::dust_chemical_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
 	static_assert(net_ienuc == NumSpec + 1, "the energy must follow the species");
 	static_assert(num_chem_rad_eqs % vars_per_group == 0, "every chemical band must have vars_per_group variables");
 	static_assert(integrator_neqs<BurnT>() == neqs, "the layout must match Microphysics' integrator_neqs");

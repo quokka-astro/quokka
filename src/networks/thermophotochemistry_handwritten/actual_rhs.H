@@ -37,7 +37,7 @@ constexpr int i_ngamma_flux = net_ienuc + 2;
 static_assert(NumThermalBands == 2, "thermophotochemistry_handwritten emits into exactly two thermal bands (IR, optical)");
 constexpr int i_ir = net_ienuc + NumChemRadEqs + 1;
 constexpr int i_optical = net_ienuc + NumChemRadEqs + 2;
-// the dust-absorbed energy (Q_dust), with Microphysics_Traits::dust_band_absorption
+// the dust-absorbed energy (Q_dust), with Microphysics_Traits::dust_chemical_band_absorption
 constexpr int i_dust = net_ienuc + NumChemRadEqs + NumThermalBands + 1;
 
 constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
@@ -237,7 +237,7 @@ template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_r
 	ydot(net_ienuc) = energy_source / state.rho;
 
 	amrex::Real chat_dust_kappa_rho = 0.0_rt;
-	if constexpr (BurnT::traits::dust_band_absorption) {
+	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
 		chat_dust_kappa_rho = state.c_hat * state.dust_kappa * state.rho;
 	}
 	const amrex::Real dust_absorption_term = chat_dust_kappa_rho * n_gamma;
@@ -247,7 +247,7 @@ template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_r
 		const amrex::Real n_gamma_flux = state.rn[1];
 		ydot(i_ngamma_flux) = -chat_sigma_photo * n_HI * n_gamma_flux - chat_dust_kappa_rho * n_gamma_flux;
 	}
-	if constexpr (BurnT::traits::dust_band_absorption) {
+	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
 		ydot(i_dust) = dust_absorption_term * get_ionizing_band_photon_energy();
 	}
 
@@ -305,7 +305,7 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	const amrex::Real dTde = 1 / state.dedT;
 
 	amrex::Real chat_dust_kappa_rho = 0.0_rt;
-	if constexpr (BurnT::traits::dust_band_absorption) {
+	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
 		chat_dust_kappa_rho = state.c_hat * state.dust_kappa * state.rho;
 	}
 
@@ -375,7 +375,7 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	jac(i_optical, iHp) = recombination_cooling_switch * Lambda_rec * n_e + rydberg_rate_coeff * n_e;
 	jac(i_optical, net_ienuc) = (recombination_cooling_switch * d_Lambda_rec_dT * n_e * n_HII + d_rydberg_rate_coeff_dT * n_e * n_HII) * dTde;
 
-	if constexpr (BurnT::traits::dust_band_absorption) {
+	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
 		jac(i_dust, i_ngamma) = n_gamma_active * chat_dust_kappa_rho * get_ionizing_band_photon_energy();
 	}
 }
