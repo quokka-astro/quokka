@@ -16,7 +16,8 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   add_executable(
     ${JOB_NAME} testDTypeFrontVC.cpp "${QuokkaSourcesNoEOS}"
-                ${${microphysics_network_name}_sources})
+                ${${microphysics_network_name}_sources}
+                ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
 
   # this will add #define CHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)

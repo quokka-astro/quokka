@@ -18,7 +18,8 @@ if(AMReX_SPACEDIM EQUAL 3)
   foreach(target ${JOB_NAME} ${JOB_NAME}TempIndependentRecombination)
     add_executable(
       ${target} test${target}.cpp "${QuokkaSourcesNoEOS}"
-                ${${microphysics_network_name}_sources})
+                ${${microphysics_network_name}_sources}
+                ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
 
     # this will add #define PHOTOCHEMISTRY
     target_compile_definitions(${target} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX)

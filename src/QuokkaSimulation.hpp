@@ -853,6 +853,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set the runtime parameters of the chemistry and photochemistry integrators
 	quokka::microphysics::integrator_params::readIntegratorParams();
 
+	// set the runtime parameters of the network, if it has any
+	if constexpr (requires { Microphysics_Traits<problem_t>::Network::ReadParameters(); }) {
+		Microphysics_Traits<problem_t>::Network::ReadParameters();
+	}
+
 	// set dust runtime parameters
 	{
 		amrex::ParmParse const dpp("dust");
