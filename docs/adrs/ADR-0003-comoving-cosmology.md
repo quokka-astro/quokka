@@ -199,9 +199,11 @@ Constrained transport preserves $`d(\nabla\cdot B)/dt = 0`$ and never removes di
 Without cosmology, constrained-transport AMR with divergence-free prolongation and EMF reflux keeps $`\nabla\cdot B`$ at machine precision. Time-interpolated coarse data only fills ghost cells, which feed EMFs, so interpolation affects accuracy, not divergence. The error comes from sync assembling one coarse cell's faces from two levels' histories, which is exact only when the field carries no multiplicative factor.
 
 ### General EOS
-An ideal-gas EOS is invariant under the unit change: $`p = (\gamma-1)\rho e`$ and $`T(e)`$ hold in both frames, so hydro on comoving variables needs no EOS hook. A general EOS needs physical density at every EOS call.
+An ideal-gas EOS is invariant under the unit change: $`p = (\gamma-1)\rho e`$ and $`T(e)`$ hold in both frames, so hydro on comoving variables needs no EOS hook. A general EOS needs all inputs in physical units at every EOS call.
 
-Hydro EOS calls go through an EOS view carrying `a3`. It passes $`\rho_c/a^3`$ to the EOS, multiplies per-volume outputs (pressure, energy density) by $`a^3`$, and passes per-unit-mass outputs ($`T`$, $`c_s`$) through unchanged. Non-cosmological runs use `a3 = 1`, and an `is_scale_invariant` EOS trait removes the view entirely for the ideal gas.
+Hydro EOS calls go through an EOS view carrying `a3`. Before calling the EOS, it divides every volume-density input by $`a^3`$: density, internal energy density, pressure, and species densities in `massScalars`. In particular, `ComputePressure` and `ComputeTgasFromEint` require both physical density and physical internal energy density, while `ComputeSoundSpeed` requires physical density and pressure. Scaling energy and species densities alongside density preserves the specific energy $`e = E_\mathrm{int}/\rho`$ and species mass fractions; converting density alone would spuriously multiply these ratios by $`a^3`$.
+
+The view multiplies per-volume outputs (pressure, energy density) by $`a^3`$. Specific energy, temperature, sound speed, and mass fractions are unchanged by the unit conversion. Non-cosmological runs use `a3 = 1`, and an `is_scale_invariant` EOS trait removes the view entirely for the ideal gas.
 
 Until the view exists, a `static_assert` requires a scale-invariant EOS whenever cosmology is enabled.
 
