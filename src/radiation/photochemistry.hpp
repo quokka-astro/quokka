@@ -70,10 +70,6 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		      "(nGroups_ - NChemBands) when ISM_Traits::thermal_band_photochemistry is true.");
 	static_assert(Microphysics_Traits<problem_t>::integrate_rad_flux == (MicrophysicsNumChemRadVarsPerGroup == 2),
 		      "Microphysics_Traits::integrate_rad_flux must be false exactly when the problem is built with SKIP_PHOTOCHEMFLUX.");
-	static_assert(RadSystem<problem_t>::dust_chemical_band_absorption_ == Microphysics_Traits<problem_t>::dust_band_absorption,
-		      "ISM_Traits::dust_chemical_band_absorption and Microphysics_Traits::dust_band_absorption must agree: without the latter "
-		      "the network does not compute e_dust_absorbed, so Q_dust would always be zero, and without the former the "
-		      "dust-absorbed photon energy would be silently dropped.");
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.
@@ -172,7 +168,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			}
 			photochemstate.rho = rho;
 			photochemstate.e = Eint / rho;
-			if constexpr (Microphysics_Traits<problem_t>::dust_band_absorption) {
+			if constexpr (Microphysics_Traits<problem_t>::dust_chemical_band_absorption) {
 				// network_rp::dust_kappa exists only for the networks with Q_dust, and a qualified non-dependent name
 				// is looked up even in a discarded if constexpr branch. This guard goes when the network parameters
 				// are hand-written (PR 6).
@@ -268,7 +264,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				}
 			}
 
-			if constexpr (Microphysics_Traits<problem_t>::dust_band_absorption) {
+			if constexpr (Microphysics_Traits<problem_t>::dust_chemical_band_absorption) {
 				dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / dt;
 			}
 
