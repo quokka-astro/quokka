@@ -19,9 +19,6 @@
 #include "microphysics/microphysics_traits.hpp"
 #include "microphysics/rosenbrock/rosenbrock_state.hpp"
 
-// still from extern/Microphysics: NumSpec
-#include "network.H"
-
 namespace quokka::microphysics
 {
 
@@ -77,12 +74,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto error_norm(const RosenbrockState<i
 	return std::sqrt(err / static_cast<amrex::Real>(int_neqs));
 }
 
-template <int int_neqs, int stages> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto species_change_valid(const RosenbrockState<int_neqs, stages> &rstate) -> bool
+template <typename Layout, int int_neqs, int stages>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto species_change_valid(const RosenbrockState<int_neqs, stages> &rstate) -> bool
 {
 	constexpr amrex::Real increase_change_factor = 4.0_rt;
 	constexpr amrex::Real decrease_change_factor = 0.25_rt;
 
-	for (int i = 1; i <= NumSpec; ++i) {
+	for (int i = 1; i <= Layout::num_spec; ++i) {
 		if (std::abs(rstate.y(i)) > integrator_params::X_reject_buffer * rstate.atol_spec &&
 		    std::abs(rstate.ynew(i)) > integrator_params::X_reject_buffer * rstate.atol_spec &&
 		    (std::abs(rstate.ynew(i)) > increase_change_factor * std::abs(rstate.y(i)) ||
@@ -429,7 +427,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 				continue;
 			}
 
-			const bool valid_update = species_change_valid(rstate);
+			const bool valid_update = species_change_valid<Layout>(rstate);
 			constexpr amrex::Real err_min = 1.e-10_rt;
 			// make copies of the traits to avoid compiler error "undefined in device code" (amrex::Clamp takes references)
 			constexpr amrex::Real fac_min = Layout::traits::h211b_fac_min;
