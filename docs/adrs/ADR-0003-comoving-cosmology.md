@@ -1,0 +1,310 @@
+# ADR-0003: Comoving Cosmology and Where the Scale Factor Enters
+Date: 2026-10-27 • Status: Proposed
+
+Quokka evolves cosmological runs in comoving variables. The scale factor $`a(t)`$ is a function of time, never mutable state, and every factor of $`a`$ lives in a small, fixed set of hooks. No physics kernel contains a $`1/a`$.
+
+## Context
+The `mfulghieri/test-cosmology` branch ([#2340](https://github.com/quokka-astro/quokka/pull/2340)) adds comoving hydro, self-gravity and CIC dark matter. It works on a single level and has two test problems (`CosmologicalExpansion`, `CosmoSphereDM`). Its structure blocks the next steps:
+
+- **Mutable scale factor.** `a_now_` is a member advanced inside the per-level Strang source operator. Its meaning changes mid-step ($`a(t)`$, then $`a(t+\Delta t/2)`$, then $`a(t+\Delta t)`$). This forces `amr.max_level = 0`, forbids restart, needs save/restore on hydro retries, and needs five extra particle hooks on `AMRSimulation`.
+- **Scattered factors of $`a`$.** $`1/a`$ is inserted separately in both flux functions, the signal speed, the CFL check, the $`P\,dV`$ term, tracer advection, the gravity source, and the particle kick, drift and CFL. Each new operator must find its own places.
+- **Ideal gas only.** The expansion operator hard-codes $`e \propto a^{-3(\gamma-1)}`$, and hydro EOS calls receive comoving density.
+- **No MHD.** Magnetic energy is dropped when total energy is recomputed, and the induction equation has no comoving form.
+
+Touches:
+- **ParmParse:** new `cosmology.*` runtime parameters; cosmological numbers move out of `Physics_Traits`.
+- **Output format:** no change. Cosmological state is added to `metadata.yaml` as diagnostics.
+- **Problem-file interface:** `Physics_Traits<problem_t>::is_cosmology_enabled`; initial conditions are specified in comoving variables (including $`B_c`$, below).
+
+Out of scope: radiation. Comoving radiation transport ($`c/a`$, photon redshift) is not covered here and stays blocked by the existing `static_assert`.
+
+## Options
+- **Option A: $`1/a`$ at each call site (current branch).** Works on one level, but every new flux path or operator must find its own factors, and the mutable `a_now_` blocks AMR, restart and retries.
+- **Option B: Supercomoving coordinates** (Martel & Shapiro 1998). These remove $`a`$ from the equations only for $`\gamma = 5/3`$. Quokka supports a general EOS.
+- **Option C: Comoving variables with a fixed set of hooks** (this ADR), storing the magnetic field as $`\tilde B = a^{3/2} B_\mathrm{phys}`$ with a $`-\tfrac12 H \tilde B`$ expansion term. This is the Li, Li & Cen (2008) form. It breaks $`\nabla\cdot B = 0`$ under AMR subcycling (see [Why a factor on B breaks ∇·B](#why-a-factor-on-b-breaks-b-at-sync)).
+- **Option D: As C, but storing the flux-frozen field $`B_c = a^2 B_\mathrm{phys}`$** (Collins et al. 2010) and converting to $`\tilde B`$ only at the solver boundary.
+
+## Decision
+Choose Option D.
+
+### Principle
+Use comoving coordinates $`x`$, peculiar velocity $`v`$, and comoving conserved variables. Every hook follows from one principle:
+
+> **At fixed $`a`$, the comoving equations are the physical equations in different units.** Densities and energy densities scale by $`a^3`$, cell size by $`a`$ ($`dx_\mathrm{phys} = a\,dx`$), and per-unit-mass quantities ($`v`$, $`e`$, $`T`$, $`c_s`$, abundances) are unchanged. The only terms that are not a unit change are the $`\dot a/a`$ expansion terms.
+
+Consequences of that principle:
+
+1. **$`a(t)`$ is a function.** The cosmology module provides `scaleFactorAt(t)` and `dtau(t, dt)` $`= \int dt'/a(t')`$, both evaluated from a table built from the cosmological parameters alone (see [Restart and reproducibility](#restart-and-reproducibility)). Every caller asks for $`a`$ at the time it needs. AMR subcycling, retries and restart need no special handling (`tNew_` is already checkpointed).
+2. **Transport runs on the clock $`\tau`$.** Every term that moves material through comoving space carries the same $`1/a`$, so it is advanced with $`d\tau`$ instead of $`dt`$.
+3. **Expansion is one Strang-split operator** on the physical $`dt`$, and the only code that knows about $`\dot a/a`$.
+4. **Local and diffusive physics run unmodified** inside a physical-frame wrapper. Diffusive terms that live inside the transport step (viscosity, resistivity) use physical-frame gradients and coefficients there.
+
+### The hooks
+These six hooks are the complete list of places where $`a`$ appears outside `src/cosmology/`.
+
+| Hook | Location | Covers |
+|---|---|---|
+| `dtau` | `advanceHydroAtLevel` (PredictStep, AddFluxesRK2, `SolveInductionEqn`, flux and EMF registers, tracers, $`B_c \leftrightarrow \tilde B`$ conversion at the solver, `PhysicalDx` and physical coefficients for viscous and resistive terms); `applyPoissonGravityAtLevel`; particle kick and drift | Flux divergence, $`P\,dV`$, induction, viscosity, resistivity, gravity on gas and particles, particle drift, tracers |
+| `dt_cfl = a * dtau_cfl` | `computeTimestepAtLevel` | Hydro, MHD and particle CFL |
+| Expansion operator | Strang source chain; particle velocity drag | All $`\dot a/a`$ terms, including general EOS ($`B_c`$ has none) |
+| `inPhysicalFrame(op)`, plus $`dx \cdot a`$ for diffusion | Strang source chain | Cooling, chemistry, photoelectric heating, electron conduction, future Strang-split local or diffusive physics |
+| $`G/a`$ and $`\bar\rho`$ | `fillPoissonRhsAtLevel`; particle `depositMass`; $`\bar\rho`$ from the level-0 composite field after average-down | Comoving Poisson equation |
+| EOS view (`a3`) | EOS calls in hydro | Non-ideal EOS |
+
+In `advanceHydroAtLevel`, `dtau_lev` is used only for the update itself. Time labels (`fillBoundaryConditions(time + dt_lev)`, the Strang source calls, `tNew_`) stay on the physical `dt_lev`. Any hyperbolic term later added to the hydro RHS inherits the correct factor automatically; diffusive terms need the treatment below.
+
+Hydro and particles use the same $`d\tau`$ for each step, which keeps gas and dark matter moving together (the property `CosmoSphereDM` tests). The particle drift uses $`d\tau`$ over the whole step; each half-kick uses $`d\tau`$ over its own half-interval, $`\tau(t+\Delta t/2) - \tau(t)`$ and $`\tau(t+\Delta t) - \tau(t+\Delta t/2)`$. The midpoint value $`\Delta t/a(t+\Delta t/2)`$ is second-order; the exact integral is preferred.
+
+### Diffusive terms inside the transport step
+Physical viscosity is computed inside `HydroSystem::ComputeFluxes`, and Ohmic resistivity inside the EMF computation and `MHDSystem::AddResistiveEnergyFlux`. Only electron conduction is Strang-split. A diffusive term needs $`1/a^2`$, but running on $`d\tau`$ supplies only one factor, so the transport hook also:
+
+- computes gradients inside diffusive fluxes with $`dx_\mathrm{phys} = a(t+\Delta t/2)\,dx`$, while the flux divergence keeps the comoving $`dx`$;
+- converts coefficients to the physical frame: dynamic viscosity $`\mu`$ scales like a density ($`k = 3`$); resistivity $`\eta`$ is a diffusivity and is unchanged.
+
+`ComovingDx` and `PhysicalDx` are distinct types, so passing the comoving spacing to a diffusive gradient does not compile.
+
+### Scaling exponents
+A single per-component table in `src/cosmology/` gives each conserved component two exponents:
+
+- the **frame exponent** $`k`$, with $`q_\mathrm{comoving} = a^k q_\mathrm{phys}`$, used by the frame wrapper and the equivalence tests;
+- the **dilution exponent** $`m`$, the power in the expansion factor $`(a_\mathrm{old}/a_\mathrm{new})^m`$, used by the expansion operator and the reflux weights.
+
+A new field needs one entry with both.
+
+| Component | $`k`$ (frame) | $`m`$ (dilution) | Expansion step |
+|---|---|---|---|
+| Density, partial densities, passive scalars | 3 | 0 | none ($`\rho_c`$ constant) |
+| Momentum density | 3 | 1 | $`\times\, a_\mathrm{old}/a_\mathrm{new}`$ |
+| Internal energy density | 3 | $`3(\gamma-1)`$ | EOS ODE (below); the power law for an ideal gas |
+| Magnetic field $`B_c`$ (face-centred, stored) | 2 | 0 | none (pure curl evolution) |
+| Solver-frame field $`\tilde B = B_c/\sqrt a`$ (not stored) | 3/2 | — | not stored |
+| Total energy | 3 | ≈ 2 (reflux only) | recomputed: $`e_\mathrm{int} + \mathrm{KE} + \tfrac12 B_c^2/a`$ |
+| Per-unit-mass quantities | 0 | 0 | none |
+
+### Expansion operator
+The expansion operator is Strang-split around the transport step and uses the physical $`dt`$. For the first half step $`a_\mathrm{old} = a(t)`$ and $`a_\mathrm{new} = a(t + \Delta t/2)`$; for the second, $`a_\mathrm{old} = a(t + \Delta t/2)`$ and $`a_\mathrm{new} = a(t + \Delta t)`$:
+
+```math
+\begin{aligned}
+\text{momentum:}\quad & p \leftarrow p\,\frac{a_\mathrm{old}}{a_\mathrm{new}} && \text{(gas and particles, exact for any EOS)} \\
+\text{internal:}\quad & \frac{\partial E_{\mathrm{int},c}}{\partial t} = -3H\,p_c, \qquad p_c = a^3\,p\!\left(\rho_c/a^3,\ e\right) \\
+\text{as ODE:}\quad & \frac{de}{d\ln a} = -3\left(\frac{p}{\rho}\right)_\mathrm{phys}\!\left(\rho_c/a^3,\ e\right) && \text{at fixed } \rho_c \\
+\text{magnetic:}\quad & B_c \text{ unchanged} \\
+\text{total:}\quad & E \leftarrow E_\mathrm{int} + \tfrac12 |p|^2/\rho + \tfrac12 |B_c|^2/a_\mathrm{new}
+\end{aligned}
+```
+
+For a general EOS the internal-energy ODE is solved with the existing RK integrator. For an ideal gas it reduces to the closed-form power law the branch uses today.
+
+### Magnetic field
+**Notation.** Throughout this ADR, $`B`$ is Quokka's code field $`B' = B_\mathrm{Gauss}/\sqrt{4\pi}`$, so magnetic energy is $`\tfrac12 B^2`$ and the Alfvén speed is $`B/\sqrt\rho`$. The factor $`\sqrt{4\pi}`$ is independent of $`a`$, so every exponent and equation here holds unchanged for $`B'`$. Enzo absorbs the same factor (Collins et al. 2010, Eq. 5), so their equations match term for term.
+
+Store the flux-frozen field $`B_c = a^2 B_\mathrm{phys}`$ (Collins et al. 2010, Eq. 11). Its induction equation is a pure curl with no expansion term (their Eq. 4):
+
+```math
+\frac{\partial B_c}{\partial t} = \frac{1}{a}\,\nabla_x \times \left(v \times B_c\right)
+```
+
+- **Solver frame.** At the transport hook the solver receives $`\tilde B = B_c/\sqrt{a(t+\Delta t/2)} = a^{3/2} B_\mathrm{phys}`$, so magnetic pressure scales like gas pressure. The Alfvén and fast speeds from $`\tilde B`$ and $`\rho_c`$ equal the physical speeds, so HLLD, fast wavespeeds and CFL are unchanged. The EMF is scaled back by $`\sqrt a`$ before updating $`B_c`$. Enzo does the same conversion around its solver (Collins et al. 2010, Eqs. 30–31).
+- **Transport.** The curl update runs on $`d\tau`$, like the hydro fluxes.
+- **No expansion factor on $`B`$.** The expansion operator never touches $`B_c`$. A multiplicative factor preserves $`\nabla\cdot B`$ on one level, but under subcycling the two levels apply different factor histories to the field, and sync assembles coarse cells at the interface from both (next section). Collins et al. (2010, §2.4) report exactly this for the source-term form of Li et al. (2008), and "greatly improved divergence" with $`B_c`$.
+- **AMR consistency.** Because $`B_c`$ evolves only through the curl, divergence-free prolongation, time interpolation and EMF reflux stay exact. Every grid sharing a face must still compute identical face EMFs (Collins et al. 2010, §2.4).
+- **Initial conditions.** Problems specify $`B_c = a_\mathrm{init}^2\,B_\mathrm{Gauss}/\sqrt{4\pi}`$. This is documented next to the comoving-density convention; it is the most likely place for a missing factor, in problem setup files and in the frozen-$`a`$ test inputs.
+- **Diagnostics.** Output in Gauss multiplies by $`\sqrt{4\pi}\,a^{-2}`$. This is an output conversion, not a hook, and is not part of the exponent table.
+
+### Why a factor on B breaks ∇·B at sync
+The error appears in the uncovered coarse cell $`C`$ next to the coarse-fine interface. At sync its faces come from two levels:
+
+- **Interface face $`F_I`$:** overwritten by average-down from the fine faces in that plane (as `amrex::average_down_faces` does for faces bounding the fine region). It carries the fine history.
+- **Faces $`P`$ sharing an edge with $`F_I`$, and $`C`$'s other faces:** coarse values plus the EMF-reflux correction on the shared edges. They carry the coarse history.
+
+```text
+          P: coarse + reflux
+      +-----------------------●-----------+-----------+
+      |                       |           |           |
+      |                       |   fine    |   fine    |
+      |          C            |           |           |
+      |   (uncovered coarse)  F_I --------+-----------+
+      |                       | (average- |           |
+      |                       |   down)   |   fine    |
+      |                       |           |           |
+      +-----------------------●-----------+-----------+
+          P: coarse + reflux
+   ● = shared edges e (2D sketch: edges appear as points)
+```
+
+**Without expansion, div(C) is exactly zero.** Average-down gives $`F_I = B_I^0 - \nabla\times\langle E_f\rangle`$: interior fine edges cancel, leaving the coarse edge perimeter with $`\langle E_f\rangle = \sum_j \Delta t_f\,E_{f,j}`$. Reflux puts the same $`\langle E_f\rangle`$ on the shared edges of $`P`$. Every edge EMF enters the two faces of $`C`$ sharing it with equal and opposite sign, and the old-field terms cancel because div(C) was zero.
+
+**A multiplicative factor $`\eta`$ on $`B`$ leaves two terms uncancelled** (schematic):
+
+```math
+\begin{aligned}
+\text{old field:}\quad & \mathrm{div}(C)\,V \supset \Big(\prod_j \eta_{f,j} - \eta_c\Big)\, B_I^0\, A_I \\
+\text{EMF:}\quad & \mathrm{div}(C)\,V \supset \sum_j (w_j - 1)\,\Delta t_f\, E_{f,j} + (\eta_{c,2} - 1)\,\Delta t\, E_c
+\end{aligned}
+```
+
+1. **Old-field term.** $`F_I`$ is scaled by the product of the fine substep factors, the other faces by the coarse factor. The error is proportional to $`B`$ itself, not to a flux mismatch. Enzo's semi-implicit factor $`(1 - x/2)/(1 + x/2)`$, with $`x = \Delta t\,\dot a/a`$, does not telescope, so this term is $`O(x^3)\,B`$ per step (Collins et al. 2010, §2.4). Exact factors from $`a(t)`$ make it zero in exact arithmetic, leaving roundoff times $`B`$ every coarse step.
+2. **EMF term.** In $`F_I`$, the substep-$`j`$ fine EMF is scaled by its later expansion factors $`w_j`$. In $`P`$, the coarse EMF is scaled by the coarse second half-step factor $`\eta_{c,2}`$, but the reflux correction is added unweighted. This is the [reflux commutation problem](#amr-subcycling-and-reflux), appearing as divergence instead of a momentum error.
+
+Constrained transport preserves $`d(\nabla\cdot B)/dt = 0`$ and never removes divergence, so the error accumulates every coarse step and is inherited by later regrids and prolongations from $`C`$.
+
+- **$`B_c = a^2 B_\mathrm{phys}`$ (chosen):** $`\eta = 1`$, so both terms vanish identically.
+- **Factor on $`B`$ with exact $`a(t)`$ and weighted EMF registers ($`m = 1/2`$, including the coarse half-step factor):** the EMF term becomes exact and the old-field term drops to roundoff, but that roundoff grows without bound, and every copy of face $`B`$ (average-down, regrid, ghost exchange) would have to apply the factors identically.
+
+Without cosmology, constrained-transport AMR with divergence-free prolongation and EMF reflux keeps $`\nabla\cdot B`$ at machine precision. Time-interpolated coarse data only fills ghost cells, which feed EMFs, so interpolation affects accuracy, not divergence. The error comes from sync assembling one coarse cell's faces from two levels' histories, which is exact only when the field carries no multiplicative factor.
+
+### General EOS
+An ideal-gas EOS is invariant under the unit change: $`p = (\gamma-1)\rho e`$ and $`T(e)`$ hold in both frames, so hydro on comoving variables needs no EOS hook. A general EOS needs physical density at every EOS call.
+
+Hydro EOS calls go through an EOS view carrying `a3`. It passes $`\rho_c/a^3`$ to the EOS, multiplies per-volume outputs (pressure, energy density) by $`a^3`$, and passes per-unit-mass outputs ($`T`$, $`c_s`$) through unchanged. Non-cosmological runs use `a3 = 1`, and an `is_scale_invariant` EOS trait removes the view entirely for the ideal gas.
+
+Until the view exists, a `static_assert` requires a scale-invariant EOS whenever cosmology is enabled.
+
+### AMR subcycling and reflux
+Reflux does not commute with the expansion operator. In `timeStepWithSubcycling` the coarse level completes its whole step, including its second Strang half-step, before the fine substeps and `Reflux` run.
+
+- The coarse flux is applied at the coarse midpoint, then scaled by $`(a(t+\Delta t/2)/a(t+\Delta t))^m`$.
+- Each fine substep's flux is applied at its own midpoint and scaled by the expansion of every later substep.
+- Reflux adds $`\sum F_f\,d\tau_f - F_c\,d\tau_c`$ unscaled at $`t_\mathrm{sync}`$.
+
+The corrected coarse cell then matches no consistent evolution. Without gravity, transport plus expansion conserves $`a\,p_c`$, and it drifts by $`O(H\Delta t)`$ times the flux mismatch every coarse step, which creates spurious bulk momentum in a periodic box. The stored magnetic field $`B_c`$ has no expansion factor, so EMF reflux is unaffected.
+
+```text
+             w = (a(t+Δt/2)/a_sync)^m
+coarse  |=================◆=================|  ┆ Reflux
+fine    |=======◆=========|========◆========|  ┆
+                w1                 w2           ┆
+        t               t+Δt/2          t+Δt = t_sync
+
+  w1 = (a(t+Δt/4)/a_sync)^m     w2 = (a(t+3Δt/4)/a_sync)^m
+  ◆ = where a level applies its flux (the Strang midpoint of its step)
+```
+
+**Fix:** weight each register deposit by the expansion it will undergo before reflux:
+
+```math
+\text{register} \mathrel{+}= \left(\frac{a(t_\mathrm{dep})}{a(t_\mathrm{sync})}\right)^{m} F\,d\tau, \qquad t_\mathrm{dep} = t_\mathrm{lev} + \tfrac12\,\Delta t_\mathrm{lev}
+```
+
+For the coarse level the weight equals its second half-step factor. For fine substep $`j`$ it is the product of all later factors, because $`a(t)`$ is a function and the momentum factors compose exactly. Reflux is then additive and exact for density and momentum. `FluxRegister::CrseInit` and `FineAdd` take one scalar per call, so deposit per dilution-exponent group or pre-scale a temporary copy of the fluxes, using the $`m`$ column of the exponent table. EMF registers need no weight ($`m = 0`$ for $`B_c`$).
+
+Collins et al. (2010, Appendix D) apply the flux correction after the expansion step and describe no weighting, so Enzo appears to carry this momentum error. That is inferred from the step order; the paper does not discuss it.
+
+Total energy has no single exact weight, since kinetic, magnetic and internal parts scale differently. Use $`m = 2`$ (exact for $`\gamma = 5/3`$ without $`B`$) and accept an $`O(H\Delta t)`$ error in the energy correction. Energy is not conserved in an expanding box (Layzer–Irvine), so consistency is the requirement; `FixupState` and dual-energy sync recompute $`E_\mathrm{int}`$.
+
+### Restart and reproducibility
+$`a(t)`$ is a pure function of the cosmological parameters and $`t`$. `WriteCheckpointFile` already stores `tNew_` and `dt_` with `precision(17)`, which round-trips doubles exactly, so a restarted run reproduces $`a`$, $`d\tau`$ and $`H`$ bitwise with no cosmology state of its own.
+
+What would break it:
+- Advancing $`a`$ step by step, or integrating from the last cached point. The result depends on the step history, and a restart starts from a different point.
+- An adaptive integrator started from a moving point. Its step sequence depends on the start, not only on the target $`t`$.
+- Restoring $`a`$ from `metadata.yaml`. yaml-cpp does not guarantee round-trip precision, and the stored value carries the history anyway. Metadata $`a`$, $`z`$ and $`H`$ are diagnostics only.
+- A running sum of $`d\tau`$ over steps.
+
+Implementation, based on the two integrals
+
+```math
+t(a) = \int \frac{da}{a\,H(a)}, \qquad \tau(a) = \int \frac{da}{a^2 H(a)}
+```
+
+1. **Table from parameters only.** At startup, tabulate $`t(a)`$ and $`\tau(a)`$ on a fixed grid uniform in $`\ln a`$, with fixed-order Gauss–Legendre quadrature per interval. Nothing adaptive, nothing history-dependent; the table is rebuilt identically on restart.
+2. **$`a(t)`$ by interpolation.** Cubic Hermite on the table using the exact derivative $`da/dt = a\,H(a)`$, optionally followed by a fixed number of Newton iterations on $`t(a) - t`$.
+3. **$`d\tau`$ as a difference.** $`d\tau(t_1, t_2) = \tau(a(t_2)) - \tau(a(t_1))`$. Nothing accumulates, and hydro, MHD and particles see the same value.
+4. **Host only.** $`a`$, $`d\tau`$ and $`H`$ are computed on the host and captured as scalars, so GPU and CPU builds and all MPI ranks agree without a broadcast.
+5. **Parameter check.** The checkpoint stores the cosmological parameters and a hash of the table. Restart aborts with an error if the inputs file has changed them.
+
+Bitwise reproducibility holds for the same binary on the same machine. A different compiler, FMA contraction or libm can change the last bits of $`H(a)`$, as it can for the hydro update. The time sequence also has to match; it does, because restart restores `dt_` and the cosmological timestep limit depends only on $`H(a(t))`$.
+
+### Rules for new physics
+1. **Every operator declares its frame.** A transport operator runs inside the $`d\tau`$ step. A Strang-split local or diffusive operator is wrapped in `inPhysicalFrame`. A diffusive term inside the transport step uses `PhysicalDx` and physical-frame coefficients. Only the expansion operator acts directly on comoving state. An undeclared operator fails to compile.
+2. **No $`a`$ inside kernels.** Outside `src/cosmology/`, the scale factor appears only in the six hooks. The type system and the AST check enforce this.
+3. **New fields get exponents.** Add one entry, with $`k`$ and $`m`$, to the exponent table; the wrapper, expansion operator, reflux weights and tests pick it up.
+
+### Enforcement
+Three layers, from hardest to softest: types make misuse a compile error, an AST check catches what types cannot express, and the equivalence tests check the numbers.
+
+**1. Strong types (compile-time gate).** The scale factor is a type whose raw value only the hooks can read, through a passkey:
+
+```cpp
+namespace quokka::cosmology {
+class ScaleFactor {
+      public:
+	auto value(HookKey /*key*/) const -> amrex::Real { return a_; } // host-only, needs a key
+      private:
+	amrex::Real a_;
+	explicit ScaleFactor(amrex::Real a) : a_(a) {}
+	friend auto scaleFactorAt(amrex::Real t) -> ScaleFactor;
+};
+class HookKey { // passkey: only the hooks can construct one
+	HookKey() = default;
+	friend class TransportStep;   // dtau, dt_cfl
+	friend class ExpansionOperator;
+	friend class PhysicalFrame;   // inPhysicalFrame, dx * a
+	friend class ComovingPoisson; // G/a, rho_bar
+	friend class EOSView;         // a3, private inside the view
+};
+} // namespace quokka::cosmology
+```
+
+- `ScaleFactor` has no implicit conversion to `Real`, so a use outside a hook fails on every build. `value()` is host-only, so a kernel that reaches it also fails under CUDA and HIP.
+- Hooks hand out only derived quantities (`dtau`, `inv_a`, `sqrt_a`, `a3`, `PhysicalDx`), never $`a`$ itself.
+- `TransportDt` and `PhysicalDt` are distinct types, so `fillBoundaryConditions(time + dtau)` does not compile. Likewise `ComovingDx` and `PhysicalDx` keep diffusive gradients on the physical spacing.
+- `callInOrder` accepts only `Transport{op}`, `PhysicalFrame{op}` or `Comoving{op}`. A `static_assert` rejects a bare lambda, and only the expansion operator can construct `Comoving`.
+- The `HookKey` friend list is the allowlist. `src/cosmology/` is a CODEOWNERS path, so adding a friend requires review.
+
+**2. AST check (CI gate).** A `clang-query` matcher script runs against `compile_commands.json` in a CI job next to the existing clang-tidy workflow. It exits non-zero with file:line on any of:
+1. a reference to `quokka::cosmology::*` (`HubbleFactor`, `scaleFactorAt`, `CosmologyParams` members) outside `src/cosmology/` and the allowlisted hook functions;
+2. a hook-output type (`inv_a`, `sqrt_a`, `a3`) used inside a lambda body outside an allowlisted function;
+3. `ScaleFactor`, `HookKey` or a hook-output type in a `HydroSystem`, `MHDSystem` or operator signature.
+
+AST matching is deterministic but needs a configured build, so it is too slow for `quokka-pre-commit.sh`. A grep for the same symbols outside allowed paths can run there as an early warning, but it is easy to evade and is not a gate.
+
+**3. Equivalence tests (numerical check).** Linting cannot see a wrong exponent, a hard-coded literal standing in for $`a`$, or a quantity a problem file has already scaled. The frozen-$`a`$ equivalence tests cover those. Full dataflow tracking with the Clang Static Analyzer taint checker is not used: it is heavier and less predictable, and the strong types already track $`a`$ up to the one point where a hook unwraps it.
+
+## Consequences
+- **Accuracy.** Expansion source terms are exact for any EOS given $`a(t)`$; transport uses the exact $`\int dt/a`$. Momentum reflux becomes exact under subcycling; total-energy reflux carries an $`O(H\Delta t)`$ error in the correction term.
+- **Performance.** Negligible: a few host-side scalars per level step, one table built at startup, and per-group scaling of flux-register deposits.
+- **Portability.** $`a`$, $`d\tau`$ and $`H`$ are host-only; kernels receive scalars. No new device code paths beyond the expansion operator and the EOS view.
+- **Maintenance.** Factors of $`a`$ are confined to `src/cosmology/` and six hooks, enforced by types and CI. New physics declares its frame instead of locating factors by hand.
+- **Problem files.** Initial conditions are comoving, including $`B_c = a_\mathrm{init}^2 B_\mathrm{Gauss}/\sqrt{4\pi}`$. `Physics_Traits` keeps only `is_cosmology_enabled`; cosmological numbers become `cosmology.*` runtime parameters.
+- **Output.** No format change. Current $`a`$, $`z`$ and $`H`$ are written to `metadata.yaml` for plotfiles and checkpoints as diagnostics.
+
+## Rollout & Testing
+Migration from the current branch:
+
+- [ ] Add the parameter-only $`a(t)`$ and $`\tau(a)`$ table with `scaleFactorAt(t)` and `dtau(t, dt)` to `src/cosmology/`; remove `a_now_`, `a_half_` and the retry save/restore.
+- [ ] Replace the five particle cosmology virtuals on `AMRSimulation` with direct calls (or one `scaleFactorAt` virtual).
+- [ ] Pass `dtau_lev` through `advanceHydroAtLevel`; remove the $`1/a`$ in both flux functions, `AddInternalEnergyPdV`, tracers, `computeMaxSignalLocal` and `isCflViolated`.
+- [ ] Apply `dt_cfl = a * dtau_cfl` once in `computeTimestepAtLevel`, for hydro and particles.
+- [ ] Merge the duplicated kernels in `applyPoissonGravityAtLevel` and `fillPoissonRhsAtLevel` into one each, with host-computed scalars; compute $`\bar\rho`$ from the level-0 composite field after average-down at each solve.
+- [ ] Rewrite the expansion operator for general EOS, including magnetic energy $`\tfrac12 B_c^2/a`$ in the total.
+- [ ] Store $`B_c = a^2 B_\mathrm{phys}`$; convert to $`\tilde B`$ at the solver and scale the EMF by $`\sqrt a`$ in the transport hook.
+- [ ] Add the exponent table ($`k`$ and $`m`$) and `inPhysicalFrame`; lift the cooling and chemistry guards by wrapping those operators.
+- [ ] Pass `PhysicalDx` and physical-frame $`\mu`$ to the viscous terms in `ComputeFluxes`, and to the resistive EMF and `AddResistiveEnergyFlux`; then lift the viscosity guard.
+- [ ] Move cosmological numbers out of `Physics_Traits` into runtime parameters; keep only `is_cosmology_enabled`.
+- [ ] Write current $`a`$, $`z`$ and $`H`$ into metadata for checkpoints as well as plotfiles.
+- [ ] Write the cosmological parameters and table hash to the checkpoint and check them on restart; then lift the restart guard.
+- [ ] Weight flux register deposits; then lift the `max_level = 0` guard.
+- [ ] Add the EOS view; then lift the scale-invariant-EOS guard.
+- [ ] Introduce `ScaleFactor`, `HookKey`, `TransportDt`/`PhysicalDt`, `ComovingDx`/`PhysicalDx` and the operator frame wrappers; add `src/cosmology/` to CODEOWNERS.
+- [ ] Add the clang-query check as a CI job and the grep warning to `quokka-pre-commit.sh`.
+- [ ] Add the verification tests to CTest.
+
+Verification (all in CTest, CPU and at least one GPU backend; the current problems use `ADD_TEST OFF` and should be enabled):
+
+| Test | Setup | Catches |
+|---|---|---|
+| Frozen-$`a`$ equivalence | Cosmology on, $`H_0 = 0`$, $`a = 0.1`$, compared with a non-cosmological run with box $`\times a`$, densities $`\times a^{-3}`$, $`B \times a^{-2}`$ (code units, $`B_\mathrm{Gauss}/\sqrt{4\pi}`$); one per operator | Any missing or extra factor of $`a`$ in any operator |
+| Identity | Cosmology on, $`H_0 = 0`$, $`a = 1`$ | Must match the non-cosmological run bitwise |
+| `CosmologicalExpansion` | Uniform box against the Einstein–de Sitter solution; also a non-ideal EOS once the view exists | Expansion operator, $`a(t)`$ table |
+| Zel'dovich pancake | Hydro, gravity and CIC particles together | Coupling of $`d\tau`$, Poisson RHS and particle kicks |
+| Restart | $`N`$ steps, compared with $`N/2`$ steps, restart, $`N/2`$ steps | Bitwise match of $`a`$, $`d\tau`$ and the final state; also covers the existing hydro restart path |
+| AMR conservation | Periodic box, static refined patch, bulk flow, subcycling on | $`\sum a\,p_c`$ constant to roundoff (fails on unweighted reflux); $`\nabla\cdot B_c`$ at machine precision across coarse-fine boundaries |
+
+## Links
+- Collins, D. C., Xu, H., Norman, M. L., Li, H., & Li, S. 2010, ApJS, 186, 308. *Cosmological Adaptive Mesh Refinement Magnetohydrodynamics with Enzo.* Eqs. 1–11 (comoving MHD and $`B_c`$), §2.4 (divergence under AMR), §2.9 and Appendix D (expansion terms and step order).
+- Li, S., Li, H., & Cen, R. 2008, ApJS, 174, 1. *CosmoMHD*: the source-term formulation of magnetic dilution.
+- Martel, H., & Shapiro, P. R. 1998, MNRAS, 297, 467. Supercomoving variables.
+- [#2340](https://github.com/quokka-astro/quokka/pull/2340): CI test PR for the `mfulghieri/test-cosmology` branch.
+- `src/cosmology/Cosmology.hpp`, `src/QuokkaSimulation.hpp`, `src/simulation.hpp`, `src/particles/PhysicsParticles.hpp`, `src/hydro/hydro_system.hpp`
