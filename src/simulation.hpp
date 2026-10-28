@@ -94,6 +94,7 @@ namespace filesystem = experimental::filesystem;
 #endif // AMREX_SPACEDIM == 3
 
 // internal headers
+#include "conduction/ConductionHelpers.hpp"
 #include "conduction/conductivity.hpp"
 #include "fundamental_constants.H"
 #include "grid.hpp"
@@ -1308,13 +1309,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	if constexpr (Physics_Traits<problem_t>::conduction_model != ConductionModel::none) {
 		if (enableConduction_ == 1) {
 			auto const &state_mf = state_new_cc_[lev].const_arrays(); // MultiFab containing the cell-centered state
-			auto const &state_fc_x0 = state_new_fc_[lev][0].const_arrays();
-#if AMREX_SPACEDIM >= 2
-			auto const &state_fc_x1 = state_new_fc_[lev][1].const_arrays();
-#endif
-#if AMREX_SPACEDIM == 3
-			auto const &state_fc_x2 = state_new_fc_[lev][2].const_arrays();
-#endif
+			quokka::conduction::FaceStateArrays const state_fc_in = quokka::conduction::MakeFaceStateArrays(state_new_fc_[lev]);
 
 			const amrex::Real cfl = conductionCFL;
 			const amrex::Real t_min = tempFloor_;
@@ -1325,26 +1320,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			    amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{}, state_new_cc_[lev],
 			    amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
 				    auto const &cons = state_mf[bx];
-				    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
-				    amrex::ignore_unused(state_fc_x0
-#if AMREX_SPACEDIM >= 2
-							 ,
-							 state_fc_x1
-#endif
-#if AMREX_SPACEDIM == 3
-							 ,
-							 state_fc_x2
-#endif
-				    );
-				    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-					    local_state_fc[0] = state_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-					    local_state_fc[1] = state_fc_x1[bx];
-#endif
-#if AMREX_SPACEDIM == 3
-					    local_state_fc[2] = state_fc_x2[bx];
-#endif
-				    }
+				    auto local_state_fc = quokka::conduction::GatherFaceFields<problem_t>(state_fc_in, bx);
 
 				    const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
 				    const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
