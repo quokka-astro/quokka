@@ -57,9 +57,10 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 	return rstate.atol_spec;
 }
 
-template <typename Layout, int int_neqs, int stages>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto error_norm(const RosenbrockState<int_neqs, stages> &rstate) -> amrex::Real
+template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto error_norm(const RosenbrockT &rstate) -> amrex::Real
 {
+	constexpr int int_neqs = Layout::neqs;
+
 	amrex::Real err = 0.0_rt;
 	for (int n = 1; n <= int_neqs; ++n) {
 		const amrex::Real sk = atol_for<Layout>(rstate, n) + rtol_for<Layout>(rstate, n) * amrex::max(std::abs(rstate.y(n)), std::abs(rstate.ynew(n)));
@@ -74,8 +75,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto error_norm(const RosenbrockState<i
 	return std::sqrt(err / static_cast<amrex::Real>(int_neqs));
 }
 
-template <typename Layout, int int_neqs, int stages>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto species_change_valid(const RosenbrockState<int_neqs, stages> &rstate) -> bool
+template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto species_change_valid(const RosenbrockT &rstate) -> bool
 {
 	constexpr amrex::Real increase_change_factor = 4.0_rt;
 	constexpr amrex::Real decrease_change_factor = 0.25_rt;
@@ -92,8 +92,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto species_change_valid(const Rosenbr
 	return true;
 }
 
-template <typename MatrixType, int int_neqs> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto matrix_is_finite(const MatrixType &matrix) -> bool
+template <typename Layout, typename MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto matrix_is_finite(const MatrixType &matrix) -> bool
 {
+	constexpr int int_neqs = Layout::neqs;
+
 	for (int j = 1; j <= int_neqs; ++j) {
 		for (int i = 1; i <= int_neqs; ++i) {
 			const amrex::Real value = matrix(i, j);
@@ -106,9 +108,10 @@ template <typename MatrixType, int int_neqs> AMREX_GPU_HOST_DEVICE AMREX_FORCE_I
 	return true;
 }
 
-template <typename Layout, int int_neqs>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex::Array1D<amrex::Real, 1, int_neqs> &y) -> bool
+template <typename Layout> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex::Array1D<amrex::Real, 1, Layout::neqs> &y) -> bool
 {
+	constexpr int int_neqs = Layout::neqs;
+
 	for (int n = 1; n <= int_neqs; ++n) {
 		const amrex::Real yn = y(n);
 		if (std::isnan(yn) || std::isinf(yn)) {
@@ -145,9 +148,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex
 
 /// The finite-difference Jacobian, from int_neqs evaluations of the right-hand side around rstate.y. Expects the
 /// right-hand side at rstate.y in rstate.k[0].
-template <typename Layout, typename BurnT, int int_neqs, int stages>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, RosenbrockState<int_neqs, stages> &rstate, const amrex::Real time)
+template <typename Layout, typename BurnT, typename RosenbrockT>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, RosenbrockT &rstate, const amrex::Real time)
 {
+	constexpr int int_neqs = Layout::neqs;
 	constexpr amrex::Real UROUND = std::numeric_limits<amrex::Real>::epsilon();
 	amrex::Array1D<amrex::Real, 1, int_neqs> ewt{};
 	amrex::Array1D<amrex::Real, 1, int_neqs> ybase{};
@@ -195,8 +199,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, R
 
 /// Evaluates the right-hand side at rstate.y into rstate.k[0] and the Jacobian into rstate.jac. Returns false if the
 /// Jacobian has a non-finite entry and numerical_jacobian_fallback is off.
-template <typename Layout, typename BurnT, int int_neqs, int stages>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, RosenbrockState<int_neqs, stages> &rstate, const amrex::Real time) -> bool
+template <typename Layout, typename BurnT, typename RosenbrockT>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, RosenbrockT &rstate, const amrex::Real time) -> bool
 {
 	rhs<Layout>(time, state, rstate, rstate.k[0]);
 	rstate.n_rhs += 1;
@@ -205,7 +209,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, Ro
 		jac<Layout>(state, rstate, rstate.jac);
 		rstate.n_jac += 1;
 
-		if (matrix_is_finite<decltype(rstate.jac), int_neqs>(rstate.jac)) {
+		if (matrix_is_finite<Layout>(rstate.jac)) {
 			return true;
 		}
 	}
@@ -218,10 +222,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, Ro
 	}
 }
 
-template <typename Layout, typename BurnT, int int_neqs, int stages>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_at(const amrex::Real time, BurnT &state, RosenbrockState<int_neqs, stages> &rstate,
-						     const amrex::Array1D<amrex::Real, 1, int_neqs> &y, amrex::Array1D<amrex::Real, 1, int_neqs> &ydot)
+template <typename Layout, typename BurnT, typename RosenbrockT>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_at(const amrex::Real time, BurnT &state, RosenbrockT &rstate,
+						     const amrex::Array1D<amrex::Real, 1, Layout::neqs> &y, amrex::Array1D<amrex::Real, 1, Layout::neqs> &ydot)
 {
+	constexpr int int_neqs = Layout::neqs;
+
 	amrex::Array1D<amrex::Real, 1, int_neqs> ysave{};
 
 	for (int n = 1; n <= int_neqs; ++n) {
@@ -236,9 +242,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_at(const amrex::Real time, Bur
 	}
 }
 
-template <typename Layout, int int_neqs, int stages>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto decompose(RosenbrockState<int_neqs, stages> &rstate, const amrex::Real fac) -> int
+template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto decompose(RosenbrockT &rstate, const amrex::Real fac) -> int
 {
+	constexpr int int_neqs = Layout::neqs;
+
 	for (int j = 1; j <= int_neqs; ++j) {
 		for (int i = 1; i <= int_neqs; ++i) {
 			rstate.jac(i, j) = -rstate.jac(i, j);
@@ -252,10 +259,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto decompose(RosenbrockState<int_neqs
 	return ierr_linpack;
 }
 
-template <typename Layout, int int_neqs, int stages>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void solve(RosenbrockState<int_neqs, stages> &rstate, amrex::Array1D<amrex::Real, 1, int_neqs> &b)
+template <typename Layout, typename RosenbrockT>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void solve(RosenbrockT &rstate, amrex::Array1D<amrex::Real, 1, Layout::neqs> &b)
 {
-	quokka::math::dgesl<int_neqs, Layout::traits::linalg_do_pivoting>(rstate.jac, rstate.pivot, b);
+	quokka::math::dgesl<Layout::neqs, Layout::traits::linalg_do_pivoting>(rstate.jac, rstate.pivot, b);
 }
 
 template <typename problem_t, typename Tableau, typename BurnT>
