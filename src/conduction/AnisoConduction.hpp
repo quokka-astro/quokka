@@ -317,7 +317,7 @@ template <typename problem_t> void ComputeCornerFC(amrex::MultiFab &bhat_corner_
 // same fully-nodal box array and vertex-indexing convention as ComputeCornerFC (vertex (i,j,k) draws
 // from the 8 (3D) or 4 (2D) cells with indices in {i-1,i}x{j-1,j}x{k-1,k}). (rho,T,massScalars) are
 // the plain average over those cells; (kappa_parallel, kappa_perp) come from EvaluateConductivity, and
-// qsat follows the same EOS chain as ComputeFaceNumberDensityAndSaturationFlux (Cowie & McKee 1977). gradT is intentionally not computed
+// qsat follows the same EOS chain as IsoConduction's evaluateFace (Cowie & McKee 1977). gradT is intentionally not computed
 // here -- ComputeAnisotropicFlux differences primVar directly (see ComputeDiagTerm/ComputeCrossTerm).
 template <typename problem_t>
 void ComputeCornerCC(amrex::MultiFab &kappa_corner_mf, amrex::MultiFab &qsat_corner_mf, amrex::MultiFab const &primVar, ConductivityParams const &conductivity,
@@ -335,7 +335,7 @@ void ComputeCornerCC(amrex::MultiFab &kappa_corner_mf, amrex::MultiFab &qsat_cor
 	amrex::IntVect const ng{AMREX_D_DECL(nghost, nghost, nghost)};
 	amrex::ParallelFor(kappa_corner_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// kappa / qsat: plain average of (rho, T, massScalars) over the {i-1,i}x{j-1,j}x{k-1,k} cells
-		// touching this vertex, then the same EOS chain ComputeFaceNumberDensityAndSaturationFlux uses.
+		// touching this vertex, then the same EOS chain IsoConduction's evaluateFace uses.
 		auto const corner_avg = [=](int comp) {
 #if AMREX_SPACEDIM == 3
 			return 0.125 * (primVar_in[bx](i - 1, j - 1, k - 1, comp) + primVar_in[bx](i, j - 1, k - 1, comp) +
