@@ -13,7 +13,9 @@
 #include <jacobian_utilities.H>
 
 using amrex::Real;
-using namespace network_rp;
+// The runtime parameters are qualified: burn_type.H brings Microphysics' network_rp, with the same names, into the
+// global namespace.
+namespace thermophotochemistry = quokka::networks::thermophotochemistry;
 using namespace eos_rp;
 using namespace C;
 
@@ -69,7 +71,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Rea
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) -> Real
 {
 	const amrex::Real coeff = 2.63e-13_rt;
-	if (recombination_temperature_dependent == 0) {
+	if (thermophotochemistry::recombination_temperature_dependent == 0) {
 		return coeff;
 	}
 	return coeff * std::pow(T / 1.0e4, -0.69999999999999996);
@@ -77,7 +79,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) ->
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) -> Real
 {
-	if (recombination_temperature_dependent == 0) {
+	if (thermophotochemistry::recombination_temperature_dependent == 0) {
 		return 0.0_rt;
 	}
 	return -2.63e-13 * 0.7 * std::pow(T / 1.0e4, -1.69999999999999996) / 1.0e4;
@@ -196,7 +198,7 @@ template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_r
 
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
-	const amrex::Real sigma_coll = (collisional_ionization_switch != 0) ? get_collisional_ionization_coefficient(state.T) : 0.0_rt;
+	const amrex::Real sigma_coll = (thermophotochemistry::collisional_ionization_switch != 0) ? get_collisional_ionization_coefficient(state.T) : 0.0_rt;
 
 	const amrex::Real n_e = state.xn[e_idx];
 	const amrex::Real n_HI = state.xn[H_idx];
@@ -206,30 +208,40 @@ template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_r
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
 	const amrex::Real xHII = (n_H_total > 0.0_rt) ? (n_HII / n_H_total) : 0.0_rt;
-	if ((allow_mixed_cell_cooling == 0) && (xHII > mixed_cell_lb) && (xHII < mixed_cell_ub)) {
+	if ((thermophotochemistry::allow_mixed_cell_cooling == 0) && (xHII > thermophotochemistry::mixed_cell_lb) &&
+	    (xHII < thermophotochemistry::mixed_cell_ub)) {
 		molecular_process_switch = 0;
 	}
 
 	const amrex::Real photoionization_term = chat_sigma_photo * n_HI * n_gamma;
-	const amrex::Real collisional_ionization_term = (collisional_ionization_switch != 0) ? n_e * n_HI * sigma_coll : 0.0_rt;
-	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T) * n_e * n_HII : 0.0_rt;
+	const amrex::Real collisional_ionization_term = (thermophotochemistry::collisional_ionization_switch != 0) ? n_e * n_HI * sigma_coll : 0.0_rt;
+	const amrex::Real recombination_term =
+	    (thermophotochemistry::recombination_switch != 0) ? get_recombination_coefficient(state.T) * n_e * n_HII : 0.0_rt;
 
 	ydot(ie) = photoionization_term + collisional_ionization_term - recombination_term;
 	ydot(iH) = -ydot(ie);
 	ydot(iHp) = ydot(ie);
 	ydot(net_ienuc) = 0.0_rt;
-	const amrex::Real recombination_cooling_rate =
-	    (energy_switch != 0 && recombination_cooling_switch != 0) ? get_recombination_cooling_coefficient(state.T) * n_e * n_HII : 0.0_rt;
-	const amrex::Real ion_ff_cooling_rate =
-	    (energy_switch != 0 && ion_ff_cooling_switch != 0) ? get_ion_ff_cooling_coefficient(state.T) * n_e * n_HII : 0.0_rt;
+	const amrex::Real recombination_cooling_rate = (thermophotochemistry::energy_switch != 0 && thermophotochemistry::recombination_cooling_switch != 0)
+							   ? get_recombination_cooling_coefficient(state.T) * n_e * n_HII
+							   : 0.0_rt;
+	const amrex::Real ion_ff_cooling_rate = (thermophotochemistry::energy_switch != 0 && thermophotochemistry::ion_ff_cooling_switch != 0)
+						    ? get_ion_ff_cooling_coefficient(state.T) * n_e * n_HII
+						    : 0.0_rt;
 	const amrex::Real KI_heating_rate =
-	    (energy_switch != 0 && molecular_process_switch != 0 && KI_heating_switch != 0) ? get_KI_heating_coefficient(state.T) * n_HI : 0.0_rt;
+	    (thermophotochemistry::energy_switch != 0 && molecular_process_switch != 0 && thermophotochemistry::KI_heating_switch != 0)
+		? get_KI_heating_coefficient(state.T) * n_HI
+		: 0.0_rt;
 	const amrex::Real KI_cooling_rate =
-	    (energy_switch != 0 && molecular_process_switch != 0 && KI_cooling_switch != 0) ? get_KI_cooling_coefficient(state.T) * n_HI * n_HI : 0.0_rt;
+	    (thermophotochemistry::energy_switch != 0 && molecular_process_switch != 0 && thermophotochemistry::KI_cooling_switch != 0)
+		? get_KI_cooling_coefficient(state.T) * n_HI * n_HI
+		: 0.0_rt;
 	const amrex::Real collisional_ionization_cooling_rate =
-	    (energy_switch != 0 && collisional_ionization_switch != 0) ? RydbergEnergy * collisional_ionization_term : 0.0_rt;
-	const amrex::Real photoheating_rate =
-	    (energy_switch != 0 && photoheating_switch != 0) ? get_ionization_heating_coefficient(state.T) * photoionization_term : 0.0_rt;
+	    (thermophotochemistry::energy_switch != 0 && thermophotochemistry::collisional_ionization_switch != 0) ? RydbergEnergy * collisional_ionization_term
+														   : 0.0_rt;
+	const amrex::Real photoheating_rate = (thermophotochemistry::energy_switch != 0 && thermophotochemistry::photoheating_switch != 0)
+						  ? get_ionization_heating_coefficient(state.T) * photoionization_term
+						  : 0.0_rt;
 	amrex::Real energy_source = 0.0_rt;
 	energy_source += photoheating_rate;
 	energy_source += KI_heating_rate;
@@ -254,7 +266,7 @@ template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_r
 		ydot(i_dust) = dust_absorption_term * get_ionizing_band_photon_energy();
 	}
 
-	const amrex::Real recombination_binding_energy_rate = (energy_switch != 0) ? RydbergEnergy * recombination_term : 0.0_rt;
+	const amrex::Real recombination_binding_energy_rate = (thermophotochemistry::energy_switch != 0) ? RydbergEnergy * recombination_term : 0.0_rt;
 	ydot(i_ir) = ion_ff_cooling_rate + KI_cooling_rate;
 	ydot(i_optical) = recombination_cooling_rate + recombination_binding_energy_rate;
 }
@@ -270,26 +282,38 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
 	amrex::Real sigma_coll = 0.0_rt;
 	amrex::Real d_sigma_coll_dT = 0.0_rt;
-	if (collisional_ionization_switch != 0) {
+	if (thermophotochemistry::collisional_ionization_switch != 0) {
 		sigma_coll = get_collisional_ionization_coefficient(state.T);
 		d_sigma_coll_dT = dCollisional_ionization_coefficient_dT(state.T);
 	}
 	amrex::Real alpha_rec = 0.0_rt;
 	amrex::Real d_alpha_rec_dT = 0.0_rt;
-	if (recombination_switch != 0) {
+	if (thermophotochemistry::recombination_switch != 0) {
 		alpha_rec = get_recombination_coefficient(state.T);
 		d_alpha_rec_dT = dRecombination_coefficient_dT(state.T);
 	}
 
-	const amrex::Real Gamma_photo = ((energy_switch != 0) && (photoheating_switch != 0)) ? get_ionization_heating_coefficient(state.T) : 0.0_rt;
-	const amrex::Real Gamma_KI = ((energy_switch != 0) && (KI_heating_switch != 0)) ? get_KI_heating_coefficient(state.T) : 0.0_rt;
-	const amrex::Real Lambda_KI = ((energy_switch != 0) && (KI_cooling_switch != 0)) ? get_KI_cooling_coefficient(state.T) : 0.0_rt;
-	const amrex::Real d_Lambda_KI_dT = ((energy_switch != 0) && (KI_cooling_switch != 0)) ? dKI_cooling_coefficient_dT(state.T) : 0.0_rt;
-	const amrex::Real Lambda_rec = ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? get_recombination_cooling_coefficient(state.T) : 0.0_rt;
-	const amrex::Real d_Lambda_rec_dT =
-	    ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? dRecombination_cooling_coefficient_dT(state.T) : 0.0_rt;
-	const amrex::Real Lambda_ff = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? get_ion_ff_cooling_coefficient(state.T) : 0.0_rt;
-	const amrex::Real d_Lambda_ff_dT = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? d_ion_ff_cooling_coefficient_dT(state.T) : 0.0_rt;
+	const amrex::Real Gamma_photo = ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::photoheating_switch != 0))
+					    ? get_ionization_heating_coefficient(state.T)
+					    : 0.0_rt;
+	const amrex::Real Gamma_KI =
+	    ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::KI_heating_switch != 0)) ? get_KI_heating_coefficient(state.T) : 0.0_rt;
+	const amrex::Real Lambda_KI =
+	    ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::KI_cooling_switch != 0)) ? get_KI_cooling_coefficient(state.T) : 0.0_rt;
+	const amrex::Real d_Lambda_KI_dT =
+	    ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::KI_cooling_switch != 0)) ? dKI_cooling_coefficient_dT(state.T) : 0.0_rt;
+	const amrex::Real Lambda_rec = ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::recombination_cooling_switch != 0))
+					   ? get_recombination_cooling_coefficient(state.T)
+					   : 0.0_rt;
+	const amrex::Real d_Lambda_rec_dT = ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::recombination_cooling_switch != 0))
+						? dRecombination_cooling_coefficient_dT(state.T)
+						: 0.0_rt;
+	const amrex::Real Lambda_ff = ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::ion_ff_cooling_switch != 0))
+					  ? get_ion_ff_cooling_coefficient(state.T)
+					  : 0.0_rt;
+	const amrex::Real d_Lambda_ff_dT = ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::ion_ff_cooling_switch != 0))
+					       ? d_ion_ff_cooling_coefficient_dT(state.T)
+					       : 0.0_rt;
 
 	const amrex::Real n_e = state.xn[e_idx];
 	const amrex::Real n_HI = state.xn[H_idx];
@@ -300,15 +324,16 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
 	const amrex::Real xHII = (n_H_total > 0.0_rt) ? (n_HII / n_H_total) : 0.0_rt;
-	if ((allow_mixed_cell_cooling == 0) && (xHII > mixed_cell_lb) && (xHII < mixed_cell_ub)) {
+	if ((thermophotochemistry::allow_mixed_cell_cooling == 0) && (xHII > thermophotochemistry::mixed_cell_lb) &&
+	    (xHII < thermophotochemistry::mixed_cell_ub)) {
 		molecular_process_switch = 0;
 	}
 
-	const amrex::Real d_collisional_ionization_term_dT = collisional_ionization_switch * n_e * n_HI * d_sigma_coll_dT;
-	const amrex::Real d_recombination_term_dT = recombination_switch * (d_alpha_rec_dT * n_e * n_HII);
-	const amrex::Real d_KI_cooling_dT = molecular_process_switch * KI_cooling_switch * (d_Lambda_KI_dT * n_HI * n_HI);
-	const amrex::Real d_recombination_cooling_dT = recombination_cooling_switch * (d_Lambda_rec_dT * n_e * n_HII);
-	const amrex::Real d_ion_ff_cooling_dT = ion_ff_cooling_switch * (d_Lambda_ff_dT * n_e * n_HII);
+	const amrex::Real d_collisional_ionization_term_dT = thermophotochemistry::collisional_ionization_switch * n_e * n_HI * d_sigma_coll_dT;
+	const amrex::Real d_recombination_term_dT = thermophotochemistry::recombination_switch * (d_alpha_rec_dT * n_e * n_HII);
+	const amrex::Real d_KI_cooling_dT = molecular_process_switch * thermophotochemistry::KI_cooling_switch * (d_Lambda_KI_dT * n_HI * n_HI);
+	const amrex::Real d_recombination_cooling_dT = thermophotochemistry::recombination_cooling_switch * (d_Lambda_rec_dT * n_e * n_HII);
+	const amrex::Real d_ion_ff_cooling_dT = thermophotochemistry::ion_ff_cooling_switch * (d_Lambda_ff_dT * n_e * n_HII);
 
 	const amrex::Real dTde = 1 / state.dedT;
 
@@ -319,9 +344,10 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 
 	jac.zero();
 
-	jac(ie, ie) = (collisional_ionization_switch * n_HI * sigma_coll - recombination_switch * alpha_rec * n_HII);
-	jac(ie, iH) = (chat_sigma_photo * n_gamma + collisional_ionization_switch * n_e * sigma_coll);
-	jac(ie, iHp) = -recombination_switch * alpha_rec * n_e;
+	jac(ie, ie) =
+	    (thermophotochemistry::collisional_ionization_switch * n_HI * sigma_coll - thermophotochemistry::recombination_switch * alpha_rec * n_HII);
+	jac(ie, iH) = (chat_sigma_photo * n_gamma + thermophotochemistry::collisional_ionization_switch * n_e * sigma_coll);
+	jac(ie, iHp) = -thermophotochemistry::recombination_switch * alpha_rec * n_e;
 	jac(ie, net_ienuc) = (d_collisional_ionization_term_dT - d_recombination_term_dT) * dTde;
 	jac(ie, i_ngamma) = n_gamma_active * chat_sigma_photo * n_HI;
 
@@ -336,20 +362,26 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	jac(iHp, net_ienuc) = jac(ie, net_ienuc);
 	jac(iHp, i_ngamma) = jac(ie, i_ngamma);
 
-	jac(net_ienuc, ie) = energy_switch *
-			     (-recombination_cooling_switch * Lambda_rec * n_HII - ion_ff_cooling_switch * Lambda_ff * n_HII -
-			      RydbergEnergy * collisional_ionization_switch * n_HI * sigma_coll) /
-			     state.rho;
-	jac(net_ienuc, iH) =
-	    energy_switch *
-	    (photoheating_switch * Gamma_photo * chat_sigma_photo * n_gamma + molecular_process_switch * KI_heating_switch * Gamma_KI -
-	     2.0_rt * molecular_process_switch * KI_cooling_switch * Lambda_KI * n_HI - RydbergEnergy * collisional_ionization_switch * n_e * sigma_coll) /
+	jac(net_ienuc, ie) =
+	    thermophotochemistry::energy_switch *
+	    (-thermophotochemistry::recombination_cooling_switch * Lambda_rec * n_HII - thermophotochemistry::ion_ff_cooling_switch * Lambda_ff * n_HII -
+	     RydbergEnergy * thermophotochemistry::collisional_ionization_switch * n_HI * sigma_coll) /
 	    state.rho;
-	jac(net_ienuc, iHp) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_e - ion_ff_cooling_switch * Lambda_ff * n_e) / state.rho;
-	jac(net_ienuc, net_ienuc) = energy_switch *
+	jac(net_ienuc, iH) = thermophotochemistry::energy_switch *
+			     (thermophotochemistry::photoheating_switch * Gamma_photo * chat_sigma_photo * n_gamma +
+			      molecular_process_switch * thermophotochemistry::KI_heating_switch * Gamma_KI -
+			      2.0_rt * molecular_process_switch * thermophotochemistry::KI_cooling_switch * Lambda_KI * n_HI -
+			      RydbergEnergy * thermophotochemistry::collisional_ionization_switch * n_e * sigma_coll) /
+			     state.rho;
+	jac(net_ienuc, iHp) =
+	    thermophotochemistry::energy_switch *
+	    (-thermophotochemistry::recombination_cooling_switch * Lambda_rec * n_e - thermophotochemistry::ion_ff_cooling_switch * Lambda_ff * n_e) /
+	    state.rho;
+	jac(net_ienuc, net_ienuc) = thermophotochemistry::energy_switch *
 				    (-d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT - RydbergEnergy * d_collisional_ionization_term_dT) *
 				    dTde / state.rho;
-	jac(net_ienuc, i_ngamma) = energy_switch * (photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) * n_gamma_active / state.rho;
+	jac(net_ienuc, i_ngamma) = thermophotochemistry::energy_switch * (thermophotochemistry::photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) *
+				   n_gamma_active / state.rho;
 
 	jac(i_ngamma, ie) = 0.0_rt;
 	jac(i_ngamma, iH) = -chat_sigma_photo * n_gamma;
@@ -372,16 +404,17 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 		jac(i_ngamma_flux, i_ngamma_flux) = -n_HI * chat_sigma_photo - chat_dust_kappa_rho;
 	}
 
-	jac(i_ir, ie) = ion_ff_cooling_switch * Lambda_ff * n_HII;
-	jac(i_ir, iH) = molecular_process_switch * (2.0_rt * KI_cooling_switch * Lambda_KI * n_HI);
-	jac(i_ir, iHp) = ion_ff_cooling_switch * Lambda_ff * n_e;
-	jac(i_ir, net_ienuc) = (ion_ff_cooling_switch * d_Lambda_ff_dT * n_e * n_HII + d_KI_cooling_dT) * dTde;
+	jac(i_ir, ie) = thermophotochemistry::ion_ff_cooling_switch * Lambda_ff * n_HII;
+	jac(i_ir, iH) = molecular_process_switch * (2.0_rt * thermophotochemistry::KI_cooling_switch * Lambda_KI * n_HI);
+	jac(i_ir, iHp) = thermophotochemistry::ion_ff_cooling_switch * Lambda_ff * n_e;
+	jac(i_ir, net_ienuc) = (thermophotochemistry::ion_ff_cooling_switch * d_Lambda_ff_dT * n_e * n_HII + d_KI_cooling_dT) * dTde;
 
-	const amrex::Real rydberg_rate_coeff = energy_switch * RydbergEnergy * alpha_rec;
-	const amrex::Real d_rydberg_rate_coeff_dT = energy_switch * RydbergEnergy * d_alpha_rec_dT;
-	jac(i_optical, ie) = recombination_cooling_switch * Lambda_rec * n_HII + rydberg_rate_coeff * n_HII;
-	jac(i_optical, iHp) = recombination_cooling_switch * Lambda_rec * n_e + rydberg_rate_coeff * n_e;
-	jac(i_optical, net_ienuc) = (recombination_cooling_switch * d_Lambda_rec_dT * n_e * n_HII + d_rydberg_rate_coeff_dT * n_e * n_HII) * dTde;
+	const amrex::Real rydberg_rate_coeff = thermophotochemistry::energy_switch * RydbergEnergy * alpha_rec;
+	const amrex::Real d_rydberg_rate_coeff_dT = thermophotochemistry::energy_switch * RydbergEnergy * d_alpha_rec_dT;
+	jac(i_optical, ie) = thermophotochemistry::recombination_cooling_switch * Lambda_rec * n_HII + rydberg_rate_coeff * n_HII;
+	jac(i_optical, iHp) = thermophotochemistry::recombination_cooling_switch * Lambda_rec * n_e + rydberg_rate_coeff * n_e;
+	jac(i_optical, net_ienuc) =
+	    (thermophotochemistry::recombination_cooling_switch * d_Lambda_rec_dT * n_e * n_HII + d_rydberg_rate_coeff_dT * n_e * n_HII) * dTde;
 
 	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
 		jac(i_dust, i_ngamma) = n_gamma_active * chat_dust_kappa_rho * get_ionizing_band_photon_energy();

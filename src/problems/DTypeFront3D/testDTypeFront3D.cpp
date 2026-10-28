@@ -411,7 +411,7 @@ auto stromgren_radius(amrex::Real flux_ion, amrex::Real n_0, amrex::Real T_i) ->
 auto ionizing_dust_kappa() -> amrex::Real
 {
 	if constexpr (RadSystem<DTypeFront3D>::dust_chemical_band_absorption_) {
-		return network_rp::dust_kappa;
+		return Network::DustKappa();
 	} else {
 		return 0.0_rt;
 	}

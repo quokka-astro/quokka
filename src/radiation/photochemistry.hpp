@@ -188,12 +188,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			photochemstate.rho = rho;
 			photochemstate.e = Eint / rho;
 			if constexpr (Microphysics_Traits<problem_t>::dust_chemical_band_absorption) {
-				// network_rp::dust_kappa exists only for the networks with Q_dust, and a qualified non-dependent name
-				// is looked up even in a discarded if constexpr branch. This guard goes when the network parameters
-				// are hand-written (PR 6).
-#ifdef DUST_CHEMICAL_BAND_ABSORPTION
-				photochemstate.dust_kappa = network_rp::dust_kappa;
-#endif
+				photochemstate.dust_kappa = Microphysics_Traits<problem_t>::Network::DustKappa();
 				photochemstate.e_dust_absorbed = 0.0_rt;
 			}
 

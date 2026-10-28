@@ -16,7 +16,8 @@ if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
 
   add_executable(
     ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
-                ${${microphysics_network_name}_sources})
+                ${${microphysics_network_name}_sources}
+                ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
 
   # this will add #define PHOTOCHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX DUST_CHEMICAL_BAND_ABSORPTION)

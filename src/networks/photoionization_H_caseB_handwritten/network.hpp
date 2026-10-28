@@ -1,14 +1,34 @@
 #ifndef NETWORKS_PHOTOIONIZATION_H_CASEB_HANDWRITTEN_NETWORK_HPP_
 #define NETWORKS_PHOTOIONIZATION_H_CASEB_HANDWRITTEN_NETWORK_HPP_
 /// \file network.hpp
-/// \brief The constants of the photoionization_H_caseB_handwritten network.
+/// \brief The constants and runtime parameters of the photoionization_H_caseB_handwritten network.
 
 #include "AMReX_Array.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_REAL.H"
 
 namespace quokka::networks
 {
+
+/// The runtime parameters of PhotoionizationHCaseB, read from the `network` prefix with Microphysics' names and
+/// defaults. They are defined in network.cpp, not inline here: HIP cannot register inline managed variables.
+namespace photoionization_h_caseb
+{
+extern AMREX_GPU_MANAGED int recombination_switch;		  // NOLINT
+extern AMREX_GPU_MANAGED int recombination_temperature_dependent; // NOLINT
+extern AMREX_GPU_MANAGED int collisional_ionization_switch;	  // NOLINT
+extern AMREX_GPU_MANAGED int energy_switch;			  // NOLINT
+extern AMREX_GPU_MANAGED int photoheating_switch;		  // NOLINT
+extern AMREX_GPU_MANAGED int KI_heating_switch;			  // NOLINT
+extern AMREX_GPU_MANAGED int recombination_cooling_switch;	  // NOLINT
+extern AMREX_GPU_MANAGED int KI_cooling_switch;			  // NOLINT
+extern AMREX_GPU_MANAGED int ion_ff_cooling_switch;		  // NOLINT
+/// cooling in mixed cells; with 0, cells with mixed_cell_lb < x_HII < mixed_cell_ub do not cool
+extern AMREX_GPU_MANAGED int allow_mixed_cell_cooling; // NOLINT
+extern AMREX_GPU_MANAGED amrex::Real mixed_cell_lb;    // NOLINT
+extern AMREX_GPU_MANAGED amrex::Real mixed_cell_ub;    // NOLINT
+} // namespace photoionization_h_caseb
 
 /// Hydrogen photoionization with case B recombination, in one chemical band.
 struct PhotoionizationHCaseB {
@@ -23,6 +43,9 @@ struct PhotoionizationHCaseB {
 	static constexpr double ChemBandsPowerLawIndex = 0;
 
 	static constexpr int NumThermalBands = 0;
+
+	/// Read the runtime parameters (namespace photoionization_h_caseb).
+	static void ReadParameters();
 };
 
 } // namespace quokka::networks
