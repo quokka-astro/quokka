@@ -21,8 +21,7 @@
 #include "microphysics/integrator_params.hpp"
 #include "microphysics/microphysics_traits.hpp"
 
-// still from extern/Microphysics: burn_t, net_ienuc, eos(), the network's actual_rhs and actual_jac, and
-// integrator_neqs (only to check the layout)
+// still from extern/Microphysics: burn_t, eos(), and the network's actual_rhs and actual_jac
 #include "actual_rhs.H"
 #include "burn_type.H"
 #include "eos.H"
@@ -38,16 +37,16 @@ using amrex::literals::operator""_rt;
 template <typename Layout, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state, const IntegratorT &int_state)
 {
-	for (int n = 1; n <= NumSpec; ++n) {
+	for (int n = 1; n <= Layout::num_spec; ++n) {
 		state.xn[n - 1] = int_state.y(n);
 	}
-	state.e = int_state.y(net_ienuc);
+	state.e = int_state.y(Layout::energy_row);
 	if constexpr (Layout::photochemistry) {
 		for (int n = 1; n <= Layout::num_chem_rad_eqs; ++n) {
-			state.rn[n - 1] = int_state.y(net_ienuc + n);
+			state.rn[n - 1] = int_state.y(Layout::energy_row + n);
 		}
 		for (int n = 1; n <= Layout::num_thermal_bands; ++n) {
-			state.re_thermal[n - 1] = int_state.y(net_ienuc + Layout::num_chem_rad_eqs + n);
+			state.re_thermal[n - 1] = int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + n);
 		}
 		state.c_hat = int_state.c_hat;
 	}
@@ -63,22 +62,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state
 template <typename Layout, typename IntegratorT, typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void integrator_to_burn(const IntegratorT &int_state, BurnT &state)
 {
-	for (int n = 1; n <= NumSpec; ++n) {
+	for (int n = 1; n <= Layout::num_spec; ++n) {
 		state.xn[n - 1] = int_state.y(n);
 	}
 
-	state.e = int_state.y(net_ienuc);
+	state.e = int_state.y(Layout::energy_row);
 
 	if constexpr (Layout::photochemistry) {
 		for (int n = 1; n <= Layout::num_chem_rad_eqs; ++n) {
-			state.rn[n - 1] = int_state.y(net_ienuc + n);
+			state.rn[n - 1] = int_state.y(Layout::energy_row + n);
 		}
 		for (int n = 1; n <= Layout::num_thermal_bands; ++n) {
-			state.re_thermal[n - 1] = int_state.y(net_ienuc + Layout::num_chem_rad_eqs + n);
+			state.re_thermal[n - 1] = int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + n);
 		}
 		state.c_hat = int_state.c_hat;
 		if constexpr (Layout::q_dust) {
-			state.e_dust_absorbed = int_state.y(net_ienuc + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1);
+			state.e_dust_absorbed = int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1);
 		}
 	}
 
@@ -89,22 +88,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void integrator_to_burn(const Integrato
 template <typename Layout, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void burn_to_integrator(const BurnT &state, IntegratorT &int_state)
 {
-	for (int n = 1; n <= NumSpec; ++n) {
+	for (int n = 1; n <= Layout::num_spec; ++n) {
 		int_state.y(n) = state.xn[n - 1];
 	}
 
-	int_state.y(net_ienuc) = state.e;
+	int_state.y(Layout::energy_row) = state.e;
 
 	if constexpr (Layout::photochemistry) {
 		for (int n = 1; n <= Layout::num_chem_rad_eqs; ++n) {
-			int_state.y(net_ienuc + n) = state.rn[n - 1];
+			int_state.y(Layout::energy_row + n) = state.rn[n - 1];
 		}
 		for (int n = 1; n <= Layout::num_thermal_bands; ++n) {
-			int_state.y(net_ienuc + Layout::num_chem_rad_eqs + n) = state.re_thermal[n - 1];
+			int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + n) = state.re_thermal[n - 1];
 		}
 		int_state.c_hat = state.c_hat;
 		if constexpr (Layout::q_dust) {
-			int_state.y(net_ienuc + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1) = state.e_dust_absorbed;
+			int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1) = state.e_dust_absorbed;
 		}
 	}
 }
@@ -141,11 +140,11 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 	if constexpr (Layout::traits::renormalize_abundances) {
 		amrex::Real sum = 0.0_rt;
 
-		for (int n = 1; n <= NumSpec; ++n) {
+		for (int n = 1; n <= Layout::num_spec; ++n) {
 			sum += int_state.y(n);
 		}
 
-		for (int n = 1; n <= NumSpec; ++n) {
+		for (int n = 1; n <= Layout::num_spec; ++n) {
 			int_state.y(n) /= sum;
 		}
 	}
@@ -191,7 +190,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 	// Allow energy integration to be disabled.
 
 	if constexpr (!Layout::traits::integrate_energy) {
-		ydot(net_ienuc) = 0.0_rt;
+		ydot(Layout::energy_row) = 0.0_rt;
 	}
 }
 
@@ -222,7 +221,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 
 	if constexpr (!Layout::traits::integrate_energy) {
 		for (int j = 1; j <= int_neqs; ++j) {
-			pd(net_ienuc, j) = 0.0_rt;
+			pd(Layout::energy_row, j) = 0.0_rt;
 		}
 	}
 }
@@ -234,7 +233,7 @@ constexpr int OUTDIGITS = std::numeric_limits<amrex::Real>::max_digits10;
 template <typename Layout> struct StateBackup {
 	amrex::Real T_in{};
 #ifndef AMREX_USE_GPU
-	amrex::GpuArray<amrex::Real, NumSpec> xn_in{};
+	amrex::GpuArray<amrex::Real, Layout::num_spec> xn_in{};
 	amrex::GpuArray<amrex::Real, Layout::num_chem_rad_eqs> rn_in{};
 	amrex::GpuArray<amrex::Real, Layout::num_thermal_bands> re_thermal_in{};
 	amrex::Real c_hat{};
@@ -291,7 +290,7 @@ template <typename Layout, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE au
 	StateBackup<Layout> state_save;
 
 #ifndef AMREX_USE_GPU
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Layout::num_spec; ++n) {
 		state_save.xn_in[n] = state.xn[n];
 	}
 	if constexpr (Layout::photochemistry) {
@@ -381,7 +380,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 		std::cout << "dt = " << std::setprecision(OUTDIGITS) << dt << '\n';
 		std::cout << "temp start = " << std::setprecision(OUTDIGITS) << state_save.T_in << '\n';
 		std::cout << "xn start = ";
-		for (int n = 0; n < NumSpec; ++n) {
+		for (int n = 0; n < Layout::num_spec; ++n) {
 			std::cout << std::scientific << std::setprecision(OUTDIGITS) << state_save.xn_in[n] << " ";
 		}
 		if constexpr (Layout::photochemistry) {
