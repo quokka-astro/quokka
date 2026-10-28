@@ -152,9 +152,12 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 
 /// The right-hand side of the integrated system: cleans the integrator state, syncs the burn state with it and calls
 /// the network.
-template <typename Layout, typename BurnT, typename IntegratorT, int int_neqs>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT &state, IntegratorT &int_state, amrex::Array1D<amrex::Real, 1, int_neqs> &ydot)
+template <typename Layout, typename BurnT, typename IntegratorT>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT &state, IntegratorT &int_state,
+						  amrex::Array1D<amrex::Real, 1, Layout::neqs> &ydot)
 {
+	constexpr int int_neqs = Layout::neqs;
+
 	// Fix the state as necessary -- this ensures that the mass
 	// fractions that enter are valid (and optionally normalized)
 
