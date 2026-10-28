@@ -25,7 +25,7 @@ struct DefaultMicrophysicsTraits {
 	/// Must match the PHOTOCHEMISTRY build macro while Microphysics' burn_t still depends on it.
 	static constexpr bool photochemistry = false;
 	/// Dust absorption in chemical bands.
-	static constexpr bool dust_band_absorption = false;
+	static constexpr bool dust_chemical_band_absorption = false;
 	/// Whether to integrate the photon flux equations or determine them algebraically.
 	static constexpr bool integrate_rad_flux = true;
 
@@ -73,9 +73,9 @@ inline constexpr bool built_with_photochemistry = true;
 inline constexpr bool built_with_photochemistry = false;
 #endif
 #ifdef DUST_CHEMICAL_BAND_ABSORPTION
-inline constexpr bool built_with_dust_band_absorption = true;
+inline constexpr bool built_with_dust_chemical_band_absorption = true;
 #else
-inline constexpr bool built_with_dust_band_absorption = false;
+inline constexpr bool built_with_dust_chemical_band_absorption = false;
 #endif
 #ifdef SKIP_PHOTOCHEMFLUX
 inline constexpr bool built_with_skip_photochemflux = true;

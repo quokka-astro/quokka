@@ -211,8 +211,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		      "Microphysics_Traits::chemistry must be true exactly when the problem is built with CHEMISTRY");
 	static_assert(Microphysics_Traits<problem_t>::photochemistry == quokka::microphysics::detail::built_with_photochemistry,
 		      "Microphysics_Traits::photochemistry must be true exactly when the problem is built with PHOTOCHEMISTRY");
-	static_assert(Microphysics_Traits<problem_t>::dust_band_absorption == quokka::microphysics::detail::built_with_dust_band_absorption,
-		      "Microphysics_Traits::dust_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
+	static_assert(Microphysics_Traits<problem_t>::dust_chemical_band_absorption == quokka::microphysics::detail::built_with_dust_chemical_band_absorption,
+		      "Microphysics_Traits::dust_chemical_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
 	static_assert(Microphysics_Traits<problem_t>::integrate_rad_flux == !quokka::microphysics::detail::built_with_skip_photochemflux,
 		      "Microphysics_Traits::integrate_rad_flux must be false exactly when the problem is built with SKIP_PHOTOCHEMFLUX");
 
@@ -3280,7 +3280,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	const int imexGroupEnd = chemBandsFirst ? nGroupsThermal : nGroups;
 
 	amrex::MultiFab dustHeatingSource;
-	if constexpr (ISM_Traits<problem_t>::dust_chemical_band_absorption) {
+	if constexpr (Microphysics_Traits<problem_t>::dust_chemical_band_absorption) {
 		dustHeatingSource.define(grids[lev], dmap[lev], 1, 0);
 		dustHeatingSource.setVal(0.0);
 	}
@@ -3418,7 +3418,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					auto const &radEnergySource_arr = radEnergySource.array(iter);
 					auto const &radFluxSource_arr = radFluxSource.array(iter);
 					amrex::Array4<const amrex::Real> dustHeatingSource_arr{};
-					if constexpr (ISM_Traits<problem_t>::dust_chemical_band_absorption) {
+					if constexpr (Microphysics_Traits<problem_t>::dust_chemical_band_absorption) {
 						dustHeatingSource_arr = dustHeatingSource.const_array(iter);
 					}
 
@@ -3516,7 +3516,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				auto const &radEnergySource_arr = radEnergySource.array(iter);
 				auto const &radFluxSource_arr = radFluxSource.array(iter);
 				amrex::Array4<const amrex::Real> dustHeatingSource_arr{};
-				if constexpr (ISM_Traits<problem_t>::dust_chemical_band_absorption) {
+				if constexpr (Microphysics_Traits<problem_t>::dust_chemical_band_absorption) {
 					dustHeatingSource_arr = dustHeatingSource.const_array(iter);
 				}
 
