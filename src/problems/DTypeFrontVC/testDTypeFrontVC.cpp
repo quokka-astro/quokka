@@ -56,9 +56,17 @@ template <> struct quokka::EOS_Traits<DTypeFrontVC> {
 	static constexpr double gamma = 5. / 3.;
 };
 
+template <> struct Microphysics_Traits<DTypeFrontVC> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PhotoionizationHCaseB;
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
+	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+};
+
+using Network = Microphysics_Traits<DTypeFrontVC>::Network;
+
 template <> struct Physics_Traits<DTypeFrontVC> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = NumSpec;
+	static constexpr int numMassScalars = Network::NumSpec;
 	static constexpr int numPassiveScalars = numMassScalars;
 	static constexpr bool is_radiation_enabled = true;
 };
@@ -67,14 +75,8 @@ template <> struct RadSystem_Traits<DTypeFrontVC> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	static constexpr int beta_order = 1;
-	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
-	static constexpr auto ChemBands() { return ChemBandsHeader(); }
-};
-
-template <> struct Microphysics_Traits<DTypeFrontVC> : DefaultMicrophysicsTraits {
-	using Network = quokka::networks::PhotoionizationHCaseB;
-	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex; }
+	static constexpr auto ChemBands() { return Network::ChemBands(); }
 };
 
 template <> struct SimulationData<DTypeFrontVC> {
@@ -133,14 +135,14 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	burn_t state;
-	std::array<Real, NumSpec> numdens = {-1.0};
-	numdens[Species::e] = userData_.n_e_init;
-	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::H_p] = userData_.n_HII_init;
+	std::array<Real, Network::NumSpec> numdens = {-1.0};
+	numdens[Network::Species::e] = userData_.n_e_init;
+	numdens[Network::Species::H] = userData_.n_HI_init;
+	numdens[Network::Species::H_p] = userData_.n_HII_init;
 	state.T = userData_.temperature;
 
 	Real rhotot = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
 		rhotot += state.xn[n] * spmasses[n];
 	}
@@ -161,7 +163,7 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x1GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x3GasMomentum_index) = 0.0_rt;
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<DTypeFrontVC>::scalar0_index + nn) = state.xn[nn] * spmasses[nn];
 		}
 	});

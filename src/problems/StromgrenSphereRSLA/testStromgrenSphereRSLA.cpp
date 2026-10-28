@@ -42,10 +42,18 @@ template <> struct quokka::EOS_Traits<StromgrenSphere> {
 	static constexpr double gamma = 5. / 3.;
 };
 
+template <> struct Microphysics_Traits<StromgrenSphere> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PhotoionizationHCaseB;
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
+	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+};
+
+using Network = Microphysics_Traits<StromgrenSphere>::Network;
+
 template <> struct Physics_Traits<StromgrenSphere> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
+	static constexpr int numMassScalars = Network::NumSpec;	     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 };
@@ -54,14 +62,8 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
-	static constexpr auto ChemBands() { return ChemBandsHeader(); }
-};
-
-template <> struct Microphysics_Traits<StromgrenSphere> : DefaultMicrophysicsTraits {
-	using Network = quokka::networks::PhotoionizationHCaseB;
-	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex; }
+	static constexpr auto ChemBands() { return Network::ChemBands(); }
 };
 
 namespace
@@ -76,9 +78,9 @@ auto compute_effective_radius(amrex::MultiFab const &state_mf, amrex::GpuArray<a
 
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
 		const amrex::Real n_HI =
-		    state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
-		const amrex::Real n_HII =
-		    state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+		    state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Network::Species::H)) / spmasses[Network::Species::H];
+		const amrex::Real n_HII = state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Network::Species::H_p)) /
+					  spmasses[Network::Species::H_p];
 		const amrex::Real denom = n_HI + n_HII;
 		if (denom <= 0.0_rt) {
 			return 0.0_rt;
@@ -260,15 +262,15 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	burn_t state;
-	std::array<Real, NumSpec> numdens = {-1.0};
-	numdens[Species::e] = userData_.n_e_init;
-	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::H_p] = userData_.n_HII_init;
+	std::array<Real, Network::NumSpec> numdens = {-1.0};
+	numdens[Network::Species::e] = userData_.n_e_init;
+	numdens[Network::Species::H] = userData_.n_HI_init;
+	numdens[Network::Species::H_p] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
 		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
 	}
@@ -292,7 +294,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, RadSystem<StromgrenSphere>::x1GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<StromgrenSphere>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<StromgrenSphere>::x3GasMomentum_index) = 0.0_rt;
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + nn) =
 			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
 		}
