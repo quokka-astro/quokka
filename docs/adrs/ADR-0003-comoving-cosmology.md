@@ -46,15 +46,44 @@ These seven hooks are the complete list of places where $`a`$ appears outside `s
 |---|---|---|
 | `dtau` | `advanceHydroAtLevel` (PredictStep, AddFluxesRK2, `SolveInductionEqn`, flux and EMF registers, tracers, magnetic view and EMF conversion, `PhysicalDx` and coefficient/flux conversions for viscous and resistive terms); `applyPoissonGravityAtLevel`; particle kick and drift | Flux divergence, $`P\,dV`$, induction, viscosity, resistivity, gravity on gas and particles, particle drift, tracers |
 | Timestep conversion: `dt_cfl = a * dtau_cfl` for hyperbolic transport; physical diffusive limits | `computeTimestepAtLevel`; `computeMaxSignalLocal` | Hydro, MHD and particle CFL; viscous and resistive stability |
-| Expansion operator | Strang source chain; particle velocity drag | All $`\dot a/a`$ terms, including general EOS ($`B_c`$ has none) |
-| `inPhysicalFrame(op)`, plus $`dx \cdot a`$ for diffusion | Strang source chain | Cooling, chemistry, photoelectric heating, electron conduction, future Strang-split local or diffusive physics |
+| Expansion operator | Strang source chain; particle velocity drag; expansion-frame adapter for ghost filling | All $`\dot a/a`$ terms, including general EOS; coarse and boundary states mapped to the consuming stage's expansion frame ($`B_c`$ has no expansion term) |
+| `inPhysicalFrame(op)`, plus $`dx \cdot a`$ for diffusion and conversion of returned integrated fluxes | Strang source chain and its flux-register contributions | Cooling, chemistry, photoelectric heating, electron conduction (state and reflux), future Strang-split local or diffusive physics |
 | $`G/a`$ and $`\bar\rho`$ | `fillPoissonRhsAtLevel`; particle `depositMass`; $`\bar\rho`$ from the level-0 composite field after average-down | Comoving Poisson equation |
 | EOS view (`a3`) | EOS calls in hydro | Non-ideal EOS |
 | Magnetic view ($`B_c/\sqrt a`$) | Transport, CFL estimation, initialization, state fixups and diagnostics that consume magnetic energy | Consistent magnetic pressure, energy and wavespeeds at each consumer's evaluation time |
 
-In `advanceHydroAtLevel`, `dtau_lev` is used only for the update itself. Time labels (`fillBoundaryConditions(time + dt_lev)`, the Strang source calls, `tNew_`) stay on the physical `dt_lev`. Any hyperbolic term later added to the hydro RHS inherits the correct factor automatically; diffusive terms need the treatment below.
+In `advanceHydroAtLevel`, `dtau_lev` is used only for the update itself. Time labels (`fillBoundaryConditions(time + dt_lev)`, the Strang source calls, `tNew_`) stay on the physical `dt_lev`. A physical time label does not identify the expansion frame of a split-stage state: ghost filling must also receive the explicit stage frame described below. Any hyperbolic term later added to the hydro RHS inherits the correct factor automatically; diffusive terms need the treatment below.
 
 Hydro and particles use the same $`d\tau`$ for each step, which keeps gas and dark matter moving together (the property `CosmoSphereDM` tests). The particle drift uses $`d\tau`$ over the whole step; each half-kick uses $`d\tau`$ over its own half-interval, $`\tau(t+\Delta t/2) - \tau(t)`$ and $`\tau(t+\Delta t) - \tau(t+\Delta t/2)`$. The midpoint value $`\Delta t/a(t+\Delta t/2)`$ is second-order; the exact integral is preferred.
+
+### Expansion-aware ghost filling
+Both RK transport stages use the frozen expansion frame $`a_\star = a(t_\mathrm{lev}+\Delta t_\mathrm{lev}/2)`$, even though their physical time labels differ. The first stage's interior has already undergone the first expansion half-step. `fillBoundaryConditions` currently obtains coarse endpoints through `GetData` at the requested physical time; copying those endpoints unchanged would leave a uniform gas's ghosts warmer than its interior. `PreInterpState`/`PostInterpState` only change the energy representation for interpolation and do not apply expansion.
+
+The expansion hook must provide a ghost-fill adapter carrying the requested physical time and the consuming stage's expansion frame separately:
+
+- Copy each coarse endpoint into a temporary and map it from its own expansion frame to $`a_\star`$ **before time interpolation**. Use the expansion operator (or its inverse when mapping backward): keep comoving density and $`B_c`$ fixed, scale momentum, evolve internal energy with the EOS ODE, and reconstruct total energy with the magnetic view at $`a_\star`$. Then interpolate in physical time and prolong spatially with all source data in that common frame. For ideal-gas homogeneous expansion, the mapped endpoints are identical, so interpolation introduces no pressure gradient. Mapping an already time-interpolated raw state does not have this property.
+- Fine stage data and same-level/periodic copies already carry the target frame; do not expand them again. Preserve stored coarse endpoints and face fields. Energy interpolation and fixups must use the target-frame EOS and magnetic views.
+- Evaluate prescribed physical-boundary data at the requested physical time, convert physical units to comoving units at that time if necessary, then map the result into the consuming stage's expansion frame. Extrapolating and reflecting boundaries act directly on stage-frame interior data. Carry this distinction through every boundary callback, including corners, so no boundary fill overwrites converted ghosts with endpoint-frame values.
+- A physical-frame source such as conduction uses the same adapter with its source-stage expansion frame, then converts all valid and ghost data to physical units at that frame. The stage descriptor must follow the actual source ordering; the source call's physical time argument alone is insufficient.
+
+This adapter belongs to the expansion hook, so it does not add scale-factor logic to interpolation kernels. Keep the AMR guard until a refined homogeneous-expansion test verifies stage ghost/interior pressure agreement and absence of interface-generated velocity, including physical boundaries and subcycling.
+
+### Strang-split conduction fluxes
+The physical-frame wrapper must convert returned fluxes as well as state and spacing. `addStrangSplitSourcesWithBuiltin` currently adds each physical `heat_flux` to `recal_fluxes` with weight `0.5`; `advanceHydroAtLevel` combines this with hydro fluxes and deposits using the full step. Replacing that last multiplier with `dtau_lev` alone gives the wrong conduction reflux.
+
+For a conduction half-step of physical duration $`\Delta t_s`$ evaluated at frozen source-frame scale factor $`a_s`$, the integrated comoving energy flux required by the register is
+
+```math
+I_s = a_s^2\,q_{\mathrm{phys},s}\,\Delta t_s
+    = a_s^3\,q_{\mathrm{phys},s}\,\Delta\tau_s
+\quad\text{at fixed }a_s,\qquad \Delta\tau_s=\Delta t_s/a_s.
+```
+
+Here $`q_{\mathrm{phys},s}`$ is the returned `heat_flux`; the $`a_s^2`$ follows from converting the energy update by $`a_s^3`$ and using physical spacing $`a_s dx`$. In an expanding run, retain the quadrature used by the physical-time source update: accumulate $`a_s^2 q_{\mathrm{phys},s}\Delta t_s`$ for each source evaluation, rather than substituting the hydro step's $`d\tau`$.
+
+Before combining with hydro register contributions, multiply each $`I_s`$ by its own remaining expansion weight $`W_s`$ from the point where that source increment enters the split state to $`t_\mathrm{sync}`$. Determine $`W_s`$ from the actual forward/reverse source ordering and all later fine substeps; do not assign both half-steps the hydro midpoint weight. For ideal-gas thermal increments, $`W_s`$ is the product of subsequent internal-energy expansion factors, $`\prod (a_\mathrm{before}/a_\mathrm{after})^{3(\gamma-1)}`$, and applies to the conduction contribution in both internal and total energy. A general EOS requires the response of the remaining expansion ODE to that thermal increment; a single exponent is not exact. Any approximate energy weighting must be documented and validated under the energy-reflux accuracy limitation below.
+
+Keep the two half-step contributions separate until unit conversion and expansion weighting are complete. Prefer an integrated-flux accumulator $`\sum_s W_s I_s`$, with no further time multiplier; if retaining the full-step `dtau_lev` deposit API, add $`\sum_s W_s I_s/dtau_lev`$ to its flux array and apply no second expansion weight. At frozen $`a`$, this reduces to the existing `0.5` per half-step times $`a^3 q_\mathrm{phys}`$. Commit these contributions only after a successful hydro/source step, as with the current retry handling.
 
 ### Diffusive terms inside the transport step
 Physical viscosity is computed inside `HydroSystem::ComputeFluxes`, and Ohmic resistivity inside the EMF computation and `MHDSystem::AddResistiveEnergyFlux`. Only electron conduction is Strang-split. A diffusive term needs $`1/a^2`$, but running on $`d\tau`$ supplies only one factor, so the transport hook also:
@@ -196,7 +225,7 @@ fine    |=======◆=========|========◆========|  ┆
   ◆ = where a level applies its flux (the Strang midpoint of its step)
 ```
 
-**Fix:** weight each register deposit by the expansion it will undergo before reflux:
+**Fix:** weight each transport register deposit by the expansion it will undergo before reflux (Strang-split conduction uses its own source-stage weights as specified above):
 
 ```math
 \text{register} \mathrel{+}= \left(\frac{a(t_\mathrm{dep})}{a(t_\mathrm{sync})}\right)^{m} F\,d\tau, \qquad t_\mathrm{dep} = t_\mathrm{lev} + \tfrac12\,\Delta t_\mathrm{lev}
@@ -234,7 +263,7 @@ t(a) = \int \frac{da}{a\,H(a)}, \qquad \tau(a) = \int \frac{da}{a^2 H(a)}
 Bitwise reproducibility holds for the same binary on the same machine. A different compiler, FMA contraction or libm can change the last bits of $`H(a)`$, as it can for the hydro update. The time sequence also has to match; it does, because restart restores `dt_` and the cosmological timestep limit depends only on $`H(a(t))`$.
 
 ### Rules for new physics
-1. **Every operator declares its frame.** A transport operator runs inside the $`d\tau`$ step. A Strang-split local or diffusive operator is wrapped in `inPhysicalFrame`. A diffusive term inside the transport step uses `PhysicalDx`, coefficients evaluated in the physical frame and fluxes converted back to transport units; its stability limit follows the same frame convention. Magnetic energy and wavespeed consumers use the magnetic view at their evaluation time. Only the expansion operator acts directly on comoving state. An undeclared operator fails to compile.
+1. **Every operator declares its frame.** A transport operator runs inside the $`d\tau`$ step. A Strang-split local or diffusive operator is wrapped in `inPhysicalFrame`, including conversion and source-stage expansion weighting of any returned flux-register contributions. Ghost fills carry the consuming stage's expansion frame separately from physical time. A diffusive term inside the transport step uses `PhysicalDx`, coefficients evaluated in the physical frame and fluxes converted back to transport units; its stability limit follows the same frame convention. Magnetic energy and wavespeed consumers use the magnetic view at their evaluation time. Only the expansion operator acts directly on comoving state. An undeclared operator fails to compile.
 2. **No $`a`$ inside kernels.** Outside `src/cosmology/`, the scale factor appears only in the seven hooks. The type system and the AST check enforce this.
 3. **New fields get exponents.** Add one entry, with $`k`$ and $`m`$, to the exponent table; the wrapper, expansion operator, reflux weights and tests pick it up.
 
@@ -299,11 +328,13 @@ Migration from the current branch:
 - [ ] Rewrite the expansion operator for general EOS, including magnetic energy $`\tfrac12 B_c^2/a`$ in the total.
 - [ ] Store $`B_c = a^2 B_\mathrm{phys}`$; supply $`\tilde B`$ through the magnetic view to transport, CFL estimation, initialization, `ApplyHydroStateFixup`/`SyncDualEnergy` (including post-AMR `FixupState`) and energy diagnostics at their evaluation times. Scale the EMF by $`\sqrt a`$ in the transport hook; keep stored faces in $`B_c`$ units.
 - [ ] Add the exponent table ($`k`$ and $`m`$) and `inPhysicalFrame`; lift the cooling and chemistry guards by wrapping those operators.
+- [ ] Convert each conduction half-step's returned heat flux to an integrated comoving register contribution and apply its remaining source-stage expansion weight before combining with hydro. Validate frozen-$`a`$ AMR equivalence and expanding source-stage weights before enabling conduction with cosmological AMR.
 - [ ] Pass `PhysicalDx` and $`a^3\mu_\mathrm{phys}`$ (both shear and bulk) to the viscous terms in `ComputeFluxes`, or multiply their physical fluxes by $`a^3`$. Use `PhysicalDx`, $`\tilde B`$ and unchanged $`\eta`$ for the resistive EMF and `AddResistiveEnergyFlux`; then lift the viscosity guard.
 - [ ] Move cosmological numbers out of `Physics_Traits` into runtime parameters; keep only `is_cosmology_enabled`.
 - [ ] Write current $`a`$, $`z`$ and $`H`$ into metadata for checkpoints as well as plotfiles.
 - [ ] Write the cosmological parameters and table hash (or constant-scale-factor mode marker) to the checkpoint and check them on restart; then lift the restart guard.
-- [ ] Weight flux register deposits; then lift the `max_level = 0` guard.
+- [ ] Add explicit expansion-frame metadata to stage ghost fills; map coarse endpoints before time interpolation and prescribed boundary data before use, including physical-frame source fills. Pass the refined homogeneous-expansion test with subcycling and physical boundaries.
+- [ ] Weight flux register deposits and pass the AMR conservation test. Lift the `max_level = 0` guard only after the expansion-aware ghost-fill requirements also pass; conduction with AMR additionally requires the flux-conversion tests above.
 - [ ] Add the EOS view; then lift the scale-invariant-EOS guard.
 - [ ] Introduce `ScaleFactor`, `HookKey`, `TransportDt`/`PhysicalDt`, `ComovingDx`/`PhysicalDx` and the operator frame wrappers; add `src/cosmology/` to CODEOWNERS.
 - [ ] Add the clang-query check as a CI job and the grep warning to `quokka-pre-commit.sh`.
@@ -316,9 +347,12 @@ Verification (all in CTest, CPU and at least one GPU backend; the current proble
 | Frozen-$`a`$ equivalence | Cosmology on, $`H_0 = 0`$, $`a = 0.1`$, compared with a non-cosmological run with box $`\times a`$, densities $`\times a^{-3}`$, $`B \times a^{-2}`$ (code units, $`B_\mathrm{Gauss}/\sqrt{4\pi}`$); one per operator | Any missing or extra factor of $`a`$ in any operator |
 | Identity | Cosmology on, $`H_0 = 0`$, $`a = 1`$ | Must match the non-cosmological run bitwise |
 | Frozen-$`a`$ diffusion | $`H_0=0`$, $`a=0.1`$, nonzero shear/bulk viscosity and, separately, constant resistivity; choose parameters so diffusion limits the timestep | Match physical-box momentum/energy fluxes and decay rates, and physical timesteps proportional to $`a^2 dx^2`$ at fixed physical diffusivity |
+| Frozen-$`a`$ AMR conduction | $`H_0=0`$, $`a=0.1`$, temperature gradient crossing a static coarse-fine interface, subcycling and reflux enabled; compare with the corresponding physical-box run | Both half-step integrated heat fluxes, internal/total energy reflux corrections and final state match after unit conversion; exercises a nonzero flux mismatch |
+| Expanding AMR conduction | Ideal gas, temperature gradient crossing a refined interface, subcycling; record each source-stage contribution and refine the timestep | Register contributions match $`\sum_s W_s a_s^2 q_s\Delta t_s`$ for the actual source ordering; energy errors converge under the stated reflux approximation |
 | Frozen-$`a`$ magnetic consumers | $`H_0=0`$, $`a=0.1`$, nonzero $`B_c`$; exercise initialization, CFL, floors and both dual-energy branches, including after AMR synchronization | Magnetic energy $`B_c^2/(2a)`$, physical wavespeeds, and internal/total energy agreement with the physical-box run |
 | Constant-scale-factor clock | $`H_0=0`$, $`a_\mathrm{init}=0.1`$ and $`1`$; query whole steps and half-intervals, repeat after restart | No table construction or inversion; constant $`a`$, zero $`H`$, and nonzero $`d\tau=dt/a_\mathrm{init}`$ for nonzero $`dt`$ |
 | `CosmologicalExpansion` | Uniform box against the Einstein–de Sitter solution; also a non-ideal EOS once the view exists | Expansion operator, $`a(t)`$ table |
+| Refined homogeneous expansion | Stationary uniform ideal gas, static refined patch, subcycling on; periodic boundaries and separately prescribed homogeneous-expansion boundaries; also a non-ideal EOS once supported | At every transport/source ghost fill, pressure agrees with the interior to roundoff for the ideal-gas map (ODE tolerance for a general EOS); no interface/boundary-generated velocity; final cooling matches the homogeneous solution |
 | Zel'dovich pancake | Hydro, gravity and CIC particles together | Coupling of $`d\tau`$, Poisson RHS and particle kicks |
 | Restart | $`N`$ steps, compared with $`N/2`$ steps, restart, $`N/2`$ steps | Bitwise match of $`a`$, $`d\tau`$ and the final state; also covers the existing hydro restart path |
 | AMR conservation | Periodic box, static refined patch, bulk flow, subcycling on | $`\sum a\,p_c`$ constant to roundoff (fails on unweighted reflux); $`\nabla\cdot B_c`$ at machine precision across coarse-fine boundaries |
