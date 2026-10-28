@@ -76,12 +76,7 @@ template <> struct ISM_Traits<DTypeFront1D> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool enable_photoelectric_heating = false;
-	static constexpr bool thermal_band_photochemistry =
-#ifdef THERMAL_DUST_PHOTOCHEMISTRY
-	    true;
-#else
-	    false;
-#endif
+	static constexpr bool thermal_band_photochemistry = true;
 	// The network only carries the absorbed-energy ODE variable when it is built with the matching macro,
 	// so the trait has to follow it rather than being set unconditionally.
 	static constexpr bool dust_chemical_band_absorption =
