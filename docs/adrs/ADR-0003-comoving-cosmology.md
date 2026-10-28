@@ -34,7 +34,7 @@ Use comoving coordinates $`x`$, peculiar velocity $`v`$, and comoving conserved 
 
 Consequences of that principle:
 
-1. **$`a(t)`$ is a function.** The cosmology module provides `scaleFactorAt(t)` and `dtau(t, dt)` $`= \int dt'/a(t')`$, evaluated from a table built from the cosmological parameters alone, or directly as $`a_\mathrm{init}`$ and $`dt/a_\mathrm{init}`$ when $`H_0 = 0`$ (see [Restart and reproducibility](#restart-and-reproducibility)). Every caller asks for $`a`$ at the time it needs. AMR subcycling, retries and restart need no special handling (`tNew_` is already checkpointed).
+1. **$`a(t)`$ is a function.** The cosmology module provides `scaleFactorAt(t)` and `dtau(t, dt)` $`= \int_t^{t+dt} dt'/a(t')`$, evaluated from a table built from the cosmological parameters alone, or directly as $`a_\mathrm{init}`$ and $`dt/a_\mathrm{init}`$ when $`H_0 = 0`$ (see [Restart and reproducibility](#restart-and-reproducibility)). Every caller asks for $`a`$ at the time it needs. AMR subcycling, retries and restart need no special handling (`tNew_` is already checkpointed).
 2. **Transport runs on the clock $`\tau`$.** Every term that moves material through comoving space carries the same $`1/a`$, so it is advanced with $`d\tau`$ instead of $`dt`$.
 3. **Expansion is one Strang-split operator** on the physical $`dt`$, and the only code that knows about $`\dot a/a`$.
 4. **Local and diffusive physics run unmodified** inside a physical-frame wrapper. Diffusive terms that live inside the transport step (viscosity, resistivity) use physical-frame gradients and coefficients, with their returned fluxes converted to the transport frame.
@@ -235,6 +235,8 @@ fine    |=======◆=========|========◆========|  ┆
 \text{register} \mathrel{+}= \left(\frac{a(t_\mathrm{dep})}{a(t_\mathrm{sync})}\right)^{m} F\,d\tau, \qquad t_\mathrm{dep} = t_\mathrm{lev} + \tfrac12\,\Delta t_\mathrm{lev}
 ```
 
+$`t_\mathrm{sync}`$ belongs to the register, not to the level that deposits. The register between levels $`\ell`$ and $`\ell+1`$ is refluxed at the end of level $`\ell`$'s step, so both its `CrseInit` (from level $`\ell`$) and its `FineAdd` (from level $`\ell+1`$) use that time. With `max_level` $`\ge 2`$, an intermediate level's flux array feeds two registers with different sync times: `FineAdd` into the register below it (synced at the end of the parent's step) and `CrseInit` into the register above it (synced at the end of its own step). Each call needs its own weight, so never pre-scale the shared flux array in place; scale a temporary copy per register, or pass the weight as the call's scalar.
+
 For the coarse level the weight equals its second half-step factor. For fine substep $`j`$ it is the product of all later factors, because $`a(t)`$ is a function and the momentum factors compose exactly. Reflux is then additive and exact for density and momentum. `FluxRegister::CrseInit` and `FineAdd` take one scalar per call, so deposit per dilution-exponent group or pre-scale a temporary copy of the fluxes, using the $`m`$ column of the exponent table. EMF registers need no weight ($`m = 0`$ for $`B_c`$).
 
 Collins et al. (2010, Appendix D) apply the flux correction after the expansion step and describe no weighting, so Enzo appears to carry this momentum error. That is inferred from the step order; the paper does not discuss it.
@@ -252,17 +254,17 @@ What would break it:
 - Restoring $`a`$ from `metadata.yaml`. yaml-cpp does not guarantee round-trip precision, and the stored value carries the history anyway. Metadata $`a`$, $`z`$ and $`H`$ are diagnostics only.
 - A running sum of $`d\tau`$ over steps.
 
-**Zero expansion.** For $`H_0 = 0`$, take an explicit constant-scale-factor branch: require $`a_\mathrm{init}>0`$, return `scaleFactorAt(t) = a_init`, `H(t) = 0` and `dtau(t, dt) = dt / a_init` for every interval. Do not construct or invert a table: the integrands below are singular, and a constant $`a`$ cannot parameterize elapsed time. Expansion is an identity operation (skip its ODE and energy reconstruction), reflux weights are one, and any timestep bound proportional to $`1/H`$ is inactive. This branch supports both frozen-$`a`$ and identity tests, including half-kicks, subcycling, retries and restart, without accumulating a transport clock.
+**Zero expansion.** For $`H_0 = 0`$, take an explicit constant-scale-factor branch: require $`a_\mathrm{init}>0`$, return `scaleFactorAt(t) = a_init`, `H(t) = 0` and `dtau(t, dt) = dt / a_init` for every interval. Do not construct or invert a table: the integrand below is singular, and a constant $`a`$ cannot parameterize elapsed time. Expansion is an identity operation (skip its ODE and energy reconstruction), reflux weights are one, and any timestep bound proportional to $`1/H`$ is inactive. This branch supports both frozen-$`a`$ and identity tests, including half-kicks, subcycling, retries and restart, without accumulating a transport clock.
 
-For an expanding cosmology with $`H(a)>0`$ throughout the table domain, implementation is based on the two integrals
+For an expanding cosmology with $`H(a)>0`$ throughout the table domain, simulation time is measured from the start of the run: $`t = 0`$ is $`a = a_\mathrm{init}`$, not the Big Bang. The table is built from
 
 ```math
-t(a) = \int \frac{da}{a\,H(a)}, \qquad \tau(a) = \int \frac{da}{a^2 H(a)}
+t(a) = \int_{a_\mathrm{init}}^{a} \frac{da'}{a'\,H(a')}
 ```
 
-1. **Table from parameters only.** At startup, tabulate $`t(a)`$ and $`\tau(a)`$ on a fixed grid uniform in $`\ln a`$, with fixed-order Gauss–Legendre quadrature per interval. Nothing adaptive, nothing history-dependent; the table is rebuilt identically on restart.
+1. **Table from parameters only.** At startup, tabulate $`t(a)`$ on a fixed grid uniform in $`\ln a`$, starting at $`a_\mathrm{init}`$ and extending until $`t(a)`$ exceeds `stop_time`, with fixed-order Gauss–Legendre quadrature per interval. A query outside the table aborts. Nothing adaptive, nothing history-dependent; the table is rebuilt identically on restart.
 2. **$`a(t)`$ by interpolation.** Cubic Hermite on the table using the exact derivative $`da/dt = a\,H(a)`$, optionally followed by a fixed number of Newton iterations on $`t(a) - t`$.
-3. **$`d\tau`$ as a difference.** $`d\tau(t_1, t_2) = \tau(a(t_2)) - \tau(a(t_1))`$. Nothing accumulates, and hydro, MHD and particles see the same value.
+3. **$`d\tau`$ by direct quadrature.** `dtau(t, dt)` evaluates $`\int_t^{t+dt} dt'/a(t')`$ with a fixed-order Gauss–Legendre rule on $`[t, t+dt]`$, calling `scaleFactorAt` at the nodes. Do not difference a cumulative $`\tau(a)`$ table: $`\tau(a(t+dt)) - \tau(a(t))`$ has relative error of about $`\epsilon\,\tau/d\tau`$, roughly $`10^{-10}`$ on deep AMR levels, and the substeps' errors are independent, so $`\sum d\tau_\mathrm{fine}`$ no longer matches $`d\tau_\mathrm{coarse}`$ to roundoff. Since $`1/a`$ varies by only $`O(H\,dt)`$ over the interval, direct quadrature carries no cancellation: its relative error is $`O(\epsilon)`$ plus the interpolation error in $`a(t)`$. Nothing accumulates, and hydro, MHD and particles calling with the same `(t, dt)` see the same value.
 4. **Host only.** $`a`$, $`d\tau`$ and $`H`$ are computed on the host and captured as scalars, so all MPI ranks of one binary agree without a broadcast. Different builds (CPU and GPU, or different compilers) may differ in the last bits, as noted below.
 5. **Parameter check.** The checkpoint stores the cosmological parameters, or a constant-scale-factor mode marker when $`H_0=0`$ (no table). Restart checks the mode and parameters, including $`a_\mathrm{init}`$, exactly, and aborts with an error on a mismatch. The table itself is not hashed: it is a deterministic function of the parameters, and a hash would reject restarts across compilers or machines whose tables differ only in the last bits (below).
 
@@ -280,7 +282,15 @@ Three layers, from hardest to softest: types make misuse a compile error, an AST
 
 ```cpp
 namespace quokka::cosmology {
-class HookKey;
+class HookKey { // passkey: only the hooks can construct one
+	HookKey() = default;
+	friend class TransportStep;   // dtau, dt_cfl
+	friend class ExpansionOperator;
+	friend class PhysicalFrame;   // inPhysicalFrame, dx * a
+	friend class ComovingPoisson; // G/a, rho_bar
+	friend class EOSView;         // a3, private inside the view
+	friend class MagneticView;    // B_c / sqrt(a), at the consumer's evaluation time
+};
 class ScaleFactor;
 auto scaleFactorAt(amrex::Real t) -> ScaleFactor; // host-only; the only way to obtain a ScaleFactor
 
@@ -291,15 +301,6 @@ class ScaleFactor {
 	amrex::Real a_;
 	explicit ScaleFactor(amrex::Real a) : a_(a) {}
 	friend auto scaleFactorAt(amrex::Real t) -> ScaleFactor;
-};
-class HookKey { // passkey: only the hooks can construct one
-	HookKey() = default;
-	friend class TransportStep;   // dtau, dt_cfl
-	friend class ExpansionOperator;
-	friend class PhysicalFrame;   // inPhysicalFrame, dx * a
-	friend class ComovingPoisson; // G/a, rho_bar
-	friend class EOSView;         // a3, private inside the view
-	friend class MagneticView;    // B_c / sqrt(a), at the consumer's evaluation time
 };
 } // namespace quokka::cosmology
 ```
@@ -330,7 +331,7 @@ AST matching is deterministic but needs a configured build, so it is too slow fo
 ## Rollout & Testing
 Migration from the current branch:
 
-- [ ] Add the parameter-only $`a(t)`$ and $`\tau(a)`$ table with `scaleFactorAt(t)` and `dtau(t, dt)` to `src/cosmology/`, plus the table-free $`H_0=0`$ branch returning $`a_\mathrm{init}`$ and $`dt/a_\mathrm{init}`$; remove `a_now_`, `a_half_` and the retry save/restore.
+- [ ] Add the parameter-only $`t(a)`$ table with `scaleFactorAt(t)` and quadrature-based `dtau(t, dt)` to `src/cosmology/`, plus the table-free $`H_0=0`$ branch returning $`a_\mathrm{init}`$ and $`dt/a_\mathrm{init}`$; remove `a_now_`, `a_half_` and the retry save/restore.
 - [ ] Replace the five particle cosmology virtuals on `AMRSimulation` with the `dtau` and expansion hooks; `AMRSimulation` gets no scale-factor accessor.
 - [ ] Pass `dtau_lev` through `advanceHydroAtLevel`; remove the $`1/a`$ in both flux functions, `AddInternalEnergyPdV`, tracers, `computeMaxSignalLocal` and `isCflViolated`.
 - [ ] Apply `dt_cfl = a * dtau_cfl` to hyperbolic hydro/MHD and particle limits; convert the viscous and resistive limits in `computeMaxSignalLocal` using physical spacing, state and coefficients before combining limits in physical time.
