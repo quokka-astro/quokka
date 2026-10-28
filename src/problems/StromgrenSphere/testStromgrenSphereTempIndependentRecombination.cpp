@@ -23,8 +23,9 @@ template <> struct Microphysics_Traits<StromgrenSphereTempIndependentRecombinati
 };
 
 template <> struct quokka::EOS_Traits<StromgrenSphereTempIndependentRecombination> : stromgren_sphere::EOSTraits {};
-template <> struct Physics_Traits<StromgrenSphereTempIndependentRecombination> : stromgren_sphere::PhysicsTraits {};
-template <> struct RadSystem_Traits<StromgrenSphereTempIndependentRecombination> : stromgren_sphere::RadTraits {};
+template <>
+struct Physics_Traits<StromgrenSphereTempIndependentRecombination> : stromgren_sphere::PhysicsTraits<StromgrenSphereTempIndependentRecombination> {};
+template <> struct RadSystem_Traits<StromgrenSphereTempIndependentRecombination> : stromgren_sphere::RadTraits<StromgrenSphereTempIndependentRecombination> {};
 template <> struct SimulationData<StromgrenSphereTempIndependentRecombination> : stromgren_sphere::Data {};
 
 template <>

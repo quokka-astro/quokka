@@ -45,11 +45,11 @@ struct EOSTraits {
 	static constexpr double gamma = 5. / 3.;
 };
 
-struct PhysicsTraits : DefaultPhysicsTraits {
+template <typename problem_t> struct PhysicsTraits : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr int numMassScalars = Microphysics_Traits<problem_t>::Network::NumSpec; // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0;				// number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr double boltzmann_constant = C::k_B;
@@ -58,12 +58,12 @@ struct PhysicsTraits : DefaultPhysicsTraits {
 	static constexpr double radiation_constant = C::a_rad;
 };
 
-struct RadTraits {
+template <typename problem_t> struct RadTraits {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
-	static constexpr auto ChemBands() { return ChemBandsHeader(); }
+	static constexpr auto ChemBandsPowerLawIndex() { return Microphysics_Traits<problem_t>::Network::ChemBandsPowerLawIndex; }
+	static constexpr auto ChemBands() { return Microphysics_Traits<problem_t>::Network::ChemBands(); }
 };
 
 struct Data {
@@ -223,20 +223,21 @@ template <typename problem_t> void PreCalculateInitialConditions(QuokkaSimulatio
 
 template <typename problem_t> void SetInitialConditionsOnGrid(QuokkaSimulation<problem_t> &sim, quokka::grid const &grid_elem)
 {
+	using Network = typename Microphysics_Traits<problem_t>::Network;
 	auto const &userData = sim.userData_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	burn_t state;
-	std::array<Real, NumSpec> numdens = {-1.0};
-	numdens[Species::e] = userData.n_e_init;
-	numdens[Species::H] = userData.n_HI_init;
-	numdens[Species::H_p] = userData.n_HII_init;
+	std::array<Real, Network::NumSpec> numdens = {-1.0};
+	numdens[Network::Species::e] = userData.n_e_init;
+	numdens[Network::Species::H] = userData.n_HI_init;
+	numdens[Network::Species::H_p] = userData.n_HII_init;
 
 	state.T = userData.temperature;
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
 		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
 	}
@@ -260,7 +261,7 @@ template <typename problem_t> void SetInitialConditionsOnGrid(QuokkaSimulation<p
 		state_cc(i, j, k, RadSystem<problem_t>::x1GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<problem_t>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) = 0.0_rt;
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) =
 			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
 		}
@@ -269,6 +270,7 @@ template <typename problem_t> void SetInitialConditionsOnGrid(QuokkaSimulation<p
 
 template <typename problem_t> void ComputeAfterTimestep(QuokkaSimulation<problem_t> &sim)
 {
+	using Network = typename Microphysics_Traits<problem_t>::Network;
 	auto &userData = sim.userData_;
 	if (userData.recombination_switch == 0) {
 		return;
@@ -293,9 +295,10 @@ template <typename problem_t> void ComputeAfterTimestep(QuokkaSimulation<problem
 		auto *hist_ptr = d_hist.data();
 
 		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const amrex::Real n_HI = state(i, j, k, HydroSystem<problem_t>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+			const amrex::Real n_HI =
+			    state(i, j, k, HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::H)) / spmasses[Network::Species::H];
 			const amrex::Real n_HII =
-			    state(i, j, k, HydroSystem<problem_t>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+			    state(i, j, k, HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::H_p)) / spmasses[Network::Species::H_p];
 			const amrex::Real denom = n_HI + n_HII;
 			if (denom <= 0.0_rt) {
 				return;
@@ -442,6 +445,8 @@ template <typename problem_t> void ComputeAfterTimestep(QuokkaSimulation<problem
 
 template <typename problem_t> auto ProblemMain() -> int
 {
+	using Network = typename Microphysics_Traits<problem_t>::Network;
+
 	// Problem parameters
 	// const int nx = 1000;
 	// const double Lx = 1.0;
@@ -468,14 +473,14 @@ template <typename problem_t> auto ProblemMain() -> int
 		const amrex::Real quanta = RadSystem<problem_t>::GetChemBandQuanta(0);
 		const amrex::Real n_photon_sum0 = sim.state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) / quanta;
 		const amrex::Real n_e_sum0 =
-		    sim.state_new_cc_[0].sum(HydroSystem<problem_t>::scalar0_index + static_cast<int>(Species::e)) / spmasses[Species::e];
+		    sim.state_new_cc_[0].sum(HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::e)) / spmasses[Network::Species::e];
 
 		sim.evolve();
 
 		const amrex::Real error_tol = 1e-6;
 		const amrex::Real n_photon_sum = sim.state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) / quanta;
 		const amrex::Real n_e_sum =
-		    sim.state_new_cc_[0].sum(HydroSystem<problem_t>::scalar0_index + static_cast<int>(Species::e)) / spmasses[Species::e];
+		    sim.state_new_cc_[0].sum(HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::e)) / spmasses[Network::Species::e];
 		amrex::Print() << "Final total number of photons: " << n_photon_sum << '\n';
 		amrex::Print() << "Final total number of electrons: " << n_e_sum << '\n';
 		const amrex::Real n_photon_added = sim.userData_.Q * sim.userData_.tend / 8.0_rt;

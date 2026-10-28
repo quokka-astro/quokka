@@ -21,8 +21,8 @@ template <> struct Microphysics_Traits<StromgrenSphere> : DefaultMicrophysicsTra
 };
 
 template <> struct quokka::EOS_Traits<StromgrenSphere> : stromgren_sphere::EOSTraits {};
-template <> struct Physics_Traits<StromgrenSphere> : stromgren_sphere::PhysicsTraits {};
-template <> struct RadSystem_Traits<StromgrenSphere> : stromgren_sphere::RadTraits {};
+template <> struct Physics_Traits<StromgrenSphere> : stromgren_sphere::PhysicsTraits<StromgrenSphere> {};
+template <> struct RadSystem_Traits<StromgrenSphere> : stromgren_sphere::RadTraits<StromgrenSphere> {};
 template <> struct SimulationData<StromgrenSphere> : stromgren_sphere::Data {};
 
 template <>
