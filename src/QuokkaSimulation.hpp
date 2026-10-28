@@ -57,7 +57,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #if AMREX_SPACEDIM == 3
-#include "hydro_MacProjector.H"
+#include "hydro/MacProjector.hpp"
 #endif
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
@@ -1961,16 +1961,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 		bc_hi[dir] = to_linop_bc(BCs_fc_[component_index].hi(dir));
 	}
 
-	Hydro::MacProjector macproj(projector_umac, amrex::MLMG::Location::FaceCenter, projector_beta, amrex::MLMG::Location::FaceCenter,
-				    amrex::MLMG::Location::CellCenter, geom_levels, info);
-	macproj.setDomainBC(bc_lo, bc_hi);
+	quokka::MacProjector macproj(projector_umac, projector_beta, geom_levels, info);
+	macproj.SetDomainBC(bc_lo, bc_hi);
 	for (int lev = 0; lev <= finest; ++lev) {
-		macproj.setLevelBC(lev, nullptr);
+		macproj.SetLevelBC(lev, nullptr);
 	}
-	macproj.setVerbose(Verbose() ? 1 : 0);
-	macproj.getMLMG().setBottomVerbose(0);
+	macproj.SetVerbose(Verbose() ? 1 : 0);
+	macproj.GetMLMG().setBottomVerbose(0);
 	amrex::Print() << "\nProjecting initial magnetic field...\n";
-	macproj.project(rel_tol, abs_tol);
+	macproj.Project(rel_tol, abs_tol);
 	fill_all_boundaries();
 
 	amrex::Real max_divB_norm = compute_dimensionless_divergence();
@@ -1987,9 +1986,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 				amrex::Abort("Magnetic field MAC projection failed to satisfy divergence tolerance.");
 			}
 			++attempt;
-			macproj.getMLMG().setFixedIter(forced_iters);
-			macproj.getMLMG().setMaxIter(forced_iters);
-			macproj.project(0.0, 0.0);
+			macproj.GetMLMG().setFixedIter(forced_iters);
+			macproj.GetMLMG().setMaxIter(forced_iters);
+			macproj.Project(0.0, 0.0);
 			fill_all_boundaries();
 			max_divB_norm = compute_dimensionless_divergence();
 			amrex::Print() << "projectFaceCenteredMagneticField retry " << attempt << " (" << forced_iters
@@ -1998,8 +1997,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 				forced_iters = std::min(forced_iters * 2, 64);
 			}
 		}
-		macproj.getMLMG().setFixedIter(0);
-		macproj.getMLMG().setMaxIter(200);
+		macproj.GetMLMG().setFixedIter(0);
+		macproj.GetMLMG().setMaxIter(200);
 	}
 #endif
 }

@@ -32,8 +32,6 @@ pr:
     - extern/yaml-cpp/**
     - extern/openPMD-api
     - extern/openPMD-api/**
-    - extern/AMReX-Hydro
-    - extern/AMReX-Hydro/**
     - extern/turbulence
     - extern/turbulence/**
     - .gitmodules
@@ -66,7 +64,7 @@ jobs:
         while IFS= read -r f; do
           [ -z "$f" ] && continue
           case "$f" in
-            src/*|tests/*|inputs/*|CMakeLists.txt|.ci/azure-pipelines.yml|extern/cooling/*.h5|extern/amrex|extern/amrex/*|extern/Microphysics|extern/Microphysics/*|extern/fmt|extern/fmt/*|extern/yaml-cpp|extern/yaml-cpp/*|extern/openPMD-api|extern/openPMD-api/*|extern/AMReX-Hydro|extern/AMReX-Hydro/*|extern/turbulence|extern/turbulence/*|.gitmodules)
+            src/*|tests/*|inputs/*|CMakeLists.txt|.ci/azure-pipelines.yml|extern/cooling/*.h5|extern/amrex|extern/amrex/*|extern/Microphysics|extern/Microphysics/*|extern/fmt|extern/fmt/*|extern/yaml-cpp|extern/yaml-cpp/*|extern/openPMD-api|extern/openPMD-api/*|extern/turbulence|extern/turbulence/*|.gitmodules)
               run_heavy="true"
               break
               ;;
