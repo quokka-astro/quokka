@@ -10,10 +10,12 @@
 
 #include "StromgrenSphere.hpp"
 #include "microphysics/microphysics_traits.hpp"
+#include "networks/photoionization_H_caseB_handwritten/network.hpp"
 
 struct StromgrenSphereTempIndependentRecombination {};
 
 template <> struct Microphysics_Traits<StromgrenSphereTempIndependentRecombination> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PhotoionizationHCaseB;
 	// ROS2S is too slow for this problem
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::Rodas4P>;
 	static constexpr bool photochemistry = true;	  // built with PHOTOCHEMISTRY

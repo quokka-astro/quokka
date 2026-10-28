@@ -11,6 +11,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "microphysics/microphysics_traits.hpp"
+#include "networks/photoionization_H_caseB_handwritten/network.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include <fstream>
@@ -60,6 +61,7 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 };
 
 template <> struct Microphysics_Traits<PhotoionizationStreamingProblem> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PhotoionizationHCaseB;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
 	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
 };
