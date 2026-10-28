@@ -15,6 +15,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "microphysics/microphysics_traits.hpp"
+#include "networks/photoionization_H_caseB_handwritten/network.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
@@ -58,6 +59,7 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 };
 
 template <> struct Microphysics_Traits<StromgrenSphere> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PhotoionizationHCaseB;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
 	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
 };

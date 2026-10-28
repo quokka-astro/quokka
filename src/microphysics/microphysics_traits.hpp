@@ -12,8 +12,16 @@ namespace quokka::microphysics
 template <typename Tableau> struct Rosenbrock;
 } // namespace quokka::microphysics
 
+namespace quokka::networks
+{
+/// The default network type: the problem names no network.
+struct None {};
+} // namespace quokka::networks
+
 /// Default values for all Microphysics_Traits fields.
 struct DefaultMicrophysicsTraits {
+	/// The species network: a type from src/networks.
+	using Network = quokka::networks::None;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::Rodas5P>;
 	/// Retry a failed burn. Replaces the runtime parameter integrator.use_burn_retry. The retry itself is not
 	/// implemented yet, so with this set a failed burn aborts.
