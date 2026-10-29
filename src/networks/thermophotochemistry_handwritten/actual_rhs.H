@@ -1,29 +1,23 @@
 #ifndef actual_rhs_H
 #define actual_rhs_H
 
+#include "AMReX_Array.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "burn_type.H"
 #include "fundamental_constants.H"
-#include "integrator_data.H"
 #include "microphysics/integrator_layout.hpp"
 #include "networks/thermophotochemistry_handwritten/network.hpp"
-#include <actual_network.H>
-#include <extern_parameters.H>
-#include <jacobian_utilities.H>
 
 using amrex::Real;
-// The runtime parameters are qualified: burn_type.H brings Microphysics' network_rp, with the same names, into the
-// global namespace.
+// The runtime parameters are qualified with the network's namespace (network.hpp).
 namespace thermophotochemistry = quokka::networks::thermophotochemistry;
-using namespace eos_rp;
 using namespace C;
 
 void actual_rhs_init();
 
 // Species indices (0-indexed, xn[]/spmasses[]) come from the Species enum in network.hpp.
 // ydot()/jac() are 1-indexed, so the same species use index+1 there.
-// net_ienuc (= NumSpec + 1) is the specific internal energy row/column.
+// net_ienuc (the integrator layout's energy_row, NumSpec + 1) is the specific internal energy row/column.
 // Radiation rows/columns follow net_ienuc: photon number density, then
 // (with Microphysics_Traits::integrate_rad_flux) photon flux.
 constexpr int e_idx = static_cast<int>(quokka::networks::Thermophotochemistry::Species::e);
@@ -32,8 +26,6 @@ constexpr int Hp_idx = static_cast<int>(quokka::networks::Thermophotochemistry::
 constexpr int ie = e_idx + 1;
 constexpr int iH = H_idx + 1;
 constexpr int iHp = Hp_idx + 1;
-constexpr int i_ngamma = net_ienuc + 1;
-constexpr int i_ngamma_flux = net_ienuc + 2;
 // The thermal-band and dust rows come from the integrator's layout (IntegratorLayout::thermal_band_row and dust_row).
 // Band 0 is the IR, band 1 the optical; the order matches group_ir / group_optical on the Quokka side, which reads
 // these back into the radiation state.
@@ -189,9 +181,14 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) 
 	return 1.3 * 1.427e-27 * 0.5 / std::sqrt(T) + d_cle_term_dT;
 }
 
-template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const BurnT &state, amrex::Array1D<Real, 1, INT_NEQS> &ydot)
+template <typename BurnT>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
+actual_rhs(const BurnT &state, amrex::Array1D<Real, 1, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
 	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
+	constexpr int net_ienuc = Layout::energy_row;
+	constexpr int i_ngamma = net_ienuc + 1;
+	constexpr int i_ngamma_flux = net_ienuc + 2;
 	constexpr int i_ir = Layout::thermal_band_row;
 	constexpr int i_optical = Layout::thermal_band_row + 1;
 	constexpr int i_dust = Layout::dust_row;
@@ -274,6 +271,9 @@ template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_r
 template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const BurnT &state, MatrixType &jac)
 {
 	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
+	constexpr int net_ienuc = Layout::energy_row;
+	constexpr int i_ngamma = net_ienuc + 1;
+	constexpr int i_ngamma_flux = net_ienuc + 2;
 	constexpr int i_ir = Layout::thermal_band_row;
 	constexpr int i_optical = Layout::thermal_band_row + 1;
 	constexpr int i_dust = Layout::dust_row;

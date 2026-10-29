@@ -20,9 +20,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 } // namespace quokka::photochemistry
 
 // The definition is compiled only in builds with photochemistry, because it uses names that only those builds have: spmasses
-// and eos() from Microphysics' photoionization EOS, and the constants of the generated network_properties.H that the
-// transitional checks below compare against. Callers use Microphysics_Traits<problem_t>::photochemistry. This guard goes
-// when the EOS is in Quokka and the generated constants are gone.
+// and eos() from Microphysics' photoionization EOS, small_x from Microphysics' generated network parameters, and the
+// constants of the generated network_properties.H that the transitional checks below compare against. Callers use
+// Microphysics_Traits<problem_t>::photochemistry. This guard goes when the EOS is in Quokka and the generated constants are gone.
 #ifdef PHOTOCHEMISTRY
 #include "actual_eos_data.H"
 #include "eos.H"
@@ -213,12 +213,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 			// Ensure positivity
 			for (double &nn : photochemstate.xn) {
-				nn = amrex::max(nn, small_x);
+				nn = amrex::max(nn, network_rp::small_x);
 			}
 			for (int nn = 0; nn < Network::NumChemBands; nn += 1) {
 				// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
 				photochemstate.rn[static_cast<std::size_t>(nn) * Layout::vars_per_group] =
-				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * Layout::vars_per_group], small_x);
+				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * Layout::vars_per_group], network_rp::small_x);
 			}
 
 			// get the updated specific eint
@@ -323,7 +323,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 							const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 							const Real E_old = state(i, j, k, eIdx); // > 0: rn[0] was clamped to small_x above
 							const Real E_new =
-							    amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum), small_x * chemBandQuanta[nn]);
+							    amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum), network_rp::small_x * chemBandQuanta[nn]);
 							state(i, j, k, eIdx) = E_new;
 							const Real flux_rescale = E_new / E_old;
 							state(i, j, k, fxIdx) *= flux_rescale;
