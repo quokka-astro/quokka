@@ -20,7 +20,11 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
 			// Counter for total particles destroyed at this time step
-			amrex::Long total_particles_destroyed = 0;
+			// One device counter for all tiles and levels (was: one AsyncArray + host sync per tile). The count only feeds the verbose
+			// printout, so it is copied back and reduced across ranks only when particle_verbose > 0.
+			int destroyed_count = 0;
+			amrex::Gpu::AsyncArray<int> d_count(&destroyed_count, 1);
+			int *p_count = d_count.data();
 
 			// Use the provided ParticleChecker type to determine which particles to destroy
 			CheckerType<problem_t> particle_checker(birth_time_index, evolution_stage_index);
@@ -39,11 +43,6 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 					// Process particles on the device
 					auto *parray = particles().data();
 
-					// Create temporary array for reduction
-					int destroyed_count = 0;
-					amrex::Gpu::AsyncArray<int> h_count(&destroyed_count, 1);
-					int *p_count = h_count.data();
-
 					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 						auto &p = parray[i]; // NOLINT
 
@@ -56,11 +55,6 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 							amrex::Gpu::Atomic::Add(p_count, 1);
 						}
 					});
-
-					// Get the count from device memory
-					// amrex::Gpu::streamSynchronize();
-					h_count.copyToHost(&destroyed_count, 1);
-					total_particles_destroyed += destroyed_count;
 				}
 
 				// Redistribute particles at this level to actually remove the invalid particles
@@ -69,16 +63,19 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 				// drifted.
 			}
 
-			// Redistribute particles at lev and above to actually remove the invalid particles
+			// Redistribute particles at lev and above to actually remove the invalid particles.
+			// N.B. This must stay unconditional even when nothing was destroyed: it is the first Redistribute after the particle drift
+			// (driftParticles does not redistribute), so it also moves drifted particles to their new grids/levels.
 			container->Redistribute(lev_min);
 
-			// Sum up total particles destroyed across all processors
-			amrex::Long global_total_destroyed = total_particles_destroyed;
-			amrex::ParallelDescriptor::ReduceLongSum(global_total_destroyed);
+			if (particle_verbose > 0) {
+				// Sum up total particles destroyed across all processors
+				d_count.copyToHost(&destroyed_count, 1);
+				amrex::Long global_total_destroyed = destroyed_count;
+				amrex::ParallelDescriptor::ReduceLongSum(global_total_destroyed);
 
-			// Print the total number of particles destroyed at this time step
-			if (amrex::ParallelDescriptor::IOProcessor()) {
-				if (particle_verbose > 0) {
+				// Print the total number of particles destroyed at this time step
+				if (amrex::ParallelDescriptor::IOProcessor()) {
 					amrex::Print()
 					    << std::format("[PARTICLES] Particle destruction: Time: {} - Destroyed {} particles (from level {} and above)\n",
 							   current_time, global_total_destroyed, lev_min);
