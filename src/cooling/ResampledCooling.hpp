@@ -17,6 +17,7 @@
 #include "AMReX_iMultiFab.H"
 #include "AMReX_ParReduce.H"
 #include "AMReX_ParallelReduce.H"
+#include "AMReX_GpuReduce.H"
 
 #include "cooling/EOSTabulatedRegistry.hpp"
 #include "hydro/hydro_system.hpp"
@@ -141,7 +142,8 @@ struct ResampledCoolingFunctor {
 // external_heating: optional position-dependent heating rate added to it, unit erg/s/H
 template <typename problem_t>
 auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &mf_fc, const Real dt_in, resampled_tables &resampledTables,
-		    const Real temp_floor, const Real const_heating_rate_per_H, ExternalHeatingRate const &external_heating = {}, const bool verbose = false) -> bool
+		    const Real temp_floor, const Real const_heating_rate_per_H, ExternalHeatingRate const &external_heating = {}, const bool verbose = false,
+		    amrex::Real *boxCost = nullptr) -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
@@ -219,6 +221,11 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 
 		    state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
 		    state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
+		    // perf-src-04c: accumulate the per-box cooling work (sum of RK substeps over the box) into the device-resident
+		    // per-box cost (merged with src-06: one atomic per cell inside the fused kernel instead of a separate block reduction)
+		    if (boxCost != nullptr) {
+			    amrex::Gpu::Atomic::AddNoRet(boxCost + box_no, static_cast<amrex::Real>(nsteps)); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		    }
 		    return {nsteps, static_cast<amrex::Long>(nsteps)};
 	    });
 

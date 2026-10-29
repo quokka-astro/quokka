@@ -47,6 +47,8 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_BCRec.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_DistributionMapping.H"
+#include "AMReX_GpuContainers.H"
+#include "AMReX_ParallelReduce.H"
 #include "AMReX_EdgeFluxRegister.H"
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
@@ -437,6 +439,28 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
 	void regridIfNeeded(int lev, amrex::Real time);
 	void regrid(int lbase, amrex::Real time, bool initial) override;
+
+	// perf-src-04c: cost-weighted distribution mapping from measured per-box cooling work
+	int costLoadBalance_ = 1;	      // 1 == weight distribution maps by measured per-box cost (cooling substeps)
+	amrex::Real costLbCellWeight_ = 10.0; // cost of one cell update (hydro, gravity, ...) in units of one cooling substep
+	amrex::Real costLbThreshold_ = 0.1;   // remap an unchanged BoxArray only if the efficiency improves by this fraction
+	int costLbStrategy_ = 0;	      // 0 == SFC, 1 == knapsack
+	struct BoxCostAccum {
+		amrex::Gpu::DeviceVector<amrex::Real> cost; // per local box: summed cooling substeps since the last reset
+		amrex::Vector<int> gidx;		    // global box index of each local box
+		amrex::BoxArray ba;
+		amrex::DistributionMapping dm;
+		int ncalls = 0;
+	};
+	amrex::Vector<BoxCostAccum> boxCostAccum_;
+	amrex::Vector<int> dmRemadeThisRegrid_;
+	auto boxCostAccumulator(int lev, amrex::MultiFab const &mf) -> amrex::Real *;
+	auto gatherCostDensity(int lev, amrex::BoxArray &ba_out) -> amrex::Vector<amrex::Real>;
+	auto estimateBoxCosts(int lev, amrex::BoxArray const &ba) -> amrex::Vector<amrex::Real>;
+	auto makeWeightedDistributionMap(amrex::Vector<amrex::Real> const &cost, amrex::BoxArray const &ba, amrex::Real &eff) const
+	    -> amrex::DistributionMapping;
+	[[nodiscard]] auto MakeDistributionMap(int lev, amrex::BoxArray const &ba) -> amrex::DistributionMapping override;
+	void rebalanceUnchangedLevels(int lbase, amrex::Real time);
 	void calculateGpotAllLevels();
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
@@ -840,6 +864,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	flux_reg_.resize(nlevs_max + 1);
 	emf_reg_.resize(nlevs_max + 1);
 	fillpatcher_.resize(nlevs_max + 1);
+	boxCostAccum_.resize(nlevs_max + 1);
+	dmRemadeThisRegrid_.assign(nlevs_max + 1, 0);
 	cellUpdatesEachLevel_.resize(nlevs_max, 0);
 
 	// check that grids will be properly nested on each level
@@ -1076,6 +1102,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// re-grid interval
 	pp.query("regrid_interval", regrid_int);
+
+	// perf-src-04c: cost-weighted load balancing
+	pp.query("cost_load_balance", costLoadBalance_);
+	pp.query("cost_lb_cell_weight", costLbCellWeight_);
+	pp.query("cost_lb_threshold", costLbThreshold_);
+	pp.query("cost_lb_strategy", costLbStrategy_);
 
 	// read density floor in g cm^-3
 	pp.query("density_floor", densityFloor_);
@@ -2514,7 +2546,218 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 // N.B.  The ForceFinestLevel regrid guarantee lives in timeStepWithSubcycling, where a
 // level-0 regrid is forced at the start of the first coarse step.  The bare override here
 // keeps the virtual method available for future diagnostics.
-template <typename problem_t> void AMRSimulation<problem_t>::regrid(int lbase, amrex::Real time, bool initial) { amrex::AmrCore::regrid(lbase, time, initial); }
+template <typename problem_t> void AMRSimulation<problem_t>::regrid(int lbase, amrex::Real time, bool initial)
+{
+	std::fill(dmRemadeThisRegrid_.begin(), dmRemadeThisRegrid_.end(), 0);
+	amrex::AmrCore::regrid(lbase, time, initial);
+	if (!initial && costLoadBalance_ != 0) {
+		rebalanceUnchangedLevels(lbase, time);
+		// restart the cost measurement on the regridded levels, so the next regrid uses the cost of the last interval
+		for (int lev = lbase; lev < static_cast<int>(boxCostAccum_.size()); ++lev) {
+			boxCostAccum_[lev].ncalls = 0;
+		}
+	}
+}
+
+// perf-src-04c: return the device per-box cost accumulator for level lev (reset when the level's
+// BoxArray/DistributionMapping changed since the last call), or nullptr if cost balancing is off.
+template <typename problem_t> auto AMRSimulation<problem_t>::boxCostAccumulator(int lev, amrex::MultiFab const &mf) -> amrex::Real *
+{
+	if (costLoadBalance_ == 0 || lev >= static_cast<int>(boxCostAccum_.size())) {
+		return nullptr;
+	}
+	auto &acc = boxCostAccum_[lev];
+	if (acc.ncalls == 0 || acc.ba != mf.boxArray() || acc.dm != mf.DistributionMap()) {
+		const int nlocal = mf.local_size();
+		acc.ba = mf.boxArray();
+		acc.dm = mf.DistributionMap();
+		acc.gidx.assign(nlocal, -1);
+		for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
+			acc.gidx[mfi.LocalIndex()] = mfi.index();
+		}
+		acc.cost.resize(nlocal);
+		if (nlocal > 0) {
+			amrex::Real *p = acc.cost.data();
+			amrex::ParallelFor(nlocal, [=] AMREX_GPU_DEVICE(int i) noexcept { p[i] = 0.0; }); // NOLINT
+		}
+		acc.ncalls = 0;
+	}
+	++acc.ncalls;
+	return acc.cost.data();
+}
+
+// perf-src-04c: collective. Returns the measured cooling work per cell per call (substeps/cell) for every box of the
+// BoxArray the level-lev accumulator was measured on (returned in ba_out), or an empty vector if nothing was measured.
+template <typename problem_t> auto AMRSimulation<problem_t>::gatherCostDensity(int lev, amrex::BoxArray &ba_out) -> amrex::Vector<amrex::Real>
+{
+	if (lev < 0 || lev >= static_cast<int>(boxCostAccum_.size())) {
+		return {};
+	}
+	auto &acc = boxCostAccum_[lev];
+	if (acc.ncalls == 0 || acc.ba.empty()) {
+		return {};
+	}
+	const int nlocal = static_cast<int>(acc.gidx.size());
+	amrex::Vector<amrex::Real> hcost(nlocal, 0.0);
+	if (nlocal > 0) {
+		amrex::Gpu::copyAsync(amrex::Gpu::deviceToHost, acc.cost.begin(), acc.cost.end(), hcost.begin());
+	}
+	amrex::Gpu::streamSynchronize();
+	const int nboxes = static_cast<int>(acc.ba.size());
+	amrex::Vector<amrex::Real> density(nboxes, 0.0);
+	for (int li = 0; li < nlocal; ++li) {
+		density[acc.gidx[li]] = hcost[li];
+	}
+	// each entry is nonzero on exactly one rank, so the sum is exact and identical on all ranks
+	amrex::ParallelAllReduce::Sum(density.data(), nboxes, amrex::ParallelContext::CommunicatorSub());
+	for (int i = 0; i < nboxes; ++i) {
+		density[i] /= (static_cast<amrex::Real>(acc.ncalls) * acc.ba[i].d_numPts());
+	}
+	ba_out = acc.ba;
+	return density;
+}
+
+// perf-src-04c: collective. Estimated per-box cost of BoxArray ba on level lev:
+//   cost = cellWeight * ncells + (estimated cooling substeps per call),
+// where the substeps come from the measured level-lev density where the new box overlaps the measured
+// boxes, and from the coarser level's density elsewhere. Empty if no cost has been measured.
+template <typename problem_t> auto AMRSimulation<problem_t>::estimateBoxCosts(int lev, amrex::BoxArray const &ba) -> amrex::Vector<amrex::Real>
+{
+	amrex::BoxArray baF;
+	amrex::BoxArray baC;
+	const amrex::Vector<amrex::Real> dF = gatherCostDensity(lev, baF);
+	amrex::Vector<amrex::Real> dC;
+	if (lev > 0) {
+		dC = gatherCostDensity(lev - 1, baC);
+	}
+	if (dF.empty() && dC.empty()) {
+		return {};
+	}
+	auto const meanOf = [](amrex::Vector<amrex::Real> const &d, amrex::BoxArray const &b) {
+		amrex::Real s = 0.0;
+		amrex::Real v = 0.0;
+		for (int i = 0; i < static_cast<int>(d.size()); ++i) {
+			s += d[i] * b[i].d_numPts();
+			v += b[i].d_numPts();
+		}
+		return (v > 0.0) ? s / v : 0.0;
+	};
+	const amrex::Real meanDensity = dF.empty() ? meanOf(dC, baC) : meanOf(dF, baF);
+
+	const int nboxes = static_cast<int>(ba.size());
+	amrex::Vector<amrex::Real> cost(nboxes, 0.0);
+	for (int i = 0; i < nboxes; ++i) {
+		const amrex::Box bx = ba[i];
+		amrex::Real substeps = 0.0;
+		amrex::Real covered = 0.0;
+		if (!dF.empty()) {
+			for (auto const &is : baF.intersections(bx)) {
+				substeps += dF[is.first] * is.second.d_numPts();
+				covered += is.second.d_numPts();
+			}
+		}
+		const amrex::Real remaining = bx.d_numPts() - covered;
+		if (remaining > 0.5) {
+			amrex::Real dens = meanDensity;
+			if (!dC.empty()) {
+				const amrex::Box bc = amrex::coarsen(bx, refRatio(lev - 1));
+				amrex::Real s = 0.0;
+				amrex::Real v = 0.0;
+				for (auto const &is : baC.intersections(bc)) {
+					s += dC[is.first] * is.second.d_numPts();
+					v += is.second.d_numPts();
+				}
+				if (v > 0.0) {
+					dens = s / v;
+				}
+			}
+			substeps += dens * remaining;
+		}
+		cost[i] = costLbCellWeight_ * bx.d_numPts() + substeps;
+	}
+	return cost;
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::makeWeightedDistributionMap(amrex::Vector<amrex::Real> const &cost, amrex::BoxArray const &ba, amrex::Real &eff) const
+    -> amrex::DistributionMapping
+{
+	if (costLbStrategy_ == 1) {
+		return amrex::DistributionMapping::makeKnapSack(cost, eff);
+	}
+	return amrex::DistributionMapping::makeSFC(cost, ba, eff);
+}
+
+// perf-src-04c: used by AmrCore::regrid / MakeNewGrids for every new BoxArray.
+template <typename problem_t> auto AMRSimulation<problem_t>::MakeDistributionMap(int lev, amrex::BoxArray const &ba) -> amrex::DistributionMapping
+{
+	if (lev < static_cast<int>(dmRemadeThisRegrid_.size())) {
+		dmRemadeThisRegrid_[lev] = 1;
+	}
+	if (costLoadBalance_ != 0) {
+		const amrex::Vector<amrex::Real> cost = estimateBoxCosts(lev, ba);
+		if (!cost.empty()) {
+			amrex::Real eff = 0.0;
+			amrex::DistributionMapping dm = makeWeightedDistributionMap(cost, ba, eff);
+			if (verbose != 0) {
+				amrex::Print() << "Creating new cost-weighted distribution map on level: " << lev << " (" << ba.size()
+					       << " boxes, estimated efficiency " << eff << ")\n";
+			}
+			return dm;
+		}
+	}
+	return amrex::AmrCore::MakeDistributionMap(lev, ba);
+}
+
+// perf-src-04c: at every regrid, remap levels whose BoxArray did not change (AmrCore keeps their old map) if the
+// measured per-box costs say a weighted map would raise the load-balance efficiency by more than costLbThreshold_.
+// Only levels > lbase are touched (the same levels AmrCore::regrid may remake).
+template <typename problem_t> void AMRSimulation<problem_t>::rebalanceUnchangedLevels(int lbase, amrex::Real time)
+{
+	BL_PROFILE("AMRSimulation::rebalanceUnchangedLevels()"); // NOLINT(misc-const-correctness)
+	const int nprocs = amrex::ParallelDescriptor::NProcs();
+	for (int lev = lbase + 1; lev <= finest_level; ++lev) {
+		if (dmRemadeThisRegrid_[lev] != 0) {
+			continue;
+		}
+		const amrex::BoxArray ba = grids[lev];
+		const amrex::Vector<amrex::Real> cost = estimateBoxCosts(lev, ba);
+		if (cost.empty()) {
+			continue;
+		}
+		amrex::Vector<amrex::Real> rankCost(nprocs, 0.0);
+		for (int i = 0; i < static_cast<int>(cost.size()); ++i) {
+			rankCost[dmap[lev][i]] += cost[i];
+		}
+		amrex::Real sumCost = 0.0;
+		amrex::Real maxCost = 0.0;
+		for (auto const c : rankCost) {
+			sumCost += c;
+			maxCost = std::max(maxCost, c);
+		}
+		const amrex::Real curEff = (maxCost > 0.0) ? sumCost / (static_cast<amrex::Real>(nprocs) * maxCost) : 1.0;
+		amrex::Real newEff = 0.0;
+		const amrex::DistributionMapping newdm = makeWeightedDistributionMap(cost, ba, newEff);
+		if (verbose != 0) {
+			amrex::Print() << "[cost LB] level " << lev << ": current efficiency " << curEff << ", weighted map " << newEff << "\n";
+		}
+		if (newEff > curEff * (1.0 + costLbThreshold_) && newdm != dmap[lev]) {
+			amrex::Print() << "[cost LB] remapping level " << lev << " (efficiency " << curEff << " -> " << newEff << ")\n";
+			RemakeLevel(lev, time, ba, newdm);
+			SetDistributionMap(lev, newdm);
+			fillpatcher_[lev].reset();
+			if (lev + 1 < static_cast<int>(fillpatcher_.size())) {
+				fillpatcher_[lev + 1].reset();
+			}
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				if (lev + 1 <= finest_level && emf_reg_[lev + 1] != nullptr) {
+					emf_reg_[lev + 1] = std::make_unique<amrex::EdgeFluxRegister>(grids[lev + 1], grids[lev], dmap[lev + 1], dmap[lev],
+												     Geom(lev + 1), Geom(lev), 1);
+				}
+			}
+		}
+	}
+}
 
 template <typename problem_t> void AMRSimulation<problem_t>::regridIfNeeded(int lev, amrex::Real time)
 {
