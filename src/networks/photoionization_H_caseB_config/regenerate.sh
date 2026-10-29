@@ -61,18 +61,11 @@ echo "==> Installing jaff from ${JAFF_DIR}"
 echo "==> Pinning sympy==${SYMPY_VERSION}"
 "${TMPDIR}/venv/bin/pip" install --quiet "sympy==${SYMPY_VERSION}"
 
-# Microphysics' build still reads these, until Quokka stops building the network with it
-JAFF_TEMPLATES="${JAFF_DIR}/src/jaff/templates"
-MICROPHYSICS_FILES="${JAFF_TEMPLATES}/generator/microphysics/_parameters"
-MICROPHYSICS_FILES+=",${JAFF_TEMPLATES}/generator/microphysics/actual_network_data.cpp"
-MICROPHYSICS_FILES+=",${JAFF_TEMPLATES}/preprocessor/microphysics/actual_network.H"
-
 echo "==> Running jaffgen, output to ${OUTDIR}"
 "${TMPDIR}/venv/bin/jaffgen" \
 	--config "${CONFIG_DIR}/jaffgen.toml" \
 	--network "${CONFIG_DIR}/photoionization_H_caseB.jet" \
 	--template quokka \
-	--files "${MICROPHYSICS_FILES}" \
 	--lang cxx \
 	--outdir "${OUTDIR}"
 
