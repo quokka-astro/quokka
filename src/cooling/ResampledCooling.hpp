@@ -15,6 +15,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_Parser.H"
 #include "AMReX_iMultiFab.H"
+#include "AMReX_GpuReduce.H"
 
 #include "cooling/EOSTabulatedRegistry.hpp"
 #include "hydro/hydro_system.hpp"
@@ -137,7 +138,8 @@ struct ResampledCoolingFunctor {
 // external_heating: optional position-dependent heating rate added to it, unit erg/s/H
 template <typename problem_t>
 auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &mf_fc, const Real dt_in, resampled_tables &resampledTables,
-		    const Real temp_floor, const Real const_heating_rate_per_H, ExternalHeatingRate const &external_heating = {}) -> bool
+		    const Real temp_floor, const Real const_heating_rate_per_H, ExternalHeatingRate const &external_heating = {},
+		    amrex::Real *boxCost = nullptr) -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
@@ -202,6 +204,16 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
 			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
 		});
+
+		// perf-src-04c: accumulate the per-box cooling work (sum of RK substeps over the box)
+		// into a device-resident per-box cost (one block reduction + one atomic per block, no sync).
+		if (boxCost != nullptr) {
+			amrex::Real *dst = boxCost + iter.LocalIndex(); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			amrex::ParallelFor(amrex::Gpu::KernelInfo().setReduction(true), indexRange,
+					   [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Gpu::Handler const &handler) noexcept {
+						   amrex::Gpu::deviceReduceSum(dst, static_cast<amrex::Real>(nsubsteps(i, j, k)), handler);
+					   });
+		}
 	}
 
 	const int nmax = nsubstepsMF.max(0);
