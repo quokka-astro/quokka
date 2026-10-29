@@ -206,16 +206,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static_assert(IMEX_Aim_22 > 0.0, "IMEX_Aim_22 must be > 0 for the IMEX PD-ARS scheme");
 	static constexpr double IMEX_alpha = IMEX_Aim_32 / IMEX_Aim_22; // = 0.5
 
-	// Transitional: while Microphysics reads the build macros, each microphysics trait must match its macro.
-	static_assert(Microphysics_Traits<problem_t>::chemistry == quokka::microphysics::detail::built_with_chemistry,
-		      "Microphysics_Traits::chemistry must be true exactly when the problem is built with CHEMISTRY");
-	static_assert(Microphysics_Traits<problem_t>::photochemistry == quokka::microphysics::detail::built_with_photochemistry,
-		      "Microphysics_Traits::photochemistry must be true exactly when the problem is built with PHOTOCHEMISTRY");
-	static_assert(Microphysics_Traits<problem_t>::dust_chemical_band_absorption == quokka::microphysics::detail::built_with_dust_chemical_band_absorption,
-		      "Microphysics_Traits::dust_chemical_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
-	static_assert(Microphysics_Traits<problem_t>::integrate_rad_flux == !quokka::microphysics::detail::built_with_skip_photochemflux,
-		      "Microphysics_Traits::integrate_rad_flux must be false exactly when the problem is built with SKIP_PHOTOCHEMFLUX");
-
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
 	amrex::Real dust_omega_drag_ = 1.0;

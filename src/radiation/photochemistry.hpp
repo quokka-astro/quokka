@@ -19,9 +19,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			   amrex::MultiFab &radEnergySource) -> bool;
 } // namespace quokka::photochemistry
 
-// The definition is compiled only in builds with photochemistry, because it uses names that only those builds have: spmasses
-// and eos() from Microphysics' photoionization EOS, and the constants of the generated network_properties.H that the transitional checks below compare against.
-// Callers use Microphysics_Traits<problem_t>::photochemistry. This guard goes when the EOS is in Quokka and the generated constants are gone.
+// The definition is compiled only in builds with photochemistry, because it uses spmasses, which only the chemistry EOSs
+// declare. Callers use Microphysics_Traits<problem_t>::photochemistry. This guard goes when the gamma_law EOS declares
+// spmasses too.
 #ifdef PHOTOCHEMISTRY
 #include "actual_eos_data.H"
 #include "eos.H"
@@ -71,23 +71,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || Network::NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
 		      "Network::NumThermalBands must equal RadSystem<problem_t>::nGroupsThermal_ (nGroups_ - NChemBands) when "
 		      "ISM_Traits::thermal_band_photochemistry is true.");
-	static_assert(Microphysics_Traits<problem_t>::integrate_rad_flux == (MicrophysicsNumChemRadVarsPerGroup == 2),
-		      "Microphysics_Traits::integrate_rad_flux must be false exactly when the problem is built with SKIP_PHOTOCHEMFLUX.");
-
-	// Transitional, until Microphysics' generated network_properties.H goes: the problem's network type must agree with the
-	// constants generated for its network.
-	static_assert(Network::NumSpec == NumSpec);
-	static_assert(Network::NumChemBands == NumChemBands);
-	static_assert([] {
-		for (int nn = 0; nn <= NumChemBands; ++nn) {
-			if (Network::ChemBands().arr[nn] != ChemBandsHeader().arr[nn]) {
-				return false;
-			}
-		}
-		return true;
-	}());
-	static_assert(Network::ChemBandsPowerLawIndex == ChemBandsPowerLawIndex_);
-	static_assert(Network::NumThermalBands == NumThermalBands);
+	// Until the EOS reads its species from the network (the EOS port), it sizes its composition by the species table on
+	// the include path (network_properties.H), so the problem's network must match that table.
+	static_assert(Network::NumSpec == NumSpec, "The problem's Network does not match the species table of the EOS it is built with.");
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.

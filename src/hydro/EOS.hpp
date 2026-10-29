@@ -252,6 +252,11 @@ template <typename problem_t> struct EOSIdeal {
 
 #if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 template <typename problem_t> struct EOSMicrophysics {
+	// Until the EOS reads its species from the network (the EOS port), it sizes its composition by the species table on
+	// the include path (network_properties.H), so the problem's network must match that table.
+	static_assert(Microphysics_Traits<problem_t>::Network::NumSpec == NumSpec,
+		      "The problem's Network does not match the species table of the EOS it is built with.");
+
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr bool is_tabulated = false;
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
