@@ -180,6 +180,44 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static void SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &faceVar_mf);
 
+	// per-cell bodies of EnforceLimits and SyncDualEnergy (shared by the separate, the fused-fixup and the fused-update kernels)
+	template <typename DensityFloorFunc>
+	AMREX_GPU_DEVICE static void EnforceLimitsCell(amrex::Array4<amrex::Real> const &state,
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc, int i, int j, int k,
+						       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+						       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real densityFloor,
+						       amrex::Real dustDensityFloor, amrex::Real tempFloor, DensityFloorFunc const &density_floor_func);
+
+	AMREX_GPU_DEVICE static void SyncDualEnergyCell(amrex::Array4<amrex::Real> const &consVar,
+							std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &faceVar, int i, int j, int k);
+
+	// EnforceLimits followed by (optionally) SyncDualEnergy in one kernel.
+	// If onlyRedoCells is non-null, only cells flagged quokka::redoFlag::redo are touched.
+	template <typename DensityFloorFunc>
+	static void EnforceLimitsAndSyncDualEnergy(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf,
+						   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
+						   DensityFloorFunc const &density_floor_func, bool syncDualEnergy,
+						   amrex::iMultiFab const *onlyRedoCells = nullptr);
+
+	struct FusedFixupParams {
+		bool enabled = false;	     // apply EnforceLimits (+ SyncDualEnergy) to valid cells inside the update kernel
+		bool syncDualEnergy = false; // also apply SyncDualEnergy
+		amrex::Real densityFloor = 0;
+		amrex::Real dustDensityFloor = 0;
+		amrex::Real tempFloor = 0;
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo{};
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx{};
+	};
+
+	// One fused kernel per RK stage: flux divergence + PdV source + forward update from consVarOld + validity flag
+	// (+ optionally the EnforceLimits/SyncDualEnergy fixup for cells that are flagged valid).
+	// Per cell this performs exactly the operations of ComputeRhsFromFluxes + AddInternalEnergyPdV + PredictStep (+ fixup), in the same order.
+	template <typename DensityFloorFunc>
+	static void UpdateStateFused(amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf,
+				     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
+				     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, double dt,
+				     int nvars, amrex::iMultiFab &redoFlag_mf, FusedFixupParams const &fixup, DensityFloorFunc const &density_floor_func);
+
 	template <RiemannSolver RIEMANN, FluxDir DIR>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &leftState_bfield_mf,
@@ -1273,6 +1311,314 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::
 		} else { // non-conservative sync
 			consVar[bx](i, j, k, internalEnergy_index) = Eint_aux;
 			consVar[bx](i, j, k, energy_index) = Eint_aux + Ekin + Emag;
+		}
+	});
+}
+
+template <typename problem_t>
+template <typename DensityFloorFunc>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+HydroSystem<problem_t>::EnforceLimitsCell(amrex::Array4<amrex::Real> const &state, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc,
+					  int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real const densityFloor,
+					  amrex::Real const dustDensityFloor, amrex::Real const tempFloor, DensityFloorFunc const &density_floor_func)
+{
+	// identical per-cell operations to the kernel in EnforceLimits()
+	amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+	amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+#else
+	amrex::Real const y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+	amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+#else
+	amrex::Real const z = 0.0;
+#endif
+
+	amrex::Real localDensityFloor = density_floor_func(x, y, z, densityFloor);
+
+	// Enforce density floor (do not adjust energies here!!)
+	amrex::Real rho_new = NAN;
+	{
+		amrex::Real const rho = state(i, j, k, density_index);
+		rho_new = rho;
+
+		if (rho < localDensityFloor) {
+			rho_new = localDensityFloor;
+			state(i, j, k, density_index) = rho_new;
+
+			if (nscalars_ > 0) {
+				for (int n = 0; n < nscalars_; ++n) {
+					if (rho_new == 0.0) {
+						state(i, j, k, scalar0_index + n) = 0.0;
+					} else {
+						state(i, j, k, scalar0_index + n) *= rho / rho_new;
+					}
+				}
+			}
+		}
+	}
+
+	// Enforce mass scalars floor
+	if (nmscalars_ > 0) {
+		amrex::Real sp_sum = 0.0;
+		for (int idx = 0; idx < nmscalars_; ++idx) {
+			if (state(i, j, k, scalar0_index + idx) < 0.0) {
+				state(i, j, k, scalar0_index + idx) = network_rp::small_x * rho_new;
+			}
+			// get sum to renormalize
+			sp_sum += state(i, j, k, scalar0_index + idx);
+		}
+
+		if ((sp_sum > std::numeric_limits<amrex::Real>::min()) && (rho_new > std::numeric_limits<amrex::Real>::min())) {
+			sp_sum /= rho_new; // get mass fractions
+			for (int idx = 0; idx < nmscalars_; ++idx) {
+				// renormalize
+				state(i, j, k, scalar0_index + idx) /= sp_sum;
+			}
+		}
+	}
+
+	// Enforce dust density floor
+	amrex::Real const dust_floor = dustDensityFloor;
+	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+		for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+			amrex::Real dust_rho = state(i, j, k, dustDensity_index + g * numDustVars_);
+			if (dust_rho < dust_floor) {
+				state(i, j, k, dustDensity_index + g * numDustVars_) = dust_floor;
+			}
+		}
+	}
+
+	// Enforce temperature floor
+	if ((rho_new > std::numeric_limits<amrex::Real>::min()) && !HydroSystem<problem_t>::is_eos_isothermal()) {
+		amrex::Real const vx1 = state(i, j, k, x1Momentum_index) / rho_new;
+		amrex::Real const vx2 = state(i, j, k, x2Momentum_index) / rho_new;
+		amrex::Real const vx3 = state(i, j, k, x3Momentum_index) / rho_new;
+		amrex::Real const Ekin = 0.5 * rho_new * (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
+
+		amrex::Real const Emag = ComputeMagneticEnergy(i, j, k, &state_fc);
+		amrex::Real const Eint = ComputeInternalEnergy(state, i, j, k, &state_fc);
+		amrex::GpuArray<Real, nmscalars_> const massScalars = RadSystem<problem_t>::ComputeMassScalars(state, i, j, k);
+		amrex::Real const primTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, Eint, massScalars);
+
+		if (primTemp < tempFloor) {
+			amrex::Real const prim_eint = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
+			state(i, j, k, energy_index) = Ekin + Emag + prim_eint;
+		}
+
+		// Enforce temperature floor (for auxiliary internal energy)
+		amrex::Real const auxEint = state(i, j, k, internalEnergy_index);
+		amrex::Real const auxTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, auxEint, massScalars);
+
+		if (auxTemp < tempFloor) {
+			amrex::Real const new_Eint = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
+			state(i, j, k, internalEnergy_index) = new_Eint;
+			// total energy should NOT be updated here
+		}
+	}
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+HydroSystem<problem_t>::SyncDualEnergyCell(amrex::Array4<amrex::Real> const &consVar, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &faceVar,
+					   int i, int j, int k)
+{
+	// identical per-cell operations to the kernel in SyncDualEnergy()
+	const amrex::Real eta = 1.0e-3; // dual energy parameter 'eta'
+
+	amrex::Real const rho = consVar(i, j, k, density_index);
+	amrex::Real const px = consVar(i, j, k, x1Momentum_index);
+	amrex::Real const py = consVar(i, j, k, x2Momentum_index);
+	amrex::Real const pz = consVar(i, j, k, x3Momentum_index);
+	amrex::Real const Etot = consVar(i, j, k, energy_index);
+	amrex::Real const Eint_aux = consVar(i, j, k, internalEnergy_index);
+
+	// abort if density is negative (can't compute kinetic energy)
+	if (rho <= 0.) {
+		amrex::Abort("density is negative in SyncDualEnergy! abort!!");
+	}
+
+	// compute kinetic energy
+	amrex::Real const Ekin = (px * px + py * py + pz * pz) / (2.0 * rho);
+
+	// compute magnetic energy
+	amrex::Real Emag = 0;
+	if (Physics_Traits<problem_t>::is_mhd_enabled) { // cannot be 'if constexpr' due to CUDA limitation
+		constexpr int mhd_idx = Physics_Indices<problem_t>::mhdFirstIndex;
+		amrex::Real const Bx = 0.5 * (faceVar[0](i, j, k, mhd_idx) + faceVar[0](i + 1, j, k, mhd_idx));
+#if AMREX_SPACEDIM >= 2
+		amrex::Real const By = 0.5 * (faceVar[1](i, j, k, mhd_idx) + faceVar[1](i, j + 1, k, mhd_idx));
+#endif
+#if AMREX_SPACEDIM == 3
+		amrex::Real const Bz = 0.5 * (faceVar[2](i, j, k, mhd_idx) + faceVar[2](i, j, k + 1, mhd_idx));
+#endif
+		Emag = 0.5 * (AMREX_D_TERM(Bx * Bx, +By * By, +Bz * Bz));
+	}
+
+	// compute internal energy from conserved vars
+	amrex::Real const Eint_cons = Etot - Ekin - Emag;
+
+	// Li et al. sync method
+	// replace Eint with Eint_cons == (Etot - Ekin) if (Eint_cons / E) > eta
+	if (Eint_cons > eta * Etot) {
+		consVar(i, j, k, internalEnergy_index) = Eint_cons;
+	} else { // non-conservative sync
+		consVar(i, j, k, internalEnergy_index) = Eint_aux;
+		consVar(i, j, k, energy_index) = Eint_aux + Ekin + Emag;
+	}
+}
+
+template <typename problem_t>
+template <typename DensityFloorFunc>
+void HydroSystem<problem_t>::EnforceLimitsAndSyncDualEnergy(amrex::Real const densityFloor, amrex::Real const dustDensityFloor, amrex::Real const tempFloor,
+							    amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf,
+							    amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func, bool const syncDualEnergy,
+							    amrex::iMultiFab const *onlyRedoCells)
+{
+	const BL_PROFILE("HydroSystem::EnforceLimitsAndSyncDualEnergy()");
+
+	auto state = state_mf.arrays();
+	auto const &state_fc_x0 = state_fc_mf[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+	auto const &state_fc_x1 = state_fc_mf[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+	auto const &state_fc_x2 = state_fc_mf[2].const_arrays();
+#endif
+	auto const prob_lo = geom.ProbLoArray();
+	auto const dx = geom.CellSizeArray();
+
+	bool const useMask = (onlyRedoCells != nullptr);
+	amrex::MultiArray4<const int> mask{};
+	if (useMask) {
+		mask = onlyRedoCells->const_arrays();
+	}
+
+	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		if (useMask && (mask[bx](i, j, k) != quokka::redoFlag::redo)) {
+			return;
+		}
+		// First-capture face-centered arrays before any constexpr-if context for CUDA.
+		std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x0[bx])>> state_fc_x0_ref{};
+#if AMREX_SPACEDIM >= 2
+		std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x1[bx])>> state_fc_x1_ref{};
+#endif
+#if AMREX_SPACEDIM == 3
+		std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x2[bx])>> state_fc_x2_ref{};
+#endif
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			state_fc_x0_ref = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+			state_fc_x1_ref = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+			state_fc_x2_ref = state_fc_x2[bx];
+#endif
+		}
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
+		state_fc[0] = state_fc_x0_ref;
+#if AMREX_SPACEDIM >= 2
+		state_fc[1] = state_fc_x1_ref;
+#endif
+#if AMREX_SPACEDIM == 3
+		state_fc[2] = state_fc_x2_ref;
+#endif
+		EnforceLimitsCell(state[bx], state_fc, i, j, k, prob_lo, dx, densityFloor, dustDensityFloor, tempFloor, density_floor_func);
+		if (syncDualEnergy) {
+			SyncDualEnergyCell(state[bx], state_fc, i, j, k);
+		}
+	});
+}
+
+template <typename problem_t>
+template <typename DensityFloorFunc>
+void HydroSystem<problem_t>::UpdateStateFused(amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf,
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+					      const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf, FusedFixupParams const &fixup,
+					      DensityFloorFunc const &density_floor_func)
+{
+	const BL_PROFILE("HydroSystem::UpdateStateFused()");
+
+	// fluxes (see ComputeRhsFromFluxes for the sign convention)
+	auto const x1Flux = fluxArray[0].const_arrays();
+	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
+	auto vel_x = faceVelArray[0].const_arrays();
+#if (AMREX_SPACEDIM >= 2)
+	auto const x2Flux = fluxArray[1].const_arrays();
+	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
+	auto vel_y = faceVelArray[1].const_arrays();
+#endif
+#if (AMREX_SPACEDIM == 3)
+	auto const x3Flux = fluxArray[2].const_arrays();
+	auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
+	auto vel_z = faceVelArray[2].const_arrays();
+#endif
+
+	auto const &consVar = consVarOld_mf.const_arrays();
+	auto consVarNew = consVarNew_mf.arrays();
+	auto redoFlag = redoFlag_mf.arrays();
+
+	bool const doFixup = fixup.enabled;
+	bool const doSync = fixup.syncDualEnergy;
+	amrex::Real const densityFloor = fixup.densityFloor;
+	amrex::Real const dustDensityFloor = fixup.dustDensityFloor;
+	amrex::Real const tempFloor = fixup.tempFloor;
+	auto const prob_lo = fixup.prob_lo;
+	auto const fixup_dx = fixup.dx;
+
+	amrex::ParallelFor(consVarNew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// --- P dV source term (identical to AddInternalEnergyPdV) ---
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			cons_fc[0] = cons_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+			cons_fc[1] = cons_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+			cons_fc[2] = cons_fc_x2[bx];
+#endif
+		}
+		const amrex::Real Pgas = ComputePressure(consVar[bx], i, j, k, &cons_fc);
+
+		// compute div v from face-centered velocities
+		amrex::Real div_v = NAN;
+
+		if (redoFlag[bx](i, j, k) == quokka::redoFlag::none) {
+			div_v = AMREX_D_TERM((vel_x[bx](i + 1, j, k) - vel_x[bx](i, j, k)) / dx[0], +(vel_y[bx](i, j + 1, k) - vel_y[bx](i, j, k)) / dx[1],
+					     +(vel_z[bx](i, j, k + 1) - vel_z[bx](i, j, k)) / dx[2]);
+		} else {
+			div_v = 0.5 * (AMREX_D_TERM((ComputeVelocityX1(consVar[bx], i + 1, j, k) - ComputeVelocityX1(consVar[bx], i - 1, j, k)) / dx[0],
+						    +(ComputeVelocityX2(consVar[bx], i, j + 1, k) - ComputeVelocityX2(consVar[bx], i, j - 1, k)) / dx[1],
+						    +(ComputeVelocityX3(consVar[bx], i, j, k + 1) - ComputeVelocityX3(consVar[bx], i, j, k - 1)) / dx[2]));
+		}
+
+		// --- flux divergence + forward update (identical to ComputeRhsFromFluxes + PredictStep) ---
+		for (int n = 0; n < nvars; ++n) {
+			amrex::Real rhs = AMREX_D_TERM((1.0 / dx[0]) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n)),
+						       +(1.0 / dx[1]) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n)),
+						       +(1.0 / dx[2]) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n)));
+			if (n == internalEnergy_index) {
+				rhs += -Pgas * div_v;
+			}
+			consVarNew[bx](i, j, k, n) = consVar[bx](i, j, k, n) + dt * rhs;
+		}
+
+		// --- check if state is valid -- flag for re-do if not ---
+		bool const valid = isStateValid(consVarNew[bx], i, j, k);
+		redoFlag[bx](i, j, k) = valid ? quokka::redoFlag::none : quokka::redoFlag::redo;
+
+		// --- fixups (identical to EnforceLimits + SyncDualEnergy); cells flagged for re-do are left untouched ---
+		if (doFixup && valid) {
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const new_fc{}; // only used for non-MHD
+			EnforceLimitsCell(consVarNew[bx], new_fc, i, j, k, prob_lo, fixup_dx, densityFloor, dustDensityFloor, tempFloor, density_floor_func);
+			if (doSync) {
+				SyncDualEnergyCell(consVarNew[bx], new_fc, i, j, k);
+			}
 		}
 	});
 }
