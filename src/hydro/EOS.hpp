@@ -73,6 +73,46 @@ template <typename problem_t> struct EOSIdeal {
 		}
 	}();
 
+	// ---- closed-form gamma-law fast path (hydro-k03) ----
+	// The Microphysics gamma_law EOS (used by every non-CHEMISTRY/PHOTOCHEMISTRY target) is evaluated here in closed form
+	// with the compile-time gamma_, instead of round-tripping through eos() with the run-time (managed-memory) eos_gamma.
+	// QuokkaSimulation::initialize() asserts that eos_rp::eos_gamma == EOS_Traits<problem_t>::gamma, so the two cannot disagree.
+	// Arguments outside the range in which eos() would apply its reset_inputs() clamps (and NaN) fall back to the general eos() path.
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
+	static constexpr bool fast_path_enabled_ = false;
+#else
+	static constexpr bool fast_path_enabled_ = (nmscalars_ == 0) && (gamma_ != 1.0);
+#endif
+	static constexpr amrex::Real gm1_ = gamma_ - 1.0;
+	static constexpr amrex::Real igm1_ = fast_path_enabled_ ? (1.0 / (gamma_ - 1.0)) : 0.0;
+	// T[units of boltzmann_constant_] = e_specific * Tcoef_ ;  e_density = rho * T * Ecoef_
+	static constexpr amrex::Real Tcoef_ = fast_path_enabled_ ? (gm1_ * mean_molecular_weight_ / boltzmann_constant_) : 0.0;
+	static constexpr amrex::Real Ecoef_ = fast_path_enabled_ ? (boltzmann_constant_ / (gm1_ * mean_molecular_weight_)) : 0.0;
+	static constexpr amrex::Real kfacInv_ = boltzmann_constant_ / C::k_B;
+	// validity ranges of the general eos() path before clamping (EOSData defaults / small_dens, small_temp set in QuokkaSimulation::initialize)
+	static constexpr amrex::Real fast_min_e_ = 1.0e-200;
+	static constexpr amrex::Real fast_max_e_ = 1.0e200;
+	static constexpr amrex::Real fast_min_p_ = 1.0e-200;
+	static constexpr amrex::Real fast_max_p_ = 1.0e200;
+	static constexpr amrex::Real fast_min_rho_ = 1.0e-100;
+	static constexpr amrex::Real fast_max_rho_ = 1.0e200;
+	static constexpr amrex::Real fast_min_T_ = 1.0e-10;
+	static constexpr amrex::Real fast_max_T_ = 1.0e200;
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FastRhoEOk(amrex::Real rho, amrex::Real Eint) -> bool
+	{
+		return (rho >= fast_min_rho_) && (rho <= fast_max_rho_) && (Eint >= rho * fast_min_e_) && (Eint <= rho * fast_max_e_);
+	}
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FastRhoPOk(amrex::Real rho, amrex::Real P) -> bool
+	{
+		return (rho >= fast_min_rho_) && (rho <= fast_max_rho_) && (P >= fast_min_p_) && (P <= fast_max_p_);
+	}
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FastRhoTOk(amrex::Real rho, amrex::Real T) -> bool
+	{
+		return (rho >= fast_min_rho_) && (rho <= fast_max_rho_) && (T >= fast_min_T_) && (T <= fast_max_T_);
+	}
+
+	template <bool AllowFast = true>
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
@@ -81,6 +121,11 @@ template <typename problem_t> struct EOSIdeal {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
+			if constexpr (AllowFast && fast_path_enabled_) {
+				if (FastRhoEOk(rho, Eint)) {
+					return (Eint / rho) * Tcoef_;
+				}
+			}
 			chem_eos_t estate;
 			estate.rho = rho;
 			estate.e = Eint / rho;
@@ -91,6 +136,7 @@ template <typename problem_t> struct EOSIdeal {
 		return Tgas;
 	}
 
+	template <bool AllowFast = true>
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
@@ -99,6 +145,11 @@ template <typename problem_t> struct EOSIdeal {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
+			if constexpr (AllowFast && fast_path_enabled_) {
+				if (FastRhoTOk(rho, Tgas)) {
+					return rho * Tgas * Ecoef_;
+				}
+			}
 			chem_eos_t estate;
 			estate.rho = rho;
 			estate.T = Tgas;
@@ -109,6 +160,7 @@ template <typename problem_t> struct EOSIdeal {
 		return Eint;
 	}
 
+	template <bool AllowFast = true>
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
@@ -117,6 +169,11 @@ template <typename problem_t> struct EOSIdeal {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
+			if constexpr (AllowFast && fast_path_enabled_) {
+				if (FastRhoPOk(rho, Pressure)) {
+					return Pressure * igm1_;
+				}
+			}
 			chem_eos_t estate;
 			estate.rho = rho;
 			estate.p = Pressure;
@@ -127,6 +184,7 @@ template <typename problem_t> struct EOSIdeal {
 		return Eint;
 	}
 
+	template <bool AllowFast = true>
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real Tgas,
 				  quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
@@ -135,6 +193,11 @@ template <typename problem_t> struct EOSIdeal {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
+			if constexpr (AllowFast && fast_path_enabled_) {
+				if (FastRhoTOk(rho, Tgas)) {
+					return rho * Ecoef_;
+				}
+			}
 			chem_eos_t estate;
 			estate.rho = rho;
 			estate.T = Tgas;
@@ -145,6 +208,7 @@ template <typename problem_t> struct EOSIdeal {
 		return dEint_dT;
 	}
 
+	template <bool AllowFast = true>
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real P, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	{
@@ -156,6 +220,15 @@ template <typename problem_t> struct EOSIdeal {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
+			if constexpr (AllowFast && fast_path_enabled_) {
+				if (FastRhoPOk(rho, P)) {
+					// dedr = 0 ; 1/dpde = 1/((gamma-1) rho) ; drho/dP = rho/(P * kB/boltzmann) ; cs^2 = gamma P / rho ; G = (gamma+1)/2
+					const amrex::Real rhoinv = 1.0 / rho;
+					const amrex::Real Pinv = 1.0 / P;
+					return std::make_tuple(amrex::Real(0.0), amrex::Real(igm1_ * rhoinv), amrex::Real(rho * Pinv * kfacInv_), amrex::Real(gamma_ * P * rhoinv),
+							       amrex::Real(0.5 * (1.0 + gamma_)));
+				}
+			}
 			chem_eos_t estate;
 			estate.rho = rho;
 			estate.p = P;
@@ -170,6 +243,7 @@ template <typename problem_t> struct EOSIdeal {
 		return std::make_tuple(deint_dRho, deint_dP, dRho_dP, dP_dRho_s, G);
 	}
 
+	template <bool AllowFast = true>
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputePressure(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
 	{
@@ -184,6 +258,12 @@ template <typename problem_t> struct EOSIdeal {
 		}
 		amrex::ignore_unused(massScalars);
 
+		if constexpr (AllowFast && fast_path_enabled_) {
+			if (FastRhoEOk(rho, Eint)) {
+				return gm1_ * Eint;
+			}
+		}
+
 		chem_eos_t estate;
 		estate.rho = rho;
 		if (rho == 0.0) {
@@ -197,6 +277,7 @@ template <typename problem_t> struct EOSIdeal {
 		return P;
 	}
 
+	template <bool AllowFast = true>
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
@@ -212,6 +293,12 @@ template <typename problem_t> struct EOSIdeal {
 			return cs;
 		}
 		amrex::ignore_unused(massScalars);
+
+		if constexpr (AllowFast && fast_path_enabled_) {
+			if (FastRhoPOk(rho, Pressure)) {
+				return std::sqrt(gamma_ * Pressure / rho);
+			}
+		}
 
 		chem_eos_t estate;
 		estate.rho = rho;
@@ -480,26 +567,26 @@ template <typename problem_t> struct EOSTabulated {
 	ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		return EOSIdeal<problem_t>::ComputeEintFromPres(rho, Pressure, massScalars);
+		return EOSIdeal<problem_t>::template ComputeEintFromPres<false>(rho, Pressure, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real P, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	{
-		return EOSIdeal<problem_t>::ComputeOtherDerivatives(rho, P, massScalars);
+		return EOSIdeal<problem_t>::template ComputeOtherDerivatives<false>(rho, P, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputePressure(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
 	{
-		return EOSIdeal<problem_t>::ComputePressure(rho, Eint, massScalars);
+		return EOSIdeal<problem_t>::template ComputePressure<false>(rho, Eint, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		return EOSIdeal<problem_t>::ComputeSoundSpeed(rho, Pressure, massScalars);
+		return EOSIdeal<problem_t>::template ComputeSoundSpeed<false>(rho, Pressure, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Real rho, amrex::Real Pressure) -> amrex::Real
@@ -567,6 +654,8 @@ template <typename problem_t> class EOS
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr bool is_tabulated = backend_t::is_tabulated;
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
+	// true if the closed-form ideal-gas fast path (hydro-k03) is active for this problem
+	static constexpr bool ideal_fast_path_ = std::is_same_v<backend_t, EOSIdeal<problem_t>> && EOSIdeal<problem_t>::fast_path_enabled_;
 
 	static constexpr amrex::Real boltzmann_constant_ = EOSIdeal<problem_t>::boltzmann_constant_;
 

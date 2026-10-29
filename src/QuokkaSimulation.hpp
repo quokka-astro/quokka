@@ -277,6 +277,15 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
 		// initialize Microphysics params
 		init_extern_parameters();
+#if !defined(PHOTOCHEMISTRY) && !defined(CHEMISTRY)
+		if constexpr (::quokka::EOS<problem_t>::ideal_fast_path_) {
+			// the closed-form ideal-gas fast path uses the compile-time gamma; it must match the gamma the Microphysics EOS uses
+			const double eos_gamma_rt = eos_rp::eos_gamma;
+			const double eos_gamma_ct = ::quokka::EOS_Traits<problem_t>::gamma;
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(eos_gamma_rt - eos_gamma_ct) <= 1.0e-14 * std::abs(eos_gamma_ct),
+							 "run-time eos_gamma differs from compile-time EOS_Traits::gamma; the closed-form ideal-gas EOS fast path would be wrong");
+		}
+#endif
 #if defined(PHOTOCHEMISTRY) || defined(CHEMISTRY)
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!integrator_rp::subtract_internal_energy,
 						 "integrator.subtract_internal_energy must be 0: Quokka reads total energy from burn_t::e, not the delta");
