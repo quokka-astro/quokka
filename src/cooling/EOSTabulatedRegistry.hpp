@@ -44,7 +44,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 	return tables.all_tables.interpolate_single(point, TEMPERATURE_IDX);
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho, Real const Tgas, resampledGpuConstTables const &tables) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho, Real const Tgas, resampledGpuConstTables const &tables, Real const rel_tol = 0.0) -> Real
 {
 	if (rho <= 0.0) {
 		AMREX_ASSERT(rho > 0.0);
@@ -66,7 +66,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho
 	auto f = [=](Real Eint) -> Real { return ComputeTgasFromEgas(rho, Eint, tables) - Tgas; };
 
 	int max_iter = 32;
-	auto tol = quokka::math::eps_tolerance<Real>{};
+	auto tol = (rel_tol > 0.0) ? quokka::math::eps_tolerance<Real>(rel_tol) : quokka::math::eps_tolerance<Real>{};
 	auto const [Eint_lo, Eint_hi] = quokka::math::toms748_solve(f, Eint_min, Eint_max, Tmin - Tgas, Tmax - Tgas, tol, max_iter);
 
 	return Eint_hi;

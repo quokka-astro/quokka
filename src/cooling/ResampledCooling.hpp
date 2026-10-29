@@ -179,8 +179,10 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 			quokka::valarray<Real, 1> y = {Eint};
 
 			// integration tolerance
-			const Real Eint_floor = (temp_floor > 0.0) ? ComputeEgasFromTgas(rho, temp_floor, tables) : 0.0;
-			const Real abstol_floor = amrex::max(Eint_floor, std::numeric_limits<Real>::min());
+			// cheap order-of-magnitude estimate of the floor energy (ideal gas, mu ~ m_p); only used for the absolute tolerance
+			constexpr Real gamma_est = quokka::EOS_Traits<problem_t>::gamma;
+			const Real Eint_floor_est = (temp_floor > 0.0) ? rho * C::k_B * temp_floor / ((gamma_est - 1.0) * C::m_p) : 0.0;
+			const Real abstol_floor = amrex::max(Eint_floor_est, std::numeric_limits<Real>::min());
 			quokka::valarray<Real, 1> const abstol = {reltol_floor * abstol_floor};
 
 			// do integration with RK2 (Heun's method)
@@ -196,7 +198,14 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 				       "time = %g, dt = %.17e\n",
 				       rho, Eint, t_cool, dt);
 			}
-			const Real Eint_new = (temp_floor > 0.0) ? amrex::max(y[0], Eint_floor) : y[0];
+			// enforce the temperature floor in temperature space; invert the table only if the floor is violated
+			Real Eint_new = y[0];
+			if (temp_floor > 0.0) {
+				const Real T_new = ComputeTgasFromEgas(rho, y[0], tables);
+				if (T_new < temp_floor) {
+					Eint_new = amrex::max(y[0], ComputeEgasFromTgas(rho, temp_floor, tables, 1.0e-8));
+				}
+			}
 			const Real dEint = Eint_new - Eint;
 
 			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
