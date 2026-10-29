@@ -347,6 +347,25 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryYieldFraction(ChemicalYieldGp
 	return std::max<amrex::Real>(values[static_cast<std::size_t>(isotope_index)], 0.0);
 }
 
+/// Interpolate one channel's table once and return the (non-negative) yield fraction of every tracked isotope.
+/// Entries for isotopes >= num_tracked_isotopes (and everything for a disabled channel) are exactly zero, matching queryYieldFraction.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryYieldFractionAll(ChemicalYieldGpuConstTables const &tables, int channel_index, amrex::Real mass_msun)
+    -> std::array<amrex::Real, max_tracked_isotopes>
+{
+	std::array<amrex::Real, max_tracked_isotopes> out{};
+	if (!tables.tables_loaded || channel_index < 0 || channel_index >= max_tracked_channels || tables.channel_enabled[channel_index] == 0) {
+		return out;
+	}
+
+	std::array<amrex::Real, 1> const point{mass_msun};
+	const auto values = tables.channels[static_cast<std::size_t>(channel_index)].interpolate(point);
+	const int niso = tables.num_tracked_isotopes < max_tracked_isotopes ? tables.num_tracked_isotopes : max_tracked_isotopes;
+	for (int n = 0; n < niso; ++n) {
+		out[static_cast<std::size_t>(n)] = std::max<amrex::Real>(values[static_cast<std::size_t>(n)], 0.0);
+	}
+	return out;
+}
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryWRMassLossCumulativeFraction(ChemicalYieldGpuConstTables const &tables, amrex::Real age,
 										amrex::Real mass_msun) -> amrex::Real
 {

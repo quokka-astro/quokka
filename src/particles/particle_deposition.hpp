@@ -1177,11 +1177,86 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 			const amrex::Real death_time = p.rdata(StochasticStellarPopParticleDeathTimeIdx);
 			const bool agb_death = enable_agb_metal && (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding)) &&
 					       (mass_birth_msun <= 8.0) && ((time + dt) > death_time);
+			// Early exit: a particle that is neither an SNII progenitor past its death time nor an AGB death step deposits exactly nothing
+			// (computeSNIIChannelYield / computeAGBChannelYield return 0 and the stage is not modified).
+			const bool snii_active = enable_snii_metal && (stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) && ((time + dt) > death_time);
+			if (!snii_active && !agb_death) {
+				return;
+			}
+
 			amrex::ParticleInterpolator::WendlandC2<W_stencil_N> interp(p, plo, dxi);
 
 			const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
 			const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
 			const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+
+			if (use_chemical_tables) {
+				// SNII (stage SNProgenitor) and AGB (stage HighMassNonExploding) are mutually exclusive for a given particle, so a single
+				// table interpolation (all isotopes at once) of the active channel serves every isotope.
+				const int channel = snii_active ? 0 : 2;
+				const auto frac = ChemicalYieldLookup::queryYieldFractionAll(yield_tables, channel, mass_birth_msun);
+				constexpr int max_iso = ChemicalYieldLookup::max_tracked_isotopes;
+				const int nlim = nchem < max_iso ? nchem : max_iso;
+
+				if (snii_active) {
+					for (int n = 0; n < nlim; ++n) {
+						const amrex::Real snii_mass = std::max<amrex::Real>(0.0, frac[static_cast<std::size_t>(n)] * mass_birth);
+						if (snii_mass <= 0.0) {
+							continue;
+						}
+						const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
+						ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, total_comp, snii_mass, vol_inverse);
+						if (store_channel_fields_local) {
+							const int sn_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + nchem + n;
+							if (sn_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+								ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, sn_comp, snii_mass, vol_inverse);
+							}
+						}
+					}
+				} else {
+					// AGB: stencil weights computed once per cell; isotopes looped inside the stencil loop.
+					constexpr int W_stencil_width = 2 * W_stencil_N + 1;
+					constexpr auto W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
+					constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
+					const int nz_loop = (AMREX_SPACEDIM >= 3) ? W_stencil_width : 1;
+					const int ny_loop = (AMREX_SPACEDIM >= 2) ? W_stencil_width : 1;
+					for (int kk = 0; kk < nz_loop; ++kk) {
+						const amrex::Real dz = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2] : 0.0;
+						for (int jj = 0; jj < ny_loop; ++jj) {
+							const amrex::Real dy = (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1] : 0.0;
+							for (int ii = 0; ii < W_stencil_width; ++ii) {
+								const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
+								const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+								if (r2 <= W_cutoff_r2) {
+									const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
+									for (int n = 0; n < nlim; ++n) {
+										const amrex::Real agb_mass = std::max<amrex::Real>(0.0, frac[static_cast<std::size_t>(n)] * mass_birth);
+										if (agb_mass <= 0.0) {
+											continue;
+										}
+										const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
+										amrex::Gpu::Atomic::AddNoRet(&local_buffer(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, total_comp),
+													     wt * agb_mass * vol_inverse);
+										if (store_channel_fields_local) {
+											const int agb_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 3 * nchem + n;
+											if (agb_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+												amrex::Gpu::Atomic::AddNoRet(
+												    &local_buffer(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, agb_comp),
+												    wt * agb_mass * vol_inverse);
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
+				if (agb_death) {
+					p.idata(StochasticStellarPopParticleStageIdx) = static_cast<int>(StellarEvolutionStage::Removed);
+				}
+				return;
+			}
 
 			for (int n = 0; n < nchem; ++n) {
 				const amrex::Real birth_iso_abundance = std::max<amrex::Real>(0.0, p.rdata(chem_base + n));
