@@ -38,6 +38,7 @@
 #include <cmath>
 #include <format>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -67,6 +68,20 @@ template <typename problem_t> class turbulentDriving
 	bool remove_mean_flow = false;
 	amrex::GpuArray<amrex::Real, 3> accumulated_forcing_bias = {0.0, 0.0, 0.0};
 
+	// Cache of the forcing field, one entry per level (keyed by geometry). The field depends only on the TurbGen
+	// pattern (which changes only inside update()) and the grid, so it is recomputed only when the pattern
+	// version changes or the BoxArray/DistributionMapping of the level changes (regrid).
+	struct ForcingCacheEntry {
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> cellSizes;
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> probLo;
+		amrex::BoxArray ba;
+		amrex::DistributionMapping dm;
+		std::unique_ptr<amrex::MultiFab> forcing;
+		long pattern_version = -1;
+	};
+	std::vector<ForcingCacheEntry> forcing_cache;
+	long pattern_version_ = 0;
+
 	// the forcing pattern is exactly zero-mean by construction, but the momentum source applied
 	// is density-weighted, so a net mean flow can still build up if the forcing correlates with
 	// density over time; this stays small for weakly compressible turbulence, but can grow to a
@@ -81,6 +96,7 @@ template <typename problem_t> class turbulentDriving
 			const VelocityMoments velocity_moments = quokka::turbulence::calculate_dispersion<problem_t>(state);
 			velocity_dispersion = velocity_moments.dispersion;
 			tg.check_for_update(time, velocity_dispersion.data());
+			++pattern_version_;
 
 			const amrex::Real forcing_bias_magnitude =
 			    std::sqrt(accumulated_forcing_bias[0] * accumulated_forcing_bias[0] + accumulated_forcing_bias[1] * accumulated_forcing_bias[1] +
@@ -117,7 +133,34 @@ template <typename problem_t> class turbulentDriving
 		update(time, state);
 		const amrex::Real dt = dt_in;
 
-		amrex::MultiFab forcing(state.boxArray(), state.DistributionMap(), AMREX_SPACEDIM, 0);
+		// find (or create) the cache entry for this level
+		ForcingCacheEntry *entry = nullptr;
+		for (auto &e : forcing_cache) {
+			bool same_geom = true;
+			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+				same_geom = same_geom && (e.cellSizes[d] == cellSizes[d]) && (e.probLo[d] == probLo[d]);
+			}
+			if (same_geom) {
+				entry = &e;
+				break;
+			}
+		}
+		if (entry == nullptr) {
+			forcing_cache.emplace_back();
+			entry = &forcing_cache.back();
+			entry->cellSizes = cellSizes;
+			entry->probLo = probLo;
+		}
+		bool const grid_changed = !entry->forcing || !(entry->ba == state.boxArray()) || !(entry->dm == state.DistributionMap());
+		if (grid_changed) {
+			entry->ba = state.boxArray();
+			entry->dm = state.DistributionMap();
+			entry->forcing = std::make_unique<amrex::MultiFab>(state.boxArray(), state.DistributionMap(), AMREX_SPACEDIM, 0);
+			entry->pattern_version = -1;
+		}
+		amrex::MultiFab &forcing = *entry->forcing;
+		bool const recompute_forcing = (entry->pattern_version != pattern_version_);
+		entry->pattern_version = pattern_version_;
 
 		// domain totals needed to remove the net mean flow the forcing would otherwise inject
 		amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum> reduce_op;
@@ -127,8 +170,10 @@ template <typename problem_t> class turbulentDriving
 			const amrex::Box &bx = mf.validbox();
 			auto const &data = state.array(mf);
 
-			amrex::FArrayBox &axFab = forcing[mf];
-			tg.get_turb_vector_unigrid(axFab, cellSizes, probLo);
+			if (recompute_forcing) {
+				amrex::FArrayBox &axFab = forcing[mf];
+				tg.get_turb_vector_unigrid(axFab, cellSizes, probLo);
+			}
 			auto const &ax = forcing.const_array(mf);
 
 			reduce_op.eval(bx, reduce_data,
@@ -169,12 +214,13 @@ template <typename problem_t> class turbulentDriving
 		accumulated_forcing_bias[1] += forcing_bias_increment[1] - mean_correction[1];
 		accumulated_forcing_bias[2] += forcing_bias_increment[2] - mean_correction[2];
 
-		for (amrex::MFIter mf(state); mf.isValid(); ++mf) {
-			const amrex::Box &bx = mf.validbox();
-			auto const &data = state.array(mf);
-			auto const &ax = forcing.const_array(mf);
+		{
+			auto const &data_arrs = state.arrays();
+			auto const &ax_arrs = forcing.const_arrays();
 
-			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bno, int i, int j, int k) noexcept {
+				auto const &data = data_arrs[bno];
+				auto const &ax = ax_arrs[bno];
 				const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
 
 				amrex::Real dE = 0;
@@ -191,7 +237,6 @@ template <typename problem_t> class turbulentDriving
 			});
 		}
 
-		amrex::Gpu::streamSynchronize();
 		return updated_forcing_pattern;
 	}
 };
