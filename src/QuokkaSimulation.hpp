@@ -3817,20 +3817,24 @@ void QuokkaSimulation<problem_t>::advanceRadiationIMEXStage2Fused(int lev, amrex
 				stateOut_cc(i, j, k, n) = stateOld_cc(i, j, k, n);
 			}
 
+			// Loops with compile-time trip counts and the group range as a predicate, fully unrolled, so that cons[] is
+			// indexed by constants and lives in registers (a runtime range [nBegin, nEnd) puts it on the scratch stack).
 			std::array<amrex::Real, ncompHyperbolic_> cons{};
+#pragma unroll
 			for (int n = 0; n < ncompHyperbolic_; ++n) {
 				cons[n] = stateOld_cc(i, j, k, nstartHyperbolic_ + n);
-			}
-			for (int n = nBegin; n < nEnd; ++n) {
-				cons[n] += AMREX_D_TERM((dt / dx0) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
-							+(dt / dy0) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
-							+(dt / dz0) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n)));
+				if (n >= nBegin && n < nEnd) {
+					cons[n] += AMREX_D_TERM((dt / dx0) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
+								+(dt / dy0) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
+								+(dt / dz0) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n)));
+				}
 			}
 			if (!RadSystem<problem_t>::isStateValid(cons)) {
 				RadSystem<problem_t>::amendRadState(cons);
 			}
 			AMREX_ASSERT(RadSystem<problem_t>::isStateValid(cons));
 			// groups outside [groupBegin, groupEnd) keep their state_new values (not the amended ones), as with the copy
+#pragma unroll
 			for (int n = 0; n < ncompHyperbolic_; ++n) {
 				stateOut_cc(i, j, k, nstartHyperbolic_ + n) = (n >= nBegin && n < nEnd) ? cons[n] : stateOld_cc(i, j, k, nstartHyperbolic_ + n);
 			}
@@ -3919,7 +3923,9 @@ void QuokkaSimulation<problem_t>::advanceRadiationIMEXStage3Fused(int lev, amrex
 		const double Aex_s1_coeff = IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21;
 		const double Aex_s2_coeff = IMEX_Aex_32;
 		auto pre = [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			// fully unrolled (compile-time trip counts) so that cons_new[] is indexed by constants and stays in registers
 			std::array<amrex::Real, ncompHyperbolic_> cons_new{};
+#pragma unroll
 			for (int n = 0; n < ncompHyperbolic_; ++n) {
 				if (n < nBegin || n >= nEnd) {
 					// groups outside [groupBegin, groupEnd) keep their current values and are not written back
@@ -3945,8 +3951,11 @@ void QuokkaSimulation<problem_t>::advanceRadiationIMEXStage3Fused(int lev, amrex
 				RadSystem<problem_t>::amendRadState(cons_new);
 			}
 			AMREX_ASSERT(RadSystem<problem_t>::isStateValid(cons_new));
-			for (int n = nBegin; n < nEnd; ++n) {
-				stateNew_cc(i, j, k, nstartHyperbolic_ + n) = cons_new[n];
+#pragma unroll
+			for (int n = 0; n < ncompHyperbolic_; ++n) {
+				if (n >= nBegin && n < nEnd) {
+					stateNew_cc(i, j, k, nstartHyperbolic_ + n) = cons_new[n];
+				}
 			}
 
 			if constexpr (nstartHyperbolic_ > 0) {
