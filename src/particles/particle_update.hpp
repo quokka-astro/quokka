@@ -177,6 +177,71 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 				const amrex::Real mass_birth_msun = mass_birth / C::M_solar;
 				const amrex::Real age = time - p.rdata(StochasticStellarPopParticleBirthTimeIdx);
 				const int stage = p.idata(StochasticStellarPopParticleStageIdx);
+				// Early exit: without WR metals, or when the particle is not in an active WR phase, y_wr is exactly zero for every isotope.
+				if (!enable_WR_metal_d) {
+					return;
+				}
+				const bool wr_stage_h = ((stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) ||
+							 (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding))) &&
+							(mass_birth_msun >= 9.0);
+				const amrex::Real wr_lifetime_h = p.rdata(StochasticStellarPopParticleDeathTimeIdx) - p.rdata(StochasticStellarPopParticleBirthTimeIdx);
+				const bool wr_active_h = (age < wr_lifetime_h) && (wr_lifetime_h > 0.0);
+				if (!(wr_stage_h && wr_active_h)) {
+					return;
+				}
+
+				if (use_chemical_tables) {
+					// f_begin/f_end are isotope independent: compute once per particle. One table interpolation gives all isotopes.
+					const amrex::Real age_begin = std::max<amrex::Real>(0.0, age);
+					const amrex::Real age_end = std::min<amrex::Real>(wr_lifetime_h, age_begin + dt);
+					const amrex::Real f_begin = ChemicalYieldLookup::queryWRMassLossCumulativeFraction(yield_tables, age_begin, mass_birth_msun);
+					const amrex::Real f_end = ChemicalYieldLookup::queryWRMassLossCumulativeFraction(yield_tables, age_end, mass_birth_msun);
+					const amrex::Real delta_fraction = std::max<amrex::Real>(0.0, f_end - f_begin);
+					if (delta_fraction <= 0.0) {
+						return; // y_wr = max(0, frac * mass_birth * 0) = 0 for every isotope
+					}
+					const auto wr_frac = ChemicalYieldLookup::queryYieldFractionAll(yield_tables, 1, mass_birth_msun);
+					constexpr int max_iso = ChemicalYieldLookup::max_tracked_isotopes;
+					const int nlim = nchem < max_iso ? nchem : max_iso;
+
+					amrex::ParticleInterpolator::WendlandC2<W_stencil_N> interp_t(p, plo, dxi);
+					const int nz_loop_t = (AMREX_SPACEDIM >= 3) ? W_stencil_width : 1;
+					const int ny_loop_t = (AMREX_SPACEDIM >= 2) ? W_stencil_width : 1;
+					for (int kk = 0; kk < nz_loop_t; ++kk) {
+						const amrex::Real dz = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp_t.frac[2] : 0.0;
+						for (int jj = 0; jj < ny_loop_t; ++jj) {
+							const amrex::Real dy = (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp_t.frac[1] : 0.0;
+							for (int ii = 0; ii < W_stencil_width; ++ii) {
+								const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp_t.frac[0];
+								const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+								if (r2 <= W_cutoff_r2) {
+									const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp_t.inv_norm;
+									for (int n = 0; n < nlim; ++n) {
+										const amrex::Real y_wr_n = std::max<amrex::Real>(0.0, wr_frac[static_cast<std::size_t>(n)] * mass_birth * delta_fraction);
+										if (y_wr_n <= 0.0) {
+											continue;
+										}
+										const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
+										const amrex::Real total_val = wt * y_wr_n * vol_inverse;
+										amrex::Gpu::Atomic::AddNoRet(&local_state(interp_t.index[0] + ii, interp_t.index[1] + jj, interp_t.index[2] + kk, total_comp),
+													     total_val);
+
+										if (store_channel_fields_d) {
+											const int wr_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 2 * nchem + n;
+											if (wr_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+												amrex::Gpu::Atomic::AddNoRet(
+												    &local_state(interp_t.index[0] + ii, interp_t.index[1] + jj, interp_t.index[2] + kk, wr_comp),
+												    wt * y_wr_n * vol_inverse);
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+					return;
+				}
+
 				amrex::ParticleInterpolator::WendlandC2<W_stencil_N> interp(p, plo, dxi);
 
 				for (int n = 0; n < nchem; ++n) {
