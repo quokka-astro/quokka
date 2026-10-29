@@ -1788,13 +1788,16 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		// The remaining components are mass scalars and passive scalars, so just copy them from
 		// x1LeftState and x1RightState into the (left, right) state vectors U_L and
 		// U_R
-		for (int n = 0; n < nscalars_; ++n) {
-			sL.scalar[n] = x1LeftState(i, j, k, scalar0_index + n);
-			sR.scalar[n] = x1RightState(i, j, k, scalar0_index + n);
-			// also store mass scalars separately
-			if (n < nmscalars_) {
-				sL.massScalar[n] = x1LeftState(i, j, k, scalar0_index + n);
-				sR.massScalar[n] = x1RightState(i, j, k, scalar0_index + n);
+		// (mass scalars are needed by the EOS inside every solver; the full scalar[] copy is only
+		// needed by the solvers that still flux scalars internally, i.e. not HLLC)
+		for (int n = 0; n < nmscalars_; ++n) {
+			sL.massScalar[n] = x1LeftState(i, j, k, scalar0_index + n);
+			sR.massScalar[n] = x1RightState(i, j, k, scalar0_index + n);
+		}
+		if constexpr (RIEMANN != RiemannSolver::HLLC) {
+			for (int n = 0; n < nscalars_; ++n) {
+				sL.scalar[n] = x1LeftState(i, j, k, scalar0_index + n);
+				sR.scalar[n] = x1RightState(i, j, k, scalar0_index + n);
 			}
 		}
 
@@ -1816,13 +1819,122 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		dw = std::min({dwl, dwr, dw});
 #endif
 
+		if constexpr (RIEMANN == RiemannSolver::HLLC) {
+			// HLLC: solve the Riemann problem for the 6 hydro components only, then flux the
+			// scalars in a separate light loop, upwinded on the (final) mass flux, writing
+			// directly to the flux array (no per-thread scalar arrays).
+			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use HLLC solver for MHD problems!");
+			constexpr int nHyd = Physics_NumVars::numHydroVars;
+			static_assert(nHyd == scalar0_index && nHyd == nHydroScalars_ - nscalars_);
+			quokka::valarray<double, nHyd> F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nHyd>(sL, sR, gamma_, du, dw);
+
+			// add artificial viscosity
+			// following Colella & Woodward (1984), eq. (4.2)
+			const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
+			const double viscosity = K_visc * std::max(-div_v, 0.);
+
+			const quokka::valarray<double, nHyd> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
+			const quokka::valarray<double, nHyd> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
+
+			F_canonical = F_canonical + viscosity * (U_L - U_R);
+
+			// physical shear/bulk viscosity, added the same way as the artificial viscosity above
+			if constexpr (AMREX_SPACEDIM == 3 && Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
+				amrex::Real localShearViscosity = shearViscosity;
+				amrex::Real localBulkViscosity = bulkViscosity;
+				if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) {
+					const auto local_viscosity = computeViscosity<problem_t, DIR>(i, j, k, q);
+					localShearViscosity = local_viscosity[0];
+					localBulkViscosity = local_viscosity[1];
+				}
+				if (localShearViscosity != 0.0 || localBulkViscosity != 0.0) {
+					const auto sigma = ComputeViscousFlux<DIR>(q, i, j, k, velN_index, velV_index, velW_index, dx_n, dx_v, dx_w,
+										   localShearViscosity, localBulkViscosity);
+					F_canonical[x1Momentum_index] -= sigma[0];
+					F_canonical[x2Momentum_index] -= sigma[1];
+					F_canonical[x3Momentum_index] -= sigma[2];
+					F_canonical[energy_index] -= sigma[3]; // zeroed below if EOS is isothermal
+				}
+			}
+
+			// write hydro fluxes, permuting momentum components according to flux direction DIR
+			const double F_rho = F_canonical[density_index];
+			AMREX_ASSERT(!std::isnan(F_rho));
+			AMREX_ASSERT(!std::isnan(F_canonical[x1Momentum_index]));
+			AMREX_ASSERT(!std::isnan(F_canonical[x2Momentum_index]));
+			AMREX_ASSERT(!std::isnan(F_canonical[x3Momentum_index]));
+			x1Flux(i, j, k, density_index) = F_rho;
+			x1Flux(i, j, k, velN_index) = F_canonical[x1Momentum_index];
+			x1Flux(i, j, k, velV_index) = F_canonical[x2Momentum_index];
+			x1Flux(i, j, k, velW_index) = F_canonical[x3Momentum_index];
+			// set energy fluxes to zero if EOS is isothermal
+			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+				x1Flux(i, j, k, energy_index) = 0;
+				x1Flux(i, j, k, internalEnergy_index) = 0;
+			} else {
+				AMREX_ASSERT(!std::isnan(F_canonical[energy_index]));
+				AMREX_ASSERT(!std::isnan(F_canonical[internalEnergy_index]));
+				x1Flux(i, j, k, energy_index) = F_canonical[energy_index];
+				x1Flux(i, j, k, internalEnergy_index) = F_canonical[internalEnergy_index];
+			}
+
+			// compute face-centered normal velocity
+			double v_norm = 0.0;
+			if (F_rho >= 0.) {
+				if (rho_R > 0.) {
+					v_norm = F_rho / rho_R;
+				}
+			} else {
+				if (rho_L > 0.) {
+					v_norm = F_rho / rho_L;
+				}
+			}
+			x1FaceVel(i, j, k) = v_norm;
+
+			// scalars: upwind on the sign of the mass flux
+			if constexpr (nscalars_ > 0) {
+				const bool upwindLeft = (F_rho >= 0.);
+				// select the upwind value per component (selecting a reference to one of the two
+				// Array4View objects forces both onto the stack -> scratch)
+				auto qUp = [&](int ii, int jj, int kk, int nn) -> double {
+					return upwindLeft ? x1LeftState(ii, jj, kk, nn) : x1RightState(ii, jj, kk, nn);
+				};
+				constexpr int nstart = nHydroScalars_ - nscalars_;
+
+				// mass scalars: conserve flux of mass scalars and scale them to the mass flux
+				// based on Plewa and Muller 1999, A&A, 342, 179 (equations 8 and 12)
+				if constexpr (nmscalars_ > 0) {
+					amrex::Real fluxSum_U = 0;
+					for (int n = 0; n < nmscalars_; ++n) {
+						fluxSum_U += qUp(i, j, k, scalar0_index + n);
+					}
+					for (int n = 0; n < nmscalars_; ++n) {
+						double Fs = 0.;
+						if (fluxSum_U > 0.) {
+							Fs = F_rho * qUp(i, j, k, scalar0_index + n) / fluxSum_U;
+						}
+						x1Flux(i, j, k, nstart + n) = Fs;
+					}
+				}
+
+				// remaining (non-mass) passive scalars: F_s = F_rho * (s / rho)_upwind
+				if constexpr (nscalars_ > nmscalars_) {
+					const double rho_up = upwindLeft ? rho_L : rho_R;
+					for (int n = nmscalars_; n < nscalars_; ++n) {
+						double Fs = 0.;
+						if (rho_up > 0.) {
+							Fs = F_rho * (qUp(i, j, k, scalar0_index + n) / rho_up);
+						}
+						AMREX_ASSERT(!std::isnan(Fs));
+						x1Flux(i, j, k, nstart + n) = Fs;
+					}
+				}
+			}
+		} else {
 		// solve the Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
 		quokka::valarray<double, nHydroScalars_> F_canonical{};
 
-		if constexpr (RIEMANN == RiemannSolver::HLLC) {
-			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use HLLC solver for MHD problems!");
-			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, du, dw);
-		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
+		if constexpr (RIEMANN == RiemannSolver::LLF) {
 			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF_MHD) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
@@ -1950,6 +2062,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			AMREX_ASSERT(!std::isnan(F[nc])); // check flux is valid
 			x1Flux(i, j, k, nc) = F[nc];
 		}
+		} // end non-HLLC solvers
 
 		// calculate dust fluxes if enabled
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
