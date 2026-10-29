@@ -222,6 +222,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
 	bool splitParticlesOnRestartRefine_ = true;		     // whether to split particles when restarting with refinement
 	amrex::Vector<amrex::MultiFab> phi;
+#if AMREX_SPACEDIM == 3
+	// persistent Poisson solver state, rebuilt only when the grid hierarchy changes (src-03a)
+	amrex::Vector<amrex::MultiFab> poissonRhs_;
+	amrex::Vector<amrex::BoxArray> poissonGrids_;
+	amrex::Vector<amrex::DistributionMapping> poissonDmap_;
+	std::unique_ptr<amrex::MLPoisson> poissonOp_;	  // declared before the MLMG that references it
+	std::unique_ptr<amrex::MLMG> poissonMlmg_;
+	std::unique_ptr<amrex::OpenBCSolver> poissonOpenBC_;
+#endif
 
 	// SFH parameters
 	int sfh_interval_ = -1;		       // interval for the star formation history
@@ -1949,8 +1958,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		BL_PROFILE_REGION("GravitySolver"); // NOLINT(misc-const-correctness)
 
-		phi.resize(finest_level + 1);
-		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		constexpr int nghost_phi = 1;
 		constexpr int nghost_deposit = 1; // CIC deposition requires 1 ghost cell
 		constexpr int nghost_drift = 1;	  // particle can drift up to 1 cell
@@ -1958,31 +1965,54 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		constexpr int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
 
+		// Rebuild phi, rhs and the solver objects only when the number of levels or the BoxArray/DistributionMapping of any level changed.
+		bool rebuild_poisson = (static_cast<int>(poissonGrids_.size()) != finest_level + 1);
+		for (int lev = 0; !rebuild_poisson && lev <= finest_level; ++lev) {
+			if (!(poissonGrids_[lev] == grids[lev]) || !(poissonDmap_[lev] == dmap[lev])) {
+				rebuild_poisson = true;
+			}
+		}
+		if (rebuild_poisson) {
+			poissonOpenBC_.reset();
+			poissonMlmg_.reset();
+			poissonOp_.reset();
+			phi.clear();
+			poissonRhs_.clear();
+			phi.resize(finest_level + 1);
+			poissonRhs_.resize(finest_level + 1);
+			poissonGrids_.assign(finest_level + 1, amrex::BoxArray());
+			poissonDmap_.assign(finest_level + 1, amrex::DistributionMapping());
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				phi[lev].define(grids[lev], dmap[lev], ncomp, nghost_phi);
+				poissonRhs_[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
+				poissonGrids_[lev] = grids[lev];
+				poissonDmap_[lev] = dmap[lev];
+			}
+		}
+		amrex::Vector<amrex::MultiFab> &rhs = poissonRhs_;
+
 		// Warm start (perf-src-03b): only the MLMG path (any periodic dimension) uses phi from the previous solve as the initial guess.
 		// The OpenBCSolver path rebuilds its solution internally, so it keeps the zero initial guess.
 		bool use_warm_start_phi = false;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			use_warm_start_phi = use_warm_start_phi || geom[0].isPeriodic(idim);
 		}
+		// (merged with src-03a: phi holds the previous solution only if the persistent Poisson data was not rebuilt above)
+		const bool phi_reusable = use_warm_start_phi && !rebuild_poisson;
 
+		// the rhs is reset exactly as for freshly defined MultiFabs; phi too unless warm-started
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			// phi[lev] is reusable only if it lives on exactly the same grids and distribution mapping as now
-			// (i.e. no regrid of this level since the last solve); otherwise fall back to a zero initial guess.
-			const bool phi_reusable = use_warm_start_phi && (phi[lev].boxArray() == grids[lev]) && (phi[lev].DistributionMap() == dmap[lev]) &&
-						  (phi[lev].nComp() == ncomp) && (phi[lev].nGrow() == nghost_phi);
 			if (phi_reusable) {
 				phi[lev].setBndry(0); // keep valid cells (previous solution); reset ghost cells to the previous cold-start value
 			} else {
-				phi[lev].define(grids[lev], dmap[lev], ncomp, nghost_phi);
 				phi[lev].setVal(0); // set initial guess to zero
 			}
-			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
 			rhs[lev].setVal(0);
 		}
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			fillPoissonRhsAtLevel(rhs[lev], lev);
-			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
+			AMREX_ASSERT(!rhs[lev].contains_nan());
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 
@@ -2014,7 +2044,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
+			AMREX_ASSERT(!rhs[lev].contains_nan());
 		}
 
 		// Analyze boundary conditions for each dimension
@@ -2064,30 +2094,33 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			}
 
 			// Create MLPoisson linear operator with proper LPInfo for AMR
-			amrex::LPInfo info;
-			info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
-			// perf-src-03b: agglomeration/consolidation re-enabled for AMR. AMReX only agglomerates/consolidates AMR level 0
-			// (MLLinOp::defineGrids); finer AMR levels keep their own grids, so it is safe with multiple levels.
+			if (!poissonMlmg_) {
+				amrex::LPInfo info;
+				info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
+				// perf-src-03b: agglomeration/consolidation re-enabled for AMR. AMReX only agglomerates/consolidates AMR level 0
+				// (MLLinOp::defineGrids); finer AMR levels keep their own grids, so it is safe with multiple levels.
 
-			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), info);
+				poissonOp_ = std::make_unique<amrex::MLPoisson>(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), info);
 
-			// Set the mixed boundary conditions (already computed above)
-			mlpoisson.setDomainBC(bc_lo, bc_hi);
+				// Set the mixed boundary conditions (already computed above)
+				poissonOp_->setDomainBC(bc_lo, bc_hi);
 
-			// Set level boundary conditions for each AMR level
-			for (int lev = 0; lev <= finest_level; ++lev) {
-				// For gravity problems with mixed BCs, we don't need to specify Dirichlet values
-				// MLMG will automatically handle the gauge freedom and find a solution
-				// The gravitational force F = -∇φ is gauge invariant (independent of φ + constant)
-				mlpoisson.setLevelBC(lev, nullptr);
+				// Set level boundary conditions for each AMR level
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					// For gravity problems with mixed BCs, we don't need to specify Dirichlet values
+					// MLMG will automatically handle the gauge freedom and find a solution
+					// The gravitational force F = -∇φ is gauge invariant (independent of φ + constant)
+					poissonOp_->setLevelBC(lev, nullptr);
+				}
+
+				// Create MLMG solver
+				poissonMlmg_ = std::make_unique<amrex::MLMG>(*poissonOp_);
+				if (verbose) {
+					poissonMlmg_->setVerbose(1);
+					poissonMlmg_->setBottomVerbose(0);
+				}
 			}
-
-			// Create MLMG solver
-			amrex::MLMG mlmg(mlpoisson);
-			if (verbose) {
-				mlmg.setVerbose(1);
-				mlmg.setBottomVerbose(0);
-			}
+			amrex::MLMG &mlmg = *poissonMlmg_;
 
 			// Set solver parameters optimized for gravity problems
 			// mlmg.setMaxIter(200);
@@ -2129,13 +2162,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				amrex::Print() << "Doing Poisson solve with open boundaries using OpenBCSolver...\n\n";
 			}
 
-			amrex::LPInfo openbc_info;
-			openbc_info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
-			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), openbc_info);
-			if (verbose) {
-				poissonSolver.setVerbose(1);
-				poissonSolver.setBottomVerbose(0);
+			if (!poissonOpenBC_) {
+				amrex::LPInfo openbc_info;
+				openbc_info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
+				poissonOpenBC_ = std::make_unique<amrex::OpenBCSolver>(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level),
+										       openbc_info);
+				if (verbose) {
+					poissonOpenBC_->setVerbose(1);
+					poissonOpenBC_->setBottomVerbose(0);
+				}
 			}
+			amrex::OpenBCSolver &poissonSolver = *poissonOpenBC_;
 
 			amrex::Real abstol = abstolPoisson_ * rhs_min;
 			poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
@@ -2145,10 +2182,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::Print() << "\n";
 		}
 
-		// check for NaN
+		// check for NaN (debug builds only)
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(), std::format("NaN detected in phi at level {} after Poisson solve", lev));
+			AMREX_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(), std::format("NaN detected in phi at level {} after Poisson solve", lev));
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
