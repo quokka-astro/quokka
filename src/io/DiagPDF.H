@@ -22,6 +22,9 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 
 	static auto MFVecMin(const amrex::Vector<const amrex::MultiFab *> &a_state, int comp) -> amrex::Real;
 	static auto MFVecMax(const amrex::Vector<const amrex::MultiFab *> &a_state, int comp) -> amrex::Real;
+	// min and max of several components with a single MPI reduction each
+	static void MFVecMinMax(const amrex::Vector<const amrex::MultiFab *> &a_state, const amrex::Vector<int> &comps, amrex::Vector<amrex::Real> &mins,
+				amrex::Vector<amrex::Real> &maxs);
 	void writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex::Vector<amrex::Real> &a_pdf);
 
 	void close() override {}
@@ -85,19 +88,32 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 	amrex::Vector<amrex::Real> transformed_binWidth(nvars);
 	amrex::Vector<amrex::Real> transformed_lowBnd(nvars);
 
-	if (!m_reportedRange) {
+	{
+		// compute min/max of all variables that need it with one reduction (on the first call, of all variables)
+		amrex::Vector<int> mm_comps;
+		amrex::Vector<int> mm_vars;
 		for (int n = 0; n < fieldIdx.size(); ++n) {
-			amrex::ignore_unused(MFVecMin(a_state, fieldIdx[n]));
-			amrex::ignore_unused(MFVecMax(a_state, fieldIdx[n]));
+			if (!m_reportedRange || m_useFieldMinMax[n]) {
+				mm_comps.push_back(fieldIdx[n]);
+				mm_vars.push_back(n);
+			}
+		}
+		amrex::Vector<amrex::Real> mm_min;
+		amrex::Vector<amrex::Real> mm_max;
+		if (!mm_comps.empty()) {
+			MFVecMinMax(a_state, mm_comps, mm_min, mm_max);
 		}
 		m_reportedRange = true;
+		for (int m = 0; m < mm_vars.size(); ++m) {
+			const int n = mm_vars[m];
+			if (m_useFieldMinMax[n]) {
+				m_lowBnd[n] = mm_min[m];
+				m_highBnd[n] = mm_max[m];
+			}
+		}
 	}
 
 	for (int n = 0; n < fieldIdx.size(); ++n) {
-		if (m_useFieldMinMax[n]) {
-			m_lowBnd[n] = MFVecMin(a_state, fieldIdx[n]);
-			m_highBnd[n] = MFVecMax(a_state, fieldIdx[n]);
-		}
 		transformed_range[n] = (m_useLogSpacedBins[n] != 0) ? (std::log10(m_highBnd[n]) - std::log10(m_lowBnd[n])) : (m_highBnd[n] - m_lowBnd[n]);
 		transformed_binWidth[n] = transformed_range[n] / m_nBins[n];
 		transformed_lowBnd[n] = (m_useLogSpacedBins[n] != 0) ? std::log10(m_lowBnd[n]) : m_lowBnd[n];
@@ -107,10 +123,38 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 	amrex::Gpu::AsyncVector<amrex::Real> pdf_d(getTotalBinCount(), 0.0);
 	amrex::Vector<amrex::Real> pdf(getTotalBinCount(), 0.0);
 
+	// set flag to check within ParallelFor below
+	bool multiply_by_gasDensity = false;
+	if (m_weightType == "mass") {
+		multiply_by_gasDensity = true;
+	}
+
+	// per-variable binning data, copied to the device once (independent of level)
+	amrex::Gpu::AsyncVector<int> idx_d(nvars);
+	amrex::Gpu::AsyncVector<int> nbins_d(nvars);
+	amrex::Gpu::AsyncVector<int> doLog_d(nvars);
+	amrex::Gpu::AsyncVector<amrex::Real> lowBnd_d(nvars);
+	amrex::Gpu::AsyncVector<amrex::Real> binWidth_d(nvars);
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, fieldIdx.begin(), fieldIdx.end(), idx_d.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, m_nBins.begin(), m_nBins.end(), nbins_d.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, m_useLogSpacedBins.begin(), m_useLogSpacedBins.end(), doLog_d.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, transformed_lowBnd.begin(), transformed_lowBnd.end(), lowBnd_d.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, transformed_binWidth.begin(), transformed_binWidth.end(), binWidth_d.begin());
+	amrex::Gpu::streamSynchronize();
+	auto *pdf_d_p = pdf_d.dataPtr();
+	auto const *idx_p = idx_d.data();
+	auto const *nbins_p = nbins_d.data();
+	auto const *lowBnd_p = lowBnd_d.data();
+	auto const *binWidth_p = binWidth_d.data();
+	auto const *doLog_p = doLog_d.data();
+
+	// keep the masks alive until the final synchronization (all kernels below are issued on the same stream)
+	amrex::Vector<amrex::iMultiFab> masks(a_state.size());
+
 	// Populate the data from each level on each proc
 	for (int lev = 0; lev < a_state.size(); ++lev) {
 		// Make mask tagging fine-covered and filtered cells
-		amrex::iMultiFab mask;
+		amrex::iMultiFab &mask = masks[lev];
 		if (lev == a_state.size() - 1) {
 			mask.define(a_state[lev]->boxArray(), a_state[lev]->DistributionMap(), 1, amrex::IntVect(0));
 			mask.setVal(1);
@@ -132,7 +176,6 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 				    }
 			    }
 		    });
-		amrex::Gpu::streamSynchronize();
 
 		/// accumulate values in histogram
 
@@ -147,33 +190,6 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 			amrex::Abort("Invalid histogram weight type! Must be either 'volume', 'mass' or 'cell_counts'.");
 		}
 
-		// set flag to check within ParallelFor below
-		bool multiply_by_gasDensity = false;
-		if (m_weightType == "mass") {
-			multiply_by_gasDensity = true;
-		}
-
-		amrex::Gpu::AsyncVector<int> idx_d(nvars);
-		amrex::Gpu::AsyncVector<int> nbins_d(nvars);
-		amrex::Gpu::AsyncVector<int> doLog_d(nvars);
-		amrex::Gpu::AsyncVector<amrex::Real> lowBnd_d(nvars);
-		amrex::Gpu::AsyncVector<amrex::Real> binWidth_d(nvars);
-
-		// copy arrays to device
-		amrex::Gpu::copy(amrex::Gpu::hostToDevice, fieldIdx.begin(), fieldIdx.end(), idx_d.begin());
-		amrex::Gpu::copy(amrex::Gpu::hostToDevice, m_nBins.begin(), m_nBins.end(), nbins_d.begin());
-		amrex::Gpu::copy(amrex::Gpu::hostToDevice, m_useLogSpacedBins.begin(), m_useLogSpacedBins.end(), doLog_d.begin());
-		amrex::Gpu::copy(amrex::Gpu::hostToDevice, transformed_lowBnd.begin(), transformed_lowBnd.end(), lowBnd_d.begin());
-		amrex::Gpu::copy(amrex::Gpu::hostToDevice, transformed_binWidth.begin(), transformed_binWidth.end(), binWidth_d.begin());
-		amrex::Gpu::streamSynchronize();
-
-		// get device pointers
-		auto *pdf_d_p = pdf_d.dataPtr();
-		auto const *idx_p = idx_d.data();
-		auto const *nbins_p = nbins_d.data();
-		auto const *lowBnd_p = lowBnd_d.data();
-		auto const *binWidth_p = binWidth_d.data();
-		auto const *doLog_p = doLog_d.data();
 
 		// compute histogram
 		amrex::ParallelFor(*a_state[lev], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
@@ -201,7 +217,6 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 				}
 			}
 		});
-		amrex::Gpu::streamSynchronize();
 	}
 
 	// sum over all MPI ranks

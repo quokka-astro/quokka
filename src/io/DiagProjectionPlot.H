@@ -57,6 +57,10 @@ template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, 
 		max_grid_size[lev] = sim->maxGridSize(lev);
 	}
 
+	// Build the fine masks once and share them between all fields and directions
+	const auto proj_masks = quokka::diagnostics::MakeProjectionMasks(*m_diagMF, sim->finestLevel(), *m_geoms, *m_refRatio);
+	bool wrote_any = false;
+
 	// Loop through all requested projection directions
 	for (auto const &dir : m_projectionDirs) {
 		// Compute projections for this direction
@@ -65,7 +69,7 @@ template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, 
 		for (const auto &field : m_fieldNames) {
 			const int comp = getFieldIndex(field, *m_diagVars);
 			proj[field] = quokka::diagnostics::ComputePlaneProjectionFromMultiFab(*m_diagMF, sim->finestLevel(), *m_geoms, *m_refRatio,
-											      max_grid_size, dir, comp);
+											      max_grid_size, dir, comp, &proj_masks);
 		}
 
 		// Skip if no projection data
@@ -78,13 +82,14 @@ template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, 
 
 		// Write projection data
 		quokka::diagnostics::WriteProjection(dir, proj, sim->Geom(), sim->ref_ratio, a_time, a_nstep, basename, sim->simulationMetadata_);
+		wrote_any = true;
+	}
 
-		// If particles are requested, write them
-		if (!m_particleTypes.empty()) {
-			const std::string filename = amrex::Concatenate(basename, a_nstep, 7);
-			sim->particleRegister_.writePlotFileFiltered(filename, m_particleTypes);
-			amrex::Print() << "  Wrote particles to projection " << filename << "\n";
-		}
+	// If particles are requested, write them once (the filename does not depend on the direction)
+	if (wrote_any && !m_particleTypes.empty()) {
+		const std::string filename = amrex::Concatenate(m_diagfile, a_nstep, 7);
+		sim->particleRegister_.writePlotFileFiltered(filename, m_particleTypes);
+		amrex::Print() << "  Wrote particles to projection " << filename << "\n";
 	}
 }
 
