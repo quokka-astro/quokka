@@ -1739,7 +1739,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 		// (N.B. particles **will not work** if you overwrite the density here!)
 		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 	});
-	amrex::Gpu::streamSynchronizeAll();
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf, const int lev, const amrex::Real dt)
