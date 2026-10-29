@@ -1424,7 +1424,13 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		// With hydro enabled, conduction is fused into the hydro fluxes of each RK stage (see advanceHydroAtLevel);
 		// the operator-split pass below is only used when the state is not advected.
 		if (!Physics_Traits<problem_t>::is_hydro_enabled && enableElectronConduction_ == 1) {
-			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
+			// Conduction reads only the hydro components (rho, momenta, E; the aux. internal energy is only written) and the
+			// mass scalars, which are stored first: fill only [0, numHydroVars + numMassScalars) on level 0 (src-02a; refined
+			// levels keep the full fill, expressed with the driver-02 sub-range arguments).
+			const int conduction_ncomp_fill = Physics_NumVars::numHydroVars + Physics_Traits<problem_t>::numMassScalars;
+			const bool partial_fill = (lev == 0) && (conduction_ncomp_fill < state.nComp());
+			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState,
+					       FillPatchType::fillpatch_class, 0, partial_fill ? conduction_ncomp_fill : -1);
 			// NOTE: heat_flux is defined (with 1 component) inside ElectronConduction::ComputeExplicit,
 			// so it only needs to be declared here.
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
@@ -1458,11 +1464,10 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 				// registers with the full time step). Each Strang half-step covers dt = 0.5 * dt_lev,
 				// hence the 0.5 weight here.
 				const amrex::Real reflux_weight = 0.5;
+				// recal_fluxes has 2 components: 0 = total energy flux, 1 = internal energy flux
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					amrex::MultiFab::Saxpy((*recal_fluxes)[idim], reflux_weight, heat_flux[idim], 0, HydroSystem<problem_t>::energy_index,
-							       1, 0);
-					amrex::MultiFab::Saxpy((*recal_fluxes)[idim], reflux_weight, heat_flux[idim], 0,
-							       HydroSystem<problem_t>::internalEnergy_index, 1, 0);
+					amrex::MultiFab::Saxpy((*recal_fluxes)[idim], reflux_weight, heat_flux[idim], 0, 0, 1, 0);
+					amrex::MultiFab::Saxpy((*recal_fluxes)[idim], reflux_weight, heat_flux[idim], 0, 1, 1, 0);
 				}
 			}
 		}
@@ -2685,7 +2690,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
 			amrex::BoxArray ba = boxArray(lev);
 			ba.surroundingNodes(dim); // nodal in direction dim
-			(*recal_fluxes)[dim].define(ba, DistributionMap(lev), Physics_Indices<problem_t>::nvarTotal_cc, 0);
+			(*recal_fluxes)[dim].define(ba, DistributionMap(lev), 2, 0); // comp 0: energy, comp 1: internal energy
 			(*recal_fluxes)[dim].setVal(0.0);
 		}
 	}
@@ -3124,10 +3129,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	if (do_reflux == 1 && final_success) {
 		if (recal_fluxes.has_value()) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				amrex::MultiFab::Saxpy(flux_rk2[idim], 1.0, (*recal_fluxes)[idim], HydroSystem<problem_t>::energy_index,
-						       HydroSystem<problem_t>::energy_index, 1, 0);
-				amrex::MultiFab::Saxpy(flux_rk2[idim], 1.0, (*recal_fluxes)[idim], HydroSystem<problem_t>::internalEnergy_index,
-						       HydroSystem<problem_t>::internalEnergy_index, 1, 0);
+				amrex::MultiFab::Saxpy(flux_rk2[idim], 1.0, (*recal_fluxes)[idim], 0, HydroSystem<problem_t>::energy_index, 1, 0);
+				amrex::MultiFab::Saxpy(flux_rk2[idim], 1.0, (*recal_fluxes)[idim], 1, HydroSystem<problem_t>::internalEnergy_index, 1, 0);
 			}
 		}
 		if (Physics_Traits<problem_t>::is_hydro_enabled || enableElectronConduction_ != 0) { // driver-03: else flux_rk2 is all zero
