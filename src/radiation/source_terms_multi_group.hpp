@@ -14,6 +14,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP
 	OpacityTerms<problem_t> result;
 
 	const auto kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
+	result.kappa_expo_and_lower_value = kappa_expo_and_lower_value; // reused by UpdateFlux
 
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 		for (int g = 0; g < nGroups_; ++g) {
@@ -68,11 +69,16 @@ RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(double const T, d
 {
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
 	const auto kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
+	// Planck function at each group edge, evaluated once (adjacent groups share an edge)
+	amrex::GpuArray<double, nGroups_ + 1> B_edge{};
+	for (int g = 0; g < nGroups_ + 1; ++g) {
+		B_edge[g] = PlanckFunction(rad_boundaries[g], T); // 4 pi B(nu) / c
+	}
 	for (int g = 0; g < nGroups_; ++g) {
 		auto const nu_L = rad_boundaries[g];
 		auto const nu_R = rad_boundaries[g + 1];
-		auto const B_L = PlanckFunction(nu_L, T); // 4 pi B(nu) / c
-		auto const B_R = PlanckFunction(nu_R, T); // 4 pi B(nu) / c
+		auto const B_L = B_edge[g]; // 4 pi B(nu) / c
+		auto const B_R = B_edge[g + 1]; // 4 pi B(nu) / c
 		auto const kappa_L = kappa_expo_and_lower_value[1][g];
 		auto const kappa_R = kappa_L * std::pow(nu_R / nu_L, kappa_expo_and_lower_value[0][g]);
 		opacity_terms.delta_nu_kappa_B_at_edge[g] = nu_R * kappa_R * B_R - nu_L * kappa_L * B_L;
@@ -191,6 +197,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state
 	quokka::valarray<double, nGroups_> work_local{}; // work term used in the Newton-Raphson iteration of the current outer iteration
 	quokka::valarray<double, nGroups_> fourPiBoverC{};
+	quokka::valarray<double, nGroups_> d_fourpiboverc_d_t{};
+	double T_d_planck = NAN; // temperature at which fourPiBoverC and the opacity table were last evaluated
 	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
 	OpacityTerms<problem_t> opacity_terms{};
@@ -257,7 +265,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 
 		// 2. Compute kappaP and kappaE at dust temperature
 
-		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+		// one fused pass over the group edges gives both 4 pi B / c and its temperature derivative
+		ComputeThermalRadiationAndTempDerivativeMultiGroup(T_d, rad_boundaries, fourPiBoverC, d_fourpiboverc_d_t);
+		T_d_planck = T_d;
 
 		opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n,
 								     opacity_terms.alpha_E, opacity_terms.alpha_P);
@@ -327,7 +337,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			}
 		}
 
-		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
 		AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
 		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
@@ -483,6 +492,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	result.work = work_local;
 	result.T_gas = T_gas;
 	result.T_d = T_d;
+	// UpdateFlux reuses fourPiBoverC and the opacity table of the final iteration. Both were evaluated at T_d_planck; if T_d moved
+	// since (decoupled-dust update followed by a relative-change or maxIter exit), re-evaluate at the returned T_d, as UpdateFlux did.
+	if (T_d != T_d_planck) {
+		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+		opacity_terms.kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
+	}
+	result.fourPiBoverC = fourPiBoverC;
 	result.opacity_terms = opacity_terms;
 	return result;
 }
@@ -498,17 +514,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 	amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
 	amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> Frad_t1{};
 
-	// make a copy of radBoundaries_
-	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
-
 	double const rho = consPrev(i, j, k, gasDensity_index);
 	const double x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
 	const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 	const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 	const std::array<double, 3> gasMtm0 = {x1GasMom0, x2GasMom0, x3GasMom0};
 
-	auto const fourPiBoverC = ComputeThermalRadiationMultiGroup(energy.T_d, radBoundaries_g);
-	auto const kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g, rho, energy.T_d);
+	// 4 pi B / c and the opacity table at energy.T_d come from the final Newton iteration (same inputs, no re-evaluation).
+	auto const &fourPiBoverC = energy.fourPiBoverC;
+	auto const &kappa_expo_and_lower_value = energy.opacity_terms.kappa_expo_and_lower_value;
 
 	const double chat = c_hat_;
 
