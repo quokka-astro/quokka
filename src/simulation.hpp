@@ -2552,24 +2552,29 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 			if (driver03Prescale_ != 0) {
 				// driver-03: same result as CrseInit(..., ADD), but the -dt*area scaling is applied only on the
 				// coarse-fine faces, so no whole-level area MultiFab and no whole-level scaled flux copy are made.
+				// The register update uses the same FabSet + per-fab Array4 tag launch as CrseInit's ADD branch,
+				// not cached MultiArray4 tables (FabArray::arrays()) of the register FabSets plus an MF-fused launch.
 				amrex::Real const mult = -dt_lev * face_area[dir];
 				for (int side = 0; side < 2; ++side) {
 					amrex::Orientation const face(dir, (side == 0) ? amrex::Orientation::low : amrex::Orientation::high);
 					amrex::FabSet &reg = (*fr_as_crse)[face];
-					amrex::MultiFab tmp(reg.boxArray(), reg.DistributionMap(), ncomp, 0, amrex::MFInfo().SetArena(amrex::The_Async_Arena()));
+					amrex::FabSet tmp(reg.boxArray(), reg.DistributionMap(), ncomp);
 					tmp.setVal(0.0);
-					tmp.ParallelCopy(fluxArrays[dir], srccomp, 0, ncomp); // COPY semantics as in CrseInit (faces shared by coarse boxes)
-					auto const &rega = reg.arrays();
-					auto const &tmpa = tmp.const_arrays();
-					amrex::ParallelFor(reg.multiFab(), amrex::IntVect(0), ncomp,
-							   [=] AMREX_GPU_DEVICE(int bno, int i, int j, int k, int n) noexcept {
+					tmp.copyFrom(fluxArrays[dir], 0, srccomp, 0, ncomp); // COPY semantics as in CrseInit (faces shared by coarse boxes)
+					using Tag = amrex::Array4PairTag<amrex::Real>;
+					amrex::Vector<Tag> tags;
+					tags.reserve(tmp.multiFab().local_size());
+					for (amrex::FabSetIter fsi(tmp); fsi.isValid(); ++fsi) {
+						tags.push_back(Tag{.dfab = reg.array(fsi), .sfab = tmp.const_array(fsi), .dbox = fsi.validbox()});
+					}
+					amrex::ParallelFor(tags, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n, Tag const &tag) noexcept {
 #ifdef __clang__
 #pragma clang fp contract(off)
 #endif
-								   // CrseInit computes (flux*mult)*1.0 in one kernel and adds it in another: no FMA
-								   amrex::Real const scaled = tmpa[bno](i, j, k, n) * mult;
-								   rega[bno](i, j, k, n + destcomp) += scaled;
-							   });
+						// CrseInit computes (flux*mult)*1.0 in one kernel and adds it in another: no FMA
+						amrex::Real const scaled = tag.sfab(i, j, k, n) * mult;
+						tag.dfab(i, j, k, n + destcomp) += scaled;
+					});
 				}
 			} else {
 				fr_as_crse->CrseInit(fluxArrays[dir], dir, srccomp, destcomp, ncomp, -dt_lev * face_area[dir], amrex::FluxRegister::ADD);
