@@ -402,6 +402,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, int groupBegin = 0,
 				int groupEnd = nGroups_);
 
+	// rad-13: forward-Euler update of all groups in one pass that reproduces two separate PredictStep calls on
+	// [0, groupSplit) and [groupSplit, nGroups_): each range sees the other range at its old value when deciding
+	// whether to amend the state.
+	static void PredictStepSplit(arrayconst_t &consVarOld, array_t &consVarNew, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
+				     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int groupSplit);
+
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, double alpha, double Aex_s1_coeff,
@@ -1224,6 +1230,60 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 
 		for (int n = nBegin; n < nEnd; ++n) {
 			consVarNew(i, j, k, nstartHyperbolic_ + n) = cons[n];
+		}
+	});
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::PredictStepSplit(arrayconst_t &consVarOld, array_t &consVarNew, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+					    const double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
+					    const int groupSplit)
+{
+	auto const dt = dt_in;
+	const auto dx = dx_in[0];
+	const auto x1Flux = fluxArray[0];
+#if (AMREX_SPACEDIM >= 2)
+	const auto dy = dx_in[1];
+	const auto x2Flux = fluxArray[1];
+#endif
+#if (AMREX_SPACEDIM == 3)
+	const auto dz = dx_in[2];
+	const auto x3Flux = fluxArray[2];
+#endif
+
+	const int nSplit = numRadVars_ * groupSplit;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		// consA: groups [0, groupSplit) updated, the others old; consB: groups [groupSplit, nGroups_) updated, the others old
+		std::array<amrex::Real, nvarHyperbolic_> consA{};
+		std::array<amrex::Real, nvarHyperbolic_> consB{};
+
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
+			consA[n] = consVarOld(i, j, k, nstartHyperbolic_ + n);
+			consB[n] = consA[n];
+		}
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
+			const amrex::Real upd =
+			    AMREX_D_TERM((dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)), +(dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
+					 +(dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n)));
+			if (n < nSplit) {
+				consA[n] += upd;
+			} else {
+				consB[n] += upd;
+			}
+		}
+
+		if (!isStateValid(consA)) {
+			amendRadState(consA);
+		}
+		AMREX_ASSERT(isStateValid(consA));
+		if (!isStateValid(consB)) {
+			amendRadState(consB);
+		}
+		AMREX_ASSERT(isStateValid(consB));
+
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
+			consVarNew(i, j, k, nstartHyperbolic_ + n) = (n < nSplit) ? consA[n] : consB[n];
 		}
 	});
 }

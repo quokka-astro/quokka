@@ -166,6 +166,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				// using the tabulated EOS to compute temperature
 	int enableChemistry_ = 0;
 	int enablePhotoChemistry_ = 0;
+	int photochemHipSyncPerBox_ = 0; // rad-13: debug option, restores the per-box streamSynchronize() after the HIP burn kernel
 	int enableTurbulence_ = 0;
 	int removeMeanFlow_ = 0;
 	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
@@ -489,7 +490,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// all groups). The other groups are left unchanged and contribute nothing to the flux registers.
 	void advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::FluxRegister *fr_as_crse,
 					  amrex::FluxRegister *fr_as_fine, amrex::MultiFab &state_out, int groupBegin = 0,
-					  int groupEnd = Physics_Traits<problem_t>::nGroups);
+					  int groupEnd = Physics_Traits<problem_t>::nGroups, int groupSplit = -1);
 	void advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::FluxRegister *fr_as_crse,
 					 amrex::FluxRegister *fr_as_fine, amrex::MultiFab &state_inter, int groupBegin = 0,
 					 int groupEnd = Physics_Traits<problem_t>::nGroups);
@@ -786,6 +787,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const hpp("photochemistry");
 		hpp.query("enabled", enablePhotoChemistry_);
+		hpp.query("hip_sync_per_box", photochemHipSyncPerBox_);
 		hpp.query("max_density_allowed", max_density_allowed);
 		hpp.query("min_density_allowed", min_density_allowed); // don't do photochemistry in cells with densities below the minimum density specified
 	}
@@ -3596,6 +3598,30 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 #endif
 	const int imexGroupEnd = chemBandsFirst ? nGroupsThermal : nGroups;
 
+	// rad-13: with chemBandsFirst, the thermal stage-2 forward-Euler step reads only the thermal radiation components of
+	// state_new (without the wavespeed correction), which neither the chemical-band transport nor photochemistry modify.
+	// It is therefore computed together with the chemical-band forward-Euler step in one transport pass over all groups
+	// at the start of the substep, and the stage-2 thermal pass (its full-state ghost fill and flux evaluation) is skipped.
+	// That pass also writes every radiation component of state_tmp1, so the full-state copy into state_tmp1 is dropped.
+	bool mergeThermalFE = false;
+	bool copyHydroForUserBC = false;
+	if constexpr (IMEX_Aim_22 > 0.0) {
+		mergeThermalFE = chemBandsFirst && (imexGroupEnd > 0) && !use_wavespeed_correction_;
+	}
+	if (mergeThermalFE) {
+		// The hydro components of state_tmp1 are not read by the chemical-band transport, but user boundary conditions
+		// (called for every ghost cell when state_tmp1 is filled) might read them; keep them as before in that case.
+		for (auto const &bc : BCs_cc_) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				if (bc.lo(idim) == amrex::BCType::ext_dir || bc.hi(idim) == amrex::BCType::ext_dir) {
+					copyHydroForUserBC = true;
+				}
+			}
+		}
+		// once per level step, so that state_tmp1 never holds uninitialised values when its ghost cells are filled
+		amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
+	}
+
 	amrex::MultiFab dustHeatingSource;
 	if constexpr (ISM_Traits<problem_t>::dust_chemical_band_absorption) {
 		dustHeatingSource.define(grids[lev], dmap[lev], 1, 0);
@@ -3608,8 +3634,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	for (int i = 0; i < nsubSteps; ++i) {
 		// We use the three-stage IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
 
-		// failure counter for: matter-radiation coupling, dust temperature, outer iteration
-		amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0});
+		// failure counter for: matter-radiation coupling, dust temperature, outer iteration, photochemistry burn (rad-13)
+		amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0, 0});
 		// iteration counter for: radiation update, Newton-Raphson iterations, max Newton-Raphson iterations, decoupled gas-dust update
 		amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0, 0});
 		int *p_iteration_failure_counter = iteration_failure_counter.data();
@@ -3668,9 +3694,18 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				// than waiting for the next substep.
 
 				// stage 2: explicit forward Euler, then emission, on state_tmp1
-				amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
-				advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine,
-							     state_tmp1_cc, nGroupsThermal, nGroups);
+				if (mergeThermalFE) {
+					// rad-13: one forward-Euler pass over all groups; the thermal part is the stage-2 thermal FE step of step 3
+					if (copyHydroForUserBC) {
+						copyHydroState(state_tmp1_cc, state_new_cc_[lev]);
+					}
+					advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine,
+								     state_tmp1_cc, 0, nGroups, nGroupsThermal);
+				} else {
+					amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
+					advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine,
+								     state_tmp1_cc, nGroupsThermal, nGroups);
+				}
 				RadSystem<problem_t>::AddChemBandSources(state_tmp1_cc, radEnergySource, radFluxSource, IMEX_Aim_22 * dt_radiation);
 
 				// stage 3: explicit midpoint RK2 (Shu-Osher combination with state_tmp1), then emission, on state_new
@@ -3691,8 +3726,11 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 #endif
 			}
 			// Also adds the thermal-band chemical emission j_g to radEnergySource, which step 3 consumes.
+			// rad-13: the burn-failure count goes into this substep's failure buffer (slot 3), checked with the others at the
+			// end of the substep, instead of its own copyToHost + ReduceIntMin here.
 			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
-										 min_density_allowed, dustHeatingSource, radEnergySource);
+										 min_density_allowed, dustHeatingSource, radEnergySource,
+										 p_iteration_failure_counter + 3, photochemHipSyncPerBox_ != 0);
 		}
 #endif
 
@@ -3713,16 +3751,24 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			if constexpr (IMEX_Aim_22 > 0.0) {
 				// Copy state_new (hydro-updated) -> state_tmp1 (to preserve gas state)
 				copyHydroState(state_tmp1_cc, state_new_cc_[lev]);
-				if (chemBandsFirst) {
-					// The forward Euler step below does not overwrite the chemical bands, so take them from state_new.
-					copyRadiationState(state_tmp1_cc, state_new_cc_[lev]);
-				}
+				if (mergeThermalFE) {
+					// rad-13: the thermal groups of state_tmp1 already hold their forward-Euler result (computed in step 1);
+					// copy only the chemical bands from state_new.
+					amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], nstartHyperbolic_ + RadSystem<problem_t>::numRadVars_ * nGroupsThermal,
+							      nstartHyperbolic_ + RadSystem<problem_t>::numRadVars_ * nGroupsThermal,
+							      RadSystem<problem_t>::numRadVars_ * (nGroups - nGroupsThermal), 0);
+				} else {
+					if (chemBandsFirst) {
+						// The forward Euler step below does not overwrite the chemical bands, so take them from state_new.
+						copyRadiationState(state_tmp1_cc, state_new_cc_[lev]);
+					}
 
-				// Forward Euler: overwrites radiation vars in state_tmp1 from state_new
-				//   state_tmp1_rad = state_new_rad + dt * Aex_21 * s(state_new_rad)
-				//   state_tmp1_gas = gas_n (unchanged by PredictStep)
-				advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine,
-							     state_tmp1_cc, 0, imexGroupEnd);
+					// Forward Euler: overwrites radiation vars in state_tmp1 from state_new
+					//   state_tmp1_rad = state_new_rad + dt * Aex_21 * s(state_new_rad)
+					//   state_tmp1_gas = gas_n (unchanged by PredictStep)
+					advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine,
+								     state_tmp1_cc, 0, imexGroupEnd);
+				}
 
 				// Implicit source terms for stage 2
 				const amrex::Real dt_stage2_implicit = IMEX_Aim_22 * dt_radiation;
@@ -3898,10 +3944,17 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		long nf_coupling = h_iteration_failure_counter[0]; // number of matter-radiation coupling failures, NOLINT(google-runtime-int)
 		long nf_dust = h_iteration_failure_counter[1];	   // number of dust temperature failures, NOLINT(google-runtime-int)
 		long nf_outer = h_iteration_failure_counter[2];	   // number of outer iterations failures, NOLINT(google-runtime-int)
+		long nf_burn = h_iteration_failure_counter[3];	   // number of photochemistry burn failures (rad-13), NOLINT(google-runtime-int)
 
 		amrex::ParallelDescriptor::ReduceLongSum(nf_coupling);
 		amrex::ParallelDescriptor::ReduceLongSum(nf_dust);
 		amrex::ParallelDescriptor::ReduceLongSum(nf_outer);
+		amrex::ParallelDescriptor::ReduceLongSum(nf_burn);
+
+		// rad-13: deferred from computePhotoChemistry; the burn ran before the IMEX stages, so it is reported first
+		if (nf_burn > 0) {
+			amrex::Abort("Burn failed in the Rosenbrock integrator. Aborting.");
+		}
 
 		// Note that the nf_dust has to abort BEFORE nf_coupling, because the dust temperature is used in the matter-radiation coupling and if
 		// dust temperature is negative, the matter-radiation coupling will fail to converge.
@@ -3944,7 +3997,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillRadiationGho
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int const /*iter_count*/,
 							       int const /*nsubsteps*/, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
-							       amrex::MultiFab &state_out, int const groupBegin, int const groupEnd)
+							       amrex::MultiFab &state_out, int const groupBegin, int const groupEnd, int const groupSplit)
 {
 	// get cell sizes
 	auto const &dx = geom[lev].CellSizeArray();
@@ -3966,9 +4019,18 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 		auto const &stateNew_cc = state_out.array(iter);
 
 		// Stage 1 of RK2-SSP
-		RadSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc,
-						  {AMREX_D_DECL(fluxes[0].const_array(iter), fluxes[1].const_array(iter), fluxes[2].const_array(iter))}, dt_radiation,
-						  dx, indexRange, ncompHyperbolic_, groupBegin, groupEnd);
+		if (groupSplit >= 0) {
+			// rad-13: all groups in one pass, amended as if [0, groupSplit) and [groupSplit, nGroups) had been separate passes
+			// (rad-03b: fluxes from the persistent level face arrays)
+			AMREX_ALWAYS_ASSERT(groupBegin == 0 && groupEnd == Physics_Traits<problem_t>::nGroups);
+			RadSystem<problem_t>::PredictStepSplit(stateOld_cc, stateNew_cc,
+							       {AMREX_D_DECL(fluxes[0].const_array(iter), fluxes[1].const_array(iter), fluxes[2].const_array(iter))},
+							       dt_radiation, dx, indexRange, groupSplit);
+		} else {
+			RadSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc,
+							  {AMREX_D_DECL(fluxes[0].const_array(iter), fluxes[1].const_array(iter), fluxes[2].const_array(iter))},
+							  dt_radiation, dx, indexRange, ncompHyperbolic_, groupBegin, groupEnd);
+		}
 	}
 
 	if (do_reflux) {

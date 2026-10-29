@@ -2,7 +2,9 @@
 #define PHOTOCHEMISTRY_HPP_
 
 #include <array>
+#include <initializer_list>
 #include <iostream>
+#include <optional>
 
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
@@ -35,16 +37,22 @@ AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
-			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource, amrex::MultiFab &radEnergySource)
-    -> bool
+			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource, amrex::MultiFab &radEnergySource,
+			   int *p_failure_counter_ext = nullptr, bool hip_sync_per_box = true) -> bool
 {
-	amrex::ignore_unused(dustHeatingSource, radEnergySource);
+	amrex::ignore_unused(dustHeatingSource, radEnergySource, hip_sync_per_box);
 
 	// Start off by assuming a successful burn.
 	int photochem_burn_success = 1;
 
-	amrex::Gpu::Buffer<int> d_num_failed({0});
-	auto *p_num_failed = d_num_failed.data();
+	// rad-13: if the caller passes a device failure counter, the burn failures are added to it and the caller
+	// checks it (deferred); otherwise they are counted here and checked at the end of this function, as before.
+	std::optional<amrex::Gpu::Buffer<int>> d_num_failed;
+	int *p_num_failed = p_failure_counter_ext;
+	if (p_num_failed == nullptr) {
+		d_num_failed.emplace(std::initializer_list<int>{0});
+		p_num_failed = d_num_failed->data();
+	}
 
 	int num_failed = 0;
 
@@ -316,11 +324,18 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		});
 
 #ifdef AMREX_USE_HIP
-		amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
+		// rad-13: gated behind photochemistry.hip_sync_per_box (debug option, default off in QuokkaSimulation)
+		if (hip_sync_per_box) {
+			amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
+		}
 #endif
 	}
 
-	num_failed = *(d_num_failed.copyToHost());
+	if (p_failure_counter_ext != nullptr) {
+		return true; // checked by the caller
+	}
+
+	num_failed = *(d_num_failed->copyToHost());
 
 	photochem_burn_success = num_failed == 0;
 	amrex::ParallelDescriptor::ReduceIntMin(photochem_burn_success);
