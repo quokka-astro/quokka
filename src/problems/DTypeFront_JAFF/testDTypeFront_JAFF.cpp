@@ -46,7 +46,8 @@ template <> struct quokka::EOS_Traits<DTypeFront_JAFF> {
 
 template <> struct Microphysics_Traits<DTypeFront_JAFF> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::JaffNetwork;
-	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
+	// The tableau is the CMake cache variable DTypeFront_JAFF_TABLEAU (default ROS2S).
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::DTYPEFRONT_JAFF_TABLEAU>;
 	static constexpr bool photochemistry = true;
 };
 
