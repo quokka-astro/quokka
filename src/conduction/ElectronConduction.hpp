@@ -86,6 +86,9 @@ template <typename problem_t> class ElectronConduction
 
 		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2 + nmscalars_, state.nGrow());
 		primVar.setVal(0.0);
+		// cell-centred sound speed, averaged to faces (replaces per-face EOS root-finds)
+		amrex::MultiFab csCell(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
+		csCell.setVal(0.0);
 
 		auto const &state_x0 = state.const_arrays();
 		auto const &state_fc_x0 = state_fc[0].const_arrays();
@@ -96,6 +99,7 @@ template <typename problem_t> class ElectronConduction
 		auto const &state_fc_x2 = state_fc[2].const_arrays();
 #endif
 		auto primVar_arr = primVar.arrays();
+		auto csCell_arr = csCell.arrays();
 		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
 
 		amrex::ParallelFor(state, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -128,6 +132,9 @@ template <typename problem_t> class ElectronConduction
 			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massScalarsRaw;
 			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 
+			const amrex::Real Pgas = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
+			csCell_arr[bx](i, j, k) = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas, massScalars);
+
 			primVar_arr[bx](i, j, k, 0) = rho;
 			primVar_arr[bx](i, j, k, 1) = amrex::max(Tgas, t_min);
 			for (int n = 0; n < nmscalars_; ++n) {
@@ -154,8 +161,8 @@ template <typename problem_t> class ElectronConduction
 
 		auto const evaluateFace = [=] AMREX_GPU_DEVICE(amrex::Real rho_L, amrex::Real T_L, amrex::Real rho_R, amrex::Real T_R,
 							       amrex::GpuArray<amrex::Real, nmscalars_> const &massFrac_L,
-							       amrex::GpuArray<amrex::Real, nmscalars_> const &massFrac_R, amrex::Real &kappa_face,
-							       amrex::Real &qsat_face) noexcept {
+							       amrex::GpuArray<amrex::Real, nmscalars_> const &massFrac_R, amrex::Real cs_face,
+							       amrex::Real &kappa_face, amrex::Real &qsat_face) noexcept {
 			const amrex::Real rho_face = 0.5 * (rho_L + rho_R);
 			const amrex::Real T_face = amrex::max(0.5 * (T_L + T_R), t_min);
 			amrex::GpuArray<amrex::Real, nmscalars_> massArray_face{};
@@ -168,16 +175,13 @@ template <typename problem_t> class ElectronConduction
 			for (int n = 0; n < nmscalars_; ++n) {
 				massArray_face[n] *= invSum * rho_face;
 			}
-			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massArray_face;
-			const amrex::Real Eint_face = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_face, T_face, massScalars);
-			const amrex::Real Pgas_face = ::quokka::EOS<problem_t>::ComputePressure(rho_face, Eint_face, massScalars);
-			const amrex::Real cs_face = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_face, Pgas_face, massScalars);
 
-			kappa_face = spitzer_scaling ? (kappa0 * std::pow(T_face, 2.5)) : kappa0;
+			kappa_face = spitzer_scaling ? (kappa0 * T_face * T_face * std::sqrt(T_face)) : kappa0;
 			qsat_face = amrex::max(saturation_factor * flux_limiter_phi * rho_face * cs_face * cs_face * cs_face, small);
 		};
 
 		auto const &temp = primVar.const_arrays();
+		auto const &csc = csCell.const_arrays();
 		auto const &left_x = leftState[0].const_arrays();
 		auto const &right_x = rightState[0].const_arrays();
 		auto flux_x = heat_flux[0].arrays();
@@ -192,7 +196,7 @@ template <typename problem_t> class ElectronConduction
 				massFrac_R[n] = right_x[bx](i, j, k, 2 + n);
 			}
 			evaluateFace(left_x[bx](i, j, k, 0), left_x[bx](i, j, k, 1), right_x[bx](i, j, k, 0), right_x[bx](i, j, k, 1), massFrac_L, massFrac_R,
-				     kappa_face, q_sat_face);
+				     0.5 * (csc[bx](i - 1, j, k) + csc[bx](i, j, k)), kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_x[bx](i, j, k) = q_classical / limiter;
@@ -213,7 +217,7 @@ template <typename problem_t> class ElectronConduction
 				massFrac_R[n] = right_y[bx](i, j, k, 2 + n);
 			}
 			evaluateFace(left_y[bx](i, j, k, 0), left_y[bx](i, j, k, 1), right_y[bx](i, j, k, 0), right_y[bx](i, j, k, 1), massFrac_L, massFrac_R,
-				     kappa_face, q_sat_face);
+				     0.5 * (csc[bx](i, j - 1, k) + csc[bx](i, j, k)), kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_y[bx](i, j, k) = q_classical / limiter;
@@ -235,7 +239,7 @@ template <typename problem_t> class ElectronConduction
 				massFrac_R[n] = right_z[bx](i, j, k, 2 + n);
 			}
 			evaluateFace(left_z[bx](i, j, k, 0), left_z[bx](i, j, k, 1), right_z[bx](i, j, k, 0), right_z[bx](i, j, k, 1), massFrac_L, massFrac_R,
-				     kappa_face, q_sat_face);
+				     0.5 * (csc[bx](i, j, k - 1) + csc[bx](i, j, k)), kappa_face, q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_z[bx](i, j, k) = q_classical / limiter;
