@@ -373,7 +373,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// AMR utility functions
 	template <typename PreInterpHook, typename PostInterpHook>
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
-				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class);
+				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class,
+				    int ncomp_level0 = -1);
 
 	template <typename PreInterpHook, typename PostInterpHook>
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
@@ -3499,9 +3500,13 @@ template <typename problem_t>
 template <typename PreInterpHook, typename PostInterpHook>
 void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int const lev, amrex::Real const time,
 						      quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp,
-						      PostInterpHook const &post_interp, FillPatchType fptype)
+						      PostInterpHook const &post_interp, FillPatchType fptype, int ncomp_level0)
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()"); // NOLINT(misc-const-correctness)
+
+	// ncomp_level0 > 0: on level 0 only, fill just components [0, ncomp_level0) (ghost cells of the other components are left untouched).
+	// On refined levels all components are always filled (the interpolation hooks assume the full component layout).
+	const int ncomp_fill = ((lev == 0) && (ncomp_level0 > 0) && (ncomp_level0 < state.nComp())) ? ncomp_level0 : state.nComp();
 
 	// On a single level, any periodic boundaries are filled first
 	// 	then built-in boundary conditions are filled (with amrex::FilccCell()),
@@ -3547,7 +3552,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		// fill internal and periodic boundaries, ignoring corners (cross=true)
 		// (there is no performance benefit for this in practice)
 		// state.FillBoundary(geom[lev].periodicity(), true);
-		state.FillBoundary(geom[lev].periodicity());
+		state.FillBoundary(0, ncomp_fill, geom[lev].periodicity());
 
 		if (!geom[lev].isAllPeriodic()) {
 			if (cen == quokka::centering::cc) {
@@ -3557,7 +3562,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
 																  boundaryFunctor);
 				// fill physical boundaries
-				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
+				physicalBoundaryFunctor(state, 0, ncomp_fill, state.nGrowVect(), time, 0);
 			} else if (cen == quokka::centering::fc) {
 				// create face-centered boundary functor using the passed direction
 				amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor =
@@ -3565,7 +3570,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
 																	 boundaryFunctor);
 				// fill physical boundaries
-				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
+				physicalBoundaryFunctor(state, 0, ncomp_fill, state.nGrowVect(), time, 0);
 			}
 		}
 	}
@@ -3573,7 +3578,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 	// ensure that there are no NaNs (can happen when domain boundary filling is
 	// unimplemented or malfunctioning)
 	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
-	AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones (usually this is caused by
+	AMREX_ASSERT(!S_filled.contains_nan(0, ncomp_fill, S_filled.nGrow())); // check ghost zones (usually this is caused by
 						// forgetting to fill some components when
 						// using custom Dirichlet BCs, e.g., radiation
 						// variables in a hydro-only problem)

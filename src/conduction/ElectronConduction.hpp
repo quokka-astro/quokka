@@ -84,8 +84,8 @@ template <typename problem_t> class ElectronConduction
 		const amrex::Real small = std::numeric_limits<amrex::Real>::min();
 		constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 
+		// (no setVal: the kernel below writes every component of every cell, ghost cells included)
 		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2 + nmscalars_, state.nGrow());
-		primVar.setVal(0.0);
 
 		auto const &state_x0 = state.const_arrays();
 		auto const &state_fc_x0 = state_fc[0].const_arrays();
@@ -144,8 +144,8 @@ template <typename problem_t> class ElectronConduction
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
 			leftState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2 + nmscalars_, ng_reconstruct);
 			rightState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2 + nmscalars_, ng_reconstruct);
+			// (no setVal: the flux kernels below write every face of heat_flux)
 			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
-			heat_flux[idim].setVal(0.0);
 		}
 
 		AMREX_D_TERM(ReconstructPrimVar<FluxDir::X1>(primVar, leftState[0], rightState[0], ng_reconstruct, params);
