@@ -1,15 +1,25 @@
 #ifndef JAFF_NETWORK_HPP_
 #define JAFF_NETWORK_HPP_
 /// \file network.hpp
-/// \brief The constants of a jaff-generated network. A Quokka problem names the
-/// network type with Microphysics_Traits::Network.
+/// \brief The constants and runtime parameters of a jaff-generated network. A
+/// Quokka problem names the network type with Microphysics_Traits::Network.
 
 #include "AMReX_Array.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_REAL.H"
 
 namespace quokka::networks
 {
+
+/// The runtime parameters of JaffNetwork, read from the `network` prefix. They
+/// are defined in network.cpp, not inline here: HIP cannot register inline
+/// managed variables.
+namespace jaff_network
+{
+/// floor of the species and radiation after a burn, and of the mass scalars
+extern AMREX_GPU_MANAGED amrex::Real small_x; // NOLINT
+} // namespace jaff_network
 
 // $JAFF SUB label
 /// The jaff network photoionization_H_caseB.
@@ -44,6 +54,13 @@ struct JaffNetwork {
 	// $JAFF END
 
 	static constexpr int NumThermalBands = 0;
+
+	/// floor of the species and radiation after a burn, and of the mass scalars
+	/// (jaff_network::small_x)
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SmallX() -> amrex::Real { return jaff_network::small_x; }
+
+	/// Read the runtime parameters (namespace jaff_network).
+	static void ReadParameters();
 };
 
 } // namespace quokka::networks
