@@ -352,6 +352,18 @@ struct DepositionCount {
 namespace SNFeedbackUtils
 {
 
+// Predicate for the pre-deposition survey: true for exactly the particles that explode in depositToBuffer().
+struct SNActivePred {
+	int evolutionStageIndex;
+	int birthTimeIndex;
+	amrex::Real step_end_time;
+
+	template <typename P> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto operator()(P const &p) const noexcept -> bool
+	{
+		return (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor)) && (step_end_time > p.rdata(birthTimeIndex + 1));
+	}
+};
+
 // Function to deposit thermal supernova remnant quantities
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
@@ -1001,6 +1013,30 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 namespace ChemicalFeedbackUtils
 {
 
+// Predicate for the pre-deposition survey: true for every particle that can deposit SNII or AGB yields (necessary condition; a particle that passes may
+// still have zero yield, which only means the full path runs).
+struct ChemicalActivePred {
+	int stageIndex;
+	int massAtBirthIndex;
+	int deathTimeIndex;
+	bool enable_snii_metal;
+	bool enable_agb_metal;
+	amrex::Real step_end_time;
+
+	template <typename P> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto operator()(P const &p) const noexcept -> bool
+	{
+		const int stage = p.idata(stageIndex);
+		const amrex::Real death_time = p.rdata(deathTimeIndex);
+		if (!(step_end_time > death_time)) {
+			return false;
+		}
+		const amrex::Real mass_birth_msun = std::max<amrex::Real>(0.0, p.rdata(massAtBirthIndex)) / C::M_solar;
+		const bool snii = enable_snii_metal && (stage == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+		const bool agb = enable_agb_metal && (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding)) && (mass_birth_msun <= 8.0);
+		return snii || agb;
+	}
+};
+
 struct ChemicalChannelYields {
 	amrex::Real snii_mass = 0.0;
 	amrex::Real agb_mass = 0.0;
@@ -1133,7 +1169,24 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 		yield_tables = ChemicalYieldLookup::constTables();
 	}
 
-	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
+	// Survey the sources before allocating anything: if no particle on any rank can deposit SNII or AGB yields this step, the channel deposits
+	// exactly nothing, so skip it (collective decision, identical on all ranks). Otherwise size the buffer to the passive scalars only
+	// (components relative to scalar0_index) and to SN_stencil_size + 1 ghost cells, falling back to the full ghost width if a stencil would not fit.
+	// The former count component was never written here, so roundoffMultiFab was a no-op and is dropped.
+	const ChemicalFeedbackUtils::ChemicalActivePred active_pred{StochasticStellarPopParticleStageIdx,
+								    StochasticStellarPopParticleMassAtBirthIdx,
+								    StochasticStellarPopParticleDeathTimeIdx,
+								    enable_SNII_metal,
+								    enable_AGB_metal,
+								    time + dt};
+	const int shrunk_ghost = std::min(SN_stencil_size + 1, state.nGrow());
+	const auto survey = ParticleUtils::surveyFeedbackSources<ContainerType>(container, state, lev, SN_stencil_size, shrunk_ghost, active_pred);
+	if (survey.active == 0) {
+		return;
+	}
+	const int buffer_ghost = (survey.misfit == 0) ? shrunk_ghost : state.nGrow();
+
+	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), nPassive, buffer_ghost);
 	state_buffer.setVal(0.0);
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
@@ -1181,7 +1234,8 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 				    yield_tables, use_chemical_tables, n, mass_birth, mass_birth_msun, birth_iso_abundance, z_snii_lookup, stage, time + dt,
 				    death_time, agb_death, enable_snii_metal, snii_fallback_yield_fraction, agb_fallback_yield_fraction, z_agb_lookup);
 
-				const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
+				// Buffer component indices are relative to scalar0_index (the buffer holds only the passive scalars).
+				const int total_comp = scalar_offset + n;
 				if (channel_yields.snii_mass > 0.0) {
 					ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, total_comp, channel_yields.snii_mass, vol_inverse);
 				}
@@ -1191,16 +1245,16 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 				}
 
 				if (store_channel_fields_local && enable_snii_metal && channel_yields.snii_mass > 0.0) {
-					const int sn_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + nchem + n;
-					if (sn_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+					const int sn_comp = scalar_offset + nchem + n;
+					if (sn_comp < nPassive) {
 						ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, sn_comp, channel_yields.snii_mass,
 											vol_inverse);
 					}
 				}
 
 				if (store_channel_fields_local && channel_yields.agb_mass > 0.0) {
-					const int agb_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 3 * nchem + n;
-					if (agb_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+					const int agb_comp = scalar_offset + 3 * nchem + n;
+					if (agb_comp < nPassive) {
 						ChemicalFeedbackUtils::depositWendland(local_buffer, interp, agb_comp, channel_yields.agb_mass, vol_inverse);
 					}
 				}
@@ -1213,8 +1267,7 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 	}
 
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
-	ParticleUtils::roundoffMultiFab(state_buffer);
-	state.plus(state_buffer, 0, state.nComp(), 0);
+	amrex::MultiFab::Add(state, state_buffer, 0, HydroSystem<problem_t>::scalar0_index, nPassive, 0);
 }
 
 template <ParticleType particleType, typename ContainerType, typename problem_t>
@@ -1225,8 +1278,20 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 	static_assert(SN_stencil_size <= 3,
 		      "SN_stencil_size must be <= 3"); // SN_stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
 
+	// Survey the sources before allocating anything: if no particle on any rank explodes this step, the channel would deposit exactly nothing
+	// (zero buffer, zero ghost-sum, no cell changes, zero SN count and zero max velocity), so skip it entirely. The survey is collective, so the
+	// decision is identical on all ranks. The buffer only needs SN_stencil_size + 1 ghost cells (stencil radius + one cell of particle drift); if any
+	// exploding particle's stencil would not fit, fall back to the full ghost width of the state.
+	const SNFeedbackUtils::SNActivePred active_pred{evolutionStageIndex, birthTimeIndex, time + dt};
+	const int shrunk_ghost = std::min(SN_stencil_size + 1, state.nGrow());
+	const auto survey = ParticleUtils::surveyFeedbackSources<ContainerType>(container, state, lev, SN_stencil_size, shrunk_ghost, active_pred);
+	if (survey.active == 0) {
+		return {0, static_cast<Real>(0.0)};
+	}
+	const int buffer_ghost = (survey.misfit == 0) ? shrunk_ghost : state.nGrow();
+
 	// Create buffer for this particle type with extra component for count
-	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
+	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, buffer_ghost);
 	state_buffer.setVal(0.0);
 
 	// copy host variables to device

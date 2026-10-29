@@ -1,7 +1,10 @@
 #ifndef PARTICLE_UTILS_HPP_
 #define PARTICLE_UTILS_HPP_
 
+#include "AMReX_Box.H"
+#include "AMReX_Gpu.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "fundamental_constants.H"
 #include "math/FastMath.hpp"
 #include "particles/particle_types.hpp"
@@ -201,6 +204,53 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 			}
 		}
 	});
+}
+
+/// Result of surveying the particles of one feedback channel on one level.
+struct FeedbackSurvey {
+	int active = 0; ///< number of particles (summed over all MPI ranks) that may deposit in this channel
+	int misfit = 0; ///< number of active particles (summed over all ranks) whose stencil does not fit in the shrunk buffer
+};
+
+/// Count (over all MPI ranks) the particles of `container` on level `lev` for which `pred(p)` is true, and how many of those have a deposition stencil
+/// (cell containing the particle +- `reach`) that would not fit inside the grid's valid box grown by `ghost`. This is a collective call (one reduction), so
+/// all ranks get the same answer and may use it for collective decisions. `pred` must be a device-callable functor (not a lambda).
+template <typename ContainerType, typename ActivePred>
+auto surveyFeedbackSources(ContainerType *container, amrex::MultiFab const &state, int lev, int reach, int ghost, ActivePred pred) -> FeedbackSurvey
+{
+	amrex::Gpu::Buffer<int> counts({0, 0});
+	int *p_counts = counts.data();
+	const auto &geom = container->Geom(lev);
+	const auto plo = geom.ProbLoArray();
+	const auto dxi = geom.InvCellSizeArray();
+
+	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
+		auto &particles = pti.GetArrayOfStructs();
+		auto *pData = particles().data();
+		const amrex::Long np = pti.numParticles();
+		const amrex::Box fab_box = amrex::grow(state.boxArray()[pti.index()], ghost);
+		const amrex::Dim3 lo = amrex::lbound(fab_box);
+		const amrex::Dim3 hi = amrex::ubound(fab_box);
+
+		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+			auto const &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			if (!pred(p)) {
+				return;
+			}
+			amrex::Gpu::Atomic::AddNoRet(&p_counts[0], 1);
+			const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
+			const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
+			const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+			if (ix - reach < lo.x || ix + reach > hi.x || iy - reach < lo.y || iy + reach > hi.y || iz - reach < lo.z || iz + reach > hi.z) {
+				amrex::Gpu::Atomic::AddNoRet(&p_counts[1], 1);
+			}
+		});
+	}
+
+	int *h_counts = counts.copyToHost();
+	int totals[2] = {h_counts[0], h_counts[1]}; // NOLINT
+	amrex::ParallelDescriptor::ReduceIntSum(totals, 2);
+	return FeedbackSurvey{totals[0], totals[1]};
 }
 
 // Zero every real component from first_comp onwards for all particles in the container.

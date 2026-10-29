@@ -88,6 +88,33 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits : Parti
 	}
 };
 
+// Predicate for the pre-deposition survey of the WR chemistry channel: true for every particle that can deposit WR metals this step (necessary condition;
+// a particle that passes may still have zero yield, which only means the full path runs).
+struct WRActivePred {
+	int stageIndex;
+	int massAtBirthIndex;
+	int birthTimeIndex;
+	int deathTimeIndex;
+	bool enable_WR_metal;
+	amrex::Real time;
+
+	template <typename P> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto operator()(P const &p) const noexcept -> bool
+	{
+		if (!enable_WR_metal) {
+			return false;
+		}
+		const amrex::Real mass_birth_msun = std::max<amrex::Real>(0.0, p.rdata(massAtBirthIndex)) / C::M_solar;
+		const amrex::Real age = time - p.rdata(birthTimeIndex);
+		const int stage = p.idata(stageIndex);
+		const bool wr_stage = ((stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) ||
+				       (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding))) &&
+				      (mass_birth_msun >= 9.0);
+		const amrex::Real wr_lifetime = p.rdata(deathTimeIndex) - p.rdata(birthTimeIndex);
+		const bool wr_active = (age < wr_lifetime) && (wr_lifetime > 0.0);
+		return wr_stage && wr_active;
+	}
+};
+
 // Specialization for StochasticStellarPop particles: updates luminosity via table interpolation.
 // Overrides updateParticleProperties to gate the update on luminosity tables being initialized,
 // and to load the tables into g_device_luminosity_tables before launching the GPU kernel.
@@ -144,7 +171,26 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 			yield_tables = ChemicalYieldLookup::constTables();
 		}
 
-		amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
+		constexpr int W_stencil_N = 2;
+
+		// Survey the sources before allocating anything: if no particle on any rank is in its WR phase this step, the channel deposits exactly
+		// nothing, so skip it (collective decision, identical on all ranks). Otherwise size the buffer to the passive scalars only (components
+		// relative to scalar0_index) and to W_stencil_N + 1 ghost cells, falling back to the full ghost width if a stencil would not fit.
+		// The former count component was never written here, so roundoffMultiFab was a no-op and is dropped.
+		const WRActivePred active_pred{StochasticStellarPopParticleStageIdx,
+					       StochasticStellarPopParticleMassAtBirthIdx,
+					       StochasticStellarPopParticleBirthTimeIdx,
+					       StochasticStellarPopParticleDeathTimeIdx,
+					       enable_WR_metal,
+					       time};
+		const int shrunk_ghost = std::min(W_stencil_N + 1, state.nGrow());
+		const auto survey = ParticleUtils::surveyFeedbackSources<ContainerType>(container, state, lev, W_stencil_N, shrunk_ghost, active_pred);
+		if (survey.active == 0) {
+			return;
+		}
+		const int buffer_ghost = (survey.misfit == 0) ? shrunk_ghost : state.nGrow();
+
+		amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), nPassive, buffer_ghost);
 		state_buffer.setVal(0.0);
 
 		const auto &geom = container->Geom(lev);
@@ -153,7 +199,6 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
 		const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
 
-		constexpr int W_stencil_N = 2;
 		constexpr int W_stencil_width = 2 * W_stencil_N + 1;
 		constexpr auto W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
 		constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
@@ -220,7 +265,8 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 						continue;
 					}
 
-					const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
+					// Buffer component indices are relative to scalar0_index (the buffer holds only the passive scalars).
+					const int total_comp = scalar_offset + n;
 					const int nz_loop = (AMREX_SPACEDIM >= 3) ? W_stencil_width : 1;
 					const int ny_loop = (AMREX_SPACEDIM >= 2) ? W_stencil_width : 1;
 
@@ -243,9 +289,8 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 												     total_val);
 
 									if (store_channel_fields_d && enable_WR_metal_d && y_wr > 0.0) {
-										const int wr_comp =
-										    HydroSystem<problem_t>::scalar0_index + scalar_offset + 2 * nchem + n;
-										if (wr_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+										const int wr_comp = scalar_offset + 2 * nchem + n;
+										if (wr_comp < nPassive) {
 											amrex::Gpu::Atomic::AddNoRet(
 											    &local_state(interp.index[0] + ii, interp.index[1] + jj,
 													 interp.index[2] + kk, wr_comp),
@@ -261,8 +306,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 		}
 
 		state_buffer.SumBoundary(container->Geom(lev).periodicity());
-		ParticleUtils::roundoffMultiFab(state_buffer);
-		state.plus(state_buffer, 0, state.nComp(), 0);
+		amrex::MultiFab::Add(state, state_buffer, 0, HydroSystem<problem_t>::scalar0_index, nPassive, 0);
 	}
 };
 
