@@ -24,9 +24,8 @@ auto computeChemistry(amrex::MultiFab &mf, amrex::Real dt, amrex::Real max_densi
 } // namespace quokka::chemistry
 
 // The definition is compiled only in builds with chemistry, because it uses names that only those builds have: spmasses
-// and eos() from Microphysics' primordial_chem EOS, small_x from Microphysics' generated network parameters, and the
-// constants of the generated network_properties.H that the transitional check below compares against. Callers use Microphysics_Traits<problem_t>::chemistry.
-// This guard goes when the EOS is in Quokka and the generated constants are gone.
+// and eos() from Microphysics' primordial_chem EOS, and the constants of the generated network_properties.H that the transitional check below compares against.
+// Callers use Microphysics_Traits<problem_t>::chemistry. This guard goes when the EOS is in Quokka and the generated constants are gone.
 #ifdef CHEMISTRY
 #include "actual_eos_data.H"
 #include "eos.H"
@@ -122,7 +121,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 
 			// ensure positivity and normalize
 			for (int nn = 0; nn < Network::NumSpec; ++nn) {
-				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], network_rp::small_x);
+				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], Network::SmallX());
 				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
 				insum += inmfracs[nn];
 			}
