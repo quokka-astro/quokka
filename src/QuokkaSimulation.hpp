@@ -3609,14 +3609,15 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 	int const compBegin = RadSystem<problem_t>::numRadVars_ * groupBegin;
 	int const ncompGroups = RadSystem<problem_t>::numRadVars_ * (groupEnd - groupBegin);
 
+	// only needed when a flux register exists (to the finer level and/or to the coarser level)
+	bool const needReflux = do_reflux && ((fr_as_crse != nullptr) || (fr_as_fine != nullptr));
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> refluxFluxes;
-	if (do_reflux) {
+	if (needReflux) {
 		auto initRefluxFluxes = [&](std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes) {
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 				amrex::BoxArray ba = state_out.boxArray();
 				ba.surroundingNodes(dir);
-				fluxes[dir].define(ba, dmap[lev], state_out.nComp(), 0);
-				fluxes[dir].setVal(0.0);
+				fluxes[dir].define(ba, dmap[lev], ncompGroups, 0); // fully overwritten by the copy below
 			}
 		};
 		initRefluxFluxes(refluxFluxes);
@@ -3648,17 +3649,17 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 		    {AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(), fluxDiffusiveArrays[1].const_array(), fluxDiffusiveArrays[2].const_array())},
 		    dt_radiation, dx, indexRange, ncompHyperbolic_, groupBegin, groupEnd);
 
-		if (do_reflux) {
+		if (needReflux) {
 			// copy only the fluxes of groups [groupBegin, groupEnd); the other components stay zero, so the
 			// fluxes of transport calls on disjoint group ranges add up correctly in the flux registers
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(fluxArrays[dir], compBegin, nstartHyperbolic_ + compBegin, ncompGroups);
+				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(fluxArrays[dir], compBegin, 0, ncompGroups);
 			}
 		}
 	}
 
-	if (do_reflux) {
-		incrementFluxRegisters(fr_as_crse, fr_as_fine, refluxFluxes, lev, 0.5 * dt_radiation);
+	if (needReflux) {
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, refluxFluxes, lev, 0.5 * dt_radiation, nstartHyperbolic_ + compBegin);
 	}
 }
 
@@ -3673,14 +3674,15 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 	int const compBegin = RadSystem<problem_t>::numRadVars_ * groupBegin;
 	int const ncompGroups = RadSystem<problem_t>::numRadVars_ * (groupEnd - groupBegin);
 
+	// only needed when a flux register exists (to the finer level and/or to the coarser level)
+	bool const needReflux = do_reflux && ((fr_as_crse != nullptr) || (fr_as_fine != nullptr));
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> refluxFluxes;
-	if (do_reflux) {
+	if (needReflux) {
 		auto initRefluxFluxes = [&](std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes) {
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 				amrex::BoxArray ba = state_new_cc_[lev].boxArray();
 				ba.surroundingNodes(dir);
-				fluxes[dir].define(ba, dmap[lev], state_new_cc_[lev].nComp(), 0);
-				fluxes[dir].setVal(0.0);
+				fluxes[dir].define(ba, dmap[lev], ncompGroups, 0); // fully overwritten by the copy below
 			}
 		};
 		initRefluxFluxes(refluxFluxes);
@@ -3717,16 +3719,16 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 		    {AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(), fluxDiffusiveArrays[1].const_array(), fluxDiffusiveArrays[2].const_array())},
 		    dt_radiation, dx, indexRange, ncompHyperbolic_, IMEX_alpha, IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21, IMEX_Aex_32, groupBegin, groupEnd);
 
-		if (do_reflux) {
+		if (needReflux) {
 			// copy only the fluxes of groups [groupBegin, groupEnd); see advanceRadiationForwardEuler
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(fluxArrays[dir], compBegin, nstartHyperbolic_ + compBegin, ncompGroups);
+				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(fluxArrays[dir], compBegin, 0, ncompGroups);
 			}
 		}
 	}
 
-	if (do_reflux) {
-		incrementFluxRegisters(fr_as_crse, fr_as_fine, refluxFluxes, lev, 0.5 * dt_radiation);
+	if (needReflux) {
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, refluxFluxes, lev, 0.5 * dt_radiation, nstartHyperbolic_ + compBegin);
 	}
 }
 
