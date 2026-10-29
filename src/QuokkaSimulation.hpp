@@ -230,6 +230,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int reconstructionOrder_ = 3;	  // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM (extrema-preserving)
 	SlopeLimiter plmLimiter_ = SlopeLimiter::sweby;
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM
+
+	// persistent face-centred radiation flux arrays (per level, ncompHyperbolic_ components), reallocated when the level's grids change
+	amrex::Vector<std::array<amrex::MultiFab, AMREX_SPACEDIM>> radFlux_;
+	amrex::Vector<std::array<amrex::MultiFab, AMREX_SPACEDIM>> radFluxOld_;
 	int emfReconstructionOrder_ = 5;       // 1 == donor cell; 2 == PLM; 3 == PPM; 5 == xPPM (extrema-preserving, default)
 	SlopeLimiter mhdPlmLimiter_ = SlopeLimiter::sweby;
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
@@ -489,10 +493,17 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine);
 
-	auto computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, int nvars,
-				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {},
-				    int groupBegin = 0, int groupEnd = Physics_Traits<problem_t>::nGroups)
-	    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
+	void computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, int nvars,
+				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, std::array<amrex::Array4<amrex::Real>, AMREX_SPACEDIM> const &fluxOut,
+				    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {}, int groupBegin = 0,
+				    int groupEnd = Physics_Traits<problem_t>::nGroups);
+
+	// level-wide radiation fluxes of groups [groupBegin, groupEnd) of cons_mf, written into the persistent face arrays fluxes[lev]
+	auto computeRadiationFluxesLevel(int lev, amrex::MultiFab const &cons_mf, amrex::Vector<std::array<amrex::MultiFab, AMREX_SPACEDIM>> &fluxes,
+					 int groupBegin, int groupEnd) -> std::array<amrex::MultiFab, AMREX_SPACEDIM> &;
+
+	void incrementRadFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes,
+				       int lev, amrex::Real dt_lev, int compBegin, int ncompGroups);
 
 	// Persistent per-level hydro temporaries (hydro-02). (Re)defined lazily whenever the level's
 	// BoxArray/DistributionMapping (or the ghost/component layout) changes, i.e. after every regrid.
@@ -543,7 +554,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void computeCCPerpBfieldComps(amrex::MultiFab &cc_bfield_perp_comps_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc) const;
 
 	template <FluxDir DIR>
-	void fluxFunction(amrex::Array4<const amrex::Real> const &consState, amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
+	void fluxFunction(amrex::Array4<const amrex::Real> const &consState, amrex::Array4<const amrex::Real> const &primVar, amrex::Array4<amrex::Real> const &x1Flux,
 			  const amrex::Box &indexRange, int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 			  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {}, int groupBegin = 0,
 			  int groupEnd = Physics_Traits<problem_t>::nGroups);
@@ -3913,56 +3924,29 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 	int const compBegin = RadSystem<problem_t>::numRadVars_ * groupBegin;
 	int const ncompGroups = RadSystem<problem_t>::numRadVars_ * (groupEnd - groupBegin);
 
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> refluxFluxes;
-	if (do_reflux) {
-		auto initRefluxFluxes = [&](std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes) {
-			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				amrex::BoxArray ba = state_out.boxArray();
-				ba.surroundingNodes(dir);
-				fluxes[dir].define(ba, dmap[lev], ncompGroups, 0); // driver-03: only the flux-carrying components
-				fluxes[dir].setVal(0.0);
-			}
-		};
-		initRefluxFluxes(refluxFluxes);
-	}
-
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
 			       PostInterpState);
+
+	// one level-wide flux kernel per direction, writing the persistent face arrays
+	auto &fluxes = computeRadiationFluxesLevel(lev, state_new_cc_[lev], radFlux_, groupBegin, groupEnd);
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_out); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateOld_cc = state_new_cc_[lev].const_array(iter);
 		auto const &stateNew_cc = state_out.array(iter);
-		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
-			cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
-#if (AMREX_SPACEDIM == 3)
-			cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
-#endif
-		}
-		auto [fluxArrays, fluxDiffusiveArrays] =
-		    computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx, cons_fc_arr, groupBegin, groupEnd);
 
 		// Stage 1 of RK2-SSP
-		RadSystem<problem_t>::PredictStep(
-		    stateOld_cc, stateNew_cc, {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
-		    {AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(), fluxDiffusiveArrays[1].const_array(), fluxDiffusiveArrays[2].const_array())},
-		    dt_radiation, dx, indexRange, ncompHyperbolic_, groupBegin, groupEnd);
-
-		if (do_reflux) {
-			// copy only the fluxes of groups [groupBegin, groupEnd); the other components stay zero, so the
-			// fluxes of transport calls on disjoint group ranges add up correctly in the flux registers
-			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(fluxArrays[dir], compBegin, 0, ncompGroups);
-			}
-		}
+		RadSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc,
+						  {AMREX_D_DECL(fluxes[0].const_array(iter), fluxes[1].const_array(iter), fluxes[2].const_array(iter))}, dt_radiation,
+						  dx, indexRange, ncompHyperbolic_, groupBegin, groupEnd);
 	}
 
 	if (do_reflux) {
-		incrementFluxRegisters(fr_as_crse, fr_as_fine, refluxFluxes, lev, 0.5 * dt_radiation, 0, nstartHyperbolic_ + compBegin, ncompGroups);
+		// only the fluxes of groups [groupBegin, groupEnd) are added, so the fluxes of transport calls on disjoint group
+		// ranges add up correctly in the flux registers
+		incrementRadFluxRegisters(fr_as_crse, fr_as_fine, fluxes, lev, 0.5 * dt_radiation, compBegin, ncompGroups);
 	}
 }
 
@@ -3977,22 +3961,15 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 	int const compBegin = RadSystem<problem_t>::numRadVars_ * groupBegin;
 	int const ncompGroups = RadSystem<problem_t>::numRadVars_ * (groupEnd - groupBegin);
 
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> refluxFluxes;
-	if (do_reflux) {
-		auto initRefluxFluxes = [&](std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes) {
-			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				amrex::BoxArray ba = state_new_cc_[lev].boxArray();
-				ba.surroundingNodes(dir);
-				fluxes[dir].define(ba, dmap[lev], ncompGroups, 0); // driver-03: only the flux-carrying components
-				fluxes[dir].setVal(0.0);
-			}
-		};
-		initRefluxFluxes(refluxFluxes);
-	}
-
 	// update ghost zones [intermediate stage stored in state_inter]
 	fillBoundaryConditions(state_inter, state_inter, lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
 			       PostInterpState);
+
+	// one level-wide flux kernel per direction and state, writing the persistent face arrays. All fluxes are computed before
+	// state_new_cc_ is updated below; each box's fluxes read only that box's FAB (valid + ghost cells), so this matches the
+	// per-box order of compute-then-update.
+	auto &fluxesOld = computeRadiationFluxesLevel(lev, state_new_cc_[lev], radFluxOld_, groupBegin, groupEnd);
+	auto &fluxes = computeRadiationFluxesLevel(lev, state_inter, radFlux_, groupBegin, groupEnd);
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -4000,77 +3977,131 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 		auto const &stateOld_cc = state_new_cc_[lev].const_array(iter);
 		auto const &stateInter_cc = state_inter.const_array(iter);
 		auto const &stateNew_cc = state_new_cc_[lev].array(iter);
-		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
-			cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
-#if (AMREX_SPACEDIM == 3)
-			cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
-#endif
-		}
-		auto [fluxArraysOld, fluxDiffusiveArraysOld] =
-		    computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx, cons_fc_arr, groupBegin, groupEnd);
-		auto [fluxArrays, fluxDiffusiveArrays] =
-		    computeRadiationFluxes(stateInter_cc, indexRange, ncompHyperbolic_, dx, cons_fc_arr, groupBegin, groupEnd);
 
 		// Stage 2 of RK2-SSP with Shu-Osher coefficients
 		RadSystem<problem_t>::AddFluxesRK2(
-		    stateNew_cc, stateOld_cc, stateInter_cc, {AMREX_D_DECL(fluxArraysOld[0].array(), fluxArraysOld[1].array(), fluxArraysOld[2].array())},
-		    {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
-		    {AMREX_D_DECL(fluxDiffusiveArraysOld[0].const_array(), fluxDiffusiveArraysOld[1].const_array(), fluxDiffusiveArraysOld[2].const_array())},
-		    {AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(), fluxDiffusiveArrays[1].const_array(), fluxDiffusiveArrays[2].const_array())},
-		    dt_radiation, dx, indexRange, ncompHyperbolic_, IMEX_alpha, IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21, IMEX_Aex_32, groupBegin, groupEnd);
-
-		if (do_reflux) {
-			// copy only the fluxes of groups [groupBegin, groupEnd); see advanceRadiationForwardEuler
-			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(fluxArrays[dir], compBegin, 0, ncompGroups);
-			}
-		}
+		    stateNew_cc, stateOld_cc, stateInter_cc,
+		    {AMREX_D_DECL(fluxesOld[0].const_array(iter), fluxesOld[1].const_array(iter), fluxesOld[2].const_array(iter))},
+		    {AMREX_D_DECL(fluxes[0].const_array(iter), fluxes[1].const_array(iter), fluxes[2].const_array(iter))}, dt_radiation, dx, indexRange,
+		    ncompHyperbolic_, IMEX_alpha, IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21, IMEX_Aex_32, groupBegin, groupEnd);
 	}
 
 	if (do_reflux) {
-		incrementFluxRegisters(fr_as_crse, fr_as_fine, refluxFluxes, lev, 0.5 * dt_radiation, 0, nstartHyperbolic_ + compBegin, ncompGroups);
+		// only the fluxes of groups [groupBegin, groupEnd); see advanceRadiationForwardEuler
+		incrementRadFluxRegisters(fr_as_crse, fr_as_fine, fluxes, lev, 0.5 * dt_radiation, compBegin, ncompGroups);
 	}
 }
 
 template <typename problem_t>
-auto QuokkaSimulation<problem_t>::computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, const int nvars,
-							 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-							 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc, const int groupBegin,
-							 const int groupEnd)
-    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>
+void QuokkaSimulation<problem_t>::incrementRadFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
+							    std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, int const lev, amrex::Real const dt_lev,
+							    int const compBegin, int const ncompGroups)
 {
-	// Only the flux components of groups [groupBegin, groupEnd) are computed; the others are left uninitialized.
-	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
-	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
-	amrex::FArrayBox x1FluxDiffusive(x1FluxRange, nvars, amrex::The_Async_Arena());
+	// rad-03b: adds the radiation components of groups [groupBegin, groupEnd) directly from the persistent face arrays
+	// (component compBegin) to the state components nstartHyperbolic_ + compBegin of the registers.
+	// Merged with driver-03: delegate to AMRSimulation::incrementFluxRegisters with a component sub-range, so the
+	// driver03.prescale path (interface-only CrseInit) applies to the radiation fluxes as well. With prescale=0 this is
+	// exactly rad-03b's CrseInit(fluxes, dir, compBegin, nstartHyperbolic_ + compBegin, ncompGroups, -dt*area, ADD) / FineAdd.
+	if (ncompGroups == 0) {
+		return;
+	}
+	incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxes, lev, dt_lev, compBegin, nstartHyperbolic_ + compBegin, ncompGroups);
+}
+
+template <typename problem_t>
+auto QuokkaSimulation<problem_t>::computeRadiationFluxesLevel(int const lev, amrex::MultiFab const &cons_mf,
+							      amrex::Vector<std::array<amrex::MultiFab, AMREX_SPACEDIM>> &fluxes, int const groupBegin,
+							      int const groupEnd) -> std::array<amrex::MultiFab, AMREX_SPACEDIM> &
+{
+	// (re)allocate the persistent face arrays of this level when they do not match the level's grids (first use or regrid)
+	if (fluxes.size() <= lev) {
+		fluxes.resize(lev + 1);
+	}
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux = fluxes[lev];
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		if (flux[dir].empty() || !flux[dir].boxArray().CellEqual(cons_mf.boxArray()) || !(flux[dir].DistributionMap() == cons_mf.DistributionMap())) {
+			flux[dir] = amrex::MultiFab(amrex::convert(cons_mf.boxArray(), amrex::IntVect::TheDimensionVector(dir)), cons_mf.DistributionMap(),
+						    ncompHyperbolic_, 0);
+		}
+	}
+
+	auto const &dx = geom[lev].CellSizeArray();
+	std::array<amrex::MultiFab const *, AMREX_SPACEDIM> cons_fc_mf{};
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			cons_fc_mf[dir] = &state_new_fc_[lev][dir];
+		}
+	}
+
+	if (radiationReconstructionOrder_ == 3 || radiationReconstructionOrder_ == 2 || radiationReconstructionOrder_ == 1) {
+		// fused kernel: primitive conversion, reconstruction and HLL flux in registers, one launch per direction over all boxes
+		auto launch = [&](auto order) {
+			constexpr int ORDER = decltype(order)::value;
+			RadSystem<problem_t>::template ComputeFluxesFused<FluxDir::X1, ORDER>(flux[0], cons_mf, cons_fc_mf, dx, use_wavespeed_correction_, groupBegin,
+											      groupEnd);
 #if (AMREX_SPACEDIM >= 2)
-	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
-	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
-	amrex::FArrayBox x2FluxDiffusive(x2FluxRange, nvars, amrex::The_Async_Arena());
+			RadSystem<problem_t>::template ComputeFluxesFused<FluxDir::X2, ORDER>(flux[1], cons_mf, cons_fc_mf, dx, use_wavespeed_correction_, groupBegin,
+											      groupEnd);
 #endif
 #if (AMREX_SPACEDIM == 3)
-	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
-	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
-	amrex::FArrayBox x3FluxDiffusive(x3FluxRange, nvars, amrex::The_Async_Arena());
+			RadSystem<problem_t>::template ComputeFluxesFused<FluxDir::X3, ORDER>(flux[2], cons_mf, cons_fc_mf, dx, use_wavespeed_correction_, groupBegin,
+											      groupEnd);
 #endif
+		};
+		if (radiationReconstructionOrder_ == 3) {
+			launch(std::integral_constant<int, 3>{});
+		} else if (radiationReconstructionOrder_ == 2) {
+			launch(std::integral_constant<int, 2>{});
+		} else {
+			launch(std::integral_constant<int, 1>{});
+		}
+	} else {
+		// other reconstructions (PPM_EP): per-box path, writing into the persistent face arrays
+		for (amrex::MFIter iter(cons_mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
+				cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
+#if (AMREX_SPACEDIM == 3)
+				cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
+#endif
+			}
+			computeRadiationFluxes(cons_mf.const_array(iter), indexRange, ncompHyperbolic_, dx,
+					       {AMREX_D_DECL(flux[0].array(iter), flux[1].array(iter), flux[2].array(iter))}, cons_fc_arr, groupBegin, groupEnd);
+		}
+	}
+	return flux;
+}
 
-	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVar, x1Flux, x1FluxDiffusive, indexRange, nvars, dx, cons_fc, groupBegin, groupEnd);
-		     , fluxFunction<FluxDir::X2>(consVar, x2Flux, x2FluxDiffusive, indexRange, nvars, dx, cons_fc, groupBegin, groupEnd);
-		     , fluxFunction<FluxDir::X3>(consVar, x3Flux, x3FluxDiffusive, indexRange, nvars, dx, cons_fc, groupBegin, groupEnd);)
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, const int nvars,
+							 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+							 std::array<amrex::Array4<amrex::Real>, AMREX_SPACEDIM> const &fluxOut,
+							 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc, const int groupBegin,
+							 const int groupEnd)
+{
+	// Only the flux components of groups [groupBegin, groupEnd) are computed; the others are left untouched.
 
-	std::array<amrex::FArrayBox, AMREX_SPACEDIM> fluxArrays = {AMREX_D_DECL(std::move(x1Flux), std::move(x2Flux), std::move(x3Flux))};
-	std::array<amrex::FArrayBox, AMREX_SPACEDIM> fluxDiffusiveArrays{
-	    AMREX_D_DECL(std::move(x1FluxDiffusive), std::move(x2FluxDiffusive), std::move(x3FluxDiffusive))};
+	// Convert to primitive variables once per box (not once per direction). The reconstruction of each direction reads cells at most
+	// 3 zones outside indexRange: PPM (order 3), PPM_EP (order 5) and WENO read +-2 zones around each cell of the reconstruction range, which
+	// extends 1 zone beyond indexRange. (The wavespeed correction and the first-order fallback read the conserved state only.)
+	constexpr int nghostPrim = 3;
+	amrex::Box const &primRange = amrex::grow(indexRange, nghostPrim);
+	amrex::FArrayBox primVar(primRange, nvars, amrex::The_Async_Arena());
+	RadSystem<problem_t>::ConservedToPrimitive(consVar, primVar.array(), primRange, groupBegin, groupEnd);
+	amrex::Array4<const amrex::Real> const primVarArr = primVar.const_array();
 
-	return std::make_tuple(std::move(fluxArrays), std::move(fluxDiffusiveArrays));
+	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVar, primVarArr, fluxOut[0], indexRange, nvars, dx, cons_fc, groupBegin, groupEnd);
+		     , fluxFunction<FluxDir::X2>(consVar, primVarArr, fluxOut[1], indexRange, nvars, dx, cons_fc, groupBegin, groupEnd);
+		     , fluxFunction<FluxDir::X3>(consVar, primVarArr, fluxOut[2], indexRange, nvars, dx, cons_fc, groupBegin, groupEnd);)
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState, amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
-					       const amrex::Box &indexRange, const int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState, amrex::Array4<const amrex::Real> const &primVar,
+					       amrex::Array4<amrex::Real> const &x1Flux, const amrex::Box &indexRange, const int nvars,
+					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc, const int groupBegin, const int groupEnd)
 {
 	int dir = 0;
@@ -4082,25 +4113,19 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 		dir = 2;
 	}
 
-	// extend box to include ghost zones
-	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_cc_);
 	// N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to
 	// work.
 	amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);
 	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, dir);
 
-	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena());
 	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
 	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
-
-	// cell-centered kernel
-	RadSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange, groupBegin, groupEnd);
 
 	// Reconstruct only the components of groups [groupBegin, groupEnd): the primitive variables of the other
 	// groups were not computed. The views below start at the first component of group groupBegin.
 	int const compBegin = RadSystem<problem_t>::numRadVars_ * groupBegin;
 	int const ncompGroups = RadSystem<problem_t>::numRadVars_ * (groupEnd - groupBegin);
-	amrex::Array4<const amrex::Real> const primVarGroups(primVar.const_array(), compBegin, ncompGroups);
+	amrex::Array4<const amrex::Real> const primVarGroups(primVar, compBegin, ncompGroups);
 	amrex::Array4<amrex::Real> const x1LeftStateGroups(x1LeftState.array(), compBegin, ncompGroups);
 	amrex::Array4<amrex::Real> const x1RightStateGroups(x1RightState.array(), compBegin, ncompGroups);
 
@@ -4125,9 +4150,9 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
-	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1FluxDiffusive.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange,
-							  consState, dx, use_wavespeed_correction_, cons_fc, groupBegin,
-							  groupEnd); // watch out for argument order!!
+	amrex::Array4<amrex::Real> x1FluxArr = x1Flux;
+	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1FluxArr, x1LeftState.array(), x1RightState.array(), x1FluxRange, consState, dx,
+							  use_wavespeed_correction_, cons_fc, groupBegin, groupEnd); // watch out for argument order!!
 }
 
 // Save single-level plotfile
