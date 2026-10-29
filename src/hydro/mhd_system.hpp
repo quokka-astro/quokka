@@ -1191,16 +1191,21 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 		const amrex::Real dx_wcomp2 = dx_wcomp[wcomp2];
 		const int energy_idx = HydroSystem<problem_t>::energy_index;
 
-		for (amrex::MFIter mfi(fcw_mf_fluxes_wcomp[wcomp0]); mfi.isValid(); ++mfi) {
-			const amrex::Box &box_face = mfi.validbox();
 
-			// b-field Array4 aliases (no copy) for the wcomp{0/1/2}-faces
-			const auto fc_a4_b_wcomp_wcomp1 = fcw_mf_cVars_wcomp[wcomp1][mfi].const_array(bfield_index);
-			const auto fc_a4_b_wcomp_wcomp2 = fcw_mf_cVars_wcomp[wcomp2][mfi].const_array(bfield_index);
-			const auto fc_a4_b_wcomp_wcomp0 = fcw_mf_cVars_wcomp[wcomp0][mfi].const_array(bfield_index);
-			auto fc_a4_flux = fcw_mf_fluxes_wcomp[wcomp0][mfi].array();
+		{
+			// level-wide launch over all boxes of the flux MultiFab
+			const int b_idx = bfield_index;
+			const auto b_arrs_wcomp1 = fcw_mf_cVars_wcomp[wcomp1].const_arrays();
+			const auto b_arrs_wcomp2 = fcw_mf_cVars_wcomp[wcomp2].const_arrays();
+			const auto b_arrs_wcomp0 = fcw_mf_cVars_wcomp[wcomp0].const_arrays();
+			const auto flux_arrs = fcw_mf_fluxes_wcomp[wcomp0].arrays();
 
-			amrex::ParallelFor(box_face, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::ParallelFor(fcw_mf_fluxes_wcomp[wcomp0], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				// b-field Array4 aliases (no copy) for the wcomp{0/1/2}-faces, starting at component bfield_index
+				const amrex::Array4<const amrex::Real> fc_a4_b_wcomp_wcomp1(b_arrs_wcomp1[bx], b_idx);
+				const amrex::Array4<const amrex::Real> fc_a4_b_wcomp_wcomp2(b_arrs_wcomp2[bx], b_idx);
+				const amrex::Array4<const amrex::Real> fc_a4_b_wcomp_wcomp0(b_arrs_wcomp0[bx], b_idx);
+				const amrex::Array4<amrex::Real> fc_a4_flux = flux_arrs[bx];
 				// odr-use every captured variable used only in the constexpr-if below, forcing nvcc to capture
 				// them here: an extended __device__ lambda cannot first-capture a variable in a constexpr-if context.
 				amrex::ignore_unused(fc_a4_b_wcomp_wcomp0, fc_a4_b_wcomp_wcomp1, fc_a4_b_wcomp_wcomp2, delta_wcomp0, delta_wcomp1, delta_wcomp2,

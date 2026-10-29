@@ -68,6 +68,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
+#include "AMReX_TagParallelFor.H"
 #include "AMReX_TypeTraits.H"
 #include "AMReX_Utility.H"
 #include "AMReX_Vector.H"
@@ -3223,6 +3224,18 @@ template <typename problem_t> auto AMRSimulation<problem_t>::isMHDDiodeBoundary(
 	return false;
 }
 
+
+
+// per-fab work item for the level-wide (tag-based) MHD diode boundary kernels
+struct MHDDiodeTag {
+	amrex::Box bx;    // iteration box of the stage this tag is used in
+	amrex::Box ccbox; // full (grown) box of the cell-centered fab
+	int ng = 0;       // number of ghost cells on this boundary
+	amrex::Array4<amrex::Real> cc;
+	std::array<amrex::Array4<amrex::Real>, 3> fc;
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Box const &box() const noexcept { return bx; }
+};
+
 template <typename problem_t>
 void AMRSimulation<problem_t>::applyMHDDiodeBC(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev)
 {
@@ -3245,9 +3258,16 @@ void AMRSimulation<problem_t>::applyMHDDiodeBC(amrex::MultiFab &state_cc, std::a
 				int const momIdx = HydroSystem<problem_t>::x1Momentum_index + d;
 				amrex::GpuArray<int, 2> const tdirs = {(d + 1) % 3, (d + 2) % 3};
 
-				for (amrex::MFIter mfi(state_cc); mfi.isValid(); ++mfi) {
+				// build one tag per local fab (and per stage), then launch each stage once for all fabs. The
+				// fabs are independent (each stage only touches its own fab's ghost cells outside the domain,
+				// and reads that same fab), so only the stage order matters, and it is preserved.
+				amrex::Vector<MHDDiodeTag> tags_t0;
+				amrex::Vector<MHDDiodeTag> tags_t1;
+				amrex::Vector<MHDDiodeTag> tags_n;
+				amrex::Vector<MHDDiodeTag> tags_e;
+				for (int const K : state_cc.IndexArray()) {
 					// ghost cells of this fab that lie outside the domain on this boundary
-					amrex::Box const ccbox = state_cc[mfi].box();
+					amrex::Box const ccbox = state_cc.fabbox(K);
 					amrex::Box slab = ccbox;
 					if (side == 0) {
 						slab.setBig(d, domain.smallEnd(d) - 1);
@@ -3257,43 +3277,65 @@ void AMRSimulation<problem_t>::applyMHDDiodeBC(amrex::MultiFab &state_cc, std::a
 					if (!slab.ok()) {
 						continue;
 					}
-					int const ng = slab.length(d);
+					MHDDiodeTag tag;
+					tag.ccbox = ccbox;
+					tag.ng = slab.length(d);
+					tag.cc = state_cc.array(K);
+					tag.fc = {state_fc[0].array(K), state_fc[1].array(K), state_fc[2].array(K)};
 
-					auto const &cc = state_cc.array(mfi);
-					std::array<amrex::Array4<amrex::Real>, 3> const fc = {state_fc[0].array(mfi), state_fc[1].array(mfi),
-											      state_fc[2].array(mfi)};
-
-					// the same inflow/outflow rule as setDiodeBCLo/Hi, evaluated on the first valid cell of the column
-					auto const isInflow = [=] AMREX_GPU_DEVICE(amrex::IntVect col) -> bool {
-						col[d] = icell;
-						amrex::Real const mom = cc(col, momIdx);
-						return (side == 0) ? !(mom < 0.0) : !(mom > 0.0);
-					};
-
-					// 1. transverse B on ghost faces: copy (outflow) or mirror with the same sign (inflow)
+					// 1. transverse B on ghost faces
 					for (int n = 0; n < 2; ++n) {
 						int const t = tdirs[n];
-						amrex::Box const tbox = amrex::surroundingNodes(slab, t) & state_fc[t][mfi].box();
-						auto const &bt = fc[t];
-						amrex::ParallelFor(tbox, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-							amrex::IntVect const iv(i, j, k);
-							amrex::IntVect col_lo = iv;
-							col_lo[t] -= 1;
-							// a face shared by an inflow and an outflow column is treated as inflow
-							bool const inflow =
-							    (ccbox.contains(iv) && isInflow(iv)) || (ccbox.contains(col_lo) && isInflow(col_lo));
-							int const m = sgn * (iv[d] - icell);
-							amrex::IntVect src = iv;
-							src[d] = inflow ? (icell - sgn * (m - 1)) : icell;
-							bt(iv, bIdx) = bt(src, bIdx);
-						});
+						amrex::Box const tbox = amrex::surroundingNodes(slab, t) & state_fc[t].fabbox(K);
+						if (tbox.ok()) {
+							tag.bx = tbox;
+							(n == 0 ? tags_t0 : tags_t1).push_back(tag);
+						}
 					}
-
-					// 2. normal B on ghost faces: integrate div B = 0 outward, starting from the boundary face
+					// 2. normal B on ghost faces
 					amrex::Box tslab = slab;
 					tslab.setRange(d, icell);
-					auto const &bn = fc[d];
-					amrex::ParallelFor(tslab, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+					tag.bx = tslab;
+					tags_n.push_back(tag);
+					// 3. ghost energy
+					tag.bx = slab;
+					tags_e.push_back(tag);
+				}
+
+				// the same inflow/outflow rule as setDiodeBCLo/Hi, evaluated on the first valid cell of the column
+				auto const isInflow = [=] AMREX_GPU_DEVICE(MHDDiodeTag const &tag, amrex::IntVect col) -> bool {
+					col[d] = icell;
+					amrex::Real const mom = tag.cc(col, momIdx);
+					return (side == 0) ? !(mom < 0.0) : !(mom > 0.0);
+				};
+
+				// 1. transverse B on ghost faces: copy (outflow) or mirror with the same sign (inflow)
+				for (int n = 0; n < 2; ++n) {
+					int const t = tdirs[n];
+					amrex::Vector<MHDDiodeTag> const &tags_t = (n == 0) ? tags_t0 : tags_t1;
+					if (tags_t.empty()) {
+						continue;
+					}
+					amrex::ParallelFor(tags_t, [=] AMREX_GPU_DEVICE(int i, int j, int k, MHDDiodeTag const &tag) {
+						auto const &bt = tag.fc[t];
+						amrex::IntVect const iv(i, j, k);
+						amrex::IntVect col_lo = iv;
+						col_lo[t] -= 1;
+						// a face shared by an inflow and an outflow column is treated as inflow
+						bool const inflow = (tag.ccbox.contains(iv) && isInflow(tag, iv)) || (tag.ccbox.contains(col_lo) && isInflow(tag, col_lo));
+						int const m = sgn * (iv[d] - icell);
+						amrex::IntVect src = iv;
+						src[d] = inflow ? (icell - sgn * (m - 1)) : icell;
+						bt(iv, bIdx) = bt(src, bIdx);
+					});
+				}
+
+				// 2. normal B on ghost faces: integrate div B = 0 outward, starting from the boundary face
+				if (!tags_n.empty()) {
+					amrex::ParallelFor(tags_n, [=] AMREX_GPU_DEVICE(int i, int j, int k, MHDDiodeTag const &tag) {
+						auto const &fc = tag.fc;
+						auto const &bn = fc[d];
+						int const ng = tag.ng;
 						amrex::IntVect c(i, j, k);
 						for (int m = 1; m <= ng; ++m) {
 							c[d] = icell + sgn * m;
@@ -3315,19 +3357,22 @@ void AMRSimulation<problem_t>::applyMHDDiodeBC(amrex::MultiFab &state_cc, std::a
 							bn(f_new, bIdx) = bn(f_known, bIdx) - sgn * dx[d] * div_t;
 						}
 					});
+				}
 
-					// 3. keep the ghost pressure equal to the source-cell pressure: replace the source magnetic energy
-					//    contained in the copied/mirrored total energy by the magnetic energy of the ghost cell
-					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const fc_const = {
-					    state_fc[0].const_array(mfi), state_fc[1].const_array(mfi), state_fc[2].const_array(mfi)};
-					amrex::ParallelFor(slab, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+				// 3. keep the ghost pressure equal to the source-cell pressure: replace the source magnetic energy
+				//    contained in the copied/mirrored total energy by the magnetic energy of the ghost cell
+				if (!tags_e.empty()) {
+					amrex::ParallelFor(tags_e, [=] AMREX_GPU_DEVICE(int i, int j, int k, MHDDiodeTag const &tag) {
+						std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const fc_const = {amrex::Array4<const amrex::Real>(tag.fc[0]),
+																																												 amrex::Array4<const amrex::Real>(tag.fc[1]),
+																																												 amrex::Array4<const amrex::Real>(tag.fc[2])};
 						amrex::IntVect const c(i, j, k);
 						int const m = sgn * (c[d] - icell);
 						amrex::IntVect src = c;
-						src[d] = isInflow(c) ? (icell - sgn * (m - 1)) : icell;
+						src[d] = isInflow(tag, c) ? (icell - sgn * (m - 1)) : icell;
 						amrex::Real const eb_ghost = ComputeCellCenteredMagneticEnergy<problem_t>(c[0], c[1], c[2], fc_const);
 						amrex::Real const eb_src = ComputeCellCenteredMagneticEnergy<problem_t>(src[0], src[1], src[2], fc_const);
-						cc(c, HydroSystem<problem_t>::energy_index) += eb_ghost - eb_src;
+						tag.cc(c, HydroSystem<problem_t>::energy_index) += eb_ghost - eb_src;
 					});
 				}
 			}
@@ -4441,6 +4486,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 	return plotMF;
 }
 
+
 template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const
 {
 	auto const ncomp_out = ncomp;
@@ -4448,35 +4494,27 @@ template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloor
 	auto const dx = geom[lev].CellSizeArray();
 	auto const density_floor = densityFloor_;
 	auto const ngrow = mf.nGrow();
+	auto const arrs = mf.arrays();
 
 	if (useDensityFloorParser_) {
 		auto const density_floor_parser = densityFloorParserExe_.value();
-		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-			amrex::Box const &box = iter.growntilebox(ngrow);
-			auto const &arr = mf.array(iter);
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::ParallelFor(mf, amrex::IntVect(ngrow), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+			amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
 #else
-				amrex::Real const y = 0.0;
+			amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+			amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
 #else
-				amrex::Real const z = 0.0;
+			amrex::Real const z = 0.0;
 #endif
-				arr(i, j, k, ncomp_out) = density_floor_parser(x, y, z, density_floor);
-			});
-		}
+			arrs[bx](i, j, k, ncomp_out) = density_floor_parser(x, y, z, density_floor);
+		});
 	} else {
-		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-			amrex::Box const &box = iter.growntilebox(ngrow);
-			auto const &arr = mf.array(iter);
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { arr(i, j, k, ncomp_out) = density_floor; });
-		}
+		amrex::ParallelFor(mf, amrex::IntVect(ngrow), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { arrs[bx](i, j, k, ncomp_out) = density_floor; });
 	}
-	amrex::Gpu::streamSynchronize();
 }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int nghost_fc_) -> amrex::MultiFab

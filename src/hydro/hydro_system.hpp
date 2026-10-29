@@ -107,6 +107,10 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 					  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, array_t &maxSignal,
 					  amrex::Box const &indexRange);
 
+	// level-wide version: a single launch over all boxes of maxSignal_mf (valid cells only)
+	static void ComputeMaxSignalSpeed(amrex::MultiFab const &cons_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
+					  amrex::MultiFab &maxSignal_mf);
+
 	// per-cell characteristic speed shared by maxSignalSpeedLocal and ComputeMaxSignalSpeed; includes gas, MHD fast
 	// magnetosonic, and dust contributions so both callers agree on what limits the timestep
 	AMREX_GPU_DEVICE static auto ComputeCellSignalSpeed(amrex::Array4<const amrex::Real> const &cons_cc, int i, int j, int k,
@@ -467,6 +471,36 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 						   amrex::Box const &indexRange)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { maxSignal(i, j, k) = ComputeCellSignalSpeed(cons_cc, i, j, k, &cons_fc); });
+}
+
+
+template <typename problem_t>
+void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::MultiFab const &cons_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
+																									 amrex::MultiFab &maxSignal_mf)
+{
+	auto const &cons = cons_cc_mf.const_arrays();
+	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+	auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
+#endif
+	auto const &maxSignal = maxSignal_mf.arrays();
+
+	amrex::ParallelFor(maxSignal_mf, amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			cons_fc[0] = cons_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+			cons_fc[1] = cons_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+			cons_fc[2] = cons_fc_x2[bx];
+#endif
+		}
+		maxSignal[bx](i, j, k) = ComputeCellSignalSpeed(cons[bx], i, j, k, &cons_fc);
+	});
 }
 
 template <typename problem_t>

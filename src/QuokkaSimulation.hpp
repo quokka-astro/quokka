@@ -1399,6 +1399,7 @@ void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &
 	(void)state_fc;
 }
 
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const
 {
 	auto const ncomp_out = ncomp;
@@ -1406,48 +1407,40 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFl
 	auto const dx = geom[lev].CellSizeArray();
 	auto const density_floor = densityFloor_;
 	auto const ngrow = mf.nGrow();
+	auto const arrs = mf.arrays();
 
 	if (this->useDensityFloorParser_) {
 		auto const density_floor_parser = this->densityFloorParserExe_.value();
-		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-			amrex::Box const &box = iter.growntilebox(ngrow);
-			auto const &arr = mf.array(iter);
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::ParallelFor(mf, amrex::IntVect(ngrow), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+			amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
 #else
-				amrex::Real const y = 0.0;
+			amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+			amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
 #else
-				amrex::Real const z = 0.0;
+			amrex::Real const z = 0.0;
 #endif
-				arr(i, j, k, ncomp_out) = density_floor_parser(x, y, z, density_floor);
-			});
-		}
+			arrs[bx](i, j, k, ncomp_out) = density_floor_parser(x, y, z, density_floor);
+		});
 	} else {
-		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-			amrex::Box const &box = iter.growntilebox(ngrow);
-			auto const &arr = mf.array(iter);
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::ParallelFor(mf, amrex::IntVect(ngrow), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+			amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
 #else
-				amrex::Real const y = 0.0;
+			amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+			amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
 #else
-				amrex::Real const z = 0.0;
+			amrex::Real const z = 0.0;
 #endif
-				arr(i, j, k, ncomp_out) = QuokkaSimulation<problem_t>::densityFloor(x, y, z, density_floor);
-			});
-		}
+			arrs[bx](i, j, k, ncomp_out) = QuokkaSimulation<problem_t>::densityFloor(x, y, z, density_floor);
+		});
 	}
-	amrex::Gpu::streamSynchronize();
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
@@ -2286,13 +2279,11 @@ auto QuokkaSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F co
 	}
 
 	// evaluate user_f on all levels
+
 	for (int lev = 0; lev <= finest_level; ++lev) {
-		for (amrex::MFIter iter(q[lev]); iter.isValid(); ++iter) {
-			auto const &box = iter.validbox();
-			auto const &state = state_new_cc_[lev].const_array(iter);
-			auto const &result = q[lev].array(iter);
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) { result(i, j, k) = user_f(i, j, k, state); });
-		}
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &result = q[lev].arrays();
+		amrex::ParallelFor(q[lev], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) { result[bx](i, j, k) = user_f(i, j, k, state[bx]); });
 	}
 
 	// average down
