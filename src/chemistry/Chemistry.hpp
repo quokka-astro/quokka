@@ -23,9 +23,9 @@ template <typename problem_t>
 auto computeChemistry(amrex::MultiFab &mf, amrex::Real dt, amrex::Real max_density_allowed, amrex::Real min_density_allowed) -> bool;
 } // namespace quokka::chemistry
 
-// The definition is compiled only in builds with chemistry, because it uses names that only those builds have: spmasses
-// and eos() from Microphysics' primordial_chem EOS, and the constants of the generated network_properties.H that the transitional check below compares against.
-// Callers use Microphysics_Traits<problem_t>::chemistry. This guard goes when the EOS is in Quokka and the generated constants are gone.
+// The definition is compiled only in builds with chemistry, because it uses spmasses, which only the chemistry EOSs
+// declare. Callers use Microphysics_Traits<problem_t>::chemistry. This guard goes when the gamma_law EOS declares
+// spmasses too.
 #ifdef CHEMISTRY
 #include "actual_eos_data.H"
 #include "eos.H"
@@ -40,9 +40,9 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 {
 	using Network = typename Microphysics_Traits<problem_t>::Network;
 
-	// Transitional, until Microphysics' generated network_properties.H goes: the problem's network type must agree with the
-	// constants generated for its network.
-	static_assert(Network::NumSpec == NumSpec);
+	// Until the EOS reads its species from the network (the EOS port), it sizes its composition by the species table on
+	// the include path (network_properties.H), so the problem's network must match that table.
+	static_assert(Network::NumSpec == NumSpec, "The problem's Network does not match the species table of the EOS it is built with.");
 
 	// Start off by assuming a successful burn.
 	int burn_success = 1;
