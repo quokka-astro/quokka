@@ -1056,6 +1056,17 @@ template <typename problem_t> class PhysicsParticleRegister
 		return nullptr;
 	}
 
+	// True if any registered particle type can deposit radiation
+	[[nodiscard]] auto hasRadiationParticles() const -> bool
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getLumIndex() >= 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	// Deposit radiation from all luminous particles
 	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time)
 	{

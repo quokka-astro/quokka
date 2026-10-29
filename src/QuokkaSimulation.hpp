@@ -586,6 +586,22 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			 amrex::iMultiFab &redoFlag);
 
 	// void PrintRadEnergySource(amrex::MultiFab const &radEnergySource);
+
+	// rad-07: persistent radiation source buffers, per level
+	amrex::Vector<amrex::MultiFab> radSrcEnergyPersist_;
+	amrex::Vector<amrex::MultiFab> radSrcFluxPersist_;
+	amrex::Vector<amrex::MultiFab> radSrcUserEnergyPersist_;
+	amrex::Vector<amrex::MultiFab> radSrcUserFluxPersist_;
+	// (Re)allocate mf (zero-filled) unless it already matches grids/dmap of lev, ncomp and ngrow
+	void ensurePersistentSourceBuffer(amrex::MultiFab &mf, int lev, int ncomp, int ngrow)
+	{
+		if (mf.isDefined() && mf.nComp() == ncomp && mf.nGrowVect() == amrex::IntVect(ngrow) && mf.boxArray() == grids[lev] &&
+		    mf.DistributionMap() == dmap[lev]) {
+			return;
+		}
+		mf = amrex::MultiFab(grids[lev], dmap[lev], ncomp, ngrow);
+		mf.setVal(0.0);
+	}
 };
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentNames()
@@ -3641,46 +3657,73 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		int *p_iteration_failure_counter = iteration_failure_counter.data();
 		int *p_iteration_counter = print_rad_counter_ ? iteration_counter.data() : nullptr; // null disables the per-cell counter atomics
 
-		// Create a MultiFab to hold radEnergySource for the current AMR level
+		// rad-07: persistent per-level buffers (reallocated only if grids/dmap/ncomp/nghost change).
 		// radEnergySource should have the unit of luminosity density, erg s^-1 cm^-3
-		int const nghost = 3; // WendlandC2<N=2>: stencil spans N=2 cells + 1 for possible particle drift
-		amrex::MultiFab radEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
-		// Companion buffer holding the radiation flux source, in components 3 * g + n (group g, direction n);
-		// unit: erg cm^-2 s^-2. Particles deposit isotropically, so they contribute nothing to it.
-		amrex::MultiFab radFluxSource(grids[lev], dmap[lev], 3 * Physics_Traits<problem_t>::nGroups, nghost);
-		// Scratch buffers written by the user hook AddRadSource, then added to the two buffers above. Giving
-		// the hook its own buffers means a problem simply assigns its own source: it cannot overwrite
-		// radiation that particles have already deposited, and need not remember to accumulate onto it.
-		// The hook supplies a reduced flux, which MergeUserRadSource converts to a flux source.
-		amrex::MultiFab userEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
-		amrex::MultiFab userReducedFlux(grids[lev], dmap[lev], 3 * Physics_Traits<problem_t>::nGroups, nghost);
+		// radFluxSource holds the radiation flux source, in components 3 * g + n (group g, direction n); unit: erg cm^-2 s^-2.
+		// userEnergySource/userReducedFlux are scratch buffers written by the user hook AddRadSource (only used if the problem overrides it).
+		auto const &prob_lo = geom[lev].ProbLoArray();
+		auto const &prob_hi = geom[lev].ProbHiArray();
+		// Does the problem override AddRadSource? The default body sets a flag; probe once on an empty box.
+		static const bool hasUserRadSource = [&]() {
+			RadSystem<problem_t>::addRadSourceDefaultCalled_ = false;
+			amrex::Array4<amrex::Real> const dummy1{};
+			amrex::Array4<amrex::Real> const dummy2{};
+			RadSystem<problem_t>::AddRadSource(dummy1, dummy2, amrex::Box(), dx, prob_lo, prob_hi, time_subcycle + dt_radiation);
+			return !RadSystem<problem_t>::addRadSourceDefaultCalled_;
+		}();
+#if AMREX_SPACEDIM == 3
+		// Ghost cells are needed only for 3D particle deposition (WendlandC2<N=2>: stencil spans N=2 cells + 1 for possible particle drift)
+		const bool radParticles = particleRegister_.hasRadiationParticles();
+#else
+		const bool radParticles = false;
+#endif
+		bool photochemOn = false;
+#ifdef PHOTOCHEMISTRY
+		photochemOn = (enablePhotoChemistry_ == 1);
+#endif
+		int const nghost = radParticles ? 3 : 0;
+		if (static_cast<int>(radSrcEnergyPersist_.size()) <= lev) {
+			radSrcEnergyPersist_.resize(max_level + 1);
+			radSrcFluxPersist_.resize(max_level + 1);
+			radSrcUserEnergyPersist_.resize(max_level + 1);
+			radSrcUserFluxPersist_.resize(max_level + 1);
+		}
+		ensurePersistentSourceBuffer(radSrcEnergyPersist_[lev], lev, Physics_Traits<problem_t>::nGroups, nghost);
+		ensurePersistentSourceBuffer(radSrcFluxPersist_[lev], lev, 3 * Physics_Traits<problem_t>::nGroups, 0);
+		amrex::MultiFab &radEnergySource = radSrcEnergyPersist_[lev];
+		amrex::MultiFab &radFluxSource = radSrcFluxPersist_[lev];
 
-		// Fill radEnergySource and radFluxSource, once per substep, with the radiation emitted by particles and by the user
-		// hook AddRadSource. Both implicit stages of the IMEX PD-ARS tableau have abscissa c = 1 (rows 2 and 3 of Aim each
-		// sum to 1), so every implicit source term is evaluated at the end of the step, for the thermal groups and the
-		// chemical bands alike. The sources then depend only on that time (particles do not move during the radiation
-		// subcycle), so every stage below reuses them. With photochemistry, step 2 adds the chemical emission j_g into
-		// the thermal groups (averaged over the substep) to the same buffer, so the thermal IMEX stages inject it too.
-		radEnergySource.setVal(0.0);
-		radFluxSource.setVal(0.0);
-		userEnergySource.setVal(0.0);
-		userReducedFlux.setVal(0.0);
+		// radEnergySource is only ever written by particle deposition, the user-source merge and photochemistry; radFluxSource only by the
+		// user-source merge. If none of those is active the buffers stay at their allocation-time zero and need no per-substep zeroing.
+		if (hasUserRadSource || photochemOn || radParticles) {
+			radEnergySource.setVal(0.0);
+		}
+		if (hasUserRadSource) {
+			radFluxSource.setVal(0.0);
+		}
 
 #if AMREX_SPACEDIM == 3
 		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle + dt_radiation);
 #endif
 
-		auto const &prob_lo = geom[lev].ProbLoArray();
-		auto const &prob_hi = geom[lev].ProbHiArray();
-		for (amrex::MFIter iter(radEnergySource); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &radEnergySource_arr = radEnergySource.array(iter);
-			auto const &radFluxSource_arr = radFluxSource.array(iter);
-			auto const &userEnergySource_arr = userEnergySource.array(iter);
-			auto const &userReducedFlux_arr = userReducedFlux.array(iter);
-			RadSystem<problem_t>::AddRadSource(userEnergySource_arr, userReducedFlux_arr, indexRange, dx, prob_lo, prob_hi,
-							   time_subcycle + dt_radiation);
-			RadSystem<problem_t>::MergeUserRadSource(radEnergySource_arr, radFluxSource_arr, userEnergySource_arr, userReducedFlux_arr, indexRange);
+		if (hasUserRadSource) {
+			ensurePersistentSourceBuffer(radSrcUserEnergyPersist_[lev], lev, Physics_Traits<problem_t>::nGroups, 0);
+			ensurePersistentSourceBuffer(radSrcUserFluxPersist_[lev], lev, 3 * Physics_Traits<problem_t>::nGroups, 0);
+			amrex::MultiFab &userEnergySource = radSrcUserEnergyPersist_[lev];
+			amrex::MultiFab &userReducedFlux = radSrcUserFluxPersist_[lev];
+			userEnergySource.setVal(0.0);
+			userReducedFlux.setVal(0.0);
+			for (amrex::MFIter iter(radEnergySource); iter.isValid(); ++iter) {
+				const amrex::Box &indexRange = iter.validbox();
+				auto const &radEnergySource_arr = radEnergySource.array(iter);
+				auto const &radFluxSource_arr = radFluxSource.array(iter);
+				auto const &userEnergySource_arr = userEnergySource.array(iter);
+				auto const &userReducedFlux_arr = userReducedFlux.array(iter);
+				RadSystem<problem_t>::AddRadSource(userEnergySource_arr, userReducedFlux_arr, indexRange, dx, prob_lo, prob_hi,
+								   time_subcycle + dt_radiation);
+				RadSystem<problem_t>::MergeUserRadSource(radEnergySource_arr, radFluxSource_arr, userEnergySource_arr, userReducedFlux_arr,
+									 indexRange);
+			}
 		}
 
 #ifdef PHOTOCHEMISTRY
@@ -3741,7 +3784,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				// The chemical-band emission was added in step 1; zero it so that AddSourceTermsMultiGroup and
 				// AddSourceTermsSingleGroup do not inject it again.
 				radEnergySource.setVal(0.0, nGroupsThermal, nGroups - nGroupsThermal, nghost);
-				radFluxSource.setVal(0.0, 3 * nGroupsThermal, 3 * (nGroups - nGroupsThermal), nghost);
+				radFluxSource.setVal(0.0, 3 * nGroupsThermal, 3 * (nGroups - nGroupsThermal), 0);
 			}
 
 			// === Stage 1: trivial U^(1) = U^n; skipped ===
