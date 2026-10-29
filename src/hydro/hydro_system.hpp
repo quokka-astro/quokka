@@ -214,6 +214,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
 				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, int nghost, int nvars);
 
+	// hydro-k01: PPM reconstruction with the shock flattening (FlattenShocks) applied in registers before the single store
+	template <FluxDir DIR>
+	static void ReconstructStatesPPMFlattened(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
+						  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf,
+						  int nghost, int nvars);
+
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -1164,6 +1170,79 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 
 		x1RightState(i, j, k, n) = new_a_minus;
 		x1LeftState(i + 1, j, k, n) = new_a_plus;
+	});
+
+#if (AMREX_SPACEDIM < 2)
+	amrex::ignore_unused(x2Chi_in);
+#endif
+#if (AMREX_SPACEDIM < 3)
+	amrex::ignore_unused(x3Chi_in);
+#endif
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+void HydroSystem<problem_t>::ReconstructStatesPPMFlattened(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
+							   amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf,
+							   amrex::MultiFab &x1RightState_mf, const int nghost, const int nvars)
+{
+	// hydro-k01: fused ReconstructStatesPPM<DIR> + FlattenShocks<DIR>. Same iteration space (cells of q_mf grown by nghost),
+	// same chi_ijk (min over the 9 stored chi values, computed once per cell instead of once per component), and the same
+	// blend formula and operation order as FlattenShocks, applied to the PPM edge values in registers; each (cell, n)
+	// thread is the only writer of rightState(i) and leftState(i + 1), so the result is identical to the two-kernel version.
+	const BL_PROFILE("HydroSystem::ReconstructStatesPPMFlattened()");
+
+	auto const &q_in = q_mf.const_arrays();
+	auto const &x1Chi_in = x1Chi_mf.const_arrays();
+	auto const &x2Chi_in = x2Chi_mf.const_arrays();
+	auto const &x3Chi_in = x3Chi_mf.const_arrays();
+	auto x1LeftState_in = x1LeftState_mf.arrays();
+	auto x1RightState_in = x1RightState_mf.arrays();
+	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+
+	// cell-centered kernel
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
+		quokka::Array4View<const amrex::Real, DIR> q(q_in[bx]);
+		quokka::Array4View<amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
+		quokka::Array4View<amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
+
+		// compute coefficient as the minimum from adjacent cells along *each
+		// axis*
+		//  (Eq. 86 of Miller & Colella 2001; Eq. 78 of Miller & Colella 2002)
+		double const chi_ijk = std::min({
+		    x1Chi_in[bx](i_in - 1, j_in, k_in),
+		    x1Chi_in[bx](i_in, j_in, k_in),
+		    x1Chi_in[bx](i_in + 1, j_in, k_in),
+#if (AMREX_SPACEDIM >= 2)
+		    x2Chi_in[bx](i_in, j_in - 1, k_in),
+		    x2Chi_in[bx](i_in, j_in, k_in),
+		    x2Chi_in[bx](i_in, j_in + 1, k_in),
+#endif
+#if (AMREX_SPACEDIM == 3)
+		    x3Chi_in[bx](i_in, j_in, k_in - 1),
+		    x3Chi_in[bx](i_in, j_in, k_in),
+		    x3Chi_in[bx](i_in, j_in, k_in + 1),
+#endif
+		});
+
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+		for (int n = 0; n < nvars; ++n) {
+			// PPM interfaces of zone i (before flattening)
+			const std::pair<double, double> edges = HyperbolicSystem<problem_t>::template PPMInterfaceValues<DIR>(q, n, i, j, k);
+			const double a_minus = edges.first;
+			const double a_plus = edges.second;
+			const double a_mean = q(i, j, k, n);
+
+			// left side of zone i (Eq. 70a)
+			const double new_a_minus = chi_ijk * a_minus + (1. - chi_ijk) * a_mean;
+
+			// right side of zone i (Eq. 70b)
+			const double new_a_plus = chi_ijk * a_plus + (1. - chi_ijk) * a_mean;
+
+			x1RightState(i, j, k, n) = new_a_minus;
+			x1LeftState(i + 1, j, k, n) = new_a_plus;
+		}
 	});
 
 #if (AMREX_SPACEDIM < 2)

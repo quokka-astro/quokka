@@ -3095,7 +3095,9 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 											   ng_reconstruct, 2);
 		}
 	} else if (reconstructionOrder_ == 3) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
+		// hydro-k01: PPM with shock flattening applied inside the reconstruction kernel (replaces ReconstructStatesPPM + FlattenShocks)
+		HydroSystem<problem_t>::template ReconstructStatesPPMFlattened<DIR>(primVar_mf, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct,
+										    nvars);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
 											ng_reconstruct, 2);
@@ -3116,8 +3118,10 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 		amrex::Abort("Invalid reconstruction order specified!");
 	}
 
-	// cell-centered kernel
-	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar_mf, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
+	// cell-centered kernel (hydro-k01: for PPM the flattening is already applied by ReconstructStatesPPMFlattened)
+	if (reconstructionOrder_ != 3) {
+		HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar_mf, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
+	}
 
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
