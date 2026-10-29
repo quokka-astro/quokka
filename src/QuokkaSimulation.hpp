@@ -250,6 +250,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 	amrex::Real shearViscosity_ = 0.0;	// shear viscosity coefficient; see viscous CFL limit below
 	amrex::Real bulkViscosity_ = 0.0;	// bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
+	amrex::Real hydroSmallX_ = 1.0e-30;	// floor of the mass scalars of a problem without a network (hydro.small_x)
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2018;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
@@ -382,6 +383,17 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// fix-up states
 	void FixupState(int level) override;
 	void ApplyHydroStateFixup(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev);
+
+	// the floor of the mass scalars: the network's small_x if the problem has a network, else hydro.small_x
+	[[nodiscard]] auto massScalarSmallX() const -> amrex::Real
+	{
+		using Network = typename Microphysics_Traits<problem_t>::Network;
+		if constexpr (std::is_same_v<Network, quokka::networks::None>) {
+			return hydroSmallX_;
+		} else {
+			return Network::SmallX();
+		}
+	}
 
 	// implement FillPatch function
 	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
@@ -662,6 +674,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 							 "Physics_Traits::viscosity_model is not `constant`; with `problem_defined`, "
 							 "viscosity comes from computeViscosity instead.");
 		}
+		// a problem with a network reads network.small_x instead (massScalarSmallX())
+		if constexpr (Physics_Traits<problem_t>::numMassScalars > 0 &&
+			      std::is_same_v<typename Microphysics_Traits<problem_t>::Network, quokka::networks::None>) {
+			hpp.query("small_x", hydroSmallX_);
+		} else {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!hpp.contains("small_x"), "hydro.small_x is set, but this problem has a network or no mass scalars, "
+										   "so it is ignored; a problem with a network uses network.small_x.");
+		}
 	}
 
 	// set MHD runtime parameters
@@ -856,6 +876,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set the runtime parameters of the network, if it has any
 	if constexpr (requires { Microphysics_Traits<problem_t>::Network::ReadParameters(); }) {
 		Microphysics_Traits<problem_t>::Network::ReadParameters();
+	}
+	if constexpr (std::is_same_v<typename Microphysics_Traits<problem_t>::Network, quokka::networks::None>) {
+		const amrex::ParmParse npp("network");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!npp.contains("small_x"), "network.small_x is set, but this problem has no network, so it is "
+									   "ignored; a problem without a network uses hydro.small_x.");
 	}
 
 	// set dust runtime parameters
@@ -2115,10 +2140,12 @@ void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, massScalarSmallX(), state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	} else {
 		auto const density_floor_func = QuokkaDensityFloorFunctor<problem_t>{};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, massScalarSmallX(), state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	}
 
 	if (useDualEnergy_ == 1) {

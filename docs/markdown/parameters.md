@@ -66,6 +66,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | hydro.use_dual_energy                  | Boolean (0/1) | `1` (Enabled)  | If set to 1, the code evolves an auxiliary internal energy variable in order to correctly evolve high-mach flows. This should only be disabled (0) for debugging.              |
 | hydro.abort_on_fofc_failure            | Boolean (0/1) | `1` (Enabled)  | If set to 1, the code aborts when first-order flux correction fails to yield a physical state (positive density and pressure). This should only be disabled (0) for debugging. |
 | hydro.artificial_viscosity_coefficient | Float         | `0.0`          | This is the linear artificial viscosity coefficient used in the artificial viscosity term added to the flux. This is the same parameter as defined in the original PPM paper.  |
+| hydro.small_x                          | Float         | `1.0e-30`      | Floor of the mass fractions: a negative mass scalar is reset to `small_x` times the density. Read only by problems with mass scalars and no network (`Microphysics_Traits<problem_t>::Network` is `None`); a problem with a network uses `network.small_x` instead. Setting it for any other problem aborts the run. |
 
 ## Radiation
 
@@ -114,6 +115,8 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | chemistry.min_density_allowed | Float         | Smallest positive Value | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
 
 Photochemistry has the same three parameters with the prefix `photochemistry` (`photochemistry.enabled`, `photochemistry.max_density_allowed`, `photochemistry.min_density_allowed`).
+
+Every network also reads `network.small_x`, the floor of the species (and of the chemical-band radiation) after a burn and of the mass scalars in the hydro update. Its default is `1.0e-30`, or `1.0e-100` for `primordial_chem`. Setting it for a problem without a network aborts the run (such a problem uses `hydro.small_x`).
 
 ### Compile-time switches
 
