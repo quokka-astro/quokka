@@ -16,7 +16,8 @@ set(JOB_NAME PrimordialChem)
 
 add_executable(
   ${JOB_NAME} testPrimordialChem.cpp "${QuokkaSourcesNoEOS}"
-              ${primordial_chem_sources})
+              ${primordial_chem_sources}
+              ${CMAKE_SOURCE_DIR}/src/networks/primordial_chem/network.cpp)
 
 # this will add #define CHEMISTRY
 target_compile_definitions(${JOB_NAME} PUBLIC CHEMISTRY)

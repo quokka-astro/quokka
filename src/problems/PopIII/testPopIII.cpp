@@ -26,6 +26,7 @@
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
 #include "microphysics/microphysics_traits.hpp"
+#include "networks/primordial_chem/network.hpp"
 #include "radiation/radiation_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
 
@@ -51,6 +52,7 @@ template <> struct Physics_Traits<PopIII> : DefaultPhysicsTraits {
 };
 
 template <> struct Microphysics_Traits<PopIII> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PrimordialChem;
 	static constexpr bool chemistry = true; // built with CHEMISTRY
 };
 
