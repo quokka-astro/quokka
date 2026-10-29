@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <map>
+#include <utility>
 #include <numbers>
 
 #include "AMReX_Array.H"
@@ -1106,10 +1108,133 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositWendland(BufferArray const &loca
 	}
 }
 
+
+// part-02b: the continuous Wolf-Rayet yield deposition, formerly its own full-state buffer (ParticlePropertyUpdateTraits::updateChemicalFeedback),
+// now deposited into the same buffer as the SNII/AGB yields. Only particles that existed before this step's particle creation are deposited
+// (pre_counts holds the per-tile particle count recorded before creation), so the set of WR sources equals the old WR pass.
+template <typename problem_t, typename ContainerType>
+void depositWRToBuffer(ContainerType *container, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int scalar_offset, int nchem,
+		       bool use_chemical_tables, ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables,
+		       std::map<std::pair<int, int>, amrex::Long> const *pre_counts)
+{
+	if (!enable_WR_metal) {
+		return;
+	}
+	const int nPassive = Physics_Traits<problem_t>::numPassiveScalars;
+	const auto &geom = container->Geom(lev);
+	const auto plo = geom.ProbLoArray();
+	const auto dxi = geom.InvCellSizeArray();
+	const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
+	const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
+
+	constexpr int W_stencil_N = 2;
+	constexpr int W_stencil_width = 2 * W_stencil_N + 1;
+	constexpr auto W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
+	constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
+	const bool enable_WR_metal_d = enable_WR_metal;
+	const bool store_channel_fields_d = store_channel_fields;
+	const amrex::Real stellar_metallicity_fraction_d = stellar_metallicity_fraction;
+	const amrex::Real wr_age_start_d = wr_age_start;
+	const amrex::Real wr_metal_yield_rate_per_mass_d = wr_metal_yield_rate_per_mass;
+
+	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
+		auto &particles = pti.GetArrayOfStructs();
+		auto *pData = particles().data();
+		amrex::Long np = pti.numParticles();
+		if (pre_counts != nullptr) {
+			const auto it = pre_counts->find(pti.GetPairIndex());
+			const amrex::Long n_old = (it == pre_counts->end()) ? 0 : it->second;
+			np = std::min(np, n_old);
+		}
+		if (np <= 0) {
+			continue;
+		}
+
+		const auto &local_state = state_buffer.array(pti);
+
+		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+
+			const amrex::Real mass_birth = std::max<amrex::Real>(0.0, p.rdata(StochasticStellarPopParticleMassAtBirthIdx));
+			const amrex::Real mass_birth_msun = mass_birth / C::M_solar;
+			const amrex::Real age = time - p.rdata(StochasticStellarPopParticleBirthTimeIdx);
+			const int stage = p.idata(StochasticStellarPopParticleStageIdx);
+			amrex::ParticleInterpolator::WendlandC2<W_stencil_N> interp(p, plo, dxi);
+
+			for (int n = 0; n < nchem; ++n) {
+				const amrex::Real birth_iso_abundance = std::max<amrex::Real>(0.0, p.rdata(chem_base + n));
+				const amrex::Real z_lookup = std::max<amrex::Real>(1.0e-12, stellar_metallicity_fraction_d);
+
+				amrex::Real y_wr = 0.0;
+				if (enable_WR_metal_d) {
+					const bool wr_stage = ((stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) ||
+							       (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding))) &&
+							      (mass_birth_msun >= 9.0);
+					const amrex::Real wr_lifetime = p.rdata(StochasticStellarPopParticleDeathTimeIdx) - p.rdata(StochasticStellarPopParticleBirthTimeIdx);
+					const bool wr_active = (age < wr_lifetime) && (wr_lifetime > 0.0);
+					if (wr_stage && wr_active) {
+						if (use_chemical_tables) {
+							const amrex::Real wr_total_frac = ChemicalYieldLookup::queryYieldFraction(yield_tables, 1, n, mass_birth_msun, z_lookup);
+							const amrex::Real age_begin = std::max<amrex::Real>(0.0, age);
+							const amrex::Real age_end = std::min<amrex::Real>(wr_lifetime, age_begin + dt);
+							const amrex::Real f_begin = ChemicalYieldLookup::queryWRMassLossCumulativeFraction(yield_tables, age_begin, mass_birth_msun);
+							const amrex::Real f_end = ChemicalYieldLookup::queryWRMassLossCumulativeFraction(yield_tables, age_end, mass_birth_msun);
+							const amrex::Real delta_fraction = std::max<amrex::Real>(0.0, f_end - f_begin);
+							y_wr = std::max<amrex::Real>(0.0, wr_total_frac * mass_birth * delta_fraction);
+						} else {
+							const amrex::Real wr_window = std::max<amrex::Real>(0.0, wr_lifetime - wr_age_start_d);
+							if (age >= wr_age_start_d && wr_window > 0.0) {
+								const amrex::Real baseline_wr_rate_per_mass = birth_iso_abundance / wr_window;
+								y_wr = std::max<amrex::Real>(0.0, (baseline_wr_rate_per_mass + wr_metal_yield_rate_per_mass_d) * mass_birth * dt);
+							}
+						}
+					}
+				}
+
+				const amrex::Real total_mass = y_wr;
+				if (total_mass <= 0.0) {
+					continue;
+				}
+
+				const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
+				const int nz_loop = (AMREX_SPACEDIM >= 3) ? W_stencil_width : 1;
+				const int ny_loop = (AMREX_SPACEDIM >= 2) ? W_stencil_width : 1;
+
+				for (int kk = 0; kk < nz_loop; ++kk) {
+					const amrex::Real dz = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2] : 0.0;
+					for (int jj = 0; jj < ny_loop; ++jj) {
+						const amrex::Real dy = (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1] : 0.0;
+						for (int ii = 0; ii < W_stencil_width; ++ii) {
+							const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
+							const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+							if (r2 <= W_cutoff_r2) {
+								const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
+								const amrex::Real total_val = wt * total_mass * vol_inverse;
+								amrex::Gpu::Atomic::AddNoRet(&local_state(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, total_comp),
+											     total_val);
+
+								if (store_channel_fields_d && enable_WR_metal_d && y_wr > 0.0) {
+									const int wr_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 2 * nchem + n;
+									if (wr_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+										amrex::Gpu::Atomic::AddNoRet(
+										    &local_state(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, wr_comp),
+										    wt * y_wr * vol_inverse);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		});
+	}
+}
+
 } // namespace ChemicalFeedbackUtils
 
 template <ParticleType particleType, typename ContainerType, typename problem_t>
-void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt,
+				std::map<std::pair<int, int>, amrex::Long> const *wr_pre_counts = nullptr)
 {
 	const BL_PROFILE("[particle_deposition] ChemicalFeedbackDeposition()");
 
@@ -1135,6 +1260,10 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 
 	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
 	state_buffer.setVal(0.0);
+
+	// part-02b: WR continuous yields share this buffer (one SumBoundary / roundoff / add for WR + SNII + AGB).
+	ChemicalFeedbackUtils::depositWRToBuffer<problem_t, ContainerType>(container, state_buffer, lev, time, dt, scalar_offset, nchem, use_chemical_tables,
+									   yield_tables, wr_pre_counts);
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		auto &particles = pti.GetArrayOfStructs();
