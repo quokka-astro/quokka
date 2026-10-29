@@ -3646,6 +3646,33 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 	// perform subcycle
 	auto const &dx = geom[lev].CellSizeArray();
+	// (part-01 also hoisted the source-buffer allocation out of the substep loop; with rad-07 the buffers are persistent per level)
+
+	// Particle radiation deposition is hoisted out of the substep loop when no particle is born or dies within the step: the deposited
+	// source depends on the deposition time only through the birth/death window test, and particles (positions, luminosities) do not
+	// change during the radiation subcycle. The deposition times of the substeps are time_i + dt_radiation (same floating-point
+	// accumulation as the loop below); the active set is constant over [t_first, t_last] iff no birth/death time lies in (t_first, t_last].
+	bool hoistParticleRadDeposition = false;
+	amrex::MultiFab particleRadSource;
+#if AMREX_SPACEDIM == 3
+	if (nsubSteps > 1 && particleRegister_.anyRadiatingAtLevel(lev)) {
+		const amrex::Real t_first = time + dt_radiation;
+		amrex::Real t_last = t_first;
+		amrex::Real t_sub = time;
+		for (int i = 0; i < nsubSteps; ++i) {
+			t_last = t_sub + dt_radiation;
+			t_sub += dt_radiation;
+		}
+		hoistParticleRadDeposition = !particleRegister_.radiationDepositionChanges(lev, t_first, t_last);
+		if (hoistParticleRadDeposition) {
+			int const nghostParticleRad = 3; // WendlandC2<N=2>: stencil spans N=2 cells + 1 for possible particle drift
+			particleRadSource.define(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghostParticleRad);
+			particleRadSource.setVal(0.0);
+			particleRegister_.depositRadiation(particleRadSource, lev, t_first);
+		}
+	}
+#endif
+
 	amrex::Real time_subcycle = time;
 	for (int i = 0; i < nsubSteps; ++i) {
 		// We use the three-stage IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
@@ -3703,7 +3730,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		}
 
 #if AMREX_SPACEDIM == 3
-		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle + dt_radiation);
+		if (hoistParticleRadDeposition) {
+			// valid cells only: the per-substep deposit leaves the ghost cells at zero
+			amrex::MultiFab::Copy(radEnergySource, particleRadSource, 0, 0, Physics_Traits<problem_t>::nGroups, 0);
+		} else {
+			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle + dt_radiation);
+		}
 #endif
 
 		if (hasUserRadSource) {
