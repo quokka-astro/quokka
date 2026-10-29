@@ -16,6 +16,8 @@ namespace
 [[maybe_unused]] EOS_SHIM_HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real zion[NumSpec] = {1.0};
 [[maybe_unused]] const std::vector<std::string> short_spec_names_cxx = {"X"};
 [[maybe_unused]] const std::vector<std::string> spec_names_cxx = {"X"};
+[[maybe_unused]] const std::vector<std::string> short_aux_names_cxx = {};
+[[maybe_unused]] const std::vector<std::string> aux_names_cxx = {};
 } // namespace
 
 #endif // EOS_SHIM_GENERAL_NULL_NETWORK_PROPERTIES_H_

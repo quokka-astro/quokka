@@ -24,6 +24,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
+#include "chemistry/Chemistry.hpp"
 #include "hydro/hydro_system.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/primordial_chem/network.hpp"
@@ -44,7 +45,7 @@ template <> struct HydroSystem_Traits<PopIII> {
 
 template <> struct Microphysics_Traits<PopIII> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::PrimordialChem;
-	static constexpr bool chemistry = true; // built with CHEMISTRY
+	static constexpr bool chemistry = true;
 };
 
 using Network = Microphysics_Traits<PopIII>::Network;
@@ -94,7 +95,7 @@ template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 {
 
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("primordial_chem");

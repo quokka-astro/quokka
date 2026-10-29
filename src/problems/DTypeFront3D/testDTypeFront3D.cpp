@@ -19,6 +19,7 @@
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/thermophotochemistry_handwritten/network.hpp"
 #include "physics_info.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_dust_system.hpp"
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
@@ -59,9 +60,9 @@ template <> struct quokka::EOS_Traits<DTypeFront3D> {
 template <> struct Microphysics_Traits<DTypeFront3D> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::Thermophotochemistry;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true;		    // built with PHOTOCHEMISTRY
-	static constexpr bool dust_chemical_band_absorption = true; // built with DUST_CHEMICAL_BAND_ABSORPTION
-	static constexpr bool integrate_rad_flux = false;	    // built with SKIP_PHOTOCHEMFLUX
+	static constexpr bool photochemistry = true;
+	static constexpr bool dust_chemical_band_absorption = true;
+	static constexpr bool integrate_rad_flux = false;
 };
 
 using Network = Microphysics_Traits<DTypeFront3D>::Network;
@@ -652,7 +653,7 @@ void RadSystem<DTypeFront3D>::AddRadSource(array_t &radEnergy, array_t &reducedF
 template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species, temperature, and source photon rates
 	amrex::ParmParse const pp("photoionize");
