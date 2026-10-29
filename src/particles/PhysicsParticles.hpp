@@ -283,6 +283,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
       protected:
 	ContainerType *container_{}; // Pointer to the actual particle container - moved to protected
+	std::map<std::pair<int, int>, amrex::Long> chemPreCreationCounts_; // part-02b: per-tile particle counts before creation
 
       public:
 	// Get the particle type
@@ -890,11 +891,18 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		return {};
 	}
 
-	void updateChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) override
+	// part-02b: the WR chemistry pass is merged into depositChemicalFeedback (one shared buffer). This hook, still called at the old WR
+	// position (before accretion/creation), only records the per-tile particle counts so the merged WR deposit skips particles created
+	// later in the same step, exactly as the old pass (which ran before creation) did.
+	void updateChemicalFeedback(amrex::MultiFab & /*state*/, int lev, amrex::Real /*current_time*/, amrex::Real /*dt*/) override
 	{
 		if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
-			ParticlePropertyUpdateTraits<particleType_>::template updateChemicalFeedback<problem_t, ContainerType>(this->container_, state, lev,
-															       current_time, dt);
+			chemPreCreationCounts_.clear();
+			if (this->container_ != nullptr) {
+				for (typename ContainerType::ParIterType pti(*this->container_, lev); pti.isValid(); ++pti) {
+					chemPreCreationCounts_[pti.GetPairIndex()] = pti.numParticles();
+				}
+			}
 		}
 	}
 
@@ -930,7 +938,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void depositChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) override
 	{
 		if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
-			ChemicalFeedbackDeposition<particleType_, ContainerType, problem_t>(this->container_, state, lev, time, dt);
+			ChemicalFeedbackDeposition<particleType_, ContainerType, problem_t>(this->container_, state, lev, time, dt, &chemPreCreationCounts_);
 		}
 	}
 
