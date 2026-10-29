@@ -2924,7 +2924,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 			redistribute_ngrow = iteration;
 		}
 		// redistribute all particles in particleRegister_
-		particleRegister_.redistribute(lev, redistribute_ngrow);
+		// part-06: neighbour-local redistribute; particles move < 1 cell per step (particle CFL 0.5), plus ngrow cells left outside box by earlier subcycled calls
+		particleRegister_.redistribute(lev, redistribute_ngrow, 2 + redistribute_ngrow);
 	}
 #endif // AMREX_SPACEDIM == 3
 }

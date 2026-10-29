@@ -189,7 +189,7 @@ class PhysicsParticleDescriptorBase
 	virtual void redistribute(int lev) const = 0;
 
 	// Redistribute particles at level lev and above with ngrow ghost cells
-	virtual void redistribute(int lev, int ngrow) const = 0;
+	virtual void redistribute(int lev, int ngrow, int local = 0) const = 0;
 
 	// Write particle data to plot file
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
@@ -752,10 +752,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Implementation of particle redistribution with ghost cells
-	void redistribute(int lev, int ngrow) const override
+	void redistribute(int lev, int ngrow, int local = 0) const override
 	{
 		if (container_ != nullptr) {
-			container_->Redistribute(lev, container_->finestLevel(), ngrow);
+			container_->Redistribute(lev, container_->finestLevel(), ngrow, local);
 		}
 	}
 
@@ -1284,11 +1284,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Redistribute all particles with ghost cells
-	void redistribute(int lev, int ngrow) const
+	void redistribute(int lev, int ngrow, int local = 0) const
 	{
 		const BL_PROFILE("PhysicsParticleRegister::redistribute(lev,ngrow)");
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->redistribute(lev, ngrow);
+			descriptor->redistribute(lev, ngrow, local);
 		}
 	}
 
