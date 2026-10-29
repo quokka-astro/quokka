@@ -3,6 +3,7 @@
 
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
+#include <limits>
 #include "burn_type.H"
 #include "fundamental_constants.H"
 #include "integrator_data.H"
@@ -36,156 +37,221 @@ constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) -> Real { return 3.2467944898988799e-18_rt; }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Real
+// ---- src-k05: constexpr helpers (std::log / std::pow / std::exp are not constexpr in C++20) ----
+// Accurate to ~1e-16 relative; used only at compile time, to fold the band-average photon energy.
+namespace ctmath
 {
-	auto const ev_bounds = ChemBandsHeader();
-	const amrex::Real ev_low = ev_bounds[0];
-	const amrex::Real ev_high = ev_bounds[1];
-	const amrex::Real alpha = ChemBandsPowerLawIndex_;
+constexpr double kLn2 = 0.69314718055994530942;
 
-	amrex::Real ev_avg = NAN;
-	if (std::isinf(ev_high)) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alpha < 0.0, "get_ionizing_band_photon_energy: an open-topped chemistry band only has a "
-							      "finite average photon energy for power_law_index < 0");
-		ev_avg = ev_low * (1.0 - 1.0 / alpha);
-	} else if (alpha == 0.0) {
-		ev_avg = ev_low * ev_high * std::log(ev_high / ev_low) / (ev_high - ev_low);
-	} else if (alpha == 1.0) {
-		ev_avg = (ev_high - ev_low) / std::log(ev_high / ev_low);
-	} else {
-		ev_avg = ((alpha - 1.0) / alpha) * (std::pow(ev_high, alpha) - std::pow(ev_low, alpha)) /
-			 (std::pow(ev_high, alpha - 1.0) - std::pow(ev_low, alpha - 1.0));
+constexpr auto clog(double x) -> double
+{
+	// x > 0. Reduce to m in [0.75, 1.5), then ln(m) = 2 atanh((m-1)/(m+1)).
+	int k = 0;
+	while (x > 1.5) {
+		x *= 0.5;
+		++k;
 	}
-
-	return ev_avg * C::ev2erg;
+	while (x < 0.75) {
+		x *= 2.0;
+		--k;
+	}
+	const double s = (x - 1.0) / (x + 1.0);
+	const double s2 = s * s;
+	double term = s;
+	double sum = 0.0;
+	for (int n = 0; n < 40; ++n) {
+		sum += term / (2.0 * n + 1.0);
+		term *= s2;
+	}
+	return 2.0 * sum + k * kLn2;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) -> Real
+constexpr auto cexp(double x) -> double
 {
+	// exp(x) = 2^k exp(r), |r| <= ln2/2.
+	const double q = x / kLn2;
+	const int k = static_cast<int>(q < 0.0 ? q - 0.5 : q + 0.5);
+	const double r = x - k * kLn2;
+	double term = 1.0;
+	double sum = 1.0;
+	for (int n = 1; n < 40; ++n) {
+		term *= r / n;
+		sum += term;
+	}
+	for (int i = 0; i < k; ++i) {
+		sum *= 2.0;
+	}
+	for (int i = 0; i > k; --i) {
+		sum *= 0.5;
+	}
+	return sum;
+}
+
+constexpr auto cpow(double a, double b) -> double { return cexp(b * clog(a)); }
+} // namespace ctmath
+
+// Average photon energy [eV] of the ionizing chemistry band (same formulas as before, now evaluated at compile time).
+constexpr auto ComputeIonizingBandAverageEv(double ev_low, double ev_high, double alpha) -> double
+{
+	double ev_avg = 0.0;
+	if (ev_high == std::numeric_limits<double>::infinity()) {
+		ev_avg = ev_low * (1.0 - 1.0 / alpha);
+	} else if (alpha == 0.0) {
+		ev_avg = ev_low * ev_high * ctmath::clog(ev_high / ev_low) / (ev_high - ev_low);
+	} else if (alpha == 1.0) {
+		ev_avg = (ev_high - ev_low) / ctmath::clog(ev_high / ev_low);
+	} else {
+		ev_avg = ((alpha - 1.0) / alpha) * (ctmath::cpow(ev_high, alpha) - ctmath::cpow(ev_low, alpha)) /
+			 (ctmath::cpow(ev_high, alpha - 1.0) - ctmath::cpow(ev_low, alpha - 1.0));
+	}
+	return ev_avg;
+}
+
+static_assert(ChemBandsHeader().arr[1] != std::numeric_limits<double>::infinity() || ChemBandsPowerLawIndex_ < 0.0,
+	      "an open-topped chemistry band only has a finite average photon energy for power_law_index < 0");
+
+constexpr amrex::Real IonizingBandPhotonEnergy =
+    ComputeIonizingBandAverageEv(ChemBandsHeader().arr[0], ChemBandsHeader().arr[1], ChemBandsPowerLawIndex_) * C::ev2erg;
+static_assert(IonizingBandPhotonEnergy > ChemBandsHeader().arr[0] * C::ev2erg, "band-average photon energy must exceed the band's lower edge");
+constexpr amrex::Real IonizingBandHeatingCoeff = (IonizingBandPhotonEnergy - RydbergEnergy > 0.0_rt) ? (IonizingBandPhotonEnergy - RydbergEnergy) : 0.0_rt;
+
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Real { return IonizingBandPhotonEnergy; }
+
+// Recombination: alpha(T) = coeff * (T/1e4)^-0.7 = [coeff * 1e4^0.7] * exp(-0.7 ln T)
+constexpr amrex::Real RecombinationCoeffAtOneKelvin = 2.63e-13 * ctmath::cpow(1.0e4, 0.69999999999999996);
+
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T, Real lnT) -> Real
+{
+	amrex::ignore_unused(T);
 	const amrex::Real coeff = 2.63e-13_rt;
 	if (recombination_temperature_dependent == 0) {
 		return coeff;
 	}
-	return coeff * std::pow(T / 1.0e4, -0.69999999999999996);
+	return RecombinationCoeffAtOneKelvin * std::exp(-0.69999999999999996 * lnT);
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) -> Real
+// d alpha / dT = -0.7 alpha / T  (alpha is the value returned by get_recombination_coefficient)
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T, Real alpha_rec) -> Real
 {
 	if (recombination_temperature_dependent == 0) {
 		return 0.0_rt;
 	}
-	return -2.63e-13 * 0.7 * std::pow(T / 1.0e4, -1.69999999999999996) / 1.0e4;
+	return -0.69999999999999996 * alpha_rec / T;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_collisional_ionization_coefficient(Real T) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_collisional_ionization_coefficient(Real T, Real sqrtT) -> Real
 {
 	// Krumholz et al. 2007
-	return 5.84e-11 * std::sqrt(T) * std::exp(-2.18e-11_rt / (C::k_B * T));
+	return 5.84e-11 * sqrtT * std::exp(-2.18e-11_rt / (C::k_B * T));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dCollisional_ionization_coefficient_dT(Real T) -> Real
+// value and dT derivative, sharing one sqrt and one exp
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void get_collisional_ionization_coefficient_and_dT(Real T, Real sqrtT, Real &value, Real &dvalue_dT)
 {
-	return 5.84e-11 * 0.5 / std::sqrt(T) * std::exp(-2.18e-11_rt / (C::k_B * T)) +
-	       5.84e-11 * std::sqrt(T) * std::exp(-2.18e-11_rt / (C::k_B * T)) * 2.18e-11_rt / (C::k_B * T * T);
+	const amrex::Real boltz = std::exp(-2.18e-11_rt / (C::k_B * T));
+	value = 5.84e-11 * sqrtT * boltz;
+	dvalue_dT = 5.84e-11 * 0.5 / sqrtT * boltz + 5.84e-11 * sqrtT * boltz * 2.18e-11_rt / (C::k_B * T * T);
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionization_heating_coefficient(Real T) -> Real
 {
 	amrex::ignore_unused(T);
-	return amrex::max(get_ionizing_band_photon_energy() - RydbergEnergy, 0.0_rt);
+	return IonizingBandHeatingCoeff;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_KI_heating_coefficient(Real T) -> Real { return 2.0e-26; }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_KI_cooling_coefficient(Real T) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_KI_cooling_coefficient(Real T, Real sqrtT) -> Real
 {
 	// Fix KI cooling function based on Vazquez-Semadeni et al. (2007).
-	return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * std::sqrt(T) * std::exp(-92.0 / T));
+	return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * sqrtT * std::exp(-92.0 / T));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dKI_cooling_coefficient_dT(Real T) -> Real
+// value and dT derivative, sharing the two exp and the sqrt
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void get_KI_cooling_coefficient_and_dT(Real T, Real sqrtT, Real &value, Real &dvalue_dT)
 {
-	return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) * 118400.0 / ((T + 1.0e3) * (T + 1.0e3)) +
-			  1.4e-2 * (0.5 / std::sqrt(T) * std::exp(-92.0 / T) + std::sqrt(T) * std::exp(-92.0 / T) * 92.0 / (T * T)));
+	const amrex::Real e_hi = std::exp(-118400.0 / (T + 1.0e3));
+	const amrex::Real e_lo = std::exp(-92.0 / T);
+	value = 2.0e-26 * (1.0e7 * e_hi + 1.4e-2 * sqrtT * e_lo);
+	dvalue_dT = 2.0e-26 * (1.0e7 * e_hi * 118400.0 / ((T + 1.0e3) * (T + 1.0e3)) + 1.4e-2 * (0.5 / sqrtT * e_lo + sqrtT * e_lo * 92.0 / (T * T)));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_cooling_coefficient(Real T) -> Real
-{
-	// Krumholz et al. 2007
-	if (T < 100.0_rt) {
-		return 0.0_rt;
-	}
-	return 6.1e-10 * C::k_B * T * std::pow(T, -0.89);
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_cooling_coefficient_dT(Real T) -> Real
+// Krumholz et al. 2007: 6.1e-10 k_B T * T^-0.89 = 6.1e-10 k_B T^0.11, derivative = 0.11 * value / T
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_cooling_coefficient(Real T, Real lnT) -> Real
 {
 	if (T < 100.0_rt) {
 		return 0.0_rt;
 	}
-	return 6.1e-10 * C::k_B * (std::pow(T, -0.89) + T * (-0.89) * std::pow(T, -1.89));
+	return 6.1e-10 * C::k_B * std::exp(0.11 * lnT);
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_cle_term(Real T) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void get_recombination_cooling_coefficient_and_dT(Real T, Real lnT, Real &value, Real &dvalue_dT)
 {
-	// Frazer and Heitsch 2019
-	amrex::Real cle_term = 0.0_rt;
-	if (T < 1.0e2) {
-		cle_term = 3.47e-29 * std::pow(T, 1.915);
-	} else if (T < std::pow(10.0, 2.8)) {
-		cle_term = 2.34e-26 * std::pow(T, 0.500);
-	} else if (T < std::pow(10.0, 3.6)) {
-		cle_term = 1.11e-24 * std::pow(T, -0.099);
-	} else if (T < 1.0e4) {
-		cle_term = 1.08e-32 * std::pow(T, 2.127);
-	} else if (T < std::pow(10.0, 4.5)) {
-		cle_term = 2.67e-30 * std::pow(T, 1.529);
-	} else if (T < 1.0e5) {
-		cle_term = 1.74e-24 * std::pow(T, 0.237);
-	} else if (T < 1.0e6) {
-		cle_term = 1.10e-21 * std::pow(T, -0.323);
-	} else {
-		cle_term = 7.49e-21 * std::pow(T, -0.462);
+	if (T < 100.0_rt) {
+		value = 0.0_rt;
+		dvalue_dT = 0.0_rt;
+		return;
 	}
-	return cle_term;
+	value = 6.1e-10 * C::k_B * std::exp(0.11 * lnT);
+	dvalue_dT = 0.11 * value / T;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ion_ff_cooling_coefficient(Real T) -> Real
+// Frazer and Heitsch 2019: cle_term = coeff * T^alpha. Returns the term and its exponent from a single pass of the branch ladder.
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void get_cle_term_and_alpha(Real T, Real lnT, Real &cle_term, Real &alpha)
 {
-	amrex::Real cle_term = get_cle_term(T);
-	return 1.3 * 1.427e-27 * std::sqrt(T) + cle_term; // Frazer and Heitsch 2019
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) -> Real
-{
-	amrex::Real d_cle_term_dT = 0.0_rt;
-	amrex::Real alpha = 0.0_rt;
+	amrex::Real coeff = 0.0_rt;
 	if (T < 1.0e2) {
+		coeff = 3.47e-29;
 		alpha = 1.915;
 	} else if (T < std::pow(10.0, 2.8)) {
+		coeff = 2.34e-26;
 		alpha = 0.500;
 	} else if (T < std::pow(10.0, 3.6)) {
+		coeff = 1.11e-24;
 		alpha = -0.099;
 	} else if (T < 1.0e4) {
+		coeff = 1.08e-32;
 		alpha = 2.127;
 	} else if (T < std::pow(10.0, 4.5)) {
+		coeff = 2.67e-30;
 		alpha = 1.529;
 	} else if (T < 1.0e5) {
+		coeff = 1.74e-24;
 		alpha = 0.237;
 	} else if (T < 1.0e6) {
+		coeff = 1.10e-21;
 		alpha = -0.323;
 	} else {
+		coeff = 7.49e-21;
 		alpha = -0.462;
 	}
-	d_cle_term_dT = alpha * get_cle_term(T) / T;
-	return 1.3 * 1.427e-27 * 0.5 / std::sqrt(T) + d_cle_term_dT;
+	cle_term = coeff * std::exp(alpha * lnT);
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ion_ff_cooling_coefficient(Real T, Real sqrtT, Real lnT) -> Real
+{
+	amrex::Real cle_term = 0.0_rt;
+	amrex::Real alpha = 0.0_rt;
+	get_cle_term_and_alpha(T, lnT, cle_term, alpha);
+	return 1.3 * 1.427e-27 * sqrtT + cle_term; // Frazer and Heitsch 2019
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void get_ion_ff_cooling_coefficient_and_dT(Real T, Real sqrtT, Real lnT, Real &value, Real &dvalue_dT)
+{
+	amrex::Real cle_term = 0.0_rt;
+	amrex::Real alpha = 0.0_rt;
+	get_cle_term_and_alpha(T, lnT, cle_term, alpha);
+	value = 1.3 * 1.427e-27 * sqrtT + cle_term;
+	dvalue_dT = 1.3 * 1.427e-27 * 0.5 / sqrtT + alpha * cle_term / T;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Array1D<Real, 1, INT_NEQS> &ydot)
 {
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
-	const amrex::Real sigma_coll = (collisional_ionization_switch != 0) ? get_collisional_ionization_coefficient(state.T) : 0.0_rt;
+	const amrex::Real sqrtT = std::sqrt(state.T);
+	const amrex::Real lnT = std::log(state.T);
+	const amrex::Real sigma_coll = (collisional_ionization_switch != 0) ? get_collisional_ionization_coefficient(state.T, sqrtT) : 0.0_rt;
 
 	const amrex::Real n_e = state.xn[e_idx];
 	const amrex::Real n_HI = state.xn[H_idx];
@@ -205,20 +271,20 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 
 	const amrex::Real photoionization_term = chat_sigma_photo * n_HI * n_gamma;
 	const amrex::Real collisional_ionization_term = (collisional_ionization_switch != 0) ? n_e * n_HI * sigma_coll : 0.0_rt;
-	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T) * n_e * n_HII : 0.0_rt;
+	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T, lnT) * n_e * n_HII : 0.0_rt;
 
 	ydot(ie) = photoionization_term + collisional_ionization_term - recombination_term;
 	ydot(iH) = -ydot(ie);
 	ydot(iHp) = ydot(ie);
 	ydot(net_ienuc) = 0.0_rt;
 	const amrex::Real recombination_cooling_rate =
-	    (energy_switch != 0 && recombination_cooling_switch != 0) ? get_recombination_cooling_coefficient(state.T) * n_e * n_HII : 0.0_rt;
+	    (energy_switch != 0 && recombination_cooling_switch != 0) ? get_recombination_cooling_coefficient(state.T, lnT) * n_e * n_HII : 0.0_rt;
 	const amrex::Real ion_ff_cooling_rate =
-	    (energy_switch != 0 && ion_ff_cooling_switch != 0) ? get_ion_ff_cooling_coefficient(state.T) * n_e * n_HII : 0.0_rt;
+	    (energy_switch != 0 && ion_ff_cooling_switch != 0) ? get_ion_ff_cooling_coefficient(state.T, sqrtT, lnT) * n_e * n_HII : 0.0_rt;
 	const amrex::Real KI_heating_rate =
 	    (energy_switch != 0 && molecular_process_switch != 0 && KI_heating_switch != 0) ? get_KI_heating_coefficient(state.T) * n_HI : 0.0_rt;
 	const amrex::Real KI_cooling_rate =
-	    (energy_switch != 0 && molecular_process_switch != 0 && KI_cooling_switch != 0) ? get_KI_cooling_coefficient(state.T) * n_HI * n_HI : 0.0_rt;
+	    (energy_switch != 0 && molecular_process_switch != 0 && KI_cooling_switch != 0) ? get_KI_cooling_coefficient(state.T, sqrtT) * n_HI * n_HI : 0.0_rt;
 	const amrex::Real collisional_ionization_cooling_rate =
 	    (energy_switch != 0 && collisional_ionization_switch != 0) ? RydbergEnergy * collisional_ionization_term : 0.0_rt;
 	const amrex::Real photoheating_rate =
@@ -241,28 +307,37 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 {
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
+	const amrex::Real sqrtT = std::sqrt(state.T);
+	const amrex::Real lnT = std::log(state.T);
 	amrex::Real sigma_coll = 0.0_rt;
 	amrex::Real d_sigma_coll_dT = 0.0_rt;
 	if (collisional_ionization_switch != 0) {
-		sigma_coll = get_collisional_ionization_coefficient(state.T);
-		d_sigma_coll_dT = dCollisional_ionization_coefficient_dT(state.T);
+		get_collisional_ionization_coefficient_and_dT(state.T, sqrtT, sigma_coll, d_sigma_coll_dT);
 	}
 	amrex::Real alpha_rec = 0.0_rt;
 	amrex::Real d_alpha_rec_dT = 0.0_rt;
 	if (recombination_switch != 0) {
-		alpha_rec = get_recombination_coefficient(state.T);
-		d_alpha_rec_dT = dRecombination_coefficient_dT(state.T);
+		alpha_rec = get_recombination_coefficient(state.T, lnT);
+		d_alpha_rec_dT = dRecombination_coefficient_dT(state.T, alpha_rec);
 	}
 
 	const amrex::Real Gamma_photo = ((energy_switch != 0) && (photoheating_switch != 0)) ? get_ionization_heating_coefficient(state.T) : 0.0_rt;
 	const amrex::Real Gamma_KI = ((energy_switch != 0) && (KI_heating_switch != 0)) ? get_KI_heating_coefficient(state.T) : 0.0_rt;
-	const amrex::Real Lambda_KI = ((energy_switch != 0) && (KI_cooling_switch != 0)) ? get_KI_cooling_coefficient(state.T) : 0.0_rt;
-	const amrex::Real d_Lambda_KI_dT = ((energy_switch != 0) && (KI_cooling_switch != 0)) ? dKI_cooling_coefficient_dT(state.T) : 0.0_rt;
-	const amrex::Real Lambda_rec = ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? get_recombination_cooling_coefficient(state.T) : 0.0_rt;
-	const amrex::Real d_Lambda_rec_dT =
-	    ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? dRecombination_cooling_coefficient_dT(state.T) : 0.0_rt;
-	const amrex::Real Lambda_ff = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? get_ion_ff_cooling_coefficient(state.T) : 0.0_rt;
-	const amrex::Real d_Lambda_ff_dT = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? d_ion_ff_cooling_coefficient_dT(state.T) : 0.0_rt;
+	amrex::Real Lambda_KI = 0.0_rt;
+	amrex::Real d_Lambda_KI_dT = 0.0_rt;
+	if ((energy_switch != 0) && (KI_cooling_switch != 0)) {
+		get_KI_cooling_coefficient_and_dT(state.T, sqrtT, Lambda_KI, d_Lambda_KI_dT);
+	}
+	amrex::Real Lambda_rec = 0.0_rt;
+	amrex::Real d_Lambda_rec_dT = 0.0_rt;
+	if ((energy_switch != 0) && (recombination_cooling_switch != 0)) {
+		get_recombination_cooling_coefficient_and_dT(state.T, lnT, Lambda_rec, d_Lambda_rec_dT);
+	}
+	amrex::Real Lambda_ff = 0.0_rt;
+	amrex::Real d_Lambda_ff_dT = 0.0_rt;
+	if ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) {
+		get_ion_ff_cooling_coefficient_and_dT(state.T, sqrtT, lnT, Lambda_ff, d_Lambda_ff_dT);
+	}
 
 	const amrex::Real n_e = state.xn[e_idx];
 	const amrex::Real n_HI = state.xn[H_idx];
