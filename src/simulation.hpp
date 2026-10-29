@@ -713,7 +713,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	/// AMR-specific parameters
 	int regrid_int = 2;	 // regrid interval (number of coarse steps)
 	int do_reflux = 1;	 // 1 == reflux, 0 == no reflux
-	int driver03Prescale_ = 0; // driver-03: 1 == apply the -dt*area scaling at the coarse-fine faces instead of FluxRegister::CrseInit
+	int driver03Prescale_ = 1; // combined: default 1 (interface-only CrseInit). driver-03: 1 == apply the -dt*area scaling at the coarse-fine faces instead of FluxRegister::CrseInit
 	int do_subcycle = 1;	 // 1 == subcycle, 0 == no subcyle
 	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
 
