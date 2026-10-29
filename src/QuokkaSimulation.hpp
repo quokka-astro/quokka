@@ -186,6 +186,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr int nvars_ = HydroSystem<problem_t>::nvar_;
 	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
+	// ghost cells of the radiation variables read by the radiation transport: PPM reconstruction of the cells one layer
+	// outside the valid box reads two further layers (the PLM, xPPM and donor-cell options need no more)
+	static constexpr int nghostRad_ = 3;
 	static constexpr int n_mhd_vars_per_dim_ = MHDSystem<problem_t>::nvar_per_dim_; // mhd
 	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup;	// number of dust variables for each dust group
 
@@ -492,6 +495,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 					 int groupEnd = Physics_Traits<problem_t>::nGroups);
 
 	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine);
+	// fill the ghost cells that the radiation transport reads: the radiation components with nghostRad_ ghost cells and, only when
+	// use_wavespeed_correction_ is set, the gas components with one ghost cell
+	void fillRadiationGhostCells(amrex::MultiFab &state, int lev, amrex::Real time);
 
 	void computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, int nvars,
 				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, std::array<amrex::Array4<amrex::Real>, AMREX_SPACEDIM> const &fluxOut,
@@ -1520,6 +1526,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::refineGrid(int /
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow)
 {
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+		// The radiation substeps no longer refresh the ghost cells of the gas components of state_new_cc_, but user tagging functions
+		// (refineGrid) may read them, so refresh all components here.
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na,
+				       PreInterpState, PostInterpState, FillPatchType::fillpatch_function);
+	}
+
 	// call user-defined RefineGrid to set tags
 	refineGrid(lev, tags, time, ngrow);
 
@@ -3912,6 +3925,22 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	}
 }
 
+template <typename problem_t> void QuokkaSimulation<problem_t>::fillRadiationGhostCells(amrex::MultiFab &state, int const lev, amrex::Real const time)
+{
+	// Radiation components only: no hydro-state hooks are needed (they only touch the gas energy), and the BCRec vector is indexed by
+	// absolute component, so the fill starts at BC component nstartHyperbolic_.
+	fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, AMRSimulation<problem_t>::InterpHookNone,
+			       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_class, nstartHyperbolic_, ncompHyperbolic_, nghostRad_);
+
+	if constexpr (nstartHyperbolic_ > 0) {
+		if (use_wavespeed_correction_) {
+			// the wavespeed correction reads the gas state (components [0, nstartHyperbolic_)) one cell outside the valid box
+			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState,
+					       FillPatchType::fillpatch_class, 0, nstartHyperbolic_, 1);
+		}
+	}
+}
+
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int const /*iter_count*/,
 							       int const /*nsubsteps*/, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
@@ -3925,8 +3954,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 	int const ncompGroups = RadSystem<problem_t>::numRadVars_ * (groupEnd - groupBegin);
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
-			       PostInterpState);
+	fillRadiationGhostCells(state_new_cc_[lev], lev, time);
 
 	// one level-wide flux kernel per direction, writing the persistent face arrays
 	auto &fluxes = computeRadiationFluxesLevel(lev, state_new_cc_[lev], radFlux_, groupBegin, groupEnd);
@@ -3962,8 +3990,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 	int const ncompGroups = RadSystem<problem_t>::numRadVars_ * (groupEnd - groupBegin);
 
 	// update ghost zones [intermediate stage stored in state_inter]
-	fillBoundaryConditions(state_inter, state_inter, lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
-			       PostInterpState);
+	fillRadiationGhostCells(state_inter, lev, time + dt_radiation);
 
 	// one level-wide flux kernel per direction and state, writing the persistent face arrays. All fluxes are computed before
 	// state_new_cc_ is updated below; each box's fluxes read only that box's FAB (valid + ghost cells), so this matches the
