@@ -431,6 +431,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
 	// radiation subcycle
+	// Persistent per-level scratch MultiFab for the IMEX stage-2 state; redefined when the level's BoxArray/DistributionMapping changes.
+	amrex::Vector<amrex::MultiFab> state_tmp1_cc_;
 	void copyRadiationState(amrex::MultiFab &dest_cc, amrex::MultiFab const &src_cc);
 	void copyHydroState(amrex::MultiFab &dest_cc, amrex::MultiFab const &src_cc);
 	auto computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int;
@@ -3251,7 +3253,15 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	AMREX_ALWAYS_ASSERT(dt_radiation > 0.0);
 
 	// Temporary state for IMEX stage 2 result (avoids gas_update_factor trick)
-	amrex::MultiFab state_tmp1_cc(grids[lev], dmap[lev], state_new_cc_[lev].nComp(), nghost_cc_);
+	// (persistent per level; every cell it is read from is first written: valid cells by the copy/forward Euler below, ghost cells by fillBoundaryConditions)
+	if (static_cast<int>(state_tmp1_cc_.size()) <= lev) {
+		state_tmp1_cc_.resize(lev + 1);
+	}
+	amrex::MultiFab &state_tmp1_cc = state_tmp1_cc_[lev];
+	if (!state_tmp1_cc.ok() || state_tmp1_cc.boxArray() != grids[lev] || !(state_tmp1_cc.DistributionMap() == dmap[lev]) ||
+	    state_tmp1_cc.nComp() != state_new_cc_[lev].nComp() || state_tmp1_cc.nGrow() != nghost_cc_) {
+		state_tmp1_cc.define(grids[lev], dmap[lev], state_new_cc_[lev].nComp(), nghost_cc_);
+	}
 
 	// Chemical (ionizing) bands are the last nGroups - nGroupsThermal groups. With photochemistry enabled, each
 	// substep first runs RK2-SSP (transport + emission) on the chemical bands, then runs photochemistry

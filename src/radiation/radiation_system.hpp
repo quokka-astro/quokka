@@ -482,10 +482,13 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 	{
 		auto const kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, Tgas);
-		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(kappa_expo_and_lower_value[1][g] == 0.0,
-							 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through photochemistry, "
-							 "so DefineOpacityExponentsAndLowerValues must return 0 for groups g >= nGroupsThermal_.");
+		// (per-cell check of the opacity values, so it stays in device code; compiled in only when it can fire)
+		if constexpr (nGroupsThermal_ < nGroups_) {
+			for (int g = nGroupsThermal_; g < nGroups_; ++g) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(kappa_expo_and_lower_value[1][g] == 0.0,
+								 "A chemical band has a nonzero opacity. Chemical bands couple to the gas only through photochemistry, "
+								 "so DefineOpacityExponentsAndLowerValues must return 0 for groups g >= nGroupsThermal_.");
+			}
 		}
 		return kappa_expo_and_lower_value;
 	}
@@ -648,8 +651,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k, int i_phys, int j_phys,
-							     int k_phys, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc,
-							     const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
+							     int k_phys, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 	    -> quokka::valarray<double, nGroups_>;
 
 	AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool;
@@ -663,6 +665,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    -> RadPressureResult;
 
 	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
+
+	// Row DIR (0, 1, 2 for X1, X2, X3) of the Eddington tensor; same arithmetic as the corresponding row of ComputeEddingtonTensor.
+	template <FluxDir DIR> AMREX_GPU_DEVICE static auto ComputeEddingtonTensorRow(double fx, double fy, double fz) -> std::array<double, 3>;
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -1240,10 +1245,12 @@ template <FluxDir DIR>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
 								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k, int i_phys,
 								    int j_phys, int k_phys,
-								    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc,
-								    const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
+								    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
     -> quokka::valarray<double, nGroups_>
 {
+	// local constexpr copy of the (static constexpr) band boundaries: indexed directly, never ODR-used by reference
+	[[maybe_unused]] constexpr amrex::GpuArray<double, nGroups_ + 1> group_boundaries = radBoundaries_;
+
 	// compute interface-averaged cell optical depth
 
 	// [By convention, the interfaces are defined on the left edge of each
@@ -1364,6 +1371,39 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 
 template <typename problem_t>
 template <FluxDir DIR>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensorRow(const double fx, const double fy, const double fz) -> std::array<double, 3>
+{
+	// Same as ComputeEddingtonTensor, but only row `row` of the tensor (the one needed for the flux in direction DIR) is assembled.
+	constexpr int row = (DIR == FluxDir::X1) ? 0 : ((DIR == FluxDir::X2) ? 1 : 2);
+
+	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
+	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
+
+	std::array<amrex::Real, 3> n{};
+
+	for (int ii = 0; ii < 3; ++ii) {
+		n[ii] = (f > 0.) ? (fvec[ii] / f) : 0.;
+	}
+
+	const double chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
+
+	AMREX_ASSERT((chi >= 1. / 3.) && (chi <= 1.0)); // NOLINT
+
+	const double Tdiag = (1.0 - chi) / 2.0;
+	const double Tf = (3.0 * chi - 1.0) / 2.0;
+
+	std::array<double, 3> T{};
+
+	for (int jj = 0; jj < 3; ++jj) {
+		const double delta_ij = (row == jj) ? 1 : 0;
+		T[jj] = Tdiag * delta_ij + Tf * (n[row] * n[jj]);
+	}
+
+	return T;
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
 							       const double fy, const double fz) -> RadPressureResult
 {
@@ -1373,17 +1413,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 	AMREX_ASSERT(erad > 0.0);
 
 	// Compute the Eddington tensor
-	auto T = ComputeEddingtonTensor(fx, fy, fz);
+	// Only row DIR of the Eddington tensor is needed (T[DIR][*]).
+	const auto T = ComputeEddingtonTensorRow<DIR>(fx, fy, fz);
 
 	// frozen Eddington tensor approximation, following Balsara
 	// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
 	double Tnormal = NAN;
 	if constexpr (DIR == FluxDir::X1) {
-		Tnormal = T[0][0];
+		Tnormal = T[0];
 	} else if constexpr (DIR == FluxDir::X2) {
-		Tnormal = T[1][1];
+		Tnormal = T[1];
 	} else if constexpr (DIR == FluxDir::X3) {
-		Tnormal = T[2][2];
+		Tnormal = T[2];
 	}
 
 	// compute fluxes F_L, F_R
@@ -1397,23 +1438,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	if constexpr (DIR == FluxDir::X1) {
 		Fn = Fx;
-
-		Tnx = T[0][0];
-		Tny = T[0][1];
-		Tnz = T[0][2];
 	} else if constexpr (DIR == FluxDir::X2) {
 		Fn = Fy;
-
-		Tnx = T[1][0];
-		Tny = T[1][1];
-		Tnz = T[1][2];
 	} else if constexpr (DIR == FluxDir::X3) {
 		Fn = Fz;
-
-		Tnx = T[2][0];
-		Tny = T[2][1];
-		Tnz = T[2][2];
 	}
+	Tnx = T[0];
+	Tny = T[1];
+	Tnz = T[2];
 
 	AMREX_ASSERT(std::isfinite(Fn));
 	AMREX_ASSERT(std::isfinite(Tnx));
@@ -1442,8 +1474,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 	quokka::Array4View<amrex::Real, DIR> x1FluxDiffusive(x1FluxDiffusive_in);
 	quokka::Array4View<const amrex::Real, DIR> consVar(consVar_in);
 
-	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
-
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
 	// the left edge of zone i.
@@ -1454,11 +1484,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
-		for (int g = 0; g < nGroups_ + 1; ++g) {
-			radBoundaries_g_copy[g] = radBoundaries_g[g];
-		}
-
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
@@ -1466,7 +1491,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		// Similar to the asymptotic-preserving flux correction in Skinner et al. (2019). Use optionally apply it here to reduce odd-even instability.
 		quokka::valarray<double, nGroups_> tau_cell{};
 		if (use_wavespeed_correction) {
-			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k, i_in, j_in, k_in, cons_fc, radBoundaries_g_copy);
+			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k, i_in, j_in, k_in, cons_fc);
 		}
 
 		// gather left- and right- state variables
