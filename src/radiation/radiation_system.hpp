@@ -387,6 +387,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 #endif
 
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange);
+	// level-wide version: sets maxSignal = c_hat on the valid cells of all boxes in one launch
+	static void ComputeMaxSignalSpeed(amrex::MultiFab &maxSignal_mf);
 	// The transport kernels below act only on the radiation groups [groupBegin, groupEnd); the components of
 	// the other groups are neither read nor written. The default range covers all groups.
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons, array_t &primVar, amrex::Box const &indexRange, int groupBegin = 0,
@@ -1004,6 +1006,16 @@ void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double signal_max = c_hat_;
 		maxSignal(i, j, k) = signal_max;
+	});
+}
+
+template <typename problem_t> void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::MultiFab &maxSignal_mf)
+{
+	// cell-centered kernel
+	auto const &maxSignal = maxSignal_mf.arrays();
+	amrex::ParallelFor(maxSignal_mf, amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		const double signal_max = c_hat_;
+		maxSignal[bx](i, j, k) = signal_max;
 	});
 }
 

@@ -906,44 +906,35 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfR
 	return nsubSteps;
 }
 
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignalLocal(int const level)
 {
 	const BL_PROFILE("QuokkaSimulation::computeMaxSignalLocal()");
 
-	// hydro: loop over local grids, compute CFL timestep
-	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateNew_cc = state_new_cc_[level].const_array(iter);
-		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> stateNew_fc;
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (int idim = 0; idim < 3; ++idim) {
-				stateNew_fc[idim] = state_new_fc_[level][idim].const_array(iter);
-			}
+	// hydro: level-wide launches (one kernel per level instead of one per box)
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && !(Physics_Traits<problem_t>::is_radiation_enabled)) {
+		// hydro/mhd
+		HydroSystem<problem_t>::ComputeMaxSignalSpeed(state_new_cc_[level], state_new_fc_[level], max_signal_speed_[level]);
+	} else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+		// radiation hydro/mhd, or radiation only
+		RadSystem<problem_t>::ComputeMaxSignalSpeed(max_signal_speed_[level]);
+		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
+			amrex::MultiFab maxSignalHydroMF(max_signal_speed_[level].boxArray(), max_signal_speed_[level].DistributionMap(), 1, 0);
+			HydroSystem<problem_t>::ComputeMaxSignalSpeed(state_new_cc_[level], state_new_fc_[level], maxSignalHydroMF);
+			const int maxSubsteps = maxSubsteps_;
+			auto const &maxSignal = max_signal_speed_[level].arrays();
+			auto const &maxSignalHydro = maxSignalHydroMF.const_arrays();
+			// ensure that we use the smaller of the two timesteps
+			amrex::ParallelFor(max_signal_speed_[level], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				amrex::Real const maxSignalRadiation = maxSignal[bx](i, j, k) / static_cast<double>(maxSubsteps);
+				maxSignal[bx](i, j, k) = std::max(maxSignalRadiation, maxSignalHydro[bx](i, j, k));
+			});
 		}
-		auto const &maxSignal = max_signal_speed_[level].array(iter);
-
-		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && !(Physics_Traits<problem_t>::is_radiation_enabled)) {
-			// hydro/mhd
-			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, stateNew_fc, maxSignal, indexRange);
-		} else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-			// radiation hydro/mhd, or radiation only
-			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, maxSignal, indexRange);
-			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
-				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
-				auto const &maxSignalHydro = maxSignalHydroFAB.array();
-				HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, stateNew_fc, maxSignalHydro, indexRange);
-				const int maxSubsteps = maxSubsteps_;
-				// ensure that we use the smaller of the two timesteps
-				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-					amrex::Real const maxSignalRadiation = maxSignal(i, j, k) / static_cast<double>(maxSubsteps);
-					maxSignal(i, j, k) = std::max(maxSignalRadiation, maxSignalHydro(i, j, k));
-				});
-			}
-		} else {
-			// no hyperbolic physics is enabled (e.g. self-gravity acting on particles only),
-			// so there is no signal speed and the timestep is set by the other physics modules
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { maxSignal(i, j, k) = 0.0; });
-		}
+	} else {
+		// no hyperbolic physics is enabled (e.g. self-gravity acting on particles only),
+		// so there is no signal speed and the timestep is set by the other physics modules
+		auto const &maxSignal = max_signal_speed_[level].arrays();
+		amrex::ParallelFor(max_signal_speed_[level], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { maxSignal[bx](i, j, k) = 0.0; });
 	}
 
 	// diffusive CFL constraint for Ohmic resistivity: dt <= cfl * dx^2 / (2*eta)
@@ -954,13 +945,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 			const auto &dx = geom[level].CellSizeArray();
 			const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 			const amrex::Real resistive_signal = 2.0 * mhdResistivity_ / dx_min;
-			for (amrex::MFIter iter(max_signal_speed_[level]); iter.isValid(); ++iter) {
-				const amrex::Box &indexRange = iter.validbox();
-				auto const &maxSignal = max_signal_speed_[level].array(iter);
-				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-					maxSignal(i, j, k) = std::max(maxSignal(i, j, k), resistive_signal);
-				});
-			}
+			auto const &maxSignal = max_signal_speed_[level].arrays();
+			amrex::ParallelFor(max_signal_speed_[level], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				maxSignal[bx](i, j, k) = std::max(maxSignal[bx](i, j, k), resistive_signal);
+			});
 		}
 	}
 
@@ -973,16 +961,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 			const auto &dx = geom[level].CellSizeArray();
 			const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 			const amrex::Real longitudinalViscosity = (4.0 / 3.0) * shearViscosity_ + bulkViscosity_;
-			for (amrex::MFIter iter(max_signal_speed_[level]); iter.isValid(); ++iter) {
-				const amrex::Box &indexRange = iter.validbox();
-				auto const &stateNew_cc = state_new_cc_[level].const_array(iter);
-				auto const &maxSignal = max_signal_speed_[level].array(iter);
-				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-					const amrex::Real rho = stateNew_cc(i, j, k, HydroSystem<problem_t>::density_index);
-					const amrex::Real viscous_signal = 2.0 * longitudinalViscosity / (rho * dx_min);
-					maxSignal(i, j, k) = std::max(maxSignal(i, j, k), viscous_signal);
-				});
-			}
+			auto const &stateNew_cc = state_new_cc_[level].const_arrays();
+			auto const &maxSignal = max_signal_speed_[level].arrays();
+			amrex::ParallelFor(max_signal_speed_[level], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				const amrex::Real rho = stateNew_cc[bx](i, j, k, HydroSystem<problem_t>::density_index);
+				const amrex::Real viscous_signal = 2.0 * longitudinalViscosity / (rho * dx_min);
+				maxSignal[bx](i, j, k) = std::max(maxSignal[bx](i, j, k), viscous_signal);
+			});
 		}
 	}
 }
@@ -1318,6 +1303,7 @@ void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &
 	(void)state_fc;
 }
 
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const
 {
 	auto const ncomp_out = ncomp;
@@ -1325,48 +1311,40 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFl
 	auto const dx = geom[lev].CellSizeArray();
 	auto const density_floor = densityFloor_;
 	auto const ngrow = mf.nGrow();
+	auto const arrs = mf.arrays();
 
 	if (this->useDensityFloorParser_) {
 		auto const density_floor_parser = this->densityFloorParserExe_.value();
-		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-			amrex::Box const &box = iter.growntilebox(ngrow);
-			auto const &arr = mf.array(iter);
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::ParallelFor(mf, amrex::IntVect(ngrow), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+			amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
 #else
-				amrex::Real const y = 0.0;
+			amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+			amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
 #else
-				amrex::Real const z = 0.0;
+			amrex::Real const z = 0.0;
 #endif
-				arr(i, j, k, ncomp_out) = density_floor_parser(x, y, z, density_floor);
-			});
-		}
+			arrs[bx](i, j, k, ncomp_out) = density_floor_parser(x, y, z, density_floor);
+		});
 	} else {
-		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-			amrex::Box const &box = iter.growntilebox(ngrow);
-			auto const &arr = mf.array(iter);
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::ParallelFor(mf, amrex::IntVect(ngrow), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+			amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
 #else
-				amrex::Real const y = 0.0;
+			amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+			amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
 #else
-				amrex::Real const z = 0.0;
+			amrex::Real const z = 0.0;
 #endif
-				arr(i, j, k, ncomp_out) = QuokkaSimulation<problem_t>::densityFloor(x, y, z, density_floor);
-			});
-		}
+			arrs[bx](i, j, k, ncomp_out) = QuokkaSimulation<problem_t>::densityFloor(x, y, z, density_floor);
+		});
 	}
-	amrex::Gpu::streamSynchronize();
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
@@ -2205,13 +2183,11 @@ auto QuokkaSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F co
 	}
 
 	// evaluate user_f on all levels
+
 	for (int lev = 0; lev <= finest_level; ++lev) {
-		for (amrex::MFIter iter(q[lev]); iter.isValid(); ++iter) {
-			auto const &box = iter.validbox();
-			auto const &state = state_new_cc_[lev].const_array(iter);
-			auto const &result = q[lev].array(iter);
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) { result(i, j, k) = user_f(i, j, k, state); });
-		}
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &result = q[lev].arrays();
+		amrex::ParallelFor(q[lev], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) { result[bx](i, j, k) = user_f(i, j, k, state[bx]); });
 	}
 
 	// average down
