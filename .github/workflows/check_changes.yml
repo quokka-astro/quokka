@@ -55,7 +55,8 @@ jobs:
             code:
               - 'src/**'
               - 'extern/amrex/**'
-              - 'extern/Microphysics/**'
+              - 'extern/eos/**'
+              - 'extern/gcem/**'
               - 'extern/fmt/**'
               - 'extern/grackle_data_files/**'
               - 'extern/openPMD-api/**'
