@@ -3276,6 +3276,41 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 	// perform subcycle
 	auto const &dx = geom[lev].CellSizeArray();
+	// Source buffers are allocated once per hydro step (not once per substep); each substep re-zeroes and refills them.
+	// radEnergySource should have the unit of luminosity density, erg s^-1 cm^-3
+	int const nghost = 3; // WendlandC2<N=2>: stencil spans N=2 cells + 1 for possible particle drift
+	amrex::MultiFab radEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
+	// Companion buffer holding the radiation flux source, in components 3 * g + n (group g, direction n);
+	// unit: erg cm^-2 s^-2. Particles deposit isotropically, so they contribute nothing to it.
+	amrex::MultiFab radFluxSource(grids[lev], dmap[lev], 3 * Physics_Traits<problem_t>::nGroups, nghost);
+	// Scratch buffers written by the user hook AddRadSource, then added to the two buffers above.
+	amrex::MultiFab userEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
+	amrex::MultiFab userReducedFlux(grids[lev], dmap[lev], 3 * Physics_Traits<problem_t>::nGroups, nghost);
+
+	// Particle radiation deposition is hoisted out of the substep loop when no particle is born or dies within the step: the deposited
+	// source depends on the deposition time only through the birth/death window test, and particles (positions, luminosities) do not
+	// change during the radiation subcycle. The deposition times of the substeps are time_i + dt_radiation (same floating-point
+	// accumulation as the loop below); the active set is constant over [t_first, t_last] iff no birth/death time lies in (t_first, t_last].
+	bool hoistParticleRadDeposition = false;
+	amrex::MultiFab particleRadSource;
+#if AMREX_SPACEDIM == 3
+	if (nsubSteps > 1 && particleRegister_.anyRadiatingAtLevel(lev)) {
+		const amrex::Real t_first = time + dt_radiation;
+		amrex::Real t_last = t_first;
+		amrex::Real t_sub = time;
+		for (int i = 0; i < nsubSteps; ++i) {
+			t_last = t_sub + dt_radiation;
+			t_sub += dt_radiation;
+		}
+		hoistParticleRadDeposition = !particleRegister_.radiationDepositionChanges(lev, t_first, t_last);
+		if (hoistParticleRadDeposition) {
+			particleRadSource.define(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
+			particleRadSource.setVal(0.0);
+			particleRegister_.depositRadiation(particleRadSource, lev, t_first);
+		}
+	}
+#endif
+
 	amrex::Real time_subcycle = time;
 	for (int i = 0; i < nsubSteps; ++i) {
 		// We use the three-stage IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
@@ -3286,20 +3321,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0, 0});
 		int *p_iteration_failure_counter = iteration_failure_counter.data();
 		int *p_iteration_counter = iteration_counter.data();
-
-		// Create a MultiFab to hold radEnergySource for the current AMR level
-		// radEnergySource should have the unit of luminosity density, erg s^-1 cm^-3
-		int const nghost = 3; // WendlandC2<N=2>: stencil spans N=2 cells + 1 for possible particle drift
-		amrex::MultiFab radEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
-		// Companion buffer holding the radiation flux source, in components 3 * g + n (group g, direction n);
-		// unit: erg cm^-2 s^-2. Particles deposit isotropically, so they contribute nothing to it.
-		amrex::MultiFab radFluxSource(grids[lev], dmap[lev], 3 * Physics_Traits<problem_t>::nGroups, nghost);
-		// Scratch buffers written by the user hook AddRadSource, then added to the two buffers above. Giving
-		// the hook its own buffers means a problem simply assigns its own source: it cannot overwrite
-		// radiation that particles have already deposited, and need not remember to accumulate onto it.
-		// The hook supplies a reduced flux, which MergeUserRadSource converts to a flux source.
-		amrex::MultiFab userEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
-		amrex::MultiFab userReducedFlux(grids[lev], dmap[lev], 3 * Physics_Traits<problem_t>::nGroups, nghost);
 
 		// Fill radEnergySource and radFluxSource, once per substep, with the radiation emitted by particles and by the user
 		// hook AddRadSource. Both implicit stages of the IMEX PD-ARS tableau have abscissa c = 1 (rows 2 and 3 of Aim each
@@ -3313,7 +3334,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		userReducedFlux.setVal(0.0);
 
 #if AMREX_SPACEDIM == 3
-		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle + dt_radiation);
+		if (hoistParticleRadDeposition) {
+			// valid cells only: the per-substep deposit leaves the ghost cells at zero
+			amrex::MultiFab::Copy(radEnergySource, particleRadSource, 0, 0, Physics_Traits<problem_t>::nGroups, 0);
+		} else {
+			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle + dt_radiation);
+		}
 #endif
 
 		auto const &prob_lo = geom[lev].ProbLoArray();

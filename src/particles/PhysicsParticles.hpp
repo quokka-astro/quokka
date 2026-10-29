@@ -178,6 +178,12 @@ class PhysicsParticleDescriptorBase
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
 
+	// True if this type deposits radiation at level lev (container exists and has a luminosity component)
+	[[nodiscard]] virtual auto radiatesAtLevel(int lev) const -> bool = 0;
+
+	// True if any particle at level lev has a birth or death time in (t0, t1], i.e. the active set of radiating particles changes
+	[[nodiscard]] virtual auto radiationActivityChanges(int lev, amrex::Real t0, amrex::Real t1) const -> bool = 0;
+
 	// Redistribute particles at level lev and above
 	virtual void redistribute(int lev) const = 0;
 
@@ -689,6 +695,33 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
+	[[nodiscard]] auto radiatesAtLevel(int lev) const -> bool override
+	{
+		return container_ != nullptr && this->getLumIndex() >= 0 && lev <= container_->finestLevel();
+	}
+
+	[[nodiscard]] auto radiationActivityChanges(int lev, amrex::Real t0, amrex::Real t1) const -> bool override
+	{
+		if (!radiatesAtLevel(lev)) {
+			return false;
+		}
+		const int birth_idx = this->getBirthTimeIndex();
+		amrex::ReduceOps<amrex::ReduceOpSum> reduce_ops;
+		using ReduceDataType = amrex::ReduceData<int>;
+		using PTDType = typename ContainerType::ParticleTileType::ConstParticleTileDataType;
+		auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
+		    *container_, lev,
+		    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> int {
+			    const amrex::Real birth = p_type.m_aos[i].rdata(birth_idx);
+			    const amrex::Real death = p_type.m_aos[i].rdata(birth_idx + 1);
+			    return ((t0 < birth && birth <= t1) || (t0 < death && death <= t1)) ? 1 : 0;
+		    },
+		    reduce_ops);
+		int n_changing = amrex::get<0>(result_tuple);
+		amrex::ParallelAllReduce::Sum(n_changing, amrex::ParallelContext::CommunicatorSub());
+		return n_changing > 0;
+	}
+
 	// Implementation of particle redistribution within a level
 	void redistribute(int lev) const override
 	{
@@ -1065,6 +1098,29 @@ template <typename problem_t> class PhysicsParticleRegister
 				descriptor->depositRadiation(radEnergySource, lev, current_time, Physics_Traits<problem_t>::nGroups);
 			}
 		}
+	}
+
+	// True if any luminous particle type has particles that radiate at level lev
+	[[nodiscard]] auto anyRadiatingAtLevel(int lev) const -> bool
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getLumIndex() >= 0 && descriptor->radiatesAtLevel(lev)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// True if the set of radiating particles (birth/death in (t0, t1]) changes between deposition times t0 and t1
+	[[nodiscard]] auto radiationDepositionChanges(int lev, amrex::Real t0, amrex::Real t1) const -> bool
+	{
+		const BL_PROFILE("PhysicsParticleRegister::radiationDepositionChanges()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getLumIndex() >= 0 && descriptor->radiationActivityChanges(lev, t0, t1)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// Deposit mass from all massive particles
