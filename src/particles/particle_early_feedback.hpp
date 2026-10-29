@@ -75,24 +75,6 @@ template <typename T> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto warpAllSum(T x) n
 	return x;
 }
 #endif
-// Predicate for the pre-deposition survey: true for exactly the particles that deposit in depositToBuffer() (or are reported as invalid sources).
-struct ActivePred {
-	int birth_time_index;
-	int mass_at_birth_index;
-	amrex::Real p0;
-	amrex::Real t_fb;
-	amrex::Real alpha;
-	amrex::Real time;
-	amrex::Real dt;
-
-	template <typename P> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto operator()(P const &p) const noexcept -> bool
-	{
-		if (p.id() <= 0) {
-			return false;
-		}
-		return earlyFeedbackMomentumIncrement(time, dt, p.rdata(birth_time_index), p.rdata(mass_at_birth_index), p0, t_fb, alpha) > 0.0;
-	}
-};
 
 template <typename ContainerType, typename problem_t>
 void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
@@ -572,21 +554,7 @@ auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, s
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(birth_time_index >= 0 && mass_at_birth_index >= 0,
 					 "Early feedback requires valid birth_time and mass_at_birth particle components.");
 
-	// Survey the sources before allocating anything: if no particle on any rank requests momentum this step, the channel deposits exactly nothing
-	// (all statistics keep their default values), so skip it (collective decision, identical on all ranks). Otherwise the buffer only needs the
-	// components that are deposited and applied (density_index .. energy_index, plus the trailing count component) and stencil_size + 1 ghost cells
-	// (stencil radius + one cell of particle drift); if a stencil would not fit, fall back to the full ghost width of the state.
-	const EarlyFeedbackUtils::ActivePred active_pred{birth_time_index, mass_at_birth_index, EMEF_p0, EMEF_tFB, EMEF_alpha, time, dt};
-	const int shrunk_ghost = std::min(EarlyFeedbackUtils::stencil_size + 1, state.nGrow());
-	const auto survey = ParticleUtils::surveyFeedbackSources<ContainerType>(container, state, lev, EarlyFeedbackUtils::stencil_size, shrunk_ghost, active_pred);
-	if (survey.active == 0) {
-		return EarlyFeedbackStats{};
-	}
-	const int buffer_ghost = (survey.misfit == 0) ? shrunk_ghost : state.nGrow();
-	constexpr int buffer_ncomp = HydroSystem<problem_t>::energy_index + 2;
-	static_assert(HydroSystem<problem_t>::density_index == 0 && HydroSystem<problem_t>::x1Momentum_index < HydroSystem<problem_t>::energy_index);
-
-	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), buffer_ncomp, buffer_ghost);
+	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
 	state_buffer.setVal(0.0);
 	// All counters in one device buffer: one host->device and one device->host copy instead of six of each.
 	struct Counters {
