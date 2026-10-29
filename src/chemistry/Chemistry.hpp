@@ -41,12 +41,10 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 
 	const BL_PROFILE("Chemistry::computeChemistry()");
 	{
-		// src-05: one MultiFab-wide fused launch with a small block (launch bounds) and no per-box sync.
+		// src-05: small block (launch bounds), no per-box sync, one MultiFab-wide fused launch when there is more than one box.
 		constexpr int chem_block_size = 64;
-		auto const &states = mf.arrays();
 
-		amrex::ParallelFor<chem_block_size>(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			auto const &state = states[bx];
+		auto const burn_cell = [=] AMREX_GPU_DEVICE(amrex::Array4<Real> const &state, int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const Real xmom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
@@ -135,7 +133,18 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn] * rho; // scale by rho to return partial densities
 			}
-		});
+		};
+
+		if (mf.local_size() == 1) {
+			// AMReX's MultiFab ParallelFor ignores the block-size argument for a single box, so launch on the box directly.
+			for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+				auto const &state = mf.array(iter);
+				amrex::ParallelFor<chem_block_size>(iter.validbox(), [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { burn_cell(state, i, j, k); });
+			}
+		} else {
+			auto const &states = mf.arrays();
+			amrex::ParallelFor<chem_block_size>(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { burn_cell(states[bx], i, j, k); });
+		}
 	}
 
 	num_failed = *(d_num_failed.copyToHost());
