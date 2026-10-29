@@ -38,6 +38,9 @@ namespace quokka::chemistry
 
 template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed) -> bool
 {
+	// Transitional, until Microphysics' generated network_properties.H goes: the problem's network type must agree with the
+	// constants generated for its network.
+	static_assert(Microphysics_Traits<problem_t>::Network::NumSpec == NumSpec);
 
 	// Start off by assuming a successful burn.
 	int burn_success = 1;
