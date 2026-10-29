@@ -15,13 +15,17 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_Parser.H"
 #include "AMReX_iMultiFab.H"
+#include "AMReX_ParReduce.H"
+#include "AMReX_ParallelReduce.H"
 
 #include "cooling/EOSTabulatedRegistry.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/ODEIntegrate.hpp"
 #include "math/root_finding.hpp"
 #include "util/DataTable.hpp"
+#include <algorithm>
 #include <format>
+#include <vector>
 
 namespace quokka::ResampledCooling
 {
@@ -137,7 +141,7 @@ struct ResampledCoolingFunctor {
 // external_heating: optional position-dependent heating rate added to it, unit erg/s/H
 template <typename problem_t>
 auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &mf_fc, const Real dt_in, resampled_tables &resampledTables,
-		    const Real temp_floor, const Real const_heating_rate_per_H, ExternalHeatingRate const &external_heating = {}) -> bool
+		    const Real temp_floor, const Real const_heating_rate_per_H, ExternalHeatingRate const &external_heating = {}, const bool verbose = false) -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
@@ -152,70 +156,89 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 	auto tables = resampledTables.const_tables();
 
 	const auto &ba = mf.boxArray();
-	const auto &dmap = mf.DistributionMap();
-	amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
 
-	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &state = mf.array(iter);
-		auto const &nsubsteps = nsubstepsMF.array(iter);
-
-		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				state_fc[dir] = mf_fc[dir].const_array(iter);
-			}
+	auto const state_arrs = mf.arrays();
+	std::array<amrex::MultiArray4<const amrex::Real>, AMREX_SPACEDIM> state_fc_arrs{};
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			state_fc_arrs[dir] = mf_fc[dir].const_arrays();
 		}
-
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			// cooling function
-			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
-			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p;			      // unit: cm^-3
-			const Real heating_rate_per_H = const_heating_rate_per_H + external_heating(i, j, k); // unit: erg/s/H
-			const ResampledCoolingFunctor user_rhs(rho, tables, heating_rate_per_H * nH);	      // unit: erg/cm^3/s
-
-			// state vector
-			const Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(state, i, j, k, &state_fc);
-			quokka::valarray<Real, 1> y = {Eint};
-
-			// integration tolerance
-			// cheap order-of-magnitude estimate of the floor energy (ideal gas, mu ~ m_p); only used for the absolute tolerance
-			constexpr Real gamma_est = quokka::EOS_Traits<problem_t>::gamma;
-			const Real Eint_floor_est = (temp_floor > 0.0) ? rho * C::k_B * temp_floor / ((gamma_est - 1.0) * C::m_p) : 0.0;
-			const Real abstol_floor = amrex::max(Eint_floor_est, std::numeric_limits<Real>::min());
-			quokka::valarray<Real, 1> const abstol = {reltol_floor * abstol_floor};
-
-			// do integration with RK2 (Heun's method)
-			int nsteps = 0;
-			rk_adaptive_integrate(user_rhs, 0, y, dt, rtol, abstol, nsteps);
-			nsubsteps(i, j, k) = nsteps;
-
-			// check if integration failed
-			if (nsteps >= maxStepsODEIntegrate) {
-				Real const Edot = resampled_cooling_function(rho, Eint, tables) + heating_rate_per_H * nH; // unit: erg/cm^3/s
-				Real const t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
-				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
-				       "time = %g, dt = %.17e\n",
-				       rho, Eint, t_cool, dt);
-			}
-			// enforce the temperature floor in temperature space; invert the table only if the floor is violated
-			Real Eint_new = y[0];
-			if (temp_floor > 0.0) {
-				const Real T_new = ComputeTgasFromEgas(rho, y[0], tables);
-				if (T_new < temp_floor) {
-					Eint_new = amrex::max(y[0], ComputeEgasFromTgas(rho, temp_floor, tables, 1.0e-8));
-				}
-			}
-			const Real dEint = Eint_new - Eint;
-
-			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
-			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
-		});
 	}
 
-	const int nmax = nsubstepsMF.max(0);
-	const Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-	amrex::Print() << std::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
+	// one fused kernel: integrate every cell and reduce (max, sum) of the substep count
+	auto const result = amrex::ParReduce(
+	    amrex::TypeList<amrex::ReduceOpMax, amrex::ReduceOpSum>{}, amrex::TypeList<int, amrex::Long>{}, mf, amrex::IntVect(0),
+	    [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::GpuTuple<int, amrex::Long> {
+		    auto const &state = state_arrs[box_no];
+
+		    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
+		    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			    for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				    state_fc[dir] = state_fc_arrs[dir][box_no];
+			    }
+		    }
+
+		    // cooling function
+		    const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
+		    const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p;			  // unit: cm^-3
+		    const Real heating_rate_per_H = const_heating_rate_per_H + external_heating(i, j, k); // unit: erg/s/H
+		    const ResampledCoolingFunctor user_rhs(rho, tables, heating_rate_per_H * nH);	  // unit: erg/cm^3/s
+
+		    // state vector
+		    const Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(state, i, j, k, &state_fc);
+		    quokka::valarray<Real, 1> y = {Eint};
+
+		    // integration tolerance
+		    // src-k01: cheap order-of-magnitude estimate of the floor energy (ideal gas, mu ~ m_p); only used for the absolute tolerance
+		    constexpr Real gamma_est = quokka::EOS_Traits<problem_t>::gamma;
+		    const Real Eint_floor_est = (temp_floor > 0.0) ? rho * C::k_B * temp_floor / ((gamma_est - 1.0) * C::m_p) : 0.0;
+		    const Real abstol_floor = amrex::max(Eint_floor_est, std::numeric_limits<Real>::min());
+		    quokka::valarray<Real, 1> const abstol = {reltol_floor * abstol_floor};
+
+		    // do integration with RK2 (Heun's method)
+		    int nsteps = 0;
+		    rk_adaptive_integrate(user_rhs, 0, y, dt, rtol, abstol, nsteps);
+
+		    // check if integration failed
+		    if (nsteps >= maxStepsODEIntegrate) {
+			    Real const Edot = resampled_cooling_function(rho, Eint, tables) + heating_rate_per_H * nH; // unit: erg/cm^3/s
+			    Real const t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
+			    printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
+				   "time = %g, dt = %.17e\n",
+				   rho, Eint, t_cool, dt);
+		    }
+		    // src-k01: enforce the temperature floor in temperature space; invert the table only if the floor is violated
+		    Real Eint_new = y[0];
+		    if (temp_floor > 0.0) {
+			    const Real T_new = ComputeTgasFromEgas(rho, y[0], tables);
+			    if (T_new < temp_floor) {
+				    Eint_new = amrex::max(y[0], ComputeEgasFromTgas(rho, temp_floor, tables, 1.0e-8));
+			    }
+		    }
+		    const Real dEint = Eint_new - Eint;
+
+		    state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
+		    state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
+		    return {nsteps, static_cast<amrex::Long>(nsteps)};
+	    });
+
+	// single collective for both statistics: gather the per-rank (max, sum) pair and fold on the host
+	amrex::Long nmax_nsum_local[2] = {static_cast<amrex::Long>(amrex::get<0>(result)), amrex::get<1>(result)};
+	const int nranks = amrex::ParallelContext::NProcsSub();
+	std::vector<amrex::Long> gathered(2 * static_cast<std::size_t>(nranks));
+	amrex::ParallelAllGather::AllGather(nmax_nsum_local, 2, gathered.data(), amrex::ParallelContext::CommunicatorSub());
+	amrex::Long nmax_l = 0;
+	amrex::Long nsum_l = 0;
+	for (int r = 0; r < nranks; ++r) {
+		nmax_l = std::max(nmax_l, gathered[2 * r]);
+		nsum_l += gathered[(2 * r) + 1];
+	}
+	const int nmax = static_cast<int>(nmax_l);
+
+	if (verbose) {
+		const Real navg = static_cast<Real>(nsum_l) / static_cast<Real>(ba.numPts());
+		amrex::Print() << std::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
+	}
 
 	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {
