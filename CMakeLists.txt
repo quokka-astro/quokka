@@ -197,12 +197,8 @@ endif()
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DIR}/yaml-cpp)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/turbulence/plugins/AMReX ${QuokkaCode_BINARY_DIR}/turbulence)
 
-#add compiler definitions again because
-#they do not carry forward from Microphysics
-#We use Strang operator-spliting while integrating the network
-#NAUX_NET defines the number of auxiliary variables
 #QUOKKA_NET_LOOP_UNROLL_LEN is the unroll length of the linear algebra loops in
 #src/math/linear_algebra.hpp and src/microphysics/array_utils.hpp
-add_definitions(-DNAUX_NET -DSTRANG -DNET_LOOP_UNROLL_LEN=${QUOKKA_NET_LOOP_UNROLL_LEN} -DQUOKKA_NET_LOOP_UNROLL_LEN=${QUOKKA_NET_LOOP_UNROLL_LEN})
+add_definitions(-DQUOKKA_NET_LOOP_UNROLL_LEN=${QUOKKA_NET_LOOP_UNROLL_LEN})
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/Microphysics ${QuokkaCode_BINARY_DIR}/Microphysics)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)

@@ -11,10 +11,6 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
-// The number of auxiliary variables, as Microphysics generates it: the build defines NAUX_NET (= 1) until the submodule
-// goes, so the EOS gives eos_t an aux member.
-constexpr int NumAux = NAUX_NET;
-
 // The arrays are constexpr on HIP only, as Microphysics generates them.
 #ifdef AMREX_USE_HIP
 #define EOS_SHIM_HIP_CONSTEXPR constexpr
