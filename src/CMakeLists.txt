@@ -129,11 +129,6 @@ include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/extern/gcem/include)
 
-# Registers Quokka's networks. Must precede every
-# setup_target_for_microphysics_compilation() call, here and in
-# src/problems/*/CMakeLists.txt.
-include(${CMAKE_SOURCE_DIR}/src/networks/NetworkRegistry.cmake)
-
 # The vendored EOS (extern/eos). Problems without chemistry use its gamma_law backend with the general_null species
 # table, set here for the whole directory; problems with chemistry call quokka_add_eos() for theirs.
 include(${CMAKE_SOURCE_DIR}/extern/eos/quokka_eos.cmake)
