@@ -2575,20 +2575,35 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		amrex::MultiFab primVar_old(grids[lev], dmap[lev], HydroSystem<problem_t>::nPrimVar_, nghost_cc_);
 		HydroSystem<problem_t>::ConservedToPrimitive(state_old_cc_tmp, state_old_fc_tmp, primVar_old, nghost_cc_);
 
-		auto [FOfluxArrays, FOfaceVel, FOfast_mhd_wavespeeds] =
-		    computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, primVar_old, nvars_, nghost_Riemann, lev);
-
+		// First-order (FOFC) fluxes are computed lazily, only if a FOFC branch is entered (hydro-01a).
+		// They depend only on state_old_cc_tmp / state_old_fc_tmp (ghost-filled above, not modified until the end of this block)
+		// and on primVar_old (hydro-05; not modified after the conversion above).
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> FOfluxArrays;
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> FOfaceVel;
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> FOfast_mhd_wavespeeds;
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_fo;
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
-				ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
+		bool FOcomputed = false;
+		auto ensureFOFluxes = [&]() {
+			if (FOcomputed) {
+				return;
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, 1,
-							 emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_);
-			// FOFC fallback cells (see replaceFluxes() below) would otherwise silently drop Joule heating.
-			MHDSystem<problem_t>::AddResistiveEnergyFlux(FOfluxArrays, state_old_fc_tmp, dx, mhdResistivity_);
-		}
+			FOcomputed = true;
+			auto FOtuple = computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, primVar_old, nvars_, nghost_Riemann, lev);
+			FOfluxArrays = std::move(std::get<0>(FOtuple));
+			FOfaceVel = std::move(std::get<1>(FOtuple));
+			FOfast_mhd_wavespeeds = std::move(std::get<2>(FOtuple));
+
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
+					ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
+				}
+				MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, 1,
+								 emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_);
+				// FOFC fallback cells (see replaceFluxes() below) would otherwise silently drop Joule heating.
+				MHDSystem<problem_t>::AddResistiveEnergyFlux(FOfluxArrays, state_old_fc_tmp, dx, mhdResistivity_);
+			}
+		};
 
 		// Stage 1 of RK2-SSP
 		{
@@ -2663,6 +2678,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				// synchronize redoFlag across ranks
 				redoFlag.FillBoundary(geom[lev].periodicity());
 
+				ensureFOFluxes();
 				replaceFluxes(fluxArrays, FOfluxArrays, redoFlag);
 				replaceFluxes(faceVel, FOfaceVel, redoFlag); // needed for dual energy
 				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2781,6 +2797,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				// synchronize redoFlag across ranks
 				redoFlag.FillBoundary(geom[lev].periodicity());
 
+				ensureFOFluxes();
 				replaceFluxes(flux_rk2, FOfluxArrays, redoFlag);
 				replaceFluxes(avgFaceVel, FOfaceVel, redoFlag); // needed for dual energy
 
