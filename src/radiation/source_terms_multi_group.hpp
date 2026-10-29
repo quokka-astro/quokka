@@ -724,6 +724,20 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 						    int *p_iteration_failure_counter, amrex::Array4<const amrex::Real> const &dustHeatingSource,
 						    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
+	AddSourceTermsMultiGroupFused([] AMREX_GPU_DEVICE(int, int, int) noexcept {}, consVar, radEnergySource, radFluxSource, indexRange, dt_implicit,
+				      gas_update_factor_in, dustGasCoeff, tol_h, tol_rel_h, tempFloor_local, p_iteration_counter, p_iteration_failure_counter,
+				      dustHeatingSource, cons_fc);
+}
+
+template <typename problem_t>
+template <typename PreFn>
+void RadSystem<problem_t>::AddSourceTermsMultiGroupFused(PreFn const &pre, array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource,
+							 amrex::Box const &indexRange, amrex::Real dt_implicit, double gas_update_factor_in,
+							 double dustGasCoeff, double const tol_h, double const tol_rel_h, double const tempFloor_local,
+							 int *p_iteration_counter, int *p_iteration_failure_counter,
+							 amrex::Array4<const amrex::Real> const &dustHeatingSource,
+							 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
+{
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
 	arrayconst_t &consPrev = consVar; // make read-only
@@ -744,6 +758,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 	// the working-set reductions in this kernel and in SolveGasDustRadiationEnergyExchange, ~280 after them).
 	constexpr int source_term_threads = 512;
 	amrex::ParallelFor<source_term_threads>(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// cell-local work fused in front of the implicit solve (no-op for the plain AddSourceTermsMultiGroup)
+		pre(i, j, k);
+
 		// make a local reference
 		auto p_iteration_counter_local = p_iteration_counter;		      // NOLINT
 		auto p_iteration_failure_counter_local = p_iteration_failure_counter; // NOLINT

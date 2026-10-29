@@ -505,6 +505,17 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::FluxRegister *fr_as_crse,
 					 amrex::FluxRegister *fr_as_fine, amrex::MultiFab &state_inter, int groupBegin = 0,
 					 int groupEnd = Physics_Traits<problem_t>::nGroups);
+	// Fused multigroup IMEX PD-ARS stages: per box, the radiation fluxes are computed as in advanceRadiationForwardEuler /
+	// advanceRadiationMidpointRK2, and then ONE kernel does every cell-local pass of the stage (stage 2: state copy +
+	// explicit forward Euler + implicit source; stage 3: explicit RK2 + gas Shu-Osher combination + implicit source).
+	void advanceRadiationIMEXStage2Fused(int lev, amrex::Real time, amrex::Real dt_explicit, amrex::Real dt_implicit, amrex::FluxRegister *fr_as_crse,
+					     amrex::FluxRegister *fr_as_fine, amrex::MultiFab &state_out, int groupBegin, int groupEnd,
+					     amrex::MultiFab const &radEnergySource, amrex::MultiFab const &radFluxSource,
+					     amrex::MultiFab const &dustHeatingSource, int *p_iteration_counter, int *p_iteration_failure_counter);
+	void advanceRadiationIMEXStage3Fused(int lev, amrex::Real time, amrex::Real dt_radiation, amrex::Real dt_implicit, amrex::FluxRegister *fr_as_crse,
+					     amrex::FluxRegister *fr_as_fine, amrex::MultiFab &state_inter, int groupBegin, int groupEnd,
+					     amrex::MultiFab const &radEnergySource, amrex::MultiFab const &radFluxSource,
+					     amrex::MultiFab const &dustHeatingSource, int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine);
 	// fill the ghost cells that the radiation transport reads: the radiation components with nghostRad_ ghost cells and, only when
@@ -3883,6 +3894,53 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 			// === Stage 1: trivial U^(1) = U^n; skipped ===
 
+			if constexpr (Physics_Traits<problem_t>::nGroups > 1) {
+				// Multigroup: each stage is one flux computation per box plus ONE fused cell-local kernel (rad-12).
+				if (mergeThermalFE) {
+					// rad-13: the stage-2 thermal forward-Euler step was already done in step 1 (the thermal groups of state_tmp1 hold its
+					// result), so the explicit part rad-12 fuses is skipped: copy the gas state and the chemical bands from state_new and
+					// run the (unfused) stage-2 implicit source-term kernel, exactly as the unfused rad-13 path below.
+					copyHydroState(state_tmp1_cc, state_new_cc_[lev]);
+					amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], nstartHyperbolic_ + RadSystem<problem_t>::numRadVars_ * nGroupsThermal,
+							      nstartHyperbolic_ + RadSystem<problem_t>::numRadVars_ * nGroupsThermal,
+							      RadSystem<problem_t>::numRadVars_ * (nGroups - nGroupsThermal), 0);
+					const amrex::Real dt_stage2_implicit = IMEX_Aim_22 * dt_radiation;
+					for (amrex::MFIter iter(state_tmp1_cc); iter.isValid(); ++iter) {
+						const amrex::Box &indexRange = iter.validbox();
+						auto const &stateTmp1 = state_tmp1_cc.array(iter);
+						auto const &radEnergySource_arr = radEnergySource.array(iter);
+						auto const &radFluxSource_arr = radFluxSource.array(iter);
+						amrex::Array4<const amrex::Real> dustHeatingSource_arr{};
+						if constexpr (ISM_Traits<problem_t>::dust_chemical_band_absorption) {
+							dustHeatingSource_arr = dustHeatingSource.const_array(iter);
+						}
+						std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
+						if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+							cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
+							cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
+#if AMREX_SPACEDIM == 3
+							cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
+#endif
+						}
+						RadSystem<problem_t>::AddSourceTermsMultiGroup(stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange,
+											       dt_stage2_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
+											       tempFloor, p_iteration_counter, p_iteration_failure_counter,
+											       dustHeatingSource_arr, cons_fc_arr);
+					}
+				} else {
+					// Stage 2: state_tmp1 = state_new (all components), then forward Euler on the radiation groups [0, imexGroupEnd)
+					// and the implicit source terms with dt * Aim_22 (gas_update_factor = 1), all in one kernel.
+					advanceRadiationIMEXStage2Fused(lev, time_subcycle, dt_radiation * IMEX_Aex_21, IMEX_Aim_22 * dt_radiation, fr_as_crse,
+									fr_as_fine, state_tmp1_cc, 0, imexGroupEnd, radEnergySource, radFluxSource,
+									dustHeatingSource, p_iteration_counter, p_iteration_failure_counter);
+				}
+				// Stage 3: explicit midpoint RK2 on the radiation groups [0, imexGroupEnd), gas Shu-Osher combination and the
+				// implicit source terms with dt * Aim_33 on state_new, all in one kernel.
+				advanceRadiationIMEXStage3Fused(lev, time_subcycle, dt_radiation, IMEX_Aim_33 * dt_radiation, fr_as_crse, fr_as_fine,
+								state_tmp1_cc, 0, imexGroupEnd, radEnergySource, radFluxSource, dustHeatingSource,
+								p_iteration_counter, p_iteration_failure_counter);
+			} else {
+
 			// === Stage 2: explicit Forward Euler + implicit source terms on state_tmp1 ===
 
 			if constexpr (IMEX_Aim_22 > 0.0) {
@@ -4041,6 +4099,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 										       dustHeatingSource_arr, cons_fc_arr);
 				}
 			}
+			} // end of unfused (single-group) stages
 		} // end of step 3 (IMEX PD-ARS)
 
 		if (print_rad_counter_) {
@@ -4224,6 +4283,242 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 		    {AMREX_D_DECL(fluxesOld[0].const_array(iter), fluxesOld[1].const_array(iter), fluxesOld[2].const_array(iter))},
 		    {AMREX_D_DECL(fluxes[0].const_array(iter), fluxes[1].const_array(iter), fluxes[2].const_array(iter))}, dt_radiation, dx, indexRange,
 		    ncompHyperbolic_, IMEX_alpha, Aex_s1_coeff, IMEX_Aex_32, groupBegin, groupEnd);
+	}
+
+	if (do_reflux) {
+		// only the fluxes of groups [groupBegin, groupEnd); see advanceRadiationForwardEuler
+		incrementRadFluxRegisters(fr_as_crse, fr_as_fine, fluxes, lev, 0.5 * dt_radiation, compBegin, ncompGroups);
+	}
+}
+
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::advanceRadiationIMEXStage2Fused(int lev, amrex::Real time, amrex::Real dt_explicit, amrex::Real dt_implicit,
+								  amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, amrex::MultiFab &state_out,
+								  int const groupBegin, int const groupEnd, amrex::MultiFab const &radEnergySource,
+								  amrex::MultiFab const &radFluxSource, amrex::MultiFab const &dustHeatingSource,
+								  int *p_iteration_counter, int *p_iteration_failure_counter)
+{
+	// rad-12 fused IMEX stage 2, merged with rad-03b (level-wide fluxes into persistent face arrays, registered once per call),
+	// rad-04 (radiation-only ghost fill) and driver-03 (register sub-range via incrementRadFluxRegisters).
+	auto const &dx = geom[lev].CellSizeArray();
+
+	// radiation components of groups [groupBegin, groupEnd), counted from the first radiation component
+	int const compBegin = RadSystem<problem_t>::numRadVars_ * groupBegin;
+	int const ncompGroups = RadSystem<problem_t>::numRadVars_ * (groupEnd - groupBegin);
+
+	// update ghost zones [old timestep]
+	fillRadiationGhostCells(state_new_cc_[lev], lev, time);
+
+	// one level-wide flux kernel per direction, writing the persistent face arrays
+	auto &fluxes = computeRadiationFluxesLevel(lev, state_new_cc_[lev], radFlux_, groupBegin, groupEnd);
+
+	int const ncomp = state_out.nComp();
+	for (amrex::MFIter iter(state_out); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateOld_cc = state_new_cc_[lev].const_array(iter);
+		auto const &stateOut_cc = state_out.array(iter);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
+			cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
+#if (AMREX_SPACEDIM == 3)
+			cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
+#endif
+		}
+
+		// Cell-local part of the stage, run by each thread of the source-term kernel before its implicit solve:
+		// 1. copy the non-radiation components and the radiation groups outside [groupBegin, groupEnd) from state_new
+		//    (this replaces copyHydroState / copyRadiationState);
+		// 2. forward Euler on the groups [groupBegin, groupEnd) with amendRadState limiting (the PredictStep kernel).
+		auto const dt = dt_explicit;
+		AMREX_D_TERM(auto const dx0 = dx[0]; auto const x1Flux = fluxes[0].const_array(iter);
+			     , auto const dy0 = dx[1]; auto const x2Flux = fluxes[1].const_array(iter);
+			     , auto const dz0 = dx[2]; auto const x3Flux = fluxes[2].const_array(iter);)
+		const int nBegin = RadSystem<problem_t>::numRadVars_ * groupBegin;
+		const int nEnd = RadSystem<problem_t>::numRadVars_ * groupEnd;
+		auto pre = [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			for (int n = 0; n < nstartHyperbolic_; ++n) {
+				stateOut_cc(i, j, k, n) = stateOld_cc(i, j, k, n);
+			}
+			for (int n = nstartHyperbolic_ + ncompHyperbolic_; n < ncomp; ++n) {
+				stateOut_cc(i, j, k, n) = stateOld_cc(i, j, k, n);
+			}
+
+			// Loops with compile-time trip counts and the group range as a predicate, fully unrolled, so that cons[] is
+			// indexed by constants and lives in registers (a runtime range [nBegin, nEnd) puts it on the scratch stack).
+			std::array<amrex::Real, ncompHyperbolic_> cons{};
+#pragma unroll
+			for (int n = 0; n < ncompHyperbolic_; ++n) {
+				cons[n] = stateOld_cc(i, j, k, nstartHyperbolic_ + n);
+				if (n >= nBegin && n < nEnd) {
+					cons[n] += AMREX_D_TERM((dt / dx0) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
+								+(dt / dy0) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
+								+(dt / dz0) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n)));
+				}
+			}
+			if (!RadSystem<problem_t>::isStateValid(cons)) {
+				RadSystem<problem_t>::amendRadState(cons);
+			}
+			AMREX_ASSERT(RadSystem<problem_t>::isStateValid(cons));
+			// groups outside [groupBegin, groupEnd) keep their state_new values (not the amended ones), as with the copy
+#pragma unroll
+			for (int n = 0; n < ncompHyperbolic_; ++n) {
+				stateOut_cc(i, j, k, nstartHyperbolic_ + n) = (n >= nBegin && n < nEnd) ? cons[n] : stateOld_cc(i, j, k, nstartHyperbolic_ + n);
+			}
+		};
+
+		amrex::Array4<const amrex::Real> dustHeatingSource_arr{};
+		if constexpr (ISM_Traits<problem_t>::dust_chemical_band_absorption) {
+			dustHeatingSource_arr = dustHeatingSource.const_array(iter);
+		}
+		// Full gas update (gas_update_factor = 1.0)
+		RadSystem<problem_t>::AddSourceTermsMultiGroupFused(pre, stateOut_cc, radEnergySource.const_array(iter), radFluxSource.const_array(iter),
+								    indexRange, dt_implicit, 1.0, dustGasInteractionCoeff_, radiation_iteration_tolerance_,
+								    radiation_iteration_tolerance_rel_, tempFloor_, p_iteration_counter,
+								    p_iteration_failure_counter, dustHeatingSource_arr, cons_fc_arr);
+	}
+
+	if (do_reflux) {
+		// only the fluxes of groups [groupBegin, groupEnd); see advanceRadiationForwardEuler
+		incrementRadFluxRegisters(fr_as_crse, fr_as_fine, fluxes, lev, 0.5 * dt_explicit, compBegin, ncompGroups);
+	}
+}
+
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::advanceRadiationIMEXStage3Fused(int lev, amrex::Real time, amrex::Real dt_radiation, amrex::Real dt_implicit,
+								  amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, amrex::MultiFab &state_inter,
+								  int const groupBegin, int const groupEnd, amrex::MultiFab const &radEnergySource,
+								  amrex::MultiFab const &radFluxSource, amrex::MultiFab const &dustHeatingSource,
+								  int *p_iteration_counter, int *p_iteration_failure_counter)
+{
+	// rad-12 fused IMEX stage 3, merged with rad-03b (level-wide fluxes), rad-01 (old-state fluxes skipped when their weight is 0),
+	// rad-04 (radiation-only ghost fill) and driver-03 (register sub-range via incrementRadFluxRegisters).
+	auto const &dx = geom[lev].CellSizeArray();
+
+	// radiation components of groups [groupBegin, groupEnd), counted from the first radiation component
+	int const compBegin = RadSystem<problem_t>::numRadVars_ * groupBegin;
+	int const ncompGroups = RadSystem<problem_t>::numRadVars_ * (groupEnd - groupBegin);
+
+	// update ghost zones [intermediate stage stored in state_inter]
+	fillRadiationGhostCells(state_inter, lev, time + dt_radiation);
+
+	// level-wide fluxes (rad-03b); the old-state fluxes are skipped when Aex_s1_coeff == 0 (rad-01), see advanceRadiationMidpointRK2
+	constexpr double Aex_s1_coeff = IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> *fluxesOldPtr = nullptr;
+	if constexpr (Aex_s1_coeff != 0.0) {
+		fluxesOldPtr = &computeRadiationFluxesLevel(lev, state_new_cc_[lev], radFluxOld_, groupBegin, groupEnd);
+	}
+	auto &fluxes = computeRadiationFluxesLevel(lev, state_inter, radFlux_, groupBegin, groupEnd);
+	if constexpr (Aex_s1_coeff == 0.0) {
+		fluxesOldPtr = &fluxes;
+	}
+	auto &fluxesOld = *fluxesOldPtr;
+
+	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateOld_cc = state_new_cc_[lev].const_array(iter);
+		auto const &stateInter_cc = state_inter.const_array(iter);
+		auto const &stateNew_cc = state_new_cc_[lev].array(iter);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
+			cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
+#if (AMREX_SPACEDIM == 3)
+			cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
+#endif
+		}
+
+		// Cell-local part of the stage, run by each thread of the source-term kernel before its implicit solve:
+		// 1. Shu-Osher RK2 update of the groups [groupBegin, groupEnd) with amendRadState limiting (the AddFluxesRK2 kernel);
+		// 2. Shu-Osher combination of the gas variables (the separate gas LinComb kernel).
+		auto const dt = dt_radiation;
+		AMREX_D_TERM(auto const dx0 = dx[0]; auto const x1FluxOld = fluxesOld[0].const_array(iter); auto const x1Flux = fluxes[0].const_array(iter);
+			     , auto const dy0 = dx[1]; auto const x2FluxOld = fluxesOld[1].const_array(iter); auto const x2Flux = fluxes[1].const_array(iter);
+			     , auto const dz0 = dx[2]; auto const x3FluxOld = fluxesOld[2].const_array(iter);
+			     auto const x3Flux = fluxes[2].const_array(iter);)
+		const int nBegin = RadSystem<problem_t>::numRadVars_ * groupBegin;
+		const int nEnd = RadSystem<problem_t>::numRadVars_ * groupEnd;
+		// the same coefficients advanceRadiationMidpointRK2 passes to AddFluxesRK2
+		const double alpha = IMEX_alpha;
+		const double Aex_s2_coeff = IMEX_Aex_32;
+		auto pre = [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			// fully unrolled (compile-time trip counts) so that cons_new[] is indexed by constants and stays in registers
+			std::array<amrex::Real, ncompHyperbolic_> cons_new{};
+#pragma unroll
+			for (int n = 0; n < ncompHyperbolic_; ++n) {
+				if (n < nBegin || n >= nEnd) {
+					// groups outside [groupBegin, groupEnd) keep their current values and are not written back
+					cons_new[n] = stateOld_cc(i, j, k, nstartHyperbolic_ + n);
+					continue;
+				}
+				const double U_0 = stateOld_cc(i, j, k, nstartHyperbolic_ + n);
+				const double U_1 = stateInter_cc(i, j, k, nstartHyperbolic_ + n);
+				const double FxU_1 = (dt / dx0) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
+#if (AMREX_SPACEDIM >= 2)
+				const double FyU_1 = (dt / dy0) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
+#endif
+#if (AMREX_SPACEDIM == 3)
+				const double FzU_1 = (dt / dz0) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
+#endif
+				if constexpr (Aex_s1_coeff != 0.0) {
+					const double FxU_0 = (dt / dx0) * (x1FluxOld(i, j, k, n) - x1FluxOld(i + 1, j, k, n));
+#if (AMREX_SPACEDIM >= 2)
+					const double FyU_0 = (dt / dy0) * (x2FluxOld(i, j, k, n) - x2FluxOld(i, j + 1, k, n));
+#endif
+#if (AMREX_SPACEDIM == 3)
+					const double FzU_0 = (dt / dz0) * (x3FluxOld(i, j, k, n) - x3FluxOld(i, j, k + 1, n));
+#endif
+					cons_new[n] = (1.0 - alpha) * U_0 + alpha * U_1 + (Aex_s1_coeff * (AMREX_D_TERM(FxU_0, +FyU_0, +FzU_0))) +
+						      (Aex_s2_coeff * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
+				} else {
+					// zero weight on the old-state fluxes (rad-01: not computed), same arithmetic as AddFluxesRK2
+					amrex::ignore_unused(AMREX_D_DECL(x1FluxOld, x2FluxOld, x3FluxOld));
+					cons_new[n] = (1.0 - alpha) * U_0 + alpha * U_1 + (Aex_s2_coeff * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
+				}
+			}
+			if (!RadSystem<problem_t>::isStateValid(cons_new)) {
+				RadSystem<problem_t>::amendRadState(cons_new);
+			}
+			AMREX_ASSERT(RadSystem<problem_t>::isStateValid(cons_new));
+#pragma unroll
+			for (int n = 0; n < ncompHyperbolic_; ++n) {
+				if (n >= nBegin && n < nEnd) {
+					stateNew_cc(i, j, k, nstartHyperbolic_ + n) = cons_new[n];
+				}
+			}
+
+			if constexpr (nstartHyperbolic_ > 0) {
+				// gas Shu-Osher combination; see the unfused stage 3 in subcycleRadiationAtLevel for why Eint is combined
+				const double rho = (1.0 - IMEX_alpha) * stateOld_cc(i, j, k, RadSystem<problem_t>::gasDensity_index) +
+						   IMEX_alpha * stateInter_cc(i, j, k, RadSystem<problem_t>::gasDensity_index);
+				const double x1Mom = (1.0 - IMEX_alpha) * stateOld_cc(i, j, k, RadSystem<problem_t>::x1GasMomentum_index) +
+						     IMEX_alpha * stateInter_cc(i, j, k, RadSystem<problem_t>::x1GasMomentum_index);
+				const double x2Mom = (1.0 - IMEX_alpha) * stateOld_cc(i, j, k, RadSystem<problem_t>::x2GasMomentum_index) +
+						     IMEX_alpha * stateInter_cc(i, j, k, RadSystem<problem_t>::x2GasMomentum_index);
+				const double x3Mom = (1.0 - IMEX_alpha) * stateOld_cc(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) +
+						     IMEX_alpha * stateInter_cc(i, j, k, RadSystem<problem_t>::x3GasMomentum_index);
+				const double Eint = (1.0 - IMEX_alpha) * stateOld_cc(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) +
+						    IMEX_alpha * stateInter_cc(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index);
+				stateNew_cc(i, j, k, RadSystem<problem_t>::gasDensity_index) = rho;
+				stateNew_cc(i, j, k, RadSystem<problem_t>::x1GasMomentum_index) = x1Mom;
+				stateNew_cc(i, j, k, RadSystem<problem_t>::x2GasMomentum_index) = x2Mom;
+				stateNew_cc(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) = x3Mom;
+				stateNew_cc(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) = Eint;
+				const double Emag = HydroSystem<problem_t>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc_arr);
+				stateNew_cc(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
+				    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, Emag);
+			}
+		};
+
+		amrex::Array4<const amrex::Real> dustHeatingSource_arr{};
+		if constexpr (ISM_Traits<problem_t>::dust_chemical_band_absorption) {
+			dustHeatingSource_arr = dustHeatingSource.const_array(iter);
+		}
+		// Full gas update (gas_update_factor = 1.0)
+		RadSystem<problem_t>::AddSourceTermsMultiGroupFused(pre, stateNew_cc, radEnergySource.const_array(iter), radFluxSource.const_array(iter),
+								    indexRange, dt_implicit, 1.0, dustGasInteractionCoeff_, radiation_iteration_tolerance_,
+								    radiation_iteration_tolerance_rel_, tempFloor_, p_iteration_counter,
+								    p_iteration_failure_counter, dustHeatingSource_arr, cons_fc_arr);
 	}
 
 	if (do_reflux) {
