@@ -322,6 +322,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
+	virtual void printEvolveSummary() {} // hydro-01b: end-of-run summary hook
 	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
 	virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
 	virtual void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf,
@@ -1854,6 +1855,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 		amrex::Print() << '\n';
 	}
+	printEvolveSummary(); // hydro-01b
 
 	// write final plotfile
 	if ((plotfileInterval_ > 0 || plotTimeInterval_ > 0) && istep[0] > last_plot_file_step) {

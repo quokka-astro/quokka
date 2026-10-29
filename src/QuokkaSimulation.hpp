@@ -451,7 +451,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
 
 	auto computeHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars, int nghost_Riemann,
-				int lev) -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
+				int lev, amrex::MultiFab *primVarOut = nullptr) -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
 						       std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	auto computeFOHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars,
@@ -486,6 +486,28 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void replaceEMFs(std::array<amrex::MultiFab, AMREX_SPACEDIM> &emf_components, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FO_emf_components,
 			 amrex::iMultiFab &redoFlag);
+
+	// hydro-01b: in-place (AthenaK-style) first-order flux correction, non-MHD 3D only.
+	// Device counters (cumulative, valid cells): [0] stage-1 flagged, [1] stage-1 failed, [2] stage-2 flagged, [3] stage-2 failed.
+	amrex::Gpu::DeviceVector<unsigned long long> fofcCountDev_;
+	amrex::Gpu::PinnedVector<unsigned long long> fofcCountHost_;
+	std::array<unsigned long long, 4> fofcCountSeen_{};
+	std::array<amrex::Long, 2> fofcFallbackCount_{}; // cells flagged on the (non-in-place) fallback path, per stage
+
+	void fofcInPlace(int lev, int stage, amrex::Real dt_lev, amrex::Real w1, bool ghostTrial, int gA, int gB, amrex::MultiFab const &stateOld,
+			 amrex::MultiFab &stateNew, amrex::MultiFab const &primOld, amrex::iMultiFab &flag, std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux,
+			 std::array<amrex::MultiFab, AMREX_SPACEDIM> &faceVel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &trialF1,
+			 std::array<amrex::MultiFab, AMREX_SPACEDIM> const *trialF2);
+
+	template <FluxDir DIR>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void fofcFaceValue(int i, int j, int k, bool replaced, bool write, amrex::Array4<amrex::Real> const &F,
+								      amrex::Array4<amrex::Real> const &V, amrex::Array4<const amrex::Real> const &q,
+								      amrex::Real K_visc, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+								      amrex::Real shearVisc, amrex::Real bulkVisc, amrex::Real *fout, amrex::Real &vout);
+
+	auto fofcCheck(int lev, int stage) -> bool;
+
+	void printEvolveSummary() override;
 
 	// void PrintRadEnergySource(amrex::MultiFab const &radEnergySource);
 };
@@ -2473,6 +2495,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 	}
 
+	bool fofcStage2Ran = false; // hydro-01b: stage-2 in-place FOFC launched (its counters are checked after the sync below)
+
 	// advect the state (skipped when hydro is disabled: the state is only copied, but Strang-split sources are still applied)
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
 		// update ghost zones [old timestep]
@@ -2529,6 +2553,22 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 		};
 
+		// hydro-01b: in-place (AthenaK-style) FOFC for non-MHD 3D problems. Cells are flagged by a test update over
+		// grow(valid, gA) (no FillBoundary) when the flux arrays carry enough ghost faces, first-order LLF fluxes are
+		// evaluated only on faces of flagged cells, and only affected cells are re-updated. No global count/sync.
+		constexpr bool fofcInPlaceCapable = (AMREX_SPACEDIM == 3) && !Physics_Traits<problem_t>::is_mhd_enabled;
+		const int fofcGA1 = (integratorOrder_ == 2) ? 2 : 1; // stage-1 flag width (stage 2 needs stage-1 flags 2 deep)
+		const bool fofcGhostTrial = fofcInPlaceCapable && (nghost_Riemann >= fofcGA1);
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> fofcF1; // stage-1 fluxes after FOFC, kept for the stage-2 ghost test update
+		amrex::MultiFab fofcPrimOld;			    // primitive variables of state_old_cc_tmp (from stage-1 computeHydroFluxes)
+		if constexpr (fofcInPlaceCapable) {
+			if (fofcCountDev_.empty()) {
+				fofcCountDev_.resize(4, 0ULL);
+				fofcCountHost_.resize(4, 0ULL);
+				amrex::Gpu::streamSynchronize();
+			}
+		}
+
 		// Stage 1 of RK2-SSP
 		{
 			//  advance all grids on local processor (Stage 1 of integrator)
@@ -2538,7 +2578,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto const &stateOld_fc = state_old_fc_tmp;
 			auto &stateNew_fc = state_inter_fc_;
 
-			auto [fluxArrays, faceVel, fast_mhd_wavespeeds] = computeHydroFluxes(stateOld_cc, stateOld_fc, nvars_, nghost_Riemann, lev);
+			auto [fluxArrays, faceVel, fast_mhd_wavespeeds] =
+			    computeHydroFluxes(stateOld_cc, stateOld_fc, nvars_, nghost_Riemann, lev, fofcInPlaceCapable ? &fofcPrimOld : nullptr);
 
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_rk_stage1;
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2553,12 +2594,20 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 
 			amrex::MultiFab rhs(grids[lev], dmap[lev], nvars_, 0);
-			amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 1);
+			amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, fofcGhostTrial ? fofcGA1 : 1);
 			redoFlag.setVal(quokka::redoFlag::none);
 
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
 			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag);
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, nvars_, redoFlag);
+
+			if constexpr (fofcInPlaceCapable) {
+				amrex::ignore_unused(ensureFOFluxes);
+				// in-place FOFC (stage 1): flags over grow(valid, gA), FO fluxes written on faces of cells in grow(valid, gB)
+				const int gB = (fofcGhostTrial && integratorOrder_ == 2) ? 1 : 0;
+				fofcInPlace(lev, 1, dt_lev, 1.0, fofcGhostTrial, fofcGA1, gB, stateOld_cc, stateNew_cc, fofcPrimOld, redoFlag, fluxArrays, faceVel,
+					    fluxArrays, nullptr);
+			}
 
 			// LOW LEVEL DEBUGGING: output rhs
 			if (lowLevelDebuggingOutput_ == 1) {
@@ -2587,9 +2636,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 
 			// do first-order flux correction (FOFC)
+			if constexpr (!fofcInPlaceCapable) {
 			amrex::Gpu::streamSynchronizeAll(); // ensure device-side ops are finished
 
 			amrex::Long const ncells_bad = redoFlag.sum(0);
+			fofcFallbackCount_[0] += ncells_bad;
 			if (ncells_bad > 0) {
 				if (Verbose()) {
 					amrex::Print() << "[FOFC-1] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
@@ -2631,6 +2682,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 					}
 				}
 			}
+			} // !fofcInPlaceCapable
 
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2645,9 +2697,21 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				amrex::MultiFab::Saxpy(avgFaceVel[idim], stage1Weight, faceVel[idim], 0, 0, 1, 0);
 			}
 
+			if constexpr (fofcInPlaceCapable) {
+				if (fofcGhostTrial && integratorOrder_ == 2) {
+					fofcF1 = std::move(fluxArrays); // keep FOFC-corrected stage-1 fluxes (with ghost faces) for the stage-2 test update
+				}
+			}
+
 			ApplyHydroStateFixup(stateNew_cc, stateNew_fc, lev);
 		}
 		amrex::Gpu::streamSynchronizeAll();
+		if constexpr (fofcInPlaceCapable) {
+			// counters were copied to pinned host memory before the sync above
+			if (!fofcCheck(lev, 1)) {
+				return false;
+			}
+		}
 
 		// Stage 2 of RK2-SSP
 		if (integratorOrder_ == 2) {
@@ -2705,9 +2769,18 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag);
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag);
 
+			if constexpr (fofcInPlaceCapable) {
+				// in-place FOFC (stage 2): test update uses stage1Weight*F1' + 0.5*F2 on grow(valid, 1); FO fluxes from state_old
+				fofcInPlace(lev, 2, dt_lev, stage1Weight, fofcGhostTrial, 1, 0, stateOld_cc, stateFinal_cc, fofcPrimOld, redoFlag, flux_rk2,
+					    avgFaceVel, fofcF1, &fluxArrays);
+				fofcStage2Ran = true;
+			}
+
 			// do first-order flux correction (FOFC)
+			if constexpr (!fofcInPlaceCapable) {
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			amrex::Long const ncells_bad = redoFlag.sum(0);
+			fofcFallbackCount_[1] += ncells_bad;
 			if (ncells_bad > 0) {
 				if (Verbose()) {
 					amrex::Print() << "[FOFC-2] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
@@ -2749,6 +2822,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 					}
 				}
 			}
+			} // !fofcInPlaceCapable
 
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateFinal_fc, ec_emf_components_rk_ave, dt_lev,
@@ -2776,6 +2850,10 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
+	// hydro-01b: stage-2 in-place FOFC counters were copied to pinned host memory before the sync above
+	if (fofcStage2Ran && !fofcCheck(lev, 2)) {
+		return false;
+	}
 
 	// do Strang split source terms (second half-step)
 	auto burn_success_second =
@@ -2809,6 +2887,328 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 
 	return final_success;
+}
+
+// hydro-01b: value of the flux at face (i,j,k) in direction DIR. If `replaced`, evaluate the first-order (donor-cell + LLF)
+// flux from the primitive state q (as computeFOHydroFluxes() would) and, if `write`, store it in F/V; otherwise read F/V.
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+QuokkaSimulation<problem_t>::fofcFaceValue(int i, int j, int k, bool replaced, bool write, amrex::Array4<amrex::Real> const &F,
+					   amrex::Array4<amrex::Real> const &V, amrex::Array4<const amrex::Real> const &q, amrex::Real K_visc,
+					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real shearVisc, amrex::Real bulkVisc, amrex::Real *fout,
+					   amrex::Real &vout)
+{
+	if (replaced) {
+		if constexpr (AMREX_SPACEDIM == 3 && !Physics_Traits<problem_t>::is_mhd_enabled) {
+			amrex::Real fbuf[nvars_] = {};
+			amrex::Real vbuf[1] = {0.};
+			const amrex::Dim3 fidx{i, j, k};
+			const amrex::Dim3 fend{i + 1, j + 1, k + 1};
+			amrex::Array4<amrex::Real> const fa(fbuf, fidx, fend, nvars_);
+			amrex::Array4<amrex::Real> const va(vbuf, fidx, fend, 1);
+			// donor-cell reconstruction: the left state at face i is q(i-1), i.e. q with its index range shifted by +1 along DIR
+			const amrex::Dim3 qlo = amrex::lbound(q);
+			const amrex::Dim3 qhi = amrex::ubound(q);
+			amrex::Dim3 slo{qlo.x, qlo.y, qlo.z};
+			amrex::Dim3 send{qhi.x + 1, qhi.y + 1, qhi.z + 1};
+			if constexpr (DIR == FluxDir::X1) {
+				slo.x += 1;
+				send.x += 1;
+			} else if constexpr (DIR == FluxDir::X2) {
+				slo.y += 1;
+				send.y += 1;
+			} else {
+				slo.z += 1;
+				send.z += 1;
+			}
+			amrex::Array4<const amrex::Real> const left(q.p, slo, send, q.nComp());
+			HydroSystem<problem_t>::template ComputeFluxAtFace<RiemannSolver::LLF, DIR>(i, j, k, left, q, q, fa, va, K_visc, dx, shearVisc,
+												    bulkVisc);
+			for (int n = 0; n < nvars_; ++n) {
+				fout[n] = fbuf[n];
+				if (write) {
+					F(i, j, k, n) = fbuf[n];
+				}
+			}
+			vout = vbuf[0];
+			if (write) {
+				V(i, j, k) = vbuf[0];
+			}
+		}
+	} else {
+		for (int n = 0; n < nvars_; ++n) {
+			fout[n] = F(i, j, k, n);
+		}
+		vout = V(i, j, k);
+	}
+}
+
+// hydro-01b: in-place first-order flux correction (AthenaK hydro_fofc.cpp style).
+//  (A) flag: if ghostTrial, a test update (density only when that is all isStateValid() tests) is evaluated over grow(valid, gA)
+//      from the flux arrays' ghost faces, so no halo exchange is needed; valid cells are also flagged where PredictStep found the
+//      actual new state invalid. Otherwise (flux arrays without enough ghost faces) PredictStep's flags are exchanged with FillBoundary.
+//  (B) one kernel over grow(valid, gB): on every face adjacent to a flagged cell the first-order LLF flux (from primOld = primitive
+//      state of state_old) overwrites flux/faceVel; each face is written by exactly one cell (its low cell, or the high cell at the
+//      region edge). Valid cells touching a replaced face are re-updated (rhs, P dV with the FOFC divergence for flagged cells, U0 +
+//      dt*rhs) and re-checked. Flagged/failed valid-cell counts go to device counters, copied asynchronously to pinned host memory.
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::fofcInPlace(int lev, int stage, amrex::Real dt_lev, amrex::Real w1, bool ghostTrial, int gA, int gB,
+					      amrex::MultiFab const &stateOld, amrex::MultiFab &stateNew, amrex::MultiFab const &primOld,
+					      amrex::iMultiFab &flag, std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux,
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> &faceVel,
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &trialF1,
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *trialF2)
+{
+	const BL_PROFILE("QuokkaSimulation::fofcInPlace()");
+	if constexpr (AMREX_SPACEDIM == 3 && !Physics_Traits<problem_t>::is_mhd_enabled) {
+		const auto dx = geom[lev].CellSizeArray();
+		const int ngf = flag.nGrow();
+		auto const &U0 = stateOld.const_arrays();
+		auto const &fl_arrs = flag.arrays();
+		unsigned long long *cnt = fofcCountDev_.data();
+		const int ic_flag = 2 * (stage - 1);
+		const int ic_fail = ic_flag + 1;
+		const amrex::Real dt = dt_lev;
+
+		// (A) flag cells
+		if (ghostTrial) {
+			AMREX_ALWAYS_ASSERT(ngf == gA);
+			amrex::Box domg = geom[lev].Domain();
+			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+				if (geom[lev].isPeriodic(d)) {
+					domg.grow(d, gA);
+				}
+			}
+			const bool hasF2 = (trialF2 != nullptr);
+			auto const &Ax_arrs = trialF1[0].const_arrays();
+			auto const &Ay_arrs = trialF1[1].const_arrays();
+			auto const &Az_arrs = trialF1[2].const_arrays();
+			auto const &Bx_arrs = (hasF2 ? (*trialF2)[0] : trialF1[0]).const_arrays();
+			auto const &By_arrs = (hasF2 ? (*trialF2)[1] : trialF1[1]).const_arrays();
+			auto const &Bz_arrs = (hasF2 ? (*trialF2)[2] : trialF1[2]).const_arrays();
+			const amrex::Real w2 = 0.5;
+
+			amrex::ParallelFor(flag, amrex::IntVect(gA), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				auto const fl = fl_arrs[bx];
+				const amrex::Dim3 lo = amrex::lbound(fl);
+				const amrex::Dim3 hi = amrex::ubound(fl);
+				const bool isValid = (i >= lo.x + ngf) && (i <= hi.x - ngf) && (j >= lo.y + ngf) && (j <= hi.y - ngf) && (k >= lo.z + ngf) &&
+						     (k <= hi.z - ngf);
+				bool bad = false;
+				if (domg.contains(amrex::IntVect(AMREX_D_DECL(i, j, k)))) {
+					auto const ax = Ax_arrs[bx];
+					auto const ay = Ay_arrs[bx];
+					auto const az = Az_arrs[bx];
+					auto const bxf = Bx_arrs[bx];
+					auto const byf = By_arrs[bx];
+					auto const bzf = Bz_arrs[bx];
+					auto const u0 = U0[bx];
+					auto ff = [&](amrex::Array4<const amrex::Real> const &a, amrex::Array4<const amrex::Real> const &b, int ii, int jj, int kk,
+						      int n) -> amrex::Real { return hasF2 ? (w1 * a(ii, jj, kk, n) + w2 * b(ii, jj, kk, n)) : a(ii, jj, kk, n); };
+					auto trial = [&](int n) -> amrex::Real {
+						const amrex::Real r = (1.0 / dx[0]) * (ff(ax, bxf, i, j, k, n) - ff(ax, bxf, i + 1, j, k, n)) +
+								      (1.0 / dx[1]) * (ff(ay, byf, i, j, k, n) - ff(ay, byf, i, j + 1, k, n)) +
+								      (1.0 / dx[2]) * (ff(az, bzf, i, j, k, n) - ff(az, bzf, i, j, k + 1, n));
+						return u0(i, j, k, n) + dt * r;
+					};
+					if constexpr (!Physics_Traits<problem_t>::is_dust_enabled && HydroSystem<problem_t>::nmscalars_ == 0) {
+						// in this configuration HydroSystem::isStateValid() only tests rho > 0
+						bad = !(trial(HydroSystem<problem_t>::density_index) > 0.);
+					} else {
+						amrex::Real tbuf[nvars_];
+						amrex::Array4<amrex::Real> const t(tbuf, amrex::Dim3{i, j, k}, amrex::Dim3{i + 1, j + 1, k + 1}, nvars_);
+						for (int n = 0; n < nvars_; ++n) {
+							t(i, j, k, n) = trial(n); // (P dV omitted: isStateValid() does not test the internal energy)
+						}
+						bad = !HydroSystem<problem_t>::isStateValid(t, i, j, k);
+					}
+				}
+				if (isValid && fl(i, j, k) == quokka::redoFlag::redo) {
+					bad = true; // PredictStep found the actual new state invalid
+				}
+				fl(i, j, k) = bad ? quokka::redoFlag::redo : quokka::redoFlag::none;
+			});
+		} else {
+			flag.FillBoundary(geom[lev].periodicity());
+		}
+
+		// (B) replace fluxes on faces of flagged cells and re-update affected valid cells
+		auto const &Unew_arrs = stateNew.arrays();
+		auto const &q_arrs = primOld.const_arrays();
+		auto const &Fx_arrs = flux[0].arrays();
+		auto const &Fy_arrs = flux[1].arrays();
+		auto const &Fz_arrs = flux[2].arrays();
+		auto const &Vx_arrs = faceVel[0].arrays();
+		auto const &Vy_arrs = faceVel[1].arrays();
+		auto const &Vz_arrs = faceVel[2].arrays();
+		const amrex::Real K_visc = artificialViscosityK_;
+		const amrex::Real shearVisc = shearViscosity_;
+		const amrex::Real bulkVisc = bulkViscosity_;
+
+		amrex::ParallelFor(flag, amrex::IntVect(gB), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			auto const fl = fl_arrs[bx];
+			const bool fc = (fl(i, j, k) == quokka::redoFlag::redo);
+			const bool rxl = fc || (fl(i - 1, j, k) == quokka::redoFlag::redo);
+			const bool rxh = fc || (fl(i + 1, j, k) == quokka::redoFlag::redo);
+			const bool ryl = fc || (fl(i, j - 1, k) == quokka::redoFlag::redo);
+			const bool ryh = fc || (fl(i, j + 1, k) == quokka::redoFlag::redo);
+			const bool rzl = fc || (fl(i, j, k - 1) == quokka::redoFlag::redo);
+			const bool rzh = fc || (fl(i, j, k + 1) == quokka::redoFlag::redo);
+			if (!(rxl || rxh || ryl || ryh || rzl || rzh)) {
+				return;
+			}
+			const amrex::Dim3 lo = amrex::lbound(fl);
+			const amrex::Dim3 hi = amrex::ubound(fl);
+			const bool isValid =
+			    (i >= lo.x + ngf) && (i <= hi.x - ngf) && (j >= lo.y + ngf) && (j <= hi.y - ngf) && (k >= lo.z + ngf) && (k <= hi.z - ngf);
+			// cells on the high edge of the iteration region also own their high faces
+			const bool edgeX = (i == hi.x - ngf + gB);
+			const bool edgeY = (j == hi.y - ngf + gB);
+			const bool edgeZ = (k == hi.z - ngf + gB);
+
+			auto const q = q_arrs[bx];
+			auto const Fx = Fx_arrs[bx];
+			auto const Fy = Fy_arrs[bx];
+			auto const Fz = Fz_arrs[bx];
+			auto const Vx = Vx_arrs[bx];
+			auto const Vy = Vy_arrs[bx];
+			auto const Vz = Vz_arrs[bx];
+
+			amrex::Real flo[nvars_];
+			amrex::Real fhi[nvars_];
+			amrex::Real vlo = 0.;
+			amrex::Real vhi = 0.;
+
+			if (!isValid) {
+				// ghost-ring cell (stage 1 only): write the replaced faces it owns, for the stage-2 test update
+				if (rxl) {
+					fofcFaceValue<FluxDir::X1>(i, j, k, true, true, Fx, Vx, q, K_visc, dx, shearVisc, bulkVisc, flo, vlo);
+				}
+				if (edgeX && rxh) {
+					fofcFaceValue<FluxDir::X1>(i + 1, j, k, true, true, Fx, Vx, q, K_visc, dx, shearVisc, bulkVisc, fhi, vhi);
+				}
+				if (ryl) {
+					fofcFaceValue<FluxDir::X2>(i, j, k, true, true, Fy, Vy, q, K_visc, dx, shearVisc, bulkVisc, flo, vlo);
+				}
+				if (edgeY && ryh) {
+					fofcFaceValue<FluxDir::X2>(i, j + 1, k, true, true, Fy, Vy, q, K_visc, dx, shearVisc, bulkVisc, fhi, vhi);
+				}
+				if (rzl) {
+					fofcFaceValue<FluxDir::X3>(i, j, k, true, true, Fz, Vz, q, K_visc, dx, shearVisc, bulkVisc, flo, vlo);
+				}
+				if (edgeZ && rzh) {
+					fofcFaceValue<FluxDir::X3>(i, j, k + 1, true, true, Fz, Vz, q, K_visc, dx, shearVisc, bulkVisc, fhi, vhi);
+				}
+				return;
+			}
+
+			if (fc) {
+				amrex::Gpu::Atomic::Add(&cnt[ic_flag], 1ULL);
+			}
+
+			amrex::Real dX[nvars_];
+			amrex::Real dY[nvars_];
+			amrex::Real dZ[nvars_];
+			fofcFaceValue<FluxDir::X1>(i, j, k, rxl, true, Fx, Vx, q, K_visc, dx, shearVisc, bulkVisc, flo, vlo);
+			fofcFaceValue<FluxDir::X1>(i + 1, j, k, rxh, edgeX, Fx, Vx, q, K_visc, dx, shearVisc, bulkVisc, fhi, vhi);
+			for (int n = 0; n < nvars_; ++n) {
+				dX[n] = flo[n] - fhi[n];
+			}
+			const amrex::Real vxl = vlo;
+			const amrex::Real vxh = vhi;
+			fofcFaceValue<FluxDir::X2>(i, j, k, ryl, true, Fy, Vy, q, K_visc, dx, shearVisc, bulkVisc, flo, vlo);
+			fofcFaceValue<FluxDir::X2>(i, j + 1, k, ryh, edgeY, Fy, Vy, q, K_visc, dx, shearVisc, bulkVisc, fhi, vhi);
+			for (int n = 0; n < nvars_; ++n) {
+				dY[n] = flo[n] - fhi[n];
+			}
+			const amrex::Real vyl = vlo;
+			const amrex::Real vyh = vhi;
+			fofcFaceValue<FluxDir::X3>(i, j, k, rzl, true, Fz, Vz, q, K_visc, dx, shearVisc, bulkVisc, flo, vlo);
+			fofcFaceValue<FluxDir::X3>(i, j, k + 1, rzh, edgeZ, Fz, Vz, q, K_visc, dx, shearVisc, bulkVisc, fhi, vhi);
+			for (int n = 0; n < nvars_; ++n) {
+				dZ[n] = flo[n] - fhi[n];
+			}
+			const amrex::Real vzl = vlo;
+			const amrex::Real vzh = vhi;
+
+			// rhs as in HydroSystem::ComputeRhsFromFluxes
+			amrex::Real rhs[nvars_];
+			for (int n = 0; n < nvars_; ++n) {
+				rhs[n] = (1.0 / dx[0]) * dX[n] + (1.0 / dx[1]) * dY[n] + (1.0 / dx[2]) * dZ[n];
+			}
+
+			// P dV as in HydroSystem::AddInternalEnergyPdV (FOFC cells use the cell-centred velocity divergence)
+			auto const u0 = U0[bx];
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+			const amrex::Real Pgas = HydroSystem<problem_t>::ComputePressure(u0, i, j, k, &cons_fc);
+			amrex::Real div_v = NAN;
+			if (!fc) {
+				div_v = (vxh - vxl) / dx[0] + (vyh - vyl) / dx[1] + (vzh - vzl) / dx[2];
+			} else {
+				div_v = 0.5 * ((HydroSystem<problem_t>::ComputeVelocityX1(u0, i + 1, j, k) - HydroSystem<problem_t>::ComputeVelocityX1(u0, i - 1, j, k)) /
+						   dx[0] +
+					       (HydroSystem<problem_t>::ComputeVelocityX2(u0, i, j + 1, k) - HydroSystem<problem_t>::ComputeVelocityX2(u0, i, j - 1, k)) /
+						   dx[1] +
+					       (HydroSystem<problem_t>::ComputeVelocityX3(u0, i, j, k + 1) - HydroSystem<problem_t>::ComputeVelocityX3(u0, i, j, k - 1)) /
+						   dx[2]);
+			}
+			rhs[HydroSystem<problem_t>::internalEnergy_index] += -Pgas * div_v;
+
+			// predict step as in HydroSystem::PredictStep
+			auto const un = Unew_arrs[bx];
+			for (int n = 0; n < nvars_; ++n) {
+				un(i, j, k, n) = u0(i, j, k, n) + dt * rhs[n];
+			}
+			if (!HydroSystem<problem_t>::isStateValid(un, i, j, k)) {
+				amrex::Gpu::Atomic::Add(&cnt[ic_fail], 1ULL);
+			}
+		});
+
+		// counters -> pinned host memory; read by fofcCheck() after the caller's next stream synchronization
+		amrex::Gpu::dtoh_memcpy_async(fofcCountHost_.data(), fofcCountDev_.data(), 4 * sizeof(unsigned long long));
+	} else {
+		amrex::ignore_unused(lev, stage, dt_lev, w1, ghostTrial, gA, gB, stateOld, stateNew, primOld, flag, flux, faceVel, trialF1, trialF2);
+	}
+}
+
+// hydro-01b: read this stage's in-place FOFC counters (already in pinned host memory after a stream sync).
+// Returns false if FOFC failed somewhere and hydro.abort_on_fofc_failure is set (needs one MPI reduction, no device reduction).
+template <typename problem_t> auto QuokkaSimulation<problem_t>::fofcCheck(int lev, int stage) -> bool
+{
+	const int s = 2 * (stage - 1);
+	const auto nflag = static_cast<amrex::Long>(fofcCountHost_[s] - fofcCountSeen_[s]);
+	auto nfail = static_cast<amrex::Long>(fofcCountHost_[s + 1] - fofcCountSeen_[s + 1]);
+	fofcCountSeen_[s] = fofcCountHost_[s];
+	fofcCountSeen_[s + 1] = fofcCountHost_[s + 1];
+	if (Verbose()) {
+		amrex::Long counts[2] = {nflag, nfail};
+		amrex::ParallelDescriptor::ReduceLongSum(counts, 2);
+		if (counts[0] > 0) {
+			amrex::Print() << "[FOFC-" << stage << "] in-place flux correcting " << counts[0] << " cells on level " << lev << "\n";
+		}
+		if (counts[1] > 0) {
+			amrex::Print() << "[FOFC-" << stage << "] in-place flux correction failed for " << counts[1] << " cells on level " << lev << "\n";
+		}
+	}
+	if (abortOnFofcFailure_ != 0) {
+		amrex::ParallelDescriptor::ReduceLongMax(nfail);
+		if (nfail > 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// hydro-01b: end-of-run FOFC summary
+template <typename problem_t> void QuokkaSimulation<problem_t>::printEvolveSummary()
+{
+	amrex::Long c[4] = {static_cast<amrex::Long>(fofcCountSeen_[0]), static_cast<amrex::Long>(fofcCountSeen_[1]),
+			    static_cast<amrex::Long>(fofcCountSeen_[2]), static_cast<amrex::Long>(fofcCountSeen_[3])};
+	amrex::ParallelDescriptor::ReduceLongSum(c, 4);
+	amrex::Print() << "[FOFC summary] in-place FOFC flagged cells (all levels and steps, incl. retries): stage 1 = " << c[0] << ", stage 2 = " << c[2]
+		       << "; still invalid after FOFC: stage 1 = " << c[1] << ", stage 2 = " << c[3]
+		       << "; fallback (global-count) path flagged: stage 1 = " << fofcFallbackCount_[0] << ", stage 2 = " << fofcFallbackCount_[1] << "\n";
 }
 
 template <typename problem_t>
@@ -2931,7 +3331,7 @@ void QuokkaSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AMRE
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc,
-						     const int nvars, const int nghost_Riemann, const int lev)
+						     const int nvars, const int nghost_Riemann, const int lev, amrex::MultiFab *primVarOut)
     -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 {
 	const BL_PROFILE("QuokkaSimulation::computeHydroFluxes()");
@@ -3035,6 +3435,11 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 			    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateR_") + quokka::face_dir_str[idim]);
 			amrex::VisMF::Write(rightState[idim], fullprefix);
 		}
+	}
+
+	// hydro-01b: optionally hand the primitive state to the caller (in-place FOFC reads it)
+	if (primVarOut != nullptr) {
+		*primVarOut = std::move(primVar);
 	}
 
 	// return flux and face-centered velocities

@@ -187,6 +187,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real shearViscosity, amrex::Real bulkViscosity,
 				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
 
+	template <RiemannSolver RIEMANN, FluxDir DIR>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void
+	ComputeFluxAtFace(int i_in, int j_in, int k_in, amrex::Array4<const amrex::Real> const &x1LeftState_a, amrex::Array4<const amrex::Real> const &x1RightState_a,
+			  amrex::Array4<const amrex::Real> const &q_a, amrex::Array4<amrex::Real> const &x1Flux_a, amrex::Array4<amrex::Real> const &x1FaceVel_a,
+			  amrex::Real K_visc, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real shearViscosity, amrex::Real bulkViscosity);
+
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeViscousFlux(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k, int velN_index,
 							int velV_index, int velW_index, amrex::Real dx_n, amrex::Real dx_v, amrex::Real dx_w,
@@ -1683,6 +1689,369 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			DustSystem<problem_t>::template ComputeDustFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k);
 		}
 	});
+}
+
+// hydro-01b: single-face flux evaluation (verbatim copy of the ComputeFluxes kernel body), used by the
+// in-place FOFC path to evaluate first-order LLF fluxes only on faces adjacent to flagged cells.
+// Non-MHD only. Left/right states are passed as Array4s (for donor-cell states: primVar shifted by one cell).
+template <typename problem_t>
+template <RiemannSolver RIEMANN, FluxDir DIR>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+HydroSystem<problem_t>::ComputeFluxAtFace(int i_in, int j_in, int k_in, amrex::Array4<const amrex::Real> const &x1LeftState_a,
+					  amrex::Array4<const amrex::Real> const &x1RightState_a, amrex::Array4<const amrex::Real> const &q_a,
+					  amrex::Array4<amrex::Real> const &x1Flux_a, amrex::Array4<amrex::Real> const &x1FaceVel_a, const amrex::Real K_visc,
+					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const amrex::Real shearViscosity, const amrex::Real bulkViscosity)
+{
+	static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "ComputeFluxAtFace is only for non-MHD problems");
+	[[maybe_unused]] amrex::Array4<double> x1FSpds_ref{};
+	[[maybe_unused]] amrex::Array4<const double> x1ConsVar_fc_ref{};
+	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_a);
+	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_a);
+	[[maybe_unused]] quokka::Array4View<const amrex::Real, DIR> x1LeftState_bfield(x1LeftState_a);
+	[[maybe_unused]] quokka::Array4View<const amrex::Real, DIR> x1RightState_bfield(x1RightState_a);
+	quokka::Array4View<const amrex::Real, DIR> q(q_a);
+	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_a);
+	quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_a);
+
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+		// gather left- and right- state variables
+
+		const double rho_L = x1LeftState(i, j, k, primDensity_index);
+		const double rho_R = x1RightState(i, j, k, primDensity_index);
+
+		const double vx_L = x1LeftState(i, j, k, x1Velocity_index);
+		const double vx_R = x1RightState(i, j, k, x1Velocity_index);
+
+		const double vy_L = x1LeftState(i, j, k, x2Velocity_index);
+		const double vy_R = x1RightState(i, j, k, x2Velocity_index);
+
+		const double vz_L = x1LeftState(i, j, k, x3Velocity_index);
+		const double vz_R = x1RightState(i, j, k, x3Velocity_index);
+
+		const double ke_L = 0.5 * rho_L * (vx_L * vx_L + vy_L * vy_L + vz_L * vz_L);
+		const double ke_R = 0.5 * rho_R * (vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
+
+		// auxiliary Eint (rho * e)
+		// this is evolved as a passive scalar by the Riemann solver
+		double Eint_L = NAN;
+		double Eint_R = NAN;
+
+		double P_L = NAN;
+		double P_R = NAN;
+
+		double E_L = NAN;
+		double E_R = NAN;
+
+		double cs_L = NAN;
+		double cs_R = NAN;
+
+		double bx1 = 0.0;
+		double by_L = 0.0;
+		double bz_L = 0.0;
+		double by_R = 0.0;
+		double bz_R = 0.0;
+		double magnetic_energy_L = 0.0;
+		double magnetic_energy_R = 0.0;
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			quokka::Array4View<const amrex::Real, DIR> x1ConsVar_fc(x1ConsVar_fc_ref);
+			bx1 = x1ConsVar_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			by_L = x1LeftState_bfield(i, j, k, 0);
+			bz_L = x1LeftState_bfield(i, j, k, 1);
+			by_R = x1RightState_bfield(i, j, k, 0);
+			bz_R = x1RightState_bfield(i, j, k, 1);
+			magnetic_energy_L = 0.5 * (bx1 * bx1 + by_L * by_L + bz_L * bz_L);
+			magnetic_energy_R = 0.5 * (bx1 * bx1 + by_R * by_R + bz_R * bz_R);
+		}
+
+		if constexpr (is_eos_isothermal()) {
+			P_L = rho_L * (cs_iso_ * cs_iso_);
+			P_R = rho_R * (cs_iso_ * cs_iso_);
+
+			cs_L = cs_iso_;
+			cs_R = cs_iso_;
+
+			// total and auxiliary internal energy are not evolved under an isothermal EOS;
+			// zero them here so the Riemann solvers never see NaN placeholders
+			E_L = 0.0;
+			E_R = 0.0;
+			Eint_L = 0.0;
+			Eint_R = 0.0;
+		} else {
+			if constexpr (reconstruct_eint) {
+				// compute pressure from specific internal energy
+				// (pressure_index is actually eint)
+				const double eint_L = x1LeftState(i, j, k, pressure_index);
+				const double eint_R = x1RightState(i, j, k, pressure_index);
+				amrex::GpuArray<Real, nmscalars_> massScalars_L = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
+				P_L = ::quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L * rho_L, massScalars_L);
+				amrex::GpuArray<Real, nmscalars_> massScalars_R = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
+				P_R = ::quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R * rho_R, massScalars_R);
+
+				// auxiliary Eint is actually (auxiliary) specific internal energy
+				Eint_L = rho_L * x1LeftState(i, j, k, primEint_index);
+				Eint_R = rho_R * x1RightState(i, j, k, primEint_index);
+			} else {
+				// pressure_index is actually pressure
+				P_L = x1LeftState(i, j, k, pressure_index);
+				P_R = x1RightState(i, j, k, pressure_index);
+
+				// primEint_index is actually (rho * e)
+				Eint_L = x1LeftState(i, j, k, primEint_index);
+				Eint_R = x1RightState(i, j, k, primEint_index);
+			}
+
+			amrex::GpuArray<Real, nmscalars_> massScalars_L = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
+			cs_L = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_L, P_L, massScalars_L);
+			E_L = ::quokka::EOS<problem_t>::ComputeEintFromPres(rho_L, P_L, massScalars_L) + ke_L + magnetic_energy_L;
+
+			amrex::GpuArray<Real, nmscalars_> massScalars_R = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
+			cs_R = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_R, P_R, massScalars_R);
+			E_R = ::quokka::EOS<problem_t>::ComputeEintFromPres(rho_R, P_R, massScalars_R) + ke_R + magnetic_energy_R;
+		}
+
+		AMREX_ASSERT(cs_L > 0.0);
+		AMREX_ASSERT(cs_R > 0.0);
+
+		// assign normal component of velocity according to DIR
+
+		int velN_index = x1Velocity_index;
+		int velV_index = x2Velocity_index;
+		int velW_index = x3Velocity_index;
+
+		// grid spacing along normal/transverse directions, for the viscous stress below (3D only)
+		[[maybe_unused]] amrex::Real dx_n = NAN;
+		[[maybe_unused]] amrex::Real dx_v = NAN;
+		[[maybe_unused]] amrex::Real dx_w = NAN;
+
+		if constexpr (DIR == FluxDir::X1) {
+			velN_index = x1Velocity_index;
+			velV_index = x2Velocity_index;
+			velW_index = x3Velocity_index;
+			if constexpr (AMREX_SPACEDIM == 3) {
+				dx_n = dx[0];
+				dx_v = dx[1];
+				dx_w = dx[2];
+			}
+		} else if constexpr (DIR == FluxDir::X2) {
+#if (AMREX_SPACEDIM == 2)
+			velN_index = x2Velocity_index;
+			velV_index = x1Velocity_index;
+			velW_index = x3Velocity_index; // unchanged in 2D
+#endif
+#if (AMREX_SPACEDIM == 3)
+			velN_index = x2Velocity_index;
+			velV_index = x3Velocity_index;
+			velW_index = x1Velocity_index;
+			dx_n = dx[1];
+			dx_v = dx[2];
+			dx_w = dx[0];
+#endif
+		} else if constexpr (DIR == FluxDir::X3) {
+			velN_index = x3Velocity_index;
+			velV_index = x1Velocity_index;
+			velW_index = x2Velocity_index;
+			if constexpr (AMREX_SPACEDIM == 3) {
+				dx_n = dx[2];
+				dx_v = dx[0];
+				dx_w = dx[1];
+			}
+		}
+
+		quokka::HydroState<nscalars_, nmscalars_> sL{};
+		sL.rho = rho_L;
+		sL.u = x1LeftState(i, j, k, velN_index);
+		sL.v = x1LeftState(i, j, k, velV_index);
+		sL.w = x1LeftState(i, j, k, velW_index);
+		sL.P = P_L;
+		sL.cs = cs_L;
+		sL.E = E_L;
+		sL.Eint = Eint_L;
+		sL.by = by_L;
+		sL.bz = bz_L;
+
+		quokka::HydroState<nscalars_, nmscalars_> sR{};
+		sR.rho = rho_R;
+		sR.u = x1RightState(i, j, k, velN_index);
+		sR.v = x1RightState(i, j, k, velV_index);
+		sR.w = x1RightState(i, j, k, velW_index);
+		sR.P = P_R;
+		sR.cs = cs_R;
+		sR.E = E_R;
+		sR.Eint = Eint_R;
+		sR.by = by_R;
+		sR.bz = bz_R;
+
+		// The remaining components are mass scalars and passive scalars, so just copy them from
+		// x1LeftState and x1RightState into the (left, right) state vectors U_L and
+		// U_R
+		for (int n = 0; n < nscalars_; ++n) {
+			sL.scalar[n] = x1LeftState(i, j, k, scalar0_index + n);
+			sR.scalar[n] = x1RightState(i, j, k, scalar0_index + n);
+			// also store mass scalars separately
+			if (n < nmscalars_) {
+				sL.massScalar[n] = x1LeftState(i, j, k, scalar0_index + n);
+				sR.massScalar[n] = x1RightState(i, j, k, scalar0_index + n);
+			}
+		}
+
+		// difference in normal velocity along normal axis
+		const double du = q(i, j, k, velN_index) - q(i - 1, j, k, velN_index);
+
+		// difference in transverse velocity
+#if AMREX_SPACEDIM == 1
+		const double dw = 0.;
+#else
+	  	amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index), q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
+	  	amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index), q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
+	  	double dw = std::min(dvl, dvr);
+#endif
+#if AMREX_SPACEDIM == 3
+		amrex::Real dwl =
+		    std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index), q(i - 1, j, k, velW_index) - q(i - 1, j, k - 1, velW_index));
+		amrex::Real dwr = std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index), q(i, j, k, velW_index) - q(i, j, k - 1, velW_index));
+		dw = std::min({dwl, dwr, dw});
+#endif
+
+		// solve the Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
+		quokka::valarray<double, nHydroScalars_> F_canonical{};
+
+		if constexpr (RIEMANN == RiemannSolver::HLLC) {
+			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use HLLC solver for MHD problems!");
+			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, du, dw);
+		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
+			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR);
+		} else if constexpr (RIEMANN == RiemannSolver::LLF_MHD) {
+			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
+			auto [F_canonical_tmp, fspd_m, fspd_p] =
+			    quokka::Riemann::LLF_MHD<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, bx1);
+			F_canonical = F_canonical_tmp;
+			x1FSpds(i, j, k, 0) = fspd_m;
+			x1FSpds(i, j, k, 1) = fspd_p;
+		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
+			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
+			auto [F_canonical_tmp, fspd_m, fspd_p] =
+			    quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, bx1, dw);
+			F_canonical = F_canonical_tmp;
+			x1FSpds(i, j, k, 0) = fspd_m;
+			x1FSpds(i, j, k, 1) = fspd_p;
+		}
+
+		// add artificial viscosity
+		// following Colella & Woodward (1984), eq. (4.2)
+		const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
+		const double viscosity = K_visc * std::max(-div_v, 0.);
+
+		quokka::valarray<double, nHydroScalars_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
+		quokka::valarray<double, nHydroScalars_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
+
+		// conserve flux of mass scalars
+		// based on Plewa and Muller 1999, A&A, 342, 179 (equations 8 and 12)
+		amrex::Real fluxSum_U_L = 0;
+		amrex::Real fluxSum_U_R = 0;
+
+		for (int n = 0; n < nscalars_; ++n) {
+			const int nstart = nHydroScalars_ - nscalars_;
+			U_L[nstart + n] = sL.scalar[n];
+			U_R[nstart + n] = sR.scalar[n];
+
+			if (n < nmscalars_) {
+				fluxSum_U_L += U_L[nstart + n];
+				fluxSum_U_R += U_R[nstart + n];
+			}
+		}
+
+		F_canonical = F_canonical + viscosity * (U_L - U_R);
+
+		// physical shear/bulk viscosity, added the same way as the artificial viscosity above
+		if constexpr (AMREX_SPACEDIM == 3 && Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
+			amrex::Real localShearViscosity = shearViscosity;
+			amrex::Real localBulkViscosity = bulkViscosity;
+			if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) {
+				const auto local_viscosity = computeViscosity<problem_t, DIR>(i, j, k, q);
+				localShearViscosity = local_viscosity[0];
+				localBulkViscosity = local_viscosity[1];
+			}
+			if (localShearViscosity != 0.0 || localBulkViscosity != 0.0) {
+				const auto sigma = ComputeViscousFlux<DIR>(q, i, j, k, velN_index, velV_index, velW_index, dx_n, dx_v, dx_w,
+									   localShearViscosity, localBulkViscosity);
+				F_canonical[x1Momentum_index] -= sigma[0];
+				F_canonical[x2Momentum_index] -= sigma[1];
+				F_canonical[x3Momentum_index] -= sigma[2];
+				F_canonical[energy_index] -= sigma[3]; // zeroed below if EOS is isothermal
+			}
+		}
+
+		quokka::valarray<double, nHydroScalars_> F = F_canonical;
+
+		// permute momentum components according to flux direction DIR
+		F[velN_index] = F_canonical[x1Momentum_index];
+		F[velV_index] = F_canonical[x2Momentum_index];
+		F[velW_index] = F_canonical[x3Momentum_index];
+
+		// set energy fluxes to zero if EOS is isothermal
+		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+			F[energy_index] = 0;
+			F[internalEnergy_index] = 0;
+		}
+
+		// compute face-centered normal velocity using HLL star state; matches Mignone21a eqn. (29), feeds
+		// ComputeEMF_Quokka2026's face velocity.
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
+			amrex::Real const fspd_m = x1FSpds(i, j, k, 0);
+			amrex::Real const fspd_p = x1FSpds(i, j, k, 1);
+			if (fspd_p + fspd_m > 0.0) {
+				x1FaceVel(i, j, k) = (fspd_p * sL.u + fspd_m * sR.u) / (fspd_p + fspd_m);
+			} else {
+				x1FaceVel(i, j, k) = 0.5 * (sL.u + sR.u);
+			}
+		} else {
+			// compute face-centered normal velocity
+			double v_norm = 0.0;
+			if (F[density_index] >= 0.) {
+				if (rho_R > 0.) {
+					v_norm = F[density_index] / rho_R;
+				}
+			} else {
+				if (rho_L > 0.) {
+					v_norm = F[density_index] / rho_L;
+				}
+			}
+			x1FaceVel(i, j, k) = v_norm;
+		}
+
+		// use the same logic as above to scale and conserve specie fluxes
+		if (F[density_index] >= 0.) {
+			for (int n = 0; n < nmscalars_; ++n) {
+				const int nstart = nHydroScalars_ - nscalars_;
+				if (fluxSum_U_L > 0.) {
+					F[nstart + n] = F[density_index] * U_L[nstart + n] / fluxSum_U_L;
+				} else {
+					F[nstart + n] = 0.;
+				}
+			}
+		} else {
+			for (int n = 0; n < nmscalars_; ++n) {
+				const int nstart = nHydroScalars_ - nscalars_;
+				if (fluxSum_U_R > 0.) {
+					F[nstart + n] = F[density_index] * U_R[nstart + n] / fluxSum_U_R;
+				} else {
+					F[nstart + n] = 0.;
+				}
+			}
+		}
+
+		// copy all flux components to the flux array
+		for (int nc = 0; nc < nHydroScalars_; ++nc) {
+			AMREX_ASSERT(!std::isnan(F[nc])); // check flux is valid
+			x1Flux(i, j, k, nc) = F[nc];
+		}
+
+		// calculate dust fluxes if enabled
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			DustSystem<problem_t>::template ComputeDustFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k);
+		}
 }
 
 template <typename problem_t>
