@@ -217,13 +217,15 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab cons
 	auto rightState_in = rightState_mf.arrays();
 	const amrex::IntVect ng = HyperbolicSystem<problem_t>::template DirectionalGrow<DIR>(nghost, nghost_t);
 
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
 		// construct ArrayViews for permuted indices
 		quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, leftState, rightState, n, i_in, j_in, k_in);
+		for (int n = 0; n < nvars; ++n) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, leftState, rightState, n, i_in, j_in, k_in);
+		}
 	});
 }
 
@@ -274,13 +276,15 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 	auto rightState_in = rightState_mf.arrays();
 	const amrex::IntVect ng = HyperbolicSystem<problem_t>::template DirectionalGrow<DIR>(nghost, nghost_t);
 
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
 		// construct ArrayViews for permuted indices
 		quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, limiter>(q, leftState, rightState, n, i_in, j_in, k_in);
+		for (int n = 0; n < nvars; ++n) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, limiter>(q, leftState, rightState, n, i_in, j_in, k_in);
+		}
 	});
 }
 
@@ -397,13 +401,15 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 	const amrex::IntVect ng = HyperbolicSystem<problem_t>::template DirectionalGrow<DIR>(nghost, nghost_t);
 
 	// cell-centered kernel
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
 		// construct ArrayViews for permuted indices
 		quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		for (int n = 0; n < nvars; ++n) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		}
 	});
 }
 
@@ -640,13 +646,15 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const 
 	const amrex::IntVect ng = HyperbolicSystem<problem_t>::template DirectionalGrow<DIR>(nghost, nghost_t);
 
 	// cell-centered kernel
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
 		// construct ArrayViews for permuted indices
 		quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		for (int n = 0; n < nvars; ++n) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		}
 	});
 }
 
