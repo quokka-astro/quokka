@@ -107,46 +107,47 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	const double P_LR = 0.5 * (sL.P + sR.P) + 0.5 * phi * (sL.rho * (S_L - sL.u) * (S_star - sL.u) + sR.rho * (S_R - sR.u) * (S_star - sR.u));
 
 	/// compute fluxes
+	//
+	// Every flux below (F_L, F_R, F_starL, F_starR, F_HLL and the theta blend)
+	// is a linear combination
+	//     F = wL * U_L + wR * U_R + pMom * e_x1mom + pEn * e_energy,
+	// where U = (rho, rho u, rho v, rho w, E, Eint, scalars...). Compute the
+	// scalar weights for the selected region only, with one reciprocal per
+	// wave-speed difference, instead of building full flux vectors and dividing
+	// them component by component. This is algebraically identical to
+	//   F_L     = u_L U_L + P_L D_L
+	//   F_starL = (S_star (S_L U_L - F_L) + S_L P_LR D_star) / (S_L - S_star)
+	//   F_HLL   = (S_R F_L - S_L F_R + S_L S_R (U_R - U_L)) / (S_R - S_L)
+	// with D_K = (0, 1, 0, 0, u_K, 0, ...) and D_star = (0, 1, 0, 0, S_star, 0, ...).
 
-	// N.B.: quokka::valarray is written to allow assigning <= fluxdim
-	// components, so this works even if there are more components than
-	// enumerated in the initializer list. The remaining components are
-	// assigned a default value of zero.
+	double wL = 0.;	  // weight of U_L
+	double wR = 0.;	  // weight of U_R
+	double pMom = 0.; // additional x1-momentum flux
+	double pEn = 0.;  // additional energy flux
 
-	const quokka::valarray<double, fluxdim> D_L = {0., 1., 0., 0., sL.u, 0.};
-	const quokka::valarray<double, fluxdim> D_R = {0., 1., 0., 0., sR.u, 0.};
-	const quokka::valarray<double, fluxdim> D_star = {0., 1., 0., 0., S_star, 0.};
-
-	quokka::valarray<double, fluxdim> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
-	quokka::valarray<double, fluxdim> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
-
-	// The remaining components are passive scalars, so just copy them from
-	// x1LeftState and x1RightState into the (left, right) state vectors U_L and
-	// U_R
-	for (int n = 0; n < N_scalars; ++n) {
-		const int nstart = fluxdim - N_scalars;
-		U_L[nstart + n] = sL.scalar[n];
-		U_R[nstart + n] = sR.scalar[n];
-	}
-
-	const quokka::valarray<double, fluxdim> F_L = sL.u * U_L + sL.P * D_L;
-	const quokka::valarray<double, fluxdim> F_R = sR.u * U_R + sR.P * D_R;
-
-	const quokka::valarray<double, fluxdim> F_starL = (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) / (S_L - S_star);
-	const quokka::valarray<double, fluxdim> F_starR = (S_star * (S_R * U_R - F_R) + S_R * P_LR * D_star) / (S_R - S_star);
-
-	// open the Riemann fan
-	quokka::valarray<double, fluxdim> F{};
-
-	// HLLC flux
+	// open the Riemann fan (HLLC flux)
 	if (S_L > 0.0) {
-		F = F_L;
+		// F = F_L
+		wL = sL.u;
+		pMom = sL.P;
+		pEn = sL.P * sL.u;
 	} else if ((S_star > 0.0) && (S_L <= 0.0)) {
-		F = F_starL;
+		// F = F_starL
+		const double inv = 1.0 / (S_L - S_star);
+		wL = S_star * (S_L - sL.u) * inv;
+		pMom = (S_L * P_LR - S_star * sL.P) * inv;
+		pEn = S_star * (S_L * P_LR - sL.P * sL.u) * inv;
 	} else if ((S_star <= 0.0) && (S_R >= 0.0)) {
-		F = F_starR;
+		// F = F_starR
+		const double inv = 1.0 / (S_R - S_star);
+		wR = S_star * (S_R - sR.u) * inv;
+		pMom = (S_R * P_LR - S_star * sR.P) * inv;
+		pEn = S_star * (S_R * P_LR - sR.P * sR.u) * inv;
 	} else { // S_R < 0.0
-		F = F_R;
+		// F = F_R
+		wR = sR.u;
+		pMom = sR.P;
+		pEn = sR.P * sR.u;
 	}
 
 	// Both solvers reduce to the same upwind flux outside the Riemann fan.
@@ -154,8 +155,36 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	// internal energy and passive scalars, using the same face weight.
 	// No pressure-jump threshold switches off this correction.
 	if ((theta < 1.0) && (S_L < 0.0) && (S_R > 0.0)) {
-		const quokka::valarray<double, fluxdim> F_HLL = (S_R * F_L - S_L * F_R + S_L * S_R * (U_R - U_L)) / (S_R - S_L);
-		F = theta * F + (1.0 - theta) * F_HLL;
+		// F_HLL weights
+		const double invLR = 1.0 / (S_R - S_L);
+		const double hL = S_R * (sL.u - S_L) * invLR;
+		const double hR = S_L * (S_R - sR.u) * invLR;
+		const double hMom = (S_R * sL.P - S_L * sR.P) * invLR;
+		const double hEn = (S_R * sL.P * sL.u - S_L * sR.P * sR.u) * invLR;
+
+		// F = theta * F + (1 - theta) * F_HLL
+		const double omt = 1.0 - theta;
+		wL = theta * wL + omt * hL;
+		wR = theta * wR + omt * hR;
+		pMom = theta * pMom + omt * hMom;
+		pEn = theta * pEn + omt * hEn;
+	}
+
+	// N.B.: quokka::valarray is value-initialized to zero, so any components
+	// beyond the hydro variables and passive scalars stay zero.
+	quokka::valarray<double, fluxdim> F{};
+	F[0] = wL * sL.rho + wR * sR.rho;
+	F[1] = wL * (sL.rho * sL.u) + wR * (sR.rho * sR.u) + pMom;
+	F[2] = wL * (sL.rho * sL.v) + wR * (sR.rho * sR.v);
+	F[3] = wL * (sL.rho * sL.w) + wR * (sR.rho * sR.w);
+	F[4] = wL * sL.E + wR * sR.E + pEn;
+	F[5] = wL * sL.Eint + wR * sR.Eint;
+
+	// The remaining components are passive scalars (U = scalar), fluxed with
+	// the same weights.
+	for (int n = 0; n < N_scalars; ++n) {
+		const int nstart = fluxdim - N_scalars;
+		F[nstart + n] = wL * sL.scalar[n] + wR * sR.scalar[n];
 	}
 
 	return F;
