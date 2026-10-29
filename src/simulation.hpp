@@ -231,6 +231,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<amrex::MLMG> poissonMlmg_;
 	std::unique_ptr<amrex::OpenBCSolver> poissonOpenBC_;
 #endif
+	// cached particle acceleration field (-grad phi), valid only for the current phi (invalidated in calculateGpotAllLevels)
+	amrex::Vector<amrex::MultiFab> particleAccelCache_;
+	bool particleAccelCacheValid_ = false;
 
 	// SFH parameters
 	int sfh_interval_ = -1;		       // interval for the star formation history
@@ -1958,6 +1961,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		BL_PROFILE_REGION("GravitySolver"); // NOLINT(misc-const-correctness)
 
+		// phi (and possibly the grids) change: the cached particle acceleration is stale (src-07)
+		particleAccelCacheValid_ = false;
+		particleAccelCache_.clear();
+
 		constexpr int nghost_phi = 1;
 		constexpr int nghost_deposit = 1; // CIC deposition requires 1 ghost cell
 		constexpr int nghost_drift = 1;	  // particle can drift up to 1 cell
@@ -2268,8 +2275,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		return;
 	}
 
+	// The acceleration field depends only on phi and the grids, so it can be reused for
+	// consecutive kicks as long as phi is unchanged (invalidated in calculateGpotAllLevels).
+	bool cache_ok = particleAccelCacheValid_ && (static_cast<int>(particleAccelCache_.size()) == finest_level + 1);
+	if (cache_ok) {
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			if (!particleAccelCache_[lev].boxArray().CellEqual(boxArray(lev)) || !(particleAccelCache_[lev].DistributionMap() == DistributionMap(lev))) {
+				cache_ok = false;
+			}
+		}
+	}
+	if (!cache_ok) {
+		particleAccelCache_.clear();
+		particleAccelCache_.resize(finest_level + 1);
+	}
+
 	// Compute accelerations and kick particles
 	for (int lev = 0; lev <= finest_level; ++lev) {
+		if (!cache_ok) {
 		// NOTE: CIC interpolation requires 1, but particles may have drifted
 		// 	into 1 ghost cell since last particle redistribute.
 		const int nghost_acc = 2;
@@ -2325,11 +2348,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
 		}
 
-		// check for NaN
-		AMREX_ALWAYS_ASSERT(!phi_extended.contains_nan());
+		// check for NaN (debug builds only)
+		AMREX_ASSERT(!phi_extended.contains_nan());
 
-		// Create cell-centered acceleration MultiFab
-		amrex::MultiFab accel_cc(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
+		// Create cell-centered acceleration MultiFab (persistent cache)
+		particleAccelCache_[lev].define(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
+		amrex::MultiFab &accel_cc = particleAccelCache_[lev];
 
 		// Compute acceleration directly from potential gradient at cell centers
 		const auto &phi_arr = phi_extended.const_arrays();
@@ -2343,13 +2367,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			accel_arr[bx](i, j, k, 1) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j + 1, k) - phi_arr[bx](i, j - 1, k));
 			accel_arr[bx](i, j, k, 2) = -0.5 * dx_inv[2] * (phi_arr[bx](i, j, k + 1) - phi_arr[bx](i, j, k - 1));
 		});
-		amrex::Gpu::streamSynchronize();
-
-		// accel_cc is guaranteed to be free of NaN as long as phi_extended does not contain NaN.
+		// No explicit sync needed: the kick's ParIter (MFIter) synchronises the default stream before
+		// launching its per-tile streams, and phi_extended is only read by the kernel above (same stream).
+		}
 
 		// Kick particles using the acceleration field
-		particleRegister_.kickParticlesAtLevel(lev, dt, accel_cc);
+		particleRegister_.kickParticlesAtLevel(lev, dt, particleAccelCache_[lev]);
 	}
+	particleAccelCacheValid_ = true;
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInteraction(amrex::Real time, amrex::Real dt)
