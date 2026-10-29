@@ -407,7 +407,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void ellipticSolveAllLevels(amrex::Real dt);
 
 	void incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays,
-				    int lev, amrex::Real dt_lev);
+				    int lev, amrex::Real dt_lev, int srccomp = 0, int destcomp = 0, int ncompIn = -1);
+	// driver-03: component ranges {start, count} of the cell-centred state that can carry a nonzero flux into the flux
+	// registers; only these are refluxed. Default: all components.
+	virtual auto refluxComponentRanges() -> amrex::Vector<std::pair<int, int>> { return {{0, state_new_cc_[0].nComp()}}; }
 	void incrementEMFRegisters(amrex::EdgeFluxRegister *emf_as_crse, amrex::EdgeFluxRegister *emf_as_fine,
 				   std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_emf_components, int lev, amrex::Real dt_lev);
 
@@ -649,6 +652,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	/// AMR-specific parameters
 	int regrid_int = 2;	 // regrid interval (number of coarse steps)
 	int do_reflux = 1;	 // 1 == reflux, 0 == no reflux
+	int driver03Prescale_ = 0; // driver-03: 1 == apply the -dt*area scaling at the coarse-fine faces instead of FluxRegister::CrseInit
 	int do_subcycle = 1;	 // 1 == subcycle, 0 == no subcyle
 	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
 
@@ -1003,6 +1007,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
+	{
+		amrex::ParmParse ppd3("driver03");
+		ppd3.query("prescale", driver03Prescale_);
+	}
 
 	// Default do_subcycle = 1
 	pp.query("do_subcycle", do_subcycle);
@@ -2456,7 +2464,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 		if (do_reflux != 0) {
 			if (flux_reg_[lev + 1] != nullptr) {
-				flux_reg_[lev + 1]->Reflux(state_new_cc_[lev], 1.0, 0, 0, state_new_cc_[lev].nComp(), geom[lev]);
+				// driver-03: reflux only the flux-carrying components; skip the per-face stream syncs inside Reflux.
+				// SingleStreamRegion keeps every kernel of the reflux on one stream, so with the syncs gone the
+				// MFIter-path kernels (setVal, copy, reflux) stay ordered; later multi-stream MFIters pre-sync this stream.
+				const amrex::Gpu::NoSyncRegion noSyncReflux;
+				const amrex::Gpu::SingleStreamRegion singleStreamReflux;
+				for (auto const &range : refluxComponentRanges()) {
+					if (range.second > 0) {
+						flux_reg_[lev + 1]->Reflux(state_new_cc_[lev], 1.0, range.first, range.first, range.second, geom[lev]);
+					}
+				}
 			}
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				if (emf_reg_[lev + 1] != nullptr) {
@@ -2502,7 +2519,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
-						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
+						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev,
+						      int const srccomp, int const destcomp, int const ncompIn)
 {
 	BL_PROFILE("AMRSimulation::incrementFluxRegisters()"); // NOLINT(misc-const-correctness)
 
@@ -2527,11 +2545,35 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 		AMREX_ASSERT(lev < finestLevel());
 		AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			int const ncomp = fluxArrays[dir].nComp();
+			int const ncomp = (ncompIn < 0) ? (fluxArrays[dir].nComp() - srccomp) : ncompIn;
 			if (ncomp == 0) {
 				continue;
 			}
-			fr_as_crse->CrseInit(fluxArrays[dir], dir, 0, 0, ncomp, -dt_lev * face_area[dir], amrex::FluxRegister::ADD);
+			if (driver03Prescale_ != 0) {
+				// driver-03: same result as CrseInit(..., ADD), but the -dt*area scaling is applied only on the
+				// coarse-fine faces, so no whole-level area MultiFab and no whole-level scaled flux copy are made.
+				amrex::Real const mult = -dt_lev * face_area[dir];
+				for (int side = 0; side < 2; ++side) {
+					amrex::Orientation const face(dir, (side == 0) ? amrex::Orientation::low : amrex::Orientation::high);
+					amrex::FabSet &reg = (*fr_as_crse)[face];
+					amrex::MultiFab tmp(reg.boxArray(), reg.DistributionMap(), ncomp, 0, amrex::MFInfo().SetArena(amrex::The_Async_Arena()));
+					tmp.setVal(0.0);
+					tmp.ParallelCopy(fluxArrays[dir], srccomp, 0, ncomp); // COPY semantics as in CrseInit (faces shared by coarse boxes)
+					auto const &rega = reg.arrays();
+					auto const &tmpa = tmp.const_arrays();
+					amrex::ParallelFor(reg.multiFab(), amrex::IntVect(0), ncomp,
+							   [=] AMREX_GPU_DEVICE(int bno, int i, int j, int k, int n) noexcept {
+#ifdef __clang__
+#pragma clang fp contract(off)
+#endif
+								   // CrseInit computes (flux*mult)*1.0 in one kernel and adds it in another: no FMA
+								   amrex::Real const scaled = tmpa[bno](i, j, k, n) * mult;
+								   rega[bno](i, j, k, n + destcomp) += scaled;
+							   });
+				}
+			} else {
+				fr_as_crse->CrseInit(fluxArrays[dir], dir, srccomp, destcomp, ncomp, -dt_lev * face_area[dir], amrex::FluxRegister::ADD);
+			}
 		}
 	}
 
@@ -2539,11 +2581,11 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 		AMREX_ASSERT(lev > 0);
 		AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			int const ncomp = fluxArrays[dir].nComp();
+			int const ncomp = (ncompIn < 0) ? (fluxArrays[dir].nComp() - srccomp) : ncompIn;
 			if (ncomp == 0) {
 				continue;
 			}
-			fr_as_fine->FineAdd(fluxArrays[dir], dir, 0, 0, ncomp, dt_lev * face_area[dir]);
+			fr_as_fine->FineAdd(fluxArrays[dir], dir, srccomp, destcomp, ncomp, dt_lev * face_area[dir]);
 		}
 	}
 }
