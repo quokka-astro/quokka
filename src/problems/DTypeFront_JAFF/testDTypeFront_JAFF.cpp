@@ -19,6 +19,7 @@
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/photoionization_H_caseB/network.hpp"
 #include "physics_info.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -46,7 +47,7 @@ template <> struct quokka::EOS_Traits<DTypeFront_JAFF> {
 template <> struct Microphysics_Traits<DTypeFront_JAFF> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::JaffNetwork;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+	static constexpr bool photochemistry = true;
 };
 
 using Network = Microphysics_Traits<DTypeFront_JAFF>::Network;
@@ -316,7 +317,7 @@ void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t & /*re
 template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");

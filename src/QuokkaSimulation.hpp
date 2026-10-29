@@ -67,7 +67,6 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_SPACE.H"
 
 #include "SimulationData.hpp"
-#include "chemistry/Chemistry.hpp"
 #include "conduction/ElectronConduction.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
@@ -80,10 +79,26 @@ namespace filesystem = experimental::filesystem;
 #include "microphysics/microphysics_traits.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
-#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 #include "turbulence/TurbulentDriving.hpp"
+
+// The chemistry and photochemistry burns. Only their declarations are here: a problem with chemistry includes
+// chemistry/Chemistry.hpp or radiation/photochemistry.hpp for the definitions, so problems without chemistry never
+// compile the burn code or the chemistry EOS.
+namespace quokka::chemistry
+{
+template <typename problem_t>
+auto computeChemistry(amrex::MultiFab &mf, amrex::Real dt, amrex::Real max_density_allowed, amrex::Real min_density_allowed) -> bool;
+} // namespace quokka::chemistry
+
+namespace quokka::photochemistry
+{
+template <typename problem_t>
+auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, amrex::Real dt,
+			   amrex::Real max_density_allowed, amrex::Real min_density_allowed, amrex::MultiFab &dustHeatingSource,
+			   amrex::MultiFab &radEnergySource) -> bool;
+} // namespace quokka::photochemistry
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class QuokkaSimulation : public AMRSimulation<problem_t>
@@ -278,9 +293,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		// set gamma
 		amrex::ParmParse eos("eos");
 		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
-		// initialize Microphysics params
-		init_extern_parameters();
-		// initialize Microphysics EOS
+		// read the EOS parameters
+		eos_rp::ReadParameters();
+		// initialize the EOS
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
 		eos_init(small_temp, small_dens);
