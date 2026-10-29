@@ -17,6 +17,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
+#include "AMReX_Scan.H"
 
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
@@ -62,6 +63,19 @@ namespace EarlyFeedbackUtils
 
 constexpr int stencil_size = ParticleUtils::stencil_size;
 
+#ifdef AMREX_USE_GPU
+// Butterfly (xor) warp sum: every lane ends with the same bits, because each step adds the same two values (IEEE addition is commutative).
+// This keeps warp-uniform branches on reduced values uniform.
+template <typename T> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto warpAllSum(T x) noexcept -> T
+{
+	constexpr int wsize = amrex::Gpu::Device::warp_size;
+	for (int offset = wsize / 2; offset > 0; offset /= 2) {
+		x += AMREX_HIP_OR_CUDA(__shfl_xor(x, offset), __shfl_xor_sync(0xffffffff, x, offset));
+	}
+	return x;
+}
+#endif
+
 template <typename ContainerType, typename problem_t>
 void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
 		     int birth_time_index, int mass_at_birth_index, amrex::Real p0, amrex::Real t_fb, amrex::Real alpha, int *active_particle_count,
@@ -70,6 +84,10 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 	const BL_PROFILE("EarlyFeedbackUtils::depositToBuffer()");
 	static_assert(AMREX_SPACEDIM == 3 || dependent_false_v<problem_t>, "Empirically motivated early feedback is currently implemented only in 3D.");
 	constexpr auto stencil_weights = ParticleUtils::kernel_spherical_3_weights_normalized;
+#ifdef AMREX_USE_GPU
+	amrex::Gpu::DeviceVector<amrex::Real> requested_vec;
+	amrex::Gpu::DeviceVector<int> active_vec;
+#endif
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		auto &particles = pti.GetArrayOfStructs();
@@ -91,6 +109,208 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		    AMREX_D_DECL(static_cast<int>(geometry.isPeriodic(0)), static_cast<int>(geometry.isPeriodic(1)), static_cast<int>(geometry.isPeriodic(2)))};
 		const int count_component = state_buffer.nComp() - 1;
 
+#ifdef AMREX_USE_GPU
+		// (1) Compact the active particles (id > 0 and a positive momentum increment) so no warp is spent on inactive ones.
+		if (num_particles <= 0) {
+			continue;
+		}
+		const int np_int = static_cast<int>(num_particles);
+		requested_vec.resize(num_particles);
+		active_vec.resize(num_particles);
+		amrex::Real *requested_ptr = requested_vec.data();
+		int *active_ptr = active_vec.data();
+		amrex::ParallelFor(np_int, [=] AMREX_GPU_DEVICE(int particle_index) noexcept {
+			const auto &particle = particle_data[particle_index]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			amrex::Real requested_momentum = 0.0;
+			if (particle.id() > 0) {
+				requested_momentum =
+				    earlyFeedbackMomentumIncrement(time, dt, particle.rdata(birth_time_index), particle.rdata(mass_at_birth_index), p0, t_fb, alpha);
+			}
+			requested_ptr[particle_index] = requested_momentum; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		});
+		const int n_active = amrex::Scan::PrefixSum<int>(
+		    np_int,
+		    [=] AMREX_GPU_DEVICE(int p) -> int { return (requested_ptr[p] > 0.0) ? 1 : 0; }, // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		    [=] AMREX_GPU_DEVICE(int p, int const &s) {
+			    if (requested_ptr[p] > 0.0) {	 // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+				    active_ptr[s] = p;		 // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			    }
+		    },
+		    amrex::Scan::Type::exclusive, amrex::Scan::retSum);
+		if (n_active <= 0) {
+			continue;
+		}
+
+		// (2) Warp-cooperative stencil: one warp per active particle, lanes stride over the 7^3 stencil cells (i fastest, so the
+		// atomics of a warp hit contiguous addresses and never the same address). (3) The per-cell geometry (offset vector and
+		// 1/r) is computed once and cached in registers for the three passes. Each cell's deposited quantities are computed
+		// with the same expressions as before; only the grouping of the per-particle sums (now warp tree reductions) changes.
+		constexpr int wsize = amrex::Gpu::Device::warp_size;
+		constexpr int stencil_width = (2 * stencil_size) + 1;
+		constexpr int stencil_cells = stencil_width * stencil_width * stencil_width;
+		constexpr int cells_per_lane = (stencil_cells + wsize - 1) / wsize;
+		constexpr int threads_per_block = 256;
+		constexpr int warps_per_block = threads_per_block / wsize;
+		static_assert(threads_per_block % wsize == 0);
+		const int nblocks = (n_active + warps_per_block - 1) / warps_per_block;
+		amrex::launch<threads_per_block>(nblocks, amrex::Gpu::gpuStream(), [=] AMREX_GPU_DEVICE() noexcept {
+			const int lane = static_cast<int>(threadIdx.x) % wsize;
+			const int active_slot = (static_cast<int>(blockIdx.x) * warps_per_block) + (static_cast<int>(threadIdx.x) / wsize);
+			if (active_slot >= n_active) {
+				return; // whole warp
+			}
+			const int particle_index = active_ptr[active_slot];	   // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			const auto &particle = particle_data[particle_index];	   // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			const amrex::Real requested_momentum = requested_ptr[particle_index]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+
+			const amrex::Real pos_x = particle.pos(0);
+			const amrex::Real pos_y = particle.pos(1);
+			const amrex::Real pos_z = particle.pos(2);
+			const int host_i = static_cast<int>(amrex::Math::floor((pos_x - prob_lo[0]) * inv_dx[0]));
+			const int host_j = static_cast<int>(amrex::Math::floor((pos_y - prob_lo[1]) * inv_dx[1]));
+			const int host_k = static_cast<int>(amrex::Math::floor((pos_z - prob_lo[2]) * inv_dx[2]));
+
+			const bool stencil_outside_fab = host_i - stencil_size < fab_lo.x || host_i + stencil_size > fab_hi.x ||
+							 host_j - stencil_size < fab_lo.y || host_j + stencil_size > fab_hi.y ||
+							 host_k - stencil_size < fab_lo.z || host_k + stencil_size > fab_hi.z;
+			const bool stencil_outside_domain = (!is_periodic[0] && (host_i - stencil_size < domain_lo.x || host_i + stencil_size > domain_hi.x)) ||
+							    (!is_periodic[1] && (host_j - stencil_size < domain_lo.y || host_j + stencil_size > domain_hi.y)) ||
+							    (!is_periodic[2] && (host_k - stencil_size < domain_lo.z || host_k + stencil_size > domain_hi.z));
+			if (stencil_outside_fab || stencil_outside_domain) {
+				if (lane == 0) {
+					amrex::Gpu::Atomic::AddNoRet(invalid_source_count, 1);
+				}
+				return; // whole warp
+			}
+
+			// pass 1: geometry (cached) + weight sum + weighted direction sum + gas-state validity
+			amrex::Real cache_delta_x[cells_per_lane];
+			amrex::Real cache_delta_y[cells_per_lane];
+			amrex::Real cache_delta_z[cells_per_lane];
+			amrex::Real cache_inverse_radius[cells_per_lane];
+			amrex::Real cache_weight[cells_per_lane];
+			amrex::Real weight_sum = 0.0;
+			amrex::Real weighted_direction_x = 0.0;
+			amrex::Real weighted_direction_y = 0.0;
+			amrex::Real weighted_direction_z = 0.0;
+			int invalid_gas_cells = 0;
+#pragma unroll
+			for (int c = 0; c < cells_per_lane; ++c) {
+				cache_delta_x[c] = 0.0;
+				cache_delta_y[c] = 0.0;
+				cache_delta_z[c] = 0.0;
+				cache_inverse_radius[c] = 0.0;
+				cache_weight[c] = 0.0;
+				const int n = lane + (c * wsize);
+				if (n >= stencil_cells) {
+					continue;
+				}
+				const int offset_i = (n % stencil_width) - stencil_size;
+				const int offset_j = ((n / stencil_width) % stencil_width) - stencil_size;
+				const int offset_k = (n / (stencil_width * stencil_width)) - stencil_size;
+				const amrex::Real weight = stencil_weights[std::abs(offset_i)][std::abs(offset_j)][std::abs(offset_k)];
+				if (!(weight > 0.0)) {
+					continue;
+				}
+				const int i = host_i + offset_i;
+				const int j = host_j + offset_j;
+				const int k = host_k + offset_k;
+				const amrex::Real rho = local_state(i, j, k, HydroSystem<problem_t>::density_index);
+				if (!(rho > 0.0 && amrex::Math::isfinite(rho))) {
+					++invalid_gas_cells;
+				}
+
+				const amrex::Real delta_x = (static_cast<amrex::Real>(i) + 0.5) * dx[0] + prob_lo[0] - pos_x;
+				const amrex::Real delta_y = (static_cast<amrex::Real>(j) + 0.5) * dx[1] + prob_lo[1] - pos_y;
+				const amrex::Real delta_z = (static_cast<amrex::Real>(k) + 0.5) * dx[2] + prob_lo[2] - pos_z;
+				const amrex::Real radius = std::sqrt((delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z));
+				const amrex::Real inverse_radius = (radius > 0.0) ? 1.0 / radius : 0.0;
+				cache_delta_x[c] = delta_x;
+				cache_delta_y[c] = delta_y;
+				cache_delta_z[c] = delta_z;
+				cache_inverse_radius[c] = inverse_radius;
+				cache_weight[c] = weight;
+				weight_sum += weight;
+				weighted_direction_x += weight * delta_x * inverse_radius;
+				weighted_direction_y += weight * delta_y * inverse_radius;
+				weighted_direction_z += weight * delta_z * inverse_radius;
+			}
+			weight_sum = warpAllSum(weight_sum);
+			weighted_direction_x = warpAllSum(weighted_direction_x);
+			weighted_direction_y = warpAllSum(weighted_direction_y);
+			weighted_direction_z = warpAllSum(weighted_direction_z);
+			invalid_gas_cells = warpAllSum(invalid_gas_cells);
+
+			if (invalid_gas_cells != 0 || !(weight_sum > 0.0)) {
+				if (lane == 0) {
+					amrex::Gpu::Atomic::AddNoRet(invalid_source_count, 1);
+				}
+				return; // whole warp (reduced values are identical in every lane)
+			}
+
+			// pass 2: corrected norm from the cached geometry
+			const amrex::Real mean_direction_x = weighted_direction_x / weight_sum;
+			const amrex::Real mean_direction_y = weighted_direction_y / weight_sum;
+			const amrex::Real mean_direction_z = weighted_direction_z / weight_sum;
+			amrex::Real corrected_norm = 0.0;
+#pragma unroll
+			for (int c = 0; c < cells_per_lane; ++c) {
+				const amrex::Real weight = cache_weight[c];
+				if (!(weight > 0.0)) {
+					continue;
+				}
+				const amrex::Real q_x = weight * ((cache_delta_x[c] * cache_inverse_radius[c]) - mean_direction_x);
+				const amrex::Real q_y = weight * ((cache_delta_y[c] * cache_inverse_radius[c]) - mean_direction_y);
+				const amrex::Real q_z = weight * ((cache_delta_z[c] * cache_inverse_radius[c]) - mean_direction_z);
+				corrected_norm += std::sqrt((q_x * q_x) + (q_y * q_y) + (q_z * q_z));
+			}
+			corrected_norm = warpAllSum(corrected_norm);
+
+			if (!(corrected_norm > 0.0) || !amrex::Math::isfinite(corrected_norm)) {
+				if (lane == 0) {
+					amrex::Gpu::Atomic::AddNoRet(invalid_source_count, 1);
+				}
+				return; // whole warp
+			}
+
+			// pass 3: deposit
+			amrex::Real work_density = 0.0;
+			const amrex::Real momentum_normalization = requested_momentum * inverse_volume / corrected_norm;
+#pragma unroll
+			for (int c = 0; c < cells_per_lane; ++c) {
+				const amrex::Real weight = cache_weight[c];
+				if (!(weight > 0.0)) {
+					continue;
+				}
+				const int n = lane + (c * wsize);
+				const int i = host_i + (n % stencil_width) - stencil_size;
+				const int j = host_j + ((n / stencil_width) % stencil_width) - stencil_size;
+				const int k = host_k + (n / (stencil_width * stencil_width)) - stencil_size;
+				const amrex::Real delta_px = momentum_normalization * weight * ((cache_delta_x[c] * cache_inverse_radius[c]) - mean_direction_x);
+				const amrex::Real delta_py = momentum_normalization * weight * ((cache_delta_y[c] * cache_inverse_radius[c]) - mean_direction_y);
+				const amrex::Real delta_pz = momentum_normalization * weight * ((cache_delta_z[c] * cache_inverse_radius[c]) - mean_direction_z);
+				const amrex::Real rho = local_state(i, j, k, HydroSystem<problem_t>::density_index);
+				const amrex::Real velocity_x = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho;
+				const amrex::Real velocity_y = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / rho;
+				const amrex::Real velocity_z = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / rho;
+				work_density += (velocity_x * delta_px) + (velocity_y * delta_py) + (velocity_z * delta_pz);
+
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index), delta_px);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index), delta_py);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index), delta_pz);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(i, j, k, count_component), 1.0);
+			}
+			work_density = warpAllSum(work_density);
+
+			if (lane == 0) {
+				if (work_density < 0.0) {
+					amrex::Gpu::Atomic::AddNoRet(&local_buffer(host_i, host_j, host_k, HydroSystem<problem_t>::energy_index), -work_density);
+				}
+				amrex::Gpu::Atomic::AddNoRet(active_particle_count, 1);
+				amrex::Gpu::Atomic::AddNoRet(scalar_momentum, requested_momentum);
+			}
+		});
+#else
 		amrex::ParallelFor(num_particles, [=] AMREX_GPU_DEVICE(int64_t particle_index) noexcept {
 			const auto &particle = particle_data[particle_index]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 			if (particle.id() <= 0) {
@@ -229,7 +449,12 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 			amrex::Gpu::Atomic::AddNoRet(active_particle_count, 1);
 			amrex::Gpu::Atomic::AddNoRet(scalar_momentum, requested_momentum);
 		});
+#endif
 	}
+#ifdef AMREX_USE_GPU
+	// keep the compaction scratch alive until the kernels that read it have finished
+	amrex::Gpu::streamSynchronize();
+#endif
 }
 
 template <typename problem_t>
