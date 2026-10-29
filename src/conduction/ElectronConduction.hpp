@@ -136,21 +136,12 @@ template <typename problem_t> class ElectronConduction
 			}
 		});
 
-		// Reconstruct (rho, T, mass fractions) to the interfaces
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
-		const int ng_reconstruct = params.ng_reconstruct;
+		// src-02b: no reconstruction; rho, T and mass fractions are brought to faces by arithmetic averages of the two adjacent cells
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			leftState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2 + nmscalars_, ng_reconstruct);
-			rightState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2 + nmscalars_, ng_reconstruct);
 			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
 			heat_flux[idim].setVal(0.0);
 		}
-
-		AMREX_D_TERM(ReconstructPrimVar<FluxDir::X1>(primVar, leftState[0], rightState[0], ng_reconstruct, params);
-			     , ReconstructPrimVar<FluxDir::X2>(primVar, leftState[1], rightState[1], ng_reconstruct, params);
-			     , ReconstructPrimVar<FluxDir::X3>(primVar, leftState[2], rightState[2], ng_reconstruct, params);)
 
 		auto const evaluateFace = [=] AMREX_GPU_DEVICE(amrex::Real rho_L, amrex::Real T_L, amrex::Real rho_R, amrex::Real T_R,
 							       amrex::GpuArray<amrex::Real, nmscalars_> const &massFrac_L,
@@ -178,8 +169,6 @@ template <typename problem_t> class ElectronConduction
 		};
 
 		auto const &temp = primVar.const_arrays();
-		auto const &left_x = leftState[0].const_arrays();
-		auto const &right_x = rightState[0].const_arrays();
 		auto flux_x = heat_flux[0].arrays();
 		amrex::ParallelFor(heat_flux[0], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			const amrex::Real gradT = (temp[bx](i, j, k, 1) - temp[bx](i - 1, j, k, 1)) / dx[0];
@@ -188,19 +177,17 @@ template <typename problem_t> class ElectronConduction
 			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_L{};
 			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_R{};
 			for (int n = 0; n < nmscalars_; ++n) {
-				massFrac_L[n] = left_x[bx](i, j, k, 2 + n);
-				massFrac_R[n] = right_x[bx](i, j, k, 2 + n);
+				massFrac_L[n] = temp[bx](i - 1, j, k, 2 + n);
+				massFrac_R[n] = temp[bx](i, j, k, 2 + n);
 			}
-			evaluateFace(left_x[bx](i, j, k, 0), left_x[bx](i, j, k, 1), right_x[bx](i, j, k, 0), right_x[bx](i, j, k, 1), massFrac_L, massFrac_R,
-				     kappa_face, q_sat_face);
+			evaluateFace(temp[bx](i - 1, j, k, 0), temp[bx](i - 1, j, k, 1), temp[bx](i, j, k, 0), temp[bx](i, j, k, 1), massFrac_L, massFrac_R, kappa_face,
+				     q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_x[bx](i, j, k) = q_classical / limiter;
 		});
 
 #if AMREX_SPACEDIM >= 2
-		auto const &left_y = leftState[1].const_arrays();
-		auto const &right_y = rightState[1].const_arrays();
 		auto flux_y = heat_flux[1].arrays();
 		amrex::ParallelFor(heat_flux[1], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			const amrex::Real gradT = (temp[bx](i, j, k, 1) - temp[bx](i, j - 1, k, 1)) / dx[1];
@@ -209,11 +196,11 @@ template <typename problem_t> class ElectronConduction
 			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_L{};
 			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_R{};
 			for (int n = 0; n < nmscalars_; ++n) {
-				massFrac_L[n] = left_y[bx](i, j, k, 2 + n);
-				massFrac_R[n] = right_y[bx](i, j, k, 2 + n);
+				massFrac_L[n] = temp[bx](i, j - 1, k, 2 + n);
+				massFrac_R[n] = temp[bx](i, j, k, 2 + n);
 			}
-			evaluateFace(left_y[bx](i, j, k, 0), left_y[bx](i, j, k, 1), right_y[bx](i, j, k, 0), right_y[bx](i, j, k, 1), massFrac_L, massFrac_R,
-				     kappa_face, q_sat_face);
+			evaluateFace(temp[bx](i, j - 1, k, 0), temp[bx](i, j - 1, k, 1), temp[bx](i, j, k, 0), temp[bx](i, j, k, 1), massFrac_L, massFrac_R, kappa_face,
+				     q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_y[bx](i, j, k) = q_classical / limiter;
@@ -221,8 +208,6 @@ template <typename problem_t> class ElectronConduction
 #endif
 
 #if AMREX_SPACEDIM == 3
-		auto const &left_z = leftState[2].const_arrays();
-		auto const &right_z = rightState[2].const_arrays();
 		auto flux_z = heat_flux[2].arrays();
 		amrex::ParallelFor(heat_flux[2], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			const amrex::Real gradT = (temp[bx](i, j, k, 1) - temp[bx](i, j, k - 1, 1)) / dx[2];
@@ -231,11 +216,11 @@ template <typename problem_t> class ElectronConduction
 			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_L{};
 			amrex::GpuArray<amrex::Real, nmscalars_> massFrac_R{};
 			for (int n = 0; n < nmscalars_; ++n) {
-				massFrac_L[n] = left_z[bx](i, j, k, 2 + n);
-				massFrac_R[n] = right_z[bx](i, j, k, 2 + n);
+				massFrac_L[n] = temp[bx](i, j, k - 1, 2 + n);
+				massFrac_R[n] = temp[bx](i, j, k, 2 + n);
 			}
-			evaluateFace(left_z[bx](i, j, k, 0), left_z[bx](i, j, k, 1), right_z[bx](i, j, k, 0), right_z[bx](i, j, k, 1), massFrac_L, massFrac_R,
-				     kappa_face, q_sat_face);
+			evaluateFace(temp[bx](i, j, k - 1, 0), temp[bx](i, j, k - 1, 1), temp[bx](i, j, k, 0), temp[bx](i, j, k, 1), massFrac_L, massFrac_R, kappa_face,
+				     q_sat_face);
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
 			flux_z[bx](i, j, k) = q_classical / limiter;
