@@ -25,14 +25,21 @@ using Real = amrex::Real;
 
 template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F const &rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
-							       quokka::valarray<Real, N> &ynew, quokka::valarray<Real, N> &yerr) -> int
+							       quokka::valarray<Real, N> &ynew, quokka::valarray<Real, N> &yerr,
+							       quokka::valarray<Real, N> const *ydot0 = nullptr) -> int
 {
 	// Compute one step of the RK Heun-Euler (1)2 method
+	// If ydot0 != nullptr it holds rhs(t0, y) (exactly the stage-1 derivative), which is then not re-evaluated.
 
 	// stage 1 [Forward Euler step at t0]
 	quokka::valarray<Real, N> k1{};
 	quokka::valarray<Real, N> y_arg = y;
-	int ierr = rhs(t0, y_arg, k1);
+	int ierr = 0;
+	if (ydot0 != nullptr) {
+		k1 = *ydot0;
+	} else {
+		ierr = rhs(t0, y_arg, k1);
+	}
 	if (ierr != 0) {
 		return ierr;
 	}
@@ -134,13 +141,16 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F const &rhs
 
 	// initial timestep
 	quokka::valarray<Real, N> ydot0{};
-	rhs(t0, y0, ydot0);
+	const int ierr_ydot0 = rhs(t0, y0, ydot0);
+	// ydot0 == rhs(t0, y) is also the stage-1 derivative of the first step (and of every retry of it,
+	// since y and t are unchanged until a step is accepted), so it is reused instead of re-evaluated.
+	bool ydot_valid = (ierr_ydot0 == 0);
 	const Real dt_guess = 0.1 * min(abs(y0 / ydot0));
 	AMREX_ASSERT(dt_guess > 0.0);
 
 	// adaptive timestep controller
 	const int maxRetries = 7;
-	const int p = 2; // integration order of (high-order) method
+	constexpr int p = 2; // integration order of (high-order) method
 	const Real eta_max = 20.;
 	const Real eta_max_errfail_prevstep = 1.0;
 	const Real eta_max_errfail_again = 0.3;
@@ -164,7 +174,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F const &rhs
 		bool step_success = false;
 		for (int k = 0; k < maxRetries; ++k) {
 			// compute single step of chosen RK method
-			int ierr = rk12_single_step(rhs, time, y, dt, ynew, yerr);
+			int ierr = rk12_single_step(rhs, time, y, dt, ynew, yerr, ydot_valid ? &ydot0 : nullptr);
 
 			Real eta = NAN;
 			Real epsilon = NAN;
@@ -179,11 +189,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F const &rhs
 
 				// compute new timestep with 'I' controller
 				// https://sundials.readthedocs.io/en/latest/arkode/Mathematics_link.html#i-controller
-				eta = std::pow(epsilon, -1.0 / static_cast<Real>(p));
+				static_assert(p == 2, "eta = epsilon^(-1/p) is written as 1/sqrt(epsilon) for p == 2");
+				eta = 1.0 / std::sqrt(epsilon);
 
 				if (epsilon < 1.0) { // error passed
 					y = ynew;
-					time += dt; // increment time
+					ydot_valid = false; // y changed: ydot0 = rhs(t0, y) no longer applies
+					time += dt;	    // increment time
 					if (k == 0) {
 						eta = std::min(eta, eta_max); // limit timestep increase
 					} else {

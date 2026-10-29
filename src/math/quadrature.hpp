@@ -17,7 +17,9 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto kernel_wendland_c2(const amrex::Real r)
 	if (r > 1.0) {
 		val = 0;
 	} else {
-		val = (21. / (2. * M_PI)) * std::pow((1.0 - r), 4) * (4.0 * r + 1.0);
+		const amrex::Real omr = 1.0 - r;
+		const amrex::Real omr2 = omr * omr;
+		val = (21. / (2. * M_PI)) * (omr2 * omr2) * (4.0 * r + 1.0);
 	}
 	return val;
 }

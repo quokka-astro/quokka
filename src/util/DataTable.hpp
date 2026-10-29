@@ -70,6 +70,97 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 	// Per-output transform for return values: linear, log, or fast_log
 	std::array<TransformType, Nout> output_transforms{};
 
+	// Reciprocal of dcoord (multiply instead of dividing in the hot path); must be the last member (aggregate init)
+	std::array<amrex::Real, Ndim> inv_dcoord{};
+
+	/// @brief Find interpolation index and normalized coordinate along a single (already transformed) dimension
+	///
+	/// This is the per-dimension body of find_interpolation_data(); exposed so that callers whose coordinate
+	/// along one axis is constant (e.g. rho in the cooling ODE integration) can compute it once.
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void find_interpolation_dim(int dim, amrex::Real const point_dim, int &index_out, amrex::Real &normalized_out) const
+	{
+		// Get table bounds - use precomputed coord_min/coord_max instead of accessing coords table
+		amrex::Real const coord_start = coord_min[dim];
+		amrex::Real const coord_end = coord_max[dim];
+
+		// Handle out-of-bounds based on policy
+		amrex::Real clamped_coord = point_dim;
+		if constexpr (oob_policy == OutOfBounds::clamp) {
+			// Clamp coordinates to valid table bounds (extrapolation not supported)
+			clamped_coord = amrex::max(coord_start, amrex::min(point_dim, coord_end));
+		} else if constexpr (oob_policy == OutOfBounds::fail) {
+			// Check if point is out of bounds and abort if so
+			if (point_dim < coord_start || point_dim > coord_end) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false,
+								 std::format("Point is out of bounds for dimension {}! (value: {}, valid range: [{}, {}])", dim, point_dim,
+									     coord_start, coord_end)
+								     .c_str());
+			}
+		}
+
+		// Find grid cell index containing the point
+		// index is the "lower" index of the containing hypercube
+		int index = amrex::max(0, amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) * inv_dcoord[dim])), sizes[dim] - 1));
+
+		// if index is end - 1, then set index to end - 2 (so that upper index is end - 1, the last index)
+		if (index == sizes[dim] - 1) {
+			index = sizes[dim] - 2;
+		}
+
+		// Compute normalized coordinate
+		// For linear spacing: coord = coord_min + index * dcoord (no table lookup needed!)
+		amrex::Real const coord_at_index = coord_min[dim] + static_cast<amrex::Real>(index) * dcoord[dim];
+		index_out = index;
+		normalized_out = (clamped_coord - coord_at_index) * inv_dcoord[dim];
+	}
+
+	/// @brief Transform a physical coordinate along one dimension to interpolation space (log/fast_log)
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto transform_coord(int dim, amrex::Real const point_dim) const -> amrex::Real
+	{
+		amrex::Real pt = point_dim;
+		if (spacing_types[dim] == TransformType::log) {
+			if constexpr (oob_policy == OutOfBounds::clamp) {
+				constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+				pt = std::log(amrex::max(point_dim, epsilon));
+			} else if constexpr (oob_policy == OutOfBounds::fail) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    point_dim > 0.0,
+				    std::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point_dim).c_str());
+				pt = std::log(point_dim);
+			}
+		} else if (spacing_types[dim] == TransformType::fast_log) {
+			if constexpr (oob_policy == OutOfBounds::clamp) {
+				constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+				pt = FastMath::lg(amrex::max(point_dim, epsilon));
+			} else if constexpr (oob_policy == OutOfBounds::fail) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    point_dim > 0.0,
+				    std::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim, point_dim).c_str());
+				pt = FastMath::lg(point_dim);
+			}
+		}
+		return pt;
+	}
+
+	/// @brief Interpolate a single output from precomputed interpolation data, applying the output transform
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single_from_interp(const InterpData<Ndim> &interp, int output_index) const
+	    -> amrex::Real
+	{
+		amrex::Real value = interpolate_single_from_indices(interp, output_index);
+		if (output_transforms[output_index] == TransformType::fast_log) {
+			value = FastMath::pow2(value);
+		} else if (output_transforms[output_index] == TransformType::log) {
+			value = std::exp(value);
+		}
+		return value;
+	}
+
+	/// @brief Locate the interpolation cell for a physical point (transform + find_interpolation_data)
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto locate(const std::array<amrex::Real, Ndim> &point) const -> InterpData<Ndim>
+	{
+		return find_interpolation_data(transform_point(point));
+	}
+
 	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
 	/// This function locates the hypercube containing the given point and computes normalized
@@ -101,39 +192,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 		InterpData<Ndim> interp;
 
 		for (int dim = 0; dim < Ndim; ++dim) {
-			// Get table bounds - use precomputed coord_min/coord_max instead of accessing coords table
-			amrex::Real const coord_start = coord_min[dim];
-			amrex::Real const coord_end = coord_max[dim];
-
-			// Handle out-of-bounds based on policy
-			amrex::Real clamped_coord = point[dim];
-			if constexpr (oob_policy == OutOfBounds::clamp) {
-				// Clamp coordinates to valid table bounds (extrapolation not supported)
-				clamped_coord = amrex::max(coord_start, amrex::min(point[dim], coord_end));
-			} else if constexpr (oob_policy == OutOfBounds::fail) {
-				// Check if point is out of bounds and abort if so
-				if (point[dim] < coord_start || point[dim] > coord_end) {
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    false, std::format("Point is out of bounds for dimension {}! (value: {}, valid range: [{}, {}])", dim, point[dim],
-							       coord_start, coord_end)
-						       .c_str());
-				}
-			}
-
-			// Find grid cell indices containing the point
-			// indices are the "lower" indices of the containing hypercube
-			interp.indices[dim] =
-			    amrex::max(0, amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) / dcoord[dim])), sizes[dim] - 1));
-
-			// if indices is end - 1, then set indices to end - 2 (so that upper_indices is end - 1, the last index)
-			if (interp.indices[dim] == sizes[dim] - 1) {
-				interp.indices[dim] = sizes[dim] - 2;
-			}
-
-			// Compute normalized coordinate
-			// For linear spacing: coord = coord_min + index * dcoord (no table lookup needed!)
-			amrex::Real const coord_at_index = coord_min[dim] + static_cast<amrex::Real>(interp.indices[dim]) * dcoord[dim];
-			interp.normalized[dim] = (clamped_coord - coord_at_index) / dcoord[dim];
+			find_interpolation_dim(dim, point[dim], interp.indices[dim], interp.normalized[dim]);
 		}
 
 		return interp;
@@ -202,13 +261,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 	    -> amrex::Real
 	{
 		InterpData<Ndim> const interp = find_interpolation_data(transform_point(point));
-		amrex::Real value = interpolate_single_from_indices(interp, output_index);
-		if (output_transforms[output_index] == TransformType::fast_log) {
-			value = FastMath::pow2(value);
-		} else if (output_transforms[output_index] == TransformType::log) {
-			value = std::exp(value);
-		}
-		return value;
+		return interpolate_single_from_interp(interp, output_index);
 	}
 
       private:
@@ -218,30 +271,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 	{
 		std::array<amrex::Real, Ndim> pt{};
 		for (int dim = 0; dim < Ndim; ++dim) {
-			if (spacing_types[dim] == TransformType::log) {
-				if constexpr (oob_policy == OutOfBounds::clamp) {
-					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
-					pt[dim] = std::log(amrex::max(point[dim], epsilon));
-				} else if constexpr (oob_policy == OutOfBounds::fail) {
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    point[dim] > 0.0,
-					    std::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim]).c_str());
-					pt[dim] = std::log(point[dim]);
-				}
-			} else if (spacing_types[dim] == TransformType::fast_log) {
-				if constexpr (oob_policy == OutOfBounds::clamp) {
-					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
-					pt[dim] = FastMath::lg(amrex::max(point[dim], epsilon));
-				} else if constexpr (oob_policy == OutOfBounds::fail) {
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    point[dim] > 0.0,
-					    std::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
-						.c_str());
-					pt[dim] = FastMath::lg(point[dim]);
-				}
-			} else {
-				pt[dim] = point[dim];
-			}
+			pt[dim] = transform_coord(dim, point[dim]);
 		}
 		return pt;
 	}
@@ -413,6 +443,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 	// Precomputed grid spacing for optimization
 	std::array<amrex::Real, Ndim> dcoord_{};
+	std::array<amrex::Real, Ndim> inv_dcoord_{};
 
 	std::array<int, Ndim> sizes_{};
 
@@ -704,7 +735,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		    spacing_types_,    // spacing types array (converted to enum)
 		    dcoord_,	       // dcoord array
 		    sizes_,	       // sizes array
-		    output_transforms_ // per-output transform
+		    output_transforms_, // per-output transform
+		    inv_dcoord_
 		};
 		return tables;
 	}
@@ -727,7 +759,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		}
 
 		DataTableGpuConst<Ndim, Nout, oob_policy> tables{coord_tables,	 data_tables, coord_min_, coord_max_,
-								 spacing_types_, dcoord_,     sizes_,	  output_transforms_};
+								 spacing_types_, dcoord_,     sizes_,	  output_transforms_, inv_dcoord_};
 		return tables;
 	}
 
@@ -869,6 +901,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		// Calculate grid spacing (after taking necessary log of the coordinates)
 		for (int dim = 0; dim < Ndim; ++dim) {
 			dcoord_[dim] = (coord_max_[dim] - coord_min_[dim]) / static_cast<amrex::Real>(sizes_[dim] - 1);
+			inv_dcoord_[dim] = 1.0 / dcoord_[dim];
 		}
 
 		amrex::Array<int, Ndim> lo{};
