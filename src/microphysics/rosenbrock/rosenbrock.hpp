@@ -11,6 +11,7 @@
 
 #include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_ConstexprFor.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
@@ -31,18 +32,17 @@ using amrex::literals::operator""_rt;
 namespace rosenbrock
 {
 
-// rtol_for and atol_for keep the shape of Microphysics' versions instead of switching over the role, during the port
-// only. See IntegratorLayout::role().
+// The tolerances of entry n. Only the entries that count toward the step error (counts_toward_error) have tolerances,
+// so callers skip the others.
 template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rtol_for(const RosenbrockT &rstate, const int n) -> amrex::Real
 {
 	const VarRole role = Layout::role(n);
+	AMREX_ASSERT(counts_toward_error(role));
 	if (role == VarRole::Energy) {
 		return rstate.rtol_enuc;
 	}
-	if constexpr (Layout::photochemistry) {
-		if (role != VarRole::Species) {
-			return role == VarRole::ChemPhotonNumber ? rstate.rtol_rad_num : 1.0e30;
-		}
+	if (role == VarRole::ChemPhotonNumber) {
+		return rstate.rtol_rad_num;
 	}
 	return rstate.rtol_spec;
 }
@@ -50,13 +50,12 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto atol_for(const RosenbrockT &rstate, const int n) -> amrex::Real
 {
 	const VarRole role = Layout::role(n);
+	AMREX_ASSERT(counts_toward_error(role));
 	if (role == VarRole::Energy) {
 		return rstate.atol_enuc;
 	}
-	if constexpr (Layout::photochemistry) {
-		if (role != VarRole::Species) {
-			return role == VarRole::ChemPhotonNumber ? rstate.atol_rad_num : 1.0e30;
-		}
+	if (role == VarRole::ChemPhotonNumber) {
+		return rstate.atol_rad_num;
 	}
 	return rstate.atol_spec;
 }
@@ -67,9 +66,12 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 
 	amrex::Real err = 0.0_rt;
 	for (int n = 1; n <= int_neqs; ++n) {
-		const amrex::Real sk = atol_for<Layout>(rstate, n) + rtol_for<Layout>(rstate, n) * amrex::max(std::abs(rstate.y(n)), std::abs(rstate.ynew(n)));
-		const amrex::Real term = counts_toward_error(Layout::role(n)) ? rstate.work(n) / sk : 0.0_rt;
-		err += term * term;
+		if (counts_toward_error(Layout::role(n))) {
+			const amrex::Real sk =
+			    atol_for<Layout>(rstate, n) + rtol_for<Layout>(rstate, n) * amrex::max(std::abs(rstate.y(n)), std::abs(rstate.ynew(n)));
+			const amrex::Real term = rstate.work(n) / sk;
+			err += term * term;
+		}
 	}
 	// Known bug, kept for bitwise identity with Microphysics and to be fixed later: the sum should be divided by the
 	// number of equations that take part in error control, not by int_neqs. The excluded equations add zero terms, so
@@ -157,6 +159,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex
 template <typename Layout, typename BurnT, typename RosenbrockT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, RosenbrockT &rstate, const amrex::Real time, const IntegratorParams &params)
 {
+	// TODO (james471): This is an unreviewed and untested function. It has never been used since we always
+	// use the analytic Jacobian.
 	constexpr int int_neqs = Layout::neqs;
 	constexpr amrex::Real UROUND = std::numeric_limits<amrex::Real>::epsilon();
 	amrex::Array1D<amrex::Real, 1, int_neqs> ewt{};
@@ -167,10 +171,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, R
 		ybase(i) = rstate.y(i);
 	}
 
+	// error weights, only for the entries that count toward the step error (the others have no tolerances)
 	amrex::Real fac = 0.0_rt;
 	for (int i = 1; i <= int_neqs; ++i) {
-		ewt(i) = 1.0_rt / (rtol_for<Layout>(rstate, i) * std::abs(rstate.y(i)) + atol_for<Layout>(rstate, i));
-		fac += (rstate.k[0](i) * ewt(i)) * (rstate.k[0](i) * ewt(i));
+		if (counts_toward_error(Layout::role(i))) {
+			ewt(i) = 1.0_rt / (rtol_for<Layout>(rstate, i) * std::abs(rstate.y(i)) + atol_for<Layout>(rstate, i));
+			fac += (rstate.k[0](i) * ewt(i)) * (rstate.k[0](i) * ewt(i));
+		}
 	}
 	fac = std::sqrt(fac / static_cast<amrex::Real>(int_neqs));
 
@@ -181,7 +188,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, R
 
 	for (int j = 1; j <= int_neqs; ++j) {
 		const amrex::Real yj = ybase(j);
-		const amrex::Real R = amrex::max(std::sqrt(UROUND) * std::abs(yj), R0 / ewt(j));
+		// an entry without tolerances gets the relative step, floored at SMALL_X_SAFE as clean_state floors it
+		const amrex::Real R = counts_toward_error(Layout::role(j)) ? amrex::max(std::sqrt(UROUND) * std::abs(yj), R0 / ewt(j))
+									   : std::sqrt(UROUND) * amrex::max(std::abs(yj), params.SMALL_X_SAFE);
 		for (int n = 1; n <= int_neqs; ++n) {
 			rstate.y(n) = ybase(n);
 		}
@@ -285,7 +294,8 @@ rosenbrock_integrator(BurnT &state, RosenbrockState<IntegratorLayout<problem_t, 
 	}
 
 	for (int n = 1; n <= int_neqs; ++n) {
-		if (atol_for<Layout>(rstate, n) <= 0.0_rt || rtol_for<Layout>(rstate, n) <= 10.0_rt * std::numeric_limits<amrex::Real>::epsilon()) {
+		if (counts_toward_error(Layout::role(n)) &&
+		    (atol_for<Layout>(rstate, n) <= 0.0_rt || rtol_for<Layout>(rstate, n) <= 10.0_rt * std::numeric_limits<amrex::Real>::epsilon())) {
 			return IERR_TOO_MUCH_ACCURACY_REQUESTED;
 		}
 	}
