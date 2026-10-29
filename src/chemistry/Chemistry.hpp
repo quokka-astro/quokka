@@ -14,22 +14,16 @@
 #include "AMReX.H"
 #include "AMReX_GpuQualifiers.H"
 
+// The definition of computeChemistry, declared in QuokkaSimulation.hpp. A problem with chemistry includes this header;
+// problems without it do not, because the definition uses spmasses, which only the chemistry EOSs declare.
+
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 
-namespace quokka::chemistry
-{
-template <typename problem_t>
-auto computeChemistry(amrex::MultiFab &mf, amrex::Real dt, amrex::Real max_density_allowed, amrex::Real min_density_allowed) -> bool;
-} // namespace quokka::chemistry
-
-// The definition is compiled only in builds with chemistry, because it uses spmasses, which only the chemistry EOSs
-// declare. Callers use Microphysics_Traits<problem_t>::chemistry. This guard goes when the gamma_law EOS declares
-// spmasses too.
-#ifdef CHEMISTRY
 #include "actual_eos_data.H"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "hydro/EOSMicrophysics.hpp"
 #include "microphysics/burn_state.hpp"
 #include "microphysics/burner.hpp"
 
@@ -166,5 +160,5 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 }
 
 } // namespace quokka::chemistry
-#endif
+
 #endif // CHEMISTRY_HPP_

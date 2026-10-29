@@ -20,6 +20,8 @@ namespace
 [[maybe_unused]] EOS_SHIM_HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real zion[NumSpec] = {1.0, 2.0, 6.0, 6.0, 7.0, 7.0, 7.0, 8.0, 8.0, 8.0, 8.0, 9.0, 9.0, 2.0};
 [[maybe_unused]] const std::vector<std::string> short_spec_names_cxx = {"E", "Hp", "H", "Hm", "Dp", "D", "H2p", "Dm", "H2", "HDp", "HD", "HEpp", "HEp", "HE"};
 [[maybe_unused]] const std::vector<std::string> spec_names_cxx = {"elec", "hp", "h", "hm", "dp", "d", "h2p", "dm", "h2", "hdp", "hd", "hepp", "hep", "he"};
+[[maybe_unused]] const std::vector<std::string> short_aux_names_cxx = {"Tdust"};
+[[maybe_unused]] const std::vector<std::string> aux_names_cxx = {"Tdust"};
 } // namespace
 
 // the table lists the species in the network's order

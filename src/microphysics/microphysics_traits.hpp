@@ -27,10 +27,8 @@ struct DefaultMicrophysicsTraits {
 	/// implemented yet, so with this set a failed burn aborts.
 	static constexpr bool burn_retry = false;
 	/// Enable chemistry
-	/// Must match the CHEMISTRY build macro while Microphysics still reads it.
 	static constexpr bool chemistry = false;
 	/// Enable photochemistry.
-	/// Must match the PHOTOCHEMISTRY build macro while Microphysics still reads it.
 	static constexpr bool photochemistry = false;
 	/// Dust absorption in chemical bands.
 	static constexpr bool dust_chemical_band_absorption = false;
