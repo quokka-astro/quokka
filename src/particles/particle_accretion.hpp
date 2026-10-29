@@ -237,7 +237,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk, 0), rel_accretion_rate);
 
 					// Deposit count into the last component for roundoff algorithm
-					const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+					const int count_comp = 1; // Last component of the 2-component buffer is the count
 					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk, count_comp), 1.0);
 					//----------------------------------------------------------------------------------------------------
 				}

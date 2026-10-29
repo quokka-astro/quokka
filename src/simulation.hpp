@@ -227,6 +227,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real sfh_time_interval_ = -1.0; // time interval for the star formation history
 	amrex::Real last_sfh_time_ = 0.0;
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
+	// cache of the density-floor MultiFab used by particleMeshInteraction (valid while key members match)
+	amrex::MultiFab densityFloorCache_;
+	int densityFloorCacheLev_ = -1;
+	amrex::Real densityFloorCacheValue_ = 0.0;
+	amrex::BoxArray densityFloorCacheBA_;
+	amrex::DistributionMapping densityFloorCacheDM_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> densityFloorCacheProbLo_{};
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> densityFloorCacheDx_{};
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
 	// Conduction parameters
@@ -2240,6 +2248,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;
 
+	// Early exit: no registered particle type accretes, forms stars or gives feedback, so every step below is a no-op on the hydro state
+	// (the accretion buffer would be all zeros, the SN / feedback / creation hooks do nothing). The FixupState call is kept because it
+	// can modify the state (dual-energy sync is not exactly idempotent); the ghost-zone fill is skipped because the ghost cells of
+	// state_new are never read before the next step refills them.
+	if (!particleRegister_.HasParticleMeshInteraction()) {
+		FixupState(lev);
+		sn_count_ = 0;
+		return;
+	}
+
 	particleRegister_.updateChemicalFeedback(state_new_cc_[lev], lev, time, dt);
 
 	// Enforce floors and limits on hydro state to ensure we have valid hydro states
@@ -2263,14 +2281,34 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc_ptr != nullptr, "MHD is enabled but state_fc_ptr is nullptr in particleMeshInteraction");
 	}
 
-	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
-	// The extra component is for the particle counts in cells
-	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars + 1, nghost);
+	// Create a MultiFab to hold the relative accretion rate (component 0) and the particle counts in cells (component 1)
+	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], 2, nghost);
 
 	// Evaluate the configured density floor cell-by-cell so sink accretion uses
-	// the same spatially varying floor as the hydro state fixup.
-	amrex::MultiFab density_floor_at_level(grids[lev], dmap[lev], 1, 0);
-	ComputeDensityFloor(lev, density_floor_at_level, 0);
+	// the same spatially varying floor as the hydro state fixup. The floor depends only on position and the floor parameter, so it is
+	// cached and recomputed only if the level, grids, distribution map, geometry or floor value changed (i.e. after a regrid).
+	{
+		const auto prob_lo_now = geom[lev].ProbLoArray();
+		const auto dx_now = geom[lev].CellSizeArray();
+		bool valid = densityFloorCache_.isDefined() && densityFloorCacheLev_ == lev && densityFloorCacheValue_ == densityFloor_ &&
+			     densityFloorCacheBA_ == grids[lev] && densityFloorCacheDM_ == dmap[lev];
+		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+			valid = valid && densityFloorCacheProbLo_[d] == prob_lo_now[d] && densityFloorCacheDx_[d] == dx_now[d];
+		}
+		if (!valid) {
+			densityFloorCache_.define(grids[lev], dmap[lev], 1, 0);
+			ComputeDensityFloor(lev, densityFloorCache_, 0);
+			densityFloorCacheLev_ = lev;
+			densityFloorCacheValue_ = densityFloor_;
+			densityFloorCacheBA_ = grids[lev];
+			densityFloorCacheDM_ = dmap[lev];
+			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+				densityFloorCacheProbLo_[d] = prob_lo_now[d];
+				densityFloorCacheDx_[d] = dx_now[d];
+			}
+		}
+	}
+	amrex::MultiFab const &density_floor_at_level = densityFloorCache_;
 
 	accretion_rate_at_level.setVal(0.0);
 

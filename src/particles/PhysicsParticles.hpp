@@ -967,6 +967,22 @@ template <typename problem_t> class PhysicsParticleRegister
 		return false;
 	}
 
+	// Returns true if any registered particle type takes part in particle-mesh interaction (accretion, creation, SN / chemical / early feedback).
+	// Decided from the registry only (compile-time particle switch + runtime parameters read identically on all ranks), so it is collective-safe.
+	[[nodiscard]] auto HasParticleMeshInteraction() const -> bool
+	{
+		if (EMEF_enabled) {
+			return true;
+		}
+		for (const auto &[type, descriptor] : particleRegistry_) { // NOSONAR
+			if (descriptor->getAllowsAccretion() || descriptor->getAllowsCreation() || descriptor->getEvolutionStageIndex() >= 0 ||
+			    type == ParticleType::StochasticStellarPop) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	// Check if registry contains any particles that support formation
 	[[nodiscard]] auto HasFormationParticles() const -> bool
 	{
