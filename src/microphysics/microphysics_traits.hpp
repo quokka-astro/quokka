@@ -30,7 +30,7 @@ struct DefaultMicrophysicsTraits {
 	/// Must match the CHEMISTRY build macro while Microphysics still reads it.
 	static constexpr bool chemistry = false;
 	/// Enable photochemistry.
-	/// Must match the PHOTOCHEMISTRY build macro while Microphysics' burn_t still depends on it.
+	/// Must match the PHOTOCHEMISTRY build macro while Microphysics still reads it.
 	static constexpr bool photochemistry = false;
 	/// Dust absorption in chemical bands.
 	static constexpr bool dust_chemical_band_absorption = false;
