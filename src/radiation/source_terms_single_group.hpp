@@ -370,9 +370,11 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				}
 
 				// update iteration counter: (+1, +ite, max(self, ite))
-				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1);     // total number of radiation updates. NOLINT
-				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1); // total number of Newton-Raphson iterations. NOLINT
-				amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1); // maximum number of Newton-Raphson iterations. NOLINT
+				if (p_iteration_counter_local != nullptr) { // null unless print_iteration_counts is set
+					amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1);     // total number of radiation updates. NOLINT
+					amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1); // total number of Newton-Raphson iterations. NOLINT
+					amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1); // maximum number of Newton-Raphson iterations. NOLINT
+				}
 
 				AMREX_ASSERT(Egas_guess > 0.0);
 				AMREX_ASSERT(Erad_guess >= 0.0);
