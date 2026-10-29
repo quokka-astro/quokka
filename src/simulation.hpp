@@ -1958,10 +1958,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		constexpr int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
 
+		// Warm start (perf-src-03b): only the MLMG path (any periodic dimension) uses phi from the previous solve as the initial guess.
+		// The OpenBCSolver path rebuilds its solution internally, so it keeps the zero initial guess.
+		bool use_warm_start_phi = false;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			use_warm_start_phi = use_warm_start_phi || geom[0].isPeriodic(idim);
+		}
+
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost_phi);
+			// phi[lev] is reusable only if it lives on exactly the same grids and distribution mapping as now
+			// (i.e. no regrid of this level since the last solve); otherwise fall back to a zero initial guess.
+			const bool phi_reusable = use_warm_start_phi && (phi[lev].boxArray() == grids[lev]) && (phi[lev].DistributionMap() == dmap[lev]) &&
+						  (phi[lev].nComp() == ncomp) && (phi[lev].nGrow() == nghost_phi);
+			if (phi_reusable) {
+				phi[lev].setBndry(0); // keep valid cells (previous solution); reset ghost cells to the previous cold-start value
+			} else {
+				phi[lev].define(grids[lev], dmap[lev], ncomp, nghost_phi);
+				phi[lev].setVal(0); // set initial guess to zero
+			}
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
-			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
 		}
 
@@ -2051,11 +2066,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			// Create MLPoisson linear operator with proper LPInfo for AMR
 			amrex::LPInfo info;
 			info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
-			// For AMR problems, we need to ensure proper coarsening
-			if (finest_level > 0) {
-				info.setAgglomeration(false); // Disable agglomeration for AMR
-				info.setConsolidation(false); // Disable consolidation for AMR
-			}
+			// perf-src-03b: agglomeration/consolidation re-enabled for AMR. AMReX only agglomerates/consolidates AMR level 0
+			// (MLLinOp::defineGrids); finer AMR levels keep their own grids, so it is safe with multiple levels.
 
 			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), info);
 
@@ -2102,6 +2114,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			// caller before use (see kickParticlesAllLevels).
 			amrex::Real abstol = abstolPoisson_ * std::abs(rhs_min);
 			amrex::Real final_resnorm = mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+
+			amrex::Print() << "[gravity] MLMG iterations = " << mlmg.getNumIters() << ", warm_start = " << use_warm_start_phi
+				       << ", init_resid = " << mlmg.getInitResidual() << ", rhs_norm = " << mlmg.getInitRHS() << ", final_resid = " << final_resnorm
+				       << "\n";
 
 			// Check convergence
 			if (verbose) {
