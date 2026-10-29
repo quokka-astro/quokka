@@ -117,17 +117,12 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	const quokka::valarray<double, fluxdim> D_R = {0., 1., 0., 0., sR.u, 0.};
 	const quokka::valarray<double, fluxdim> D_star = {0., 1., 0., 0., S_star, 0.};
 
-	quokka::valarray<double, fluxdim> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
-	quokka::valarray<double, fluxdim> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
-
-	// The remaining components are passive scalars, so just copy them from
-	// x1LeftState and x1RightState into the (left, right) state vectors U_L and
-	// U_R
-	for (int n = 0; n < N_scalars; ++n) {
-		const int nstart = fluxdim - N_scalars;
-		U_L[nstart + n] = sL.scalar[n];
-		U_R[nstart + n] = sR.scalar[n];
-	}
+	// Only the 6 hydro components (rho, 3 momenta, E, Eint) are solved here; passive
+	// scalars are upwinded on the mass flux by the caller (HydroSystem::ComputeFluxes),
+	// so the register footprint of this solver does not grow with the number of scalars.
+	static_assert(fluxdim == 6, "HLLC solves only the 6 hydro components; scalars are fluxed by the caller");
+	const quokka::valarray<double, fluxdim> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
+	const quokka::valarray<double, fluxdim> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
 
 	const quokka::valarray<double, fluxdim> F_L = sL.u * U_L + sL.P * D_L;
 	const quokka::valarray<double, fluxdim> F_R = sR.u * U_R + sR.P * D_R;
