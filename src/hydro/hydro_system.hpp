@@ -967,7 +967,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
 	// cell-centered kernel
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) {
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
 		quokka::Array4View<const amrex::Real, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
@@ -993,6 +993,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
+		for (int n = 0; n < nvars; ++n) {
 		// get interfaces
 		const double a_minus = x1RightState(i, j, k, n);
 		const double a_plus = x1LeftState(i + 1, j, k, n);
@@ -1006,6 +1007,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 
 		x1RightState(i, j, k, n) = new_a_minus;
 		x1LeftState(i + 1, j, k, n) = new_a_plus;
+		}
 	});
 
 #if (AMREX_SPACEDIM < 2)
