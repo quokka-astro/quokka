@@ -33,7 +33,6 @@
 #include "actual_eos_data.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 using amrex::Real;
 
@@ -139,7 +138,6 @@ template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 	pp.query("primary_species_14", userData_.primary_species_14);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 
 	static bool isSamplingDone = false;
 	if (!isSamplingDone) {
