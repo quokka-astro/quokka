@@ -170,25 +170,6 @@ template <typename problem_t> struct NewtonIterationResult {
 	bool gas_decoupled = false;
 };
 
-// State carried across the outer work-term passes of AddSourceTermsMultiGroup for one cell.
-// (a) Values that do not depend on the work term, computed in pass 0 and reused by later passes (rad-08 hoist).
-// (b) The raw Newton-Raphson state at the end of the previous pass, used as the initial guess of the next pass
-//     (rad-08 warm start). It is the state the residual was last evaluated at, before any post-Newton additions.
-template <typename problem_t> struct NewtonOuterState {
-	// (a) invariant across outer passes
-	int dust_model = 1;
-	double T_d0 = NAN;
-	double lambda_gd_times_dt = NAN;
-	double Etot0 = NAN;
-	bool have_Egas_post = false; // dust_model == 2 (no PE): the post-Newton implicit gas-energy update is invariant
-	double Egas_post = NAN;
-	// (b) warm start
-	bool warm = false;
-	double Egas = NAN;
-	double T_d = NAN;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec{};
-};
-
 // A struct to hold the results of ComputeJacobian functions, containing the following elements:
 // J00, F0, Fg_abs_sum, J0g, Jg0, Jgg, Fg
 template <typename problem_t> struct JacobianResult {
@@ -604,8 +585,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 											  amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
 	    -> quokka::valarray<amrex::Real, nGroups_>;
 
-	template <typename RHSFunction, typename RHSJacFunction>
-	AMREX_GPU_DEVICE static auto BackwardEulerOneVariable(RHSFunction const &rhs, RHSJacFunction const &rhs_jac, double x0, double compare) -> double;
+	template <typename RHSFunction, typename JacFunction>
+	AMREX_GPU_DEVICE static auto BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, double x0, double compare) -> double;
 
 	AMREX_GPU_DEVICE static auto
 	ComputeDustTemperatureBateKeto(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
@@ -675,7 +656,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 					amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
 					quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
 					amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double tempFloor,
-					int *p_iteration_counter, int *p_iteration_failure_counter, NewtonOuterState<problem_t> &outer_state) -> NewtonIterationResult<problem_t>;
+					int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto SolveGasDustRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho,
 									 double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
@@ -684,7 +665,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 									 quokka::valarray<double, nGroups_> const &Src, double Q_dust,
 									 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol,
 									 double rel_change_tol, double tempFloor, int *p_iteration_counter,
-									 int *p_iteration_failure_counter, NewtonOuterState<problem_t> &outer_state) -> NewtonIterationResult<problem_t>;
+									 int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto SolveGasDustRadiationEnergyExchangeWithPE(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho,
 									       double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
@@ -693,7 +674,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 									       quokka::valarray<double, nGroups_> const &Src, double Q_dust,
 									       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol,
 									       double rel_change_tol, double tempFloor, int *p_iteration_counter,
-									       int *p_iteration_failure_counter, NewtonOuterState<problem_t> &outer_state) -> NewtonIterationResult<problem_t>;
+									       int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
@@ -2252,9 +2233,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 }
 
 template <typename problem_t>
-template <typename RHSFunction, typename RHSJacFunction>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction const &rhs, RHSJacFunction const &rhs_jac, const double x0,
-								     const double compare) -> double
+template <typename RHSFunction, typename JacFunction>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, const double x0, const double compare)
+    -> double
 {
 	const double rel_tol = 1.0e-8;
 	const double rel_change_tol = 1.0e-6;
@@ -2264,9 +2245,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	// a zero scale makes the convergence test unsatisfiable.
 	AMREX_ASSERT(compare > 0.0);
 
-	// rhs_jac(x) returns {rhs(x), jac(x)} from one shared evaluation of the Planck function and opacities (rad-08).
-	const auto fj0 = rhs_jac(x0);
-	const double f0 = fj0[0];
+	const double f0 = rhs(x0);
 	if (std::abs(f0) < rel_tol * compare) {
 		return x0;
 	}
@@ -2280,7 +2259,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	// Planck function is stiff enough that one step can leave the neighbourhood of the root and never
 	// return, which is the origin of the "dust temperature failed to converge" abort. Both unknowns are
 	// physically positive, so the search is confined to x > 0.
-	const double j0 = fj0[1];
+	const double j0 = jac(x0);
 	const double dir = (j0 * f0 > 0.0) ? -1.0 : 1.0; // sign of the Newton step -f/j
 	double xa = x0;
 	double fa = f0;
@@ -2317,8 +2296,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 	double x = 0.5 * (xa + xb);
 	int iter_Td = 0;
 	for (; iter_Td < max_iter_td; ++iter_Td) {
-		const auto fj = rhs_jac(x);
-		const double the_rhs = fj[0];
+		const double the_rhs = rhs(x);
 		if (std::abs(the_rhs) < rel_tol * compare) {
 			break;
 		}
@@ -2332,7 +2310,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 			fb = the_rhs;
 		}
 
-		const double j = fj[1];
+		const double j = jac(x);
 		double x_new = (j != 0.0) ? (x - the_rhs / j) : (0.5 * (xa + xb));
 		// Fall back to bisection whenever Newton would leave the bracket. Written as the negation of the
 		// in-bracket test rather than its DeMorgan dual so that a NaN step also lands here.
@@ -2399,34 +2377,27 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		return LHS;
 	};
 
-	// {rhs, jac} at the same T_d, sharing one Planck function and opacity evaluation; the residual is the same arithmetic as rhs (rad-08)
-	auto rhs_jac = [=](double T_d) -> amrex::GpuArray<double, 2> {
-		amrex::GpuArray<double, 2> fj{};
+	// the Jacobian of the RHS of the equation 0 = c_hat_ dt rho (kappa_E * E_g - kappa_P * B_g) + N_d sqrt(T_gas) (T_gas - T_d) + Q_dust
+	auto jac = [=](double T_d) -> double {
+		double dLHS_dTd = NAN;
+
 		if constexpr (nGroups_ == 1) {
-			const auto fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
-			const auto kappaE = ComputeEnergyMeanOpacity(rho, T_d);
 			const auto kappaP = ComputePlanckOpacity(rho, T_d);
-			fj[0] = c_hat_ * dt * rho * (kappaE * Erad[0] - kappaP * fourPiBoverC) + N_d * std::sqrt(T_gas) * (T_gas - T_d) + Q_dust * c_hat_over_c;
 			const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
-			fj[1] = -c_hat_ * dt * rho * (kappaP * d_fourpib_over_c_d_t) - N_d * std::sqrt(T_gas);
+			dLHS_dTd = -c_hat_ * dt * rho * (kappaP * d_fourpib_over_c_d_t) - N_d * std::sqrt(T_gas);
 		} else {
 			const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
 			const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
-			// thermal groups only (rad-10), same arithmetic as rhs
-			double exchange = 0.0;
-			for (int g = 0; g < nGroupsThermal_; ++g) {
-				exchange += opacity_terms.kappaE[g] * Erad[g] - opacity_terms.kappaP[g] * fourPiBoverC[g];
-			}
-			fj[0] = c_hat_ * dt * rho * exchange + N_d * std::sqrt(T_gas) * (T_gas - T_d) + Q_dust * c_hat_over_c;
 			const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
-			// thermal groups only: the chemical bands have zero thermal-coupling opacity (rad-10)
+			// thermal groups only: the chemical bands have zero thermal-coupling opacity
 			double d_exchange = 0.0;
 			for (int g = 0; g < nGroupsThermal_; ++g) {
 				d_exchange += opacity_terms.kappaP[g] * d_fourpib_over_c_d_t[g];
 			}
-			fj[1] = -c_hat_ * dt * rho * d_exchange - N_d * std::sqrt(T_gas);
+			dLHS_dTd = -c_hat_ * dt * rho * d_exchange - N_d * std::sqrt(T_gas);
 		}
-		return fj;
+
+		return dLHS_dTd;
 	};
 
 	// Measure the residual against the available heating (collisional, chemical-band absorption and radiative),
@@ -2454,7 +2425,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		return T_d_init;
 	}
 
-	const auto T_d = BackwardEulerOneVariable(rhs, rhs_jac, T_d_init, Lambda_compare);
+	const auto T_d = BackwardEulerOneVariable(rhs, jac, T_d_init, Lambda_compare);
 	AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 
 	return T_d;

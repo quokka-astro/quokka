@@ -180,7 +180,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
     amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const resid_tol, double const rel_change_tol, double const /*tempFloor*/,
-    int *p_iteration_counter, int *p_iteration_failure_counter, NewtonOuterState<problem_t> &outer_state) -> NewtonIterationResult<problem_t>
+    int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
 
@@ -255,13 +255,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		}
 	}
 
-	// rad-08 warm start: a later outer pass starts from the previous pass's converged Newton state (Egas, Erad)
-	// instead of the old state. The work term of the current pass enters through Rvec at n == 0 as before.
-	bool warm_start = (n_outer_iter > 0) && outer_state.warm;
-	int n_warm_iters = 0; // iterations spent in a warm-started attempt that had to be restarted cold
-
-	double Egas_guess = warm_start ? outer_state.Egas : Egas0;
-	auto EradVec_guess = warm_start ? outer_state.EradVec : Erad0Vec;
+	double Egas_guess = Egas0;
+	auto EradVec_guess = Erad0Vec;
 
 	double Egas_guess_prev = Egas_guess;
 	auto EradVec_guess_prev = EradVec_guess;
@@ -480,25 +475,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
 		// 	break;
 		// }
-
-		if (warm_start && n == maxIter - 1) {
-			// rad-08: the warm-started attempt did not converge. Restart the pass from the old state with a fresh
-			// iteration budget, i.e. exactly as the solver ran before warm starts.
-			n_warm_iters += n + 1;
-			warm_start = false;
-			n = -1; // incremented to 0 by the loop
-			Egas_guess = Egas0;
-			EradVec_guess = Erad0Vec;
-			Egas_guess_prev = Egas_guess;
-			EradVec_guess_prev = EradVec_guess;
-		}
 	} // END NEWTON-RAPHSON LOOP
-
-	// rad-08: keep the raw Newton state (before the transparent-group injection) as the next pass's initial guess
-	outer_state.warm = (n < maxIter);
-	outer_state.Egas = Egas_guess;
-	outer_state.T_d = T_d;
-	outer_state.EradVec = EradVec_guess;
 
 	// Inject the source directly into transparent groups (tau ~ 0). The Newton solve above excludes such
 	// groups from its residual and Jacobian (Fg_abs_sum and Jgg skip tau <= 0) and leaves their radiation
@@ -520,10 +497,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1); // NOLINT
 	}
 
-	if (p_iteration_counter != nullptr) { // null unless print_iteration_counts is set (rad-02); rad-08: warm-start iterations counted too
-		amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);			// total number of radiation updates. NOLINT
-		amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n_warm_iters + n + 1); // total number of Newton-Raphson iterations. NOLINT
-		amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n_warm_iters + n + 1); // maximum number of Newton-Raphson iterations. NOLINT
+	if (p_iteration_counter != nullptr) { // null unless print_iteration_counts is set
+		amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	 // total number of radiation updates. NOLINT
+		amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations. NOLINT
+		amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations. NOLINT
 	}
 
 	NewtonIterationResult<problem_t> result;
@@ -883,8 +860,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 		// Outer iteration loop to update the work term until it converges
 		const int max_iter = 5;
-		// rad-08: invariant setup and the warm-start state shared by the outer passes of this cell
-		NewtonOuterState<problem_t> outer_state{};
 		int iter = 0;
 		for (; iter < max_iter; ++iter) {
 			amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
@@ -920,18 +895,18 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					// gas + radiation
 					updated_energy = SolveGasRadiationEnergyExchange(Egas0, Erad0Vec, rho, dt, massScalars, iter, work, vel_times_F, Src,
 											 radBoundaries_g_copy, tol, tol_rel, tempFloor,
-											 p_iteration_counter_local, p_iteration_failure_counter_local, outer_state);
+											 p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
 					if constexpr (!enable_photoelectric_heating_) {
 						// gas + radiation + dust
 						updated_energy = SolveGasDustRadiationEnergyExchange(
 						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, Q_dust, radBoundaries_g_copy,
-						    tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local, outer_state);
+						    tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 					} else {
 						// gas + radiation + dust + photoelectric heating
 						updated_energy = SolveGasDustRadiationEnergyExchangeWithPE(
 						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, Q_dust, radBoundaries_g_copy,
-						    tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local, outer_state);
+						    tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 					}
 				}
 
@@ -1047,7 +1022,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			amrex::ignore_unused(Etot0);
 			amrex::ignore_unused(work);
 			amrex::ignore_unused(work_prev);
-			amrex::ignore_unused(outer_state);
 		}
 	});
 }
