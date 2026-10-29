@@ -392,19 +392,17 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons, array_t &primVar, amrex::Box const &indexRange, int groupBegin = 0,
 					 int groupEnd = nGroups_);
 
-	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
-				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
+	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
 				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, int groupBegin = 0,
 				int groupEnd = nGroups_);
 
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
-				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrayOld,
-				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
+				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, double alpha, double Aex_s1_coeff,
 				 double Aex_s2_coeff, int groupBegin = 0, int groupEnd = nGroups_);
 
 	template <FluxDir DIR>
-	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
+	static void ComputeFluxes(array_t &x1Flux_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool use_wavespeed_correction,
 				  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {}, int groupBegin = 0, int groupEnd = nGroups_);
@@ -1084,7 +1082,7 @@ template <typename problem_t> void RadSystem<problem_t>::EnforceLimits(amrex::Mu
 
 template <typename problem_t>
 void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
-				       amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArray*/, const double dt_in,
+				       const double dt_in,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/,
 				       const int groupBegin, const int groupEnd)
 {
@@ -1096,16 +1094,13 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 	auto const dt = dt_in;
 	const auto dx = dx_in[0];
 	const auto x1Flux = fluxArray[0];
-	// const auto x1FluxDiffusive = fluxDiffusiveArray[0];
 #if (AMREX_SPACEDIM >= 2)
 	const auto dy = dx_in[1];
 	const auto x2Flux = fluxArray[1];
-	// const auto x2FluxDiffusive = fluxDiffusiveArray[1];
 #endif
 #if (AMREX_SPACEDIM == 3)
 	const auto dz = dx_in[2];
 	const auto x3Flux = fluxArray[2];
-	// const auto x3FluxDiffusive = fluxDiffusiveArray[2];
 #endif
 
 	const int nBegin = numRadVars_ * groupBegin;
@@ -1138,8 +1133,7 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 template <typename problem_t>
 void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
-					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArrayOld*/,
-					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArray*/, const double dt_in,
+					const double dt_in,
 					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/,
 					const double alpha, const double Aex_s1_coeff, const double Aex_s2_coeff, const int groupBegin, const int groupEnd)
 {
@@ -1431,7 +1425,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 template <typename problem_t>
 template <FluxDir DIR>
-void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
+void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					 amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool const use_wavespeed_correction,
 					 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc, const int groupBegin, const int groupEnd)
@@ -1439,7 +1433,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
 	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
 	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
-	quokka::Array4View<amrex::Real, DIR> x1FluxDiffusive(x1FluxDiffusive_in);
 	quokka::Array4View<const amrex::Real, DIR> consVar(consVar_in);
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
@@ -1574,14 +1567,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			x1Flux(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[1];
 			x1Flux(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[2];
 			x1Flux(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[3];
-
-			const quokka::valarray<double, numRadVars_> diffusiveF =
-			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
-
-			x1FluxDiffusive(i, j, k, radEnergy_index + numRadVars_ * g - nstartHyperbolic_) = diffusiveF[0];
-			x1FluxDiffusive(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = diffusiveF[1];
-			x1FluxDiffusive(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = diffusiveF[2];
-			x1FluxDiffusive(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = diffusiveF[3];
 		} // end loop over radiation groups
 	});
 }
