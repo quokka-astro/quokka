@@ -55,7 +55,7 @@ template <typename problem_t> struct BurnState : detail::DustChemicalBandAbsorpt
 
 	amrex::Real dedT{}; /// read by the networks' Jacobians
 
-	// Written by Microphysics' eos(); they go when the EOS is ported.
+	// Written by Microphysics' eos().
 	amrex::Real dedr{};
 	amrex::Real mu{};
 	amrex::Real mu_e{};

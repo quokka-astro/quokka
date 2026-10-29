@@ -21,12 +21,9 @@
 #include "microphysics/integrator_params.hpp"
 #include "microphysics/microphysics_traits.hpp"
 
-// still from extern/Microphysics: burn_t, eos(), and the network's actual_rhs and actual_jac
+// eos() is still Microphysics'. actual_rhs and actual_jac come from the problem's network.
 #include "actual_rhs.H"
-#include "burn_type.H"
 #include "eos.H"
-#include "integrator_data.H"
-#include "network.H"
 
 namespace quokka::microphysics
 {
@@ -165,7 +162,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 
 	// Update the thermodynamics as necessary -- this primarily takes
 	// the information in int_state (X and e), copies it to the
-	// (burn_t) state and calls the EOS to get state.T
+	// burn state and calls the EOS to get state.T
 
 	update_thermodynamics<Layout>(state, int_state);
 
@@ -183,7 +180,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 
 	state.time = time;
 
-	// at this point, the (burn_t) state is synchronized with the integrator
+	// at this point, the burn state is synchronized with the integrator
 	// and is thermodynamically consistent.
 
 	// Call the specific network routine to get the RHS.
