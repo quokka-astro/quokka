@@ -67,10 +67,26 @@ void write_2D_header(std::ostream &os, const amrex::FArrayBox &f, int nvar);
 
 } // namespace detail
 
+// Build the per-level masks (1 = not covered by a finer level) once so that they can be shared between fields/directions.
+inline auto MakeProjectionMasks(const amrex::Vector<const amrex::MultiFab *> &mfs, const int finest_level, amrex::Vector<amrex::Geometry> const &geom,
+				amrex::Vector<amrex::IntVect> const &ref_ratio) -> amrex::Vector<amrex::iMultiFab>
+{
+	amrex::Vector<amrex::iMultiFab> masks(finest_level + 1);
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		if (lev == finest_level) {
+			masks[lev].define(mfs[lev]->boxArray(), mfs[lev]->DistributionMap(), 1, amrex::IntVect(0));
+			masks[lev].setVal(1);
+		} else {
+			masks[lev] = amrex::makeFineMask(*mfs[lev], *mfs[lev + 1], amrex::IntVect(0), ref_ratio[lev], geom[lev].periodicity(), 1, 0);
+		}
+	}
+	return masks;
+}
+
 inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::MultiFab *> &mfs, const int finest_level,
 					       amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio,
-					       amrex::Vector<amrex::IntVect> const &max_grid_size, const amrex::Direction dir, const int comp)
-    -> amrex::Vector<amrex::MultiFab>
+					       amrex::Vector<amrex::IntVect> const &max_grid_size, const amrex::Direction dir, const int comp,
+					       const amrex::Vector<amrex::iMultiFab> *shared_masks = nullptr) -> amrex::Vector<amrex::MultiFab>
 {
 	// compute plane-parallel projection of a single MultiFab component along the given axis.
 	const BL_PROFILE("quokka::DiagProjection::computePlaneProjectionFromMultiFab()");
@@ -86,13 +102,16 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		AMREX_ALWAYS_ASSERT(static_cast<int>(max_grid_size.size()) > lev);
-		amrex::iMultiFab mask;
-		if (lev == finest_level) {
-			mask.define(mfs[lev]->boxArray(), mfs[lev]->DistributionMap(), 1, amrex::IntVect(0));
-			mask.setVal(1);
-		} else {
-			mask = amrex::makeFineMask(*mfs[lev], *mfs[lev + 1], amrex::IntVect(0), ref_ratio[lev], geom[lev].periodicity(), 1, 0);
+		amrex::iMultiFab local_mask;
+		if (shared_masks == nullptr) {
+			if (lev == finest_level) {
+				local_mask.define(mfs[lev]->boxArray(), mfs[lev]->DistributionMap(), 1, amrex::IntVect(0));
+				local_mask.setVal(1);
+			} else {
+				local_mask = amrex::makeFineMask(*mfs[lev], *mfs[lev + 1], amrex::IntVect(0), ref_ratio[lev], geom[lev].periodicity(), 1, 0);
+			}
 		}
+		amrex::iMultiFab const &mask = (shared_masks != nullptr) ? (*shared_masks)[lev] : local_mask;
 
 		auto const &mf_arr = mfs[lev]->const_arrays();
 		auto const &mask_arr = mask.const_arrays();

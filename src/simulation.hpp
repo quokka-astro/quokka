@@ -513,6 +513,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileMFAtLevel_cc(int lev, int included_ghosts) -> amrex::MultiFab;
 	[[nodiscard]] auto PlotFileMFAtLevel_cc(int lev, int included_ghosts, const amrex::MultiFab &src_cc,
 						const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &src_fc) -> amrex::MultiFab;
+	[[nodiscard]] auto PlotFileMFAtLevel_cc(int lev, int included_ghosts, const amrex::MultiFab &src_cc,
+						const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &src_fc, const amrex::Vector<std::string> &varsToInclude)
+	    -> amrex::MultiFab;
 	[[nodiscard]] auto PlotFileMF_fc(int nghost_fc_) -> std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM>;
 	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_) -> amrex::MultiFab;
 	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_, const amrex::MultiFab &src_fc) -> amrex::MultiFab;
@@ -4220,12 +4223,20 @@ template <typename problem_t>
 auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int included_ghosts, const amrex::MultiFab &src_cc,
 						    const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &src_fc) -> amrex::MultiFab
 {
-	const int ncomp_plotMF = plotfileVarsToInclude_cc_.size();
+	return PlotFileMFAtLevel_cc(lev, included_ghosts, src_cc, src_fc, plotfileVarsToInclude_cc_);
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int included_ghosts, const amrex::MultiFab &src_cc,
+						    const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &src_fc,
+						    const amrex::Vector<std::string> &varsToInclude) -> amrex::MultiFab
+{
+	const int ncomp_plotMF = varsToInclude.size();
 	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, included_ghosts);
 
-	// Process each variable in the configurable list
+	// Process each variable in the given list
 	int comp = 0;
-	for (const std::string &varname : plotfileVarsToInclude_cc_) {
+	for (const std::string &varname : varsToInclude) {
 		// Check if it's a cell-centered variable
 		auto cc_it = std::ranges::find(componentNames_cc_, varname);
 		if (cc_it != componentNames_cc_.end()) {
@@ -4656,21 +4667,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	amrex::Vector<std::unique_ptr<amrex::MultiFab>> diagMFVec(finestLevel() + 1);
 	amrex::Vector<const amrex::MultiFab *> diagMFVec_ptr;
 	if (computeVars) {
+		// fill the scratch data for all levels once, then compute only the requested variables at each level
+		const int diag_ghosts = std::min(nghost_cc_, nghost_fc_);
+		amrex::Vector<amrex::MultiFab> scratch_cc;
+		amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> scratch_fc;
+		if (diag_ghosts > 0) {
+			FillPlotFileScratchData(finestLevel(), diag_ghosts, scratch_cc, scratch_fc);
+		}
 		for (int lev{0}; lev <= finestLevel(); ++lev) {
 			diagMFVec[lev] = std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], m_diagVars.size(), 1);
-			amrex::MultiFab const mf = PlotFileMFAtLevel_cc(lev, std::min(nghost_cc_, nghost_fc_));
-			auto const varnames = GetPlotfileVarNames();
+			amrex::MultiFab const mf = (diag_ghosts > 0) ? PlotFileMFAtLevel_cc(lev, diag_ghosts, scratch_cc[lev], scratch_fc[lev], m_diagVars)
+								     : PlotFileMFAtLevel_cc(lev, diag_ghosts, state_new_cc_[lev], state_new_fc_[lev], m_diagVars);
 
 			for (int v{0}; v < m_diagVars.size(); ++v) {
-				// get component index for the 'mf' multifab
-				int mf_idx = -1;
-				for (int i = 0; i < varnames.size(); ++i) {
-					if (m_diagVars[v] == varnames[i]) {
-						mf_idx = i;
-					}
-				}
-				AMREX_ALWAYS_ASSERT(mf_idx != -1);
-				amrex::MultiFab::Copy(*diagMFVec[lev], mf, mf_idx, v, 1, 1);
+				// component v of 'mf' is m_diagVars[v]
+				amrex::MultiFab::Copy(*diagMFVec[lev], mf, v, v, 1, 1);
 			}
 		}
 		amrex::Vector<amrex::MultiFab *> diagMFVec_raw;

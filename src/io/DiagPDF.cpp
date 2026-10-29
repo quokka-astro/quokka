@@ -124,6 +124,22 @@ auto DiagPDF::MFVecMax(const amrex::Vector<const amrex::MultiFab *> &a_state, in
 	return mmax;
 }
 
+void DiagPDF::MFVecMinMax(const amrex::Vector<const amrex::MultiFab *> &a_state, const amrex::Vector<int> &comps, amrex::Vector<amrex::Real> &mins,
+			  amrex::Vector<amrex::Real> &maxs)
+{
+	const int n = static_cast<int>(comps.size());
+	mins.assign(n, AMREX_REAL_MAX);
+	maxs.assign(n, AMREX_REAL_LOWEST);
+	for (int m = 0; m < n; ++m) {
+		for (const auto *st : a_state) {
+			mins[m] = std::min(mins[m], st->min(comps[m], 0, true));
+			maxs[m] = std::max(maxs[m], st->max(comps[m], 0, true));
+		}
+	}
+	amrex::ParallelDescriptor::ReduceRealMin(mins.data(), n);
+	amrex::ParallelDescriptor::ReduceRealMax(maxs.data(), n);
+}
+
 void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex::Vector<amrex::Real> &a_pdf)
 {
 	std::string diagfile;
