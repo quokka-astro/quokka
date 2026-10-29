@@ -2959,13 +2959,14 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		}
 	}
 
-	// conserved to primitive variables
-	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_);
+	// conserved to primitive variables: only the "cross" region that later kernels read is converted
+	// (nghost_cc_ along one axis, nghost_Riemann + 1 along the other two)
+	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_, reconstructGhost);
 
-	// compute flattening coefficients
-	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(primVar, flatCoefs[0], flatteningGhost);
-		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X2>(primVar, flatCoefs[1], flatteningGhost);
-		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost);)
+	// compute flattening coefficients: grown by flatteningGhost along the sweep axis and reconstructGhost transversally
+	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(primVar, flatCoefs[0], flatteningGhost, reconstructGhost);
+		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X2>(primVar, flatCoefs[1], flatteningGhost, reconstructGhost);
+		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost, reconstructGhost);)
 
 	// compute flux functions
 	const auto &dx = geom[lev].CellSizeArray();
@@ -3081,35 +3082,35 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	}
 
 	if (reconstructionOrder_ == 5) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars, 0, 0, nghost_Riemann);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											   ng_reconstruct, 2);
+											   ng_reconstruct, 2, 0, 0, nghost_Riemann);
 		}
 	} else if (reconstructionOrder_ == 3) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars, 0, 0, nghost_Riemann);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											ng_reconstruct, 2);
+											ng_reconstruct, 2, 0, 0, nghost_Riemann);
 		}
 	} else if (reconstructionOrder_ == 2) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars, plmLimiter_);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars, plmLimiter_, nghost_Riemann);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											ng_reconstruct, 2, plmLimiter_);
+											ng_reconstruct, 2, plmLimiter_, nghost_Riemann);
 		}
 	} else if (reconstructionOrder_ == 1) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars, nghost_Riemann);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											     ng_reconstruct, 2);
+											     ng_reconstruct, 2, nghost_Riemann);
 		}
 	} else {
 		amrex::Abort("Invalid reconstruction order specified!");
 	}
 
 	// cell-centered kernel
-	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar_mf, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
+	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar_mf, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars, nghost_Riemann);
 
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -3161,8 +3162,8 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 		}
 	}
 
-	// conserved to primitive variables
-	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_);
+	// conserved to primitive variables: the first-order fluxes only read primitives within nghost_Riemann + 1 of the valid box
+	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, reconstructRange);
 
 	// compute flux functions
 	const auto &dx = geom[lev].CellSizeArray();

@@ -96,8 +96,17 @@ template <typename problem_t> class HyperbolicSystem
 						 "Reconstruction interfaceRange must equal surroundingNodes(cellRange, dir).");
 	}
 
+	// grow `nghost` cells along the sweep direction DIR and `nghost_t` (default: nghost) along the transverse directions
+	template <FluxDir DIR> static auto DirectionalGrow(const int nghost, const int nghost_t) -> amrex::IntVect
+	{
+		amrex::IntVect ng{AMREX_D_DECL(nghost_t < 0 ? nghost : nghost_t, nghost_t < 0 ? nghost : nghost_t, nghost_t < 0 ? nghost : nghost_t)};
+		ng[static_cast<int>(DIR)] = nghost;
+		return ng;
+	}
+
 	template <FluxDir DIR>
-	static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
+	static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars,
+					      int nghost_t = -1);
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState,
@@ -110,11 +119,12 @@ template <typename problem_t> class HyperbolicSystem
 				  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
 	template <FluxDir DIR, SlopeLimiter limiter>
-	static void ReconstructStatesPLM(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
+	static void ReconstructStatesPLM(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars,
+					 int nghost_t = -1);
 
 	template <FluxDir DIR>
 	static void ReconstructStatesPLM(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars,
-					 SlopeLimiter limiter);
+					 SlopeLimiter limiter, int nghost_t = -1);
 
 	template <FluxDir DIR, SlopeLimiter limiter>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState,
@@ -131,7 +141,7 @@ template <typename problem_t> class HyperbolicSystem
 
 	template <FluxDir DIR>
 	static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
-					 int iReadFrom = 0, int iWriteFrom = 0);
+					 int iReadFrom = 0, int iWriteFrom = 0, int nghost_t = -1);
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
@@ -161,7 +171,7 @@ template <typename problem_t> class HyperbolicSystem
 
 	template <FluxDir DIR>
 	static void ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
-					    int iReadFrom = 0, int iWriteFrom = 0);
+					    int iReadFrom = 0, int iWriteFrom = 0, int nghost_t = -1);
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
@@ -194,12 +204,12 @@ template <typename problem_t> class HyperbolicSystem
 template <typename problem_t>
 template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-							    const int nghost, const int nvars)
+							    const int nghost, const int nvars, const int nghost_t)
 {
 	auto const &q_in = q_mf.const_arrays();
 	auto leftState_in = leftState_mf.arrays();
 	auto rightState_in = rightState_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+	const amrex::IntVect ng = HyperbolicSystem<problem_t>::template DirectionalGrow<DIR>(nghost, nghost_t);
 
 	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
 		// construct ArrayViews for permuted indices
@@ -251,12 +261,12 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstan
 template <typename problem_t>
 template <FluxDir DIR, SlopeLimiter limiter>
 void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-						       const int nghost, const int nvars)
+						       const int nghost, const int nvars, const int nghost_t)
 {
 	auto const &q_in = q_mf.const_arrays();
 	auto leftState_in = leftState_mf.arrays();
 	auto rightState_in = rightState_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+	const amrex::IntVect ng = HyperbolicSystem<problem_t>::template DirectionalGrow<DIR>(nghost, nghost_t);
 
 	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
 		// construct ArrayViews for permuted indices
@@ -271,19 +281,19 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 template <typename problem_t>
 template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-						       const int nghost, const int nvars, SlopeLimiter limiter)
+						       const int nghost, const int nvars, SlopeLimiter limiter, const int nghost_t)
 {
 	switch (limiter) {
 		case SlopeLimiter::minmod: {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(q_mf, leftState_mf, rightState_mf, nghost, nvars);
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(q_mf, leftState_mf, rightState_mf, nghost, nvars, nghost_t);
 			break;
 		}
 		case SlopeLimiter::sweby: {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(q_mf, leftState_mf, rightState_mf, nghost, nvars);
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(q_mf, leftState_mf, rightState_mf, nghost, nvars, nghost_t);
 			break;
 		}
 		case SlopeLimiter::mc: {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::mc>(q_mf, leftState_mf, rightState_mf, nghost, nvars);
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::mc>(q_mf, leftState_mf, rightState_mf, nghost, nvars, nghost_t);
 			break;
 		}
 		default: {
@@ -371,14 +381,14 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 template <typename problem_t>
 template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-						       const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
+						       const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom, const int nghost_t)
 {
 	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(MultiFabs)");
 
 	auto const &q_in = q_mf.const_arrays();
 	auto leftState_in = leftState_mf.arrays();
 	auto rightState_in = rightState_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+	const amrex::IntVect ng = HyperbolicSystem<problem_t>::template DirectionalGrow<DIR>(nghost, nghost_t);
 
 	// cell-centered kernel
 	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
@@ -600,14 +610,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWEN
 template <typename problem_t>
 template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-							  const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
+							  const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom, const int nghost_t)
 {
 	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(MultiFabs)");
 
 	auto const &q_in = q_mf.const_arrays();
 	auto leftState_in = leftState_mf.arrays();
 	auto rightState_in = rightState_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+	const amrex::IntVect ng = HyperbolicSystem<problem_t>::template DirectionalGrow<DIR>(nghost, nghost_t);
 
 	// cell-centered kernel
 	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {

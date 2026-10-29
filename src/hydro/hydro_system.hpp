@@ -99,7 +99,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	enum primDustVarIndex { primDustDensity_index = primDustFirstIndex, x1DustVelocity_index, x2DustVelocity_index, x3DustVelocity_index }; // NOLINT
 
 	static void ConservedToPrimitive(amrex::MultiFab const &cons_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
-					 amrex::MultiFab &primVar_mf, int nghost);
+					 amrex::MultiFab &primVar_mf, int nghost, int nghost_core = -1);
 
 	static auto maxSignalSpeedLocal(amrex::MultiFab const &cons, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> amrex::Real;
 
@@ -196,11 +196,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
 
-	template <FluxDir DIR> static void ComputeFlatteningCoefficients(amrex::MultiFab const &primVar_mf, amrex::MultiFab &x1Chi_mf, int nghost);
+	template <FluxDir DIR> static void ComputeFlatteningCoefficients(amrex::MultiFab const &primVar_mf, amrex::MultiFab &x1Chi_mf, int nghost, int nghost_t = -1);
 
 	template <FluxDir DIR>
 	static void FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
-				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, int nghost, int nvars);
+				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, int nghost, int nvars,
+				  int nghost_t = -1);
 
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
@@ -213,7 +214,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 template <typename problem_t>
 void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
-						  amrex::MultiFab &primVar_mf, const int nghost)
+						  amrex::MultiFab &primVar_mf, const int nghost, const int nghost_core)
 {
 	// convert conserved to primitive variables
 	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
@@ -227,7 +228,22 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 	auto const &primVar = primVar_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
+	// When nghost_core >= 0, only cells within nghost_core of the valid box in at least two of the three directions are skipped:
+	// every kernel downstream reads primitives only on a "cross" (nghost along one axis, nghost_core along the other two).
+	const amrex::IntVect pv_grow = primVar_mf.nGrowVect();
+
 	amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		if (nghost_core >= 0) {
+			const amrex::Dim3 pv_lo = amrex::lbound(primVar[bx]);
+			const amrex::Dim3 pv_hi = amrex::ubound(primVar[bx]);
+			const int ext_x = amrex::max(0, pv_lo.x + pv_grow[0] - i, i - (pv_hi.x - pv_grow[0]));
+			const int ext_y = amrex::max(0, pv_lo.y + pv_grow[1] - j, j - (pv_hi.y - pv_grow[1]));
+			const int ext_z = amrex::max(0, pv_lo.z + pv_grow[2] - k, k - (pv_hi.z - pv_grow[2]));
+			const int n_out = static_cast<int>(ext_x > nghost_core) + static_cast<int>(ext_y > nghost_core) + static_cast<int>(ext_z > nghost_core);
+			if (n_out >= 2) {
+				return;
+			}
+		}
 		// First-capture the magnetic field arrays by accessing them early
 		// This forces NVCC to capture them before the constexpr if block
 		std::remove_cv_t<std::remove_reference_t<decltype(cons_fc_x0[bx])>> fc_x0_ref{};
@@ -852,7 +868,7 @@ void HydroSystem<problem_t>::AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::Multi
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const &primVar_mf, amrex::MultiFab &x1Chi_mf, const int nghost)
+void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const &primVar_mf, amrex::MultiFab &x1Chi_mf, const int nghost, const int nghost_t)
 {
 	// compute the PPM shock flattening coefficient following
 	//   Appendix B1 of Mignone+ 2005 [this description has typos].
@@ -866,7 +882,9 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 
 	auto const &primVar_in = primVar_mf.const_arrays();
 	auto x1Chi_in = x1Chi_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+	// grow `nghost` along the sweep direction and `nghost_t` (default: nghost) along the transverse directions
+	amrex::IntVect ng{AMREX_D_DECL(nghost_t < 0 ? nghost : nghost_t, nghost_t < 0 ? nghost : nghost_t, nghost_t < 0 ? nghost : nghost_t)};
+	ng[static_cast<int>(DIR)] = nghost;
 
 	// cell-centered kernel
 	amrex::ParallelFor(primVar_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
@@ -952,7 +970,7 @@ template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
 					   amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, const int nghost,
-					   const int nvars)
+					   const int nvars, const int nghost_t)
 {
 	// Apply shock flattening based on Miller & Colella (2002)
 	// [This is necessary to get a reasonable solution to the slow-moving
@@ -964,7 +982,8 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 	auto const &x3Chi_in = x3Chi_mf.const_arrays();
 	auto x1LeftState_in = x1LeftState_mf.arrays();
 	auto x1RightState_in = x1RightState_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+	amrex::IntVect ng{AMREX_D_DECL(nghost_t < 0 ? nghost : nghost_t, nghost_t < 0 ? nghost : nghost_t, nghost_t < 0 ? nghost : nghost_t)};
+	ng[static_cast<int>(DIR)] = nghost;
 
 	// cell-centered kernel
 	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) {
