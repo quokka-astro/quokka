@@ -56,9 +56,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rh
 	// Compute cooling length l_cool = c_s * t_cool
 	const Real eint = Eint / rho;
 	std::array<amrex::Real, 2> const point = {rho, eint};
-	const Real cs = tables.all_tables.interpolate_single(point, SOUND_SPEED_IDX);
+	// one table lookup (cell location) shared by the sound speed and the cooling rate
+	const auto interp = tables.all_tables.locate(point);
+	const Real cs = tables.all_tables.interpolate_single_from_interp(interp, SOUND_SPEED_IDX);
 
-	const Real Edot = resampled_cooling_function(rho, Eint, tables) + const_heating_rate;
+	const Real Edot_over_rhosq = tables.all_tables.interpolate_single_from_interp(interp, COOLING_RATE_IDX);
+	const Real Edot = Edot_over_rhosq * (rho * rho) + const_heating_rate;
 	const Real t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
 
 	return cs * t_cool;
@@ -113,10 +116,14 @@ struct ResampledCoolingFunctor {
 	Real rho;
 	resampledGpuConstTables tables;
 	Real const_heating_rate;
+	// rho is constant during the integration: its axis (index, weight) and rho^2 are computed once
+	quokka::InterpData<2> interp_rho{};
+	Real rho_sq;
 
 	AMREX_GPU_HOST_DEVICE ResampledCoolingFunctor(Real rho_in, resampledGpuConstTables const &tables_in, Real const_heating_rate_in)
-	    : rho(rho_in), tables(tables_in), const_heating_rate(const_heating_rate_in)
+	    : rho(rho_in), tables(tables_in), const_heating_rate(const_heating_rate_in), rho_sq(rho_in * rho_in)
 	{
+		tables.all_tables.find_interpolation_dim(0, tables.all_tables.transform_coord(0, rho), interp_rho.indices[0], interp_rho.normalized[0]);
 	}
 
 	AMREX_GPU_HOST_DEVICE ~ResampledCoolingFunctor() = default;
@@ -128,7 +135,11 @@ struct ResampledCoolingFunctor {
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs) const -> int
 	{
 		const Real Eint = y_data[0];
-		y_rhs[0] = resampled_cooling_function(rho, Eint, tables) + const_heating_rate;
+		const Real eint = Eint / rho;
+		quokka::InterpData<2> interp = interp_rho;
+		tables.all_tables.find_interpolation_dim(1, tables.all_tables.transform_coord(1, eint), interp.indices[1], interp.normalized[1]);
+		const Real Edot_over_rhosq = tables.all_tables.interpolate_single_from_interp(interp, COOLING_RATE_IDX);
+		y_rhs[0] = Edot_over_rhosq * rho_sq + const_heating_rate;
 		return 0; // success
 	}
 };
