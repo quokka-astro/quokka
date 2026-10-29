@@ -127,6 +127,7 @@ include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/extern/gcem/include)
 
 # Registers Quokka's networks. Must precede every
 # setup_target_for_microphysics_compilation() call, here and in
