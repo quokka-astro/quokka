@@ -61,31 +61,53 @@ template <typename problem_t> class IsoConduction
 		}
 	}
 
-	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
-				    amrex::Real dt, IsoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
+	/// \brief Returns false when conduction has no effect for this problem: ConductionModel::none, an isothermal EOS,
+	///        or a built-in conductivity model with a non-positive prefactor.
+	static auto IsActive(IsoConductionParams const &params) -> bool
+	{
+		constexpr ConductionModel model = Physics_Traits<problem_t>::conduction_model;
+		if constexpr (model == ConductionModel::none || HydroSystem<problem_t>::is_eos_isothermal()) {
+			amrex::ignore_unused(params);
+			return false;
+		} else if constexpr (model == ConductionModel::constant || model == ConductionModel::spitzer) {
+			return params.conductivity.kappa0_par > 0.0;
+		} else {
+			amrex::ignore_unused(params);
+			return true;
+		}
+	}
+
+	/// \brief Defines \p heat_flux (1 component, no ghost faces) on the faces of \p state's BoxArray and zeroes it.
+	static void DefineHeatFlux(amrex::MultiFab const &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
 			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
 			heat_flux[idim].setVal(0.0);
 		}
+	}
 
-		constexpr ConductionModel model = Physics_Traits<problem_t>::conduction_model;
-		if constexpr (model == ConductionModel::none) {
-			amrex::ignore_unused(state, state_fc, geom, dt, params, heat_flux);
+	/// \brief Forward-Euler conduction update of \p state over \p dt. On return, \p heat_flux holds the face fluxes
+	///        used for the update (zero if conduction is inactive or \p dt <= 0).
+	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
+				    amrex::Real dt, IsoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
+	{
+		if ((dt <= 0.0) || !IsActive(params)) {
+			DefineHeatFlux(state, heat_flux);
 			return;
 		}
-		if (dt <= 0.0) {
-			return;
-		}
-		if constexpr (model == ConductionModel::constant || model == ConductionModel::spitzer) {
-			if (params.conductivity.kappa0_par <= 0.0) {
-				return;
-			}
-		}
+		ComputeHeatFlux(state, state_fc, geom, params, heat_flux);
+		ApplyConductionUpdate<problem_t>(state, state_fc, heat_flux, geom.CellSizeArray(), dt);
+	}
 
-		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-			amrex::ignore_unused(state_fc, geom, params);
+	/// \brief Computes the flux-limited, saturated conductive heat flux q on every face of \p state's valid boxes.
+	///        Does not modify \p state; its ghost cells must already be filled. \p heat_flux is (re)defined here.
+	static void ComputeHeatFlux(amrex::MultiFab const &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
+				    IsoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
+	{
+		DefineHeatFlux(state, heat_flux);
+		if (!IsActive(params)) {
+			amrex::ignore_unused(state_fc, geom);
 			return;
 		}
 
@@ -207,8 +229,6 @@ template <typename problem_t> class IsoConduction
 			flux_z[bx](i, j, k) = q_classical / limiter;
 		});
 #endif
-
-		ApplyConductionUpdate<problem_t>(state, state_fc, heat_flux, dx, dt);
 	}
 };
 

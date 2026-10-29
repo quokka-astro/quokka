@@ -70,6 +70,7 @@ namespace filesystem = experimental::filesystem;
 #include "chemistry/Chemistry.hpp"
 #include "conduction/AnisoConduction.hpp"
 #include "conduction/IsoConduction.hpp"
+#include "conduction/SuperTimeStepping.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
@@ -148,6 +149,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::enableConduction_;
 	using AMRSimulation<problem_t>::conductivityParams_;
 	using AMRSimulation<problem_t>::conductionCFL;
+	using AMRSimulation<problem_t>::conductionUseSTS_;
+	using AMRSimulation<problem_t>::conductionSTSParams_;
 
 #if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
@@ -740,6 +743,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("conduction_cfl", conductionCFL);
 		hpp.query("flux_limiter_phi", conductionFluxLimiterPhi_);
 		hpp.query("saturation_factor", conductionSaturationFactor_);
+		hpp.query("use_sts", conductionUseSTS_);
+		hpp.query("sts_max_stages", conductionSTSParams_.max_stages);
+		hpp.query("sts_safety", conductionSTSParams_.safety);
+		hpp.query("sts_dt_cap_fraction", conductionSTSParams_.dt_cap_fraction);
+
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductionUseSTS_ == 0 || conductionUseSTS_ == 1, "conduction.use_sts must be 0 or 1.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductionSTSParams_.max_stages >= 3, "conduction.sts_max_stages must be >= 3.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductionSTSParams_.safety > 0.0 && conductionSTSParams_.safety <= 1.0,
+						 "conduction.sts_safety must be in (0, 1].");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductionSTSParams_.dt_cap_fraction > 0.0 && conductionSTSParams_.dt_cap_fraction <= 1.0,
+						 "conduction.sts_dt_cap_fraction must be in (0, 1].");
 
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!hpp.contains("conduction_type"),
 						 "conduction.conduction_type has been removed; set Physics_Traits::conduction_model and "
@@ -751,6 +765,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		const bool conduction_enabled = (enableConduction_ != 0);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!conduction_enabled || conduction_model != ConductionModel::none,
 						 "conduction.enabled = 1, but this problem's Physics_Traits::conduction_model is `none`.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!is_anisotropic || conductionUseSTS_ == 0,
+						 "conduction.use_sts = 1 is not yet supported with ConductionGeometry::anisotropic.");
 
 		// Conductivity prefactors (erg cm^-1 s^-1 K^-1; erg cm^-1 s^-1 K^-3.5 for spitzer) are only read for the
 		// built-in models, and only under the keys matching conduction_geometry.
@@ -1305,7 +1321,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	auto const applyConduction = [&]() {
 		if (enableConduction_ == 1) {
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
-			// NOTE: heat_flux is defined (with 1 component) inside IsoConduction::ComputeExplicit,
+			// NOTE: heat_flux is defined (with 1 component) inside ComputeExplicit or AdvanceRKL2,
 			// so it only needs to be declared here.
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
 
@@ -1338,7 +1354,33 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 												.reconstruction_order = reconstructionOrder_,
 												.plm_limiter = plmLimiter_,
 												.ng_reconstruct = conduction_reconstructGhost};
-				quokka::conduction::IsoConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
+				if ((conductionUseSTS_ == 1) && (dt > 0.0) && quokka::conduction::IsoConduction<problem_t>::IsActive(conduction_params)) {
+					// forward-Euler stability limit dt <= dx^2 / (2 * AMREX_SPACEDIM * D), from the current state
+					auto const &dx = geom[lev].CellSizeArray();
+					const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+					const amrex::Real dt_expl =
+					    quokka::conduction::ComputeConductionTimestep<problem_t>(state, state_fc, dx_min, conductivityParams_, tempFloor_,
+												     conductionSTSParams_.safety / (2.0 * AMREX_SPACEDIM))
+						.value;
+
+					auto const computeFlux = [&](amrex::MultiFab const &stage_state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &q) {
+						quokka::conduction::IsoConduction<problem_t>::ComputeHeatFlux(stage_state, state_fc, geom[lev],
+													      conduction_params, q);
+					};
+					auto const fillGhost = [&](amrex::MultiFab &stage_state) {
+						fillBoundaryConditions(stage_state, stage_state, lev, time, quokka::centering::cc, quokka::direction::na,
+								       PreInterpState, PostInterpState);
+					};
+					const int nstages = quokka::conduction::AdvanceRKL2<problem_t>(
+					    state, state_fc, geom[lev], dt, dt_expl, conductionSTSParams_.max_stages, computeFlux, fillGhost, heat_flux);
+					if (this->verbose) {
+						amrex::Print() << std::format("...[level {}] RKL2 conduction: {} stages, dt / dt_expl = {:e}\n", lev, nstages,
+									      dt / dt_expl);
+					}
+				} else {
+					quokka::conduction::IsoConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params,
+												      heat_flux);
+				}
 			}
 			if ((do_reflux != 0) && (recal_fluxes != nullptr)) {
 				// heat_flux has a single component, so accumulate it into the energy components of the

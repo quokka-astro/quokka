@@ -95,6 +95,7 @@ namespace filesystem = experimental::filesystem;
 
 // internal headers
 #include "conduction/ConductionHelpers.hpp"
+#include "conduction/SuperTimeStepping.hpp"
 #include "conduction/conductivity.hpp"
 #include "fundamental_constants.H"
 #include "grid.hpp"
@@ -234,8 +235,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Conduction parameters
 	// conductivity prefactors for ConductionModel::constant/spitzer; model and geometry are set by Physics_Traits
 	quokka::conduction::ConductivityParams conductivityParams_{};
-	amrex::Real conductionCFL = 0.2; // default
+	amrex::Real conductionCFL = 0.2; // default; unused when conductionUseSTS_ == 1
 	int enableConduction_ = 0;	 // default
+	int conductionUseSTS_ = 0;	 // 1 == RKL2 super time stepping (isotropic conduction only)
+	quokka::conduction::STSParams conductionSTSParams_{};
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
@@ -1308,51 +1311,24 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	if constexpr (Physics_Traits<problem_t>::conduction_model != ConductionModel::none) {
 		if (enableConduction_ == 1) {
-			auto const &state_mf = state_new_cc_[lev].const_arrays(); // MultiFab containing the cell-centered state
-			quokka::conduction::FaceStateArrays const state_fc_in = quokka::conduction::MakeFaceStateArrays(state_new_fc_[lev]);
-
-			const amrex::Real cfl = conductionCFL;
-			const amrex::Real t_min = tempFloor_;
-			const quokka::conduction::ConductivityParams conductivity_params = conductivityParams_;
-
-			// Use amrex::ParReduce to find the minimum dt and its location across all GPU threads
-			auto r = amrex::ParReduce(
-			    amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{}, state_new_cc_[lev],
-			    amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
-				    auto const &cons = state_mf[bx];
-				    auto local_state_fc = quokka::conduction::GatherFaceFields<problem_t>(state_fc_in, bx);
-
-				    const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
-				    const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
-				    auto const massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-				    const amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars));
-
-				    // kappa from the conductivity model; see conductivity.hpp
-				    const auto kappa = quokka::conduction::EvaluateConductivity<problem_t>(rho, T, conductivity_params);
-				    amrex::Real kappa_eff = kappa[0];
-				    if constexpr (Physics_Traits<problem_t>::conduction_geometry == ConductionGeometry::anisotropic) {
-					    // bound the largest eigenvalue of the conductivity tensor by kappa_par + kappa_perp, keeping the
-					    // factor-of-2 safety margin previously used for the anisotropic scheme
-					    kappa_eff = 2.0 * (kappa[0] + kappa[1]);
-				    }
-				    const amrex::Real heat_capacity = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T, massScalars);
-				    const amrex::Real diffusion_coefficient = kappa_eff / heat_capacity;
-
-				    // Avoid division by zero for unphysical states
-				    amrex::Real cell_dt = std::numeric_limits<amrex::Real>::max();
-				    if (diffusion_coefficient > 0.0) {
-					    cell_dt = cfl * (dx_min * dx_min) / diffusion_coefficient;
-				    }
-
-				    return {.value = cell_dt, .index = amrex::IntVect{AMREX_D_DECL(i, j, k)}};
-			    });
-
-			// Extract the global reduction results
-			conduction_dt = r;
-			amrex::ParallelAllReduce::Min(conduction_dt, amrex::ParallelContext::CommunicatorSub());
+			if (conductionUseSTS_ == 1) {
+				// RKL2 takes each Strang half-step (dt / 2) in as many stages as it needs, so conduction only caps dt
+				// such that a half-step needs at most conduction.sts_max_stages stages
+				conduction_dt = quokka::conduction::ComputeConductionTimestep<problem_t>(state_new_cc_[lev], state_new_fc_[lev], dx_min,
+													 conductivityParams_, tempFloor_,
+													 conductionSTSParams_.safety / (2.0 * AMREX_SPACEDIM));
+				if (conduction_dt.value < std::numeric_limits<amrex::Real>::max()) {
+					conduction_dt.value *= 2.0 * conductionSTSParams_.dt_cap_fraction *
+							       quokka::conduction::RKL2MaxTimestepRatio(conductionSTSParams_.max_stages);
+				}
+			} else {
+				conduction_dt = quokka::conduction::ComputeConductionTimestep<problem_t>(state_new_cc_[lev], state_new_fc_[lev], dx_min,
+													 conductivityParams_, tempFloor_, conductionCFL);
+			}
 
 			if (verbose) {
-				amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
+				amrex::Print() << std::format("...[level {}] \testimated conduction timestep{}: {:e}\n", lev,
+							      (conductionUseSTS_ == 1) ? " (RKL2 stage cap)" : "", conduction_dt.value);
 				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
 							      formatIntVect(conduction_dt.index));
 			}
@@ -1404,7 +1380,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		} else if (dt_min_ptr == &particle_dt) {
 			amrex::Print() << std::format("...[level {}] timestep limited by PARTICLES\n", lev);
 		} else if (dt_min_ptr == &conduction_dt) {
-			amrex::Print() << std::format("...[level {}] timestep limited by CONDUCTION\n", lev);
+			amrex::Print() << std::format("...[level {}] timestep limited by CONDUCTION{}\n", lev,
+						      (conductionUseSTS_ == 1) ? " (RKL2 stage cap)" : "");
 		}
 	}
 

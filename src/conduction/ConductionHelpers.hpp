@@ -12,12 +12,18 @@
 ///        divergence to the internal and total energy.
 
 #include <array>
+#include <limits>
 
 #include "AMReX_Array4.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_ParReduce.H"
+#include "AMReX_ParallelReduce.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
+#include "AMReX_ValLocPair.H"
+#include "conduction/conductivity.hpp"
 #include "hydro/hydro_system.hpp"
 
 namespace quokka::conduction
@@ -137,6 +143,95 @@ void ApplyConductionUpdate(amrex::MultiFab &state, std::array<amrex::MultiFab, A
 		state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin + Emag;
 		state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
 	});
+}
+
+/// \brief Copies the internal energy of every valid cell of \p state into the 1-component MultiFab \p Eint
+///        (same BoxArray and DistributionMapping as \p state), derived from total energy as in ApplyConductionUpdate.
+template <typename problem_t>
+void ExtractInternalEnergy(amrex::MultiFab const &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::MultiFab &Eint)
+{
+	auto const &state_in = state.const_arrays();
+	FaceStateArrays const state_fc_in = MakeFaceStateArrays(state_fc);
+	auto Eint_out = Eint.arrays();
+
+	amrex::ParallelFor(Eint, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		auto local_state_fc = GatherFaceFields<problem_t>(state_fc_in, bx);
+		Eint_out[bx](i, j, k) = HydroSystem<problem_t>::ComputeInternalEnergy(state_in[bx], i, j, k, &local_state_fc);
+	});
+}
+
+/// \brief Sets the internal energy of every valid cell of \p state to \p Eint, updating both the total energy
+///        (Eint + Ekin + Emag) and the auxiliary internal energy, as in ApplyConductionUpdate.
+template <typename problem_t>
+void SetInternalEnergy(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::MultiFab const &Eint)
+{
+	auto state_out = state.arrays();
+	FaceStateArrays const state_fc_in = MakeFaceStateArrays(state_fc);
+	auto const &Eint_in = Eint.const_arrays();
+
+	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		auto local_state_fc = GatherFaceFields<problem_t>(state_fc_in, bx);
+
+		const amrex::Real rho = state_out[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		const amrex::Real px = state_out[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+		const amrex::Real py = state_out[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+		const amrex::Real pz = state_out[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+
+		const amrex::Real Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
+		const amrex::Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &local_state_fc);
+		const amrex::Real Eint_new = Eint_in[bx](i, j, k);
+
+		state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin + Emag;
+		state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
+	});
+}
+
+/// \brief Returns the minimum over the valid cells of \p state (reduced across all MPI ranks) of the explicit
+///        conduction timestep cfl * dx_min^2 / D, with D = kappa_eff / (dEint/dT), and the cell where it occurs.
+///        With ConductionGeometry::anisotropic, kappa_eff = 2 (kappa_par + kappa_perp). Cells with D <= 0 do not
+///        limit the timestep.
+template <typename problem_t>
+auto ComputeConductionTimestep(amrex::MultiFab const &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Real dx_min,
+			       ConductivityParams const &conductivity_params, amrex::Real t_min, amrex::Real cfl)
+    -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
+{
+	auto const &state_mf = state.const_arrays();
+	FaceStateArrays const state_fc_in = MakeFaceStateArrays(state_fc);
+
+	// Use amrex::ParReduce to find the minimum dt and its location across all GPU threads
+	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt =
+	    amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{}, state, amrex::IntVect(0),
+			     [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
+				     auto const &cons = state_mf[bx];
+				     auto local_state_fc = GatherFaceFields<problem_t>(state_fc_in, bx);
+
+				     const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+				     const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
+				     auto const massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+				     const amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars));
+
+				     // kappa from the conductivity model; see conductivity.hpp
+				     const auto kappa = EvaluateConductivity<problem_t>(rho, T, conductivity_params);
+				     amrex::Real kappa_eff = kappa[0];
+				     if constexpr (Physics_Traits<problem_t>::conduction_geometry == ConductionGeometry::anisotropic) {
+					     // bound the largest eigenvalue of the conductivity tensor by kappa_par + kappa_perp, keeping the
+					     // factor-of-2 safety margin previously used for the anisotropic scheme
+					     kappa_eff = 2.0 * (kappa[0] + kappa[1]);
+				     }
+				     const amrex::Real heat_capacity = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T, massScalars);
+				     const amrex::Real diffusion_coefficient = kappa_eff / heat_capacity;
+
+				     // Avoid division by zero for unphysical states
+				     amrex::Real cell_dt = std::numeric_limits<amrex::Real>::max();
+				     if (diffusion_coefficient > 0.0) {
+					     cell_dt = cfl * (dx_min * dx_min) / diffusion_coefficient;
+				     }
+
+				     return {.value = cell_dt, .index = amrex::IntVect{AMREX_D_DECL(i, j, k)}};
+			     });
+
+	amrex::ParallelAllReduce::Min(conduction_dt, amrex::ParallelContext::CommunicatorSub());
+	return conduction_dt;
 }
 
 } // namespace quokka::conduction
