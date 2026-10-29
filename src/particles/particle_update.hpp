@@ -132,15 +132,64 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 
 		// Only proceed if tables are initialized
 		if (host_tables_ptr != nullptr && host_tables_ptr->is_initialized()) {
-			g_device_luminosity_tables<nGroups> = host_tables_ptr->const_tables();
-			applyUpdate<problem_t, ContainerType>(container, current_time, dt);
+			// Pass the table views by value into the kernel (no per-step write of a managed global).
+			const auto tables = host_tables_ptr->const_tables();
+			for (int lev = 0; lev <= container->finestLevel(); ++lev) {
+				for (typename ContainerType::ParIterType pIter(*container, lev); pIter.isValid(); ++pIter) {
+					auto &particles = pIter.GetArrayOfStructs();
+					auto *pData = particles().data();
+					const amrex::Long np = pIter.numParticles();
+
+					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+						auto &p = pData[idx]; // NOLINT
+						LuminosityUpdate::updateLuminosity<problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time,
+																	      tables);
+					});
+				}
+			}
 		}
 	}
 
-	template <typename problem_t, typename ParticleType, int Nout>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time, amrex::Real /*dt*/) noexcept
+	// Fused drift + property (luminosity) update: one kernel per tile per level instead of two separate passes.
+	// The per-particle operations are applied in the same order and with the same inputs as the separate drift pass
+	// (driftParticlesAllLevels) followed by updateParticleProperties(current_time): the luminosity update reads only
+	// mass and birth time (not modified by drift, the elliptic solve or the kick that run in between) and writes only
+	// the luminosity components (not read by those steps).
+	// Returns false (and does nothing) if the luminosity tables are not initialized; the caller then drifts separately.
+	template <typename problem_t, typename ContainerType>
+	static auto driftAndUpdateProperties(ContainerType *container, int lev_min, int lev_max, int mass_idx, amrex::Real dt,
+					     amrex::Real current_time) noexcept -> bool
 	{
-		LuminosityUpdate::updateLuminosity<problem_t, ParticleType, Nout>(p, current_time);
+		const BL_PROFILE("ParticlePropertyUpdateTraits::driftAndUpdateProperties()");
+		if (container == nullptr || mass_idx < 0) {
+			return false;
+		}
+		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+		auto *host_tables_ptr = quokka::g_luminosity_tables_ptr<nGroups>;
+		if (host_tables_ptr == nullptr || !host_tables_ptr->is_initialized()) {
+			return false;
+		}
+		const auto tables = host_tables_ptr->const_tables();
+		for (int lev = lev_min; lev <= lev_max; ++lev) {
+			for (typename ContainerType::ParIterType pIter(*container, lev); pIter.isValid(); ++pIter) {
+				auto &particles = pIter.GetArrayOfStructs();
+				auto *pData = particles().data();
+				const amrex::Long np = pIter.numParticles();
+
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+					auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					// drift: update particle position based on velocity components
+					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+						if (mass_idx + 1 + i < ContainerType::ParticleType::NReal) {
+							p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+						}
+					}
+					// property update: luminosity from (age, mass) table
+					LuminosityUpdate::updateLuminosity<problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, tables);
+				});
+			}
+		}
+		return true;
 	}
 
 	template <typename problem_t, typename ContainerType>

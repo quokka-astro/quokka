@@ -620,6 +620,11 @@ inline int particle_verbose = 0; // NOLINT print particle logistics
 // Disable particle drift
 inline bool disable_particle_drift = false; // NOLINT
 
+// Delete StochasticStellarPop particles whose evolution stage is Removed (AGB death) at the end of each step.
+// Default false (baseline behaviour: Removed SSP particles are kept, and keep their gravitating mass).
+// Turning this on changes the gravitational-mass and stellar-mass bookkeeping, so it is a physics decision.
+inline bool destroy_removed_SSP_particles = false; // NOLINT
+
 // Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
 inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
 
@@ -706,6 +711,7 @@ template <typename problem_t> inline void particleParmParse()
 
 	// Disable particle drift
 	pp.query("disable_particle_drift", disable_particle_drift);
+	pp.query("destroy_removed_SSP_particles", destroy_removed_SSP_particles);
 
 	// Stellar velocity limit parameter
 	pp.query("stellar_velocity_limit", stellar_velocity_limit);

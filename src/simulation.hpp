@@ -1756,7 +1756,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			if (particleRegister_.HasMassiveParticles()) {
 				// drift particles from t to (t + dt)
 				// N.B.: MUST be done *before* Poisson solve at new time!
-				particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
+				// (fuses the property update at cur_time, i.e. updateParticleProperties(cur_time, ...) below, into the drift kernel)
+				particleRegister_.driftParticlesAllLevels(dt_[0], finest_level, cur_time);
 			}
 		}
 #endif
