@@ -15,6 +15,7 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/photoionization_H_caseB/network.hpp"
 #include "physics_info.hpp"
@@ -30,10 +31,8 @@
 #include <string>
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 struct DTypeFront_JAFF {};
 
@@ -337,7 +336,6 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialCondition
 	pp.query("Q", userData_.Q);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -362,7 +360,7 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::setInitialConditionsOnGrid(q
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::microphysics::BurnState<DTypeFront_JAFF> state;
 	std::array<Real, Network::NumSpec> numdens = {-1.0};
 	numdens[Network::Species::ek] = userData_.n_e_init;
 	numdens[Network::Species::h] = userData_.n_HI_init;
@@ -549,7 +547,7 @@ auto problem_main() -> int
 				const amrex::Real x_HII = n_HII_cell / denom;
 				const amrex::Real x_HI = n_HI_cell / denom;
 
-				burn_t bstate;
+				quokka::microphysics::BurnState<DTypeFront_JAFF> bstate;
 				for (int nn = 0; nn < Network::NumSpec; ++nn) {
 					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + nn) / spmasses[nn];
 				}

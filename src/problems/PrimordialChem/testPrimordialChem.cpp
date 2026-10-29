@@ -31,15 +31,14 @@
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/primordial_chem/network.hpp"
 #include "radiation/radiation_system.hpp"
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 using amrex::Real;
 
@@ -126,7 +125,6 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 	pp.query("primary_species_14", userData_.primary_species_14);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 }
 
 template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -135,7 +133,7 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::microphysics::BurnState<PrimordialChemTest> state;
 
 	std::array<Real, Network::NumSpec> numdens = {-1.0};
 
