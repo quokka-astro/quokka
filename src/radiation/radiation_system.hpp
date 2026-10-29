@@ -1734,7 +1734,7 @@ void RadSystem<problem_t>::ComputeFluxesFused(amrex::MultiFab &x1Flux_mf, amrex:
 		}
 	}
 
-	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
+	// (rad-14: radBoundaries_ is indexed directly inside ComputeCellOpticalDepth; no per-thread copy)
 
 	// stencil offsets (relative to cell i) needed by the reconstruction
 	constexpr int sLo = (ORDER == 1) ? -1 : ((ORDER == 2) ? -2 : -3);
@@ -1757,18 +1757,13 @@ void RadSystem<problem_t>::ComputeFluxesFused(amrex::MultiFab &x1Flux_mf, amrex:
 			}
 		}
 
-		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
-		for (int g = 0; g < nGroups_ + 1; ++g) {
-			radBoundaries_g_copy[g] = radBoundaries_g[g];
-		}
-
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
 		// calculate cell optical depth for each photon group
 		quokka::valarray<double, nGroups_> tau_cell{};
 		if (use_wavespeed_correction) {
-			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k, i_in, j_in, k_in, cons_fc, radBoundaries_g_copy);
+			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k, i_in, j_in, k_in, cons_fc);
 		}
 
 		for (int g = groupBegin; g < groupEnd; ++g) {
