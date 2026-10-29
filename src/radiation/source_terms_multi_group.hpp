@@ -4,6 +4,23 @@
 
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
+namespace quokka::detail
+{
+// Return x unchanged, but hide its value from the optimiser. Address arithmetic derived from the result is then formed
+// where it is used, instead of being computed once at the top of a kernel and held (one 64-bit register pair per array
+// component) until the last store. In AddSourceTermsMultiGroup those long-lived addresses are the largest single item
+// of the per-thread working set: they are what spills to scratch when the kernel is held to 256 registers.
+template <typename T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto opaque_value(T x) -> T
+{
+#if defined(__HIP_DEVICE_COMPILE__) && defined(__AMDGCN__)
+	asm volatile("" : "+v"(x));
+#elif defined(__CUDA_ARCH__)
+	asm volatile("" : "+r"(x));
+#endif
+	return x;
+}
+} // namespace quokka::detail
+
 // Compute kappaE and kappaP based on the opacity model. The result is stored in the last five arguments: alpha_P, alpha_E, kappaP, kappaE, and kappaPoverE.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP(
@@ -77,11 +94,16 @@ RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(double const T, d
 	for (int g = 0; g < nGroups_; ++g) {
 		auto const nu_L = rad_boundaries[g];
 		auto const nu_R = rad_boundaries[g + 1];
-		auto const B_L = B_edge[g]; // 4 pi B(nu) / c
+		auto const B_L = B_edge[g];	// 4 pi B(nu) / c (rad-09: fused per-edge Planck evaluation)
 		auto const B_R = B_edge[g + 1]; // 4 pi B(nu) / c
-		auto const kappa_L = kappa_expo_and_lower_value[1][g];
-		auto const kappa_R = kappa_L * std::pow(nu_R / nu_L, kappa_expo_and_lower_value[0][g]);
-		opacity_terms.delta_nu_kappa_B_at_edge[g] = nu_R * kappa_R * B_R - nu_L * kappa_L * B_L;
+		if (g < nGroupsThermal_) {
+			auto const kappa_L = kappa_expo_and_lower_value[1][g];
+			auto const kappa_R = kappa_L * std::pow(nu_R / nu_L, kappa_expo_and_lower_value[0][g]);
+			opacity_terms.delta_nu_kappa_B_at_edge[g] = nu_R * kappa_R * B_R - nu_L * kappa_L * B_L;
+		} else {
+			// A chemical band has zero thermal-coupling opacity (kappa_L = kappa_R = 0), so this term vanishes (rad-10).
+			opacity_terms.delta_nu_kappa_B_at_edge[g] = 0.0;
+		}
 		delta_nu_B_at_edge[g] = nu_R * B_R - nu_L * B_L;
 	}
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
@@ -708,7 +730,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 	array_t &consNew = consVar;
 	auto dt = dt_implicit;
 
-	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
 	const double tempFloor_h = tempFloor_local;
 
 	// Add source terms
@@ -717,7 +738,12 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 	// Greenough [Journal of Computational Physics 184 (2003) 53–78].
 
 	// cell-centered kernel
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	// Launch bound: 512 threads per block is 8 wavefronts per block, i.e. 2 per SIMD on gfx90a, so the compiler must
+	// fit each thread into 256 registers (VGPR + AGPR) and the kernel runs at an occupancy of at least 2 waves/SIMD.
+	// With the default 256 threads the compiler settles at 1 wave/SIMD and spreads into the AGPRs (350 registers before
+	// the working-set reductions in this kernel and in SolveGasDustRadiationEnergyExchange, ~280 after them).
+	constexpr int source_term_threads = 512;
+	amrex::ParallelFor<source_term_threads>(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// make a local reference
 		auto p_iteration_counter_local = p_iteration_counter;		      // NOLINT
 		auto p_iteration_failure_counter_local = p_iteration_failure_counter; // NOLINT
@@ -760,18 +786,17 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// plus advection source term (for well-balanced/SDC integrators)
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
 		// The radiation flux source is scaled exactly like the energy source; unit: erg cm^-2 s^-2.
+		// The last NChemBands groups are ionizing photon groups (no cscale).
+		// All other (thermal) groups require scaling by chat/c (= 1/cscale).
+		// Avoid if constexpr here: NVCC rejects first-captures inside constexpr-if in device lambdas.
+		auto src_scale_of = [=](int g) -> double { return (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_) ? dt : dt * (chat / c); };
 		quokka::valarray<double, nGroups_> Src;
-		amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> Src_flux{};
 		for (int g = 0; g < nGroups_; ++g) {
-			// The last NChemBands groups are ionizing photon groups (no cscale).
-			// All other (thermal) groups require scaling by chat/c (= 1/cscale).
-			// Avoid if constexpr here: NVCC rejects first-captures inside constexpr-if in device lambdas.
-			const double src_scale = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_) ? dt : dt * (chat / c);
-			Src[g] = src_scale * radEnergySource(i, j, k, g);
-			for (int n = 0; n < 3; ++n) {
-				Src_flux[n][g] = src_scale * radFluxSource(i, j, k, 3 * g + n);
-			}
+			Src[g] = src_scale_of(g) * radEnergySource(i, j, k, g);
 		}
+		// The flux source (Src_flux) and the chemical-band energy source (Src_chem) are needed only after the
+		// energy exchange, so they are read from radFluxSource / radEnergySource where they are used (before
+		// UpdateFlux and at the final store) instead of being held in registers across the Newton solve.
 
 		// Chemical (ionizing) bands are decoupled from the thermal gas-radiation energy exchange. Their
 		// source is injected directly into the radiation energy after the Newton solve (see the store
@@ -780,9 +805,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// thermal solve here. When NChemBands == 0 this loop is empty and behaviour is unchanged. With
 		// photochemistry enabled, subcycleRadiationAtLevel injects the chem-band emission before
 		// photochemistry (RadSystem::AddChemBandSources) and passes zero chem-band sources here.
-		quokka::valarray<double, nGroups_> Src_chem{};
 		for (int g = nGroupsThermal_; g < nGroups_; ++g) {
-			Src_chem[g] = Src[g];
 			Src[g] = 0.0;
 		}
 
@@ -799,12 +822,12 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			Ekin0 = Egastot0 - Egas0;
 		}
 
-		// make a copy of radBoundaries_g
-		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
+		// The group boundaries and their ratios are compile-time constants (radBoundaries_ is static constexpr), so
+		// form them as constexpr locals rather than copying a captured host array element by element; this lets the
+		// compiler fold every boundary-dependent expression in the inlined solver.
+		constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy = radBoundaries_;
+		// (not constexpr: the default single-group boundaries {0, inf} would divide by zero in a constant expression)
 		amrex::GpuArray<double, nGroups_> radBoundaryRatios_copy{};
-		for (int g = 0; g < nGroups_ + 1; ++g) {
-			radBoundaries_g_copy[g] = radBoundaries_g[g];
-		}
 		for (int g = 0; g < nGroups_; ++g) {
 			radBoundaryRatios_copy[g] = radBoundaries_g_copy[g + 1] / radBoundaries_g_copy[g];
 		}
@@ -851,11 +874,15 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				quokka::valarray<double, nGroups_> vel_times_F{};
 				if constexpr (include_work_term_in_source) {
 					if (iter == 0) {
+						// fresh (opaque) cell indices: see quokka::detail::opaque_value
+						const int io = quokka::detail::opaque_value(i);
+						const int jo = quokka::detail::opaque_value(j);
+						const int ko = quokka::detail::opaque_value(k);
 						for (int g = 0; g < nGroups_; ++g) {
 							// Compute vel_times_F[g] = sum(vel * F_g)
-							const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-							const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-							const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+							const double frad0 = consPrev(io, jo, ko, x1RadFlux_index + numRadVars_ * g);
+							const double frad1 = consPrev(io, jo, ko, x2RadFlux_index + numRadVars_ * g);
+							const double frad2 = consPrev(io, jo, ko, x3RadFlux_index + numRadVars_ * g);
 							vel_times_F[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2);
 						}
 					}
@@ -909,7 +936,19 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			// 2. Compute radiation flux update
 
 			// 2.1. Update flux and gas momentum
-			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0, Src_flux, Emag);
+			// The radiation flux source is scaled exactly like the energy source; unit: erg cm^-2 s^-2.
+			// fresh (opaque) cell indices for the loads here and in UpdateFlux: see quokka::detail::opaque_value
+			const int iu = quokka::detail::opaque_value(i);
+			const int ju = quokka::detail::opaque_value(j);
+			const int ku = quokka::detail::opaque_value(k);
+			amrex::GpuArray<quokka::valarray<double, nGroups_>, 3> Src_flux{};
+			for (int g = 0; g < nGroups_; ++g) {
+				const double src_scale = src_scale_of(g);
+				for (int n = 0; n < 3; ++n) {
+					Src_flux[n][g] = src_scale * radFluxSource(iu, ju, ku, 3 * g + n);
+				}
+			}
+			auto updated_flux = UpdateFlux(iu, ju, ku, consPrev, updated_energy, dt, gas_update_factor, Ekin0, Src_flux, Emag);
 
 			// 2.2. Check for convergence of the work term
 			bool work_converged = true;
@@ -933,16 +972,21 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 			// 3. If converged, store new radiation energy, gas energy
 			if (work_converged) {
-				consNew(i, j, k, x1GasMomentum_index) = updated_flux.gasMomentum[0];
-				consNew(i, j, k, x2GasMomentum_index) = updated_flux.gasMomentum[1];
-				consNew(i, j, k, x3GasMomentum_index) = updated_flux.gasMomentum[2];
+				// fresh (opaque) cell indices: see quokka::detail::opaque_value
+				const int is = quokka::detail::opaque_value(i);
+				const int js = quokka::detail::opaque_value(j);
+				const int ks = quokka::detail::opaque_value(k);
+				consNew(is, js, ks, x1GasMomentum_index) = updated_flux.gasMomentum[0];
+				consNew(is, js, ks, x2GasMomentum_index) = updated_flux.gasMomentum[1];
+				consNew(is, js, ks, x3GasMomentum_index) = updated_flux.gasMomentum[2];
 				for (int g = 0; g < nGroups_; ++g) {
-					// For chemical bands, Src_chem[g] injects the ionizing source directly (the thermal
-					// solve left updated_flux.Erad[g] == Erad0[g]); for thermal groups Src_chem[g] == 0.
-					consNew(i, j, k, radEnergy_index + numRadVars_ * g) = updated_flux.Erad[g] + Src_chem[g];
-					consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = updated_flux.Frad[0][g];
-					consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = updated_flux.Frad[1][g];
-					consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = updated_flux.Frad[2][g];
+					// For chemical bands, Src_chem injects the ionizing source directly (the thermal
+					// solve left updated_flux.Erad[g] == Erad0[g]); for thermal groups Src_chem == 0.
+					const double Src_chem = (g >= nGroupsThermal_) ? src_scale_of(g) * radEnergySource(is, js, ks, g) : 0.0;
+					consNew(is, js, ks, radEnergy_index + numRadVars_ * g) = updated_flux.Erad[g] + Src_chem;
+					consNew(is, js, ks, x1RadFlux_index + numRadVars_ * g) = updated_flux.Frad[0][g];
+					consNew(is, js, ks, x2RadFlux_index + numRadVars_ * g) = updated_flux.Frad[1][g];
+					consNew(is, js, ks, x3RadFlux_index + numRadVars_ * g) = updated_flux.Frad[2][g];
 				}
 				if constexpr (gamma_ != 1.0) {
 					Egas_guess = updated_energy.Egas;
@@ -959,14 +1003,18 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// 4b. Store new radiation energy, gas energy
 		// In the first stage of the IMEX scheme, the hydro quantities are updated by a fraction (defined by
 		// gas_update_factor) of the time step.
-		const auto x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
-		const auto x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
-		const auto x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
+		// fresh (opaque) cell indices: see quokka::detail::opaque_value
+		const int ie = quokka::detail::opaque_value(i);
+		const int je = quokka::detail::opaque_value(j);
+		const int ke = quokka::detail::opaque_value(k);
+		const auto x1GasMom1 = consNew(ie, je, ke, x1GasMomentum_index);
+		const auto x2GasMom1 = consNew(ie, je, ke, x2GasMomentum_index);
+		const auto x3GasMom1 = consNew(ie, je, ke, x3GasMomentum_index);
 
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
-			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
-			consNew(i, j, k, gasEnergy_index) =
+			consNew(ie, je, ke, gasInternalEnergy_index) = Egas_guess;
+			consNew(ie, je, ke, gasEnergy_index) =
 			    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 		} else {
 			amrex::ignore_unused(Egas_guess);
