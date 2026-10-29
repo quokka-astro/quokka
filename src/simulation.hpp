@@ -1639,16 +1639,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	amrex::Vector<amrex::Real> init_sum_cons(ncomp_cc);
-	{
-		// local per-component sums, then a single element-wise Allreduce
+	for (int n = 0; n < ncomp_cc; ++n) {
 		const int lev = 0;
-		for (int n = 0; n < ncomp_cc; ++n) {
-			init_sum_cons[n] = state_new_cc_[lev].sum(n, true);
-		}
-		amrex::ParallelAllReduce::Sum(init_sum_cons.data(), ncomp_cc, amrex::ParallelContext::CommunicatorSub());
-		for (int n = 0; n < ncomp_cc; ++n) {
-			init_sum_cons[n] *= vol;
-		}
+		init_sum_cons[n] = state_new_cc_[lev].sum(n) * vol;
 	}
 
 	getWalltime(); // initialize start_time
@@ -1661,9 +1654,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time << " (" << (cur_time / stopTime_) * 100. << "%) starts ";
 		}
 
-		if (printCycleTiming_ == 1) {
-			amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks (needed only for consistent cycle timing)
-		}
+		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 
 		if (suppress_output == 0) {
 			// output per-cycle timing
@@ -1798,32 +1789,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			}
 		}
 
-		// Forced plotfile/checkpoint output via sentinel files. The filesystem is only polled every kSentinelCheckInterval steps,
-		// and both flags are broadcast together in a single int array.
+		// Forced plotfile output via sentinel file
 		const std::filesystem::path sentinel_path{"outputNow"};
-		const std::filesystem::path checkpoint_sentinel{"checkpointNow"};
-		constexpr int kSentinelCheckInterval = 10;
-		int sentinel_flags[2] = {0, 0};
-		if ((step + 1) % kSentinelCheckInterval == 0) {
-			if (amrex::ParallelDescriptor::IOProcessor()) {
-				std::error_code exists_ec;
-				const bool plot_exists = std::filesystem::exists(sentinel_path, exists_ec) && !exists_ec;
-				if (exists_ec) {
-					amrex::Print() << "[WARNING] Could not check for '" << sentinel_path.string() << "': " << exists_ec.message() << '\n';
-				} else {
-					sentinel_flags[0] = plot_exists ? 1 : 0;
-				}
-				std::error_code chk_exists_ec;
-				const bool chk_exists = std::filesystem::exists(checkpoint_sentinel, chk_exists_ec) && !chk_exists_ec;
-				if (chk_exists_ec) {
-					amrex::Print() << "[WARNING] Could not check for '" << checkpoint_sentinel.string() << "': " << chk_exists_ec.message() << '\n';
-				} else {
-					sentinel_flags[1] = chk_exists ? 1 : 0;
-				}
+		bool force_plotfile_now = false;
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			std::error_code exists_ec;
+			force_plotfile_now = std::filesystem::exists(sentinel_path, exists_ec) && !exists_ec;
+			if (exists_ec) {
+				amrex::Print() << "[WARNING] Could not check for '" << sentinel_path.string() << "': " << exists_ec.message() << '\n';
+				force_plotfile_now = false;
 			}
-			amrex::ParallelDescriptor::Bcast(sentinel_flags, 2, amrex::ParallelDescriptor::IOProcessorNumber());
 		}
-		const bool force_plotfile_now = (sentinel_flags[0] == 1);
+		int force_plotfile_flag = force_plotfile_now ? 1 : 0;
+		amrex::ParallelDescriptor::Bcast(&force_plotfile_flag, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+		force_plotfile_now = (force_plotfile_flag == 1);
 
 		if (force_plotfile_now) {
 			if (last_plot_file_step != step + 1) {
@@ -1859,7 +1838,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 
 		// Forced checkpoint output via sentinel file
-		const bool force_checkpoint_now = (sentinel_flags[1] == 1);
+		const std::filesystem::path checkpoint_sentinel{"checkpointNow"};
+		bool force_checkpoint_now = false;
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			std::error_code chk_exists_ec;
+			force_checkpoint_now = std::filesystem::exists(checkpoint_sentinel, chk_exists_ec) && !chk_exists_ec;
+			if (chk_exists_ec) {
+				amrex::Print() << "[WARNING] Could not check for '" << checkpoint_sentinel.string() << "': " << chk_exists_ec.message() << '\n';
+				force_checkpoint_now = false;
+			}
+		}
+		int force_checkpoint_flag = force_checkpoint_now ? 1 : 0;
+		amrex::ParallelDescriptor::Bcast(&force_checkpoint_flag, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+		force_checkpoint_now = (force_checkpoint_flag == 1);
 
 		if (force_checkpoint_now && last_chk_file_step != step + 1) {
 			last_chk_file_step = step + 1;
@@ -1904,13 +1895,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	computeAfterEvolve(init_sum_cons);
 
 	// compute conservation error
-	amrex::Vector<amrex::Real> final_sum_cons(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		final_sum_cons[n] = state_new_cc_[0].sum(n, true);
-	}
-	amrex::ParallelAllReduce::Sum(final_sum_cons.data(), ncomp_cc, amrex::ParallelContext::CommunicatorSub());
-	for (int n = 0; n < ncomp_cc; ++n) {
-		amrex::Real const final_sum = final_sum_cons[n] * vol;
+		amrex::Real const final_sum = state_new_cc_[0].sum(n) * vol;
 		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
 		if (suppress_output == 0) {
 			amrex::Print() << "Initial " << componentNames_cc_[n] << " = " << init_sum_cons[n] << '\n';
