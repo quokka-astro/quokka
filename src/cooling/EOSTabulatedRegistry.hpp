@@ -83,14 +83,21 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real con
 	return tables.all_tables.interpolate_single(point, ENTROPY_IDX);
 }
 
-struct EOSTabulatedRegistry {
-	resampledGpuConstTables host;
-	resampledGpuConstTables device;
+// Table descriptors for the tabulated EOS. The host copy is an ordinary host global; the device copy is a
+// device-global variable (plain device memory, NOT managed memory), updated with hipMemcpyToSymbol at registration.
+extern resampledGpuConstTables g_eos_tabulated_host;							    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+extern bool g_eos_tabulated_registered;									    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+// __device__ variables cannot have dynamic initialization, and resampledGpuConstTables has default member initializers,
+// so the device global is a raw, suitably aligned byte buffer that is read back as a resampledGpuConstTables.
+struct EOSTabulatedDeviceBytes {
+	alignas(resampledGpuConstTables) unsigned char data[sizeof(resampledGpuConstTables)];
 };
+extern AMREX_DEVICE_GLOBAL_VARIABLE(EOSTabulatedDeviceBytes, g_eos_tabulated_device); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-extern AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-
-inline AMREX_GPU_HOST_DEVICE auto getEOSTabulatedRegistry() -> EOSTabulatedRegistry * { return g_eos_tabulated_registry; }
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto getEOSTabulatedDeviceTables() -> resampledGpuConstTables
+{
+	return *reinterpret_cast<const resampledGpuConstTables *>(&g_eos_tabulated_device); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+}
 
 void registerEOSTabulated(resampledGpuConstTables host_tables, resampledGpuConstTables device_tables);
 

@@ -11,6 +11,7 @@
 ///
 
 #include "cooling/ResampledCooling.hpp"
+#include <cstring>
 
 #include "AMReX_Arena.H"
 #include "AMReX_FileSystem.H"
@@ -109,7 +110,9 @@ auto resampled_tables::const_tables_host() const -> resampledGpuConstTables
 	};
 }
 
-AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry = nullptr; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+resampledGpuConstTables g_eos_tabulated_host{};	    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+bool g_eos_tabulated_registered = false;		    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_DEVICE_GLOBAL_VARIABLE(EOSTabulatedDeviceBytes, g_eos_tabulated_device); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 /// Register (or re-register) resampled table sub-handles for the tabulated EOS backend.
 /// Lazily allocates the managed-memory registry on first call. Repeated calls overwrite
@@ -117,12 +120,16 @@ AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry = nullptr; // N
 /// cooling table. The pointer being non-null is the sole "registered" invariant.
 void registerEOSTabulated(resampledGpuConstTables host_tables, resampledGpuConstTables device_tables)
 {
-	if (g_eos_tabulated_registry == nullptr) {
-		auto *mem = amrex::The_Managed_Arena()->alloc(sizeof(EOSTabulatedRegistry));
-		g_eos_tabulated_registry = new (mem) EOSTabulatedRegistry{}; // NOLINT(cppcoreguidelines-owning-memory)
-	}
-	g_eos_tabulated_registry->host = host_tables;
-	g_eos_tabulated_registry->device = device_tables;
+	amrex::Gpu::streamSynchronize();
+	g_eos_tabulated_host = host_tables;
+#if defined(AMREX_USE_HIP)
+	AMREX_HIP_SAFE_CALL(hipMemcpyToSymbol(HIP_SYMBOL(g_eos_tabulated_device), &device_tables, sizeof(resampledGpuConstTables)));
+#elif defined(AMREX_USE_CUDA)
+	AMREX_CUDA_SAFE_CALL(cudaMemcpyToSymbol(g_eos_tabulated_device, &device_tables, sizeof(resampledGpuConstTables)));
+#else
+	std::memcpy(&g_eos_tabulated_device, &device_tables, sizeof(resampledGpuConstTables));
+#endif
+	g_eos_tabulated_registered = true;
 }
 
 } // namespace quokka::ResampledCooling
