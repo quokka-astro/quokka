@@ -3724,11 +3724,13 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 #endif
 
 	amrex::Real time_subcycle = time;
+	// failure counter for: matter-radiation coupling, dust temperature, outer iteration.
+	// Accumulated over all substeps of this level step; copied to the host and reduced once after the substep loop.
+	// (merged with rad-13: 4th slot = photochemistry burn failures)
+	amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0, 0});
 	for (int i = 0; i < nsubSteps; ++i) {
 		// We use the three-stage IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
 
-		// failure counter for: matter-radiation coupling, dust temperature, outer iteration, photochemistry burn (rad-13)
-		amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0, 0});
 		// iteration counter for: radiation update, Newton-Raphson iterations, max Newton-Raphson iterations, decoupled gas-dust update
 		amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0, 0});
 		int *p_iteration_failure_counter = iteration_failure_counter.data();
@@ -4065,18 +4067,30 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			}
 		}
 
+		// new hydro+radiation state is stored in state_new_cc_
+
+		// update 'time_subcycle'
+		time_subcycle += dt_radiation;
+
+		// update cell update counter
+		radiationCellUpdates_ += CountCells(lev); // keep track of number of cell updates
+	}
+
+	// Check the failure counters once per level step (accumulated over all substeps), with one merged reduction.
+	{
 		auto *h_iteration_failure_counter = iteration_failure_counter.copyToHost();
-		long nf_coupling = h_iteration_failure_counter[0]; // number of matter-radiation coupling failures, NOLINT(google-runtime-int)
-		long nf_dust = h_iteration_failure_counter[1];	   // number of dust temperature failures, NOLINT(google-runtime-int)
-		long nf_outer = h_iteration_failure_counter[2];	   // number of outer iterations failures, NOLINT(google-runtime-int)
-		long nf_burn = h_iteration_failure_counter[3];	   // number of photochemistry burn failures (rad-13), NOLINT(google-runtime-int)
+		std::array<long, 4> nf = {h_iteration_failure_counter[0], // number of matter-radiation coupling failures, NOLINT(google-runtime-int)
+					  h_iteration_failure_counter[1], // number of dust temperature failures, NOLINT(google-runtime-int)
+					  h_iteration_failure_counter[2], // number of outer iterations failures, NOLINT(google-runtime-int)
+					  h_iteration_failure_counter[3]}; // number of photochemistry burn failures (rad-13), NOLINT(google-runtime-int)
+		amrex::ParallelDescriptor::ReduceLongSum(nf.data(), 4);
+		const long nf_coupling = nf[0]; // NOLINT(google-runtime-int)
+		const long nf_dust = nf[1];	// NOLINT(google-runtime-int)
+		const long nf_outer = nf[2];	// NOLINT(google-runtime-int)
+		const long nf_burn = nf[3];	// NOLINT(google-runtime-int)
 
-		amrex::ParallelDescriptor::ReduceLongSum(nf_coupling);
-		amrex::ParallelDescriptor::ReduceLongSum(nf_dust);
-		amrex::ParallelDescriptor::ReduceLongSum(nf_outer);
-		amrex::ParallelDescriptor::ReduceLongSum(nf_burn);
-
-		// rad-13: deferred from computePhotoChemistry; the burn ran before the IMEX stages, so it is reported first
+		// rad-13: deferred from computePhotoChemistry (rad-05: checked once per level step); the burn ran before the IMEX stages, so it is
+		// reported first
 		if (nf_burn > 0) {
 			amrex::Abort("Burn failed in the Rosenbrock integrator. Aborting.");
 		}
@@ -4092,14 +4106,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		if (nf_outer > 0) {
 			amrex::Abort("Outer iteration for matter-radiation coupling failed to converge!");
 		}
-
-		// new hydro+radiation state is stored in state_new_cc_
-
-		// update 'time_subcycle'
-		time_subcycle += dt_radiation;
-
-		// update cell update counter
-		radiationCellUpdates_ += CountCells(lev); // keep track of number of cell updates
 	}
 }
 

@@ -9,6 +9,7 @@
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_ParmParse.H"
 
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
@@ -55,6 +56,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	}
 
 	int num_failed = 0;
+
+	// (rad-05 queried photochemistry.hip_sync_per_box here; merged with rad-13, the same switch is read once in
+	// QuokkaSimulation::readParmParse (default 0) and passed in as hip_sync_per_box)
 
 	const int firstChemIndex = RadSystem<problem_t>::radEnergy_index +
 				   RadSystem<problem_t>::numRadVars_ * (RadSystem<problem_t>::nGroups_ - RadSystem_NChemBands<problem_t>::value);
