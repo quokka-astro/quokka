@@ -373,13 +373,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// AMR utility functions
 	template <typename PreInterpHook, typename PostInterpHook>
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
-				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class);
+				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class,
+				    int icomp_fill = 0, int ncomp_fill = -1, int nghost_fill = -1);
 
 	template <typename PreInterpHook, typename PostInterpHook>
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
 			       amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData, amrex::Vector<amrex::Real> &fineTime,
 			       int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering &cen, quokka::direction dir, FillPatchType fptype,
-			       PreInterpHook const &pre_interp, PostInterpHook const &post_interp);
+			       PreInterpHook const &pre_interp, PostInterpHook const &post_interp, int scomp_fill = 0, int bccomp_fill = 0, int nghost_fill = -1);
 
 	static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
 	virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
@@ -3499,9 +3500,18 @@ template <typename problem_t>
 template <typename PreInterpHook, typename PostInterpHook>
 void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int const lev, amrex::Real const time,
 						      quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp,
-						      PostInterpHook const &post_interp, FillPatchType fptype)
+						      PostInterpHook const &post_interp, FillPatchType fptype, int icomp_fill, int ncomp_fill, int nghost_fill)
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()"); // NOLINT(misc-const-correctness)
+
+	// Optionally fill only components [icomp_fill, icomp_fill + ncomp_fill) with nghost_fill ghost cells (cell-centred only).
+	// The default (ncomp_fill < 0) fills every component with the full ghost width of the MultiFab.
+	// The BCRec vector is indexed by absolute component, so the sub-range uses BC components starting at icomp_fill.
+	const bool subset = (ncomp_fill >= 0);
+	const int fill_scomp = subset ? icomp_fill : 0;
+	const int fill_ncomp = subset ? ncomp_fill : state.nComp();
+	const amrex::IntVect fill_nghost = (nghost_fill >= 0) ? amrex::IntVect(nghost_fill) : state.nGrowVect();
+	AMREX_ALWAYS_ASSERT(!subset || cen == quokka::centering::cc);
 
 	// On a single level, any periodic boundaries are filled first
 	// 	then built-in boundary conditions are filled (with amrex::FilccCell()),
@@ -3533,21 +3543,30 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 		// returns old state, new state, or both depending on 'time'
 		GetData(lev - 1, time, coarseData, coarseTime, cen, dir);
-		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
+		AMREX_ASSERT(!state.contains_nan(fill_scomp, fill_ncomp));
 
 		for (auto &i : coarseData) {
-			AMREX_ASSERT(!i->contains_nan(0, state.nComp()));
-			AMREX_ASSERT(!i->contains_nan()); // check ghost zones
+			AMREX_ASSERT(!i->contains_nan(fill_scomp, fill_ncomp));
+			AMREX_ASSERT(!i->contains_nan(fill_scomp, fill_ncomp, i->nGrowVect())); // check ghost zones
 			amrex::ignore_unused(i);
 		}
 
-		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, cen, dir, fptype, pre_interp,
-				  post_interp);
+		if (subset) {
+			FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, fill_scomp, fill_ncomp, BCs, cen, dir, fptype,
+					  pre_interp, post_interp, fill_scomp, fill_scomp, nghost_fill);
+		} else {
+			FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, cen, dir, fptype,
+					  pre_interp, post_interp);
+		}
 	} else { // level 0
 		// fill internal and periodic boundaries, ignoring corners (cross=true)
 		// (there is no performance benefit for this in practice)
 		// state.FillBoundary(geom[lev].periodicity(), true);
-		state.FillBoundary(geom[lev].periodicity());
+		if (subset) {
+			state.FillBoundary(fill_scomp, fill_ncomp, fill_nghost, geom[lev].periodicity());
+		} else {
+			state.FillBoundary(geom[lev].periodicity());
+		}
 
 		if (!geom[lev].isAllPeriodic()) {
 			if (cen == quokka::centering::cc) {
@@ -3557,7 +3576,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
 																  boundaryFunctor);
 				// fill physical boundaries
-				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
+				physicalBoundaryFunctor(state, fill_scomp, fill_ncomp, fill_nghost, time, fill_scomp);
 			} else if (cen == quokka::centering::fc) {
 				// create face-centered boundary functor using the passed direction
 				amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor =
@@ -3572,8 +3591,8 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 	// ensure that there are no NaNs (can happen when domain boundary filling is
 	// unimplemented or malfunctioning)
-	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
-	AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones (usually this is caused by
+	AMREX_ASSERT(!S_filled.contains_nan(fill_scomp, fill_ncomp));
+	AMREX_ASSERT(!S_filled.contains_nan(fill_scomp, fill_ncomp, fill_nghost)); // check ghost zones (usually this is caused by
 						// forgetting to fill some components when
 						// using custom Dirichlet BCs, e.g., radiation
 						// variables in a hydro-only problem)
@@ -3587,9 +3606,13 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 						 amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData,
 						 amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
 						 quokka::centering &cen, quokka::direction dir, FillPatchType fptype, PreInterpHook const &pre_interp,
-						 PostInterpHook const &post_interp)
+						 PostInterpHook const &post_interp, int scomp_fill, int bccomp_fill, int nghost_fill)
 {
 	BL_PROFILE("AMRSimulation::FillPatchWithData()"); // NOLINT(misc-const-correctness)
+	// scomp_fill: source component of coarseData/fineData (and of the interpolation scratch) for the first filled component;
+	// bccomp_fill: BC component (index into BCs) of the first filled component; nghost_fill: ghost width (<0: all of mf's).
+	// The defaults reproduce the original behaviour (source component 0, BC component 0, full ghost width).
+	const amrex::IntVect fill_nghost = (nghost_fill >= 0) ? amrex::IntVect(nghost_fill) : mf.nGrowVect();
 
 	amrex::MFInterpolater *mapper_cc = getAmrInterpolaterCellCentered();
 
@@ -3626,9 +3649,9 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 		if (fptype == FillPatchType::fillpatch_class) {
 			if (cen == quokka::centering::cc) {
 				// N.B.: this only works for cell-centered data
-				fillpatcher_[lev]->fill(mf, mf.nGrowVect(), time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
-							coarsePhysicalBoundaryFunctor_cc, 0, finePhysicalBoundaryFunctor_cc, 0, BCs, 0, pre_interp,
-							post_interp);
+				fillpatcher_[lev]->fill(mf, fill_nghost, time, coarseData, coarseTime, fineData, fineTime, scomp_fill, icomp, ncomp,
+							coarsePhysicalBoundaryFunctor_cc, bccomp_fill, finePhysicalBoundaryFunctor_cc, bccomp_fill, BCs, bccomp_fill,
+							pre_interp, post_interp);
 			} else {
 				// AMReX only implements FillPatch class for cell-centered data
 				// See extern/amrex/Src/AmrCore/AMReX_FillPatcher.H
@@ -3638,9 +3661,9 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 			}
 		} else {
 			if (cen == quokka::centering::cc) {
-				amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp, geom[lev - 1], geom[lev],
-							  coarsePhysicalBoundaryFunctor_cc, 0, finePhysicalBoundaryFunctor_cc, 0, refRatio(lev - 1),
-							  getAmrInterpolaterCellCentered(), BCs, 0, pre_interp, post_interp);
+				amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, scomp_fill, icomp, ncomp, geom[lev - 1], geom[lev],
+							  coarsePhysicalBoundaryFunctor_cc, bccomp_fill, finePhysicalBoundaryFunctor_cc, bccomp_fill, refRatio(lev - 1),
+							  getAmrInterpolaterCellCentered(), BCs, bccomp_fill, pre_interp, post_interp);
 			} else if (cen == quokka::centering::fc) {
 				amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp, geom[lev - 1], geom[lev],
 							  coarsePhysicalBoundaryFunctor_fc, 0, finePhysicalBoundaryFunctor_fc, 0, refRatio(lev - 1),
