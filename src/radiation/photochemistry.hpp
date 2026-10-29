@@ -38,8 +38,8 @@ static constexpr bool debit_work_term_from_radiation = false;
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
-			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource, amrex::MultiFab &radEnergySource)
-    -> bool
+			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource, amrex::MultiFab &radEnergySource,
+			   const quokka::microphysics::IntegratorParams integrator_params) -> bool
 {
 	amrex::ignore_unused(dustHeatingSource, radEnergySource);
 
@@ -174,7 +174,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			eos(eos_input_re, photochemstate);
 
 			// do the actual integration
-			quokka::microphysics::Burn<problem_t>(photochemstate, dt);
+			quokka::microphysics::Burn<problem_t>(photochemstate, dt, integrator_params);
 
 			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
 				amrex::Abort("Burner returned NAN");

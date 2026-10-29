@@ -106,7 +106,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void burn_to_integrator(const BurnT &st
 }
 
 /// Keep the integrated variables within their valid ranges before the right-hand side is evaluated.
-template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void clean_state(IntegratorT &int_state)
+template <typename Layout, typename IntegratorT>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void clean_state(IntegratorT &int_state, const IntegratorParams &params)
 {
 	for (int n = 1; n <= Layout::neqs; ++n) {
 		switch (Layout::role(n)) {
@@ -114,14 +115,14 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 				// Ensure that mass fractions always stay positive and less than or
 				// equal to 1.
 				if constexpr (Layout::traits::do_species_clip) {
-					int_state.y(n) = amrex::Clamp(int_state.y(n), integrator_params::SMALL_X_SAFE, 1.0_rt);
+					int_state.y(n) = amrex::Clamp(int_state.y(n), params.SMALL_X_SAFE, 1.0_rt);
 				}
 				// enforce positivity of the number densities
-				int_state.y(n) = amrex::max(int_state.y(n), integrator_params::SMALL_X_SAFE);
+				int_state.y(n) = amrex::max(int_state.y(n), params.SMALL_X_SAFE);
 				break;
 			case VarRole::ChemPhotonNumber:
 			case VarRole::ThermalBandEnergy:
-				int_state.y(n) = amrex::max(int_state.y(n), integrator_params::SMALL_X_SAFE);
+				int_state.y(n) = amrex::max(int_state.y(n), params.SMALL_X_SAFE);
 				break;
 			case VarRole::DustAbsorbedEnergy:
 				int_state.y(n) = amrex::max(int_state.y(n), 0.0_rt);
@@ -151,14 +152,14 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 /// the network.
 template <typename Layout, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT &state, IntegratorT &int_state,
-						  amrex::Array1D<amrex::Real, 1, Layout::neqs> &ydot)
+						  amrex::Array1D<amrex::Real, 1, Layout::neqs> &ydot, const IntegratorParams &params)
 {
 	constexpr int int_neqs = Layout::neqs;
 
 	// Fix the state as necessary -- this ensures that the mass
 	// fractions that enter are valid (and optionally normalized)
 
-	clean_state<Layout>(int_state);
+	clean_state<Layout>(int_state, params);
 
 	// Update the thermodynamics as necessary -- this primarily takes
 	// the information in int_state (X and e), copies it to the
@@ -243,20 +244,20 @@ template <typename Layout> struct StateBackup {
 
 /// Set up the integrator state from the burn state.
 template <typename Layout, typename IntegratorT, typename BurnT>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amrex::Real dt) -> IntegratorT
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amrex::Real dt, const IntegratorParams &params) -> IntegratorT
 {
 	IntegratorT int_state{};
 
 	// Set the tolerances.
 
-	int_state.atol_spec = integrator_params::atol_spec; // mass fractions
-	int_state.atol_enuc = integrator_params::atol_enuc; // energy generated
+	int_state.atol_spec = params.atol_spec; // mass fractions
+	int_state.atol_enuc = params.atol_enuc; // energy generated
 
-	int_state.rtol_spec = integrator_params::rtol_spec; // mass fractions
-	int_state.rtol_enuc = integrator_params::rtol_enuc; // energy generated
+	int_state.rtol_spec = params.rtol_spec; // mass fractions
+	int_state.rtol_enuc = params.rtol_enuc; // energy generated
 	if constexpr (Layout::photochemistry) {
-		int_state.atol_rad_num = integrator_params::atol_rad_num; // radiation number density
-		int_state.rtol_rad_num = integrator_params::rtol_rad_num; // radiation number density
+		int_state.atol_rad_num = params.atol_rad_num; // radiation number density
+		int_state.rtol_rad_num = params.rtol_rad_num; // radiation number density
 	}
 
 	// Start off by assuming a successful burn.
@@ -314,7 +315,7 @@ template <typename Layout, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE au
 /// Copy the integrator state back to the burn state and check the result.
 template <typename Layout, typename IntegratorT, typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_state, BurnT &state, const int istate, const StateBackup<Layout> &state_save,
-							   const amrex::Real dt)
+							   const amrex::Real dt, const IntegratorParams &params)
 {
 	// Copy the integration data back to the burn state.
 
@@ -339,12 +340,12 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 	for (int n = 1; n <= Layout::neqs; ++n) {
 		switch (Layout::role(n)) {
 			case VarRole::Species:
-				if (int_state.y(n) < -integrator_params::species_failure_tolerance) {
+				if (int_state.y(n) < -params.species_failure_tolerance) {
 					state.success = false;
 				}
 				break;
 			case VarRole::ChemPhotonNumber:
-				if (int_state.y(n) < -integrator_params::radiation_failure_tolerance) {
+				if (int_state.y(n) < -params.radiation_failure_tolerance) {
 					state.success = false;
 				}
 				break;
@@ -357,7 +358,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 	}
 
 #ifndef AMREX_USE_GPU
-	if (integrator_params::burner_verbose) {
+	if (params.burner_verbose) {
 		// Print out some integration statistics, if desired.
 		std::cout << "integration summary: " << '\n';
 		std::cout << "dens: " << state.rho << " temp: " << state.T << '\n';
