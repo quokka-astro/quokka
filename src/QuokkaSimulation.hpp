@@ -2440,34 +2440,57 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		amrex::ignore_unused(emf_as_crse, emf_as_fine);
 	}
 
-	amrex::MultiFab accepted_state_cc(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
-	{ amrex::Gpu::NoSyncRegion const noSync; amrex::Copy(accepted_state_cc, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_); } // hydro-02: kernel-only copy, no host sync
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> accepted_state_fc;
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			auto ba_fc = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
-			accepted_state_fc[idim].define(ba_fc, dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
-			amrex::Copy(accepted_state_fc[idim], state_old_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+	// The accepted state is materialized lazily. Until a retry is needed, the accepted state is exactly
+	// state_old_cc_[lev] / state_old_fc_[lev], which advanceHydroAtLevel never modifies.
+	std::optional<amrex::MultiFab> accepted_state_cc_storage;
+	std::optional<std::array<amrex::MultiFab, AMREX_SPACEDIM>> accepted_state_fc_storage;
+
+	auto materializeAcceptedState = [&]() {
+		if (accepted_state_cc_storage.has_value()) {
+			return;
 		}
-	}
+		accepted_state_cc_storage.emplace(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+		{ amrex::Gpu::NoSyncRegion const noSync; amrex::Copy(*accepted_state_cc_storage, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_); } // hydro-02: kernel-only copy, no host sync
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			accepted_state_fc_storage.emplace();
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				auto ba_fc = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
+				(*accepted_state_fc_storage)[idim].define(ba_fc, dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+				amrex::Copy((*accepted_state_fc_storage)[idim], state_old_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+			}
+		}
+	};
+
+	// current accepted state (the untouched old state if no retry has happened yet)
+	auto acceptedCc = [&]() -> amrex::MultiFab const & {
+		return accepted_state_cc_storage.has_value() ? *accepted_state_cc_storage : state_old_cc_[lev];
+	};
+	auto acceptedFc = [&](int idim) -> amrex::MultiFab const & {
+		return accepted_state_fc_storage.has_value() ? (*accepted_state_fc_storage)[idim] : state_old_fc_[lev][idim];
+	};
 
 	auto restoreHydroState = [&]() {
-		amrex::Copy(state_new_cc_[lev], accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+		amrex::Copy(state_new_cc_[lev], acceptedCc(), 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				amrex::Copy(state_new_fc_[lev][idim], accepted_state_fc[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+				amrex::Copy(state_new_fc_[lev][idim], acceptedFc(idim), 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
 			}
 		}
 	};
 
 	auto updateAcceptedHydroState = [&]() {
-		amrex::Copy(accepted_state_cc, state_new_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+		materializeAcceptedState();
+		amrex::Copy(*accepted_state_cc_storage, state_new_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				amrex::Copy(accepted_state_fc[idim], state_new_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+				amrex::Copy((*accepted_state_fc_storage)[idim], state_new_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
 			}
 		}
 	};
+
+	// when hydro is advected, only the hydro (+scalar/dust) components of the old-state working copy are read;
+	// the radiation components of state_new_cc_ are not derived from it. Otherwise the whole state is copied through.
+	constexpr int ncomp_work_copy = Physics_Traits<problem_t>::is_hydro_enabled ? HydroSystem<problem_t>::nvar_ : Physics_Indices<problem_t>::nvarTotal_cc;
 
 	const int max_total_substeps = static_cast<int>(1U << static_cast<unsigned>(max_retries));
 	int completed_units = 0;
@@ -2487,14 +2510,14 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		}
 
 		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
-		{ amrex::Gpu::NoSyncRegion const noSync; amrex::Copy(state_old_cc_tmp, accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_); } // hydro-02: kernel-only copy, no host sync
+		{ amrex::Gpu::NoSyncRegion const noSync; amrex::Copy(state_old_cc_tmp, acceptedCc(), 0, 0, ncomp_work_copy, nghost_cc_); } // hydro-02: kernel-only copy, no host sync
 
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> state_old_fc_tmp;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				auto ba_fc = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
 				state_old_fc_tmp[idim].define(ba_fc, dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
-				amrex::Copy(state_old_fc_tmp[idim], accepted_state_fc[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+				amrex::Copy(state_old_fc_tmp[idim], acceptedFc(idim), 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
 			}
 		}
 
@@ -2522,10 +2545,14 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 			completed_units += units_per_substep;
 			completed_units = std::min(completed_units, max_total_substeps);
 
-			updateAcceptedHydroState();
+			// the accepted state is only needed if a later substep (or retry) may follow
+			if (substep_index + 1 < total_substeps) {
+				updateAcceptedHydroState();
+			}
 		}
 
 		if (attempt_failed) {
+			materializeAcceptedState();
 			restoreHydroState();
 			++cur_retry_level;
 			continue;
@@ -2637,12 +2664,14 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	// persistent per-level temporaries (hydro-02); (re)defined on regrid
 	HydroScratch &scratch = getHydroScratch(lev, nvars_, nghost_Riemann);
 
-	// intermediate state (persistent; re-zeroed every step exactly as the fresh MultiFab used to be)
+	// intermediate state (persistent, hydro-02)
 	amrex::MultiFab &state_inter_cc_ = scratch.state_inter_cc;
+#ifdef AMREX_DEBUG
 	{
 		amrex::Gpu::NoSyncRegion const noSync; // kernel-only setVal: no host sync needed
-		state_inter_cc_.setVal(0);	       // prevent assert in fillBoundaryConditions when radiation is enabled
+		state_inter_cc_.setVal(0);	       // prevent assert in fillBoundaryConditions when radiation is enabled (hydro-06: debug builds only)
 	}
+#endif
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> state_inter_fc_;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
