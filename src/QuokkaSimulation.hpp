@@ -89,7 +89,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
       public:
 	using AMRSimulation<problem_t>::state_old_cc_;
 	using AMRSimulation<problem_t>::state_new_cc_;
-	using AMRSimulation<problem_t>::max_signal_speed_;
 	using AMRSimulation<problem_t>::state_old_fc_;
 	using AMRSimulation<problem_t>::state_new_fc_;
 	using AMRSimulation<problem_t>::TracerPC;
@@ -327,7 +326,19 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void checkHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc, char const *file, int line);
 	void CheckHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc,
 			      std::source_location const &location = std::source_location::current());
-	void computeMaxSignalLocal(int level) override;
+	auto computeMaxSignalLocal(int level, bool withLocation) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> override;
+
+	struct SignalParams {
+		int maxSubsteps;
+		bool useResistive;
+		amrex::Real resistiveSignal;
+		bool useViscous;
+		amrex::Real longitudinalViscosity;
+		amrex::Real dxMin;
+	};
+	// per-cell signal speed used for the CFL timestep (hydro / radiation / resistive / viscous limits)
+	AMREX_GPU_DEVICE static auto cellSignalSpeed(amrex::Array4<const amrex::Real> const &cons, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc,
+						     int i, int j, int k, SignalParams const &sp) -> amrex::Real;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
@@ -906,85 +917,137 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfR
 	return nsubSteps;
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignalLocal(int const level)
+template <typename problem_t>
+AMREX_GPU_DEVICE auto QuokkaSimulation<problem_t>::cellSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
+								   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, int i, int j, int k,
+								   SignalParams const &sp) -> amrex::Real
+{
+	amrex::Real signal = 0.0;
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && !(Physics_Traits<problem_t>::is_radiation_enabled)) {
+		// hydro/mhd
+		signal = HydroSystem<problem_t>::ComputeCellSignalSpeed(cons, i, j, k, cons_fc);
+	} else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+		// radiation hydro/mhd, or radiation only
+		const double signal_max = RadSystem<problem_t>::c_hat_;
+		signal = signal_max;
+		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
+			const amrex::Real signalHydro = HydroSystem<problem_t>::ComputeCellSignalSpeed(cons, i, j, k, cons_fc);
+			// ensure that we use the smaller of the two timesteps
+			amrex::Real const maxSignalRadiation = signal / static_cast<double>(sp.maxSubsteps);
+			signal = std::max(maxSignalRadiation, signalHydro);
+		}
+	} else {
+		// no hyperbolic physics is enabled (e.g. self-gravity acting on particles only),
+		// so there is no signal speed and the timestep is set by the other physics modules
+		signal = 0.0;
+	}
+	if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
+		if (sp.useResistive) {
+			signal = std::max(signal, sp.resistiveSignal);
+		}
+	}
+	if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
+		if (sp.useViscous) {
+			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+			const amrex::Real viscous_signal = 2.0 * sp.longitudinalViscosity / (rho * sp.dxMin);
+			signal = std::max(signal, viscous_signal);
+		}
+	}
+	return signal;
+}
+
+template <typename problem_t>
+auto QuokkaSimulation<problem_t>::computeMaxSignalLocal(int const level, bool const withLocation) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
 {
 	const BL_PROFILE("QuokkaSimulation::computeMaxSignalLocal()");
 
-	// hydro: loop over local grids, compute CFL timestep
-	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateNew_cc = state_new_cc_[level].const_array(iter);
-		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> stateNew_fc;
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (int idim = 0; idim < 3; ++idim) {
-				stateNew_fc[idim] = state_new_fc_[level][idim].const_array(iter);
-			}
-		}
-		auto const &maxSignal = max_signal_speed_[level].array(iter);
-
-		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && !(Physics_Traits<problem_t>::is_radiation_enabled)) {
-			// hydro/mhd
-			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, stateNew_fc, maxSignal, indexRange);
-		} else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-			// radiation hydro/mhd, or radiation only
-			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, maxSignal, indexRange);
-			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
-				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
-				auto const &maxSignalHydro = maxSignalHydroFAB.array();
-				HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, stateNew_fc, maxSignalHydro, indexRange);
-				const int maxSubsteps = maxSubsteps_;
-				// ensure that we use the smaller of the two timesteps
-				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-					amrex::Real const maxSignalRadiation = maxSignal(i, j, k) / static_cast<double>(maxSubsteps);
-					maxSignal(i, j, k) = std::max(maxSignalRadiation, maxSignalHydro(i, j, k));
-				});
-			}
-		} else {
-			// no hyperbolic physics is enabled (e.g. self-gravity acting on particles only),
-			// so there is no signal speed and the timestep is set by the other physics modules
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { maxSignal(i, j, k) = 0.0; });
-		}
-	}
-
-	// diffusive CFL constraint for Ohmic resistivity: dt <= cfl * dx^2 / (2*eta)
-	// in N dimensions the true stability limit requires cfl < 1/N, so for 3D use cfl < 1/3
-	// not enforced for problem_defined resistivity; the problem must ensure stability
+	// rank-local maximum of the per-cell signal speed on all boxes of this level in a single reduction (no MPI).
+	// the limits (hydro / radiation, Ohmic resistivity: dt <= cfl * dx^2 / (2*eta) for the constant model, viscosity: dt <= cfl * dx^2 * rho / (2*((4/3)*shear + bulk)))
+	// are combined per cell exactly as before (max of the individual signal speeds).
+	const auto &dx = geom[level].CellSizeArray();
+	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+	SignalParams sp{.maxSubsteps = maxSubsteps_,
+			.useResistive = false,
+			.resistiveSignal = 0.0,
+			.useViscous = false,
+			.longitudinalViscosity = 0.0,
+			.dxMin = dx_min};
 	if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 		if (mhdResistivity_ != 0.0) {
-			const auto &dx = geom[level].CellSizeArray();
-			const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-			const amrex::Real resistive_signal = 2.0 * mhdResistivity_ / dx_min;
-			for (amrex::MFIter iter(max_signal_speed_[level]); iter.isValid(); ++iter) {
-				const amrex::Box &indexRange = iter.validbox();
-				auto const &maxSignal = max_signal_speed_[level].array(iter);
-				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-					maxSignal(i, j, k) = std::max(maxSignal(i, j, k), resistive_signal);
-				});
-			}
+			sp.useResistive = true;
+			sp.resistiveSignal = 2.0 * mhdResistivity_ / dx_min;
+		}
+	}
+	if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
+		if (shearViscosity_ != 0.0 || bulkViscosity_ != 0.0) {
+			sp.useViscous = true;
+			sp.longitudinalViscosity = (4.0 / 3.0) * shearViscosity_ + bulkViscosity_;
 		}
 	}
 
-	// diffusive CFL constraint: dt <= cfl * dx^2 * rho / (2*((4/3)*shearViscosity_ + bulkViscosity_))
-	// where (4/3)*shear+bulk is the longitudinal diffusivity; unlike resistivity's eta, this depends
-	// on the local density, so it needs to be evaluated per cell
-	// not enforced for problem_defined viscosity; the problem must ensure stability
-	if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
-		if (shearViscosity_ != 0.0 || bulkViscosity_ != 0.0) {
-			const auto &dx = geom[level].CellSizeArray();
-			const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-			const amrex::Real longitudinalViscosity = (4.0 / 3.0) * shearViscosity_ + bulkViscosity_;
-			for (amrex::MFIter iter(max_signal_speed_[level]); iter.isValid(); ++iter) {
-				const amrex::Box &indexRange = iter.validbox();
-				auto const &stateNew_cc = state_new_cc_[level].const_array(iter);
-				auto const &maxSignal = max_signal_speed_[level].array(iter);
-				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-					const amrex::Real rho = stateNew_cc(i, j, k, HydroSystem<problem_t>::density_index);
-					const amrex::Real viscous_signal = 2.0 * longitudinalViscosity / (rho * dx_min);
-					maxSignal(i, j, k) = std::max(maxSignal(i, j, k), viscous_signal);
-				});
-			}
-		}
+	auto const &cons = state_new_cc_[level].const_arrays();
+	auto const &fc_x0 = state_new_fc_[level][0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+	auto const &fc_x1 = state_new_fc_[level][1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+	auto const &fc_x2 = state_new_fc_[level][2].const_arrays();
+#endif
+
+	if (!withLocation) {
+		const amrex::Real smax = amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{}, state_new_cc_[level],
+							  amrex::IntVect(0), // no ghost cells
+							  [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
+								  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+								  amrex::ignore_unused(fc_x0
+#if AMREX_SPACEDIM >= 2
+										       ,
+										       fc_x1
+#endif
+#if AMREX_SPACEDIM == 3
+										       ,
+										       fc_x2
+#endif
+								  );
+								  if (Physics_Traits<problem_t>::is_mhd_enabled) { // if instead of if constexpr to avoid nvcc issues
+									  cons_fc[0] = fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+									  cons_fc[1] = fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+									  cons_fc[2] = fc_x2[bx];
+#endif
+								  }
+								  return {std::abs(cellSignalSpeed(cons[bx], &cons_fc, i, j, k, sp))};
+							  });
+		return {.value = smax, .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	}
+
+	return amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{}, state_new_cc_[level],
+				amrex::IntVect(0), // no ghost cells
+				[=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
+					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+					amrex::ignore_unused(fc_x0
+#if AMREX_SPACEDIM >= 2
+							     ,
+							     fc_x1
+#endif
+#if AMREX_SPACEDIM == 3
+							     ,
+							     fc_x2
+#endif
+					);
+					if (Physics_Traits<problem_t>::is_mhd_enabled) {
+						cons_fc[0] = fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+						cons_fc[1] = fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+						cons_fc[2] = fc_x2[bx];
+#endif
+					}
+					return {.value = std::abs(cellSignalSpeed(cons[bx], &cons_fc, i, j, k, sp)), .index = amrex::IntVect{AMREX_D_DECL(i, j, k)}};
+				});
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::printCellProperties(int lev, amrex::IntVect const &index)

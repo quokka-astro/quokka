@@ -294,12 +294,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void setInitialConditionsAtLevel_fc(int level, amrex::Real time);
 	void evolve();
 	void computeTimestep();
-	auto computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>;
+	auto computeTimestepAtLevel(int lev, amrex::Real domain_signal_max, amrex::Real conduction_reduced) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>;
+	auto computeConductionDtLocal(int lev) -> amrex::Real;
 
 	void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start, int srccomp_total) const;
 	virtual void setCustomGhostCells() {}
 
-	virtual void computeMaxSignalLocal(int level) = 0;
+	// rank-local maximum signal speed on level 'level' (no MPI); the location is only computed when withLocation is true
+	virtual auto computeMaxSignalLocal(int level, bool withLocation) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> = 0;
 	virtual void printCellProperties(int lev, amrex::IntVect const &index) = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
 	virtual void preCalculateInitialConditions() = 0;
@@ -587,7 +589,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::MultiFab> state_new_cc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_old_fc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_new_fc_;
-	amrex::Vector<amrex::MultiFab> max_signal_speed_; // needed to compute CFL timestep
 
 	// flux registers: store fluxes at coarse-fine interface for synchronization
 	// this will be sized "nlevs_max+1"
@@ -796,7 +797,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	state_old_cc_.resize(nlevs_max);
 	state_new_fc_.resize(nlevs_max);
 	state_old_fc_.resize(nlevs_max);
-	max_signal_speed_.resize(nlevs_max);
 	flux_reg_.resize(nlevs_max + 1);
 	emf_reg_.resize(nlevs_max + 1);
 	fillpatcher_.resize(nlevs_max + 1);
@@ -1267,56 +1267,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	}
 }
 
-template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
+// rank-local conduction quantity on level 'lev' (no MPI): min density for constant conduction, min cell timestep for Spitzer
+template <typename problem_t> auto AMRSimulation<problem_t>::computeConductionDtLocal(int lev) -> amrex::Real
 {
-	// compute CFL timestep on level 'lev'
-	BL_PROFILE("AMRSimulation::computeTimestepAtLevel()"); // NOLINT(misc-const-correctness)
-
-	using dtloc_t = amrex::ValLocPair<amrex::Real, amrex::IntVect>;
-
-	// compute hydro timestep on level 'lev'
-	computeMaxSignalLocal(lev);
-	const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
-	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
-	if (signalSpeedAbort_ > 0.0 && domain_signal_max > signalSpeedAbort_) {
-		const std::string abort_msg =
-		    std::format("[FATAL] Maximum signal speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}",
-				domain_signal_max, signalSpeedAbort_, lev, formatIntVect(domain_signal_maxloc));
-		printCellProperties(lev, domain_signal_maxloc);
-		amrex::Abort(abort_msg.c_str());
-	}
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
-	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-	// the signal speed is zero when no hyperbolic physics is enabled (e.g. self-gravity acting on
-	// particles only), in which case the hydro timestep does not constrain the simulation
-	dtloc_t hydro_dt{.value = std::numeric_limits<amrex::Real>::max(), .index = domain_signal_maxloc};
-	if (domain_signal_max > 0.0) {
-		hydro_dt.value = cflNumber_ * (dx_min / domain_signal_max);
-	}
-
-	if (verbose && domain_signal_max > 0.0) {
-		amrex::Print() << std::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
-		amrex::Print() << std::format("...[level {}] \thydro timestep limited at cell {} with signal speed = {:e}\n", lev,
-					      formatIntVect(hydro_dt.index), domain_signal_max);
-		printCellProperties(lev, hydro_dt.index);
-	}
-
-	// compute timestep based on conduction parameters
-	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
-								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+	amrex::Real result = std::numeric_limits<amrex::Real>::max();
 	if (enableElectronConduction_ == 1) {
 		if (conductionType_ == "constant") {
-			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
-			double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
-			conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
-			conduction_dt.index = domain_signal_maxloc;
-
-			if (verbose) {
-				amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
-				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
-							      formatIntVect(conduction_dt.index));
-			}
-		} else {							  // conductionType_ == "spitzer"
+			result = state_new_cc_[lev].min(0, 0, true);
+		} else { // conductionType_ == "spitzer"
+			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
+			const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 			auto const &state_mf = state_new_cc_[lev].const_arrays(); // MultiFab containing the cell-centered state
 			auto const &state_fc_x0 = state_new_fc_[lev][0].const_arrays();
 #if AMREX_SPACEDIM >= 2
@@ -1330,10 +1290,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			const amrex::Real kappa0 = electronConductionKappa0_;
 			const amrex::Real t_min = tempFloor_;
 
-			// Use amrex::ParReduce to find the minimum dt and its location across all GPU threads
-			auto r = amrex::ParReduce(
-			    amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{}, state_new_cc_[lev],
-			    amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
+			result = amrex::ParReduce(
+			    amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::Real>{}, state_new_cc_[lev], amrex::IntVect(0),
+			    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::GpuTuple<amrex::Real> {
 				    auto const &cons = state_mf[bx];
 				    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
 				    amrex::ignore_unused(state_fc_x0
@@ -1371,17 +1330,75 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 					    cell_dt = cfl * (dx_min * dx_min) / diffusion_coefficient;
 				    }
 
-				    return {.value = cell_dt, .index = amrex::IntVect{AMREX_D_DECL(i, j, k)}};
+				    return {cell_dt};
 			    });
+		}
+	}
+	return result;
+}
 
-			// Extract the global reduction results
-			conduction_dt = r;
-			amrex::ParallelAllReduce::Min(conduction_dt, amrex::ParallelContext::CommunicatorSub());
+// domain_signal_max and conduction_reduced are the MPI-reduced results of computeMaxSignalLocal and computeConductionDtLocal
+template <typename problem_t>
+auto AMRSimulation<problem_t>::computeTimestepAtLevel(int lev, amrex::Real domain_signal_max, amrex::Real conduction_reduced)
+    -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
+{
+	// compute CFL timestep on level 'lev'
+	BL_PROFILE("AMRSimulation::computeTimestepAtLevel()"); // NOLINT(misc-const-correctness)
+
+	using dtloc_t = amrex::ValLocPair<amrex::Real, amrex::IntVect>;
+
+	// the cell location of the maximum signal speed is only needed for the abort message and verbose output
+	amrex::IntVect domain_signal_maxloc{AMREX_D_DECL(-1, -1, -1)};
+	const bool signal_abort = (signalSpeedAbort_ > 0.0 && domain_signal_max > signalSpeedAbort_);
+	if (signal_abort || (verbose && domain_signal_max > 0.0)) {
+		dtloc_t loc = computeMaxSignalLocal(lev, true);
+		amrex::ParallelAllReduce::Max(loc, amrex::ParallelContext::CommunicatorSub());
+		domain_signal_maxloc = loc.index;
+	}
+	if (signal_abort) {
+		const std::string abort_msg =
+		    std::format("[FATAL] Maximum signal speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}",
+				domain_signal_max, signalSpeedAbort_, lev, formatIntVect(domain_signal_maxloc));
+		printCellProperties(lev, domain_signal_maxloc);
+		amrex::Abort(abort_msg.c_str());
+	}
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
+	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+	// the signal speed is zero when no hyperbolic physics is enabled (e.g. self-gravity acting on
+	// particles only), in which case the hydro timestep does not constrain the simulation
+	dtloc_t hydro_dt{.value = std::numeric_limits<amrex::Real>::max(), .index = domain_signal_maxloc};
+	if (domain_signal_max > 0.0) {
+		hydro_dt.value = cflNumber_ * (dx_min / domain_signal_max);
+	}
+
+	if (verbose && domain_signal_max > 0.0) {
+		amrex::Print() << std::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
+		amrex::Print() << std::format("...[level {}] \thydro timestep limited at cell {} with signal speed = {:e}\n", lev,
+					      formatIntVect(hydro_dt.index), domain_signal_max);
+		printCellProperties(lev, hydro_dt.index);
+	}
+
+	// compute timestep based on conduction parameters
+	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
+								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+	if (enableElectronConduction_ == 1) {
+		if (conductionType_ == "constant") {
+			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+			double diffusion_coefficient = electronConductionKappa0_ / (conduction_reduced * c_v);
+			conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
+			conduction_dt.index = domain_signal_maxloc;
+
+			if (verbose) {
+				amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
+				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
+							      formatIntVect(conduction_dt.index));
+			}
+		} else { // conductionType_ == "spitzer"
+			// the reduction over cells was fused into computeTimestep(); the cell location is no longer reported
+			conduction_dt.value = conduction_reduced;
 
 			if (verbose) {
 				amrex::Print() << std::format("...[level {}] \testimated Spitzer conduction timestep: {:e}\n", lev, conduction_dt.value);
-				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
-							      formatIntVect(conduction_dt.index));
 			}
 		}
 	}
@@ -1444,8 +1461,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 
 	// compute candidate timestep dt_tmp on each level
 	amrex::Vector<amrex::Real> dt_tmp(finest_level + 1);
+
+	// fused reduction: pack the rank-local results of all levels into one array and do a single MPI_Allreduce(MIN).
+	// entry 2*lev is the negated max signal speed (so the max becomes a min; negation is exact), entry 2*lev+1 the conduction quantity.
+	amrex::Vector<amrex::Real> reduced(2 * (finest_level + 1));
 	for (int level = 0; level <= finest_level; ++level) {
-		dt_tmp[level] = computeTimestepAtLevel(level).value;
+		reduced[2 * level] = -computeMaxSignalLocal(level, false).value;
+		reduced[2 * level + 1] = computeConductionDtLocal(level);
+	}
+	amrex::ParallelAllReduce::Min(reduced.data(), static_cast<int>(reduced.size()), amrex::ParallelContext::CommunicatorSub());
+
+	for (int level = 0; level <= finest_level; ++level) {
+		dt_tmp[level] = computeTimestepAtLevel(level, -reduced[2 * level], reduced[2 * level + 1]).value;
 	}
 
 	// limit change in timestep on each level
@@ -2625,7 +2652,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na);
 	FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na); // also necessary
 
-	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
@@ -2678,9 +2704,6 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	std::swap(int_state_new_cc, state_new_cc_[level]);
 	std::swap(int_state_old_cc, state_old_cc_[level]);
 
-	amrex::MultiFab max_signal_speed(ba, dm, 1, nghost_cc);
-	std::swap(max_signal_speed, max_signal_speed_[level]);
-
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
@@ -2729,7 +2752,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ClearLevel(int leve
 
 	state_new_cc_[level].clear();
 	state_old_cc_[level].clear();
-	max_signal_speed_[level].clear();
 
 	flux_reg_[level].reset(nullptr);
 	emf_reg_[level].reset(nullptr);
@@ -3455,7 +3477,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	const int nghost_cc = nghost_cc_;
 	state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
-	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
 
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
@@ -5416,7 +5437,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		const int nghost_cc = nghost_cc_;
 		state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
-		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
 
 		if (lev > 0 && (do_reflux != 0)) {
 			flux_reg_[lev] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(lev - 1), lev, ncomp_cc);

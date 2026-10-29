@@ -35,7 +35,6 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
       public:
 	using AMRSimulation<problem_t>::state_old_cc_;
 	using AMRSimulation<problem_t>::state_new_cc_;
-	using AMRSimulation<problem_t>::max_signal_speed_;
 
 	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::dt_;
@@ -88,7 +87,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 		nghost_fc_ = std::max(nghost_fc_, nghost_cc_);
 	}
 
-	void computeMaxSignalLocal(int level) override;
+	auto computeMaxSignalLocal(int level, bool withLocation) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
@@ -145,15 +144,20 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	static constexpr int integratorOrder_ = 2; // RK2-SSP = 2, forward Euler = 1
 };
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSignalLocal(int const level)
+template <typename problem_t>
+auto AdvectionSimulation<problem_t>::computeMaxSignalLocal(int const level, bool const /*withLocation*/) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
 {
-	// loop over local grids, compute CFL timestep
-	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_cc_[level].const_array(iter);
-		auto const &maxSignal = max_signal_speed_[level].array(iter);
-		LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(stateOld, maxSignal, advectionVx_, advectionVy_, advectionVz_, indexRange);
+	// the signal speed is uniform: sqrt(vx^2 + vy^2 + vz^2)
+	const double vx = advectionVx_;
+	const double vy = advectionVy_;
+	const double vz = advectionVz_;
+	const amrex::Real signal_max = std::sqrt(vx * vx + vy * vy + vz * vz);
+	amrex::IntVect idx{AMREX_D_DECL(-1, -1, -1)};
+	if (state_new_cc_[level].boxArray().size() > 0) {
+		const amrex::Box box0 = state_new_cc_[level].boxArray()[0];
+		idx = box0.smallEnd();
 	}
+	return {.value = signal_max, .index = idx};
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::printCellProperties(int lev, amrex::IntVect const &index)
