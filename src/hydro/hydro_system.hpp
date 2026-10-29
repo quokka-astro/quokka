@@ -1621,7 +1621,11 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			// scalars: upwind on the sign of the mass flux
 			if constexpr (nscalars_ > 0) {
 				const bool upwindLeft = (F_rho >= 0.);
-				auto const &qUp = upwindLeft ? x1LeftState : x1RightState;
+				// select the upwind value per component (selecting a reference to one of the two
+				// Array4View objects forces both onto the stack -> scratch)
+				auto qUp = [&](int ii, int jj, int kk, int nn) -> double {
+					return upwindLeft ? x1LeftState(ii, jj, kk, nn) : x1RightState(ii, jj, kk, nn);
+				};
 				constexpr int nstart = nHydroScalars_ - nscalars_;
 
 				// mass scalars: conserve flux of mass scalars and scale them to the mass flux
