@@ -407,7 +407,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool use_wavespeed_correction,
-				  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {}, int groupBegin = 0, int groupEnd = nGroups_);
+				  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {}, int groupBegin = 0, int groupEnd = nGroups_,
+				  amrex::Array4<amrex::Real> const &refluxAccum_in = {}, double refluxWeight = 0.0);
 
 	//! Set the user-defined radiation source terms.
 	//!
@@ -1434,8 +1435,12 @@ template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					 amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool const use_wavespeed_correction,
-					 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc, const int groupBegin, const int groupEnd)
+					 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc, const int groupBegin, const int groupEnd,
+					 amrex::Array4<amrex::Real> const &refluxAccum_in, const double refluxWeight)
 {
+	// If refluxAccum_in is set, refluxWeight * F is added to it (the flux-register accumulator; same face box as x1Flux)
+	const bool accumulateReflux = (refluxAccum_in.dataPtr() != nullptr);
+	quokka::Array4View<amrex::Real, DIR> refluxAccum(refluxAccum_in);
 	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
 	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
 	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
@@ -1574,6 +1579,13 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			x1Flux(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[1];
 			x1Flux(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[2];
 			x1Flux(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[3];
+
+			if (accumulateReflux) {
+				refluxAccum(i, j, k, radEnergy_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[0];
+				refluxAccum(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[1];
+				refluxAccum(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[2];
+				refluxAccum(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[3];
+			}
 
 			const quokka::valarray<double, numRadVars_> diffusiveF =
 			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);

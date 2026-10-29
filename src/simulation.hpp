@@ -407,7 +407,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void ellipticSolveAllLevels(amrex::Real dt);
 
 	void incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays,
-				    int lev, amrex::Real dt_lev);
+				    int lev, amrex::Real dt_lev, int destcomp = 0);
 	void incrementEMFRegisters(amrex::EdgeFluxRegister *emf_as_crse, amrex::EdgeFluxRegister *emf_as_fine,
 				   std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_emf_components, int lev, amrex::Real dt_lev);
 
@@ -2502,7 +2502,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
-						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
+						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev,
+						      int const destcomp)
 {
 	BL_PROFILE("AMRSimulation::incrementFluxRegisters()"); // NOLINT(misc-const-correctness)
 
@@ -2531,7 +2532,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 			if (ncomp == 0) {
 				continue;
 			}
-			fr_as_crse->CrseInit(fluxArrays[dir], dir, 0, 0, ncomp, -dt_lev * face_area[dir], amrex::FluxRegister::ADD);
+			fr_as_crse->CrseInit(fluxArrays[dir], dir, 0, destcomp, ncomp, -dt_lev * face_area[dir], amrex::FluxRegister::ADD);
 		}
 	}
 
@@ -2543,7 +2544,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 			if (ncomp == 0) {
 				continue;
 			}
-			fr_as_fine->FineAdd(fluxArrays[dir], dir, 0, 0, ncomp, dt_lev * face_area[dir]);
+			fr_as_fine->FineAdd(fluxArrays[dir], dir, 0, destcomp, ncomp, dt_lev * face_area[dir]);
 		}
 	}
 }
