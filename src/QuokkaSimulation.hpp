@@ -2476,15 +2476,14 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	// advect the state (skipped when hydro is disabled: the state is only copied, but Strang-split sources are still applied)
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
 		// update ghost zones [old timestep]
-		fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
-				       PostInterpState);
+		// (only the hydro components 0..nvars_-1 are read by the hydro solver; radiation components are not filled here)
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				fillBoundaryConditions(state_old_fc_tmp[idim], state_old_fc_tmp[idim], lev, time, quokka::centering::fc,
-						       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone,
-						       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
-			}
+			AMRSimulation<problem_t>::fillBoundaryConditionsCcFc(state_old_cc_tmp, state_old_fc_tmp, lev, time, PreInterpState, PostInterpState,
+									     nvars_);
 			AMRSimulation<problem_t>::applyMHDDiodeBC(state_old_cc_tmp, state_old_fc_tmp, lev);
+		} else {
+			fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
+					       PostInterpState, FillPatchType::fillpatch_class, 0, nvars_);
 		}
 
 		// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
@@ -2497,8 +2496,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		// check state validity
-		AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
-		AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
+		AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, nvars_, state_old_cc_tmp.nGrowVect())); // valid and ghost cells (hydro components)
 
 		auto [FOfluxArrays, FOfaceVel, FOfast_mhd_wavespeeds] = computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, nvars_, nghost_Riemann, lev);
 
@@ -2636,20 +2634,17 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		// Stage 2 of RK2-SSP
 		if (integratorOrder_ == 2) {
 			//  update ghost zones [intermediate stage stored in state_inter_cc_]
-			fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev, quokka::centering::cc, quokka::direction::na,
-					       PreInterpState, PostInterpState);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					fillBoundaryConditions(state_inter_fc_[idim], state_inter_fc_[idim], lev, time + dt_lev, quokka::centering::fc,
-							       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone,
-							       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
-				}
+				AMRSimulation<problem_t>::fillBoundaryConditionsCcFc(state_inter_cc_, state_inter_fc_, lev, time + dt_lev, PreInterpState,
+										     PostInterpState, nvars_);
 				AMRSimulation<problem_t>::applyMHDDiodeBC(state_inter_cc_, state_inter_fc_, lev);
+			} else {
+				fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev, quokka::centering::cc, quokka::direction::na,
+						       PreInterpState, PostInterpState, FillPatchType::fillpatch_class, 0, nvars_);
 			}
 
 			// check intermediate state validity
-			AMREX_ASSERT(!state_inter_cc_.contains_nan(0, state_inter_cc_.nComp()));
-			AMREX_ASSERT(!state_inter_cc_.contains_nan()); // check ghost zones
+			AMREX_ASSERT(!state_inter_cc_.contains_nan(0, nvars_, state_inter_cc_.nGrowVect())); // valid and ghost cells (hydro components)
 
 			auto const &stateOld_cc = state_old_cc_tmp;
 			auto const &stateInter_cc = state_inter_cc_;

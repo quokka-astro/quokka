@@ -373,7 +373,19 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// AMR utility functions
 	template <typename PreInterpHook, typename PostInterpHook>
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
-				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class);
+				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class,
+				    int icomp = 0, int ncomp = -1, int nghost = -1);
+
+	// fill physical-boundary ghost cells of `state` (components icomp..icomp+ncomp-1, nghost ghost cells)
+	void fillPhysicalBoundaries(amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir, int icomp, int ncomp,
+				    amrex::IntVect const &nghost);
+
+	// fill cell-centred state (components 0..ncomp_cc-1) and all face-centred components with one batched
+	// FillBoundary on level 0 (all messages posted before any wait); on lev > 0 this is the same as
+	// fillBoundaryConditions() on cc followed by one fillBoundaryConditions() per face direction.
+	template <typename PreInterpHook, typename PostInterpHook>
+	void fillBoundaryConditionsCcFc(amrex::MultiFab &cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc, int lev, amrex::Real time,
+					PreInterpHook const &pre_interp, PostInterpHook const &post_interp, int ncomp_cc);
 
 	template <typename PreInterpHook, typename PostInterpHook>
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
@@ -3499,9 +3511,15 @@ template <typename problem_t>
 template <typename PreInterpHook, typename PostInterpHook>
 void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int const lev, amrex::Real const time,
 						      quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp,
-						      PostInterpHook const &post_interp, FillPatchType fptype)
+						      PostInterpHook const &post_interp, FillPatchType fptype, int icomp, int ncomp, int nghost)
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()"); // NOLINT(misc-const-correctness)
+
+	// default: fill all components and all ghost cells
+	if (ncomp < 0) {
+		ncomp = S_filled.nComp() - icomp;
+	}
+	const amrex::IntVect nghost_vec = (nghost < 0) ? state.nGrowVect() : amrex::IntVect(nghost);
 
 	// On a single level, any periodic boundaries are filled first
 	// 	then built-in boundary conditions are filled (with amrex::FilccCell()),
@@ -3541,42 +3559,95 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 			amrex::ignore_unused(i);
 		}
 
-		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, cen, dir, fptype, pre_interp,
+		// FillPatchWithData() copies from component 0 of the coarse/fine data into component icomp of the destination
+		AMREX_ALWAYS_ASSERT(icomp == 0);
+		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, icomp, ncomp, BCs, cen, dir, fptype, pre_interp,
 				  post_interp);
 	} else { // level 0
 		// fill internal and periodic boundaries, ignoring corners (cross=true)
 		// (there is no performance benefit for this in practice)
 		// state.FillBoundary(geom[lev].periodicity(), true);
-		state.FillBoundary(geom[lev].periodicity());
-
-		if (!geom[lev].isAllPeriodic()) {
-			if (cen == quokka::centering::cc) {
-				// create cell-centered boundary functor
-				amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor =
-				    amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>{setBoundaryFunctor<problem_t>{}};
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
-																  boundaryFunctor);
-				// fill physical boundaries
-				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
-			} else if (cen == quokka::centering::fc) {
-				// create face-centered boundary functor using the passed direction
-				amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor =
-				    amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>{setBoundaryFunctorFaceVar<problem_t>{dir}};
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
-																	 boundaryFunctor);
-				// fill physical boundaries
-				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
-			}
+		if (state.nGrowVect().max() > 0) {
+			state.FillBoundary(icomp, ncomp, nghost_vec, geom[lev].periodicity());
 		}
+
+		fillPhysicalBoundaries(state, lev, time, cen, dir, icomp, ncomp, nghost_vec);
 	}
 
 	// ensure that there are no NaNs (can happen when domain boundary filling is
 	// unimplemented or malfunctioning)
-	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
-	AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones (usually this is caused by
-						// forgetting to fill some components when
-						// using custom Dirichlet BCs, e.g., radiation
-						// variables in a hydro-only problem)
+	AMREX_ASSERT(!S_filled.contains_nan(icomp, ncomp, nghost_vec));
+	// (when only a subset of components is filled, ghost cells of the other components are not checked)
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::fillPhysicalBoundaries(amrex::MultiFab &state, int const lev, amrex::Real const time, quokka::centering cen,
+						      quokka::direction dir, int const icomp, int const ncomp, amrex::IntVect const &nghost)
+{
+	if (geom[lev].isAllPeriodic()) {
+		return;
+	}
+	if (cen == quokka::centering::cc) {
+		// create cell-centered boundary functor
+		amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor =
+		    amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>{setBoundaryFunctor<problem_t>{}};
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs_cc_, boundaryFunctor);
+		// fill physical boundaries
+		physicalBoundaryFunctor(state, icomp, ncomp, nghost, time, icomp);
+	} else if (cen == quokka::centering::fc) {
+		// create face-centered boundary functor using the passed direction
+		amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor =
+		    amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>{setBoundaryFunctorFaceVar<problem_t>{dir}};
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs_fc_, boundaryFunctor);
+		// fill physical boundaries
+		physicalBoundaryFunctor(state, icomp, ncomp, nghost, time, icomp);
+	}
+}
+
+template <typename problem_t>
+template <typename PreInterpHook, typename PostInterpHook>
+void AMRSimulation<problem_t>::fillBoundaryConditionsCcFc(amrex::MultiFab &cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc, int const lev,
+							  amrex::Real const time, PreInterpHook const &pre_interp, PostInterpHook const &post_interp,
+							  int const ncomp_cc)
+{
+	BL_PROFILE("AMRSimulation::fillBoundaryConditionsCcFc()"); // NOLINT(misc-const-correctness)
+
+	if (lev > 0) {
+		fillBoundaryConditions(cc, cc, lev, time, quokka::centering::cc, quokka::direction::na, pre_interp, post_interp, FillPatchType::fillpatch_class, 0,
+				       ncomp_cc);
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			fillBoundaryConditions(fc[idim], fc[idim], lev, time, quokka::centering::fc, quokka::direction{idim}, InterpHookNone, InterpHookNone,
+					       FillPatchType::fillpatch_function);
+		}
+		return;
+	}
+
+	// level 0: post all FillBoundary messages (cell- and face-centred) before waiting on any of them
+	amrex::Vector<amrex::MultiFab *> mfs{&cc};
+	amrex::Vector<int> scomps{0};
+	amrex::Vector<int> ncomps{ncomp_cc};
+	amrex::Vector<amrex::IntVect> nghosts{cc.nGrowVect()};
+	amrex::Vector<amrex::Periodicity> periods(1 + AMREX_SPACEDIM, geom[lev].periodicity());
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		mfs.push_back(&fc[idim]);
+		scomps.push_back(0);
+		ncomps.push_back(fc[idim].nComp());
+		nghosts.push_back(fc[idim].nGrowVect());
+	}
+	// (each FillBoundary call is skipped by the single-MultiFab version when there are no ghost cells; here ghost cells are always present)
+	AMREX_ALWAYS_ASSERT(cc.nGrowVect().max() > 0);
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		AMREX_ALWAYS_ASSERT(fc[idim].nGrowVect().max() > 0);
+	}
+	amrex::FillBoundary(mfs, scomps, ncomps, nghosts, periods);
+
+	// physical boundaries (after all exchanges are complete)
+	fillPhysicalBoundaries(cc, lev, time, quokka::centering::cc, quokka::direction::na, 0, ncomp_cc, cc.nGrowVect());
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		fillPhysicalBoundaries(fc[idim], lev, time, quokka::centering::fc, quokka::direction{idim}, 0, fc[idim].nComp(), fc[idim].nGrowVect());
+	}
+
+	AMREX_ASSERT(!cc.contains_nan(0, ncomp_cc, cc.nGrowVect()));
 }
 
 // Compute a new multifab 'mf' by copying in state from given data and filling
