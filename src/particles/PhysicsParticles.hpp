@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -213,6 +214,15 @@ class PhysicsParticleDescriptorBase
 
 	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
+
+	// Drift particles and, where supported, apply the per-particle property update (updateParticleProperties at
+	// property_time) in the same kernel. Returns true if the property update was applied (the caller then skips
+	// the separate updateParticleProperties pass for this type).
+	virtual auto driftParticlesAndUpdateProperties(int lev_min, int lev_max, amrex::Real dt, amrex::Real /*property_time*/) -> bool
+	{
+		driftParticles(lev_min, lev_max, dt);
+		return false;
+	}
 
 	// Kick particles at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) = 0;
@@ -476,6 +486,21 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				}
 			}
 		}
+	}
+
+	auto driftParticlesAndUpdateProperties(int lev_min, int lev_max, amrex::Real dt, amrex::Real property_time) -> bool override
+	{
+		if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
+			// Fuse only when the drift covers exactly the levels the property update iterates over.
+			if (container_ != nullptr && lev_min == 0 && lev_max == container_->finestLevel()) {
+				if (ParticlePropertyUpdateTraits<particleType_>::template driftAndUpdateProperties<problem_t, ContainerType>(
+					container_, lev_min, lev_max, this->getMassIndex(), dt, property_time)) {
+					return true;
+				}
+			}
+		}
+		driftParticles(lev_min, lev_max, dt);
+		return false;
 	}
 
 	// Implementation of particle kick (velocity update based on acceleration)
@@ -937,6 +962,10 @@ template <typename problem_t> class PhysicsParticleRegister
 	// SFH data: nstep, time, total_mass (kept in memory for accumulation)
 	std::map<ParticleType, std::vector<std::tuple<int, amrex::Real, amrex::Real>>> sfh_data_;
 
+	// Particle types whose property update was already applied (fused into the drift kernel) at time propertiesUpdatedTime_
+	std::map<ParticleType, bool> propertiesUpdatedInDrift_;
+	amrex::Real propertiesUpdatedTime_{std::numeric_limits<amrex::Real>::quiet_NaN()};
+
       public:
 	// Constructor
 	PhysicsParticleRegister() = default;
@@ -1244,10 +1273,29 @@ template <typename problem_t> class PhysicsParticleRegister
 	void driftParticlesAllLevels(amrex::Real dt, int lev_max)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::driftParticlesAllLevels()");
+		propertiesUpdatedInDrift_.clear();
 		if (!quokka::disable_particle_drift) {
 			for (const auto &[type, descriptor] : particleRegistry_) {
 				if (descriptor->getMassIndex() >= 0) {
 					descriptor->driftParticles(0, lev_max, dt);
+				}
+			}
+		}
+	}
+
+	// Drift all massive particles and fuse the property update at property_time (the time that the following
+	// updateParticleProperties(property_time, ...) call will use) into the drift kernel where supported.
+	void driftParticlesAllLevels(amrex::Real dt, int lev_max, amrex::Real property_time)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::driftParticlesAllLevels()");
+		propertiesUpdatedInDrift_.clear();
+		propertiesUpdatedTime_ = property_time;
+		if (!quokka::disable_particle_drift) {
+			for (const auto &[type, descriptor] : particleRegistry_) {
+				if (descriptor->getMassIndex() >= 0) {
+					if (descriptor->driftParticlesAndUpdateProperties(0, lev_max, dt, property_time)) {
+						propertiesUpdatedInDrift_[type] = true;
+					}
 				}
 			}
 		}
@@ -1286,8 +1334,9 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		const BL_PROFILE("PhysicsParticleRegister::destroyParticles()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			// Only destroy particles if the descriptor allows destruction
-			if (descriptor->getAllowsDestruction()) {
+			// Only destroy particles if the descriptor allows destruction (SSP: only with particles.destroy_removed_SSP_particles)
+			if (descriptor->getAllowsDestruction() ||
+			    (type == ParticleType::StochasticStellarPop && quokka::destroy_removed_SSP_particles)) {
 				// Call the appropriate particle destruction method based on the particle type
 				descriptor->destroyParticles(lev_min, current_time, dt);
 			}
@@ -1336,8 +1385,13 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		const BL_PROFILE("PhysicsParticleRegister::updateParticleProperties()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
+			// Skip types whose update at this same time was already fused into the drift kernel
+			if (propertiesUpdatedInDrift_.contains(type) && propertiesUpdatedTime_ == current_time) {
+				continue;
+			}
 			descriptor->updateParticleProperties(current_time, dt);
 		}
+		propertiesUpdatedInDrift_.clear();
 	}
 
 	void updateChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
