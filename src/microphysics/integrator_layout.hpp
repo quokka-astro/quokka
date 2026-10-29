@@ -63,13 +63,6 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 
 	/// The role of entry n (1-based) of y: the species, then the energy, then a photon number (and with
 	/// integrate_rad_flux a photon flux) per chemical band, then the thermal bands, then the dust slot.
-	///
-	/// Port-only exception, removed by the post-port cleanup PR: rtol_for and atol_for (rosenbrock.hpp) should switch
-	/// over the role, but a switch breaks bitwise identity with Microphysics, which we need during the port but not at
-	/// the end. Without photochemistry the switch does not reduce to one select, so numerical_jacobian's ewt loop becomes
-	/// too big for Apple clang to unroll fully for PrimordialChem (15 entries). The loop vectorizer then sums fac without
-	/// the fused multiply-adds of Microphysics' fully unrolled loop, and the finite-difference Jacobian changes in the
-	/// last bits. So they keep Microphysics' shape (energy first, the photon branch only with photochemistry) for now.
 	AMREX_GPU_HOST_DEVICE static constexpr auto role(const int n) -> VarRole
 	{
 		if (n <= num_spec) {
