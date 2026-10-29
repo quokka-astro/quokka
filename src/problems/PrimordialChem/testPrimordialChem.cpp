@@ -30,6 +30,7 @@
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
 #include "microphysics/microphysics_traits.hpp"
+#include "networks/primordial_chem/network.hpp"
 #include "radiation/radiation_system.hpp"
 
 #include "actual_eos_data.H"
@@ -50,6 +51,7 @@ template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 };
 
 template <> struct Microphysics_Traits<PrimordialChemTest> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PrimordialChem;
 	static constexpr bool chemistry = true; // built with CHEMISTRY
 	static constexpr bool numerical_jacobian_fallback = true;
 };
