@@ -1250,7 +1250,9 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	};
 
 	auto const applyConduction = [&]() {
-		if (enableElectronConduction_ == 1) {
+		// With hydro enabled, conduction is fused into the hydro fluxes of each RK stage (see advanceHydroAtLevel);
+		// the operator-split pass below is only used when the state is not advected.
+		if (!Physics_Traits<problem_t>::is_hydro_enabled && enableElectronConduction_ == 1) {
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 			// NOTE: heat_flux is defined (with 1 component) inside ElectronConduction::ComputeExplicit,
 			// so it only needs to be declared here.
@@ -2407,7 +2409,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 	std::optional<std::array<amrex::MultiFab, AMREX_SPACEDIM>> recal_fluxes;
 
-	if (enableElectronConduction_ == 1) {
+	// operator-split conduction (and its reflux array) is only used when hydro is disabled; otherwise the heat flux
+	// is added to the hydro fluxes of each RK stage below and is refluxed with them.
+	if (!Physics_Traits<problem_t>::is_hydro_enabled && enableElectronConduction_ == 1) {
 		// Construct the array of MultiFabs using emplace
 		recal_fluxes.emplace();
 		for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
@@ -2427,6 +2431,18 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto ba_cc = grids[lev];
 	auto dm = dmap[lev];
 	auto dx = geom[lev].CellSizeArray();
+
+	// fused conduction: parameters identical to the (former) operator-split pass
+	const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
+									     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
+									     .saturation_factor = electronConductionSaturationFactor_,
+									     .min_temperature = tempFloor_,
+									     .spitzer_scaling = (conductionType_ == "spitzer"),
+									     .reconstruction_order = reconstructionOrder_,
+									     .plm_limiter = plmLimiter_,
+									     .ng_reconstruct = nghost_Riemann + 1};
+	const bool fuseConduction = Physics_Traits<problem_t>::is_hydro_enabled && (enableElectronConduction_ == 1);
+	amrex::ignore_unused(conduction_params, fuseConduction);
 
 	// do Strang split source terms (first half-step)
 	auto burn_success_first =
@@ -2535,6 +2551,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 								 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx,
 								 mhdResistivity_);
 				MHDSystem<problem_t>::AddResistiveEnergyFlux(fluxArrays, stateOld_fc, dx, mhdResistivity_);
+			}
+
+			if (fuseConduction) {
+				// add the heat flux of the stage-1 state (U^n) to the stage-1 fluxes, and to the FO fallback fluxes
+				// (also built from U^n) so that FOFC cells keep conduction
+				quokka::conduction::ElectronConduction<problem_t>::AddHeatFluxes(stateOld_cc, stateOld_fc, geom[lev], conduction_params, fluxArrays,
+												  &FOfluxArrays);
 			}
 
 			amrex::MultiFab rhs(grids[lev], dmap[lev], nvars_, 0);
@@ -2673,6 +2696,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				MHDSystem<problem_t>::AddResistiveEnergyFlux(fluxArrays, stateInter_fc, dx, mhdResistivity_);
 			}
 
+			if (fuseConduction) {
+				// heat flux of the intermediate state U*, enters flux_rk2 with weight 0.5 below
+				quokka::conduction::ElectronConduction<problem_t>::AddHeatFluxes(stateInter_cc, stateInter_fc, geom[lev], conduction_params, fluxArrays,
+												  nullptr);
+			}
+
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, nvars_, 0);
 				amrex::MultiFab::Saxpy(avgFaceVel[idim], 0.5, faceVel[idim], 0, 0, 1, 0);
@@ -2772,7 +2801,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	bool const final_success = (cfl_ok && burn_success_second);
 
 	if (do_reflux == 1 && final_success) {
-		if (enableElectronConduction_ == 1) {
+		if (recal_fluxes.has_value()) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				amrex::MultiFab::Saxpy(flux_rk2[idim], 1.0, (*recal_fluxes)[idim], HydroSystem<problem_t>::energy_index,
 						       HydroSystem<problem_t>::energy_index, 1, 0);

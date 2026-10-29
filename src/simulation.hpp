@@ -1305,10 +1305,16 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	if (enableElectronConduction_ == 1) {
+		// When hydro is enabled, the conductive flux is added to the hydro fluxes and applied in every RK stage as a
+		// forward-Euler stage of the FULL dt (previously: two operator-split forward-Euler half-steps of dt/2). The
+		// explicit diffusion stability limit of such a stage (and of SSP-RK2) is D dt / dx^2 <= 1/(2 DIM), so cap the
+		// conduction CFL at 0.8 of that limit. Unchanged for conduction_cfl <= 0.4/DIM (e.g. 0.1 in 3D).
+		const amrex::Real conductionCFLeff =
+		    Physics_Traits<problem_t>::is_hydro_enabled ? std::min(conductionCFL, 0.4 / static_cast<amrex::Real>(AMREX_SPACEDIM)) : conductionCFL;
 		if (conductionType_ == "constant") {
 			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
 			double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
-			conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
+			conduction_dt.value = conductionCFLeff * dx_min * dx_min / diffusion_coefficient;
 			conduction_dt.index = domain_signal_maxloc;
 
 			if (verbose) {
@@ -1326,7 +1332,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			auto const &state_fc_x2 = state_new_fc_[lev][2].const_arrays();
 #endif
 
-			amrex::Real cfl = conductionCFL;
+			amrex::Real cfl = conductionCFLeff;
 			const amrex::Real kappa0 = electronConductionKappa0_;
 			const amrex::Real t_min = tempFloor_;
 

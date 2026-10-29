@@ -287,6 +287,164 @@ template <typename problem_t> class ElectronConduction
 			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
 		});
 	}
+
+	// Fused (AthenaK-style) conduction: compute the flux-limited heat flux q from 'state' (whose ghost cells
+	// the hydro solver has already filled) and ADD it to the energy and auxiliary internal-energy components
+	// of the hydro face-flux arrays 'fluxA' (and, if non-null, 'fluxB') on the valid faces. The hydro update
+	// U^{n+1} = U^n - dt div F then applies conduction with the RK stage weighting, and the hydro flux
+	// registers reflux it. The heat flux is the same as in ComputeExplicit (same (rho, T, X) reconstruction,
+	// same kappa/q_sat face evaluation, same cell-centred gradT).
+	static void AddHeatFluxes(amrex::MultiFab const &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
+				  ElectronConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxA,
+				  std::array<amrex::MultiFab, AMREX_SPACEDIM> *fluxB)
+	{
+		if (params.conductivity_prefactor <= 0.0) {
+			return;
+		}
+
+		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+			amrex::ignore_unused(state, state_fc, geom, params, fluxA, fluxB);
+			return;
+		} else {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state.nGrow() >= 1, "Electron conduction requires at least 1 ghost cell.");
+
+			const auto dx = geom.CellSizeArray();
+			const amrex::Real flux_limiter_phi = params.flux_limiter_phi;
+			const amrex::Real saturation_factor = params.saturation_factor;
+			const amrex::Real t_min = params.min_temperature;
+			const bool spitzer_scaling = params.spitzer_scaling;
+			const amrex::Real kappa0 = params.conductivity_prefactor;
+			const amrex::Real small = std::numeric_limits<amrex::Real>::min();
+			constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+			constexpr int iE = HydroSystem<problem_t>::energy_index;
+			constexpr int iEint = HydroSystem<problem_t>::internalEnergy_index;
+
+			amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2 + nmscalars_, state.nGrow());
+			primVar.setVal(0.0);
+
+			auto const &state_x0 = state.const_arrays();
+			auto const &state_fc_x0 = state_fc[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+			auto const &state_fc_x1 = state_fc[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+			auto const &state_fc_x2 = state_fc[2].const_arrays();
+#endif
+			auto primVar_arr = primVar.arrays();
+			amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
+
+			amrex::ParallelFor(primVar, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				auto const &cons = state_x0[bx];
+				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
+				amrex::ignore_unused(state_fc_x0
+#if AMREX_SPACEDIM >= 2
+						     ,
+						     state_fc_x1
+#endif
+#if AMREX_SPACEDIM == 3
+						     ,
+						     state_fc_x2
+#endif
+				);
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					local_state_fc[0] = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+					local_state_fc[1] = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+					local_state_fc[2] = state_fc_x2[bx];
+#endif
+				}
+
+				const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+				const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
+				auto const massScalarsRaw = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+				quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massScalarsRaw;
+				const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
+
+				primVar_arr[bx](i, j, k, 0) = rho;
+				primVar_arr[bx](i, j, k, 1) = amrex::max(Tgas, t_min);
+				for (int n = 0; n < nmscalars_; ++n) {
+					primVar_arr[bx](i, j, k, 2 + n) = massScalarsRaw[n] / rho;
+				}
+			});
+
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
+			const int ng_reconstruct = params.ng_reconstruct;
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+				leftState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2 + nmscalars_, ng_reconstruct);
+				rightState[idim] = amrex::MultiFab(ba_face, state.DistributionMap(), 2 + nmscalars_, ng_reconstruct);
+			}
+
+			AMREX_D_TERM(ReconstructPrimVar<FluxDir::X1>(primVar, leftState[0], rightState[0], ng_reconstruct, params);
+				     , ReconstructPrimVar<FluxDir::X2>(primVar, leftState[1], rightState[1], ng_reconstruct, params);
+				     , ReconstructPrimVar<FluxDir::X3>(primVar, leftState[2], rightState[2], ng_reconstruct, params);)
+
+			auto const evaluateFace = [=] AMREX_GPU_DEVICE(amrex::Real rho_L, amrex::Real T_L, amrex::Real rho_R, amrex::Real T_R,
+								       amrex::GpuArray<amrex::Real, nmscalars_> const &massFrac_L,
+								       amrex::GpuArray<amrex::Real, nmscalars_> const &massFrac_R, amrex::Real &kappa_face,
+								       amrex::Real &qsat_face) noexcept {
+				const amrex::Real rho_face = 0.5 * (rho_L + rho_R);
+				const amrex::Real T_face = amrex::max(0.5 * (T_L + T_R), t_min);
+				amrex::GpuArray<amrex::Real, nmscalars_> massArray_face{};
+				amrex::Real sumFrac = 0.0;
+				for (int n = 0; n < nmscalars_; ++n) {
+					massArray_face[n] = 0.5 * (massFrac_L[n] + massFrac_R[n]);
+					sumFrac += massArray_face[n];
+				}
+				const amrex::Real invSum = 1.0 / amrex::max(sumFrac, small);
+				for (int n = 0; n < nmscalars_; ++n) {
+					massArray_face[n] *= invSum * rho_face;
+				}
+				quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massArray_face;
+				const amrex::Real Eint_face = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_face, T_face, massScalars);
+				const amrex::Real Pgas_face = ::quokka::EOS<problem_t>::ComputePressure(rho_face, Eint_face, massScalars);
+				const amrex::Real cs_face = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_face, Pgas_face, massScalars);
+
+				kappa_face = spitzer_scaling ? (kappa0 * std::pow(T_face, 2.5)) : kappa0;
+				qsat_face = amrex::max(saturation_factor * flux_limiter_phi * rho_face * cs_face * cs_face * cs_face, small);
+			};
+
+			auto const &temp = primVar.const_arrays();
+			const bool hasB = (fluxB != nullptr);
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				const int di = (idim == 0) ? 1 : 0;
+				const int dj = (idim == 1) ? 1 : 0;
+				const int dk = (idim == 2) ? 1 : 0;
+				const amrex::Real dx_dir = dx[idim];
+				auto const &left = leftState[idim].const_arrays();
+				auto const &right = rightState[idim].const_arrays();
+				auto fA = fluxA[idim].arrays();
+				// when there is no second flux array, alias the first one; it is only written if hasB
+				auto fB = hasB ? (*fluxB)[idim].arrays() : fA;
+				// loop over the valid faces only (the hydro update and flux registers use valid faces only)
+				amrex::ParallelFor(leftState[idim], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+					const amrex::Real gradT = (temp[bx](i, j, k, 1) - temp[bx](i - di, j - dj, k - dk, 1)) / dx_dir;
+					amrex::Real kappa_face = 0.0;
+					amrex::Real q_sat_face = 0.0;
+					amrex::GpuArray<amrex::Real, nmscalars_> massFrac_L{};
+					amrex::GpuArray<amrex::Real, nmscalars_> massFrac_R{};
+					for (int n = 0; n < nmscalars_; ++n) {
+						massFrac_L[n] = left[bx](i, j, k, 2 + n);
+						massFrac_R[n] = right[bx](i, j, k, 2 + n);
+					}
+					evaluateFace(left[bx](i, j, k, 0), left[bx](i, j, k, 1), right[bx](i, j, k, 0), right[bx](i, j, k, 1), massFrac_L,
+						     massFrac_R, kappa_face, q_sat_face);
+					const amrex::Real q_classical = -kappa_face * gradT;
+					const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
+					const amrex::Real q = q_classical / limiter;
+					fA[bx](i, j, k, iE) += q;
+					fA[bx](i, j, k, iEint) += q;
+					if (hasB) {
+						fB[bx](i, j, k, iE) += q;
+						fB[bx](i, j, k, iEint) += q;
+					}
+				});
+			}
+		}
+	}
 };
 
 } // namespace quokka::conduction
