@@ -1179,19 +1179,28 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 			}
 			const double U_0 = U0(i, j, k, nstartHyperbolic_ + n);
 			const double U_1 = U1(i, j, k, nstartHyperbolic_ + n);
-			const double FxU_0 = (dt / dx) * (x1FluxOld(i, j, k, n) - x1FluxOld(i + 1, j, k, n));
 			const double FxU_1 = (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
 #if (AMREX_SPACEDIM >= 2)
-			const double FyU_0 = (dt / dy) * (x2FluxOld(i, j, k, n) - x2FluxOld(i, j + 1, k, n));
 			const double FyU_1 = (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
 #endif
 #if (AMREX_SPACEDIM == 3)
-			const double FzU_0 = (dt / dz) * (x3FluxOld(i, j, k, n) - x3FluxOld(i, j, k + 1, n));
 			const double FzU_1 = (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
 #endif
-			// save results in cons_new
-			cons_new[n] = (1.0 - alpha) * U_0 + alpha * U_1 + (Aex_s1_coeff * (AMREX_D_TERM(FxU_0, +FyU_0, +FzU_0))) +
-				      (Aex_s2_coeff * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
+			if (Aex_s1_coeff != 0.0) {
+				const double FxU_0 = (dt / dx) * (x1FluxOld(i, j, k, n) - x1FluxOld(i + 1, j, k, n));
+#if (AMREX_SPACEDIM >= 2)
+				const double FyU_0 = (dt / dy) * (x2FluxOld(i, j, k, n) - x2FluxOld(i, j + 1, k, n));
+#endif
+#if (AMREX_SPACEDIM == 3)
+				const double FzU_0 = (dt / dz) * (x3FluxOld(i, j, k, n) - x3FluxOld(i, j, k + 1, n));
+#endif
+				// save results in cons_new
+				cons_new[n] = (1.0 - alpha) * U_0 + alpha * U_1 + (Aex_s1_coeff * (AMREX_D_TERM(FxU_0, +FyU_0, +FzU_0))) +
+					      (Aex_s2_coeff * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
+			} else {
+				// zero weight on the old-state fluxes (old fluxes were not computed)
+				cons_new[n] = (1.0 - alpha) * U_0 + alpha * U_1 + (Aex_s2_coeff * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
+			}
 		}
 
 		if (!isStateValid(cons_new)) {

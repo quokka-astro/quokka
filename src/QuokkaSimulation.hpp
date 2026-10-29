@@ -3704,8 +3704,14 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 			cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
 #endif
 		}
-		auto [fluxArraysOld, fluxDiffusiveArraysOld] =
-		    computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx, cons_fc_arr, groupBegin, groupEnd);
+		// The old-state fluxes carry weight Aex_s1_coeff = Aex_31 - alpha*Aex_21, which is exactly 0 for PD-ARS; skip their evaluation then.
+		constexpr double Aex_s1_coeff = IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21;
+		std::array<amrex::FArrayBox, AMREX_SPACEDIM> fluxArraysOld;
+		std::array<amrex::FArrayBox, AMREX_SPACEDIM> fluxDiffusiveArraysOld;
+		if constexpr (Aex_s1_coeff != 0.0) {
+			std::tie(fluxArraysOld, fluxDiffusiveArraysOld) =
+			    computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx, cons_fc_arr, groupBegin, groupEnd);
+		}
 		auto [fluxArrays, fluxDiffusiveArrays] =
 		    computeRadiationFluxes(stateInter_cc, indexRange, ncompHyperbolic_, dx, cons_fc_arr, groupBegin, groupEnd);
 
@@ -3715,7 +3721,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 		    {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
 		    {AMREX_D_DECL(fluxDiffusiveArraysOld[0].const_array(), fluxDiffusiveArraysOld[1].const_array(), fluxDiffusiveArraysOld[2].const_array())},
 		    {AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(), fluxDiffusiveArrays[1].const_array(), fluxDiffusiveArrays[2].const_array())},
-		    dt_radiation, dx, indexRange, ncompHyperbolic_, IMEX_alpha, IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21, IMEX_Aex_32, groupBegin, groupEnd);
+		    dt_radiation, dx, indexRange, ncompHyperbolic_, IMEX_alpha, Aex_s1_coeff, IMEX_Aex_32, groupBegin, groupEnd);
 
 		if (do_reflux) {
 			// copy only the fluxes of groups [groupBegin, groupEnd); see advanceRadiationForwardEuler
