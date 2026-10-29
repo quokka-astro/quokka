@@ -16,6 +16,7 @@
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/photoionization_H_caseB_handwritten/network.hpp"
 #include "physics_info.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -42,7 +43,7 @@ template <> struct quokka::EOS_Traits<StromgrenSphere> {
 template <> struct Microphysics_Traits<StromgrenSphere> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::PhotoionizationHCaseB;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+	static constexpr bool photochemistry = true;
 };
 
 using Network = Microphysics_Traits<StromgrenSphere>::Network;
@@ -207,7 +208,7 @@ template <> struct SimulationData<StromgrenSphere> {
 template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
