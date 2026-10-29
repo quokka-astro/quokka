@@ -134,7 +134,7 @@ A problem with chemistry or photochemistry also needs, in its `CMakeLists.txt`: 
 
 ## Integrator (Rosenbrock)
 
-These parameters control the Rosenbrock ODE integrator used for chemistry and photochemistry source terms. They are read from the `integrator` prefix by `readIntegratorParams()` in `src/microphysics/integrator_params.hpp`. See also `docs/markdown/photoionization.md`.
+These parameters control the Rosenbrock ODE integrator used for chemistry and photochemistry source terms. They are read from the `integrator` prefix into an `IntegratorParams` struct (`src/microphysics/integrator_params.hpp`), which is passed to the integrator. See also `docs/markdown/photoionization.md`.
 
 The photochemistry problems set their own tolerances in their input files.
 

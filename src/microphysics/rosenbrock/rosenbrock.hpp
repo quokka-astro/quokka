@@ -75,14 +75,14 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 	return std::sqrt(err / static_cast<amrex::Real>(int_neqs));
 }
 
-template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto species_change_valid(const RosenbrockT &rstate) -> bool
+template <typename Layout, typename RosenbrockT>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto species_change_valid(const RosenbrockT &rstate, const IntegratorParams &params) -> bool
 {
 	constexpr amrex::Real increase_change_factor = 4.0_rt;
 	constexpr amrex::Real decrease_change_factor = 0.25_rt;
 
 	for (int i = 1; i <= Layout::num_spec; ++i) {
-		if (std::abs(rstate.y(i)) > integrator_params::X_reject_buffer * rstate.atol_spec &&
-		    std::abs(rstate.ynew(i)) > integrator_params::X_reject_buffer * rstate.atol_spec &&
+		if (std::abs(rstate.y(i)) > params.X_reject_buffer * rstate.atol_spec && std::abs(rstate.ynew(i)) > params.X_reject_buffer * rstate.atol_spec &&
 		    (std::abs(rstate.ynew(i)) > increase_change_factor * std::abs(rstate.y(i)) ||
 		     std::abs(rstate.ynew(i)) < decrease_change_factor * std::abs(rstate.y(i)))) {
 			return false;
@@ -108,7 +108,9 @@ template <typename Layout, typename MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORC
 	return true;
 }
 
-template <typename Layout> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex::Array1D<amrex::Real, 1, Layout::neqs> &y) -> bool
+template <typename Layout>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex::Array1D<amrex::Real, 1, Layout::neqs> &y, const IntegratorParams &params)
+    -> bool
 {
 	constexpr int int_neqs = Layout::neqs;
 
@@ -122,7 +124,7 @@ template <typename Layout> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_i
 	for (int n = 1; n <= int_neqs; ++n) {
 		switch (Layout::role(n)) {
 			case VarRole::Species:
-				if (y(n) < -integrator_params::atol_spec) {
+				if (y(n) < -params.atol_spec) {
 					return false;
 				}
 				break;
@@ -132,7 +134,7 @@ template <typename Layout> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_i
 				}
 				break;
 			case VarRole::ChemPhotonNumber:
-				if (y(n) < -integrator_params::atol_rad_num) {
+				if (y(n) < -params.atol_rad_num) {
 					return false;
 				}
 				break;
@@ -149,7 +151,7 @@ template <typename Layout> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_i
 /// The finite-difference Jacobian, from int_neqs evaluations of the right-hand side around rstate.y. Expects the
 /// right-hand side at rstate.y in rstate.k[0].
 template <typename Layout, typename BurnT, typename RosenbrockT>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, RosenbrockT &rstate, const amrex::Real time)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, RosenbrockT &rstate, const amrex::Real time, const IntegratorParams &params)
 {
 	constexpr int int_neqs = Layout::neqs;
 	constexpr amrex::Real UROUND = std::numeric_limits<amrex::Real>::epsilon();
@@ -181,7 +183,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, R
 		}
 		rstate.y(j) += R;
 
-		rhs<Layout>(time, state, rstate, rstate.work);
+		rhs<Layout>(time, state, rstate, rstate.work, params);
 
 		fac = 1.0_rt / R;
 		for (int i = 1; i <= int_neqs; ++i) {
@@ -200,9 +202,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, R
 /// Evaluates the right-hand side at rstate.y into rstate.k[0] and the Jacobian into rstate.jac. Returns false if the
 /// Jacobian has a non-finite entry and numerical_jacobian_fallback is off.
 template <typename Layout, typename BurnT, typename RosenbrockT>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, RosenbrockT &rstate, const amrex::Real time) -> bool
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, RosenbrockT &rstate, const amrex::Real time, const IntegratorParams &params)
+    -> bool
 {
-	rhs<Layout>(time, state, rstate, rstate.k[0]);
+	rhs<Layout>(time, state, rstate, rstate.k[0], params);
 	rstate.n_rhs += 1;
 
 	if constexpr (Layout::traits::analytic_jacobian) {
@@ -215,7 +218,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, Ro
 	}
 
 	if constexpr (!Layout::traits::analytic_jacobian || Layout::traits::numerical_jacobian_fallback) {
-		numerical_jacobian<Layout>(state, rstate, time);
+		numerical_jacobian<Layout>(state, rstate, time, params);
 		return true;
 	} else {
 		return false;
@@ -224,7 +227,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, Ro
 
 template <typename Layout, typename BurnT, typename RosenbrockT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_at(const amrex::Real time, BurnT &state, RosenbrockT &rstate,
-						     const amrex::Array1D<amrex::Real, 1, Layout::neqs> &y, amrex::Array1D<amrex::Real, 1, Layout::neqs> &ydot)
+						     const amrex::Array1D<amrex::Real, 1, Layout::neqs> &y, amrex::Array1D<amrex::Real, 1, Layout::neqs> &ydot,
+						     const IntegratorParams &params)
 {
 	constexpr int int_neqs = Layout::neqs;
 
@@ -235,7 +239,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_at(const amrex::Real time, Bur
 		rstate.y(n) = y(n);
 	}
 
-	rhs<Layout>(time, state, rstate, ydot);
+	rhs<Layout>(time, state, rstate, ydot, params);
 
 	for (int n = 1; n <= int_neqs; ++n) {
 		rstate.y(n) = ysave(n);
@@ -266,8 +270,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void solve(RosenbrockT &rstate, amrex::
 }
 
 template <typename problem_t, typename Tableau, typename BurnT>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state,
-								    RosenbrockState<IntegratorLayout<problem_t, BurnT>::neqs, Tableau::stages> &rstate) -> int
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+rosenbrock_integrator(BurnT &state, RosenbrockState<IntegratorLayout<problem_t, BurnT>::neqs, Tableau::stages> &rstate, const IntegratorParams &params) -> int
 {
 	using Layout = IntegratorLayout<problem_t, BurnT>;
 	constexpr int int_neqs = Layout::neqs;
@@ -315,7 +319,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 
 	while (true) {
 
-		if (rstate.n_step > integrator_params::ode_max_steps) {
+		if (rstate.n_step > params.ode_max_steps) {
 			rstate.t = x;
 			rstate.dt = h;
 			return IERR_TOO_MANY_STEPS;
@@ -352,7 +356,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 			}
 
 			const amrex::Real fac = 1.0_rt / (h * Tableau::gamma);
-			if (!evaluate_jacobian<Layout>(state, rstate, x)) {
+			if (!evaluate_jacobian<Layout>(state, rstate, x, params)) {
 				rstate.t = x;
 				rstate.dt = h;
 				return IERR_JACOBIAN_NOT_FINITE;
@@ -387,7 +391,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 					}
 				}
 
-				if (!valid_integrator_state<Layout>(rstate.ynew)) {
+				if (!valid_integrator_state<Layout>(rstate.ynew, params)) {
 					h *= 0.25_rt;
 					reject = true;
 					n_reject += 1;
@@ -396,7 +400,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 					break;
 				}
 
-				rhs_at<Layout>(x + Tableau::ct(istage) * h, state, rstate, rstate.ynew, rhs_tmp);
+				rhs_at<Layout>(x + Tableau::ct(istage) * h, state, rstate, rstate.ynew, rhs_tmp, params);
 				rstate.n_rhs += 1;
 
 				for (int n = 1; n <= int_neqs; ++n) {
@@ -425,7 +429,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 
 			rstate.n_step += 1;
 
-			const bool valid_state = valid_integrator_state<Layout>(rstate.ynew);
+			const bool valid_state = valid_integrator_state<Layout>(rstate.ynew, params);
 			if (!valid_state) {
 				reject = true;
 				n_reject += 1;
@@ -434,7 +438,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 				continue;
 			}
 
-			const bool valid_update = species_change_valid<Layout>(rstate);
+			const bool valid_update = species_change_valid<Layout>(rstate, params);
 			constexpr amrex::Real err_min = 1.e-10_rt;
 			// make copies of the traits to avoid compiler error "undefined in device code" (amrex::Clamp takes references)
 			constexpr amrex::Real fac_min = Layout::traits::h211b_fac_min;
@@ -494,17 +498,18 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 template <typename Tableau> struct Rosenbrock {
 	using tableau = Tableau;
 
-	template <typename problem_t, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE static void Integrate(BurnT &state, const amrex::Real dt)
+	template <typename problem_t, typename BurnT>
+	AMREX_GPU_HOST_DEVICE AMREX_INLINE static void Integrate(BurnT &state, const amrex::Real dt, const IntegratorParams &params)
 	{
 		using Layout = IntegratorLayout<problem_t, BurnT>;
 		constexpr int int_neqs = Layout::neqs;
 
-		auto rosenbrock_state = integrator_setup<Layout, RosenbrockState<int_neqs, Tableau::stages>>(state, dt);
+		auto rosenbrock_state = integrator_setup<Layout, RosenbrockState<int_neqs, Tableau::stages>>(state, dt, params);
 		const auto state_save = integrator_backup<Layout>(state);
 
-		const int istate = rosenbrock::rosenbrock_integrator<problem_t, Tableau>(state, rosenbrock_state);
+		const int istate = rosenbrock::rosenbrock_integrator<problem_t, Tableau>(state, rosenbrock_state, params);
 
-		integrator_cleanup<Layout>(rosenbrock_state, state, istate, state_save, dt);
+		integrator_cleanup<Layout>(rosenbrock_state, state, istate, state_save, dt, params);
 	}
 };
 
