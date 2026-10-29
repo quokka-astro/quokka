@@ -40,11 +40,13 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 	int num_failed = 0;
 
 	const BL_PROFILE("Chemistry::computeChemistry()");
-	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &state = mf.array(iter);
+	{
+		// src-05: one MultiFab-wide fused launch with a small block (launch bounds) and no per-box sync.
+		constexpr int chem_block_size = 64;
+		auto const &states = mf.arrays();
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		amrex::ParallelFor<chem_block_size>(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			auto const &state = states[bx];
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const Real xmom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
@@ -134,10 +136,6 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn] * rho; // scale by rho to return partial densities
 			}
 		});
-
-#if defined(AMREX_USE_HIP)
-		amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
-#endif
 	}
 
 	num_failed = *(d_num_failed.copyToHost());
