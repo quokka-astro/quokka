@@ -16,7 +16,7 @@
 ///        (selected by AnisoConductionParams::flux_limiter_type). Both terms read bhat/kappa at
 ///        mesh vertices ("corners") and gradT via direct two-point differences of cell-centered T,
 ///        never a precomputed face/corner gradT field. kappa_par and kappa_perp are stored at each
-///        corner, kappa = n k_B chi (Sharma & Hammett's n chi), with chi from EvaluateDiffusivity
+///        corner, kappa = n k_B chi (Sharma & Hammett's n chi), from EvaluateConductivity
 ///        (conductivity.hpp) evaluated at the corner-averaged (rho, T). The flux is
 ///        q = -kappa_perp grad T - (kappa_par - kappa_perp) bhat (bhat . grad T): the diagonal and
 ///        cross terms above carry (kappa_par - kappa_perp), and the isotropic kappa_perp term is an
@@ -36,9 +36,9 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
+#include "conduction/ConductionHelpers.hpp"
 #include "conduction/conductivity.hpp"
 #include "hydro/hydro_system.hpp"
-#include "hyperbolic_system.hpp"
 
 namespace quokka::conduction
 {
@@ -52,11 +52,8 @@ struct AnisoConductionParams {
 	ConductivityParams conductivity{}; // prefactors for ConductionModel::constant/spitzer (see conductivity.hpp)
 	amrex::Real l2_alpha = 2.0;	   // bias factor for the L2 limiter (Sharma & Hammett 2007 Eq. 21) applied to the normal (q_xx-type) term
 	amrex::Real flux_limiter_phi = 0.1;
-	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
-	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
-	int reconstruction_order = 3;	     // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM;
-	SlopeLimiter plm_limiter = SlopeLimiter::sweby;
-	int ng_reconstruct = 2;						   // number of ghost faces to reconstruct beyond the valid box
+	amrex::Real saturation_factor = 5.0;				   // refer to equation 8 of Cowie & McKee 1977
+	amrex::Real min_temperature = 0.0;				   // default value will be overwritten by tempFloor_ during initialization
 	AnisoFluxLimiterType flux_limiter_type = AnisoFluxLimiterType::mc; // transverse-gradient limiter (conduction.aniso_flux_limiter)
 };
 
@@ -246,60 +243,7 @@ template <typename problem_t> class AnisoConduction
 		// once per cell here and reused (via face-averaging) instead of being re-derived from
 		// `state` at every face below.
 		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2 + nmscalars_, state.nGrow());
-		auto const &state_x0 = state.const_arrays();
-		primVar.setVal(0.0);
-
-		auto primVar_arr = primVar.arrays();
-		const amrex::Real t_min = params.min_temperature;
-
-		// Per-box face-centered B, gathered into an array so it can be handed to
-		// HydroSystem<problem_t>::ComputeInternalEnergy/ComputeMagneticEnergy below.
-		auto const &state_fc_x0 = state_fc[0].const_arrays();
-#if AMREX_SPACEDIM >= 2
-		auto const &state_fc_x1 = state_fc[1].const_arrays();
-#endif
-#if AMREX_SPACEDIM == 3
-		auto const &state_fc_x2 = state_fc[2].const_arrays();
-#endif
-
-		amrex::IntVect const ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
-
-		amrex::ParallelFor(state, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			auto const &cons = state_x0[bx];
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
-			amrex::ignore_unused(state_fc_x0
-#if AMREX_SPACEDIM >= 2
-					     ,
-					     state_fc_x1
-#endif
-#if AMREX_SPACEDIM == 3
-					     ,
-					     state_fc_x2
-#endif
-			);
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				local_state_fc[0] = state_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-				local_state_fc[1] = state_fc_x1[bx];
-#endif
-#if AMREX_SPACEDIM == 3
-				local_state_fc[2] = state_fc_x2[bx];
-#endif
-			}
-
-			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
-			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
-			// Temperature always from EOS
-			amrex::GpuArray<amrex::Real, nmscalars_> const massScalarsArr = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const massScalars = massScalarsArr;
-			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
-
-			primVar_arr[bx](i, j, k, 0) = rho;
-			primVar_arr[bx](i, j, k, 1) = amrex::max(Tgas, t_min);
-			for (int n = 0; n < nmscalars_; ++n) {
-				primVar_arr[bx](i, j, k, 2 + n) = massScalarsArr[n];
-			}
-		});
+		ComputeConductionPrimVar<problem_t, MassScalarStorage::partial_density>(state, state_fc, params.min_temperature, primVar);
 
 		// Unit B-field, kappa, and qsat at mesh vertices ("corners")
 		amrex::BoxArray const ba_corner = amrex::convert(state.boxArray(), amrex::IntVect::TheUnitVector());
@@ -325,58 +269,7 @@ template <typename problem_t> class AnisoConduction
 			     , ComputeAnisotropicFlux<FluxDir::X3>(heat_flux[2], primVar, bhat_corner, kappa_corner, qsat_corner, dx, params.l2_alpha,
 								   params.flux_limiter_type);)
 
-		auto state_out = state.arrays();
-		auto const &flux_x_const = heat_flux[0].const_arrays();
-#if AMREX_SPACEDIM >= 2
-		auto const &flux_y_const = heat_flux[1].const_arrays();
-#endif
-#if AMREX_SPACEDIM == 3
-		auto const &flux_z_const = heat_flux[2].const_arrays();
-#endif
-
-		amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
-			amrex::ignore_unused(state_fc_x0
-#if AMREX_SPACEDIM >= 2
-					     ,
-					     state_fc_x1
-#endif
-#if AMREX_SPACEDIM == 3
-					     ,
-					     state_fc_x2
-#endif
-			);
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				local_state_fc[0] = state_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-				local_state_fc[1] = state_fc_x1[bx];
-#endif
-#if AMREX_SPACEDIM == 3
-				local_state_fc[2] = state_fc_x2[bx];
-#endif
-			}
-
-			const amrex::Real rho = state_out[bx](i, j, k, HydroSystem<problem_t>::density_index);
-			const amrex::Real px = state_out[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-			const amrex::Real py = state_out[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-			const amrex::Real pz = state_out[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-
-			const amrex::Real Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
-			const amrex::Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &local_state_fc);
-			const amrex::Real Eint_old = HydroSystem<problem_t>::ComputeInternalEnergy(state_out[bx], i, j, k, &local_state_fc);
-			amrex::Real div_flux = (flux_x_const[bx](i + 1, j, k) - flux_x_const[bx](i, j, k)) / dx[0];
-#if AMREX_SPACEDIM >= 2
-			div_flux += (flux_y_const[bx](i, j + 1, k) - flux_y_const[bx](i, j, k)) / dx[1];
-#endif
-#if AMREX_SPACEDIM == 3
-			div_flux += (flux_z_const[bx](i, j, k + 1) - flux_z_const[bx](i, j, k)) / dx[2];
-#endif
-
-			amrex::Real const Eint_new = Eint_old - dt * div_flux;
-
-			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin + Emag;
-			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
-		});
+		ApplyConductionUpdate<problem_t>(state, state_fc, heat_flux, dx, dt);
 	}
 };
 
@@ -423,8 +316,8 @@ template <typename problem_t> void ComputeCornerFC(amrex::MultiFab &bhat_corner_
 // Estimate kappa and qsat at mesh vertices ("corners") from CELL-CENTERED input data (primVar), on the
 // same fully-nodal box array and vertex-indexing convention as ComputeCornerFC (vertex (i,j,k) draws
 // from the 8 (3D) or 4 (2D) cells with indices in {i-1,i}x{j-1,j}x{k-1,k}). (rho,T,massScalars) are
-// the plain average over those cells; kappa = n k_B (chi_parallel, chi_perp) with chi from EvaluateDiffusivity, and
-// qsat follows the same EOS chain as ComputeFaceNumberDensityAndSaturationFlux (Cowie & McKee 1977). gradT is intentionally not computed
+// the plain average over those cells; (kappa_parallel, kappa_perp) come from EvaluateConductivity, and
+// qsat follows the same EOS chain as IsoConduction's evaluateFace (Cowie & McKee 1977). gradT is intentionally not computed
 // here -- ComputeAnisotropicFlux differences primVar directly (see ComputeDiagTerm/ComputeCrossTerm).
 template <typename problem_t>
 void ComputeCornerCC(amrex::MultiFab &kappa_corner_mf, amrex::MultiFab &qsat_corner_mf, amrex::MultiFab const &primVar, ConductivityParams const &conductivity,
@@ -436,15 +329,13 @@ void ComputeCornerCC(amrex::MultiFab &kappa_corner_mf, amrex::MultiFab &qsat_cor
 
 	auto const &primVar_in = primVar.const_arrays();
 	const ConductivityParams conductivity_params = conductivity;
-	const amrex::Real mean_molecular_weight = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-	const amrex::Real k_B = quokka::EOS<problem_t>::boltzmann_constant_;
 	auto kappa_out = kappa_corner_mf.arrays();
 	auto qsat_out = qsat_corner_mf.arrays();
 
 	amrex::IntVect const ng{AMREX_D_DECL(nghost, nghost, nghost)};
 	amrex::ParallelFor(kappa_corner_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// kappa / qsat: plain average of (rho, T, massScalars) over the {i-1,i}x{j-1,j}x{k-1,k} cells
-		// touching this vertex, then the same EOS chain ComputeFaceNumberDensityAndSaturationFlux uses.
+		// touching this vertex, then the same EOS chain IsoConduction's evaluateFace uses.
 		auto const corner_avg = [=](int comp) {
 #if AMREX_SPACEDIM == 3
 			return 0.125 * (primVar_in[bx](i - 1, j - 1, k - 1, comp) + primVar_in[bx](i, j - 1, k - 1, comp) +
@@ -461,13 +352,12 @@ void ComputeCornerCC(amrex::MultiFab &kappa_corner_mf, amrex::MultiFab &qsat_cor
 		const amrex::Real T_corner = corner_avg(T_comp);
 
 		// kappa = n k_B chi (Sharma & Hammett's n chi); see conductivity.hpp
-		const auto chi_corner = EvaluateDiffusivity<problem_t>(rho_corner, T_corner, conductivity_params);
-		const amrex::Real nkB_corner = (rho_corner / mean_molecular_weight) * k_B;
-		kappa_out[bx](i, j, k, 0) = nkB_corner * chi_corner[0];
+		const auto kappa_corner = EvaluateConductivity<problem_t>(rho_corner, T_corner, conductivity_params);
+		kappa_out[bx](i, j, k, 0) = kappa_corner[0];
 		// the L2-limited (kappa_par - kappa_perp) b_n^2 term must stay non-negative; the input-file prefactors are
 		// asserted at startup, so this can only fire with ConductionModel::problem_defined (debug builds only)
-		AMREX_ASSERT(chi_corner[1] <= chi_corner[0]);
-		kappa_out[bx](i, j, k, 1) = nkB_corner * chi_corner[1];
+		AMREX_ASSERT(kappa_corner[1] <= kappa_corner[0]);
+		kappa_out[bx](i, j, k, 1) = kappa_corner[1];
 
 		amrex::GpuArray<amrex::Real, nmscalars_> massArray_corner{};
 		for (int n = 0; n < nmscalars_; ++n) {
@@ -536,8 +426,7 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 		const amrex::Real qsat_face = 0.5 * (qsat_in[bx](corner_lo, 0) + qsat_in[bx](corner_hi, 0));
 #else // AMREX_SPACEDIM == 3
 
-		// Cyclic transverse-axis convention (matches ComputeFaceUnitBField elsewhere in this file):
-		// X1 -> (y,z), X2 -> (z,x), X3 -> (x,y).
+		// Cyclic transverse-axis convention: X1 -> (y,z), X2 -> (z,x), X3 -> (x,y).
 		constexpr int Ax0 = (static_cast<int>(DIR) + 1) % 3;
 		constexpr int Ax1 = (static_cast<int>(DIR) + 2) % 3;
 		const amrex::Real dx0 = dx[Ax0];
@@ -546,8 +435,11 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 		amrex::IntVect const corner_1 = corner_lo + AxisUnit<Ax1>();
 		amrex::IntVect const corner_01 = UpperCorner<DIR>(i, j, k); // == corner_0 + AxisUnit<Ax1>()
 
-		const amrex::Real q_xx = 0.5 * (ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx_n, l2_alpha) +
-						ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_1, dx_n, l2_alpha));
+		// Limit the normal gradient along both transverse axes (each corner appears once per axis), mirroring q_cross0/q_cross1.
+		const amrex::Real q_xx = 0.25 * (ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx_n, l2_alpha) +
+						 ComputeDiagTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_1, dx_n, l2_alpha) +
+						 ComputeDiagTerm<DIR, Ax1>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx_n, l2_alpha) +
+						 ComputeDiagTerm<DIR, Ax1>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_0, dx_n, l2_alpha));
 		const amrex::Real q_cross0 =
 		    0.5 * (ComputeCrossTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_lo, dx0, limiter_type) +
 			   ComputeCrossTerm<DIR, Ax0>(T_in[bx], bhat_in[bx], kappa_in[bx], cm, cp, corner_1, dx0, limiter_type));

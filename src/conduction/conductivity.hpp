@@ -13,11 +13,10 @@
 /// Conductivities are always specified as a full conductivity kappa (erg cm^-1 s^-1 K^-1), whether
 /// through the conduction.* prefactors in the input file (ConductionModel::constant/spitzer) or through
 /// a problem-specific computeConductivity (ConductionModel::problem_defined). The conduction solvers
-/// only ever call quokka::conduction::EvaluateDiffusivity, which converts kappa to the diffusivity
-/// chi = kappa / (n k_B) (cm^2 s^-1) of Sharma & Hammett (2007), so that q = -n k_B chi grad T.
+/// only ever call quokka::conduction::EvaluateConductivity, which returns kappa directly. kappa is
+/// Sharma & Hammett's (2007) n k_B chi, so that q = -kappa grad T.
 
 #include <cmath>
-#include <limits>
 
 #include "AMReX.H"
 #include "AMReX_GpuQualifiers.H"
@@ -62,11 +61,11 @@ struct ConductivityParams {
 	amrex::Real kappa0_perp = 0.0; // as kappa0_par, across the magnetic field (ConductionGeometry::anisotropic only); must be <= kappa0_par
 };
 
-/// \brief Returns the thermal diffusivities {chi_parallel, chi_perp} = kappa / (n k_B) in cm^2 s^-1, with
-///        n = rho / mean_molecular_weight, for the conductivity model and geometry set in Physics_Traits.
-///        With ConductionGeometry::isotropic, chi_perp == chi_parallel. Returns zero with ConductionModel::none.
+/// \brief Returns the thermal conductivities {kappa_parallel, kappa_perp} in erg cm^-1 s^-1 K^-1, for the
+///        conductivity model and geometry set in Physics_Traits. With ConductionGeometry::isotropic,
+///        kappa_perp == kappa_parallel. Returns zero with ConductionModel::none.
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto EvaluateDiffusivity(amrex::Real rho, amrex::Real Tgas, ConductivityParams const &params)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto EvaluateConductivity(amrex::Real rho, amrex::Real Tgas, ConductivityParams const &params)
     -> quokka::valarray<amrex::Real, 2>
 {
 	constexpr ConductionModel model = Physics_Traits<problem_t>::conduction_model;
@@ -75,9 +74,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto EvaluateDiffusivity(amrex::Real rh
 	if constexpr (model == ConductionModel::problem_defined) {
 		kappa = computeConductivity<problem_t>(rho, Tgas);
 	} else if constexpr (model == ConductionModel::spitzer) {
+		amrex::ignore_unused(rho);
 		const amrex::Real T_52 = std::pow(Tgas, 2.5);
 		kappa = {params.kappa0_par * T_52, params.kappa0_perp * T_52};
 	} else if constexpr (model == ConductionModel::constant) {
+		amrex::ignore_unused(rho, Tgas);
 		kappa = {params.kappa0_par, params.kappa0_perp};
 	} else { // ConductionModel::none
 		amrex::ignore_unused(rho, Tgas, params);
@@ -88,15 +89,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto EvaluateDiffusivity(amrex::Real rh
 		kappa[1] = kappa[0];
 	}
 
-	constexpr amrex::Real mean_molecular_weight = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-	if constexpr (model != ConductionModel::none) {
-		// NaN is the only value that compares unequal to itself (std::isnan is not constexpr until C++23)
-		static_assert(mean_molecular_weight == mean_molecular_weight, // NOLINT(misc-redundant-expression)
-			      "Thermal conduction requires EOS_Traits::mean_molecular_weight to be set (chi = kappa / (n k_B), n = rho / mu).");
-	}
-	// floor rho so that a zero density gives a finite chi (and, after the solver multiplies by n, a zero kappa) rather than NaN
-	const amrex::Real n = amrex::max(rho, std::numeric_limits<amrex::Real>::min()) / mean_molecular_weight;
-	return kappa / (n * quokka::EOS<problem_t>::boltzmann_constant_);
+	return kappa;
 }
 
 } // namespace quokka::conduction

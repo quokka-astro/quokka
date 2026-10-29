@@ -20,6 +20,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "conduction/ConductionHelpers.hpp"
 #include "conduction/conductivity.hpp"
 #include "hydro/hydro_system.hpp"
 #include "hyperbolic_system.hpp"
@@ -60,31 +61,53 @@ template <typename problem_t> class IsoConduction
 		}
 	}
 
-	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
-				    amrex::Real dt, IsoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
+	/// \brief Returns false when conduction has no effect for this problem: ConductionModel::none, an isothermal EOS,
+	///        or a built-in conductivity model with a non-positive prefactor.
+	static auto IsActive(IsoConductionParams const &params) -> bool
+	{
+		constexpr ConductionModel model = Physics_Traits<problem_t>::conduction_model;
+		if constexpr (model == ConductionModel::none || HydroSystem<problem_t>::is_eos_isothermal()) {
+			amrex::ignore_unused(params);
+			return false;
+		} else if constexpr (model == ConductionModel::constant || model == ConductionModel::spitzer) {
+			return params.conductivity.kappa0_par > 0.0;
+		} else {
+			amrex::ignore_unused(params);
+			return true;
+		}
+	}
+
+	/// \brief Defines \p heat_flux (1 component, no ghost faces) on the faces of \p state's BoxArray and zeroes it.
+	static void DefineHeatFlux(amrex::MultiFab const &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
 			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
 			heat_flux[idim].setVal(0.0);
 		}
+	}
 
-		constexpr ConductionModel model = Physics_Traits<problem_t>::conduction_model;
-		if constexpr (model == ConductionModel::none) {
-			amrex::ignore_unused(state, state_fc, geom, dt, params, heat_flux);
+	/// \brief Forward-Euler conduction update of \p state over \p dt. On return, \p heat_flux holds the face fluxes
+	///        used for the update (zero if conduction is inactive or \p dt <= 0).
+	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
+				    amrex::Real dt, IsoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
+	{
+		if ((dt <= 0.0) || !IsActive(params)) {
+			DefineHeatFlux(state, heat_flux);
 			return;
 		}
-		if (dt <= 0.0) {
-			return;
-		}
-		if constexpr (model == ConductionModel::constant || model == ConductionModel::spitzer) {
-			if (params.conductivity.kappa0_par <= 0.0) {
-				return;
-			}
-		}
+		ComputeHeatFlux(state, state_fc, geom, params, heat_flux);
+		ApplyConductionUpdate<problem_t>(state, state_fc, heat_flux, geom.CellSizeArray(), dt);
+	}
 
-		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-			amrex::ignore_unused(state_fc, geom, params);
+	/// \brief Computes the flux-limited, saturated conductive heat flux q on every face of \p state's valid boxes.
+	///        Does not modify \p state; its ghost cells must already be filled. \p heat_flux is (re)defined here.
+	static void ComputeHeatFlux(amrex::MultiFab const &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
+				    IsoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
+	{
+		DefineHeatFlux(state, heat_flux);
+		if (!IsActive(params)) {
+			amrex::ignore_unused(state_fc, geom);
 			return;
 		}
 
@@ -95,62 +118,12 @@ template <typename problem_t> class IsoConduction
 		const amrex::Real saturation_factor = params.saturation_factor;
 		const amrex::Real t_min = params.min_temperature;
 		const ConductivityParams conductivity_params = params.conductivity;
-		const amrex::Real mean_molecular_weight = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-		const amrex::Real k_B = quokka::EOS<problem_t>::boltzmann_constant_;
 		const amrex::Real small = std::numeric_limits<amrex::Real>::min();
 		constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 
+		// mass fractions (not partial densities), so they reconstruct consistently with rho and T
 		amrex::MultiFab primVar(state.boxArray(), state.DistributionMap(), 2 + nmscalars_, state.nGrow());
-		primVar.setVal(0.0);
-
-		auto const &state_x0 = state.const_arrays();
-		auto const &state_fc_x0 = state_fc[0].const_arrays();
-#if AMREX_SPACEDIM >= 2
-		auto const &state_fc_x1 = state_fc[1].const_arrays();
-#endif
-#if AMREX_SPACEDIM == 3
-		auto const &state_fc_x2 = state_fc[2].const_arrays();
-#endif
-		auto primVar_arr = primVar.arrays();
-		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
-
-		amrex::ParallelFor(state, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			auto const &cons = state_x0[bx];
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
-			amrex::ignore_unused(state_fc_x0
-#if AMREX_SPACEDIM >= 2
-					     ,
-					     state_fc_x1
-#endif
-#if AMREX_SPACEDIM == 3
-					     ,
-					     state_fc_x2
-#endif
-			);
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				local_state_fc[0] = state_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-				local_state_fc[1] = state_fc_x1[bx];
-#endif
-#if AMREX_SPACEDIM == 3
-				local_state_fc[2] = state_fc_x2[bx];
-#endif
-			}
-
-			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
-			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
-			// Temperature always from EOS
-			auto const massScalarsRaw = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = massScalarsRaw;
-			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
-
-			primVar_arr[bx](i, j, k, 0) = rho;
-			primVar_arr[bx](i, j, k, 1) = amrex::max(Tgas, t_min);
-			for (int n = 0; n < nmscalars_; ++n) {
-				// store mass fraction (not partial density) so it reconstructs consistently with rho and T
-				primVar_arr[bx](i, j, k, 2 + n) = massScalarsRaw[n] / rho;
-			}
-		});
+		ComputeConductionPrimVar<problem_t, MassScalarStorage::mass_fraction>(state, state_fc, t_min, primVar);
 
 		// Reconstruct (rho, T, mass fractions) to the interfaces
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
@@ -187,9 +160,8 @@ template <typename problem_t> class IsoConduction
 			const amrex::Real Pgas_face = ::quokka::EOS<problem_t>::ComputePressure(rho_face, Eint_face, massScalars);
 			const amrex::Real cs_face = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho_face, Pgas_face, massScalars);
 
-			// kappa = n k_B chi, with chi from the conductivity model; see conductivity.hpp
-			const amrex::Real chi_face = EvaluateDiffusivity<problem_t>(rho_face, T_face, conductivity_params)[0];
-			kappa_face = (rho_face / mean_molecular_weight) * k_B * chi_face;
+			// kappa from the conductivity model; see conductivity.hpp
+			kappa_face = EvaluateConductivity<problem_t>(rho_face, T_face, conductivity_params)[0];
 			qsat_face = amrex::max(saturation_factor * flux_limiter_phi * rho_face * cs_face * cs_face * cs_face, small);
 		};
 
@@ -257,51 +229,6 @@ template <typename problem_t> class IsoConduction
 			flux_z[bx](i, j, k) = q_classical / limiter;
 		});
 #endif
-
-		auto state_out = state.arrays();
-		auto const &flux_x_const = heat_flux[0].const_arrays();
-#if AMREX_SPACEDIM >= 2
-		auto const &flux_y_const = heat_flux[1].const_arrays();
-#endif
-#if AMREX_SPACEDIM == 3
-		auto const &flux_z_const = heat_flux[2].const_arrays();
-#endif
-
-		amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
-			if (Physics_Traits<problem_t>::is_mhd_enabled) {
-				local_state_fc[0] = state_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-				local_state_fc[1] = state_fc_x1[bx];
-#endif
-#if AMREX_SPACEDIM == 3
-				local_state_fc[2] = state_fc_x2[bx];
-#endif
-			}
-
-			const amrex::Real rho = state_out[bx](i, j, k, HydroSystem<problem_t>::density_index);
-			const amrex::Real px = state_out[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-			const amrex::Real py = state_out[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-			const amrex::Real pz = state_out[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-
-			const amrex::Real Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
-			const amrex::Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &local_state_fc);
-			// derive Eint from total energy rather than the auxiliary internalEnergy_index field,
-			// which is not kept in sync with total energy when hydro.use_dual_energy == 0
-			const amrex::Real Eint_old = HydroSystem<problem_t>::ComputeInternalEnergy(state_out[bx], i, j, k, &local_state_fc);
-			amrex::Real div_flux = (flux_x_const[bx](i + 1, j, k) - flux_x_const[bx](i, j, k)) / dx[0];
-#if AMREX_SPACEDIM >= 2
-			div_flux += (flux_y_const[bx](i, j + 1, k) - flux_y_const[bx](i, j, k)) / dx[1];
-#endif
-#if AMREX_SPACEDIM == 3
-			div_flux += (flux_z_const[bx](i, j, k + 1) - flux_z_const[bx](i, j, k)) / dx[2];
-#endif
-
-			amrex::Real Eint_new = Eint_old - dt * div_flux;
-
-			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin + Emag;
-			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
-		});
 	}
 };
 

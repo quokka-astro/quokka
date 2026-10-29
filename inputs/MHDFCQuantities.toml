@@ -22,3 +22,5 @@ do_subcycle = 0
 
 plotfile_interval = 100
 checkpoint_interval = 200
+
+density_floor = 1e-7  # g cm^-3

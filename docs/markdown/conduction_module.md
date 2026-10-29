@@ -42,13 +42,7 @@ where \\(f\_{\rm sat}\\) is `conduction.saturation_factor`, \\(\phi\\) is `condu
 
 Conductivities are always given as a full conductivity \\(\kappa\\), in erg cm\\(^{-1}\\) s\\(^{-1}\\) K\\(^{-1}\\), in both geometries. For `spitzer`, the prefactor \\(\kappa\_0\\) is in erg cm\\(^{-1}\\) s\\(^{-1}\\) K\\(^{-7/2}\\). With a non-CGS `unit_system`, use the corresponding code units.
 
-Internally, both solvers obtain \\(\kappa\\) through `quokka::conduction::EvaluateDiffusivity` (`src/conduction/conductivity.hpp`). It returns the diffusivity
-
-<script type="math/tex; mode=display">
-\chi = \frac{\kappa}{n k_B}, \qquad n = \frac{\rho}{\mu},
-</script>
-
-which is the \\(\chi\\) of Sharma & Hammett (2007), whose flux is \\(\mathbf{q} = -n k\_B \chi \nabla T\\). Conduction therefore requires `EOS_Traits::mean_molecular_weight` to be set; this is checked at compile time.
+Internally, both solvers obtain \\(\kappa\\) through `quokka::conduction::EvaluateConductivity` (`src/conduction/conductivity.hpp`). In the notation of Sharma & Hammett (2007), whose flux is \\(\mathbf{q} = -n k\_B \chi \nabla T\\), \\(\kappa = n k\_B \chi\\); the solvers only ever need this product, so the diffusivity \\(\chi\\) is never formed.
 
 ## Problem-defined conductivity
 

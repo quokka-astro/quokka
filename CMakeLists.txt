@@ -1,4 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
+# Recent HIP device linkers reject duplicate archives under --whole-archive.
+if(POLICY CMP0156)
+  cmake_policy(SET CMP0156 NEW)
+endif()
+if(POLICY CMP0179)
+  cmake_policy(SET CMP0179 NEW)
+endif()
 project(QuokkaCode VERSION 1.0
   DESCRIPTION "Radiation hydrodynamics with structured AMR"
   LANGUAGES CXX C)
