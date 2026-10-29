@@ -401,6 +401,15 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, double alpha, double Aex_s1_coeff,
 				 double Aex_s2_coeff, int groupBegin = 0, int groupEnd = nGroups_);
 
+	// fused level-wide flux kernel (primitive conversion, reconstruction of order ORDER = 1, 2 or 3, and HLL flux in registers)
+	template <FluxDir DIR, int ORDER>
+	static void ComputeFluxesFused(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &consVar_mf,
+				       std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+				       bool use_wavespeed_correction, int groupBegin, int groupEnd);
+	template <int ORDER> AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void ReconstructFaceFromCells(const double *q, double &leftState, double &rightState);
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void ReconstructCellPPM(double qm2, double qm1, double q0, double qp1, double qp2, double &aminus,
+									   double &aplus);
+
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
@@ -1421,6 +1430,245 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 	result.S = std::max(0.1, std::sqrt(Tnormal));
 
 	return result;
+}
+
+template <typename problem_t>
+template <int ORDER>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void RadSystem<problem_t>::ReconstructFaceFromCells(const double *q, double &leftState, double &rightState)
+{
+	// Reconstructed states at the face on the left edge of cell i (the face between cells i-1 and i), from the primitive values of
+	// cells i + s, s in [-3, 2], stored at q[s + 3]. leftState is the value on the right edge of cell i-1 (leftState(i) of the
+	// per-box reconstruction kernels) and rightState the value on the left edge of cell i (rightState(i)). The arithmetic and operand
+	// order of each value match HyperbolicSystem::ReconstructStatesConstant/PLM<sweby>/PPM exactly.
+	if constexpr (ORDER == 1) {
+		leftState = q[2];
+		rightState = q[3];
+	} else if constexpr (ORDER == 2) {
+		{
+			// cell i-1
+			const auto slope = HyperbolicSystem<problem_t>::template SlopeFunc<SlopeLimiter::sweby>(q[3] - q[2], q[2] - q[1]);
+			leftState = q[2] + 0.5 * slope; // NOLINT
+		}
+		{
+			// cell i
+			const auto slope = HyperbolicSystem<problem_t>::template SlopeFunc<SlopeLimiter::sweby>(q[4] - q[3], q[3] - q[2]);
+			rightState = q[3] - 0.5 * slope; // NOLINT
+		}
+	} else if constexpr (ORDER == 3) {
+		double a_minus_unused = NAN;
+		double a_plus_unused = NAN;
+		// cell i-1: its right edge value new_a_plus is the left state of face i
+		ReconstructCellPPM(q[0], q[1], q[2], q[3], q[4], a_minus_unused, leftState);
+		// cell i: its left edge value new_a_minus is the right state of face i
+		ReconstructCellPPM(q[1], q[2], q[3], q[4], q[5], rightState, a_plus_unused);
+	}
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void RadSystem<problem_t>::ReconstructCellPPM(const double qm2, const double qm1, const double q0, const double qp1,
+										  const double qp2, double &aminus, double &aplus)
+{
+	// value-based copy of HyperbolicSystem::ReconstructStatesPPM (same operations in the same order)
+	const std::pair<double, double> bounds = std::minmax({q0, qm1, qp1});
+
+	const double coef_1 = (7. / 12.);
+	const double coef_2 = (-1. / 12.);
+	const double a_minus = (coef_1 * q0 + coef_2 * qp1) + (coef_1 * qm1 + coef_2 * qm2);
+	const double a_plus = (coef_1 * qp1 + coef_2 * qp2) + (coef_1 * q0 + coef_2 * qm1);
+
+	double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
+	double new_a_plus = clamp(a_plus, bounds.first, bounds.second);
+
+	const double a = q0;
+	const double dq_minus = (a - new_a_minus);
+	const double dq_plus = (new_a_plus - a);
+
+	const double qa = dq_plus * dq_minus; // interface extrema
+
+	if (qa <= 0.0) { // local extremum
+		const double dq0 = HyperbolicSystem<problem_t>::MC(qp1 - q0, q0 - qm1);
+		new_a_minus = a - 0.5 * dq0;
+		new_a_plus = a + 0.5 * dq0;
+	} else { // no local extrema
+		if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
+			new_a_minus = a - 2.0 * dq_plus;
+		}
+		if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
+			new_a_plus = a + 2.0 * dq_minus;
+		}
+	}
+	aminus = new_a_minus;
+	aplus = new_a_plus;
+}
+
+template <typename problem_t>
+template <FluxDir DIR, int ORDER>
+void RadSystem<problem_t>::ComputeFluxesFused(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &consVar_mf,
+					      std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+					      bool const use_wavespeed_correction, const int groupBegin, const int groupEnd)
+{
+	// One kernel over all faces (normal to DIR) of all boxes. Each thread gathers the conserved radiation variables of the
+	// cells i-3..i+2 along DIR, converts them to primitives (E, f) in registers exactly as ConservedToPrimitive does,
+	// reconstructs the left/right face states exactly as the per-box reconstruction kernels do, and computes the HLL flux
+	// exactly as ComputeFluxes does, writing only the flux of groups [groupBegin, groupEnd).
+	auto const flux_arrs = x1Flux_mf.arrays();
+	auto const cons_arrs = consVar_mf.const_arrays();
+	amrex::GpuArray<amrex::MultiArray4<const amrex::Real>, AMREX_SPACEDIM> fc_arrs{};
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+			fc_arrs[d] = cons_fc_mf[d]->const_arrays();
+		}
+	}
+
+	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
+
+	// stencil offsets (relative to cell i) needed by the reconstruction
+	constexpr int sLo = (ORDER == 1) ? -1 : ((ORDER == 2) ? -2 : -3);
+	constexpr int sHi = (ORDER == 1) ? 0 : ((ORDER == 2) ? 1 : 2);
+
+	amrex::ParallelFor(x1Flux_mf, amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+		quokka::Array4View<amrex::Real, DIR> x1Flux(flux_arrs[bx]);
+		quokka::Array4View<const amrex::Real, DIR> consVar(cons_arrs[bx]);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+				cons_fc[d] = fc_arrs[d][bx];
+			}
+		}
+
+		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
+		for (int g = 0; g < nGroups_ + 1; ++g) {
+			radBoundaries_g_copy[g] = radBoundaries_g[g];
+		}
+
+		// HLL solver following Toro (1998) and Balsara (2017).
+		// Radiation eigenvalues from Skinner & Ostriker (2013).
+
+		// calculate cell optical depth for each photon group
+		quokka::valarray<double, nGroups_> tau_cell{};
+		if (use_wavespeed_correction) {
+			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k, i_in, j_in, k_in, cons_fc, radBoundaries_g_copy);
+		}
+
+		for (int g = groupBegin; g < groupEnd; ++g) {
+			// primitive variables of the stencil cells, q[n][s + 3] for cell i + s
+			double q[numRadVars_][6];
+			for (int s = sLo; s <= sHi; ++s) {
+				const auto E_r = consVar(i + s, j, k, radEnergy_index + numRadVars_ * g);
+				const auto Fx = consVar(i + s, j, k, x1RadFlux_index + numRadVars_ * g);
+				const auto Fy = consVar(i + s, j, k, x2RadFlux_index + numRadVars_ * g);
+				const auto Fz = consVar(i + s, j, k, x3RadFlux_index + numRadVars_ * g);
+				q[primRadEnergy_index][s + 3] = E_r;
+				q[x1ReducedFlux_index][s + 3] = Fx / (c_light_ * E_r);
+				q[x2ReducedFlux_index][s + 3] = Fy / (c_light_ * E_r);
+				q[x3ReducedFlux_index][s + 3] = Fz / (c_light_ * E_r);
+			}
+
+			double erad_L = NAN;
+			double erad_R = NAN;
+			double fx_L = NAN;
+			double fx_R = NAN;
+			double fy_L = NAN;
+			double fy_R = NAN;
+			double fz_L = NAN;
+			double fz_R = NAN;
+			ReconstructFaceFromCells<ORDER>(q[primRadEnergy_index], erad_L, erad_R);
+			ReconstructFaceFromCells<ORDER>(q[x1ReducedFlux_index], fx_L, fx_R);
+			ReconstructFaceFromCells<ORDER>(q[x2ReducedFlux_index], fy_L, fy_R);
+			ReconstructFaceFromCells<ORDER>(q[x3ReducedFlux_index], fz_L, fz_R);
+
+			// compute scalar reduced flux f
+			double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+			double f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
+
+			// Compute "un-reduced" Fx, Fy, Fz
+			double Fx_L = fx_L * (c_light_ * erad_L);
+			double Fx_R = fx_R * (c_light_ * erad_R);
+
+			double Fy_L = fy_L * (c_light_ * erad_L);
+			double Fy_R = fy_R * (c_light_ * erad_R);
+
+			double Fz_L = fz_L * (c_light_ * erad_L);
+			double Fz_R = fz_R * (c_light_ * erad_R);
+
+			// check that states are physically admissible; if not, use first-order
+			// reconstruction
+			if ((erad_L <= 0.) || (erad_R <= 0.) || (f_L >= 1.) || (f_R >= 1.)) {
+				erad_L = consVar(i - 1, j, k, radEnergy_index + numRadVars_ * g);
+				erad_R = consVar(i, j, k, radEnergy_index + numRadVars_ * g);
+
+				Fx_L = consVar(i - 1, j, k, x1RadFlux_index + numRadVars_ * g);
+				Fx_R = consVar(i, j, k, x1RadFlux_index + numRadVars_ * g);
+
+				Fy_L = consVar(i - 1, j, k, x2RadFlux_index + numRadVars_ * g);
+				Fy_R = consVar(i, j, k, x2RadFlux_index + numRadVars_ * g);
+
+				Fz_L = consVar(i - 1, j, k, x3RadFlux_index + numRadVars_ * g);
+				Fz_R = consVar(i, j, k, x3RadFlux_index + numRadVars_ * g);
+
+				// compute primitive variables
+				fx_L = Fx_L / (c_light_ * erad_L);
+				fx_R = Fx_R / (c_light_ * erad_R);
+
+				fy_L = Fy_L / (c_light_ * erad_L);
+				fy_R = Fy_R / (c_light_ * erad_R);
+
+				fz_L = Fz_L / (c_light_ * erad_L);
+				fz_R = Fz_R / (c_light_ * erad_R);
+
+				f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+				f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
+			}
+
+			// ComputeRadPressure returns F_L_and_S_L or F_R_and_S_R
+			auto [F_L, S_L] = ComputeRadPressure<DIR>(erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L);
+			S_L *= -1.; // speed sign is -1
+			auto [F_R, S_R] = ComputeRadPressure<DIR>(erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R);
+
+			// correct for reduced speed of light
+			F_L[0] *= c_hat_ / c_light_;
+			F_R[0] *= c_hat_ / c_light_;
+			for (int n = 1; n < numRadVars_; ++n) {
+				F_L[n] *= c_hat_ * c_light_;
+				F_R[n] *= c_hat_ * c_light_;
+			}
+			S_L *= c_hat_;
+			S_R *= c_hat_;
+
+			const quokka::valarray<double, numRadVars_> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
+			const quokka::valarray<double, numRadVars_> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
+
+			quokka::valarray<double, numRadVars_> epsilon = {1.0, 1.0, 1.0, 1.0};
+			if (use_wavespeed_correction) {
+				// no correction for odd zones
+				if ((i + j + k) % 2 == 0) {
+					const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
+					epsilon = {S_corr, 1.0, 1.0, 1.0};			// Skinner et al. (2019)
+				}
+			}
+
+			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
+			AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
+
+			// in the frozen Eddington tensor approximation, we are always
+			// in the star region, so F = F_star
+			const quokka::valarray<double, numRadVars_> F =
+			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+
+			// check states are valid
+			AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
+			AMREX_ASSERT(!std::isnan(F[1])); // NOLINT
+			AMREX_ASSERT(!std::isnan(F[2])); // NOLINT
+			AMREX_ASSERT(!std::isnan(F[3])); // NOLINT
+
+			x1Flux(i, j, k, radEnergy_index + numRadVars_ * g - nstartHyperbolic_) = F[0];
+			x1Flux(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[1];
+			x1Flux(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[2];
+			x1Flux(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[3];
+		} // end loop over radiation groups
+	});
 }
 
 template <typename problem_t>
