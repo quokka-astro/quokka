@@ -678,9 +678,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 		}
 
-		// Reduce across all MPI ranks to get global maximum. Use ParallelContext::CommunicatorSub() for current level and avoid using the default
-		// communicator.
-		amrex::ParallelAllReduce::Max(max_speed, amrex::ParallelContext::CommunicatorSub());
+		// Rank-local maximum only: PhysicsParticleRegister::computeMaxParticleSpeed does one MPI reduction for all particle types.
 		return max_speed;
 	}
 
@@ -1393,6 +1391,9 @@ template <typename problem_t> class PhysicsParticleRegister
 				max_speed = std::max(max_speed, speed);
 			}
 		}
+		// One reduction across all MPI ranks for all particle types (the descriptors return rank-local maxima). Use
+		// ParallelContext::CommunicatorSub() for current level and avoid using the default communicator.
+		amrex::ParallelAllReduce::Max(max_speed, amrex::ParallelContext::CommunicatorSub());
 		return max_speed;
 	}
 

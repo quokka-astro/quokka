@@ -1541,13 +1541,14 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 	// copy host variables to device
 	const SNScheme SN_scheme_d = SN_scheme;
 
-	// Initialize maximum velocity tracking
-	amrex::Gpu::Buffer<amrex::Real> max_velocity_buffer({0.0});
-	amrex::Real *p_max_velocity = max_velocity_buffer.data();
-
-	// Initialize SN explosion count tracking
-	amrex::Gpu::Buffer<int> sn_count_buffer({0});
-	int *p_sn_count = sn_count_buffer.data();
+	// Maximum velocity and SN explosion count share one device buffer (one host->device and one device->host copy)
+	struct Counters {
+		amrex::Real max_velocity;
+		int sn_count;
+	};
+	amrex::Gpu::Buffer<Counters> counter_buffer({Counters{0.0, 0}});
+	amrex::Real *p_max_velocity = &(counter_buffer.data()->max_velocity);
+	int *p_sn_count = &(counter_buffer.data()->sn_count);
 
 	// Step 1: Local deposition within each box
 	SNFeedbackUtils::depositToBuffer<particleType, ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex,
@@ -1563,12 +1564,11 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 	SNFeedbackUtils::addBufferToState<problem_t>(state, state_fc, state_buffer, SN_scheme_d, p_max_velocity);
 
 	// Step 4: Check maximum velocity and SN count, then reduce across ranks
-	auto *h_max_velocity = max_velocity_buffer.copyToHost();
-	Real max_velocity = h_max_velocity[0];
+	const Counters h_counters = counter_buffer.copyToHost()[0];
+	Real max_velocity = h_counters.max_velocity;
 	amrex::ParallelDescriptor::ReduceRealMax(max_velocity);
 
-	auto *h_sn_count = sn_count_buffer.copyToHost();
-	int sn_count = h_sn_count[0];
+	int sn_count = h_counters.sn_count;
 	amrex::ParallelDescriptor::ReduceIntSum(sn_count);
 
 	return {sn_count, max_velocity};

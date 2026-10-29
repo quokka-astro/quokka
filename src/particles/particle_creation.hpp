@@ -36,6 +36,177 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 			// Use the provided ParticleChecker type with global particle parameters
 			CheckerType<problem_t> particle_checker(current_time, dt);
 
+			bool run_sequential = true;
+
+#ifdef AMREX_USE_GPU
+			// Batched path (bitwise identical to the original per-box loop below): run the checker sweep of every box back to back on one stream,
+			// replicating AMReX's ParallelForRNG launch (same blocks/threads/tid -> RNG state mapping) minus its per-launch host sync,
+			// and accumulate per-box totals with atomics. One device->host copy then tells us which boxes create particles.
+			// The RNG draws are identical to the sequential algorithm as long as no creator sweep (which also draws RNG) would have run
+			// between two checker sweeps, i.e. as long as at most the LAST box creates particles. Otherwise the RNG state is restored from
+			// a snapshot and the original sequential algorithm is run.
+			struct BoxInfo {
+				amrex::Box box;
+				amrex::Array4<const amrex::Real> state_arr;
+				amrex::Array4<const amrex::Real> accretion_rate_arr;
+				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc;
+			};
+			std::vector<BoxInfo> boxes;
+			for (amrex::MFIter mfi = container->MakeMFIter(lev); mfi.isValid(); ++mfi) {
+				BoxInfo info{};
+				info.box = mfi.validbox();
+				info.state_arr = state.const_array(mfi);
+				info.accretion_rate_arr = accretion_rate.const_array(mfi);
+				if (has_face_centered_state) {
+					info.fab_fc[0] = (*state_fc)[0].const_array(mfi);
+					info.fab_fc[1] = (*state_fc)[1].const_array(mfi);
+					info.fab_fc[2] = (*state_fc)[2].const_array(mfi);
+				}
+				boxes.push_back(info);
+			}
+			const int nboxes = static_cast<int>(boxes.size());
+			if (nboxes == 0) {
+				run_sequential = false; // the original loop would do nothing
+			}
+
+			if (nboxes > 0) {
+				const auto dx = container->Geom(lev).CellSizeArray();
+				const auto plo = container->Geom(lev).ProbLoArray();
+				amrex::randState_t *rand_state = amrex::getRandState();
+				// Number of RNG states the checker launches below can touch (thread ids [0, n_rand_states)).
+				std::size_t n_rand_states = 0;
+				for (const BoxInfo &info : boxes) {
+					if (!info.box.isEmpty()) {
+						const auto ec = amrex::Gpu::ExecutionConfig(info.box.numPts());
+						n_rand_states = std::max(n_rand_states, std::size_t(amrex::min(ec.numBlocks.x, amrex::Gpu::Device::maxBlocksPerLaunch())) *
+											    std::size_t(AMREX_GPU_MAX_THREADS));
+					}
+				}
+
+				// Snapshot of the RNG states, needed only if a rollback may be required (more than one box).
+				amrex::Gpu::AsyncVector<amrex::randState_t> rand_snapshot;
+				if (nboxes > 1) {
+					rand_snapshot.resize(n_rand_states);
+					amrex::Gpu::dtod_memcpy_async(rand_snapshot.data(), rand_state, n_rand_states * sizeof(amrex::randState_t));
+				}
+
+				const std::vector<unsigned int> zeros(nboxes, 0U);
+				amrex::Gpu::Buffer<unsigned int> box_totals(zeros.data(), zeros.size());
+				unsigned int *p_box_totals = box_totals.data();
+
+				// Per-cell counts are only kept for the last box (the only box that can create particles on the fast path).
+				const amrex::Box &last_box = boxes[nboxes - 1].box;
+				amrex::Gpu::AsyncVector<unsigned int> last_counts(last_box.numPts());
+				unsigned int *p_last_counts = last_counts.data();
+
+				for (int ib = 0; ib < nboxes; ++ib) {
+					const BoxInfo &info = boxes[ib];
+					const amrex::Box box = info.box;
+					if (box.isEmpty()) {
+						continue;
+					}
+					const auto state_arr = info.state_arr;
+					const auto accretion_rate_arr = info.accretion_rate_arr;
+					const auto fab_fc = info.fab_fc;
+					const bool is_last = (ib == nboxes - 1);
+					const amrex::BoxIndexer indexer(box);
+					const auto ec = amrex::Gpu::ExecutionConfig(box.numPts());
+					AMREX_LAUNCH_KERNEL(AMREX_GPU_MAX_THREADS, amrex::min(ec.numBlocks.x, amrex::Gpu::Device::maxBlocksPerLaunch()), ec.numThreads,
+							    0, amrex::Gpu::gpuStream(), [=] AMREX_GPU_DEVICE() noexcept {
+								    auto const tid = std::uint64_t(AMREX_GPU_MAX_THREADS) * blockIdx.x + threadIdx.x;
+								    amrex::RandomEngine engine{&(rand_state[tid])};
+								    for (std::uint64_t icell = tid, stride = std::uint64_t(AMREX_GPU_MAX_THREADS) * gridDim.x;
+									 icell < indexer.numPts(); icell += stride) {
+									    auto iv = indexer.intVect(icell);
+									    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr =
+										has_face_centered_state ? &fab_fc : nullptr;
+									    const unsigned int c =
+										particle_checker(state_arr, accretion_rate_arr, iv.dim3().x, iv.dim3().y, iv.dim3().z, dx, fab_fc_ptr, engine);
+									    if (is_last) {
+										    p_last_counts[box.index(iv)] = c; // NOLINT
+									    }
+									    if (c > 0) {
+										    amrex::Gpu::Atomic::Add(&p_box_totals[ib], c); // NOLINT
+									    }
+								    }
+							    });
+					AMREX_GPU_ERROR_CHECK();
+				}
+
+				// One host sync for all boxes
+				const unsigned int *h_box_totals = box_totals.copyToHost();
+				bool fast_path_ok = true;
+				for (int ib = 0; ib < nboxes - 1; ++ib) {
+					if (h_box_totals[ib] > 0) {
+						fast_path_ok = false;
+						break;
+					}
+				}
+
+				if (fast_path_ok) {
+					run_sequential = false;
+					int ib = 0;
+					for (amrex::MFIter mfi = container->MakeMFIter(lev); mfi.isValid(); ++mfi, ++ib) {
+						auto &particle_tile = container->DefineAndReturnParticleTile(lev, mfi);
+						if (ib != nboxes - 1 || h_box_totals[ib] == 0) {
+							continue;
+						}
+						const auto &box = mfi.validbox();
+						const auto &state_arr = state.array(mfi);
+						const auto &accretion_rate_arr = accretion_rate.array(mfi);
+						std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{};
+						if (has_face_centered_state) {
+							fab_fc[0] = (*state_fc)[0].const_array(mfi);
+							fab_fc[1] = (*state_fc)[1].const_array(mfi);
+							fab_fc[2] = (*state_fc)[2].const_array(mfi);
+						}
+
+						amrex::Gpu::AsyncVector<unsigned int> offset(box.numPts());
+						const amrex::Long max_new_particles =
+						    amrex::Scan::ExclusiveSum(last_counts.size(), last_counts.data(), offset.data());
+						AMREX_ALWAYS_ASSERT(max_new_particles == static_cast<amrex::Long>(h_box_totals[ib]));
+						total_particles_created += max_new_particles;
+
+						const amrex::Long pid = ContainerType::ParticleType::NextID();
+						ContainerType::ParticleType::NextID(pid + max_new_particles);
+
+						auto &aos = particle_tile.GetArrayOfStructs();
+						const int old_size = aos.size();
+						aos.resize(old_size + max_new_particles);
+
+						auto *pcounts = last_counts.data();
+						auto *poffset = offset.data();
+						auto *pdata = aos.data() + old_size;
+						const int cpu_id = amrex::ParallelDescriptor::MyProc();
+						CreatorType<problem_t> particle_creator(mass_idx, birth_time_index, death_time_index, cpu_id, pid,
+											evolution_stage_index, mass_at_birth_index, current_time, dt);
+
+						amrex::ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::RandomEngine const &engine) {
+							const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
+							const auto index = box.index(iv);
+							std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr =
+							    has_face_centered_state ? &fab_fc : nullptr;
+
+							if (pcounts[index] > 0) {			  // NOLINT
+								const int num_particles = pcounts[index]; // NOLINT
+								auto *particles = &pdata[poffset[index]]; // NOLINT
+								particle_creator(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo,
+										 fab_fc_ptr, poffset[index],
+										 engine); // NOLINT
+							}
+						});
+					}
+				} else {
+					// Roll back the RNG state and redo everything with the original algorithm.
+					amrex::Gpu::dtod_memcpy_async(rand_state, rand_snapshot.data(), n_rand_states * sizeof(amrex::randState_t));
+					amrex::Gpu::streamSynchronize();
+					// run_sequential stays true
+				}
+			}
+#endif
+
+			if (run_sequential) {
+			// Original per-box algorithm: checker sweep, scan (host sync), creator sweep for every box.
 			for (amrex::MFIter mfi = container->MakeMFIter(lev); mfi.isValid(); ++mfi) {
 				const auto &box = mfi.validbox();
 				const auto &state_arr = state.array(mfi);
@@ -107,6 +278,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 								 engine); // NOLINT
 					}
 				});
+			}
 			}
 
 			// Sum up total particles created across all processors

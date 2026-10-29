@@ -588,39 +588,47 @@ auto EarlyFeedbackDeposition(ContainerType *container, amrex::MultiFab &state, s
 
 	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), buffer_ncomp, buffer_ghost);
 	state_buffer.setVal(0.0);
-	amrex::Gpu::Buffer<int> active_particle_buffer({0});
-	amrex::Gpu::Buffer<amrex::Real> scalar_momentum_buffer({0.0});
-	amrex::Gpu::Buffer<int> invalid_source_buffer({0});
-	amrex::Gpu::Buffer<int> clipped_cell_buffer({0});
-	amrex::Gpu::Buffer<amrex::Real> min_velocity_scale_buffer({1.0});
-	amrex::Gpu::Buffer<amrex::Real> max_velocity_buffer({0.0});
+	// All counters in one device buffer: one host->device and one device->host copy instead of six of each.
+	struct Counters {
+		int active_particles;
+		int invalid_sources;
+		int clipped_cells;
+		amrex::Real scalar_momentum;
+		amrex::Real min_velocity_scale;
+		amrex::Real max_velocity;
+	};
+	amrex::Gpu::Buffer<Counters> counter_buffer({Counters{0, 0, 0, 0.0, 1.0, 0.0}});
+	Counters *d_counters = counter_buffer.data();
 
 	EarlyFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, birth_time_index, mass_at_birth_index,
-								      EMEF_p0, EMEF_tFB, EMEF_alpha, active_particle_buffer.data(),
-								      scalar_momentum_buffer.data(), invalid_source_buffer.data());
+								      EMEF_p0, EMEF_tFB, EMEF_alpha, &(d_counters->active_particles),
+								      &(d_counters->scalar_momentum), &(d_counters->invalid_sources));
 
-	int invalid_sources = invalid_source_buffer.copyToHost()[0];
-	amrex::ParallelDescriptor::ReduceIntSum(invalid_sources);
+	state_buffer.SumBoundary(container->Geom(lev).periodicity());
+	ParticleUtils::roundoffMultiFab(state_buffer);
+	EarlyFeedbackUtils::applyBuffer<problem_t>(state, state_buffer, EMEF_max_velocity, &(d_counters->clipped_cells),
+						   &(d_counters->min_velocity_scale), &(d_counters->max_velocity));
+
+	const Counters h_counters = counter_buffer.copyToHost()[0];
+
+	// Two MPI reductions instead of seven: all sums in one array (integer counts are exact in double), min as a negated max.
+	std::array<amrex::Real, 4> sums{h_counters.scalar_momentum, static_cast<amrex::Real>(h_counters.active_particles),
+					static_cast<amrex::Real>(h_counters.clipped_cells), static_cast<amrex::Real>(h_counters.invalid_sources)};
+	std::array<amrex::Real, 2> maxes{h_counters.max_velocity, -h_counters.min_velocity_scale};
+	amrex::ParallelDescriptor::ReduceRealSum(sums.data(), static_cast<int>(sums.size()));
+	amrex::ParallelDescriptor::ReduceRealMax(maxes.data(), static_cast<int>(maxes.size()));
+
+	const int invalid_sources = static_cast<int>(sums[3]);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 	    invalid_sources == 0,
 	    "Early feedback found an active particle whose full three-cell stencil is not representable on its particle grid and inside the physical domain.");
 
-	state_buffer.SumBoundary(container->Geom(lev).periodicity());
-	ParticleUtils::roundoffMultiFab(state_buffer);
-	EarlyFeedbackUtils::applyBuffer<problem_t>(state, state_buffer, EMEF_max_velocity, clipped_cell_buffer.data(), min_velocity_scale_buffer.data(),
-						   max_velocity_buffer.data());
-
 	EarlyFeedbackStats stats;
-	stats.active_particles = active_particle_buffer.copyToHost()[0];
-	stats.clipped_cells = clipped_cell_buffer.copyToHost()[0];
-	stats.scalar_momentum = scalar_momentum_buffer.copyToHost()[0];
-	stats.min_velocity_scale = min_velocity_scale_buffer.copyToHost()[0];
-	stats.max_velocity = max_velocity_buffer.copyToHost()[0];
-	amrex::ParallelDescriptor::ReduceIntSum(stats.active_particles);
-	amrex::ParallelDescriptor::ReduceIntSum(stats.clipped_cells);
-	amrex::ParallelDescriptor::ReduceRealSum(stats.scalar_momentum);
-	amrex::ParallelDescriptor::ReduceRealMin(stats.min_velocity_scale);
-	amrex::ParallelDescriptor::ReduceRealMax(stats.max_velocity);
+	stats.scalar_momentum = sums[0];
+	stats.active_particles = static_cast<int>(sums[1]);
+	stats.clipped_cells = static_cast<int>(sums[2]);
+	stats.max_velocity = maxes[0];
+	stats.min_velocity_scale = -maxes[1];
 	return stats;
 }
 
