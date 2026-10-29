@@ -129,8 +129,14 @@ template <int N = 2> struct WendlandC2 {
 		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
 		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
 
-		for (int ic = 0; ic < num_comps; ++ic) {
-			const auto pval = f(p, src_comp + ic);
+		// Group loop innermost: each stencil cell's weight is computed once and applied to all components.
+		constexpr int kChunk = 16;
+		for (int c0 = 0; c0 < num_comps; c0 += kChunk) {
+			const int nc = (num_comps - c0 < kChunk) ? (num_comps - c0) : kChunk;
+			amrex::Real pvals[kChunk]; // NOLINT
+			for (int ic = 0; ic < nc; ++ic) {
+				pvals[ic] = f(p, src_comp + c0 + ic);
+			}
 			for (int kk = 0; kk < nz_loop; ++kk) {
 				const amrex::Real dz =
 				    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - N) + 0.5 - frac[2] : 0.0; // NOLINT(misc-redundant-expression)
@@ -142,8 +148,10 @@ template <int N = 2> struct WendlandC2 {
 						const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
 						if (r2 <= cutoff_r2) {
 							const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * inv_N) * inv_norm;
-							amrex::Gpu::Atomic::AddNoRet(&arr(index[0] + ii, index[1] + jj, index[2] + kk, ic + dst_comp),
-										     static_cast<V>(wt * pval));
+							for (int ic = 0; ic < nc; ++ic) {
+								amrex::Gpu::Atomic::AddNoRet(&arr(index[0] + ii, index[1] + jj, index[2] + kk, c0 + ic + dst_comp),
+											     static_cast<V>(wt * pvals[ic]));
+							}
 						}
 					}
 				}
@@ -196,9 +204,13 @@ struct RadDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
-		amrex::ParticleInterpolator::WendlandC2<> interp(p, plo, dxi);
 		const auto currentTime = current_time;
 		const auto birthIndex = birthTimeIndex;
+		// Early exit: particles outside their [birth, death) window deposit nothing, so skip the stencil construction entirely.
+		if (currentTime < p.rdata(birthIndex) || currentTime >= p.rdata(birthIndex + 1)) {
+			return;
+		}
+		amrex::ParticleInterpolator::WendlandC2<> interp(p, plo, dxi);
 		// Deposit radiation energy only if particle is active
 		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
 				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
