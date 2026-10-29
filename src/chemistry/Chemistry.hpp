@@ -29,9 +29,9 @@ auto computeChemistry(amrex::MultiFab &mf, amrex::Real dt, amrex::Real max_densi
 // This guard goes when the EOS is in Quokka and the generated constants are gone.
 #ifdef CHEMISTRY
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/burner.hpp"
 
 namespace quokka::chemistry
@@ -78,7 +78,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 
 			// do chemistry using microphysics
 
-			burn_t chemstate;
+			quokka::microphysics::BurnState<problem_t> chemstate;
 			chemstate.success = true;
 			int burn_failed = 0;
 
@@ -122,7 +122,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 
 			// ensure positivity and normalize
 			for (int nn = 0; nn < Network::NumSpec; ++nn) {
-				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
+				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], network_rp::small_x);
 				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
 				insum += inmfracs[nn];
 			}

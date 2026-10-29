@@ -6,23 +6,23 @@
 #ifndef actual_rhs_H
 #define actual_rhs_H
 
+#include <cmath>
+
 #include <AMReX_Array.H>
+#include <AMReX_Extension.H>
+#include <AMReX_GpuQualifiers.H>
 #include <AMReX_REAL.H>
 
-#include <actual_network.H>
-#include <burn_type.H>
-#include <extern_parameters.H>
-#include <jacobian_utilities.H>
+#include "microphysics/integrator_layout.hpp"
+#include "networks/primordial_chem/network.hpp"
 
 using amrex::Real;
-using namespace ArrayUtil;
-using namespace network_rp;
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE void rhs_specie(const burn_t &state, amrex::Array1D<Real, 1, neqs> &ydot, const amrex::Array1D<Real, 0, NumSpec - 1> &X,
-						   Real const /*z*/)
+template <typename BurnT>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void
+rhs_specie(const BurnT &state, amrex::Array1D<Real, 1, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot,
+	   const amrex::Array1D<Real, 0, quokka::networks::PrimordialChem::NumSpec - 1> &X, Real const /*z*/)
 {
-
-	using namespace Rates;
 
 	Real T = state.T;
 
@@ -364,10 +364,10 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void rhs_specie(const burn_t &state, amrex::A
 	ydot(14) = x118;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE Real rhs_eint(const burn_t &state, const amrex::Array1D<Real, 0, NumSpec - 1> &X, Real const z)
+template <typename BurnT>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto rhs_eint(const BurnT &state, const amrex::Array1D<Real, 0, quokka::networks::PrimordialChem::NumSpec - 1> &X,
+						 Real const z) -> Real
 {
-
-	using namespace Rates;
 
 	Real T = state.T;
 	Real x0 = 9.1093818800000008e-28 * X(0) + 1.6726215800000001e-24 * X(1) + 5.01956503638e-24 * X(10) + 6.6902431600000005e-24 * X(11) +
@@ -1150,12 +1150,16 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE Real rhs_eint(const burn_t &state, const amre
 ))));
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_rhs(const burn_t &state, amrex::Array1D<Real, 1, neqs> &ydot)
+template <typename BurnT>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void
+actual_rhs(const BurnT &state, amrex::Array1D<Real, 1, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
-	Real z = redshift;
+	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
 
-	amrex::Array1D<Real, 0, NumSpec - 1> X;
-	for (int i = 0; i < NumSpec; ++i) {
+	Real z = quokka::networks::primordial_chem::redshift;
+
+	amrex::Array1D<Real, 0, quokka::networks::PrimordialChem::NumSpec - 1> X;
+	for (int i = 0; i < quokka::networks::PrimordialChem::NumSpec; ++i) {
 		X(i) = state.xn[i];
 	}
 	// YDOTS
@@ -1168,11 +1172,12 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_rhs(const burn_t &state, amrex::A
 
 	// Append the energy equation (this is erg/g/s)
 
-	ydot(net_ienuc) = edot;
+	ydot(Layout::energy_row) = edot;
 }
 
-template <class MatrixType>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const burn_t &state, MatrixType &jac, const amrex::Array1D<Real, 0, NumSpec - 1> &X, Real const z)
+template <typename BurnT, class MatrixType>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const BurnT &state, MatrixType &jac,
+						const amrex::Array1D<Real, 0, quokka::networks::PrimordialChem::NumSpec - 1> &X, Real const z)
 {
 
 	Real T = state.T;
@@ -5998,12 +6003,12 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void jac_nuc(const burn_t &state, MatrixType 
 	 X(6) * x476 + X(7) * x475 + X(8) * x476 + X(9) * x476);
 }
 
-template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
+template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const BurnT &state, MatrixType &jac)
 {
-	Real z = redshift;
+	Real z = quokka::networks::primordial_chem::redshift;
 
-	amrex::Array1D<Real, 0, NumSpec - 1> X;
-	for (int i = 0; i < NumSpec; ++i) {
+	amrex::Array1D<Real, 0, quokka::networks::PrimordialChem::NumSpec - 1> X;
+	for (int i = 0; i < quokka::networks::PrimordialChem::NumSpec; ++i) {
 		X(i) = state.xn[i];
 	}
 	// Species Jacobian elements with respect to other species
