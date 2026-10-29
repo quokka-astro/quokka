@@ -417,7 +417,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	template <FluxDir DIR, int ORDER>
 	static void ComputeFluxesFused(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &consVar_mf,
 				       std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-				       bool use_wavespeed_correction, int groupBegin, int groupEnd);
+				       bool use_wavespeed_correction, int groupBegin, int groupEnd, amrex::MultiFab *refluxAccum_mf = nullptr,
+				       double refluxWeight = 0.0);
 	template <int ORDER> AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void ReconstructFaceFromCells(const double *q, double &leftState, double &rightState);
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void ReconstructCellPPM(double qm2, double qm1, double q0, double qp1, double qp2, double &aminus,
 									   double &aplus);
@@ -426,7 +427,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ComputeFluxes(array_t &x1Flux_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool use_wavespeed_correction,
-				  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {}, int groupBegin = 0, int groupEnd = nGroups_);
+				  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {}, int groupBegin = 0, int groupEnd = nGroups_,
+				  amrex::Array4<amrex::Real> const &refluxAccum_in = {}, double refluxWeight = 0.0);
 
 	//! Set the user-defined radiation source terms.
 	//!
@@ -1710,8 +1712,15 @@ template <typename problem_t>
 template <FluxDir DIR, int ORDER>
 void RadSystem<problem_t>::ComputeFluxesFused(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &consVar_mf,
 					      std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-					      bool const use_wavespeed_correction, const int groupBegin, const int groupEnd)
+					      bool const use_wavespeed_correction, const int groupBegin, const int groupEnd, amrex::MultiFab *refluxAccum_mf,
+					      const double refluxWeight)
 {
+	// driver-04: if refluxAccum_mf is given, refluxWeight * F is also added to it (the per-level flux-register accumulator, same faces)
+	const bool accumulateReflux = (refluxAccum_mf != nullptr);
+	amrex::MultiArray4<amrex::Real> accum_arrs{};
+	if (accumulateReflux) {
+		accum_arrs = refluxAccum_mf->arrays();
+	}
 	// One kernel over all faces (normal to DIR) of all boxes. Each thread gathers the conserved radiation variables of the
 	// cells i-3..i+2 along DIR, converts them to primitives (E, f) in registers exactly as ConservedToPrimitive does,
 	// reconstructs the left/right face states exactly as the per-box reconstruction kernels do, and computes the HLL flux
@@ -1736,6 +1745,11 @@ void RadSystem<problem_t>::ComputeFluxesFused(amrex::MultiFab &x1Flux_mf, amrex:
 
 		quokka::Array4View<amrex::Real, DIR> x1Flux(flux_arrs[bx]);
 		quokka::Array4View<const amrex::Real, DIR> consVar(cons_arrs[bx]);
+		amrex::Array4<amrex::Real> accum_box{};
+		if (accumulateReflux) {
+			accum_box = accum_arrs[bx];
+		}
+		quokka::Array4View<amrex::Real, DIR> refluxAccum(accum_box);
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
@@ -1872,6 +1886,14 @@ void RadSystem<problem_t>::ComputeFluxesFused(amrex::MultiFab &x1Flux_mf, amrex:
 			x1Flux(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[1];
 			x1Flux(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[2];
 			x1Flux(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[3];
+
+			if (accumulateReflux) {
+				// driver-04: flux-register accumulator (weight 0.5 * dt_stage)
+				refluxAccum(i, j, k, radEnergy_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[0];
+				refluxAccum(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[1];
+				refluxAccum(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[2];
+				refluxAccum(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[3];
+			}
 		} // end loop over radiation groups
 	});
 }
@@ -1881,8 +1903,12 @@ template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					 amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool const use_wavespeed_correction,
-					 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc, const int groupBegin, const int groupEnd)
+					 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc, const int groupBegin, const int groupEnd,
+					 amrex::Array4<amrex::Real> const &refluxAccum_in, const double refluxWeight)
 {
+	// If refluxAccum_in is set, refluxWeight * F is added to it (the flux-register accumulator; same face box as x1Flux)
+	const bool accumulateReflux = (refluxAccum_in.dataPtr() != nullptr);
+	quokka::Array4View<amrex::Real, DIR> refluxAccum(refluxAccum_in);
 	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
 	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
 	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
@@ -2013,6 +2039,14 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, amrex::Array4<const
 			x1Flux(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[1];
 			x1Flux(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[2];
 			x1Flux(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[3];
+
+			if (accumulateReflux) {
+				// driver-04: flux-register accumulator (weight 0.5 * dt_stage)
+				refluxAccum(i, j, k, radEnergy_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[0];
+				refluxAccum(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[1];
+				refluxAccum(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[2];
+				refluxAccum(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) += refluxWeight * F[3];
+			}
 		} // end loop over radiation groups
 	});
 }
