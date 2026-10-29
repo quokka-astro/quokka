@@ -150,6 +150,8 @@ template <typename problem_t> struct OpacityTerms {
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa * B)
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_P;
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_E;
+	// DefineOpacityExponentsAndLowerValues at the temperature of the final Newton iteration (reused by UpdateFlux)
+	amrex::GpuArray<amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1>, 2> kappa_expo_and_lower_value;
 };
 
 // A struct to hold the results of the Newton-Raphson iteration for energy update, containing the following elements:
@@ -161,6 +163,8 @@ template <typename problem_t> struct NewtonIterationResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;    // work term
 	OpacityTerms<problem_t> opacity_terms;
+	// 4 pi B / c per group at T_d, from the final Newton iteration (reused by UpdateFlux)
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> fourPiBoverC;
 	// True if Egas took no part in the energy exchange (dust thermally decoupled from the gas), so it was
 	// never credited with the work term and the radiation must pay for the kinetic energy it buys.
 	bool gas_decoupled = false;
@@ -559,6 +563,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real;
 
+	// Fused version of ComputeThermalRadiationMultiGroup and ComputeThermalRadiationTempDerivativeMultiGroup: one Planck integral per group edge.
+	AMREX_GPU_HOST_DEVICE static void ComputeThermalRadiationAndTempDerivativeMultiGroup(amrex::Real temperature,
+									    amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
+									    quokka::valarray<amrex::Real, nGroups_> &fourPiBoverC,
+									    quokka::valarray<amrex::Real, nGroups_> &d_fourpiboverc_d_t);
 	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real temperature,
 											  amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
 	    -> quokka::valarray<amrex::Real, nGroups_>;
@@ -728,7 +737,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityH(double rh
 // define ComputeThermalRadiation for single-group, returns the thermal radiation power = a_r * T^4
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> Real
 {
-	double power = radiation_constant_ * std::pow(temperature, 4);
+	double power = radiation_constant_ * ((temperature * temperature) * (temperature * temperature));
 	// set floor
 	if (power < Erad_floor_) {
 		power = Erad_floor_;
@@ -742,7 +751,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 										   amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
-	const double power = radiation_constant_ * std::pow(temperature, 4);
+	const double power = radiation_constant_ * ((temperature * temperature) * (temperature * temperature));
 	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	auto Erad_g = power * radEnergyFractions;
 	// set floor on the thermal groups only; chemical bands emit no blackbody radiation and are left at 0.
@@ -754,10 +763,78 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 	return Erad_g;
 }
 
+// Fused ComputeThermalRadiationMultiGroup + ComputeThermalRadiationTempDerivativeMultiGroup. The two functions need the same Planck integral at
+// every group edge (P(x) or Q(x)), so evaluate it once per edge, together with the single exp that the derivative kernel needs, and form both
+// the energy fractions and their temperature derivative from it. The formulas are exactly those of the two separate functions.
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::ComputeThermalRadiationAndTempDerivativeMultiGroup(amrex::Real temperature,
+												    amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
+												    quokka::valarray<amrex::Real, nGroups_> &fourPiBoverC,
+												    quokka::valarray<amrex::Real, nGroups_> &d_fourpiboverc_d_t)
+{
+	const double T2 = temperature * temperature;
+	const double power = radiation_constant_ * (T2 * T2); // a T^4
+	const double a_T3 = radiation_constant_ * (T2 * temperature);
+	fourPiBoverC = quokka::valarray<amrex::Real, nGroups_>{};
+	d_fourpiboverc_d_t = quokka::valarray<amrex::Real, nGroups_>{};
+
+	amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
+	amrex::Real p_prev = 0.0;
+	amrex::Real q_prev = 1.0;
+	amrex::Real d_prev = 0.0;
+	amrex::Real u_prev = 4.0;
+	bool prev_in_tail = false;
+	// Only the thermal groups emit; the chemical bands are left at 0.
+	for (int g = 0; g < nGroupsThermal_; ++g) {
+		// no chemical bands: the last group carries all remaining blackbody, so P = 1, Q = 0, D = D(inf) = 4, U = 0
+		amrex::Real p = 1.0;
+		amrex::Real q = 0.0;
+		amrex::Real d = 4.0;
+		amrex::Real u = 0.0;
+		bool in_tail = true;
+		if (g < nGroups_ - 1) {
+			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
+			if (x >= X_TAIL) {
+				// x^4 / (e^x - 1) written with e^(-x) so that cold matter (x up to ~1e9 or inf) never forms e^x, which overflows
+				// past x ~ 710. Once e^(-x) underflows to 0 the kernel is 0; testing it first also avoids 0 * inf at x = inf.
+				const amrex::Real e = std::exp(-x);
+				const amrex::Real kernel = (e > 0.0) ? (x * x * x * x * e / (1.0 - e)) / gInf : 0.0;
+				q = integrate_planck_from_x_to_inf_series_with_exp(x, e);
+				p = 1.0 - q;
+				d = 4. * (1.0 - q) - kernel;
+				u = 4. * q + kernel;
+			} else {
+				in_tail = false;
+				const amrex::Real kernel = (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
+				p = integrate_planck_from_0_to_x(x);
+				q = 1.0 - p;
+				d = 4. * p - kernel;
+				u = 4.0 - d;
+			}
+		}
+		// A group whose lower edge is in the Wien tail takes differences of the upper integrals (see ComputePlanckEnergyFractions and
+		// ComputeThermalRadiationTempDerivativeMultiGroup).
+		const amrex::Real fraction = prev_in_tail ? q_prev - q : p - p_prev;
+		const amrex::Real d_fraction = prev_in_tail ? u_prev - u : d - d_prev;
+		amrex::Real Erad_g = power * fraction;
+		// set floor on the thermal groups only
+		if (Erad_g < Erad_floor_) {
+			Erad_g = Erad_floor_;
+		}
+		fourPiBoverC[g] = Erad_g;
+		d_fourpiboverc_d_t[g] = a_T3 * d_fraction;
+		p_prev = p;
+		q_prev = q;
+		d_prev = d;
+		u_prev = u;
+		prev_in_tail = in_tail;
+	}
+}
+
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real
 {
 	// by default, d emission/dT = 4 emission / T
-	return 4. * radiation_constant_ * std::pow(temperature, 3);
+	return 4. * radiation_constant_ * (temperature * temperature * temperature);
 }
 
 template <typename problem_t>
@@ -2001,9 +2078,10 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::P
 		// Taylor series
 		planck_integral = x * x - x * x * x / 2.;
 	} else {
-		planck_integral = std::pow(x, 3) / (std::exp(x) - 1.0);
+		planck_integral = (x * x * x) / (std::exp(x) - 1.0);
 	}
-	return coeff / (std::pow(PI, 4) / 15.0) * (radiation_constant_ * std::pow(T, 4)) * planck_integral;
+	const double T2 = T * T;
+	return coeff / gInf * (radiation_constant_ * (T2 * T2)) * planck_integral;
 }
 
 template <typename problem_t>
@@ -2054,12 +2132,12 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 	amrex::GpuArray<double, nGroups_> flux{};
 	for (int g = 0; g < nGroups_ + 1; ++g) {
 		auto x = coeff * rad_boundaries[g];
-		edge_values[g] = 4. / 3. * integrate_planck_from_0_to_x(x) - 1. / 3. * x * (std::pow(x, 3) / (std::exp(x) - 1.0)) / gInf;
+		edge_values[g] = 4. / 3. * integrate_planck_from_0_to_x(x) - 1. / 3. * x * ((x * x * x) / (std::exp(x) - 1.0)) / gInf;
 		// test: reproduce the Planck function
 		// edge_values[g] = 4. / 3. * integrate_planck_from_0_to_x(x);
 	}
 	for (int g = 0; g < nGroups_; ++g) {
-		flux[g] = vel * radiation_constant_ * std::pow(T, 4) * (edge_values[g + 1] - edge_values[g]);
+		flux[g] = vel * radiation_constant_ * ((T * T) * (T * T)) * (edge_values[g + 1] - edge_values[g]);
 	}
 	return flux;
 }

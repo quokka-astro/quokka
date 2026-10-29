@@ -282,12 +282,12 @@ static constexpr int TAIL_SERIES_MAX_TERMS = 20;
 // integrating each term exactly gives
 //     Q(x) = (15/pi^4) sum_{k>=1} e^(-k x) (x^3/k + 3 x^2/k^2 + 6 x/k^3 + 6/k^4),
 // whose terms fall off like e^(-k x): 8 terms at x = 5, 2 at x = 20 for double precision. Only meant for x >= X_TAIL.
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_x_to_inf_series(const Real x) -> Real
+// Takes e = exp(-x), already evaluated by the caller.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_x_to_inf_series_with_exp(const Real x, const Real e) -> Real
 {
 	AMREX_ASSERT(!std::isnan(x));
 	AMREX_ASSERT(x >= 0.);
 
-	const Real e = std::exp(-x);
 	if (e == 0.0) {
 		// Q has underflowed. Return before forming x^3, which overflows for very large x and gives 0 * inf at x = inf (T = 0).
 		return 0.0;
@@ -306,6 +306,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_x_to_inf_ser
 		ek *= e;
 	}
 	return q / gInf;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_x_to_inf_series(const Real x) -> Real
+{
+	return integrate_planck_from_x_to_inf_series_with_exp(x, std::exp(-x));
 }
 
 // Both the lower and upper normalized Planck integrals at x, {P, Q} with P + Q = 1, each computed from whichever representation
