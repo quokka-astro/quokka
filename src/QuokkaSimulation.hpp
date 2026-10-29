@@ -3277,11 +3277,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	// perform subcycle
 	auto const &dx = geom[lev].CellSizeArray();
 	amrex::Real time_subcycle = time;
+	// failure counter for: matter-radiation coupling, dust temperature, outer iteration.
+	// Accumulated over all substeps of this level step; copied to the host and reduced once after the substep loop.
+	amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0});
 	for (int i = 0; i < nsubSteps; ++i) {
 		// We use the three-stage IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
 
-		// failure counter for: matter-radiation coupling, dust temperature, outer iteration
-		amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0});
 		// iteration counter for: radiation update, Newton-Raphson iterations, max Newton-Raphson iterations, decoupled gas-dust update
 		amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0, 0});
 		int *p_iteration_failure_counter = iteration_failure_counter.data();
@@ -3566,14 +3567,25 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			}
 		}
 
-		auto *h_iteration_failure_counter = iteration_failure_counter.copyToHost();
-		long nf_coupling = h_iteration_failure_counter[0]; // number of matter-radiation coupling failures, NOLINT(google-runtime-int)
-		long nf_dust = h_iteration_failure_counter[1];	   // number of dust temperature failures, NOLINT(google-runtime-int)
-		long nf_outer = h_iteration_failure_counter[2];	   // number of outer iterations failures, NOLINT(google-runtime-int)
+		// new hydro+radiation state is stored in state_new_cc_
 
-		amrex::ParallelDescriptor::ReduceLongSum(nf_coupling);
-		amrex::ParallelDescriptor::ReduceLongSum(nf_dust);
-		amrex::ParallelDescriptor::ReduceLongSum(nf_outer);
+		// update 'time_subcycle'
+		time_subcycle += dt_radiation;
+
+		// update cell update counter
+		radiationCellUpdates_ += CountCells(lev); // keep track of number of cell updates
+	}
+
+	// Check the failure counters once per level step (accumulated over all substeps), with one merged reduction.
+	{
+		auto *h_iteration_failure_counter = iteration_failure_counter.copyToHost();
+		std::array<long, 3> nf = {h_iteration_failure_counter[0], // number of matter-radiation coupling failures, NOLINT(google-runtime-int)
+					  h_iteration_failure_counter[1], // number of dust temperature failures, NOLINT(google-runtime-int)
+					  h_iteration_failure_counter[2]}; // number of outer iterations failures, NOLINT(google-runtime-int)
+		amrex::ParallelDescriptor::ReduceLongSum(nf.data(), 3);
+		const long nf_coupling = nf[0]; // NOLINT(google-runtime-int)
+		const long nf_dust = nf[1];	// NOLINT(google-runtime-int)
+		const long nf_outer = nf[2];	// NOLINT(google-runtime-int)
 
 		// Note that the nf_dust has to abort BEFORE nf_coupling, because the dust temperature is used in the matter-radiation coupling and if
 		// dust temperature is negative, the matter-radiation coupling will fail to converge.
@@ -3586,14 +3598,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		if (nf_outer > 0) {
 			amrex::Abort("Outer iteration for matter-radiation coupling failed to converge!");
 		}
-
-		// new hydro+radiation state is stored in state_new_cc_
-
-		// update 'time_subcycle'
-		time_subcycle += dt_radiation;
-
-		// update cell update counter
-		radiationCellUpdates_ += CountCells(lev); // keep track of number of cell updates
 	}
 }
 

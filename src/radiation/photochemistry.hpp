@@ -7,6 +7,7 @@
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_ParmParse.H"
 
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
@@ -47,6 +48,15 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	auto *p_num_failed = d_num_failed.data();
 
 	int num_failed = 0;
+
+	// Run-time switch: synchronize the stream after every box on HIP (old behaviour). Default off (faster).
+	static const bool hip_sync_per_box = []() {
+		int v = 0;
+		amrex::ParmParse pp("photochemistry");
+		pp.query("hip_sync_per_box", v);
+		return v != 0;
+	}();
+	amrex::ignore_unused(hip_sync_per_box);
 
 	const int firstChemIndex = RadSystem<problem_t>::radEnergy_index +
 				   RadSystem<problem_t>::numRadVars_ * (RadSystem<problem_t>::nGroups_ - RadSystem_NChemBands<problem_t>::value);
@@ -316,7 +326,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		});
 
 #ifdef AMREX_USE_HIP
-		amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
+		if (hip_sync_per_box) {
+			amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
+		}
 #endif
 	}
 
