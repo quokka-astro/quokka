@@ -240,7 +240,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src, const double Q_dust,
     amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double /*tempFloor*/, int *p_iteration_counter,
-    int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t> // NOSONAR: High cognitive complexity is expected for this numerical solver
+    int *p_iteration_failure_counter, NewtonOuterState<problem_t> &outer_state)
+    -> NewtonIterationResult<problem_t> // NOSONAR: High cognitive complexity is expected for this numerical solver
 {
 	// 1. Compute energy exchange
 
@@ -270,32 +271,46 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	double lambda_gd_times_dt = NAN;
 	const double T_gas0 = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 	AMREX_ASSERT(T_gas0 >= 0.);
-	T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, Q_dust, rad_boundaries);
-	AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
-	if (T_d0 < 0.0) {
-		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
-	}
-
-	const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
-	// A zero collisional coupling coefficient means the gas and the dust exchange no energy at all, which is
-	// exactly what the decoupled model describes, so select it on that ground alone. The comparison below
-	// cannot be relied on to do it: it flips sense once Egas0 is negative, and the coupled branch it then
-	// selects divides by coeff_n, filling the state with NaNs that surface later as a spurious
-	// "Newton-Raphson iteration failed to converge".
-	if (!(coeff_n > 0.0) || (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0)) {
-		dust_model = 2;
-		lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
-	}
-
-	// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src)) + Q_dust;
 	double Etot0 = NAN;
-	if (dust_model == 1) {
-		Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src)) + Q_dust;
+	if (n_outer_iter == 0) {
+		// rad-08: everything in this block depends only on the old state (Egas0, Erad0Vec, Src, Q_dust), not on the
+		// work term, so it is computed in the first outer pass and reused by the later ones.
+		T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, Q_dust, rad_boundaries);
+		AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
+		if (T_d0 < 0.0) {
+			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
+		}
+
+		const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
+		// A zero collisional coupling coefficient means the gas and the dust exchange no energy at all, which is
+		// exactly what the decoupled model describes, so select it on that ground alone. The comparison below
+		// cannot be relied on to do it: it flips sense once Egas0 is negative, and the coupled branch it then
+		// selects divides by coeff_n, filling the state with NaNs that surface later as a spurious
+		// "Newton-Raphson iteration failed to converge".
+		if (!(coeff_n > 0.0) || (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0)) {
+			dust_model = 2;
+			lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
+		}
+
+		// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src)) + Q_dust;
+		if (dust_model == 1) {
+			Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src)) + Q_dust;
+		} else {
+			// Only the radiation and collisional exchange supply energy to decoupled dust. Its equilibrium
+			// Planck energy can greatly exceed the actual radiation energy in a thin cell; using that as a
+			// residual scale can accept spurious emission and corrupt the subsequent radiation force.
+			Etot0 = std::abs(lambda_gd_times_dt) + (sum(Erad0Vec) + sum(Src)) + Q_dust / cscale;
+		}
+		outer_state.dust_model = dust_model;
+		outer_state.T_d0 = T_d0;
+		outer_state.lambda_gd_times_dt = lambda_gd_times_dt;
+		outer_state.Etot0 = Etot0;
+		outer_state.have_Egas_post = false;
 	} else {
-		// Only the radiation and collisional exchange supply energy to decoupled dust. Its equilibrium
-		// Planck energy can greatly exceed the actual radiation energy in a thin cell; using that as a
-		// residual scale can accept spurious emission and corrupt the subsequent radiation force.
-		Etot0 = std::abs(lambda_gd_times_dt) + (sum(Erad0Vec) + sum(Src)) + Q_dust / cscale;
+		dust_model = outer_state.dust_model;
+		T_d0 = outer_state.T_d0;
+		lambda_gd_times_dt = outer_state.lambda_gd_times_dt;
+		Etot0 = outer_state.Etot0;
 	}
 
 	double T_gas = NAN;
@@ -341,8 +356,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		}
 	}
 
-	double Egas_guess = Egas0;
-	auto EradVec_guess = Erad0Vec;
+	// rad-08 warm start: a later outer pass starts from the previous pass's converged Newton state (Egas, Erad, T_d)
+	// instead of the old state. The work term of the current pass enters through Rvec at n == 0 as before.
+	bool warm_start = (n_outer_iter > 0) && outer_state.warm;
+	int n_warm_iters = 0; // iterations spent in a warm-started attempt that had to be restarted cold
+
+	double Egas_guess = warm_start ? outer_state.Egas : Egas0;
+	auto EradVec_guess = warm_start ? outer_state.EradVec : Erad0Vec;
 
 	double Egas_guess_prev = Egas_guess;
 	auto EradVec_guess_prev = EradVec_guess;
@@ -369,6 +389,23 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	int worsen_streak = 0;
 	int cooldown_remaining = 0;
 	int n = 0;
+	// rad-08: if a warm-started attempt fails (no convergence within maxIter, or a negative dust temperature), restart
+	// the pass from the old state with a fresh iteration budget, i.e. exactly as the solver ran before warm starts.
+	auto restart_cold = [&]() {
+		n_warm_iters += n + 1;
+		warm_start = false;
+		n = -1; // incremented to 0 by the loop
+		Egas_guess = Egas0;
+		EradVec_guess = Erad0Vec;
+		Egas_guess_prev = Egas_guess;
+		EradVec_guess_prev = EradVec_guess;
+		T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+		relax = 1.0;
+		Fg_abs_sum_prev = std::numeric_limits<double>::max();
+		delta_x_prev = 0.0;
+		worsen_streak = 0;
+		cooldown_remaining = 0;
+	};
 	for (; n < maxIter; ++n) { // NOSONAR
 		// if relative change is within tol, break
 		if (rel_change_tol > 0.0 && n > 0) {
@@ -394,18 +431,22 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 
 		if (dust_model == 1) {
 			if (n == 0) {
-				T_d = T_d0;
+				T_d = warm_start ? outer_state.T_d : T_d0;
 			} else {
 				T_d = T_gas - (sum(Rvec) - Q_dust / cscale) / (coeff_n * std::sqrt(T_gas));
-				AMREX_ASSERT_WITH_MESSAGE(T_d >= 0.,
+				AMREX_ASSERT_WITH_MESSAGE(warm_start || T_d >= 0.,
 							  "Dust temperature is negative! Consider increasing ISM_Traits::gas_dust_coupling_threshold");
 			}
 		} else {
 			if (n == 0) {
-				T_d = T_d0;
+				T_d = warm_start ? outer_state.T_d : T_d0;
 			}
 		}
 		if (T_d < 0.0) {
+			if (warm_start) {
+				restart_cold();
+				continue;
+			}
 			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
 		}
 
@@ -447,6 +488,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 				work_local.fillin(0.0);
 			}
 
+			// With a warm start, this is the R implied by the previous pass's (T_d, Erad) and the current work term.
 			tau0 = dt * rho * opacity_terms.kappaP * chat;
 			tau = tau0;
 			Rvec = (fourPiBoverC - EradVec_guess / opacity_terms.kappaPoverE) * tau0 + work_local;
@@ -631,7 +673,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
 		// 	break;
 		// }
+
+		if (warm_start && n == maxIter - 1) {
+			restart_cold(); // the warm-started attempt did not converge: rerun the pass cold
+		}
 	} // END NEWTON-RAPHSON LOOP
+
+	// rad-08: keep the raw Newton state (before the post-Newton additions below) as the next pass's initial guess
+	outer_state.warm = (n < maxIter);
+	outer_state.Egas = Egas_guess;
+	outer_state.T_d = T_d;
+	outer_state.EradVec = EradVec_guess;
 
 	// Inject the source directly into transparent groups (tau ~ 0). The Newton solve above excludes such
 	// groups from its residual and Jacobian (Fg_abs_sum and Jgg skip tau <= 0) and leaves their radiation
@@ -650,27 +702,44 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	if (dust_model == 2) {
 		// include line cooling/heating, cosmic ray heating terms; implicitly update Egas_guess
 
-		const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
+		// rad-08: in the decoupled branch the Newton iteration leaves Egas at Egas0 (unless the radiation floor is
+		// forced inside the iteration), so this implicit gas update depends only on the old state and lambda_gd_times_dt,
+		// not on the work term. Solve it in the first pass that reaches it and reuse the result in later passes.
+		bool reuse_Egas_post = false;
+		if constexpr (!force_rad_floor_in_iteration) {
+			reuse_Egas_post = outer_state.have_Egas_post;
+		}
+		if (reuse_Egas_post) {
+			Egas_guess = outer_state.Egas_post;
+		} else {
+			const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
 
-		const double compare = Egas_guess + std::abs(cscale * lambda_gd_times_dt) + sum(abs(cooling_tend)) + std::abs(CR_heating);
+			const double compare = Egas_guess + std::abs(cscale * lambda_gd_times_dt) + sum(abs(cooling_tend)) + std::abs(CR_heating);
 
-		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
-		auto rhs = [=](double Egas_) -> double {
-			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
-			const auto cooling_ = DefineNetCoolingRate(T_gas_, H_num_den) * dt;
-			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - CR_heating;
-		};
+			// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
+			auto rhs = [=](double Egas_) -> double {
+				const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+				const auto cooling_ = DefineNetCoolingRate(T_gas_, H_num_den) * dt;
+				return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - CR_heating;
+			};
 
-		// Jacobian of the RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
-		auto jac = [=](double Egas_) -> double {
-			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
-			const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, H_num_den) * dt;
-			const double c_v_ = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas_, massScalars); // Egas = c_v * T
-			// The residual is a function of Egas_, so convert dCooling/dT to dCooling/dEgas via the chain rule (dT/dEgas = 1 / c_v).
-			return 1.0 + sum(d_cooling_d_Tgas_) / c_v_;
-		};
+			// {RHS, Jacobian} of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling), sharing T_gas_
+			auto rhs_jac = [=](double Egas_) -> amrex::GpuArray<double, 2> {
+				const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+				const auto cooling_ = DefineNetCoolingRate(T_gas_, H_num_den) * dt;
+				const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, H_num_den) * dt;
+				const double c_v_ = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas_, massScalars); // Egas = c_v * T
+				// The residual is a function of Egas_, so convert dCooling/dT to dCooling/dEgas via the chain rule (dT/dEgas = 1 / c_v).
+				return amrex::GpuArray<double, 2>{Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - CR_heating,
+								  1.0 + sum(d_cooling_d_Tgas_) / c_v_};
+			};
 
-		Egas_guess = BackwardEulerOneVariable(rhs, jac, Egas0, compare);
+			Egas_guess = BackwardEulerOneVariable(rhs, rhs_jac, Egas0, compare);
+			if constexpr (!force_rad_floor_in_iteration) {
+				outer_state.have_Egas_post = true;
+				outer_state.Egas_post = Egas_guess;
+			}
+		}
 	}
 
 	if constexpr (!add_line_cooling_to_radiation_in_jac) {
@@ -687,9 +756,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1); // NOLINT
 	}
 
-	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	 // total number of radiation updates. NOLINT
-	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations. NOLINT
-	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations. NOLINT
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);			// total number of radiation updates. NOLINT
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n_warm_iters + n + 1); // total number of Newton-Raphson iterations. NOLINT
+	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n_warm_iters + n + 1); // maximum number of Newton-Raphson iterations. NOLINT
 	if (dust_model == 2) {
 		amrex::Gpu::Atomic::Add(&p_iteration_counter[3], 1); // total number of decoupled gas-dust iterations. NOLINT
 	}
@@ -718,7 +787,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src, const double Q_dust,
     amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double /*tempFloor*/, int *p_iteration_counter,
-    int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t> // NOSONAR: Numerical solver with inherently high complexity
+    int *p_iteration_failure_counter, NewtonOuterState<problem_t> &outer_state)
+    -> NewtonIterationResult<problem_t> // NOSONAR: Numerical solver with inherently high complexity
 {
 	// 1. Compute energy exchange
 
@@ -748,30 +818,42 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	double lambda_gd_times_dt = NAN;
 	const double T_gas0 = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 	AMREX_ASSERT(T_gas0 >= 0.);
-	T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, Q_dust, rad_boundaries);
-	AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
-	if (T_d0 < 0.0) {
-		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
-	}
-
-	const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
-	// A zero collisional coupling coefficient means the gas and the dust exchange no energy at all, which is
-	// exactly what the decoupled model describes, so select it on that ground alone. The comparison below
-	// cannot be relied on to do it: it flips sense once Egas0 is negative, and the coupled branch it then
-	// selects divides by coeff_n, filling the state with NaNs that surface later as a spurious
-	// "Newton-Raphson iteration failed to converge".
-	if (!(coeff_n > 0.0) || (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0)) {
-		dust_model = 2;
-		lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
-	}
-
-	// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src)) + Q_dust;
 	double Etot0 = NAN;
-	if (dust_model == 1) {
-		Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src)) + Q_dust;
+	if (n_outer_iter == 0) {
+		// rad-08: invariant across outer passes; computed in the first pass and reused by the later ones.
+		T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, Q_dust, rad_boundaries);
+		AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
+		if (T_d0 < 0.0) {
+			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
+		}
+
+		const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
+		// A zero collisional coupling coefficient means the gas and the dust exchange no energy at all, which is
+		// exactly what the decoupled model describes, so select it on that ground alone. The comparison below
+		// cannot be relied on to do it: it flips sense once Egas0 is negative, and the coupled branch it then
+		// selects divides by coeff_n, filling the state with NaNs that surface later as a spurious
+		// "Newton-Raphson iteration failed to converge".
+		if (!(coeff_n > 0.0) || (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0)) {
+			dust_model = 2;
+			lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
+		}
+
+		// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src)) + Q_dust;
+		if (dust_model == 1) {
+			Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src)) + Q_dust;
+		} else {
+			// for dust_model == 2 (decoupled gas and dust), Egas0 is not involved in the iteration
+			Etot0 = std::abs(lambda_gd_times_dt) + (sum(Erad0Vec) + sum(Src)) + Q_dust / cscale;
+		}
+		outer_state.dust_model = dust_model;
+		outer_state.T_d0 = T_d0;
+		outer_state.lambda_gd_times_dt = lambda_gd_times_dt;
+		outer_state.Etot0 = Etot0;
 	} else {
-		// for dust_model == 2 (decoupled gas and dust), Egas0 is not involved in the iteration
-		Etot0 = std::abs(lambda_gd_times_dt) + (sum(Erad0Vec) + sum(Src)) + Q_dust / cscale;
+		dust_model = outer_state.dust_model;
+		T_d0 = outer_state.T_d0;
+		lambda_gd_times_dt = outer_state.lambda_gd_times_dt;
+		Etot0 = outer_state.Etot0;
 	}
 
 	double T_gas = NAN;
@@ -817,8 +899,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		}
 	}
 
-	double Egas_guess = Egas0;
-	auto EradVec_guess = Erad0Vec;
+	// rad-08 warm start from the previous pass's converged Newton state (see SolveGasDustRadiationEnergyExchange)
+	bool warm_start = (n_outer_iter > 0) && outer_state.warm;
+	int n_warm_iters = 0;
+
+	double Egas_guess = warm_start ? outer_state.Egas : Egas0;
+	auto EradVec_guess = warm_start ? outer_state.EradVec : Erad0Vec;
 
 	double Egas_guess_prev = Egas_guess;
 	auto EradVec_guess_prev = EradVec_guess;
@@ -827,11 +913,22 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	AMREX_ASSERT(T_gas >= 0.);
 
 	// phtoelectric heating
+	// (evaluated at the old gas temperature T_gas0, which is what the cold start used, so the equations solved are unchanged)
 	const double H_num_den = ComputeNumberDensityH(rho, massScalars);
-	const double PE_heating_energy_derivative = dt * DefinePhotoelectricHeatingE1Derivative(T_gas, H_num_den);
+	const double PE_heating_energy_derivative = dt * DefinePhotoelectricHeatingE1Derivative(T_gas0, H_num_den);
 
 	const int maxIter = 100;
 	int n = 0;
+	auto restart_cold = [&]() {
+		n_warm_iters += n + 1;
+		warm_start = false;
+		n = -1; // incremented to 0 by the loop
+		Egas_guess = Egas0;
+		EradVec_guess = Erad0Vec;
+		Egas_guess_prev = Egas_guess;
+		EradVec_guess_prev = EradVec_guess;
+		T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+	};
 	for (; n < maxIter; ++n) { // NOSONAR
 		// if relative change is within tol, break
 		if (rel_change_tol > 0.0 && n > 0) {
@@ -857,17 +954,22 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 		if (dust_model == 1) {
 			if (n == 0) {
-				T_d = T_d0;
+				T_d = warm_start ? outer_state.T_d : T_d0;
 			} else {
 				T_d = T_gas - (sum(Rvec) - Q_dust / cscale) / (coeff_n * std::sqrt(T_gas));
 			}
 		} else {
 			if (n == 0) {
-				T_d = T_d0;
+				T_d = warm_start ? outer_state.T_d : T_d0;
 			}
 		}
-		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative! Consider increasing ISM_Traits::gas_dust_coupling_threshold");
+		AMREX_ASSERT_WITH_MESSAGE(warm_start || T_d >= 0.,
+					  "Dust temperature is negative! Consider increasing ISM_Traits::gas_dust_coupling_threshold");
 		if (T_d < 0.0) {
+			if (warm_start) {
+				restart_cold();
+				continue;
+			}
 			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
 		}
 
@@ -1034,7 +1136,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
 		// 	break;
 		// }
+
+		if (warm_start && n == maxIter - 1) {
+			restart_cold(); // the warm-started attempt did not converge: rerun the pass cold
+		}
 	} // END NEWTON-RAPHSON LOOP
+
+	// rad-08: keep the raw Newton state as the next pass's initial guess
+	outer_state.warm = (n < maxIter);
+	outer_state.Egas = Egas_guess;
+	outer_state.T_d = T_d;
+	outer_state.EradVec = EradVec_guess;
 
 	// Inject the source directly into transparent groups (tau ~ 0). The Newton solve above excludes such
 	// groups from its residual and Jacobian (Fg_abs_sum and Jgg skip tau <= 0) and leaves their radiation
@@ -1067,15 +1179,19 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 		// Jacobian of the RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) + PE_heating_energy_derivative *
 		// EradVec_guess[nGroups_ - 1];
-		auto jac = [=](double Egas_) -> double {
+		// (returned together with the RHS, sharing T_gas_; rad-08)
+		auto rhs_jac = [=](double Egas_) -> amrex::GpuArray<double, 2> {
 			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const auto cooling_ = DefineNetCoolingRate(T_gas_, H_num_den) * dt;
 			const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, H_num_den) * dt;
 			const double c_v_ = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas_, massScalars); // Egas = c_v * T
 			// The residual is a function of Egas_, so convert dCooling/dT to dCooling/dEgas via the chain rule (dT/dEgas = 1 / c_v).
-			return 1.0 + sum(d_cooling_d_Tgas_) / c_v_;
+			return amrex::GpuArray<double, 2>{Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) -
+							      PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1] - CR_heating,
+							  1.0 + sum(d_cooling_d_Tgas_) / c_v_};
 		};
 
-		Egas_guess = BackwardEulerOneVariable(rhs, jac, Egas0, compare);
+		Egas_guess = BackwardEulerOneVariable(rhs, rhs_jac, Egas0, compare);
 	}
 
 	if constexpr (!add_line_cooling_to_radiation_in_jac) {
@@ -1091,8 +1207,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	}
 
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	 // total number of radiation updates. NOLINT
-	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations. NOLINT
-	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations. NOLINT
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n_warm_iters + n + 1); // total number of Newton-Raphson iterations. NOLINT
+	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n_warm_iters + n + 1); // maximum number of Newton-Raphson iterations. NOLINT
 	if (dust_model == 2) {
 		amrex::Gpu::Atomic::Add(&p_iteration_counter[3], 1); // total number of decoupled gas-dust iterations. NOLINT
 	}
