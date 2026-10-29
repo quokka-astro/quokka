@@ -264,6 +264,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	const double c = c_light_; // make a copy of c_light_ to avoid compiler error "undefined in device code"
 	const double chat = c_hat_;
 	const double cscale = c / chat;
+	constexpr double c_hat_over_c = RadSystem_Traits<problem_t>::c_hat_over_c;
+	// Only the thermal groups take part in the Newton solve. The chemical bands have zero thermal-coupling opacity
+	// (enforced by DefineThermalCouplingOpacityExponentsAndLowerValues), so tau = 0 for them, their residual is zero
+	// and so is their step: they are left out of every per-group Newton loop, keep the zero-initialised
+	// tau/Rvec/work_local entries, and get their radiation energy from the tau = 0 branch after the loop.
+	constexpr int nGT = nGroupsThermal_;
 
 	int dust_model = 1;
 	double T_d0 = NAN;
@@ -301,7 +307,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	double T_gas = NAN;
 	double T_d = NAN;
 	double delta_x = NAN;
-	quokka::valarray<double, nGroups_> delta_R{};
 	quokka::valarray<double, nGroups_> Rvec{};
 	quokka::valarray<double, nGroups_> tau0{};	 // optical depth across c * dt at old state
 	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state
@@ -396,7 +401,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 			if (n == 0) {
 				T_d = T_d0;
 			} else {
-				T_d = T_gas - (sum(Rvec) - Q_dust / cscale) / (coeff_n * std::sqrt(T_gas));
+				double R_sum = 0.0;
+				for (int g = 0; g < nGT; ++g) {
+					R_sum += Rvec[g];
+				}
+				T_d = T_gas - (R_sum - Q_dust / cscale) / (coeff_n * std::sqrt(T_gas));
 				AMREX_ASSERT_WITH_MESSAGE(T_d >= 0.,
 							  "Dust temperature is negative! Consider increasing ISM_Traits::gas_dust_coupling_threshold");
 			}
@@ -430,7 +439,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 				// compute the work term at the old state
 				// const double gamma = 1.0 / sqrt(1.0 - vsqr / (c * c));
 				if (n_outer_iter == 0) {
-					for (int g = 0; g < nGroups_; ++g) {
+					for (int g = 0; g < nGT; ++g) {
 						if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 							work_local[g] = vel_times_F[g] * opacity_terms.kappaF[g] * chat / (c * c) * dt;
 						} else {
@@ -447,12 +456,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 				work_local.fillin(0.0);
 			}
 
-			tau0 = dt * rho * opacity_terms.kappaP * chat;
-			tau = tau0;
-			Rvec = (fourPiBoverC - EradVec_guess / opacity_terms.kappaPoverE) * tau0 + work_local;
+			for (int g = 0; g < nGT; ++g) {
+				tau0[g] = dt * rho * opacity_terms.kappaP[g] * chat;
+				tau[g] = tau0[g];
+				Rvec[g] = (fourPiBoverC[g] - EradVec_guess[g] / opacity_terms.kappaPoverE[g]) * tau0[g] + work_local[g];
+			}
 			if constexpr (use_D_as_base) {
 				// tau0 is used as a scaling factor for Rvec
-				for (int g = 0; g < nGroups_; ++g) {
+				for (int g = 0; g < nGT; ++g) {
 					if (tau0[g] <= 1.0) {
 						tau0[g] = 1.0;
 					}
@@ -460,8 +471,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 			}
 		} else { // in the second and later loops, calculate tau, then recover whichever of E and R is not
 			 // the unknown for that group (see newton_erad_base_tau_threshold)
-			tau = dt * rho * opacity_terms.kappaP * chat;
-			for (int g = 0; g < nGroups_; ++g) {
+			for (int g = 0; g < nGT; ++g) {
+				tau[g] = dt * rho * opacity_terms.kappaP[g] * chat;
+			}
+			for (int g = 0; g < nGT; ++g) {
 				// If tau = 0.0, Erad_guess shouldn't change
 				if (tau[g] > 0.0) {
 					if (rebase_thin && (tau[g] < newton_erad_base_tau_threshold)) {
@@ -486,30 +499,109 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
 		const auto Egas_diff = Egas_guess - Egas0;
-		const auto Erad_diff = EradVec_guess - Erad0Vec;
 
-		JacobianResult<problem_t> jacobian;
-
+		// Matrix-free arrowhead Newton system. The Jacobian has non-zeros only in its first row (J0g), first column
+		// (Jg0) and diagonal (Jgg), so the linear solve (SolveLinearEqs) needs only two sums over the groups,
+		// sum_g J0g Fg / Jgg and sum_g J0g Jg0 / Jgg. Instead of materialising the JacobianResult arrays, the
+		// per-group entries are formed by arrow_row(g) inside the loop that accumulates those sums, and formed again
+		// in the loop that computes and applies the step of each group. This is the same algebra as
+		// ComputeJacobianForGasAndDust / ComputeJacobianForGasAndDustDecoupled, the use_D_as_base scaling,
+		// RebaseThinGroupsOntoErad and SolveLinearEqs, evaluated one group at a time.
+		double F0 = NAN;	// (0) component of the residual
+		double J00_rows = NAN;	// (0, 0) component of the Jacobian before the thin-group rebase (enters Jg0 when dust_model == 1)
+		double d_Td_d_T = NAN;	// dust_model == 1 only
+		double dTd_dRg = NAN;	// dust_model == 1 only
+		quokka::valarray<double, nGroups_> cooling{};
+		quokka::valarray<double, nGroups_> cooling_derivative{};
 		if (dust_model == 1) {
-			jacobian = ComputeJacobianForGasAndDust(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, Q_dust, coeff_n, tau, c_v, lambda_gd_times_dt,
-								opacity_terms.kappaPoverE, d_fourpiboverc_d_t, H_num_den, dt);
+			// compute cooling/heating terms
+			cooling = DefineNetCoolingRate(T_gas, H_num_den) * dt;
+			cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, H_num_den) * dt;
+			const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
+			F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - CR_heating - Q_dust;
+			J00_rows = 1.0 + sum(cooling_derivative) / c_v;
+			d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
+			dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 		} else {
-			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, Q_dust, coeff_n, tau, c_v,
-									 lambda_gd_times_dt, opacity_terms.kappaPoverE, d_fourpiboverc_d_t);
+			// lambda_gd_times_dt and Rvec are c_hat/c scaled. So, we are solving
+			// sum(R_g) - lambda_gd_time_dt - c_hat / c * Q_dust = 0.
+			F0 = -lambda_gd_times_dt + sum(Rvec) - c_hat_over_c * Q_dust;
+			J00_rows = 0.0;
 		}
 
-		if constexpr (use_D_as_base) {
-			jacobian.J0g = jacobian.J0g * tau0;
-			jacobian.Jgg = jacobian.Jgg * tau0;
-		} else if (rebase_thin) {
-			RebaseThinGroupsOntoErad(jacobian, tau, opacity_terms.kappaPoverE);
+		struct ArrowRow {
+			double J0g;	  // (0, g) component of the Jacobian
+			double Jg0;	  // (g, 0) component of the Jacobian
+			double Jgg;	  // (g, g) component of the Jacobian
+			double Fg;	  // (g) component of the residual (as modified for dust_model == 1)
+			double abs_resid; // contribution of group g to Fg_abs_sum
+			double dJ00;	  // change of J00 from rebasing group g onto Erad_g
+		};
+		auto arrow_row = [&](int g) -> ArrowRow {
+			ArrowRow r{};
+			r.dJ00 = 0.0;
+			const double Erad_diff_g = EradVec_guess[g] - Erad0Vec[g];
+			double Fg_raw = Erad_diff_g - (Rvec[g] + Src[g]);
+			// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this
+			// assumption only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged
+			// solution at all.
+			const double dEg_dT_g = opacity_terms.kappaPoverE[g] * d_fourpiboverc_d_t[g];
+			if (dust_model == 1) {
+				if constexpr (add_line_cooling_to_radiation_in_jac) {
+					Fg_raw -= (1.0 / cscale) * cooling[g];
+				}
+				r.abs_resid = (tau[g] > 0.0) ? std::abs(Fg_raw) : std::abs(Fg_raw + Rvec[g]);
+				const double rg = dEg_dT_g * dTd_dRg;
+				r.J0g = cscale;
+				r.Jg0 = 1.0 / c_v * (dEg_dT_g * d_Td_d_T) - (1 / cscale) * cooling_derivative[g] - 1.0 / cscale * rg * J00_rows;
+				// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.
+				r.Fg = Fg_raw - 1.0 / cscale * rg * F0;
+			} else {
+				r.abs_resid = (tau[g] > 0.0) ? std::abs(Fg_raw) : 0.0;
+				r.J0g = 1.0;
+				r.Jg0 = dEg_dT_g;
+				r.Fg = Fg_raw;
+			}
+			if (tau[g] <= 0.0) {
+				r.Jgg = -std::numeric_limits<double>::infinity();
+			} else {
+				r.Jgg = -1.0 * opacity_terms.kappaPoverE[g] / tau[g] - 1.0;
+			}
+			if constexpr (use_D_as_base) {
+				r.J0g = r.J0g * tau0[g];
+				r.Jgg = r.Jgg * tau0[g];
+			} else {
+				if (rebase_thin && (tau[g] > 0.0) && (tau[g] < newton_erad_base_tau_threshold)) {
+					// see RebaseThinGroupsOntoErad
+					const double scale = -tau[g] / opacity_terms.kappaPoverE[g]; // dR_g / dErad_g
+					r.dJ00 = r.J0g * scale * r.Jg0;
+					r.Jgg *= scale;
+					r.J0g *= scale;
+					r.Jg0 *= scale;
+				}
+			}
+			return r;
+		};
+
+		// First pass over the groups: residual norm and the two sums of the arrowhead solve.
+		double J00 = J00_rows;
+		double Fg_abs_sum = 0.0;
+		double sum_ratio_Fg = 0.0;
+		double sum_ratio_Jg0 = 0.0;
+		for (int g = 0; g < nGT; ++g) {
+			const ArrowRow r = arrow_row(g);
+			Fg_abs_sum += r.abs_resid;
+			J00 -= r.dJ00;
+			const double ratio = r.J0g / r.Jgg;
+			sum_ratio_Fg += ratio * r.Fg;
+			sum_ratio_Jg0 += ratio * r.Jg0;
 		}
 
 		// Round-off floor on the radiation residual, as in SolveGasRadiationEnergyExchange: a group whose
 		// unknown is R_g has its energy recovered from a cancelling difference, so |Fg| cannot fall below
 		// the double-precision round-off of the larger operand and a purely relative test is unreachable.
 		double Fg_roundoff = 0.0;
-		for (int g = 0; g < nGroups_; ++g) {
+		for (int g = 0; g < nGT; ++g) {
 			if (tau[g] > 0.0) {
 				// A group rebased onto Erad_g reaches its residual without that cancellation, so its floor
 				// is just the round-off of the terms of the residual itself.
@@ -523,44 +615,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 
 		// check relative convergence of the residuals, or that the radiation residual has bottomed out at
 		// the round-off floor and cannot be reduced any further
-		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) &&
-		    ((cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol) || (jacobian.Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
+		if ((std::abs(F0 / Etot0) < resid_tol) &&
+		    ((cscale * Fg_abs_sum / Etot0 < resid_tol) || (Fg_abs_sum < newton_resid_roundoff_factor * Fg_roundoff))) {
 			break;
 		}
 
-#if 0
-		// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
-		if (n == 0) {
-			std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = [";
-			for (int g = 0; g < nGroups_; ++g) {
-				std::cout << Erad0Vec[g] << ", ";
-			}
-			std::cout << "], tau0 = [";
-			for (int g = 0; g < nGroups_; ++g) {
-				std::cout << tau0[g] << ", ";
-			}
-			std::cout << "]";
-			std::cout << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << ", coeff_n = " << coeff_n << "\n";
-		} else if (n >= 0) {
-			std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = [";
-			for (int g = 0; g < nGroups_; ++g) {
-				std::cout << EradVec_guess[g] << ", ";
-			}
-			std::cout << "], tau = [";
-			for (int g = 0; g < nGroups_; ++g) {
-				std::cout << tau[g] << ", ";
-			}
-			std::cout << "]";
-			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
-		}
-#endif
-
-		// update variables
-		RadSystem<problem_t>::SolveLinearEqs(jacobian, delta_x, delta_R); // This is modify delta_x and delta_R in place
+		// update variables: x0 of the arrowhead solve (SolveLinearEqs)
+		delta_x = (sum_ratio_Fg - F0) / (-sum_ratio_Jg0 + J00);
 		AMREX_ASSERT(!std::isnan(delta_x));
-		AMREX_ASSERT(!delta_R.hasnan());
 
-		// Update independent variables (Egas_guess, Rvec)
+		// Update independent variables (Egas_guess, Rvec). The step of group g, xi_g = (-Fg - Jg0 x0) / Jgg, is
+		// computed and applied in the second pass over the groups below.
 		// enable_dE_constrain is used to prevent the gas temperature from dropping/increasing below/above the radiation
 		// temperature
 		if (dust_model == 2) {
@@ -569,7 +634,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 				// that would ODR-use the namespace-scope constexpr constant, which nvcc does not make
 				// available in device code.
 				const double damping_min = newton_damping_min;
-				const bool worsened = jacobian.Fg_abs_sum > Fg_abs_sum_prev;
+				const bool worsened = Fg_abs_sum > Fg_abs_sum_prev;
 				worsen_streak = worsened ? worsen_streak + 1 : 0;
 				if (cooldown_remaining > 0) {
 					--cooldown_remaining;
@@ -585,7 +650,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 				}
 				relax = std::min(std::max(relax, damping_min), 1.0);
 			}
-			Fg_abs_sum_prev = jacobian.Fg_abs_sum;
+			Fg_abs_sum_prev = Fg_abs_sum;
 			// Oscillation catch. When the iteration cycles about the root rather than approaching it, the
 			// steps alternate in sign and each one overshoots past the root. For a clean period-two cycle
 			// x_a <-> x_b the root is the midpoint, which is reached by half of the current step, so take
@@ -593,37 +658,42 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 			// damps the cycle without bypassing the criterion. (Not the mean of the current and previous
 			// steps: the previous one has already been applied, so that re-applies half of it -- a 2-cycle's
 			// steps +d, -d average to 0 and the iterate stalls.)
-			double step_x = delta_x;
-			auto step_R = delta_R;
-			if (n > 0 && delta_x * delta_x_prev < 0.0) {
-				step_x = 0.5 * delta_x;
-				step_R = 0.5 * delta_R;
-			}
+			const bool halve = (n > 0 && delta_x * delta_x_prev < 0.0);
+			const double step_x = halve ? 0.5 * delta_x : delta_x;
 			delta_x_prev = delta_x;
-			T_d += relax * step_x;
-			for (int g = 0; g < nGroups_; ++g) {
+			for (int g = 0; g < nGT; ++g) {
+				const ArrowRow r = arrow_row(g);
+				const double delta_R_g = (-1.0 * r.Fg - r.Jg0 * delta_x) / r.Jgg;
+				AMREX_ASSERT(!std::isnan(delta_R_g));
+				const double step_R_g = halve ? 0.5 * delta_R_g : delta_R_g;
 				if (rebase_thin && (tau[g] > 0.0) && (tau[g] < newton_erad_base_tau_threshold)) {
 					// step_R holds the Erad_g step for a rebased group. Rvec is advanced to first order
 					// as well, so that it stays usable if the group leaves the thin regime; when it does
 					// not, Rvec is recovered exactly at the top of the next iteration.
-					EradVec_guess[g] += relax * step_R[g];
-					Rvec[g] += -tau[g] / opacity_terms.kappaPoverE[g] * relax * step_R[g];
+					EradVec_guess[g] += relax * step_R_g;
+					Rvec[g] += -tau[g] / opacity_terms.kappaPoverE[g] * relax * step_R_g;
 				} else {
-					Rvec[g] += relax * step_R[g];
+					Rvec[g] += relax * step_R_g;
 				}
 			}
+			T_d += relax * step_x;
 		} else {
 			const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
 			if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {
 				Egas_guess = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
 				// Rvec.fillin(0.0);
 			} else {
-				Egas_guess += delta_x;
-				if constexpr (use_D_as_base) {
-					Rvec += tau0 * delta_R;
-				} else {
-					Rvec += delta_R;
+				for (int g = 0; g < nGT; ++g) {
+					const ArrowRow r = arrow_row(g);
+					const double delta_R_g = (-1.0 * r.Fg - r.Jg0 * delta_x) / r.Jgg;
+					AMREX_ASSERT(!std::isnan(delta_R_g));
+					if constexpr (use_D_as_base) {
+						Rvec[g] += tau0[g] * delta_R_g;
+					} else {
+						Rvec[g] += delta_R_g;
+					}
 				}
+				Egas_guess += delta_x;
 			}
 		}
 
@@ -1114,5 +1184,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	result.gas_decoupled = (dust_model == 2);
 	return result;
 }
+
 
 #endif // RADIATION_DUST_SYSTEM_HPP_

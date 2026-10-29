@@ -733,7 +733,10 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 										   amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
-	const double power = radiation_constant_ * std::pow(temperature, 4);
+	// T^4 as two squarings rather than std::pow(T, 4): on the GPU, pow (pown) inlines a full log/exp evaluation whose
+	// many coefficients are hoisted into registers for the whole source-term kernel.
+	const double T2 = temperature * temperature;
+	const double power = radiation_constant_ * (T2 * T2);
 	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	auto Erad_g = power * radEnergyFractions;
 	// set floor on the thermal groups only; chemical bands emit no blackbody radiation and are left at 0.
@@ -1747,9 +1750,11 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::P
 		// Taylor series
 		planck_integral = x * x - x * x * x / 2.;
 	} else {
-		planck_integral = std::pow(x, 3) / (std::exp(x) - 1.0);
+		planck_integral = (x * x * x) / (std::exp(x) - 1.0);
 	}
-	return coeff / (std::pow(PI, 4) / 15.0) * (radiation_constant_ * std::pow(T, 4)) * planck_integral;
+	// integer powers by multiplication rather than std::pow; see ComputeThermalRadiationMultiGroup
+	const double T2 = T * T;
+	return coeff / ((PI * PI) * (PI * PI) / 15.0) * (radiation_constant_ * (T2 * T2)) * planck_integral;
 }
 
 template <typename problem_t>
