@@ -425,6 +425,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time);
 
+	//! Set to true by the DEFAULT AddRadSource only (an explicit specialization in a problem replaces that body and never sets it).
+	//! QuokkaSimulation probes AddRadSource once on an empty box to learn whether the problem overrides it.
+	static inline bool addRadSourceDefaultCalled_ = false;
+
 	//! Merge the source written by AddRadSource into the source that is actually deposited.
 	//!
 	//! Radiation from particles has already been deposited into radEnergySource, so the user source is
@@ -882,6 +886,7 @@ void RadSystem<problem_t>::AddRadSource(array_t &radEnergySource, array_t &reduc
 					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time)
 {
+	addRadSourceDefaultCalled_ = true;
 	// Default implementation: no radiation source is added.
 	// Users should override this method to set their own radiation source. Both buffers belong to this hook
 	// alone and are zeroed before every call, so simply assign to them; the framework merges the result into
