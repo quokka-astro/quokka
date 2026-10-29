@@ -556,7 +556,7 @@ template <typename problem_t> struct EOSTabulated {
 		// One root-find, then use DataTable::partial_derivative for ∂T/∂eint_specific.
 		// Table axes: (rho, eint_specific = Eint/rho). dEint_density/dT = rho / (∂T/∂eint_specific).
 		const amrex::Real Eint = ComputeEintFromTgas(rho, Tgas, massScalars);
-		auto const &tables = get_tables();
+		auto const tables = get_tables();
 		const amrex::Real dT_deint = tables.all_tables.partial_derivative({rho, Eint / rho}, 1, ResampledCooling::TEMPERATURE_IDX);
 		AMREX_ASSERT(dT_deint > amrex::Real(0.0));
 		return rho / dT_deint;
@@ -606,12 +606,11 @@ template <typename problem_t> struct EOSTabulated {
 	// Returns the device or host table handle appropriate for the current execution context.
 	// The registration invariant (non-null pointer) is checked once at setup; only a
 	// debug-mode assert is needed here to avoid per-cell overhead in Release GPU kernels.
-	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto get_tables() -> ResampledCooling::resampledGpuConstTables const &
+	// Returned by value so the compiler can treat the descriptor fields as locals (SROA) instead of re-reading them through a reference.
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto get_tables() -> ResampledCooling::resampledGpuConstTables
 	{
-		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
-		AMREX_ASSERT(reg != nullptr);
-		AMREX_IF_ON_DEVICE((return reg->device;))
-		AMREX_IF_ON_HOST((return reg->host;))
+		AMREX_IF_ON_DEVICE((return ResampledCooling::getEOSTabulatedDeviceTables();))
+		AMREX_IF_ON_HOST((AMREX_ASSERT(ResampledCooling::g_eos_tabulated_registered); return ResampledCooling::g_eos_tabulated_host;))
 	}
 };
 
