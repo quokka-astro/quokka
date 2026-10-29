@@ -2734,7 +2734,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		// the stage-1 fluxes and flattening, and every P dV evaluation (which all use state_old_cc_tmp)
 		// (hydro-02: persistent per-level storage)
 		amrex::MultiFab &primVar_old = scratch.primVar_old;
-		HydroSystem<problem_t>::ConservedToPrimitive(state_old_cc_tmp, state_old_fc_tmp, primVar_old, nghost_cc_);
+		// hydro-k04: only the "cross" region read later (nghost_cc_ along one axis, nghost_Riemann + 1 along the other two)
+		HydroSystem<problem_t>::ConservedToPrimitive(state_old_cc_tmp, state_old_fc_tmp, primVar_old, nghost_cc_, nghost_Riemann + 1);
 
 		// First-order (FOFC) fluxes are computed lazily, only if a FOFC branch is entered (hydro-01a).
 		// They depend only on state_old_cc_tmp / state_old_fc_tmp (ghost-filled above, not modified until the end of this block)
@@ -2922,7 +2923,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			// hydro-05: primitive variables of the (ghost-filled) intermediate state, computed once for this stage
 			// (hydro-02: persistent per-level storage)
 			amrex::MultiFab &primVar_inter = scratch.primVar_inter;
-			HydroSystem<problem_t>::ConservedToPrimitive(stateInter_cc, stateInter_fc, primVar_inter, nghost_cc_);
+			// hydro-k04: only the "cross" region read later (nghost_cc_ along one axis, nghost_Riemann + 1 along the other two)
+			HydroSystem<problem_t>::ConservedToPrimitive(stateInter_cc, stateInter_fc, primVar_inter, nghost_cc_, nghost_Riemann + 1);
 
 			auto [fluxArrays, faceVel, fast_mhd_wavespeeds] =
 			    computeHydroFluxes(stateInter_cc, stateInter_fc, primVar_inter, nvars_, nghost_Riemann, lev);
@@ -3278,7 +3280,8 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> &fast_mhd_wavespeeds = scratch.fast_mhd_wavespeeds;
 
 	// compute flattening coefficients (hydro-05: all directions in one kernel, from the stored pressure)
-	HydroSystem<problem_t>::ComputeFlatteningCoefficientsAllDirs(primVar, flatCoefs, flatteningGhost);
+	// (hydro-k04: grown by flatteningGhost along the sweep axis and reconstructGhost transversally)
+	HydroSystem<problem_t>::ComputeFlatteningCoefficientsAllDirs(primVar, flatCoefs, flatteningGhost, reconstructGhost);
 
 	// compute flux functions
 	const auto &dx = geom[lev].CellSizeArray();
@@ -3394,38 +3397,40 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	}
 
 	if (reconstructionOrder_ == 5) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars, 0, 0, nghost_Riemann);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											   ng_reconstruct, 2);
+											   ng_reconstruct, 2, 0, 0, nghost_Riemann);
 		}
 	} else if (reconstructionOrder_ == 3) {
 		// hydro-k01: PPM with shock flattening applied inside the reconstruction kernel (replaces ReconstructStatesPPM + FlattenShocks)
+		// (hydro-k04: grown by ng_reconstruct along DIR and nghost_Riemann transversally)
 		HydroSystem<problem_t>::template ReconstructStatesPPMFlattened<DIR>(primVar_mf, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct,
-										    nvars);
+										    nvars, nghost_Riemann);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											ng_reconstruct, 2);
+											ng_reconstruct, 2, 0, 0, nghost_Riemann);
 		}
 	} else if (reconstructionOrder_ == 2) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars, plmLimiter_);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars, plmLimiter_, nghost_Riemann);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											ng_reconstruct, 2, plmLimiter_);
+											ng_reconstruct, 2, plmLimiter_, nghost_Riemann);
 		}
 	} else if (reconstructionOrder_ == 1) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars, nghost_Riemann);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											     ng_reconstruct, 2);
+											     ng_reconstruct, 2, nghost_Riemann);
 		}
 	} else {
 		amrex::Abort("Invalid reconstruction order specified!");
 	}
 
 	// cell-centered kernel (hydro-k01: for PPM the flattening is already applied by ReconstructStatesPPMFlattened)
+	// (hydro-k04: transverse range nghost_Riemann)
 	if (reconstructionOrder_ != 3) {
-		HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar_mf, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
+		HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar_mf, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars, nghost_Riemann);
 	}
 
 	// interface-centered kernel
