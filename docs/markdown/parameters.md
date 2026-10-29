@@ -132,11 +132,11 @@ Whether a problem compiles chemistry or photochemistry at all is set by fields o
 
 A problem with chemistry or photochemistry also needs, in its `CMakeLists.txt`: the network's `network.cpp` among the executable's sources; `quokka_add_eos(<target> <backend> <network>)` (from `extern/eos/quokka_eos.cmake`), which builds it against the EOS backend (`photoionization` or `primordial_chem`) and the network's species table; and the network's directory on the include path, for its `actual_rhs.H`. Its problem file includes `radiation/photochemistry.hpp` or `chemistry/Chemistry.hpp`, which define the burn. The burn and the EOS check that `Network` has as many species as the species table it is built with. Problems without chemistry use the `gamma_law` backend.
 
-## Integrator (VODE)
+## Integrator (Rosenbrock)
 
-These parameters control the VODE ODE integrator used for chemistry and photochemistry source terms. They are read from the `integrator` prefix by `readIntegratorParams()` in `src/microphysics/integrator_params.hpp`. See also `docs/markdown/photoionization.md`.
+These parameters control the Rosenbrock ODE integrator used for chemistry and photochemistry source terms. They are read from the `integrator` prefix by `readIntegratorParams()` in `src/microphysics/integrator_params.hpp`. See also `docs/markdown/photoionization.md`.
 
-VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will cause the integrator to stall. Users must explicitly set the tolerances below.
+The photochemistry problems set their own tolerances in their input files.
 
 ### Tolerance parameters
 
@@ -148,18 +148,17 @@ VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will
 | `integrator.rtol_enuc` | Float | `1.e-10` | Relative tolerance for internal energy. |
 | `integrator.atol_rad_num` | Float | `1.e-10` | Absolute tolerance for radiation number density (cm⁻³). |
 | `integrator.rtol_rad_num` | Float | `1.e-10` | Relative tolerance for radiation number density. |
-| `integrator.species_failure_tolerance` | Float | `0.01` | Maximum allowed negative species number density (cm⁻³) at internal VODE nodes. When exceeded, VODE rejects the substep and retries with a smaller timestep. Should equal `atol_spec`. At the final interpolated state, the threshold is relaxed to 1.5× this value to account for VODE's non-monotonic interpolation. |
-| `integrator.radiation_failure_tolerance` | Float | `0.01` | Maximum allowed negative photon number density (cm⁻³) at internal VODE nodes. When exceeded, VODE rejects the substep and retries with a smaller timestep. Should equal `atol_rad_num`. At the final interpolated state, the threshold is relaxed to 1.5× this value. |
+| `integrator.species_failure_tolerance` | Float | `0.01` | The burn fails if a species number density (cm⁻³) ends below `-species_failure_tolerance`. It is checked only at the end of the burn. |
+| `integrator.radiation_failure_tolerance` | Float | `0.01` | The burn fails if a chemical-band photon number density (cm⁻³) ends below `-radiation_failure_tolerance`. It is checked only at the end of the burn. |
 
 ### Other integrator parameters
 
 | Parameter Name | Type | Default | Description |
 |---|---|---|---|
-| `integrator.ode_max_steps` | Integer | `150000` | Maximum number of VODE internal steps per burn call. |
-| `integrator.burner_verbose` | Boolean (0/1) | `0` | If 1, print diagnostic output after each burn. |
-| `integrator.SMALL_X_SAFE` | Float | `1.e-30` | Species floor to prevent underflow in the integrator. |
-| `integrator.X_reject_buffer` | Float | `1.0` | Buffer factor for the species change-factor rejection threshold. Only meaningful for mass fractions; has no effect with number densities. Set to `1e100` to disable. |
-| `integrator.do_corrector_validation` | Boolean (0/1) | `1` | If 1, check predicted state validity before calling RHS. |
+| `integrator.ode_max_steps` | Integer | `150000` | Maximum number of integrator steps per burn call. |
+| `integrator.burner_verbose` | Boolean (0/1) | `0` | If 1, print diagnostic output after each burn (CPU builds only). |
+| `integrator.SMALL_X_SAFE` | Float | `1.e-30` | Floor of the species, the chemical-band photon numbers and the thermal-band energies before each right-hand side. |
+| `integrator.X_reject_buffer` | Float | `1.0` | The integrator rejects a step that changes a species by more than a factor of 4 either way, if the species is above `X_reject_buffer` × `atol_spec` before and after the step. Set to `1e100` to disable. |
 
 Burn retry is not a runtime parameter. A problem enables it at compile time with `Microphysics_Traits<problem_t>::burn_retry` (default `false`, see `src/microphysics/microphysics_traits.hpp`). The retry itself is not implemented yet, so with it enabled a failed burn aborts the run.
 
@@ -167,6 +166,7 @@ These integrator settings are not runtime parameters either. Each is a field of 
 
 | Trait | Default | Replaces |
 |---|---|---|
+| `Integrator` | `Rosenbrock<Rodas5P>` | `integrator.rosenbrock_tableau`. The tableaus are `ROS2S`, `Rodas3P`, `Rodas4P` and `Rodas5P` (`src/microphysics/rosenbrock/tableaus.hpp`). |
 | `analytic_jacobian` | `true` | `integrator.jacobian = 1`. With `false`, the Jacobian always comes from finite differences. |
 | `numerical_jacobian_fallback` | `true` | Nothing (new). With `analytic_jacobian`, an analytic Jacobian with a non-finite entry is replaced by finite differences, as before. With `false`, the finite-difference Jacobian is not compiled and such a burn fails with error code `-9`. |
 | `linalg_do_pivoting` | `true` | `integrator.linalg_do_pivoting` |

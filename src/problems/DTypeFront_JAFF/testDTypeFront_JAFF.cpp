@@ -68,11 +68,11 @@ template <> struct RadSystem_Traits<DTypeFront_JAFF> {
 	//
 	// SetAtolFromPhysics() derives atol_rad_num = 1e-6 * a_rad * T_min^4 / E_photon, where
 	// T_min = typical_minimal_radiation_T.  With T_min = 10 K, atol_rad_num ~ 1.25e-6 cm^-3.
-	// The ratio atol_rad_num / N_gamma_floor ~ 1e4 ensures that VODE returns in one BDF step
+	// The ratio atol_rad_num / N_gamma_floor ~ 1e4 ensures that the integrator returns in one step
 	// even in the darkest cells.
 	//
 	// The 1e-6 prefactor means radiation at T_min becomes numerically negligible after
-	// ~1e6 VODE steps (accumulated local error stays below the physically meaningful level).
+	// ~1e6 integrator steps (accumulated local error stays below the physically meaningful level).
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	// photochemistry momentum deposition is gated on beta_order == 1, so this test validates pure
 	// thermal-pressure D-type front expansion with radiation pressure.
