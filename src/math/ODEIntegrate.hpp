@@ -224,4 +224,95 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F const &rhs
 	}
 }
 
+// Resumable form of rk_adaptive_integrate, split so that the integration can be stopped after a
+// given number of outer steps and continued later (possibly in another kernel) with exactly the
+// same sequence of floating-point operations. The complete integrator state carried between outer
+// steps is (time, y, dt, istep); the retry counter is local to one outer step.
+
+// initial timestep, identical to the start of rk_adaptive_integrate
+template <typename F, int N>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk_adaptive_initial_dt(F const &rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1) -> Real
+{
+	quokka::valarray<Real, N> ydot0{};
+	rhs(t0, y0, ydot0);
+	const Real dt_guess = 0.1 * min(abs(y0 / ydot0));
+	AMREX_ASSERT(dt_guess > 0.0);
+	return std::isnan(dt_guess) ? (t1 - t0) : dt_guess;
+}
+
+// Run outer steps istep .. i_end-1 of rk_adaptive_integrate.
+// Returns 1 on success (istep = steps taken), -1 on failure (retries exhausted), 0 if i_end was reached
+// before t1 (istep = i_end; time, y, dt hold the state to resume from).
+template <typename F, int N>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk_adaptive_integrate_resume(F const &rhs, Real &time, quokka::valarray<Real, N> &y, Real &dt, Real t1,
+									   Real reltol, quokka::valarray<Real, N> const &abstol, int &istep, int i_end) -> int
+{
+	// adaptive timestep controller
+	const int maxRetries = 7;
+	const int p = 2; // integration order of (high-order) method
+	const Real eta_max = 20.;
+	const Real eta_max_errfail_prevstep = 1.0;
+	const Real eta_max_errfail_again = 0.3;
+	const Real eta_min_errfail_multiple = 0.1;
+	const Real eta_retry_failed_rhs = 0.5;
+
+	quokka::valarray<Real, N> yerr{};
+	quokka::valarray<Real, N> ynew{};
+
+	for (int i = istep; i < i_end; ++i) {
+		if ((time + dt) > t1) {
+			// reduce dt to end at t1
+			dt = t1 - time;
+		}
+
+		bool step_success = false;
+		for (int k = 0; k < maxRetries; ++k) {
+			int ierr = rk12_single_step(rhs, time, y, dt, ynew, yerr);
+
+			Real eta = NAN;
+			Real epsilon = NAN;
+
+			if (ierr != 0) {
+				eta = eta_retry_failed_rhs;
+			} else {
+				epsilon = error_norm(y, yerr, reltol, abstol);
+				eta = std::pow(epsilon, -1.0 / static_cast<Real>(p));
+
+				if (epsilon < 1.0) { // error passed
+					y = ynew;
+					time += dt; // increment time
+					if (k == 0) {
+						eta = std::min(eta, eta_max); // limit timestep increase
+					} else {
+						eta = std::min(eta, eta_max_errfail_prevstep);
+					}
+					dt *= eta; // use new timestep
+					step_success = true;
+					break;
+				}
+			}
+
+			if (k == 1) {
+				eta = std::min(eta, eta_max_errfail_again);
+			} else if (k > 1) {
+				eta = amrex::Clamp(eta, eta_min_errfail_multiple, eta_max_errfail_again);
+			}
+			dt *= eta; // use new timestep
+			AMREX_ASSERT(!std::isnan(dt));
+		}
+
+		if (!step_success) {
+			istep = i;
+			return -1;
+		}
+
+		if (time >= t1) {
+			istep = i + 1;
+			return 1;
+		}
+	}
+	istep = i_end;
+	return 0;
+}
+
 #endif // ODEINTEGRATE_HPP_

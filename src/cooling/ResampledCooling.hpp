@@ -14,6 +14,10 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_Parser.H"
+#include "AMReX_GpuContainers.H"
+#include "AMReX_MultiFab.H"
+#include "AMReX_ParmParse.H"
+#include "AMReX_Scan.H"
 #include "AMReX_iMultiFab.H"
 
 #include "cooling/EOSTabulatedRegistry.hpp"
@@ -155,10 +159,56 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 	const auto &dmap = mf.DistributionMap();
 	amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
 
+	// Two-phase integration: phase 1 runs at most nphase1 outer steps per cell. Unfinished cells save
+	// their complete integrator state (time, y, dt; step counter as -istep in nsubsteps), are compacted
+	// into an index list per box, and phase 2 finishes them over the compacted list.
+	static const int nphase1 = []() {
+		int n = 16;
+		amrex::ParmParse const pp("cooling");
+		pp.query("phase1_max_substeps", n);
+		return amrex::Clamp(n, 1, maxStepsODEIntegrate);
+	}();
+	const int nphase1_d = nphase1;
+	constexpr int nmaxsteps = maxStepsODEIntegrate;
+	amrex::MultiFab resumeMF(ba, dmap, 3, 0); // time, dt, y
+
+	auto cellSetup = [=] AMREX_GPU_DEVICE(amrex::Array4<Real> const &state, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc,
+					      int i, int j, int k, Real &rho, Real &nH, Real &heating_rate_per_H, Real &Eint, Real &Eint_floor,
+					      quokka::valarray<Real, 1> &abstol) noexcept {
+		rho = state(i, j, k, HydroSystem<problem_t>::density_index);
+		nH = rho * tables.cloudy_H_mass_fraction / C::m_p;			      // unit: cm^-3
+		heating_rate_per_H = const_heating_rate_per_H + external_heating(i, j, k); // unit: erg/s/H
+		Eint = HydroSystem<problem_t>::ComputeInternalEnergy(state, i, j, k, &state_fc);
+		Eint_floor = (temp_floor > 0.0) ? ComputeEgasFromTgas(rho, temp_floor, tables) : 0.0;
+		const Real abstol_floor = amrex::max(Eint_floor, std::numeric_limits<Real>::min());
+		abstol = {reltol_floor * abstol_floor};
+	};
+
+	auto cellFinish = [=] AMREX_GPU_DEVICE(amrex::Array4<Real> const &state, amrex::Array4<int> const &nsubsteps, int i, int j, int k, int nsteps,
+					       Real rho, Real nH, Real heating_rate_per_H, Real Eint, Real Eint_floor, Real y0) noexcept {
+		nsubsteps(i, j, k) = nsteps;
+
+		// check if integration failed
+		if (nsteps >= nmaxsteps) {
+			Real const Edot = resampled_cooling_function(rho, Eint, tables) + heating_rate_per_H * nH; // unit: erg/cm^3/s
+			Real const t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
+			printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
+			       "time = %g, dt = %.17e\n",
+			       rho, Eint, t_cool, dt);
+		}
+		const Real Eint_new = (temp_floor > 0.0) ? amrex::max(y0, Eint_floor) : y0;
+		const Real dEint = Eint_new - Eint;
+
+		state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
+		state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
+	};
+
+	// phase 1
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
 		auto const &nsubsteps = nsubstepsMF.array(iter);
+		auto const &resume = resumeMF.array(iter);
 
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -168,40 +218,102 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 		}
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			// cooling function
-			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
-			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p;			      // unit: cm^-3
-			const Real heating_rate_per_H = const_heating_rate_per_H + external_heating(i, j, k); // unit: erg/s/H
-			const ResampledCoolingFunctor user_rhs(rho, tables, heating_rate_per_H * nH);	      // unit: erg/cm^3/s
+			Real rho{};
+			Real nH{};
+			Real heating_rate_per_H{};
+			Real Eint{};
+			Real Eint_floor{};
+			quokka::valarray<Real, 1> abstol{};
+			cellSetup(state, state_fc, i, j, k, rho, nH, heating_rate_per_H, Eint, Eint_floor, abstol);
+			const ResampledCoolingFunctor user_rhs(rho, tables, heating_rate_per_H * nH); // unit: erg/cm^3/s
 
-			// state vector
-			const Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(state, i, j, k, &state_fc);
 			quokka::valarray<Real, 1> y = {Eint};
+			Real time = 0;
+			Real dtsub = rk_adaptive_initial_dt(user_rhs, 0, y, dt);
+			int istep = 0;
+			const int status = rk_adaptive_integrate_resume(user_rhs, time, y, dtsub, dt, rtol, abstol, istep, nphase1_d);
 
-			// integration tolerance
-			const Real Eint_floor = (temp_floor > 0.0) ? ComputeEgasFromTgas(rho, temp_floor, tables) : 0.0;
-			const Real abstol_floor = amrex::max(Eint_floor, std::numeric_limits<Real>::min());
-			quokka::valarray<Real, 1> const abstol = {reltol_floor * abstol_floor};
-
-			// do integration with RK2 (Heun's method)
-			int nsteps = 0;
-			rk_adaptive_integrate(user_rhs, 0, y, dt, rtol, abstol, nsteps);
-			nsubsteps(i, j, k) = nsteps;
-
-			// check if integration failed
-			if (nsteps >= maxStepsODEIntegrate) {
-				Real const Edot = resampled_cooling_function(rho, Eint, tables) + heating_rate_per_H * nH; // unit: erg/cm^3/s
-				Real const t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
-				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
-				       "time = %g, dt = %.17e\n",
-				       rho, Eint, t_cool, dt);
+			if (status == 0 && istep < nmaxsteps) {
+				// unfinished: save integrator state
+				resume(i, j, k, 0) = time;
+				resume(i, j, k, 1) = dtsub;
+				resume(i, j, k, 2) = y[0];
+				nsubsteps(i, j, k) = -istep;
+				return;
 			}
-			const Real Eint_new = (temp_floor > 0.0) ? amrex::max(y[0], Eint_floor) : y[0];
-			const Real dEint = Eint_new - Eint;
-
-			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
-			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
+			const int nsteps = (status == 1) ? istep : nmaxsteps;
+			cellFinish(state, nsubsteps, i, j, k, nsteps, rho, nH, heating_rate_per_H, Eint, Eint_floor, y[0]);
 		});
+	}
+
+	// phase 2 (only if any cell on this rank is unfinished)
+	if ((nphase1 < maxStepsODEIntegrate) && (nsubstepsMF.min(0, 0, true) < 0)) {
+		long long ntotal2 = 0;
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &state = mf.array(iter);
+			auto const &nsubsteps = nsubstepsMF.array(iter);
+			auto const &resume = resumeMF.array(iter);
+
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+					state_fc[dir] = mf_fc[dir].const_array(iter);
+				}
+			}
+
+			const auto lo = amrex::lbound(indexRange);
+			const auto len = amrex::length(indexRange);
+			const int npts = static_cast<int>(indexRange.numPts());
+
+			// compact the unfinished cells into an index list
+			amrex::Gpu::DeviceVector<int> cellList(npts);
+			int *const cellListPtr = cellList.data();
+			auto isUnfinished = [=] AMREX_GPU_DEVICE(int n) noexcept -> int {
+				const int ii = lo.x + n % len.x;
+				const int jj = lo.y + (n / len.x) % len.y;
+				const int kk = lo.z + n / (len.x * len.y);
+				return (nsubsteps(ii, jj, kk) < 0) ? 1 : 0;
+			};
+			const int nunfinished = amrex::Scan::PrefixSum<int>(
+			    npts, [=] AMREX_GPU_DEVICE(int n) noexcept -> int { return isUnfinished(n); },
+			    [=] AMREX_GPU_DEVICE(int n, int const &s) noexcept {
+				    if (isUnfinished(n) != 0) {
+					    cellListPtr[s] = n;
+				    }
+			    },
+			    amrex::Scan::Type::exclusive, amrex::Scan::retSum);
+			ntotal2 += nunfinished;
+
+			if (nunfinished > 0) {
+				amrex::ParallelFor(nunfinished, [=] AMREX_GPU_DEVICE(int m) noexcept {
+					const int n = cellListPtr[m];
+					const int i = lo.x + n % len.x;
+					const int j = lo.y + (n / len.x) % len.y;
+					const int k = lo.z + n / (len.x * len.y);
+
+					Real rho{};
+					Real nH{};
+					Real heating_rate_per_H{};
+					Real Eint{};
+					Real Eint_floor{};
+					quokka::valarray<Real, 1> abstol{};
+					cellSetup(state, state_fc, i, j, k, rho, nH, heating_rate_per_H, Eint, Eint_floor, abstol);
+					const ResampledCoolingFunctor user_rhs(rho, tables, heating_rate_per_H * nH); // unit: erg/cm^3/s
+
+					Real time = resume(i, j, k, 0);
+					Real dtsub = resume(i, j, k, 1);
+					quokka::valarray<Real, 1> y = {resume(i, j, k, 2)};
+					int istep = -nsubsteps(i, j, k);
+					const int status = rk_adaptive_integrate_resume(user_rhs, time, y, dtsub, dt, rtol, abstol, istep, nmaxsteps);
+
+					const int nsteps = (status == 1) ? istep : nmaxsteps;
+					cellFinish(state, nsubsteps, i, j, k, nsteps, rho, nH, heating_rate_per_H, Eint, Eint_floor, y[0]);
+				});
+			}
+			amrex::Gpu::streamSynchronize(); // cellList goes out of scope
+		}
+		amrex::Print(amrex::Print::AllProcs) << std::format("\tcooling phase 2 cells (rank {}): {}\n", amrex::ParallelDescriptor::MyProc(), ntotal2);
 	}
 
 	const int nmax = nsubstepsMF.max(0);
