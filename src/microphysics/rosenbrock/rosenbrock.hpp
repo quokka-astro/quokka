@@ -73,12 +73,10 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 			err += term * term;
 		}
 	}
-	// Known bug, kept for bitwise identity with Microphysics and to be fixed later: the sum should be divided by the
-	// number of equations that take part in error control, not by int_neqs. The excluded equations add zero terms, so
-	// dividing by all of them lowers the norm and accepts steps whose monitored errors exceed the tolerances. See
-	// https://github.com/quokka-astro/quokka/pull/2295#discussion_r4051762482 and
-	// https://github.com/quokka-astro/quokka/pull/2295#issuecomment-5943124602.
-	return std::sqrt(err / static_cast<amrex::Real>(int_neqs));
+	// the root mean square over the entries that count toward the error, so that the entries outside error control do
+	// not lower the norm (https://github.com/quokka-astro/quokka/pull/2295#discussion_r4051762482)
+	constexpr int num_error_entries = Layout::NumErrorEntries();
+	return std::sqrt(err / static_cast<amrex::Real>(num_error_entries));
 }
 
 template <typename Layout, typename RosenbrockT>

@@ -84,6 +84,18 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 		return VarRole::DustAbsorbedEnergy;
 	}
 
+	/// The number of entries that count toward the step error.
+	static constexpr auto NumErrorEntries() -> int
+	{
+		int count = 0;
+		for (int n = 1; n <= neqs; ++n) {
+			if (counts_toward_error(role(n))) {
+				++count;
+			}
+		}
+		return count;
+	}
+
 	static_assert(photochemistry == requires { &BurnT::rn; }, "The burn state must have rn exactly when Microphysics_Traits::photochemistry is true");
 	static_assert(
 	    q_dust == requires { &BurnT::e_dust_absorbed; },
