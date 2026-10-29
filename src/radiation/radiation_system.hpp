@@ -1949,8 +1949,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		} else {
 			const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
 			const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
-			LHS = c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad - opacity_terms.kappaP * fourPiBoverC) +
-			      N_d * std::sqrt(T_gas) * (T_gas - T_d) + Q_dust * c_hat_over_c;
+			// thermal groups only: the chemical bands have zero thermal-coupling opacity
+			double exchange = 0.0;
+			for (int g = 0; g < nGroupsThermal_; ++g) {
+				exchange += opacity_terms.kappaE[g] * Erad[g] - opacity_terms.kappaP[g] * fourPiBoverC[g];
+			}
+			LHS = c_hat_ * dt * rho * exchange + N_d * std::sqrt(T_gas) * (T_gas - T_d) + Q_dust * c_hat_over_c;
 		}
 
 		return LHS;
@@ -1968,7 +1972,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 			const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
 			const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
 			const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
-			dLHS_dTd = -c_hat_ * dt * rho * sum(opacity_terms.kappaP * d_fourpib_over_c_d_t) - N_d * std::sqrt(T_gas);
+			// thermal groups only: the chemical bands have zero thermal-coupling opacity
+			double d_exchange = 0.0;
+			for (int g = 0; g < nGroupsThermal_; ++g) {
+				d_exchange += opacity_terms.kappaP[g] * d_fourpib_over_c_d_t[g];
+			}
+			dLHS_dTd = -c_hat_ * dt * rho * d_exchange - N_d * std::sqrt(T_gas);
 		}
 
 		return dLHS_dTd;
@@ -1986,7 +1995,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	} else {
 		const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d_init, rad_boundaries);
 		const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d_init, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
-		Lambda_compare += c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad);
+		// thermal groups only: the chemical bands have zero thermal-coupling opacity
+		double absorption = 0.0;
+		for (int g = 0; g < nGroupsThermal_; ++g) {
+			absorption += opacity_terms.kappaE[g] * Erad[g];
+		}
+		Lambda_compare += c_hat_ * dt * rho * absorption;
 	}
 	// With no radiative or collisional exchange, every temperature is a solution. Preserve the guess
 	// without passing a zero convergence scale to the root finder.

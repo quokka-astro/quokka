@@ -724,7 +724,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 	// cell-centered kernel
 	// Launch bound: 512 threads per block is 8 wavefronts per block, i.e. 2 per SIMD on gfx90a, so the compiler must
 	// fit each thread into 256 registers (VGPR + AGPR) and the kernel runs at an occupancy of at least 2 waves/SIMD.
-	// With the default 256 threads it settles at 1 wave/SIMD and spreads into the AGPRs (~350 registers).
+	// With the default 256 threads the compiler settles at 1 wave/SIMD and spreads into the AGPRs (350 registers before
+	// the working-set reductions in this kernel and in SolveGasDustRadiationEnergyExchange, ~280 after them).
 	constexpr int source_term_threads = 512;
 	amrex::ParallelFor<source_term_threads>(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// make a local reference
