@@ -151,6 +151,15 @@ class ParticleContainer : public amrex::ParticleContainerRTSoA<>
 		const auto maximum = std::max(static_cast<amrex::Long>(0), amrex::get<0>(result.value(op)));
 		pendingNextID_ = std::max(pendingNextID_, maximum + 1);
 	}
+	// Register a restored population before the shared finalization step.
+	void RegisterRestartNextID(amrex::Long next)
+	{
+		const auto previous = ParticleType::NextID();
+		ParticleType::NextID(previous);
+		AMREX_ALWAYS_ASSERT(next > 0 && next <= amrex::LongParticleIds::LastParticleID);
+		restartNextID_ = next;
+		pendingNextID_ = std::max({pendingNextID_, previous, next});
+	}
 	[[nodiscard]] auto RestartNextID() const -> amrex::Long { return restartNextID_; }
 	// Collective: invoke once after every population, including tracers, has
 	// restarted and before any initialization or physics creation is allowed.

@@ -1,0 +1,394 @@
+#!/usr/bin/env bash
+
+#SBATCH -A ast236
+#SBATCH -J quokka_openpmd_restart
+#SBATCH -o openpmd_restart_%x-%j.out
+#SBATCH -t 01:00:00
+#SBATCH -p batch
+#SBATCH -N 64
+#SBATCH -C nvme
+
+# At-scale openPMD checkpoint/restart test and I/O bandwidth estimate
+# (HydroBlast3D with tracers and one AMR level).
+#
+# openPMD runs are repeated for each ADIOS2 aggregation mode in AGGREGATION
+# (openpmd.aggregation = off or on), written <mode> below.
+# Write runs, on all nodes, 2K steps each:
+#   reference       native AMReX checkpoints at steps 0, K and 2K
+#   openpmd_<mode>  openPMD checkpoints at steps 0, K and 2K
+#   plotfile_<mode> openPMD plotfiles at steps K and 2K (PLOTFILE=1)
+# Read runs, on the last RESTART_NODES nodes (away from the writers' page cache):
+#   read_openpmd_<mode> restart from that mode's openPMD checkpoint at K, no steps
+#   read_native         restart from the native checkpoint at K, no steps
+# Correctness, on the first RESTART_NODES nodes (a different rank count):
+#   restart_<mode>  restart from that mode's openPMD checkpoint at K, native checkpoint at 2K
+#   native_restart  the same from the native checkpoint (CONTROL=1)
+#   compare         cell data (all levels) and tracers at 2K must match the reference bit for bit
+#
+# Effective bandwidth = bytes written or read / TinyProfiler time (inclusive, max over
+# ranks) of the run's AMRSimulation::WriteCheckpointFile(), WritePlotFile() or
+# ReadCheckpointFile() region. Each figure comes from a single run, so repeat the job
+# to judge run-to-run variation. Sizes come from each output's metadata (see bytes())
+# and are measured once: openPMD sizes come from the first aggregation mode (the modes
+# differ by a few bytes of metadata), and reads reuse the size of the checkpoint at K
+# measured after writing it.
+#
+# Build first (on a login node), from the repository root:
+#   quokka config -d 3d-hip --source scripts/hpc_profiles/frontier.profile --root . \
+#     -DQUOKKA_OPENPMD=ON -DADIOS2_DIR=<adios2 prefix>/lib64/cmake/adios2
+#   quokka build -d 3d-hip --source scripts/hpc_profiles/frontier.profile --root . HydroBlast3D
+#   ninja -C build/3d-hip OpenPMDCheckpoint
+#
+# Submit from the repository root:
+#   sbatch scripts/slurm/frontier-openpmd-restart.submit
+#
+# Or run from the rocm-diskgalaxy container image, which includes HydroBlast3D and
+# OpenPMDCheckpoint built with openPMD (no build needed):
+#   apptainer pull quokka_rocm-diskgalaxy.sif docker://ghcr.io/quokka-astro/quokka:<tag>
+#   sbatch --export=ALL,CONTAINER=$PWD/quokka_rocm-diskgalaxy.sif scripts/slurm/frontier-openpmd-restart.submit
+# In container mode the environment follows scripts/slurm/frontier-container.submit, and
+# the image is copied to each node's NVMe (hence -C nvme) instead of being read from Orion.
+#
+# Overrides (environment variables, e.g. `sbatch --export=ALL,NCELL=4096 -N 512 ...`):
+#   NCELL          cells per dimension in x and y (default 2048; 2048^3 fits 64 nodes)
+#   NCELL_Z        cells in z (default NCELL; set differently for a non-cubic domain)
+#   MAX_LEVEL      finest AMR level (default 1; refines around the blast wave)
+#   MAX_GRID_SIZE  maximum grid size and blocking factor (default 128)
+#   CHK_STEP       K, the step of the checkpoint used for restart (default 10)
+#   RESTART_NODES  nodes for the read and restart runs (default: half the allocation)
+#   NATIVE_NFILES  files per MultiFab and particle files for native output (default -1,
+#                  one file per rank; production runs use the node count)
+#   VERIFY         0 to skip the restart and compare runs, measuring bandwidth only (default 1)
+#   READS_ONLY     1 to skip the write runs and reuse the checkpoints at K (and 2K, with
+#                  VERIFY=1) of an earlier job; set RUN_DIR to that job's run directory
+#                  (default 0). Logs are kept per job, in $RUN_DIR/logs/<job id>.
+#   MATCH_MODE     FI_CXI_RX_MATCH_MODE for every run (default software, as in production)
+#   CONTROL        1 to also restart from the native checkpoint (default 1)
+#   PLOTFILE       1 to also measure openPMD plotfile output (default 1)
+#   AGGREGATION    openpmd.aggregation modes to compare (default "off on")
+#   BUILD_DIR      build directory (default build/3d-hip; ignored with CONTAINER)
+#   CONTAINER      Apptainer image to run instead of a build directory
+#   RUN_DIR        output directory on Orion (default under the project scratch)
+#   PROFILE        environment script to source (default scripts/hpc_profiles/frontier.profile;
+#                  ignored with CONTAINER)
+#
+# Each checkpoint is about 100 bytes per cell (cell data and tracers), so
+# 2048^3 produces roughly 0.9 TB per checkpoint. Step-0, unused and compared
+# checkpoints are deleted once measured; peak usage is about 6 TB.
+
+QUOKKA_ROOT=${SLURM_SUBMIT_DIR:-$(pwd)}
+cd "${QUOKKA_ROOT}" || exit 1
+CONTAINER=${CONTAINER:-}
+# Set up the environment before enabling strict mode: the module scripts reference
+# unset variables.
+if [[ -n ${CONTAINER} ]]; then
+	# As in scripts/slurm/frontier-container.submit.
+	# cray-mpich-abi needs a compiler module loaded first.
+	module load amd/7.2.0
+	module load rocm/7.2.0
+	module load cray-mpich-abi/9.1.0
+	if [[ -z ${CRAY_MPICH_ROOTDIR:-} ]]; then
+		echo "cray-mpich-abi/9.1.0 did not load" >&2
+		exit 1
+	fi
+	export MPICH_GPU_SUPPORT_ENABLED=1
+	export MPICH_SMP_SINGLE_COPY_MODE=NONE # temporary workaround
+	# APPTAINERENV_LD_LIBRARY_PATH replaces the image's library path, so append the
+	# image's own path, which holds libopenPMD and ADIOS2.
+	image_ld_path=$(apptainer exec "${CONTAINER}" printenv LD_LIBRARY_PATH) || {
+		echo "cannot read LD_LIBRARY_PATH from ${CONTAINER}" >&2
+		exit 1
+	}
+	export APPTAINERENV_LD_LIBRARY_PATH="$CRAY_MPICH_ROOTDIR/gtl/lib:/opt/rocm/lib:/opt/rocm/lib64:$CRAY_LD_LIBRARY_PATH:$LD_LIBRARY_PATH:/opt/cray/pe/lib64:${image_ld_path}"
+	# Apptainer refuses to start if a listed library is missing, and the compute
+	# nodes no longer have libxpmem, so pass only the host libraries that exist.
+	containlibs=()
+	for lib in /usr/lib64/libcxi.so.1 /usr/lib64/libjson-c.so.5 /lib64/libtinfo.so.6 /usr/lib64/libnl-3.so.200 \
+		/usr/lib64/libgfortran.so.5 /usr/lib64/libjansson.so.4 /usr/lib64/libxpmem.so.0 /usr/lib64/libatomic.so.1; do
+		if [[ -e ${lib} ]]; then
+			containlibs+=("${lib}")
+		else
+			echo "note: ${lib} not found on this node; not passed to the container"
+		fi
+	done
+	APPTAINER_CONTAINLIBS=$(
+		IFS=,
+		echo "${containlibs[*]}"
+	)
+	export APPTAINER_CONTAINLIBS
+	export APPTAINERENV_LD_PRELOAD=$CRAY_MPICH_ROOTDIR/gtl/lib/libmpi_gtl_hsa.so.0:
+	proj=${proj:-ast236}
+else
+	# shellcheck source=/dev/null
+	. "${PROFILE:-scripts/hpc_profiles/frontier.profile}"
+fi
+set -euo pipefail
+export OMP_NUM_THREADS=1
+# As in production runs: avoids network flakiness above 1000 nodes, and gives MPI
+# startup more time at scale. MATCH_MODE overrides the match mode, for example
+# hybrid to test whether software matching causes stalls in MPI waits.
+export FI_CXI_RX_MATCH_MODE=${MATCH_MODE:-software}
+export PMI_MMAP_SYNC_WAIT_TIME=1800
+
+NCELL=${NCELL:-2048}
+NCELL_Z=${NCELL_Z:-${NCELL}}
+MAX_LEVEL=${MAX_LEVEL:-1}
+MAX_GRID_SIZE=${MAX_GRID_SIZE:-128}
+CHK_STEP=${CHK_STEP:-10}
+FINAL_STEP=$((2 * CHK_STEP))
+NODES=${SLURM_JOB_NUM_NODES}
+RESTART_NODES=${RESTART_NODES:-$(((NODES + 1) / 2))}
+NATIVE_NFILES=${NATIVE_NFILES:--1}
+VERIFY=${VERIFY:-1}
+CONTROL=${CONTROL:-1}
+PLOTFILE=${PLOTFILE:-1}
+READS_ONLY=${READS_ONLY:-0}
+read -r -a AGGREGATION <<<"${AGGREGATION:-off on}"
+RUN_DIR=${RUN_DIR:-/lustre/orion/${proj}/scratch/${USER}/quokka-openpmd-restart/${SLURM_JOB_ID}}
+
+if [[ -n ${CONTAINER} ]]; then
+	CONTAINER=$(realpath "${CONTAINER}")
+	[[ -f ${CONTAINER} ]] || {
+		echo "missing container image: ${CONTAINER}" >&2
+		exit 1
+	}
+	# Thousands of ranks reading the image from Orion can keep a job from starting, so
+	# copy it to each node's NVMe first.
+	image_nvme=/mnt/bb/${USER}/$(basename "${CONTAINER}")
+	echo "copying ${CONTAINER} to ${image_nvme} on every node"
+	sbcast -pf "${CONTAINER}" "${image_nvme}"
+	CONTAINER=${image_nvme}
+	SIM=/opt/quokka/bin/HydroBlast3D
+	COMPARE=/opt/quokka/bin/OpenPMDCheckpoint
+	INPUT=/opt/quokka/share/quokka/inputs/HydroBlast3D.toml
+	# Every step runs inside the image, with the run directory bound into it.
+	export APPTAINER_BINDPATH=/usr/share/libdrm,/var/spool/slurmd,/opt/cray,${RUN_DIR}
+	launch=(apptainer exec --workdir "${RUN_DIR}" --rocm "${CONTAINER}")
+else
+	BUILD_DIR=$(realpath -m "${BUILD_DIR:-build/3d-hip}")
+	SIM=${BUILD_DIR}/src/problems/HydroBlast3D/HydroBlast3D
+	COMPARE=${BUILD_DIR}/src/problems/ParticleSchema/OpenPMDCheckpoint
+	INPUT=${QUOKKA_ROOT}/inputs/HydroBlast3D.toml
+	for exe in "${SIM}" "${COMPARE}"; do
+		[[ -x ${exe} ]] || {
+			echo "missing executable: ${exe}" >&2
+			exit 1
+		}
+	done
+	launch=()
+fi
+if ((RESTART_NODES < 1 || RESTART_NODES > NODES)); then
+	echo "RESTART_NODES=${RESTART_NODES} must be between 1 and ${NODES}" >&2
+	exit 1
+fi
+
+# Logs go in a per-job directory, so jobs sharing RUN_DIR (READS_ONLY) keep their own.
+LOG_DIR=${RUN_DIR}/logs/${SLURM_JOB_ID}
+mkdir -p "${LOG_DIR}"
+cd "${RUN_DIR}"
+
+chk() { printf '%s%07d' "$1" "$2"; }
+
+# Print a timestamped progress line.
+stamp() { echo "[$(date +%T)] $*" >&2; }
+
+# Remove output, with timestamps.
+clean() {
+	stamp "removing $*"
+	rm -rf "$@"
+	stamp "removed"
+}
+
+# Bytes in the given native checkpoints and openPMD series (.bp), from their own
+# metadata, with timestamps. Never stat the data files: sizing thousands of freshly
+# written files on Lustre took up to 49 minutes at 1024 nodes. openPMD sizes are the
+# bytes each rank wrote (ADIOS2's profiling.json); native sizes are the cell and
+# particle data in the FAB and particle headers (double precision, without the small
+# headers themselves).
+bytes() {
+	stamp "measuring size of $*"
+	python3 -c 'import json, os, re, sys
+
+def openpmd(path):
+    with open(os.path.join(path, "profiling.json")) as f:
+        ranks = json.load(f)
+    return sum(v["wbytes"] for rank in ranks for k, v in rank.items() if k.startswith("transport_"))
+
+def fabs(header):
+    with open(header) as f:
+        lines = f.read().split("\n")
+    ncomp = int(lines[2])
+    total = 0
+    for line in lines:
+        m = re.fullmatch(r"\(\(([-\d,]+)\) \(([-\d,]+)\) \([\d,]+\)\)", line)
+        if m:
+            cells = 1
+            for lo, hi in zip(m[1].split(","), m[2].split(",")):
+                cells *= int(hi) - int(lo) + 1
+            total += cells * ncomp * 8
+    return total
+
+def particles(header):
+    with open(header) as f:
+        lines = f.read().split("\n")
+    real = 8 if lines[0].endswith("_double") else 4
+    dim, nreal = int(lines[1]), int(lines[2])
+    nint = int(lines[3 + nreal])
+    assert lines[4 + nreal + nint] == "1", header + " is not a checkpoint"
+    # Checkpoints add two ints (id and cpu) per particle.
+    return int(lines[5 + nreal + nint]) * ((dim + nreal) * real + (2 + nint) * 4)
+
+def native(path):
+    total = 0
+    for entry in os.scandir(path):
+        if entry.name.startswith("Level_"):
+            total += sum(fabs(h.path) for h in os.scandir(entry.path) if h.name.endswith("_H"))
+        elif entry.is_dir():
+            total += particles(os.path.join(entry.path, "Header"))
+    return total
+
+print(sum(openpmd(p) if p.endswith(".bp") else native(p) for p in sys.argv[1:]))' "$@"
+	stamp "measured"
+}
+
+# The elapsed time (s) a run reports, and the inclusive max time (s) of a TinyProfiler region.
+elapsed() { awk '/^elapsed time:/ { print $3 }' "${LOG_DIR}/$1.log"; }
+region() { awk -v name="$2" '/Incl\. Min/ { incl = 1 } incl && $1 == name { print $5; exit }' "${LOG_DIR}/$1.log"; }
+
+# Native particle restarts read with at most 64 ranks by default, which runs out of
+# memory at scale; AMReX caps this at the rank count. The compare runs read native
+# tracers too.
+native_read=(particles.nreaders=1000000)
+common=("${INPUT}"
+	"amr.n_cell=${NCELL} ${NCELL} ${NCELL_Z}" amr.max_level="${MAX_LEVEL}"
+	amr.max_grid_size="${MAX_GRID_SIZE}" amr.blocking_factor="${MAX_GRID_SIZE}"
+	do_tracers=1 quokka.slice_z.int=-1 blast_problem.check_solution=0 tiny_profiler.enabled=1
+	"${native_read[@]}"
+	# Native output as in production runs, except one file per rank by default.
+	amr.checkpoint_nfiles="${NATIVE_NFILES}" amr.plot_nfiles="${NATIVE_NFILES}"
+	particles.particles_nfiles="${NATIVE_NFILES}" vismf.noflushafterwrite=1)
+no_output=(checkpoint_interval=-1 plotfile_interval=-1)
+
+# Run one step of the test on $2 nodes, starting at node $3 of the allocation
+# (default 0); output goes to $LOG_DIR/<label>.log.
+run() {
+	local label=$1 nodes=$2 first=$3
+	shift 3
+	echo "=== [$(date +%T)] ${label}: ${nodes} nodes from node ${first}, $((nodes * 8)) ranks"
+	if ! srun -N "${nodes}" -n $((nodes * 8)) --relative="${first}" --ntasks-per-node=8 --cpus-per-task=7 --gpus-per-task=1 \
+		--gpu-bind=closest ${launch[@]+"${launch[@]}"} "$@" >"${LOG_DIR}/${label}.log" 2>&1; then
+		echo "${label} FAILED; see ${LOG_DIR}/${label}.log"
+		tail -n 30 "${LOG_DIR}/${label}.log"
+		exit 1
+	fi
+	local t
+	t=$(elapsed "${label}")
+	echo "[$(date +%T)] ${label} finished${t:+, elapsed ${t} s}"
+}
+
+# Record one bandwidth line: label, direction, bytes, run, TinyProfiler region.
+summary=()
+measure() {
+	local label=$1 direction=$2 size=$3 log=$4 name=$5
+	local line
+	line=$(awk -v label="${label}" -v dir="${direction}" -v size="${size}" -v t="$(region "${log}" "${name}")" 'BEGIN {
+		time = t == "" ? "n/a" : t
+		bw = t > 0 ? sprintf("%.2f", size / t / 1e9) : "n/a"
+		printf "%-26s %-5s %10.3f %10s %10s\n", label, dir, size / 1e9, time, bw
+	}')
+	summary+=("${line}")
+}
+
+echo "NCELL=${NCELL}x${NCELL}x${NCELL_Z} MAX_LEVEL=${MAX_LEVEL} CHK_STEP=${CHK_STEP} NODES=${NODES} RESTART_NODES=${RESTART_NODES} NATIVE_NFILES=${NATIVE_NFILES} VERIFY=${VERIFY}"
+echo "READS_ONLY=${READS_ONLY} FI_CXI_RX_MATCH_MODE=${FI_CXI_RX_MATCH_MODE}"
+echo "RUN_DIR=${RUN_DIR}"
+echo "LOG_DIR=${LOG_DIR}"
+if [[ -n ${CONTAINER} ]]; then
+	echo "container ${CONTAINER}"
+else
+	echo "quokka $(git -C "${QUOKKA_ROOT}" rev-parse --short HEAD)"
+fi
+
+steps=(max_timesteps="${FINAL_STEP}")
+if ((READS_ONLY)); then
+	native_k=$(bytes "$(chk reference "${CHK_STEP}")")
+	openpmd_k=$(bytes "$(chk "openpmd_${AGGREGATION[0]}" "${CHK_STEP}").bp")
+else
+	# Write runs.
+	run reference "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
+		checkpoint_format=amrex checkpoint_prefix=reference
+	native_k=$(bytes "$(chk reference "${CHK_STEP}")")
+	native_other=$(bytes "$(chk reference 0)" "$(chk reference "${FINAL_STEP}")")
+	measure "native checkpoint" write $((native_k + native_other)) reference "AMRSimulation::WriteCheckpointFile()"
+	# Keep only the native checkpoints at K and 2K.
+	clean "$(chk reference 0)"
+	openpmd_k='' openpmd_other='' plotfile_size=''
+	for mode in "${AGGREGATION[@]}"; do
+		prefix=openpmd_${mode}
+		run "${prefix}" "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 \
+			checkpoint_format=openpmd checkpoint_prefix="${prefix}" openpmd.aggregation="${mode}"
+		if [[ -z ${openpmd_k} ]]; then
+			openpmd_k=$(bytes "$(chk "${prefix}" "${CHK_STEP}").bp")
+			openpmd_other=$(bytes "$(chk "${prefix}" 0).bp" "$(chk "${prefix}" "${FINAL_STEP}").bp")
+		fi
+		measure "openPMD checkpoint (${mode})" write $((openpmd_k + openpmd_other)) "${prefix}" "AMRSimulation::WriteCheckpointFile()"
+		# Keep only the openPMD checkpoint at K.
+		clean "$(chk "${prefix}" 0).bp" "$(chk "${prefix}" 0).yaml" "$(chk "${prefix}" "${FINAL_STEP}").bp" \
+			"$(chk "${prefix}" "${FINAL_STEP}").yaml"
+
+		if ((PLOTFILE)); then
+			run "plotfile_${mode}" "${NODES}" 0 "${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval=-1 \
+				plotfile_interval="${CHK_STEP}" skip_initial_plotfile=1 openpmd.aggregation="${mode}"
+			if [[ -z ${plotfile_size} ]]; then
+				plotfile_size=$(bytes plt*.bp)
+			fi
+			measure "openPMD plotfile (${mode})" write "${plotfile_size}" "plotfile_${mode}" "AMRSimulation::WritePlotFile()"
+			clean plt*.bp plt*.yaml
+		fi
+	done
+fi
+
+# Read runs, on the last RESTART_NODES nodes.
+read_first=$((NODES - RESTART_NODES))
+for mode in "${AGGREGATION[@]}"; do
+	prefix=openpmd_${mode}
+	run "read_${prefix}" "${RESTART_NODES}" "${read_first}" "${SIM}" "${common[@]}" max_timesteps="${CHK_STEP}" "${no_output[@]}" \
+		restartfile="$(chk "${prefix}" "${CHK_STEP}")"
+	measure "openPMD checkpoint (${mode})" read "${openpmd_k}" "read_${prefix}" "AMRSimulation::ReadCheckpointFile()"
+done
+run read_native "${RESTART_NODES}" "${read_first}" "${SIM}" "${common[@]}" max_timesteps="${CHK_STEP}" "${no_output[@]}" \
+	restartfile="$(chk reference "${CHK_STEP}")"
+measure "native checkpoint" read "${native_k}" read_native "AMRSimulation::ReadCheckpointFile()"
+
+# Correctness: restarts on a different rank count must reproduce step 2K exactly.
+levels=$((MAX_LEVEL + 1))
+restart_common=("${SIM}" "${common[@]}" "${steps[@]}" checkpoint_interval="${CHK_STEP}" plotfile_interval=-1 checkpoint_format=amrex)
+if ((VERIFY)); then
+	for mode in "${AGGREGATION[@]}"; do
+		run "restart_${mode}" "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix="restarted_${mode}" \
+			restartfile="$(chk "openpmd_${mode}" "${CHK_STEP}")"
+		run "compare_${mode}" "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" \
+			candidate="$(chk "restarted_${mode}" "${FINAL_STEP}")" levels="${levels}" "${native_read[@]}"
+		clean "$(chk "restarted_${mode}" "${FINAL_STEP}")"
+	done
+	if ((CONTROL)); then
+		run native_restart "${RESTART_NODES}" 0 "${restart_common[@]}" checkpoint_prefix=native_restarted \
+			restartfile="$(chk reference "${CHK_STEP}")"
+		run native_compare "${NODES}" 0 "${COMPARE}" reference="$(chk reference "${FINAL_STEP}")" \
+			candidate="$(chk native_restarted "${FINAL_STEP}")" levels="${levels}" "${native_read[@]}"
+	fi
+fi
+
+echo
+echo "Effective I/O bandwidth (GB = 1e9 bytes; TinyProfiler times in s; write runs on ${NODES} nodes, reads on ${RESTART_NODES})"
+printf "%-26s %-5s %10s %10s %10s\n" output dir GB time GB/s
+for line in "${summary[@]}"; do
+	echo "${line}"
+done
+echo "(time = inclusive max time of the run's WriteCheckpointFile, WritePlotFile or ReadCheckpointFile region)"
+echo
+if ((VERIFY)); then
+	echo "PASS: openPMD restarts at step ${CHK_STEP} (aggregation: ${AGGREGATION[*]}) reproduce step ${FINAL_STEP} exactly"
+else
+	echo "restart compares skipped (VERIFY=0)"
+fi
