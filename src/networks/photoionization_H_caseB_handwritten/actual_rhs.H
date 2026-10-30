@@ -193,7 +193,7 @@ actual_rhs(const BurnT &state, amrex::Array1D<Real, 1, quokka::microphysics::Int
 	const amrex::Real n_HI = state.xn[H_idx];
 	const amrex::Real n_HII = state.xn[Hp_idx];
 	const amrex::Real n_gamma =
-	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
+	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if the integrator steps rn[0] slightly negative within tolerance
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
@@ -297,7 +297,7 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	const amrex::Real n_HI = state.xn[H_idx];
 	const amrex::Real n_HII = state.xn[Hp_idx];
 	const amrex::Real n_gamma =
-	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
+	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if the integrator steps rn[0] slightly negative within tolerance
 	// Gate for column-5 Jacobian entries: when rn[0] < 0 the clamp makes the RHS
 	// independent of rn[0], so all derivatives w.r.t. rn[0] are zero.
 	const amrex::Real n_gamma_active = (state.rn[0] >= 0.0_rt) ? 1.0_rt : 0.0_rt;

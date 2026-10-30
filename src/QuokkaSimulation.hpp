@@ -89,7 +89,8 @@ namespace filesystem = experimental::filesystem;
 namespace quokka::chemistry
 {
 template <typename problem_t>
-auto computeChemistry(amrex::MultiFab &mf, amrex::Real dt, amrex::Real max_density_allowed, amrex::Real min_density_allowed) -> bool;
+auto computeChemistry(amrex::MultiFab &mf, amrex::Real dt, amrex::Real max_density_allowed, amrex::Real min_density_allowed,
+		      quokka::microphysics::IntegratorParams integrator_params) -> bool;
 } // namespace quokka::chemistry
 
 namespace quokka::photochemistry
@@ -97,7 +98,7 @@ namespace quokka::photochemistry
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, amrex::Real dt,
 			   amrex::Real max_density_allowed, amrex::Real min_density_allowed, amrex::MultiFab &dustHeatingSource,
-			   amrex::MultiFab &radEnergySource) -> bool;
+			   amrex::MultiFab &radEnergySource, quokka::microphysics::IntegratorParams integrator_params) -> bool;
 } // namespace quokka::photochemistry
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
@@ -190,6 +191,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	quokka::dust::CoefficientIterationConfig dustCoefficientIteration_;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
+	quokka::microphysics::IntegratorParams integratorParams_;
 
 	quokka::ResampledCooling::resampled_tables resampledTables_;
 	std::string coolingTableType_;
@@ -876,7 +878,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	}
 
 	// set the runtime parameters of the chemistry and photochemistry integrators
-	quokka::microphysics::integrator_params::readIntegratorParams();
+	integratorParams_ = quokka::microphysics::ReadIntegratorParams();
 
 	// set the runtime parameters of the network, if it has any
 	if constexpr (requires { Microphysics_Traits<problem_t>::Network::ReadParameters(); }) {
@@ -1286,7 +1288,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		if constexpr (Microphysics_Traits<problem_t>::chemistry) {
 			if (enableChemistry_ == 1) {
 				// compute chemistry
-				burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+				burn_success =
+				    quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed, integratorParams_);
 			}
 		}
 	};
@@ -3413,7 +3416,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				}
 				// Also adds the thermal-band chemical emission j_g to radEnergySource, which step 3 consumes.
 				quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
-											 min_density_allowed, dustHeatingSource, radEnergySource);
+											 min_density_allowed, dustHeatingSource, radEnergySource,
+											 integratorParams_);
 			}
 		}
 

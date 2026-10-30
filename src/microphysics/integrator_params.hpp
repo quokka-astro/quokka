@@ -4,41 +4,43 @@
 /// \brief Runtime parameters of the microphysics integrators, read from the `integrator` prefix. Ported from Microphysics'
 /// integration/_parameters and integration/Rosenbrock/_parameters, with the same names and defaults. The integrator
 /// switches are compile-time traits instead (microphysics_traits.hpp).
-///
-/// The variables are defined in integrator_params.cpp, not inline here: HIP cannot register inline managed variables.
 
-#include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
-namespace quokka::microphysics::integrator_params
+namespace quokka::microphysics
 {
 
-/// Relative and absolute tolerances of the species.
-extern AMREX_GPU_MANAGED amrex::Real rtol_spec; // NOLINT
-extern AMREX_GPU_MANAGED amrex::Real atol_spec; // NOLINT
-/// Relative and absolute tolerances of the energy.
-extern AMREX_GPU_MANAGED amrex::Real rtol_enuc; // NOLINT
-extern AMREX_GPU_MANAGED amrex::Real atol_enuc; // NOLINT
-/// Relative and absolute tolerances of the chemical-band photon numbers.
-extern AMREX_GPU_MANAGED amrex::Real rtol_rad_num; // NOLINT
-extern AMREX_GPU_MANAGED amrex::Real atol_rad_num; // NOLINT
-/// A burn fails if a species ends below -species_failure_tolerance.
-extern AMREX_GPU_MANAGED amrex::Real species_failure_tolerance; // NOLINT
-/// A burn fails if a chemical-band photon number ends below -radiation_failure_tolerance.
-extern AMREX_GPU_MANAGED amrex::Real radiation_failure_tolerance; // NOLINT
-/// The floor of the species and the photon numbers.
-extern AMREX_GPU_MANAGED amrex::Real SMALL_X_SAFE; // NOLINT
-/// The largest number of steps in one burn.
-extern AMREX_GPU_MANAGED int ode_max_steps; // NOLINT
-/// The Rosenbrock integrator rejects a step that changes a species above X_reject_buffer * atol_spec by more than a
-/// factor of 4 either way.
-extern AMREX_GPU_MANAGED amrex::Real X_reject_buffer; // NOLINT
-/// Print a summary after each burn (CPU builds only).
-extern AMREX_GPU_MANAGED bool burner_verbose; // NOLINT
+using amrex::literals::operator""_rt;
+
+/// The runtime parameters of the integrators.
+struct IntegratorParams {
+	/// Relative and absolute tolerances of the species.
+	amrex::Real rtol_spec = 1.e-10_rt;
+	amrex::Real atol_spec = 1.e-10_rt;
+	/// Relative and absolute tolerances of the energy.
+	amrex::Real rtol_enuc = 1.e-10_rt;
+	amrex::Real atol_enuc = 1.e-25_rt;
+	/// Relative and absolute tolerances of the chemical-band photon numbers.
+	amrex::Real rtol_rad_num = 1.e-10_rt;
+	amrex::Real atol_rad_num = 1.e-10_rt;
+	/// A burn fails if a species ends below -species_failure_tolerance.
+	amrex::Real species_failure_tolerance = 1.e-2_rt;
+	/// A burn fails if a chemical-band photon number ends below -radiation_failure_tolerance.
+	amrex::Real radiation_failure_tolerance = 1.e-2_rt;
+	/// The floor of the species and the photon numbers.
+	amrex::Real SMALL_X_SAFE = 1.0e-30_rt;
+	/// The largest number of steps in one burn.
+	int ode_max_steps = 150000;
+	/// The Rosenbrock integrator rejects a step that changes a species above X_reject_buffer * atol_spec by more than a
+	/// factor of 4 either way.
+	amrex::Real X_reject_buffer = 1.0_rt;
+	/// Print a summary after each burn (CPU builds only).
+	bool burner_verbose = false;
+};
 
 /// Read the integrator parameters. Replaces the integrator part of Microphysics' init_extern_parameters().
-void readIntegratorParams();
+auto ReadIntegratorParams() -> IntegratorParams;
 
-} // namespace quokka::microphysics::integrator_params
+} // namespace quokka::microphysics
 
 #endif // MICROPHYSICS_INTEGRATOR_PARAMS_HPP_
