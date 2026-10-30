@@ -258,6 +258,9 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 	const bool storeExtraPressures = (nPrimExtra_ > 0) && (primVar_mf.nComp() >= nPrimVar_);
 
 	amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		// storeExtraPressures is only read inside `if constexpr` below; nvcc can't first-capture
+		// a variable from inside constexpr-if, so touch it unconditionally here first
+		[[maybe_unused]] bool const storeExtraPressures_captured = storeExtraPressures;
 		// First-capture the magnetic field arrays by accessing them early
 		// This forces NVCC to capture them before the constexpr if block
 		std::remove_cv_t<std::remove_reference_t<decltype(cons_fc_x0[bx])>> fc_x0_ref{};
