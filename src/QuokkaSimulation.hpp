@@ -3664,8 +3664,18 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 	// one level-wide flux kernel per direction and state, writing the persistent face arrays. All fluxes are computed before
 	// state_new_cc_ is updated below; each box's fluxes read only that box's FAB (valid + ghost cells), so this matches the
 	// per-box order of compute-then-update.
-	auto &fluxesOld = computeRadiationFluxesLevel(lev, state_new_cc_[lev], radFluxOld_, groupBegin, groupEnd);
+	// rad-01: the old-state fluxes carry weight Aex_s1_coeff = Aex_31 - alpha*Aex_21, which is exactly 0 for PD-ARS; skip their
+	// evaluation then (AddFluxesRK2 does not read them; the stage fluxes are passed in their place only to have valid arrays).
+	constexpr double Aex_s1_coeff = IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> *fluxesOldPtr = nullptr;
+	if constexpr (Aex_s1_coeff != 0.0) {
+		fluxesOldPtr = &computeRadiationFluxesLevel(lev, state_new_cc_[lev], radFluxOld_, groupBegin, groupEnd);
+	}
 	auto &fluxes = computeRadiationFluxesLevel(lev, state_inter, radFlux_, groupBegin, groupEnd);
+	if constexpr (Aex_s1_coeff == 0.0) {
+		fluxesOldPtr = &fluxes;
+	}
+	auto &fluxesOld = *fluxesOldPtr;
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -3679,7 +3689,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 		    stateNew_cc, stateOld_cc, stateInter_cc,
 		    {AMREX_D_DECL(fluxesOld[0].const_array(iter), fluxesOld[1].const_array(iter), fluxesOld[2].const_array(iter))},
 		    {AMREX_D_DECL(fluxes[0].const_array(iter), fluxes[1].const_array(iter), fluxes[2].const_array(iter))}, dt_radiation, dx, indexRange,
-		    ncompHyperbolic_, IMEX_alpha, IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21, IMEX_Aex_32, groupBegin, groupEnd);
+		    ncompHyperbolic_, IMEX_alpha, Aex_s1_coeff, IMEX_Aex_32, groupBegin, groupEnd);
 	}
 
 	if (do_reflux) {
