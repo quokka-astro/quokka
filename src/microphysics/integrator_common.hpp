@@ -37,16 +37,16 @@ using amrex::literals::operator""_rt;
 template <typename Layout, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state, const IntegratorT &int_state)
 {
-	for (int n = 1; n <= Layout::num_spec; ++n) {
-		state.xn[n - 1] = int_state.y(n);
+	for (int n = 0; n < Layout::num_spec; ++n) {
+		state.xn[n] = int_state.y[n];
 	}
-	state.e = int_state.y(Layout::energy_row);
+	state.e = int_state.y[Layout::energy_row];
 	if constexpr (Layout::photochemistry) {
-		for (int n = 1; n <= Layout::num_chem_rad_eqs; ++n) {
-			state.rn[n - 1] = int_state.y(Layout::energy_row + n);
+		for (int n = 0; n < Layout::num_chem_rad_eqs; ++n) {
+			state.rn[n] = int_state.y[Layout::energy_row + 1 + n];
 		}
-		for (int n = 1; n <= Layout::num_thermal_bands; ++n) {
-			state.re_thermal[n - 1] = int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + n);
+		for (int n = 0; n < Layout::num_thermal_bands; ++n) {
+			state.re_thermal[n] = int_state.y[Layout::thermal_band_row + n];
 		}
 		state.c_hat = int_state.c_hat;
 	}
@@ -62,22 +62,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state
 template <typename Layout, typename IntegratorT, typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void integrator_to_burn(const IntegratorT &int_state, BurnT &state)
 {
-	for (int n = 1; n <= Layout::num_spec; ++n) {
-		state.xn[n - 1] = int_state.y(n);
+	for (int n = 0; n < Layout::num_spec; ++n) {
+		state.xn[n] = int_state.y[n];
 	}
 
-	state.e = int_state.y(Layout::energy_row);
+	state.e = int_state.y[Layout::energy_row];
 
 	if constexpr (Layout::photochemistry) {
-		for (int n = 1; n <= Layout::num_chem_rad_eqs; ++n) {
-			state.rn[n - 1] = int_state.y(Layout::energy_row + n);
+		for (int n = 0; n < Layout::num_chem_rad_eqs; ++n) {
+			state.rn[n] = int_state.y[Layout::energy_row + 1 + n];
 		}
-		for (int n = 1; n <= Layout::num_thermal_bands; ++n) {
-			state.re_thermal[n - 1] = int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + n);
+		for (int n = 0; n < Layout::num_thermal_bands; ++n) {
+			state.re_thermal[n] = int_state.y[Layout::thermal_band_row + n];
 		}
 		state.c_hat = int_state.c_hat;
 		if constexpr (Layout::q_dust) {
-			state.e_dust_absorbed = int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1);
+			state.e_dust_absorbed = int_state.y[Layout::dust_row];
 		}
 	}
 
@@ -88,22 +88,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void integrator_to_burn(const Integrato
 template <typename Layout, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void burn_to_integrator(const BurnT &state, IntegratorT &int_state)
 {
-	for (int n = 1; n <= Layout::num_spec; ++n) {
-		int_state.y(n) = state.xn[n - 1];
+	for (int n = 0; n < Layout::num_spec; ++n) {
+		int_state.y[n] = state.xn[n];
 	}
 
-	int_state.y(Layout::energy_row) = state.e;
+	int_state.y[Layout::energy_row] = state.e;
 
 	if constexpr (Layout::photochemistry) {
-		for (int n = 1; n <= Layout::num_chem_rad_eqs; ++n) {
-			int_state.y(Layout::energy_row + n) = state.rn[n - 1];
+		for (int n = 0; n < Layout::num_chem_rad_eqs; ++n) {
+			int_state.y[Layout::energy_row + 1 + n] = state.rn[n];
 		}
-		for (int n = 1; n <= Layout::num_thermal_bands; ++n) {
-			int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + n) = state.re_thermal[n - 1];
+		for (int n = 0; n < Layout::num_thermal_bands; ++n) {
+			int_state.y[Layout::thermal_band_row + n] = state.re_thermal[n];
 		}
 		int_state.c_hat = state.c_hat;
 		if constexpr (Layout::q_dust) {
-			int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1) = state.e_dust_absorbed;
+			int_state.y[Layout::dust_row] = state.e_dust_absorbed;
 		}
 	}
 }
@@ -112,22 +112,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void burn_to_integrator(const BurnT &st
 template <typename Layout, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void clean_state(IntegratorT &int_state, const IntegratorParams &params)
 {
-	for (int n = 1; n <= Layout::neqs; ++n) {
+	for (int n = 0; n < Layout::neqs; ++n) {
 		switch (Layout::role(n)) {
 			case VarRole::Species:
 				// do_species_clip also caps each species at 1, which only makes sense for mass fractions
 				if constexpr (Layout::traits::do_species_clip) {
-					int_state.y(n) = amrex::Clamp(int_state.y(n), params.SMALL_X_SAFE, 1.0_rt);
+					int_state.y[n] = amrex::Clamp(int_state.y[n], params.SMALL_X_SAFE, 1.0_rt);
 				}
 				// enforce positivity of the number densities
-				int_state.y(n) = amrex::max(int_state.y(n), params.SMALL_X_SAFE);
+				int_state.y[n] = amrex::max(int_state.y[n], params.SMALL_X_SAFE);
 				break;
 			case VarRole::ChemPhotonNumber:
 			case VarRole::ThermalBandEnergy:
-				int_state.y(n) = amrex::max(int_state.y(n), params.SMALL_X_SAFE);
+				int_state.y[n] = amrex::max(int_state.y[n], params.SMALL_X_SAFE);
 				break;
 			case VarRole::DustAbsorbedEnergy:
-				int_state.y(n) = amrex::max(int_state.y(n), 0.0_rt);
+				int_state.y[n] = amrex::max(int_state.y[n], 0.0_rt);
 				break;
 			case VarRole::Energy:
 			case VarRole::ChemPhotonFlux:
@@ -140,12 +140,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void clean_state(IntegratorT &int_state
 	if constexpr (Layout::traits::renormalize_abundances) {
 		amrex::Real sum = 0.0_rt;
 
-		for (int n = 1; n <= Layout::num_spec; ++n) {
-			sum += int_state.y(n);
+		for (int n = 0; n < Layout::num_spec; ++n) {
+			sum += int_state.y[n];
 		}
 
-		for (int n = 1; n <= Layout::num_spec; ++n) {
-			int_state.y(n) /= sum;
+		for (int n = 0; n < Layout::num_spec; ++n) {
+			int_state.y[n] /= sum;
 		}
 	}
 }
@@ -154,7 +154,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void clean_state(IntegratorT &int_state
 /// the network.
 template <typename Layout, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT &state, IntegratorT &int_state,
-						  amrex::Array1D<amrex::Real, 1, Layout::neqs> &ydot, const IntegratorParams &params)
+						  amrex::GpuArray<amrex::Real, Layout::neqs> &ydot, const IntegratorParams &params)
 {
 	constexpr int int_neqs = Layout::neqs;
 
@@ -187,15 +187,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 		// Allow energy integration to be disabled.
 
 		if constexpr (!Layout::traits::integrate_energy) {
-			ydot(Layout::energy_row) = 0.0_rt;
+			ydot[Layout::energy_row] = 0.0_rt;
 		}
 	}
 
 	// The zeroing is a select after the branch, not stores inside an else branch: the compiler would merge such stores
 	// with the network's last store into one store with a run-time index, which keeps the whole integrator state, ydot
 	// included, in scratch memory on the GPU.
-	for (int n = 1; n <= int_neqs; ++n) {
-		ydot(n) = in_bounds ? ydot(n) : 0.0_rt;
+	for (int n = 0; n < int_neqs; ++n) {
+		ydot[n] = in_bounds ? ydot[n] : 0.0_rt;
 	}
 }
 
@@ -210,7 +210,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 	// bounds. Otherwise set the Jacobian to zero and return.
 
 	if (state.T <= EOSData::mintemp || state.T >= Layout::traits::max_temp) {
-		pd.zero();
+		pd = MatrixType{};
 		return;
 	}
 
@@ -218,14 +218,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 
 	integrator_to_burn<Layout>(int_state, state);
 
-	pd.zero();
+	pd = MatrixType{};
 
 	actual_jac(state, pd);
 
 	// Allow temperature and energy integration to be disabled.
 
 	if constexpr (!Layout::traits::integrate_energy) {
-		for (int j = 1; j <= int_neqs; ++j) {
+		for (int j = 0; j < int_neqs; ++j) {
 			pd(Layout::energy_row, j) = 0.0_rt;
 		}
 	}
@@ -341,15 +341,15 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 		state.success = false;
 	}
 
-	for (int n = 1; n <= Layout::neqs; ++n) {
+	for (int n = 0; n < Layout::neqs; ++n) {
 		switch (Layout::role(n)) {
 			case VarRole::Species:
-				if (int_state.y(n) < -params.species_failure_tolerance) {
+				if (int_state.y[n] < -params.species_failure_tolerance) {
 					state.success = false;
 				}
 				break;
 			case VarRole::ChemPhotonNumber:
-				if (int_state.y(n) < -params.radiation_failure_tolerance) {
+				if (int_state.y[n] < -params.radiation_failure_tolerance) {
 					state.success = false;
 				}
 				break;

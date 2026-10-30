@@ -18,17 +18,16 @@ using namespace C;
 
 void actual_rhs_init();
 
-// Species indices (0-indexed, xn[]/spmasses[]) come from the Species enum in network.hpp.
-// ydot()/jac() are 1-indexed, so the same species use index+1 there.
-// net_ienuc (the integrator layout's energy_row, NumSpec + 1) is the specific internal energy row/column.
+// Species indices (xn[]/spmasses[]) come from the Species enum in network.hpp; ydot[]/jac() use the same indices.
+// net_ienuc (the integrator layout's energy_row, NumSpec) is the specific internal energy row/column.
 // Radiation rows/columns follow net_ienuc: photon number density, then
 // (with Microphysics_Traits::integrate_rad_flux) photon flux.
 constexpr int e_idx = static_cast<int>(quokka::networks::Thermophotochemistry::Species::e);
 constexpr int H_idx = static_cast<int>(quokka::networks::Thermophotochemistry::Species::H);
 constexpr int Hp_idx = static_cast<int>(quokka::networks::Thermophotochemistry::Species::H_p);
-constexpr int ie = e_idx + 1;
-constexpr int iH = H_idx + 1;
-constexpr int iHp = Hp_idx + 1;
+constexpr int ie = e_idx;
+constexpr int iH = H_idx;
+constexpr int iHp = Hp_idx;
 // The thermal-band and dust rows come from the integrator's layout (IntegratorLayout::thermal_band_row and dust_row).
 // Band 0 is the IR, band 1 the optical; the order matches group_ir / group_optical on the Quokka side, which reads
 // these back into the radiation state.
@@ -186,7 +185,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) 
 
 template <typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-actual_rhs(const BurnT &state, amrex::Array1D<Real, 1, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
+actual_rhs(const BurnT &state, amrex::GpuArray<Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
 	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
 	constexpr int net_ienuc = Layout::energy_row;
@@ -218,10 +217,10 @@ actual_rhs(const BurnT &state, amrex::Array1D<Real, 1, quokka::microphysics::Int
 	const amrex::Real recombination_term =
 	    (thermophotochemistry::recombination_switch != 0) ? get_recombination_coefficient(state.T) * n_e * n_HII : 0.0_rt;
 
-	ydot(ie) = photoionization_term + collisional_ionization_term - recombination_term;
-	ydot(iH) = -ydot(ie);
-	ydot(iHp) = ydot(ie);
-	ydot(net_ienuc) = 0.0_rt;
+	ydot[ie] = photoionization_term + collisional_ionization_term - recombination_term;
+	ydot[iH] = -ydot[ie];
+	ydot[iHp] = ydot[ie];
+	ydot[net_ienuc] = 0.0_rt;
 	const amrex::Real recombination_cooling_rate = (thermophotochemistry::energy_switch != 0 && thermophotochemistry::recombination_cooling_switch != 0)
 							   ? get_recombination_cooling_coefficient(state.T) * n_e * n_HII
 							   : 0.0_rt;
@@ -249,7 +248,7 @@ actual_rhs(const BurnT &state, amrex::Array1D<Real, 1, quokka::microphysics::Int
 	energy_source -= recombination_cooling_rate;
 	energy_source -= ion_ff_cooling_rate;
 	energy_source -= collisional_ionization_cooling_rate;
-	ydot(net_ienuc) = energy_source / state.rho;
+	ydot[net_ienuc] = energy_source / state.rho;
 
 	amrex::Real chat_dust_kappa_rho = 0.0_rt;
 	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
@@ -257,18 +256,18 @@ actual_rhs(const BurnT &state, amrex::Array1D<Real, 1, quokka::microphysics::Int
 	}
 	const amrex::Real dust_absorption_term = chat_dust_kappa_rho * n_gamma;
 
-	ydot(i_ngamma) = -photoionization_term - dust_absorption_term;
+	ydot[i_ngamma] = -photoionization_term - dust_absorption_term;
 	if constexpr (BurnT::traits::integrate_rad_flux) {
 		const amrex::Real n_gamma_flux = state.rn[1];
-		ydot(i_ngamma_flux) = -chat_sigma_photo * n_HI * n_gamma_flux - chat_dust_kappa_rho * n_gamma_flux;
+		ydot[i_ngamma_flux] = -chat_sigma_photo * n_HI * n_gamma_flux - chat_dust_kappa_rho * n_gamma_flux;
 	}
 	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
-		ydot(i_dust) = dust_absorption_term * get_ionizing_band_photon_energy();
+		ydot[i_dust] = dust_absorption_term * get_ionizing_band_photon_energy();
 	}
 
 	const amrex::Real recombination_binding_energy_rate = (thermophotochemistry::energy_switch != 0) ? RydbergEnergy * recombination_term : 0.0_rt;
-	ydot(i_ir) = ion_ff_cooling_rate + KI_cooling_rate;
-	ydot(i_optical) = recombination_cooling_rate + recombination_binding_energy_rate;
+	ydot[i_ir] = ion_ff_cooling_rate + KI_cooling_rate;
+	ydot[i_optical] = recombination_cooling_rate + recombination_binding_energy_rate;
 }
 
 template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const BurnT &state, MatrixType &jac)
@@ -345,7 +344,7 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 		chat_dust_kappa_rho = state.c_hat * state.dust_kappa * state.rho;
 	}
 
-	jac.zero();
+	// the integrator zeroes jac before calling actual_jac
 
 	jac(ie, ie) =
 	    (thermophotochemistry::collisional_ionization_switch * n_HI * sigma_coll - thermophotochemistry::recombination_switch * alpha_rec * n_HII);
