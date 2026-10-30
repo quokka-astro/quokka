@@ -25,6 +25,7 @@
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
+#include "microphysics/microphysics_traits.hpp"
 #include "radiation/radiation_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
 
@@ -47,6 +48,10 @@ template <> struct Physics_Traits<PopIII> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr int numMassScalars = NumSpec;		     // number of chemical species
 	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
+};
+
+template <> struct Microphysics_Traits<PopIII> : DefaultMicrophysicsTraits {
+	static constexpr bool chemistry = true; // built with CHEMISTRY
 };
 
 template <> struct SimulationData<PopIII> {

@@ -61,6 +61,7 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 
 template <> struct Microphysics_Traits<PhotoionizationStreamingProblem> : DefaultMicrophysicsTraits {
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
+	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {

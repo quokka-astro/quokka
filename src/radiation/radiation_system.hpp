@@ -26,6 +26,7 @@
 #include "hydro/EOS.hpp"
 #include "hyperbolic_system.hpp"
 #include "math/math_impl.hpp"
+#include "microphysics/microphysics_traits.hpp"
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
 #include "util/valarray.hpp"
@@ -131,7 +132,6 @@ template <typename problem_t> struct ISM_Traits {
 	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool thermal_band_photochemistry = false;
-	static constexpr bool dust_chemical_band_absorption = false;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -312,9 +312,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool enable_dust_gas_thermal_coupling_model_ = ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 	static constexpr bool thermal_band_photochemistry_ = ISM_Traits<problem_t>::thermal_band_photochemistry;
-	static constexpr bool dust_chemical_band_absorption_ = ISM_Traits<problem_t>::dust_chemical_band_absorption;
+	static constexpr bool dust_chemical_band_absorption_ = Microphysics_Traits<problem_t>::dust_chemical_band_absorption;
 	static_assert(!dust_chemical_band_absorption_ || enable_dust_gas_thermal_coupling_model_,
-		      "ISM_Traits::dust_chemical_band_absorption requires ISM_Traits::enable_dust_gas_thermal_coupling_model = true, "
+		      "Microphysics_Traits::dust_chemical_band_absorption requires ISM_Traits::enable_dust_gas_thermal_coupling_model = true, "
 		      "otherwise the dust-absorbed chemical-band energy (Q_dust) is silently dropped.");
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
@@ -357,11 +357,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(RadSystem_NChemBands<problem_t>::value >= 0 && RadSystem_NChemBands<problem_t>::value <= nGroups_,
 		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
 
-#ifdef PHOTOCHEMISTRY
-	static_assert(RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
-		      "ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg when PHOTOCHEMISTRY is enabled.");
-#endif
-
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
 
@@ -382,9 +377,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static auto GetThermalBandQuanta(int group_index) -> amrex::Real;
 
-#ifdef PHOTOCHEMISTRY
 	AMREX_GPU_HOST_DEVICE static auto GetChemBandQuanta(int group_index) -> amrex::Real;
-#endif
 
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange);
 	// The transport kernels below act only on the radiation groups [groupBegin, groupEnd); the components of
@@ -970,9 +963,11 @@ template <typename problem_t> auto RadSystem<problem_t>::GetThermalBandQuanta(in
 	return 0.5 * (radBoundaries_[group_index] + radBoundaries_[group_index + 1]) * C::ev2erg;
 }
 
-#ifdef PHOTOCHEMISTRY
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
 {
+	static_assert(RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
+		      "ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg with photochemistry.");
+
 	auto const ev_bounds = RadSystem_Traits<problem_t>::ChemBands();
 	amrex::Real const ev_low = ev_bounds[group_index];
 	amrex::Real const ev_high = ev_bounds[group_index + 1];
@@ -995,7 +990,6 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::G
 
 	return ev_avg * C::ev2erg;
 }
-#endif
 
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const & /*cons*/, array_t &maxSignal, amrex::Box const &indexRange)

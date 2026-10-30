@@ -113,6 +113,21 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | chemistry.max_density_allowed | Float         | `1.0e300`               | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold.  |
 | chemistry.min_density_allowed | Float         | Smallest positive Value | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
 
+Photochemistry has the same three parameters with the prefix `photochemistry` (`photochemistry.enabled`, `photochemistry.max_density_allowed`, `photochemistry.min_density_allowed`).
+
+### Compile-time switches
+
+Whether a problem compiles chemistry or photochemistry at all is set by fields of `Microphysics_Traits<problem_t>` (see `src/microphysics/microphysics_traits.hpp`). `chemistry.enabled = 1` or `photochemistry.enabled = 1` aborts the run if the matching trait is `false`.
+
+| Trait | Default | Description |
+|---|---|---|
+| `chemistry` | `false` | Compile the chemistry source term. Also makes `EOSMicrophysics` the default EOS backend. |
+| `photochemistry` | `false` | Compile photochemistry in the radiation substeps. Also makes `EOSMicrophysics` the default EOS backend. |
+| `dust_chemical_band_absorption` | `false` | Dust absorbs chemical-band photons (`Q_dust`): the network carries the absorbed energy, which heats the dust. Requires `ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model = true`. |
+| `integrate_rad_flux` | `true` | With photochemistry, integrate the photon flux equations in the network. With `false`, the flux is determined algebraically. |
+
+While the Microphysics submodule is still used, the problem's `CMakeLists.txt` must also define the build macros that Microphysics reads: `CHEMISTRY` with `chemistry`, `PHOTOCHEMISTRY` with `photochemistry`, `DUST_CHEMICAL_BAND_ABSORPTION` with `dust_chemical_band_absorption`, and `SKIP_PHOTOCHEMFLUX` with `integrate_rad_flux = false`. A trait that does not match its macro is a compile error.
+
 ## Integrator (VODE)
 
 These parameters control the VODE ODE integrator used for chemistry and photochemistry source terms. They are read from the `integrator` prefix by `readIntegratorParams()` in `src/microphysics/integrator_params.hpp`. See also `docs/markdown/photoionization.md`.
