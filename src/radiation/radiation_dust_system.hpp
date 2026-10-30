@@ -307,6 +307,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state
 	quokka::valarray<double, nGroups_> work_local{}; // work term used in the Newton-Raphson iteration of the current outer iteration
 	quokka::valarray<double, nGroups_> fourPiBoverC{};
+	quokka::valarray<double, nGroups_> d_fourpiboverc_d_t{};
+	double T_d_planck = NAN; // temperature at which fourPiBoverC and the opacity table were last evaluated
 	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
 	OpacityTerms<problem_t> opacity_terms{};
@@ -411,7 +413,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 
 		// 2. Compute kappaP and kappaE at dust temperature
 
-		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+		// one fused pass over the group edges gives both 4 pi B / c and its temperature derivative
+		ComputeThermalRadiationAndTempDerivativeMultiGroup(T_d, rad_boundaries, fourPiBoverC, d_fourpiboverc_d_t);
+		T_d_planck = T_d;
 
 		opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n,
 								     opacity_terms.alpha_E, opacity_terms.alpha_P);
@@ -481,7 +485,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 			}
 		}
 
-		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
 		AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
 		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
@@ -707,6 +710,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	result.work = work_local;
 	result.T_gas = T_gas;
 	result.T_d = T_d;
+	// UpdateFlux reuses fourPiBoverC and the opacity table of the final iteration. Both were evaluated at T_d_planck; if T_d moved
+	// since (decoupled-dust update followed by a relative-change or maxIter exit), re-evaluate at the returned T_d, as UpdateFlux did.
+	if (T_d != T_d_planck) {
+		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+		opacity_terms.kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
+	}
+	result.fourPiBoverC = fourPiBoverC;
 	result.opacity_terms = opacity_terms;
 	result.gas_decoupled = (dust_model == 2);
 	return result;
@@ -783,6 +793,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state
 	quokka::valarray<double, nGroups_> work_local{}; // work term used in the Newton-Raphson iteration of the current outer iteration
 	quokka::valarray<double, nGroups_> fourPiBoverC{};
+	quokka::valarray<double, nGroups_> d_fourpiboverc_d_t{};
+	double T_d_planck = NAN; // temperature at which fourPiBoverC and the opacity table were last evaluated
 	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
 	OpacityTerms<problem_t> opacity_terms{};
@@ -873,7 +885,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 		// 2. Compute kappaP and kappaE at dust temperature
 
-		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+		// one fused pass over the group edges gives both 4 pi B / c and its temperature derivative
+		ComputeThermalRadiationAndTempDerivativeMultiGroup(T_d, rad_boundaries, fourPiBoverC, d_fourpiboverc_d_t);
+		T_d_planck = T_d;
 
 		opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n,
 								     opacity_terms.alpha_E, opacity_terms.alpha_P);
@@ -936,7 +950,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 			}
 		}
 
-		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
 		AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
 		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
@@ -1110,6 +1123,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	result.work = work_local;
 	result.T_gas = T_gas;
 	result.T_d = T_d;
+	// UpdateFlux reuses fourPiBoverC and the opacity table of the final iteration. Both were evaluated at T_d_planck; if T_d moved
+	// since (decoupled-dust update followed by a relative-change or maxIter exit), re-evaluate at the returned T_d, as UpdateFlux did.
+	if (T_d != T_d_planck) {
+		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+		opacity_terms.kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
+	}
+	result.fourPiBoverC = fourPiBoverC;
 	result.opacity_terms = opacity_terms;
 	result.gas_decoupled = (dust_model == 2);
 	return result;

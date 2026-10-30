@@ -266,7 +266,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
 					F_D = Erad_guess - Erad0 - (R + Src);
 					double F_D_abs = 0.0;
-					if (tau * std::max(radiation_constant_ * std::pow(T_gas, 4), Etot0) < resid_tol * Etot0) {
+					if (tau * std::max(radiation_constant_ * ((T_gas * T_gas) * (T_gas * T_gas)), Etot0) < resid_tol * Etot0) {
 						Erad_guess = Erad0 + Src;
 						F_D = 0.0;
 						F_D_abs = 0.0;
@@ -435,7 +435,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					double Planck_term = kappaP * fourPiBoverC * lorentz_factor_v;
 					// compute (kappa_F - kappa_E) term
 					if (kappaF != kappaE) {
-						Planck_term += (kappaF - kappaE) * erad * std::pow(lorentz_factor_v, 3);
+						Planck_term += (kappaF - kappaE) * erad * (lorentz_factor_v * lorentz_factor_v * lorentz_factor_v);
 					}
 					Planck_term *= chat * dt * gasMtm0[n];
 
@@ -467,7 +467,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 							dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
 						}
 					} else {
-						const double K0 = 2.0 * rho * chat * dt * (kappaF - kappaE) / c / c * std::pow(lorentz_factor_v_v, 3);
+						const double K0 = 2.0 * rho * chat * dt * (kappaF - kappaE) / c / c * (lorentz_factor_v_v * lorentz_factor_v_v * lorentz_factor_v_v);
 
 						// A test to see if this routine reduces to the correct result when ignoring the beta^2 terms
 						// const double X0 = 1.0 + rho * chat * dt * (kappaF);
