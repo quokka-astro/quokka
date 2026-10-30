@@ -56,6 +56,7 @@
 - [Debugging](debugging.md)
 - [Assertions and error checking](error_checking.md)
 - [Performance tips](performance.md)
+- [Kernel autoresearch](kernel_autoresearch.md)
 - [How to use clang-tidy](howto_clang_tidy.md)
 - [DataTable](data_table.md)
 
