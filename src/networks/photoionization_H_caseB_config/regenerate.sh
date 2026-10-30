@@ -26,7 +26,7 @@ done
 
 # A fork of jaff with the quokka template, until jaff itself has it
 JAFF_REPO="https://github.com/James471/jaff.git"
-JAFF_COMMIT="025233ba421e10d237ac31e8495c7342b85b575b"
+JAFF_COMMIT="515712a5e3913f7a1d6974174ff31c01bc8f0644"
 # Pin sympy version so that jaffgen's output is reproducible
 SYMPY_VERSION="1.14.0"
 
@@ -66,7 +66,6 @@ echo "==> Running jaffgen, output to ${OUTDIR}"
 	--config "${CONFIG_DIR}/jaffgen.toml" \
 	--network "${CONFIG_DIR}/photoionization_H_caseB.jet" \
 	--template quokka \
-	--lang cxx \
 	--outdir "${OUTDIR}"
 
 echo "==> Running clang-format on generated files"
