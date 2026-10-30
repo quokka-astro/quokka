@@ -6,6 +6,7 @@
 #include "AMReX_REAL.H"
 #include "fundamental_constants.H"
 #include "particles/star_particle_indices.H"
+#include <array>
 #include <cmath>
 
 namespace quokka
@@ -20,6 +21,8 @@ struct ToyStellarModel {
 	// The toy model is stateless, so it needs none.
 	static constexpr int nExtraReal = 0;
 	static constexpr int nExtraInt = 0;
+	static constexpr std::array<const char *, nExtraReal> extraRealNames{};
+	static constexpr std::array<const char *, nExtraInt> extraIntNames{};
 
 	static constexpr amrex::Real L_solar = 3.828e33; // erg/s (CODATA 2022)
 	static constexpr amrex::Real radius_exponent = 0.4;
@@ -54,7 +57,7 @@ struct ToyStellarModel {
 	// integer state, etc.).
 	//   rdata:    [in/out] particle real-component array (layout defined by StarParticleDataIdx)
 	//   idata:    [in/out] particle integer-component array (may be nullptr if NInt == 0)
-	//   n_groups: [in]     number of radiation groups (= number of lum slots after index 7)
+	//   n_groups: [in]     number of radiation groups (= number of lum slots)
 	//   dt:       [in]     timestep
 	// The toy model is stateless, so it only reads mass/mdot and writes radius/lum.
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void evolve(amrex::Real *rdata, [[maybe_unused]] int *idata, int n_groups,
