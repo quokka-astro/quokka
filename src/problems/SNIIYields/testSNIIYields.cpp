@@ -121,22 +121,24 @@ template <> void QuokkaSimulation<test_SNII_Yields>::createInitialStochasticStel
 
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
-			auto &particle_array = ikv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
+			auto &particle_tile = ikv.second;
+			const auto layout = StochasticStellarPopParticles->Layout();
+			const auto np = particle_tile.numParticles();
 
 			if (np == 0) {
 				continue;
 			}
 
-			auto *pdata = particle_array().data();
+			const auto data = particle_tile.getParticleTileData();
 			const int chem_base = quokka::StochasticStellarPopParticleChemistryBaseIdx<test_SNII_Yields>();
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				quokka::ParticleView(data, i, layout).idata(quokka::StochasticStellarPopParticleStageIdx) =
+				    static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 				// Non-zero birth abundances catch accidental double-counting in table-driven yields.
-				pdata[i].rdata(chem_base) = 1.0e-3;
-				pdata[i].rdata(chem_base + 1) = 2.0e-3;
-				pdata[i].rdata(chem_base + 2) = 3.0e-3;
+				quokka::ParticleView(data, i, layout).rdata(chem_base) = 1.0e-3;
+				quokka::ParticleView(data, i, layout).rdata(chem_base + 1) = 2.0e-3;
+				quokka::ParticleView(data, i, layout).rdata(chem_base + 2) = 3.0e-3;
 			});
 		}
 	}
