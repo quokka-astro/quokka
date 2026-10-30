@@ -17,6 +17,7 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/burn_state.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include <algorithm>
@@ -26,10 +27,8 @@
 #include <string>
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 using Network = Microphysics_Traits<StromgrenSphereProblem>::Network;
 
@@ -212,7 +211,6 @@ template <> void QuokkaSimulation<StromgrenSphereProblem>::preCalculateInitialCo
 	pp2.query("recombination_switch", userData_.recombination_switch);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
@@ -238,7 +236,7 @@ template <> void QuokkaSimulation<StromgrenSphereProblem>::setInitialConditionsO
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::microphysics::BurnState<StromgrenSphereProblem> state;
 	std::array<Real, Network::NumSpec> numdens = {-1.0};
 	numdens[Network::Species::e] = userData_.n_e_init;
 	numdens[Network::Species::H] = userData_.n_HI_init;

@@ -13,8 +13,7 @@
 namespace quokka::microphysics
 {
 
-/// The burn state is a BurnState<problem_t> (burn_state.hpp) for the photochemistry problems and Microphysics' burn_t
-/// for the others.
+/// The burn state is a BurnState<problem_t> (burn_state.hpp).
 template <typename problem_t, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void Burn(BurnT &state, const amrex::Real dt)
 {
 	Microphysics_Traits<problem_t>::Integrator::template Integrate<problem_t>(state, dt);

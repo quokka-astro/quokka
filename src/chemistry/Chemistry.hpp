@@ -23,14 +23,15 @@ template <typename problem_t>
 auto computeChemistry(amrex::MultiFab &mf, amrex::Real dt, amrex::Real max_density_allowed, amrex::Real min_density_allowed) -> bool;
 } // namespace quokka::chemistry
 
-// The definition is compiled only in builds with chemistry, because it uses names that only those builds have: spmasses,
-// small_x and eos() from Microphysics' primordial_chem EOS and network. Callers use Microphysics_Traits<problem_t>::chemistry.
-// This guard goes when the EOS and the network are in Quokka.
+// The definition is compiled only in builds with chemistry, because it uses names that only those builds have: spmasses
+// and eos() from Microphysics' primordial_chem EOS, small_x from Microphysics' generated network parameters, and the
+// constants of the generated network_properties.H that the transitional check below compares against. Callers use Microphysics_Traits<problem_t>::chemistry.
+// This guard goes when the EOS is in Quokka and the generated constants are gone.
 #ifdef CHEMISTRY
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/burner.hpp"
 
 namespace quokka::chemistry
@@ -38,6 +39,11 @@ namespace quokka::chemistry
 
 template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed) -> bool
 {
+	using Network = typename Microphysics_Traits<problem_t>::Network;
+
+	// Transitional, until Microphysics' generated network_properties.H goes: the problem's network type must agree with the
+	// constants generated for its network.
+	static_assert(Network::NumSpec == NumSpec);
 
 	// Start off by assuming a successful burn.
 	int burn_success = 1;
@@ -61,22 +67,22 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, 0.0);
 
-			std::array<Real, NumSpec> chem = {-1.0};
-			std::array<Real, NumSpec> inmfracs = {-1.0};
+			std::array<Real, Network::NumSpec> chem = {-1.0};
+			std::array<Real, Network::NumSpec> inmfracs = {-1.0};
 			Real insum = 0.0_rt;
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				chem[nn] = state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) /
 					   rho; // state has partial densities, so divide by rho to get mass fractions
 			}
 
 			// do chemistry using microphysics
 
-			burn_t chemstate;
+			quokka::microphysics::BurnState<problem_t> chemstate;
 			chemstate.success = true;
 			int burn_failed = 0;
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				inmfracs[nn] = chem[nn] * rho / spmasses[nn];
 				chemstate.xn[nn] = inmfracs[nn];
 			}
@@ -115,13 +121,13 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			}
 
 			// ensure positivity and normalize
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
+				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], network_rp::small_x);
 				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
 				insum += inmfracs[nn];
 			}
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				inmfracs[nn] /= insum;
 				// update the number densities with conserved mass fractions
 				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
@@ -136,7 +142,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
 			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn] * rho; // scale by rho to return partial densities
 			}
 		});
