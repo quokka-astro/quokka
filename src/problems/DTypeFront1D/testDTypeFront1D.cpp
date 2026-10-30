@@ -15,6 +15,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "microphysics/microphysics_traits.hpp"
+#include "networks/thermophotochemistry_handwritten/network.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_dust_system.hpp"
 #include "radiation/radiation_system.hpp"
@@ -51,12 +52,22 @@ template <> struct quokka::EOS_Traits<DTypeFront1D> {
 	static constexpr double gamma = 5. / 3.;
 };
 
+template <> struct Microphysics_Traits<DTypeFront1D> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::Thermophotochemistry;
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
+	static constexpr bool photochemistry = true;		    // built with PHOTOCHEMISTRY
+	static constexpr bool dust_chemical_band_absorption = true; // built with DUST_CHEMICAL_BAND_ABSORPTION
+	static constexpr bool integrate_rad_flux = false;	    // built with SKIP_PHOTOCHEMFLUX
+};
+
+using Network = Microphysics_Traits<DTypeFront1D>::Network;
+
 template <> struct Physics_Traits<DTypeFront1D> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr int numMassScalars = NumSpec;
+	static constexpr int numMassScalars = Network::NumSpec;
 	static constexpr int numPassiveScalars = numMassScalars + 0;
-	static constexpr int nGroups = NumThermalBands + NumChemBands;
+	static constexpr int nGroups = Network::NumThermalBands + Network::NumChemBands;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
@@ -65,11 +76,11 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr int beta_order = 1;
 	static constexpr double energy_unit = C::ev2erg;
-	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{1.0e-6, 0.413567, ChemBandsHeader().arr[0],
-													  ChemBandsHeader().arr[1]};
+	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{1.0e-6, 0.413567, Network::ChemBands().arr[0],
+													  Network::ChemBands().arr[1]};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
-	static constexpr auto ChemBands() { return ChemBandsHeader(); }
+	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex; }
+	static constexpr auto ChemBands() { return Network::ChemBands(); }
 };
 
 template <> struct ISM_Traits<DTypeFront1D> {
@@ -77,13 +88,6 @@ template <> struct ISM_Traits<DTypeFront1D> {
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr bool thermal_band_photochemistry = true;
-};
-
-template <> struct Microphysics_Traits<DTypeFront1D> : DefaultMicrophysicsTraits {
-	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true;		    // built with PHOTOCHEMISTRY
-	static constexpr bool dust_chemical_band_absorption = true; // built with DUST_CHEMICAL_BAND_ABSORPTION
-	static constexpr bool integrate_rad_flux = false;	    // built with SKIP_PHOTOCHEMFLUX
 };
 
 template <> struct SimulationData<DTypeFront1D> {
@@ -460,7 +464,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	{
 		const amrex::Real l_s = stromgren_column(userData_.flux_ion, userData_.n_HI_init, userData_.T_ionized);
 		const amrex::Real c_s = ionized_sound_speed(userData_.T_ionized);
-		const amrex::Real l_d = dusty_stromgren_column(l_s, network_rp::dust_kappa * userData_.n_HI_init * spmasses[Species::H]);
+		const amrex::Real l_d = dusty_stromgren_column(l_s, Network::DustKappa() * userData_.n_HI_init * spmasses[Network::Species::H]);
 		userData_.l_ode_last_t_ = 0.0_rt;
 		userData_.l_ode_last_l_ = l_d;
 		userData_.l_ode_last_u_ = l_d * c_s;
@@ -491,14 +495,14 @@ template <> void QuokkaSimulation<DTypeFront1D>::setInitialConditionsOnGrid(quok
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	burn_t state;
-	std::array<Real, NumSpec> numdens = {-1.0};
-	numdens[Species::e] = userData_.n_e_init;
-	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::H_p] = userData_.n_HII_init;
+	std::array<Real, Network::NumSpec> numdens = {-1.0};
+	numdens[Network::Species::e] = userData_.n_e_init;
+	numdens[Network::Species::H] = userData_.n_HI_init;
+	numdens[Network::Species::H_p] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 	Real rhotot = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
 		rhotot += state.xn[n] * spmasses[n];
 	}
@@ -520,7 +524,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, RadSystem<DTypeFront1D>::x1GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFront1D>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFront1D>::x3GasMomentum_index) = 0.0_rt;
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + nn) =
 			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
 		}
@@ -545,9 +549,10 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 	const amrex::Real ionized_volume_integral = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
 				 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
-		    const amrex::Real n_HI = state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+		    const amrex::Real n_HI =
+			state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Network::Species::H)) / spmasses[Network::Species::H];
 		    const amrex::Real n_HII =
-			state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+			state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Network::Species::H_p)) / spmasses[Network::Species::H_p];
 		    const amrex::Real denom = n_HI + n_HII;
 		    if (denom <= 0.0_rt) {
 			    return 0.0_rt;
@@ -557,7 +562,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 	    });
 	const amrex::Real x_eff = ionized_volume_integral / transverse_area / 2.0_rt;
 
-	const amrex::Real chat_kappa_over_eps = c_hat * network_rp::dust_kappa / userData_.eps_ion;
+	const amrex::Real chat_kappa_over_eps = c_hat * Network::DustKappa() / userData_.eps_ion;
 	userData_.N_gamma_dust_ +=
 	    dt_[lev] * computeVolumeIntegral(
 			   [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
@@ -569,7 +574,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 	amrex::Real x_ode = std::numeric_limits<amrex::Real>::quiet_NaN();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const amrex::Real n_0 = userData_.n_HI_init;
-		const amrex::Real rho_0 = n_0 * spmasses[Species::H];
+		const amrex::Real rho_0 = n_0 * spmasses[Network::Species::H];
 		const amrex::Real l_s = stromgren_column(userData_.flux_ion, n_0, userData_.T_ionized);
 		const amrex::Real c_s = ionized_sound_speed(userData_.T_ionized);
 		const amrex::Real T_i = userData_.T_ionized;
@@ -578,7 +583,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 		const amrex::Real eps_rec = 13.6 * C::ev2erg + lambda_rec(T_i) / recombination_coefficient(T_i);
 		const amrex::Real Xi = (userData_.flux_ion * userData_.eps_ion + userData_.flux_optical * userData_.eps_opt) / (rho_0 * C::c_light);
 		const amrex::Real Xi_rec = userData_.flux_ion * eps_rec / (rho_0 * C::c_light);
-		const amrex::Real kappa_rho_0 = network_rp::dust_kappa * rho_0;
+		const amrex::Real kappa_rho_0 = Network::DustKappa() * rho_0;
 
 		amrex::Real dt_ode = t - userData_.l_ode_last_t_;
 		if (dt_ode < 0.0_rt) {
@@ -650,10 +655,11 @@ auto problem_main() -> int
 			amrex::LoopOnCpu(box, [&](int i, int j, int k) noexcept {
 				const amrex::Real rho = state(i, j, k, HydroSystem<DTypeFront1D>::density_index);
 				const amrex::Real Eint = state(i, j, k, RadSystem<DTypeFront1D>::gasInternalEnergy_index);
-				const amrex::Real n_HI_cell =
-				    state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+				const amrex::Real n_HI_cell = state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Network::Species::H)) /
+							      spmasses[Network::Species::H];
 				const amrex::Real n_HII_cell =
-				    state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+				    state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Network::Species::H_p)) /
+				    spmasses[Network::Species::H_p];
 				const amrex::Real denom = n_HI_cell + n_HII_cell;
 				if (denom <= 0.0_rt) {
 					return;
@@ -662,7 +668,7 @@ auto problem_main() -> int
 				const amrex::Real x_HI = n_HI_cell / denom;
 
 				burn_t bstate;
-				for (int nn = 0; nn < NumSpec; ++nn) {
+				for (int nn = 0; nn < Network::NumSpec; ++nn) {
 					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + nn) / spmasses[nn];
 				}
 				bstate.rho = rho;
@@ -846,8 +852,10 @@ auto problem_main() -> int
 		const amrex::Real E_ir = volume_integral(RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ir);
 		const amrex::Real E_opt = volume_integral(RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_optical);
 		const amrex::Real E_ion = volume_integral(RadSystem<DTypeFront1D>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * group_ionizing);
-		const amrex::Real N_HII = volume_integral(HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
-		const amrex::Real N_HI = volume_integral(HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+		const amrex::Real N_HII =
+		    volume_integral(HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Network::Species::H_p)) / spmasses[Network::Species::H_p];
+		const amrex::Real N_HI =
+		    volume_integral(HydroSystem<DTypeFront1D>::scalar0_index + static_cast<int>(Network::Species::H)) / spmasses[Network::Species::H];
 
 		const double t_end = sim.tNew_[0];
 		const double c_hat_over_c = RadSystem_Traits<DTypeFront1D>::c_hat_over_c;

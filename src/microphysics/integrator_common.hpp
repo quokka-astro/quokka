@@ -8,7 +8,6 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
-#include <type_traits>
 
 #include "AMReX_ANSIEscCode.H"
 #include "AMReX_Algorithm.H"
@@ -18,11 +17,11 @@
 #include "AMReX_REAL.H"
 
 #include "microphysics/integrator_errors.hpp"
+#include "microphysics/integrator_layout.hpp"
 #include "microphysics/integrator_params.hpp"
 #include "microphysics/microphysics_traits.hpp"
 
-// still from extern/Microphysics: burn_t, net_ienuc, eos(), the network's actual_rhs and actual_jac, and
-// integrator_neqs (only to check the layout)
+// still from extern/Microphysics: burn_t, eos(), and the network's actual_rhs and actual_jac
 #include "actual_rhs.H"
 #include "burn_type.H"
 #include "eos.H"
@@ -34,108 +33,20 @@ namespace quokka::microphysics
 
 using amrex::literals::operator""_rt;
 
-/// What an entry of the integrated vector y holds. The role decides the entry's tolerances, whether it counts toward
-/// the step error, and how clean_state floors it.
-enum class VarRole : std::uint8_t { Species, Energy, ChemPhotonNumber, ChemPhotonFlux, ThermalBandEnergy, DustAbsorbedEnergy };
-
-/// Whether entries with this role count toward the step error.
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto counts_toward_error(const VarRole role) -> bool
-{
-	return role == VarRole::Species || role == VarRole::Energy || role == VarRole::ChemPhotonNumber;
-}
-
-/// The length of an array member of a burn state: a C array in Microphysics' burn_t, an amrex::GpuArray in BurnState.
-/// Transitional: it goes with burn_t, once the primordial problems use BurnState.
-template <typename ArrayT> constexpr auto burn_array_size() -> int
-{
-	if constexpr (std::is_array_v<ArrayT>) {
-		return static_cast<int>(std::extent_v<ArrayT>);
-	} else {
-		return static_cast<int>(ArrayT::size());
-	}
-}
-
-template <typename problem_t, typename BurnT> struct IntegratorLayout {
-	using traits = Microphysics_Traits<problem_t>;
-
-	static constexpr bool photochemistry = traits::photochemistry;
-
-	static constexpr auto NumChemRadEqs() -> int
-	{
-		if constexpr (photochemistry) {
-			return burn_array_size<decltype(BurnT::rn)>();
-		} else {
-			return 0;
-		}
-	}
-
-	static constexpr auto NumThermalBands() -> int
-	{
-		if constexpr (photochemistry) {
-			return burn_array_size<decltype(BurnT::re_thermal)>();
-		} else {
-			return 0;
-		}
-	}
-
-	static constexpr int num_chem_rad_eqs = NumChemRadEqs();
-	static constexpr int num_thermal_bands = NumThermalBands();
-	static constexpr int vars_per_group = Microphysics_Traits<problem_t>::integrate_rad_flux ? 2 : 1;
-	static constexpr bool q_dust = traits::dust_chemical_band_absorption;
-	static constexpr int neqs = NumSpec + 1 + num_chem_rad_eqs + num_thermal_bands + (q_dust ? 1 : 0);
-
-	/// The role of entry n (1-based) of y: the species, then the energy, then a photon number (and with
-	/// integrate_rad_flux a photon flux) per chemical band, then the thermal bands, then the dust slot.
-	///
-	/// Port-only exception, removed by the post-port cleanup PR: rtol_for and atol_for (rosenbrock.hpp) should switch
-	/// over the role, but a switch breaks bitwise identity with Microphysics, which we need during the port but not at
-	/// the end. Without photochemistry the switch does not reduce to one select, so numerical_jacobian's ewt loop becomes
-	/// too big for Apple clang to unroll fully for PrimordialChem (15 entries). The loop vectorizer then sums fac without
-	/// the fused multiply-adds of Microphysics' fully unrolled loop, and the finite-difference Jacobian changes in the
-	/// last bits. So they keep Microphysics' shape (energy first, the photon branch only with photochemistry) for now.
-	AMREX_GPU_HOST_DEVICE static constexpr auto role(const int n) -> VarRole
-	{
-		if (n <= NumSpec) {
-			return VarRole::Species;
-		}
-		if (n == net_ienuc) {
-			return VarRole::Energy;
-		}
-		const int r = n - net_ienuc;
-		if (r <= num_chem_rad_eqs) {
-			return (r - 1) % vars_per_group == 0 ? VarRole::ChemPhotonNumber : VarRole::ChemPhotonFlux;
-		}
-		if (r <= num_chem_rad_eqs + num_thermal_bands) {
-			return VarRole::ThermalBandEnergy;
-		}
-		return VarRole::DustAbsorbedEnergy;
-	}
-
-	static_assert(
-	    photochemistry == requires { &BurnT::rn; },
-	    "Microphysics_Traits::photochemistry must be true exactly when the problem is built with PHOTOCHEMISTRY");
-	static_assert(
-	    q_dust == requires { &BurnT::e_dust_absorbed; },
-	    "Microphysics_Traits::dust_chemical_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
-	static_assert(net_ienuc == NumSpec + 1, "the energy must follow the species");
-	static_assert(num_chem_rad_eqs % vars_per_group == 0, "every chemical band must have vars_per_group variables");
-	static_assert(integrator_neqs<BurnT>() == neqs, "the layout must match Microphysics' integrator_neqs");
-};
-
 /// Update the thermodynamics in the burn state from the integrator state. This may involve an EOS call.
 template <typename Layout, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state, const IntegratorT &int_state)
 {
-	for (int n = 1; n <= NumSpec; ++n) {
+	for (int n = 1; n <= Layout::num_spec; ++n) {
 		state.xn[n - 1] = int_state.y(n);
 	}
-	state.e = int_state.y(net_ienuc);
+	state.e = int_state.y(Layout::energy_row);
 	if constexpr (Layout::photochemistry) {
 		for (int n = 1; n <= Layout::num_chem_rad_eqs; ++n) {
-			state.rn[n - 1] = int_state.y(net_ienuc + n);
+			state.rn[n - 1] = int_state.y(Layout::energy_row + n);
 		}
 		for (int n = 1; n <= Layout::num_thermal_bands; ++n) {
-			state.re_thermal[n - 1] = int_state.y(net_ienuc + Layout::num_chem_rad_eqs + n);
+			state.re_thermal[n - 1] = int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + n);
 		}
 		state.c_hat = int_state.c_hat;
 	}
@@ -151,22 +62,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state
 template <typename Layout, typename IntegratorT, typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void integrator_to_burn(const IntegratorT &int_state, BurnT &state)
 {
-	for (int n = 1; n <= NumSpec; ++n) {
+	for (int n = 1; n <= Layout::num_spec; ++n) {
 		state.xn[n - 1] = int_state.y(n);
 	}
 
-	state.e = int_state.y(net_ienuc);
+	state.e = int_state.y(Layout::energy_row);
 
 	if constexpr (Layout::photochemistry) {
 		for (int n = 1; n <= Layout::num_chem_rad_eqs; ++n) {
-			state.rn[n - 1] = int_state.y(net_ienuc + n);
+			state.rn[n - 1] = int_state.y(Layout::energy_row + n);
 		}
 		for (int n = 1; n <= Layout::num_thermal_bands; ++n) {
-			state.re_thermal[n - 1] = int_state.y(net_ienuc + Layout::num_chem_rad_eqs + n);
+			state.re_thermal[n - 1] = int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + n);
 		}
 		state.c_hat = int_state.c_hat;
 		if constexpr (Layout::q_dust) {
-			state.e_dust_absorbed = int_state.y(net_ienuc + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1);
+			state.e_dust_absorbed = int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1);
 		}
 	}
 
@@ -177,22 +88,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void integrator_to_burn(const Integrato
 template <typename Layout, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void burn_to_integrator(const BurnT &state, IntegratorT &int_state)
 {
-	for (int n = 1; n <= NumSpec; ++n) {
+	for (int n = 1; n <= Layout::num_spec; ++n) {
 		int_state.y(n) = state.xn[n - 1];
 	}
 
-	int_state.y(net_ienuc) = state.e;
+	int_state.y(Layout::energy_row) = state.e;
 
 	if constexpr (Layout::photochemistry) {
 		for (int n = 1; n <= Layout::num_chem_rad_eqs; ++n) {
-			int_state.y(net_ienuc + n) = state.rn[n - 1];
+			int_state.y(Layout::energy_row + n) = state.rn[n - 1];
 		}
 		for (int n = 1; n <= Layout::num_thermal_bands; ++n) {
-			int_state.y(net_ienuc + Layout::num_chem_rad_eqs + n) = state.re_thermal[n - 1];
+			int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + n) = state.re_thermal[n - 1];
 		}
 		int_state.c_hat = state.c_hat;
 		if constexpr (Layout::q_dust) {
-			int_state.y(net_ienuc + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1) = state.e_dust_absorbed;
+			int_state.y(Layout::energy_row + Layout::num_chem_rad_eqs + Layout::num_thermal_bands + 1) = state.e_dust_absorbed;
 		}
 	}
 }
@@ -229,11 +140,11 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 	if constexpr (Layout::traits::renormalize_abundances) {
 		amrex::Real sum = 0.0_rt;
 
-		for (int n = 1; n <= NumSpec; ++n) {
+		for (int n = 1; n <= Layout::num_spec; ++n) {
 			sum += int_state.y(n);
 		}
 
-		for (int n = 1; n <= NumSpec; ++n) {
+		for (int n = 1; n <= Layout::num_spec; ++n) {
 			int_state.y(n) /= sum;
 		}
 	}
@@ -241,9 +152,12 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 
 /// The right-hand side of the integrated system: cleans the integrator state, syncs the burn state with it and calls
 /// the network.
-template <typename Layout, typename BurnT, typename IntegratorT, int int_neqs>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT &state, IntegratorT &int_state, amrex::Array1D<amrex::Real, 1, int_neqs> &ydot)
+template <typename Layout, typename BurnT, typename IntegratorT>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT &state, IntegratorT &int_state,
+						  amrex::Array1D<amrex::Real, 1, Layout::neqs> &ydot)
 {
+	constexpr int int_neqs = Layout::neqs;
+
 	// Fix the state as necessary -- this ensures that the mass
 	// fractions that enter are valid (and optionally normalized)
 
@@ -279,7 +193,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 	// Allow energy integration to be disabled.
 
 	if constexpr (!Layout::traits::integrate_energy) {
-		ydot(net_ienuc) = 0.0_rt;
+		ydot(Layout::energy_row) = 0.0_rt;
 	}
 }
 
@@ -310,7 +224,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 
 	if constexpr (!Layout::traits::integrate_energy) {
 		for (int j = 1; j <= int_neqs; ++j) {
-			pd(net_ienuc, j) = 0.0_rt;
+			pd(Layout::energy_row, j) = 0.0_rt;
 		}
 	}
 }
@@ -322,7 +236,7 @@ constexpr int OUTDIGITS = std::numeric_limits<amrex::Real>::max_digits10;
 template <typename Layout> struct StateBackup {
 	amrex::Real T_in{};
 #ifndef AMREX_USE_GPU
-	amrex::GpuArray<amrex::Real, NumSpec> xn_in{};
+	amrex::GpuArray<amrex::Real, Layout::num_spec> xn_in{};
 	amrex::GpuArray<amrex::Real, Layout::num_chem_rad_eqs> rn_in{};
 	amrex::GpuArray<amrex::Real, Layout::num_thermal_bands> re_thermal_in{};
 	amrex::Real c_hat{};
@@ -379,7 +293,7 @@ template <typename Layout, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE au
 	StateBackup<Layout> state_save;
 
 #ifndef AMREX_USE_GPU
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Layout::num_spec; ++n) {
 		state_save.xn_in[n] = state.xn[n];
 	}
 	if constexpr (Layout::photochemistry) {
@@ -469,7 +383,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 		std::cout << "dt = " << std::setprecision(OUTDIGITS) << dt << '\n';
 		std::cout << "temp start = " << std::setprecision(OUTDIGITS) << state_save.T_in << '\n';
 		std::cout << "xn start = ";
-		for (int n = 0; n < NumSpec; ++n) {
+		for (int n = 0; n < Layout::num_spec; ++n) {
 			std::cout << std::scientific << std::setprecision(OUTDIGITS) << state_save.xn_in[n] << " ";
 		}
 		if constexpr (Layout::photochemistry) {

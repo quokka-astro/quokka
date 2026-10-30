@@ -30,6 +30,7 @@ template <> struct DustChemicalBandAbsorptionState<true> {
 } // namespace detail
 
 template <typename problem_t> struct BurnState : detail::DustChemicalBandAbsorptionState<Microphysics_Traits<problem_t>::dust_chemical_band_absorption> {
+	using problem_type = problem_t;
 	using traits = Microphysics_Traits<problem_t>;
 	static_assert(traits::photochemistry, "BurnState is used by the photochemistry problems only, for now");
 
