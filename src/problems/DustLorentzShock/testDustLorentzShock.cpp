@@ -83,7 +83,7 @@ template <typename problem_t> struct ShockEOSTraits {
 	static constexpr double cs_isothermal = ShockCaseParams<problem_t>::sound_speed;
 };
 
-struct ShockPhysicsTraits {
+struct ShockPhysicsTraits : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;
