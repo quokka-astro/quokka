@@ -58,7 +58,6 @@ photoionize.kappa_optical = 1000
 radiation.iteration_tolerance = 1e-10
 radiation.dust_gas_interaction_coeff = 0.0   # thermally decouple dust from gas; dust sits at radiative equilibrium
 
-integrator.rosenbrock_tableau = 3
 integrator.use_number_densities = 1
 integrator.do_species_clip = 0
 integrator.jacobian = 1
