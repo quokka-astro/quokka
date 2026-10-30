@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef DERIVED_PARTICLE_DEPOSITION_H_
 #define DERIVED_PARTICLE_DEPOSITION_H_
 

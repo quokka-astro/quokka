@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef HLLC_HPP_ // NOLINT
 #define HLLC_HPP_
 

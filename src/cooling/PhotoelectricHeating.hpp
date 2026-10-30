@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef PHOTOELECTRIC_HEATING_HPP_
 #define PHOTOELECTRIC_HEATING_HPP_
 

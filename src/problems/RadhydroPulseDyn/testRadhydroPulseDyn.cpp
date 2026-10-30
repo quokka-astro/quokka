@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadhydroPulseDyn.cpp
 /// \brief Defines a test problem for radiation in the dynamic diffusion regime with advection by gas.
 ///

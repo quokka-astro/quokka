@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustyShock.cpp
 /// \brief Dust–gas drag test with analytic comparison.
 
