@@ -1530,8 +1530,13 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 	auto const &x1LeftState_in = x1LeftState_mf.const_arrays();
 	auto const &x1RightState_in = x1RightState_mf.const_arrays();
-	auto const &x1LeftState_bfield_in = x1LeftState_bfield_mf.const_arrays();
-	auto const &x1RightState_bfield_in = x1RightState_bfield_mf.const_arrays();
+	// B-field interface states exist only for MHD (hydro-02: they are empty MultiFabs in pure hydro)
+	amrex::MultiArray4<const amrex::Real> x1LeftState_bfield_in;
+	amrex::MultiArray4<const amrex::Real> x1RightState_bfield_in;
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		x1LeftState_bfield_in = x1LeftState_bfield_mf.const_arrays();
+		x1RightState_bfield_in = x1RightState_bfield_mf.const_arrays();
+	}
 	auto const &primVar_in = primVar_mf.const_arrays();
 	auto x1Flux_in = x1Flux_mf.arrays();
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
@@ -1565,8 +1570,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
-		quokka::Array4View<const amrex::Real, DIR> x1LeftState_bfield(x1LeftState_bfield_in[bx]);
-		quokka::Array4View<const amrex::Real, DIR> x1RightState_bfield(x1RightState_bfield_in[bx]);
+		[[maybe_unused]] amrex::Array4<const amrex::Real> x1LeftState_bfield_ref{};
+		[[maybe_unused]] amrex::Array4<const amrex::Real> x1RightState_bfield_ref{};
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			x1LeftState_bfield_ref = x1LeftState_bfield_in[bx];
+			x1RightState_bfield_ref = x1RightState_bfield_in[bx];
+		}
+		[[maybe_unused]] quokka::Array4View<const amrex::Real, DIR> x1LeftState_bfield(x1LeftState_bfield_ref);
+		[[maybe_unused]] quokka::Array4View<const amrex::Real, DIR> x1RightState_bfield(x1RightState_bfield_ref);
 		quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in[bx]);
