@@ -19,6 +19,7 @@
 #include "fundamental_constants.H"
 #include "microphysics/burn_state.hpp"
 #include "physics_info.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #include <algorithm>
 #include <cmath>
@@ -185,7 +186,7 @@ template <> struct SimulationData<StromgrenSphereProblem> {
 template <> void QuokkaSimulation<StromgrenSphereProblem>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");

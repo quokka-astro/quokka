@@ -58,7 +58,7 @@ template <> struct quokka::EOS_Traits<DTypeFrontVC> {
 template <> struct Microphysics_Traits<DTypeFrontVC> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::PhotoionizationHCaseB;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+	static constexpr bool photochemistry = true;
 };
 
 using Network = Microphysics_Traits<DTypeFrontVC>::Network;
@@ -98,7 +98,7 @@ void RadSystem<DTypeFrontVC>::AddRadSource(array_t &radEnergy, array_t & /*reduc
 
 template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 {
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	amrex::ParmParse const pp("photoionization_momentum");
 	userData_.small_temp = 1.0e-2;

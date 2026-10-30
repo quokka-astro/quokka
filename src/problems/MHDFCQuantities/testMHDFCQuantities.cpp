@@ -186,7 +186,7 @@ void checkEnforceLimitsPreservesMagneticEnergy()
 	// Enforce temperature floor:
 	// this should raise the temperature from temp_cold to temp_floor,
 	// while leaving the magnetic energy unchanged
-	HydroSystem<MHDFCQuantities>::EnforceLimits(0.0, 0.0, temp_floor, state_cc, state_fc, geom,
+	HydroSystem<MHDFCQuantities>::EnforceLimits(0.0, 0.0, temp_floor, 0.0, state_cc, state_fc, geom,
 						    [] AMREX_GPU_DEVICE(amrex::Real /*x*/, amrex::Real /*y*/, amrex::Real /*z*/,
 									amrex::Real base_density_floor) noexcept -> amrex::Real { return base_density_floor; });
 	amrex::Gpu::streamSynchronizeAll();

@@ -66,6 +66,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | hydro.use_dual_energy                  | Boolean (0/1) | `1` (Enabled)  | If set to 1, the code evolves an auxiliary internal energy variable in order to correctly evolve high-mach flows. This should only be disabled (0) for debugging.              |
 | hydro.abort_on_fofc_failure            | Boolean (0/1) | `1` (Enabled)  | If set to 1, the code aborts when first-order flux correction fails to yield a physical state (positive density and pressure). This should only be disabled (0) for debugging. |
 | hydro.artificial_viscosity_coefficient | Float         | `0.0`          | This is the linear artificial viscosity coefficient used in the artificial viscosity term added to the flux. This is the same parameter as defined in the original PPM paper.  |
+| hydro.small_x                          | Float         | `1.0e-30`      | Floor of the mass fractions: a negative mass scalar is reset to `small_x` times the density. Read only by problems with mass scalars and no network (`Microphysics_Traits<problem_t>::Network` is `None`); a problem with a network uses `network.small_x` instead. Setting it for any other problem aborts the run. |
 
 ## Radiation
 
@@ -115,6 +116,8 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 Photochemistry has the same three parameters with the prefix `photochemistry` (`photochemistry.enabled`, `photochemistry.max_density_allowed`, `photochemistry.min_density_allowed`).
 
+Every network also reads `network.small_x`, the floor of the species (and of the chemical-band radiation) after a burn and of the mass scalars in the hydro update. Its default is `1.0e-30`, or `1.0e-100` for `primordial_chem`. Setting it for a problem without a network aborts the run (such a problem uses `hydro.small_x`).
+
 ### Compile-time switches
 
 Whether a problem compiles chemistry or photochemistry at all is set by fields of `Microphysics_Traits<problem_t>` (see `src/microphysics/microphysics_traits.hpp`). `chemistry.enabled = 1` or `photochemistry.enabled = 1` aborts the run if the matching trait is `false`.
@@ -127,7 +130,7 @@ Whether a problem compiles chemistry or photochemistry at all is set by fields o
 | `dust_chemical_band_absorption` | `false` | Dust absorbs chemical-band photons (`Q_dust`): the network carries the absorbed energy, which heats the dust. Requires `ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model = true`. |
 | `integrate_rad_flux` | `true` | With photochemistry, integrate the photon flux equations in the network. With `false`, the flux is determined algebraically. |
 
-While the Microphysics submodule is still used, the problem's `CMakeLists.txt` must also define the build macros that Microphysics reads: `CHEMISTRY` with `chemistry`, `PHOTOCHEMISTRY` with `photochemistry`, `DUST_CHEMICAL_BAND_ABSORPTION` with `dust_chemical_band_absorption`, and `SKIP_PHOTOCHEMFLUX` with `integrate_rad_flux = false`. A trait that does not match its macro is a compile error. Likewise, `microphysics_network_name` in `CMakeLists.txt` must name the directory of `Network`, and the executable must compile that network's `network.cpp`; photochemistry checks the network type against the constants Microphysics generates for that directory.
+A problem with chemistry or photochemistry also needs, in its `CMakeLists.txt`: the network's `network.cpp` among the executable's sources; `quokka_add_eos(<target> <backend> <network>)` (from `extern/eos/quokka_eos.cmake`), which builds it against the EOS backend (`photoionization` or `primordial_chem`) and the network's species table; and the network's directory on the include path, for its `actual_rhs.H`. Its problem file includes `radiation/photochemistry.hpp` or `chemistry/Chemistry.hpp`, which define the burn. The burn and the EOS check that `Network` has as many species as the species table it is built with. Problems without chemistry use the `gamma_law` backend.
 
 ## Integrator (VODE)
 

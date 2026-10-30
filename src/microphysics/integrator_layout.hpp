@@ -88,12 +88,10 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 		return VarRole::DustAbsorbedEnergy;
 	}
 
-	static_assert(
-	    photochemistry == requires { &BurnT::rn; },
-	    "Microphysics_Traits::photochemistry must be true exactly when the problem is built with PHOTOCHEMISTRY");
+	static_assert(photochemistry == requires { &BurnT::rn; }, "The burn state must have rn exactly when Microphysics_Traits::photochemistry is true");
 	static_assert(
 	    q_dust == requires { &BurnT::e_dust_absorbed; },
-	    "Microphysics_Traits::dust_chemical_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
+	    "The burn state must have e_dust_absorbed exactly when Microphysics_Traits::dust_chemical_band_absorption is true");
 	static_assert(num_chem_rad_eqs % vars_per_group == 0, "every chemical band must have vars_per_group variables");
 };
 

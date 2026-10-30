@@ -67,7 +67,6 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_SPACE.H"
 
 #include "SimulationData.hpp"
-#include "chemistry/Chemistry.hpp"
 #include "conduction/ElectronConduction.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
@@ -80,10 +79,26 @@ namespace filesystem = experimental::filesystem;
 #include "microphysics/microphysics_traits.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
-#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 #include "turbulence/TurbulentDriving.hpp"
+
+// The chemistry and photochemistry burns. Only their declarations are here: a problem with chemistry includes
+// chemistry/Chemistry.hpp or radiation/photochemistry.hpp for the definitions, so problems without chemistry never
+// compile the burn code or the chemistry EOS.
+namespace quokka::chemistry
+{
+template <typename problem_t>
+auto computeChemistry(amrex::MultiFab &mf, amrex::Real dt, amrex::Real max_density_allowed, amrex::Real min_density_allowed) -> bool;
+} // namespace quokka::chemistry
+
+namespace quokka::photochemistry
+{
+template <typename problem_t>
+auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, amrex::Real dt,
+			   amrex::Real max_density_allowed, amrex::Real min_density_allowed, amrex::MultiFab &dustHeatingSource,
+			   amrex::MultiFab &radEnergySource) -> bool;
+} // namespace quokka::photochemistry
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class QuokkaSimulation : public AMRSimulation<problem_t>
@@ -206,16 +221,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static_assert(IMEX_Aim_22 > 0.0, "IMEX_Aim_22 must be > 0 for the IMEX PD-ARS scheme");
 	static constexpr double IMEX_alpha = IMEX_Aim_32 / IMEX_Aim_22; // = 0.5
 
-	// Transitional: while Microphysics reads the build macros, each microphysics trait must match its macro.
-	static_assert(Microphysics_Traits<problem_t>::chemistry == quokka::microphysics::detail::built_with_chemistry,
-		      "Microphysics_Traits::chemistry must be true exactly when the problem is built with CHEMISTRY");
-	static_assert(Microphysics_Traits<problem_t>::photochemistry == quokka::microphysics::detail::built_with_photochemistry,
-		      "Microphysics_Traits::photochemistry must be true exactly when the problem is built with PHOTOCHEMISTRY");
-	static_assert(Microphysics_Traits<problem_t>::dust_chemical_band_absorption == quokka::microphysics::detail::built_with_dust_chemical_band_absorption,
-		      "Microphysics_Traits::dust_chemical_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
-	static_assert(Microphysics_Traits<problem_t>::integrate_rad_flux == !quokka::microphysics::detail::built_with_skip_photochemflux,
-		      "Microphysics_Traits::integrate_rad_flux must be false exactly when the problem is built with SKIP_PHOTOCHEMFLUX");
-
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
 	amrex::Real dust_omega_drag_ = 1.0;
@@ -250,6 +255,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 	amrex::Real shearViscosity_ = 0.0;	// shear viscosity coefficient; see viscous CFL limit below
 	amrex::Real bulkViscosity_ = 0.0;	// bulk viscosity coefficient; parabolic limit: dt < dx^2 * rho / (2*max(shear,bulk))
+	amrex::Real hydroSmallX_ = 1.0e-30;	// floor of the mass scalars of a problem without a network (hydro.small_x)
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2018;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
@@ -287,9 +293,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		// set gamma
 		amrex::ParmParse eos("eos");
 		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
-		// initialize Microphysics params
-		init_extern_parameters();
-		// initialize Microphysics EOS
+		// read the EOS parameters
+		eos_rp::ReadParameters();
+		// initialize the EOS
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
 		eos_init(small_temp, small_dens);
@@ -382,6 +388,17 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// fix-up states
 	void FixupState(int level) override;
 	void ApplyHydroStateFixup(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev);
+
+	// the floor of the mass scalars: the network's small_x if the problem has a network, else hydro.small_x
+	[[nodiscard]] auto massScalarSmallX() const -> amrex::Real
+	{
+		using Network = typename Microphysics_Traits<problem_t>::Network;
+		if constexpr (std::is_same_v<Network, quokka::networks::None>) {
+			return hydroSmallX_;
+		} else {
+			return Network::SmallX();
+		}
+	}
 
 	// implement FillPatch function
 	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
@@ -662,6 +679,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 							 "Physics_Traits::viscosity_model is not `constant`; with `problem_defined`, "
 							 "viscosity comes from computeViscosity instead.");
 		}
+		// a problem with a network reads network.small_x instead (massScalarSmallX())
+		if constexpr (Physics_Traits<problem_t>::numMassScalars > 0 &&
+			      std::is_same_v<typename Microphysics_Traits<problem_t>::Network, quokka::networks::None>) {
+			hpp.query("small_x", hydroSmallX_);
+		} else {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!hpp.contains("small_x"), "hydro.small_x is set, but this problem has a network or no mass scalars, "
+										   "so it is ignored; a problem with a network uses network.small_x.");
+		}
 	}
 
 	// set MHD runtime parameters
@@ -856,6 +881,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set the runtime parameters of the network, if it has any
 	if constexpr (requires { Microphysics_Traits<problem_t>::Network::ReadParameters(); }) {
 		Microphysics_Traits<problem_t>::Network::ReadParameters();
+	}
+	if constexpr (std::is_same_v<typename Microphysics_Traits<problem_t>::Network, quokka::networks::None>) {
+		const amrex::ParmParse npp("network");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!npp.contains("small_x"), "network.small_x is set, but this problem has no network, so it is "
+									   "ignored; a problem without a network uses hydro.small_x.");
 	}
 
 	// set dust runtime parameters
@@ -2115,10 +2145,12 @@ void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, massScalarSmallX(), state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	} else {
 		auto const density_floor_func = QuokkaDensityFloorFunctor<problem_t>{};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, massScalarSmallX(), state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	}
 
 	if (useDualEnergy_ == 1) {

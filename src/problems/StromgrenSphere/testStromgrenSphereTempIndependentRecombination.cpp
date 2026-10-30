@@ -18,8 +18,8 @@ template <> struct Microphysics_Traits<StromgrenSphereTempIndependentRecombinati
 	using Network = quokka::networks::PhotoionizationHCaseB;
 	// ROS2S is too slow for this problem
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::Rodas4P>;
-	static constexpr bool photochemistry = true;	  // built with PHOTOCHEMISTRY
-	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
+	static constexpr bool photochemistry = true;
+	static constexpr bool integrate_rad_flux = false;
 };
 
 #include "StromgrenSphere.hpp"

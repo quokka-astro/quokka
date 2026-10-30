@@ -8,25 +8,16 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
 
+// The definition of computePhotoChemistry, declared in QuokkaSimulation.hpp. A problem with photochemistry includes this
+// header; problems without it do not, because the definition uses spmasses, which only the chemistry EOSs declare.
+
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 
-namespace quokka::photochemistry
-{
-template <typename problem_t>
-auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, amrex::Real dt,
-			   amrex::Real max_density_allowed, amrex::Real min_density_allowed, amrex::MultiFab &dustHeatingSource,
-			   amrex::MultiFab &radEnergySource) -> bool;
-} // namespace quokka::photochemistry
-
-// The definition is compiled only in builds with photochemistry, because it uses names that only those builds have: spmasses
-// and eos() from Microphysics' photoionization EOS, small_x from Microphysics' generated network parameters, and the
-// constants of the generated network_properties.H that the transitional checks below compare against. Callers use
-// Microphysics_Traits<problem_t>::photochemistry. This guard goes when the EOS is in Quokka and the generated constants are gone.
-#ifdef PHOTOCHEMISTRY
 #include "actual_eos_data.H"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "hydro/EOSMicrophysics.hpp"
 #include "microphysics/burn_state.hpp"
 #include "microphysics/burner.hpp"
 #include "microphysics/integrator_layout.hpp"
@@ -72,23 +63,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || Network::NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
 		      "Network::NumThermalBands must equal RadSystem<problem_t>::nGroupsThermal_ (nGroups_ - NChemBands) when "
 		      "ISM_Traits::thermal_band_photochemistry is true.");
-	static_assert(Microphysics_Traits<problem_t>::integrate_rad_flux == (MicrophysicsNumChemRadVarsPerGroup == 2),
-		      "Microphysics_Traits::integrate_rad_flux must be false exactly when the problem is built with SKIP_PHOTOCHEMFLUX.");
-
-	// Transitional, until Microphysics' generated network_properties.H goes: the problem's network type must agree with the
-	// constants generated for its network.
-	static_assert(Network::NumSpec == NumSpec);
-	static_assert(Network::NumChemBands == NumChemBands);
-	static_assert([] {
-		for (int nn = 0; nn <= NumChemBands; ++nn) {
-			if (Network::ChemBands().arr[nn] != ChemBandsHeader().arr[nn]) {
-				return false;
-			}
-		}
-		return true;
-	}());
-	static_assert(Network::ChemBandsPowerLawIndex == ChemBandsPowerLawIndex_);
-	static_assert(Network::NumThermalBands == NumThermalBands);
+	// Until the EOS reads its species from the network (the EOS port), it sizes its composition by the species table on
+	// the include path (network_properties.H), so the problem's network must match that table.
+	static_assert(Network::NumSpec == NumSpec, "The problem's Network does not match the species table of the EOS it is built with.");
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.
@@ -213,12 +190,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 			// Ensure positivity
 			for (double &nn : photochemstate.xn) {
-				nn = amrex::max(nn, network_rp::small_x);
+				nn = amrex::max(nn, Network::SmallX());
 			}
 			for (int nn = 0; nn < Network::NumChemBands; nn += 1) {
 				// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
 				photochemstate.rn[static_cast<std::size_t>(nn) * Layout::vars_per_group] =
-				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * Layout::vars_per_group], network_rp::small_x);
+				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * Layout::vars_per_group], Network::SmallX());
 			}
 
 			// get the updated specific eint
@@ -228,11 +205,11 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
 			}
 			// Update the chem-band photon number density, attenuate the flux by the burn's rn[1] factor or algebraically using the photon number
-			// density if SKIP_PHOTOCHEMFLUX is defined, and accumulate the momentum the gas absorbs from the O(v/c) work term: dP = -(F_after -
-			// F_before) / c^2, summed over chem bands. The absorbed photon momentum is tied to the physical photon flux F = c E; the reduced speed
-			// of light only changes the absorption rate used by the chemistry solve. dMom is computed here unconditionally (cheap) and only applied
-			// when do_vc_work is true -- computing it outside the `if constexpr (do_vc_work)` block avoids NVCC's "cannot first-capture in
-			// constexpr-if" restriction.
+			// density if Microphysics_Traits::integrate_rad_flux is false, and accumulate the momentum the gas absorbs from the O(v/c) work term:
+			// dP = -(F_after - F_before) / c^2, summed over chem bands. The absorbed photon momentum is tied to the physical photon flux F = c E;
+			// the reduced speed of light only changes the absorption rate used by the chemistry solve. dMom is computed here unconditionally
+			// (cheap) and only applied when do_vc_work is true -- computing it outside the `if constexpr (do_vc_work)` block avoids NVCC's "cannot
+			// first-capture in constexpr-if" restriction.
 			const Real inv_c2 = 1.0_rt / (C::c_light * C::c_light);
 			Real dMomX = 0.0_rt;
 			Real dMomY = 0.0_rt;
@@ -323,7 +300,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 							const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 							const Real E_old = state(i, j, k, eIdx); // > 0: rn[0] was clamped to small_x above
 							const Real E_new =
-							    amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum), network_rp::small_x * chemBandQuanta[nn]);
+							    amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum), Network::SmallX() * chemBandQuanta[nn]);
 							state(i, j, k, eIdx) = E_new;
 							const Real flux_rescale = E_new / E_old;
 							state(i, j, k, fxIdx) *= flux_rescale;
@@ -353,6 +330,5 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 }
 
 } // namespace quokka::photochemistry
-#endif
 
 #endif

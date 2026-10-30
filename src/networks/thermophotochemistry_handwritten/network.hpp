@@ -29,6 +29,7 @@ extern AMREX_GPU_MANAGED int allow_mixed_cell_cooling; // NOLINT
 extern AMREX_GPU_MANAGED amrex::Real mixed_cell_lb;    // NOLINT
 extern AMREX_GPU_MANAGED amrex::Real mixed_cell_ub;    // NOLINT
 extern AMREX_GPU_MANAGED amrex::Real dust_kappa;       // NOLINT
+extern AMREX_GPU_MANAGED amrex::Real small_x;	       // NOLINT
 } // namespace thermophotochemistry
 
 /// Hydrogen photoionization in one chemical band, with dust in two thermal bands.
@@ -48,6 +49,8 @@ struct Thermophotochemistry {
 
 	/// gray dust opacity to ionizing radiation [cm^2/g] (thermophotochemistry::dust_kappa)
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto DustKappa() -> amrex::Real { return thermophotochemistry::dust_kappa; }
+
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SmallX() -> amrex::Real { return thermophotochemistry::small_x; }
 
 	/// Read the runtime parameters (namespace thermophotochemistry).
 	static void ReadParameters();
