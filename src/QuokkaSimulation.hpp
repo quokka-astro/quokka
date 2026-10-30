@@ -2282,7 +2282,10 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 	}
 
 	amrex::MultiFab accepted_state_cc(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
-	{ amrex::Gpu::NoSyncRegion const noSync; amrex::Copy(accepted_state_cc, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_); } // hydro-02: kernel-only copy, no host sync
+	{
+		amrex::Gpu::NoSyncRegion const noSync;
+		amrex::Copy(accepted_state_cc, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+	} // hydro-02: kernel-only copy, no host sync
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> accepted_state_fc;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2328,7 +2331,10 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		}
 
 		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
-		{ amrex::Gpu::NoSyncRegion const noSync; amrex::Copy(state_old_cc_tmp, accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_); } // hydro-02: kernel-only copy, no host sync
+		{
+			amrex::Gpu::NoSyncRegion const noSync;
+			amrex::Copy(state_old_cc_tmp, accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+		} // hydro-02: kernel-only copy, no host sync
 
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> state_old_fc_tmp;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2343,7 +2349,10 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 
 		for (int substep_index = start_substep; substep_index < total_substeps; ++substep_index) {
 			if (substep_index > start_substep) {
-				{ amrex::Gpu::NoSyncRegion const noSync; amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, nvars_, nghost_cc_); } // hydro-02: kernel-only copy, no host sync
+				{
+					amrex::Gpu::NoSyncRegion const noSync;
+					amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, nvars_, nghost_cc_);
+				} // hydro-02: kernel-only copy, no host sync
 				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 					for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 						amrex::Copy(state_old_fc_tmp[idim], state_new_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc,
@@ -2585,7 +2594,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto const &stateOld_fc = state_old_fc_tmp;
 			auto &stateNew_fc = state_inter_fc_;
 
-			auto [fluxArrays, faceVel, fast_mhd_wavespeeds] = computeHydroFluxes(stateOld_cc, stateOld_fc, primVar_old, nvars_, nghost_Riemann, lev);
+			auto [fluxArrays, faceVel, fast_mhd_wavespeeds] =
+			    computeHydroFluxes(stateOld_cc, stateOld_fc, primVar_old, nvars_, nghost_Riemann, lev);
 
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_rk_stage1;
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2685,7 +2695,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				{
 					amrex::Gpu::NoSyncRegion const noSync;
 					for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-						amrex::MultiFab::Saxpy(ec_emf_components_rk_ave[idim], stage1Weight, ec_emf_components_rk_stage1[idim], 0, 0, 1, 0);
+						amrex::MultiFab::Saxpy(ec_emf_components_rk_ave[idim], stage1Weight, ec_emf_components_rk_stage1[idim], 0, 0, 1,
+								       0);
 					}
 				}
 				MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateNew_fc, ec_emf_components_rk_stage1, dt_lev,
@@ -2992,8 +3003,7 @@ void QuokkaSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AMRE
 	}
 }
 
-template <typename problem_t>
-auto QuokkaSimulation<problem_t>::getHydroScratch(const int lev, const int nvars, const int nghost_Riemann) -> HydroScratch &
+template <typename problem_t> auto QuokkaSimulation<problem_t>::getHydroScratch(const int lev, const int nvars, const int nghost_Riemann) -> HydroScratch &
 {
 	if (static_cast<int>(hydroScratch_.size()) <= lev) {
 		hydroScratch_.resize(lev + 1);

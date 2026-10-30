@@ -147,8 +147,8 @@ template <typename problem_t> class HyperbolicSystem
 	// hydro-k01: PPM interface values of zone (i, j, k) [already permuted to DIR] for component n:
 	// returns (a_minus, a_plus) = (rightState(i), leftState(i + 1)) without storing them
 	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto PPMInterfaceValues(quokka::Array4View<amrex::Real const, DIR> const &q, int n, int i, int j,
-										 int k) -> std::pair<double, double>;
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto PPMInterfaceValues(quokka::Array4View<amrex::Real const, DIR> const &q, int n, int i, int j, int k)
+	    -> std::pair<double, double>;
 
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto MonotonizeEdges(double qL_in, double qR_in, double q, double qminus, double qplus)
 	    -> std::pair<double, double>;
@@ -441,7 +441,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::PPMInterfaceValues(quokka::Array4View<amrex::Real const, DIR> const &q,
-											       const int n_q, int i, int j, int k) -> std::pair<double, double>
+											      const int n_q, int i, int j, int k) -> std::pair<double, double>
 {
 	// hydro-k01: body of the pointwise ReconstructStatesPPM, unchanged except that iReadFrom + n is passed as n_q
 	// (so "iReadFrom + n" below is n_q) and the two edge values are returned instead of stored
@@ -643,7 +643,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const 
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
 		for (int n = 0; n < nvars; ++n) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom,
+											   iWriteFrom);
 		}
 	});
 }

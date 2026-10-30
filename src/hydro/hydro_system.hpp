@@ -393,7 +393,8 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 					const amrex::Real rho_prim = primVar[bx](i, j, k, primDensity_index);
 					const amrex::Real eint_prim = primVar[bx](i, j, k, pressure_index);
 					amrex::GpuArray<Real, nmscalars_> massScalars_prim = RadSystem<problem_t>::ComputeMassScalars(primVar[bx], i, j, k);
-					primVar[bx](i, j, k, primPflat_index) = ::quokka::EOS<problem_t>::ComputePressure(rho_prim, rho_prim * eint_prim, massScalars_prim);
+					primVar[bx](i, j, k, primPflat_index) =
+					    ::quokka::EOS<problem_t>::ComputePressure(rho_prim, rho_prim * eint_prim, massScalars_prim);
 				}
 			}
 		}
@@ -1014,8 +1015,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::FlatteningKS(am
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::FlatteningChi(amrex::Array4<const amrex::Real> const &primVar_in, int i_in, int j_in,
-									       int k_in, amrex::Real K_S) -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::FlatteningChi(amrex::Array4<const amrex::Real> const &primVar_in, int i_in, int j_in, int k_in,
+									       amrex::Real K_S) -> amrex::Real
 {
 	// same arithmetic as ComputeFlatteningCoefficients<DIR>, with the pressure read from the stored primPflat_index
 	constexpr double beta_max = 0.85;
@@ -1072,7 +1073,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::FlatteningChi(a
 
 template <typename problem_t>
 void HydroSystem<problem_t>::ComputeFlatteningCoefficientsAllDirs(amrex::MultiFab const &primVar_mf, std::array<amrex::MultiFab, 3> &flatCoefs,
-								   const int nghost)
+								  const int nghost)
 {
 	// PPM shock flattening coefficients (Miller & Colella 2002) for all directions in one kernel,
 	// from the pressure stored once per stage in primVar_mf (component primPflat_index)
@@ -1158,19 +1159,19 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
 		for (int n = 0; n < nvars; ++n) {
-		// get interfaces
-		const double a_minus = x1RightState(i, j, k, n);
-		const double a_plus = x1LeftState(i + 1, j, k, n);
-		const double a_mean = q(i, j, k, n);
+			// get interfaces
+			const double a_minus = x1RightState(i, j, k, n);
+			const double a_plus = x1LeftState(i + 1, j, k, n);
+			const double a_mean = q(i, j, k, n);
 
-		// left side of zone i (Eq. 70a)
-		const double new_a_minus = chi_ijk * a_minus + (1. - chi_ijk) * a_mean;
+			// left side of zone i (Eq. 70a)
+			const double new_a_minus = chi_ijk * a_minus + (1. - chi_ijk) * a_mean;
 
-		// right side of zone i (Eq. 70b)
-		const double new_a_plus = chi_ijk * a_plus + (1. - chi_ijk) * a_mean;
+			// right side of zone i (Eq. 70b)
+			const double new_a_plus = chi_ijk * a_plus + (1. - chi_ijk) * a_mean;
 
-		x1RightState(i, j, k, n) = new_a_minus;
-		x1LeftState(i + 1, j, k, n) = new_a_plus;
+			x1RightState(i, j, k, n) = new_a_minus;
+			x1LeftState(i + 1, j, k, n) = new_a_plus;
 		}
 	});
 
@@ -1185,8 +1186,8 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ReconstructStatesPPMFlattened(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
-							   amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf,
-							   amrex::MultiFab &x1RightState_mf, const int nghost, const int nvars)
+							   amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf,
+							   const int nghost, const int nvars)
 {
 	// hydro-k01: fused ReconstructStatesPPM<DIR> + FlattenShocks<DIR>. Same iteration space (cells of q_mf grown by nghost),
 	// same chi_ijk (min over the 9 stored chi values, computed once per cell instead of once per component), and the same
