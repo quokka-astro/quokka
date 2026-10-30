@@ -173,12 +173,6 @@ else()
     set(GIT_DIRTY 0)
 endif()
 
-# add preprocessor macros for git commits
-add_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
-add_definitions(-DAMREX_GIT_HASH="${AMREX_GIT_HASH}")
-add_definitions(-DMICROPHYSICS_GIT_HASH="${MICROPHYSICS_GIT_HASH}")
-add_definitions(-DAMREX_HYDRO_GIT_HASH="${AMREX_HYDRO_GIT_HASH}")
-add_definitions(-DTURBULENCE_GIT_HASH="${TURBULENCE_GIT_HASH}")
 message(STATUS "Quokka git branch: ${QUOKKA_GIT_BRANCH}")
 message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
 message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
@@ -201,4 +195,11 @@ add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/turbulence/plugins/AMReX ${Quok
 #match Microphysics' CMake default of 1.
 add_definitions(-DNAUX_NET -DSTRANG -DNET_LOOP_UNROLL_LEN=1)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/Microphysics ${QuokkaCode_BINARY_DIR}/Microphysics)
+# add preprocessor macros for git commits (after the extern/ libraries, so a new
+# commit hash does not force them to rebuild)
+add_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
+add_definitions(-DAMREX_GIT_HASH="${AMREX_GIT_HASH}")
+add_definitions(-DMICROPHYSICS_GIT_HASH="${MICROPHYSICS_GIT_HASH}")
+add_definitions(-DAMREX_HYDRO_GIT_HASH="${AMREX_HYDRO_GIT_HASH}")
+add_definitions(-DTURBULENCE_GIT_HASH="${TURBULENCE_GIT_HASH}")
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)

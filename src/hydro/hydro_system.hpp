@@ -174,7 +174,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
 				  DensityFloorFunc const &density_floor_func);
 
-	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
+	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::MultiFab const &primVar_mf,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
 
@@ -198,9 +198,27 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	template <FluxDir DIR> static void ComputeFlatteningCoefficients(amrex::MultiFab const &primVar_mf, amrex::MultiFab &x1Chi_mf, int nghost);
 
+	// hydro-05: all directions in one kernel, reading the stored flattening pressure (primPflat_index) of primVar_mf
+	static void ComputeFlatteningCoefficientsAllDirs(amrex::MultiFab const &primVar_mf, std::array<amrex::MultiFab, 3> &flatCoefs, int nghost);
+
+	// hydro-05: flattening coefficient chi in direction DIR at cell (i_in, j_in, k_in), given the stored primitives
+	// (pressure taken from primPflat_index) and the cell's K_S = rho * c_s^2 (Eq. 76 of Miller & Colella 2002)
+	template <FluxDir DIR>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto FlatteningChi(amrex::Array4<const amrex::Real> const &primVar_in, int i_in, int j_in, int k_in,
+								      amrex::Real K_S) -> amrex::Real;
+
+	// hydro-05: K_S = rho * c_s^2 at a cell, from the stored primitives (same formula as ComputeFlatteningCoefficients)
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto FlatteningKS(amrex::Array4<const amrex::Real> const &primVar_in, int i, int j, int k) -> amrex::Real;
+
 	template <FluxDir DIR>
 	static void FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
 				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, int nghost, int nvars);
+
+	// hydro-k01: PPM reconstruction with the shock flattening (FlattenShocks) applied in registers before the single store
+	template <FluxDir DIR>
+	static void ReconstructStatesPPMFlattened(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
+						  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf,
+						  int nghost, int nvars);
 
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
@@ -209,6 +227,16 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static constexpr auto is_eos_isothermal() -> bool { return (gamma_ == 1.0); }
 
 	static constexpr bool reconstruct_eint = HydroSystem_Traits<problem_t>::reconstruct_eint;
+
+	// hydro-05: persistent primitive variables. The primitive MultiFab produced by ConservedToPrimitive may carry
+	// nPrimExtra_ extra components after the nvar_ primitive variables:
+	//   primPgas_index  = gas pressure ComputePressure(cons, i, j, k, cons_fc) (used by AddInternalEnergyPdV)
+	//   primPflat_index = the pressure used by the PPM shock-flattening stencil
+	// When reconstruct_eint is false, both are already stored in pressure_index and no extra components are needed.
+	static constexpr int nPrimExtra_ = reconstruct_eint ? 2 : 0;
+	static constexpr int nPrimVar_ = nvar_ + nPrimExtra_; // number of components to allocate for a persistent primVar MultiFab
+	static constexpr int primPgas_index = reconstruct_eint ? nvar_ : static_cast<int>(pressure_index);
+	static constexpr int primPflat_index = reconstruct_eint ? (nvar_ + 1) : static_cast<int>(pressure_index);
 };
 
 template <typename problem_t>
@@ -226,8 +254,13 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 	auto const &cons_cc = cons_cc_mf.const_arrays();
 	auto const &primVar = primVar_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+	// hydro-05: also store the extra pressure components if the caller allocated them
+	const bool storeExtraPressures = (nPrimExtra_ > 0) && (primVar_mf.nComp() >= nPrimVar_);
 
 	amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		// storeExtraPressures is only read inside `if constexpr` below; nvcc can't first-capture
+		// a variable from inside constexpr-if, so touch it unconditionally here first
+		[[maybe_unused]] bool const storeExtraPressures_captured = storeExtraPressures;
 		// First-capture the magnetic field arrays by accessing them early
 		// This forces NVCC to capture them before the constexpr if block
 		std::remove_cv_t<std::remove_reference_t<decltype(cons_fc_x0[bx])>> fc_x0_ref{};
@@ -348,6 +381,24 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 				primVar[bx](i, j, k, x1DustVelocity_index + numDustVars_ * g) = dust_vx;
 				primVar[bx](i, j, k, x2DustVelocity_index + numDustVars_ * g) = dust_vy;
 				primVar[bx](i, j, k, x3DustVelocity_index + numDustVars_ * g) = dust_vz;
+			}
+		}
+
+		// hydro-05: persistent pressures (only needed when pressure_index holds the specific internal energy)
+		if constexpr (nPrimExtra_ > 0) {
+			if (storeExtraPressures) {
+				// gas pressure, exactly as AddInternalEnergyPdV computed it from the conserved state
+				primVar[bx](i, j, k, primPgas_index) = Pgas;
+				if constexpr (!is_eos_isothermal()) {
+					// flattening pressure, exactly as ComputeFlatteningCoefficients computed it from the primitives:
+					// EOS(rho_prim, rho_prim * eint_prim, massScalars read from the primitive array)
+					// (all primitive components it reads have been written above by this thread)
+					const amrex::Real rho_prim = primVar[bx](i, j, k, primDensity_index);
+					const amrex::Real eint_prim = primVar[bx](i, j, k, pressure_index);
+					amrex::GpuArray<Real, nmscalars_> massScalars_prim = RadSystem<problem_t>::ComputeMassScalars(primVar[bx], i, j, k);
+					primVar[bx](i, j, k, primPflat_index) =
+					    ::quokka::EOS<problem_t>::ComputePressure(rho_prim, rho_prim * eint_prim, massScalars_prim);
+				}
 			}
 		}
 	});
@@ -949,6 +1000,123 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 }
 
 template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::FlatteningKS(amrex::Array4<const amrex::Real> const &primVar, int i, int j, int k)
+    -> amrex::Real
+{
+	// Eq. 76 of Miller & Colella 2002 (denominator of Z); identical to ComputeFlatteningCoefficients
+	double K_S = NAN;
+	if constexpr (is_eos_isothermal()) {
+		K_S = primVar(i, j, k, primDensity_index) * cs_iso_ * cs_iso_;
+	} else {
+		const amrex::Real P = primVar(i, j, k, primPflat_index);
+		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
+		K_S = std::pow(::quokka::EOS<problem_t>::ComputeSoundSpeed(primVar(i, j, k, primDensity_index), P, massScalars), 2) *
+		      primVar(i, j, k, primDensity_index);
+	}
+	return K_S;
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::FlatteningChi(amrex::Array4<const amrex::Real> const &primVar_in, int i_in, int j_in, int k_in,
+									       amrex::Real K_S) -> amrex::Real
+{
+	// same arithmetic as ComputeFlatteningCoefficients<DIR>, with the pressure read from the stored primPflat_index
+	constexpr double beta_max = 0.85;
+	constexpr double beta_min = 0.75;
+	constexpr double Zmax = 0.75;
+	constexpr double Zmin = 0.25;
+
+	quokka::Array4View<const amrex::Real, DIR> primVar(primVar_in);
+	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+	amrex::Real Pplus2 = NAN;
+	amrex::Real Pplus1 = NAN;
+	amrex::Real Pminus1 = NAN;
+	amrex::Real Pminus2 = NAN;
+	if constexpr (is_eos_isothermal()) {
+		const amrex::Real cs_sq = cs_iso_ * cs_iso_;
+		Pplus2 = primVar(i + 2, j, k, primDensity_index) * cs_sq;
+		Pplus1 = primVar(i + 1, j, k, primDensity_index) * cs_sq;
+		Pminus1 = primVar(i - 1, j, k, primDensity_index) * cs_sq;
+		Pminus2 = primVar(i - 2, j, k, primDensity_index) * cs_sq;
+	} else {
+		Pplus2 = primVar(i + 2, j, k, primPflat_index);
+		Pplus1 = primVar(i + 1, j, k, primPflat_index);
+		Pminus1 = primVar(i - 1, j, k, primPflat_index);
+		Pminus2 = primVar(i - 2, j, k, primPflat_index);
+	}
+
+	// beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
+	const double beta_denom = std::abs(Pplus2 - Pminus2);
+	// avoid division by zero (in this case, chi = 1 anyway)
+	const double beta = (beta_denom != 0) ? (std::abs(Pplus1 - Pminus1) / beta_denom) : 0;
+
+	// Eq. 75 of Miller & Colella 2002
+	const double chi_min = std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
+
+	// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
+	const double Z = std::abs(Pplus1 - Pminus1) / K_S;
+
+	// check for converging flow along the normal direction DIR (Eq. 77)
+	int velocity_index = 0;
+	if constexpr (DIR == FluxDir::X1) {
+		velocity_index = x1Velocity_index;
+	} else if constexpr (DIR == FluxDir::X2) {
+		velocity_index = x2Velocity_index;
+	} else if constexpr (DIR == FluxDir::X3) {
+		velocity_index = x3Velocity_index;
+	}
+	double chi = 1.0;
+	if (primVar(i + 1, j, k, velocity_index) < primVar(i - 1, j, k, velocity_index)) {
+		chi = std::max(chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
+	}
+	return chi;
+}
+
+template <typename problem_t>
+void HydroSystem<problem_t>::ComputeFlatteningCoefficientsAllDirs(amrex::MultiFab const &primVar_mf, std::array<amrex::MultiFab, 3> &flatCoefs,
+								  const int nghost)
+{
+	// PPM shock flattening coefficients (Miller & Colella 2002) for all directions in one kernel,
+	// from the pressure stored once per stage in primVar_mf (component primPflat_index)
+	auto const &primVar_in = primVar_mf.const_arrays();
+	auto x1Chi_in = flatCoefs[0].arrays();
+#if AMREX_SPACEDIM >= 2
+	auto x2Chi_in = flatCoefs[1].arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+	auto x3Chi_in = flatCoefs[2].arrays();
+#endif
+	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+
+	amrex::ParallelFor(primVar_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		amrex::Array4<const amrex::Real> const &primVar = primVar_in[bx];
+		const amrex::Real K_S = FlatteningKS(primVar, i, j, k);
+
+		{
+			quokka::Array4View<amrex::Real, FluxDir::X1> const x1Chi(x1Chi_in[bx]);
+			auto [ii, jj, kk] = quokka::reorderMultiIndex<FluxDir::X1>(i, j, k);
+			x1Chi(ii, jj, kk) = FlatteningChi<FluxDir::X1>(primVar, i, j, k, K_S);
+		}
+#if AMREX_SPACEDIM >= 2
+		{
+			quokka::Array4View<amrex::Real, FluxDir::X2> const x2Chi(x2Chi_in[bx]);
+			auto [ii, jj, kk] = quokka::reorderMultiIndex<FluxDir::X2>(i, j, k);
+			x2Chi(ii, jj, kk) = FlatteningChi<FluxDir::X2>(primVar, i, j, k, K_S);
+		}
+#endif
+#if AMREX_SPACEDIM == 3
+		{
+			quokka::Array4View<amrex::Real, FluxDir::X3> const x3Chi(x3Chi_in[bx]);
+			auto [ii, jj, kk] = quokka::reorderMultiIndex<FluxDir::X3>(i, j, k);
+			x3Chi(ii, jj, kk) = FlatteningChi<FluxDir::X3>(primVar, i, j, k, K_S);
+		}
+#endif
+	});
+}
+
+template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
 					   amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, const int nghost,
@@ -967,7 +1135,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
 	// cell-centered kernel
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) {
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
 		quokka::Array4View<const amrex::Real, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
@@ -993,19 +1161,94 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-		// get interfaces
-		const double a_minus = x1RightState(i, j, k, n);
-		const double a_plus = x1LeftState(i + 1, j, k, n);
-		const double a_mean = q(i, j, k, n);
+		for (int n = 0; n < nvars; ++n) {
+			// get interfaces
+			const double a_minus = x1RightState(i, j, k, n);
+			const double a_plus = x1LeftState(i + 1, j, k, n);
+			const double a_mean = q(i, j, k, n);
 
-		// left side of zone i (Eq. 70a)
-		const double new_a_minus = chi_ijk * a_minus + (1. - chi_ijk) * a_mean;
+			// left side of zone i (Eq. 70a)
+			const double new_a_minus = chi_ijk * a_minus + (1. - chi_ijk) * a_mean;
 
-		// right side of zone i (Eq. 70b)
-		const double new_a_plus = chi_ijk * a_plus + (1. - chi_ijk) * a_mean;
+			// right side of zone i (Eq. 70b)
+			const double new_a_plus = chi_ijk * a_plus + (1. - chi_ijk) * a_mean;
 
-		x1RightState(i, j, k, n) = new_a_minus;
-		x1LeftState(i + 1, j, k, n) = new_a_plus;
+			x1RightState(i, j, k, n) = new_a_minus;
+			x1LeftState(i + 1, j, k, n) = new_a_plus;
+		}
+	});
+
+#if (AMREX_SPACEDIM < 2)
+	amrex::ignore_unused(x2Chi_in);
+#endif
+#if (AMREX_SPACEDIM < 3)
+	amrex::ignore_unused(x3Chi_in);
+#endif
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+void HydroSystem<problem_t>::ReconstructStatesPPMFlattened(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
+							   amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf,
+							   const int nghost, const int nvars)
+{
+	// hydro-k01: fused ReconstructStatesPPM<DIR> + FlattenShocks<DIR>. Same iteration space (cells of q_mf grown by nghost),
+	// same chi_ijk (min over the 9 stored chi values, computed once per cell instead of once per component), and the same
+	// blend formula and operation order as FlattenShocks, applied to the PPM edge values in registers; each (cell, n)
+	// thread is the only writer of rightState(i) and leftState(i + 1), so the result is identical to the two-kernel version.
+	const BL_PROFILE("HydroSystem::ReconstructStatesPPMFlattened()");
+
+	auto const &q_in = q_mf.const_arrays();
+	auto const &x1Chi_in = x1Chi_mf.const_arrays();
+	auto const &x2Chi_in = x2Chi_mf.const_arrays();
+	auto const &x3Chi_in = x3Chi_mf.const_arrays();
+	auto x1LeftState_in = x1LeftState_mf.arrays();
+	auto x1RightState_in = x1RightState_mf.arrays();
+	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+
+	// cell-centered kernel
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
+		quokka::Array4View<const amrex::Real, DIR> q(q_in[bx]);
+		quokka::Array4View<amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
+		quokka::Array4View<amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
+
+		// compute coefficient as the minimum from adjacent cells along *each
+		// axis*
+		//  (Eq. 86 of Miller & Colella 2001; Eq. 78 of Miller & Colella 2002)
+		double const chi_ijk = std::min({
+		    x1Chi_in[bx](i_in - 1, j_in, k_in),
+		    x1Chi_in[bx](i_in, j_in, k_in),
+		    x1Chi_in[bx](i_in + 1, j_in, k_in),
+#if (AMREX_SPACEDIM >= 2)
+		    x2Chi_in[bx](i_in, j_in - 1, k_in),
+		    x2Chi_in[bx](i_in, j_in, k_in),
+		    x2Chi_in[bx](i_in, j_in + 1, k_in),
+#endif
+#if (AMREX_SPACEDIM == 3)
+		    x3Chi_in[bx](i_in, j_in, k_in - 1),
+		    x3Chi_in[bx](i_in, j_in, k_in),
+		    x3Chi_in[bx](i_in, j_in, k_in + 1),
+#endif
+		});
+
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+		for (int n = 0; n < nvars; ++n) {
+			// PPM interfaces of zone i (before flattening)
+			const std::pair<double, double> edges = HyperbolicSystem<problem_t>::template PPMInterfaceValues<DIR>(q, n, i, j, k);
+			const double a_minus = edges.first;
+			const double a_plus = edges.second;
+			const double a_mean = q(i, j, k, n);
+
+			// left side of zone i (Eq. 70a)
+			const double new_a_minus = chi_ijk * a_minus + (1. - chi_ijk) * a_mean;
+
+			// right side of zone i (Eq. 70b)
+			const double new_a_plus = chi_ijk * a_plus + (1. - chi_ijk) * a_mean;
+
+			x1RightState(i, j, k, n) = new_a_minus;
+			x1LeftState(i + 1, j, k, n) = new_a_plus;
+		}
 	});
 
 #if (AMREX_SPACEDIM < 2)
@@ -1161,43 +1404,34 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
+void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::MultiFab const &primVar_mf,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
 						  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf)
 {
 	// compute P dV source term for the internal energy equation,
 	// using the face-centered velocities in faceVelArray and the pressure
-	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
+	// hydro-05: the pressure is read from primVar_mf (component primPgas_index), which must be
+	// ConservedToPrimitive(consVar_mf, cons_fc_mf) of the same state (allocated with nPrimVar_ components)
+	amrex::ignore_unused(cons_fc_mf);
+	AMREX_ALWAYS_ASSERT(primVar_mf.nComp() > primPgas_index);
 	auto vel_x = faceVelArray[0].const_arrays();
 
 #if AMREX_SPACEDIM >= 2
-	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
 	auto vel_y = faceVelArray[1].const_arrays();
 #endif
 #if AMREX_SPACEDIM == 3
-	auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
 	auto vel_z = faceVelArray[2].const_arrays();
 #endif
 
 	auto const &consVar = consVar_mf.const_arrays();
+	auto const &primVar = primVar_mf.const_arrays();
 	auto const &redoFlag = redoFlag_mf.const_arrays();
 	auto rhs = rhs_mf.arrays();
 
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-		// get cell-centered pressure
-		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
-
-		if (Physics_Traits<problem_t>::is_mhd_enabled) {
-			cons_fc[0] = cons_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-			cons_fc[1] = cons_fc_x1[bx];
-#endif
-#if AMREX_SPACEDIM == 3
-			cons_fc[2] = cons_fc_x2[bx];
-#endif
-		}
-		const amrex::Real Pgas = ComputePressure(consVar[bx], i, j, k, &cons_fc);
+		// get cell-centered pressure (stored by ConservedToPrimitive)
+		const amrex::Real Pgas = primVar[bx](i, j, k, primPgas_index);
 
 		// compute div v from face-centered velocities
 		amrex::Real div_v = NAN;
@@ -1302,8 +1536,13 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 	auto const &x1LeftState_in = x1LeftState_mf.const_arrays();
 	auto const &x1RightState_in = x1RightState_mf.const_arrays();
-	auto const &x1LeftState_bfield_in = x1LeftState_bfield_mf.const_arrays();
-	auto const &x1RightState_bfield_in = x1RightState_bfield_mf.const_arrays();
+	// B-field interface states exist only for MHD (hydro-02: they are empty MultiFabs in pure hydro)
+	amrex::MultiArray4<const amrex::Real> x1LeftState_bfield_in;
+	amrex::MultiArray4<const amrex::Real> x1RightState_bfield_in;
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		x1LeftState_bfield_in = x1LeftState_bfield_mf.const_arrays();
+		x1RightState_bfield_in = x1RightState_bfield_mf.const_arrays();
+	}
 	auto const &primVar_in = primVar_mf.const_arrays();
 	auto x1Flux_in = x1Flux_mf.arrays();
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
@@ -1337,8 +1576,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
-		quokka::Array4View<const amrex::Real, DIR> x1LeftState_bfield(x1LeftState_bfield_in[bx]);
-		quokka::Array4View<const amrex::Real, DIR> x1RightState_bfield(x1RightState_bfield_in[bx]);
+		[[maybe_unused]] amrex::Array4<const amrex::Real> x1LeftState_bfield_ref{};
+		[[maybe_unused]] amrex::Array4<const amrex::Real> x1RightState_bfield_ref{};
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			x1LeftState_bfield_ref = x1LeftState_bfield_in[bx];
+			x1RightState_bfield_ref = x1RightState_bfield_in[bx];
+		}
+		[[maybe_unused]] quokka::Array4View<const amrex::Real, DIR> x1LeftState_bfield(x1LeftState_bfield_ref);
+		[[maybe_unused]] quokka::Array4View<const amrex::Real, DIR> x1RightState_bfield(x1RightState_bfield_ref);
 		quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in[bx]);
