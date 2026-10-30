@@ -84,8 +84,6 @@ primordial_chem.primary_species_14 = 0.77500001e-001
 integrator.use_number_densities = 1
 # we do not want to subtract the internal energy
 integrator.subtract_internal_energy = 0
-# we do not want to clip species between 0 and 1
-integrator.do_species_clip = 0
 # minimum positive value of number densities
 integrator.SMALL_X_SAFE = 1e-100
 integrator.burner_verbose = 0
@@ -94,13 +92,6 @@ integrator.burner_verbose = 0
 integrator.use_jacobian_caching = 0
 # integration will fail if the number density > X_reject_buffer*atol
 integrator.X_reject_buffer = 1e100
-# Set which jacobian to use
-# 1 = analytic jacobian
-# 2 = numerical jacobian
-integrator.jacobian = 1
-
-# do you want to normalize abundances within the integrator? (you don't!)
-integrator.renormalize_abundances = 0
 # tolerances
 integrator.rtol_spec = 1.0e-4
 integrator.atol_spec = 1.0e-4
