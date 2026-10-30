@@ -7,6 +7,41 @@
 
 All particle features can only be activated when compiled with `-DAMReX_SPACEDIM=3`.
 
+## openPMD plotfiles
+
+With `QUOKKA_OPENPMD=ON`, plotfiles include tracers and registered physics
+particle populations in the same iteration as the mesh fields. PlotFile
+diagnostics honor `particles` for physics populations; tracers are included
+whenever enabled, as in AMReX plotfiles.
+
+Each population contains `position`, a constant zero `positionOffset`, `id`,
+`amr_level`, and every real and integer field under its particle schema name.
+Particles from all AMR levels share one array. Invalid and neighbor particles
+are excluded. Globally empty populations are omitted. Array order can change
+between outputs; match particles using `id`, which stores AMReX's packed
+64-bit ID and creation-rank pair.
+
+Particle output borrows each tile's arrays directly, including device pointers
+when ADIOS2 is built with the matching CUDA/HIP support. Tiles containing invalid
+particles are compacted in device memory. The generated `amr_level` array also
+uses a tile-sized device buffer. If these scratch allocations fail, that tile
+falls back to host staging. `openpmd.particle_device_buffer_bytes` limits scratch
+bytes per tile (`-1`, the default, imposes no limit; `0` forces host fallback).
+This limit excludes small reduction workspaces and backend-owned buffers.
+
+Each tile is flushed before its scratch buffers are freed. MPI ranks participate
+in matching flush rounds even when their tile counts differ. BP5 flushes request
+disk drainage to avoid retaining a whole population in backend buffers. Backend
+configuration overrides can change this buffering behavior. The fallback handles
+Quokka scratch allocation failures; it cannot safely retry an ADIOS2 failure
+once a collective write has started.
+
+Values remain in simulation units. Position and fields with schema unit
+metadata include openPMD dimensions and SI conversion factors for CGS and
+custom unit systems. When a conversion is unknown (the constants unit system),
+`quokka_unitSI_known` is false and `unitSI` is a placeholder of one. Fields
+without schema unit metadata retain openPMD's default units.
+
 ## Sink Particle Type
 
 Sink particles carry the following real-valued attributes:
