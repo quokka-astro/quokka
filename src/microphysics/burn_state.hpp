@@ -5,14 +5,12 @@
 /// the photochemistry problems: its members follow the problem's Microphysics_Traits instead of build macros.
 
 #include <cstdint>
+#include <type_traits>
 
 #include "AMReX_Array.H"
 #include "AMReX_REAL.H"
 
 #include "microphysics/microphysics_traits.hpp"
-
-// still from extern/Microphysics: NumSpec, NumChemRadEqs and NumThermalBands
-#include "network_properties.H"
 
 namespace quokka::microphysics
 {
@@ -32,16 +30,18 @@ template <> struct DustChemicalBandAbsorptionState<true> {
 template <typename problem_t> struct BurnState : detail::DustChemicalBandAbsorptionState<Microphysics_Traits<problem_t>::dust_chemical_band_absorption> {
 	using problem_type = problem_t;
 	using traits = Microphysics_Traits<problem_t>;
+	using Network = typename traits::Network;
 	static_assert(traits::photochemistry, "BurnState is used by the photochemistry problems only, for now");
+	static_assert(!std::is_same_v<Network, quokka::networks::None>, "a photochemistry problem must set Microphysics_Traits::Network");
 
 	amrex::Real rho{};
 	amrex::Real T{};
 	amrex::Real e{}; ///< specific internal energy
-	amrex::GpuArray<amrex::Real, NumSpec> xn{};
+	amrex::GpuArray<amrex::Real, Network::NumSpec> xn{};
 	/// per chemical band: the photon number density, and the flux-attenuation factor (if integrate_rad_flux is true)
-	amrex::GpuArray<amrex::Real, NumChemRadEqs> rn{};
-	amrex::GpuArray<amrex::Real, NumThermalBands> re_thermal{}; /// thermal-band energy densities
-	amrex::Real c_hat{};					    /// reduced speed of light
+	amrex::GpuArray<amrex::Real, (traits::integrate_rad_flux ? 2 : 1) * Network::NumChemBands> rn{};
+	amrex::GpuArray<amrex::Real, Network::NumThermalBands> re_thermal{}; /// thermal-band energy densities
+	amrex::Real c_hat{};						     /// reduced speed of light
 
 	amrex::Real dedT{}; /// read by the networks' Jacobians
 

@@ -1,23 +1,22 @@
 #ifndef actual_rhs_H
 #define actual_rhs_H
+/// \file actual_rhs.H
+/// \brief The right-hand side and Jacobian of a jaff-generated network, on
+/// Quokka's burn state.
 
-#include <AMReX_Array.H>
-#include <AMReX_REAL.H>
 #include <cmath>
 
-#include <actual_network.H>
-#include <burn_type.H>
-#include <extern_parameters.H>
-#include <jacobian_utilities.H>
+#include <AMReX_Array.H>
+#include <AMReX_Extension.H>
+#include <AMReX_GpuQualifiers.H>
+#include <AMReX_REAL.H>
 
-using namespace ArrayUtil;
-using namespace network_rp;
+#include "microphysics/integrator_layout.hpp"
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_rhs(const burn_t &state, amrex::Array1D<amrex::Real, 1, neqs> &ydot)
+template <typename BurnT>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void
+actual_rhs(const BurnT &state, amrex::Array1D<amrex::Real, 1, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
-
-	using namespace Rates;
-
 	// $JAFF REPEAT idx, rhs, cse IN rhses $[REPLACE radeden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE
 	// rflux\[\s*(\d+)\s*\] state.rn[2*\1+1] REPLACE nden\[\s*(\d+)\s*\] state.xn[\1] REPLACE tgas state.T REPLACE c_hat state.c_hat  RADIATION True]$
 	const amrex::Real cse0 = 3.2467944898988799e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0];
@@ -59,8 +58,9 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_rhs(const burn_t &state, amrex::A
 	// $JAFF END
 }
 
-template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
+template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const BurnT &state, MatrixType &jac)
 {
+	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
 
 	// $JAFF REPEAT idx, expr, cse IN jacobian $[REPLACE radeden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE
 	// rflux\[\s*(\d+)\s*\] state.rn[2*\1+1] REPLACE nden\[\s*(\d+)\s*\] state.xn[\1] REPLACE tgas state.T REPLACE c_hat state.c_hat RADIATION True USE_DEDT
@@ -158,14 +158,11 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(c
 	jac(6, 1) = -cse0 * state.rn[2 * 0 + 1];
 	jac(6, 6) = cse20;
 	// $JAFF END
-	// $JAFF SUB nspec, nbands
-	for (int i = 1; i <= INT_NEQS; i++) {
+	// $JAFF SUB nspec
+	for (int i = 1; i <= Layout::neqs; i++) {
 		jac(4, i) /= state.rho;
 	}
 	// $JAFF END
 }
-
-AMREX_INLINE
-void actual_rhs_init() {}
 
 #endif
