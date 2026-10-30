@@ -8,8 +8,6 @@
 #include "AMReX_Array.H"
 #include "AMReX_REAL.H"
 
-#include "microphysics/array_utils.hpp"
-
 namespace quokka::microphysics
 {
 
@@ -38,13 +36,13 @@ template <int int_neqs, int stages> struct RosenbrockState {
 	amrex::Real rtol_rad_num;
 	amrex::Real c_hat;
 
-	amrex::Array1D<amrex::Real, 1, int_neqs> y;
-	amrex::Array1D<amrex::Real, 1, int_neqs> ynew;
-	amrex::GpuArray<amrex::Array1D<amrex::Real, 1, int_neqs>, stages> k; // k[i - 1] is the stage vector of stage i
-	amrex::Array1D<amrex::Real, 1, int_neqs> work;
+	amrex::GpuArray<amrex::Real, int_neqs> y;
+	amrex::GpuArray<amrex::Real, int_neqs> ynew;
+	amrex::GpuArray<amrex::GpuArray<amrex::Real, int_neqs>, stages> k; // k[i - 1] is the stage vector of stage i
+	amrex::GpuArray<amrex::Real, int_neqs> work;
 
-	MathArray2D<int_neqs> jac;
-	amrex::Array1D<std::int16_t, 1, int_neqs> pivot;
+	amrex::Array2D<amrex::Real, 0, int_neqs - 1, 0, int_neqs - 1> jac; // stored column by column
+	amrex::GpuArray<std::int16_t, int_neqs> pivot;
 };
 
 } // namespace quokka::microphysics

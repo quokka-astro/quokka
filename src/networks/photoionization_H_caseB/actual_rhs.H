@@ -32,7 +32,7 @@
 
 template <typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE void
-actual_rhs(const BurnT &state, amrex::Array1D<amrex::Real, 1, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
+actual_rhs(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
 	// $$JAFF REPEAT idx, rhs, cse IN rhses { USE quokka }
 	const amrex::Real cse0 = 3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0];
@@ -42,10 +42,10 @@ actual_rhs(const BurnT &state, amrex::Array1D<amrex::Real, 1, quokka::microphysi
 	const amrex::Real cse4 = cse0 + 5.84e-11 * cse3 - 1.6594178159829075e-10 * std::pow(state.T, -0.69999999999999996) * state.xn[1] * state.xn[2];
 	const amrex::Real cse5 = state.T < 100.0;
 	const amrex::Real cse6 = state.xn[1] * state.xn[2];
-	ydot(1) = -cse4;
-	ydot(2) = cse4;
-	ydot(3) = cse4;
-	ydot(4) =
+	ydot[0] = -cse4;
+	ydot[1] = cse4;
+	ydot[2] = cse4;
+	ydot[3] =
 	    2.5316840555840673e-29 * state.c_hat * state.xn[0] * state.rn[2 * 0] - 1.27251276978816e-21 * cse3 -
 	    cse6 * (1.8551e-27 * cse1 +
 		    ((cse5) ? (3.47e-29 * std::pow(state.T, 1.915))
@@ -65,11 +65,11 @@ actual_rhs(const BurnT &state, amrex::Array1D<amrex::Real, 1, quokka::microphysi
 	    (2.8000000000000002e-28 * cse1 * std::exp(-92.0 * cse2) + 2.0000000000000002e-19 * std::exp(-118400.0 / (state.T + 1000.0))) *
 		std::pow(state.xn[0], 2) +
 	    2.0000000000000001e-26 * state.xn[0];
-	ydot(5) = -cse0;
-	ydot(6) = -3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0 + 1];
+	ydot[4] = -cse0;
+	ydot[5] = -3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0 + 1];
 	// $$JAFF END
 	// $$JAFF SUB nspec
-	ydot(4) /= state.rho;
+	ydot[3] /= state.rho;
 	// $$JAFF END
 }
 
@@ -149,41 +149,41 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE v
 							     : ((cse40) ? (1.7399999999999998e-24 * std::pow(state.T, 0.23699999999999999))
 									: ((cse41) ? (1.1e-21 * std::pow(state.T, -0.32300000000000001))
 										   : (7.4900000000000001e-21 * std::pow(state.T, -0.46200000000000002)))))))));
-	jac(1, 1) = -cse13 - cse18;
-	jac(1, 2) = -cse13 + cse20;
-	jac(1, 3) = -cse13 + cse21 - cse22;
-	jac(1, 4) = cse11;
-	jac(1, 5) = cse24;
-	jac(2, 1) = cse27;
-	jac(2, 2) = cse28;
-	jac(2, 3) = cse29;
-	jac(2, 4) = cse25;
-	jac(2, 5) = cse23;
-	jac(3, 1) = cse27;
-	jac(3, 2) = cse28;
-	jac(3, 3) = cse29;
-	jac(3, 4) = cse25;
-	jac(3, 5) = cse23;
-	jac(4, 1) = 2.5316840555840673e-29 * state.c_hat * state.rn[2 * 0] - cse30 * state.xn[2] - cse43 -
+	jac(0, 0) = -cse13 - cse18;
+	jac(0, 1) = -cse13 + cse20;
+	jac(0, 2) = -cse13 + cse21 - cse22;
+	jac(0, 3) = cse11;
+	jac(0, 4) = cse24;
+	jac(1, 0) = cse27;
+	jac(1, 1) = cse28;
+	jac(1, 2) = cse29;
+	jac(1, 3) = cse25;
+	jac(1, 4) = cse23;
+	jac(2, 0) = cse27;
+	jac(2, 1) = cse28;
+	jac(2, 2) = cse29;
+	jac(2, 3) = cse25;
+	jac(2, 4) = cse23;
+	jac(3, 0) = 2.5316840555840673e-29 * state.c_hat * state.rn[2 * 0] - cse30 * state.xn[2] - cse43 -
 		    2 * state.xn[0] * (2.0000000000000002e-19 * cse32 + 2.8000000000000002e-28 * cse33 * cse7) + 2.0000000000000001e-26;
-	jac(4, 2) = -cse43 - cse44 * state.xn[2] - cse45 * state.xn[2];
-	jac(4, 3) = -cse30 * state.xn[0] - cse43 - cse44 * state.xn[1] - cse45 * state.xn[1];
-	jac(4, 4) = cse42;
-	jac(4, 5) = 2.5316840555840673e-29 * state.c_hat * state.xn[0];
-	jac(5, 1) = -cse15;
+	jac(3, 1) = -cse43 - cse44 * state.xn[2] - cse45 * state.xn[2];
+	jac(3, 2) = -cse30 * state.xn[0] - cse43 - cse44 * state.xn[1] - cse45 * state.xn[1];
+	jac(3, 3) = cse42;
+	jac(3, 4) = 2.5316840555840673e-29 * state.c_hat * state.xn[0];
+	jac(4, 0) = -cse15;
+	jac(4, 4) = cse24;
+	jac(5, 0) = -cse14 * state.rn[2 * 0 + 1];
 	jac(5, 5) = cse24;
-	jac(6, 1) = -cse14 * state.rn[2 * 0 + 1];
-	jac(6, 6) = cse24;
 	// $$JAFF END
 	// jaff's energy row and column are those of E = rho e: the row is d(dE/dt)
 	// and the column d/dE. Change them to e, with rho fixed during the burn: the
 	// row divides by rho, the column multiplies by rho, and d(de/dt)/de =
 	// d(dE/dt)/dE is unchanged.
 	// $$JAFF SUB nspec
-	for (int i = 1; i <= Layout::neqs; i++) {
-		if (i != 4) {
-			jac(4, i) /= state.rho;
-			jac(i, 4) *= state.rho;
+	for (int i = 0; i < Layout::neqs; i++) {
+		if (i != 3) {
+			jac(3, i) /= state.rho;
+			jac(i, 3) *= state.rho;
 		}
 	}
 	// $$JAFF END
