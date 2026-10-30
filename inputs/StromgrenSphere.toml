@@ -27,8 +27,6 @@ stromgen.n_HII_init = 1.0e-30
 stromgen.Q = 1e48
 
 photochemistry.enabled = 1
-integrator.use_number_densities = 1
-integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 
 integrator.atol_spec                     = 1.0e-2   # cm^-3; spec_abundance_tol (1e-5) × n_H (1000)

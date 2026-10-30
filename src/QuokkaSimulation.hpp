@@ -76,6 +76,7 @@ namespace filesystem = experimental::filesystem;
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
 #include "hyperbolic_system.hpp"
+#include "microphysics/integrator_params.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 #include "radiation/photochemistry.hpp"
@@ -277,10 +278,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
 		// initialize Microphysics params
 		init_extern_parameters();
-#if defined(PHOTOCHEMISTRY) || defined(CHEMISTRY)
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!integrator_rp::subtract_internal_energy,
-						 "integrator.subtract_internal_energy must be 0: Quokka reads total energy from burn_t::e, not the delta");
-#endif
 		// initialize Microphysics EOS
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
@@ -837,6 +834,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
 	}
 #endif
+
+	// set the runtime parameters of the chemistry and photochemistry integrators
+	quokka::microphysics::integrator_params::readIntegratorParams();
 
 	// set dust runtime parameters
 	{

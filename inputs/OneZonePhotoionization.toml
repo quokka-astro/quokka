@@ -21,8 +21,6 @@ do_subcycle = 0
 suppress_output = 0
 
 photochemistry.enabled = 1
-integrator.use_number_densities = 1
-integrator.subtract_internal_energy = 0
 
 photoionization.n_e_init = 1e-10
 photoionization.n_HI_init = 1e2
