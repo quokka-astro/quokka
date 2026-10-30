@@ -1242,10 +1242,14 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	};
 
 	auto const applyTurbulence = [&]() {
-		if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
-			auto const &cellSizes = geom[lev].CellSizeArray();
-			auto const &probLo = geom[lev].ProbLoArray();
-			td->applyDriving(state, time, dt, cellSizes, probLo);
+		// perf-src-01b: apply the forcing once per full step (with dt_lev = 2 * dt) in the first Strang
+		// half, where the pattern is evaluated at the step's start time; the second half does nothing.
+		if constexpr (Order == SourceOrder::forward) {
+			if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
+				auto const &cellSizes = geom[lev].CellSizeArray();
+				auto const &probLo = geom[lev].ProbLoArray();
+				td->applyDriving(state, time, 2.0 * dt, cellSizes, probLo);
+			}
 		}
 	};
 
