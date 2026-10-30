@@ -105,6 +105,8 @@ template <typename problem_t> class turbulentDriving
 	}
 
       public:
+	[[nodiscard]] auto usesProportionalControl() const -> bool { return tg.uses_proportional_control(); }
+
 	turbulentDriving() = default;
 	explicit turbulentDriving(const std::map<std::string, std::string> &turb_params, bool remove_mean_flow_in) : remove_mean_flow(remove_mean_flow_in)
 	{
