@@ -460,6 +460,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 					     amrex::Array4<const amrex::Real> const &dustHeatingSource,
 					     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
 
+	//! As AddSourceTermsMultiGroup, but each thread first calls pre(i, j, k), which may write the cell's state in consVar
+	//! (e.g. the explicit transport update of an IMEX stage), and then runs the implicit solve on that cell. This fuses the
+	//! cell-local passes of an IMEX stage into the source-term kernel.
+	template <typename PreFn>
+	static void AddSourceTermsMultiGroupFused(PreFn const &pre, array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource,
+						  amrex::Box const &indexRange, amrex::Real dt_implicit, double gas_update_factor, double dustGasCoeff,
+						  double tol_h, double tol_rel_h, double tempFloor, int *p_iteration_counter,
+						  int *p_iteration_failure_counter, amrex::Array4<const amrex::Real> const &dustHeatingSource,
+						  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc);
+
 	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
 					      amrex::Real dt_implicit, double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h,
 					      double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter,
