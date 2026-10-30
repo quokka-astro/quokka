@@ -1095,20 +1095,20 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficientsAllDirs(amrex::MultiFa
 		const amrex::Real K_S = FlatteningKS(primVar, i, j, k);
 
 		{
-			quokka::Array4View<amrex::Real, FluxDir::X1> x1Chi(x1Chi_in[bx]);
+			quokka::Array4View<amrex::Real, FluxDir::X1> const x1Chi(x1Chi_in[bx]);
 			auto [ii, jj, kk] = quokka::reorderMultiIndex<FluxDir::X1>(i, j, k);
 			x1Chi(ii, jj, kk) = FlatteningChi<FluxDir::X1>(primVar, i, j, k, K_S);
 		}
 #if AMREX_SPACEDIM >= 2
 		{
-			quokka::Array4View<amrex::Real, FluxDir::X2> x2Chi(x2Chi_in[bx]);
+			quokka::Array4View<amrex::Real, FluxDir::X2> const x2Chi(x2Chi_in[bx]);
 			auto [ii, jj, kk] = quokka::reorderMultiIndex<FluxDir::X2>(i, j, k);
 			x2Chi(ii, jj, kk) = FlatteningChi<FluxDir::X2>(primVar, i, j, k, K_S);
 		}
 #endif
 #if AMREX_SPACEDIM == 3
 		{
-			quokka::Array4View<amrex::Real, FluxDir::X3> x3Chi(x3Chi_in[bx]);
+			quokka::Array4View<amrex::Real, FluxDir::X3> const x3Chi(x3Chi_in[bx]);
 			auto [ii, jj, kk] = quokka::reorderMultiIndex<FluxDir::X3>(i, j, k);
 			x3Chi(ii, jj, kk) = FlatteningChi<FluxDir::X3>(primVar, i, j, k, K_S);
 		}

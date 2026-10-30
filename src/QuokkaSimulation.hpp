@@ -2283,7 +2283,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 
 	amrex::MultiFab accepted_state_cc(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	{
-		amrex::Gpu::NoSyncRegion const noSync;
+		[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync;
 		amrex::Copy(accepted_state_cc, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	} // hydro-02: kernel-only copy, no host sync
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> accepted_state_fc;
@@ -2332,7 +2332,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 
 		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		{
-			amrex::Gpu::NoSyncRegion const noSync;
+			[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync;
 			amrex::Copy(state_old_cc_tmp, accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		} // hydro-02: kernel-only copy, no host sync
 
@@ -2350,7 +2350,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		for (int substep_index = start_substep; substep_index < total_substeps; ++substep_index) {
 			if (substep_index > start_substep) {
 				{
-					amrex::Gpu::NoSyncRegion const noSync;
+					[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync;
 					amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, nvars_, nghost_cc_);
 				} // hydro-02: kernel-only copy, no host sync
 				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2490,8 +2490,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	// intermediate state (persistent; re-zeroed every step exactly as the fresh MultiFab used to be)
 	amrex::MultiFab &state_inter_cc_ = scratch.state_inter_cc;
 	{
-		amrex::Gpu::NoSyncRegion const noSync; // kernel-only setVal: no host sync needed
-		state_inter_cc_.setVal(0);	       // prevent assert in fillBoundaryConditions when radiation is enabled
+		[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync; // kernel-only setVal: no host sync needed
+		state_inter_cc_.setVal(0);				// prevent assert in fillBoundaryConditions when radiation is enabled
 	}
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> state_inter_fc_;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2508,7 +2508,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> &avgFaceVel = scratch.avgFaceVel; // 2 ghost faces are needed for tracer particles
 
 	{
-		amrex::Gpu::NoSyncRegion const noSync;
+		[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			flux_rk2[idim].setVal(0);
 			avgFaceVel[idim].setVal(0);
@@ -2612,7 +2612,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::MultiFab &rhs = scratch.rhs; // persistent; fully overwritten by ComputeRhsFromFluxes
 			amrex::iMultiFab &redoFlag = scratch.redoFlag;
 			{
-				amrex::Gpu::NoSyncRegion const noSync;
+				[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync;
 				redoFlag.setVal(quokka::redoFlag::none);
 			}
 
@@ -2693,7 +2693,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				{
-					amrex::Gpu::NoSyncRegion const noSync;
+					[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync;
 					for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 						amrex::MultiFab::Saxpy(ec_emf_components_rk_ave[idim], stage1Weight, ec_emf_components_rk_stage1[idim], 0, 0, 1,
 								       0);
@@ -2704,7 +2704,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 
 			{
-				amrex::Gpu::NoSyncRegion const noSync; // kernel-only Saxpy: no host sync needed
+				[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync; // kernel-only Saxpy: no host sync needed
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					amrex::MultiFab::Saxpy(flux_rk2[idim], stage1Weight, fluxArrays[idim], 0, 0, nvars_, 0);
 					amrex::MultiFab::Saxpy(avgFaceVel[idim], stage1Weight, faceVel[idim], 0, 0, 1, 0);
@@ -2765,7 +2765,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::MultiFab &rhs = scratch.rhs; // persistent; fully overwritten by ComputeRhsFromFluxes
 			amrex::iMultiFab &redoFlag = scratch.redoFlag;
 			{
-				amrex::Gpu::NoSyncRegion const noSync; // kernel-only Saxpy/setVal: no host sync needed
+				[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync; // kernel-only Saxpy/setVal: no host sync needed
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, nvars_, 0);
 					amrex::MultiFab::Saxpy(avgFaceVel[idim], 0.5, faceVel[idim], 0, 0, 1, 0);
@@ -3154,7 +3154,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	}
 
 	// return flux and face-centered velocities (references to persistent storage)
-	return FluxArraysRef(flux, facevel, fast_mhd_wavespeeds);
+	return {flux, facevel, fast_mhd_wavespeeds};
 }
 
 template <typename problem_t>
@@ -3296,7 +3296,7 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 	// (hydro-02) no keep-alive sync needed: the temporaries are persistent
 
 	// return flux and face-centered velocities (references to persistent storage)
-	return FluxArraysRef(flux, facevel, fast_mhd_wavespeeds);
+	return {flux, facevel, fast_mhd_wavespeeds};
 }
 
 template <typename problem_t>
