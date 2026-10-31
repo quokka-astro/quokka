@@ -34,7 +34,7 @@ extern AMREX_GPU_MANAGED amrex::Real mixed_cell_ub;    // NOLINT
 struct PhotoionizationHCaseB {
 	static constexpr int NumSpec = 3;
 	/// indices of the species in xn
-	enum Species : int { H = 0, H_p, e };
+	enum Species : int { H = 0, H_p, e }; // NOLINT(cppcoreguidelines-use-enum-class)
 
 	static constexpr int NumChemBands = 1;
 	/// edges of the chemical bands [eV]
