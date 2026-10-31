@@ -8,7 +8,7 @@
 namespace quokka::microphysics
 {
 
-enum IntegratorError : std::int8_t {
+enum IntegratorError : std::int8_t { // NOLINT(cppcoreguidelines-use-enum-class)
 	IERR_SUCCESS = 1,
 	IERR_BAD_INPUTS = -1,
 	IERR_DT_UNDERFLOW = -2,
