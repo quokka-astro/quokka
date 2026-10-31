@@ -450,14 +450,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				    int groupBegin = 0, int groupEnd = Physics_Traits<problem_t>::nGroups)
 	    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
 
-	// Persistent per-level hydro temporaries (hydro-02). (Re)defined lazily whenever the level's
-	// BoxArray/DistributionMapping (or the ghost/component layout) changes, i.e. after every regrid.
+	// Hydro temporaries for one call of advanceHydroAtLevel (hydro-02). Allocated at the start of the
+	// level update and freed when it returns, so only one level's temporaries are live at a time.
 	struct HydroScratch {
-		amrex::BoxArray ba;
-		amrex::DistributionMapping dm;
-		int nvars = -1;
-		int nghost_Riemann = -1;
-		int nghost_cc = -1;
 		// flux-path temporaries (shared by the first-order and high-order flux computations)
 		// hydro-05 + hydro-02: primitive variables of the old and intermediate states (nPrimVar_ components),
 		// computed once per stage in advanceHydroAtLevel and passed to the flux functions
@@ -484,17 +479,16 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> flux_rk2;
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> avgFaceVel;
 	};
-	std::vector<std::unique_ptr<HydroScratch>> hydroScratch_;
-	auto getHydroScratch(int lev, int nvars, int nghost_Riemann) -> HydroScratch &;
+	void defineHydroScratch(HydroScratch &s, int lev, int nvars, int nghost_Riemann);
 
 	using FluxArraysRef = std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM> &, std::array<amrex::MultiFab, AMREX_SPACEDIM> &,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> &>;
 
 	auto computeHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab &primVar,
-				int nvars, int nghost_Riemann, int lev) -> FluxArraysRef;
+				int nvars, int nghost_Riemann, int lev, HydroScratch &scratch) -> FluxArraysRef;
 
 	auto computeFOHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab &primVar,
-				  int nvars, int nghost_Riemann, int lev) -> FluxArraysRef;
+				  int nvars, int nghost_Riemann, int lev, HydroScratch &scratch) -> FluxArraysRef;
 
 	template <FluxDir DIR>
 	void computeCCPerpBfieldComps(amrex::MultiFab &cc_bfield_perp_comps_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc) const;
@@ -2484,10 +2478,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 	ApplyHydroStateFixup(state_old_cc_tmp, state_old_fc_tmp, lev);
 
-	// persistent per-level temporaries (hydro-02); (re)defined on regrid
-	HydroScratch &scratch = getHydroScratch(lev, nvars_, nghost_Riemann);
+	// temporaries for this level update (hydro-02); freed when this function returns
+	HydroScratch scratch;
+	defineHydroScratch(scratch, lev, nvars_, nghost_Riemann);
 
-	// intermediate state (persistent; re-zeroed every step exactly as the fresh MultiFab used to be)
+	// intermediate state (re-zeroed exactly as the fresh MultiFab used to be)
 	amrex::MultiFab &state_inter_cc_ = scratch.state_inter_cc;
 	{
 		[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync; // kernel-only setVal: no host sync needed
@@ -2503,7 +2498,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 
 	// create temporary multifabs for combined RK2 flux and time-average face velocity
-	// (persistent; re-zeroed every step, ghost faces included, as before)
+	// (scratch; re-zeroed every call, ghost faces included, as before)
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux_rk2 = scratch.flux_rk2;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> &avgFaceVel = scratch.avgFaceVel; // 2 ghost faces are needed for tracer particles
 
@@ -2552,14 +2547,14 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 		// hydro-05: primitive variables (incl. pressure) of the old state, computed once and reused by the first-order fluxes,
 		// the stage-1 fluxes and flattening, and every P dV evaluation (which all use state_old_cc_tmp)
-		// (hydro-02: persistent per-level storage)
+		// (hydro-02: HydroScratch storage)
 		amrex::MultiFab &primVar_old = scratch.primVar_old;
 		HydroSystem<problem_t>::ConservedToPrimitive(state_old_cc_tmp, state_old_fc_tmp, primVar_old, nghost_cc_);
 
 		// First-order (FOFC) fluxes are computed lazily, only if a FOFC branch is entered (hydro-01a).
 		// They depend only on state_old_cc_tmp / state_old_fc_tmp (ghost-filled above, not modified until the end of this block)
 		// and on primVar_old (hydro-05; not modified after the conversion above).
-		// (hydro-02: the first-order outputs live in persistent per-level storage, filled by computeFOHydroFluxes)
+		// (hydro-02: the first-order outputs live in HydroScratch storage, filled by computeFOHydroFluxes)
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxArrays = scratch.fo_flux;
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfaceVel = scratch.fo_facevel;
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfast_mhd_wavespeeds = scratch.fo_fast_mhd_wavespeeds;
@@ -2571,7 +2566,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 			FOcomputed = true;
 			// returns references to scratch.fo_flux / fo_facevel / fo_fast_mhd_wavespeeds (aliased above)
-			computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, primVar_old, nvars_, nghost_Riemann, lev);
+			computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, primVar_old, nvars_, nghost_Riemann, lev, scratch);
 
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2595,7 +2590,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto &stateNew_fc = state_inter_fc_;
 
 			auto [fluxArrays, faceVel, fast_mhd_wavespeeds] =
-			    computeHydroFluxes(stateOld_cc, stateOld_fc, primVar_old, nvars_, nghost_Riemann, lev);
+			    computeHydroFluxes(stateOld_cc, stateOld_fc, primVar_old, nvars_, nghost_Riemann, lev, scratch);
 
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_rk_stage1;
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2609,7 +2604,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				MHDSystem<problem_t>::AddResistiveEnergyFlux(fluxArrays, stateOld_fc, dx, mhdResistivity_);
 			}
 
-			amrex::MultiFab &rhs = scratch.rhs; // persistent; fully overwritten by ComputeRhsFromFluxes
+			amrex::MultiFab &rhs = scratch.rhs; // scratch; fully overwritten by ComputeRhsFromFluxes
 			amrex::iMultiFab &redoFlag = scratch.redoFlag;
 			{
 				[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync;
@@ -2714,7 +2709,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			ApplyHydroStateFixup(stateNew_cc, stateNew_fc, lev);
 		}
 		// (hydro-02) removed the end-of-stage-1 streamSynchronizeAll(): nothing on the host reads device data here and
-		// the stage-1 flux temporaries are persistent (freed MHD EMF temporaries are only reused by later work on the same stream)
+		// the stage-1 flux temporaries live until this function returns (freed MHD EMF temporaries are only reused by later work on the same stream)
 
 		// Stage 2 of RK2-SSP
 		if (integratorOrder_ == 2) {
@@ -2743,12 +2738,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto &stateFinal_fc = state_new_fc_[lev];
 
 			// hydro-05: primitive variables of the (ghost-filled) intermediate state, computed once for this stage
-			// (hydro-02: persistent per-level storage)
+			// (hydro-02: HydroScratch storage)
 			amrex::MultiFab &primVar_inter = scratch.primVar_inter;
 			HydroSystem<problem_t>::ConservedToPrimitive(stateInter_cc, stateInter_fc, primVar_inter, nghost_cc_);
 
 			auto [fluxArrays, faceVel, fast_mhd_wavespeeds] =
-			    computeHydroFluxes(stateInter_cc, stateInter_fc, primVar_inter, nvars_, nghost_Riemann, lev);
+			    computeHydroFluxes(stateInter_cc, stateInter_fc, primVar_inter, nvars_, nghost_Riemann, lev, scratch);
 
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_rk_stage2;
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2762,7 +2757,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				MHDSystem<problem_t>::AddResistiveEnergyFlux(fluxArrays, stateInter_fc, dx, mhdResistivity_);
 			}
 
-			amrex::MultiFab &rhs = scratch.rhs; // persistent; fully overwritten by ComputeRhsFromFluxes
+			amrex::MultiFab &rhs = scratch.rhs; // scratch; fully overwritten by ComputeRhsFromFluxes
 			amrex::iMultiFab &redoFlag = scratch.redoFlag;
 			{
 				[[maybe_unused]] amrex::Gpu::NoSyncRegion const noSync; // kernel-only Saxpy/setVal: no host sync needed
@@ -2849,7 +2844,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 		}
 	}
-	// (hydro-02) removed the keep-alive streamSynchronizeAll() here: the hydro temporaries are persistent
+	// (hydro-02) removed the keep-alive streamSynchronizeAll() here: the hydro temporaries are freed only when this
+	// function returns, and later device work that may reuse their memory is ordered after the pending kernels
 
 	// do Strang split source terms (second half-step)
 	auto burn_success_second =
@@ -3003,29 +2999,10 @@ void QuokkaSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AMRE
 	}
 }
 
-template <typename problem_t> auto QuokkaSimulation<problem_t>::getHydroScratch(const int lev, const int nvars, const int nghost_Riemann) -> HydroScratch &
+template <typename problem_t> void QuokkaSimulation<problem_t>::defineHydroScratch(HydroScratch &s, const int lev, const int nvars, const int nghost_Riemann)
 {
-	if (static_cast<int>(hydroScratch_.size()) <= lev) {
-		hydroScratch_.resize(lev + 1);
-	}
-	if (!hydroScratch_[lev]) {
-		hydroScratch_[lev] = std::make_unique<HydroScratch>();
-	}
-	HydroScratch &s = *hydroScratch_[lev];
-
 	const amrex::BoxArray &ba = grids[lev];
 	const amrex::DistributionMapping &dm = dmap[lev];
-	if (s.nvars == nvars && s.nghost_Riemann == nghost_Riemann && s.nghost_cc == nghost_cc_ && s.ba == ba && s.dm == dm) {
-		return s; // layout unchanged since the last (re)definition
-	}
-
-	// (re)define everything for the current level layout (first use or after a regrid)
-	s = HydroScratch{};
-	s.ba = ba;
-	s.dm = dm;
-	s.nvars = nvars;
-	s.nghost_Riemann = nghost_Riemann;
-	s.nghost_cc = nghost_cc_;
 
 	const int reconstructGhost = nghost_Riemann + 1;
 	const int flatteningGhost = reconstructGhost + 1;
@@ -3066,12 +3043,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::getHydroScratch(
 	s.state_inter_cc.define(ba, dm, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	s.rhs.define(ba, dm, nvars_, 0);
 	s.redoFlag.define(ba, dm, 1, 1);
-	return s;
 }
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc,
-						     amrex::MultiFab &primVar, const int nvars, const int nghost_Riemann, const int lev) -> FluxArraysRef
+						     amrex::MultiFab &primVar, const int nvars, const int nghost_Riemann, const int lev, HydroScratch &scratch)
+    -> FluxArraysRef
 {
 	const BL_PROFILE("QuokkaSimulation::computeHydroFluxes()");
 
@@ -3083,8 +3060,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	// reconstructed interfaces and use a +/-2 pressure stencil.
 	const int flatteningGhost = reconstructGhost + 1;
 
-	// persistent per-level temporaries (fully overwritten below; B-field ones are empty unless MHD)
-	HydroScratch &scratch = getHydroScratch(lev, nvars, nghost_Riemann);
+	// temporaries owned by advanceHydroAtLevel (fully overwritten below; B-field ones are empty unless MHD)
 	// hydro-05: primVar (= ConservedToPrimitive(consVar_cc, consVar_fc), nghost_cc_ ghost cells) is computed once per stage by the caller
 	amrex::ignore_unused(consVar_cc);
 	amrex::MultiFab &cc_bfield_perp_comps = scratch.cc_bfield_perp_comps;
@@ -3112,7 +3088,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 						      flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2],
 						      reconstructGhost, nvars, nghost_Riemann, dx);)
 
-	// (hydro-02) no keep-alive sync needed: the temporaries are persistent
+	// (hydro-02) no keep-alive sync needed: the temporaries are owned by advanceHydroAtLevel
 
 	// write reconstructed states to disk for analysis (includes ghost zones)
 	// this->writeReconstructedStatesToDisk(leftState, rightState, lev, istep[lev]);
@@ -3153,7 +3129,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		}
 	}
 
-	// return flux and face-centered velocities (references to persistent storage)
+	// return flux and face-centered velocities (references into the caller's HydroScratch)
 	return {flux, facevel, fast_mhd_wavespeeds};
 }
 
@@ -3262,7 +3238,8 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc,
-						       amrex::MultiFab &primVar, const int nvars, const int nghost_Riemann, const int lev) -> FluxArraysRef
+						       amrex::MultiFab &primVar, const int nvars, const int nghost_Riemann, const int lev,
+						       HydroScratch &scratch) -> FluxArraysRef
 {
 	const BL_PROFILE("QuokkaSimulation::computeFOHydroFluxes()");
 
@@ -3270,9 +3247,8 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 	// so the outermost ghost face has left/right interface states.
 	const int reconstructRange = nghost_Riemann + 1;
 
-	// persistent per-level temporaries: the L/R states are shared with computeHydroFluxes
+	// temporaries owned by advanceHydroAtLevel: the L/R states are shared with computeHydroFluxes
 	// (same layout; stream order serializes the reuse); the first-order outputs have their own storage.
-	HydroScratch &scratch = getHydroScratch(lev, nvars, nghost_Riemann);
 	// hydro-05: primVar (= ConservedToPrimitive(consVar_cc, consVar_fc), nghost_cc_ ghost cells) is computed once per stage by the caller
 	amrex::ignore_unused(consVar_cc);
 	amrex::MultiFab &cc_bfield_perp_comps = scratch.cc_bfield_perp_comps;
@@ -3293,9 +3269,9 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 		     , hydroFOFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2], rightState_bfield[2],
 							flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructRange, nvars, nghost_Riemann, dx);)
 
-	// (hydro-02) no keep-alive sync needed: the temporaries are persistent
+	// (hydro-02) no keep-alive sync needed: the temporaries are owned by advanceHydroAtLevel
 
-	// return flux and face-centered velocities (references to persistent storage)
+	// return flux and face-centered velocities (references into the caller's HydroScratch)
 	return {flux, facevel, fast_mhd_wavespeeds};
 }
 
