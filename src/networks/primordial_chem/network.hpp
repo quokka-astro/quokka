@@ -21,7 +21,7 @@ extern AMREX_GPU_MANAGED amrex::Real redshift; // NOLINT
 struct PrimordialChem {
 	static constexpr int NumSpec = 14;
 	/// indices of the species in xn
-	enum Species : int { E = 0, Hp, H, Hm, Dp, D, H2p, Dm, H2, Hdp, Hd, Hepp, Hep, He };
+	enum Species : int { E = 0, Hp, H, Hm, Dp, D, H2p, Dm, H2, Hdp, Hd, Hepp, Hep, He }; // NOLINT(cppcoreguidelines-use-enum-class)
 
 	/// Read the runtime parameters (namespace primordial_chem).
 	static void ReadParameters();
