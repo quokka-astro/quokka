@@ -30,8 +30,10 @@ jobs:
       id: review
       with:
         config_file: src/.clang-tidy
-        # The jaff-generated network is skipped: fixes belong in jaff's template, not in the generated files.
+        # The jaff-generated network is skipped: fixes belong in jaff's template, not in the generated files. So are the
+        # vendored copies in extern/: fixes belong upstream.
         exclude: "extern/turbulence/*,\
+          extern/gcem/*,\
           src/networks/photoionization_H_caseB/*"
         build_dir: build
         apt_packages: libopenmpi-dev,libhdf5-mpi-dev,python3-dev,python3-numpy,python3-matplotlib
