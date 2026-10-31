@@ -36,7 +36,9 @@ jobs:
         #   chemistry problems' include paths find; linted again once they stop including them
         # - burn_state.hpp reads NumChemRadEqs and NumThermalBands from Microphysics' generated network_properties.H,
         #   which has them only for the photochemistry problems; linted again once it stops including it
+        # The jaff-generated network is skipped too: fixes belong in jaff's template, not in the generated files.
         exclude: "extern/turbulence/*,\
+          src/networks/photoionization_H_caseB/*,\
           src/microphysics/burn_state.hpp,\
           src/microphysics/burner.hpp,\
           src/microphysics/integrator_layout.hpp,\
