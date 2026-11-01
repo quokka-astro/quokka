@@ -144,6 +144,12 @@ template <typename problem_t> class HyperbolicSystem
 										  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
 										  int j_in, int k_in, int iReadFrom = 0, int iWriteFrom = 0);
 
+	// hydro-k01: PPM interface values of zone (i, j, k) [already permuted to DIR] for component n:
+	// returns (a_minus, a_plus) = (rightState(i), leftState(i + 1)) without storing them
+	template <FluxDir DIR>
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto PPMInterfaceValues(quokka::Array4View<amrex::Real const, DIR> const &q, int n, int i, int j, int k)
+	    -> std::pair<double, double>;
+
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto MonotonizeEdges(double qL_in, double qR_in, double q, double qminus, double qplus)
 	    -> std::pair<double, double>;
 
@@ -201,13 +207,15 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab cons
 	auto rightState_in = rightState_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
 		// construct ArrayViews for permuted indices
 		quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, leftState, rightState, n, i_in, j_in, k_in);
+		for (int n = 0; n < nvars; ++n) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, leftState, rightState, n, i_in, j_in, k_in);
+		}
 	});
 }
 
@@ -258,13 +266,15 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 	auto rightState_in = rightState_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
 		// construct ArrayViews for permuted indices
 		quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, limiter>(q, leftState, rightState, n, i_in, j_in, k_in);
+		for (int n = 0; n < nvars; ++n) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, limiter>(q, leftState, rightState, n, i_in, j_in, k_in);
+		}
 	});
 }
 
@@ -381,13 +391,15 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
 	// cell-centered kernel
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
 		// construct ArrayViews for permuted indices
 		quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		for (int n = 0; n < nvars; ++n) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		}
 	});
 }
 
@@ -420,6 +432,21 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 {
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+	const std::pair<double, double> edges = HyperbolicSystem<problem_t>::template PPMInterfaceValues<DIR>(q, iReadFrom + n, i, j, k);
+	rightState(i, j, k, iWriteFrom + n) = edges.first;
+	leftState(i + 1, j, k, iWriteFrom + n) = edges.second;
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::PPMInterfaceValues(quokka::Array4View<amrex::Real const, DIR> const &q,
+											      const int n_q, int i, int j, int k) -> std::pair<double, double>
+{
+	// hydro-k01: body of the pointwise ReconstructStatesPPM, unchanged except that iReadFrom + n is passed as n_q
+	// (so "iReadFrom + n" below is n_q) and the two edge values are returned instead of stored
+	constexpr int iReadFrom = 0;
+	const int n = n_q;
 
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at the left
@@ -498,8 +525,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 			new_a_plus = a + 2.0 * dq_minus;
 		}
 	}
-	rightState(i, j, k, iWriteFrom + n) = new_a_minus;
-	leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
+	return std::make_pair(new_a_minus, new_a_plus);
 }
 
 template <typename problem_t>
@@ -610,13 +636,16 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const 
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
 	// cell-centered kernel
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
 		// construct ArrayViews for permuted indices
 		quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		for (int n = 0; n < nvars; ++n) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom,
+											   iWriteFrom);
+		}
 	});
 }
 
