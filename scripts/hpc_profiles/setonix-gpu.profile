@@ -21,9 +21,9 @@ module load cray-hdf5
 # python
 module load cray-python/3.12.12
 
-# ROCm 10.0 user-space SDK for the MI250X (gfx90a). The host amdgpu
+# ROCm 10.1 user-space SDK for the MI250X (gfx90a). The host amdgpu
 # driver is supplied by Setonix; install the wheel environment only once.
-ROCM_VENV="${MYSOFTWARE}/venvs/rocm-10.0"
+ROCM_VENV="${MYSOFTWARE}/venvs/rocm-10.1"
 
 # Keep pip's large downloads and temporary build files out of $HOME, where
 # Setonix applies a comparatively small quota. Pawsey defines $MYSCRATCH and
@@ -41,12 +41,15 @@ if [[ ! -x "${ROCM_VENV}/bin/python" ]] ||
   "${ROCM_VENV}/bin/python" -m pip install --upgrade pip
   "${ROCM_VENV}/bin/python" -m pip install \
     --index-url https://stable.repo.amd.com/rocm/whl-next/ \
-    "rocm[libraries,devel,device-gfx90a]==10.0.0"
+    "rocm[libraries,devel,device-gfx90a]==10.1.0"
 fi
 source "${ROCM_VENV}/bin/activate"
 
 echo "Initializing ROCm SDK... (may take several minutes on a parallel file system, please be patient)"
 rocm-sdk init
+
+# fixup PS1
+export PS1='\u@\h:\w> '
 
 # Expose the wheel-provided ROCm installation to CMake and AMReX. The SDK
 # activation places hipcc on PATH but does not currently publish its CMake
