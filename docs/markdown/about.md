@@ -23,6 +23,7 @@ Per the documentation policy in the maintainer guide, physics features that have
 | Dust | beta | Dedicated dust dynamics, drag, and charged-dust Lorentz source terms |
 | Particles | beta | Particle-mesh gravity, sink particles, star formation, and feedback |
 | Chemistry | beta | Primordial chemistry source terms |
+| Photoionization | beta | Hydrogen photoionization and photoheating of ionizing photons with the M1 closure |
 | Self-gravity | beta | Poisson solve for gas and particle mass |
 
 Hydrodynamics and optically-thin cooling are not currently marked as beta.
