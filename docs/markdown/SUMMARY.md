@@ -38,6 +38,7 @@
     - [Advecting radiation pulse test](tests/radhydro_pulse.md)
     - [1D H II region and dust reprocessing test](tests/DTypeFront1D.md)
 - [Runtime parameters](parameters.md)
+- [Checkpoint and restart](checkpoint_restart.md)
 - [In-situ analysis](insitu_analysis.md)
 - [Postprocessing](postprocessing.md)
 - [Debugging simulation instability](instability.md)

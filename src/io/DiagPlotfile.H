@@ -124,6 +124,9 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 
 #ifdef QUOKKA_USE_OPENPMD
 	// Write using OpenPMD format
+#if AMREX_SPACEDIM == 3
+	sim->particleRegister_.redistribute(0, 0);
+#endif // AMREX_SPACEDIM == 3
 	quokka::OpenPMDOutput::WriteFile(
 	    varnames_out, finest_level + 1, mf_cc_out_ptr, geoms, m_diagfile, a_time, sim->istep[0],
 	    [sim, this](openPMD::Series &series, openPMD::Iteration &iteration) { sim->WriteOpenPMDParticles(series, iteration, m_particleTypes); });

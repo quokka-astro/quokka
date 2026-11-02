@@ -1,5 +1,6 @@
 #include "AMReX_ParmParse.H"
 #include "io/openPMD.hpp"
+#include <limits>
 #include <set>
 
 auto main(int argc, char **argv) -> int
@@ -58,7 +59,46 @@ auto main(int argc, char **argv) -> int
 			}
 		}
 		amrex::Gpu::streamSynchronize();
+		// Valid IDs in tile order: a single-rank writer must preserve this order exactly.
+		std::vector<std::uint64_t> expectedOrder;
+		for (int lev = 0; lev <= particles.finestLevel(); ++lev) {
+			for (const auto &[key, tile] : particles.GetParticles(lev)) {
+				amrex::ignore_unused(key);
+				const auto idcpu = tile.GetStructOfArrays().GetIdCPUData();
+				std::vector<std::remove_cv_t<std::remove_reference_t<decltype(*idcpu.begin())>>> host(tile.numParticles());
+				amrex::Gpu::copy(amrex::Gpu::deviceToHost, idcpu.begin(), idcpu.begin() + tile.numParticles(), host.begin());
+				std::copy_if(host.begin(), host.end(), std::back_inserter(expectedOrder),
+					     [](auto id) { return amrex::particle_impl::unpack_id(id) > 0; });
+			}
+		}
 		quokka::ParticleContainer empty(schema, geom, dm, boxes);
+		int checkpoint = 0;
+		pp.query("checkpoint", checkpoint);
+		quokka::ParticleContainer restored(schema, geoms, maps, grids, amrex::Vector<amrex::IntVect>{amrex::IntVect(2)});
+		quokka::ParticleContainer restoredEmpty(schema, geom, dm, boxes);
+		if (checkpoint != 0) {
+			// write_checkpoint=0 reads an existing checkpoint, e.g. from the other precision.
+			int writeCheckpoint = 1;
+			pp.query("write_checkpoint", writeCheckpoint);
+			if (writeCheckpoint != 0) {
+				auto series = quokka::OpenPMDOutput::CreateCheckpointSeries("particle_checkpoint");
+				auto iteration = series.iterations[3];
+				quokka::OpenPMDOutput::SetCheckpointVersion(iteration);
+				const auto nan = std::numeric_limits<double>::quiet_NaN();
+				quokka::OpenPMDOutput::WriteParticles(series, iteration, particles, "test", {nan, nan, nan, nan}, true);
+				quokka::OpenPMDOutput::WriteParticles(series, iteration, empty, "empty", {nan, nan, nan, nan}, true);
+				series.close();
+			}
+			auto series = quokka::OpenPMDOutput::OpenCheckpointSeries("particle_checkpoint0000003.bp");
+			auto iteration = quokka::OpenPMDOutput::CheckpointIteration(series);
+			quokka::OpenPMDOutput::ReadCheckpointParticles(iteration, restored, "test");
+			quokka::OpenPMDOutput::ReadCheckpointParticles(iteration, restoredEmpty, "empty");
+			series.close();
+			AMREX_ALWAYS_ASSERT(restoredEmpty.TotalNumberOfParticles() == 0);
+			quokka::ParticleContainer::FinalizeRestarts();
+			const auto next = quokka::ParticleContainer::ReserveIDs(1);
+			AMREX_ALWAYS_ASSERT(next >= restored.RestartNextID() && next >= restoredEmpty.RestartNextID());
+		}
 #if openPMD_HAVE_ADIOS2
 		const std::string path = "particle_openpmd_%T.bp";
 #else
@@ -71,7 +111,7 @@ auto main(int argc, char **argv) -> int
 			openPMD::Series output(path, openPMD::Access::CREATE);
 #endif
 			auto iteration = output.iterations[0];
-			quokka::OpenPMDOutput::WriteParticles(output, iteration, particles, "test", {0.001, 0.01, 1., 1.});
+			quokka::OpenPMDOutput::WriteParticles(output, iteration, checkpoint != 0 ? restored : particles, "test", {0.001, 0.01, 1., 1.});
 			quokka::OpenPMDOutput::WriteParticles(output, iteration, empty, "empty", {1., 1., 1., 1.});
 			output.close();
 		}
@@ -112,6 +152,9 @@ auto main(int argc, char **argv) -> int
 			}
 			AMREX_ALWAYS_ASSERT(species["mass"][scalar].unitSI() == 0.001);
 			input.flush();
+			if (checkpoint == 0 && amrex::ParallelDescriptor::NProcs() == 1) {
+				AMREX_ALWAYS_ASSERT(std::equal(expectedOrder.begin(), expectedOrder.end(), ids.get(), ids.get() + count));
+			}
 			std::set<std::uint64_t> unique;
 			std::set<unsigned> cells;
 			for (unsigned i = 0; i < count; ++i) {
@@ -131,6 +174,26 @@ auto main(int argc, char **argv) -> int
 				cells.insert(cell);
 			}
 			AMREX_ALWAYS_ASSERT(unique.size() == count && cells.size() == count);
+			if (checkpoint != 0) {
+				// Checkpoint species match plotfile species; empty populations have none.
+				openPMD::Series saved("particle_checkpoint0000003.bp", openPMD::Access::READ_ONLY);
+				AMREX_ALWAYS_ASSERT(!saved.iterations.at(3).particles.contains("empty"));
+				auto savedSpecies = saved.iterations.at(3).particles.at("test");
+				// openPMD-api cannot convert while loading, so compare raw records only when
+				// the checkpoint has this build's precision. Restored values were checked above.
+				if (savedSpecies["mass"][scalar].getDatatype() == openPMD::determineDatatype<amrex::ParticleReal>()) {
+					const auto savedIDs = savedSpecies["id"][scalar].loadChunk<std::uint64_t>();
+					const auto savedMass = savedSpecies["mass"][scalar].loadChunk<amrex::ParticleReal>();
+					saved.flush();
+					std::map<std::uint64_t, amrex::ParticleReal> identity;
+					for (unsigned i = 0; i < count; ++i) {
+						identity.emplace(savedIDs.get()[i], savedMass.get()[i]);
+					}
+					for (unsigned i = 0; i < count; ++i) {
+						AMREX_ALWAYS_ASSERT(identity.at(ids.get()[i]) == mass.get()[i]);
+					}
+				}
+			}
 		}
 	}
 	amrex::Finalize();

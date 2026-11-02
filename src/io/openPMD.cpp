@@ -20,6 +20,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Reduce.H"
+#include "AMReX_Scan.H"
 
 // openPMD headers
 #include "openPMD/IterationEncoding.hpp"
@@ -60,9 +61,9 @@ auto getReversedVec(const amrex::Real *v) -> std::vector<double>
 	return u;
 }
 
-void SetupMeshComponent(openPMD::Mesh &mesh, amrex::Geometry &full_geom)
+void SetupMeshComponent(openPMD::Mesh &mesh, const amrex::Geometry &full_geom, amrex::IndexType ixType)
 {
-	amrex::Box const &global_box = full_geom.Domain();
+	amrex::Box const global_box = amrex::convert(full_geom.Domain(), ixType);
 	auto global_size = getReversedVec(global_box.size());
 	std::vector<double> const grid_spacing = getReversedVec(full_geom.CellSize());
 	std::vector<double> const global_offset = getReversedVec(full_geom.ProbLo());
@@ -79,8 +80,47 @@ void SetupMeshComponent(openPMD::Mesh &mesh, amrex::Geometry &full_geom)
 	auto mesh_comp = mesh[openPMD::MeshRecordComponent::SCALAR];
 	auto const dataset = openPMD::Dataset(openPMD::determineDatatype<amrex::Real>(), global_size);
 	mesh_comp.resetDataset(dataset);
-	std::vector<amrex::Real> const relativePosition{0.5, 0.5, 0.5}; // cell-centered only (for now)
+	// staggering in units of the cell size: 0.5 for cell-centered axes, 0 for nodal ones
+	const auto stagger = [&](int d) { return ixType.cellCentered(d) ? amrex::Real(0.5) : amrex::Real(0.0); };
+	std::vector<amrex::Real> relativePosition{AMREX_D_DECL(stagger(0), stagger(1), stagger(2))};
+	std::reverse(relativePosition.begin(), relativePosition.end());
 	mesh_comp.setPosition(relativePosition);
+}
+
+// openPMD options for every output series. openpmd.aggregation (on or off)
+// selects ADIOS2 BP5 aggregation: on keeps BP5's default (TwoLevelShm, one
+// aggregator per node), off lets every rank write its own subfile. EveryoneWrites
+// alone still shares one subfile per node, so off also sets one aggregator per
+// rank; a shared subfile sits on a single OST on Lustre. off is the default: on
+// Frontier from 64 to 1024 nodes it wrote plotfiles faster and read checkpoints
+// faster than on. Evaluated once, collectively.
+auto SeriesOptions() -> const std::string &
+{
+	static const std::string options = [] {
+		const amrex::ParmParse pp("openpmd");
+		std::string mode = "off";
+		pp.query("aggregation", mode);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mode == "on" || mode == "off", "openpmd.aggregation must be on or off");
+		amrex::Print() << "openPMD: ADIOS2 aggregation " << mode << "\n";
+		if (mode == "on") {
+			return std::string("{}");
+		}
+		return R"({"adios2": {"engine": {"parameters": {"AggregationType": "EveryoneWrites", "NumAggregators": ")" +
+		       std::to_string(amrex::ParallelDescriptor::NProcs()) + R"("}}}})";
+	}();
+	return options;
+}
+
+auto CreateSeries(const std::string &filename) -> openPMD::Series
+{
+#ifdef AMREX_USE_MPI
+	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator(), SeriesOptions());
+#else
+	auto series = openPMD::Series(filename, openPMD::Access::CREATE, SeriesOptions());
+#endif
+	series.setSoftware("Quokka", "1.0");
+	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
+	return series;
 }
 
 auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::string
@@ -101,14 +141,7 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 	       const std::function<void(openPMD::Series &, openPMD::Iteration &)> &writeParticles)
 {
 	// open file
-	std::string const filename = output_basename + "%05T.bp";
-#ifdef AMREX_USE_MPI
-	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
-#else
-	auto series = openPMD::Series(filename, openPMD::Access::CREATE);
-#endif
-	series.setSoftware("Quokka", "1.0");
-	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
+	auto series = detail::CreateSeries(output_basename + "%05T.bp");
 
 	auto series_iteration = series.iterations[file_number];
 	series_iteration.open();
@@ -144,13 +177,15 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 				auto chunk_offset = detail::getReversedVec(box_offset); // this overflows if ghost zones are used (!)
 				auto chunk_size = detail::getReversedVec(local_box.size());
 
-				// pass device pointer directly to ADIOS
-				amrex::Real const *local_data = fab.dataPtr(icomp);
-				mesh.storeChunkRaw(local_data, chunk_offset, chunk_size);
+				detail::StoreDeviceChunk(mesh, fab.dataPtr(icomp), local_box.numPts(), chunk_offset, chunk_size);
 			}
 		}
 
-		// flush this level to disk
+		// Flush this level to disk once its staged copies are complete. A rank without
+		// patches on this level has nothing new to flush, and openPMD would skip its
+		// part of BP5's collective write.
+		amrex::Gpu::streamSynchronize();
+		series_iteration.touch();
 		series.flush();
 	}
 
@@ -175,7 +210,6 @@ struct ParticleTileOutput {
 	amrex::Gpu::DeviceVector<amrex::ParticleReal> deviceReals;
 	amrex::Gpu::DeviceVector<int> deviceInts;
 	amrex::Gpu::DeviceVector<std::uint64_t> deviceIDs;
-	amrex::Gpu::DeviceVector<amrex::Long> deviceIndices;
 	std::vector<amrex::ParticleReal> hostReals;
 	std::vector<int> hostInts;
 	std::vector<std::uint64_t> hostIDs;
@@ -183,6 +217,9 @@ struct ParticleTileOutput {
 	std::vector<const int *> integers;
 	const std::uint64_t *ids = nullptr;
 	const int *levels = nullptr;
+	// Whether the pointers above refer to host memory (the host fallback) rather
+	// than device memory.
+	bool onHost = false;
 
 	void Prepare(const ParticleContainer::ParticleTileType &tile, int lev, std::uint64_t count, ParticleLayout layout, amrex::Long bufferLimit)
 	{
@@ -193,9 +230,7 @@ struct ParticleTileOutput {
 		integers.resize(layout.numInt);
 		const bool compact = count != static_cast<std::uint64_t>(n);
 		const auto bytes =
-		    count * sizeof(int) +
-		    (compact ? count * (nr * sizeof(amrex::ParticleReal) + layout.numInt * sizeof(int) + sizeof(std::uint64_t)) + (n + 1) * sizeof(amrex::Long)
-			     : 0);
+		    count * sizeof(int) + (compact ? count * (nr * sizeof(amrex::ParticleReal) + layout.numInt * sizeof(int) + sizeof(std::uint64_t)) : 0);
 		try {
 			// A configurable scratch limit also allows deterministic fallback tests.
 			if (bufferLimit >= 0 && bytes > static_cast<std::uint64_t>(bufferLimit)) {
@@ -205,7 +240,6 @@ struct ParticleTileOutput {
 			if (compact) {
 				deviceReals.resize(count * nr);
 				deviceIDs.resize(count);
-				deviceIndices.resize(n + 1);
 			}
 			// Finish all allocations before launching kernels, so an allocation
 			// failure can release partial buffers without waiting on their use.
@@ -222,28 +256,27 @@ struct ParticleTileOutput {
 					integers[c] = soa.GetIntData(c).data();
 				}
 			} else {
-				auto *indices = deviceIndices.data();
 				const auto data = tile.getConstParticleTileData();
-				amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) { indices[n] = 0; });
-				amrex::ParallelFor(n, [=] AMREX_GPU_DEVICE(int i) {
-					indices[i] = data.id(i) > 0 ? amrex::Gpu::Atomic::Add(&indices[n], amrex::Long{1}) : -1;
-				});
 				auto *outReals = deviceReals.data();
 				auto *outIDs = deviceIDs.data();
 				const auto *inIDs = soa.GetIdCPUData().data();
 				const int ni = layout.numInt;
-				amrex::ParallelFor(n, [=] AMREX_GPU_DEVICE(int i) {
-					const auto j = indices[i];
-					if (j >= 0) {
-						outIDs[j] = inIDs[i];
-						for (int c = 0; c < nr; ++c) {
-							outReals[c * count + j] = data.rdata(c, i);
-						}
-						for (int c = 0; c < ni; ++c) {
-							outInts[(c + 1) * count + j] = data.idata(c, i);
-						}
-					}
-				});
+				// An exclusive prefix sum over the valid mask keeps the tile's particle
+				// order, so output is reproducible from run to run.
+				amrex::Scan::PrefixSum<amrex::Long>(
+				    n, [=] AMREX_GPU_DEVICE(int i) -> amrex::Long { return data.id(i) > 0 ? 1 : 0; },
+				    [=] AMREX_GPU_DEVICE(int i, amrex::Long const &j) {
+					    if (data.id(i) > 0) {
+						    outIDs[j] = inIDs[i];
+						    for (int c = 0; c < nr; ++c) {
+							    outReals[c * count + j] = data.rdata(c, i);
+						    }
+						    for (int c = 0; c < ni; ++c) {
+							    outInts[(c + 1) * count + j] = data.idata(c, i);
+						    }
+					    }
+				    },
+				    amrex::Scan::Type::exclusive, amrex::Scan::noRetSum);
 				ids = outIDs;
 				for (int c = 0; c < nr; ++c) {
 					reals[c] = outReals + c * count;
@@ -260,8 +293,8 @@ struct ParticleTileOutput {
 			amrex::Gpu::DeviceVector<amrex::ParticleReal>().swap(deviceReals);
 			amrex::Gpu::DeviceVector<int>().swap(deviceInts);
 			amrex::Gpu::DeviceVector<std::uint64_t>().swap(deviceIDs);
-			amrex::Gpu::DeviceVector<amrex::Long>().swap(deviceIndices);
 		}
+		onHost = true;
 		const auto identity = HostCopy(soa.GetIdCPUData(), n);
 		std::vector<int> valid;
 		valid.reserve(count);
@@ -315,7 +348,7 @@ void SetParticleUnits(openPMD::Record record, const std::array<int, 4> &powers, 
 } // namespace
 
 void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, const ParticleContainer &particles, const std::string &name,
-		    const std::array<double, 4> &units)
+		    const std::array<double, 4> &units, bool restart)
 {
 	const auto &schema = particles.Schema();
 	const auto layout = particles.Layout();
@@ -357,6 +390,9 @@ void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, cons
 #endif
 	const auto total = std::accumulate(counts.begin(), counts.end(), std::uint64_t{0});
 	auto offset = std::accumulate(counts.begin(), counts.begin() + amrex::ParallelDescriptor::MyProc(), std::uint64_t{0});
+	if (restart) {
+		detail::WriteCheckpointParticleAttributes(iteration, particles, name, total);
+	}
 	// An absent species represents a globally empty population.
 	if (total == 0) {
 		return;
@@ -390,34 +426,65 @@ void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, cons
 	}
 	// Define the same datasets on every rank before submitting any chunks.
 	series.flush();
-	auto rounds = static_cast<amrex::Long>(tiles.size());
-	amrex::ParallelDescriptor::ReduceLongMax(rounds);
 	const auto rankEnd = offset + local;
 	amrex::Long bufferLimit = -1;
 	amrex::ParmParse("openpmd").query("particle_device_buffer_bytes", bufferLimit);
+	// Group tiles into flush rounds of up to flushBytes of particle data per rank,
+	// so the number of collective flushes follows data volume rather than the
+	// number of tiles. A tile larger than the budget gets a round of its own.
+	amrex::Long flushBytes = amrex::Long{256} << 20;
+	amrex::ParmParse("openpmd").query("particle_flush_bytes", flushBytes);
+	const auto recordBytes = (AMREX_SPACEDIM + layout.numReal) * sizeof(amrex::ParticleReal) + (layout.numInt + 1) * sizeof(int) + sizeof(std::uint64_t);
+	std::vector<std::size_t> roundStart;
+	std::uint64_t roundBytes = 0;
+	for (std::size_t t = 0; t < tiles.size(); ++t) {
+		const auto bytes = tiles[t].count * recordBytes;
+		if (roundStart.empty() || roundBytes + bytes > static_cast<std::uint64_t>(flushBytes)) {
+			roundStart.push_back(t);
+			roundBytes = 0;
+		}
+		roundBytes += bytes;
+	}
+	const auto localRounds = static_cast<amrex::Long>(roundStart.size());
+	roundStart.push_back(tiles.size());
+	auto rounds = localRounds;
+	amrex::ParallelDescriptor::ReduceLongMax(rounds);
 	for (amrex::Long round = 0; round < rounds; ++round) {
-		ParticleTileOutput buffers;
-		if (round < static_cast<amrex::Long>(tiles.size())) {
-			const auto &[lev, tile, count] = tiles[round];
+		const auto first = round < localRounds ? roundStart[round] : tiles.size();
+		const auto last = round < localRounds ? roundStart[round + 1] : tiles.size();
+		std::vector<ParticleTileOutput> roundBuffers(last - first);
+		for (auto t = first; t < last; ++t) {
+			auto &buffers = roundBuffers[t - first];
+			const auto &[lev, tile, count] = tiles[t];
 			buffers.Prepare(*tile, lev, count, layout, bufferLimit);
-			const auto store = [&](openPMD::RecordComponent component, const auto *values) { component.storeChunkRaw(values, {offset}, {count}); };
+			const auto store = [&](openPMD::RecordComponent component, const auto *values) {
+#ifdef AMREX_USE_GPU
+				if (!buffers.onHost) {
+					detail::StoreDeviceChunk(component, values, count, {offset}, {count});
+					return;
+				}
+#endif
+				component.storeChunkRaw(values, {offset}, {count});
+			};
 			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 				store(species["position"][axes[d]], buffers.reals[d]);
 			}
 			store(species["id"][openPMD::RecordComponent::SCALAR], buffers.ids);
 			store(species["amr_level"][openPMD::RecordComponent::SCALAR], buffers.levels);
 			for (int c = 0; c < layout.numReal; ++c) {
-				store(species[schema.RealNames()[c]][openPMD::RecordComponent::SCALAR], buffers.reals[AMREX_SPACEDIM + c]);
+				store(species[schema.RealNames()[c]][openPMD::RecordComponent::SCALAR], buffers.reals[layout.RealStorage(c)]);
 			}
 			for (int c = 0; c < layout.numInt; ++c) {
 				store(species[schema.IntNames()[c]][openPMD::RecordComponent::SCALAR], buffers.integers[c]);
 			}
 			offset += count;
 		}
-		// All borrowed pointers and scratch buffers remain alive through this
-		// collective flush, including on ranks that have already run out of tiles.
+		// Staged copies must be complete, and all borrowed pointers and scratch buffers
+		// remain alive through this collective flush, including on ranks that have
+		// already run out of tiles.
 		// Otherwise openPMD can skip a clean iteration on an idle rank,
 		// leaving other ranks inside BP5's collective PerformDataWrite.
+		amrex::Gpu::streamSynchronize();
 		iteration.touch();
 		series.flush(R"({"adios2": {"engine": {"preferred_flush_target": "disk"}}})");
 	}
