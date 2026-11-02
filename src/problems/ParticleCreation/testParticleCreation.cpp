@@ -10,6 +10,9 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_schema_traits.hpp"
+
+#include <array>
 
 struct TestParticle {};
 
@@ -73,18 +76,18 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	// do not have particles, TestParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual particle container.
 	for (auto &kv : TestParticles->GetParticles()) {
 		for (auto &ikv : kv) {
-			auto &particle_array = ikv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
+			const auto np = ikv.second.numParticles();
+			const auto layout = TestParticles->Layout();
 
 			if (np == 0) {
 				continue;
 			}
 
-			auto *pdata = particle_array().data();
+			const auto data = ikv.second.getParticleTileData();
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
+				auto p = quokka::ParticleView(data, i, layout); // NOLINT
 				if (p.rdata(0) > 1.0e-10) {
 					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 				} else {
@@ -113,7 +116,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		double x_L = box_left_edge_;
 		double offset = particle_offset_from_center_;
 
-		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
+		ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const & /*state_arr*/,
 						 amrex::Array4<const amrex::Real> const & /*state_accretion_rate_arr*/, int i, int j, int k,
@@ -160,14 +163,15 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		{
 		}
 
-		template <typename ParticleType, typename StateArray>
-		AMREX_GPU_DEVICE void
-		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*state_accretion_rate_arr*/, int i,
-			   int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/, amrex::Long base_offset,
-			   amrex::RandomEngine const & /*engine*/) const
+		template <typename TileData, typename StateArray>
+		AMREX_GPU_DEVICE void operator()(TileData data, amrex::Long first, ParticleLayout layout, int num_particles, StateArray const &state_arr,
+						 StateArray const & /*state_accretion_rate_arr*/, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/, amrex::Long base_offset,
+						 amrex::RandomEngine const & /*engine*/) const
 		{
-			if (mass_idx + 3 < ParticleType::NReal) {
+			if (mass_idx + 3 < layout.numReal) {
 				// Calculate common values for all particles
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
@@ -177,7 +181,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 				// Create all particles
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
-					auto &p = particles[p_idx]; // NOLINT
+					auto p = ParticleView(data, first + p_idx, layout); // NOLINT
 
 					// Set particle position at cell center
 					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
@@ -250,8 +254,113 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGridFaceV
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<TestParticle>::mhdFirstIndex) = B_val; });
 }
 
+// Check production creation against independent expected fields and gas updates.
+void checkRTSoACreation()
+{
+	const auto savedNextID = quokka::ParticleContainer::ParticleType::NextID();
+	quokka::ParticleContainer::ParticleType::NextID(savedNextID);
+	const amrex::Box domain(amrex::IntVect(0), amrex::IntVect(3));
+	const amrex::RealBox bounds({-2., -2., -2.}, {2., 2., 2.});
+	const std::array<int, 3> periodic = {0, 0, 0};
+	const amrex::Geometry geom(domain, &bounds, 0, periodic.data());
+	amrex::BoxArray ba(domain);
+	ba.maxSize(2);
+	const amrex::DistributionMapping dm(ba);
+	const auto schema = quokka::ParticleSchemaTraits<quokka::ParticleType::Test, TestParticle>::Create();
+	quokka::ParticleContainer runtime(schema, geom, dm, ba);
+	amrex::MultiFab gasState(ba, dm, HydroSystem<TestParticle>::nvar_, 0);
+	amrex::MultiFab state_accretion_rate(ba, dm, gasState.nComp(), 0);
+	gasState.setVal(0);
+	gasState.setVal(rho0, HydroSystem<TestParticle>::density_index, 1);
+	state_accretion_rate.setVal(0);
+	const auto create = [&](auto &pc, amrex::MultiFab &state, double time) {
+		using Container = std::decay_t<decltype(pc)>;
+		quokka::ParticleCreationTraits<quokka::ParticleType::Test>::createParticles<TestParticle, Container>(
+		    &pc, schema.Layout().mass, state, state_accretion_rate, 0, time, dt_, schema.Layout().evolutionStage, schema.Layout().birthTime,
+		    schema.Layout().deathTime, -1);
+	};
+	quokka::ParticleContainer::ParticleType::NextID(100);
+	create(runtime, gasState, quokka::particle_param1);
+	AMREX_ALWAYS_ASSERT(runtime.TotalNumberOfParticles() == 8);
+	create(runtime, gasState, quokka::particle_param1);
+	AMREX_ALWAYS_ASSERT(runtime.TotalNumberOfParticles() == 16);
+	const auto layout = runtime.Layout();
+	amrex::ReduceOps<amrex::ReduceOpSum> op;
+	amrex::ReduceData<int> result(op);
+	using Tuple = decltype(result)::Type;
+	for (auto &[key, tile] : runtime.GetParticles(0)) {
+		const auto data = tile.getParticleTileData();
+		amrex::ignore_unused(key);
+		const int rank = amrex::ParallelDescriptor::MyProc();
+		const auto birth = quokka::particle_param1;
+		op.eval(tile.numParticles(), result, [=] AMREX_GPU_DEVICE(int i) -> Tuple {
+			const auto p = quokka::ParticleView(data, i, layout);
+			int bad = !p.id().is_valid() || p.id() < 100 || p.cpu() != rank;
+			bad += p.rdata(layout.mass) != SN_mass;
+			bad += p.idata(layout.evolutionStage) != static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+				bad += std::abs(p.pos(d)) != 0.5;
+			}
+			for (int c = 0; c < layout.numReal; ++c) {
+				amrex::ParticleReal expected = 0;
+				if (c == layout.mass) {
+					expected = SN_mass;
+				} else if (c == layout.birthTime) {
+					expected = birth;
+				} else if (c == layout.deathTime) {
+					expected = birth + 0.0025;
+				}
+				bad += p.rdata(c) != expected;
+			}
+			for (int c = 0; c < layout.numInt; ++c) {
+				bad += p.idata(c) != static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+			}
+			return {bad};
+		});
+	}
+	AMREX_ALWAYS_ASSERT(amrex::get<0>(result.value(op)) == 0);
+	const auto next = quokka::ParticleContainer::ParticleType::NextID();
+	quokka::ParticleContainer::ParticleType::NextID(next);
+	create(runtime, gasState, quokka::particle_param1 + dt_);
+	AMREX_ALWAYS_ASSERT(quokka::ParticleContainer::ParticleType::NextID() == next);
+	quokka::ParticleContainer::ParticleType::NextID(next);
+	runtime.Redistribute();
+	AMREX_ALWAYS_ASSERT(runtime.TotalNumberOfParticles() == 16);
+	for (amrex::MFIter mfi(gasState); mfi.isValid(); ++mfi) {
+		const auto gas = gasState.const_array(mfi);
+		op.eval(mfi.validbox(), result, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> Tuple {
+			const bool created = (i == 1 || i == 2) && (j == 1 || j == 2) && (k == 1 || k == 2);
+			const auto density = created ? (rho0 - 1.0e-20) - 1.0e-20 : rho0;
+			int bad = gas(i, j, k, HydroSystem<TestParticle>::density_index) != density;
+			for (int c = 0; c < HydroSystem<TestParticle>::nvar_; ++c) {
+				if (c != HydroSystem<TestParticle>::density_index) {
+					bad += gas(i, j, k, c) != 0;
+				}
+			}
+			return {bad};
+		});
+	}
+	AMREX_ALWAYS_ASSERT(amrex::get<0>(result.value(op)) == 0);
+	for (auto &[key, tile] : runtime.GetParticles(0)) {
+		amrex::ignore_unused(key);
+		const auto data = tile.getParticleTileData();
+		amrex::ParallelFor(tile.numParticles(), [=] AMREX_GPU_DEVICE(int i) {
+			const auto p = quokka::ParticleView(data, i, layout);
+			if (p.pos(0) < 0) {
+				p.idata(layout.evolutionStage) = static_cast<int>(quokka::StellarEvolutionStage::Removed);
+			}
+		});
+	}
+	quokka::ParticleDestructionTraits<quokka::ParticleType::Test>::destroyParticles<TestParticle>(&runtime, layout.mass, 0, 0., dt_, layout.birthTime,
+												      layout.evolutionStage);
+	AMREX_ALWAYS_ASSERT(runtime.TotalNumberOfParticles() == 8);
+	quokka::ParticleContainer::ParticleType::NextID(savedNextID);
+	amrex::Print() << "RTSoA creation fields, gas updates, and destruction passed\n";
+}
+
 auto problem_main() -> int
 {
+	checkRTSoACreation();
 	// Problem initialization
 	QuokkaSimulation<TestParticle> sim;
 	sim.maxDt_ = dt_;

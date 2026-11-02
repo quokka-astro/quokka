@@ -3,6 +3,7 @@
 
 #include "AMReX_BLProfiler.H"
 #include "particle_types.hpp"
+#include "particles/particle_container.hpp"
 #include <format>
 
 namespace quokka
@@ -19,6 +20,8 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 	const BL_PROFILE("ParticleDestructionImpl::destroyParticlesImpl()");
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
+			const auto layout = container->Layout();
+			amrex::ignore_unused(layout.IntStorage(evolution_stage_index));
 			// Counter for total particles destroyed at this time step
 			amrex::Long total_particles_destroyed = 0;
 
@@ -28,8 +31,7 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 			for (int lev = lev_min; lev <= container->finestLevel(); ++lev) {
 				// Iterate through all particles at this level
 				for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-					auto &particles = pti.GetArrayOfStructs();
-					const int np = particles.numParticles();
+					const int np = pti.numParticles();
 
 					// Skip if no particles in this tile
 					if (np == 0) {
@@ -37,7 +39,7 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 					}
 
 					// Process particles on the device
-					auto *parray = particles().data();
+					const auto data = pti.GetParticleTile().getParticleTileData();
 
 					// Create temporary array for reduction
 					int destroyed_count = 0;
@@ -45,7 +47,7 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 					int *p_count = h_count.data();
 
 					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-						auto &p = parray[i]; // NOLINT
+						auto p = ParticleView(data, i, layout); // NOLINT
 
 						// Check if this particle should be destroyed
 						if (particle_checker(p, mass_idx, current_time, dt)) {

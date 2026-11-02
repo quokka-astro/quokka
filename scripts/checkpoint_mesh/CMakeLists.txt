@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(CompareCheckpointMesh LANGUAGES CXX)
+find_package(AMReX CONFIG REQUIRED)
+add_executable(compare_checkpoint_mesh compare_checkpoint_mesh.cpp)
+target_link_libraries(compare_checkpoint_mesh PRIVATE AMReX::amrex)
+target_compile_features(compare_checkpoint_mesh PRIVATE cxx_std_17)

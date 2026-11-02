@@ -15,6 +15,7 @@
 #include "particle_radiation.hpp"
 #include "particle_types.hpp"
 #include "particle_utils.hpp"
+#include "particles/particle_container.hpp"
 #include "physics_info.hpp"
 #include "starparticle_radiation.hpp"
 
@@ -48,14 +49,14 @@ template <ParticleType particleType> struct ParticlePropertyUpdateBase {
 		// Apply the updater to all particles across all levels
 		for (int lev = 0; lev <= container->finestLevel(); ++lev) {
 			for (typename ContainerType::ParIterType pIter(*container, lev); pIter.isValid(); ++pIter) {
-				auto &particles = pIter.GetArrayOfStructs();
-				auto *pData = particles().data();
+				const auto data = pIter.GetParticleTile().getParticleTileData();
+				const auto layout = container->Layout();
 				const amrex::Long np = pIter.numParticles();
 
 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-					auto &p = pData[idx]; // NOLINT
-					ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t, typename ContainerType::ParticleType,
-													      nGroups>(p, current_time, dt);
+					auto p = ParticleView(data, idx, layout); // NOLINT
+					ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t, decltype(p), nGroups>(p, current_time,
+																	       dt);
 				});
 			}
 		}
@@ -164,14 +165,14 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 		const amrex::Real wr_metal_yield_rate_per_mass_d = wr_metal_yield_rate_per_mass;
 
 		for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-			auto &particles = pti.GetArrayOfStructs();
-			auto *pData = particles().data();
+			const auto data = pti.GetParticleTile().getParticleTileData();
+			const auto layout = container->Layout();
 			const amrex::Long np = pti.numParticles();
 
 			const auto &local_state = state_buffer.array(pti);
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+				auto p = ParticleView(data, idx, layout); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 				const amrex::Real mass_birth = std::max<amrex::Real>(0.0, p.rdata(StochasticStellarPopParticleMassAtBirthIdx));
 				const amrex::Real mass_birth_msun = mass_birth / C::M_solar;
