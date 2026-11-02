@@ -74,6 +74,7 @@ docs/api/
 docs/doxyoutput/
 docs/.mdbook-plantuml-cache/
 _build/
+build*/
 
 # Include image and pdf files inside docs
 !/docs/markdown/tests/attach/*.png
