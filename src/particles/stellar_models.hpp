@@ -49,24 +49,18 @@ struct ToyStellarModel {
 		return C::Gconst * mass * mdot / radius_val;
 	}
 
-	// Stellar-evolution step — takes the full particle real- and integer-data arrays
-	// so the model can read and modify any component (mass, radius, luminosity groups,
-	// integer state, etc.).
-	//   rdata:    [in/out] particle real-component array (layout defined by StarParticleDataIdx)
-	//   idata:    [in/out] particle integer-component array (may be nullptr if NInt == 0)
-	//   n_groups: [in]     number of radiation groups (= number of lum slots after index 7)
-	//   dt:       [in]     timestep
-	// The toy model is stateless, so it only reads mass/mdot and writes radius/lum.
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void evolve(amrex::Real *rdata, [[maybe_unused]] int *idata, int n_groups,
-								    [[maybe_unused]] amrex::Real dt)
+	// Models receive a logical particle view; fields need not be contiguous.
+	// The toy model reads mass/mdot and writes radius and luminosity.
+	template <typename ParticleView>
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void evolve(ParticleView &p, int n_groups, [[maybe_unused]] amrex::Real dt)
 	{
-		const amrex::Real mass = rdata[StarParticleMassIdx];
-		const amrex::Real mdot = rdata[StarParticleMdotIdx];
-		rdata[StarParticleRadiusIdx] = radius(mass);
+		const amrex::Real mass = p.rdata(StarParticleMassIdx);
+		const amrex::Real mdot = p.rdata(StarParticleMdotIdx);
+		p.rdata(StarParticleRadiusIdx) = radius(mass);
 		if (n_groups > 0) {
-			rdata[StarParticleLumIdx] = luminosityStar(mass) + luminosityAcc(mass, mdot, rdata[StarParticleRadiusIdx]);
+			p.rdata(StarParticleLumIdx) = luminosityStar(mass) + luminosityAcc(mass, mdot, p.rdata(StarParticleRadiusIdx));
 			for (int g = 1; g < n_groups; ++g) {
-				rdata[StarParticleLumIdx + g] = 0.0;
+				p.rdata(StarParticleLumIdx + g) = 0.0;
 			}
 		}
 	}

@@ -4,6 +4,7 @@
 #include "AMReX_MultiFab.H"
 #include "fundamental_constants.H"
 #include "math/FastMath.hpp"
+#include "particles/particle_container.hpp"
 #include "particles/particle_types.hpp"
 
 namespace quokka::ParticleUtils
@@ -212,19 +213,19 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 // InitFromAsciiFile() with first_comp = nreal_extra.
 template <typename ContainerType> void zeroRealComponentsFrom(ContainerType *container, const int first_comp)
 {
-	using PType = typename ContainerType::ParticleType;
-	if (first_comp >= PType::NReal) {
+	const auto layout = container->Layout();
+	AMREX_ALWAYS_ASSERT(first_comp >= 0);
+	if (first_comp >= layout.numReal) {
 		return;
 	}
 
 	for (int lev = 0; lev <= container->finestLevel(); ++lev) {
 		for (auto &kv : container->GetParticles(lev)) {
-			auto &particle_array = kv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
-			auto *pdata = particle_array().data();
+			const int np = kv.second.numParticles();
+			const auto data = kv.second.getParticleTileData();
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
-				for (int n = first_comp; n < PType::NReal; ++n) {
+				auto p = ParticleView(data, i, layout); // NOLINT
+				for (int n = first_comp; n < layout.numReal; ++n) {
 					p.rdata(n) = 0.0;
 				}
 			});

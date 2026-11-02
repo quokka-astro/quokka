@@ -1,0 +1,6 @@
+# Optional particle-dominated kernel benchmark; not a numerical regression case.
+benchmark.cells = 64
+benchmark.iterations = 20
+benchmark.io_iterations = 3
+amrex.the_arena_is_managed = 0
+amrex.abort_on_out_of_gpu_memory = 1

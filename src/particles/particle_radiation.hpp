@@ -71,7 +71,7 @@ class LuminosityUpdate
 		auto const luminosities = g_device_luminosity_tables<Nout, oob_policy>.luminosity.interpolate(point);
 
 		// Update luminosity components (they are stored consecutively starting at lum_idx)
-		if (lum_idx + nGroups <= ParticleType::NReal) {
+		if (lum_idx + nGroups <= p.Layout().numReal) {
 			for (int g = 0; g < nGroups; ++g) {
 				p.rdata(lum_idx + g) = luminosities[g];
 			}

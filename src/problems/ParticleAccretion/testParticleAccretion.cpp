@@ -94,18 +94,19 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 	// manually set particle mass to M_star_in_Msun * C::M_solar
 	for (auto &kv : SinkParticles->GetParticles()) {
 		for (auto &ikv : kv) {
-			auto &particle_array = ikv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
+			auto &particle_tile = ikv.second;
+			const auto layout = SinkParticles->Layout();
+			const auto np = particle_tile.numParticles();
 
 			if (np == 0) {
 				continue;
 			}
 
-			auto *pdata = particle_array().data();
+			const auto data = particle_tile.getParticleTileData();
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
+				auto p = quokka::ParticleView(data, i, layout); // NOLINT
 				p.rdata(0) = M_star_in_Msun * C::M_solar;
 				if (particle_in_cell_center) {
 					p.pos(0) = 0.5 * dx[0];

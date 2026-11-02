@@ -95,7 +95,7 @@ template <> void QuokkaSimulation<CollapseProblem>::createInitialCICParticles()
 	const double total_particle_mass = 0.5; // about 0.1 of the total fluid mass
 	const double particle_mass = total_particle_mass / static_cast<double>(num_particles);
 
-	const quokka::CICParticleContainer::ParticleInitData pdata = {{particle_mass, 0, 0, 0}, {}, {}, {}}; // {mass vx vy vz}, empty, empty, empty
+	const quokka::ParticleContainer::ParticleInitData pdata = {{particle_mass, 0, 0, 0}, {}}; // logical real fields: mass vx vy vz
 	CICParticles->InitRandom(num_particles, iseed, pdata, generate_on_root_rank);
 }
 

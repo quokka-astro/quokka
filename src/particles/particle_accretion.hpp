@@ -1,6 +1,8 @@
 #ifndef PARTICLE_ACCRETION_HPP_
 #define PARTICLE_ACCRETION_HPP_
 
+#include "particles/particle_container.hpp"
+
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_MultiFab.H"
@@ -150,15 +152,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_accretion_kernel(const dou
 
 // Function to compute accretion rate for particles in a box, including the ParallelFor call
 template <typename ContainerType, typename problem_t>
-void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
+void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, ParticleLayout layout, const amrex::Array4<const amrex::Real> &local_state,
 			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
 			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc,
 			       amrex::Real /*time*/, amrex::Real dt, int /*mass_index*/)
 {
 	const BL_PROFILE("SinkAccretionUtils::ComputeAccretionRateInBox()");
 	// Get the particle array of structs
-	auto &particles = pti.GetArrayOfStructs();
-	auto *pData = particles().data();
+	const auto data = pti.GetParticleTile().getParticleTileData();
 	const amrex::Long np = pti.numParticles();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
@@ -166,7 +167,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		auto p = ParticleView(data, idx, layout); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 		// Find the cell containing the particle
 		int ix = static_cast<int>((p.pos(0) - plo[0]) / dx[0]);
@@ -350,23 +351,22 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 
 // Function to update particle mass and momentum for particles in a box, including the ParallelFor call
 template <typename ContainerType, typename problem_t>
-void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
-					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
+void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti, ParticleLayout layout,
+					const amrex::Array4<const amrex::Real> &local_state, const amrex::Array4<const amrex::Real> &local_scale_down,
+					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
 					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc, int mass_index, amrex::Real /*time*/,
 					amrex::Real dt, amrex::Real /*vol*/, int mdot_index = -1, int ang_mom_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentumInBox()");
 	// Get the particle array of structs
-	auto &particles = pti.GetArrayOfStructs();
-	auto *pData = particles().data();
+	const auto data = pti.GetParticleTile().getParticleTileData();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 	const amrex::Long np = pti.numParticles();
 
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		auto p = ParticleView(data, idx, layout); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 		// Find the cell containing the particle
 		int ix = static_cast<int>((p.pos(0) - plo[0]) / dx[0]);
@@ -527,8 +527,8 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		// Process particles in this box
-		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dx, local_fab_fc, mass_index, time, dt,
-									     vol, mdot_index, ang_mom_index);
+		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, container->Layout(), local_state, local_scale_down, plo, dx, local_fab_fc,
+									     mass_index, time, dt, vol, mdot_index, ang_mom_index);
 	}
 }
 
@@ -604,7 +604,8 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 		const auto dx = geom.CellSizeArray();
 
 		// Process particles in this box
-		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dx, local_fab_fc, time, dt, mass_index);
+		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, container->Layout(), local_state, local_accretion_rate, plo, dx, local_fab_fc, time,
+								    dt, mass_index);
 	}
 
 	// Sum boundary cell values to real cells

@@ -86,14 +86,14 @@ template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 		auto &particles = TestParticles->GetParticles(lev);
 
 		for (auto &kv : particles) {
-			auto &particle_array = kv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
-			auto *pdata = particle_array().data();
+			const auto np = kv.second.numParticles();
+			const auto data = kv.second.getParticleTileData();
+			const auto layout = TestParticles->Layout();
 			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
+				auto p = quokka::ParticleView(data, i, layout); // NOLINT
 				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 				p.rdata(quokka::TestParticleVxIdx) += boost_velocity[0];
 				p.rdata(quokka::TestParticleVyIdx) += boost_velocity[1];

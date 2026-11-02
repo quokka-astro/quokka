@@ -2788,7 +2788,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 
 	if (Physics_Traits<problem_t>::is_hydro_enabled && do_tracers != 0 && final_success) {
-		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
+		quokka::AdvectTracers(*TracerPC, avgFaceVel.data(), lev, dt_lev);
 	}
 
 	return final_success;
