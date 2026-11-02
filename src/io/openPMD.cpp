@@ -6,14 +6,20 @@
 //! \file openPMD.cpp
 ///  \brief openPMD I/O for snapshots
 
+#include "io/openPMD.hpp"
+#include <cmath>
 #include <cstdint>
+#include <numeric>
 #include <string>
 
 // AMReX headers
 #include "AMReX.H"
+#include "AMReX_Exception.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_ParmParse.H"
+#include "AMReX_Reduce.H"
 
 // openPMD headers
 #include "openPMD/IterationEncoding.hpp"
@@ -91,11 +97,16 @@ auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::
 //----------------------------------------------------------------------------------------
 /// \brief Write cell-centered MultiFab using openPMD.
 void WriteFile(const std::vector<std::string> &varnames, int const output_levels, const amrex::Vector<const amrex::MultiFab *> &mf,
-	       const amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real const time, int const file_number)
+	       const amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real const time, int const file_number,
+	       const std::function<void(openPMD::Series &, openPMD::Iteration &)> &writeParticles)
 {
 	// open file
 	std::string const filename = output_basename + "%05T.bp";
+#ifdef AMREX_USE_MPI
 	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
+#else
+	auto series = openPMD::Series(filename, openPMD::Access::CREATE);
+#endif
 	series.setSoftware("Quokka", "1.0");
 	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
 
@@ -143,8 +154,274 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 		series.flush();
 	}
 
+	if (writeParticles) {
+		writeParticles(series, series_iteration);
+	}
+
 	// close file
 	series.close();
+}
+
+namespace
+{
+template <typename T> auto HostCopy(const amrex::ArrayView<const T> &source, amrex::Long count)
+{
+	std::vector<T> host(count);
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, source.begin(), source.begin() + count, host.begin());
+	return host;
+}
+
+struct ParticleTileOutput {
+	amrex::Gpu::DeviceVector<amrex::ParticleReal> deviceReals;
+	amrex::Gpu::DeviceVector<int> deviceInts;
+	amrex::Gpu::DeviceVector<std::uint64_t> deviceIDs;
+	amrex::Gpu::DeviceVector<amrex::Long> deviceIndices;
+	std::vector<amrex::ParticleReal> hostReals;
+	std::vector<int> hostInts;
+	std::vector<std::uint64_t> hostIDs;
+	std::vector<const amrex::ParticleReal *> reals;
+	std::vector<const int *> integers;
+	const std::uint64_t *ids = nullptr;
+	const int *levels = nullptr;
+
+	void Prepare(const ParticleContainer::ParticleTileType &tile, int lev, std::uint64_t count, ParticleLayout layout, amrex::Long bufferLimit)
+	{
+		const auto &soa = tile.GetStructOfArrays();
+		const auto n = tile.numParticles();
+		const int nr = AMREX_SPACEDIM + layout.numReal;
+		reals.resize(nr);
+		integers.resize(layout.numInt);
+		const bool compact = count != static_cast<std::uint64_t>(n);
+		const auto bytes =
+		    count * sizeof(int) +
+		    (compact ? count * (nr * sizeof(amrex::ParticleReal) + layout.numInt * sizeof(int) + sizeof(std::uint64_t)) + (n + 1) * sizeof(amrex::Long)
+			     : 0);
+		try {
+			// A configurable scratch limit also allows deterministic fallback tests.
+			if (bufferLimit >= 0 && bytes > static_cast<std::uint64_t>(bufferLimit)) {
+				throw amrex::OutOfMemoryError("openPMD particle scratch limit exceeded");
+			}
+			deviceInts.resize(count * (compact ? layout.numInt + 1 : 1));
+			if (compact) {
+				deviceReals.resize(count * nr);
+				deviceIDs.resize(count);
+				deviceIndices.resize(n + 1);
+			}
+			// Finish all allocations before launching kernels, so an allocation
+			// failure can release partial buffers without waiting on their use.
+			auto *outInts = deviceInts.data();
+			levels = outInts;
+			amrex::ParallelFor(count, [=] AMREX_GPU_DEVICE(std::uint64_t i) { outInts[i] = lev; });
+			if (!compact) {
+				// The normal path borrows the existing arrays, including idcpu.
+				ids = soa.GetIdCPUData().data();
+				for (int c = 0; c < nr; ++c) {
+					reals[c] = soa.GetRealData(c).data();
+				}
+				for (int c = 0; c < layout.numInt; ++c) {
+					integers[c] = soa.GetIntData(c).data();
+				}
+			} else {
+				auto *indices = deviceIndices.data();
+				const auto data = tile.getConstParticleTileData();
+				amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) { indices[n] = 0; });
+				amrex::ParallelFor(n, [=] AMREX_GPU_DEVICE(int i) {
+					indices[i] = data.id(i) > 0 ? amrex::Gpu::Atomic::Add(&indices[n], amrex::Long{1}) : -1;
+				});
+				auto *outReals = deviceReals.data();
+				auto *outIDs = deviceIDs.data();
+				const auto *inIDs = soa.GetIdCPUData().data();
+				const int ni = layout.numInt;
+				amrex::ParallelFor(n, [=] AMREX_GPU_DEVICE(int i) {
+					const auto j = indices[i];
+					if (j >= 0) {
+						outIDs[j] = inIDs[i];
+						for (int c = 0; c < nr; ++c) {
+							outReals[c * count + j] = data.rdata(c, i);
+						}
+						for (int c = 0; c < ni; ++c) {
+							outInts[(c + 1) * count + j] = data.idata(c, i);
+						}
+					}
+				});
+				ids = outIDs;
+				for (int c = 0; c < nr; ++c) {
+					reals[c] = outReals + c * count;
+				}
+				for (int c = 0; c < layout.numInt; ++c) {
+					integers[c] = outInts + (c + 1) * count;
+				}
+			}
+			amrex::Gpu::streamSynchronize();
+			return;
+		} catch (const std::bad_alloc &) {
+			// AMReX arenas throw OutOfMemoryError (a bad_alloc) on allocation
+			// failure. Release partial device allocations before staging on host.
+			amrex::Gpu::DeviceVector<amrex::ParticleReal>().swap(deviceReals);
+			amrex::Gpu::DeviceVector<int>().swap(deviceInts);
+			amrex::Gpu::DeviceVector<std::uint64_t>().swap(deviceIDs);
+			amrex::Gpu::DeviceVector<amrex::Long>().swap(deviceIndices);
+		}
+		const auto identity = HostCopy(soa.GetIdCPUData(), n);
+		std::vector<int> valid;
+		valid.reserve(count);
+		for (int i = 0; i < n; ++i) {
+			if (amrex::particle_impl::unpack_id(identity[i]) > 0) {
+				valid.push_back(i);
+				hostIDs.push_back(identity[i]);
+			}
+		}
+		AMREX_ALWAYS_ASSERT(valid.size() == count);
+		hostReals.resize(count * nr);
+		hostInts.resize(count * (layout.numInt + 1));
+		std::fill_n(hostInts.data(), count, lev);
+		for (int c = 0; c < nr; ++c) {
+			const auto host = HostCopy(soa.GetRealData(c), n);
+			for (std::size_t j = 0; j < count; ++j) {
+				hostReals[c * count + j] = host[valid[j]];
+			}
+			reals[c] = hostReals.data() + c * count;
+		}
+		for (int c = 0; c < layout.numInt; ++c) {
+			const auto host = HostCopy(soa.GetIntData(c), n);
+			for (std::size_t j = 0; j < count; ++j) {
+				hostInts[(c + 1) * count + j] = host[valid[j]];
+			}
+			integers[c] = hostInts.data() + (c + 1) * count;
+		}
+		ids = hostIDs.data();
+		levels = hostInts.data();
+	}
+};
+
+void SetParticleUnits(openPMD::Record record, const std::array<int, 4> &powers, const std::array<double, 4> &units)
+{
+	record.setUnitDimension({{openPMD::UnitDimension::M, powers[0]},
+				 {openPMD::UnitDimension::L, powers[1]},
+				 {openPMD::UnitDimension::T, powers[2]},
+				 {openPMD::UnitDimension::theta, powers[3]}});
+	double scale = 1.0;
+	for (int d = 0; d < 4; ++d) {
+		if (powers[d] != 0) {
+			scale *= std::pow(units[d], powers[d]);
+		}
+	}
+	record.setAttribute("quokka_unitSI_known", std::isfinite(scale));
+	for (auto &[name, component] : record) {
+		amrex::ignore_unused(name);
+		component.setUnitSI(std::isfinite(scale) ? scale : 1.0);
+	}
+}
+} // namespace
+
+void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, const ParticleContainer &particles, const std::string &name,
+		    const std::array<double, 4> &units)
+{
+	const auto &schema = particles.Schema();
+	const auto layout = particles.Layout();
+	// Count valid particles without staging a rank's entire population. Retain
+	// only tile references; particle buffers below live for one flush round.
+	struct Tile {
+		int level;
+		const ParticleContainer::ParticleTileType *data;
+		std::uint64_t count;
+	};
+	std::vector<Tile> tiles;
+	std::uint64_t local = 0;
+	for (int lev = 0; lev <= particles.finestLevel(); ++lev) {
+		for (const auto &[key, tile] : particles.GetParticles(lev)) {
+			amrex::ignore_unused(key);
+			if (tile.numParticles() == 0) {
+				continue;
+			}
+			std::uint64_t count = 0;
+			try {
+				const auto data = tile.getConstParticleTileData();
+				count = amrex::Reduce::Sum<std::uint64_t>(tile.numParticles(),
+									  [=] AMREX_GPU_DEVICE(int i) -> std::uint64_t { return data.id(i) > 0 ? 1 : 0; });
+			} catch (const std::bad_alloc &) {
+				const auto identity = HostCopy(tile.GetStructOfArrays().GetIdCPUData(), tile.numParticles());
+				count = std::count_if(identity.begin(), identity.end(), [](auto id) { return amrex::particle_impl::unpack_id(id) > 0; });
+			}
+			local += count;
+			if (count > 0) {
+				tiles.push_back({lev, &tile, count});
+			}
+		}
+	}
+	std::vector<std::uint64_t> counts(amrex::ParallelDescriptor::NProcs(), 0);
+#ifdef AMREX_USE_MPI
+	MPI_Allgather(&local, 1, MPI_UINT64_T, counts.data(), 1, MPI_UINT64_T, amrex::ParallelDescriptor::Communicator());
+#else
+	counts[0] = local;
+#endif
+	const auto total = std::accumulate(counts.begin(), counts.end(), std::uint64_t{0});
+	auto offset = std::accumulate(counts.begin(), counts.begin() + amrex::ParallelDescriptor::MyProc(), std::uint64_t{0});
+	// An absent species represents a globally empty population.
+	if (total == 0) {
+		return;
+	}
+	auto species = iteration.particles[name];
+	species.setAttribute("quokka_id_encoding", "AMReX packed idcpu (ID and creation rank)");
+	const auto define = [&]<typename T>(openPMD::RecordComponent component) {
+		component.resetDataset(openPMD::Dataset(openPMD::determineDatatype<T>(), {total}));
+	};
+	const std::array<std::string, 3> axes{"x", "y", "z"};
+	for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+		define.operator()<amrex::ParticleReal>(species["position"][axes[d]]);
+		auto component = species["positionOffset"][axes[d]];
+		component.resetDataset(openPMD::Dataset(openPMD::determineDatatype<amrex::ParticleReal>(), {total}));
+		component.makeConstant(amrex::ParticleReal{0});
+	}
+	SetParticleUnits(species["position"], {0, 1, 0, 0}, units);
+	SetParticleUnits(species["positionOffset"], {0, 1, 0, 0}, units);
+	define.operator()<std::uint64_t>(species["id"][openPMD::RecordComponent::SCALAR]);
+	define.operator()<int>(species["amr_level"][openPMD::RecordComponent::SCALAR]);
+	for (int c = 0; c < layout.numReal; ++c) {
+		auto record = species[schema.RealNames()[c]];
+		define.operator()<amrex::ParticleReal>(record[openPMD::RecordComponent::SCALAR]);
+		const auto &unitKey = schema.RealUnitsKeys()[c];
+		if (!unitKey.empty()) {
+			SetParticleUnits(record, schema.UnitDefinitions().at(unitKey), units);
+		}
+	}
+	for (int c = 0; c < layout.numInt; ++c) {
+		define.operator()<int>(species[schema.IntNames()[c]][openPMD::RecordComponent::SCALAR]);
+	}
+	// Define the same datasets on every rank before submitting any chunks.
+	series.flush();
+	auto rounds = static_cast<amrex::Long>(tiles.size());
+	amrex::ParallelDescriptor::ReduceLongMax(rounds);
+	const auto rankEnd = offset + local;
+	amrex::Long bufferLimit = -1;
+	amrex::ParmParse("openpmd").query("particle_device_buffer_bytes", bufferLimit);
+	for (amrex::Long round = 0; round < rounds; ++round) {
+		ParticleTileOutput buffers;
+		if (round < static_cast<amrex::Long>(tiles.size())) {
+			const auto &[lev, tile, count] = tiles[round];
+			buffers.Prepare(*tile, lev, count, layout, bufferLimit);
+			const auto store = [&](openPMD::RecordComponent component, const auto *values) { component.storeChunkRaw(values, {offset}, {count}); };
+			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+				store(species["position"][axes[d]], buffers.reals[d]);
+			}
+			store(species["id"][openPMD::RecordComponent::SCALAR], buffers.ids);
+			store(species["amr_level"][openPMD::RecordComponent::SCALAR], buffers.levels);
+			for (int c = 0; c < layout.numReal; ++c) {
+				store(species[schema.RealNames()[c]][openPMD::RecordComponent::SCALAR], buffers.reals[AMREX_SPACEDIM + c]);
+			}
+			for (int c = 0; c < layout.numInt; ++c) {
+				store(species[schema.IntNames()[c]][openPMD::RecordComponent::SCALAR], buffers.integers[c]);
+			}
+			offset += count;
+		}
+		// All borrowed pointers and scratch buffers remain alive through this
+		// collective flush, including on ranks that have already run out of tiles.
+		// Otherwise openPMD can skip a clean iteration on an idle rank,
+		// leaving other ranks inside BP5's collective PerformDataWrite.
+		iteration.touch();
+		series.flush(R"({"adios2": {"engine": {"preferred_flush_target": "disk"}}})");
+	}
+	AMREX_ALWAYS_ASSERT(offset == rankEnd);
 }
 
 } // namespace quokka::OpenPMDOutput

@@ -533,6 +533,21 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void ReadMetadataFile(std::string const &chkfilename);
 	void WriteStatisticsFile();
 	void WritePlotFile();
+#ifdef QUOKKA_USE_OPENPMD
+	void WriteOpenPMDParticles(openPMD::Series &series, openPMD::Iteration &iteration, const std::vector<std::string> &names = {})
+	{
+		const std::array<double, 4> units{unit_mass * 1.e-3, unit_length * 1.e-2, unit_time, unit_temperature};
+		if (TracerPC != nullptr) {
+			quokka::OpenPMDOutput::WriteParticles(series, iteration, *TracerPC, "tracer_particles", units);
+		}
+#if AMREX_SPACEDIM == 3
+		particleRegister_.writeOpenPMD(series, iteration, units, names);
+#else
+		amrex::ignore_unused(names);
+#endif
+	}
+#endif
+
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
 	void writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVel, int lev, int step);
@@ -899,12 +914,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 				  "128 (or greater) when running on GPUs, and 64 (or "
 				  "greater) when running on CPUs.\n";
 	}
-
-#ifdef QUOKKA_USE_OPENPMD
-	// warning about particles and OpenPMD outputs
-	amrex::Print() << "\n[Warning] [I/O] OpenPMD outputs currently do NOT include particles!"
-		       << " Support for outputting particles for openPMD is not yet implemented.\n";
-#endif
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
@@ -4807,8 +4816,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #endif // AMREX_SPACEDIM == 3
 
 #ifdef QUOKKA_USE_OPENPMD
-	// TODO(bwibking): write particles using openPMD
-	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, Geom(), plot_file, tNew_[0], istep[0]);
+	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, Geom(), plot_file, tNew_[0], istep[0],
+					 [this](openPMD::Series &series, openPMD::Iteration &iteration) { WriteOpenPMDParticles(series, iteration); });
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
 	// sets the maximum number of binary files per MultiFab

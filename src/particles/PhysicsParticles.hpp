@@ -34,6 +34,9 @@
 #include "particle_types.hpp"
 #include "particle_update.hpp"
 #include "physics_info.hpp"
+#ifdef QUOKKA_USE_OPENPMD
+#include "io/openPMD.hpp"
+#endif
 
 #include "cooling/PhotoelectricHeating.hpp"
 
@@ -184,7 +187,10 @@ class PhysicsParticleDescriptorBase
 	// Redistribute particles at level lev and above with ngrow ghost cells
 	virtual void redistribute(int lev, int ngrow) const = 0;
 
-	// Write particle data to plot file
+// Write particle data to plot file
+#ifdef QUOKKA_USE_OPENPMD
+	virtual void writeOpenPMD(openPMD::Series &series, openPMD::Iteration &iteration, const std::string &name, const std::array<double, 4> &units) = 0;
+#endif
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 
 	// Write particle data to checkpoint file
@@ -723,6 +729,14 @@ template <typename problem_t, ParticleType particleType> class PhysicsParticleDe
 	}
 
 	// The instance schema supplies the exact names and field order for output.
+#ifdef QUOKKA_USE_OPENPMD
+	void writeOpenPMD(openPMD::Series &series, openPMD::Iteration &iteration, const std::string &name, const std::array<double, 4> &units) override
+	{
+		if (container_ != nullptr) {
+			OpenPMDOutput::WriteParticles(series, iteration, *container_, name, units);
+		}
+	}
+#endif
 	void writePlotFile(const std::string &plotfilename, const std::string &name) override
 	{
 		if (container_ != nullptr) {
@@ -1163,6 +1177,19 @@ template <typename problem_t> class PhysicsParticleRegister
 			descriptor->redistribute(lev, ngrow);
 		}
 	}
+
+#ifdef QUOKKA_USE_OPENPMD
+	void writeOpenPMD(openPMD::Series &series, openPMD::Iteration &iteration, const std::array<double, 4> &units,
+			  const std::vector<std::string> &names = {})
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			const auto name = getParticleTypeName(type);
+			if (names.empty() || std::ranges::find(names, name) != names.end()) {
+				descriptor->writeOpenPMD(series, iteration, name, units);
+			}
+		}
+	}
+#endif
 
 	// Write all particle data to plot file
 	void writePlotFile(const std::string &plotfilename)

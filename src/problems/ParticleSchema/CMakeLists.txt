@@ -32,3 +32,27 @@ if(AMReX_MPI)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tracer)
   set_tests_properties(ParticleTracer ParticleTracerMPI PROPERTIES RUN_SERIAL TRUE)
 endif()
+
+if(QUOKKA_OPENPMD)
+  add_executable(ParticleOpenPMD testParticleOpenPMD.cpp ${openPMDSources})
+  if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    setup_target_for_cuda_compilation(ParticleOpenPMD)
+  endif()
+  add_test(NAME ParticleOpenPMD COMMAND ParticleOpenPMD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  add_test(NAME ParticleOpenPMDHostFallback COMMAND ParticleOpenPMD host_fallback=1
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  set_tests_properties(ParticleOpenPMD ParticleOpenPMDHostFallback PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
+  if(AMReX_MPI AND openPMD_USE_ADIOS2)
+    add_test(NAME ParticleOpenPMDMPI
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS} $<TARGET_FILE:ParticleOpenPMD> ${MPIEXEC_POSTFLAGS}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    add_test(NAME ParticleOpenPMDEmptyRank
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS} $<TARGET_FILE:ParticleOpenPMD> ${MPIEXEC_POSTFLAGS} empty_rank=1
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    add_test(NAME ParticleOpenPMDMixedFallback
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS} $<TARGET_FILE:ParticleOpenPMD> ${MPIEXEC_POSTFLAGS} host_fallback=2
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(ParticleOpenPMDMPI ParticleOpenPMDEmptyRank ParticleOpenPMDMixedFallback PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
+  endif()
+endif()
