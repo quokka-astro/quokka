@@ -510,10 +510,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		// in the loop that computes and applies the step of each group. This is the same algebra as
 		// ComputeJacobianForGasAndDust / ComputeJacobianForGasAndDustDecoupled, the use_D_as_base scaling,
 		// RebaseThinGroupsOntoErad and SolveLinearEqs, evaluated one group at a time.
-		double F0 = NAN;	// (0) component of the residual
-		double J00_rows = NAN;	// (0, 0) component of the Jacobian before the thin-group rebase (enters Jg0 when dust_model == 1)
-		double d_Td_d_T = NAN;	// dust_model == 1 only
-		double dTd_dRg = NAN;	// dust_model == 1 only
+		double F0 = NAN;       // (0) component of the residual
+		double J00_rows = NAN; // (0, 0) component of the Jacobian before the thin-group rebase (enters Jg0 when dust_model == 1)
+		double d_Td_d_T = NAN; // dust_model == 1 only
+		double dTd_dRg = NAN;  // dust_model == 1 only
 		quokka::valarray<double, nGroups_> cooling{};
 		quokka::valarray<double, nGroups_> cooling_derivative{};
 		if (dust_model == 1) {
@@ -1204,6 +1204,5 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	result.gas_decoupled = (dust_model == 2);
 	return result;
 }
-
 
 #endif // RADIATION_DUST_SYSTEM_HPP_

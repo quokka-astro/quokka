@@ -401,9 +401,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				int groupEnd = nGroups_);
 
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
-				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
-				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, double alpha, double Aex_s1_coeff,
-				 double Aex_s2_coeff, int groupBegin = 0, int groupEnd = nGroups_);
+				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+				 amrex::Box const &indexRange, int nvars, double alpha, double Aex_s1_coeff, double Aex_s2_coeff, int groupBegin = 0,
+				 int groupEnd = nGroups_);
 
 	// fused level-wide flux kernel (primitive conversion, reconstruction of order ORDER = 1, 2 or 3, and HLL flux in registers)
 	template <FluxDir DIR, int ORDER>
@@ -468,8 +468,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	template <typename PreFn>
 	static void AddSourceTermsMultiGroupFused(PreFn const &pre, array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource,
 						  amrex::Box const &indexRange, amrex::Real dt_implicit, double gas_update_factor, double dustGasCoeff,
-						  double tol_h, double tol_rel_h, double tempFloor, int *p_iteration_counter,
-						  int *p_iteration_failure_counter, amrex::Array4<const amrex::Real> const &dustHeatingSource,
+						  double tol_h, double tol_rel_h, double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter,
+						  amrex::Array4<const amrex::Real> const &dustHeatingSource,
 						  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc);
 
 	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &radFluxSource, amrex::Box const &indexRange,
@@ -575,9 +575,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	// Fused version of ComputeThermalRadiationMultiGroup and ComputeThermalRadiationTempDerivativeMultiGroup: one Planck integral per group edge.
 	AMREX_GPU_HOST_DEVICE static void ComputeThermalRadiationAndTempDerivativeMultiGroup(amrex::Real temperature,
-									    amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
-									    quokka::valarray<amrex::Real, nGroups_> &fourPiBoverC,
-									    quokka::valarray<amrex::Real, nGroups_> &d_fourpiboverc_d_t);
+											     amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
+											     quokka::valarray<amrex::Real, nGroups_> &fourPiBoverC,
+											     quokka::valarray<amrex::Real, nGroups_> &d_fourpiboverc_d_t);
 	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real temperature,
 											  amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
 	    -> quokka::valarray<amrex::Real, nGroups_>;
@@ -1180,9 +1180,8 @@ template <typename problem_t> void RadSystem<problem_t>::EnforceLimits(amrex::Mu
 
 template <typename problem_t>
 void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
-				       const double dt_in,
-				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/,
-				       const int groupBegin, const int groupEnd)
+				       const double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
+				       const int /*nvars*/, const int groupBegin, const int groupEnd)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -1230,8 +1229,7 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
-					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
-					const double dt_in,
+					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
 					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/,
 					const double alpha, const double Aex_s1_coeff, const double Aex_s2_coeff, const int groupBegin, const int groupEnd)
 {
@@ -1602,9 +1600,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void RadSystem<problem_t>::ReconstructCellPP
 template <typename problem_t>
 template <FluxDir DIR, int ORDER>
 void RadSystem<problem_t>::ComputeFluxesFused(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &consVar_mf,
-					      std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-					      bool const use_wavespeed_correction, const int groupBegin, const int groupEnd, amrex::MultiFab *refluxAccum_mf,
-					      const double refluxWeight)
+					      std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &cons_fc_mf,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool const use_wavespeed_correction, const int groupBegin,
+					      const int groupEnd, amrex::MultiFab *refluxAccum_mf, const double refluxWeight)
 {
 	// One kernel over all faces (normal to DIR) of all boxes. Each thread gathers the conserved radiation variables of the
 	// cells i-3..i+2 along DIR, converts them to primitives (E, f) in registers exactly as ConservedToPrimitive does,

@@ -119,10 +119,10 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDe
 
 // The solvers call the fused routine, so it must reproduce the two problem-specific overrides above.
 template <>
-AMREX_GPU_HOST_DEVICE void RadSystem<DustProblem>::ComputeThermalRadiationAndTempDerivativeMultiGroup(amrex::Real temperature,
-										       amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
-										       quokka::valarray<amrex::Real, nGroups_> &fourPiBoverC,
-										       quokka::valarray<amrex::Real, nGroups_> &d_fourpiboverc_d_t)
+AMREX_GPU_HOST_DEVICE void
+RadSystem<DustProblem>::ComputeThermalRadiationAndTempDerivativeMultiGroup(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
+									   quokka::valarray<amrex::Real, nGroups_> &fourPiBoverC,
+									   quokka::valarray<amrex::Real, nGroups_> &d_fourpiboverc_d_t)
 {
 	fourPiBoverC = ComputeThermalRadiationMultiGroup(temperature, boundaries);
 	d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(temperature, boundaries);

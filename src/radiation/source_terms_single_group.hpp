@@ -467,7 +467,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 							dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
 						}
 					} else {
-						const double K0 = 2.0 * rho * chat * dt * (kappaF - kappaE) / c / c * (lorentz_factor_v_v * lorentz_factor_v_v * lorentz_factor_v_v);
+						const double K0 = 2.0 * rho * chat * dt * (kappaF - kappaE) / c / c *
+								  (lorentz_factor_v_v * lorentz_factor_v_v * lorentz_factor_v_v);
 
 						// A test to see if this routine reduces to the correct result when ignoring the beta^2 terms
 						// const double X0 = 1.0 + rho * chat * dt * (kappaF);

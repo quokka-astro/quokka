@@ -804,7 +804,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroupFused(PreFn const &pre, array
 		// The last NChemBands groups are ionizing photon groups (no cscale).
 		// All other (thermal) groups require scaling by chat/c (= 1/cscale).
 		// Avoid if constexpr here: NVCC rejects first-captures inside constexpr-if in device lambdas.
-		auto src_scale_of = [=](int g) -> double { return (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_) ? dt : dt * (chat / c); };
+		auto src_scale_of = [=](int g) -> double {
+			return (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroupsThermal_) ? dt : dt * (chat / c);
+		};
 		quokka::valarray<double, nGroups_> Src;
 		for (int g = 0; g < nGroups_; ++g) {
 			Src[g] = src_scale_of(g) * radEnergySource(i, j, k, g);
