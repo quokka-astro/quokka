@@ -39,10 +39,10 @@ template <typename problem_t> struct BurnState : detail::DustChemicalBandAbsorpt
 	amrex::GpuArray<amrex::Real, NumSpec> xn{};
 	/// per chemical band: the photon number density, and the flux-attenuation factor (if integrate_rad_flux is true)
 	amrex::GpuArray<amrex::Real, NumChemRadEqs> rn{};
-	amrex::GpuArray<amrex::Real, NumThermalBands> re_thermal{}; /// thermal-band energy densities
-	amrex::Real c_hat{};					    /// reduced speed of light
+	amrex::GpuArray<amrex::Real, NumThermalBands> re_thermal{}; ///< thermal-band energy densities
+	amrex::Real c_hat{};					    ///< reduced speed of light
 
-	amrex::Real dedT{}; /// read by the networks' Jacobians
+	amrex::Real dedT{}; ///< read by the networks' Jacobians
 
 	// Written by Microphysics' eos(); they go when the EOS is ported.
 	amrex::Real dedr{};
@@ -52,7 +52,7 @@ template <typename problem_t> struct BurnState : detail::DustChemicalBandAbsorpt
 	amrex::Real abar{};
 	amrex::Real zbar{};
 
-	amrex::Real time{}; /// written by the integrator; nothing reads it
+	amrex::Real time{}; ///< written by the integrator; nothing reads it
 
 	// the cell, for the failure output
 	int i{};
