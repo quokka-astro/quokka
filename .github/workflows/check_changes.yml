@@ -59,6 +59,7 @@ jobs:
               - 'extern/fmt/**'
               - 'extern/grackle_data_files/**'
               - 'extern/openPMD-api/**'
+              - 'extern/bp5lite/**'
               - 'extern/yaml-cpp/**'
               - 'extern/turbulence/**'
               - 'inputs/**'
