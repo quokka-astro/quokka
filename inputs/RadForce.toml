@@ -27,3 +27,5 @@ suppress_output = 1
 
 cfl = 0.4
 radiation.cfl = 0.4
+
+density_floor = 1e-25  # g cm^-3

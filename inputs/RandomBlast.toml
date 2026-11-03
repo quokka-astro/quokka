@@ -40,3 +40,5 @@ cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 problem.boost_velocity = [0.0, 0.0, 0.0]
 
 tiny_profiler.enabled = 0
+
+density_floor = 1e-35  # g cm^-3

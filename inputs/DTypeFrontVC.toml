@@ -49,3 +49,5 @@ integrator.rtol_rad_num = 1.0e-10
 integrator.rtol_enuc = 1.0e-10
 
 integrator.rosenbrock_tableau = 3
+
+density_floor = 1e-28  # g cm^-3

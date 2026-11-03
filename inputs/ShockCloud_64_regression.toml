@@ -34,6 +34,7 @@ derived_vars = ["pressure", "entropy", "nH", "temperature", "cooling_length", "c
 cooling.read_tables_even_if_disabled = 1
 cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
 temperature_floor = 100
+density_floor = 1e-33  # g cm^-3
 
 sharp_cloud_edge = 1
 do_frame_shift = 1

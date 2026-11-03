@@ -4,9 +4,23 @@ on:
   push:
     branches:
       - development
+    paths:
+      # jaffgen inputs and regenerate.sh, which pins the jaff commit and sympy version
+      - 'src/networks/photoionization_H_caseB_config/**'
+      # committed output, to catch hand-edits to generated files
+      - 'src/networks/photoionization_H_caseB/**'
+      # clang-format style applied to the generated files
+      - 'src/.clang-format'
+      # this workflow pins the clang-format version
+      - '.github/workflows/jaff-network-regen.yml'
   pull_request:
     branches:
       - development
+    paths:
+      - 'src/networks/photoionization_H_caseB_config/**'
+      - 'src/networks/photoionization_H_caseB/**'
+      - 'src/.clang-format'
+      - '.github/workflows/jaff-network-regen.yml'
 
 permissions:
   contents: read

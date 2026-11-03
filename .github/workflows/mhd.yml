@@ -103,7 +103,7 @@ jobs:
           ../inputs/MHDFastWave.toml \
           amr.max_grid_size_x=32 \
           amr.blocking_factor_x=16 \
-          mhd.emf_compute_scheme=FelkerStone2017 \
+          mhd.emf_compute_scheme=FelkerStone2018 \
           mhd.emf_averaging_scheme=LondrilloDelZanna2004 \
           amrex.init_snan=1 \
           amrex.fpe_trap_invalid=1 \
@@ -125,7 +125,7 @@ jobs:
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: test-results
         path: ${{github.workspace}}/tests

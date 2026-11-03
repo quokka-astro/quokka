@@ -42,3 +42,5 @@ cooling.read_tables_even_if_disabled = 1
 cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
 
 problem.boost_velocity = [0.0, 0.0, 0.0]
+
+density_floor = 1e-35  # g cm^-3

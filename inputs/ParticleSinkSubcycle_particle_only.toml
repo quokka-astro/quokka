@@ -28,3 +28,5 @@ stop_time = 3.0e14   # enough for 3 coarse steps at CFL dt ~8e13 s
 max_timesteps = 3
 tiny_profiler.enabled = 0
 density_refinement = 0
+
+density_floor = 1e-30  # g cm^-3

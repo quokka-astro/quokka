@@ -38,6 +38,7 @@ photoionize.source_cells = 1
 photoionize.flux = 1.0e13
 
 temperature_floor = 10.0
+density_floor = 1e-32  # g cm^-3
 
 # *****************************************************************
 # Photochemistry Properties

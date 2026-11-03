@@ -38,3 +38,5 @@ problem.t_end_over_t_b = 10.0
 problem.refine_center = true
 
 tiny_profiler.enabled = 0
+
+density_floor = 1e-31  # g cm^-3
