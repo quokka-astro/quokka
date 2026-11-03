@@ -55,6 +55,14 @@ static constexpr double newton_resid_roundoff_factor = 10.0;
 static constexpr double newton_damping_down = 0.5;
 static constexpr double newton_damping_up = 1.5;
 static constexpr double newton_damping_min = 0.05;
+// Reacting to a single iteration's residual comparison lets relax lock into a stable limit cycle (cycling
+// through a fixed sequence of values, e.g. period 3) instead of settling. So a cut by newton_damping_down
+// fires only after newton_damping_patience consecutive iterations fail to reduce the residual, which makes
+// it period-agnostic: the step is shortened once recent progress has clearly stalled, not because one
+// sample of an oscillating sequence ticked upward. newton_damping_cooldown then holds relax fixed for that
+// many iterations after a cut, so the shorter step takes effect before it is judged again.
+static constexpr int newton_damping_patience = 3;
+static constexpr int newton_damping_cooldown = 2;
 static constexpr bool use_D_as_base = false;
 // Optical depth below which a group's Newton unknown is its radiation energy Erad_g rather than its
 // exchange term R_g. With R_g as the unknown, Erad_g must be recovered as
@@ -76,16 +84,15 @@ static constexpr double newton_erad_base_tau_threshold = 1.0;
 //
 // Capping does not conserve energy. It is a known limitation of the lagged O(v/c) work term rather than a
 // symptom of too long a radiation timestep: the work term is lagged from the previous outer iteration while
-// dEkin_work is evaluated from the freshly updated momentum, so the two do not cancel exactly, and refining
-// dt does not help. Measured on DTypeFront1D, the fraction of radiation cell-updates that reach the cap is
-// invariant at ~27% across a fourfold refinement of dt (26.8% / 27.2% / 26.5% at 128 / 256 / 512 cells).
+// dEkin_work is evaluated from the freshly updated momentum, so the two do not cancel exactly.
 //
-// It is nonetheless benign, which is why it is left in place and not reported at runtime. The cap can only
-// bind where dEkin_work already exceeds the internal energy available, i.e. in cold cells the radiation has
-// evacuated, so Egas there is minuscule and the absolute energy discarded is negligible however many cells
-// are involved: DTypeFront1D closes its thermal-band energy budget to 1.0000000 with ~27% of its radiation
-// cell-updates capping. Counting them would mean an atomic on one address in a large fraction of every
-// radiation kernel, which is not worth paying for in a production GPU run.
+// The cap applies only where the energy exchange credited Egas with the work. With the dust thermally
+// decoupled from the gas the exchange leaves Egas out, and UpdateFlux takes the kinetic energy from the
+// radiation instead. Debiting Egas there was a bug rather than a lag effect, and it was not benign: it is
+// what put ~27% of DTypeFront1D's radiation cell-updates at this cap (a fraction that did not fall with dt),
+// and each binding removes 90% of the internal energy, which held the fully ionised, radiation-evacuated
+// cavity of DTypeFront3D near 1 K and hypersonic until it shocked. Capped updates are not counted at run
+// time: that would mean an atomic on one address in a large fraction of every radiation kernel.
 //
 // See https://github.com/quokka-astro/quokka/issues/2173 for the two candidate fixes.
 static constexpr double work_term_min_eint_fraction = 0.1;
@@ -154,6 +161,9 @@ template <typename problem_t> struct NewtonIterationResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;    // work term
 	OpacityTerms<problem_t> opacity_terms;
+	// True if Egas took no part in the energy exchange (dust thermally decoupled from the gas), so it was
+	// never credited with the work term and the radiation must pay for the kinetic energy it buys.
+	bool gas_decoupled = false;
 };
 
 // A struct to hold the results of ComputeJacobian functions, containing the following elements:
@@ -646,6 +656,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
 
+	static void EnforceLimits(amrex::MultiFab &state_mf);
+
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
 	    -> RadPressureResult;
@@ -665,25 +677,31 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 		return radEnergyFractions;
 	} else {
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		amrex::Real y = NAN;
-		amrex::Real previous = 0.0;
+		// (P, Q) = lower/upper normalized Planck integrals at the group's lower edge; the first group's lower edge is taken as x = 0.
+		amrex::Real p_prev = 0.0;
+		amrex::Real q_prev = 1.0;
+		bool prev_in_tail = false;
 		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission. When
 		// chemical bands are present the thermal fractions are NOT renormalized: the blackbody radiation
 		// above the first chemical-band boundary is simply dropped, so the fractions sum to < 1.
 		for (int g = 0; g < nGroupsThermal_; ++g) {
-			if (g == nGroups_ - 1) {
-				// no chemical bands: the last group carries all remaining blackbody, total fraction = 1.0
-				y = 1.0;
-			} else {
+			// no chemical bands: the last group carries all remaining blackbody, total fraction = 1.0
+			amrex::Real p = 1.0;
+			amrex::Real q = 0.0;
+			bool in_tail = true;
+			if (g < nGroups_ - 1) {
 				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-				if (x >= 100.) { // 100. is the upper limit of x in the table
-					y = 1.0;
-				} else {
-					y = integrate_planck_from_0_to_x(x);
-				}
+				in_tail = x >= X_TAIL;
+				const auto pq = integrate_planck_below_and_above_x(x);
+				p = pq[0];
+				q = pq[1];
 			}
-			radEnergyFractions[g] = y - previous;
-			previous = y;
+			// A group whose lower edge is in the Wien tail (see X_TAIL in planck_integral.hpp) takes its fraction as a difference
+			// of upper integrals, Q(x_lo) - Q(x_hi), rather than of lower integrals that are both ~1.
+			radEnergyFractions[g] = prev_in_tail ? q_prev - q : p - p_prev;
+			p_prev = p;
+			q_prev = q;
+			prev_in_tail = in_tail;
 		}
 		// chemical bands (g >= nGroupsThermal_) emit no blackbody radiation; left at 0.
 		AMREX_ASSERT(sum(radEnergyFractions) < 1.0 + 1.0e-10);
@@ -752,24 +770,42 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 		//     D(x) = (15/pi^4) \int_0^x s^4 e^s / (e^s - 1)^2 ds = 4 P(x) - (15/pi^4) x^4 / (e^x - 1),
 		// where P is the same normalized Planck integral used for the energy fractions, so the exact
 		// derivative costs one extra term per group boundary. D(inf) = 4 recovers d(a T^4)/dT.
+		// Alongside D(x) this also tracks its complement
+		//     U(x) = 4 - D(x) = 4 Q(x) + (15/pi^4) x^4 / (e^x - 1),
+		// and a group whose lower edge is in the Wien tail takes U(x_lo) - U(x_hi) instead of D(x_hi) - D(x_lo), mirroring
+		// ComputePlanckEnergyFractions. There Q comes from the exact tail series (see X_TAIL in planck_integral.hpp), so this is
+		// the derivative of the emission actually computed, not of the true Planck function that the table only approximates.
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		amrex::Real y = NAN;
-		amrex::Real previous = 0.0;
+		amrex::Real d_prev = 0.0;
+		amrex::Real u_prev = 4.0;
+		bool prev_in_tail = false;
 		// Only the thermal groups emit; the chemical bands are left at 0, as in ComputePlanckEnergyFractions.
 		for (int g = 0; g < nGroupsThermal_; ++g) {
-			if (g == nGroups_ - 1) {
-				// no chemical bands: the last group carries all remaining blackbody, so D = D(inf) = 4
-				y = 4.0;
-			} else {
+			// no chemical bands: the last group carries all remaining blackbody, so D = D(inf) = 4
+			amrex::Real d = 4.0;
+			amrex::Real u = 0.0;
+			bool in_tail = true;
+			if (g < nGroups_ - 1) {
 				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-				if (x >= 100.) { // 100. is the upper limit of x in the table
-					y = 4.0;
+				if (x >= X_TAIL) {
+					// x^4 / (e^x - 1) written with e^(-x) so that cold matter (x up to ~1e9 or inf) never forms e^x, which overflows
+					// past x ~ 710. Once e^(-x) underflows to 0 the kernel is 0; testing it first also avoids 0 * inf at x = inf.
+					const amrex::Real e = std::exp(-x);
+					const amrex::Real kernel = (e > 0.0) ? (x * x * x * x * e / (1.0 - e)) / gInf : 0.0;
+					const amrex::Real q = integrate_planck_from_x_to_inf_series(x);
+					d = 4. * (1.0 - q) - kernel;
+					u = 4. * q + kernel;
 				} else {
-					y = 4. * integrate_planck_from_0_to_x(x) - (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
+					in_tail = false;
+					const amrex::Real kernel = (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
+					d = 4. * integrate_planck_from_0_to_x(x) - kernel;
+					u = 4.0 - d;
 				}
 			}
-			d_fourpiboverc_d_t[g] = a_T3 * (y - previous);
-			previous = y;
+			d_fourpiboverc_d_t[g] = a_T3 * (prev_in_tail ? u_prev - u : d - d_prev);
+			d_prev = d;
+			u_prev = u;
+			prev_in_tail = in_tail;
 		}
 
 		return d_fourpiboverc_d_t;
@@ -1024,6 +1060,26 @@ template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendR
 			}
 		}
 	}
+}
+
+template <typename problem_t> void RadSystem<problem_t>::EnforceLimits(amrex::MultiFab &state_mf)
+{
+	auto state = state_mf.arrays();
+
+	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		std::array<amrex::Real, nvarHyperbolic_> cons{};
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
+			cons[n] = state[bx](i, j, k, nstartHyperbolic_ + n);
+		}
+
+		if (!isStateValid(cons)) {
+			amendRadState(cons);
+		}
+
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
+			state[bx](i, j, k, nstartHyperbolic_ + n) = cons[n];
+		}
+	});
 }
 
 template <typename problem_t>
@@ -1913,20 +1969,24 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		return dLHS_dTd;
 	};
 
-	// Scale for the convergence test. The residual balances the radiative term against the gas-dust collisional
-	// term and the dust's chemical-band absorption, so the scale must contain all three: the collisional term
-	// vanishes identically when the gas-dust coupling coefficient N_d is zero, and a scale of zero would make
-	// the convergence test unsatisfiable.
+	// Measure the residual against the available heating (collisional, chemical-band absorption and radiative),
+	// with the same c_hat * dt * rho scaling as the RHS.
+	// Emission at the initial guess is not an appropriate scale: the gas can be much hotter than the dust,
+	// so it would permit a large imbalance at the root. In particular, adding an unweighted Planck energy
+	// accepts T_d_init outright when c_hat * dt * rho * kappa < rel_tol, even far from radiative equilibrium.
 	double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas + (c_hat_ / c_light_) * std::abs(Q_dust);
 	if constexpr (nGroups_ == 1) {
-		const auto fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d_init);
 		const auto kappaE = ComputeEnergyMeanOpacity(rho, T_d_init);
-		const auto kappaP = ComputePlanckOpacity(rho, T_d_init);
-		Lambda_compare += c_hat_ * dt * rho * (kappaE * Erad[0] + kappaP * fourPiBoverC) + fourPiBoverC;
+		Lambda_compare += c_hat_ * dt * rho * kappaE * Erad[0];
 	} else {
 		const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d_init, rad_boundaries);
 		const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d_init, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
-		Lambda_compare += c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad + opacity_terms.kappaP * fourPiBoverC) + sum(fourPiBoverC);
+		Lambda_compare += c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad);
+	}
+	// With no radiative or collisional exchange, every temperature is a solution. Preserve the guess
+	// without passing a zero convergence scale to the root finder.
+	if (Lambda_compare == 0.0 && rhs(T_d_init) == 0.0) {
+		return T_d_init;
 	}
 
 	const auto T_d = BackwardEulerOneVariable(rhs, jac, T_d_init, Lambda_compare);
