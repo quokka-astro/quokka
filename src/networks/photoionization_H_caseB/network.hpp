@@ -4,6 +4,8 @@
 /// \brief The constants and runtime parameters of a jaff-generated network. A
 /// Quokka problem names the network type with Microphysics_Traits::Network.
 
+#include <cmath> // INFINITY, for an open top band edge
+
 #include "AMReX_Array.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
@@ -48,9 +50,12 @@ struct JaffNetwork {
 		// $$JAFF END
 	}
 	/// index alpha of the photon-number spectrum n(E) ~ E^(alpha-2) within a
-	/// chemical band
-	// $$JAFF SUB profile_index
+	/// chemical band; Quokka takes one alpha for all bands
+	// $$JAFF GET profile_index IN 0
 	static constexpr double ChemBandsPowerLawIndex = 0;
+	// $$JAFF END
+	// $$JAFF REPEAT idx, profile_index IN profile_indices
+	static_assert(0 == ChemBandsPowerLawIndex, "band 0: Quokka takes one profile index for all chemical bands");
 	// $$JAFF END
 
 	static constexpr int NumThermalBands = 0;
