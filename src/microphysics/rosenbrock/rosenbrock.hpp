@@ -188,7 +188,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, R
 
 	for (int j = 1; j <= int_neqs; ++j) {
 		const amrex::Real yj = ybase(j);
-		// an entry without tolerances gets the relative step, floored at SMALL_X_SAFE as clean_state floors it
+		// an entry without tolerances gets the relative step, with |y| floored at SMALL_X_SAFE so that a zero entry still moves
 		const amrex::Real R = counts_toward_error(Layout::role(j)) ? amrex::max(std::sqrt(UROUND) * std::abs(yj), R0 / ewt(j))
 									   : std::sqrt(UROUND) * amrex::max(std::abs(yj), params.SMALL_X_SAFE);
 		for (int n = 1; n <= int_neqs; ++n) {
