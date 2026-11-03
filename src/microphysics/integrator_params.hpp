@@ -36,7 +36,7 @@ extern AMREX_GPU_MANAGED amrex::Real X_reject_buffer; // NOLINT
 /// Print a summary after each burn (CPU builds only).
 extern AMREX_GPU_MANAGED bool burner_verbose; // NOLINT
 
-/// Read the integrator parameters. Replaces the integrator part of Microphysics' init_extern_parameters().
+/// Read the integrator parameters. The ported integrator reads these instead of Microphysics' integrator_rp.
 void readIntegratorParams();
 
 } // namespace quokka::microphysics::integrator_params

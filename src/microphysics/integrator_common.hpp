@@ -191,8 +191,7 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 	for (int n = 1; n <= Layout::neqs; ++n) {
 		switch (Layout::role(n)) {
 			case VarRole::Species:
-				// Ensure that mass fractions always stay positive and less than or
-				// equal to 1.
+				// do_species_clip also caps each species at 1, which only makes sense for mass fractions
 				if constexpr (Layout::traits::do_species_clip) {
 					int_state.y(n) = amrex::Clamp(int_state.y(n), integrator_params::SMALL_X_SAFE, 1.0_rt);
 				}
@@ -232,8 +231,8 @@ template <typename Layout, typename IntegratorT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 template <typename Layout, typename BurnT, typename IntegratorT, int int_neqs>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT &state, IntegratorT &int_state, amrex::Array1D<amrex::Real, 1, int_neqs> &ydot)
 {
-	// Fix the state as necessary -- this ensures that the mass
-	// fractions that enter are valid (and optionally normalized)
+	// Fix the state as necessary -- this ensures that the species
+	// that enter are valid (and optionally normalized)
 
 	clean_state<Layout>(int_state);
 
@@ -326,11 +325,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amr
 
 	// Set the tolerances.
 
-	int_state.atol_spec = integrator_params::atol_spec; // mass fractions
-	int_state.atol_enuc = integrator_params::atol_enuc; // energy generated
+	int_state.atol_spec = integrator_params::atol_spec; // species number densities
+	int_state.atol_enuc = integrator_params::atol_enuc; // specific internal energy
 
-	int_state.rtol_spec = integrator_params::rtol_spec; // mass fractions
-	int_state.rtol_enuc = integrator_params::rtol_enuc; // energy generated
+	int_state.rtol_spec = integrator_params::rtol_spec; // species number densities
+	int_state.rtol_enuc = integrator_params::rtol_enuc; // specific internal energy
 	if constexpr (Layout::photochemistry) {
 		int_state.atol_rad_num = integrator_params::atol_rad_num; // radiation number density
 		int_state.rtol_rad_num = integrator_params::rtol_rad_num; // radiation number density
