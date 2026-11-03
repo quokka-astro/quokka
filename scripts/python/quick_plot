@@ -226,7 +226,7 @@ def plot_one(pltdir, args, suffix_idx=None):
         slc = yt.SlicePlot(ds, view_dir, field, center=center)
     elif kind == "prj":
         slc = yt.ProjectionPlot(ds, view_dir, field,
-                                weight_field=args.weight_field, center=center)
+                                weight_field=weight_field, center=center)
     else:
         raise ValueError(f"kind {kind} not supported")
 

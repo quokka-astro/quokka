@@ -20,8 +20,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct CouplingProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct CouplingProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 // Su & Olson (1997) test problem
 constexpr double eps_SuOlson = 1.0;

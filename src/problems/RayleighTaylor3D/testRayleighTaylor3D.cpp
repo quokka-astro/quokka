@@ -23,8 +23,7 @@
 #include "hydro/hydro_system.hpp"
 #include "util/BC.hpp"
 
-struct RTProblem {
-};
+struct RTProblem {};
 
 template <> struct quokka::EOS_Traits<RTProblem> {
 	static constexpr double gamma = 1.4;
@@ -36,6 +35,7 @@ template <> struct HydroSystem_Traits<RTProblem> {
 };
 
 template <> struct Physics_Traits<RTProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars

@@ -26,8 +26,7 @@
 #endif
 #include "util/BC.hpp"
 
-struct ShocktubeProblem {
-};
+struct ShocktubeProblem {};
 
 template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
@@ -35,6 +34,7 @@ template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> : DefaultPhysicsTraits {
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 };

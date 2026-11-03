@@ -20,8 +20,7 @@
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
 
-struct SuOlsonProblemCgs {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct SuOlsonProblemCgs {}; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double kappa = 300.0;		      // cm^-1 (opacity)
 constexpr double rho0 = 2.0879373766122384;   // g cm^-3 (matter density)

@@ -21,6 +21,13 @@ enum class ResistivityModel {
 	problem_defined, // per-cell Ohmic resistivity; eta returned by a problem-specific computeResistivity device function
 };
 
+// enum for hydro (shear + bulk) viscosity model
+enum class ViscosityModel {
+	none,		 // no physical viscosity model
+	constant,	 // uniform shear/bulk viscosity; read from hydro.shear_viscosity / hydro.bulk_viscosity in the TOML input file
+	problem_defined, // per-cell viscosity; returned by a problem-specific computeViscosity device function
+};
+
 // default values for all Physics_Traits fields; specialize Physics_Traits by inheriting from this
 // struct and overriding only the fields that differ from the defaults
 struct DefaultPhysicsTraits {
@@ -35,6 +42,7 @@ struct DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
+	static constexpr ViscosityModel viscosity_model = ViscosityModel::none;
 	static constexpr int nGroups = 1;     // number of radiation groups
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
@@ -49,24 +57,18 @@ struct DefaultPhysicsTraits {
 };
 
 // this struct is specialized by the user application code.
-template <typename problem_t> struct Physics_Traits : DefaultPhysicsTraits {
-};
+template <typename problem_t> struct Physics_Traits : DefaultPhysicsTraits {};
 
 // this struct stores the indices at which quantities start
 template <typename problem_t> struct Physics_Indices {
-	// number of cc quantities required for advection problems
-	static constexpr int nvarTotal_cc_adv = 1;
-	// number of cc quantities required for rad /+ hydro problem
-	static constexpr int nvarTotal_cc = []() constexpr {
-		if constexpr (!(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled)) {
-			return nvarTotal_cc_adv;
-		}
-		return Physics_Traits<problem_t>::numPassiveScalars + Physics_NumVars::numHydroVars +
-		       Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups *
-			   static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled) +
-		       Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups *
-			   static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled);
-	}();
+	// number of cc quantities
+	// the hydro variables are always allocated: is_hydro_enabled only controls whether they are advected,
+	// so the gas state (and any Strang-split sources acting on it) exists even when hydro is disabled
+	static constexpr int nvarTotal_cc =
+	    Physics_Traits<problem_t>::numPassiveScalars + Physics_NumVars::numHydroVars +
+	    Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups * static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled) +
+	    Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups * static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled);
+
 	// cell-centered
 	static constexpr int hydroFirstIndex = 0;
 	static constexpr int pscalarFirstIndex = Physics_NumVars::numHydroVars;

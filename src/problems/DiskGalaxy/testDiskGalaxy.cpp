@@ -44,8 +44,7 @@ constexpr double keV_in_ergs = 1000.0 * C::ev2erg; // ergs == 1 keV
 constexpr double seconds_per_year = 3.15576e7;
 } // namespace
 
-struct DiskGalaxy {
-};
+struct DiskGalaxy {};
 
 static_assert(AMREX_SPACEDIM == 3, "DiskGalaxy problem requires AMREX_SPACEDIM == 3.");
 

@@ -1,0 +1,5 @@
+if(AMReX_SPACEDIM EQUAL 3)
+  quokka_add_problem(JOB_NAME MHDDiode INPUT_FILE MHDDiodeWall.toml)
+  add_test(NAME MHDDiodeMixed COMMAND MHDDiode ../inputs/MHDDiodeMixed.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  set_tests_properties(MHDDiode MHDDiodeMixed PROPERTIES LABELS "MHD")
+endif()

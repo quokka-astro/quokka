@@ -1,0 +1,110 @@
+# MHD version of TallBoxSf (small test configuration)
+
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+# 1x1x4 kpc box
+geometry.prob_lo = [0.0, 0.0, -6.036e+21]
+geometry.prob_hi = [3.018e21, 3.018e21, 6.036e+21]
+# x, y: periodic; z: MHD diode (set in problem_main)
+quokka.bc = ["periodic", "periodic", "ext_dir"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1  # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [16, 16, 64]
+amr.max_level = 0  # number of levels = max_level + 1
+amr.max_grid_size = 16
+amr.blocking_factor = 16  # grid size must be divisible by this
+amr.n_error_buf = 0
+amr.grid_eff = 0.0
+
+cfl = 0.3
+do_reflux = 1
+do_subcycle = 0
+
+checkpoint_interval = -1
+plotfile_interval = -1
+stop_time = "64*Myr"
+max_timesteps = 40  # keep short: with FPE traps, a spurious divide-by-zero in the cooling ODE integrator (pow(0, -1/2) in ODEIntegrate.hpp) aborts later steps
+init_shrink = 0.01
+regrid_interval = -1
+# be careful about Poisson supercycling
+poisson_supercycle_interval = 2
+
+particles.verbose = 0
+particles.disable_SN_feedback = false
+particles.split_particles_on_restart_refine = false
+
+# metal scalar
+particles.scalar_yield_per_SN = 1.99e33  # 1 Msun
+problem.initial_scalar_density = 1.67e-35  # 1e-11 mH/cm^3
+
+density_floor = 1.67e-27  # in g cm^-3
+density_floor_expr = "scaleheight=3.018e21; max(1.67e-28, base_density_floor * exp(-(z/scaleheight)*(z/scaleheight)))"
+temperature_floor = 10.0  # K
+
+particles.eps_ff = 0.01
+problem.stars_file = ""
+problem.IC_file = "../extern/problems/TallBoxSf/disk_solution_datatable_Sigma13-Z1.csv"
+problem.rho01 = 4.320441e-24
+problem.sigma1 = 7.0e5
+problem.B0_uG = 3.0  # midplane B_x in microgauss (SILCC, Walch et al. 2015)
+
+cooling.enabled = 1
+cooling.cooling_table_type = "resampled"
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
+heating_rate_external = "max(min(1.0, 2.0 - time / (32 * Myr)), 0.0024) * 2e-26" # unit: erg/s/H. Gamma_0 = 2e-26
+use_sfh_based_pe_heating = true
+sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
+sfh_time_interval = 3.155760000e+12  # 1e5 yr
+sf_area_kpc2 = 1.0  # kpc^2
+
+turbulence.enabled = 1
+turbulence.length = 3.018e21
+turbulence.target_vdisp = 700000.0
+turbulence.ampl_factor = 0.2
+turbulence.ampl_auto_adjust = 1
+turbulence.k_driv = 69.84230155
+turbulence.k_min = 2.0
+turbulence.k_max = 3.0
+turbulence.sol_weight = 0.5
+turbulence.spect_form = 1
+turbulence.random_seed = 140281
+turbulence.nsteps_per_t_turb = 10
+turbulence.stop_time = "32 * Myr"
+
+derived_vars = ["temperature", "gpot", "gas_z_outflow_rate", "metal_z_outflow_rate"]
+
+# total gas and metal outflow rates through |z| = outflow_height, written every step (time [Myr], Mdot_gas and Mdot_metal [Msun/yr])
+problem.outflow_height = 3.0857e21  # 1 kpc
+problem.outflow_file = "MHDTallBoxSf_outflow.txt"
+
+# slices and projections (short intervals so that the short test run writes a few of them)
+quokka.diagnostics = ["slice_x", "slice_z", "proj"]
+
+quokka.slice_x.type = "DiagFramePlane"
+quokka.slice_x.file = "mhd_slicex_plt"
+quokka.slice_x.normal = 0  # plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_x.center = 1.509001e21
+quokka.slice_x.time_int = "0.2*Myr"
+quokka.slice_x.field_names = ["gasDensity", "temperature", "z-GasMomentum", "scalar_0", "gas_z_outflow_rate", "metal_z_outflow_rate",
+	"x-BField", "y-BField", "z-BField"]
+
+quokka.slice_z.type = "DiagFramePlane"
+quokka.slice_z.file = "mhd_slicez_plt"
+quokka.slice_z.normal = 2
+quokka.slice_z.center = 1.0e12  # midplane (offset from the cell faces at z = 0)
+quokka.slice_z.time_int = "0.2*Myr"
+quokka.slice_z.field_names = ["gasDensity", "temperature", "z-GasMomentum", "scalar_0", "x-BField", "y-BField", "z-BField"]
+
+quokka.proj.type = "ProjectionPlot"
+quokka.proj.file = "mhd_proj_plt"  # output file prefix (must end in "plt")
+quokka.proj.time_int = "0.2*Myr"
+quokka.proj.normal = 0
+quokka.proj.field_names = ["gasDensity", "scalar_0", "gas_z_outflow_rate", "metal_z_outflow_rate"]

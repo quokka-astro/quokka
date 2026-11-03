@@ -29,8 +29,8 @@ cfl = 0.3
 stop_time = 5.0
 max_timesteps = 20000
 
-mhd.emf_compute_scheme = "Balsara2025"
-mhd.emf_averaging_scheme = "Balsara2025"
+mhd.emf_compute_scheme = "Balsara2025a"
+mhd.emf_averaging_scheme = "Balsara2025b"
 
 dust.density_floor = 1.0e-14
 

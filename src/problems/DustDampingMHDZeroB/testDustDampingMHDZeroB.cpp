@@ -4,7 +4,9 @@
 
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
+#include <cmath>
 #include <format>
+#include <limits>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -31,8 +33,7 @@ auto v_dust1_analytic(double t) -> double;
 auto v_dust2_analytic(double t) -> double;
 auto E_gas_analytic(double t) -> double;
 
-struct DustDampingMHDZeroB {
-};
+struct DustDampingMHDZeroB {};
 
 template <> struct SimulationData<DustDampingMHDZeroB> {
 	std::vector<double> t_vec_;
@@ -66,10 +67,8 @@ template <> struct Physics_Traits<DustDampingMHDZeroB> : DefaultPhysicsTraits {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroB>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
-											   amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-											   amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-											   double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroB>::ComputeReciprocalStoppingTime(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 2> alpha{};
 	alpha[0] = 1.0 / TS1;
@@ -77,11 +76,13 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroB>::ComputeReciprocalSt
 	return alpha;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroB>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroB>::ComputeDustDimensionlessChargeToMassRatio(DustCoefficientState const & /*state*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, 2> charge_to_mass_ratio{};
-	charge_to_mass_ratio.fill(1.0);
-	return charge_to_mass_ratio;
+	amrex::GpuArray<amrex::Real, 2> dimensionless_charge_to_mass_ratio{};
+	dimensionless_charge_to_mass_ratio.fill(1.0);
+	return dimensionless_charge_to_mass_ratio;
 }
 
 template <> void QuokkaSimulation<DustDampingMHDZeroB>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
@@ -199,12 +200,25 @@ auto E_gas_analytic(double t) -> double
 	return E_gas_initial + integral;
 }
 
-auto problem_main() -> int
+namespace
 {
-	const double CFL_number = 1000000.0; // large CFL number to avoid CFL violation
+using ResolvedRkScheme = quokka::dust::ResolvedRkScheme;
 
-	auto BCs_cc = quokka::BC<DustDampingMHDZeroB>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
+struct SchemeRunResult {
+	ResolvedRkScheme scheme;
+	SimulationData<DustDampingMHDZeroB> data;
+	double rel_err_gas_vx;
+	double rel_err_dust1_vx;
+	double rel_err_dust2_vx;
+	double rel_err_gas_E;
+};
 
+constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
+constexpr std::array<char const *, 3> scheme_colors = {"C0", "C1", "C2"};
+constexpr std::array<char const *, 3> scheme_markers = {"o", "s", "^"};
+
+auto makePeriodicFaceBCs() -> amrex::Vector<amrex::BCRec>
+{
 	const int nvars_fc = Physics_Indices<DustDampingMHDZeroB>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
@@ -213,13 +227,22 @@ auto problem_main() -> int
 			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
 		}
 	}
+	return BCs_fc;
+}
 
+auto runDustDampingSimulation(ResolvedRkScheme scheme) -> SimulationData<DustDampingMHDZeroB>
+{
+	const double CFL_number = 1000000.0; // large CFL number to avoid CFL violation
+
+	auto BCs_cc = quokka::BC<DustDampingMHDZeroB>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
+	auto BCs_fc = makePeriodicFaceBCs();
 	QuokkaSimulation<DustDampingMHDZeroB> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3;
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
+	sim.dustResolvedRkScheme_ = scheme;
 
 	sim.setInitialConditions();
 
@@ -248,22 +271,93 @@ auto problem_main() -> int
 	}
 
 	sim.evolve();
+	return sim.userData_;
+}
+
+auto computeRunResult(ResolvedRkScheme scheme, SimulationData<DustDampingMHDZeroB> data) -> SchemeRunResult
+{
+	std::vector<double> const &t = data.t_vec_;
+	std::vector<double> const &v_gas = data.v_gas_vec_;
+	std::vector<double> const &v_dust1 = data.v_dust1_vec_;
+	std::vector<double> const &v_dust2 = data.v_dust2_vec_;
+	std::vector<double> const &E_gas = data.E_gas_vec_;
+
+	std::vector<double> v_gas_exact(t.size());
+	std::vector<double> v_dust1_exact(t.size());
+	std::vector<double> v_dust2_exact(t.size());
+	std::vector<double> E_gas_exact(t.size());
+
+	for (size_t i = 0; i < t.size(); ++i) {
+		v_gas_exact[i] = v_gas_analytic(t[i]);
+		v_dust1_exact[i] = v_dust1_analytic(t[i]);
+		v_dust2_exact[i] = v_dust2_analytic(t[i]);
+		E_gas_exact[i] = E_gas_analytic(t[i]);
+	}
+
+	auto rel_err = [](const std::vector<double> &sim_vals, const std::vector<double> &exact_vals) {
+		if ((sim_vals.size() != exact_vals.size()) || exact_vals.empty()) {
+			return std::numeric_limits<double>::quiet_NaN();
+		}
+		double err = 0.0;
+		double sol = 0.0;
+		for (size_t i = 0; i < sim_vals.size(); ++i) {
+			err += std::abs(sim_vals[i] - exact_vals[i]);
+			sol += std::abs(exact_vals[i]);
+		}
+		return (sol > 0.0) ? (err / sol) : std::numeric_limits<double>::quiet_NaN();
+	};
+
+	double const rel_err_gas_vx = rel_err(v_gas, v_gas_exact);
+	double const rel_err_dust1_vx = rel_err(v_dust1, v_dust1_exact);
+	double const rel_err_dust2_vx = rel_err(v_dust2, v_dust2_exact);
+	double const rel_err_gas_E = rel_err(E_gas, E_gas_exact);
+
+	return SchemeRunResult{
+	    .scheme = scheme,
+	    .data = std::move(data),
+	    .rel_err_gas_vx = rel_err_gas_vx,
+	    .rel_err_dust1_vx = rel_err_dust1_vx,
+	    .rel_err_dust2_vx = rel_err_dust2_vx,
+	    .rel_err_gas_E = rel_err_gas_E,
+	};
+}
+} // namespace
+
+auto problem_main() -> int
+{
+	std::vector<SchemeRunResult> runs;
+	runs.reserve(resolved_rk_schemes.size());
+	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
+		runs.push_back(computeRunResult(scheme, runDustDampingSimulation(scheme)));
+	}
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::vector<double> &t = sim.userData_.t_vec_;
-		std::vector<double> const &v_gas = sim.userData_.v_gas_vec_;
-		std::vector<double> const &v_dust1 = sim.userData_.v_dust1_vec_;
-		std::vector<double> const &v_dust2 = sim.userData_.v_dust2_vec_;
-		std::vector<double> const &E_gas = sim.userData_.E_gas_vec_;
+		const double rel_err_tol = 0.03;
+		for (auto const &run : runs) {
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas vx    = " << run.rel_err_gas_vx
+				       << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust1 vx  = " << run.rel_err_dust1_vx
+				       << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust2 vx  = " << run.rel_err_dust2_vx
+				       << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas E     = " << run.rel_err_gas_E
+				       << "\n";
+			if (!std::isfinite(run.rel_err_gas_vx) || !std::isfinite(run.rel_err_dust1_vx) || !std::isfinite(run.rel_err_dust2_vx) ||
+			    !std::isfinite(run.rel_err_gas_E) || (run.rel_err_gas_vx > rel_err_tol) || (run.rel_err_dust1_vx > rel_err_tol) ||
+			    (run.rel_err_dust2_vx > rel_err_tol) || (run.rel_err_gas_E > rel_err_tol)) {
+				status = 1;
+			}
+		}
 
+#ifdef HAVE_PYTHON
+		std::vector<double> const &t = runs.front().data.t_vec_;
 		const size_t n_dense_points = 1000;
 		std::vector<double> t_dense(n_dense_points);
 		std::vector<double> v_gas_exact_dense(n_dense_points);
 		std::vector<double> v_dust1_exact_dense(n_dense_points);
 		std::vector<double> v_dust2_exact_dense(n_dense_points);
 		std::vector<double> E_gas_exact_dense(n_dense_points);
-
 		double const t_max = t.empty() ? 0.0 : t.back();
 		for (size_t i = 0; i < n_dense_points; ++i) {
 			t_dense[i] = t_max * static_cast<double>(i) / (n_dense_points - 1);
@@ -273,47 +367,21 @@ auto problem_main() -> int
 			E_gas_exact_dense[i] = E_gas_analytic(t_dense[i]);
 		}
 
-		std::vector<double> v_gas_exact(t.size());
-		std::vector<double> v_dust1_exact(t.size());
-		std::vector<double> v_dust2_exact(t.size());
-		std::vector<double> E_gas_exact(t.size());
-
-		for (size_t i = 0; i < t.size(); ++i) {
-			v_gas_exact[i] = v_gas_analytic(t[i]);
-			v_dust1_exact[i] = v_dust1_analytic(t[i]);
-			v_dust2_exact[i] = v_dust2_analytic(t[i]);
-			E_gas_exact[i] = E_gas_analytic(t[i]);
-		}
-
-		auto rel_err = [](const std::vector<double> &sim_vals, const std::vector<double> &exact_vals) {
-			double err = 0.0;
-			double sol = 0.0;
-			for (size_t i = 0; i < sim_vals.size(); ++i) {
-				err += std::abs(sim_vals[i] - exact_vals[i]);
-				sol += std::abs(exact_vals[i]);
+		auto plotRunSeries = [&](auto const &series_accessor) {
+			for (size_t idx = 0; idx < runs.size(); ++idx) {
+				auto const &series = series_accessor(runs[idx].data);
+				matplotlibcpp::plot(runs[idx].data.t_vec_, series,
+						    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
+						     {"color", scheme_colors[idx]},
+						     {"linestyle", "-"},
+						     {"marker", scheme_markers[idx]},
+						     {"markersize", "3"}});
 			}
-			return err / sol;
 		};
 
-		double const rel_err_gas_vx = rel_err(v_gas, v_gas_exact);
-		double const rel_err_dust1_vx = rel_err(v_dust1, v_dust1_exact);
-		double const rel_err_dust2_vx = rel_err(v_dust2, v_dust2_exact);
-		double const rel_err_gas_E = rel_err(E_gas, E_gas_exact);
-
-		amrex::Print() << "Relative L1 norm for gas vx    = " << rel_err_gas_vx << "\n";
-		amrex::Print() << "Relative L1 norm for dust1 vx  = " << rel_err_dust1_vx << "\n";
-		amrex::Print() << "Relative L1 norm for dust2 vx  = " << rel_err_dust2_vx << "\n";
-		amrex::Print() << "Relative L1 norm for gas E     = " << rel_err_gas_E << "\n";
-
-		const double rel_err_tol = 0.03;
-		if ((rel_err_gas_vx > rel_err_tol) || (rel_err_dust1_vx > rel_err_tol) || (rel_err_dust2_vx > rel_err_tol) || (rel_err_gas_E > rel_err_tol)) {
-			status = 1;
-		}
-
-#ifdef HAVE_PYTHON
 		matplotlibcpp::clf();
-		matplotlibcpp::plot(t, v_gas, {{"label", "numerical"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, v_gas_exact_dense, {{"label", "analytic"}, {"color", "r"}, {"linestyle", "--"}});
+		matplotlibcpp::plot(t_dense, v_gas_exact_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}});
+		plotRunSeries([](auto const &data) -> std::vector<double> const & { return data.v_gas_vec_; });
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_g$)");
@@ -322,8 +390,8 @@ auto problem_main() -> int
 		matplotlibcpp::save("./dust_damping_mhd_zero_b_gas_velocity.pdf");
 
 		matplotlibcpp::clf();
-		matplotlibcpp::plot(t, v_dust1, {{"label", "numerical"}, {"color", "b"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, v_dust1_exact_dense, {{"label", "analytic"}, {"color", "b"}, {"linestyle", "--"}});
+		matplotlibcpp::plot(t_dense, v_dust1_exact_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}});
+		plotRunSeries([](auto const &data) -> std::vector<double> const & { return data.v_dust1_vec_; });
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,1}$)");
@@ -332,8 +400,8 @@ auto problem_main() -> int
 		matplotlibcpp::save("./dust_damping_mhd_zero_b_dust1_velocity.pdf");
 
 		matplotlibcpp::clf();
-		matplotlibcpp::plot(t, v_dust2, {{"label", "numerical"}, {"color", "g"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, v_dust2_exact_dense, {{"label", "analytic"}, {"color", "g"}, {"linestyle", "--"}});
+		matplotlibcpp::plot(t_dense, v_dust2_exact_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}});
+		plotRunSeries([](auto const &data) -> std::vector<double> const & { return data.v_dust2_vec_; });
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,2}$)");
@@ -342,8 +410,8 @@ auto problem_main() -> int
 		matplotlibcpp::save("./dust_damping_mhd_zero_b_dust2_velocity.pdf");
 
 		matplotlibcpp::clf();
-		matplotlibcpp::plot(t, E_gas, {{"label", "numerical"}, {"color", "m"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, E_gas_exact_dense, {{"label", "analytic"}, {"color", "m"}, {"linestyle", "--"}});
+		matplotlibcpp::plot(t_dense, E_gas_exact_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}});
+		plotRunSeries([](auto const &data) -> std::vector<double> const & { return data.E_gas_vec_; });
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($E_g$)");

@@ -7,24 +7,14 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 
 ## Build & Test Commands
 
-The `scripts/bash/quokka` script is the recommended way to configure, build, and run tests. Make sure it exists in your `PATH`; if not, run `./scripts/bash/bootstrap.sh` once from the repo root to install it (and `quokka-pre-commit.sh`) into `~/.local/bin/`. All commands accept `--root <path>` to specify the repo root when not running from it.
+The `scripts/bash/quokka` script is the recommended way to configure, build, and run tests. **Run `quokka --help` for the current commands, options, and presets** — that output is the source of truth, so read it rather than a copy in this file.
 
-The script optionally sources an environment file via `--source <file>` for commands that need the build/test environment (`config`, `build`, `buildrun`, `run`, `target`). If `--source` is omitted, no environment file is sourced.
+What `--help` does not cover:
 
-- **Configure**: `quokka config [-d <preset>] [--delete] [--source <file>] [-D<k>=<v> ...]` — runs CMake with the selected preset (default `1d`).
-- **Build one or more problems**: `quokka build [-d <preset>] <problem> [<problem> ...] [-j <N>] [--source <file>]`
-- **Build matching problems**: `quokka build [-d <preset>] --filter <glob> [-j <N>]` (e.g. `'Rad*'`; quote patterns)
-- **Build and run (combined)**: `quokka buildrun [-d <preset>] <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>]`
-- **Build and run (filtered)**: `quokka buildrun [-d <preset>] --filter <pattern> [-j <N>]`
-- **Run one or more problems**: `quokka run [-d <preset>] <problem> [<problem> ...] [--input <file>] [--fpe]` (`--input` only with one problem)
-- **Run all tests**: `quokka run [-d <preset>] [-j <N>]`
-- **Run matching tests**: `quokka run [-d <preset>] --filter <regex>` (quote regex/globs to avoid shell expansion)
-- **List problems**: `quokka list`
-- **Show targets**: `quokka target [-d <preset>]`
-- **Clean test output**: `quokka clean`
-- **Result summary**: `build`, `run`, and `buildrun` always print final per-target summary lines (`<name> SUCCESS|FAIL|SKIPPED`), so tooling/agents can reliably inspect outcomes by tailing the command output.
-
-Presets: `1d`, `2d`, `3d`, `1d-debug`, `2d-debug`, `3d-debug`, `1d-hip`, `2d-hip`, `3d-hip`, `1d-cuda`, `2d-cuda`, `3d-cuda` (sets dimensionality, Release/Debug build type, and optional GPU backend). Default preset is `1d`.
+- **Install**: run `./scripts/bash/bootstrap.sh` once from the repo root; it copies `quokka` and `quokka-pre-commit.sh` into `~/.local/bin/`. It skips a copy already on `PATH`, so it never refreshes a stale install — compare with `cmp -s scripts/bash/quokka "$(command -v quokka)"` and reinstall with `install -m755 scripts/bash/quokka ~/.local/bin/quokka`.
+- **Build environment**: put per-machine setup (`module load`, a CUDA `bin` prepended to `PATH`) in `~/.config/quokka/quokka.rc` and pass `--source default`. When that file is absent the command warns and continues; the warning is not a failure.
+- **Pass `--root <path>`** so commands work from any directory.
+- **Result summary**: `build`, `run`, and `buildrun` end with per-target `<name> SUCCESS|FAIL|SKIPPED` lines — tail the output to read outcomes.
 
 **Without the script (manual):**
 - **Configure**: `mkdir -p build/<preset> && cd build/<preset> && cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=<type> -DAMReX_SPACEDIM=<N>`

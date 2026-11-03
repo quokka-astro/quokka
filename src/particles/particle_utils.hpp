@@ -203,6 +203,36 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	});
 }
 
+// Zero every real component from first_comp onwards for all particles in the container.
+//
+// InitFromAsciiFile() only writes the nreal_extra components present in the file and leaves the
+// rest of each particle's real data indeterminate. Accumulator components such as the sink-particle
+// angular momentum are updated with += during accretion, so reading them before they are written
+// yields whatever the underlying (host or device) allocation last held. Call this immediately after
+// InitFromAsciiFile() with first_comp = nreal_extra.
+template <typename ContainerType> void zeroRealComponentsFrom(ContainerType *container, const int first_comp)
+{
+	using PType = typename ContainerType::ParticleType;
+	if (first_comp >= PType::NReal) {
+		return;
+	}
+
+	for (int lev = 0; lev <= container->finestLevel(); ++lev) {
+		for (auto &kv : container->GetParticles(lev)) {
+			auto &particle_array = kv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			auto *pdata = particle_array().data();
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				for (int n = first_comp; n < PType::NReal; ++n) {
+					p.rdata(n) = 0.0;
+				}
+			});
+		}
+	}
+	amrex::Gpu::streamSynchronize();
+}
+
 } // namespace quokka::ParticleUtils
 
 #endif // PARTICLE_UTILS_HPP_

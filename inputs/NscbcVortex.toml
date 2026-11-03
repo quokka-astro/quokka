@@ -43,3 +43,5 @@ vortex.u_inflow = 1.0e4  # cm/s
 vortex.v_inflow = 0.0  # cm/s
 vortex.w_inflow = 0.0  # cm/s
 vortex.s_inflow = 1.0  # dimensionless
+
+density_floor = 1e-9  # g cm^-3

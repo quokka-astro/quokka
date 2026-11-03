@@ -16,10 +16,8 @@
 #include <format>
 #include <fstream>
 
-struct PulseProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
-struct AdvPulseProblem {
-};
+struct PulseProblem {}; // dummy type to allow compile-type polymorphism via template specialization
+struct AdvPulseProblem {};
 
 constexpr double T_lo = 1.0e7; // K (temperature)
 constexpr double T_hi = 2.0e7; // K (temperature)

@@ -25,8 +25,7 @@ constexpr double vel_dust_left = 2.0;
 constexpr double cs_isothermal = 1.0;
 constexpr double drag_coefficient = 1.0; // K1 in the analytic solution
 
-struct DustyShock {
-};
+struct DustyShock {};
 
 template <> struct quokka::EOS_Traits<DustyShock> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -46,13 +45,12 @@ template <> struct Physics_Traits<DustyShock> : DefaultPhysicsTraits {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustyShock>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-										  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustyShock>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> alpha{};
 	for (int g = 0; g < nDustGroups_; ++g) {
-		alpha[g] = 1.0 / rho_d[g];
+		alpha[g] = 1.0 / state.rhoDust[g];
 	}
 	return alpha;
 }

@@ -19,10 +19,8 @@
 #include <format>
 #include <fstream>
 
-struct MGProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
-struct ExactProblem {
-};
+struct MGProblem {}; // dummy type to allow compile-type polymorphism via template specialization
+struct ExactProblem {};
 
 // constexpr int n_groups_ = 2;
 constexpr int n_groups_ = 4;

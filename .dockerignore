@@ -12,6 +12,8 @@ tests/
 docs/
 paper/
 scripts/
+# CMake helpers are required even when BUILD_TESTING=OFF.
+!scripts/cmake/
 
 # OS/editor noise
 **/.DS_Store

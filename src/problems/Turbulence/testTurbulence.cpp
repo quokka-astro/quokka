@@ -17,8 +17,7 @@
 #include <string>
 #include <vector>
 
-struct TurbulentBox {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct TurbulentBox {}; // dummy type to allow compile-type polymorphism via template specialization
 
 template <> struct Physics_Traits<TurbulentBox> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
@@ -95,7 +94,7 @@ template <> void QuokkaSimulation<TurbulentBox>::refineGrid(int lev, amrex::TagB
 
 template <> void QuokkaSimulation<TurbulentBox>::computeAfterTimestep()
 {
-	auto disp = quokka::turbulence::calculate_dispersion<TurbulentBox>(state_new_cc_[0]);
+	const auto disp = quokka::turbulence::calculate_dispersion<TurbulentBox>(state_new_cc_[0]).dispersion;
 	const amrex::Real disp3d = std::sqrt(disp[0] * disp[0] + disp[1] * disp[1] + disp[2] * disp[2]);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
