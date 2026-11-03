@@ -31,7 +31,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 //
-// Additional modifications SPDX-FileCopyrightText: © The AMReX Authors
+// Additional modifications SPDX-FileCopyrightText: © The Quokka Authors
 
 #include <algorithm>
 #include <limits>
