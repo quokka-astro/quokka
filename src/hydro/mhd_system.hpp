@@ -135,13 +135,14 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	    amrex::Real dx_wcomp1, amrex::Real resistivity);
 
 	template <typename EA, typename BA>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void EMFAverageEdge_Balsara2025b(
-	    int i, int j, int k, amrex::Array4<amrex::Real> const &ec_a4_emf_ave_wcomp2, EA const &ec_a4_emf_iquad0_wcomp2, EA const &ec_a4_emf_iquad1_wcomp2,
-	    EA const &ec_a4_emf_iquad2_wcomp2, EA const &ec_a4_emf_iquad3_wcomp2, BA const &ec_a4_b_wcomp0_m, BA const &ec_a4_b_wcomp0_p,
-	    BA const &ec_a4_b_wcomp1_m, BA const &ec_a4_b_wcomp1_p, amrex::Array4<const amrex::Real> const &fc_a4_fspds_wcomp0,
-	    amrex::Array4<const amrex::Real> const &fc_a4_fspds_wcomp1, std::array<int, 3> const &delta_wcomp0, std::array<int, 3> const &delta_wcomp1,
-	    amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0, amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1, amrex::Real dx_wcomp0,
-	    amrex::Real dx_wcomp1, amrex::Real resistivity);
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void
+	EMFAverageEdge_Balsara2025b(int i, int j, int k, amrex::Array4<amrex::Real> const &ec_a4_emf_ave_wcomp2, EA const &ec_a4_emf_iquad0_wcomp2,
+				    EA const &ec_a4_emf_iquad1_wcomp2, EA const &ec_a4_emf_iquad2_wcomp2, EA const &ec_a4_emf_iquad3_wcomp2,
+				    BA const &ec_a4_b_wcomp0_m, BA const &ec_a4_b_wcomp0_p, BA const &ec_a4_b_wcomp1_m, BA const &ec_a4_b_wcomp1_p,
+				    amrex::Array4<const amrex::Real> const &fc_a4_fspds_wcomp0, amrex::Array4<const amrex::Real> const &fc_a4_fspds_wcomp1,
+				    std::array<int, 3> const &delta_wcomp0, std::array<int, 3> const &delta_wcomp1,
+				    amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0, amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1,
+				    amrex::Real dx_wcomp0, amrex::Real dx_wcomp1, amrex::Real resistivity);
 
 	// level-wide FelkerStone2018 machinery
 	// a register value read through the same a(i, j, k) interface as an Array4
@@ -165,8 +166,9 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static auto GetEMFWorkspace(amrex::MultiFab const &cc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> EMFWorkspace &;
 
 	template <FluxDir DIR, int ORD, SlopeLimiter LIM>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void ReconstructCellFS18(amrex::Array4<const amrex::Real> const &in, amrex::Array4<amrex::Real> const &out_left,
-									   amrex::Array4<amrex::Real> const &out_right, int i, int j, int k);
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void ReconstructCellFS18(amrex::Array4<const amrex::Real> const &in,
+									    amrex::Array4<amrex::Real> const &out_left,
+									    amrex::Array4<amrex::Real> const &out_right, int i, int j, int k);
 
 	template <FluxDir DIR, int ORD, SlopeLimiter LIM>
 	static void LaunchFS18_CC2FC(amrex::MultiFab const &cc_mf_iter, amrex::IntVect const &ng, EMFWorkspace &ws, int wcompA, int wcompB);
@@ -354,8 +356,8 @@ auto MHDSystem<problem_t>::GetEMFWorkspace(amrex::MultiFab const &cc_mf, amrex::
 template <typename problem_t>
 template <FluxDir DIR, int ORD, SlopeLimiter LIM>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void MHDSystem<problem_t>::ReconstructCellFS18(amrex::Array4<const amrex::Real> const &in,
-										  amrex::Array4<amrex::Real> const &out_left,
-										  amrex::Array4<amrex::Real> const &out_right, int i, int j, int k)
+										   amrex::Array4<amrex::Real> const &out_left,
+										   amrex::Array4<amrex::Real> const &out_right, int i, int j, int k)
 {
 	// the same per-cell call that MHDSystem::ReconstructTo makes for a single component (n = 0, no component offsets)
 	quokka::Array4View<amrex::Real const, DIR> q(in);
@@ -376,8 +378,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void MHDSystem<problem_t>::ReconstructCellFS
 // outputs: ws.fc_vs comps [2 * icomp + side-of-face].
 template <typename problem_t>
 template <FluxDir DIR, int ORD, SlopeLimiter LIM>
-void MHDSystem<problem_t>::LaunchFS18_CC2FC(amrex::MultiFab const &cc_mf_iter, amrex::IntVect const &ng, EMFWorkspace &ws, const int wcompA,
-					     const int wcompB)
+void MHDSystem<problem_t>::LaunchFS18_CC2FC(amrex::MultiFab const &cc_mf_iter, amrex::IntVect const &ng, EMFWorkspace &ws, const int wcompA, const int wcompB)
 {
 	auto const cc_a4s_vs = ws.cc_vs.const_arrays();
 	auto const fc_a4s_vs = ws.fc_vs.arrays();
@@ -426,9 +427,9 @@ void MHDSystem<problem_t>::LaunchFS18_FC2EC(amrex::MultiFab const &fc_mf_cVars_f
 template <typename problem_t>
 template <EMFAvgScheme AVG>
 void MHDSystem<problem_t>::LaunchFS18_EdgeEMF(amrex::MultiFab &ec_mf_emf, EMFWorkspace &ws, std::array<int, 2> const &reconstruct_dirs,
-					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
-					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, const amrex::Real dx_wcomp0,
-					       const amrex::Real dx_wcomp1, const amrex::Real resistivity)
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, const amrex::Real dx_wcomp0,
+					      const amrex::Real dx_wcomp1, const amrex::Real resistivity)
 {
 	constexpr int b_idx = bfield_index;
 	int const wcomp0_comp = reconstruct_dirs[0];
@@ -494,13 +495,15 @@ void MHDSystem<problem_t>::LaunchFS18_EdgeEMF(amrex::MultiFab &ec_mf_emf, EMFWor
 		const amrex::Array4<const amrex::Real> fc_a4_fspds_wcomp1 = fc_a4s_fspds_wcomp1[bx];
 
 		if constexpr (AVG == EMFAvgScheme::LondrilloDelZanna2004) {
-			MHDSystem<problem_t>::EMFAverageEdge_LondrilloDelZanna2004(
-			    i, j, k, ec_a4_emf_ave_wcomp2, emf_iquad0, emf_iquad1, emf_iquad2, emf_iquad3, b_wcomp0_m, b_wcomp0_p, b_wcomp1_m, b_wcomp1_p,
-			    fc_a4_fspds_wcomp0, fc_a4_fspds_wcomp1, delta_wcomp0, delta_wcomp1, fc_a4_b_wcomp0, fc_a4_b_wcomp1, dx_wcomp0, dx_wcomp1, resistivity);
+			MHDSystem<problem_t>::EMFAverageEdge_LondrilloDelZanna2004(i, j, k, ec_a4_emf_ave_wcomp2, emf_iquad0, emf_iquad1, emf_iquad2,
+										   emf_iquad3, b_wcomp0_m, b_wcomp0_p, b_wcomp1_m, b_wcomp1_p,
+										   fc_a4_fspds_wcomp0, fc_a4_fspds_wcomp1, delta_wcomp0, delta_wcomp1,
+										   fc_a4_b_wcomp0, fc_a4_b_wcomp1, dx_wcomp0, dx_wcomp1, resistivity);
 		} else {
-			MHDSystem<problem_t>::EMFAverageEdge_Balsara2025b(i, j, k, ec_a4_emf_ave_wcomp2, emf_iquad0, emf_iquad1, emf_iquad2, emf_iquad3, b_wcomp0_m,
-									  b_wcomp0_p, b_wcomp1_m, b_wcomp1_p, fc_a4_fspds_wcomp0, fc_a4_fspds_wcomp1, delta_wcomp0,
-									  delta_wcomp1, fc_a4_b_wcomp0, fc_a4_b_wcomp1, dx_wcomp0, dx_wcomp1, resistivity);
+			MHDSystem<problem_t>::EMFAverageEdge_Balsara2025b(i, j, k, ec_a4_emf_ave_wcomp2, emf_iquad0, emf_iquad1, emf_iquad2, emf_iquad3,
+									  b_wcomp0_m, b_wcomp0_p, b_wcomp1_m, b_wcomp1_p, fc_a4_fspds_wcomp0,
+									  fc_a4_fspds_wcomp1, delta_wcomp0, delta_wcomp1, fc_a4_b_wcomp0, fc_a4_b_wcomp1,
+									  dx_wcomp0, dx_wcomp1, resistivity);
 		}
 	});
 }
@@ -552,15 +555,15 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2018_Level(std::array<amrex::Mu
 			switch (reconstruct_dir2face) {
 				case 0:
 					MHDSystem<problem_t>::template LaunchFS18_CC2FC<FluxDir::X1, ORD, LIM>(cc_mf_cVars, ng_cc, ws, reconstruct_dirs[0],
-													      reconstruct_dirs[1]);
+													       reconstruct_dirs[1]);
 					break;
 				case 1:
 					MHDSystem<problem_t>::template LaunchFS18_CC2FC<FluxDir::X2, ORD, LIM>(cc_mf_cVars, ng_cc, ws, reconstruct_dirs[0],
-													      reconstruct_dirs[1]);
+													       reconstruct_dirs[1]);
 					break;
 				default:
 					MHDSystem<problem_t>::template LaunchFS18_CC2FC<FluxDir::X3, ORD, LIM>(cc_mf_cVars, ng_cc, ws, reconstruct_dirs[0],
-													      reconstruct_dirs[1]);
+													       reconstruct_dirs[1]);
 					break;
 			}
 
