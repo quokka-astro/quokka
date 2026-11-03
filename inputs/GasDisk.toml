@@ -13,7 +13,7 @@ regrid_interval = -1
 
 [amr]
 n_cell = [128, 128, 128]
-max_level = 5
+max_level = 7
 max_grid_size = 128
 
 blocking_factor_x = 32
@@ -47,8 +47,8 @@ MD = 0.0032
 particle_file = "./GALIC_particles.txt"
 
 # Cylindrical AMR refinement
-refine_Rcyl_kpc = 5.0
-refine_Hcyl_kpc = 1.5
+refine_Rcyl_kpc = 10.0
+refine_Hcyl_kpc = 4
 refine_Rcyl_inner_kpc = 0.0
 
 refine_Rcyl_shrink_per_level_kpc = 1.0

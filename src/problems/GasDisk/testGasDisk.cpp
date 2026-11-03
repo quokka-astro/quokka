@@ -195,8 +195,31 @@ template <> struct Particle_Traits<GasDisk> : DefaultParticleTraits{
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 
-template <> void QuokkaSimulation<GasDisk>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
-{
+template <> struct SimulationData<GasDisk> {
+	bool tables_ready = false;
+
+	int nRTable = 256;
+	int nZTable = 512;
+
+	amrex::Real RTableMax{};
+	amrex::Real ZTableMax{};
+
+	amrex::Real cs{};
+	amrex::Real rho_cut{};
+	amrex::Real rho_bg{};
+	amrex::Real T_bg = 1.0e6;
+
+	amrex::Gpu::DeviceVector<amrex::Real> rhoTableDevice;
+	amrex::Gpu::DeviceVector<amrex::Real> vphiTableDevice;
+};
+
+template <> void QuokkaSimulation<GasDisk>::preCalculateInitialConditions(){
+	auto &data = userData_;
+
+	if(data.tables_ready){
+		return;
+	}
+
 	//Inputs
 	amrex::ParmParse const pp("gas_disk");
 
@@ -251,32 +274,17 @@ template <> void QuokkaSimulation<GasDisk>::setInitialConditionsOnGrid(quokka::g
 	//	       << "R200 = " << R200 / (1.0e3 * C::parsec) << " kpc\n"
 	//	       << "rs = " << rs / (1.0e3 * C::parsec) << " kpc\n";
 	
+	data.cs = cs;
 
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_hi = grid_elem.prob_hi_;
-
-	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const amrex::Array4<double> &state_cc = grid_elem.array_;
-
-	int const ncomp_cc = Physics_Indices<GasDisk>::nvarTotal_cc;
-
-	amrex::Real const x_center = 0.5 * (prob_lo[0] + prob_hi[0]);
-	amrex::Real const y_center = 0.5 * (prob_lo[1] + prob_hi[1]);
-	amrex::Real const z_center = 0.5 * (prob_lo[2] + prob_hi[2]);
-
-	// rho table
-	int const nRTable = 256;
-	int const nZTable = 512;
+	int const nRTable = data.nRTable;
+	int const nZTable = data.nZTable;
 	int const nIntegrate = 2048;
 
-	amrex::Real const xmax = std::max(std::abs(prob_lo[0] - x_center), std::abs(prob_hi[0] - x_center));
+	data.RTableMax = 10.0e3*C::parsec;
+	data.ZTableMax = 10.0e3*C::parsec;
 
-	amrex::Real const ymax = std::max(std::abs(prob_lo[1] - y_center), std::abs(prob_hi[1] - y_center));
-
-	amrex::Real const RTableMax = std::sqrt(xmax * xmax + ymax * ymax);
-
-	amrex::Real const ZTableMax = std::max(std::abs(prob_lo[2] - z_center), std::abs(prob_hi[2] - z_center));
+	amrex::Real const RTableMax = data.RTableMax;
+	amrex::Real const ZTableMax = data.ZTableMax;
 
 	amrex::Real const ZNormMax = 20.0 * 1.0e3 * C::parsec;
 
@@ -327,26 +335,59 @@ template <> void QuokkaSimulation<GasDisk>::setInitialConditionsOnGrid(quokka::g
 		vphiTableHost[ir] = std::sqrt(std::max(0.0, vphi2));
 	}
 
-	vphiTableHost[nRTable -1] = vphiTableHost[nRTable - 2];
-	//copy rhoTable to Device
-	amrex::Gpu::DeviceVector<amrex::Real> rhoTableDevice(rhoTableHost.size());
-
-	amrex::Gpu::copy(amrex::Gpu::hostToDevice, rhoTableHost.begin(), rhoTableHost.end(), rhoTableDevice.begin());
-
-	amrex::Real const *rhoTablePtr = rhoTableDevice.data();
-	//copy  vphiTable to Device
-	amrex::Gpu::DeviceVector<amrex::Real> vphiTableDevice(vphiTableHost.size());
-
-	amrex::Gpu::copy(amrex::Gpu::hostToDevice, vphiTableHost.begin(), vphiTableHost.end(), vphiTableDevice.begin());
-
-	amrex::Real const *vphiTablePtr = vphiTableDevice.data();
-
 	//cutoff
 	amrex::Real const rho_max = *std::max_element(rhoTableHost.begin(),rhoTableHost.end());
-	amrex::Real const rho_cut = rho_max*1.0e-3;
-	amrex::Real const rho_bg = rho_max*1.0e-6;
+	data.rho_cut = rho_max*1.0e-3;
+	data.rho_bg = rho_max*1.0e-6;
 
-	amrex::Real const T_bg = 1.0e6;
+	vphiTableHost[nRTable -1] = vphiTableHost[nRTable - 2];
+	//copy rhoTable to Device
+	data.rhoTableDevice.resize(rhoTableHost.size());
+
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, rhoTableHost.begin(), rhoTableHost.end(), data.rhoTableDevice.begin());
+
+	//copy  vphiTable to Device
+	data.vphiTableDevice.resize(vphiTableHost.size());
+
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, vphiTableHost.begin(), vphiTableHost.end(), data.vphiTableDevice.begin());
+	
+	amrex::Gpu::streamSynchronize();
+	data.tables_ready = true;
+}
+
+template <> void QuokkaSimulation<GasDisk>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	auto const &data = userData_;
+
+	AMREX_ALWAYS_ASSERT(data.tables_ready);
+
+	auto const dx = grid_elem.dx_;
+	auto const prob_lo = grid_elem.prob_lo_;
+	auto const prob_hi = grid_elem.prob_hi_;
+
+	auto const &indexRange = grid_elem.indexRange_;
+	auto const &state_cc = grid_elem.array_;
+
+	amrex::Real const x_center = 0.5 * (prob_lo[0] + prob_hi[0]);
+	amrex::Real const y_center = 0.5 * (prob_lo[1] + prob_hi[1]);
+	amrex::Real const z_center = 0.5 * (prob_lo[2] + prob_hi[2]);
+
+	int const ncomp_cc = Physics_Indices<GasDisk>::nvarTotal_cc;
+
+	int const nRTable = data.nRTable;
+	int const nZTable = data.nZTable;
+
+	amrex::Real const RTableMax = data.RTableMax;
+	amrex::Real const ZTableMax = data.ZTableMax;
+
+	amrex::Real const cs = data.cs;
+	amrex::Real const rho_cut = data.rho_cut;
+	amrex::Real const rho_bg = data.rho_bg;
+	amrex::Real const T_bg = data.T_bg;
+
+	amrex::Real const *rhoTablePtr = data.rhoTableDevice.data();
+	amrex::Real const *vphiTablePtr = data.vphiTableDevice.data();
+
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp_cc; ++n) {
@@ -363,7 +404,16 @@ template <> void QuokkaSimulation<GasDisk>::setInitialConditionsOnGrid(quokka::g
 
 		amrex::Real const R = std::sqrt(xp * xp + yp * yp);
 		//Density	
-		amrex::Real const rho_disk = interpolateDensity(R, zp, rhoTablePtr, nRTable, nZTable, RTableMax, ZTableMax);
+		
+
+		amrex::Real rho_disk = 0.0;
+
+		if (R <= RTableMax && std::abs(zp) <= ZTableMax) {
+			rho_disk = interpolateDensity(
+					R, zp, rhoTablePtr, 
+					nRTable, nZTable, 
+					RTableMax, ZTableMax
+				);}
 		
 		bool const is_disk = (rho_disk >= rho_cut);
 
