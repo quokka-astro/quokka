@@ -47,6 +47,9 @@ template <typename problem_t> struct BurnState : detail::DustChemicalBandAbsorpt
 	using Network = typename traits::Network;
 	static_assert(traits::chemistry || traits::photochemistry, "BurnState is used by the chemistry and photochemistry problems only");
 	static_assert(!std::is_same_v<Network, quokka::networks::None>, "a chemistry or photochemistry problem must set Microphysics_Traits::Network");
+	// The integrator seeds and reads back the Q_dust entry only with photochemistry.
+	static_assert(!traits::dust_chemical_band_absorption || traits::photochemistry,
+		      "Microphysics_Traits::dust_chemical_band_absorption requires Microphysics_Traits::photochemistry");
 
 	amrex::Real rho{};
 	amrex::Real T{};
