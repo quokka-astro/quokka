@@ -257,7 +257,7 @@ else
 			SUMMARY+=("${name} SUCCESS seconds=$(cat "${WORK_DIR}/${name}/seconds")")
 		else
 			echo "${name}: differs from the reference (- reference, + this run):"
-			diff -u "${REFERENCE_DIR}/${name}.txt" "${WORK_DIR}/${name}/fingerprint.txt" | head -n 60 || true
+			diff -u "${REFERENCE_DIR}/${name}.txt" "${WORK_DIR}/${name}/fingerprint.txt" || true
 			SUMMARY+=("${name} FAIL")
 			failed=1
 		fi

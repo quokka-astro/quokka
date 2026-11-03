@@ -8,14 +8,17 @@ name: 🧪 ChemistryReproducibility
 # the source tree of the pushed commit and uploads the result as an artifact, to be
 # committed into extern/chemistry_reproducibility/. Both modes share every build
 # step, so the references come from exactly the toolchain the check uses.
+#
+# The check is temporary. It guards only the PRs of the Microphysics port, whose
+# head branches are listed in check_changes below. Other PRs skip it, so a PR that
+# changes these results on purpose does not fail it. The last PR of the port
+# removes this workflow.
 
 on:
   push:
-    branches: [ development, ci/chem-repro-generate ]
-  # PRs into any branch, so that PRs stacked on other feature branches are checked too.
+    branches: [ ci/chem-repro-generate ]
+  # PRs into any branch, so that PRs stacked on other port branches are checked too.
   pull_request:
-  merge_group:
-    branches: [ development ]
 
 concurrency:
   group: ${{ github.ref }}-${{ github.head_ref }}-chemistry-reproducibility
@@ -29,10 +32,13 @@ permissions:
 
 jobs:
   check_changes:
+    # Only the port's PRs and the generate branch. When this job is skipped, the
+    # test job is skipped too.
+    if: ${{ github.event_name == 'push' || github.head_ref == 'james471/chemistry-reproducibility-ci' || startsWith(github.head_ref, 'james471/microphysics-') }}
     uses: ./.github/workflows/check_changes.yml
     with:
       workflow_file: '.github/workflows/chemistry-reproducibility.yml'
-      additional_workflow_paths: '["extern/chemistry_reproducibility/**", "scripts/python/plotfile_hashes.py"]'
+      additional_workflow_paths: '["extern/chemistry_reproducibility/**", "scripts/python/plotfile_hashes.py", "scripts/bash/chemistry_reproducibility_test.sh"]'
 
   test:
     # Pinned rather than ubuntu-latest: a new image can change the compiler or libc,
