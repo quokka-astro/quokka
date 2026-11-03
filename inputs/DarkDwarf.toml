@@ -29,7 +29,7 @@ prob_lo = [-4.93708413e23, -4.93708413e23, -4.93708413e23]
 prob_hi = [ 4.93708413e23,  4.93708413e23,  4.93708413e23]
 is_periodic = [0, 0, 0]
 
-[gas_disk]
+[dark_dwarf]
 # Gas surface density
 Sigma0_Msun_pc2 = 21.8
 Rd_kpc = 0.785

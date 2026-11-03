@@ -178,24 +178,24 @@ amrex::Real interpolateDensity(amrex::Real R, amrex::Real z, amrex::Real const *
 
 } // namespace
 
-struct GasDisk {};
+struct DarkDwarf {};
 
-template <> struct quokka::EOS_Traits<GasDisk> {
+template <> struct quokka::EOS_Traits<DarkDwarf> {
 	static constexpr double gamma = 5.0 / 3.0;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<GasDisk> : DefaultPhysicsTraits {
+template <> struct Physics_Traits<DarkDwarf> : DefaultPhysicsTraits {
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
 };
 
-template <> struct Particle_Traits<GasDisk> : DefaultParticleTraits{
+template <> struct Particle_Traits<DarkDwarf> : DefaultParticleTraits{
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 
-template <> struct SimulationData<GasDisk> {
+template <> struct SimulationData<DarkDwarf> {
 	bool tables_ready = false;
 
 	int nRTable = 256;
@@ -213,7 +213,7 @@ template <> struct SimulationData<GasDisk> {
 	amrex::Gpu::DeviceVector<amrex::Real> vphiTableDevice;
 };
 
-template <> void QuokkaSimulation<GasDisk>::preCalculateInitialConditions(){
+template <> void QuokkaSimulation<DarkDwarf>::preCalculateInitialConditions(){
 	auto &data = userData_;
 
 	if(data.tables_ready){
@@ -221,7 +221,7 @@ template <> void QuokkaSimulation<GasDisk>::preCalculateInitialConditions(){
 	}
 
 	//Inputs
-	amrex::ParmParse const pp("gas_disk");
+	amrex::ParmParse const pp("dark_dwarf");
 
 	amrex::Real alpha;
 	amrex::Real beta;
@@ -355,7 +355,7 @@ template <> void QuokkaSimulation<GasDisk>::preCalculateInitialConditions(){
 	data.tables_ready = true;
 }
 
-template <> void QuokkaSimulation<GasDisk>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<DarkDwarf>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	auto const &data = userData_;
 
@@ -372,7 +372,7 @@ template <> void QuokkaSimulation<GasDisk>::setInitialConditionsOnGrid(quokka::g
 	amrex::Real const y_center = 0.5 * (prob_lo[1] + prob_hi[1]);
 	amrex::Real const z_center = 0.5 * (prob_lo[2] + prob_hi[2]);
 
-	int const ncomp_cc = Physics_Indices<GasDisk>::nvarTotal_cc;
+	int const ncomp_cc = Physics_Indices<DarkDwarf>::nvarTotal_cc;
 
 	int const nRTable = data.nRTable;
 	int const nZTable = data.nZTable;
@@ -446,32 +446,32 @@ template <> void QuokkaSimulation<GasDisk>::setInitialConditionsOnGrid(quokka::g
 		}
 
 		//apply density and momentum
-		state_cc(i, j, k, HydroSystem<GasDisk>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<DarkDwarf>::density_index) = rho;
 
-		state_cc(i, j, k, HydroSystem<GasDisk>::x1Momentum_index) = rho * vx;
-		state_cc(i, j, k, HydroSystem<GasDisk>::x2Momentum_index) = rho * vy;
-		state_cc(i, j, k, HydroSystem<GasDisk>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<DarkDwarf>::x1Momentum_index) = rho * vx;
+		state_cc(i, j, k, HydroSystem<DarkDwarf>::x2Momentum_index) = rho * vy;
+		state_cc(i, j, k, HydroSystem<DarkDwarf>::x3Momentum_index) = 0.0;
 		//internal energy
 		amrex::Real const eint = is_disk 
-			? quokka::EOS<GasDisk>::ComputeEintFromPres(rho, P)
-			: quokka::EOS<GasDisk>::ComputeEintFromTgas(rho, T_bg); 
+			? quokka::EOS<DarkDwarf>::ComputeEintFromPres(rho, P)
+			: quokka::EOS<DarkDwarf>::ComputeEintFromTgas(rho, T_bg); 
 		
 		//rotational kinetic energy
 		amrex::Real const ekin = 0.5 * rho * (vx*vx + vy*vy);
 
 		//total energy
-		state_cc(i, j, k, HydroSystem<GasDisk>::energy_index) = eint + ekin;
+		state_cc(i, j, k, HydroSystem<DarkDwarf>::energy_index) = eint + ekin;
 
-		state_cc(i, j, k, HydroSystem<GasDisk>::internalEnergy_index) = eint;
+		state_cc(i, j, k, HydroSystem<DarkDwarf>::internalEnergy_index) = eint;
 	});
 
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<GasDisk>::createInitialCICParticles()
+template <> void QuokkaSimulation<DarkDwarf>::createInitialCICParticles()
 {
 	// read particles from ASCII file
-	amrex::ParmParse const pp("gas_disk");
+	amrex::ParmParse const pp("dark_dwarf");
 	std::string filename;
 	pp.query("particle_file", filename);
 
@@ -484,13 +484,13 @@ template <> void QuokkaSimulation<GasDisk>::createInitialCICParticles()
 
 
 template <>
-void QuokkaSimulation<GasDisk>::refineGrid(
+void QuokkaSimulation<DarkDwarf>::refineGrid(
     int lev,
     amrex::TagBoxArray &tags,
     amrex::Real /*time*/,
     int /*ngrow*/)
 {
-    amrex::ParmParse const pp("gas_disk");
+    amrex::ParmParse const pp("dark_dwarf");
 
     // Refinement cylinder parameters, in kpc
     amrex::Real Rcyl_kpc;
@@ -590,7 +590,7 @@ void QuokkaSimulation<GasDisk>::refineGrid(
 
 auto problem_main() -> int
 {
-	QuokkaSimulation<GasDisk> sim;
+	QuokkaSimulation<DarkDwarf> sim;
 	sim.setInitialConditions();
 	sim.evolve();
 
