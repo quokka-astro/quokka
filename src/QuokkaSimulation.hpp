@@ -3868,7 +3868,8 @@ void QuokkaSimulation<problem_t>::advanceRadiationIMEXStage3Fused(int lev, amrex
 	// level-wide fluxes into the persistent face arrays, as in advanceRadiationMidpointRK2: the old-state fluxes carry weight
 	// Aex_s1_coeff = Aex_31 - alpha*Aex_21, which is exactly 0 for PD-ARS; their evaluation is skipped then (the stage fluxes
 	// are passed in their place only to have valid arrays; they are not read).
-	constexpr double Aex_s1_coeff = IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21;
+	// static so that the device lambda below can use it in an if constexpr condition without capturing it (nvcc)
+	static constexpr double Aex_s1_coeff = IMEX_Aex_31 - IMEX_alpha * IMEX_Aex_21;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> *fluxesOldPtr = nullptr;
 	if constexpr (Aex_s1_coeff != 0.0) {
 		fluxesOldPtr = &computeRadiationFluxesLevel(lev, state_new_cc_[lev], radFluxOld_, groupBegin, groupEnd);
@@ -3925,20 +3926,24 @@ void QuokkaSimulation<problem_t>::advanceRadiationIMEXStage3Fused(int lev, amrex
 #if (AMREX_SPACEDIM == 3)
 				const double FzU_1 = (dt / dz0) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
 #endif
+				// nvcc: an extended device lambda may not first-capture a variable inside if constexpr, so bind them here
+				AMREX_D_TERM(auto const &x1FluxOld_r = x1FluxOld;, auto const &x2FluxOld_r = x2FluxOld;, auto const &x3FluxOld_r = x3FluxOld;)
+				auto const &alpha_r = alpha;
+				auto const &Aex_s2_coeff_r = Aex_s2_coeff;
 				if constexpr (Aex_s1_coeff != 0.0) {
-					const double FxU_0 = (dt / dx0) * (x1FluxOld(i, j, k, n) - x1FluxOld(i + 1, j, k, n));
+					const double FxU_0 = (dt / dx0) * (x1FluxOld_r(i, j, k, n) - x1FluxOld_r(i + 1, j, k, n));
 #if (AMREX_SPACEDIM >= 2)
-					const double FyU_0 = (dt / dy0) * (x2FluxOld(i, j, k, n) - x2FluxOld(i, j + 1, k, n));
+					const double FyU_0 = (dt / dy0) * (x2FluxOld_r(i, j, k, n) - x2FluxOld_r(i, j + 1, k, n));
 #endif
 #if (AMREX_SPACEDIM == 3)
-					const double FzU_0 = (dt / dz0) * (x3FluxOld(i, j, k, n) - x3FluxOld(i, j, k + 1, n));
+					const double FzU_0 = (dt / dz0) * (x3FluxOld_r(i, j, k, n) - x3FluxOld_r(i, j, k + 1, n));
 #endif
-					cons_new[n] = (1.0 - alpha) * U_0 + alpha * U_1 + (Aex_s1_coeff * (AMREX_D_TERM(FxU_0, +FyU_0, +FzU_0))) +
-						      (Aex_s2_coeff * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
+					cons_new[n] = (1.0 - alpha_r) * U_0 + alpha_r * U_1 + (Aex_s1_coeff * (AMREX_D_TERM(FxU_0, +FyU_0, +FzU_0))) +
+						      (Aex_s2_coeff_r * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
 				} else {
 					// zero weight on the old-state fluxes (not computed), same arithmetic as AddFluxesRK2
-					amrex::ignore_unused(AMREX_D_DECL(x1FluxOld, x2FluxOld, x3FluxOld));
-					cons_new[n] = (1.0 - alpha) * U_0 + alpha * U_1 + (Aex_s2_coeff * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
+					amrex::ignore_unused(AMREX_D_DECL(x1FluxOld_r, x2FluxOld_r, x3FluxOld_r));
+					cons_new[n] = (1.0 - alpha_r) * U_0 + alpha_r * U_1 + (Aex_s2_coeff_r * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
 				}
 			}
 			if (!RadSystem<problem_t>::isStateValid(cons_new)) {
@@ -3952,6 +3957,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationIMEXStage3Fused(int lev, amrex
 				}
 			}
 
+			auto const &cons_fc_arr_r = cons_fc_arr; // nvcc: no first capture inside if constexpr
 			if constexpr (nstartHyperbolic_ > 0) {
 				// gas Shu-Osher combination; see the unfused stage 3 in subcycleRadiationAtLevel for why Eint is combined
 				const double rho = (1.0 - IMEX_alpha) * stateOld_cc(i, j, k, RadSystem<problem_t>::gasDensity_index) +
@@ -3969,9 +3975,11 @@ void QuokkaSimulation<problem_t>::advanceRadiationIMEXStage3Fused(int lev, amrex
 				stateNew_cc(i, j, k, RadSystem<problem_t>::x2GasMomentum_index) = x2Mom;
 				stateNew_cc(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) = x3Mom;
 				stateNew_cc(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) = Eint;
-				const double Emag = HydroSystem<problem_t>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc_arr);
+				const double Emag = HydroSystem<problem_t>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc_arr_r);
 				stateNew_cc(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
 				    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, Emag);
+			} else {
+				amrex::ignore_unused(cons_fc_arr_r);
 			}
 		};
 

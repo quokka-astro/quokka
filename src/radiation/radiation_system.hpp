@@ -1644,10 +1644,13 @@ void RadSystem<problem_t>::ComputeFluxesFused(amrex::MultiFab &x1Flux_mf, amrex:
 		}
 		quokka::Array4View<amrex::Real, DIR> refluxAccum(accum_box);
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+		auto const &fc_arrs_r = fc_arrs; // nvcc: an extended device lambda may not first-capture a variable inside if constexpr
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-				cons_fc[d] = fc_arrs[d][bx];
+				cons_fc[d] = fc_arrs_r[d][bx];
 			}
+		} else {
+			amrex::ignore_unused(fc_arrs_r);
 		}
 
 		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
