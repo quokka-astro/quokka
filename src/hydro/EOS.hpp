@@ -32,7 +32,7 @@ template <typename problem_t> struct EOSMicrophysics;
 template <typename problem_t> struct EOSTabulated;
 
 // Single source of truth for the default EOS backend selection, forward-declared here
-// so EOS_Traits can reference it. Fully defined after EOSMicrophysics below.
+// so EOS_Traits can reference it. Fully defined after EOSTabulated below.
 template <typename problem_t> struct DefaultEOSBackend;
 
 // Primary EOS_Traits template. Provides default values for ideal gamma-law EOS
