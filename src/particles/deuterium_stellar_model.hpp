@@ -41,24 +41,34 @@ constexpr amrex::Real psi_ion = 17.0 * C::ev2erg * C::n_A;   // energy per gram 
 constexpr amrex::Real psi_deut = 100.0 * C::ev2erg * C::n_A; // energy per gram released by burning its deuterium
 constexpr amrex::Real dlogm = 1.0e-3;			     // fractional mass step of the numerical d/dlog(m)
 
+// The tables are returned by value rather than stored as __constant__ globals, so that host code (e.g. the
+// ParticleStar reference-track test) gets the same values as device code; host reads of the __constant__ globals
+// gave wrong values in HIP builds.
 // Lane-Emden factors rho_mean/rho_c and P_c/(G m^2/r^4) for n = 1.5, 1.6, ..., 3.1 (Kippenhahn & Weigert)
 constexpr int n_poly_table = 17;
-static AMREX_GPU_CONSTANT const amrex::GpuArray<amrex::Real, n_poly_table> rho_factor_table = {0.166931,  0.14742,   0.129933,	0.114265,  0.100242,  0.0877,
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rhoFactorTable() -> amrex::GpuArray<amrex::Real, n_poly_table>
+{
+	return {0.166931,  0.14742,   0.129933,	0.114265,  0.100242,  0.0877,
 											       0.0764968, 0.0665109, 0.0576198, 0.0497216, 0.0427224, 0.0365357,
 											       0.0310837, 0.0262952, 0.0221057, 0.0184553, 0.01529};
-static AMREX_GPU_CONSTANT const amrex::GpuArray<amrex::Real, n_poly_table> pressure_factor_table = {
-    0.770087, 0.889001, 1.02979, 1.19731, 1.39753, 1.63818, 1.92909, 2.2825, 2.71504, 3.24792, 3.90921, 4.73657, 5.78067, 7.11088, 8.82286, 11.0515, 13.9885};
+}
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto pressureFactorTable() -> amrex::GpuArray<amrex::Real, n_poly_table>
+{
+	return {0.770087, 0.889001, 1.02979, 1.19731, 1.39753, 1.63818, 1.92909, 2.2825, 2.71504, 3.24792, 3.90921, 4.73657, 5.78067, 7.11088, 8.82286, 11.0515, 13.9885};
+}
 
 // Mean gas-pressure fraction beta of a polytrope for m = 5, 7.5, ..., 50 M_sun (rows) and n = 1.5, 2, 2.5, 3 (columns)
 constexpr int n_beta_mass = 19;
 constexpr int n_beta_poly = 4;
-static AMREX_GPU_CONSTANT const amrex::GpuArray<amrex::Real, n_beta_mass * n_beta_poly> beta_table = {
-    0.98785,  0.988928, 0.98947,  0.989634, 0.97438,  0.976428, 0.977462, 0.977774, 0.957927, 0.960895, 0.962397, 0.962846, 0.939787,
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto betaTable() -> amrex::GpuArray<amrex::Real, n_beta_mass * n_beta_poly>
+{
+	return {0.98785,  0.988928, 0.98947,  0.989634, 0.97438,  0.976428, 0.977462, 0.977774, 0.957927, 0.960895, 0.962397, 0.962846, 0.939787,
     0.943497, 0.945369, 0.945922, 0.92091,  0.925151, 0.927276, 0.927896, 0.901932, 0.906512, 0.908785, 0.909436, 0.883254, 0.888017,
     0.890353, 0.891013, 0.865111, 0.86994,  0.872277, 0.872927, 0.847635, 0.852445, 0.854739, 0.855367, 0.830886, 0.835619, 0.837842,
     0.838441, 0.814885, 0.8195,	  0.821635, 0.822201, 0.799625, 0.804095, 0.806133, 0.806664, 0.785082, 0.789394, 0.791328, 0.791825,
     0.771226, 0.775371, 0.777202, 0.777665, 0.758022, 0.761997, 0.763726, 0.764156, 0.745433, 0.749238, 0.750869, 0.751268, 0.733423,
     0.73706,  0.738596, 0.738966, 0.721954, 0.725429, 0.726874, 0.727216, 0.710993, 0.714311, 0.715671, 0.715987};
+}
 
 // Initial polytropic index from the accretion rate, clamped to [1.5, 3]
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto nInit(amrex::Real mdot) -> amrex::Real
@@ -89,12 +99,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto polytropeFactor(amrex::GpuArray<am
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rhoCentral(amrex::Real m, amrex::Real r, amrex::Real n) -> amrex::Real
 {
-	return m / (4.0 / 3.0 * M_PI * r * r * r) / polytropeFactor(rho_factor_table, n);
+	return m / (4.0 / 3.0 * M_PI * r * r * r) / polytropeFactor(rhoFactorTable(), n);
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto pressureCentral(amrex::Real m, amrex::Real r, amrex::Real n) -> amrex::Real
 {
-	return polytropeFactor(pressure_factor_table, n) * C::Gconst * m * m / (r * r * r * r);
+	return polytropeFactor(pressureFactorTable(), n) * C::Gconst * m * m / (r * r * r * r);
 }
 
 // Central temperature from P_c = rho_c k_B T_c / (mu m_H) + a T_c^4 / 3
@@ -139,7 +149,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto beta(amrex::Real m, amrex::Real r,
 	const amrex::Real mwgt = std::min((m - (m_min + midx * m_step)) / m_step, 1.0);
 	const int nidx = std::min(std::max(static_cast<int>(std::floor((n - 1.5) / 0.5)), 0), n_beta_poly - 2);
 	const amrex::Real nwgt = (n - (1.5 + 0.5 * nidx)) / 0.5;
-	auto b = [](int i, int j) { return beta_table[i * n_beta_poly + j]; };
+	const auto table = betaTable();
+	auto b = [&table](int i, int j) { return table[i * n_beta_poly + j]; };
 	return b(midx, nidx) * (1.0 - mwgt) * (1.0 - nwgt) + b(midx + 1, nidx) * mwgt * (1.0 - nwgt) + b(midx, nidx + 1) * (1.0 - mwgt) * nwgt +
 	       b(midx + 1, nidx + 1) * mwgt * nwgt;
 }
