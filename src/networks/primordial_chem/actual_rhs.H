@@ -11,6 +11,7 @@
 #include <AMReX_Array.H>
 #include <AMReX_Extension.H>
 #include <AMReX_GpuQualifiers.H>
+#include <AMReX_Math.H>
 #include <AMReX_REAL.H>
 
 #include "microphysics/integrator_layout.hpp"
@@ -6015,8 +6016,5 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE v
 
 	jac_nuc(state, jac, X, z);
 }
-
-AMREX_INLINE
-void actual_rhs_init() {}
 
 #endif
