@@ -24,8 +24,8 @@
 #include "microphysics/integrator_params.hpp"
 #include "microphysics/microphysics_traits.hpp"
 
-// eos() is still Microphysics'. actual_rhs and actual_jac come from the problem's network.
-#include "actual_rhs.H"
+// eos() is still Microphysics'. actual_rhs and actual_jac are members of the problem's network type, which the problem
+// file includes.
 #include "eos.H"
 
 namespace quokka::microphysics
@@ -182,7 +182,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 
 		// Call the specific network routine to get the RHS.
 
-		actual_rhs(state, ydot);
+		Layout::traits::Network::actual_rhs(state, ydot);
 
 		// Allow energy integration to be disabled.
 
@@ -220,7 +220,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 
 	pd = MatrixType{};
 
-	actual_jac(state, pd);
+	Layout::traits::Network::actual_jac(state, pd);
 
 	// Allow temperature and energy integration to be disabled.
 

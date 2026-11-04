@@ -9,9 +9,6 @@ if(AMReX_SPACEDIM EQUAL 3)
     testPopIII.cpp "${QuokkaSourcesNoEOS}" ../../turbulence/TurbDataReader.cpp
     ${CMAKE_SOURCE_DIR}/src/networks/primordial_chem/network.cpp)
   quokka_add_eos(${JOB_NAME} primordial_chem primordial_chem)
-  # the network's actual_rhs.H
-  target_include_directories(${JOB_NAME} BEFORE PRIVATE
-                             ${CMAKE_SOURCE_DIR}/src/networks/primordial_chem)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
