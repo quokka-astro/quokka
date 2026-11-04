@@ -134,12 +134,12 @@ include_directories(${CMAKE_SOURCE_DIR}/extern/gcem/include)
 # src/problems/*/CMakeLists.txt.
 include(${CMAKE_SOURCE_DIR}/src/networks/NetworkRegistry.cmake)
 
-# default network_name (for Microphysics EOS) for all tests:
-set(microphysics_network_name "gamma_law")
-# default output_dir (for Microphysics EOS) for all tests:
-set(microphysics_output_dir "${CMAKE_CURRENT_BINARY_DIR}/")
-setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_CURRENT_BINARY_DIR}/")
-include_directories(${${microphysics_network_name}_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
+# The vendored EOS (extern/eos). Problems without chemistry use its gamma_law backend with the general_null species
+# table, set here for the whole directory; problems with chemistry call quokka_add_eos() for theirs.
+include(${CMAKE_SOURCE_DIR}/extern/eos/quokka_eos.cmake)
+quokka_eos_include_dirs(quokka_default_eos_dirs gamma_law general_null)
+include_directories(${quokka_default_eos_dirs})
+quokka_eos_sources(quokka_default_eos_sources gamma_law)
 
 if(TARGET amrex_hydro_api)
   link_libraries(amrex_hydro_api)
@@ -170,6 +170,6 @@ if(AMReX_SPACEDIM EQUAL 3)
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
 endif()
 
-set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
+set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${quokka_default_eos_sources}")
 
 add_subdirectory(problems)

@@ -25,6 +25,7 @@ AMREX_GPU_MANAGED int allow_mixed_cell_cooling = 1;	       // NOLINT
 AMREX_GPU_MANAGED amrex::Real mixed_cell_lb = 0.01_rt;	       // NOLINT
 AMREX_GPU_MANAGED amrex::Real mixed_cell_ub = 0.99_rt;	       // NOLINT
 AMREX_GPU_MANAGED amrex::Real dust_kappa = 0.0_rt;	       // NOLINT
+AMREX_GPU_MANAGED amrex::Real small_x = 1.0e-30_rt;	       // NOLINT
 } // namespace thermophotochemistry
 
 void Thermophotochemistry::ReadParameters()
@@ -44,6 +45,7 @@ void Thermophotochemistry::ReadParameters()
 	pp.query("mixed_cell_lb", params::mixed_cell_lb);
 	pp.query("mixed_cell_ub", params::mixed_cell_ub);
 	pp.query("dust_kappa", params::dust_kappa);
+	pp.query("small_x", params::small_x);
 }
 
 } // namespace quokka::networks

@@ -27,10 +27,8 @@ struct DefaultMicrophysicsTraits {
 	/// implemented yet, so with this set a failed burn aborts.
 	static constexpr bool burn_retry = false;
 	/// Enable chemistry
-	/// Must match the CHEMISTRY build macro while Microphysics still reads it.
 	static constexpr bool chemistry = false;
 	/// Enable photochemistry.
-	/// Must match the PHOTOCHEMISTRY build macro while Microphysics still reads it.
 	static constexpr bool photochemistry = false;
 	/// Dust absorption in chemical bands.
 	static constexpr bool dust_chemical_band_absorption = false;
@@ -65,31 +63,5 @@ struct DefaultMicrophysicsTraits {
 };
 
 template <typename problem_t> struct Microphysics_Traits : DefaultMicrophysicsTraits {};
-
-namespace quokka::microphysics::detail
-{
-// Transitional: the problems' CMake files still define these macros because Microphysics' headers read them. Quokka's
-// own code uses the traits instead, and QuokkaSimulation checks the traits against the macros. These go with the macros.
-#ifdef CHEMISTRY
-inline constexpr bool built_with_chemistry = true;
-#else
-inline constexpr bool built_with_chemistry = false;
-#endif
-#ifdef PHOTOCHEMISTRY
-inline constexpr bool built_with_photochemistry = true;
-#else
-inline constexpr bool built_with_photochemistry = false;
-#endif
-#ifdef DUST_CHEMICAL_BAND_ABSORPTION
-inline constexpr bool built_with_dust_chemical_band_absorption = true;
-#else
-inline constexpr bool built_with_dust_chemical_band_absorption = false;
-#endif
-#ifdef SKIP_PHOTOCHEMFLUX
-inline constexpr bool built_with_skip_photochemflux = true;
-#else
-inline constexpr bool built_with_skip_photochemflux = false;
-#endif
-} // namespace quokka::microphysics::detail
 
 #endif // MICROPHYSICS_TRAITS_HPP_

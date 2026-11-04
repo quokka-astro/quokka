@@ -13,6 +13,7 @@
 #include "microphysics/burn_state.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/photoionization_H_caseB_handwritten/network.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include <fstream>
@@ -46,7 +47,7 @@ template <> struct quokka::EOS_Traits<PhotoionizationStreamingProblem> {
 template <> struct Microphysics_Traits<PhotoionizationStreamingProblem> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::PhotoionizationHCaseB;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+	static constexpr bool photochemistry = true;
 };
 
 using Network = Microphysics_Traits<PhotoionizationStreamingProblem>::Network;
@@ -89,7 +90,7 @@ template <> struct SimulationData<PhotoionizationStreamingProblem> {
 template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("photoionization");

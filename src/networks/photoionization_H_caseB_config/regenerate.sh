@@ -26,7 +26,7 @@ done
 
 # A fork of jaff with the quokka template, until jaff itself has it
 JAFF_REPO="https://github.com/James471/jaff.git"
-JAFF_COMMIT="d8ec12ee5788058fe26ade445c8856138b5d0163"
+JAFF_COMMIT="025233ba421e10d237ac31e8495c7342b85b575b"
 # Pin sympy version so that jaffgen's output is reproducible
 SYMPY_VERSION="1.14.0"
 

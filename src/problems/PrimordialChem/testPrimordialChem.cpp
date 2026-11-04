@@ -30,6 +30,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
+#include "chemistry/Chemistry.hpp"
 #include "hydro/hydro_system.hpp"
 #include "microphysics/burn_state.hpp"
 #include "microphysics/microphysics_traits.hpp"
@@ -46,7 +47,7 @@ struct PrimordialChemTest {}; // dummy type to allow compile-type polymorphism v
 
 template <> struct Microphysics_Traits<PrimordialChemTest> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::PrimordialChem;
-	static constexpr bool chemistry = true; // built with CHEMISTRY
+	static constexpr bool chemistry = true;
 };
 
 using Network = Microphysics_Traits<PrimordialChemTest>::Network;
@@ -81,7 +82,7 @@ template <> struct SimulationData<PrimordialChemTest> {
 template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("primordial_chem");
