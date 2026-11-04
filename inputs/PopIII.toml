@@ -80,16 +80,10 @@ primordial_chem.primary_species_14 = 0.77500001e-001
 
 
 # integrator runtime parameters
-# are we using primordial chemistry? then we use number densities
-integrator.use_number_densities = 1
-# we do not want to subtract the internal energy
-integrator.subtract_internal_energy = 0
 # minimum positive value of number densities
 integrator.SMALL_X_SAFE = 1e-100
 integrator.burner_verbose = 0
 
-# do you want to use the jacobian calculated in a previous step?
-integrator.use_jacobian_caching = 0
 # integration will fail if the number density > X_reject_buffer*atol
 integrator.X_reject_buffer = 1e100
 # tolerances

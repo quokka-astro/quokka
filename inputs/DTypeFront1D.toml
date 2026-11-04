@@ -72,8 +72,6 @@ radiation.dust_gas_interaction_coeff = 0.0
 # Photochemistry Integrator
 # *****************************************************************
 
-integrator.use_number_densities = 1
-integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 integrator.ode_max_steps = 50000
 
