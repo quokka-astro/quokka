@@ -14,6 +14,9 @@
 #include "math/bracketing_root_finding.hpp"
 #include "math/root_finding.hpp"
 #include "radiation/radiation_system.hpp"
+#include "photochemistry/PhotochemEOS.hpp"
+#include "photochemistry/PhotochemParams.hpp"
+#include "photochemistry/PhotochemState.hpp"
 #include "rosenbrock/rosenbrock.hpp"
 #include "util/BC.hpp"
 #include "util/valarray.hpp"
@@ -501,6 +504,46 @@ auto TestRosenbrock() -> int
 	return status;
 }
 
+auto TestPhotochemEOS() -> int
+{
+	namespace pc = quokka::photochemistry;
+	constexpr Real T = 8000.0;
+	const amrex::GpuArray<Real, 3> n{0.3, 0.7, 0.7}; // H, H+, e- [cm^-3]
+	const std::array<Real, 3> mass{C::m_p, C::m_p, C::m_e};
+	const std::array<Real, 3> gamma{5. / 3., 5. / 3., 5. / 3.};
+	const Real rho_sp = n[0] * mass[0] + n[1] * mass[1] + n[2] * mass[2];
+	const Real e_expected = 1.5 * C::k_B * T * (n[0] + n[1] + n[2]) / rho_sp;
+
+	int status = 0;
+	auto check = [&status](const char *name, Real value, Real expected) {
+		const Real err = std::abs(value - expected) / std::abs(expected);
+		const bool ok = err <= 1.0e-14;
+		std::cout << std::format("PhotochemEOS {:<28}{:>24.16e}{:>24.16e}{:>12.2e}{}\n", name, value, expected, err, ok ? "" : "  FAIL");
+		if (!ok) {
+			status = 1;
+		}
+	};
+	const Real e = pc::EnergyFromTemperature<3>(T, n, mass.data(), gamma.data());
+	check("e(T)", e, e_expected);
+	check("T(e)", pc::TemperatureFromEnergy<3>(e, n, mass.data(), gamma.data()), T);
+	check("de/dT", pc::dEnergy_dT<3>(n, mass.data(), gamma.data()), e_expected / T);
+
+	// with no integrator.* inputs, the parameters are the Microphysics defaults
+	const pc::IntegratorParams p = pc::IntegratorParams::read();
+	const bool defaults_ok = p.rtol_spec == 1.0e-10 && p.atol_spec == 1.0e-10 && p.rtol_enuc == 1.0e-10 && p.atol_enuc == 1.0e-25 &&
+				 p.rtol_rad_num == 1.0e-10 && p.atol_rad_num == 1.0e-10 && p.ode_max_steps == 150000 && p.X_reject_buffer == 1.0 &&
+				 p.species_failure_tolerance == 1.0e-2 && p.radiation_failure_tolerance == 1.0e-2;
+	std::cout << "PhotochemEOS IntegratorParams defaults " << (defaults_ok ? "PASS" : "FAIL") << "\n";
+	if (!defaults_ok) {
+		status = 1;
+	}
+
+	// the state struct keeps at least one radiation slot so it compiles for networks without bands
+	const pc::State<3, 0, 0> s{};
+	amrex::ignore_unused(s);
+	return status;
+}
+
 } // namespace
 
 auto problem_main() -> int
@@ -512,6 +555,10 @@ auto problem_main() -> int
 	if (rosenbrock_status != 0) {
 		std::cout << "MathUnitTests: Rosenbrock test FAILED.\n";
 	}
+	const int photochem_eos_status = TestPhotochemEOS();
+	if (photochem_eos_status != 0) {
+		std::cout << "MathUnitTests: photochemistry EOS test FAILED.\n";
+	}
 	if (ode_status != 0) {
 		std::cout << "MathUnitTests: ODE integration test FAILED.\n";
 	}
@@ -521,5 +568,5 @@ auto problem_main() -> int
 	if (eos_status != 0) {
 		std::cout << "MathUnitTests: EOS test FAILED.\n";
 	}
-	return ((ode_status != 0) || (root_status != 0) || (eos_status != 0) || (rosenbrock_status != 0)) ? 1 : 0;
+	return ((ode_status != 0) || (root_status != 0) || (eos_status != 0) || (rosenbrock_status != 0) || (photochem_eos_status != 0)) ? 1 : 0;
 }
