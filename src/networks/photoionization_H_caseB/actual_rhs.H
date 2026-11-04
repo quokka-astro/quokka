@@ -13,25 +13,42 @@
 
 #include "microphysics/integrator_layout.hpp"
 
+// Network symbols mapped onto the burn state, shared by the RHS and the
+// Jacobian. jaff's energy row is the volumetric dE/dt; Quokka integrates the
+// specific internal energy e = E / rho, so the functions below divide that row
+// by state.rho. jaff emits a density and a flux moment per band, interleaved in
+// state.rn, so the problem must integrate the photon flux.
+// $$JAFF DEFINE quokka {
+// REPLACE {
+// "radeden\[\s*(\d+)\s*\]" -> "state.rn[2*\1]"
+// "photden\[\s*(\d+)\s*\]" -> "state.rn[2*\1]"
+// "rflux\[\s*(\d+)\s*\]" -> "state.rn[2*\1+1]"
+// "nden\[\s*(\d+)\s*\]" -> "state.xn[\1]"
+// "tgas" -> "state.T"
+// "c_hat" -> "state.c_hat"
+// }
+// THERMAL { MODE -> dedt  ENERGY -> volumetric }
+// RADIATION { ENABLED -> True }
+// }
+
 template <typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE void
-actual_rhs(const BurnT &state, amrex::Array1D<amrex::Real, 1, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
+actual_rhs(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
-	// $JAFF REPEAT idx, rhs, cse IN rhses $[REPLACE radeden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE
-	// rflux\[\s*(\d+)\s*\] state.rn[2*\1+1] REPLACE nden\[\s*(\d+)\s*\] state.xn[\1] REPLACE tgas state.T REPLACE c_hat state.c_hat  RADIATION True]$
-	const amrex::Real cse0 = 3.2467944898988799e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0];
+	static_assert(BurnT::traits::integrate_rad_flux, "a jaff network needs Microphysics_Traits::integrate_rad_flux");
+	// $$JAFF REPEAT idx, rhs, cse IN rhses { USE quokka }
+	const amrex::Real cse0 = 3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0];
 	const amrex::Real cse1 = std::sqrt(state.T);
 	const amrex::Real cse2 = 1.0 / state.T;
 	const amrex::Real cse3 = cse1 * std::exp(-157896.75724967025 * cse2) * state.xn[0] * state.xn[2];
 	const amrex::Real cse4 = cse0 + 5.84e-11 * cse3 - 1.6594178159829075e-10 * std::pow(state.T, -0.69999999999999996) * state.xn[1] * state.xn[2];
 	const amrex::Real cse5 = state.T < 100.0;
 	const amrex::Real cse6 = state.xn[1] * state.xn[2];
-
-	ydot(1) = -cse4;
-	ydot(2) = cse4;
-	ydot(3) = cse4;
-	ydot(4) =
-	    2.5381371501267261e-29 * state.c_hat * state.xn[0] * state.rn[2 * 0] - 1.27251276978816e-21 * cse3 -
+	ydot[0] = -cse4;
+	ydot[1] = cse4;
+	ydot[2] = cse4;
+	ydot[3] =
+	    2.5316840555840673e-29 * state.c_hat * state.xn[0] * state.rn[2 * 0] - 1.27251276978816e-21 * cse3 -
 	    cse6 * (1.8551e-27 * cse1 +
 		    ((cse5) ? (3.47e-29 * std::pow(state.T, 1.915))
 			    : ((state.T < 630.957344480193)
@@ -50,119 +67,129 @@ actual_rhs(const BurnT &state, amrex::Array1D<amrex::Real, 1, quokka::microphysi
 	    (2.8000000000000002e-28 * cse1 * std::exp(-92.0 * cse2) + 2.0000000000000002e-19 * std::exp(-118400.0 / (state.T + 1000.0))) *
 		std::pow(state.xn[0], 2) +
 	    2.0000000000000001e-26 * state.xn[0];
-	ydot(5) = -cse0;
-	ydot(6) = -3.2467944898988799e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0 + 1];
-	// $JAFF END
-	// $JAFF SUB nspec
-	ydot(4) /= state.rho;
-	// $JAFF END
+	ydot[4] = -cse0;
+	ydot[5] = -3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0 + 1];
+	// $$JAFF END
+	// $$JAFF SUB nspec
+	ydot[3] /= state.rho;
+	// $$JAFF END
 }
 
 template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const BurnT &state, MatrixType &jac)
 {
 	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
+	static_assert(BurnT::traits::integrate_rad_flux, "a jaff network needs Microphysics_Traits::integrate_rad_flux");
 
-	// $JAFF REPEAT idx, expr, cse IN jacobian $[REPLACE radeden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE
-	// rflux\[\s*(\d+)\s*\] state.rn[2*\1+1] REPLACE nden\[\s*(\d+)\s*\] state.xn[\1] REPLACE tgas state.T REPLACE c_hat state.c_hat RADIATION True USE_DEDT
-	// True]$
-	const amrex::Real cse0 = 3.2467944898988799e-18 * state.c_hat;
-	const amrex::Real cse1 = cse0 * state.rn[2 * 0];
-	const amrex::Real cse2 = std::sqrt(state.T);
+	// $$JAFF REPEAT idx, expr, cse IN jacobian { USE quokka }
+	const amrex::Real cse0 = 1.0 / (2.0709734999998963e-16 * state.xn[0] + 2.0709734999998963e-16 * state.xn[1] + 2.0709734999998963e-16 * state.xn[2]);
+	const amrex::Real cse1 = state.xn[1] * state.xn[2];
+	const amrex::Real cse2 = std::pow(state.T, -3.0 / 2.0);
 	const amrex::Real cse3 = 1.0 / state.T;
 	const amrex::Real cse4 = std::exp(-157896.75724967025 * cse3);
-	const amrex::Real cse5 = cse2 * cse4;
-	const amrex::Real cse6 = 5.84e-11 * cse5;
-	const amrex::Real cse7 = cse1 + cse6 * state.xn[2];
-	const amrex::Real cse8 = 1.6594178159829075e-10 * std::pow(state.T, -0.69999999999999996);
-	const amrex::Real cse9 = cse8 * state.xn[2];
-	const amrex::Real cse10 = -cse6 * state.xn[0] + cse8 * state.xn[1];
-	const amrex::Real cse11 = state.xn[1] * state.xn[2];
-	const amrex::Real cse12 = std::pow(state.T, -3.0 / 2.0);
-	const amrex::Real cse13 = cse4 * state.xn[0] * state.xn[2];
-	const amrex::Real cse14 = cse12 * cse13;
-	const amrex::Real cse15 = 1.0 / cse2;
-	const amrex::Real cse16 = cse13 * cse15;
-	const amrex::Real cse17 = 1.1615924711880352e-10 * cse11 * std::pow(state.T, -1.7) + 9.2211706233807419e-6 * cse14 + 2.92e-11 * cse16;
-	const amrex::Real cse18 = 0.66666666666670005 *
-				  (1.6737729999999998e-24 * state.xn[0] + 1.6728620616289998e-24 * state.xn[1] + 9.1093837099999994e-28 * state.xn[2]) /
-				  (1.380649e-16 * state.xn[0] + 1.380649e-16 * state.xn[1] + 1.380649e-16 * state.xn[2]);
-	const amrex::Real cse19 = cse0 * state.xn[0];
-	const amrex::Real cse20 = -cse19;
-	const amrex::Real cse21 = -cse9;
-	const amrex::Real cse22 = -cse10;
-	const amrex::Real cse23 = cse17 * cse18;
-	const amrex::Real cse24 = 2.5381371501267261e-29 * state.c_hat;
-	const amrex::Real cse25 = 1.27251276978816e-21 * cse5;
-	const amrex::Real cse26 = state.T + 1000.0;
-	const amrex::Real cse27 = std::exp(-118400.0 / cse26);
-	const amrex::Real cse28 = std::exp(-92.0 * cse3);
-	const amrex::Real cse29 = state.T < 100.0;
-	const amrex::Real cse30 = ((cse29) ? (0.0) : (8.4219589e-26 * std::pow(state.T, 0.10999999999999999)));
-	const amrex::Real cse31 = std::sqrt(state.T);
-	const amrex::Real cse32 = state.T < 630.957344480193;
-	const amrex::Real cse33 = state.T < 3981.0717055349733;
-	const amrex::Real cse34 = state.T < 10000.0;
-	const amrex::Real cse35 = state.T < 31622.776601683792;
-	const amrex::Real cse36 = state.T < 100000.0;
-	const amrex::Real cse37 = state.T < 1000000.0;
-	const amrex::Real cse38 =
-	    1.8551e-27 * cse2 +
-	    ((cse29)
-		 ? (3.47e-29 * std::pow(state.T, 1.915))
-		 : ((cse32) ? (2.34e-26 * cse31)
-			    : ((cse33) ? (1.11e-24 * std::pow(state.T, -0.099000000000000005))
-				       : ((cse34) ? (1.08e-32 * std::pow(state.T, 2.1269999999999998))
-						  : ((cse35) ? (2.6700000000000001e-30 * std::pow(state.T, 1.5289999999999999))
-							     : ((cse36) ? (1.7399999999999998e-24 * std::pow(state.T, 0.23699999999999999))
-									: ((cse37) ? (1.1e-21 * std::pow(state.T, -0.32300000000000001))
-										   : (7.4900000000000001e-21 * std::pow(state.T, -0.46200000000000002)))))))));
-
-	jac(1, 1) = -cse7;
-	jac(1, 2) = cse9;
-	jac(1, 3) = cse10;
-	jac(1, 4) = -cse17 * cse18;
-	jac(1, 5) = cse20;
-	jac(2, 1) = cse7;
-	jac(2, 2) = cse21;
-	jac(2, 3) = cse22;
-	jac(2, 4) = cse23;
-	jac(2, 5) = cse19;
-	jac(3, 1) = cse7;
-	jac(3, 2) = cse21;
-	jac(3, 3) = cse22;
-	jac(3, 4) = cse23;
-	jac(3, 5) = cse19;
-	jac(4, 1) = cse24 * state.rn[2 * 0] - cse25 * state.xn[2] - 2 * state.xn[0] * (2.8000000000000002e-28 * cse2 * cse28 + 2.0000000000000002e-19 * cse27) +
-		    2.0000000000000001e-26;
-	jac(4, 2) = -cse30 * state.xn[2] - cse38 * state.xn[2];
-	jac(4, 3) = -cse25 * state.xn[0] - cse30 * state.xn[1] - cse38 * state.xn[1];
-	jac(4, 4) =
-	    cse18 *
-	    (-cse11 *
-		 (9.2755000000000002e-28 * cse15 +
-		  ((cse29) ? (6.6450500000000003e-29 * std::pow(state.T, 0.91500000000000004))
-			   : ((cse32) ? (1.17e-26 / cse31)
-				      : ((cse33) ? (-1.0989000000000001e-25 * std::pow(state.T, -1.099))
-						 : ((cse34) ? (2.2971599999999999e-32 * std::pow(state.T, 1.1269999999999998))
-							    : ((cse35) ? (4.0824300000000001e-30 * std::pow(state.T, 0.52899999999999991))
-								       : ((cse36) ? (4.1237999999999993e-25 * std::pow(state.T, -0.76300000000000001))
-										  : ((cse37) ? (-3.5530000000000001e-22 * std::pow(state.T, -1.323))
+	const amrex::Real cse5 = cse4 * state.xn[0] * state.xn[2];
+	const amrex::Real cse6 = cse2 * cse5;
+	const amrex::Real cse7 = std::sqrt(state.T);
+	const amrex::Real cse8 = 1.0 / cse7;
+	const amrex::Real cse9 = cse5 * cse8;
+	const amrex::Real cse10 = 1.1615924711880352e-10 * cse1 * std::pow(state.T, -1.7) + 9.2211706233807419e-6 * cse6 + 2.92e-11 * cse9;
+	const amrex::Real cse11 = -cse0 * cse10;
+	const amrex::Real cse12 = 2.0709734999998963e-16 * state.T;
+	const amrex::Real cse13 = cse11 * cse12;
+	const amrex::Real cse14 = 3.2385396673401957e-18 * state.c_hat;
+	const amrex::Real cse15 = cse14 * state.rn[2 * 0];
+	const amrex::Real cse16 = cse4 * cse7;
+	const amrex::Real cse17 = 5.84e-11 * cse16;
+	const amrex::Real cse18 = cse15 + cse17 * state.xn[2];
+	const amrex::Real cse19 = 1.6594178159829075e-10 * std::pow(state.T, -0.69999999999999996);
+	const amrex::Real cse20 = cse19 * state.xn[2];
+	const amrex::Real cse21 = cse19 * state.xn[1];
+	const amrex::Real cse22 = cse17 * state.xn[0];
+	const amrex::Real cse23 = cse14 * state.xn[0];
+	const amrex::Real cse24 = -cse23;
+	const amrex::Real cse25 = cse0 * cse10;
+	const amrex::Real cse26 = cse12 * cse25;
+	const amrex::Real cse27 = cse18 - cse26;
+	const amrex::Real cse28 = -cse20 - cse26;
+	const amrex::Real cse29 = -cse21 + cse22 - cse26;
+	const amrex::Real cse30 = 1.27251276978816e-21 * cse16;
+	const amrex::Real cse31 = state.T + 1000.0;
+	const amrex::Real cse32 = std::exp(-118400.0 / cse31);
+	const amrex::Real cse33 = std::exp(-92.0 * cse3);
+	const amrex::Real cse34 = state.T < 100.0;
+	const amrex::Real cse35 = std::sqrt(state.T);
+	const amrex::Real cse36 = state.T < 630.957344480193;
+	const amrex::Real cse37 = state.T < 3981.0717055349733;
+	const amrex::Real cse38 = state.T < 10000.0;
+	const amrex::Real cse39 = state.T < 31622.776601683792;
+	const amrex::Real cse40 = state.T < 100000.0;
+	const amrex::Real cse41 = state.T < 1000000.0;
+	const amrex::Real cse42 =
+	    cse0 *
+	    (-cse1 *
+		 (9.2755000000000002e-28 * cse8 +
+		  ((cse34) ? (6.6450500000000003e-29 * std::pow(state.T, 0.91500000000000004))
+			   : ((cse36) ? (1.17e-26 / cse35)
+				      : ((cse37) ? (-1.0989000000000001e-25 * std::pow(state.T, -1.099))
+						 : ((cse38) ? (2.2971599999999999e-32 * std::pow(state.T, 1.1269999999999998))
+							    : ((cse39) ? (4.0824300000000001e-30 * std::pow(state.T, 0.52899999999999991))
+								       : ((cse40) ? (4.1237999999999993e-25 * std::pow(state.T, -0.76300000000000001))
+										  : ((cse41) ? (-3.5530000000000001e-22 * std::pow(state.T, -1.323))
 											     : (-3.4603799999999999e-21 * std::pow(state.T, -1.462)))))))))) -
-	     cse11 * ((cse29) ? (0) : (9.2641547899999994e-27 * std::pow(state.T, -0.89000000000000001))) - 2.0092563990834663e-16 * cse14 -
-	     6.3625638489408001e-22 * cse16 -
+	     cse1 * ((cse34) ? (0) : (9.2641547899999994e-27 * std::pow(state.T, -0.89000000000000001))) - 2.0092563990834663e-16 * cse6 -
+	     6.3625638489408001e-22 * cse9 -
 	     std::pow(state.xn[0], 2) *
-		 (2.5760000000000003e-26 * cse12 * cse28 + 1.4000000000000001e-28 * cse15 * cse28 + 2.3680000000000003e-14 * cse27 / std::pow(cse26, 2)));
-	jac(4, 5) = cse24 * state.xn[0];
-	jac(5, 1) = -cse1;
-	jac(5, 5) = cse20;
-	jac(6, 1) = -cse0 * state.rn[2 * 0 + 1];
-	jac(6, 6) = cse20;
-	// $JAFF END
-	// $JAFF SUB nspec
-	for (int i = 1; i <= Layout::neqs; i++) {
-		jac(4, i) /= state.rho;
+		 (2.5760000000000003e-26 * cse2 * cse33 + 1.4000000000000001e-28 * cse33 * cse8 + 2.3680000000000003e-14 * cse32 / std::pow(cse31, 2)));
+	const amrex::Real cse43 = cse12 * cse42;
+	const amrex::Real cse44 = ((cse34) ? (0.0) : (8.4219589e-26 * std::pow(state.T, 0.10999999999999999)));
+	const amrex::Real cse45 =
+	    1.8551e-27 * cse7 +
+	    ((cse34)
+		 ? (3.47e-29 * std::pow(state.T, 1.915))
+		 : ((cse36) ? (2.34e-26 * cse35)
+			    : ((cse37) ? (1.11e-24 * std::pow(state.T, -0.099000000000000005))
+				       : ((cse38) ? (1.08e-32 * std::pow(state.T, 2.1269999999999998))
+						  : ((cse39) ? (2.6700000000000001e-30 * std::pow(state.T, 1.5289999999999999))
+							     : ((cse40) ? (1.7399999999999998e-24 * std::pow(state.T, 0.23699999999999999))
+									: ((cse41) ? (1.1e-21 * std::pow(state.T, -0.32300000000000001))
+										   : (7.4900000000000001e-21 * std::pow(state.T, -0.46200000000000002)))))))));
+	jac(0, 0) = -cse13 - cse18;
+	jac(0, 1) = -cse13 + cse20;
+	jac(0, 2) = -cse13 + cse21 - cse22;
+	jac(0, 3) = cse11;
+	jac(0, 4) = cse24;
+	jac(1, 0) = cse27;
+	jac(1, 1) = cse28;
+	jac(1, 2) = cse29;
+	jac(1, 3) = cse25;
+	jac(1, 4) = cse23;
+	jac(2, 0) = cse27;
+	jac(2, 1) = cse28;
+	jac(2, 2) = cse29;
+	jac(2, 3) = cse25;
+	jac(2, 4) = cse23;
+	jac(3, 0) = 2.5316840555840673e-29 * state.c_hat * state.rn[2 * 0] - cse30 * state.xn[2] - cse43 -
+		    2 * state.xn[0] * (2.0000000000000002e-19 * cse32 + 2.8000000000000002e-28 * cse33 * cse7) + 2.0000000000000001e-26;
+	jac(3, 1) = -cse43 - cse44 * state.xn[2] - cse45 * state.xn[2];
+	jac(3, 2) = -cse30 * state.xn[0] - cse43 - cse44 * state.xn[1] - cse45 * state.xn[1];
+	jac(3, 3) = cse42;
+	jac(3, 4) = 2.5316840555840673e-29 * state.c_hat * state.xn[0];
+	jac(4, 0) = -cse15;
+	jac(4, 4) = cse24;
+	jac(5, 0) = -cse14 * state.rn[2 * 0 + 1];
+	jac(5, 5) = cse24;
+	// $$JAFF END
+	// jaff's energy row and column are those of E = rho e: the row is d(dE/dt)
+	// and the column d/dE. Change them to e, with rho fixed during the burn: the
+	// row divides by rho, the column multiplies by rho, and d(de/dt)/de =
+	// d(dE/dt)/dE is unchanged.
+	// $$JAFF SUB nspec
+	for (int i = 0; i < Layout::neqs; i++) {
+		if (i != 3) {
+			jac(3, i) /= state.rho;
+			jac(i, 3) *= state.rho;
+		}
 	}
-	// $JAFF END
+	// $$JAFF END
 }
 
 #endif
