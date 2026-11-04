@@ -1,8 +1,6 @@
 set(JOB_NAME PrimordialChem)
 
-add_executable(
-  ${JOB_NAME} testPrimordialChem.cpp "${QuokkaSourcesNoEOS}"
-              ${CMAKE_SOURCE_DIR}/src/networks/primordial_chem/network.cpp)
+add_executable(${JOB_NAME} testPrimordialChem.cpp "${QuokkaSourcesNoEOS}")
 quokka_add_eos(${JOB_NAME} primordial_chem primordial_chem)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")

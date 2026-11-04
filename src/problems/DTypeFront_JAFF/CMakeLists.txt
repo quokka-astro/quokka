@@ -11,8 +11,7 @@ if(AMReX_SPACEDIM EQUAL 3)
     message(FATAL_ERROR "DTypeFront_JAFF_TABLEAU must be ROS2S, Rodas3P, Rodas4P or Rodas5P, got '${DTypeFront_JAFF_TABLEAU}'")
   endif()
 
-  add_executable(${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
-                ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
+  add_executable(${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}")
   target_compile_definitions(${JOB_NAME} PRIVATE DTYPEFRONT_JAFF_TABLEAU=${DTypeFront_JAFF_TABLEAU})
   quokka_add_eos(${JOB_NAME} photoionization ${microphysics_network_name})
 

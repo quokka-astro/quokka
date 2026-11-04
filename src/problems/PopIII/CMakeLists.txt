@@ -6,8 +6,7 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   add_executable(
     ${JOB_NAME}
-    testPopIII.cpp "${QuokkaSourcesNoEOS}" ../../turbulence/TurbDataReader.cpp
-    ${CMAKE_SOURCE_DIR}/src/networks/primordial_chem/network.cpp)
+    testPopIII.cpp "${QuokkaSourcesNoEOS}" ../../turbulence/TurbDataReader.cpp)
   quokka_add_eos(${JOB_NAME} primordial_chem primordial_chem)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
