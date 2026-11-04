@@ -22,7 +22,11 @@ if(AMReX_SPACEDIM EQUAL 3)
   add_executable(
     ${JOB_NAME}
     testPopIII.cpp "${QuokkaSourcesNoEOS}" ../../turbulence/TurbDataReader.cpp
-    ${primordial_chem_sources})
+    ${primordial_chem_sources}
+    ${CMAKE_SOURCE_DIR}/src/networks/primordial_chem/network.cpp)
+  # the network's actual_rhs.H, ahead of Microphysics' copy
+  target_include_directories(${JOB_NAME} BEFORE PRIVATE
+                             ${CMAKE_SOURCE_DIR}/src/networks/primordial_chem)
   target_compile_definitions(${JOB_NAME} PUBLIC CHEMISTRY) # this will add
                                                            # #define CHEMISTRY
 

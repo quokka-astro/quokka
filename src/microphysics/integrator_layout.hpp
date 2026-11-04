@@ -5,15 +5,11 @@
 /// networks, so it does not include a network.
 
 #include <cstdint>
-#include <type_traits>
 
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 
 #include "microphysics/microphysics_traits.hpp"
-
-// still from extern/Microphysics: net_ienuc and integrator_neqs, only to check the layout against them
-#include "integrator_data.H"
 
 namespace quokka::microphysics
 {
@@ -28,17 +24,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto counts_toward_error(cons
 	return role == VarRole::Species || role == VarRole::Energy || role == VarRole::ChemPhotonNumber;
 }
 
-/// The length of an array member of a burn state: a C array in Microphysics' burn_t, an amrex::GpuArray in BurnState.
-/// Transitional: it goes with burn_t, once the primordial problems use BurnState.
-template <typename ArrayT> constexpr auto burn_array_size() -> int
-{
-	if constexpr (std::is_array_v<ArrayT>) {
-		return static_cast<int>(std::extent_v<ArrayT>);
-	} else {
-		return static_cast<int>(ArrayT::size());
-	}
-}
-
 template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	using traits = Microphysics_Traits<problem_t>;
 
@@ -47,7 +32,7 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	static constexpr auto NumChemRadEqs() -> int
 	{
 		if constexpr (photochemistry) {
-			return burn_array_size<decltype(BurnT::rn)>();
+			return static_cast<int>(decltype(BurnT::rn)::size());
 		} else {
 			return 0;
 		}
@@ -56,13 +41,13 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	static constexpr auto NumThermalBands() -> int
 	{
 		if constexpr (photochemistry) {
-			return burn_array_size<decltype(BurnT::re_thermal)>();
+			return static_cast<int>(decltype(BurnT::re_thermal)::size());
 		} else {
 			return 0;
 		}
 	}
 
-	static constexpr int num_spec = burn_array_size<decltype(BurnT::xn)>();
+	static constexpr int num_spec = static_cast<int>(decltype(BurnT::xn)::size());
 	static constexpr int num_chem_rad_eqs = NumChemRadEqs();
 	static constexpr int num_thermal_bands = NumThermalBands();
 	static constexpr int vars_per_group = Microphysics_Traits<problem_t>::integrate_rad_flux ? 2 : 1;
@@ -109,9 +94,7 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	static_assert(
 	    q_dust == requires { &BurnT::e_dust_absorbed; },
 	    "Microphysics_Traits::dust_chemical_band_absorption must be true exactly when the problem is built with DUST_CHEMICAL_BAND_ABSORPTION");
-	static_assert(energy_row == net_ienuc, "the energy must be where the networks, which still use Microphysics' net_ienuc, write it");
 	static_assert(num_chem_rad_eqs % vars_per_group == 0, "every chemical band must have vars_per_group variables");
-	static_assert(integrator_neqs<BurnT>() == neqs, "the layout must match Microphysics' integrator_neqs");
 };
 
 } // namespace quokka::microphysics

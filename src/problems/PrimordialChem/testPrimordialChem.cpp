@@ -31,28 +31,31 @@
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/microphysics_traits.hpp"
+#include "networks/primordial_chem/network.hpp"
 #include "radiation/radiation_system.hpp"
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 using amrex::Real;
 
 struct PrimordialChemTest {}; // dummy type to allow compile-type polymorphism via template specialization
 
+template <> struct Microphysics_Traits<PrimordialChemTest> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PrimordialChem;
+	static constexpr bool chemistry = true; // built with CHEMISTRY
+};
+
+using Network = Microphysics_Traits<PrimordialChemTest>::Network;
+
 template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = NumSpec;		     // number of chemical species
+	static constexpr int numMassScalars = Network::NumSpec;	     // number of chemical species
 	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
-};
-
-template <> struct Microphysics_Traits<PrimordialChemTest> : DefaultMicrophysicsTraits {
-	static constexpr bool chemistry = true; // built with CHEMISTRY
 };
 
 template <> struct SimulationData<PrimordialChemTest> {
@@ -122,7 +125,6 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 	pp.query("primary_species_14", userData_.primary_species_14);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 }
 
 template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -131,11 +133,11 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::microphysics::BurnState<PrimordialChemTest> state;
 
-	std::array<Real, NumSpec> numdens = {-1.0};
+	std::array<Real, Network::NumSpec> numdens = {-1.0};
 
-	for (int n = 1; n <= NumSpec; ++n) {
+	for (int n = 1; n <= Network::NumSpec; ++n) {
 		switch (n) {
 
 			case 1:
@@ -191,7 +193,7 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
 		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
 	}
@@ -200,14 +202,14 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 
 	// normalize -- just in case
 
-	std::array<Real, NumSpec> mfracs = {-1.0};
+	std::array<Real, Network::NumSpec> mfracs = {-1.0};
 	Real msum = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
 		msum += mfracs[n];
 	}
 
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		mfracs[n] /= msum;
 		// use the normalized mass fractions to obtain the corresponding number densities
 		state.xn[n] = mfracs[n] * rhotot / spmasses[n];
@@ -236,7 +238,7 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x2Momentum_index) = ymom;
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x3Momentum_index) = zmom;
 
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + nn) =
 			    mfracs[nn] * rho; // we use partial densities and not mass fractions
 		}
