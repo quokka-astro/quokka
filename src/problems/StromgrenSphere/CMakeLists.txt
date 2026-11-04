@@ -5,9 +5,7 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   # two executables built from StromgrenSphere.hpp, each with its own test and input
   foreach(target ${JOB_NAME} ${JOB_NAME}TempIndependentRecombination)
-    add_executable(
-      ${target} test${target}.cpp "${QuokkaSourcesNoEOS}"
-                ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
+    add_executable(${target} test${target}.cpp "${QuokkaSourcesNoEOS}")
     quokka_add_eos(${target} photoionization ${microphysics_network_name})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")

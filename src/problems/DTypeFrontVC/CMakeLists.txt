@@ -3,9 +3,7 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   set(JOB_NAME DTypeFrontVC)
 
-  add_executable(
-    ${JOB_NAME} testDTypeFrontVC.cpp "${QuokkaSourcesNoEOS}"
-                ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
+  add_executable(${JOB_NAME} testDTypeFrontVC.cpp "${QuokkaSourcesNoEOS}")
   quokka_add_eos(${JOB_NAME} photoionization ${microphysics_network_name})
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")

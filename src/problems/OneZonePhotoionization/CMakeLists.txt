@@ -2,9 +2,7 @@ set(microphysics_network_name "photoionization_H_caseB_handwritten")
 
 set(JOB_NAME OneZonePhotoionization)
 
-add_executable(
-  ${JOB_NAME} testOneZonePhotoionization.cpp "${QuokkaSourcesNoEOS}"
-              ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
+add_executable(${JOB_NAME} testOneZonePhotoionization.cpp "${QuokkaSourcesNoEOS}")
 quokka_add_eos(${JOB_NAME} photoionization ${microphysics_network_name})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
