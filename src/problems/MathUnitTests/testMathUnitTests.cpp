@@ -14,6 +14,7 @@
 #include "math/bracketing_root_finding.hpp"
 #include "math/root_finding.hpp"
 #include "radiation/radiation_system.hpp"
+#include "rosenbrock/rosenbrock.hpp"
 #include "util/BC.hpp"
 #include "util/valarray.hpp"
 #include <array>
@@ -349,6 +350,155 @@ auto TestEOSIdeal() -> int
 	return status;
 }
 
+// ---- Rosenbrock solver tests ----
+
+// y' = -k y; optionally the Jacobian is non-finite on its first evaluation
+struct DecaySystem {
+	Real k = 1.0e3;
+	bool nan_jacobian_once = false;
+	int jac_calls = 0;
+	AMREX_GPU_HOST_DEVICE void rhs(Real /*t*/, rosenbrock::Vector<1> &y, rosenbrock::Vector<1> &ydot) const { ydot[0] = -k * y[0]; }
+	AMREX_GPU_HOST_DEVICE void jac(Real /*t*/, rosenbrock::Vector<1> const & /*y*/, rosenbrock::Matrix<1> &J)
+	{
+		J(0, 0) = (nan_jacobian_once && jac_calls == 0) ? std::numeric_limits<Real>::quiet_NaN() : -k;
+		++jac_calls;
+	}
+};
+
+// Robertson's stiff chemical kinetics problem
+struct RobertsonSystem {
+	static constexpr Real k1 = 0.04;
+	static constexpr Real k2 = 3.0e7;
+	static constexpr Real k3 = 1.0e4;
+	AMREX_GPU_HOST_DEVICE void rhs(Real /*t*/, rosenbrock::Vector<3> &y, rosenbrock::Vector<3> &ydot) const
+	{
+		ydot[0] = -k1 * y[0] + k3 * y[1] * y[2];
+		ydot[2] = k2 * y[1] * y[1];
+		ydot[1] = -ydot[0] - ydot[2];
+	}
+	AMREX_GPU_HOST_DEVICE void jac(Real /*t*/, rosenbrock::Vector<3> const &y, rosenbrock::Matrix<3> &J) const
+	{
+		J(0, 0) = -k1;
+		J(0, 1) = k3 * y[2];
+		J(0, 2) = k3 * y[1];
+		J(2, 0) = 0.0;
+		J(2, 1) = 2.0 * k2 * y[1];
+		J(2, 2) = 0.0;
+		J(1, 0) = k1;
+		J(1, 1) = -k3 * y[2] - 2.0 * k2 * y[1];
+		J(1, 2) = -k3 * y[1];
+	}
+};
+
+// rhs raises y[0] to at least 0 in place, as the photochemistry driver cleans the photon number densities
+struct CleanSystem {
+	AMREX_GPU_HOST_DEVICE void rhs(Real /*t*/, rosenbrock::Vector<1> &y, rosenbrock::Vector<1> &ydot) const
+	{
+		y[0] = amrex::max(y[0], Real(0.0));
+		ydot[0] = 0.0;
+	}
+	AMREX_GPU_HOST_DEVICE void jac(Real /*t*/, rosenbrock::Vector<1> const & /*y*/, rosenbrock::Matrix<1> &J) const { J(0, 0) = 0.0; }
+};
+
+template <int N> AMREX_GPU_HOST_DEVICE auto UniformSettings(Real atol, Real rtol, int max_steps) -> rosenbrock::Settings<N>
+{
+	rosenbrock::Settings<N> s{};
+	for (int n = 0; n < N; ++n) {
+		s.atol[n] = atol;
+		s.rtol[n] = rtol;
+		s.in_error_norm[n] = true;
+		s.min_value[n] = -std::numeric_limits<Real>::infinity();
+		s.change_floor[n] = std::numeric_limits<Real>::infinity();
+	}
+	s.max_steps = max_steps;
+	return s;
+}
+
+constexpr int n_rosenbrock_results = 12;
+
+// Runs every Rosenbrock test case and writes the results to out[0..n_rosenbrock_results-1]; host and device run the same code.
+AMREX_GPU_HOST_DEVICE void RunRosenbrockCases(Real *out)
+{
+	{ // decay
+		DecaySystem sys{};
+		rosenbrock::Vector<1> y{1.0};
+		const auto r = rosenbrock::integrate<1>(sys, y, 1.0e-2, UniformSettings<1>(1.0e-14, 1.0e-8, 150000)); // atol << y(dt) = 4.5e-5, so rtol sets the accuracy
+		out[0] = y[0];
+		out[1] = static_cast<Real>(r.status);
+	}
+	{ // robertson
+		RobertsonSystem sys{};
+		rosenbrock::Vector<3> y{1.0, 0.0, 0.0};
+		auto settings = UniformSettings<3>(1.0e-8, 1.0e-6, 150000);
+		settings.atol[1] = 1.0e-14;
+		const auto r = rosenbrock::integrate<3>(sys, y, 40.0, settings);
+		out[2] = y[0];
+		out[3] = y[1];
+		out[4] = y[2];
+		out[5] = static_cast<Real>(r.status);
+	}
+	{ // nan_jacobian_once
+		DecaySystem sys{};
+		sys.nan_jacobian_once = true;
+		rosenbrock::Vector<1> y{1.0};
+		const auto r = rosenbrock::integrate<1>(sys, y, 1.0e-2, UniformSettings<1>(1.0e-14, 1.0e-8, 150000)); // atol << y(dt) = 4.5e-5, so rtol sets the accuracy
+		out[6] = y[0];
+		out[7] = static_cast<Real>(r.status);
+		out[8] = static_cast<Real>(r.n_jac);
+	}
+	{ // max_steps
+		RobertsonSystem sys{};
+		rosenbrock::Vector<3> y{1.0, 0.0, 0.0};
+		const auto r = rosenbrock::integrate<3>(sys, y, 40.0, UniformSettings<3>(1.0e-8, 1.0e-6, 5));
+		out[9] = static_cast<Real>(r.status);
+	}
+	{ // clean
+		CleanSystem sys{};
+		rosenbrock::Vector<1> y{-1.0e-12};
+		const auto r = rosenbrock::integrate<1>(sys, y, 1.0, UniformSettings<1>(1.0e-8, 1.0e-8, 150000));
+		out[10] = y[0];
+		out[11] = static_cast<Real>(r.status);
+	}
+}
+
+auto TestRosenbrock() -> int
+{
+	// the NaN-Jacobian case creates a NaN on purpose; suspend the FP-exception traps the test suite can enable
+	std::fenv_t fenv{};
+	std::feholdexcept(&fenv);
+	std::array<Real, n_rosenbrock_results> host{};
+	RunRosenbrockCases(host.data());
+	amrex::Gpu::DeviceVector<Real> dev_d(n_rosenbrock_results);
+	Real *dev_ptr = dev_d.data();
+	amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) noexcept { RunRosenbrockCases(dev_ptr); });
+	std::array<Real, n_rosenbrock_results> dev{};
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dev_d.begin(), dev_d.end(), dev.begin());
+	std::fesetenv(&fenv);
+
+	const Real success = static_cast<Real>(rosenbrock::Status::Success);
+	int status = 0;
+	for (int pass = 0; pass < 2; ++pass) {
+		const auto &v = (pass == 0) ? host : dev;
+		const char *where = (pass == 0) ? "host" : "device";
+		auto check = [&status, where](const char *name, bool ok) {
+			std::cout << std::format("Rosenbrock {:<34}{:<8}{}\n", name, where, ok ? "PASS" : "FAIL");
+			if (!ok) {
+				status = 1;
+			}
+		};
+		auto close = [](Real value, Real expected, Real reltol) { return std::abs(value - expected) <= reltol * std::abs(expected); };
+		std::cout << std::format("Rosenbrock decay y = {:.10e} (exact {:.10e}), status {}; nan_jacobian_once y = {:.10e}, status {}, n_jac {}\n", v[0],
+					 std::exp(-10.0), v[1], v[6], v[7], v[8]);
+		check("decay", v[1] == success && close(v[0], std::exp(-10.0), 1.0e-5));
+		check("robertson", v[5] == success && close(v[2], 0.7158270687, 1.0e-4) && close(v[3], 9.185534765e-6, 1.0e-3) &&
+				       close(v[4], 0.2841637457, 1.0e-4));
+		check("nan_jacobian_once", v[7] == success && v[8] >= 2.0 && close(v[6], std::exp(-10.0), 1.0e-5));
+		check("max_steps", v[9] == static_cast<Real>(rosenbrock::Status::TooManySteps));
+		check("clean", v[11] == success && v[10] >= 0.0);
+	}
+	return status;
+}
+
 } // namespace
 
 auto problem_main() -> int
@@ -356,6 +506,10 @@ auto problem_main() -> int
 	const int ode_status = TestODEIntegration();
 	const int root_status = TestRootFinding();
 	const int eos_status = TestEOSIdeal();
+	const int rosenbrock_status = TestRosenbrock();
+	if (rosenbrock_status != 0) {
+		std::cout << "MathUnitTests: Rosenbrock test FAILED.\n";
+	}
 	if (ode_status != 0) {
 		std::cout << "MathUnitTests: ODE integration test FAILED.\n";
 	}
@@ -365,5 +519,5 @@ auto problem_main() -> int
 	if (eos_status != 0) {
 		std::cout << "MathUnitTests: EOS test FAILED.\n";
 	}
-	return ((ode_status != 0) || (root_status != 0) || (eos_status != 0)) ? 1 : 0;
+	return ((ode_status != 0) || (root_status != 0) || (eos_status != 0) || (rosenbrock_status != 0)) ? 1 : 0;
 }
