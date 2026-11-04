@@ -20,8 +20,8 @@ namespace detail
 {
 /// sum_i n_i / (gamma_i - 1) and rho_sp = sum_i n_i m_i
 template <int NSpec>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HeatCapacitySums(amrex::GpuArray<amrex::Real, NSpec> const &n, amrex::Real const *mass,
-							      amrex::Real const *gamma, amrex::Real &sum_n_over_gm1, amrex::Real &rho_sp)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HeatCapacitySums(amrex::GpuArray<amrex::Real, NSpec> const &n, amrex::Real const *mass, amrex::Real const *gamma,
+							       amrex::Real &sum_n_over_gm1, amrex::Real &rho_sp)
 {
 	sum_n_over_gm1 = 0.0;
 	rho_sp = 0.0;
@@ -34,8 +34,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HeatCapacitySums(amrex::GpuArray<a
 
 /// temperature [K] from the specific internal energy e [erg g^-1]
 template <int NSpec>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto TemperatureFromEnergy(const amrex::Real e, amrex::GpuArray<amrex::Real, NSpec> const &n,
-								     amrex::Real const *mass, amrex::Real const *gamma) -> amrex::Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto TemperatureFromEnergy(const amrex::Real e, amrex::GpuArray<amrex::Real, NSpec> const &n, amrex::Real const *mass,
+								    amrex::Real const *gamma) -> amrex::Real
 {
 	amrex::Real s = NAN;
 	amrex::Real rho_sp = NAN;
@@ -45,8 +45,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto TemperatureFromEnergy(const amrex:
 
 /// specific internal energy [erg g^-1] from the temperature T [K]
 template <int NSpec>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto EnergyFromTemperature(const amrex::Real T, amrex::GpuArray<amrex::Real, NSpec> const &n,
-								     amrex::Real const *mass, amrex::Real const *gamma) -> amrex::Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto EnergyFromTemperature(const amrex::Real T, amrex::GpuArray<amrex::Real, NSpec> const &n, amrex::Real const *mass,
+								    amrex::Real const *gamma) -> amrex::Real
 {
 	amrex::Real s = NAN;
 	amrex::Real rho_sp = NAN;
