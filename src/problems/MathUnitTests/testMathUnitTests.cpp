@@ -9,8 +9,6 @@
 
 #include "AMReX_Gpu.H"
 #include "AMReX_GpuContainers.H"
-#include "eos.H"
-#include "extern_parameters.H"
 
 #include "math/ODEIntegrate.hpp"
 #include "math/bracketing_root_finding.hpp"
@@ -45,7 +43,7 @@ template <> struct quokka::EOS_Traits<ODETest> {
 struct EOSTestGas {};
 template <> struct quokka::EOS_Traits<EOSTestGas> {
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
-	static constexpr double gamma = 5. / 3.;
+	static constexpr double gamma = 1.4; // not 5/3, so the test fails if gamma comes from anywhere but EOS_Traits
 };
 
 // isothermal gas used by TestEOSIdeal
@@ -92,12 +90,6 @@ namespace
 
 auto TestODEIntegration() -> int
 {
-	// initialize EOS
-	init_extern_parameters();
-	Real small_temp = 1e-10;
-	Real small_dens = 1e-100;
-	eos_init(small_temp, small_dens);
-
 	// set up initial conditions
 	const Real Eint0 = quokka::EOS<ODETest>::ComputeEintFromTgas(rho0, Tgas0);
 	const Real Edot0 = cooling_function(rho0, Tgas0);
@@ -351,7 +343,7 @@ auto problem_main() -> int
 {
 	const int ode_status = TestODEIntegration();
 	const int root_status = TestRootFinding();
-	const int eos_status = TestEOSIdeal(); // after TestODEIntegration, which initialises the Microphysics EOS
+	const int eos_status = TestEOSIdeal();
 	if (ode_status != 0) {
 		std::cout << "MathUnitTests: ODE integration test FAILED.\n";
 	}

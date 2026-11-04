@@ -231,7 +231,7 @@ class PhysicsParticleDescriptorBase
 	virtual auto depositSN(amrex::MultiFab & /*state*/, std::array<amrex::MultiFab, AMREX_SPACEDIM> const * /*state_fc*/, int /*lev*/, amrex::Real /*time*/,
 			       amrex::Real /*dt*/) -> std::pair<int, amrex::Real>
 	{
-		return {0, 0.0_rt};
+		return {0, amrex::Real(0.0)};
 	}
 
 	virtual auto depositEarlyFeedback(amrex::MultiFab & /*state*/, std::array<amrex::MultiFab, AMREX_SPACEDIM> const * /*state_fc*/, int /*lev*/,
