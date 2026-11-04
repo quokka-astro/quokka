@@ -21,6 +21,7 @@
 #include <cmath>
 #include <format>
 #include <iostream>
+#include <limits>
 #include <numbers>
 
 struct ODETest {};
@@ -320,6 +321,17 @@ auto TestEOSIdeal() -> int
 	check("Eint(rho, 0)", EOS::ComputeEintFromTgas(rho, 0.0), rho * C::k_B * Tfloor / ((gamma - 1.0) * mbar));
 	check("P(rho, 0)", EOS::ComputePressure(rho, 0.0), rho * C::k_B * Tfloor / mbar);
 	check("P(0, Eint)", EOS::ComputePressure(0.0, Eint), rho_floor * C::k_B * Tfloor / mbar);
+
+	// NaN rho or T is raised to the floor, as Microphysics's eos() did (max(floor, NaN) = floor).
+	// Comparisons with NaN may raise FE_INVALID, so suspend the FP-exception traps the test suite can enable.
+	std::fenv_t fenv{};
+	std::feholdexcept(&fenv);
+	const Real nan = std::numeric_limits<Real>::quiet_NaN();
+	const Real Eint_nanT = EOS::ComputeEintFromTgas(rho, nan);
+	const Real cs_nanrho = EOS::ComputeSoundSpeed(nan, P);
+	std::fesetenv(&fenv);
+	check("Eint(rho, NaN)", Eint_nanT, rho * C::k_B * Tfloor / ((gamma - 1.0) * mbar));
+	check("cs(NaN, P)", cs_nanrho, std::sqrt(gamma * P / rho_floor));
 
 	// isothermal
 	check("P_iso(rho, Eint)", quokka::EOS<EOSTestIso>::ComputePressure(rho, Eint), rho * 2.0e5 * 2.0e5);

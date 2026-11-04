@@ -98,9 +98,16 @@ template <typename problem_t> struct EOSIdeal {
 		return GammaLawState{.rho = rho, .T = T, .p = p, .e = e};
 	}
 
+	// Clamp by value: a NaN x gives lo, as Microphysics's min(hi, max(lo, x)) did. Taking the bounds by value also avoids
+	// binding references to the static constexpr members in device code.
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ClampToRange(amrex::Real x, amrex::Real lo, amrex::Real hi) -> amrex::Real
+	{
+		return std::fmin(std::fmax(x, lo), hi);
+	}
+
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto GammaLawFromRhoT(amrex::Real rho, amrex::Real T) -> GammaLawState
 	{
-		return GammaLawFromValidRhoT(amrex::Clamp(rho, eos_min_dens_, eos_max_), amrex::Clamp(T, eos_min_temp_, eos_max_));
+		return GammaLawFromValidRhoT(ClampToRange(rho, eos_min_dens_, eos_max_), ClampToRange(T, eos_min_temp_, eos_max_));
 	}
 
 	// An out-of-range e is replaced by the state at the minimum temperature, as Microphysics's eos_reset() did
@@ -111,7 +118,7 @@ template <typename problem_t> struct EOSIdeal {
 			return GammaLawFromRhoT(rho, 0.0);
 		}
 		const amrex::Real T = e * mean_molecular_weight_ * (gamma_ - 1.0) / C::k_B;
-		return GammaLawFromValidRhoT(amrex::Clamp(rho, eos_min_dens_, eos_max_), T);
+		return GammaLawFromValidRhoT(ClampToRange(rho, eos_min_dens_, eos_max_), T);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto GammaLawFromRhoP(amrex::Real rho, amrex::Real p) -> GammaLawState
@@ -119,7 +126,7 @@ template <typename problem_t> struct EOSIdeal {
 		if (p < eos_min_p_ || p > eos_max_) {
 			return GammaLawFromRhoT(rho, 0.0);
 		}
-		const amrex::Real rho_clamped = amrex::Clamp(rho, eos_min_dens_, eos_max_);
+		const amrex::Real rho_clamped = ClampToRange(rho, eos_min_dens_, eos_max_);
 		const amrex::Real T = p * mean_molecular_weight_ / (C::k_B * rho_clamped);
 		return GammaLawFromValidRhoT(rho_clamped, T);
 	}
