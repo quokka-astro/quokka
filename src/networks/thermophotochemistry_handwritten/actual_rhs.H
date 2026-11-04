@@ -22,7 +22,7 @@ void actual_rhs_init();
 // ydot()/jac() are 1-indexed, so the same species use index+1 there.
 // net_ienuc (= NumSpec + 1) is the specific internal energy row/column.
 // Radiation rows/columns follow net_ienuc: photon number density, then
-// (unless SKIP_PHOTOCHEMFLUX) photon flux.
+// (with Microphysics_Traits::integrate_rad_flux) photon flux.
 constexpr int e_idx = static_cast<int>(Species::e);
 constexpr int H_idx = static_cast<int>(Species::H);
 constexpr int Hp_idx = static_cast<int>(Species::H_p);
@@ -37,9 +37,8 @@ constexpr int i_ngamma_flux = net_ienuc + 2;
 static_assert(NumThermalBands == 2, "thermophotochemistry_handwritten emits into exactly two thermal bands (IR, optical)");
 constexpr int i_ir = net_ienuc + NumChemRadEqs + 1;
 constexpr int i_optical = net_ienuc + NumChemRadEqs + 2;
-#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+// the dust-absorbed energy (Q_dust), with Microphysics_Traits::dust_chemical_band_absorption
 constexpr int i_dust = net_ienuc + NumChemRadEqs + NumThermalBands + 1;
-#endif
 
 constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
 
@@ -190,7 +189,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) 
 	return 1.3 * 1.427e-27 * 0.5 / std::sqrt(T) + d_cle_term_dT;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, amrex::Array1D<Real, 1, INT_NEQS> &ydot)
+template <typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const BurnT &state, amrex::Array1D<Real, 1, INT_NEQS> &ydot)
 {
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
@@ -200,9 +199,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, am
 	const amrex::Real n_HI = state.xn[H_idx];
 	const amrex::Real n_HII = state.xn[Hp_idx];
 	const amrex::Real n_gamma = amrex::max(state.rn[0], 0.0_rt);
-#ifndef SKIP_PHOTOCHEMFLUX
-	const amrex::Real n_gamma_flux = state.rn[1];
-#endif
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
@@ -241,27 +237,26 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, am
 	ydot(net_ienuc) = energy_source / state.rho;
 
 	amrex::Real chat_dust_kappa_rho = 0.0_rt;
-#ifdef DUST_CHEMICAL_BAND_ABSORPTION
-	chat_dust_kappa_rho = state.c_hat * state.dust_kappa * state.rho;
-#endif
+	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
+		chat_dust_kappa_rho = state.c_hat * state.dust_kappa * state.rho;
+	}
 	const amrex::Real dust_absorption_term = chat_dust_kappa_rho * n_gamma;
 
 	ydot(i_ngamma) = -photoionization_term - dust_absorption_term;
-#ifndef SKIP_PHOTOCHEMFLUX
-	ydot(i_ngamma_flux) = -chat_sigma_photo * n_HI * n_gamma_flux - chat_dust_kappa_rho * n_gamma_flux;
-#endif
-#ifdef DUST_CHEMICAL_BAND_ABSORPTION
-	ydot(i_dust) = dust_absorption_term * get_ionizing_band_photon_energy();
-#else
-	amrex::ignore_unused(dust_absorption_term);
-#endif
+	if constexpr (BurnT::traits::integrate_rad_flux) {
+		const amrex::Real n_gamma_flux = state.rn[1];
+		ydot(i_ngamma_flux) = -chat_sigma_photo * n_HI * n_gamma_flux - chat_dust_kappa_rho * n_gamma_flux;
+	}
+	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
+		ydot(i_dust) = dust_absorption_term * get_ionizing_band_photon_energy();
+	}
 
 	const amrex::Real recombination_binding_energy_rate = (energy_switch != 0) ? RydbergEnergy * recombination_term : 0.0_rt;
 	ydot(i_ir) = ion_ff_cooling_rate + KI_cooling_rate;
 	ydot(i_optical) = recombination_cooling_rate + recombination_binding_energy_rate;
 }
 
-template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
+template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const BurnT &state, MatrixType &jac)
 {
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
@@ -293,9 +288,6 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	const amrex::Real n_HII = state.xn[Hp_idx];
 	const amrex::Real n_gamma = amrex::max(state.rn[0], 0.0_rt);
 	const amrex::Real n_gamma_active = (state.rn[0] >= 0.0_rt) ? 1.0_rt : 0.0_rt;
-#ifndef SKIP_PHOTOCHEMFLUX
-	const amrex::Real n_gamma_flux = state.rn[1];
-#endif
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
@@ -313,9 +305,9 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	const amrex::Real dTde = 1 / state.dedT;
 
 	amrex::Real chat_dust_kappa_rho = 0.0_rt;
-#ifdef DUST_CHEMICAL_BAND_ABSORPTION
-	chat_dust_kappa_rho = state.c_hat * state.dust_kappa * state.rho;
-#endif
+	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
+		chat_dust_kappa_rho = state.c_hat * state.dust_kappa * state.rho;
+	}
 
 	jac.zero();
 
@@ -357,19 +349,20 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(i_ngamma, net_ienuc) = 0.0_rt;
 	jac(i_ngamma, i_ngamma) = -n_gamma_active * (chat_sigma_photo * n_HI + chat_dust_kappa_rho);
 
-#ifndef SKIP_PHOTOCHEMFLUX
-	jac(ie, i_ngamma_flux) = 0.0_rt;
-	jac(iH, i_ngamma_flux) = -jac(ie, i_ngamma_flux);
-	jac(iHp, i_ngamma_flux) = jac(ie, i_ngamma_flux);
-	jac(net_ienuc, i_ngamma_flux) = 0.0_rt;
-	jac(i_ngamma, i_ngamma_flux) = 0.0_rt;
-	jac(i_ngamma_flux, ie) = 0.0_rt;
-	jac(i_ngamma_flux, iH) = -chat_sigma_photo * n_gamma_flux;
-	jac(i_ngamma_flux, iHp) = 0.0_rt;
-	jac(i_ngamma_flux, net_ienuc) = 0.0_rt;
-	jac(i_ngamma_flux, i_ngamma) = 0.0_rt;
-	jac(i_ngamma_flux, i_ngamma_flux) = -n_HI * chat_sigma_photo - chat_dust_kappa_rho;
-#endif
+	if constexpr (BurnT::traits::integrate_rad_flux) {
+		const amrex::Real n_gamma_flux = state.rn[1];
+		jac(ie, i_ngamma_flux) = 0.0_rt;
+		jac(iH, i_ngamma_flux) = -jac(ie, i_ngamma_flux);
+		jac(iHp, i_ngamma_flux) = jac(ie, i_ngamma_flux);
+		jac(net_ienuc, i_ngamma_flux) = 0.0_rt;
+		jac(i_ngamma, i_ngamma_flux) = 0.0_rt;
+		jac(i_ngamma_flux, ie) = 0.0_rt;
+		jac(i_ngamma_flux, iH) = -chat_sigma_photo * n_gamma_flux;
+		jac(i_ngamma_flux, iHp) = 0.0_rt;
+		jac(i_ngamma_flux, net_ienuc) = 0.0_rt;
+		jac(i_ngamma_flux, i_ngamma) = 0.0_rt;
+		jac(i_ngamma_flux, i_ngamma_flux) = -n_HI * chat_sigma_photo - chat_dust_kappa_rho;
+	}
 
 	jac(i_ir, ie) = ion_ff_cooling_switch * Lambda_ff * n_HII;
 	jac(i_ir, iH) = molecular_process_switch * (2.0_rt * KI_cooling_switch * Lambda_KI * n_HI);
@@ -382,11 +375,9 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(i_optical, iHp) = recombination_cooling_switch * Lambda_rec * n_e + rydberg_rate_coeff * n_e;
 	jac(i_optical, net_ienuc) = (recombination_cooling_switch * d_Lambda_rec_dT * n_e * n_HII + d_rydberg_rate_coeff_dT * n_e * n_HII) * dTde;
 
-#ifdef DUST_CHEMICAL_BAND_ABSORPTION
-	jac(i_dust, i_ngamma) = n_gamma_active * chat_dust_kappa_rho * get_ionizing_band_photon_energy();
-#else
-	amrex::ignore_unused(chat_dust_kappa_rho);
-#endif
+	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
+		jac(i_dust, i_ngamma) = n_gamma_active * chat_dust_kappa_rho * get_ionizing_band_photon_energy();
+	}
 }
 
 #endif

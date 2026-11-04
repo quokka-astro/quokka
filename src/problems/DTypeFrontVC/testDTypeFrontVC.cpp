@@ -72,6 +72,7 @@ template <> struct RadSystem_Traits<DTypeFrontVC> {
 
 template <> struct Microphysics_Traits<DTypeFrontVC> : DefaultMicrophysicsTraits {
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
+	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
 };
 
 template <> struct SimulationData<DTypeFrontVC> {

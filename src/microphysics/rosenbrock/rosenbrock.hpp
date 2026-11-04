@@ -19,9 +19,8 @@
 #include "microphysics/microphysics_traits.hpp"
 #include "microphysics/rosenbrock/rosenbrock_state.hpp"
 
-// still from extern/Microphysics: burn_t, net_ienuc and integrator_neqs
-#include "burn_type.H"
-#include "integrator_data.H"
+// still from extern/Microphysics: NumSpec
+#include "network.H"
 
 namespace quokka::microphysics
 {
@@ -262,10 +261,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void solve(RosenbrockState<int_neqs, st
 }
 
 template <typename problem_t, typename Tableau, typename BurnT>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state, RosenbrockState<integrator_neqs<BurnT>(), Tableau::stages> &rstate) -> int
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state,
+								    RosenbrockState<IntegratorLayout<problem_t, BurnT>::neqs, Tableau::stages> &rstate) -> int
 {
 	using Layout = IntegratorLayout<problem_t, BurnT>;
-	constexpr int int_neqs = integrator_neqs<BurnT>();
+	constexpr int int_neqs = Layout::neqs;
 
 	if (rstate.tout == rstate.t) {
 		return IERR_SUCCESS;
@@ -492,7 +492,7 @@ template <typename Tableau> struct Rosenbrock {
 	template <typename problem_t, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE static void Integrate(BurnT &state, const amrex::Real dt)
 	{
 		using Layout = IntegratorLayout<problem_t, BurnT>;
-		constexpr int int_neqs = integrator_neqs<BurnT>();
+		constexpr int int_neqs = Layout::neqs;
 
 		auto rosenbrock_state = integrator_setup<Layout, RosenbrockState<int_neqs, Tableau::stages>>(state, dt);
 		const auto state_save = integrator_backup<Layout>(state);

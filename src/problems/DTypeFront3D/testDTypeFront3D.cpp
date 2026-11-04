@@ -81,25 +81,14 @@ template <> struct ISM_Traits<DTypeFront3D> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool enable_photoelectric_heating = false;
-	static constexpr bool thermal_band_photochemistry =
-#ifdef THERMAL_DUST_PHOTOCHEMISTRY
-	    true;
-#else
-	    false;
-#endif
-	// The network only carries the absorbed-energy ODE variable when it is built with the matching macro,
-	// so the trait has to follow it rather than being set unconditionally.
-	static constexpr bool dust_chemical_band_absorption =
-#ifdef DUST_CHEMICAL_BAND_ABSORPTION
-	    true;
-#else
-	    false;
-#endif
+	static constexpr bool thermal_band_photochemistry = true;
 };
 
 template <> struct Microphysics_Traits<DTypeFront3D> : DefaultMicrophysicsTraits {
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
+	static constexpr bool photochemistry = true;		    // built with PHOTOCHEMISTRY
+	static constexpr bool dust_chemical_band_absorption = true; // built with DUST_CHEMICAL_BAND_ABSORPTION
+	static constexpr bool integrate_rad_flux = false;	    // built with SKIP_PHOTOCHEMFLUX
 };
 
 template <> struct SimulationData<DTypeFront3D> {

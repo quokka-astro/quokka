@@ -17,6 +17,15 @@
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 
+namespace quokka::chemistry
+{
+template <typename problem_t>
+auto computeChemistry(amrex::MultiFab &mf, amrex::Real dt, amrex::Real max_density_allowed, amrex::Real min_density_allowed) -> bool;
+} // namespace quokka::chemistry
+
+// The definition is compiled only in builds with chemistry, because it uses names that only those builds have: spmasses,
+// small_x and eos() from Microphysics' primordial_chem EOS and network. Callers use Microphysics_Traits<problem_t>::chemistry.
+// This guard goes when the EOS and the network are in Quokka.
 #ifdef CHEMISTRY
 #include "actual_eos_data.H"
 #include "burn_type.H"

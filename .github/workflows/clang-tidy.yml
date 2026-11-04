@@ -34,7 +34,10 @@ jobs:
         # that only compiles inside a particular problem's build fails. Skipped:
         # - burner.hpp and rosenbrock.hpp include Microphysics' integrator headers, which only the chemistry problems'
         #   include paths find; linted again once they stop including them
+        # - burn_state.hpp reads NumChemRadEqs and NumThermalBands from Microphysics' generated network_properties.H,
+        #   which has them only for the photochemistry problems; linted again once it stops including it
         exclude: "extern/turbulence/*,\
+          src/microphysics/burn_state.hpp,\
           src/microphysics/burner.hpp,\
           src/microphysics/rosenbrock/rosenbrock.hpp"
         build_dir: build

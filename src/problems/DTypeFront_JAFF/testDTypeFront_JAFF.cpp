@@ -15,6 +15,7 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/jaff_network_adapter.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
@@ -74,6 +75,7 @@ template <> struct RadSystem_Traits<DTypeFront_JAFF> {
 
 template <> struct Microphysics_Traits<DTypeFront_JAFF> : DefaultMicrophysicsTraits {
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
+	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
 };
 
 template <> struct SimulationData<DTypeFront_JAFF> {
