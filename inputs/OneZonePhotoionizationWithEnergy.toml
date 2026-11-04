@@ -46,8 +46,6 @@ integrator.rtol_spec     = 5e-8
 integrator.rtol_rad_num  = 5e-8
 integrator.rtol_enuc     = 5e-8
 
-integrator.rosenbrock_tableau = 3
-
 network.energy_switch = 1
 network.KI_heating_switch = 0
 network.KI_cooling_switch = 0

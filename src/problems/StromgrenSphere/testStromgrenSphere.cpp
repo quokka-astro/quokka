@@ -8,8 +8,14 @@
 ///
 
 #include "StromgrenSphere.hpp"
+#include "microphysics/microphysics_traits.hpp"
 
 struct StromgrenSphere {};
+
+template <> struct Microphysics_Traits<StromgrenSphere> : DefaultMicrophysicsTraits {
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
+	static constexpr bool integrate_rad_flux = false; // built with SKIP_PHOTOCHEMFLUX
+};
 
 template <> struct quokka::EOS_Traits<StromgrenSphere> : stromgren_sphere::EOSTraits {};
 template <> struct Physics_Traits<StromgrenSphere> : stromgren_sphere::PhysicsTraits {};

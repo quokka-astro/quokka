@@ -10,6 +10,7 @@
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/microphysics_traits.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include <fstream>
@@ -56,6 +57,10 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 	static constexpr int beta_order = 0;
 	static constexpr auto ChemBandsPowerLawIndex() -> double { return ChemBandsPowerLawIndex_; }
 	static constexpr auto ChemBands() -> amrex::GpuArray<double, NumChemBands + 1> { return ChemBandsHeader(); }
+};
+
+template <> struct Microphysics_Traits<PhotoionizationStreamingProblem> : DefaultMicrophysicsTraits {
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {
