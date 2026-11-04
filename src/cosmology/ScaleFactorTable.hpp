@@ -3,15 +3,14 @@
 /// \file ScaleFactorTable.hpp
 /// \brief Host-only lookup table for the scale factor a(t), built once from the cosmological parameters.
 
-#include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstddef>
-#include <iterator>
-#include <vector>
 
-#include "AMReX.H"
+#include "AMReX_Algorithm.H"
+#include "AMReX_BLassert.H"
+#include "AMReX_INT.H"
 #include "AMReX_REAL.H"
+#include "AMReX_Vector.H"
 
 #include "cosmology/Cosmology.hpp"
 
@@ -86,9 +85,8 @@ class ScaleFactorTable
 		}
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(t >= 0.0 && t <= t_.back(), "ScaleFactorTable: time outside the table (increase cosmology.a_max).");
 
-		// first node strictly after t; the interval is [t_[i], t_[i+1]]
-		const auto it = std::upper_bound(t_.begin(), t_.end(), t);
-		const std::size_t i = (it == t_.end()) ? t_.size() - 2 : static_cast<std::size_t>(std::distance(t_.begin(), it)) - 1;
+		// interval [t_[i], t_[i+1]] with t_[i] <= t < t_[i+1]; t == t_.back() falls in the last interval
+		const amrex::Long i = amrex::bisect(t_.data(), amrex::Long{0}, t_.size() - 1, t);
 
 		const amrex::Real width = t_[i + 1] - t_[i];
 		const amrex::Real s = (t - t_[i]) / width; // map to s in [0,1], where Hermite relation is valid
@@ -105,9 +103,9 @@ class ScaleFactorTable
       private:
 	bool is_static_ = false;
 	amrex::Real a_init_ = 1.0;
-	std::vector<amrex::Real> t_;	///< physical time since a_init [s]
-	std::vector<amrex::Real> a_;	///< scale factor at t_
-	std::vector<amrex::Real> adot_; ///< da/dt at t_ [1/s]
+	amrex::Vector<amrex::Real> t_;	  ///< physical time since a_init [s]
+	amrex::Vector<amrex::Real> a_;	  ///< scale factor at t_
+	amrex::Vector<amrex::Real> adot_; ///< da/dt at t_ [1/s]
 };
 
 } // namespace quokka::cosmology
