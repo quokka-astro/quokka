@@ -22,7 +22,7 @@
 #include "AMReX_REAL.H"
 
 // internal headers
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "hydro/EOS.hpp"
 #include "hyperbolic_system.hpp"
 #include "math/math_impl.hpp"

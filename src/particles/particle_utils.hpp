@@ -2,7 +2,7 @@
 #define PARTICLE_UTILS_HPP_
 
 #include "AMReX_MultiFab.H"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "math/FastMath.hpp"
 #include "particles/particle_types.hpp"
 

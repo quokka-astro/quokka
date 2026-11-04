@@ -94,7 +94,7 @@ namespace filesystem = experimental::filesystem;
 #endif // AMREX_SPACEDIM == 3
 
 // internal headers
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "grid.hpp"
 #include "hydro/mhd_system.hpp"
 #include "io/DerivedFieldBase.H"

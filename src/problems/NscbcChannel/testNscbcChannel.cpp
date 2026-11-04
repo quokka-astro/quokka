@@ -30,7 +30,7 @@
 #include "AMReX_SPACE.H"
 
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/HydroState.hpp"
 #include "hydro/NSCBC_inflow.hpp"

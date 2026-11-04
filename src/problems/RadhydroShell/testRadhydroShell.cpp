@@ -14,7 +14,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "util/BC.hpp"

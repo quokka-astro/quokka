@@ -26,7 +26,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "cooling/ResampledCooling.hpp"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/NSCBC_inflow.hpp"
 #include "hydro/NSCBC_outflow.hpp"

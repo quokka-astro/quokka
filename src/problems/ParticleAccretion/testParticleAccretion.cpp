@@ -10,7 +10,7 @@
 #include "AMReX_ParmParse.H"
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"

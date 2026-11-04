@@ -4,7 +4,7 @@
 #include "AMReX_Array4.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "physics_numVars.hpp"
 #include <AMReX.H>
 #include <array>

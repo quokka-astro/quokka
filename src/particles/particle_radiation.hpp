@@ -2,7 +2,7 @@
 #define PARTICLE_RADIATION_HPP_
 
 #include "AMReX_Extension.H"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "particle_types.hpp"
 #include "util/DataTable.hpp"
 

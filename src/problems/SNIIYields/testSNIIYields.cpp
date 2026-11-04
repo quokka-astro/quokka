@@ -7,7 +7,7 @@
 #include "AMReX_Print.H"
 
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_chemical_yield.hpp"
 #include "particles/particle_types.hpp"

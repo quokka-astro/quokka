@@ -8,7 +8,7 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_dust_system.hpp"

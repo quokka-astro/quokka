@@ -24,7 +24,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "particle_IO.hpp"
 #include "particle_accretion.hpp"
 #include "particle_creation.hpp"

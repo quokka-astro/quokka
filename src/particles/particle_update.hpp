@@ -7,7 +7,7 @@
 #include "AMReX_Extension.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/quadrature.hpp"
 #include "particle_chemical_yield.hpp"

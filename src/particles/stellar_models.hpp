@@ -4,7 +4,7 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "particles/star_particle_indices.H"
 #include <cmath>
 

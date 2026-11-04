@@ -15,7 +15,7 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "math/interpolate.hpp"
 
 using Real = amrex::Real;
