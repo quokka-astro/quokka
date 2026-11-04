@@ -809,8 +809,8 @@ auto problem_main() -> int
 	sim.pressureFloor_ = 1.0e-3 * ::P0; // set pressure floor
 
 	// set metadata
-	sim.simulationMetadata_["delta_x"] = Real(0.0);
-	sim.simulationMetadata_["delta_vx"] = Real(0.0);
+	sim.simulationMetadata_["delta_x"] = static_cast<Real>(0.0);
+	sim.simulationMetadata_["delta_vx"] = static_cast<Real>(0.0);
 	sim.simulationMetadata_["rho_wind"] = rho_wind;
 	sim.simulationMetadata_["v_wind"] = v_wind;
 	sim.simulationMetadata_["P_wind"] = P_wind;
