@@ -36,9 +36,6 @@ integrator.ode_max_steps = 50000
 plotfile_interval = -1
 plotfile_prefix = "DTypeRadPres"
 
-network.allow_mixed_cell_cooling = 0
-
-
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 
 # VODE absolute tolerances. NOTE: these were tuned for the original DTypeFront_JAFF at n_H = 139.9
