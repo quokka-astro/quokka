@@ -474,6 +474,7 @@ template <typename problem_t> struct EOSMicrophysics {
 #ifdef PHOTOCHEMISTRY
 template <typename problem_t> struct EOSPhotochem {
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	static_assert(nmscalars_ >= NumSpec, "EOSPhotochem reads one mass scalar per network species: numMassScalars must be at least NumSpec");
 	static constexpr bool is_tabulated = false;
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
 	static constexpr amrex::Real boltzmann_constant_ = EOSIdeal<problem_t>::boltzmann_constant_;

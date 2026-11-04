@@ -34,7 +34,8 @@ using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 static constexpr bool debit_work_term_from_radiation = false;
 
 // Bounds outside which the network is frozen (RHS and Jacobian set to zero), as in Microphysics: the EOS minimum
-// temperature (eos_init(small_temp = 1e-10)) and integrator.MAX_TEMP.
+// temperature and integrator.MAX_TEMP. (Under Microphysics the photochemistry problems also called eos_init with their
+// own small_temp = 1e-2 K; at physical temperatures the choice has no effect.)
 static constexpr Real photochem_min_temp = 1.0e-10;
 static constexpr Real photochem_max_temp = 1.0e11;
 // floor applied to photon number densities, thermal-band energies and species inside every RHS call (Microphysics SMALL_X_SAFE)
@@ -47,6 +48,10 @@ constexpr int i_enuc = NumSpec;
 constexpr int i_rad0 = NumSpec + 1;
 constexpr int i_thermal0 = i_rad0 + NumChemRadEqs;
 constexpr int i_dust = i_thermal0 + NumThermalBands; // valid only with DUST_CHEMICAL_BAND_ABSORPTION
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+static_assert(i_dust < network::NumEqs, "DUST_CHEMICAL_BAND_ABSORPTION needs a network with a dust-absorption slot in its solver vector "
+					"(e.g. thermophotochemistry_handwritten)");
+#endif
 
 /// The ODE system for one cell: wraps the network RHS and Jacobian with Microphysics's clean_state clamps, the EOS
 /// call and the temperature bounds (integration/integrator_rhs_strang.H, integrator_type_strang.H).

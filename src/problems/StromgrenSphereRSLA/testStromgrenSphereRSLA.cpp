@@ -179,8 +179,6 @@ void RadSystem<StromgrenSphere>::AddRadSource(array_t &radEnergy, array_t & /*re
 }
 
 template <> struct SimulationData<StromgrenSphere> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -201,8 +199,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
-	userData_.small_temp = 1e-2;
-	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e4;
 	userData_.tend = 1000.0_rt;
 	userData_.n_e_init = 0.0e0_rt;
@@ -210,8 +206,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	userData_.n_HII_init = 0.0e0_rt;
 	userData_.Q = 1.0e49_rt;
 	userData_.recombination_switch = 0;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("tend", userData_.tend);
 	pp.query("n_e_init", userData_.n_e_init);

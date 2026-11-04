@@ -113,9 +113,11 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | chemistry.max_density_allowed | Float         | `1.0e300`               | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold.  |
 | chemistry.min_density_allowed | Float         | Smallest positive Value | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
 
-## Integrator (VODE)
+## Integrator (primordial chemistry: Microphysics VODE)
 
-These parameters control the VODE ODE integrator used for chemistry and photochemistry source terms. The generated code reads them via `init_extern_parameters()` from the `integrator` prefix. See also `docs/markdown/photoionization.md`.
+These parameters control the Microphysics VODE integrator used for the primordial-chemistry source terms (`CHEMISTRY`: PrimordialChem, PopIII). The generated code reads them via `init_extern_parameters()` from the `integrator` prefix.
+
+Photochemistry (`PHOTOCHEMISTRY`) does not use Microphysics: it has its own Rosenbrock integrator, which reads only `integrator.atol_*`, `integrator.rtol_*`, `integrator.species_failure_tolerance`, `integrator.radiation_failure_tolerance`, `integrator.X_reject_buffer` and `integrator.ode_max_steps`, with different failure semantics. See [Photoionization](photoionization.md), section 3.
 
 VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will cause the integrator to stall. Users must explicitly set the tolerances below.
 

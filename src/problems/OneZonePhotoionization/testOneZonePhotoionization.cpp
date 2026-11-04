@@ -60,8 +60,6 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -83,16 +81,12 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("photoionization");
-	userData_.small_temp = 1e-2;
-	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e3;
 	userData_.n_e_init = 0.0e0_rt;
 	userData_.n_HI_init = 1.0e2_rt;
 	userData_.n_HII_init = 0.0e0_rt;
 	userData_.tend = 1000.0_rt;
 	userData_.n_photon = 1.0e5_rt;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("n_e_init", userData_.n_e_init);
 	pp.query("n_HI_init", userData_.n_HI_init);
