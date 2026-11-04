@@ -81,7 +81,7 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE v
 	static_assert(BurnT::traits::integrate_rad_flux, "a jaff network needs Microphysics_Traits::integrate_rad_flux");
 
 	// $$JAFF REPEAT idx, expr, cse IN jacobian { USE quokka }
-	const amrex::Real cse0 = 1.0 / (2.0709734999998963e-16 * state.xn[0] + 2.0709734999998963e-16 * state.xn[1] + 2.0709734999998963e-16 * state.xn[2]);
+	const amrex::Real cse0 = 1.0 / (2.0709734999999996e-16 * state.xn[0] + 2.0709734999999996e-16 * state.xn[1] + 2.0709734999999996e-16 * state.xn[2]);
 	const amrex::Real cse1 = state.xn[1] * state.xn[2];
 	const amrex::Real cse2 = std::pow(state.T, -3.0 / 2.0);
 	const amrex::Real cse3 = 1.0 / state.T;
@@ -93,7 +93,7 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE v
 	const amrex::Real cse9 = cse5 * cse8;
 	const amrex::Real cse10 = 1.1615924711880352e-10 * cse1 * std::pow(state.T, -1.7) + 9.2211706233807419e-6 * cse6 + 2.92e-11 * cse9;
 	const amrex::Real cse11 = -cse0 * cse10;
-	const amrex::Real cse12 = 2.0709734999998963e-16 * state.T;
+	const amrex::Real cse12 = 2.0709734999999996e-16 * state.T;
 	const amrex::Real cse13 = cse11 * cse12;
 	const amrex::Real cse14 = 3.2385396673401957e-18 * state.c_hat;
 	const amrex::Real cse15 = cse14 * state.rn[2 * 0];

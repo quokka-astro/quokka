@@ -9,7 +9,7 @@
 #include "../species_table.H"
 #include "networks/photoionization_H_caseB/network.hpp"
 
-constexpr int NumSpec = quokka::networks::JaffNetwork::NumSpec;
+constexpr int NumSpec = quokka::networks::photoionization_H_caseB::Network::NumSpec;
 
 namespace
 {
@@ -21,6 +21,7 @@ namespace
 } // namespace
 
 // the table lists the species in the network's order
-static_assert(quokka::networks::JaffNetwork::h == 0 && quokka::networks::JaffNetwork::hj == 1 && quokka::networks::JaffNetwork::ek == 2);
+static_assert(quokka::networks::photoionization_H_caseB::Network::h == 0 && quokka::networks::photoionization_H_caseB::Network::hj == 1 &&
+	      quokka::networks::photoionization_H_caseB::Network::ek == 2);
 
 #endif // EOS_SHIM_PHOTOIONIZATION_H_CASEB_NETWORK_PROPERTIES_H_
