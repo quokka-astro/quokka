@@ -3,6 +3,8 @@
 /// \file microphysics_traits.hpp
 /// \brief Compile-time microphysics settings, chosen per problem through Microphysics_Traits.
 
+#include "AMReX_REAL.H"
+
 #include "microphysics/rosenbrock/tableaus.hpp"
 
 namespace quokka::microphysics
@@ -18,6 +20,32 @@ struct DefaultMicrophysicsTraits {
 	static constexpr bool burn_retry = false;
 	/// Whether to integrate the photon flux equations or determine them algebraically.
 	static constexpr bool integrate_rad_flux = true;
+
+	/// Use the network's analytic Jacobian.
+	static constexpr bool analytic_jacobian = true;
+	/// With analytic_jacobian, replace an analytic Jacobian that has a non-finite entry by finite differences. With
+	/// false, the finite-difference Jacobian is not compiled and such a burn fails with IERR_JACOBIAN_NOT_FINITE.
+	static constexpr bool numerical_jacobian_fallback = true;
+	/// LU decomposition with partial pivoting.
+	static constexpr bool linalg_do_pivoting = true;
+	/// Call the EOS in the right-hand side to get T from e.
+	static constexpr bool call_eos_in_rhs = true;
+	/// Integrate the energy; with false it is frozen.
+	static constexpr bool integrate_energy = true;
+	/// Clip the species to [SMALL_X_SAFE, 1] before each right-hand side.
+	static constexpr bool do_species_clip = false;
+	/// Renormalize the species to sum to 1 before each right-hand side.
+	static constexpr bool renormalize_abundances = false;
+	/// The right-hand side and the Jacobian are zero at or above this temperature.
+	static constexpr amrex::Real max_temp = 1.0e11;
+	/// The largest internal timestep.
+	static constexpr amrex::Real ode_max_dt = 1.e30;
+	/// The H211b step-size controller of the Rosenbrock integrator.
+	static constexpr amrex::Real h211b_b = 4.0;
+	static constexpr amrex::Real h211b_k = 2.5;
+	static constexpr amrex::Real h211b_fac_min = 0.2;
+	static constexpr amrex::Real h211b_fac_max = 6.0;
+	static constexpr amrex::Real h211b_reduction_fac = 0.5;
 };
 
 template <typename problem_t> struct Microphysics_Traits : DefaultMicrophysicsTraits {};
