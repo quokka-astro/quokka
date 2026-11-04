@@ -104,7 +104,7 @@ struct NetworkParams {
 	Real mixed_cell_lb = 0.01;
 	Real mixed_cell_ub = 0.99;
 	Real small_x = 1.0e-30; ///< floor for species number densities after the solve
-	Real dust_kappa = 0.0;  ///< dust opacity in the ionizing band [cm^2 g^-1] (DUST_CHEMICAL_BAND_ABSORPTION only)
+	Real dust_kappa = 0.0;	///< dust opacity in the ionizing band [cm^2 g^-1] (DUST_CHEMICAL_BAND_ABSORPTION only)
 
 	static auto read() -> NetworkParams
 	{
@@ -311,7 +311,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_rhs(State const &state, Ne
 
 	const amrex::Real photoionization_term = chat_sigma_photo * n_HI * n_gamma;
 	const amrex::Real collisional_ionization_term = (collisional_ionization_switch != 0) ? n_e * n_HI * sigma_coll : 0.0_rt;
-	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T, p.recombination_temperature_dependent) * n_e * n_HII : 0.0_rt;
+	const amrex::Real recombination_term =
+	    (recombination_switch != 0) ? get_recombination_coefficient(state.T, p.recombination_temperature_dependent) * n_e * n_HII : 0.0_rt;
 
 	ydot[ie] = photoionization_term + collisional_ionization_term - recombination_term;
 	ydot[iH] = -ydot[ie];

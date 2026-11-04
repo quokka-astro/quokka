@@ -13,10 +13,10 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_dust_system.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fundamental_constants.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -470,7 +470,6 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 		userData_.l_ode_last_u_ = l_d * c_s;
 		amrex::Print() << "Stromgren column l_s = " << l_s << " cm, ionized sound speed c_s = " << c_s << " cm/s\n";
 	}
-
 }
 
 template <>
