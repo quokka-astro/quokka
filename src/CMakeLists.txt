@@ -133,8 +133,8 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 # src/problems/*/CMakeLists.txt.
 include(${CMAKE_SOURCE_DIR}/src/networks/NetworkRegistry.cmake)
 # Only chemistry and photochemistry problems use Microphysics; each sets up its own network and include directories.
-# gcem (header-only constexpr math, used across Quokka) is not Microphysics code, but its copy lives in the Microphysics submodule.
-include_directories(${CMAKE_SOURCE_DIR}/extern/Microphysics/util/gcem/include)
+# gcem: header-only constexpr math library (https://github.com/kthohr/gcem, Apache-2.0), vendored in extern/gcem
+include_directories(${CMAKE_SOURCE_DIR}/extern/gcem/include)
 
 if(TARGET amrex_hydro_api)
   link_libraries(amrex_hydro_api)
