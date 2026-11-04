@@ -1,7 +1,8 @@
-#ifndef MICROPHYSICS_INTEGRATOR_LAYOUT_HPP_
-#define MICROPHYSICS_INTEGRATOR_LAYOUT_HPP_
-/// \file integrator_layout.hpp
-/// \brief The layout of the integrated vector y: what each entry holds and where. Shared by the integrators and the
+#ifndef MICROPHYSICS_ODE_SYSTEM_HPP_
+#define MICROPHYSICS_ODE_SYSTEM_HPP_
+/// \file ode_system.hpp
+/// \brief The ODE system the integrator solves: the integrated vector y, what each entry holds and where, and through
+/// traits the switches of the equations and the network that defines them. Shared by the integrators and the
 /// networks, so it does not include a network.
 
 #include <cstdint>
@@ -24,7 +25,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto counts_toward_error(cons
 	return role == VarRole::Species || role == VarRole::Energy || role == VarRole::ChemPhotonNumber;
 }
 
-template <typename problem_t, typename BurnT> struct IntegratorLayout {
+template <typename problem_t, typename BurnT> struct ODESystem {
 	using traits = Microphysics_Traits<problem_t>;
 
 	static constexpr bool photochemistry = traits::photochemistry;
@@ -102,4 +103,4 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 
 } // namespace quokka::microphysics
 
-#endif // MICROPHYSICS_INTEGRATOR_LAYOUT_HPP_
+#endif // MICROPHYSICS_ODE_SYSTEM_HPP_
