@@ -13,9 +13,9 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fundamental_constants.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif

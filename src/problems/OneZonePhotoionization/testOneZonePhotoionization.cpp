@@ -9,9 +9,9 @@
 
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include "util/fundamental_constants.hpp"
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -98,7 +98,6 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	pp.query("n_HII_init", userData_.n_HII_init);
 	pp.query("tend", userData_.tend);
 	pp.query("n_photon", userData_.n_photon);
-
 
 	quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands> state;
 	state.T = userData_.temperature;

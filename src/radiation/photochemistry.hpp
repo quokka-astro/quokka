@@ -51,7 +51,7 @@ constexpr int i_dust = i_thermal0 + NumThermalBands; // valid only with DUST_CHE
 /// The ODE system for one cell: wraps the network RHS and Jacobian with Microphysics's clean_state clamps, the EOS
 /// call and the temperature bounds (integration/integrator_rhs_strang.H, integrator_type_strang.H).
 struct PhotochemSystem {
-	network::State state;	      // rho, c_hat and dust_kappa are fixed; the rest is unpacked from y
+	network::State state; // rho, c_hat and dust_kappa are fixed; the rest is unpacked from y
 	network::NetworkParams params;
 
 	AMREX_GPU_HOST_DEVICE static void clean(rosenbrock::Vector<network::NumEqs> &y)

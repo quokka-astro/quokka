@@ -297,7 +297,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_rhs(State const &state, Ne
 
 	const amrex::Real photoionization_term = chat_sigma_photo * n_HI * n_gamma;
 	const amrex::Real collisional_ionization_term = (collisional_ionization_switch != 0) ? n_e * n_HI * sigma_coll : 0.0_rt;
-	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T, p.recombination_temperature_dependent) * n_e * n_HII : 0.0_rt;
+	const amrex::Real recombination_term =
+	    (recombination_switch != 0) ? get_recombination_coefficient(state.T, p.recombination_temperature_dependent) * n_e * n_HII : 0.0_rt;
 
 	ydot[ie] = photoionization_term + collisional_ionization_term - recombination_term;
 	ydot[iH] = -ydot[ie];

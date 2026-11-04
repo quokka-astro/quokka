@@ -13,10 +13,10 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Reduce.H"
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "physics_info.hpp"
 #include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fundamental_constants.hpp"
 #include <array>
 #include <cmath>
 #include <limits>
@@ -103,7 +103,6 @@ template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 	pp.query("n_e_init", userData_.n_e_init);
 	pp.query("n_HI_init", userData_.n_HI_init);
 	pp.query("n_HII_init", userData_.n_HII_init);
-
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontVC>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real

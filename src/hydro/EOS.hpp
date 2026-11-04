@@ -508,7 +508,8 @@ template <typename problem_t> struct EOSPhotochem {
 		return n;
 	}
 
-	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto HeatCapacityPerParticle(amrex::GpuArray<amrex::Real, NumSpec> const &n) -> amrex::Real
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto HeatCapacityPerParticle(amrex::GpuArray<amrex::Real, NumSpec> const &n)
+	    -> amrex::Real
 	{
 		amrex::Real sum_n = 0.0;
 		amrex::Real sum_f = 0.0;
@@ -520,8 +521,8 @@ template <typename problem_t> struct EOSPhotochem {
 	}
 
 	// (rho, T) input: rho and T are clamped to the floors
-	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FromRhoT(amrex::Real rho, amrex::Real T, amrex::GpuArray<amrex::Real, NumSpec> const &n)
-	    -> State
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FromRhoT(amrex::Real rho, amrex::Real T,
+										    amrex::GpuArray<amrex::Real, NumSpec> const &n) -> State
 	{
 		State s{};
 		s.rho = ClampToRange(rho, eos_min_dens_, eos_max_);
@@ -533,8 +534,8 @@ template <typename problem_t> struct EOSPhotochem {
 	}
 
 	// (rho, e) input: an out-of-range e is replaced by the state at the minimum temperature; T itself is not floored
-	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FromRhoE(amrex::Real rho, amrex::Real e, amrex::GpuArray<amrex::Real, NumSpec> const &n)
-	    -> State
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FromRhoE(amrex::Real rho, amrex::Real e,
+										    amrex::GpuArray<amrex::Real, NumSpec> const &n) -> State
 	{
 		if (e < eos_min_ep_ || e > eos_max_) {
 			return FromRhoT(rho, 0.0, n);
@@ -549,8 +550,8 @@ template <typename problem_t> struct EOSPhotochem {
 	}
 
 	// (rho, p) input: an out-of-range p is replaced by the state at the minimum temperature
-	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FromRhoP(amrex::Real rho, amrex::Real p, amrex::GpuArray<amrex::Real, NumSpec> const &n)
-	    -> State
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FromRhoP(amrex::Real rho, amrex::Real p,
+										    amrex::GpuArray<amrex::Real, NumSpec> const &n) -> State
 	{
 		if (p < eos_min_ep_ || p > eos_max_) {
 			return FromRhoT(rho, 0.0, n);

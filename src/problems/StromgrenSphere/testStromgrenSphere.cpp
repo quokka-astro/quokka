@@ -13,9 +13,9 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fundamental_constants.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -205,7 +205,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 
 	amrex::ParmParse const pp2("network");
 	pp2.query("recombination_switch", userData_.recombination_switch);
-
 
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
