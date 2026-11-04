@@ -15,7 +15,7 @@ setup_target_for_microphysics_compilation(${microphysics_network_name}
 
 add_executable(
   ${JOB_NAME} testOneZonePhotoionization.cpp "${QuokkaSourcesNoEOS}"
-              ../../radiation/photochemistry.cpp ${${microphysics_network_name}_sources})
+              ${${microphysics_network_name}_sources})
 
 # this will add #define PHOTOCHEMISTRY
 target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
