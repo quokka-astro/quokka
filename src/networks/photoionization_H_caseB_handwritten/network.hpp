@@ -14,7 +14,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "fundamental_constants.H"
-#include "microphysics/integrator_layout.hpp"
+#include "microphysics/ode_system.hpp"
 
 namespace quokka::networks
 {
@@ -61,7 +61,7 @@ struct PhotoionizationHCaseB {
 	/// The right-hand side on Quokka's burn state (photoionization_h_caseb::actual_rhs, below).
 	template <typename BurnT>
 	AMREX_GPU_HOST_DEVICE static void
-	actual_rhs(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot);
+	actual_rhs(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot);
 	/// The Jacobian of actual_rhs (photoionization_h_caseb::actual_jac, below).
 	template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE static void actual_jac(const BurnT &state, MatrixType &jac);
 };
@@ -73,7 +73,7 @@ using amrex::Real;
 using amrex::literals::operator""_rt;
 
 // Species indices (xn[]/spmasses[]) come from the Species enum above; ydot[]/jac() use the same indices.
-// net_ienuc (the integrator layout's energy_row, NumSpec) is the specific internal energy row/column.
+// net_ienuc (the ODE system's energy_row, NumSpec) is the specific internal energy row/column.
 // Radiation rows/columns follow net_ienuc: photon number density, then
 // (with Microphysics_Traits::integrate_rad_flux) photon flux.
 constexpr int e_idx = static_cast<int>(quokka::networks::PhotoionizationHCaseB::Species::e);
@@ -234,10 +234,10 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) 
 
 template <typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-actual_rhs(const BurnT &state, amrex::GpuArray<Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
+actual_rhs(const BurnT &state, amrex::GpuArray<Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
-	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
-	constexpr int net_ienuc = Layout::energy_row;
+	using System = quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>;
+	constexpr int net_ienuc = System::energy_row;
 	constexpr int i_ngamma = net_ienuc + 1;
 	constexpr int i_ngamma_flux = net_ienuc + 2;
 
@@ -307,8 +307,8 @@ actual_rhs(const BurnT &state, amrex::GpuArray<Real, quokka::microphysics::Integ
 
 template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const BurnT &state, MatrixType &jac)
 {
-	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
-	constexpr int net_ienuc = Layout::energy_row;
+	using System = quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>;
+	constexpr int net_ienuc = System::energy_row;
 	constexpr int i_ngamma = net_ienuc + 1;
 	constexpr int i_ngamma_flux = net_ienuc + 2;
 
@@ -442,7 +442,7 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 template <typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
 PhotoionizationHCaseB::actual_rhs(const BurnT &state,
-				  amrex::GpuArray<amrex::Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
+				  amrex::GpuArray<amrex::Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
 	photoionization_h_caseb::actual_rhs(state, ydot);
 }

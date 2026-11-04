@@ -20,7 +20,7 @@
 #include <AMReX_Math.H>
 #include <AMReX_REAL.H>
 
-#include "microphysics/integrator_layout.hpp"
+#include "microphysics/ode_system.hpp"
 
 namespace quokka::networks
 {
@@ -48,7 +48,7 @@ struct PrimordialChem {
 	/// The right-hand side on Quokka's burn state (primordial_chem::actual_rhs, below).
 	template <typename BurnT>
 	AMREX_GPU_HOST_DEVICE static void
-	actual_rhs(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot);
+	actual_rhs(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot);
 	/// The Jacobian of actual_rhs (primordial_chem::actual_jac, below).
 	template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE static void actual_jac(const BurnT &state, MatrixType &jac);
 };
@@ -59,9 +59,9 @@ namespace primordial_chem
 using amrex::Real;
 
 template <typename BurnT>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE void
-rhs_specie(const BurnT &state, amrex::GpuArray<Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot,
-	   const amrex::GpuArray<Real, quokka::networks::PrimordialChem::NumSpec> &X, Real const /*z*/)
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void rhs_specie(const BurnT &state,
+						   amrex::GpuArray<Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot,
+						   const amrex::GpuArray<Real, quokka::networks::PrimordialChem::NumSpec> &X, Real const /*z*/)
 {
 
 	Real T = state.T;
@@ -1191,10 +1191,10 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto rhs_eint(const BurnT &state, const amrex
 }
 
 template <typename BurnT>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE void
-actual_rhs(const BurnT &state, amrex::GpuArray<Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_rhs(const BurnT &state,
+						   amrex::GpuArray<Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
-	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
+	using System = quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>;
 
 	Real z = quokka::networks::primordial_chem::redshift;
 
@@ -1212,7 +1212,7 @@ actual_rhs(const BurnT &state, amrex::GpuArray<Real, quokka::microphysics::Integ
 
 	// Append the energy equation (this is erg/g/s)
 
-	ydot[Layout::energy_row] = edot;
+	ydot[System::energy_row] = edot;
 }
 
 template <typename BurnT, class MatrixType>
@@ -6059,8 +6059,7 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE v
 
 template <typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-PrimordialChem::actual_rhs(const BurnT &state,
-			   amrex::GpuArray<amrex::Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
+PrimordialChem::actual_rhs(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
 	primordial_chem::actual_rhs(state, ydot);
 }

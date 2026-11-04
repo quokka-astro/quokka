@@ -20,9 +20,9 @@
 #include "AMReX_REAL.H"
 
 #include "microphysics/integrator_errors.hpp"
-#include "microphysics/integrator_layout.hpp"
 #include "microphysics/integrator_params.hpp"
 #include "microphysics/microphysics_traits.hpp"
+#include "microphysics/ode_system.hpp"
 
 // eos() is still Microphysics'. actual_rhs and actual_jac are members of the problem's network type, which the problem
 // file includes.
@@ -34,50 +34,50 @@ namespace quokka::microphysics
 using amrex::literals::operator""_rt;
 
 /// Update the thermodynamics in the burn state from the integrator state. This may involve an EOS call.
-template <typename Layout, typename BurnT, typename IntegratorT>
+template <typename System, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state, const IntegratorT &int_state)
 {
-	for (int n = 0; n < Layout::num_spec; ++n) {
+	for (int n = 0; n < System::num_spec; ++n) {
 		state.xn[n] = int_state.y[n];
 	}
-	state.e = int_state.y[Layout::energy_row];
-	if constexpr (Layout::photochemistry) {
-		for (int n = 0; n < Layout::num_chem_rad_eqs; ++n) {
-			state.rn[n] = int_state.y[Layout::energy_row + 1 + n];
+	state.e = int_state.y[System::energy_row];
+	if constexpr (System::photochemistry) {
+		for (int n = 0; n < System::num_chem_rad_eqs; ++n) {
+			state.rn[n] = int_state.y[System::energy_row + 1 + n];
 		}
-		for (int n = 0; n < Layout::num_thermal_bands; ++n) {
-			state.re_thermal[n] = int_state.y[Layout::thermal_band_row + n];
+		for (int n = 0; n < System::num_thermal_bands; ++n) {
+			state.re_thermal[n] = int_state.y[System::thermal_band_row + n];
 		}
 		state.c_hat = int_state.c_hat;
 	}
 
 	// Get T from e (also updates composition quantities).
 
-	if constexpr (Layout::traits::call_eos_in_rhs) {
+	if constexpr (System::traits::call_eos_in_rhs) {
 		eos(eos_input_re, state);
 	}
 }
 
 /// Copy the integration data to the burn state.
-template <typename Layout, typename IntegratorT, typename BurnT>
+template <typename System, typename IntegratorT, typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void integrator_to_burn(const IntegratorT &int_state, BurnT &state)
 {
-	for (int n = 0; n < Layout::num_spec; ++n) {
+	for (int n = 0; n < System::num_spec; ++n) {
 		state.xn[n] = int_state.y[n];
 	}
 
-	state.e = int_state.y[Layout::energy_row];
+	state.e = int_state.y[System::energy_row];
 
-	if constexpr (Layout::photochemistry) {
-		for (int n = 0; n < Layout::num_chem_rad_eqs; ++n) {
-			state.rn[n] = int_state.y[Layout::energy_row + 1 + n];
+	if constexpr (System::photochemistry) {
+		for (int n = 0; n < System::num_chem_rad_eqs; ++n) {
+			state.rn[n] = int_state.y[System::energy_row + 1 + n];
 		}
-		for (int n = 0; n < Layout::num_thermal_bands; ++n) {
-			state.re_thermal[n] = int_state.y[Layout::thermal_band_row + n];
+		for (int n = 0; n < System::num_thermal_bands; ++n) {
+			state.re_thermal[n] = int_state.y[System::thermal_band_row + n];
 		}
 		state.c_hat = int_state.c_hat;
-		if constexpr (Layout::q_dust) {
-			state.e_dust_absorbed = int_state.y[Layout::dust_row];
+		if constexpr (System::q_dust) {
+			state.e_dust_absorbed = int_state.y[System::dust_row];
 		}
 	}
 
@@ -85,38 +85,38 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void integrator_to_burn(const Integrato
 }
 
 /// Copy the integration data from the burn state.
-template <typename Layout, typename BurnT, typename IntegratorT>
+template <typename System, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void burn_to_integrator(const BurnT &state, IntegratorT &int_state)
 {
-	for (int n = 0; n < Layout::num_spec; ++n) {
+	for (int n = 0; n < System::num_spec; ++n) {
 		int_state.y[n] = state.xn[n];
 	}
 
-	int_state.y[Layout::energy_row] = state.e;
+	int_state.y[System::energy_row] = state.e;
 
-	if constexpr (Layout::photochemistry) {
-		for (int n = 0; n < Layout::num_chem_rad_eqs; ++n) {
-			int_state.y[Layout::energy_row + 1 + n] = state.rn[n];
+	if constexpr (System::photochemistry) {
+		for (int n = 0; n < System::num_chem_rad_eqs; ++n) {
+			int_state.y[System::energy_row + 1 + n] = state.rn[n];
 		}
-		for (int n = 0; n < Layout::num_thermal_bands; ++n) {
-			int_state.y[Layout::thermal_band_row + n] = state.re_thermal[n];
+		for (int n = 0; n < System::num_thermal_bands; ++n) {
+			int_state.y[System::thermal_band_row + n] = state.re_thermal[n];
 		}
 		int_state.c_hat = state.c_hat;
-		if constexpr (Layout::q_dust) {
-			int_state.y[Layout::dust_row] = state.e_dust_absorbed;
+		if constexpr (System::q_dust) {
+			int_state.y[System::dust_row] = state.e_dust_absorbed;
 		}
 	}
 }
 
 /// Keep the integrated variables within their valid ranges before the right-hand side is evaluated.
-template <typename Layout, typename IntegratorT>
+template <typename System, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void clean_state(IntegratorT &int_state, const IntegratorParams &params)
 {
-	for (int n = 0; n < Layout::neqs; ++n) {
-		switch (Layout::role(n)) {
+	for (int n = 0; n < System::neqs; ++n) {
+		switch (System::role(n)) {
 			case VarRole::Species:
 				// do_species_clip also caps each species at 1, which only makes sense for mass fractions
-				if constexpr (Layout::traits::do_species_clip) {
+				if constexpr (System::traits::do_species_clip) {
 					int_state.y[n] = amrex::Clamp(int_state.y[n], params.SMALL_X_SAFE, 1.0_rt);
 				}
 				// enforce positivity of the number densities
@@ -137,14 +137,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void clean_state(IntegratorT &int_state
 
 	// Renormalize the abundances as necessary.
 
-	if constexpr (Layout::traits::renormalize_abundances) {
+	if constexpr (System::traits::renormalize_abundances) {
 		amrex::Real sum = 0.0_rt;
 
-		for (int n = 0; n < Layout::num_spec; ++n) {
+		for (int n = 0; n < System::num_spec; ++n) {
 			sum += int_state.y[n];
 		}
 
-		for (int n = 0; n < Layout::num_spec; ++n) {
+		for (int n = 0; n < System::num_spec; ++n) {
 			int_state.y[n] /= sum;
 		}
 	}
@@ -152,27 +152,27 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void clean_state(IntegratorT &int_state
 
 /// The right-hand side of the integrated system: cleans the integrator state, syncs the burn state with it and calls
 /// the network.
-template <typename Layout, typename BurnT, typename IntegratorT>
+template <typename System, typename BurnT, typename IntegratorT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT &state, IntegratorT &int_state,
-						  amrex::GpuArray<amrex::Real, Layout::neqs> &ydot, const IntegratorParams &params)
+						  amrex::GpuArray<amrex::Real, System::neqs> &ydot, const IntegratorParams &params)
 {
-	constexpr int int_neqs = Layout::neqs;
+	constexpr int int_neqs = System::neqs;
 
 	// Fix the state as necessary -- this ensures that the species
 	// that enter are valid (and optionally normalized)
 
-	clean_state<Layout>(int_state, params);
+	clean_state<System>(int_state, params);
 
 	// Update the thermodynamics as necessary -- this primarily takes
 	// the information in int_state (X and e), copies it to the
 	// burn state and calls the EOS to get state.T
 
-	update_thermodynamics<Layout>(state, int_state);
+	update_thermodynamics<System>(state, int_state);
 
 	// Only do the burn if the incoming temperature is within the temperature
 	// bounds. Otherwise set the RHS to zero.
 
-	const bool in_bounds = !(state.T <= EOSData::mintemp || state.T >= Layout::traits::max_temp);
+	const bool in_bounds = !(state.T <= EOSData::mintemp || state.T >= System::traits::max_temp);
 
 	if (in_bounds) {
 		state.time = time;
@@ -182,12 +182,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 
 		// Call the specific network routine to get the RHS.
 
-		Layout::traits::Network::actual_rhs(state, ydot);
+		System::traits::Network::actual_rhs(state, ydot);
 
 		// Allow energy integration to be disabled.
 
-		if constexpr (!Layout::traits::integrate_energy) {
-			ydot[Layout::energy_row] = 0.0_rt;
+		if constexpr (!System::traits::integrate_energy) {
+			ydot[System::energy_row] = 0.0_rt;
 		}
 	}
 
@@ -201,32 +201,32 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 
 /// The analytic Jacobian of the integrated system. The matrix is zeroed before the network fills it, so a network only
 /// has to write its nonzero entries.
-template <typename Layout, typename BurnT, typename IntegratorT, typename MatrixType>
+template <typename System, typename BurnT, typename IntegratorT, typename MatrixType>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int_state, MatrixType &pd)
 {
-	constexpr int int_neqs = Layout::neqs;
+	constexpr int int_neqs = System::neqs;
 
 	// Only do the burn if the incoming temperature is within the temperature
 	// bounds. Otherwise set the Jacobian to zero and return.
 
-	if (state.T <= EOSData::mintemp || state.T >= Layout::traits::max_temp) {
+	if (state.T <= EOSData::mintemp || state.T >= System::traits::max_temp) {
 		pd = MatrixType{};
 		return;
 	}
 
 	// Call the specific network routine to get the Jacobian.
 
-	integrator_to_burn<Layout>(int_state, state);
+	integrator_to_burn<System>(int_state, state);
 
 	pd = MatrixType{};
 
-	Layout::traits::Network::actual_jac(state, pd);
+	System::traits::Network::actual_jac(state, pd);
 
 	// Allow temperature and energy integration to be disabled.
 
-	if constexpr (!Layout::traits::integrate_energy) {
+	if constexpr (!System::traits::integrate_energy) {
 		for (int j = 0; j < int_neqs; ++j) {
-			pd(Layout::energy_row, j) = 0.0_rt;
+			pd(System::energy_row, j) = 0.0_rt;
 		}
 	}
 }
@@ -235,19 +235,19 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 constexpr int OUTDIGITS = std::numeric_limits<amrex::Real>::max_digits10;
 
 /// The initial composition and thermodynamic state, saved for diagnostics.
-template <typename Layout> struct StateBackup {
+template <typename System> struct StateBackup {
 	amrex::Real T_in{};
 #ifndef AMREX_USE_GPU
-	amrex::GpuArray<amrex::Real, Layout::num_spec> xn_in{};
-	amrex::GpuArray<amrex::Real, Layout::num_chem_rad_eqs> rn_in{};
-	amrex::GpuArray<amrex::Real, Layout::num_thermal_bands> re_thermal_in{};
+	amrex::GpuArray<amrex::Real, System::num_spec> xn_in{};
+	amrex::GpuArray<amrex::Real, System::num_chem_rad_eqs> rn_in{};
+	amrex::GpuArray<amrex::Real, System::num_thermal_bands> re_thermal_in{};
 	amrex::Real c_hat{};
 	amrex::Real e_dust_absorbed_in{};
 #endif
 };
 
 /// Set up the integrator state from the burn state.
-template <typename Layout, typename IntegratorT, typename BurnT>
+template <typename System, typename IntegratorT, typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amrex::Real dt, const IntegratorParams &params) -> IntegratorT
 {
 	IntegratorT int_state{};
@@ -259,7 +259,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amr
 
 	int_state.rtol_spec = params.rtol_spec; // species number densities
 	int_state.rtol_enuc = params.rtol_enuc; // specific internal energy
-	if constexpr (Layout::photochemistry) {
+	if constexpr (System::photochemistry) {
 		int_state.atol_rad_num = params.atol_rad_num; // radiation number density
 		int_state.rtol_rad_num = params.rtol_rad_num; // radiation number density
 	}
@@ -278,35 +278,35 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amr
 
 	eos(eos_input_rt, state);
 
-	if constexpr (Layout::q_dust) {
+	if constexpr (System::q_dust) {
 		state.e_dust_absorbed = 0.0_rt;
 	}
 
 	// Fill in the initial integration state.
 
-	burn_to_integrator<Layout>(state, int_state);
+	burn_to_integrator<System>(state, int_state);
 
 	return int_state;
 }
 
 /// Save the initial composition and thermodynamic state for diagnostics.
-template <typename Layout, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_backup(const BurnT &state) -> StateBackup<Layout>
+template <typename System, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_backup(const BurnT &state) -> StateBackup<System>
 {
-	StateBackup<Layout> state_save;
+	StateBackup<System> state_save;
 
 #ifndef AMREX_USE_GPU
-	for (int n = 0; n < Layout::num_spec; ++n) {
+	for (int n = 0; n < System::num_spec; ++n) {
 		state_save.xn_in[n] = state.xn[n];
 	}
-	if constexpr (Layout::photochemistry) {
-		for (int n = 0; n < Layout::num_chem_rad_eqs; ++n) {
+	if constexpr (System::photochemistry) {
+		for (int n = 0; n < System::num_chem_rad_eqs; ++n) {
 			state_save.rn_in[n] = state.rn[n];
 		}
-		for (int n = 0; n < Layout::num_thermal_bands; ++n) {
+		for (int n = 0; n < System::num_thermal_bands; ++n) {
 			state_save.re_thermal_in[n] = state.re_thermal[n];
 		}
 		state_save.c_hat = state.c_hat;
-		if constexpr (Layout::q_dust) {
+		if constexpr (System::q_dust) {
 			state_save.e_dust_absorbed_in = state.e_dust_absorbed;
 		}
 	}
@@ -317,13 +317,13 @@ template <typename Layout, typename BurnT> AMREX_GPU_HOST_DEVICE AMREX_INLINE au
 }
 
 /// Copy the integrator state back to the burn state and check the result.
-template <typename Layout, typename IntegratorT, typename BurnT>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_state, BurnT &state, const int istate, const StateBackup<Layout> &state_save,
+template <typename System, typename IntegratorT, typename BurnT>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_state, BurnT &state, const int istate, const StateBackup<System> &state_save,
 							   const amrex::Real dt, const IntegratorParams &params)
 {
 	// Copy the integration data back to the burn state.
 
-	integrator_to_burn<Layout>(int_state, state);
+	integrator_to_burn<System>(int_state, state);
 
 	// Get the number of RHS and Jacobian evaluations.
 
@@ -341,8 +341,8 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 		state.success = false;
 	}
 
-	for (int n = 0; n < Layout::neqs; ++n) {
-		switch (Layout::role(n)) {
+	for (int n = 0; n < System::neqs; ++n) {
+		switch (System::role(n)) {
 			case VarRole::Species:
 				if (int_state.y[n] < -params.species_failure_tolerance) {
 					state.success = false;
@@ -385,21 +385,21 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 		std::cout << "dt = " << std::setprecision(OUTDIGITS) << dt << '\n';
 		std::cout << "temp start = " << std::setprecision(OUTDIGITS) << state_save.T_in << '\n';
 		std::cout << "xn start = ";
-		for (int n = 0; n < Layout::num_spec; ++n) {
+		for (int n = 0; n < System::num_spec; ++n) {
 			std::cout << std::scientific << std::setprecision(OUTDIGITS) << state_save.xn_in[n] << " ";
 		}
-		if constexpr (Layout::photochemistry) {
+		if constexpr (System::photochemistry) {
 			std::cout << '\n';
 			std::cout << "rn start = ";
-			for (int n = 0; n < Layout::num_chem_rad_eqs; ++n) {
+			for (int n = 0; n < System::num_chem_rad_eqs; ++n) {
 				std::cout << std::scientific << std::setprecision(OUTDIGITS) << state_save.rn_in[n] << " ";
 			}
 			std::cout << '\n';
 			std::cout << "re_thermal start = ";
-			for (int n = 0; n < Layout::num_thermal_bands; ++n) {
+			for (int n = 0; n < System::num_thermal_bands; ++n) {
 				std::cout << std::scientific << std::setprecision(OUTDIGITS) << state_save.re_thermal_in[n] << " ";
 			}
-			if constexpr (Layout::q_dust) {
+			if constexpr (System::q_dust) {
 				std::cout << '\n';
 				std::cout << "e_dust_absorbed start = " << std::scientific << std::setprecision(OUTDIGITS) << state_save.e_dust_absorbed_in;
 			}
@@ -411,7 +411,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 		for (const double X : state.xn) {
 			std::cout << std::scientific << std::setprecision(OUTDIGITS) << X << " ";
 		}
-		if constexpr (Layout::photochemistry) {
+		if constexpr (System::photochemistry) {
 			std::cout << '\n';
 			std::cout << "rn current = ";
 			for (const double X : state.rn) {
@@ -422,7 +422,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void integrator_cleanup(IntegratorT &int_stat
 			for (const double X : state.re_thermal) {
 				std::cout << std::scientific << std::setprecision(OUTDIGITS) << X << " ";
 			}
-			if constexpr (Layout::q_dust) {
+			if constexpr (System::q_dust) {
 				std::cout << '\n';
 				std::cout << "e_dust_absorbed current = " << std::scientific << std::setprecision(OUTDIGITS) << state.e_dust_absorbed;
 			}
