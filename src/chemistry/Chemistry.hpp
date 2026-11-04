@@ -30,7 +30,9 @@
 namespace quokka::chemistry
 {
 
-template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed) -> bool
+template <typename problem_t>
+auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed,
+		      const quokka::microphysics::IntegratorParams integrator_params) -> bool
 {
 	using Network = typename Microphysics_Traits<problem_t>::Network;
 
@@ -99,7 +101,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			eos(eos_input_re, chemstate);
 
 			// do the actual integration
-			quokka::microphysics::Burn<problem_t>(chemstate, dt);
+			quokka::microphysics::Burn<problem_t>(chemstate, dt, integrator_params);
 
 			if (std::isnan(chemstate.xn[0]) || std::isnan(chemstate.rho)) {
 				amrex::Abort("Burner returned NAN");

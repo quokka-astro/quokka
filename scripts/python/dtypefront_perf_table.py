@@ -13,8 +13,7 @@ METHOD_ORDER = {
     "ROS2S": 0,
     "Rodas3P": 1,
     "Rodas4P": 2,
-    "VODE": 3,
-    "Rodas5P": 4,
+    "Rodas5P": 3,
 }
 
 
@@ -63,11 +62,7 @@ def discover_logs(paths: list[Path]) -> list[Path]:
 
 
 def method_from_log(text: str, path: Path) -> str:
-    match = re.search(r"DTypeFront microphysics integrator: VODE", text)
-    if match:
-        return "VODE"
-
-    match = re.search(r"DTypeFront microphysics integrator: Rosenbrock \(Rosenbrock tableau \d+: ([^)]+)\)", text)
+    match = re.search(r"microphysics integrator: Rosenbrock \(Rosenbrock tableau ([^)]+)\)", text)
     if match:
         return match.group(1)
 
@@ -76,7 +71,6 @@ def method_from_log(text: str, path: Path) -> str:
         "rodas3p": "Rodas3P",
         "rodas4p": "Rodas4P",
         "rodas5p": "Rodas5P",
-        "vode": "VODE",
     }
     return name_map.get(path.stem.lower(), path.stem)
 
@@ -122,7 +116,7 @@ def parse_log(path: Path) -> Metrics:
     if hydro is not None:
         metrics.hydro_s, metrics.hydro_pct = hydro
 
-    match = re.search(r"Photochemistry burn failed.*", text)
+    match = re.search(r"Burn failed in the Rosenbrock integrator.*", text)
     if match:
         metrics.failed = match.group(0)
 
