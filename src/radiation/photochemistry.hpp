@@ -12,15 +12,17 @@
 #include "radiation/radiation_system.hpp"
 
 #ifdef PHOTOCHEMISTRY
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network_properties.H"
+#include "network.hpp"
+#include "photochemistry/PhotochemEOS.hpp"
+#include "photochemistry/PhotochemParams.hpp"
+#include "photochemistry/PhotochemState.hpp"
 #include "physics_numVars.hpp"
+#include "rosenbrock/rosenbrock.hpp"
 
 namespace quokka::photochemistry
 {
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
+
 // Only relevant when the O(v/c) work term is active (see do_vc_work below). If true, the work-term kinetic
 // energy the gas gains from the absorbed-photon momentum kick is debited from the chem-band photon field
 // (photon energy density reduced by (c / chat) * dEkin, and each band's flux rescaled by the same factor to
@@ -31,7 +33,129 @@ namespace quokka::photochemistry
 // ionization-front propagation, so it is the default.
 static constexpr bool debit_work_term_from_radiation = false;
 
-AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
+// Bounds outside which the network is frozen (RHS and Jacobian set to zero), as in Microphysics: the EOS minimum
+// temperature (eos_init(small_temp = 1e-10)) and integrator.MAX_TEMP.
+static constexpr Real photochem_min_temp = 1.0e-10;
+static constexpr Real photochem_max_temp = 1.0e11;
+// floor applied to photon number densities, thermal-band energies and species inside every RHS call (Microphysics SMALL_X_SAFE)
+static constexpr Real photochem_small_x_safe = 1.0e-30;
+
+namespace detail
+{
+// solver-vector offsets (0-based)
+constexpr int i_enuc = NumSpec;
+constexpr int i_rad0 = NumSpec + 1;
+constexpr int i_thermal0 = i_rad0 + NumChemRadEqs;
+constexpr int i_dust = i_thermal0 + NumThermalBands; // valid only with DUST_CHEMICAL_BAND_ABSORPTION
+
+/// The ODE system for one cell: wraps the network RHS and Jacobian with Microphysics's clean_state clamps, the EOS
+/// call and the temperature bounds (integration/integrator_rhs_strang.H, integrator_type_strang.H).
+struct PhotochemSystem {
+	network::State state;	      // rho, c_hat and dust_kappa are fixed; the rest is unpacked from y
+	network::NetworkParams params;
+
+	AMREX_GPU_HOST_DEVICE static void clean(rosenbrock::Vector<network::NumEqs> &y)
+	{
+		for (int n = 0; n < NumSpec; ++n) {
+			y[n] = amrex::max(y[n], photochem_small_x_safe);
+		}
+		for (int n = i_rad0; n < i_rad0 + NumChemRadEqs; n += NumChemRadVarsPerGroup) {
+			y[n] = amrex::max(y[n], photochem_small_x_safe);
+		}
+		for (int n = i_thermal0; n < i_thermal0 + NumThermalBands; ++n) {
+			y[n] = amrex::max(y[n], photochem_small_x_safe);
+		}
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+		y[i_dust] = amrex::max(y[i_dust], 0.0_rt);
+#endif
+	}
+
+	AMREX_GPU_HOST_DEVICE void unpack(rosenbrock::Vector<network::NumEqs> const &y)
+	{
+		for (int n = 0; n < NumSpec; ++n) {
+			state.xn[n] = y[n];
+		}
+		state.e = y[i_enuc];
+		for (int n = 0; n < NumChemRadEqs; ++n) {
+			state.rn[n] = y[i_rad0 + n];
+		}
+		for (int n = 0; n < NumThermalBands; ++n) {
+			state.re_thermal[n] = y[i_thermal0 + n];
+		}
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+		state.e_dust_absorbed = y[i_dust];
+#endif
+		state.T = TemperatureFromEnergy<NumSpec>(state.e, state.xn, spmasses, gammas);
+		state.dedT = dEnergy_dT<NumSpec>(state.xn, spmasses, gammas);
+	}
+
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto in_temperature_bounds() const -> bool
+	{
+		return (state.T > photochem_min_temp) && (state.T < photochem_max_temp);
+	}
+
+	AMREX_GPU_HOST_DEVICE void rhs(Real /*t*/, rosenbrock::Vector<network::NumEqs> &y, rosenbrock::Vector<network::NumEqs> &ydot)
+	{
+		clean(y);
+		unpack(y);
+		if (!in_temperature_bounds()) {
+			for (int n = 0; n < network::NumEqs; ++n) {
+				ydot[n] = 0.0;
+			}
+			return;
+		}
+		network::network_rhs(state, params, ydot);
+	}
+
+	AMREX_GPU_HOST_DEVICE void jac(Real /*t*/, rosenbrock::Vector<network::NumEqs> const &y, rosenbrock::Matrix<network::NumEqs> &J)
+	{
+		unpack(y);
+		if (!in_temperature_bounds()) {
+			for (int j = 0; j < network::NumEqs; ++j) {
+				for (int i = 0; i < network::NumEqs; ++i) {
+					J(i, j) = 0.0;
+				}
+			}
+			return;
+		}
+		network::network_jac(state, params, J);
+	}
+};
+
+/// Solver settings: which components enter the error norm, their tolerances, and the validity limits, as in
+/// Microphysics's Rosenbrock integrator (rtol_for/atol_for, valid_integrator_state, species_change_valid).
+inline auto MakeSolverSettings(IntegratorParams const &ip) -> rosenbrock::Settings<network::NumEqs>
+{
+	constexpr Real inf = std::numeric_limits<Real>::infinity();
+	rosenbrock::Settings<network::NumEqs> s{};
+	for (int n = 0; n < network::NumEqs; ++n) {
+		s.atol[n] = 1.0;
+		s.rtol[n] = 1.0;
+		s.in_error_norm[n] = false;
+		s.min_value[n] = -inf;
+		s.change_floor[n] = inf;
+	}
+	for (int n = 0; n < NumSpec; ++n) {
+		s.atol[n] = ip.atol_spec;
+		s.rtol[n] = ip.rtol_spec;
+		s.in_error_norm[n] = true;
+		s.min_value[n] = -ip.atol_spec;
+		s.change_floor[n] = ip.X_reject_buffer * ip.atol_spec;
+	}
+	s.atol[i_enuc] = ip.atol_enuc;
+	s.rtol[i_enuc] = ip.rtol_enuc;
+	s.in_error_norm[i_enuc] = true;
+	s.min_value[i_enuc] = std::numeric_limits<Real>::min(); // the specific internal energy must stay > 0
+	for (int n = i_rad0; n < i_rad0 + NumChemRadEqs; n += NumChemRadVarsPerGroup) {
+		s.atol[n] = ip.atol_rad_num;
+		s.rtol[n] = ip.rtol_rad_num;
+		s.in_error_norm[n] = true;
+		s.min_value[n] = -ip.atol_rad_num;
+	}
+	s.max_steps = ip.ode_max_steps;
+	return s;
+}
+} // namespace detail
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
@@ -80,6 +204,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	if constexpr (RadSystem<problem_t>::dust_chemical_band_absorption_) {
 		dustHeatingSource.setVal(0.0);
 	}
+
+	static const IntegratorParams integratorParams = IntegratorParams::read();
+	static const network::NetworkParams networkParams = network::NetworkParams::read();
+	const rosenbrock::Settings<network::NumEqs> solverSettings = detail::MakeSolverSettings(integratorParams);
+	const IntegratorParams ip = integratorParams;
+	const network::NetworkParams np = networkParams;
+	const Real small_x = np.small_x;
 
 	const BL_PROFILE("PhotoChemistry::computePhotoChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -133,8 +264,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				RadSystem<problem_t>::AssertChemBandOpacitiesAreZero(radBoundaries, rho, Tgas);
 			}
 
-			burn_t photochemstate;
-			photochemstate.success = true;
+			detail::PhotochemSystem sys{};
+			sys.params = np;
+			network::State &photochemstate = sys.state;
 			int burn_failed = 0;
 			photochemstate.c_hat = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
 			for (int nn = 0; nn < NumSpec; ++nn) {
@@ -145,11 +277,11 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 #endif
 			for (int nn = 0; nn < NumChemBands; ++nn) {
 				const Real n_gamma = state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) * invChemBandQuanta[nn];
-				photochemstate.rn[0 + MicrophysicsNumChemRadVarsPerGroup * nn] = n_gamma;
+				photochemstate.rn[0 + NumChemRadVarsPerGroup * nn] = n_gamma;
 #ifdef SKIP_PHOTOCHEMFLUX
 				n_gamma_initial[nn] = n_gamma;
 #else
-				photochemstate.rn[1 + MicrophysicsNumChemRadVarsPerGroup * nn] = 1.0_rt;
+				photochemstate.rn[1 + NumChemRadVarsPerGroup * nn] = 1.0_rt;
 #endif
 			}
 			amrex::GpuArray<Real, amrex::max(NumThermalBands, 1)> re_thermal_initial{};
@@ -160,29 +292,50 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				}
 			}
 			photochemstate.rho = rho;
-			photochemstate.e = Eint / rho;
 #ifdef DUST_CHEMICAL_BAND_ABSORPTION
-			// burn_t declares these only under the macro, and photochemstate is a non-dependent type,
-			// so its members are looked up even inside a discarded if constexpr branch. The guard has
-			// to be a preprocessor one.
-			photochemstate.dust_kappa = network_rp::dust_kappa;
+			photochemstate.dust_kappa = np.dust_kappa;
 			photochemstate.e_dust_absorbed = 0.0_rt;
 #endif
 
-			// call the EOS to set the temperature
-			eos(eos_input_re, photochemstate);
+			// temperature from the EOS, then e from T, as the Microphysics EOS calls with eos_input_re and (in integrator_setup) eos_input_rt did
+			photochemstate.T = TemperatureFromEnergy<NumSpec>(Eint / rho, photochemstate.xn, spmasses, gammas);
+			photochemstate.e = EnergyFromTemperature<NumSpec>(photochemstate.T, photochemstate.xn, spmasses, gammas);
 
-			// do the actual integration
-			// do it in .cpp so that it is not built at compile time for all tests
-			// which would otherwise slow down compilation due to the large RHS file
-			photochem_burner(photochemstate, dt);
+			// pack the solver vector and integrate
+			rosenbrock::Vector<network::NumEqs> y{};
+			for (int nn = 0; nn < NumSpec; ++nn) {
+				y[nn] = photochemstate.xn[nn];
+			}
+			y[detail::i_enuc] = photochemstate.e;
+			for (int nn = 0; nn < NumChemRadEqs; ++nn) {
+				y[detail::i_rad0 + nn] = photochemstate.rn[nn];
+			}
+			for (int nn = 0; nn < NumThermalBands; ++nn) {
+				y[detail::i_thermal0 + nn] = photochemstate.re_thermal[nn];
+			}
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+			y[detail::i_dust] = 0.0_rt;
+#endif
+			const rosenbrock::Result result = rosenbrock::integrate<network::NumEqs>(sys, y, dt, solverSettings);
+
+			// final-state checks (Microphysics integrator_cleanup)
+			if (result.status != rosenbrock::Status::Success) {
+				burn_failed = 1;
+			}
+			for (int nn = 0; nn < NumSpec; ++nn) {
+				if (y[nn] < -ip.species_failure_tolerance) {
+					burn_failed = 1;
+				}
+			}
+			for (int nn = detail::i_rad0; nn < detail::i_rad0 + NumChemRadEqs; nn += NumChemRadVarsPerGroup) {
+				if (y[nn] < -ip.radiation_failure_tolerance) {
+					burn_failed = 1;
+				}
+			}
+			sys.unpack(y);
 
 			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
 				amrex::Abort("Burner returned NAN");
-			}
-
-			if (!photochemstate.success) {
-				burn_failed = 1;
 			}
 
 			if (burn_failed) {
@@ -195,12 +348,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			}
 			for (int nn = 0; nn < NumChemBands; nn += 1) {
 				// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
-				photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup] =
-				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup], small_x);
+				photochemstate.rn[static_cast<std::size_t>(nn) * NumChemRadVarsPerGroup] =
+				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * NumChemRadVarsPerGroup], small_x);
 			}
-
-			// get the updated specific eint
-			eos(eos_input_re, photochemstate);
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
@@ -222,7 +372,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
-				const Real n_gamma_final = photochemstate.rn[0 + MicrophysicsNumChemRadVarsPerGroup * nn];
+				const Real n_gamma_final = photochemstate.rn[0 + NumChemRadVarsPerGroup * nn];
 				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) = n_gamma_final * chemBandQuanta[nn];
 				const Real FxOld = state(i, j, k, fxIdx);
 				const Real FyOld = state(i, j, k, fyIdx);
@@ -231,7 +381,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				// flux is not carried in photochemstate; derive the attenuation factor from the change in n_gamma
 				const Real flux_factor = (n_gamma_initial[nn] > 0.0_rt) ? (n_gamma_final / n_gamma_initial[nn]) : 0.0_rt;
 #else
-				const Real flux_factor = photochemstate.rn[1 + MicrophysicsNumChemRadVarsPerGroup * nn];
+				const Real flux_factor = photochemstate.rn[1 + NumChemRadVarsPerGroup * nn];
 #endif
 				// dp = (F_before - F_after) / c^2 = (1 - flux_factor) * F_before / c^2
 				const Real dpx = (1.0_rt - flux_factor) * FxOld * inv_c2;
@@ -326,7 +476,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	amrex::ParallelDescriptor::ReduceIntMin(photochem_burn_success);
 
 	if (!photochem_burn_success) {
-		amrex::Abort("Burn failed in the Rosenbrock integrator. Aborting.");
+		amrex::Abort("Photochemistry solve failed in the Rosenbrock integrator. Aborting.");
 	}
 
 	return photochem_burn_success;

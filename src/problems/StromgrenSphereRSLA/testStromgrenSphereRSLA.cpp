@@ -13,7 +13,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
@@ -23,11 +23,11 @@
 #include <map>
 #include <string>
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
+#include "network.hpp"
+#include "photochemistry/PhotochemEOS.hpp"
+#include "photochemistry/PhotochemState.hpp"
+
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 
 struct StromgrenSphere {};
 
@@ -198,8 +198,6 @@ template <> struct SimulationData<StromgrenSphere> {
 
 template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
@@ -224,8 +222,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	amrex::ParmParse const pp2("network");
 	pp2.query("recombination_switch", userData_.recombination_switch);
 
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -250,7 +246,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands> state;
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
@@ -266,7 +262,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 	state.rho = rhotot;
 
 	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	state.e = quokka::photochemistry::EnergyFromTemperature<NumSpec>(state.T, state.xn, spmasses, gammas);
 	const auto Egas0 = state.e * rhotot;
 
 	// loop over the grid and set the initial condition

@@ -9,7 +9,7 @@
 
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include <fstream>
@@ -25,11 +25,11 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
+#include "network.hpp"
+#include "photochemistry/PhotochemEOS.hpp"
+#include "photochemistry/PhotochemState.hpp"
+
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 
 struct PhotoionizationStreamingProblem {};
 
@@ -79,8 +79,6 @@ template <> struct SimulationData<PhotoionizationStreamingProblem> {
 
 template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("photoionization");
@@ -101,10 +99,8 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	pp.query("tend", userData_.tend);
 	pp.query("n_photon", userData_.n_photon);
 
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 
-	burn_t state;
+	quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands> state;
 	state.T = userData_.temperature;
 	Real rhotot = 0.0_rt;
 	state.xn[Species::e] = userData_.n_e_init;
@@ -112,7 +108,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	state.xn[Species::H_p] = userData_.n_HII_init;
 	rhotot = state.xn[Species::e] * spmasses[Species::e] + state.xn[Species::H] * spmasses[Species::H] + state.xn[Species::H_p] * spmasses[Species::H_p];
 	state.rho = rhotot;
-	eos(eos_input_rt, state);
+	state.e = quokka::photochemistry::EnergyFromTemperature<NumSpec>(state.T, state.xn, spmasses, gammas);
 
 	const amrex::Real t = 0.0;
 	const amrex::Real n_e = userData_.n_e_init;
@@ -145,7 +141,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands> state;
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
@@ -161,7 +157,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 	}
 	state.rho = rhotot;
 	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	state.e = quokka::photochemistry::EnergyFromTemperature<NumSpec>(state.T, state.xn, spmasses, gammas);
 
 	const auto Erad0 = userData_.n_photon * RadSystem<PhotoionizationStreamingProblem>::GetChemBandQuanta(0);
 	const auto Egas0 = state.e * rhotot; // initial_Egas;
@@ -224,8 +220,120 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 	}
 }
 
+// Unit test of the photochemistry solver system (driver wrapper + this network): temperature bounds, in-place cleaning
+// of the photon number density, and the analytic Jacobian against a central finite difference of the RHS.
+auto TestPhotochemSystem() -> int
+{
+	using quokka::photochemistry::detail::PhotochemSystem;
+	constexpr int N = network::NumEqs;
+	int status = 0;
+	auto report = [&status](const char *name, bool ok) {
+		std::cout << std::format("PhotochemSystem {:<34}{}\n", name, ok ? "PASS" : "FAIL");
+		if (!ok) {
+			status = 1;
+		}
+	};
+
+	PhotochemSystem sys{};
+	sys.params = network::NetworkParams{};
+	sys.state.rho = 1.0e2 * spmasses[Species::H];
+	sys.state.c_hat = C::c_light;
+
+	// a partly ionized state at T ~ 8000 K with photons
+	amrex::GpuArray<Real, NumSpec> n{};
+	n[Species::H] = 30.0;
+	n[Species::H_p] = 70.0;
+	n[Species::e] = 70.0;
+	rosenbrock::Vector<N> y{};
+	for (int i = 0; i < NumSpec; ++i) {
+		y[i] = n[i];
+	}
+	y[network::net_ienuc] = quokka::photochemistry::EnergyFromTemperature<NumSpec>(8000.0, n, spmasses, gammas);
+	y[network::i_ngamma] = 1.0e3;
+#ifndef SKIP_PHOTOCHEMFLUX
+	y[network::i_ngamma_flux] = 1.0;
+#endif
+
+	// temperature above the upper bound: the RHS is zero
+	{
+		rosenbrock::Vector<N> yhot = y;
+		yhot[network::net_ienuc] = quokka::photochemistry::EnergyFromTemperature<NumSpec>(1.0e12, n, spmasses, gammas);
+		rosenbrock::Vector<N> ydot{};
+		ydot[0] = 1.0;
+		sys.rhs(0.0, yhot, ydot);
+		bool all_zero = true;
+		for (int i = 0; i < N; ++i) {
+			all_zero = all_zero && (ydot[i] == 0.0);
+		}
+		report("rhs zero above T_max", all_zero);
+	}
+
+	// a slightly negative photon number density is cleaned in place to SMALL_X_SAFE
+	{
+		rosenbrock::Vector<N> yneg = y;
+		yneg[network::i_ngamma] = -1.0e-40;
+		rosenbrock::Vector<N> ydot{};
+		sys.rhs(0.0, yneg, ydot);
+		report("rhs cleans photon number", yneg[network::i_ngamma] == quokka::photochemistry::photochem_small_x_safe);
+	}
+
+	// analytic Jacobian vs central finite differences of the RHS. The network's Jacobian holds T fixed through dedT
+	// (it ignores dT/dn_i), so the species columns are compared with e adjusted to keep T fixed.
+	{
+		rosenbrock::Vector<N> ybase = y;
+		rosenbrock::Vector<N> f0{};
+		sys.rhs(0.0, ybase, f0);
+		rosenbrock::Matrix<N> J{};
+		sys.jac(0.0, ybase, J);
+		const Real T0 = sys.state.T;
+		Real jmax = 0.0;
+		for (int j = 0; j < N; ++j) {
+			for (int i = 0; i < N; ++i) {
+				jmax = amrex::max(jmax, std::abs(J(i, j)));
+			}
+		}
+		bool ok = true;
+		for (int j = 0; j < N; ++j) {
+			// large enough that roundoff in the photoheating-dominated energy row (|f| ~ 1e8) stays below the tolerance
+			const Real h = 1.0e-4 * amrex::max(std::abs(ybase[j]), 1.0e-30);
+			rosenbrock::Vector<N> yp = ybase;
+			rosenbrock::Vector<N> ym = ybase;
+			yp[j] += h;
+			ym[j] -= h;
+			if (j < NumSpec) { // keep T fixed: recompute e from T0 with the perturbed composition
+				amrex::GpuArray<Real, NumSpec> np{};
+				amrex::GpuArray<Real, NumSpec> nm{};
+				for (int s = 0; s < NumSpec; ++s) {
+					np[s] = yp[s];
+					nm[s] = ym[s];
+				}
+				yp[network::net_ienuc] = quokka::photochemistry::EnergyFromTemperature<NumSpec>(T0, np, spmasses, gammas);
+				ym[network::net_ienuc] = quokka::photochemistry::EnergyFromTemperature<NumSpec>(T0, nm, spmasses, gammas);
+			}
+			rosenbrock::Vector<N> fp{};
+			rosenbrock::Vector<N> fm{};
+			sys.rhs(0.0, yp, fp);
+			sys.rhs(0.0, ym, fm);
+			for (int i = 0; i < N; ++i) {
+				const Real fd = (fp[i] - fm[i]) / (2.0 * h);
+				if (std::abs(J(i, j)) > 1.0e-12 * jmax && std::abs(fd - J(i, j)) > 1.0e-5 * std::abs(J(i, j))) {
+					std::cout << std::format("  J({}, {}) = {:.8e}, finite difference {:.8e}\n", i, j, J(i, j), fd);
+					ok = false;
+				}
+			}
+		}
+		report("jac matches finite differences", ok);
+	}
+	return status;
+}
+
 auto problem_main() -> int
 {
+	if (TestPhotochemSystem() != 0) {
+		std::cout << "OneZonePhotoionization: photochemistry system unit test FAILED.\n";
+		return 1;
+	}
+
 	// Problem parameters
 	const double CFL_number = 0.3;
 	const int max_timesteps = 5000000;

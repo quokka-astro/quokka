@@ -13,7 +13,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Reduce.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "physics_info.hpp"
 #include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
@@ -21,11 +21,11 @@
 #include <cmath>
 #include <limits>
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
+#include "network.hpp"
+#include "photochemistry/PhotochemEOS.hpp"
+#include "photochemistry/PhotochemState.hpp"
+
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 
 struct DTypeFrontVC {};
 
@@ -89,7 +89,6 @@ void RadSystem<DTypeFrontVC>::AddRadSource(array_t &radEnergy, array_t & /*reduc
 
 template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 {
-	init_extern_parameters();
 
 	amrex::ParmParse const pp("photoionization_momentum");
 	userData_.small_temp = 1.0e-2;
@@ -105,8 +104,6 @@ template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 	pp.query("n_HI_init", userData_.n_HI_init);
 	pp.query("n_HII_init", userData_.n_HII_init);
 
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontVC>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -124,7 +121,7 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands> state;
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
@@ -137,7 +134,7 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 		rhotot += state.xn[n] * spmasses[n];
 	}
 	state.rho = rhotot;
-	eos(eos_input_rt, state);
+	state.e = quokka::photochemistry::EnergyFromTemperature<NumSpec>(state.T, state.xn, spmasses, gammas);
 	const auto Egas0 = state.e * rhotot;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
