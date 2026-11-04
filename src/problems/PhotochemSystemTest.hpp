@@ -11,8 +11,10 @@
 #include "radiation/photochemistry.hpp"
 
 /// \param dust_kappa dust opacity used in the test state (exercises the dust rows when DUST_CHEMICAL_BAND_ABSORPTION is defined)
+/// \param jacobian_at_fixed_T true if the network's species columns hold T fixed (the handwritten networks ignore dT/dn_i);
+///        false if they are the full derivative at fixed e (the JAFF-generated networks)
 /// \return 0 if all checks pass
-inline auto TestPhotochemSystem(const amrex::Real dust_kappa = 0.0) -> int
+inline auto TestPhotochemSystem(const amrex::Real dust_kappa = 0.0, const bool jacobian_at_fixed_T = true) -> int
 {
 	using amrex::Real;
 	using quokka::photochemistry::detail::PhotochemSystem;
@@ -75,8 +77,8 @@ inline auto TestPhotochemSystem(const amrex::Real dust_kappa = 0.0) -> int
 		report("rhs cleans photon number", yneg[pd::i_rad0] == quokka::photochemistry::photochem_small_x_safe);
 	}
 
-	// Analytic Jacobian vs central finite differences of the RHS. The network's Jacobian holds T fixed through dedT (it
-	// ignores dT/dn_i), so the species columns are compared with e adjusted to keep T fixed. The step is large enough that
+	// Analytic Jacobian vs central finite differences of the RHS. If the network's Jacobian holds T fixed through dedT (it
+	// ignores dT/dn_i), the species columns are compared with e adjusted to keep T fixed. The step is large enough that
 	// roundoff in the photoheating-dominated energy row (|f| ~ 1e8) stays below the tolerance; the RHS is bilinear in the
 	// species at fixed T, so this adds no truncation error there.
 	{
@@ -99,7 +101,7 @@ inline auto TestPhotochemSystem(const amrex::Real dust_kappa = 0.0) -> int
 			rosenbrock::Vector<N> ym = ybase;
 			yp[j] += h;
 			ym[j] -= h;
-			if (j < NumSpec) { // keep T fixed: recompute e from T0 with the perturbed composition
+			if (jacobian_at_fixed_T && j < NumSpec) { // keep T fixed: recompute e from T0 with the perturbed composition
 				amrex::GpuArray<Real, NumSpec> np{};
 				amrex::GpuArray<Real, NumSpec> nm{};
 				for (int s = 0; s < NumSpec; ++s) {
