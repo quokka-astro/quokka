@@ -34,11 +34,13 @@ jobs:
         # that only compiles inside a particular problem's build fails. Skipped:
         # - Chemistry.hpp, EOSMicrophysics.hpp and photochemistry.hpp include the EOS backend's actual_eos_data.H, which
         #   only the chemistry problems' include paths find, until the EOS is ported
-        # The vendored copies in extern/ are skipped too: fixes belong upstream.
+        # The vendored copies in extern/ are skipped too: fixes belong upstream. So is the primordial_chem network, whose
+        # right-hand side and Jacobian are generated (pynucastro).
         exclude: "extern/turbulence/*,\
           extern/gcem/*,\
           extern/eos/EOS/*,\
           extern/eos/interfaces/*,\
+          src/networks/primordial_chem/network.hpp,\
           src/chemistry/Chemistry.hpp,\
           src/hydro/EOSMicrophysics.hpp,\
           src/radiation/photochemistry.hpp"

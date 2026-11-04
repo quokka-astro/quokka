@@ -15,8 +15,6 @@ if(AMReX_SPACEDIM EQUAL 3)
                 ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
   target_compile_definitions(${JOB_NAME} PRIVATE DTYPEFRONT_JAFF_TABLEAU=${DTypeFront_JAFF_TABLEAU})
   quokka_add_eos(${JOB_NAME} photoionization ${microphysics_network_name})
-  # the network's actual_rhs.H
-  target_include_directories(${JOB_NAME} BEFORE PRIVATE ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name})
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})

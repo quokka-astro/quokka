@@ -578,7 +578,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 		const amrex::Real c_s = ionized_sound_speed(userData_.T_ionized);
 		const amrex::Real T_i = userData_.T_ionized;
 		// Energy per recombination: binding energy plus the kinetic energy carried off. The network emits this into the optical band (ydot(i_optical)
-		// in actual_rhs.H), hence its grouping below.
+		// in the network's actual_rhs), hence its grouping below.
 		const amrex::Real eps_rec = 13.6 * C::ev2erg + lambda_rec(T_i) / recombination_coefficient(T_i);
 		const amrex::Real Xi = (userData_.flux_ion * userData_.eps_ion + userData_.flux_optical * userData_.eps_opt) / (rho_0 * C::c_light);
 		const amrex::Real Xi_rec = userData_.flux_ion * eps_rec / (rho_0 * C::c_light);

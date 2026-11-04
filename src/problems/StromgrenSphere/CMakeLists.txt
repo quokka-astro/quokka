@@ -9,8 +9,6 @@ if(AMReX_SPACEDIM EQUAL 3)
       ${target} test${target}.cpp "${QuokkaSourcesNoEOS}"
                 ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
     quokka_add_eos(${target} photoionization ${microphysics_network_name})
-    # the network's actual_rhs.H
-    target_include_directories(${target} BEFORE PRIVATE ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
       setup_target_for_cuda_compilation(${target})

@@ -139,7 +139,7 @@ auto lambda_rec(double T) -> double
 	return 6.1e-10 * C::k_B * T * std::pow(T, -0.89);
 }
 
-// Frazer and Heitsch 2019, matching get_cle_term() in actual_rhs.H
+// Frazer and Heitsch 2019, matching get_cle_term() in the hand-written networks
 auto cle_term(double T) -> double
 {
 	if (T < 1.0e2) {
