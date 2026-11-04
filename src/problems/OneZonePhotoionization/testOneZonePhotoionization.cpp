@@ -28,6 +28,7 @@
 #include "network.hpp"
 #include "photochemistry/PhotochemEOS.hpp"
 #include "photochemistry/PhotochemState.hpp"
+#include "problems/PhotochemSystemTest.hpp"
 
 using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 
@@ -217,113 +218,6 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 
 		userData_.output_file_ << time << "," << n_e << "," << n_HI << "," << n_HII << "," << n_gamma << "," << Egas_i << "," << temp << "\n";
 	}
-}
-
-// Unit test of the photochemistry solver system (driver wrapper + this network): temperature bounds, in-place cleaning
-// of the photon number density, and the analytic Jacobian against a central finite difference of the RHS.
-auto TestPhotochemSystem() -> int
-{
-	using quokka::photochemistry::detail::PhotochemSystem;
-	constexpr int N = network::NumEqs;
-	int status = 0;
-	auto report = [&status](const char *name, bool ok) {
-		std::cout << std::format("PhotochemSystem {:<34}{}\n", name, ok ? "PASS" : "FAIL");
-		if (!ok) {
-			status = 1;
-		}
-	};
-
-	PhotochemSystem sys{};
-	sys.params = network::NetworkParams{};
-	sys.state.rho = 1.0e2 * spmasses[Species::H];
-	sys.state.c_hat = C::c_light;
-
-	// a partly ionized state at T ~ 8000 K with photons
-	amrex::GpuArray<Real, NumSpec> n{};
-	n[Species::H] = 30.0;
-	n[Species::H_p] = 70.0;
-	n[Species::e] = 70.0;
-	rosenbrock::Vector<N> y{};
-	for (int i = 0; i < NumSpec; ++i) {
-		y[i] = n[i];
-	}
-	y[network::net_ienuc] = quokka::photochemistry::EnergyFromTemperature<NumSpec>(8000.0, n, spmasses, gammas);
-	y[network::i_ngamma] = 1.0e3;
-#ifndef SKIP_PHOTOCHEMFLUX
-	y[network::i_ngamma_flux] = 1.0;
-#endif
-
-	// temperature above the upper bound: the RHS is zero
-	{
-		rosenbrock::Vector<N> yhot = y;
-		yhot[network::net_ienuc] = quokka::photochemistry::EnergyFromTemperature<NumSpec>(1.0e12, n, spmasses, gammas);
-		rosenbrock::Vector<N> ydot{};
-		ydot[0] = 1.0;
-		sys.rhs(0.0, yhot, ydot);
-		bool all_zero = true;
-		for (int i = 0; i < N; ++i) {
-			all_zero = all_zero && (ydot[i] == 0.0);
-		}
-		report("rhs zero above T_max", all_zero);
-	}
-
-	// a slightly negative photon number density is cleaned in place to SMALL_X_SAFE
-	{
-		rosenbrock::Vector<N> yneg = y;
-		yneg[network::i_ngamma] = -1.0e-40;
-		rosenbrock::Vector<N> ydot{};
-		sys.rhs(0.0, yneg, ydot);
-		report("rhs cleans photon number", yneg[network::i_ngamma] == quokka::photochemistry::photochem_small_x_safe);
-	}
-
-	// analytic Jacobian vs central finite differences of the RHS. The network's Jacobian holds T fixed through dedT
-	// (it ignores dT/dn_i), so the species columns are compared with e adjusted to keep T fixed.
-	{
-		rosenbrock::Vector<N> ybase = y;
-		rosenbrock::Vector<N> f0{};
-		sys.rhs(0.0, ybase, f0);
-		rosenbrock::Matrix<N> J{};
-		sys.jac(0.0, ybase, J);
-		const Real T0 = sys.state.T;
-		Real jmax = 0.0;
-		for (int j = 0; j < N; ++j) {
-			for (int i = 0; i < N; ++i) {
-				jmax = amrex::max(jmax, std::abs(J(i, j)));
-			}
-		}
-		bool ok = true;
-		for (int j = 0; j < N; ++j) {
-			// large enough that roundoff in the photoheating-dominated energy row (|f| ~ 1e8) stays below the tolerance
-			const Real h = 1.0e-4 * amrex::max(std::abs(ybase[j]), 1.0e-30);
-			rosenbrock::Vector<N> yp = ybase;
-			rosenbrock::Vector<N> ym = ybase;
-			yp[j] += h;
-			ym[j] -= h;
-			if (j < NumSpec) { // keep T fixed: recompute e from T0 with the perturbed composition
-				amrex::GpuArray<Real, NumSpec> np{};
-				amrex::GpuArray<Real, NumSpec> nm{};
-				for (int s = 0; s < NumSpec; ++s) {
-					np[s] = yp[s];
-					nm[s] = ym[s];
-				}
-				yp[network::net_ienuc] = quokka::photochemistry::EnergyFromTemperature<NumSpec>(T0, np, spmasses, gammas);
-				ym[network::net_ienuc] = quokka::photochemistry::EnergyFromTemperature<NumSpec>(T0, nm, spmasses, gammas);
-			}
-			rosenbrock::Vector<N> fp{};
-			rosenbrock::Vector<N> fm{};
-			sys.rhs(0.0, yp, fp);
-			sys.rhs(0.0, ym, fm);
-			for (int i = 0; i < N; ++i) {
-				const Real fd = (fp[i] - fm[i]) / (2.0 * h);
-				if (std::abs(J(i, j)) > 1.0e-12 * jmax && std::abs(fd - J(i, j)) > 1.0e-5 * std::abs(J(i, j))) {
-					std::cout << std::format("  J({}, {}) = {:.8e}, finite difference {:.8e}\n", i, j, J(i, j), fd);
-					ok = false;
-				}
-			}
-		}
-		report("jac matches finite differences", ok);
-	}
-	return status;
 }
 
 auto problem_main() -> int

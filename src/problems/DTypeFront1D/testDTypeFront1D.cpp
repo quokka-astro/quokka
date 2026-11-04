@@ -13,7 +13,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_dust_system.hpp"
 #include "radiation/radiation_system.hpp"
@@ -27,11 +27,12 @@
 #include <string>
 #include <vector>
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
+#include "network.hpp"
+#include "photochemistry/PhotochemEOS.hpp"
+#include "photochemistry/PhotochemState.hpp"
+#include "problems/PhotochemSystemTest.hpp"
+
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 
 struct DTypeFront1D {};
 
@@ -427,8 +428,6 @@ void RadSystem<DTypeFront1D>::AddRadSource(array_t &radEnergy, array_t &reducedF
 
 template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
 
 	// parmparse species, temperature, and flux
 	amrex::ParmParse const pp("photoionize");
@@ -465,15 +464,13 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	{
 		const amrex::Real l_s = stromgren_column(userData_.flux_ion, userData_.n_HI_init, userData_.T_ionized);
 		const amrex::Real c_s = ionized_sound_speed(userData_.T_ionized);
-		const amrex::Real l_d = dusty_stromgren_column(l_s, network_rp::dust_kappa * userData_.n_HI_init * spmasses[Species::H]);
+		const amrex::Real l_d = dusty_stromgren_column(l_s, network::NetworkParams::read().dust_kappa * userData_.n_HI_init * spmasses[Species::H]);
 		userData_.l_ode_last_t_ = 0.0_rt;
 		userData_.l_ode_last_l_ = l_d;
 		userData_.l_ode_last_u_ = l_d * c_s;
 		amrex::Print() << "Stromgren column l_s = " << l_s << " cm, ionized sound speed c_s = " << c_s << " cm/s\n";
 	}
 
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 }
 
 template <>
@@ -495,7 +492,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands> state;
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
@@ -509,7 +506,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::setInitialConditionsOnGrid(quok
 	}
 	state.rho = rhotot;
 
-	eos(eos_input_rt, state);
+	state.e = quokka::photochemistry::EnergyFromTemperature<NumSpec>(state.T, state.xn, spmasses, gammas);
 	const auto Egas0 = state.e * rhotot;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -562,7 +559,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 	    });
 	const amrex::Real x_eff = ionized_volume_integral / transverse_area / 2.0_rt;
 
-	const amrex::Real chat_kappa_over_eps = c_hat * network_rp::dust_kappa / userData_.eps_ion;
+	const amrex::Real chat_kappa_over_eps = c_hat * network::NetworkParams::read().dust_kappa / userData_.eps_ion;
 	userData_.N_gamma_dust_ +=
 	    dt_[lev] * computeVolumeIntegral(
 			   [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
@@ -583,7 +580,7 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 		const amrex::Real eps_rec = 13.6 * C::ev2erg + lambda_rec(T_i) / recombination_coefficient(T_i);
 		const amrex::Real Xi = (userData_.flux_ion * userData_.eps_ion + userData_.flux_optical * userData_.eps_opt) / (rho_0 * C::c_light);
 		const amrex::Real Xi_rec = userData_.flux_ion * eps_rec / (rho_0 * C::c_light);
-		const amrex::Real kappa_rho_0 = network_rp::dust_kappa * rho_0;
+		const amrex::Real kappa_rho_0 = network::NetworkParams::read().dust_kappa * rho_0;
 
 		amrex::Real dt_ode = t - userData_.l_ode_last_t_;
 		if (dt_ode < 0.0_rt) {
@@ -610,6 +607,11 @@ template <> void QuokkaSimulation<DTypeFront1D>::computeAfterTimestep()
 
 auto problem_main() -> int
 {
+	if (TestPhotochemSystem(1.0e2) != 0) {
+		std::cout << "DTypeFront1D: photochemistry system unit test FAILED.\n";
+		return 1;
+	}
+
 	// Problem parameters
 	const double CFL_number = 0.3;
 
@@ -666,15 +668,11 @@ auto problem_main() -> int
 				const amrex::Real x_HII = n_HII_cell / denom;
 				const amrex::Real x_HI = n_HI_cell / denom;
 
-				burn_t bstate;
+				amrex::GpuArray<amrex::Real, NumSpec> n_cell{};
 				for (int nn = 0; nn < NumSpec; ++nn) {
-					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + nn) / spmasses[nn];
+					n_cell[nn] = state(i, j, k, HydroSystem<DTypeFront1D>::scalar0_index + nn) / spmasses[nn];
 				}
-				bstate.rho = rho;
-				bstate.e = Eint / rho;
-				bstate.T = 1.0e4; // initial guess
-				eos(eos_input_re, bstate);
-				const double T_cell = bstate.T;
+				const double T_cell = quokka::photochemistry::TemperatureFromEnergy<NumSpec>(Eint / rho, n_cell, spmasses, gammas);
 
 				if (x_HII > 0.90_rt) {
 					cavity_temps.push_back(T_cell);

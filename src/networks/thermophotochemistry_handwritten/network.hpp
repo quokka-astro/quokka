@@ -1,45 +1,132 @@
-#ifndef actual_rhs_H
-#define actual_rhs_H
+#ifndef NETWORK_THERMOPHOTOCHEMISTRY_HANDWRITTEN_HPP_
+#define NETWORK_THERMOPHOTOCHEMISTRY_HANDWRITTEN_HPP_
+/// \file network.hpp
+/// \brief Hydrogen photoionization network with thermal emission: H, H+, e-, one ionizing photon band, and two thermal
+/// bands (IR, optical) that receive the cooling radiation; optionally, dust absorption of the ionizing band
+/// (DUST_CHEMICAL_BAND_ABSORPTION).
+///
+/// Network contract used by src/radiation/photochemistry.hpp: global NumSpec, Species::, spmasses, gammas,
+/// NumChemBands, NumChemRadVarsPerGroup, NumChemRadEqs, NumThermalBands, ChemBandsHeader(), ChemBandsPowerLawIndex_;
+/// and in namespace network: NumEqs, State, NetworkParams, network_rhs, network_jac.
+/// Solver vector layout (0-based): species number densities, specific internal energy, then per chemical band the
+/// photon number density (and the flux factor unless SKIP_PHOTOCHEMFLUX), the thermal-band energy densities (IR, optical),
+/// and the dust-absorbed energy (DUST_CHEMICAL_BAND_ABSORPTION only).
 
+#include <cmath>
+
+#include "AMReX.H"
+#include "AMReX_Array.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
-#include "burn_type.H"
-#include "fundamental_constants.H"
-#include "integrator_data.H"
-#include <actual_network.H>
-#include <extern_parameters.H>
-#include <jacobian_utilities.H>
 
-using namespace amrex;
-using namespace network_rp;
-using namespace eos_rp;
-using namespace C;
+#include "photochemistry/PhotochemState.hpp"
+#include "rosenbrock/dense_lu.hpp"
+#include "util/fundamental_constants.hpp"
 
-void actual_rhs_init();
+#ifdef AMREX_USE_HIP
+#define QUOKKA_NETWORK_CONSTEXPR constexpr
+#else
+#define QUOKKA_NETWORK_CONSTEXPR
+#endif
 
-// Species indices (0-indexed, xn[]/spmasses[]) come from the SPECIES_ENUM
-// set in this problem's CMakeLists.txt, via Species::NetworkSpecies.
-// ydot()/jac() are 1-indexed, so the same species use index+1 there.
-// net_ienuc (= NumSpec + 1) is the specific internal energy row/column.
-// Radiation rows/columns follow net_ienuc: photon number density, then
-// (unless SKIP_PHOTOCHEMFLUX) photon flux.
+constexpr int NumSpec = 3;
+
+namespace Species
+{
+enum NetworkSpecies { H = 0, H_p, e };
+} // namespace Species
+
+constexpr int NumChemBands = 1;
+#ifdef SKIP_PHOTOCHEMFLUX
+constexpr int NumChemRadVarsPerGroup = 1;
+#else
+constexpr int NumChemRadVarsPerGroup = 2;
+#endif
+constexpr int NumChemRadEqs = NumChemBands * NumChemRadVarsPerGroup;
+constexpr int NumThermalBands = 2;
+
+// photon-number spectrum index alpha in n(E) ~ E^(alpha-2) within each chemical band
+constexpr double ChemBandsPowerLawIndex_ = 0;
+
+/// chemical band edges [eV]
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto ChemBandsHeader() -> amrex::GpuArray<double, NumChemBands + 1> { return {{13.6, 26.0}}; }
+
+namespace
+{
+// particle masses [g] and adiabatic indices, ordered as Species (values from Microphysics EOS/photoionization/_parameters)
+[[maybe_unused]] QUOKKA_NETWORK_CONSTEXPR AMREX_GPU_MANAGED amrex::Real spmasses[NumSpec] = {1.673773e-24, 1.6728620616289998e-24, 9.10938371e-28};
+[[maybe_unused]] QUOKKA_NETWORK_CONSTEXPR AMREX_GPU_MANAGED amrex::Real gammas[NumSpec] = {5. / 3., 5. / 3., 5. / 3.};
+} // namespace
+
+namespace network
+{
+using amrex::Real;
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
+
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+constexpr int NumEqs = NumSpec + 1 + NumChemRadEqs + NumThermalBands + 1;
+#else
+constexpr int NumEqs = NumSpec + 1 + NumChemRadEqs + NumThermalBands;
+#endif
+using State = quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands>;
+
+// 0-based indices into the solver vector
 constexpr int e_idx = static_cast<int>(Species::e);
 constexpr int H_idx = static_cast<int>(Species::H);
 constexpr int Hp_idx = static_cast<int>(Species::H_p);
-constexpr int ie = e_idx + 1;
-constexpr int iH = H_idx + 1;
-constexpr int iHp = Hp_idx + 1;
+constexpr int ie = e_idx;
+constexpr int iH = H_idx;
+constexpr int iHp = Hp_idx;
+constexpr int net_ienuc = NumSpec;
 constexpr int i_ngamma = net_ienuc + 1;
 constexpr int i_ngamma_flux = net_ienuc + 2;
-// Thermal-band rows follow the chemistry-band rows, whose count (NumChemRadEqs) already accounts for
-// whether each band carries a flux variable. Band 0 is the IR, band 1 the optical; the order matches
+// Thermal-band rows follow the chemistry-band rows. Band 0 is the IR, band 1 the optical; the order matches
 // group_ir / group_optical on the Quokka side, which reads these back into the radiation state.
-static_assert(NumThermalBands == 2, "thermophotochemistry_handwritten emits into exactly two thermal bands (IR, optical)");
 constexpr int i_ir = net_ienuc + NumChemRadEqs + 1;
 constexpr int i_optical = net_ienuc + NumChemRadEqs + 2;
 #ifdef DUST_CHEMICAL_BAND_ABSORPTION
 constexpr int i_dust = net_ienuc + NumChemRadEqs + NumThermalBands + 1;
 #endif
+
+/// runtime switches, read from the "network" ParmParse prefix (defaults as in the former _parameters file)
+struct NetworkParams {
+	int recombination_switch = 1;
+	int recombination_temperature_dependent = 1;
+	int collisional_ionization_switch = 1;
+	int energy_switch = 1;
+	int photoheating_switch = 1;
+	int KI_heating_switch = 1;
+	int recombination_cooling_switch = 1;
+	int KI_cooling_switch = 1;
+	int ion_ff_cooling_switch = 1;
+	int allow_mixed_cell_cooling = 1;
+	Real mixed_cell_lb = 0.01;
+	Real mixed_cell_ub = 0.99;
+	Real small_x = 1.0e-30; ///< floor for species number densities after the solve
+	Real dust_kappa = 0.0;  ///< dust opacity in the ionizing band [cm^2 g^-1] (DUST_CHEMICAL_BAND_ABSORPTION only)
+
+	static auto read() -> NetworkParams
+	{
+		NetworkParams p{};
+		const amrex::ParmParse pp("network");
+		pp.query("recombination_switch", p.recombination_switch);
+		pp.query("recombination_temperature_dependent", p.recombination_temperature_dependent);
+		pp.query("collisional_ionization_switch", p.collisional_ionization_switch);
+		pp.query("energy_switch", p.energy_switch);
+		pp.query("photoheating_switch", p.photoheating_switch);
+		pp.query("KI_heating_switch", p.KI_heating_switch);
+		pp.query("recombination_cooling_switch", p.recombination_cooling_switch);
+		pp.query("KI_cooling_switch", p.KI_cooling_switch);
+		pp.query("ion_ff_cooling_switch", p.ion_ff_cooling_switch);
+		pp.query("allow_mixed_cell_cooling", p.allow_mixed_cell_cooling);
+		pp.query("mixed_cell_lb", p.mixed_cell_lb);
+		pp.query("mixed_cell_ub", p.mixed_cell_ub);
+		pp.query("small_x", p.small_x);
+		pp.query("dust_kappa", p.dust_kappa);
+		return p;
+	}
+};
 
 constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
 
@@ -69,7 +156,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Rea
 	return ev_avg * C::ev2erg;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T, int recombination_temperature_dependent) -> Real
 {
 	const amrex::Real coeff = 2.63e-13_rt;
 	if (recombination_temperature_dependent == 0) {
@@ -78,7 +165,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) ->
 	return coeff * std::pow(T / 1.0e4, -0.69999999999999996);
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T, int recombination_temperature_dependent) -> Real
 {
 	if (recombination_temperature_dependent == 0) {
 		return 0.0_rt;
@@ -190,8 +277,19 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) 
 	return 1.3 * 1.427e-27 * 0.5 / std::sqrt(T) + d_cle_term_dT;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Array1D<Real, 1, INT_NEQS> &ydot)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_rhs(State const &state, NetworkParams const &p, rosenbrock::Vector<NumEqs> &ydot)
 {
+	[[maybe_unused]] const auto recombination_switch = p.recombination_switch;
+	[[maybe_unused]] const auto collisional_ionization_switch = p.collisional_ionization_switch;
+	[[maybe_unused]] const auto energy_switch = p.energy_switch;
+	[[maybe_unused]] const auto photoheating_switch = p.photoheating_switch;
+	[[maybe_unused]] const auto KI_heating_switch = p.KI_heating_switch;
+	[[maybe_unused]] const auto recombination_cooling_switch = p.recombination_cooling_switch;
+	[[maybe_unused]] const auto KI_cooling_switch = p.KI_cooling_switch;
+	[[maybe_unused]] const auto ion_ff_cooling_switch = p.ion_ff_cooling_switch;
+	[[maybe_unused]] const auto allow_mixed_cell_cooling = p.allow_mixed_cell_cooling;
+	[[maybe_unused]] const auto mixed_cell_lb = p.mixed_cell_lb;
+	[[maybe_unused]] const auto mixed_cell_ub = p.mixed_cell_ub;
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
 	const amrex::Real sigma_coll = (collisional_ionization_switch != 0) ? get_collisional_ionization_coefficient(state.T) : 0.0_rt;
@@ -213,12 +311,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 
 	const amrex::Real photoionization_term = chat_sigma_photo * n_HI * n_gamma;
 	const amrex::Real collisional_ionization_term = (collisional_ionization_switch != 0) ? n_e * n_HI * sigma_coll : 0.0_rt;
-	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T) * n_e * n_HII : 0.0_rt;
+	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T, p.recombination_temperature_dependent) * n_e * n_HII : 0.0_rt;
 
-	ydot(ie) = photoionization_term + collisional_ionization_term - recombination_term;
-	ydot(iH) = -ydot(ie);
-	ydot(iHp) = ydot(ie);
-	ydot(net_ienuc) = 0.0_rt;
+	ydot[ie] = photoionization_term + collisional_ionization_term - recombination_term;
+	ydot[iH] = -ydot[ie];
+	ydot[iHp] = ydot[ie];
+	ydot[net_ienuc] = 0.0_rt;
 	const amrex::Real recombination_cooling_rate =
 	    (energy_switch != 0 && recombination_cooling_switch != 0) ? get_recombination_cooling_coefficient(state.T) * n_e * n_HII : 0.0_rt;
 	const amrex::Real ion_ff_cooling_rate =
@@ -238,7 +336,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	energy_source -= recombination_cooling_rate;
 	energy_source -= ion_ff_cooling_rate;
 	energy_source -= collisional_ionization_cooling_rate;
-	ydot(net_ienuc) = energy_source / state.rho;
+	ydot[net_ienuc] = energy_source / state.rho;
 
 	amrex::Real chat_dust_kappa_rho = 0.0_rt;
 #ifdef DUST_CHEMICAL_BAND_ABSORPTION
@@ -246,23 +344,34 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 #endif
 	const amrex::Real dust_absorption_term = chat_dust_kappa_rho * n_gamma;
 
-	ydot(i_ngamma) = -photoionization_term - dust_absorption_term;
+	ydot[i_ngamma] = -photoionization_term - dust_absorption_term;
 #ifndef SKIP_PHOTOCHEMFLUX
-	ydot(i_ngamma_flux) = -chat_sigma_photo * n_HI * n_gamma_flux - chat_dust_kappa_rho * n_gamma_flux;
+	ydot[i_ngamma_flux] = -chat_sigma_photo * n_HI * n_gamma_flux - chat_dust_kappa_rho * n_gamma_flux;
 #endif
 #ifdef DUST_CHEMICAL_BAND_ABSORPTION
-	ydot(i_dust) = dust_absorption_term * get_ionizing_band_photon_energy();
+	ydot[i_dust] = dust_absorption_term * get_ionizing_band_photon_energy();
 #else
 	amrex::ignore_unused(dust_absorption_term);
 #endif
 
 	const amrex::Real recombination_binding_energy_rate = (energy_switch != 0) ? RydbergEnergy * recombination_term : 0.0_rt;
-	ydot(i_ir) = ion_ff_cooling_rate + KI_cooling_rate;
-	ydot(i_optical) = recombination_cooling_rate + recombination_binding_energy_rate;
+	ydot[i_ir] = ion_ff_cooling_rate + KI_cooling_rate;
+	ydot[i_optical] = recombination_cooling_rate + recombination_binding_energy_rate;
 }
 
-template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_jac(State const &state, NetworkParams const &p, rosenbrock::Matrix<NumEqs> &jac)
 {
+	[[maybe_unused]] const auto recombination_switch = p.recombination_switch;
+	[[maybe_unused]] const auto collisional_ionization_switch = p.collisional_ionization_switch;
+	[[maybe_unused]] const auto energy_switch = p.energy_switch;
+	[[maybe_unused]] const auto photoheating_switch = p.photoheating_switch;
+	[[maybe_unused]] const auto KI_heating_switch = p.KI_heating_switch;
+	[[maybe_unused]] const auto recombination_cooling_switch = p.recombination_cooling_switch;
+	[[maybe_unused]] const auto KI_cooling_switch = p.KI_cooling_switch;
+	[[maybe_unused]] const auto ion_ff_cooling_switch = p.ion_ff_cooling_switch;
+	[[maybe_unused]] const auto allow_mixed_cell_cooling = p.allow_mixed_cell_cooling;
+	[[maybe_unused]] const auto mixed_cell_lb = p.mixed_cell_lb;
+	[[maybe_unused]] const auto mixed_cell_ub = p.mixed_cell_ub;
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
 	amrex::Real sigma_coll = 0.0_rt;
@@ -274,8 +383,8 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	amrex::Real alpha_rec = 0.0_rt;
 	amrex::Real d_alpha_rec_dT = 0.0_rt;
 	if (recombination_switch != 0) {
-		alpha_rec = get_recombination_coefficient(state.T);
-		d_alpha_rec_dT = dRecombination_coefficient_dT(state.T);
+		alpha_rec = get_recombination_coefficient(state.T, p.recombination_temperature_dependent);
+		d_alpha_rec_dT = dRecombination_coefficient_dT(state.T, p.recombination_temperature_dependent);
 	}
 
 	const amrex::Real Gamma_photo = ((energy_switch != 0) && (photoheating_switch != 0)) ? get_ionization_heating_coefficient(state.T) : 0.0_rt;
@@ -317,7 +426,11 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	chat_dust_kappa_rho = state.c_hat * state.dust_kappa * state.rho;
 #endif
 
-	jac.zero();
+	for (int j = 0; j < NumEqs; ++j) {
+		for (int i = 0; i < NumEqs; ++i) {
+			jac(i, j) = 0.0_rt;
+		}
+	}
 
 	jac(ie, ie) = (collisional_ionization_switch * n_HI * sigma_coll - recombination_switch * alpha_rec * n_HII);
 	jac(ie, iH) = (chat_sigma_photo * n_gamma + collisional_ionization_switch * n_e * sigma_coll);
@@ -388,5 +501,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	amrex::ignore_unused(chat_dust_kappa_rho);
 #endif
 }
+
+} // namespace network
 
 #endif
