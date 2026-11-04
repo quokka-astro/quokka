@@ -41,6 +41,21 @@ template <> struct quokka::EOS_Traits<ODETest> {
 	static constexpr double gamma = 5. / 3.;
 };
 
+// gas used by TestEOSIdeal
+struct EOSTestGas {};
+template <> struct quokka::EOS_Traits<EOSTestGas> {
+	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
+	static constexpr double gamma = 5. / 3.;
+};
+
+// isothermal gas used by TestEOSIdeal
+struct EOSTestIso {};
+template <> struct quokka::EOS_Traits<EOSTestIso> {
+	static constexpr double gamma = 1.0;
+	static constexpr double cs_isothermal = 2.0e5;
+	static constexpr double mean_molecular_weight = NAN;
+};
+
 struct ODEUserData {
 	amrex::Real rho;
 };
@@ -267,17 +282,84 @@ auto TestRootFinding() -> int
 	return status;
 }
 
+auto TestEOSIdeal() -> int
+{
+	using EOS = quokka::EOS<EOSTestGas>;
+	constexpr Real gamma = quokka::EOS_Traits<EOSTestGas>::gamma;
+	constexpr Real mbar = quokka::EOS_Traits<EOSTestGas>::mean_molecular_weight;
+	constexpr Real rho = 2.3e-24;
+	constexpr Real T = 8000.;
+	constexpr Real Eint = rho * C::k_B * T / ((gamma - 1.0) * mbar);
+	constexpr Real P = (gamma - 1.0) * Eint;
+	constexpr Real Tfloor = 1.0e-10; // Microphysics eos() resets e <= 0 (and T <= 0) to this temperature
+	constexpr Real rho_floor = 1.0e-100;
+	constexpr Real reltol = 1.0e-14;
+
+	int status = 0;
+	auto check = [&status](const char *name, Real value, Real expected) {
+		const Real err = std::abs(value - expected) / std::abs(expected);
+		const bool ok = err <= reltol;
+		std::cout << std::format("{:<36}{:>24.16e}{:>24.16e}{:>12.2e}{}\n", name, value, expected, err, ok ? "" : "  FAIL");
+		if (!ok) {
+			status = 1;
+		}
+	};
+
+	// regular state
+	check("Tgas(rho, Eint)", EOS::ComputeTgasFromEint(rho, Eint), (gamma - 1.0) * mbar * Eint / (rho * C::k_B));
+	check("Eint(rho, T)", EOS::ComputeEintFromTgas(rho, T), rho * C::k_B * T / ((gamma - 1.0) * mbar));
+	check("Eint(rho, P)", EOS::ComputeEintFromPres(rho, P), P / (gamma - 1.0));
+	check("dEint/dT(rho, T)", EOS::ComputeEintTempDerivative(rho, T), rho * C::k_B / ((gamma - 1.0) * mbar));
+	check("P(rho, Eint)", EOS::ComputePressure(rho, Eint), (gamma - 1.0) * Eint);
+	check("cs(rho, P)", EOS::ComputeSoundSpeed(rho, P), std::sqrt(gamma * P / rho));
+	const auto [deint_dRho, deint_dP, dRho_dP, dP_dRho_s, G] = EOS::ComputeOtherDerivatives(rho, P);
+	if (deint_dRho != 0.0) {
+		std::cout << "deint_dRho = " << deint_dRho << " (expected 0)  FAIL\n";
+		status = 1;
+	}
+	check("deint_dP(rho, P)", deint_dP, 1.0 / ((gamma - 1.0) * rho));
+	check("dRho_dP(rho, P)", dRho_dP, rho / P);
+	check("dP_dRho_s(rho, P)", dP_dRho_s, gamma * P / rho);
+	check("G(rho, P)", G, 0.5 * (1.0 + gamma));
+
+	// floors
+	check("Tgas(rho, 0)", EOS::ComputeTgasFromEint(rho, 0.0), Tfloor);
+	check("Tgas(rho, -1e-12)", EOS::ComputeTgasFromEint(rho, -1.0e-12), Tfloor);
+	check("Eint(rho, 0)", EOS::ComputeEintFromTgas(rho, 0.0), rho * C::k_B * Tfloor / ((gamma - 1.0) * mbar));
+	check("P(rho, 0)", EOS::ComputePressure(rho, 0.0), rho * C::k_B * Tfloor / mbar);
+	check("P(0, Eint)", EOS::ComputePressure(0.0, Eint), rho_floor * C::k_B * Tfloor / mbar);
+
+	// isothermal
+	check("P_iso(rho, Eint)", quokka::EOS<EOSTestIso>::ComputePressure(rho, Eint), rho * 2.0e5 * 2.0e5);
+
+	// device: the floors must hold in device code too
+	amrex::Gpu::DeviceVector<Real> T_d(2);
+	Real *T_ptr = T_d.data();
+	amrex::ParallelFor(2, [=] AMREX_GPU_DEVICE(int n) noexcept { T_ptr[n] = EOS::ComputeTgasFromEint(rho, (n == 0) ? Eint : 0.0); });
+	std::array<Real, 2> T_h{};
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, T_d.begin(), T_d.end(), T_h.begin());
+	check("Tgas(rho, Eint) (device)", T_h[0], (gamma - 1.0) * mbar * Eint / (rho * C::k_B));
+	check("Tgas(rho, 0) (device)", T_h[1], Tfloor);
+
+	std::cout << (status == 0 ? "EOSIdeal: all tests passed.\n" : "EOSIdeal: FAILED.\n");
+	return status;
+}
+
 } // namespace
 
 auto problem_main() -> int
 {
 	const int ode_status = TestODEIntegration();
 	const int root_status = TestRootFinding();
+	const int eos_status = TestEOSIdeal(); // after TestODEIntegration, which initialises the Microphysics EOS
 	if (ode_status != 0) {
 		std::cout << "MathUnitTests: ODE integration test FAILED.\n";
 	}
 	if (root_status != 0) {
 		std::cout << "MathUnitTests: root finding test FAILED.\n";
 	}
-	return ((ode_status != 0) || (root_status != 0)) ? 1 : 0;
+	if (eos_status != 0) {
+		std::cout << "MathUnitTests: EOS test FAILED.\n";
+	}
+	return ((ode_status != 0) || (root_status != 0) || (eos_status != 0)) ? 1 : 0;
 }
