@@ -422,7 +422,8 @@ AMREX_GPU_HOST_DEVICE void RunRosenbrockCases(Real *out)
 	{ // decay
 		DecaySystem sys{};
 		rosenbrock::Vector<1> y{1.0};
-		const auto r = rosenbrock::integrate<1>(sys, y, 1.0e-2, UniformSettings<1>(1.0e-14, 1.0e-8, 150000)); // atol << y(dt) = 4.5e-5, so rtol sets the accuracy
+		const auto r =
+		    rosenbrock::integrate<1>(sys, y, 1.0e-2, UniformSettings<1>(1.0e-14, 1.0e-8, 150000)); // atol << y(dt) = 4.5e-5, so rtol sets the accuracy
 		out[0] = y[0];
 		out[1] = static_cast<Real>(r.status);
 	}
@@ -441,7 +442,8 @@ AMREX_GPU_HOST_DEVICE void RunRosenbrockCases(Real *out)
 		DecaySystem sys{};
 		sys.nan_jacobian_once = true;
 		rosenbrock::Vector<1> y{1.0};
-		const auto r = rosenbrock::integrate<1>(sys, y, 1.0e-2, UniformSettings<1>(1.0e-14, 1.0e-8, 150000)); // atol << y(dt) = 4.5e-5, so rtol sets the accuracy
+		const auto r =
+		    rosenbrock::integrate<1>(sys, y, 1.0e-2, UniformSettings<1>(1.0e-14, 1.0e-8, 150000)); // atol << y(dt) = 4.5e-5, so rtol sets the accuracy
 		out[6] = y[0];
 		out[7] = static_cast<Real>(r.status);
 		out[8] = static_cast<Real>(r.n_jac);
@@ -490,8 +492,8 @@ auto TestRosenbrock() -> int
 		std::cout << std::format("Rosenbrock decay y = {:.10e} (exact {:.10e}), status {}; nan_jacobian_once y = {:.10e}, status {}, n_jac {}\n", v[0],
 					 std::exp(-10.0), v[1], v[6], v[7], v[8]);
 		check("decay", v[1] == success && close(v[0], std::exp(-10.0), 1.0e-5));
-		check("robertson", v[5] == success && close(v[2], 0.7158270687, 1.0e-4) && close(v[3], 9.185534765e-6, 1.0e-3) &&
-				       close(v[4], 0.2841637457, 1.0e-4));
+		check("robertson",
+		      v[5] == success && close(v[2], 0.7158270687, 1.0e-4) && close(v[3], 9.185534765e-6, 1.0e-3) && close(v[4], 0.2841637457, 1.0e-4));
 		check("nan_jacobian_once", v[7] == success && v[8] >= 2.0 && close(v[6], std::exp(-10.0), 1.0e-5));
 		check("max_steps", v[9] == static_cast<Real>(rosenbrock::Status::TooManySteps));
 		check("clean", v[11] == success && v[10] >= 0.0);

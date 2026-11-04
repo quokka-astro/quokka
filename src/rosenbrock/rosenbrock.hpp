@@ -24,10 +24,10 @@ namespace rosenbrock
 enum class Status : int { Success = 0, TooManySteps, StepSizeUnderflow, SingularMatrix, ToleranceTooSmall };
 
 template <int N> struct Settings {
-	Vector<N> atol;			       ///< absolute tolerance; must be > 0 for every component in the error norm
-	Vector<N> rtol;			       ///< relative tolerance; must be > 10 eps for every component in the error norm
+	Vector<N> atol;				///< absolute tolerance; must be > 0 for every component in the error norm
+	Vector<N> rtol;				///< relative tolerance; must be > 10 eps for every component in the error norm
 	amrex::GpuArray<bool, N> in_error_norm; ///< false: left out of the sum of the RMS error norm (the sum is still divided by N)
-	Vector<N> min_value;		       ///< a stage or step with y(n) < min_value(n) is rejected; -inf for no limit
+	Vector<N> min_value;			///< a stage or step with y(n) < min_value(n) is rejected; -inf for no limit
 	Vector<N> change_floor; ///< where |y_old| and |y_new| both exceed this, a step that changes |y| by more than 4x is rejected; +inf for none
 	int max_steps;		///< maximum number of steps
 };
@@ -109,8 +109,7 @@ template <int N> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto matrix_is_finite(
 ///   void jac(amrex::Real t, Vector<N> const &y, Matrix<N> &J);    // J(i, j) = d ydot_i / d y_j; called right after rhs at the same y
 /// rhs is called on the accepted state itself at the start of every step attempt (so its cleaning persists) and on a
 /// copy for the later stages.
-template <int N, typename System>
-AMREX_GPU_HOST_DEVICE auto integrate(System &sys, Vector<N> &y, const amrex::Real dt, Settings<N> const &settings) -> Result
+template <int N, typename System> AMREX_GPU_HOST_DEVICE auto integrate(System &sys, Vector<N> &y, const amrex::Real dt, Settings<N> const &settings) -> Result
 {
 	using T = ros2s_tableau;
 	constexpr amrex::Real eps = std::numeric_limits<amrex::Real>::epsilon();
