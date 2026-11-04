@@ -30,7 +30,6 @@
 #include "AMReX_SPACE.H"
 
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/HydroState.hpp"
 #include "hydro/NSCBC_inflow.hpp"
@@ -39,6 +38,7 @@
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
+#include "util/fundamental_constants.hpp"
 #include "util/valarray.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"

@@ -2,8 +2,8 @@
 #define PHOTOELECTRIC_HEATING_HPP_
 
 #include "AMReX_REAL.H"
-#include "util/fundamental_constants.hpp"
 #include "util/DataTable.hpp"
+#include "util/fundamental_constants.hpp"
 #include <array>
 #include <tuple>
 #include <vector>

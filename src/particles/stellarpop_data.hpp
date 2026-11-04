@@ -15,8 +15,8 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "util/fundamental_constants.hpp"
 #include "math/interpolate.hpp"
+#include "util/fundamental_constants.hpp"
 
 using Real = amrex::Real;
 static constexpr int FATE_ARR_SIZE = 201;

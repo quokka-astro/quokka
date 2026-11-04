@@ -26,7 +26,6 @@
 
 #include "QuokkaSimulation.hpp"
 #include "cooling/ResampledCooling.hpp"
-#include "util/fundamental_constants.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/NSCBC_inflow.hpp"
 #include "hydro/NSCBC_outflow.hpp"
@@ -35,6 +34,7 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
+#include "util/fundamental_constants.hpp"
 
 using amrex::Real;
 

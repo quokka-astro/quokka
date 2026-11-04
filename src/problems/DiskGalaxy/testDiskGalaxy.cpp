@@ -27,7 +27,6 @@
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
-#include "util/fundamental_constants.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
@@ -37,6 +36,7 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 #include "util/DataTable.hpp"
+#include "util/fundamental_constants.hpp"
 
 namespace
 {

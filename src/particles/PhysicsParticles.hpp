@@ -24,7 +24,6 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 
-#include "util/fundamental_constants.hpp"
 #include "particle_IO.hpp"
 #include "particle_accretion.hpp"
 #include "particle_creation.hpp"
@@ -34,6 +33,7 @@
 #include "particle_types.hpp"
 #include "particle_update.hpp"
 #include "physics_info.hpp"
+#include "util/fundamental_constants.hpp"
 
 #include "cooling/PhotoelectricHeating.hpp"
 

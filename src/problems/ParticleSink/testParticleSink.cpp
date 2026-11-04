@@ -15,11 +15,11 @@
 #include <utility>
 
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 #include "util/BC.hpp"
+#include "util/fundamental_constants.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"

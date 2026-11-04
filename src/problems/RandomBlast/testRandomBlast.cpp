@@ -12,10 +12,10 @@
 #include <format>
 
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 #include "util/fextract.hpp"
+#include "util/fundamental_constants.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"

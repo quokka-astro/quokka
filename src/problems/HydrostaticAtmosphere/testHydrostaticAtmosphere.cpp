@@ -14,8 +14,8 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "hydro/hydro_system.hpp"
+#include "util/fundamental_constants.hpp"
 
 struct HydrostaticAtmosphereProblem {};
 

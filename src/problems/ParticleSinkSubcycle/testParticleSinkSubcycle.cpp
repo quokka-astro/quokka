@@ -34,10 +34,10 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "util/BC.hpp"
+#include "util/fundamental_constants.hpp"
 
 struct SubcycleProblem {};
 namespace

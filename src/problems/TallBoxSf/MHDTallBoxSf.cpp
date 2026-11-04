@@ -24,9 +24,9 @@
 #include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
-#include "util/fundamental_constants.hpp"
 #include "hydro/hydro_system.hpp"
 #include "util/DataTable.hpp"
+#include "util/fundamental_constants.hpp"
 #include "util/time_units.hpp"
 
 constexpr double mu = 1.0 * C::m_p;
