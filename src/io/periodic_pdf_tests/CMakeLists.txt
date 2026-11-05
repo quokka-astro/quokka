@@ -1,0 +1,8 @@
+add_executable(PDFPeriodicTest testPDFPeriodic.cpp ../DiagPDF.cpp ../DiagBase.cpp ../DiagFilter.cpp)
+target_link_libraries(PDFPeriodicTest PRIVATE AMReX::amrex yaml-cpp::yaml-cpp)
+target_include_directories(PDFPeriodicTest PRIVATE .. ../..)
+target_compile_features(PDFPeriodicTest PRIVATE cxx_std_20)
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  setup_target_for_cuda_compilation(PDFPeriodicTest)
+endif()
+add_test(NAME PDFPeriodicTest COMMAND PDFPeriodicTest)
