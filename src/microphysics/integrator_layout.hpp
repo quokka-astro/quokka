@@ -54,25 +54,18 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 	static constexpr bool q_dust = traits::dust_chemical_band_absorption;
 	static constexpr int neqs = num_spec + 1 + num_chem_rad_eqs + num_thermal_bands + (q_dust ? 1 : 0);
 
-	/// the entry (1-based) of the specific internal energy, right after the species
-	static constexpr int energy_row = num_spec + 1;
-	/// the entry (1-based) of the first thermal band; the others follow it
+	/// the entry of the specific internal energy, right after the species
+	static constexpr int energy_row = num_spec;
+	/// the entry of the first thermal band; the others follow it
 	static constexpr int thermal_band_row = energy_row + num_chem_rad_eqs + 1;
-	/// the entry (1-based) of the energy absorbed by dust, with q_dust
+	/// the entry of the energy absorbed by dust, with q_dust
 	static constexpr int dust_row = energy_row + num_chem_rad_eqs + num_thermal_bands + 1;
 
-	/// The role of entry n (1-based) of y: the species, then the energy, then a photon number (and with
-	/// integrate_rad_flux a photon flux) per chemical band, then the thermal bands, then the dust slot.
-	///
-	/// Port-only exception, removed by the post-port cleanup PR: rtol_for and atol_for (rosenbrock.hpp) should switch
-	/// over the role, but a switch breaks bitwise identity with Microphysics, which we need during the port but not at
-	/// the end. Without photochemistry the switch does not reduce to one select, so numerical_jacobian's ewt loop becomes
-	/// too big for Apple clang to unroll fully for PrimordialChem (15 entries). The loop vectorizer then sums fac without
-	/// the fused multiply-adds of Microphysics' fully unrolled loop, and the finite-difference Jacobian changes in the
-	/// last bits. So they keep Microphysics' shape (energy first, the photon branch only with photochemistry) for now.
+	/// The role of entry n of y: the species, then the energy, then a photon number (and with integrate_rad_flux a
+	/// photon flux) per chemical band, then the thermal bands, then the dust slot.
 	AMREX_GPU_HOST_DEVICE static constexpr auto role(const int n) -> VarRole
 	{
-		if (n <= num_spec) {
+		if (n < num_spec) {
 			return VarRole::Species;
 		}
 		if (n == energy_row) {
@@ -86,6 +79,18 @@ template <typename problem_t, typename BurnT> struct IntegratorLayout {
 			return VarRole::ThermalBandEnergy;
 		}
 		return VarRole::DustAbsorbedEnergy;
+	}
+
+	/// The number of entries that count toward the step error.
+	static constexpr auto NumErrorEntries() -> int
+	{
+		int count = 0;
+		for (int n = 0; n < neqs; ++n) {
+			if (counts_toward_error(role(n))) {
+				++count;
+			}
+		}
+		return count;
 	}
 
 	static_assert(photochemistry == requires { &BurnT::rn; }, "The burn state must have rn exactly when Microphysics_Traits::photochemistry is true");

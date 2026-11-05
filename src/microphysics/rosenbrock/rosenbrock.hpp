@@ -8,6 +8,7 @@
 
 #include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
@@ -27,18 +28,17 @@ using amrex::literals::operator""_rt;
 namespace rosenbrock
 {
 
-// rtol_for and atol_for keep the shape of Microphysics' versions instead of switching over the role, during the port
-// only. See IntegratorLayout::role().
+// The tolerances of entry n. Only the entries that count toward the step error (counts_toward_error) have tolerances,
+// so callers skip the others.
 template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rtol_for(const RosenbrockT &rstate, const int n) -> amrex::Real
 {
 	const VarRole role = Layout::role(n);
+	AMREX_ASSERT(counts_toward_error(role));
 	if (role == VarRole::Energy) {
 		return rstate.rtol_enuc;
 	}
-	if constexpr (Layout::photochemistry) {
-		if (role != VarRole::Species) {
-			return role == VarRole::ChemPhotonNumber ? rstate.rtol_rad_num : 1.0e30;
-		}
+	if (role == VarRole::ChemPhotonNumber) {
+		return rstate.rtol_rad_num;
 	}
 	return rstate.rtol_spec;
 }
@@ -46,13 +46,12 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto atol_for(const RosenbrockT &rstate, const int n) -> amrex::Real
 {
 	const VarRole role = Layout::role(n);
+	AMREX_ASSERT(counts_toward_error(role));
 	if (role == VarRole::Energy) {
 		return rstate.atol_enuc;
 	}
-	if constexpr (Layout::photochemistry) {
-		if (role != VarRole::Species) {
-			return role == VarRole::ChemPhotonNumber ? rstate.atol_rad_num : 1.0e30;
-		}
+	if (role == VarRole::ChemPhotonNumber) {
+		return rstate.atol_rad_num;
 	}
 	return rstate.atol_spec;
 }
@@ -62,17 +61,18 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 	constexpr int int_neqs = Layout::neqs;
 
 	amrex::Real err = 0.0_rt;
-	for (int n = 1; n <= int_neqs; ++n) {
-		const amrex::Real sk = atol_for<Layout>(rstate, n) + rtol_for<Layout>(rstate, n) * amrex::max(std::abs(rstate.y(n)), std::abs(rstate.ynew(n)));
-		const amrex::Real term = counts_toward_error(Layout::role(n)) ? rstate.work(n) / sk : 0.0_rt;
-		err += term * term;
+	for (int n = 0; n < int_neqs; ++n) {
+		if (counts_toward_error(Layout::role(n))) {
+			const amrex::Real sk =
+			    atol_for<Layout>(rstate, n) + rtol_for<Layout>(rstate, n) * amrex::max(std::abs(rstate.y[n]), std::abs(rstate.ynew[n]));
+			const amrex::Real term = rstate.work[n] / sk;
+			err += term * term;
+		}
 	}
-	// Known bug, kept for bitwise identity with Microphysics and to be fixed later: the sum should be divided by the
-	// number of equations that take part in error control, not by int_neqs. The excluded equations add zero terms, so
-	// dividing by all of them lowers the norm and accepts steps whose monitored errors exceed the tolerances. See
-	// https://github.com/quokka-astro/quokka/pull/2295#discussion_r4051762482 and
-	// https://github.com/quokka-astro/quokka/pull/2295#issuecomment-5943124602.
-	return std::sqrt(err / static_cast<amrex::Real>(int_neqs));
+	// the root mean square over the entries that count toward the error, so that the entries outside error control do
+	// not lower the norm (https://github.com/quokka-astro/quokka/pull/2295#discussion_r4051762482)
+	constexpr int num_error_entries = Layout::NumErrorEntries();
+	return std::sqrt(err / static_cast<amrex::Real>(num_error_entries));
 }
 
 template <typename Layout, typename RosenbrockT>
@@ -81,10 +81,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto species_change_valid(const Rosenbr
 	constexpr amrex::Real increase_change_factor = 4.0_rt;
 	constexpr amrex::Real decrease_change_factor = 0.25_rt;
 
-	for (int i = 1; i <= Layout::num_spec; ++i) {
-		if (std::abs(rstate.y(i)) > params.X_reject_buffer * rstate.atol_spec && std::abs(rstate.ynew(i)) > params.X_reject_buffer * rstate.atol_spec &&
-		    (std::abs(rstate.ynew(i)) > increase_change_factor * std::abs(rstate.y(i)) ||
-		     std::abs(rstate.ynew(i)) < decrease_change_factor * std::abs(rstate.y(i)))) {
+	for (int i = 0; i < Layout::num_spec; ++i) {
+		if (std::abs(rstate.y[i]) > params.X_reject_buffer * rstate.atol_spec && std::abs(rstate.ynew[i]) > params.X_reject_buffer * rstate.atol_spec &&
+		    (std::abs(rstate.ynew[i]) > increase_change_factor * std::abs(rstate.y[i]) ||
+		     std::abs(rstate.ynew[i]) < decrease_change_factor * std::abs(rstate.y[i]))) {
 			return false;
 		}
 	}
@@ -96,8 +96,8 @@ template <typename Layout, typename MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORC
 {
 	constexpr int int_neqs = Layout::neqs;
 
-	for (int j = 1; j <= int_neqs; ++j) {
-		for (int i = 1; i <= int_neqs; ++i) {
+	for (int j = 0; j < int_neqs; ++j) {
+		for (int i = 0; i < int_neqs; ++i) {
 			const amrex::Real value = matrix(i, j);
 			if (std::isnan(value) || std::isinf(value)) {
 				return false;
@@ -109,32 +109,32 @@ template <typename Layout, typename MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORC
 }
 
 template <typename Layout>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex::Array1D<amrex::Real, 1, Layout::neqs> &y, const IntegratorParams &params)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex::GpuArray<amrex::Real, Layout::neqs> &y, const IntegratorParams &params)
     -> bool
 {
 	constexpr int int_neqs = Layout::neqs;
 
-	for (int n = 1; n <= int_neqs; ++n) {
-		const amrex::Real yn = y(n);
+	for (int n = 0; n < int_neqs; ++n) {
+		const amrex::Real yn = y[n];
 		if (std::isnan(yn) || std::isinf(yn)) {
 			return false;
 		}
 	}
 
-	for (int n = 1; n <= int_neqs; ++n) {
+	for (int n = 0; n < int_neqs; ++n) {
 		switch (Layout::role(n)) {
 			case VarRole::Species:
-				if (y(n) < -params.atol_spec) {
+				if (y[n] < -params.atol_spec) {
 					return false;
 				}
 				break;
 			case VarRole::Energy:
-				if (y(n) <= 0.0_rt) {
+				if (y[n] <= 0.0_rt) {
 					return false;
 				}
 				break;
 			case VarRole::ChemPhotonNumber:
-				if (y(n) < -params.atol_rad_num) {
+				if (y[n] < -params.atol_rad_num) {
 					return false;
 				}
 				break;
@@ -153,20 +153,25 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex
 template <typename Layout, typename BurnT, typename RosenbrockT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, RosenbrockT &rstate, const amrex::Real time, const IntegratorParams &params)
 {
+	// TODO (james471): This is an unreviewed and untested function. It has never been used since we always
+	// use the analytic Jacobian.
 	constexpr int int_neqs = Layout::neqs;
 	constexpr amrex::Real UROUND = std::numeric_limits<amrex::Real>::epsilon();
-	amrex::Array1D<amrex::Real, 1, int_neqs> ewt{};
-	amrex::Array1D<amrex::Real, 1, int_neqs> ybase{};
+	amrex::GpuArray<amrex::Real, int_neqs> ewt{};
+	amrex::GpuArray<amrex::Real, int_neqs> ybase{};
 
 	// rhs() may clean or renormalize all components of rstate.y.
-	for (int i = 1; i <= int_neqs; ++i) {
-		ybase(i) = rstate.y(i);
+	for (int i = 0; i < int_neqs; ++i) {
+		ybase[i] = rstate.y[i];
 	}
 
+	// error weights, only for the entries that count toward the step error (the others have no tolerances)
 	amrex::Real fac = 0.0_rt;
-	for (int i = 1; i <= int_neqs; ++i) {
-		ewt(i) = 1.0_rt / (rtol_for<Layout>(rstate, i) * std::abs(rstate.y(i)) + atol_for<Layout>(rstate, i));
-		fac += (rstate.k[0](i) * ewt(i)) * (rstate.k[0](i) * ewt(i));
+	for (int i = 0; i < int_neqs; ++i) {
+		if (counts_toward_error(Layout::role(i))) {
+			ewt[i] = 1.0_rt / (rtol_for<Layout>(rstate, i) * std::abs(rstate.y[i]) + atol_for<Layout>(rstate, i));
+			fac += (rstate.k[0][i] * ewt[i]) * (rstate.k[0][i] * ewt[i]);
+		}
 	}
 	fac = std::sqrt(fac / static_cast<amrex::Real>(int_neqs));
 
@@ -175,23 +180,25 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, R
 		R0 = 1.0_rt;
 	}
 
-	for (int j = 1; j <= int_neqs; ++j) {
-		const amrex::Real yj = ybase(j);
-		const amrex::Real R = amrex::max(std::sqrt(UROUND) * std::abs(yj), R0 / ewt(j));
-		for (int n = 1; n <= int_neqs; ++n) {
-			rstate.y(n) = ybase(n);
+	for (int j = 0; j < int_neqs; ++j) {
+		const amrex::Real yj = ybase[j];
+		// an entry without tolerances gets the relative step, with |y| floored at SMALL_X_SAFE so that a zero entry still moves
+		const amrex::Real R = counts_toward_error(Layout::role(j)) ? amrex::max(std::sqrt(UROUND) * std::abs(yj), R0 / ewt[j])
+									   : std::sqrt(UROUND) * amrex::max(std::abs(yj), params.SMALL_X_SAFE);
+		for (int n = 0; n < int_neqs; ++n) {
+			rstate.y[n] = ybase[n];
 		}
-		rstate.y(j) += R;
+		rstate.y[j] += R;
 
 		rhs<Layout>(time, state, rstate, rstate.work, params);
 
 		fac = 1.0_rt / R;
-		for (int i = 1; i <= int_neqs; ++i) {
-			rstate.jac.set(i, j, (rstate.work(i) - rstate.k[0](i)) * fac);
+		for (int i = 0; i < int_neqs; ++i) {
+			rstate.jac(i, j) = (rstate.work[i] - rstate.k[0][i]) * fac;
 		}
 
-		for (int n = 1; n <= int_neqs; ++n) {
-			rstate.y(n) = ybase(n);
+		for (int n = 0; n < int_neqs; ++n) {
+			rstate.y[n] = ybase[n];
 		}
 	}
 
@@ -227,22 +234,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, Ro
 
 template <typename Layout, typename BurnT, typename RosenbrockT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_at(const amrex::Real time, BurnT &state, RosenbrockT &rstate,
-						     const amrex::Array1D<amrex::Real, 1, Layout::neqs> &y, amrex::Array1D<amrex::Real, 1, Layout::neqs> &ydot,
+						     const amrex::GpuArray<amrex::Real, Layout::neqs> &y, amrex::GpuArray<amrex::Real, Layout::neqs> &ydot,
 						     const IntegratorParams &params)
 {
 	constexpr int int_neqs = Layout::neqs;
 
-	amrex::Array1D<amrex::Real, 1, int_neqs> ysave{};
+	amrex::GpuArray<amrex::Real, int_neqs> ysave{};
 
-	for (int n = 1; n <= int_neqs; ++n) {
-		ysave(n) = rstate.y(n);
-		rstate.y(n) = y(n);
+	for (int n = 0; n < int_neqs; ++n) {
+		ysave[n] = rstate.y[n];
+		rstate.y[n] = y[n];
 	}
 
 	rhs<Layout>(time, state, rstate, ydot, params);
 
-	for (int n = 1; n <= int_neqs; ++n) {
-		rstate.y(n) = ysave(n);
+	for (int n = 0; n < int_neqs; ++n) {
+		rstate.y[n] = ysave[n];
 	}
 }
 
@@ -250,8 +257,8 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 {
 	constexpr int int_neqs = Layout::neqs;
 
-	for (int j = 1; j <= int_neqs; ++j) {
-		for (int i = 1; i <= int_neqs; ++i) {
+	for (int j = 0; j < int_neqs; ++j) {
+		for (int i = 0; i < int_neqs; ++i) {
 			rstate.jac(i, j) = -rstate.jac(i, j);
 		}
 		rstate.jac(j, j) += fac;
@@ -264,7 +271,7 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 }
 
 template <typename Layout, typename RosenbrockT>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void solve(RosenbrockT &rstate, amrex::Array1D<amrex::Real, 1, Layout::neqs> &b)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void solve(RosenbrockT &rstate, amrex::GpuArray<amrex::Real, Layout::neqs> &b)
 {
 	quokka::math::dgesl<Layout::neqs, Layout::traits::linalg_do_pivoting>(rstate.jac, rstate.pivot, b);
 }
@@ -280,8 +287,9 @@ rosenbrock_integrator(BurnT &state, RosenbrockState<IntegratorLayout<problem_t, 
 		return IERR_SUCCESS;
 	}
 
-	for (int n = 1; n <= int_neqs; ++n) {
-		if (atol_for<Layout>(rstate, n) <= 0.0_rt || rtol_for<Layout>(rstate, n) <= 10.0_rt * std::numeric_limits<amrex::Real>::epsilon()) {
+	for (int n = 0; n < int_neqs; ++n) {
+		if (counts_toward_error(Layout::role(n)) &&
+		    (atol_for<Layout>(rstate, n) <= 0.0_rt || rtol_for<Layout>(rstate, n) <= 10.0_rt * std::numeric_limits<amrex::Real>::epsilon())) {
 			return IERR_TOO_MUCH_ACCURACY_REQUESTED;
 		}
 	}
@@ -309,13 +317,13 @@ rosenbrock_integrator(BurnT &state, RosenbrockState<IntegratorLayout<problem_t, 
 	amrex::Real errold = 1.0_rt;
 	amrex::Real hopt = h;
 	amrex::Real x = rstate.t;
-	amrex::Array1D<amrex::Real, 1, int_neqs> rhs_tmp{};
+	amrex::GpuArray<amrex::Real, int_neqs> rhs_tmp{};
 
 	// main evolution loop
 
 	// within this loop, x will be the current time and h will be the
 	// step size we are attempting.  The solution at the current time
-	// is rstate.y().
+	// is rstate.y.
 
 	while (true) {
 
@@ -380,14 +388,14 @@ rosenbrock_integrator(BurnT &state, RosenbrockState<IntegratorLayout<problem_t, 
 
 			bool valid_stage_state = true;
 			for (int istage = 2; istage <= Tableau::stages; ++istage) {
-				for (int n = 1; n <= int_neqs; ++n) {
-					rstate.ynew(n) = rstate.y(n);
-					rstate.k[istage - 1](n) = 0.0_rt;
+				for (int n = 0; n < int_neqs; ++n) {
+					rstate.ynew[n] = rstate.y[n];
+					rstate.k[istage - 1][n] = 0.0_rt;
 
 					for (int jstage = 1; jstage < istage; ++jstage) {
-						const amrex::Real akj = rstate.k[jstage - 1](n);
-						rstate.ynew(n) += Tableau::a(istage, jstage) * akj;
-						rstate.k[istage - 1](n) += (Tableau::c(istage, jstage) / h) * akj;
+						const amrex::Real akj = rstate.k[jstage - 1][n];
+						rstate.ynew[n] += Tableau::a(istage, jstage) * akj;
+						rstate.k[istage - 1][n] += (Tableau::c(istage, jstage) / h) * akj;
 					}
 				}
 
@@ -403,8 +411,8 @@ rosenbrock_integrator(BurnT &state, RosenbrockState<IntegratorLayout<problem_t, 
 				rhs_at<Layout>(x + Tableau::ct(istage) * h, state, rstate, rstate.ynew, rhs_tmp, params);
 				rstate.n_rhs += 1;
 
-				for (int n = 1; n <= int_neqs; ++n) {
-					rstate.k[istage - 1](n) += rhs_tmp(n);
+				for (int n = 0; n < int_neqs; ++n) {
+					rstate.k[istage - 1][n] += rhs_tmp[n];
 				}
 				solve<Layout>(rstate, rstate.k[istage - 1]);
 			}
@@ -413,18 +421,18 @@ rosenbrock_integrator(BurnT &state, RosenbrockState<IntegratorLayout<problem_t, 
 				continue;
 			}
 
-			for (int n = 1; n <= int_neqs; ++n) {
+			for (int n = 0; n < int_neqs; ++n) {
 				amrex::Real y_update = 0.0_rt;
 				amrex::Real err = 0.0_rt;
 
 				for (int istage = 1; istage <= Tableau::stages; ++istage) {
-					const amrex::Real aki = rstate.k[istage - 1](n);
+					const amrex::Real aki = rstate.k[istage - 1][n];
 					y_update += Tableau::b(istage) * aki;
 					err += Tableau::e(istage) * aki;
 				}
 
-				rstate.ynew(n) = rstate.y(n) + y_update;
-				rstate.work(n) = err;
+				rstate.ynew[n] = rstate.y[n] + y_update;
+				rstate.work[n] = err;
 			}
 
 			rstate.n_step += 1;
@@ -458,8 +466,8 @@ rosenbrock_integrator(BurnT &state, RosenbrockState<IntegratorLayout<problem_t, 
 			// and predict the next timestep
 
 			if (err <= 1.0_rt && valid_update) {
-				for (int n = 1; n <= int_neqs; ++n) {
-					rstate.y(n) = rstate.ynew(n);
+				for (int n = 0; n < int_neqs; ++n) {
+					rstate.y[n] = rstate.ynew[n];
 				}
 				x += h;
 

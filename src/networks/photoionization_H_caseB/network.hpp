@@ -4,6 +4,8 @@
 /// \brief The constants and runtime parameters of a jaff-generated network. A
 /// Quokka problem names the network type with Microphysics_Traits::Network.
 
+#include <cmath> // INFINITY, for an open top band edge
+
 #include "AMReX_Array.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
@@ -21,37 +23,40 @@ namespace jaff_network
 extern AMREX_GPU_MANAGED amrex::Real small_x; // NOLINT
 } // namespace jaff_network
 
-// $JAFF SUB label
+// $$JAFF SUB label
 /// The jaff network photoionization_H_caseB.
-// $JAFF END
+// $$JAFF END
 struct JaffNetwork {
-	// $JAFF SUB nspec
+	// $$JAFF SUB nspec
 	static constexpr int NumSpec = 3;
-	// $JAFF END
+	// $$JAFF END
 	/// indices of the species in xn
-	enum Species : int {
-		// $JAFF REPEAT idx, specie_with_normalized_sign IN species_with_normalized_sign
+	enum Species : int { // NOLINT(cppcoreguidelines-use-enum-class)
+		// $$JAFF REPEAT idx, specie_with_normalized_sign IN species_with_normalized_sign
 		h = 0,
 		hj = 1,
 		ek = 2,
-		// $JAFF END
+		// $$JAFF END
 	};
 
-	// $JAFF SUB nbands
+	// $$JAFF SUB nbands
 	static constexpr int NumChemBands = 1;
-	// $JAFF END
+	// $$JAFF END
 	/// edges of the chemical bands [eV]
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static constexpr auto ChemBands() -> amrex::GpuArray<double, NumChemBands + 1>
 	{
-		// $JAFF REPEAT radiation_boundary IN radiation_boundaries
+		// $$JAFF REPEAT radiation_boundary IN radiation_boundaries
 		return {{13.6, 26.0}};
-		// $JAFF END
+		// $$JAFF END
 	}
 	/// index alpha of the photon-number spectrum n(E) ~ E^(alpha-2) within a
-	/// chemical band
-	// $JAFF SUB profile_index
+	/// chemical band; Quokka takes one alpha for all bands
+	// $$JAFF GET profile_index IN 0
 	static constexpr double ChemBandsPowerLawIndex = 0;
-	// $JAFF END
+	// $$JAFF END
+	// $$JAFF REPEAT idx, profile_index IN profile_indices
+	static_assert(0 == ChemBandsPowerLawIndex, "band 0: Quokka takes one profile index for all chemical bands");
+	// $$JAFF END
 
 	static constexpr int NumThermalBands = 0;
 
