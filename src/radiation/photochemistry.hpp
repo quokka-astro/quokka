@@ -61,14 +61,17 @@ struct PhotochemSystem {
 
 	AMREX_GPU_HOST_DEVICE static void clean(rosenbrock::Vector<network::NumEqs> &y)
 	{
+		// local copy: amrex::max takes its arguments by reference, which would odr-use the namespace-scope constant, and
+		// nvcc has no device copy of it (std::fmax is not used because it would replace a NaN with the floor)
+		constexpr Real small_x_safe = photochem_small_x_safe;
 		for (int n = 0; n < NumSpec; ++n) {
-			y[n] = amrex::max(y[n], photochem_small_x_safe);
+			y[n] = amrex::max(y[n], small_x_safe);
 		}
 		for (int n = i_rad0; n < i_rad0 + NumChemRadEqs; n += NumChemRadVarsPerGroup) {
-			y[n] = amrex::max(y[n], photochem_small_x_safe);
+			y[n] = amrex::max(y[n], small_x_safe);
 		}
 		for (int n = i_thermal0; n < i_thermal0 + NumThermalBands; ++n) {
-			y[n] = amrex::max(y[n], photochem_small_x_safe);
+			y[n] = amrex::max(y[n], small_x_safe);
 		}
 #ifdef DUST_CHEMICAL_BAND_ABSORPTION
 		y[i_dust] = amrex::max(y[i_dust], 0.0_rt);
