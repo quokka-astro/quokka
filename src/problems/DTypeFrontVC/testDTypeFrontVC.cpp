@@ -24,10 +24,6 @@
 #include <cmath>
 #include <limits>
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
 struct DTypeFrontVC {};
 
 namespace
@@ -96,8 +92,6 @@ void RadSystem<DTypeFrontVC>::AddRadSource(array_t &radEnergy, array_t & /*reduc
 
 template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 {
-	eos_rp::ReadParameters();
-
 	amrex::ParmParse const pp("photoionization_momentum");
 	userData_.temperature = 1.0e3;
 	userData_.n_e_init = 1.0e-10;
@@ -134,10 +128,10 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n];
+		rhotot += state.xn[n] * Network::SpeciesMass()[n];
 	}
 	state.rho = rhotot;
-	eos(eos_input_rt, state);
+	quokka::EOS<DTypeFrontVC>::Solve(quokka::EOS<DTypeFrontVC>::Input::RhoT, state);
 	const auto Egas0 = state.e * rhotot;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -154,7 +148,7 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x3GasMomentum_index) = 0.0_rt;
 		for (int nn = 0; nn < Network::NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<DTypeFrontVC>::scalar0_index + nn) = state.xn[nn] * spmasses[nn];
+			state_cc(i, j, k, HydroSystem<DTypeFrontVC>::scalar0_index + nn) = state.xn[nn] * Network::SpeciesMass()[nn];
 		}
 	});
 }
