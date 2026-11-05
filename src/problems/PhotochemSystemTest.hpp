@@ -10,6 +10,8 @@
 
 #include "radiation/photochemistry.hpp"
 
+#ifdef PHOTOCHEMISTRY // the test needs the photochemistry network of the problem that includes it
+
 /// \param dust_kappa dust opacity used in the test state (exercises the dust rows when DUST_CHEMICAL_BAND_ABSORPTION is defined)
 /// \param jacobian_at_fixed_T true if the network's species columns hold T fixed (the handwritten networks ignore dT/dn_i);
 ///        false if they are the full derivative at fixed e (the JAFF-generated networks)
@@ -96,7 +98,7 @@ inline auto TestPhotochemSystem(const amrex::Real dust_kappa = 0.0, const bool j
 		}
 		bool ok = true;
 		for (int j = 0; j < N; ++j) {
-			const Real h = 1.0e-4 * amrex::max(std::abs(ybase[j]), Real(1.0e-30));
+			const Real h = 1.0e-4 * amrex::max(std::abs(ybase[j]), 1.0e-30);
 			rosenbrock::Vector<N> yp = ybase;
 			rosenbrock::Vector<N> ym = ybase;
 			yp[j] += h;
@@ -127,5 +129,7 @@ inline auto TestPhotochemSystem(const amrex::Real dust_kappa = 0.0, const bool j
 	}
 	return status;
 }
+
+#endif // PHOTOCHEMISTRY
 
 #endif // PHOTOCHEM_SYSTEM_TEST_HPP_

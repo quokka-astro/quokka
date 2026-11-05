@@ -373,13 +373,13 @@ struct RobertsonSystem {
 	static constexpr Real k1 = 0.04;
 	static constexpr Real k2 = 3.0e7;
 	static constexpr Real k3 = 1.0e4;
-	AMREX_GPU_HOST_DEVICE void rhs(Real /*t*/, rosenbrock::Vector<3> &y, rosenbrock::Vector<3> &ydot) const
+	AMREX_GPU_HOST_DEVICE static void rhs(Real /*t*/, rosenbrock::Vector<3> &y, rosenbrock::Vector<3> &ydot)
 	{
 		ydot[0] = -k1 * y[0] + k3 * y[1] * y[2];
 		ydot[2] = k2 * y[1] * y[1];
 		ydot[1] = -ydot[0] - ydot[2];
 	}
-	AMREX_GPU_HOST_DEVICE void jac(Real /*t*/, rosenbrock::Vector<3> const &y, rosenbrock::Matrix<3> &J) const
+	AMREX_GPU_HOST_DEVICE static void jac(Real /*t*/, rosenbrock::Vector<3> const &y, rosenbrock::Matrix<3> &J)
 	{
 		J(0, 0) = -k1;
 		J(0, 1) = k3 * y[2];
@@ -395,12 +395,12 @@ struct RobertsonSystem {
 
 // rhs raises y[0] to at least 0 in place, as the photochemistry driver cleans the photon number densities
 struct CleanSystem {
-	AMREX_GPU_HOST_DEVICE void rhs(Real /*t*/, rosenbrock::Vector<1> &y, rosenbrock::Vector<1> &ydot) const
+	AMREX_GPU_HOST_DEVICE static void rhs(Real /*t*/, rosenbrock::Vector<1> &y, rosenbrock::Vector<1> &ydot)
 	{
-		y[0] = amrex::max(y[0], Real(0.0));
+		y[0] = amrex::max(y[0], 0.0);
 		ydot[0] = 0.0;
 	}
-	AMREX_GPU_HOST_DEVICE void jac(Real /*t*/, rosenbrock::Vector<1> const & /*y*/, rosenbrock::Matrix<1> &J) const { J(0, 0) = 0.0; }
+	AMREX_GPU_HOST_DEVICE static void jac(Real /*t*/, rosenbrock::Vector<1> const & /*y*/, rosenbrock::Matrix<1> &J) { J(0, 0) = 0.0; }
 };
 
 template <int N> AMREX_GPU_HOST_DEVICE auto UniformSettings(Real atol, Real rtol, int max_steps) -> rosenbrock::Settings<N>

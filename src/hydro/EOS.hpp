@@ -751,7 +751,7 @@ template <typename problem_t> struct EOSTabulated {
 // Both EOS_Traits (primary template) and EOSBackendHelper (SFINAE fallback) use this
 // so the default-backend policy lives in exactly one place.
 template <typename T> struct DefaultEOSBackend {
-#if defined(CHEMISTRY)
+#ifdef CHEMISTRY
 	using type = EOSMicrophysics<T>;
 #elif defined(PHOTOCHEMISTRY)
 	using type = EOSPhotochem<T>;
