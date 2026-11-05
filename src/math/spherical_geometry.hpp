@@ -1,7 +1,9 @@
 #ifndef SPHERICAL_GEOMETRY_HPP_
 #define SPHERICAL_GEOMETRY_HPP_
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "AMReX_Array.H"
 #include "AMReX_GpuQualifiers.H"
@@ -54,13 +56,14 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::GpuArray<Poi
 	}
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real const x0, amrex::Real const x1, amrex::Real const y0, amrex::Real const y1,
-								  amrex::Real const z0, amrex::Real const z1, amrex::Real const nx, amrex::Real const ny,
-								  amrex::Real const nz, amrex::Real const d) -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto normalizedPlaneBoxSectionArea(amrex::Real const x0, amrex::Real const x1, amrex::Real const y0,
+									    amrex::Real const y1, amrex::Real const z0, amrex::Real const z1,
+									    amrex::Real const nx, amrex::Real const ny, amrex::Real const nz,
+									    amrex::Real const d) -> amrex::Real
 {
-	// Plane: n·x = d. Compute exact area of intersection polygon with an axis-aligned box.
-	const amrex::Real scale = (std::abs(x0) + std::abs(x1) + std::abs(y0) + std::abs(y1) + std::abs(z0) + std::abs(z1) + std::abs(d) + 1.0);
-	const amrex::Real tol = 1.0e-12 * scale;
+	// Plane: n·x = d, with unit normal n and cell-centered coordinates
+	// normalized by the largest box side. Tolerances are dimensionless.
+	const amrex::Real tol = 64.0 * std::numeric_limits<amrex::Real>::epsilon();
 
 	const amrex::GpuArray<Point, 8> verts{Point{x0, y0, z0}, Point{x1, y0, z0}, Point{x0, y1, z0}, Point{x1, y1, z0},
 					      Point{x0, y0, z1}, Point{x1, y0, z1}, Point{x0, y1, z1}, Point{x1, y1, z1}};
@@ -185,6 +188,29 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real co
 		area2 += u[i] * v[j] - v[i] * u[j];
 	}
 	return 0.5 * std::abs(area2);
+}
+
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real const x0, amrex::Real const x1, amrex::Real const y0, amrex::Real const y1,
+								  amrex::Real const z0, amrex::Real const z1, amrex::Real const nx, amrex::Real const ny,
+								  amrex::Real const nz, amrex::Real const d) -> amrex::Real
+{
+	const amrex::Real dx = x1 - x0;
+	const amrex::Real dy = y1 - y0;
+	const amrex::Real dz = z1 - z0;
+	if (dx <= 0.0 || dy <= 0.0 || dz <= 0.0) {
+		return 0.0;
+	}
+	const amrex::Real scale = std::max({dx, dy, dz});
+	const amrex::Real xc = x0 + 0.5 * dx;
+	const amrex::Real yc = y0 + 0.5 * dy;
+	const amrex::Real zc = z0 + 0.5 * dz;
+	// Translate the plane along with the box; fused operations limit cancellation.
+	const amrex::Real local_d = std::fma(-nx, xc, std::fma(-ny, yc, std::fma(-nz, zc, d))) / scale;
+	const amrex::Real hx = 0.5 * (dx / scale);
+	const amrex::Real hy = 0.5 * (dy / scale);
+	const amrex::Real hz = 0.5 * (dz / scale);
+	const amrex::Real area = normalizedPlaneBoxSectionArea(-hx, hx, -hy, hy, -hz, hz, nx, ny, nz, local_d);
+	return (area * scale) * scale;
 }
 
 } // namespace detail
