@@ -14,6 +14,17 @@ endif()
 if(QUOKKA_OPENPMD)
   message(STATUS "Building Quokka with OpenPMD support")
   add_compile_definitions(QUOKKA_USE_OPENPMD)
+  # bp5lite (extern/bp5lite) provides the ADIOS2 BP5 backend for openPMD-api
+  # in-tree, so no ADIOS2 installation is needed. Its files are identical to
+  # upstream ADIOS2 BP5 output. It is built with the same MPI and GPU settings
+  # as AMReX, because Quokka hands device pointers straight to openPMD-api.
+  set(BP5LITE_USE_MPI ${AMReX_MPI} CACHE STRING "" FORCE)
+  if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    set(BP5LITE_USE_CUDA ON CACHE BOOL "" FORCE)
+  elseif(AMReX_GPU_BACKEND MATCHES "HIP")
+    set(BP5LITE_USE_HIP ON CACHE BOOL "" FORCE)
+  endif()
+  add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/bp5lite ${QuokkaCode_BINARY_DIR}/bp5lite)
   set(openPMD_USE_ADIOS2 ON CACHE BOOL "") # ADIOS2 is required
   set(openPMD_USE_HDF5 OFF CACHE BOOL "")
   set(openPMD_USE_PYTHON OFF CACHE BOOL "")

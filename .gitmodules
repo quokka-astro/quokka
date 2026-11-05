@@ -17,3 +17,6 @@
 [submodule "extern/AMReX-Hydro"]
 	path = extern/AMReX-Hydro
 	url = https://github.com/AMReX-Fluids/AMReX-Hydro.git
+[submodule "extern/bp5lite"]
+	path = extern/bp5lite
+	url = https://github.com/BenWibking/bp5lite.git
