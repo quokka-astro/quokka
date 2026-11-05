@@ -504,6 +504,57 @@ auto TestRosenbrock() -> int
 	return status;
 }
 
+// The dense LU has a loop form (host) and a compile-time-unrolled form (device code); both must give bit-identical results.
+auto TestDenseLU() -> int
+{
+	constexpr int N = 6;
+	int status = 0;
+	for (int c = 0; c < 3; ++c) {
+		rosenbrock::Matrix<N> a{};
+		for (int j = 0; j < N; ++j) {
+			for (int i = 0; i < N; ++i) {
+				if (c == 0) { // general, pivots in most columns
+					a(i, j) = std::sin(1.0 + 7.0 * i + 3.0 * j);
+				} else if (c == 1) { // largest entries on the anti-diagonal: a row swap in every column
+					a(i, j) = (i + j == N - 1) ? 10.0 + i : 0.1 * (i - j);
+				} else { // singular: column 2 is zero
+					a(i, j) = (j == 2) ? 0.0 : std::cos(2.0 + i - 5.0 * j);
+				}
+			}
+		}
+		rosenbrock::Matrix<N> a_loops = a;
+		rosenbrock::Matrix<N> a_unrolled = a;
+		rosenbrock::Pivots<N> p_loops{};
+		rosenbrock::Pivots<N> p_unrolled{};
+		const int info_loops = rosenbrock::detail::lu_factor_loops<N>(a_loops, p_loops);
+		const int info_unrolled = rosenbrock::detail::lu_factor_unrolled<N>(a_unrolled, p_unrolled);
+		bool same = (info_loops == info_unrolled) && ((c == 2) == (info_loops != 0));
+		for (int j = 0; j < N; ++j) {
+			same = same && (p_loops[j] == p_unrolled[j]);
+			for (int i = 0; i < N; ++i) {
+				same = same && (a_loops(i, j) == a_unrolled(i, j));
+			}
+		}
+		if (info_loops == 0) {
+			rosenbrock::Vector<N> b_loops{};
+			for (int i = 0; i < N; ++i) {
+				b_loops[i] = 1.0 + i;
+			}
+			rosenbrock::Vector<N> b_unrolled = b_loops;
+			rosenbrock::detail::lu_solve_loops<N>(a_loops, p_loops, b_loops);
+			rosenbrock::detail::lu_solve_unrolled<N>(a_unrolled, p_unrolled, b_unrolled);
+			for (int i = 0; i < N; ++i) {
+				same = same && (b_loops[i] == b_unrolled[i]);
+			}
+		}
+		std::cout << std::format("DenseLU case {} (info {}): loop and unrolled forms {}\n", c, info_loops, same ? "identical PASS" : "differ FAIL");
+		if (!same) {
+			status = 1;
+		}
+	}
+	return status;
+}
+
 auto TestPhotochemEOS() -> int
 {
 	namespace pc = quokka::photochemistry;
@@ -555,6 +606,10 @@ auto problem_main() -> int
 	if (rosenbrock_status != 0) {
 		std::cout << "MathUnitTests: Rosenbrock test FAILED.\n";
 	}
+	const int dense_lu_status = TestDenseLU();
+	if (dense_lu_status != 0) {
+		std::cout << "MathUnitTests: dense LU test FAILED.\n";
+	}
 	const int photochem_eos_status = TestPhotochemEOS();
 	if (photochem_eos_status != 0) {
 		std::cout << "MathUnitTests: photochemistry EOS test FAILED.\n";
@@ -568,5 +623,8 @@ auto problem_main() -> int
 	if (eos_status != 0) {
 		std::cout << "MathUnitTests: EOS test FAILED.\n";
 	}
-	return ((ode_status != 0) || (root_status != 0) || (eos_status != 0) || (rosenbrock_status != 0) || (photochem_eos_status != 0)) ? 1 : 0;
+	return ((ode_status != 0) || (root_status != 0) || (eos_status != 0) || (rosenbrock_status != 0) || (dense_lu_status != 0) ||
+		(photochem_eos_status != 0))
+		   ? 1
+		   : 0;
 }
