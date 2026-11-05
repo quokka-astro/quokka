@@ -23,7 +23,7 @@
 #include "actual_eos_data.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "hydro/EOSMicrophysics.hpp"
+#include "hydro/EOS.hpp"
 #include "microphysics/burn_state.hpp"
 #include "microphysics/burner.hpp"
 
