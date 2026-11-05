@@ -59,8 +59,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto EnergyFromTemperature(const amrex:
 
 /// de/dT at constant composition [erg g^-1 K^-1]
 template <int NSpec, typename Array>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto dEnergy_dT(amrex::GpuArray<amrex::Real, NSpec> const &n, Array const &mass, Array const &gamma)
-    -> amrex::Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto dEnergy_dT(amrex::GpuArray<amrex::Real, NSpec> const &n, Array const &mass, Array const &gamma) -> amrex::Real
 {
 	amrex::Real s = NAN;
 	amrex::Real rho_sp = NAN;
