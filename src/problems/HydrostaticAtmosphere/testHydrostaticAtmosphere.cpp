@@ -46,10 +46,10 @@ AMRSimulation<HydrostaticAtmosphereProblem>::setCustomBoundaryConditions(const a
 {
 	auto [i, j, k] = iv.dim3();
 
-	amrex::Real const *dx = geom.CellSize();
-	amrex::Real const *prob_lo = geom.ProbLo();
+	amrex::Real const dx = geom.CellSize(0);
+	amrex::Real const prob_lo = geom.ProbLo(0);
 
-	amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+	amrex::Real const x = prob_lo + (static_cast<amrex::Real>(i) + 0.5) * dx;
 	amrex::Real const rho_atm = g_base_density_floor * std::exp(-x / g_scale_height);
 	amrex::Real const rho_init = kRhoInitFactor * rho_atm;
 	amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
