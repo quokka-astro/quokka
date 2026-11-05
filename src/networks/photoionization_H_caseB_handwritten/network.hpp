@@ -5,6 +5,7 @@
 /// Jacobian.
 
 #include <cmath>
+#include <string_view>
 
 #include "AMReX_Array.H"
 #include "AMReX_Extension.H"
@@ -41,6 +42,19 @@ struct PhotoionizationHCaseB {
 	static constexpr int NumSpec = 3;
 	/// indices of the species in xn
 	enum Species : int { H = 0, H_p, e }; // NOLINT(cppcoreguidelines-use-enum-class)
+
+	/// mass of each species [g]
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static constexpr auto SpeciesMass() -> amrex::GpuArray<amrex::Real, NumSpec>
+	{
+		return {{1.673773e-24, 1.6728620616289998e-24, 9.10938371e-28}};
+	}
+	/// adiabatic index of each species
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static constexpr auto SpeciesGamma() -> amrex::GpuArray<amrex::Real, NumSpec>
+	{
+		return {{5. / 3., 5. / 3., 5. / 3.}};
+	}
+	/// the equation of state the network assumes, named as jaff names it (the type of jaff's [network.eos])
+	static constexpr std::string_view EOSType = "ideal";
 
 	static constexpr int NumChemBands = 1;
 	/// edges of the chemical bands [eV]
