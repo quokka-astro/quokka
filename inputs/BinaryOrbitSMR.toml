@@ -1,0 +1,44 @@
+# Static mesh refinement test for gravitational self-force errors at a coarse/fine boundary.
+#
+# Level 1 covers x >= 0 and the refinement does NOT follow the particles, so the coarse/fine
+# boundary is a fixed plane at x = 0. The binary orbits entirely inside the refined half, with
+# its closest approach 4 level-1 cells from the boundary -- the geometry of Zhu & Gnedin (2021,
+# arXiv:2104.10170). A refinement-boundary self-force shows up as a secular drift of the binary
+# separation, which is what the test measures.
+
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [-2.5e13, -2.5e13, -2.5e13]
+geometry.prob_hi = [2.5e13, 2.5e13, 2.5e13]
+quokka.bc = ["periodic", "periodic", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1  # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [32, 32, 32]
+amr.max_level = 1  # number of levels = max_level + 1
+amr.blocking_factor = 8   # in level-1 cells; keeps the coarse/fine boundary at x = 0
+amr.max_grid_size = 32
+amr.n_error_buf = 0  # no buffer, so the coarse/fine boundary sits exactly at x = 0
+amr.grid_eff = 1.0
+
+problem.refine_x_min = 0.0	# level 1 covers x >= 0
+problem.force_finest_level = 0	# static mesh: refinement must not follow the particles
+problem.particles_file = "../inputs/BinaryOrbitSMR_particles.txt"
+
+cfl = 0.3
+max_timesteps = 2000
+stop_time = 5.0e7  # s
+
+do_reflux = 1
+do_subcycle = 0
+
+checkpoint_interval = -1
+plotfile_interval = -1
+derived_vars = "gpot"
