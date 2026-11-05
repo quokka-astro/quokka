@@ -28,6 +28,7 @@ extern AMREX_GPU_MANAGED int ion_ff_cooling_switch;		  // NOLINT
 extern AMREX_GPU_MANAGED int allow_mixed_cell_cooling; // NOLINT
 extern AMREX_GPU_MANAGED amrex::Real mixed_cell_lb;    // NOLINT
 extern AMREX_GPU_MANAGED amrex::Real mixed_cell_ub;    // NOLINT
+extern AMREX_GPU_MANAGED amrex::Real small_x;	       // NOLINT
 } // namespace photoionization_h_caseb
 
 /// Hydrogen photoionization with case B recombination, in one chemical band.
@@ -43,6 +44,8 @@ struct PhotoionizationHCaseB {
 	static constexpr double ChemBandsPowerLawIndex = 0;
 
 	static constexpr int NumThermalBands = 0;
+
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SmallX() -> amrex::Real { return photoionization_h_caseb::small_x; }
 
 	/// Read the runtime parameters (namespace photoionization_h_caseb).
 	static void ReadParameters();

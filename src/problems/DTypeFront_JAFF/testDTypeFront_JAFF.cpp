@@ -15,9 +15,11 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/photoionization_H_caseB/network.hpp"
 #include "physics_info.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -30,10 +32,8 @@
 #include <string>
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 struct DTypeFront_JAFF {};
 
@@ -46,8 +46,9 @@ template <> struct quokka::EOS_Traits<DTypeFront_JAFF> {
 
 template <> struct Microphysics_Traits<DTypeFront_JAFF> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::JaffNetwork;
-	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+	// The tableau is the CMake cache variable DTypeFront_JAFF_TABLEAU (default ROS2S).
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::DTYPEFRONT_JAFF_TABLEAU>;
+	static constexpr bool photochemistry = true;
 };
 
 using Network = Microphysics_Traits<DTypeFront_JAFF>::Network;
@@ -68,11 +69,11 @@ template <> struct RadSystem_Traits<DTypeFront_JAFF> {
 	//
 	// SetAtolFromPhysics() derives atol_rad_num = 1e-6 * a_rad * T_min^4 / E_photon, where
 	// T_min = typical_minimal_radiation_T.  With T_min = 10 K, atol_rad_num ~ 1.25e-6 cm^-3.
-	// The ratio atol_rad_num / N_gamma_floor ~ 1e4 ensures that VODE returns in one BDF step
+	// The ratio atol_rad_num / N_gamma_floor ~ 1e4 ensures that the integrator returns in one step
 	// even in the darkest cells.
 	//
 	// The 1e-6 prefactor means radiation at T_min becomes numerically negligible after
-	// ~1e6 VODE steps (accumulated local error stays below the physically meaningful level).
+	// ~1e6 integrator steps (accumulated local error stays below the physically meaningful level).
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	// photochemistry momentum deposition is gated on beta_order == 1, so this test validates pure
 	// thermal-pressure D-type front expansion with radiation pressure.
@@ -317,7 +318,7 @@ void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t & /*re
 template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
@@ -337,7 +338,6 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialCondition
 	pp.query("Q", userData_.Q);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -362,7 +362,7 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::setInitialConditionsOnGrid(q
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::microphysics::BurnState<DTypeFront_JAFF> state;
 	std::array<Real, Network::NumSpec> numdens = {-1.0};
 	numdens[Network::Species::ek] = userData_.n_e_init;
 	numdens[Network::Species::h] = userData_.n_HI_init;
@@ -549,7 +549,7 @@ auto problem_main() -> int
 				const amrex::Real x_HII = n_HII_cell / denom;
 				const amrex::Real x_HI = n_HI_cell / denom;
 
-				burn_t bstate;
+				quokka::microphysics::BurnState<DTypeFront_JAFF> bstate;
 				for (int nn = 0; nn < Network::NumSpec; ++nn) {
 					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + nn) / spmasses[nn];
 				}

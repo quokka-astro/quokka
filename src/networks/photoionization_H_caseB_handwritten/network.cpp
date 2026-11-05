@@ -24,6 +24,7 @@ AMREX_GPU_MANAGED int ion_ff_cooling_switch = 1;	       // NOLINT
 AMREX_GPU_MANAGED int allow_mixed_cell_cooling = 1;	       // NOLINT
 AMREX_GPU_MANAGED amrex::Real mixed_cell_lb = 0.01_rt;	       // NOLINT
 AMREX_GPU_MANAGED amrex::Real mixed_cell_ub = 0.99_rt;	       // NOLINT
+AMREX_GPU_MANAGED amrex::Real small_x = 1.0e-30_rt;	       // NOLINT
 } // namespace photoionization_h_caseb
 
 void PhotoionizationHCaseB::ReadParameters()
@@ -42,6 +43,7 @@ void PhotoionizationHCaseB::ReadParameters()
 	pp.query("allow_mixed_cell_cooling", params::allow_mixed_cell_cooling);
 	pp.query("mixed_cell_lb", params::mixed_cell_lb);
 	pp.query("mixed_cell_ub", params::mixed_cell_ub);
+	pp.query("small_x", params::small_x);
 }
 
 } // namespace quokka::networks

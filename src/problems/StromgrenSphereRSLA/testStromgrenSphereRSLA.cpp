@@ -14,9 +14,11 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/photoionization_H_caseB_handwritten/network.hpp"
 #include "physics_info.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -26,10 +28,8 @@
 #include <string>
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 struct StromgrenSphere {};
 
@@ -45,7 +45,7 @@ template <> struct quokka::EOS_Traits<StromgrenSphere> {
 template <> struct Microphysics_Traits<StromgrenSphere> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::PhotoionizationHCaseB;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+	static constexpr bool photochemistry = true;
 };
 
 using Network = Microphysics_Traits<StromgrenSphere>::Network;
@@ -210,7 +210,7 @@ template <> struct SimulationData<StromgrenSphere> {
 template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
@@ -236,7 +236,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	pp2.query("recombination_switch", userData_.recombination_switch);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -261,7 +260,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::microphysics::BurnState<StromgrenSphere> state;
 	std::array<Real, Network::NumSpec> numdens = {-1.0};
 	numdens[Network::Species::e] = userData_.n_e_init;
 	numdens[Network::Species::H] = userData_.n_HI_init;
