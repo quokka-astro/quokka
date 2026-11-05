@@ -94,6 +94,8 @@ namespace filesystem = experimental::filesystem;
 #endif // AMREX_SPACEDIM == 3
 
 // internal headers
+#include "conduction/ConductionHelpers.hpp"
+#include "conduction/conductivity.hpp"
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "hydro/mhd_system.hpp"
@@ -230,10 +232,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
 	// Conduction parameters
-	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
-	amrex::Real conductionCFL = 0.2;	      // default
-	int enableElectronConduction_ = 0;	      // default
-	std::string conductionType_ = "constant";     // "constant" or "spitzer"; controls the conduction timestep estimate
+	// conductivity prefactors for ConductionModel::constant/spitzer; model and geometry are set by Physics_Traits
+	quokka::conduction::ConductivityParams conductivityParams_{};
+	amrex::Real conductionCFL = 0.2; // default
+	int enableConduction_ = 0;	 // default
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
@@ -1304,66 +1306,37 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	// compute timestep based on conduction parameters
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
-	if (enableElectronConduction_ == 1) {
-		if (conductionType_ == "constant") {
-			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
-			double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
-			conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
-			conduction_dt.index = domain_signal_maxloc;
-
-			if (verbose) {
-				amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
-				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
-							      formatIntVect(conduction_dt.index));
-			}
-		} else {							  // conductionType_ == "spitzer"
+	if constexpr (Physics_Traits<problem_t>::conduction_model != ConductionModel::none) {
+		if (enableConduction_ == 1) {
 			auto const &state_mf = state_new_cc_[lev].const_arrays(); // MultiFab containing the cell-centered state
-			auto const &state_fc_x0 = state_new_fc_[lev][0].const_arrays();
-#if AMREX_SPACEDIM >= 2
-			auto const &state_fc_x1 = state_new_fc_[lev][1].const_arrays();
-#endif
-#if AMREX_SPACEDIM == 3
-			auto const &state_fc_x2 = state_new_fc_[lev][2].const_arrays();
-#endif
+			quokka::conduction::FaceStateArrays const state_fc_in = quokka::conduction::MakeFaceStateArrays(state_new_fc_[lev]);
 
-			amrex::Real cfl = conductionCFL;
-			const amrex::Real kappa0 = electronConductionKappa0_;
+			const amrex::Real cfl = conductionCFL;
 			const amrex::Real t_min = tempFloor_;
+			const quokka::conduction::ConductivityParams conductivity_params = conductivityParams_;
 
 			// Use amrex::ParReduce to find the minimum dt and its location across all GPU threads
 			auto r = amrex::ParReduce(
 			    amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::ValLocPair<amrex::Real, amrex::IntVect>>{}, state_new_cc_[lev],
 			    amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> {
 				    auto const &cons = state_mf[bx];
-				    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
-				    amrex::ignore_unused(state_fc_x0
-#if AMREX_SPACEDIM >= 2
-							 ,
-							 state_fc_x1
-#endif
-#if AMREX_SPACEDIM == 3
-							 ,
-							 state_fc_x2
-#endif
-				    );
-				    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-					    local_state_fc[0] = state_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-					    local_state_fc[1] = state_fc_x1[bx];
-#endif
-#if AMREX_SPACEDIM == 3
-					    local_state_fc[2] = state_fc_x2[bx];
-#endif
-				    }
+				    auto local_state_fc = quokka::conduction::GatherFaceFields<problem_t>(state_fc_in, bx);
 
-				    amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
-				    amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
+				    const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+				    const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
 				    auto const massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-				    amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars));
+				    const amrex::Real T = amrex::max(t_min, quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars));
 
-				    amrex::Real const kappa_spitzer = kappa0 * std::pow(T, 2.5);
-				    double heat_capacity = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T, massScalars);
-				    amrex::Real const diffusion_coefficient = kappa_spitzer / heat_capacity;
+				    // kappa from the conductivity model; see conductivity.hpp
+				    const auto kappa = quokka::conduction::EvaluateConductivity<problem_t>(rho, T, conductivity_params);
+				    amrex::Real kappa_eff = kappa[0];
+				    if constexpr (Physics_Traits<problem_t>::conduction_geometry == ConductionGeometry::anisotropic) {
+					    // bound the largest eigenvalue of the conductivity tensor by kappa_par + kappa_perp, keeping the
+					    // factor-of-2 safety margin previously used for the anisotropic scheme
+					    kappa_eff = 2.0 * (kappa[0] + kappa[1]);
+				    }
+				    const amrex::Real heat_capacity = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T, massScalars);
+				    const amrex::Real diffusion_coefficient = kappa_eff / heat_capacity;
 
 				    // Avoid division by zero for unphysical states
 				    amrex::Real cell_dt = std::numeric_limits<amrex::Real>::max();
@@ -1379,7 +1352,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			amrex::ParallelAllReduce::Min(conduction_dt, amrex::ParallelContext::CommunicatorSub());
 
 			if (verbose) {
-				amrex::Print() << std::format("...[level {}] \testimated Spitzer conduction timestep: {:e}\n", lev, conduction_dt.value);
+				amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
 				amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
 							      formatIntVect(conduction_dt.index));
 			}
@@ -1471,7 +1444,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		n_factor *= nsubsteps[level];
 
 		auto effective_factor = static_cast<amrex::Real>(n_factor);
-		if (enableElectronConduction_ == 1) {
+		if (enableConduction_ == 1) {
 			// Conduction timestep scales as dx^2, so we need to use n_factor^2 here instead of n_factor.
 			effective_factor = static_cast<amrex::Real>(n_factor) * static_cast<amrex::Real>(n_factor);
 		}
