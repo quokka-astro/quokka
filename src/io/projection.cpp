@@ -187,8 +187,6 @@ void VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_mf_name)
 	auto whichRD = amrex::FArrayBox::getDataDescriptor();
 	bool const doConvert(*whichRD != amrex::FPC::NativeRealDescriptor());
 
-	amrex::Long bytesWritten(0);
-
 	std::string const filePrefix(a_mf_name + "_D_");
 
 	bool const calcMinMax = false;
@@ -223,6 +221,7 @@ void VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_mf_name)
 		nfi.SetDynamic();
 	}
 	for (; nfi.ReadyToWrite(); ++nfi) {
+		amrex::Long bytesWritten(0);
 		int const whichRDBytes(whichRD->numBytes());
 		int nFABs(0);
 		amrex::Long writeDataItems(0);
