@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 // \file testDTypeFront1D.cpp
 // \brief Defines a 1D planar H II region test: a central ionizing+optical source drives a D-type ionization front into a uniform neutral slab. Momentum
 // deposition from the optical radiation is also accounted for in accordance with KM09.

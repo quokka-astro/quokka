@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadhydroPulseGrey.cpp
 /// \brief Defines a test problem for radiation in the diffusion regime with advection in medium with variable opacity under grey approximation.
 ///
