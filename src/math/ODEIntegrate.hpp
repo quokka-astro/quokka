@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "AMReX_Algorithm.H"
 #include "AMReX_BLassert.H"
@@ -115,7 +116,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto error_norm(quokka::valarray<Real, 
 
 	Real err_sq = 0;
 	for (int i = 0; i < N; ++i) {
-		Real w_i = 1. / (reltol * y0[i] + abstol[i]);
+		Real w_i = 1. / (reltol * std::abs(y0[i]) + abstol[i]);
 		err_sq += (yerr[i] * yerr[i]) * (w_i * w_i);
 	}
 	const Real err = std::sqrt(err_sq / N);
@@ -132,11 +133,35 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F const &rhs
 	// with local truncation error bounded by relative tolerance 'reltol'
 	// and absolute tolerances 'abstol'.
 
-	// initial timestep
+	steps_taken = maxStepsODEIntegrate; // failure unless the entire interval is integrated
+	if (t1 == t0) {
+		steps_taken = 0;
+		return;
+	}
+	if (!(t1 > t0)) {
+		return;
+	}
+
+	// Evaluate a copy, as RHS callbacks may modify their input state.
 	quokka::valarray<Real, N> ydot0{};
-	rhs(t0, y0, ydot0);
-	const Real dt_guess = 0.1 * min(abs(y0 / ydot0));
-	AMREX_ASSERT(dt_guess > 0.0);
+	quokka::valarray<Real, N> y_arg = y0;
+	if (rhs(t0, y_arg, ydot0) != 0) {
+		return;
+	}
+	// Bound the initial step by the interval and include the absolute tolerance
+	// so a component starting at zero does not force a zero timestep.
+	Real dt_guess = t1 - t0;
+	for (int i = 0; i < N; ++i) {
+		if (ydot0[i] != 0.) {
+			const Real timescale = std::max(std::abs(y0[i]), abstol[i]) / std::abs(ydot0[i]);
+			const Real candidate = 0.1 * timescale;
+			if (std::isfinite(candidate) && candidate > 0.) {
+				dt_guess = std::min(dt_guess, candidate);
+			}
+		}
+	}
+	const Real min_step = std::nextafter(t0, std::numeric_limits<Real>::infinity()) - t0;
+	dt_guess = std::max(dt_guess, min_step);
 
 	// adaptive timestep controller
 	const int maxRetries = 7;
@@ -149,7 +174,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F const &rhs
 
 	// integration loop
 	Real time = t0;
-	Real dt = std::isnan(dt_guess) ? (t1 - t0) : dt_guess;
+	Real dt = dt_guess;
 	quokka::valarray<Real, N> &y = y0;
 	quokka::valarray<Real, N> yerr{};
 	quokka::valarray<Real, N> ynew{};
@@ -163,6 +188,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F const &rhs
 
 		bool step_success = false;
 		for (int k = 0; k < maxRetries; ++k) {
+			if (!(dt > 0.) || !(time + dt > time)) {
+				break; // the requested accuracy cannot be reached at this time resolution
+			}
 			// compute single step of chosen RK method
 			int ierr = rk12_single_step(rhs, time, y, dt, ynew, yerr);
 
