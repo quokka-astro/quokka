@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testParticleRadiationSlug.cpp
 /// \brief Validates a slug2-generated stellar luminosity table against direct slug2 output.
 ///
