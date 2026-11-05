@@ -112,6 +112,7 @@ void DiagProjectionPlot::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::G
 
 	// DiagProjectionPlot doesn't need special preparation
 	DiagBase::prepare(0, {}, {}, {}, a_varNames);
+	first_time = false;
 }
 
 void DiagProjectionPlot::addVars(amrex::Vector<std::string> &a_varList)
