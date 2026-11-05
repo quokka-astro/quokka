@@ -90,7 +90,7 @@ template <> struct SimulationData<ResampledCoolingTest> {
 template <> struct quokka::EOS_Traits<ResampledCoolingTest> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
-	using EOSBackend = quokka::EOSTabulated<ResampledCoolingTest>;
+	using EOS = quokka::EOSTabulated<ResampledCoolingTest>;
 };
 
 template <> struct Physics_Traits<ResampledCoolingTest> : DefaultPhysicsTraits {

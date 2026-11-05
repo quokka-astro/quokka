@@ -1,8 +1,8 @@
 #ifndef EOS_MICROPHYSICS_HPP_ // NOLINT
 #define EOS_MICROPHYSICS_HPP_
 /// \file EOSMicrophysics.hpp
-/// \brief The EOSMicrophysics backend of EOS.hpp: the default backend of the problems with chemistry or photochemistry
-/// (see DefaultEOSBackend). It is in its own header because it uses spmasses, which only the chemistry EOSs declare;
+/// \brief The EOSMicrophysics EOS of EOS.hpp: the default EOS of the problems with chemistry or photochemistry
+/// (see DefaultEOS). It is in its own header because it uses spmasses, which only the chemistry EOSs declare;
 /// chemistry/Chemistry.hpp and radiation/photochemistry.hpp include it, and problems without chemistry never do.
 /// Likely transitional: this file may go once it is decided how Quokka does the EOS (the EOS port).
 /// James471: This file was an agent's suggestion. It was not given a review by me and I recommend not putting effort into reviewing it, until the EOS port is
@@ -27,7 +27,7 @@
 namespace quokka
 {
 
-template <typename problem_t> struct EOSMicrophysics {
+template <typename problem_t> struct EOSMicrophysics : EOSBase {
 	// Until the EOS reads its species from the network (the EOS port), it sizes its composition by the species table on
 	// the include path (network_properties.H), so the problem's network must match that table.
 	static_assert(Microphysics_Traits<problem_t>::Network::NumSpec == NumSpec,

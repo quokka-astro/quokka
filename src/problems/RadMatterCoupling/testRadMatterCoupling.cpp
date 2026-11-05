@@ -33,9 +33,12 @@ template <> struct SimulationData<CouplingProblem> {
 	std::vector<double> Tgas_vec_;
 };
 
+struct CouplingProblemEOS; // below: its base reads these traits
+
 template <> struct quokka::EOS_Traits<CouplingProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double gamma = 5. / 3.;
+	using EOS = CouplingProblemEOS;
 };
 
 template <> struct RadSystem_Traits<CouplingProblem> {
@@ -60,38 +63,37 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeFluxMe
 	return 1.0;
 }
 
-[[maybe_unused]] static constexpr int nmscalars_ = Physics_Traits<CouplingProblem>::numMassScalars;
-template <>
-AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<CouplingProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
-						  [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
-{
-	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
-}
+// The Su-Olson material, e = (alpha / 4) T^4; everything else is the ideal gas's.
+struct CouplingProblemEOS : quokka::EOSIdeal<CouplingProblem> {
+	AMREX_GPU_HOST_DEVICE static auto
+	ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
+			    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> double
+	{
+		return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
+	}
 
-template <>
-AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<CouplingProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
-						  [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
-{
-	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
-}
+	AMREX_GPU_HOST_DEVICE static auto
+	ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
+			    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> double
+	{
+		return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
+	}
 
-template <>
-AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<CouplingProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-							quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
-{
-	// This is also known as the heat capacity, i.e.
-	// 		\del E_g / \del T = \rho c_v,
-	// for normal materials.
+	AMREX_GPU_HOST_DEVICE static auto ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
+								    quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/ = {})
+	    -> double
+	{
+		// This is also known as the heat capacity, i.e.
+		// 		\del E_g / \del T = \rho c_v,
+		// for normal materials.
 
-	// However, for this problem, this must be of the form \alpha T^3
-	// in order to obtain an exact solution to the problem.
-	// The input parameter is the *temperature*, not Egas itself.
+		// However, for this problem, this must be of the form \alpha T^3
+		// in order to obtain an exact solution to the problem.
+		// The input parameter is the *temperature*, not Egas itself.
 
-	return alpha_SuOlson * std::pow(Tgas, 3);
-}
+		return alpha_SuOlson * std::pow(Tgas, 3);
+	}
+};
 
 constexpr double Erad0 = 1.0e12; // erg cm^-3
 constexpr double Egas0 = 1.0e2;	 // erg cm^-3

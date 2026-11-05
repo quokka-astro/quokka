@@ -1,26 +1,26 @@
 # Cooling Module
 
-Radiative cooling in Quokka is selected at compile time by the `EOSBackend` member of `quokka::EOS_Traits<problem_t>`. The backend determines both how gas temperature is computed and whether a cooling source term is applied at all. Selecting the tabulated backend enables the cooling module; the integrator can then be toggled at runtime by `cooling.enabled` (on by default).
+Radiative cooling in Quokka is selected at compile time by the `EOS` member of `quokka::EOS_Traits<problem_t>`. The EOS determines both how gas temperature is computed and whether a cooling source term is applied at all. Selecting the tabulated EOS enables the cooling module; the integrator can then be toggled at runtime by `cooling.enabled` (on by default).
 
-## Choosing an EOS backend
+## Choosing an EOS
 
-| Backend | Cooling | Temperature from |
+| EOS | Cooling | Temperature from |
 |---------|---------|------------------|
 | `quokka::EOSIdeal<P>` | none | ideal gas law with constant \\(\mu\\) |
 | `quokka::EOSTabulated<P>` | tabulated (Grackle-derived) | resampled table lookup |
 | `quokka::EOSMicrophysics<P>` | Microphysics reaction network | Microphysics EOS |
 
-A problem selects its backend in its `EOS_Traits` specialization:
+A problem selects its EOS in its `EOS_Traits` specialization:
 
 ```cpp
 template <> struct quokka::EOS_Traits<MyProblem> {
     static constexpr double gamma = 5. / 3.;
     static constexpr double mean_molecular_weight = C::m_u;
-    using EOSBackend = quokka::EOSTabulated<MyProblem>;
+    using EOS = quokka::EOSTabulated<MyProblem>;
 };
 ```
 
-If `EOSBackend` is omitted, the default is `EOSMicrophysics<P>` when `Microphysics_Traits<P>::chemistry` or `Microphysics_Traits<P>::photochemistry` is `true`, and `EOSIdeal<P>` otherwise.
+If `EOS` is omitted, the default is `EOSMicrophysics<P>` when `Microphysics_Traits<P>::chemistry` or `Microphysics_Traits<P>::photochemistry` is `true`, and `EOSIdeal<P>` otherwise. `quokka::EOS<P>` is the chosen EOS. Each EOS is a struct with all the EOS functions, so a problem that needs its own (for example the Su-Olson material of the `RadMarshak` test) derives a struct from one of these, replaces the functions it changes, and names it in `EOS_Traits<P>::EOS`.
 
 ### EOSIdeal
 
@@ -34,7 +34,7 @@ Applies optically-thin radiative cooling as a Strang-split source term, and comp
 
 Delegates the EOS to the copy of [Microphysics](https://github.com/AMReX-Astro/Microphysics)' equation of state in `extern/eos`, so that temperature is consistent with the evolving chemical species tracked by the reaction network (`chemstate.xn`). Cooling and heating are handled by the network itself rather than by a table, and are advanced by the chemistry burner (`quokka::chemistry::computeChemistry`) rather than by the cooling integrator.
 
-This is the backend for every problem with chemistry or photochemistry (`Microphysics_Traits<P>::chemistry` or `photochemistry`), which covers both primordial chemistry problems (`PrimordialChem`, `PopIII`) and photoionization problems (`DTypeFront_JAFF`, `DTypeFrontVC`, `StromgrenSphere`, `StromgrenSphereRSLA`, `OneZonePhotoionization`) — including hydro-enabled ones. None of these set `EOSBackend` explicitly; they receive `EOSMicrophysics` through `DefaultEOSBackend` by virtue of these traits. See the chemistry module and [Photoionization](photoionization.md) for details.
+This is the backend for every problem with chemistry or photochemistry (`Microphysics_Traits<P>::chemistry` or `photochemistry`), which covers both primordial chemistry problems (`PrimordialChem`, `PopIII`) and photoionization problems (`DTypeFront_JAFF`, `DTypeFrontVC`, `StromgrenSphere`, `StromgrenSphereRSLA`, `OneZonePhotoionization`) — including hydro-enabled ones. None of these set `EOS` explicitly; they receive `EOSMicrophysics` through `DefaultEOS` by virtue of these traits. See the chemistry module and [Photoionization](photoionization.md) for details.
 
 ## The EOSTabulated cooling model
 
@@ -167,7 +167,7 @@ Tabulated cooling is the only cooling module currently supported: a problem gets
 template <> struct quokka::EOS_Traits<MyProblem> {
     static constexpr double gamma = 5. / 3.;
     static constexpr double mean_molecular_weight = C::m_u;
-    using EOSBackend = quokka::EOSTabulated<MyProblem>;
+    using EOS = quokka::EOSTabulated<MyProblem>;
 };
 ```
 
@@ -199,7 +199,7 @@ An external `heating_rate_external` expression is independent of this choice and
 
 ### 4. Access thermodynamic quantities in callbacks
 
-Prefer `quokka::EOS<problem_t>`, which forwards to the selected backend and therefore works for any problem:
+Prefer `quokka::EOS<problem_t>`, which is the selected EOS and therefore works for any problem:
 
 ```cpp
 const Real T = quokka::EOS<MyProblem>::ComputeTgasFromEint(rho, Eint);

@@ -65,7 +65,7 @@ template <> struct HydroSystem_Traits<MHDTallBoxSf> {
 template <> struct quokka::EOS_Traits<MHDTallBoxSf> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = mu;
-	using EOSBackend = quokka::EOSTabulated<MHDTallBoxSf>;
+	using EOS = quokka::EOSTabulated<MHDTallBoxSf>;
 };
 
 template <> struct Physics_Traits<MHDTallBoxSf> : DefaultPhysicsTraits {

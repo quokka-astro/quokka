@@ -56,9 +56,12 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr int beta_order = 0;
 };
 
+struct MarshakProblemEOS; // below: its base reads these traits
+
 template <> struct quokka::EOS_Traits<MarshakProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
+	using EOS = MarshakProblemEOS;
 };
 
 template <> struct Physics_Traits<MarshakProblem> : DefaultPhysicsTraits {
@@ -84,38 +87,37 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMea
 	return kappa / rho;
 }
 
-[[maybe_unused]] static constexpr int nmscalars_ = Physics_Traits<MarshakProblem>::numMassScalars;
-template <>
-AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<MarshakProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
-						 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
-{
-	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
-}
+// The Su-Olson material, e = (alpha / 4) T^4; everything else is the ideal gas's.
+struct MarshakProblemEOS : quokka::EOSIdeal<MarshakProblem> {
+	AMREX_GPU_HOST_DEVICE static auto
+	ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
+			    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> double
+	{
+		return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
+	}
 
-template <>
-AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<MarshakProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
-						 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
-{
-	return (alpha_SuOlson / 4.0) * (Tgas * Tgas * Tgas * Tgas);
-}
+	AMREX_GPU_HOST_DEVICE static auto
+	ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
+			    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> double
+	{
+		return (alpha_SuOlson / 4.0) * (Tgas * Tgas * Tgas * Tgas);
+	}
 
-template <>
-AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<MarshakProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-						       quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
-{
-	// This is also known as the heat capacity, i.e.
-	// 		\del E_g / \del T = \rho c_v,
-	// for normal materials.
+	AMREX_GPU_HOST_DEVICE static auto ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
+								    quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/ = {})
+	    -> double
+	{
+		// This is also known as the heat capacity, i.e.
+		// 		\del E_g / \del T = \rho c_v,
+		// for normal materials.
 
-	// However, for this problem, this must be of the form \alpha T^3
-	// in order to obtain an exact solution to the problem.
-	// The input parameter is the *temperature*, not Egas itself.
+		// However, for this problem, this must be of the form \alpha T^3
+		// in order to obtain an exact solution to the problem.
+		// The input parameter is the *temperature*, not Egas itself.
 
-	return alpha_SuOlson * std::pow(Tgas, 3);
-}
+		return alpha_SuOlson * std::pow(Tgas, 3);
+	}
+};
 
 const auto initial_Egas = 1e-10 * quokka::EOS<MarshakProblem>::ComputeEintFromTgas(rho0, T_hohlraum); // NOLINT
 const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum));      // NOLINT
