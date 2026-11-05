@@ -72,7 +72,6 @@ namespace filesystem = experimental::filesystem;
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
-#include "eos.H"
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
 #include "hyperbolic_system.hpp"
@@ -293,16 +292,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		defineDefaultPlotfileVariables();
 		// read in runtime parameters
 		readParmParse();
-		// set gamma
-		amrex::ParmParse eos("eos");
-		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
-		// read the EOS parameters
-		eos_rp::ReadParameters();
-		// the EOS floors (eos.min_temp, eos.min_dens), also given to the vendored EOS until it goes
+		// the EOS floors (eos.min_temp, eos.min_dens)
 		quokka::eos_floors::ReadParameters();
-		amrex::Real small_temp = quokka::eos_floors::min_temp;
-		amrex::Real small_dens = quokka::eos_floors::min_dens;
-		eos_init(small_temp, small_dens);
 		if constexpr (Physics_Traits<problem_t>::resistivity_model != ResistivityModel::none) {
 			const bool resistivity_active =
 			    (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) || (mhdResistivity_ != 0.0);

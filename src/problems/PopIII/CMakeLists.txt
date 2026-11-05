@@ -4,10 +4,7 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   set(JOB_NAME PopIII)
 
-  add_executable(
-    ${JOB_NAME}
-    testPopIII.cpp "${QuokkaSourcesNoEOS}" ../../turbulence/TurbDataReader.cpp)
-  quokka_add_eos(${JOB_NAME} primordial_chem primordial_chem)
+  add_executable(${JOB_NAME} testPopIII.cpp ${QuokkaObjSources} ../../turbulence/TurbDataReader.cpp)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
