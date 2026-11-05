@@ -2,6 +2,7 @@
 #define PHOTOCHEMISTRY_HPP_
 
 #include <array>
+#include <cstdint>
 #include <iostream>
 
 #include "AMReX.H"
@@ -163,6 +164,45 @@ inline auto MakeSolverSettings(IntegratorParams const &ip) -> rosenbrock::Settin
 	s.max_steps = ip.ode_max_steps;
 	return s;
 }
+
+// Launch of the photochemistry kernel on CUDA. The kernel is latency-bound with few warps per SM, because each thread
+// holds the solver's matrix and stage vectors. Measured on a V100: for the 5-equation system (H network without the flux
+// factor, e.g. StromgrenSphere), capping the registers at 168 (blocks of 128 threads, 3 blocks per SM) raises the
+// occupancy from 8 to 12 warps per SM and makes the kernel 1.28x faster. Larger systems spill at that cap and get slower
+// (6 equations: 0.85x-0.97x, 8 equations: 0.77x), so they keep amrex::ParallelFor's launch (256 threads, no cap).
+constexpr bool photochem_capped_launch = (network::NumEqs <= 5);
+constexpr int photochem_block_threads = 128;
+constexpr int photochem_min_blocks = 3;
+
+/// amrex::ParallelFor over a box; on CUDA with photochem_capped_launch, the same kernel body is launched with launch
+/// bounds that cap the registers per thread.
+template <typename F> void PhotochemParallelFor(amrex::Box const &box, F const &f)
+{
+#ifdef AMREX_USE_CUDA
+	if constexpr (photochem_capped_launch) {
+		if (box.isEmpty()) {
+			return;
+		}
+		constexpr int MT = photochem_block_threads;
+		const amrex::BoxIndexerND<AMREX_SPACEDIM> indexer(box);
+		for (auto const &ec : amrex::Gpu::makeNExecutionConfigs<MT>(box)) {
+			const auto start_idx = static_cast<std::uint64_t>(ec.start_idx);
+			amrex::launch_global<MT, photochem_min_blocks><<<ec.nblocks, MT, 0, amrex::Gpu::gpuStream()>>>([=] AMREX_GPU_DEVICE() noexcept {
+				const auto icell = static_cast<std::uint64_t>(MT) * blockIdx.x + threadIdx.x + start_idx;
+				if (icell < indexer.numPts()) {
+					amrex::detail::call_f_intvect_handler(f, indexer.intVect(icell), amrex::Gpu::Handler{});
+				}
+			});
+		}
+		AMREX_GPU_ERROR_CHECK();
+	} else {
+		amrex::ParallelFor(box, f);
+	}
+#else
+	amrex::ParallelFor(box, f);
+#endif
+}
+
 } // namespace detail
 
 template <typename problem_t>
@@ -245,7 +285,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 #endif
 		}
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		detail::PhotochemParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, RadSystem<problem_t>::gasDensity_index);
 			// dont do photochemistry in cells with densities below the minimum density specified
 			if (rho < min_density_allowed) {
