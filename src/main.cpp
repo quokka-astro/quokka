@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 /// \file main.cpp
-/// \brief The main() function for simulations.
+/// \brief The entry point for simulation executables.
 ///
 
 #include "AMReX.H"
