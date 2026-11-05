@@ -134,12 +134,12 @@ Whether a problem compiles chemistry or photochemistry at all is set by fields o
 | Trait | Default | Description |
 |---|---|---|
 | `Network` | `quokka::networks::None` | The species network, a type from `src/networks/<network>/network.hpp`, e.g. `quokka::networks::PhotoionizationHCaseB` or `quokka::networks::Thermophotochemistry`. It supplies the species, the chemical and thermal bands, and the network's runtime parameters (prefix `network`), which `QuokkaSimulation` reads at start-up. |
-| `chemistry` | `false` | Compile the chemistry source term. Also makes `EOSMicrophysics` the default EOS backend. |
-| `photochemistry` | `false` | Compile photochemistry in the radiation substeps. Also makes `EOSMicrophysics` the default EOS backend. |
+| `chemistry` | `false` | Compile the chemistry source term. |
+| `photochemistry` | `false` | Compile photochemistry in the radiation substeps. |
 | `dust_chemical_band_absorption` | `false` | Dust absorbs chemical-band photons (`Q_dust`): the network carries the absorbed energy, which heats the dust. Requires `ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model = true`. |
 | `integrate_rad_flux` | `true` | With photochemistry, integrate the photon flux equations in the network. With `false`, the flux is determined algebraically. |
 
-A problem with chemistry or photochemistry also needs, in its `CMakeLists.txt`, `quokka_add_eos(<target> <backend> <network>)` (from `extern/eos/quokka_eos.cmake`), which builds it against the EOS backend (`photoionization` or `primordial_chem`) and the network's species table. The networks' runtime parameters (each `src/networks/<network>/network.cpp`) are in the `quokka_networks` library, which every target links. Its problem file includes the network's `network.hpp`, which holds the network's right-hand side and Jacobian, and `radiation/photochemistry.hpp` or `chemistry/Chemistry.hpp`, which define the burn. The burn and the EOS check that `Network` has as many species as the species table it is built with. Problems without chemistry use the `gamma_law` backend.
+A problem with chemistry or photochemistry also needs, in its `CMakeLists.txt`, `quokka_add_eos(<target> <backend> <network>)` (from `extern/eos/quokka_eos.cmake`), which builds it against the EOS backend (`photoionization` or `primordial_chem`) and the network's species table. The networks' runtime parameters (each `src/networks/<network>/network.cpp`) are in the `quokka_networks` library, which every target links. Its problem file includes the network's `network.hpp`, which holds the network's right-hand side and Jacobian, and `radiation/photochemistry.hpp` or `chemistry/Chemistry.hpp`, which define the burn. The burn checks that `Network` has as many species as the species table it is built with. The hydro EOS of a problem with a network is `EOSMultigamma`, which reads the network's species masses and adiabatic indices.
 
 ## Integrator (Rosenbrock)
 
