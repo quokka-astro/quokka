@@ -265,13 +265,13 @@ template <int N, typename System> AMREX_GPU_HOST_DEVICE auto integrate(System &s
 			const bool final_step_accepted =
 			    last && errnorm <= 1.0 && valid_update && 0.1 * (detail::h211b_fac_min * std::abs(h)) > std::abs(x + h) * eps;
 			const amrex::Real exponent = 1.0 / (detail::h211b_b * detail::h211b_k);
-			const amrex::Real controller_fac =
-			    final_step_accepted ? detail::h211b_fac_min
-						: std::fmin(std::fmax(std::pow(1.0 / std::fmax(errnorm, detail::err_min), exponent) *
-									  std::pow(1.0 / std::fmax(errold, detail::err_min), exponent) *
-									  std::pow(facold, -1.0 / detail::h211b_b),
-								      detail::h211b_fac_min),
-							    detail::h211b_fac_max);
+			const amrex::Real controller_fac = final_step_accepted
+							       ? detail::h211b_fac_min
+							       : std::fmin(std::fmax(std::pow(1.0 / std::fmax(errnorm, detail::err_min), exponent) *
+											 std::pow(1.0 / std::fmax(errold, detail::err_min), exponent) *
+											 std::pow(facold, -1.0 / detail::h211b_b),
+										     detail::h211b_fac_min),
+									   detail::h211b_fac_max);
 			facold = controller_fac;
 			errold = errnorm;
 			amrex::Real hnew = h * controller_fac;
