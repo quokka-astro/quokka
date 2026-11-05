@@ -1,5 +1,4 @@
 if(AMReX_SPACEDIM EQUAL 3)
-	setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_CURRENT_BINARY_DIR}/")
 	quokka_add_problem(JOB_NAME ParticleDeposition INPUT_FILE ParticleDeposition.toml)
 
 	add_test(NAME ParticleDepositionSliceDiag COMMAND ParticleDeposition ../inputs/ParticleDepositionSlice.toml ${QuokkaTestParams}

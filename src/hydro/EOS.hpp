@@ -20,7 +20,9 @@
 #include <AMReX_Print.H>
 
 #include "cooling/EOSTabulatedRegistry.hpp"
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 #include "eos.H"
+#endif
 
 #ifdef CHEMISTRY
 #include "actual_eos_data.H"
@@ -72,6 +74,62 @@ template <typename problem_t> struct EOSIdeal {
 		}
 	}();
 
+	// Gamma-law state in the form the Microphysics gamma_law EOS used: temperature in kelvin with C::k_B, specific internal energy e.
+	struct GammaLawState {
+		amrex::Real rho;
+		amrex::Real T;
+		amrex::Real p;
+		amrex::Real e;
+	};
+
+	// Input floors of the Microphysics eos() wrapper, as set by eos_init(small_temp = 1e-10, small_dens = 1e-100).
+	static constexpr amrex::Real eos_min_temp_ = 1.0e-10;
+	static constexpr amrex::Real eos_min_dens_ = 1.0e-100;
+	static constexpr amrex::Real eos_min_e_ = 1.0e-200;
+	static constexpr amrex::Real eos_min_p_ = 1.0e-200;
+	static constexpr amrex::Real eos_max_ = 1.0e200;
+
+	// p and e from rho and T, without input resets
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto GammaLawFromValidRhoT(amrex::Real rho, amrex::Real T) -> GammaLawState
+	{
+		const amrex::Real p = rho * C::k_B * T / mean_molecular_weight_;
+		const amrex::Real e = p / ((gamma_ - 1.0) * rho);
+		return GammaLawState{.rho = rho, .T = T, .p = p, .e = e};
+	}
+
+	// Clamp by value: a NaN x gives lo, as Microphysics's min(hi, max(lo, x)) did. Taking the bounds by value also avoids
+	// binding references to the static constexpr members in device code.
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ClampToRange(amrex::Real x, amrex::Real lo, amrex::Real hi) -> amrex::Real
+	{
+		return std::fmin(std::fmax(x, lo), hi);
+	}
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto GammaLawFromRhoT(amrex::Real rho, amrex::Real T) -> GammaLawState
+	{
+		return GammaLawFromValidRhoT(ClampToRange(rho, eos_min_dens_, eos_max_), ClampToRange(T, eos_min_temp_, eos_max_));
+	}
+
+	// An out-of-range e is replaced by the state at the minimum temperature, as Microphysics's eos_reset() did
+	// (its input state had T = 0, which it raised to the floor).
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto GammaLawFromRhoE(amrex::Real rho, amrex::Real e) -> GammaLawState
+	{
+		if (e < eos_min_e_ || e > eos_max_) {
+			return GammaLawFromRhoT(rho, 0.0);
+		}
+		const amrex::Real T = e * mean_molecular_weight_ * (gamma_ - 1.0) / C::k_B;
+		return GammaLawFromValidRhoT(ClampToRange(rho, eos_min_dens_, eos_max_), T);
+	}
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto GammaLawFromRhoP(amrex::Real rho, amrex::Real p) -> GammaLawState
+	{
+		if (p < eos_min_p_ || p > eos_max_) {
+			return GammaLawFromRhoT(rho, 0.0);
+		}
+		const amrex::Real rho_clamped = ClampToRange(rho, eos_min_dens_, eos_max_);
+		const amrex::Real T = p * mean_molecular_weight_ / (C::k_B * rho_clamped);
+		return GammaLawFromValidRhoT(rho_clamped, T);
+	}
+
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
@@ -80,12 +138,7 @@ template <typename problem_t> struct EOSIdeal {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
-			chem_eos_t estate;
-			estate.rho = rho;
-			estate.e = Eint / rho;
-			estate.mu = mean_molecular_weight_ / C::m_u;
-			eos(eos_input_re, estate);
-			Tgas = estate.T * C::k_B / boltzmann_constant_;
+			Tgas = GammaLawFromRhoE(rho, Eint / rho).T * C::k_B / boltzmann_constant_;
 		}
 		return Tgas;
 	}
@@ -98,12 +151,7 @@ template <typename problem_t> struct EOSIdeal {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
-			chem_eos_t estate;
-			estate.rho = rho;
-			estate.T = Tgas;
-			estate.mu = mean_molecular_weight_ / C::m_u;
-			eos(eos_input_rt, estate);
-			Eint = estate.e * rho * boltzmann_constant_ / C::k_B;
+			Eint = GammaLawFromRhoT(rho, Tgas).e * rho * boltzmann_constant_ / C::k_B;
 		}
 		return Eint;
 	}
@@ -116,12 +164,7 @@ template <typename problem_t> struct EOSIdeal {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
-			chem_eos_t estate;
-			estate.rho = rho;
-			estate.p = Pressure;
-			estate.mu = mean_molecular_weight_ / C::m_u;
-			eos(eos_input_rp, estate);
-			Eint = estate.e * rho;
+			Eint = GammaLawFromRhoP(rho, Pressure).e * rho;
 		}
 		return Eint;
 	}
@@ -134,12 +177,8 @@ template <typename problem_t> struct EOSIdeal {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
-			chem_eos_t estate;
-			estate.rho = rho;
-			estate.T = Tgas;
-			estate.mu = mean_molecular_weight_ / C::m_u;
-			eos(eos_input_rt, estate);
-			dEint_dT = estate.dedT * rho * boltzmann_constant_ / C::k_B;
+			const GammaLawState s = GammaLawFromRhoT(rho, Tgas);
+			dEint_dT = (s.e / s.T) * rho * boltzmann_constant_ / C::k_B;
 		}
 		return dEint_dT;
 	}
@@ -155,16 +194,12 @@ template <typename problem_t> struct EOSIdeal {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
-			chem_eos_t estate;
-			estate.rho = rho;
-			estate.p = P;
-			estate.mu = mean_molecular_weight_ / C::m_u;
-			eos(eos_input_rp, estate);
-			deint_dRho = estate.dedr;
-			deint_dP = 1.0 / estate.dpde;
-			dRho_dP = 1.0 / (estate.dpdr * C::k_B / boltzmann_constant_);
-			dP_dRho_s = estate.cs * estate.cs;
-			G = estate.G;
+			const GammaLawState s = GammaLawFromRhoP(rho, P);
+			deint_dRho = 0.0;
+			deint_dP = 1.0 / ((s.p / s.T) / (s.e / s.T));
+			dRho_dP = 1.0 / ((s.p / s.rho) * C::k_B / boltzmann_constant_);
+			dP_dRho_s = gamma_ * s.p / s.rho;
+			G = 0.5 * (1.0 + gamma_);
 		}
 		return std::make_tuple(deint_dRho, deint_dP, dRho_dP, dP_dRho_s, G);
 	}
@@ -183,16 +218,8 @@ template <typename problem_t> struct EOSIdeal {
 		}
 		amrex::ignore_unused(massScalars);
 
-		chem_eos_t estate;
-		estate.rho = rho;
-		if (rho == 0.0) {
-			estate.e = 0;
-		} else {
-			estate.e = Eint / rho;
-		}
-		estate.mu = mean_molecular_weight_ / C::m_u;
-		eos(eos_input_re, estate);
-		P = estate.p;
+		const amrex::Real e = (rho == 0.0) ? 0.0 : Eint / rho;
+		P = GammaLawFromRhoE(rho, e).p;
 		return P;
 	}
 
@@ -212,12 +239,8 @@ template <typename problem_t> struct EOSIdeal {
 		}
 		amrex::ignore_unused(massScalars);
 
-		chem_eos_t estate;
-		estate.rho = rho;
-		estate.p = Pressure;
-		estate.mu = mean_molecular_weight_ / C::m_u;
-		eos(eos_input_rp, estate);
-		cs = estate.cs;
+		const GammaLawState s = GammaLawFromRhoP(rho, Pressure);
+		cs = std::sqrt(gamma_ * s.p / s.rho);
 		return cs;
 	}
 
