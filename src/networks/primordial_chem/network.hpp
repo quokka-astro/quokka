@@ -13,6 +13,7 @@
 /// right-hand side and the Jacobian are generated (pynucastro), so clang-tidy-review skips this file.
 
 #include <cmath>
+#include <string_view>
 
 #include <AMReX_Array.H>
 #include <AMReX_Extension.H>
@@ -39,6 +40,20 @@ struct PrimordialChem {
 	static constexpr int NumSpec = 14;
 	/// indices of the species in xn
 	enum Species : int { E = 0, Hp, H, Hm, Dp, D, H2p, Dm, H2, Hdp, Hd, Hepp, Hep, He }; // NOLINT(cppcoreguidelines-use-enum-class)
+
+	/// mass of each species [g]
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static constexpr auto SpeciesMass() -> amrex::GpuArray<amrex::Real, NumSpec>
+	{
+		return {{9.10938188e-28, 1.67262158e-24, 1.67353251819e-24, 1.67444345638e-24, 3.34512158e-24, 3.34603251819e-24, 3.34615409819e-24,
+			 3.34694345638e-24, 3.34706503638e-24, 5.01865409819e-24, 5.01956503638e-24, 6.69024316e-24, 6.69115409819e-24, 6.69206503638e-24}};
+	}
+	/// adiabatic index of each species: 7/5 for the molecules (H2+, H2, HD+, HD), 5/3 otherwise
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static constexpr auto SpeciesGamma() -> amrex::GpuArray<amrex::Real, NumSpec>
+	{
+		return {{5. / 3., 5. / 3., 5. / 3., 5. / 3., 5. / 3., 5. / 3., 1.4, 5. / 3., 1.4, 1.4, 1.4, 5. / 3., 5. / 3., 5. / 3.}};
+	}
+	/// the equation of state the network assumes, named as jaff names it (the type of jaff's [network.eos])
+	static constexpr std::string_view EOSType = "multi_gamma";
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SmallX() -> amrex::Real { return primordial_chem::small_x; }
 
