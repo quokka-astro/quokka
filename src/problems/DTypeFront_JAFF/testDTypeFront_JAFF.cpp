@@ -15,7 +15,11 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/burn_state.hpp"
+#include "microphysics/microphysics_traits.hpp"
+#include "networks/photoionization_H_caseB/network.hpp"
 #include "physics_info.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -28,10 +32,8 @@
 #include <string>
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 struct DTypeFront_JAFF {};
 
@@ -42,10 +44,19 @@ template <> struct quokka::EOS_Traits<DTypeFront_JAFF> {
 	static constexpr double gamma = 5. / 3.;
 };
 
+template <> struct Microphysics_Traits<DTypeFront_JAFF> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::JaffNetwork;
+	// The tableau is the CMake cache variable DTypeFront_JAFF_TABLEAU (default ROS2S).
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::DTYPEFRONT_JAFF_TABLEAU>;
+	static constexpr bool photochemistry = true;
+};
+
+using Network = Microphysics_Traits<DTypeFront_JAFF>::Network;
+
 template <> struct Physics_Traits<DTypeFront_JAFF> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
+	static constexpr int numMassScalars = Network::NumSpec;	     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 #ifdef DTYPEFRONT_JAFF_NO_RADIATION
 	static constexpr bool is_radiation_enabled = false;
@@ -62,17 +73,17 @@ template <> struct RadSystem_Traits<DTypeFront_JAFF> {
 	//
 	// SetAtolFromPhysics() derives atol_rad_num = 1e-6 * a_rad * T_min^4 / E_photon, where
 	// T_min = typical_minimal_radiation_T.  With T_min = 10 K, atol_rad_num ~ 1.25e-6 cm^-3.
-	// The ratio atol_rad_num / N_gamma_floor ~ 1e4 ensures that VODE returns in one BDF step
+	// The ratio atol_rad_num / N_gamma_floor ~ 1e4 ensures that the integrator returns in one step
 	// even in the darkest cells.
 	//
 	// The 1e-6 prefactor means radiation at T_min becomes numerically negligible after
-	// ~1e6 VODE steps (accumulated local error stays below the physically meaningful level).
+	// ~1e6 integrator steps (accumulated local error stays below the physically meaningful level).
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	// photochemistry momentum deposition is gated on beta_order == 1, so this test validates pure
 	// thermal-pressure D-type front expansion with radiation pressure.
 	static constexpr int beta_order = 1;
-	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
-	static constexpr auto ChemBands() { return ChemBandsHeader(); }
+	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex; }
+	static constexpr auto ChemBands() { return Network::ChemBands(); }
 };
 
 template <> struct SimulationData<DTypeFront_JAFF> {
@@ -107,9 +118,9 @@ auto compute_effective_radius(amrex::MultiFab const &state_mf, amrex::GpuArray<a
 
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
 		const amrex::Real n_HI =
-		    state[box_no](i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
-		const amrex::Real n_HII =
-		    state[box_no](i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+		    state[box_no](i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Network::Species::h)) / spmasses[Network::Species::h];
+		const amrex::Real n_HII = state[box_no](i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Network::Species::hj)) /
+					  spmasses[Network::Species::hj];
 		const amrex::Real denom = n_HI + n_HII;
 		if (denom <= 0.0_rt) {
 			return 0.0_rt;
@@ -231,31 +242,11 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 	return 0.5 * (T_lo + T_hi);
 }
 
-#ifdef DTYPEFRONT_JAFF_VODE
-void print_microphysics_integrator() { amrex::Print() << "DTypeFront_JAFF microphysics integrator: VODE\n"; }
-#else
-auto rosenbrock_tableau_name(int tableau) -> char const *
-{
-	switch (tableau) {
-		case 0:
-			return "Rodas5P";
-		case 1:
-			return "Rodas4P";
-		case 2:
-			return "Rodas3P";
-		case 3:
-			return "ROS2S";
-		default:
-			return "unknown";
-	}
-}
-
 void print_microphysics_integrator()
 {
-	amrex::Print() << "DTypeFront_JAFF microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
-		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
+	amrex::Print() << "DTypeFront_JAFF microphysics integrator: Rosenbrock (Rosenbrock tableau "
+		       << Microphysics_Traits<DTypeFront_JAFF>::Integrator::tableau::name << ")\n";
 }
-#endif
 
 } // namespace
 
@@ -331,7 +322,7 @@ void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t & /*re
 template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
@@ -351,7 +342,6 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialCondition
 	pp.query("Q", userData_.Q);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -376,16 +366,16 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::setInitialConditionsOnGrid(q
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
-	std::array<Real, NumSpec> numdens = {-1.0};
-	numdens[Species::e] = userData_.n_e_init;
-	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::H_p] = userData_.n_HII_init;
+	quokka::microphysics::BurnState<DTypeFront_JAFF> state;
+	std::array<Real, Network::NumSpec> numdens = {-1.0};
+	numdens[Network::Species::ek] = userData_.n_e_init;
+	numdens[Network::Species::h] = userData_.n_HI_init;
+	numdens[Network::Species::hj] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
 		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
 	}
@@ -411,7 +401,7 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x1GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x3GasMomentum_index) = 0.0_rt;
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + nn) =
 			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
 		}
@@ -435,8 +425,8 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::computeAfterTimestep()
 	const amrex::Real mu = 0.5;
 	const amrex::Real Q = userData_.Q;
 	const amrex::Real c_i = std::sqrt(C::k_B * T_eq / (mu * C::m_p));
-	const amrex::Real rho =
-	    userData_.n_e_init * spmasses[Species::e] + userData_.n_HI_init * spmasses[Species::H] + userData_.n_HII_init * spmasses[Species::H_p];
+	const amrex::Real rho = userData_.n_e_init * spmasses[Network::Species::ek] + userData_.n_HI_init * spmasses[Network::Species::h] +
+				userData_.n_HII_init * spmasses[Network::Species::hj];
 	const amrex::Real eps = RadSystem<DTypeFront_JAFF>::GetChemBandQuanta(0);
 
 	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_e * n_e), 1.0_rt / 3.0_rt);
@@ -554,9 +544,11 @@ auto problem_main() -> int
 				const amrex::Real rho = state(i, j, k, HydroSystem<DTypeFront_JAFF>::density_index);
 				const amrex::Real Eint = state(i, j, k, RadSystem<DTypeFront_JAFF>::gasInternalEnergy_index);
 				const amrex::Real n_HI_cell =
-				    state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+				    state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Network::Species::h)) /
+				    spmasses[Network::Species::h];
 				const amrex::Real n_HII_cell =
-				    state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+				    state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + static_cast<int>(Network::Species::hj)) /
+				    spmasses[Network::Species::hj];
 				const amrex::Real denom = n_HI_cell + n_HII_cell;
 				if (denom <= 0.0_rt) {
 					return;
@@ -564,8 +556,8 @@ auto problem_main() -> int
 				const amrex::Real x_HII = n_HII_cell / denom;
 				const amrex::Real x_HI = n_HI_cell / denom;
 
-				burn_t bstate;
-				for (int nn = 0; nn < NumSpec; ++nn) {
+				quokka::microphysics::BurnState<DTypeFront_JAFF> bstate;
+				for (int nn = 0; nn < Network::NumSpec; ++nn) {
 					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + nn) / spmasses[nn];
 				}
 				bstate.rho = rho;

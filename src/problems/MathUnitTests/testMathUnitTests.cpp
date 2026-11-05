@@ -78,7 +78,7 @@ namespace
 auto TestODEIntegration() -> int
 {
 	// initialize EOS
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 	Real small_temp = 1e-10;
 	Real small_dens = 1e-100;
 	eos_init(small_temp, small_dens);

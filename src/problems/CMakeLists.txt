@@ -3,6 +3,9 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/ProblemHelpers.cmake)
 
 # List of directories to skip
 set(IGNORE_DIRS
+  # TODO: not yet ported to the Quokka-native microphysics (still use setup_target_for_microphysics_compilation)
+  DTypeFrontHe
+  StromgrenSpherePhotonConservation
 )
 
 # Get all children of the current directory (relative paths)

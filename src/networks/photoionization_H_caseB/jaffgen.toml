@@ -1,5 +1,6 @@
 [network.radiation]
 bands = [13.6, 26.0]
-power_law_index = 0
+# index alpha of the photon-number spectrum n(E) ~ E^(alpha-2) in a band; jaff reads it
+profile_index = 0
 energy_density = false
 rsl = "c_hat"

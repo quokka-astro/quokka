@@ -1,32 +1,24 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  set(microphysics_network_name "photoionization_H_caseB_handwritten") # this will override
-                                                  # network_name to
-                                                  # photoionization for this
-                                                  # directory only
+  set(microphysics_network_name "photoionization_H_caseB_handwritten")
 
   set(JOB_NAME StromgrenSphere)
 
-  # NSPEC/SPECIES_ENUM/SPEC_NAMES/AION/ZION/CHEM_BANDS/... come from the
-  # 'photoionization' entry in src/networks/NetworkRegistry.cmake, and
-  # network_properties.H is generated from them inside
-  # setup_target_for_microphysics_compilation() below.
-  setup_target_for_microphysics_compilation(${microphysics_network_name}
-                                            "${CMAKE_CURRENT_BINARY_DIR}/"
-                                            INTEGRATOR "Rosenbrock")
-
-  add_executable(
-    ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
-                ../../radiation/photochemistry.cpp ${${microphysics_network_name}_sources})
-
   set(STROMGREN_C_HAT_DIVISOR 1 CACHE STRING "StromgrenSphere reduced speed of light: c_hat = c / divisor")
 
-  # this will add #define PHOTOCHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX C_HAT_DIVISOR=${STROMGREN_C_HAT_DIVISOR})
+  # two executables built from StromgrenSphere.hpp, each with its own test and input
+  foreach(target ${JOB_NAME} ${JOB_NAME}TempIndependentRecombination)
+    add_executable(
+      ${target} test${target}.cpp "${QuokkaSourcesNoEOS}"
+                ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
+    target_compile_definitions(${target} PRIVATE C_HAT_DIVISOR=${STROMGREN_C_HAT_DIVISOR})
+    quokka_add_eos(${target} photoionization ${microphysics_network_name})
+    # the network's actual_rhs.H
+    target_include_directories(${target} BEFORE PRIVATE ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name})
 
-  if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(${JOB_NAME})
-  endif(AMReX_GPU_BACKEND MATCHES "CUDA")
+    if(AMReX_GPU_BACKEND MATCHES "CUDA")
+      setup_target_for_cuda_compilation(${target})
+    endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  add_test(NAME ${JOB_NAME}TempIndependentRecombination COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}TempIndependentRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ${target} COMMAND ${target} ../inputs/${target}.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  endforeach()
 endif()

@@ -1160,8 +1160,7 @@ private:
 
             if ((ka >= kmin) && (ka <= kmax)) {
 
-              if (spect_form == 0)
-                amplitude = 1.0; // Band
+              amplitude = 1.0; // Band
               if (spect_form == 1)
                 amplitude =
                     fabs(parab_prefact * pow(ka - kc, 2.0) + 1.0); // Parabola

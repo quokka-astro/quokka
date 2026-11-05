@@ -72,12 +72,6 @@ radiation.dust_gas_interaction_coeff = 0.0
 # Photochemistry Integrator
 # *****************************************************************
 
-integrator.rosenbrock_tableau = 3
-integrator.use_number_densities = 1
-integrator.do_species_clip = 0
-integrator.jacobian = 1
-integrator.renormalize_abundances = 0
-integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 integrator.ode_max_steps = 50000
 
@@ -89,4 +83,4 @@ integrator.atol_spec                     = 1.0e-3   # cm^-3
 integrator.atol_enuc                     = 1.24e8   # erg/g; c_v * 1 K temperature accuracy
 integrator.atol_rad_num                  = 1.0e-6   # cm^-3
 integrator.species_failure_tolerance     = 1.0e-3   # cm^-3; = atol_spec
-integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at the front
+integrator.radiation_failure_tolerance   = 0.5      # cm^-3;

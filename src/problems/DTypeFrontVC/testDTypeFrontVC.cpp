@@ -14,6 +14,9 @@
 #include "AMReX_Reduce.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/burn_state.hpp"
+#include "microphysics/microphysics_traits.hpp"
+#include "networks/photoionization_H_caseB_handwritten/network.hpp"
 #include "physics_info.hpp"
 #include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
@@ -22,10 +25,8 @@
 #include <limits>
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 struct DTypeFrontVC {};
 
@@ -54,9 +55,17 @@ template <> struct quokka::EOS_Traits<DTypeFrontVC> {
 	static constexpr double gamma = 5. / 3.;
 };
 
+template <> struct Microphysics_Traits<DTypeFrontVC> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PhotoionizationHCaseB;
+	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
+	static constexpr bool photochemistry = true;
+};
+
+using Network = Microphysics_Traits<DTypeFrontVC>::Network;
+
 template <> struct Physics_Traits<DTypeFrontVC> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = NumSpec;
+	static constexpr int numMassScalars = Network::NumSpec;
 	static constexpr int numPassiveScalars = numMassScalars;
 	static constexpr bool is_radiation_enabled = true;
 };
@@ -65,8 +74,8 @@ template <> struct RadSystem_Traits<DTypeFrontVC> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	static constexpr int beta_order = 1;
-	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
-	static constexpr auto ChemBands() { return ChemBandsHeader(); }
+	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex; }
+	static constexpr auto ChemBands() { return Network::ChemBands(); }
 };
 
 template <> struct SimulationData<DTypeFrontVC> {
@@ -89,7 +98,7 @@ void RadSystem<DTypeFrontVC>::AddRadSource(array_t &radEnergy, array_t & /*reduc
 
 template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 {
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	amrex::ParmParse const pp("photoionization_momentum");
 	userData_.small_temp = 1.0e-2;
@@ -106,7 +115,6 @@ template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 	pp.query("n_HII_init", userData_.n_HII_init);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontVC>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -124,15 +132,15 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
-	std::array<Real, NumSpec> numdens = {-1.0};
-	numdens[Species::e] = userData_.n_e_init;
-	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::H_p] = userData_.n_HII_init;
+	quokka::microphysics::BurnState<DTypeFrontVC> state;
+	std::array<Real, Network::NumSpec> numdens = {-1.0};
+	numdens[Network::Species::e] = userData_.n_e_init;
+	numdens[Network::Species::H] = userData_.n_HI_init;
+	numdens[Network::Species::H_p] = userData_.n_HII_init;
 	state.T = userData_.temperature;
 
 	Real rhotot = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
 		rhotot += state.xn[n] * spmasses[n];
 	}
@@ -153,7 +161,7 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x1GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x3GasMomentum_index) = 0.0_rt;
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<DTypeFrontVC>::scalar0_index + nn) = state.xn[nn] * spmasses[nn];
 		}
 	});
@@ -248,8 +256,9 @@ auto problem_main() -> int
 	std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const fc_ptrs{};
 	amrex::MultiFab dustHeatingSource;
 	amrex::MultiFab radEnergySource; // untouched: this problem has no thermal-band photochemistry
-	static_cast<void>(quokka::photochemistry::computePhotoChemistry<DTypeFrontVC>(
-	    sim.state_new_cc_[0], fc_ptrs, burn_dt, std::numeric_limits<amrex::Real>::max(), 0.0_rt, dustHeatingSource, radEnergySource));
+	static_cast<void>(quokka::photochemistry::computePhotoChemistry<DTypeFrontVC>(sim.state_new_cc_[0], fc_ptrs, burn_dt,
+										      std::numeric_limits<amrex::Real>::max(), 0.0_rt, dustHeatingSource,
+										      radEnergySource, sim.integratorParams_));
 
 	const MomentumCheck check = compute_momentum_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray(), initial_flux_x);
 	const EnergyCheck energy_after = compute_energy_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray());
