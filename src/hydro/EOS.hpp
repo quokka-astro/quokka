@@ -8,12 +8,14 @@
 /// \brief A class for equation of state calculations.
 
 #include <cmath>
+#include <cstdint>
 #include <optional>
 #include <type_traits>
 
 #include "util/Optional.hpp"
 
 #include "AMReX.H"
+#include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
@@ -21,8 +23,13 @@
 #include <AMReX_Print.H>
 
 #include "cooling/EOSTabulatedRegistry.hpp"
-#include "eos.H"
+#include "fundamental_constants.H"
+#include "hydro/EOSFloors.hpp"
 #include "microphysics/microphysics_traits.hpp"
+
+// Microphysics' EOS, which every file including this header used to get through eos.H, put amrex::literals (_rt, _prt)
+// in the global namespace, and Quokka code relies on it (for example particles/PhysicsParticles.hpp).
+using namespace amrex::literals; // NOLINT(google-build-using-namespace,google-global-names-in-headers)
 
 namespace quokka
 {
@@ -96,11 +103,11 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
-			chem_eos_t estate;
+			GasState estate;
 			estate.rho = rho;
 			estate.e = Eint / rho;
 			estate.mu = mean_molecular_weight_ / C::m_u;
-			eos(eos_input_re, estate);
+			Solve(Input::RhoE, estate);
 			Tgas = estate.T * C::k_B / boltzmann_constant_;
 		}
 		return Tgas;
@@ -114,11 +121,11 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
-			chem_eos_t estate;
+			GasState estate;
 			estate.rho = rho;
 			estate.T = Tgas;
 			estate.mu = mean_molecular_weight_ / C::m_u;
-			eos(eos_input_rt, estate);
+			Solve(Input::RhoT, estate);
 			Eint = estate.e * rho * boltzmann_constant_ / C::k_B;
 		}
 		return Eint;
@@ -132,11 +139,11 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
-			chem_eos_t estate;
+			GasState estate;
 			estate.rho = rho;
 			estate.p = Pressure;
 			estate.mu = mean_molecular_weight_ / C::m_u;
-			eos(eos_input_rp, estate);
+			Solve(Input::RhoP, estate);
 			Eint = estate.e * rho;
 		}
 		return Eint;
@@ -150,11 +157,11 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
-			chem_eos_t estate;
+			GasState estate;
 			estate.rho = rho;
 			estate.T = Tgas;
 			estate.mu = mean_molecular_weight_ / C::m_u;
-			eos(eos_input_rt, estate);
+			Solve(Input::RhoT, estate);
 			dEint_dT = estate.dedT * rho * boltzmann_constant_ / C::k_B;
 		}
 		return dEint_dT;
@@ -171,11 +178,11 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 		amrex::ignore_unused(massScalars);
 
 		if constexpr (gamma_ != 1.0) {
-			chem_eos_t estate;
+			GasState estate;
 			estate.rho = rho;
 			estate.p = P;
 			estate.mu = mean_molecular_weight_ / C::m_u;
-			eos(eos_input_rp, estate);
+			Solve(Input::RhoP, estate);
 			deint_dRho = estate.dedr;
 			deint_dP = 1.0 / estate.dpde;
 			dRho_dP = 1.0 / (estate.dpdr * C::k_B / boltzmann_constant_);
@@ -199,7 +206,7 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 		}
 		amrex::ignore_unused(massScalars);
 
-		chem_eos_t estate;
+		GasState estate;
 		estate.rho = rho;
 		if (rho == 0.0) {
 			estate.e = 0;
@@ -207,7 +214,7 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 			estate.e = Eint / rho;
 		}
 		estate.mu = mean_molecular_weight_ / C::m_u;
-		eos(eos_input_re, estate);
+		Solve(Input::RhoE, estate);
 		P = estate.p;
 		return P;
 	}
@@ -228,11 +235,11 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 		}
 		amrex::ignore_unused(massScalars);
 
-		chem_eos_t estate;
+		GasState estate;
 		estate.rho = rho;
 		estate.p = Pressure;
 		estate.mu = mean_molecular_weight_ / C::m_u;
-		eos(eos_input_rp, estate);
+		Solve(Input::RhoP, estate);
 		cs = estate.cs;
 		return cs;
 	}
@@ -259,6 +266,79 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 		// sizeof(problem_t)==0: fires only on instantiation, not at parse time (C++20 ill-formed NDR workaround)
 		static_assert(sizeof(problem_t) == 0, "ComputeEntropyFromRhoEint is only supported by the EOSTabulated backend");
 		return 0.0;
+	}
+
+      private:
+	/// The gas state of one evaluation, in CGS: the inputs (rho and one of T, e, p, with mu) and the outputs read above.
+	struct GasState {
+		amrex::Real rho{};
+		amrex::Real T{};
+		amrex::Real p{};
+		amrex::Real e{}; ///< specific internal energy
+		amrex::Real mu{};
+		amrex::Real dpdT{};
+		amrex::Real dpdr{};
+		amrex::Real dpde{};
+		amrex::Real dedT{};
+		amrex::Real dedr{};
+		amrex::Real cs{};
+		amrex::Real G{};
+	};
+
+	/// Which of T, e and p is given with rho.
+	enum class Input : std::uint8_t { RhoT, RhoE, RhoP };
+
+	/// Complete the state from rho and the given quantity, as Microphysics' eos() did with its gamma_law backend: rho is
+	/// clamped to the floors, and so is T when T is given; an e or p outside its bounds resets the state to its clamped
+	/// rho and T (0 unless set, so the temperature floor).
+	AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static void Solve(Input input, GasState &state)
+	{
+		bool has_been_reset = false;
+		state.rho = amrex::min(eos_floors::max_dens, amrex::max(eos_floors::min_dens, state.rho));
+		switch (input) {
+			case Input::RhoT:
+				state.T = amrex::min(eos_floors::max_temp, amrex::max(eos_floors::min_temp, state.T));
+				break;
+			case Input::RhoE:
+				has_been_reset = state.e < eos_floors::min_e || state.e > eos_floors::max_e;
+				break;
+			case Input::RhoP:
+				has_been_reset = state.p < eos_floors::min_p || state.p > eos_floors::max_p;
+				break;
+		}
+		if (has_been_reset) {
+			state.T = amrex::min(eos_floors::max_temp, amrex::max(eos_floors::min_temp, state.T));
+			state.rho = amrex::min(eos_floors::max_dens, amrex::max(eos_floors::min_dens, state.rho));
+			input = Input::RhoT;
+		}
+
+		const amrex::Real m_nucleon = C::m_u;
+
+		switch (input) {
+			case Input::RhoT:
+				break;
+			case Input::RhoE:
+				state.T = state.e * state.mu * m_nucleon * (gamma_ - 1.0) / C::k_B;
+				break;
+			case Input::RhoP:
+				state.T = state.p * state.mu * m_nucleon / (C::k_B * state.rho);
+				break;
+		}
+
+		const amrex::Real Tinv = 1.0 / state.T;
+		const amrex::Real rhoinv = 1.0 / state.rho;
+		const amrex::Real pressure = state.rho * state.T * C::k_B / (state.mu * m_nucleon);
+		const amrex::Real energy = pressure / (gamma_ - 1.0) * rhoinv;
+
+		state.p = pressure;
+		state.e = energy;
+		state.dpdT = state.p * Tinv;
+		state.dpdr = state.p * rhoinv;
+		state.dedT = state.e * Tinv;
+		state.dedr = 0.0;
+		state.dpde = state.dpdT * (1.0 / state.dedT);
+		state.cs = std::sqrt(gamma_ * state.p * rhoinv);
+		state.G = 0.5 * (1.0 + gamma_);
 	}
 };
 
