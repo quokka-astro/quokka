@@ -71,8 +71,6 @@ template <> struct SimulationData<PopIII> {
 	amrex::Real numdens_init{};
 	amrex::Real omega_sphere{};
 
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real primary_species_1{};
 	amrex::Real primary_species_2{};
@@ -98,12 +96,6 @@ template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("primordial_chem");
-	userData_.small_temp = 1e1;
-	pp.query("small_temp", userData_.small_temp);
-
-	userData_.small_dens = 1e-60;
-	pp.query("small_dens", userData_.small_dens);
-
 	userData_.temperature = 1e1;
 	pp.query("temperature", userData_.temperature);
 
@@ -136,8 +128,6 @@ template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 	pp.query("primary_species_12", userData_.primary_species_12);
 	pp.query("primary_species_13", userData_.primary_species_13);
 	pp.query("primary_species_14", userData_.primary_species_14);
-
-	eos_init(userData_.small_temp, userData_.small_dens);
 
 	static bool isSamplingDone = false;
 	if (!isSamplingDone) {

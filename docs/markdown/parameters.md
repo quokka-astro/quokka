@@ -68,6 +68,15 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | hydro.artificial_viscosity_coefficient | Float         | `0.0`          | This is the linear artificial viscosity coefficient used in the artificial viscosity term added to the flux. This is the same parameter as defined in the original PPM paper.  |
 | hydro.small_x                          | Float         | `1.0e-30`      | Floor of the mass fractions: a negative mass scalar is reset to `small_x` times the density. Read only by problems with mass scalars and no network (`Microphysics_Traits<problem_t>::Network` is `None`); a problem with a network uses `network.small_x` instead. Setting it for any other problem aborts the run. |
 
+## Equation of state
+
+These parameters are read in `quokka::eos_floors::ReadParameters()` in `src/hydro/EOSFloors.cpp`, called by `QuokkaSimulation<problem_t>::initialize()`.
+
+| Parameter Name | Type  | Default    | Description                                                                 |
+|----------------|-------|------------|-----------------------------------------------------------------------------|
+| eos.min_temp   | Float | `1.0e-10`  | Floor of the temperature the equation of state is given.                    |
+| eos.min_dens   | Float | `1.0e-100` | Floor of the density the equation of state is given.                        |
+
 ## Radiation
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.

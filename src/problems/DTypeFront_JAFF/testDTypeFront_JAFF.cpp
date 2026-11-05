@@ -81,8 +81,6 @@ template <> struct RadSystem_Traits<DTypeFront_JAFF> {
 };
 
 template <> struct SimulationData<DTypeFront_JAFF> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -320,22 +318,17 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialCondition
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
-	userData_.small_temp = 1e-2;
-	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e4;
 	userData_.n_e_init = 0.0e0_rt;
 	userData_.n_HI_init = 1.0e2_rt;
 	userData_.n_HII_init = 0.0e0_rt;
 	userData_.Q = 1.0e49_rt;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("n_e_init", userData_.n_e_init);
 	pp.query("n_HI_init", userData_.n_HI_init);
 	pp.query("n_HII_init", userData_.n_HII_init);
 	pp.query("Q", userData_.Q);
 
-	eos_init(userData_.small_temp, userData_.small_dens);
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
