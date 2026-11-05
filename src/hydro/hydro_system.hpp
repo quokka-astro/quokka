@@ -88,6 +88,17 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
 	};
 
+	// pressure_index stores either pressure or specific internal energy; primEint_index
+	// stores the auxiliary thermodynamic variable. Passive scalars also use the
+	// nonnegative fallback; their range ends before any dust components.
+	struct PositivePrimitiveReconstruction {
+		AMREX_GPU_HOST_DEVICE constexpr auto operator()(int component) const -> bool
+		{
+			return component == primDensity_index || component == pressure_index || component == primEint_index ||
+			       (component >= primScalar0_index && component < primScalar0_index + nscalars_);
+		}
+	};
+
 	enum dustVarIndex { // NOLINT
 		dustDensity_index = Physics_Indices<problem_t>::dustFirstIndex,
 		x1DustMomentum_index,

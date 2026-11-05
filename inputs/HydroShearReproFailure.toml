@@ -1,0 +1,38 @@
+# 2D oblique perturbed thin shear with density contrast 19999:1.
+# The initially solenoidal velocity evolves under the full compressible Euler equations.
+# On the tested CPU build, order=5 exhausts hydro retries during the first coarse step;
+# changing ONLY hydro.reconstruction_order to 3 completes stop_time=3.
+# Dual energy is essential and enabled for every comparison.
+geometry.prob_lo = [0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0]
+quokka.bc = ["periodic", "periodic", "periodic"]
+amr.n_cell = [32, 32]
+amr.max_level = 0
+amr.max_grid_size = 64
+amr.blocking_factor = 8
+amr.v = 1
+do_reflux = 0
+do_subcycle = 0
+stop_time = 3.0
+max_timesteps = 1000000
+cfl = 0.3
+hydro.reconstruction_order = 5
+hydro.artificial_viscosity_coefficient = 0.0
+hydro.use_dual_energy = 1
+hydro.rk_integrator_order = 2
+density_floor = 1e-12
+temperature_floor = 1e-20
+plotfile_interval = -1
+checkpoint_interval = -1
+suppress_output = 1
+shear.amplitude = 1.0
+# Highest pressure in the tested sweep that retains the xPPM retry failure.
+shear.pressure = 2e-7
+shear.bulk_x = 0.0
+shear.bulk_y = 0.0
+shear.mode_x = 1
+shear.mode_y = 3
+shear.sharpness = 30.0
+shear.perturbation = 0.3
+shear.density_amplitude = 0.9999
+shear.history_file = "shear_failure_history.txt"
