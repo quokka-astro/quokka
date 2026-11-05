@@ -26,6 +26,7 @@
 #endif
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <limits>
 #include <map>
 #include <math/quadrature.hpp>
@@ -49,6 +50,9 @@ template <> struct Microphysics_Traits<DTypeFront_JAFF> : DefaultMicrophysicsTra
 	// The tableau is the CMake cache variable DTypeFront_JAFF_TABLEAU (default ROS2S).
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::DTYPEFRONT_JAFF_TABLEAU>;
 	static constexpr bool photochemistry = true;
+#ifdef ROSENBROCK_ANALYTIC_JAC_ONLY
+	static constexpr bool numerical_jacobian_fallback = false;
+#endif
 };
 
 using Network = Microphysics_Traits<DTypeFront_JAFF>::Network;
@@ -347,6 +351,7 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialCondition
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::string const filename = "dtype_front_radii.csv";
 		userData_.output_file_.open(filename);
+		userData_.output_file_ << std::setprecision(17);
 		userData_.output_file_ << "time,r_effective,r_analytical\n";
 	}
 }

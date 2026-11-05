@@ -21,12 +21,127 @@ using amrex::literals::operator""_rt;
 // as amrex::Array2D<amrex::Real, 0, num_eqs - 1, 0, num_eqs - 1>. The unroll length of the marked loops is the CMake
 // cache variable QUOKKA_NET_LOOP_UNROLL_LEN (default 1, no unrolling), Microphysics' NET_LOOP_UNROLL_LEN.
 
+#ifdef MICROPHYSICS_STATIC_PIVOT
+// Partial pivoting with only compile-time indices: every loop is fully unrolled and the row swaps are "if (i == l)"
+// selects instead of indexing by the runtime pivot row l. Same operations in the same order as dgesl/dgefa with
+// allow_pivot, so the results are identical, but a and b can stay in registers on GPUs.
+template <int num_eqs, typename Matrix>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgesl_static_pivot(const Matrix &a, const amrex::GpuArray<std::int16_t, num_eqs> &pivot,
+								 amrex::GpuArray<amrex::Real, num_eqs> &b)
+{
+#pragma unroll
+	for (int k = 0; k < num_eqs - 1; ++k) {
+		const int l = pivot[k];
+		amrex::Real t = b[k];
+#pragma unroll
+		for (int i = k + 1; i < num_eqs; ++i) {
+			if (i == l) {
+				t = b[i];
+				b[i] = b[k];
+				b[k] = t;
+			}
+		}
+#pragma unroll
+		for (int j = k + 1; j < num_eqs; ++j) {
+			b[j] += t * a(j, k);
+		}
+	}
+#pragma unroll
+	for (int k = num_eqs - 1; k >= 0; --k) {
+		b[k] = b[k] / a(k, k);
+		const amrex::Real t = -b[k];
+#pragma unroll
+		for (int j = 0; j < k; ++j) {
+			b[j] += t * a(j, k);
+		}
+	}
+}
+
+template <int num_eqs, typename Matrix>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_static_pivot(Matrix &a, amrex::GpuArray<std::int16_t, num_eqs> &pivot, int &info)
+{
+	info = 0;
+#pragma unroll
+	for (int k = 0; k < num_eqs - 1; ++k) {
+		int l = k;
+		amrex::Real dmax = std::abs(a(k, k));
+#pragma unroll
+		for (int i = k + 1; i < num_eqs; ++i) {
+			const amrex::Real ai = std::abs(a(i, k));
+			if (ai > dmax) {
+				l = i;
+				dmax = ai;
+			}
+		}
+		pivot[k] = static_cast<std::int16_t>(l);
+
+		amrex::Real alk = a(k, k); // a(l, k)
+#pragma unroll
+		for (int i = k + 1; i < num_eqs; ++i) {
+			if (i == l) {
+				alk = a(i, k);
+			}
+		}
+
+		if (alk != 0.0e0_rt) {
+			// interchange a(l, k) and a(k, k) if necessary
+#pragma unroll
+			for (int i = k + 1; i < num_eqs; ++i) {
+				if (i == l) {
+					a(i, k) = a(k, k);
+					a(k, k) = alk;
+				}
+			}
+
+			// compute multipliers
+			const amrex::Real tm = -1.0e0_rt / a(k, k);
+#pragma unroll
+			for (int j = k + 1; j < num_eqs; ++j) {
+				a(j, k) *= tm;
+			}
+
+			// row elimination with column indexing
+#pragma unroll
+			for (int j = k + 1; j < num_eqs; ++j) {
+				amrex::Real t = a(k, j); // a(l, j)
+#pragma unroll
+				for (int i = k + 1; i < num_eqs; ++i) {
+					if (i == l) {
+						t = a(i, j);
+						a(i, j) = a(k, j);
+						a(k, j) = t;
+					}
+				}
+#pragma unroll
+				for (int i = k + 1; i < num_eqs; ++i) {
+					a(i, j) += t * a(i, k);
+				}
+			}
+		} else {
+			info = k + 1;
+		}
+	}
+
+	pivot[num_eqs - 1] = static_cast<std::int16_t>(num_eqs - 1);
+
+	if (a(num_eqs - 1, num_eqs - 1) == 0.0e0_rt) {
+		info = num_eqs;
+	}
+}
+#endif
+
 /// Solves a x = b and overwrites b with x, where a and pivot hold the factors from dgefa<num_eqs, allow_pivot>.
 /// Without allow_pivot, pivot is not read.
 template <int num_eqs, bool allow_pivot, typename Matrix>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgesl(const Matrix &a, const amrex::GpuArray<std::int16_t, num_eqs> &pivot,
 						    amrex::GpuArray<amrex::Real, num_eqs> &b)
 {
+#ifdef MICROPHYSICS_STATIC_PIVOT
+	if constexpr (allow_pivot) {
+		dgesl_static_pivot<num_eqs>(a, pivot, b);
+		return;
+	}
+#endif
 	constexpr int nm1 = num_eqs - 1;
 
 	// solve a * x = b
@@ -77,6 +192,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa(Matrix &a, amrex::GpuArray<s
 	// triangular matrices and u is upper triangular.
 
 	// gaussian elimination with partial pivoting
+
+#ifdef MICROPHYSICS_STATIC_PIVOT
+	if constexpr (allow_pivot) {
+		dgefa_static_pivot<num_eqs>(a, pivot, info);
+		return;
+	}
+#endif
 
 	info = 0;
 	constexpr int nm1 = num_eqs - 1;

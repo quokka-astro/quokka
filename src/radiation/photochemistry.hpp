@@ -110,7 +110,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 #endif
 		}
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		auto const burn_cell = [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, RadSystem<problem_t>::gasDensity_index);
 			// dont do photochemistry in cells with densities below the minimum density specified
 			if (rho < min_density_allowed) {
@@ -310,7 +310,31 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 					}
 				}
 			}
-		});
+		};
+
+#if defined(PHOTOCHEM_MIN_WAVES) && defined(AMREX_USE_HIP)
+		// Launch with __launch_bounds__(256, PHOTOCHEM_MIN_WAVES) so that the compiler limits the registers to fit that
+		// many waves per SIMD (amrex::ParallelFor only sets the maximum block size).
+		{
+			const auto lo = amrex::lbound(indexRange);
+			const auto len = amrex::length(indexRange);
+			const int ncells = static_cast<int>(indexRange.numPts());
+			const int nblocks = (ncells + 255) / 256;
+			amrex::launch_global<256, PHOTOCHEM_MIN_WAVES><<<nblocks, 256, 0, amrex::Gpu::gpuStream()>>>([=] AMREX_GPU_DEVICE() noexcept {
+				const int icell = static_cast<int>(blockDim.x * blockIdx.x + threadIdx.x);
+				if (icell < ncells) {
+					const int kk = icell / (len.x * len.y);
+					const int r = icell - kk * len.x * len.y;
+					const int jj = r / len.x;
+					const int ii = r - jj * len.x;
+					burn_cell(ii + lo.x, jj + lo.y, kk + lo.z);
+				}
+			});
+			AMREX_GPU_ERROR_CHECK();
+		}
+#else
+		amrex::ParallelFor(indexRange, burn_cell);
+#endif
 
 #ifdef AMREX_USE_HIP
 		amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.

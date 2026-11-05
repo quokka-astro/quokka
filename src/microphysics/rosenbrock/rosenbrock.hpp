@@ -20,6 +20,13 @@
 #include "microphysics/microphysics_traits.hpp"
 #include "microphysics/rosenbrock/rosenbrock_state.hpp"
 
+// Full unrolling of the stage and decompose loops, so that the stage indices are compile-time constants.
+#ifdef ROSENBROCK_UNROLL_STAGES
+#define ROSENBROCK_UNROLL _Pragma("unroll")
+#else
+#define ROSENBROCK_UNROLL
+#endif
+
 namespace quokka::microphysics
 {
 
@@ -257,7 +264,9 @@ template <typename Layout, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 {
 	constexpr int int_neqs = Layout::neqs;
 
+	ROSENBROCK_UNROLL
 	for (int j = 0; j < int_neqs; ++j) {
+		ROSENBROCK_UNROLL
 		for (int i = 0; i < int_neqs; ++i) {
 			rstate.jac(i, j) = -rstate.jac(i, j);
 		}
@@ -387,11 +396,14 @@ rosenbrock_integrator(BurnT &state, RosenbrockState<IntegratorLayout<problem_t, 
 			solve<Layout>(rstate, rstate.k[0]);
 
 			bool valid_stage_state = true;
+			ROSENBROCK_UNROLL
 			for (int istage = 2; istage <= Tableau::stages; ++istage) {
+				ROSENBROCK_UNROLL
 				for (int n = 0; n < int_neqs; ++n) {
 					rstate.ynew[n] = rstate.y[n];
 					rstate.k[istage - 1][n] = 0.0_rt;
 
+					ROSENBROCK_UNROLL
 					for (int jstage = 1; jstage < istage; ++jstage) {
 						const amrex::Real akj = rstate.k[jstage - 1][n];
 						rstate.ynew[n] += Tableau::a(istage, jstage) * akj;
@@ -421,10 +433,12 @@ rosenbrock_integrator(BurnT &state, RosenbrockState<IntegratorLayout<problem_t, 
 				continue;
 			}
 
+			ROSENBROCK_UNROLL
 			for (int n = 0; n < int_neqs; ++n) {
 				amrex::Real y_update = 0.0_rt;
 				amrex::Real err = 0.0_rt;
 
+				ROSENBROCK_UNROLL
 				for (int istage = 1; istage <= Tableau::stages; ++istage) {
 					const amrex::Real aki = rstate.k[istage - 1][n];
 					y_update += Tableau::b(istage) * aki;

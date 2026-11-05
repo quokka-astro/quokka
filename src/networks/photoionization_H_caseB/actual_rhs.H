@@ -31,11 +31,72 @@
 // RADIATION { ENABLED -> True }
 // }
 
+#ifdef PHOTOCHEM_FAST_RATES
+// SPEED PROTOTYPE (hand edit of jaff output; must move to the generator before it can be kept). All powers of T come
+// from one log(T): T^p = exp(p ln T), and the derivative of c T^p is p c T^p / T, so the Jacobian needs no extra
+// transcendentals either. The piecewise CLE cooling coefficient (Frazer & Heitsch 2019) c T^p: returns c T^p and sets p.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto photochem_fast_cle(const amrex::Real T, const amrex::Real lnT, amrex::Real &p) -> amrex::Real
+{
+	amrex::Real c = 0.0;
+	if (T < 100.0) {
+		c = 3.47e-29;
+		p = 1.915;
+	} else if (T < 630.957344480193) {
+		c = 2.34e-26;
+		p = 0.5;
+	} else if (T < 3981.0717055349733) {
+		c = 1.11e-24;
+		p = -0.099000000000000005;
+	} else if (T < 10000.0) {
+		c = 1.08e-32;
+		p = 2.1269999999999998;
+	} else if (T < 31622.776601683792) {
+		c = 2.6700000000000001e-30;
+		p = 1.5289999999999999;
+	} else if (T < 100000.0) {
+		c = 1.7399999999999998e-24;
+		p = 0.23699999999999999;
+	} else if (T < 1000000.0) {
+		c = 1.1e-21;
+		p = -0.32300000000000001;
+	} else {
+		c = 7.4900000000000001e-21;
+		p = -0.46200000000000002;
+	}
+	return c * std::exp(p * lnT);
+}
+#endif
+
 template <typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE void
 actual_rhs(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
 	static_assert(BurnT::traits::integrate_rad_flux, "a jaff network needs Microphysics_Traits::integrate_rad_flux");
+#ifdef PHOTOCHEM_FAST_RATES
+	{
+		const amrex::Real T = state.T;
+		const amrex::Real lnT = std::log(T);
+		const amrex::Real cse0 = 3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0];
+		const amrex::Real cse1 = std::sqrt(T);
+		const amrex::Real cse2 = 1.0 / T;
+		const amrex::Real cse3 = cse1 * std::exp(-157896.75724967025 * cse2) * state.xn[0] * state.xn[2];
+		const amrex::Real cse4 = cse0 + 5.84e-11 * cse3 - 1.6594178159829075e-10 * std::exp(-0.69999999999999996 * lnT) * state.xn[1] * state.xn[2];
+		const amrex::Real cse6 = state.xn[1] * state.xn[2];
+		amrex::Real p_cle = 0.0;
+		const amrex::Real cle = photochem_fast_cle(T, lnT, p_cle);
+		const amrex::Real rec = (T < 100.0) ? 0.0 : 8.4219589e-26 * std::exp(0.10999999999999999 * lnT);
+		ydot[0] = -cse4;
+		ydot[1] = cse4;
+		ydot[2] = cse4;
+		ydot[3] = 2.5316840555840673e-29 * state.c_hat * state.xn[0] * state.rn[2 * 0] - 1.27251276978816e-21 * cse3 -
+			  cse6 * (1.8551e-27 * cse1 + cle) - cse6 * rec -
+			  (2.8000000000000002e-28 * cse1 * std::exp(-92.0 * cse2) + 2.0000000000000002e-19 * std::exp(-118400.0 / (T + 1000.0))) * state.xn[0] *
+			      state.xn[0] +
+			  2.0000000000000001e-26 * state.xn[0];
+		ydot[4] = -cse0;
+		ydot[5] = -3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0 + 1];
+	}
+#else
 	// $$JAFF REPEAT idx, rhs, cse IN rhses { USE quokka }
 	const amrex::Real cse0 = 3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0];
 	const amrex::Real cse1 = std::sqrt(state.T);
@@ -70,6 +131,7 @@ actual_rhs(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics
 	ydot[4] = -cse0;
 	ydot[5] = -3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[2 * 0 + 1];
 	// $$JAFF END
+#endif
 	// $$JAFF SUB nspec
 	ydot[3] /= state.rho;
 	// $$JAFF END
@@ -80,6 +142,85 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE v
 	using Layout = quokka::microphysics::IntegratorLayout<typename BurnT::problem_type, BurnT>;
 	static_assert(BurnT::traits::integrate_rad_flux, "a jaff network needs Microphysics_Traits::integrate_rad_flux");
 
+#ifdef PHOTOCHEM_FAST_RATES
+	{
+		const amrex::Real T = state.T;
+		const amrex::Real lnT = std::log(T);
+		const amrex::Real cse0 =
+		    1.0 / (2.0709734999998963e-16 * state.xn[0] + 2.0709734999998963e-16 * state.xn[1] + 2.0709734999998963e-16 * state.xn[2]);
+		const amrex::Real cse1 = state.xn[1] * state.xn[2];
+		const amrex::Real cse3 = 1.0 / T;
+		const amrex::Real cse7 = std::sqrt(T);
+		const amrex::Real cse8 = 1.0 / cse7;
+		const amrex::Real cse2 = cse3 * cse8; // T^-1.5
+		const amrex::Real cse4 = std::exp(-157896.75724967025 * cse3);
+		const amrex::Real cse5 = cse4 * state.xn[0] * state.xn[2];
+		const amrex::Real cse6 = cse2 * cse5;
+		const amrex::Real cse9 = cse5 * cse8;
+		const amrex::Real Tm07 = std::exp(-0.69999999999999996 * lnT);
+		const amrex::Real cse10 = 1.1615924711880352e-10 * cse1 * (Tm07 * cse3) + 9.2211706233807419e-6 * cse6 + 2.92e-11 * cse9;
+		const amrex::Real cse11 = -cse0 * cse10;
+		const amrex::Real cse12 = 2.0709734999998963e-16 * T;
+		const amrex::Real cse13 = cse11 * cse12;
+		const amrex::Real cse14 = 3.2385396673401957e-18 * state.c_hat;
+		const amrex::Real cse15 = cse14 * state.rn[2 * 0];
+		const amrex::Real cse16 = cse4 * cse7;
+		const amrex::Real cse17 = 5.84e-11 * cse16;
+		const amrex::Real cse18 = cse15 + cse17 * state.xn[2];
+		const amrex::Real cse19 = 1.6594178159829075e-10 * Tm07;
+		const amrex::Real cse20 = cse19 * state.xn[2];
+		const amrex::Real cse21 = cse19 * state.xn[1];
+		const amrex::Real cse22 = cse17 * state.xn[0];
+		const amrex::Real cse23 = cse14 * state.xn[0];
+		const amrex::Real cse24 = -cse23;
+		const amrex::Real cse25 = cse0 * cse10;
+		const amrex::Real cse26 = cse12 * cse25;
+		const amrex::Real cse27 = cse18 - cse26;
+		const amrex::Real cse28 = -cse20 - cse26;
+		const amrex::Real cse29 = -cse21 + cse22 - cse26;
+		const amrex::Real cse30 = 1.27251276978816e-21 * cse16;
+		const amrex::Real cse31 = T + 1000.0;
+		const amrex::Real cse32 = std::exp(-118400.0 / cse31);
+		const amrex::Real cse33 = std::exp(-92.0 * cse3);
+		const amrex::Real T011 = (T < 100.0) ? 0.0 : std::exp(0.10999999999999999 * lnT);
+		amrex::Real p_cle = 0.0;
+		const amrex::Real cle = photochem_fast_cle(T, lnT, p_cle);
+		const amrex::Real cse42 =
+		    cse0 *
+		    (-cse1 * (9.2755000000000002e-28 * cse8 + p_cle * cle * cse3) - cse1 * (9.2641547899999994e-27 * T011 * cse3) -
+		     2.0092563990834663e-16 * cse6 - 6.3625638489408001e-22 * cse9 -
+		     state.xn[0] * state.xn[0] *
+			 (2.5760000000000003e-26 * cse2 * cse33 + 1.4000000000000001e-28 * cse33 * cse8 + 2.3680000000000003e-14 * cse32 / (cse31 * cse31)));
+		const amrex::Real cse43 = cse12 * cse42;
+		const amrex::Real cse44 = 8.4219589e-26 * T011;
+		const amrex::Real cse45 = 1.8551e-27 * cse7 + cle;
+		jac(0, 0) = -cse13 - cse18;
+		jac(0, 1) = -cse13 + cse20;
+		jac(0, 2) = -cse13 + cse21 - cse22;
+		jac(0, 3) = cse11;
+		jac(0, 4) = cse24;
+		jac(1, 0) = cse27;
+		jac(1, 1) = cse28;
+		jac(1, 2) = cse29;
+		jac(1, 3) = cse25;
+		jac(1, 4) = cse23;
+		jac(2, 0) = cse27;
+		jac(2, 1) = cse28;
+		jac(2, 2) = cse29;
+		jac(2, 3) = cse25;
+		jac(2, 4) = cse23;
+		jac(3, 0) = 2.5316840555840673e-29 * state.c_hat * state.rn[2 * 0] - cse30 * state.xn[2] - cse43 -
+			    2 * state.xn[0] * (2.0000000000000002e-19 * cse32 + 2.8000000000000002e-28 * cse33 * cse7) + 2.0000000000000001e-26;
+		jac(3, 1) = -cse43 - cse44 * state.xn[2] - cse45 * state.xn[2];
+		jac(3, 2) = -cse30 * state.xn[0] - cse43 - cse44 * state.xn[1] - cse45 * state.xn[1];
+		jac(3, 3) = cse42;
+		jac(3, 4) = 2.5316840555840673e-29 * state.c_hat * state.xn[0];
+		jac(4, 0) = -cse15;
+		jac(4, 4) = cse24;
+		jac(5, 0) = -cse14 * state.rn[2 * 0 + 1];
+		jac(5, 5) = cse24;
+	}
+#else
 	// $$JAFF REPEAT idx, expr, cse IN jacobian { USE quokka }
 	const amrex::Real cse0 = 1.0 / (2.0709734999998963e-16 * state.xn[0] + 2.0709734999998963e-16 * state.xn[1] + 2.0709734999998963e-16 * state.xn[2]);
 	const amrex::Real cse1 = state.xn[1] * state.xn[2];
@@ -178,6 +319,7 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE v
 	jac(5, 0) = -cse14 * state.rn[2 * 0 + 1];
 	jac(5, 5) = cse24;
 	// $$JAFF END
+#endif
 	// jaff's energy row and column are those of E = rho e: the row is d(dE/dt)
 	// and the column d/dE. Change them to e, with rho fixed during the burn: the
 	// row divides by rho, the column multiplies by rho, and d(de/dt)/de =
