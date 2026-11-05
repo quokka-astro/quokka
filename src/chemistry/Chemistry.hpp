@@ -15,14 +15,11 @@
 #include "AMReX_GpuQualifiers.H"
 
 // The definition of computeChemistry, declared in QuokkaSimulation.hpp. A problem with chemistry includes this header;
-// problems without it do not, because the definition uses spmasses, which only the chemistry EOSs declare.
+// problems without it do not.
 
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
 #include "hydro/EOS.hpp"
 #include "microphysics/burn_state.hpp"
 #include "microphysics/burner.hpp"
@@ -35,10 +32,7 @@ auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density
 		      const quokka::microphysics::IntegratorParams integrator_params) -> bool
 {
 	using Network = typename Microphysics_Traits<problem_t>::Network;
-
-	// Until the EOS reads its species from the network (the EOS port), it sizes its composition by the species table on
-	// the include path (network_properties.H), so the problem's network must match that table.
-	static_assert(Network::NumSpec == NumSpec, "The problem's Network does not match the species table of the EOS it is built with.");
+	using GasEOS = quokka::EOS<problem_t>;
 
 	// Start off by assuming a successful burn.
 	int burn_success = 1;
@@ -78,7 +72,7 @@ auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density
 			int burn_failed = 0;
 
 			for (int nn = 0; nn < Network::NumSpec; ++nn) {
-				inmfracs[nn] = chem[nn] * rho / spmasses[nn];
+				inmfracs[nn] = chem[nn] * rho / Network::SpeciesMass()[nn];
 				chemstate.xn[nn] = inmfracs[nn];
 			}
 
@@ -98,7 +92,7 @@ auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density
 			chemstate.e = Eint / rho;
 
 			// call the EOS to set initial internal energy e
-			eos(eos_input_re, chemstate);
+			GasEOS::Solve(GasEOS::Input::RhoE, chemstate);
 
 			// do the actual integration
 			quokka::microphysics::Burn<problem_t>(chemstate, dt, integrator_params);
@@ -118,18 +112,18 @@ auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density
 			// ensure positivity and normalize
 			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], Network::SmallX());
-				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
+				inmfracs[nn] = Network::SpeciesMass()[nn] * chemstate.xn[nn] / chemstate.rho;
 				insum += inmfracs[nn];
 			}
 
 			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				inmfracs[nn] /= insum;
 				// update the number densities with conserved mass fractions
-				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
+				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / Network::SpeciesMass()[nn];
 			}
 
 			// get the updated specific eint
-			eos(eos_input_rt, chemstate);
+			GasEOS::Solve(GasEOS::Input::RhoT, chemstate);
 
 			// get dEint
 			// Quokka uses rho*eint
