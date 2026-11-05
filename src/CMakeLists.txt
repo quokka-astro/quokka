@@ -133,7 +133,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 # src/problems/*/CMakeLists.txt.
 include(${CMAKE_SOURCE_DIR}/src/networks/NetworkRegistry.cmake)
 # Only chemistry and photochemistry problems use Microphysics; each sets up its own network and include directories.
-# gcem: header-only constexpr math library (https://github.com/kthohr/gcem, Apache-2.0), vendored in extern/gcem
+# gcem: header-only constexpr math library (https://github.com/kthohr/gcem, Apache-2.0), git submodule extern/gcem pinned at v1.13.1
 include_directories(${CMAKE_SOURCE_DIR}/extern/gcem/include)
 
 if(TARGET amrex_hydro_api)
