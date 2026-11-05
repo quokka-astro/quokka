@@ -19,14 +19,15 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
+#include "hydro/EOS.hpp"
+#include "hydro/EOSFloors.hpp"
 #include "microphysics/integrator_errors.hpp"
 #include "microphysics/integrator_params.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "microphysics/ode_system.hpp"
 
-// eos() is still Microphysics'. actual_rhs and actual_jac are members of the problem's network type, which the problem
-// file includes.
-#include "eos.H"
+// The burn state's EOS is the problem's (quokka::EOS, the one its network names). actual_rhs and actual_jac are members
+// of the problem's network type, which the problem file includes.
 
 namespace quokka::microphysics
 {
@@ -51,10 +52,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void update_thermodynamics(BurnT &state
 		state.c_hat = int_state.c_hat;
 	}
 
-	// Get T from e (also updates composition quantities).
+	// Get T from e.
 
 	if constexpr (System::traits::call_eos_in_rhs) {
-		eos(eos_input_re, state);
+		using GasEOS = quokka::EOS<typename BurnT::problem_type>;
+		GasEOS::Solve(GasEOS::Input::RhoE, state);
 	}
 }
 
@@ -172,7 +174,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 	// Only do the burn if the incoming temperature is within the temperature
 	// bounds. Otherwise set the RHS to zero.
 
-	const bool in_bounds = !(state.T <= EOSData::mintemp || state.T >= System::traits::max_temp);
+	const bool in_bounds = !(state.T <= quokka::eos_floors::min_temp || state.T >= System::traits::max_temp);
 
 	if (in_bounds) {
 		state.time = time;
@@ -209,7 +211,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 	// Only do the burn if the incoming temperature is within the temperature
 	// bounds. Otherwise set the Jacobian to zero and return.
 
-	if (state.T <= EOSData::mintemp || state.T >= System::traits::max_temp) {
+	if (state.T <= quokka::eos_floors::min_temp || state.T >= System::traits::max_temp) {
 		pd = MatrixType{};
 		return;
 	}
@@ -276,7 +278,8 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amr
 	// We assume that (rho, T) coming in are valid, do an EOS call
 	// to fill the rest of the thermodynamic variables.
 
-	eos(eos_input_rt, state);
+	using GasEOS = quokka::EOS<typename BurnT::problem_type>;
+	GasEOS::Solve(GasEOS::Input::RhoT, state);
 
 	if constexpr (System::q_dust) {
 		state.e_dust_absorbed = 0.0_rt;

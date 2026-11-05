@@ -12,19 +12,15 @@
 #include "AMReX_GpuQualifiers.H"
 
 // The definition of computePhotoChemistry, declared in QuokkaSimulation.hpp. A problem with photochemistry includes this
-// header; problems without it do not, because the definition uses spmasses, which only the chemistry EOSs declare.
+// header; problems without it do not.
 
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
 #include "hydro/EOS.hpp"
 #include "microphysics/burn_state.hpp"
 #include "microphysics/burner.hpp"
 #include "microphysics/ode_system.hpp"
-#include "network_properties.H"
 #include "physics_numVars.hpp"
 
 namespace quokka::photochemistry
@@ -62,13 +58,11 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 	using Network = typename Microphysics_Traits<problem_t>::Network;
 	using System = quokka::microphysics::ODESystem<problem_t, quokka::microphysics::BurnState<problem_t>>;
+	using GasEOS = quokka::EOS<problem_t>;
 
 	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || Network::NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
 		      "Network::NumThermalBands must equal RadSystem<problem_t>::nGroupsThermal_ (nGroups_ - NChemBands) when "
 		      "ISM_Traits::thermal_band_photochemistry is true.");
-	// Until the EOS reads its species from the network (the EOS port), it sizes its composition by the species table on
-	// the include path (network_properties.H), so the problem's network must match that table.
-	static_assert(Network::NumSpec == NumSpec, "The problem's Network does not match the species table of the EOS it is built with.");
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.
@@ -145,7 +139,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			int burn_failed = 0;
 			photochemstate.c_hat = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
 			for (int nn = 0; nn < Network::NumSpec; ++nn) {
-				photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
+				photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / Network::SpeciesMass()[nn];
 			}
 			// without integrate_rad_flux, the flux attenuation is derived from the change in n_gamma
 			[[maybe_unused]] amrex::GpuArray<Real, Network::NumChemBands> n_gamma_initial{};
@@ -174,7 +168,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			}
 
 			// call the EOS to set the temperature
-			eos(eos_input_re, photochemstate);
+			GasEOS::Solve(GasEOS::Input::RhoE, photochemstate);
 
 			// do the actual integration
 			quokka::microphysics::Burn<problem_t>(photochemstate, dt, integrator_params);
@@ -202,10 +196,10 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			}
 
 			// get the updated specific eint
-			eos(eos_input_re, photochemstate);
+			GasEOS::Solve(GasEOS::Input::RhoE, photochemstate);
 
 			for (int nn = 0; nn < Network::NumSpec; ++nn) {
-				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
+				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * Network::SpeciesMass()[nn];
 			}
 			// Update the chem-band photon number density, attenuate the flux by the burn's rn[1] factor or algebraically using the photon number
 			// density if Microphysics_Traits::integrate_rad_flux is false, and accumulate the momentum the gas absorbs from the O(v/c) work term:
