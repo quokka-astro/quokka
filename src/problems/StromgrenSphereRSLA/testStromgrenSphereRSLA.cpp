@@ -25,10 +25,6 @@
 #include <map>
 #include <string>
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
 struct StromgrenSphere {};
 
 constexpr double c_hat = C::c_light / 100.0;
@@ -75,10 +71,10 @@ auto compute_effective_radius(amrex::MultiFab const &state_mf, amrex::GpuArray<a
 	const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
-		const amrex::Real n_HI =
-		    state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Network::Species::H)) / spmasses[Network::Species::H];
+		const amrex::Real n_HI = state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Network::Species::H)) /
+					 Network::SpeciesMass()[Network::Species::H];
 		const amrex::Real n_HII = state[box_no](i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Network::Species::H_p)) /
-					  spmasses[Network::Species::H_p];
+					  Network::SpeciesMass()[Network::Species::H_p];
 		const amrex::Real denom = n_HI + n_HII;
 		if (denom <= 0.0_rt) {
 			return 0.0_rt;
@@ -205,9 +201,6 @@ template <> struct SimulationData<StromgrenSphere> {
 
 template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	eos_rp::ReadParameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
 	userData_.temperature = 1.0e4;
@@ -262,12 +255,12 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+		rhotot += state.xn[n] * Network::SpeciesMass()[n];
 	}
 	state.rho = rhotot;
 
 	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	quokka::EOS<StromgrenSphere>::Solve(quokka::EOS<StromgrenSphere>::Input::RhoT, state);
 	const auto Egas0 = state.e * rhotot;
 
 	// loop over the grid and set the initial condition
@@ -286,7 +279,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, RadSystem<StromgrenSphere>::x3GasMomentum_index) = 0.0_rt;
 		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + nn) =
-			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			    state.xn[nn] * Network::SpeciesMass()[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }

@@ -27,10 +27,6 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
 struct PhotoionizationStreamingProblem {};
 
 constexpr double c = C::c_light;    // speed of light
@@ -85,9 +81,6 @@ template <> struct SimulationData<PhotoionizationStreamingProblem> {
 
 template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	eos_rp::ReadParameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("photoionization");
 	userData_.temperature = 1.0e3;
@@ -109,10 +102,11 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	state.xn[Network::Species::e] = userData_.n_e_init;
 	state.xn[Network::Species::H] = userData_.n_HI_init;
 	state.xn[Network::Species::H_p] = userData_.n_HII_init;
-	rhotot = state.xn[Network::Species::e] * spmasses[Network::Species::e] + state.xn[Network::Species::H] * spmasses[Network::Species::H] +
-		 state.xn[Network::Species::H_p] * spmasses[Network::Species::H_p];
+	rhotot = state.xn[Network::Species::e] * Network::SpeciesMass()[Network::Species::e] +
+		 state.xn[Network::Species::H] * Network::SpeciesMass()[Network::Species::H] +
+		 state.xn[Network::Species::H_p] * Network::SpeciesMass()[Network::Species::H_p];
 	state.rho = rhotot;
-	eos(eos_input_rt, state);
+	quokka::EOS<PhotoionizationStreamingProblem>::Solve(quokka::EOS<PhotoionizationStreamingProblem>::Input::RhoT, state);
 
 	const amrex::Real t = 0.0;
 	const amrex::Real n_e = userData_.n_e_init;
@@ -157,11 +151,11 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+		rhotot += state.xn[n] * Network::SpeciesMass()[n];
 	}
 	state.rho = rhotot;
 	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	quokka::EOS<PhotoionizationStreamingProblem>::Solve(quokka::EOS<PhotoionizationStreamingProblem>::Input::RhoT, state);
 
 	const auto Erad0 = userData_.n_photon * RadSystem<PhotoionizationStreamingProblem>::GetChemBandQuanta(0);
 	const auto Egas0 = state.e * rhotot; // initial_Egas;
@@ -182,7 +176,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 		state_cc(i, j, k, RadSystem<PhotoionizationStreamingProblem>::x3GasMomentum_index) = 0.;
 		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + nn) =
-			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			    state.xn[nn] * Network::SpeciesMass()[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
@@ -195,20 +189,20 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 		const amrex::Real time = tNew_[0];
 		const amrex::Real Erad_i = values.at(RadSystem<PhotoionizationStreamingProblem>::radEnergy_index)[0];
 		const amrex::Real n_e = values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + static_cast<int>(Network::Species::e))[0] /
-					spmasses[Network::Species::e];
+					Network::SpeciesMass()[Network::Species::e];
 		const amrex::Real n_HI = values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + static_cast<int>(Network::Species::H))[0] /
-					 spmasses[Network::Species::H];
+					 Network::SpeciesMass()[Network::Species::H];
 		const amrex::Real n_HII = values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + static_cast<int>(Network::Species::H_p))[0] /
-					  spmasses[Network::Species::H_p];
+					  Network::SpeciesMass()[Network::Species::H_p];
 		const amrex::Real n_gamma = Erad_i / RadSystem<PhotoionizationStreamingProblem>::GetChemBandQuanta(0);
 		const amrex::Real rho = values.at(RadSystem<PhotoionizationStreamingProblem>::gasDensity_index)[0];
 		const amrex::Real Egas_i = values.at(RadSystem<PhotoionizationStreamingProblem>::gasEnergy_index)[0];
 		const amrex::Real Eint_i = values.at(RadSystem<PhotoionizationStreamingProblem>::gasInternalEnergy_index)[0];
 		quokka::optional<amrex::GpuArray<amrex::Real, Network::NumSpec>> massScalars;
 		amrex::GpuArray<amrex::Real, Network::NumSpec> scalars{};
-		scalars[Network::Species::e] = n_e * spmasses[Network::Species::e];
-		scalars[Network::Species::H] = n_HI * spmasses[Network::Species::H];
-		scalars[Network::Species::H_p] = n_HII * spmasses[Network::Species::H_p];
+		scalars[Network::Species::e] = n_e * Network::SpeciesMass()[Network::Species::e];
+		scalars[Network::Species::H] = n_HI * Network::SpeciesMass()[Network::Species::H];
+		scalars[Network::Species::H_p] = n_HII * Network::SpeciesMass()[Network::Species::H_p];
 		massScalars = scalars;
 		const amrex::Real temp = quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Eint_i, massScalars);
 
