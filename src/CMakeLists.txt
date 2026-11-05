@@ -129,13 +129,6 @@ include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/extern/gcem/include)
 
-# The vendored EOS (extern/eos). Problems without chemistry use its gamma_law backend with the general_null species
-# table, set here for the whole directory; problems with chemistry call quokka_add_eos() for theirs.
-include(${CMAKE_SOURCE_DIR}/extern/eos/quokka_eos.cmake)
-quokka_eos_include_dirs(quokka_default_eos_dirs gamma_law general_null)
-include_directories(${quokka_default_eos_dirs})
-quokka_eos_sources(quokka_default_eos_sources gamma_law)
-
 if(TARGET amrex_hydro_api)
   link_libraries(amrex_hydro_api)
 endif()
@@ -155,7 +148,7 @@ link_libraries(quokka_networks)
 
 include(CTest)
 
-set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
+set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagBase.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DerivedFieldBase.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DerivedParticleDeposition.cpp"
@@ -171,10 +164,8 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${openPMDSources}")
 
 if(AMReX_SPACEDIM EQUAL 3)
-  list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")
-  list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
+  list(APPEND QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")
+  list(APPEND QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
 endif()
-
-set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${quokka_default_eos_sources}")
 
 add_subdirectory(problems)

@@ -35,8 +35,6 @@ jobs:
         # belong upstream. So is the primordial_chem network, whose right-hand side and Jacobian are generated (pynucastro).
         exclude: "extern/turbulence/*,\
           extern/gcem/*,\
-          extern/eos/EOS/*,\
-          extern/eos/interfaces/*,\
           src/networks/primordial_chem/network.hpp"
         build_dir: build
         apt_packages: libopenmpi-dev,libhdf5-mpi-dev,python3-dev,python3-numpy,python3-matplotlib
