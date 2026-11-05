@@ -1,5 +1,8 @@
 // ABOUTME: Provides a free function template for computing volume-weighted integrals over AMR levels.
 // ABOUTME: Passes both cell-centered and face-centered state arrays to the user-supplied integrand lambda.
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef QUOKKA_VOLUME_INTEGRAL_HPP
 #define QUOKKA_VOLUME_INTEGRAL_HPP
 

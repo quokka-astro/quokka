@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadhydroBB.cpp
 /// \brief Defines a test problem for blackbody spectrum in a uniform advecting medium.
 ///
