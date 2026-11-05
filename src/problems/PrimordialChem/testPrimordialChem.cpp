@@ -37,10 +37,6 @@
 #include "networks/primordial_chem/network.hpp"
 #include "radiation/radiation_system.hpp"
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
 using amrex::Real;
 
 struct PrimordialChemTest {}; // dummy type to allow compile-type polymorphism via template specialization
@@ -79,9 +75,6 @@ template <> struct SimulationData<PrimordialChemTest> {
 
 template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	eos_rp::ReadParameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("primordial_chem");
 	userData_.temperature = 1e1;
@@ -186,7 +179,7 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+		rhotot += state.xn[n] * Network::SpeciesMass()[n];
 	}
 
 	state.rho = rhotot;
@@ -196,18 +189,18 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 	std::array<Real, Network::NumSpec> mfracs = {-1.0};
 	Real msum = 0.0_rt;
 	for (int n = 0; n < Network::NumSpec; ++n) {
-		mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
+		mfracs[n] = state.xn[n] * Network::SpeciesMass()[n] / rhotot;
 		msum += mfracs[n];
 	}
 
 	for (int n = 0; n < Network::NumSpec; ++n) {
 		mfracs[n] /= msum;
 		// use the normalized mass fractions to obtain the corresponding number densities
-		state.xn[n] = mfracs[n] * rhotot / spmasses[n];
+		state.xn[n] = mfracs[n] * rhotot / Network::SpeciesMass()[n];
 	}
 
 	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	quokka::EOS<PrimordialChemTest>::Solve(quokka::EOS<PrimordialChemTest>::Input::RhoT, state);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {

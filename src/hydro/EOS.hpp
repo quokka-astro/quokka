@@ -357,6 +357,23 @@ template <typename problem_t> struct EOSMultigamma : EOSBase {
 	/// Which of T, e and p is given with rho and the species.
 	enum class Input : std::uint8_t { RhoT, RhoE, RhoP };
 
+	/// A gas state with every quantity Solve() sets: the hydro uses it, and so can a problem that needs a pressure.
+	struct GasState {
+		amrex::Real rho{};
+		amrex::Real T{};
+		amrex::Real p{};
+		amrex::Real e{};				     ///< specific internal energy
+		amrex::GpuArray<amrex::Real, Network::NumSpec> xn{}; ///< number densities
+		amrex::Real mu{};
+		amrex::Real dpdT{};
+		amrex::Real dpdr{};
+		amrex::Real dpde{};
+		amrex::Real dedT{};
+		amrex::Real dedr{};
+		amrex::Real cs{};
+		amrex::Real G{};
+	};
+
 	/// Complete a state from rho, the species' number densities xn and one of T, e (specific) and p, as Microphysics'
 	/// eos() did with its photoionization backend: rho is clamped to the floors (quokka::eos_floors), and so is T when T
 	/// is given; an e or p outside its bounds resets the state to its clamped rho and T. Works on any state with rho, T,
@@ -567,23 +584,6 @@ template <typename problem_t> struct EOSMultigamma : EOSBase {
 	}
 
       private:
-	/// The gas state of one evaluation from the hydro: the inputs and everything Solve() sets.
-	struct GasState {
-		amrex::Real rho{};
-		amrex::Real T{};
-		amrex::Real p{};
-		amrex::Real e{};				     ///< specific internal energy
-		amrex::GpuArray<amrex::Real, Network::NumSpec> xn{}; ///< number densities
-		amrex::Real mu{};
-		amrex::Real dpdT{};
-		amrex::Real dpdr{};
-		amrex::Real dpde{};
-		amrex::Real dedT{};
-		amrex::Real dedr{};
-		amrex::Real cs{};
-		amrex::Real G{};
-	};
-
 	/// The species' number densities from the mass scalars (partial densities); -1 without them.
 	AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static void SetSpecies(GasState &state,
 									quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars)

@@ -58,14 +58,6 @@ template <typename problem_t> struct BurnState : detail::DustChemicalBandAbsorpt
 
 	amrex::Real dedT{}; ///< read by the networks' Jacobians
 
-	// Written by Microphysics' eos().
-	amrex::Real dedr{};
-	amrex::Real mu{};
-	amrex::Real mu_e{};
-	amrex::Real y_e{};
-	amrex::Real abar{};
-	amrex::Real zbar{};
-
 	amrex::Real time{}; ///< written by the integrator; nothing reads it
 
 	// the cell, for the failure output

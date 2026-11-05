@@ -88,7 +88,7 @@ namespace thermophotochemistry
 using amrex::Real;
 using amrex::literals::operator""_rt;
 
-// Species indices (xn[]/spmasses[]) come from the Species enum above; ydot[]/jac() use the same indices.
+// Species indices (xn[]/SpeciesMass()) come from the Species enum above; ydot[]/jac() use the same indices.
 // net_ienuc (the ODE system's energy_row, NumSpec) is the specific internal energy row/column.
 // Radiation rows/columns follow net_ienuc: photon number density, then
 // (with Microphysics_Traits::integrate_rad_flux) photon flux.
