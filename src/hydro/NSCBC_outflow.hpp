@@ -133,7 +133,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_xdir_dQ_data(const amrex::In
 		if (consVar.contains(ibr, j, k + 1) && consVar.contains(ibr, j, k - 1)) {
 			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k + 1);
 			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k - 1);
-			dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(2));
+			dQ_dz_data = (Qp - Qm) / (2.0 * geom.CellSize(2));
 		}
 	}
 
@@ -428,8 +428,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 			Q_im1 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im1);
 			Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im2);
 			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im3);
-			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im4);
-			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im5);
+			Q_im4 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im4);
+			Q_im5 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im5);
 		}
 
 		// reflect velocities
