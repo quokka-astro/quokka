@@ -91,8 +91,6 @@ template <> struct ISM_Traits<DTypeFront1D> {
 };
 
 template <> struct SimulationData<DTypeFront1D> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -431,8 +429,6 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 
 	// parmparse species, temperature, and flux
 	amrex::ParmParse const pp("photoionize");
-	userData_.small_temp = 1e-2;
-	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e2;
 	userData_.n_e_init = 1.0e-10_rt;
 	userData_.n_HI_init = 1.0e2_rt;
@@ -442,8 +438,6 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 	userData_.flux_ir = 0.0_rt;
 	pp.query("kappa_ir", kappa_ir);
 	pp.query("kappa_optical", kappa_optical);
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("n_e_init", userData_.n_e_init);
 	pp.query("n_HI_init", userData_.n_HI_init);
@@ -470,8 +464,6 @@ template <> void QuokkaSimulation<DTypeFront1D>::preCalculateInitialConditions()
 		userData_.l_ode_last_u_ = l_d * c_s;
 		amrex::Print() << "Stromgren column l_s = " << l_s << " cm, ionized sound speed c_s = " << c_s << " cm/s\n";
 	}
-
-	eos_init(userData_.small_temp, userData_.small_dens);
 }
 
 template <>

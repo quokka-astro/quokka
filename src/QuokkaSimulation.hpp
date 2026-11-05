@@ -13,6 +13,7 @@
 #include "AMReX_Tuple.H"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
+#include "hydro/EOSFloors.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -297,9 +298,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
 		// read the EOS parameters
 		eos_rp::ReadParameters();
-		// initialize the EOS
-		amrex::Real small_temp = 1e-10;
-		amrex::Real small_dens = 1e-100;
+		// the EOS floors (eos.min_temp, eos.min_dens), also given to the vendored EOS until it goes
+		quokka::eos_floors::ReadParameters();
+		amrex::Real small_temp = quokka::eos_floors::min_temp;
+		amrex::Real small_dens = quokka::eos_floors::min_dens;
 		eos_init(small_temp, small_dens);
 		if constexpr (Physics_Traits<problem_t>::resistivity_model != ResistivityModel::none) {
 			const bool resistivity_active =

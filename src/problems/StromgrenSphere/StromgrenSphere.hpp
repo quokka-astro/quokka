@@ -67,8 +67,6 @@ template <typename problem_t> struct RadTraits {
 };
 
 struct Data {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -188,8 +186,6 @@ template <typename problem_t> void PreCalculateInitialConditions(QuokkaSimulatio
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
-	userData.small_temp = 1e-2;
-	userData.small_dens = 1e-60;
 	userData.temperature = 1.0e4;
 	userData.tend = 1000.0_rt;
 	userData.n_e_init = 0.0e0_rt;
@@ -197,8 +193,6 @@ template <typename problem_t> void PreCalculateInitialConditions(QuokkaSimulatio
 	userData.n_HII_init = 0.0e0_rt;
 	userData.Q = 1.0e49_rt;
 	userData.recombination_switch = 0;
-	pp.query("small_temp", userData.small_temp);
-	pp.query("small_dens", userData.small_dens);
 	pp.query("temperature", userData.temperature);
 	pp.query("tend", userData.tend);
 	pp.query("n_e_init", userData.n_e_init);
@@ -208,8 +202,6 @@ template <typename problem_t> void PreCalculateInitialConditions(QuokkaSimulatio
 
 	amrex::ParmParse const pp2("network");
 	pp2.query("recombination_switch", userData.recombination_switch);
-
-	eos_init(userData.small_temp, userData.small_dens);
 
 	userData.r_analytical_last_t = 0.0_rt;
 	userData.r_analytical_last_R = 0.0_rt;

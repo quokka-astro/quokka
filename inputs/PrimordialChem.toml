@@ -27,8 +27,8 @@ chemistry.max_density_allowed = 3e-6
 
 primordial_chem.temperature = 1e2
 
-primordial_chem.small_temp = 1.0e1
-primordial_chem.small_dens = 1.0e-60
+eos.min_temp = 1.0e1
+eos.min_dens = 1.0e-60
 
 primordial_chem.primary_species_1 = 1e-4
 primordial_chem.primary_species_2 = 1e-4
