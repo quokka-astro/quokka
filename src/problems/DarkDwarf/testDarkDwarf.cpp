@@ -1,5 +1,5 @@
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -24,15 +24,17 @@ amrex::Real surfaceDensity(amrex::Real R, amrex::Real Sigma0, amrex::Real Rd, am
 	return Sigma0 * std::exp(-R / Rd - beta * std::exp(-alpha * R / Rd));
 }
 
-
 AMREX_GPU_HOST_DEVICE
 AMREX_FORCE_INLINE
-amrex::Real hernquistVertical(amrex::Real R, amrex::Real z, amrex::Real Mhalo, amrex::Real a){
-	amrex::Real const r = std::sqrt(R*R+z*z);
+amrex::Real hernquistVertical(amrex::Real R, amrex::Real z, amrex::Real Mhalo, amrex::Real a)
+{
+	amrex::Real const r = std::sqrt(R * R + z * z);
 
-	if (r<=0.0){return 0.0;}
+	if (r <= 0.0) {
+		return 0.0;
+	}
 
-	return C::Gconst * Mhalo * z / (r* (r+a) * (r+a));
+	return C::Gconst * Mhalo * z / (r * (r + a) * (r + a));
 }
 
 // Vertical ODE
@@ -92,8 +94,7 @@ VerticalState rk4Step(amrex::Real R, amrex::Real z, amrex::Real dz, VerticalStat
 	return out;
 }
 
-amrex::Real integratedSurfaceDensity(amrex::Real R, amrex::Real rhoMid, amrex::Real cs, amrex::Real Mhalo, amrex::Real a,
-				     amrex::Real zMax, int nSteps)
+amrex::Real integratedSurfaceDensity(amrex::Real R, amrex::Real rhoMid, amrex::Real cs, amrex::Real Mhalo, amrex::Real a, amrex::Real zMax, int nSteps)
 {
 	amrex::Real const dz = zMax / nSteps;
 
@@ -112,8 +113,7 @@ amrex::Real integratedSurfaceDensity(amrex::Real R, amrex::Real rhoMid, amrex::R
 	return 2.0 * s.columnHalf;
 }
 
-amrex::Real solveMidplaneDensity(amrex::Real R, amrex::Real SigmaTarget, amrex::Real cs, amrex::Real Mhalo, amrex::Real a,
-				 amrex::Real zMax, int nSteps)
+amrex::Real solveMidplaneDensity(amrex::Real R, amrex::Real SigmaTarget, amrex::Real cs, amrex::Real Mhalo, amrex::Real a, amrex::Real zMax, int nSteps)
 {
 	amrex::Real const rhoSG = M_PI * C::Gconst * SigmaTarget * SigmaTarget / (2.0 * cs * cs);
 
@@ -191,7 +191,7 @@ template <> struct Physics_Traits<DarkDwarf> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = true;
 };
 
-template <> struct Particle_Traits<DarkDwarf> : DefaultParticleTraits{
+template <> struct Particle_Traits<DarkDwarf> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 
@@ -213,14 +213,15 @@ template <> struct SimulationData<DarkDwarf> {
 	amrex::Gpu::DeviceVector<amrex::Real> vphiTableDevice;
 };
 
-template <> void QuokkaSimulation<DarkDwarf>::preCalculateInitialConditions(){
+template <> void QuokkaSimulation<DarkDwarf>::preCalculateInitialConditions()
+{
 	auto &data = userData_;
 
-	if(data.tables_ready){
+	if (data.tables_ready) {
 		return;
 	}
 
-	//Inputs
+	// Inputs
 	amrex::ParmParse const pp("dark_dwarf");
 
 	amrex::Real alpha;
@@ -246,10 +247,10 @@ template <> void QuokkaSimulation<DarkDwarf>::preCalculateInitialConditions(){
 	pp.get("M200_Msun", M200_Msun);
 	pp.get("concentration", concentration);
 	pp.query("H0_kms_Mpc", H0_kms_Mpc);
-	
-	pp.get("MD",MD);
 
-	//input conversion
+	pp.get("MD", MD);
+
+	// input conversion
 	amrex::Real const Sigma0 = Sigma0_Msun_pc2 * C::M_solar / (C::parsec * C::parsec);
 
 	amrex::Real const Rd = Rd_kpc * 1.0e3 * C::parsec;
@@ -264,24 +265,24 @@ template <> void QuokkaSimulation<DarkDwarf>::preCalculateInitialConditions(){
 
 	amrex::Real const R200 = std::cbrt(3.0 * M200 / (4.0 * M_PI * 200.0 * rhoCrit));
 
-	amrex::Real const Mhalo = (1.0 -MD)* M200;
+	amrex::Real const Mhalo = (1.0 - MD) * M200;
 
 	amrex::Real const fc = std::log(1.0 + concentration) - concentration / (1.0 + concentration);
 
 	amrex::Real const a = R200 / concentration * std::sqrt(2.0 * fc);
 
-	//amrex::Print() << "M200 = " << M200_Msun << " Msun\n"
+	// amrex::Print() << "M200 = " << M200_Msun << " Msun\n"
 	//	       << "R200 = " << R200 / (1.0e3 * C::parsec) << " kpc\n"
 	//	       << "rs = " << rs / (1.0e3 * C::parsec) << " kpc\n";
-	
+
 	data.cs = cs;
 
 	int const nRTable = data.nRTable;
 	int const nZTable = data.nZTable;
 	int const nIntegrate = 2048;
 
-	data.RTableMax = 10.0e3*C::parsec;
-	data.ZTableMax = 10.0e3*C::parsec;
+	data.RTableMax = 10.0e3 * C::parsec;
+	data.ZTableMax = 10.0e3 * C::parsec;
 
 	amrex::Real const RTableMax = data.RTableMax;
 	amrex::Real const ZTableMax = data.ZTableMax;
@@ -315,42 +316,42 @@ template <> void QuokkaSimulation<DarkDwarf>::preCalculateInitialConditions(){
 			rhoTableHost[ir * nZTable + iz] = std::exp(s.lnRho);
 		}
 	}
-	//vphi table
+	// vphi table
 	amrex::Vector<amrex::Real> vphiTableHost(nRTable, 0.0);
 
 	amrex::Real const dR = RTableMax / (nRTable - 1);
 
-	for (int ir = 1; ir < nRTable -1; ++ir) {
+	for (int ir = 1; ir < nRTable - 1; ++ir) {
 		amrex::Real const R = ir * dR;
-		
-		amrex::Real const rhoLeft = rhoTableHost[(ir -1)* nZTable];
-		amrex::Real const rhoRight = rhoTableHost[(ir +1)* nZTable];
+
+		amrex::Real const rhoLeft = rhoTableHost[(ir - 1) * nZTable];
+		amrex::Real const rhoRight = rhoTableHost[(ir + 1) * nZTable];
 
 		amrex::Real const dlnrho_dR = (std::log(rhoRight) - std::log(rhoLeft)) / (2.0 * dR);
 
-		amrex::Real const gR = C::Gconst * Mhalo / ((R+a) * (R+a));
+		amrex::Real const gR = C::Gconst * Mhalo / ((R + a) * (R + a));
 
 		amrex::Real const vphi2 = R * (gR + cs * cs * dlnrho_dR);
 
 		vphiTableHost[ir] = std::sqrt(std::max(0.0, vphi2));
 	}
 
-	//cutoff
-	amrex::Real const rho_max = *std::max_element(rhoTableHost.begin(),rhoTableHost.end());
-	data.rho_cut = rho_max*1.0e-3;
-	data.rho_bg = rho_max*1.0e-6;
+	// cutoff
+	amrex::Real const rho_max = *std::max_element(rhoTableHost.begin(), rhoTableHost.end());
+	data.rho_cut = rho_max * 1.0e-3;
+	data.rho_bg = rho_max * 1.0e-6;
 
-	vphiTableHost[nRTable -1] = vphiTableHost[nRTable - 2];
-	//copy rhoTable to Device
+	vphiTableHost[nRTable - 1] = vphiTableHost[nRTable - 2];
+	// copy rhoTable to Device
 	data.rhoTableDevice.resize(rhoTableHost.size());
 
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, rhoTableHost.begin(), rhoTableHost.end(), data.rhoTableDevice.begin());
 
-	//copy  vphiTable to Device
+	// copy  vphiTable to Device
 	data.vphiTableDevice.resize(vphiTableHost.size());
 
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, vphiTableHost.begin(), vphiTableHost.end(), data.vphiTableDevice.begin());
-	
+
 	amrex::Gpu::streamSynchronize();
 	data.tables_ready = true;
 }
@@ -388,7 +389,6 @@ template <> void QuokkaSimulation<DarkDwarf>::setInitialConditionsOnGrid(quokka:
 	amrex::Real const *rhoTablePtr = data.rhoTableDevice.data();
 	amrex::Real const *vphiTablePtr = data.vphiTableDevice.data();
 
-
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.0;
@@ -403,63 +403,51 @@ template <> void QuokkaSimulation<DarkDwarf>::setInitialConditionsOnGrid(quokka:
 		amrex::Real const zp = z - z_center;
 
 		amrex::Real const R = std::sqrt(xp * xp + yp * yp);
-		//Density	
-		
+		// Density
 
 		amrex::Real rho_disk = 0.0;
 
 		if (R <= RTableMax && std::abs(zp) <= ZTableMax) {
-			rho_disk = interpolateDensity(
-					R, zp, rhoTablePtr, 
-					nRTable, nZTable, 
-					RTableMax, ZTableMax
-				);}
-		
+			rho_disk = interpolateDensity(R, zp, rhoTablePtr, nRTable, nZTable, RTableMax, ZTableMax);
+		}
+
 		bool const is_disk = (rho_disk >= rho_cut);
 
 		amrex::Real const rho = is_disk ? rho_disk : rho_bg;
 		amrex::Real const P = rho * cs * cs;
-		
+
 		amrex::Real vphi = 0.0;
-		//rotational vel
+		// rotational vel
 		if (is_disk && R > 0.0) {
-			amrex::Real const fr = amrex::min(
-					static_cast<amrex::Real>(nRTable - 1),
-					R / RTableMax * (nRTable - 1)
-				);
-			int const i0 = amrex::min(
-					static_cast<int>(fr),
-					nRTable - 2
-				);
-			
+			amrex::Real const fr = amrex::min(static_cast<amrex::Real>(nRTable - 1), R / RTableMax * (nRTable - 1));
+			int const i0 = amrex::min(static_cast<int>(fr), nRTable - 2);
+
 			amrex::Real const w = fr - i0;
 
-			vphi = (1.0 - w)* vphiTablePtr[i0] + w * vphiTablePtr[i0+1];
+			vphi = (1.0 - w) * vphiTablePtr[i0] + w * vphiTablePtr[i0 + 1];
 		}
 
 		amrex::Real vx = 0.0;
 		amrex::Real vy = 0.0;
 
-		if (is_disk && R>0.0) {
-			vx = -vphi * yp/R;
-			vy =  vphi * xp/R;
+		if (is_disk && R > 0.0) {
+			vx = -vphi * yp / R;
+			vy = vphi * xp / R;
 		}
 
-		//apply density and momentum
+		// apply density and momentum
 		state_cc(i, j, k, HydroSystem<DarkDwarf>::density_index) = rho;
 
 		state_cc(i, j, k, HydroSystem<DarkDwarf>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<DarkDwarf>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<DarkDwarf>::x3Momentum_index) = 0.0;
-		//internal energy
-		amrex::Real const eint = is_disk 
-			? quokka::EOS<DarkDwarf>::ComputeEintFromPres(rho, P)
-			: quokka::EOS<DarkDwarf>::ComputeEintFromTgas(rho, T_bg); 
-		
-		//rotational kinetic energy
-		amrex::Real const ekin = 0.5 * rho * (vx*vx + vy*vy);
+		// internal energy
+		amrex::Real const eint = is_disk ? quokka::EOS<DarkDwarf>::ComputeEintFromPres(rho, P) : quokka::EOS<DarkDwarf>::ComputeEintFromTgas(rho, T_bg);
 
-		//total energy
+		// rotational kinetic energy
+		amrex::Real const ekin = 0.5 * rho * (vx * vx + vy * vy);
+
+		// total energy
 		state_cc(i, j, k, HydroSystem<DarkDwarf>::energy_index) = eint + ekin;
 
 		state_cc(i, j, k, HydroSystem<DarkDwarf>::internalEnergy_index) = eint;
@@ -482,111 +470,86 @@ template <> void QuokkaSimulation<DarkDwarf>::createInitialCICParticles()
 	amrex::Print() << "\n";
 }
 
-
-template <>
-void QuokkaSimulation<DarkDwarf>::refineGrid(
-    int lev,
-    amrex::TagBoxArray &tags,
-    amrex::Real /*time*/,
-    int /*ngrow*/)
+template <> void QuokkaSimulation<DarkDwarf>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-    amrex::ParmParse const pp("dark_dwarf");
+	amrex::ParmParse const pp("dark_dwarf");
 
-    // Refinement cylinder parameters, in kpc
-    amrex::Real Rcyl_kpc;
-    amrex::Real Hcyl_kpc;
-    amrex::Real shrinkR_kpc = 0.0;
-    amrex::Real shrinkH_kpc = 0.0;
-    amrex::Real Rinner_kpc = 0.0;
+	// Refinement cylinder parameters, in kpc
+	amrex::Real Rcyl_kpc;
+	amrex::Real Hcyl_kpc;
+	amrex::Real shrinkR_kpc = 0.0;
+	amrex::Real shrinkH_kpc = 0.0;
+	amrex::Real Rinner_kpc = 0.0;
 
-    pp.get("refine_Rcyl_kpc", Rcyl_kpc);
-    pp.get("refine_Hcyl_kpc", Hcyl_kpc);
-    pp.query("refine_Rcyl_shrink_per_level_kpc", shrinkR_kpc);
-    pp.query("refine_Hcyl_shrink_per_level_kpc", shrinkH_kpc);
-    pp.query("refine_Rcyl_inner_kpc", Rinner_kpc);
+	pp.get("refine_Rcyl_kpc", Rcyl_kpc);
+	pp.get("refine_Hcyl_kpc", Hcyl_kpc);
+	pp.query("refine_Rcyl_shrink_per_level_kpc", shrinkR_kpc);
+	pp.query("refine_Hcyl_shrink_per_level_kpc", shrinkH_kpc);
+	pp.query("refine_Rcyl_inner_kpc", Rinner_kpc);
 
-    // Convert to CGS
-    constexpr amrex::Real kpc = 1.0e3 * C::parsec;
+	// Convert to CGS
+	constexpr amrex::Real kpc = 1.0e3 * C::parsec;
 
-    amrex::Real const Rcyl = Rcyl_kpc * kpc;
-    amrex::Real const Hcyl = Hcyl_kpc * kpc;
-    amrex::Real const shrinkR = shrinkR_kpc * kpc;
-    amrex::Real const shrinkH = shrinkH_kpc * kpc;
-    amrex::Real const Rinner = Rinner_kpc * kpc;
+	amrex::Real const Rcyl = Rcyl_kpc * kpc;
+	amrex::Real const Hcyl = Hcyl_kpc * kpc;
+	amrex::Real const shrinkR = shrinkR_kpc * kpc;
+	amrex::Real const shrinkH = shrinkH_kpc * kpc;
+	amrex::Real const Rinner = Rinner_kpc * kpc;
 
-    // Progressively shrink the cylinder on finer levels
-    amrex::Real const Rlevel = std::max(
-        Rcyl - lev * shrinkR,
-        std::max(0.3 * Rcyl, Rinner)
-    );
+	// Progressively shrink the cylinder on finer levels
+	amrex::Real const Rlevel = std::max(Rcyl - lev * shrinkR, std::max(0.3 * Rcyl, Rinner));
 
-    amrex::Real const Hlevel = std::max(
-        Hcyl - lev * shrinkH,
-        0.3 * Hcyl
-    );
+	amrex::Real const Hlevel = std::max(Hcyl - lev * shrinkH, 0.3 * Hcyl);
 
-    auto const prob_lo = geom[lev].ProbLoArray();
-    auto const prob_hi = geom[lev].ProbHiArray();
-    auto const dx = geom[lev].CellSizeArray();
-    auto const tag = tags.arrays();
+	auto const prob_lo = geom[lev].ProbLoArray();
+	auto const prob_hi = geom[lev].ProbHiArray();
+	auto const dx = geom[lev].CellSizeArray();
+	auto const tag = tags.arrays();
 
-    // Same center convention as the gas disk IC
-    amrex::Real const xc = 0.5 * (prob_lo[0] + prob_hi[0]);
-    amrex::Real const yc = 0.5 * (prob_lo[1] + prob_hi[1]);
-    amrex::Real const zc = 0.5 * (prob_lo[2] + prob_hi[2]);
+	// Same center convention as the gas disk IC
+	amrex::Real const xc = 0.5 * (prob_lo[0] + prob_hi[0]);
+	amrex::Real const yc = 0.5 * (prob_lo[1] + prob_hi[1]);
+	amrex::Real const zc = 0.5 * (prob_lo[2] + prob_hi[2]);
 
-    constexpr int subsamples = 4;
+	constexpr int subsamples = 4;
 
-    amrex::ParallelFor(
-        tags,
-        [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept
-        {
-            amrex::Real const x0 = prob_lo[0] + i * dx[0];
-            amrex::Real const y0 = prob_lo[1] + j * dx[1];
-            amrex::Real const z0 = prob_lo[2] + k * dx[2];
+	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::Real const x0 = prob_lo[0] + i * dx[0];
+		amrex::Real const y0 = prob_lo[1] + j * dx[1];
+		amrex::Real const z0 = prob_lo[2] + k * dx[2];
 
-            for (int ia = 0; ia < subsamples; ++ia) {
-                amrex::Real const wx =
-                    static_cast<amrex::Real>(ia) / (subsamples - 1);
+		for (int ia = 0; ia < subsamples; ++ia) {
+			amrex::Real const wx = static_cast<amrex::Real>(ia) / (subsamples - 1);
 
-                amrex::Real const x = x0 + wx * dx[0];
+			amrex::Real const x = x0 + wx * dx[0];
 
-                for (int ib = 0; ib < subsamples; ++ib) {
-                    amrex::Real const wy =
-                        static_cast<amrex::Real>(ib) / (subsamples - 1);
+			for (int ib = 0; ib < subsamples; ++ib) {
+				amrex::Real const wy = static_cast<amrex::Real>(ib) / (subsamples - 1);
 
-                    amrex::Real const y = y0 + wy * dx[1];
+				amrex::Real const y = y0 + wy * dx[1];
 
-                    for (int ic = 0; ic < subsamples; ++ic) {
-                        amrex::Real const wz =
-                            static_cast<amrex::Real>(ic) / (subsamples - 1);
+				for (int ic = 0; ic < subsamples; ++ic) {
+					amrex::Real const wz = static_cast<amrex::Real>(ic) / (subsamples - 1);
 
-                        amrex::Real const z = z0 + wz * dx[2];
+					amrex::Real const z = z0 + wz * dx[2];
 
-                        amrex::Real const xp = x - xc;
-                        amrex::Real const yp = y - yc;
-                        amrex::Real const zp = z - zc;
+					amrex::Real const xp = x - xc;
+					amrex::Real const yp = y - yc;
+					amrex::Real const zp = z - zc;
 
-                        amrex::Real const R =
-                            std::sqrt(xp * xp + yp * yp);
+					amrex::Real const R = std::sqrt(xp * xp + yp * yp);
 
-                        if (R >= Rinner &&
-                            R < Rlevel &&
-                            std::abs(zp) < Hlevel)
-                        {
-                            tag[bx](i, j, k) = amrex::TagBox::SET;
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-    );
+					if (R >= Rinner && R < Rlevel && std::abs(zp) < Hlevel) {
+						tag[bx](i, j, k) = amrex::TagBox::SET;
+						return;
+					}
+				}
+			}
+		}
+	});
 
-    amrex::Gpu::streamSynchronize();
+	amrex::Gpu::streamSynchronize();
 }
-
-
 
 auto problem_main() -> int
 {
