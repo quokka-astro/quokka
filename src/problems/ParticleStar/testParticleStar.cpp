@@ -160,7 +160,7 @@ template <typename Model> auto compareWithReferenceTrack(std::string const &file
 	double max_err_L = 0.0;
 	double max_err_n = 0.0;
 	double max_err_mdeut = 0.0;
-	double max_err_netlum = 0.0;
+	double max_err_netlum = 0.0; // NOLINT(misc-const-correctness): only updated for models with netlum
 	int64_t step = 0;
 	std::string line;
 	while (std::getline(input, line)) {
@@ -175,7 +175,7 @@ template <typename Model> auto compareWithReferenceTrack(std::string const &file
 		double mdeut_ref = NAN;
 		int state_ref = -1;
 		double L_ref = NAN;
-		double netlum_ref = NAN;
+		double netlum_ref = NAN; // NOLINT(misc-const-correctness): only read for models with netlum
 		row >> ref_step >> m_ref >> r_ref >> n_ref >> mdeut_ref >> state_ref >> L_ref;
 		if constexpr (has_netlum) {
 			row >> netlum_ref;

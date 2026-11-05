@@ -391,7 +391,10 @@ constexpr amrex::Real timescale_fraction = 0.01;	   // sub-step bound: |r/(dr/dt
 // Mean gas-pressure fraction beta of a polytrope for log10(m/M_sun) = 0, 0.1, ..., 2.5 (rows) and n = 1.5, 1.6, ..., 3 (columns)
 constexpr int n_beta_mass = 26;
 constexpr int n_beta_poly = 16;
-static AMREX_GPU_CONSTANT const amrex::GpuArray<amrex::Real, n_beta_mass * n_beta_poly> beta_table = {
+// beta_table_host is used by host code; device code reads the copy in GPU constant memory, since host code must not
+// read __constant__ variables (on HIP this gives wrong values).
+// NOLINTBEGIN(modernize-use-std-numbers): tabulated data, some entries happen to be close to 1/sqrt(pi)
+inline constexpr amrex::GpuArray<amrex::Real, n_beta_mass * n_beta_poly> beta_table_host = {
     0.999492, 0.999504, 0.999515, 0.999525, 0.999534, 0.999541, 0.999548, 0.999553, 0.999558, 0.999562, 0.999566, 0.999569, 0.999571, 0.999572, 0.999573,
     0.999573, 0.999196, 0.999215, 0.999233, 0.999248, 0.999262, 0.999274, 0.999284, 0.999293, 0.999301, 0.999307, 0.999313, 0.999317, 0.99932,	0.999323,
     0.999324, 0.999324, 0.998728, 0.998759, 0.998787, 0.998811, 0.998832, 0.998851, 0.998867, 0.998881, 0.998894, 0.998904, 0.998912, 0.998919, 0.998924,
@@ -420,6 +423,14 @@ static AMREX_GPU_CONSTANT const amrex::GpuArray<amrex::Real, n_beta_mass * n_bet
     0.428312, 0.42829,	0.428265, 0.42824,  0.428216, 0.428195, 0.428178, 0.428167, 0.428163, 0.388399, 0.388431, 0.38844,  0.388434, 0.388415, 0.388387,
     0.388354, 0.388317, 0.38828,  0.388243, 0.388208, 0.388177, 0.388151, 0.388131, 0.388118, 0.388114, 0.351535, 0.351522, 0.351496, 0.35146,	0.351416,
     0.351369, 0.351319, 0.35127,  0.351222, 0.351178, 0.351137, 0.351102, 0.351073, 0.351051, 0.351037, 0.351033};
+// NOLINTEND(modernize-use-std-numbers)
+static AMREX_GPU_CONSTANT const amrex::GpuArray<amrex::Real, n_beta_mass * n_beta_poly> beta_table_device = beta_table_host;
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto betaTableEntry(int i, int j) -> amrex::Real
+{
+	AMREX_IF_ON_DEVICE((return beta_table_device[i * n_beta_poly + j];))
+	AMREX_IF_ON_HOST((return beta_table_host[i * n_beta_poly + j];))
+}
 
 // Initial polytropic index from the accretion rate, clamped to [1.5, 3]
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto nInit(amrex::Real mdot) -> amrex::Real
@@ -455,7 +466,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto betaCentral(amrex::Real m, amrex::
 	return rho_c * C::k_B * temperatureCentral(m, r, n) / (StellarPhysics::mu * StellarPhysics::m_H) / P_c;
 }
 
-// Mean ratio of gas pressure to total pressure, by bilinear interpolation in beta_table: 1 for m <= 1 M_sun, and
+// Mean ratio of gas pressure to total pressure, by bilinear interpolation in the beta table: 1 for m <= 1 M_sun, and
 // beta(last row) (m / 10^2.6 M_sun)^(-1/2) above the table. Two bugs of ORION2's beta() are fixed here:
 //  (a) ORION2 computes the row as floor(logm - logm0 / dlogm) = floor(logm), so between 1 and 10 M_sun it extrapolates
 //      from the first row with weights up to 10; the row is floor((logm - logm0) / dlogm), clamped to n_beta_mass - 2
@@ -482,7 +493,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto beta(amrex::Real m, amrex::Real n)
 		nidx = n_beta_poly - 2;
 		nwgt = 1.0;
 	}
-	auto b = [](int i, int j) { return beta_table[i * n_beta_poly + j]; };
+	auto b = [](int i, int j) { return betaTableEntry(i, j); };
 	if (logm < logm0 + n_beta_mass * dlogm_tab) {
 		const int midx = std::min(static_cast<int>(std::floor((logm - logm0) / dlogm_tab)), n_beta_mass - 2);
 		const amrex::Real mwgt = std::min((logm - (logm0 + midx * dlogm_tab)) / dlogm_tab, 1.0);
