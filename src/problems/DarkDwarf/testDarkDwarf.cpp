@@ -6,6 +6,7 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
+#include "particles/particle_utils.hpp"
 
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
@@ -14,6 +15,8 @@
 #include "AMReX_Gpu.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_Vector.H"
+
+
 
 namespace
 {
@@ -474,6 +477,10 @@ template <> void QuokkaSimulation<DarkDwarf>::refineGrid(int lev, amrex::TagBoxA
 {
 	amrex::ParmParse const pp("dark_dwarf");
 
+	int cyl_max;
+	pp.get("cylinder_max_level", cyl_max);
+	
+	if (lev < cyl_max){	
 	// Refinement cylinder parameters, in kpc
 	amrex::Real Rcyl_kpc;
 	amrex::Real Hcyl_kpc;
@@ -481,11 +488,13 @@ template <> void QuokkaSimulation<DarkDwarf>::refineGrid(int lev, amrex::TagBoxA
 	amrex::Real shrinkH_kpc = 0.0;
 	amrex::Real Rinner_kpc = 0.0;
 
+
 	pp.get("refine_Rcyl_kpc", Rcyl_kpc);
 	pp.get("refine_Hcyl_kpc", Hcyl_kpc);
 	pp.query("refine_Rcyl_shrink_per_level_kpc", shrinkR_kpc);
 	pp.query("refine_Hcyl_shrink_per_level_kpc", shrinkH_kpc);
 	pp.query("refine_Rcyl_inner_kpc", Rinner_kpc);
+
 
 	// Convert to CGS
 	constexpr amrex::Real kpc = 1.0e3 * C::parsec;
@@ -512,7 +521,7 @@ template <> void QuokkaSimulation<DarkDwarf>::refineGrid(int lev, amrex::TagBoxA
 	amrex::Real const zc = 0.5 * (prob_lo[2] + prob_hi[2]);
 
 	constexpr int subsamples = 4;
-
+	
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		amrex::Real const x0 = prob_lo[0] + i * dx[0];
 		amrex::Real const y0 = prob_lo[1] + j * dx[1];
@@ -547,6 +556,9 @@ template <> void QuokkaSimulation<DarkDwarf>::refineGrid(int lev, amrex::TagBoxA
 			}
 		}
 	});
+	}
+	
+
 
 	amrex::Gpu::streamSynchronize();
 }
