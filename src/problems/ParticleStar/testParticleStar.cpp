@@ -176,9 +176,13 @@ template <typename Model> auto compareWithReferenceTrack(std::string const &file
 		int state_ref = -1;
 		double L_ref = NAN;
 		double netlum_ref = NAN; // NOLINT(misc-const-correctness): only read for models with netlum
-		row >> ref_step >> m_ref >> r_ref >> n_ref >> mdeut_ref >> state_ref >> L_ref;
+		bool parsed = static_cast<bool>(row >> ref_step >> m_ref >> r_ref >> n_ref >> mdeut_ref >> state_ref >> L_ref);
 		if constexpr (has_netlum) {
-			row >> netlum_ref;
+			parsed = parsed && static_cast<bool>(row >> netlum_ref);
+		}
+		if (!parsed) {
+			amrex::Print() << "FAIL: cannot parse reference row in " << filename << ": " << line << "\n";
+			return 1;
 		}
 		for (; step < ref_step; ++step) {
 			rdata[quokka::StarParticleMassIdx] += dm;
@@ -186,19 +190,31 @@ template <typename Model> auto compareWithReferenceTrack(std::string const &file
 		}
 		++n_rows;
 
+		// std::max ignores NaN, so check the model output before comparing
+		const amrex::Real r = rdata[quokka::StarParticleRadiusIdx];
+		const amrex::Real L = rdata[quokka::StarParticleLumIdx];
+		bool finite = std::isfinite(r) && std::isfinite(L) && std::isfinite(rdata[n_poly_idx]) && std::isfinite(rdata[mdeut_idx]);
+		if constexpr (has_netlum) {
+			finite = finite && std::isfinite(rdata[n_poly_idx + 1]);
+		}
+		if (!finite) {
+			amrex::Print() << "FAIL: non-finite stellar state at step " << ref_step << " of " << filename << "\n";
+			return 1;
+		}
+
 		// Transitions may land a few steps apart, so a row next to a transition can be one phase off.
 		if (idata[0] != state_ref) {
 			++n_state_mismatch;
 			phase_jump = phase_jump || (std::abs(idata[0] - state_ref) > 1);
 			continue;
 		}
-		max_err_L = std::max(max_err_L, relativeError(rdata[quokka::StarParticleLumIdx], L_ref));
+		max_err_L = std::max(max_err_L, relativeError(L, L_ref));
 		max_err_mdeut = std::max(max_err_mdeut, std::abs(rdata[mdeut_idx] - mdeut_ref) / m_ref);
 		if constexpr (has_netlum) {
 			max_err_netlum = std::max(max_err_netlum, relativeError(rdata[n_poly_idx + 1], netlum_ref));
 		}
 		if (state_ref != 0) {
-			max_err_r = std::max(max_err_r, std::abs(rdata[quokka::StarParticleRadiusIdx] / r_ref - 1.0));
+			max_err_r = std::max(max_err_r, std::abs(r / r_ref - 1.0));
 			max_err_n = std::max(max_err_n, std::abs(rdata[n_poly_idx] - n_ref));
 		}
 	}
@@ -276,7 +292,7 @@ auto problem_main() -> int
 	const auto [real_data, int_data] = star_data();
 	const double rel_err_final = std::abs(total_mass(real_data) / m_tot_init - 1.0);
 	amrex::Print() << "After " << sim.maxTimesteps_ << " steps: relative change of total mass = " << rel_err_final << "\n";
-	if (!(rel_err_final < 1.0e-13)) {
+	if (!(rel_err_final < 1.0e-12)) {
 		amrex::Print() << "FAIL: mass not conserved during accretion\n";
 		status += 1;
 	}

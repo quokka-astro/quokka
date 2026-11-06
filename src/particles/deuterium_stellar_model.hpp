@@ -242,6 +242,7 @@ struct Orion2007StellarModel {
 
 	static constexpr amrex::Real max_dr_fraction = 0.01; // largest change of r per sub-step from any one term of dr/dt
 	static constexpr int max_substeps = 10000;
+	static constexpr int max_limiter_iterations = 10;
 
 	// Deuterium-burning luminosity
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto luminosityDeut(BurnState state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot)
@@ -314,7 +315,7 @@ struct Orion2007StellarModel {
 
 		// Sub-cycle the explicit radius update. The mass grows linearly in time to m at the end of dt, and, as in a
 		// single step, each sub-step uses the mass at its end. The sub-step is set so that no single term of dr/dt,
-		// evaluated at the mass at its start, changes r by more than max_dr_fraction (the contraction and accretion
+		// evaluated at the masses at its start and end, changes r by more than max_dr_fraction (the contraction and accretion
 		// terms nearly cancel while the star contracts, so the net rate alone does not bound the step). The part of dt
 		// left after max_substeps sub-steps is not integrated.
 		const amrex::Real m_min = StellarPhysics::M_rad_min; // local copy: std::max takes references
@@ -325,9 +326,16 @@ struct Orion2007StellarModel {
 				const amrex::Real m_start = std::max(m - mdot * t_left, m_min);
 				h = std::min(t_left, max_dr_fraction * r / radiusRate(state, m_start, r, n, mdot).scale);
 			}
-			const amrex::Real ms = std::max(m - mdot * (t_left - h), m_min);
+			amrex::Real ms = std::max(m - mdot * (t_left - h), m_min);
 			if (state != BurnState::MainSequence) {
 				rate = radiusRate(state, ms, r, n, mdot);
+				// The rate at the end mass can be much larger than at the start mass (e.g. d log beta / d log m jumps at
+				// 5 M_sun), so shorten the sub-step until the limit also holds at its end mass.
+				for (int j = 0; j < max_limiter_iterations && rate.scale * h > max_dr_fraction * r; ++j) {
+					h = max_dr_fraction * r / rate.scale;
+					ms = std::max(m - mdot * (t_left - h), m_min);
+					rate = radiusRate(state, ms, r, n, mdot);
+				}
 			}
 			t_left -= h;
 			r += rate.drdt * h;
