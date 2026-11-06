@@ -17,6 +17,3 @@
 [submodule "extern/AMReX-Hydro"]
 	path = extern/AMReX-Hydro
 	url = https://github.com/AMReX-Fluids/AMReX-Hydro.git
-[submodule "extern/gcem"]
-	path = extern/gcem
-	url = https://github.com/kthohr/gcem.git
