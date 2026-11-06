@@ -1,23 +1,11 @@
-set(microphysics_network_name "photoionization_H_caseB_handwritten") # this will override
-                                                 # network_name to
-                                                 # photoionization for this
-                                                 # directory only
 
 set(JOB_NAME OneZonePhotoionization)
 
-# NSPEC/SPECIES_ENUM/SPEC_NAMES/AION/ZION/CHEM_BANDS/... come from the
-# 'photoionization' entry in src/networks/NetworkRegistry.cmake, and
-# network_properties.H is generated from them inside
-# setup_target_for_microphysics_compilation() below.
-setup_target_for_microphysics_compilation(${microphysics_network_name}
-                                          "${CMAKE_CURRENT_BINARY_DIR}/"
-                                          INTEGRATOR "Rosenbrock")
-# Microphysics headers are not on the global include path; this target uses its network's directories
-include_directories(BEFORE ${${microphysics_network_name}_dirs} "${CMAKE_CURRENT_BINARY_DIR}/")
+# the photochemistry network: src/networks/photoionization_H_caseB_handwritten/network.hpp
+include_directories(BEFORE ${CMAKE_SOURCE_DIR}/src/networks/photoionization_H_caseB_handwritten)
 
 add_executable(
-  ${JOB_NAME} testOneZonePhotoionization.cpp "${QuokkaSourcesNoEOS}"
-              ../../radiation/photochemistry.cpp ${${microphysics_network_name}_sources})
+  ${JOB_NAME} testOneZonePhotoionization.cpp "${QuokkaSourcesNoEOS}")
 
 # this will add #define PHOTOCHEMISTRY
 target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)

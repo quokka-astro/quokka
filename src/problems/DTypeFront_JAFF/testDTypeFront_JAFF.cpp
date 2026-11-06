@@ -14,9 +14,9 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fundamental_constants.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -27,11 +27,12 @@
 #include <math/quadrature.hpp>
 #include <string>
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
+#include "network.hpp"
+#include "photochemistry/PhotochemEOS.hpp"
+#include "photochemistry/PhotochemState.hpp"
+#include "problems/PhotochemSystemTest.hpp"
+
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 
 struct DTypeFront_JAFF {};
 
@@ -72,8 +73,6 @@ template <> struct RadSystem_Traits<DTypeFront_JAFF> {
 };
 
 template <> struct SimulationData<DTypeFront_JAFF> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -227,28 +226,6 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 	return 0.5 * (T_lo + T_hi);
 }
 
-auto rosenbrock_tableau_name(int tableau) -> char const *
-{
-	switch (tableau) {
-		case 0:
-			return "Rodas5P";
-		case 1:
-			return "Rodas4P";
-		case 2:
-			return "Rodas3P";
-		case 3:
-			return "ROS2S";
-		default:
-			return "unknown";
-	}
-}
-
-void print_microphysics_integrator()
-{
-	amrex::Print() << "DTypeFront_JAFF microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
-		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
-}
-
 } // namespace
 
 AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
@@ -322,28 +299,20 @@ void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t & /*re
 
 template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
-	userData_.small_temp = 1e-2;
-	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e4;
 	userData_.n_e_init = 0.0e0_rt;
 	userData_.n_HI_init = 1.0e2_rt;
 	userData_.n_HII_init = 0.0e0_rt;
 	userData_.Q = 1.0e49_rt;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("n_e_init", userData_.n_e_init);
 	pp.query("n_HI_init", userData_.n_HI_init);
 	pp.query("n_HII_init", userData_.n_HII_init);
 	pp.query("Q", userData_.Q);
 
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -368,7 +337,7 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::setInitialConditionsOnGrid(q
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands> state;
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
@@ -384,7 +353,7 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::setInitialConditionsOnGrid(q
 	state.rho = rhotot;
 
 	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	state.e = quokka::photochemistry::EnergyFromTemperature<NumSpec>(state.T, state.xn, spmasses, gammas);
 	const auto Egas0 = state.e * rhotot;
 
 	// loop over the grid and set the initial condition
@@ -457,13 +426,17 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::computeAfterTimestep()
 
 auto problem_main() -> int
 {
+	if (TestPhotochemSystem(0.0, /*jacobian_at_fixed_T=*/false) != 0) {
+		std::cout << "DTypeFront_JAFF: photochemistry system unit test FAILED.\n";
+		return 1;
+	}
+
 	// Problem parameters
 	const double CFL_number = 0.3;
 	const double dt_max = 1e99;
 
 	// Problem initialization
 	QuokkaSimulation<DTypeFront_JAFF> sim;
-	print_microphysics_integrator();
 
 	// initialize
 	sim.setInitialConditions();
@@ -553,15 +526,11 @@ auto problem_main() -> int
 				const amrex::Real x_HII = n_HII_cell / denom;
 				const amrex::Real x_HI = n_HI_cell / denom;
 
-				burn_t bstate;
+				amrex::GpuArray<amrex::Real, NumSpec> n_cell{};
 				for (int nn = 0; nn < NumSpec; ++nn) {
-					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + nn) / spmasses[nn];
+					n_cell[nn] = state(i, j, k, HydroSystem<DTypeFront_JAFF>::scalar0_index + nn) / spmasses[nn];
 				}
-				bstate.rho = rho;
-				bstate.e = Eint / rho;
-				bstate.T = 1.0e4; // initial guess
-				eos(eos_input_re, bstate);
-				const double T_cell = bstate.T;
+				const double T_cell = quokka::photochemistry::TemperatureFromEnergy<NumSpec>(Eint / rho, n_cell, spmasses, gammas);
 
 				if (x_HII > 0.90_rt) {
 					cavity_temps.push_back(T_cell);

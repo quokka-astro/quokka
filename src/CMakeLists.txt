@@ -128,11 +128,8 @@ include_directories(${HDF5_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
-# Registers Quokka's networks. Must precede every
-# setup_target_for_microphysics_compilation() call, here and in
-# src/problems/*/CMakeLists.txt.
-include(${CMAKE_SOURCE_DIR}/src/networks/NetworkRegistry.cmake)
-# Only chemistry and photochemistry problems use Microphysics; each sets up its own network and include directories.
+# Only the primordial-chemistry (CHEMISTRY) problems use Microphysics; each sets up its own network and include directories.
+# Photochemistry networks are plain headers in src/networks/<name>/network.hpp.
 # gcem: header-only constexpr math library (https://github.com/kthohr/gcem, Apache-2.0), vendored in extern/gcem
 # from upstream tag v1.13.1, commit a20b0fc0206ff7d99a96fe4afdfe8205b01c8220
 include_directories(${CMAKE_SOURCE_DIR}/extern/gcem/include)

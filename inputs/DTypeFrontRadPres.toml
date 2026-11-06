@@ -30,18 +30,12 @@ stromgen.Q = 1.56e51
 stromgen.temperature = 37.11
 
 photochemistry.enabled = 1
-integrator.use_number_densities = 1
-integrator.do_species_clip = 0
-integrator.jacobian = 1
-integrator.renormalize_abundances = 0
-integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 integrator.ode_max_steps = 50000
 
 plotfile_interval = -1
 plotfile_prefix = "DTypeRadPres"
 
-network.allow_mixed_cell_cooling = 0
 
 
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
@@ -63,6 +57,5 @@ integrator.rtol_spec     = 1e-2
 integrator.rtol_rad_num  = 1e-2
 integrator.rtol_enuc     = 1e-2
 
-integrator.rosenbrock_tableau = 3
 
 density_floor = 1e-30  # g cm^-3

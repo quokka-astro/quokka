@@ -14,10 +14,10 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
 #include "physics_info.hpp"
 #include "radiation/radiation_dust_system.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fundamental_constants.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -30,11 +30,11 @@
 #include <string>
 #include <vector>
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
+#include "network.hpp"
+#include "photochemistry/PhotochemEOS.hpp"
+#include "photochemistry/PhotochemState.hpp"
+
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 
 struct DTypeFront3D {};
 
@@ -97,8 +97,6 @@ template <> struct ISM_Traits<DTypeFront3D> {
 };
 
 template <> struct SimulationData<DTypeFront3D> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -409,7 +407,7 @@ auto stromgren_radius(amrex::Real flux_ion, amrex::Real n_0, amrex::Real T_i) ->
 auto ionizing_dust_kappa() -> amrex::Real
 {
 	if constexpr (RadSystem<DTypeFront3D>::dust_chemical_band_absorption_) {
-		return network_rp::dust_kappa;
+		return network::NetworkParams::read().dust_kappa;
 	} else {
 		return 0.0_rt;
 	}
@@ -650,13 +648,9 @@ void RadSystem<DTypeFront3D>::AddRadSource(array_t &radEnergy, array_t &reducedF
 
 template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
 
 	// parmparse species, temperature, and source photon rates
 	amrex::ParmParse const pp("photoionize");
-	userData_.small_temp = 1e-2;
-	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e2;
 	userData_.n_e_init = 1.0e-10_rt;
 	userData_.n_HI_init = 1.0e2_rt;
@@ -666,8 +660,6 @@ template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 	userData_.flux_ir = 0.0_rt;
 	pp.query("kappa_ir", kappa_ir);
 	pp.query("kappa_optical", kappa_optical);
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("n_e_init", userData_.n_e_init);
 	pp.query("n_HI_init", userData_.n_HI_init);
@@ -695,8 +687,6 @@ template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 		amrex::Print() << "Stromgren radius R_s = " << R_s << " cm (with dust: " << R_d << " cm), ionized sound speed c_s = " << c_s << " cm/s\n";
 	}
 
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	// Called once per level built at t = 0. Reopening an open stream fails and silently drops every later write.
 	// A restart appends to the file the original run wrote.
 	if (amrex::ParallelDescriptor::IOProcessor() && !userData_.output_file_.is_open()) {
@@ -728,7 +718,7 @@ template <> void QuokkaSimulation<DTypeFront3D>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands> state;
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
@@ -742,7 +732,7 @@ template <> void QuokkaSimulation<DTypeFront3D>::setInitialConditionsOnGrid(quok
 	}
 	state.rho = rhotot;
 
-	eos(eos_input_rt, state);
+	state.e = quokka::photochemistry::EnergyFromTemperature<NumSpec>(state.T, state.xn, spmasses, gammas);
 	const auto Egas0 = state.e * rhotot;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -940,15 +930,11 @@ auto problem_main() -> int
 				const amrex::Real x_HII = n_HII_cell / denom;
 				const amrex::Real x_HI = n_HI_cell / denom;
 
-				burn_t bstate;
+				amrex::GpuArray<amrex::Real, NumSpec> n_cell{};
 				for (int nn = 0; nn < NumSpec; ++nn) {
-					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + nn) / spmasses[nn];
+					n_cell[nn] = state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + nn) / spmasses[nn];
 				}
-				bstate.rho = rho;
-				bstate.e = Eint / rho;
-				bstate.T = 1.0e4; // initial guess
-				eos(eos_input_re, bstate);
-				const double T_cell = bstate.T;
+				const double T_cell = quokka::photochemistry::TemperatureFromEnergy<NumSpec>(Eint / rho, n_cell, spmasses, gammas);
 
 				if (x_HII > 0.90_rt) {
 					cavity_temps.push_back(T_cell);

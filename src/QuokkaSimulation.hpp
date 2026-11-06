@@ -72,7 +72,7 @@ namespace filesystem = experimental::filesystem;
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
+#ifdef CHEMISTRY
 #include "eos.H"
 #endif
 #include "hydro/hydro_system.hpp"
@@ -274,7 +274,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		defineDefaultPlotfileVariables();
 		// read in runtime parameters
 		readParmParse();
-#if defined(PHOTOCHEMISTRY) || defined(CHEMISTRY)
+#ifdef CHEMISTRY
 		// set gamma
 		amrex::ParmParse eos("eos");
 		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);

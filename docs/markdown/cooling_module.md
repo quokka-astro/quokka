@@ -9,6 +9,7 @@ Radiative cooling in Quokka is selected at compile time by the `EOSBackend` memb
 | `quokka::EOSIdeal<P>` | none | ideal gas law with constant \\(\mu\\) |
 | `quokka::EOSTabulated<P>` | tabulated (Grackle-derived) | resampled table lookup |
 | `quokka::EOSMicrophysics<P>` | Microphysics reaction network | Microphysics EOS |
+| `quokka::EOSPhotochem<P>` | photochemistry network | multi-gamma ideal gas of the network's species |
 
 A problem selects its backend in its `EOS_Traits` specialization:
 
@@ -20,7 +21,7 @@ template <> struct quokka::EOS_Traits<MyProblem> {
 };
 ```
 
-If `EOSBackend` is omitted, the default is `EOSMicrophysics<P>` when the target is compiled with `CHEMISTRY` or `PHOTOCHEMISTRY` defined, and `EOSIdeal<P>` otherwise.
+If `EOSBackend` is omitted, the default is `EOSMicrophysics<P>` when the target is compiled with `CHEMISTRY` defined, `EOSPhotochem<P>` when it is compiled with `PHOTOCHEMISTRY` defined, and `EOSIdeal<P>` otherwise.
 
 ### EOSIdeal
 
@@ -34,7 +35,11 @@ Applies optically-thin radiative cooling as a Strang-split source term, and comp
 
 Delegates the EOS to the [Microphysics](https://github.com/AMReX-Astro/Microphysics) submodule, so that temperature is consistent with the evolving chemical species tracked by the reaction network (`chemstate.xn`). Cooling and heating are handled by the network itself rather than by a table, and are advanced by the chemistry burner (`quokka::chemistry::computeChemistry`) rather than by the cooling integrator.
 
-This is the backend for every target compiled with `CHEMISTRY` or `PHOTOCHEMISTRY`, which covers both primordial chemistry problems (`PrimordialChem`, `PopIII`) and photoionization problems (`DTypeFront_JAFF`, `DTypeFrontVC`, `StromgrenSphere`, `StromgrenSphereRSLA`, `OneZonePhotoionization`) — including hydro-enabled ones. None of these set `EOSBackend` explicitly; they receive `EOSMicrophysics` through `DefaultEOSBackend` by virtue of their compile definition. See the chemistry module and [Photoionization](photoionization.md) for details.
+This is the backend for every target compiled with `CHEMISTRY`: the primordial chemistry problems (`PrimordialChem`, `PopIII`). They do not set `EOSBackend` explicitly; they receive `EOSMicrophysics` through `DefaultEOSBackend` by virtue of their compile definition.
+
+### EOSPhotochem
+
+The equation of state of the photochemistry problems (`PHOTOCHEMISTRY`: `DTypeFront1D`, `DTypeFront3D`, `DTypeFront_JAFF`, `DTypeFrontVC`, `StromgrenSphere`, `StromgrenSphereRSLA`, `OneZonePhotoionization`), selected through `DefaultEOSBackend`. Each species \\(i\\) of the network is an ideal gas with its own adiabatic index \\(\gamma\_i\\), and the specific internal energy is \\(e = k\_B T \sum\_i n\_i / (\gamma\_i - 1) / \sum\_i n\_i m\_i\\), with the number densities \\(n\_i\\) taken from the mass scalars. Heating and cooling are advanced by the photochemistry solve (see [Photoionization](photoionization.md)), not by the cooling integrator.
 
 ## The EOSTabulated cooling model
 

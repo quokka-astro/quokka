@@ -38,7 +38,7 @@
 #include "util/ArrayView.hpp"
 #include "util/valarray.hpp"
 
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
+#ifdef CHEMISTRY
 // Microphysics headers
 #include "extern_parameters.H"
 #endif
@@ -1080,7 +1080,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real sp_sum = 0.0;
 			for (int idx = 0; idx < nmscalars_; ++idx) {
 				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
+#ifdef CHEMISTRY
 					state[bx](i, j, k, scalar0_index + idx) = network_rp::small_x * rho_new;
 #else
 					state[bx](i, j, k, scalar0_index + idx) = small_x_ * rho_new;

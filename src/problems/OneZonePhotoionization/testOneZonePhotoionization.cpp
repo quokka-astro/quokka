@@ -9,9 +9,9 @@
 
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include "util/fundamental_constants.hpp"
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -25,11 +25,12 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
+#include "network.hpp"
+#include "photochemistry/PhotochemEOS.hpp"
+#include "photochemistry/PhotochemState.hpp"
+#include "problems/PhotochemSystemTest.hpp"
+
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 
 struct PhotoionizationStreamingProblem {};
 
@@ -59,8 +60,6 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -79,21 +78,15 @@ template <> struct SimulationData<PhotoionizationStreamingProblem> {
 
 template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("photoionization");
-	userData_.small_temp = 1e-2;
-	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e3;
 	userData_.n_e_init = 0.0e0_rt;
 	userData_.n_HI_init = 1.0e2_rt;
 	userData_.n_HII_init = 0.0e0_rt;
 	userData_.tend = 1000.0_rt;
 	userData_.n_photon = 1.0e5_rt;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("n_e_init", userData_.n_e_init);
 	pp.query("n_HI_init", userData_.n_HI_init);
@@ -101,10 +94,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	pp.query("tend", userData_.tend);
 	pp.query("n_photon", userData_.n_photon);
 
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
-
-	burn_t state;
+	quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands> state;
 	state.T = userData_.temperature;
 	Real rhotot = 0.0_rt;
 	state.xn[Species::e] = userData_.n_e_init;
@@ -112,7 +102,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	state.xn[Species::H_p] = userData_.n_HII_init;
 	rhotot = state.xn[Species::e] * spmasses[Species::e] + state.xn[Species::H] * spmasses[Species::H] + state.xn[Species::H_p] * spmasses[Species::H_p];
 	state.rho = rhotot;
-	eos(eos_input_rt, state);
+	state.e = quokka::photochemistry::EnergyFromTemperature<NumSpec>(state.T, state.xn, spmasses, gammas);
 
 	const amrex::Real t = 0.0;
 	const amrex::Real n_e = userData_.n_e_init;
@@ -145,7 +135,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands> state;
 	std::array<Real, NumSpec> numdens = {-1.0};
 	numdens[Species::e] = userData_.n_e_init;
 	numdens[Species::H] = userData_.n_HI_init;
@@ -161,7 +151,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 	}
 	state.rho = rhotot;
 	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	state.e = quokka::photochemistry::EnergyFromTemperature<NumSpec>(state.T, state.xn, spmasses, gammas);
 
 	const auto Erad0 = userData_.n_photon * RadSystem<PhotoionizationStreamingProblem>::GetChemBandQuanta(0);
 	const auto Egas0 = state.e * rhotot; // initial_Egas;
@@ -226,6 +216,11 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 
 auto problem_main() -> int
 {
+	if (TestPhotochemSystem() != 0) {
+		std::cout << "OneZonePhotoionization: photochemistry system unit test FAILED.\n";
+		return 1;
+	}
+
 	// Problem parameters
 	const double CFL_number = 0.3;
 	const int max_timesteps = 5000000;
