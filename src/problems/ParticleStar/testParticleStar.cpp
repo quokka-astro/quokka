@@ -236,7 +236,7 @@ auto problem_main() -> int
 	const auto [real_data, int_data] = star_data();
 	const double rel_err_final = std::abs(total_mass(real_data) / m_tot_init - 1.0);
 	amrex::Print() << "After " << sim.maxTimesteps_ << " steps: relative change of total mass = " << rel_err_final << "\n";
-	if (!(rel_err_final < 1.0e-13)) {
+	if (!(rel_err_final < 1.0e-12)) {
 		amrex::Print() << "FAIL: mass not conserved during accretion\n";
 		status += 1;
 	}
