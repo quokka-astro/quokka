@@ -5,8 +5,8 @@
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
-#include "physics_info.hpp"
 #include "particles/particle_utils.hpp"
+#include "physics_info.hpp"
 
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
@@ -15,8 +15,6 @@
 #include "AMReX_Gpu.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_Vector.H"
-
-
 
 namespace
 {
@@ -479,86 +477,82 @@ template <> void QuokkaSimulation<DarkDwarf>::refineGrid(int lev, amrex::TagBoxA
 
 	int cyl_max;
 	pp.get("cylinder_max_level", cyl_max);
-	
-	if (lev < cyl_max){	
-	// Refinement cylinder parameters, in kpc
-	amrex::Real Rcyl_kpc;
-	amrex::Real Hcyl_kpc;
-	amrex::Real shrinkR_kpc = 0.0;
-	amrex::Real shrinkH_kpc = 0.0;
-	amrex::Real Rinner_kpc = 0.0;
 
+	if (lev < cyl_max) {
+		// Refinement cylinder parameters, in kpc
+		amrex::Real Rcyl_kpc;
+		amrex::Real Hcyl_kpc;
+		amrex::Real shrinkR_kpc = 0.0;
+		amrex::Real shrinkH_kpc = 0.0;
+		amrex::Real Rinner_kpc = 0.0;
 
-	pp.get("refine_Rcyl_kpc", Rcyl_kpc);
-	pp.get("refine_Hcyl_kpc", Hcyl_kpc);
-	pp.query("refine_Rcyl_shrink_per_level_kpc", shrinkR_kpc);
-	pp.query("refine_Hcyl_shrink_per_level_kpc", shrinkH_kpc);
-	pp.query("refine_Rcyl_inner_kpc", Rinner_kpc);
+		pp.get("refine_Rcyl_kpc", Rcyl_kpc);
+		pp.get("refine_Hcyl_kpc", Hcyl_kpc);
+		pp.query("refine_Rcyl_shrink_per_level_kpc", shrinkR_kpc);
+		pp.query("refine_Hcyl_shrink_per_level_kpc", shrinkH_kpc);
+		pp.query("refine_Rcyl_inner_kpc", Rinner_kpc);
 
+		// Convert to CGS
+		constexpr amrex::Real kpc = 1.0e3 * C::parsec;
 
-	// Convert to CGS
-	constexpr amrex::Real kpc = 1.0e3 * C::parsec;
+		amrex::Real const Rcyl = Rcyl_kpc * kpc;
+		amrex::Real const Hcyl = Hcyl_kpc * kpc;
+		amrex::Real const shrinkR = shrinkR_kpc * kpc;
+		amrex::Real const shrinkH = shrinkH_kpc * kpc;
+		amrex::Real const Rinner = Rinner_kpc * kpc;
 
-	amrex::Real const Rcyl = Rcyl_kpc * kpc;
-	amrex::Real const Hcyl = Hcyl_kpc * kpc;
-	amrex::Real const shrinkR = shrinkR_kpc * kpc;
-	amrex::Real const shrinkH = shrinkH_kpc * kpc;
-	amrex::Real const Rinner = Rinner_kpc * kpc;
+		// Progressively shrink the cylinder on finer levels
+		amrex::Real const Rlevel = std::max(Rcyl - lev * shrinkR, std::max(0.3 * Rcyl, Rinner));
 
-	// Progressively shrink the cylinder on finer levels
-	amrex::Real const Rlevel = std::max(Rcyl - lev * shrinkR, std::max(0.3 * Rcyl, Rinner));
+		amrex::Real const Hlevel = std::max(Hcyl - lev * shrinkH, 0.3 * Hcyl);
 
-	amrex::Real const Hlevel = std::max(Hcyl - lev * shrinkH, 0.3 * Hcyl);
+		auto const prob_lo = geom[lev].ProbLoArray();
+		auto const prob_hi = geom[lev].ProbHiArray();
+		auto const dx = geom[lev].CellSizeArray();
+		auto const tag = tags.arrays();
 
-	auto const prob_lo = geom[lev].ProbLoArray();
-	auto const prob_hi = geom[lev].ProbHiArray();
-	auto const dx = geom[lev].CellSizeArray();
-	auto const tag = tags.arrays();
+		// Same center convention as the gas disk IC
+		amrex::Real const xc = 0.5 * (prob_lo[0] + prob_hi[0]);
+		amrex::Real const yc = 0.5 * (prob_lo[1] + prob_hi[1]);
+		amrex::Real const zc = 0.5 * (prob_lo[2] + prob_hi[2]);
 
-	// Same center convention as the gas disk IC
-	amrex::Real const xc = 0.5 * (prob_lo[0] + prob_hi[0]);
-	amrex::Real const yc = 0.5 * (prob_lo[1] + prob_hi[1]);
-	amrex::Real const zc = 0.5 * (prob_lo[2] + prob_hi[2]);
+		constexpr int subsamples = 4;
 
-	constexpr int subsamples = 4;
-	
-	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		amrex::Real const x0 = prob_lo[0] + i * dx[0];
-		amrex::Real const y0 = prob_lo[1] + j * dx[1];
-		amrex::Real const z0 = prob_lo[2] + k * dx[2];
+		amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real const x0 = prob_lo[0] + i * dx[0];
+			amrex::Real const y0 = prob_lo[1] + j * dx[1];
+			amrex::Real const z0 = prob_lo[2] + k * dx[2];
 
-		for (int ia = 0; ia < subsamples; ++ia) {
-			amrex::Real const wx = static_cast<amrex::Real>(ia) / (subsamples - 1);
+			for (int ia = 0; ia < subsamples; ++ia) {
+				amrex::Real const wx = static_cast<amrex::Real>(ia) / (subsamples - 1);
 
-			amrex::Real const x = x0 + wx * dx[0];
+				amrex::Real const x = x0 + wx * dx[0];
 
-			for (int ib = 0; ib < subsamples; ++ib) {
-				amrex::Real const wy = static_cast<amrex::Real>(ib) / (subsamples - 1);
+				for (int ib = 0; ib < subsamples; ++ib) {
+					amrex::Real const wy = static_cast<amrex::Real>(ib) / (subsamples - 1);
 
-				amrex::Real const y = y0 + wy * dx[1];
+					amrex::Real const y = y0 + wy * dx[1];
 
-				for (int ic = 0; ic < subsamples; ++ic) {
-					amrex::Real const wz = static_cast<amrex::Real>(ic) / (subsamples - 1);
+					for (int ic = 0; ic < subsamples; ++ic) {
+						amrex::Real const wz = static_cast<amrex::Real>(ic) / (subsamples - 1);
 
-					amrex::Real const z = z0 + wz * dx[2];
+						amrex::Real const z = z0 + wz * dx[2];
 
-					amrex::Real const xp = x - xc;
-					amrex::Real const yp = y - yc;
-					amrex::Real const zp = z - zc;
+						amrex::Real const xp = x - xc;
+						amrex::Real const yp = y - yc;
+						amrex::Real const zp = z - zc;
 
-					amrex::Real const R = std::sqrt(xp * xp + yp * yp);
+						amrex::Real const R = std::sqrt(xp * xp + yp * yp);
 
-					if (R >= Rinner && R < Rlevel && std::abs(zp) < Hlevel) {
-						tag[bx](i, j, k) = amrex::TagBox::SET;
-						return;
+						if (R >= Rinner && R < Rlevel && std::abs(zp) < Hlevel) {
+							tag[bx](i, j, k) = amrex::TagBox::SET;
+							return;
+						}
 					}
 				}
 			}
-		}
-	});
+		});
 	}
-	
-
 
 	amrex::Gpu::streamSynchronize();
 }
