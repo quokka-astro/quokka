@@ -176,10 +176,13 @@ template <typename Model> auto compareWithReferenceTrack(std::string const &file
 		int state_ref = -1;
 		double L_ref = NAN;
 		double netlum_ref = NAN; // NOLINT(misc-const-correctness): only read for models with netlum
-		bool parsed = static_cast<bool>(row >> ref_step >> m_ref >> r_ref >> n_ref >> mdeut_ref >> state_ref >> L_ref);
-		if constexpr (has_netlum) {
-			parsed = parsed && static_cast<bool>(row >> netlum_ref);
-		}
+		const bool parsed = static_cast<bool>(row >> ref_step >> m_ref >> r_ref >> n_ref >> mdeut_ref >> state_ref >> L_ref) && [&row, &netlum_ref] {
+			if constexpr (has_netlum) {
+				return static_cast<bool>(row >> netlum_ref);
+			} else {
+				return true;
+			}
+		}();
 		if (!parsed) {
 			amrex::Print() << "FAIL: cannot parse reference row in " << filename << ": " << line << "\n";
 			return 1;
@@ -193,10 +196,13 @@ template <typename Model> auto compareWithReferenceTrack(std::string const &file
 		// std::max ignores NaN, so check the model output before comparing
 		const amrex::Real r = rdata[quokka::StarParticleRadiusIdx];
 		const amrex::Real L = rdata[quokka::StarParticleLumIdx];
-		bool finite = std::isfinite(r) && std::isfinite(L) && std::isfinite(rdata[n_poly_idx]) && std::isfinite(rdata[mdeut_idx]);
-		if constexpr (has_netlum) {
-			finite = finite && std::isfinite(rdata[n_poly_idx + 1]);
-		}
+		const bool finite = std::isfinite(r) && std::isfinite(L) && std::isfinite(rdata[n_poly_idx]) && std::isfinite(rdata[mdeut_idx]) && [&rdata] {
+			if constexpr (has_netlum) {
+				return std::isfinite(rdata[n_poly_idx + 1]);
+			} else {
+				return true;
+			}
+		}();
 		if (!finite) {
 			amrex::Print() << "FAIL: non-finite stellar state at step " << ref_step << " of " << filename << "\n";
 			return 1;
