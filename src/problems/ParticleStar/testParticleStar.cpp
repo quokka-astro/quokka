@@ -153,12 +153,23 @@ auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per
 		double mdeut_ref = NAN;
 		int state_ref = -1;
 		double L_ref = NAN;
-		row >> ref_step >> m_ref >> r_ref >> n_ref >> mdeut_ref >> state_ref >> L_ref;
+		if (!(row >> ref_step >> m_ref >> r_ref >> n_ref >> mdeut_ref >> state_ref >> L_ref)) {
+			amrex::Print() << "FAIL: cannot parse reference row in " << filename << ": " << line << "\n";
+			return 1;
+		}
 		for (; step < ref_step; ++step) {
 			rdata[quokka::StarParticleMassIdx] += dm;
 			StellarModel::evolve(rdata.data(), idata.data(), n_groups, dt);
 		}
 		++n_rows;
+
+		// std::max ignores NaN, so check the model output before comparing
+		const amrex::Real r = rdata[quokka::StarParticleRadiusIdx];
+		const amrex::Real L = rdata[quokka::StarParticleLumIdx];
+		if (!std::isfinite(r) || !std::isfinite(L) || !std::isfinite(rdata[n_poly_idx]) || !std::isfinite(rdata[mdeut_idx])) {
+			amrex::Print() << "FAIL: non-finite stellar state at step " << ref_step << " of " << filename << "\n";
+			return 1;
+		}
 
 		// Transitions may land a few steps apart, so a row next to a transition can be one phase off.
 		if (idata[0] != state_ref) {
@@ -166,8 +177,8 @@ auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per
 			phase_jump = phase_jump || (std::abs(idata[0] - state_ref) > 1);
 			continue;
 		}
-		max_err_r = std::max(max_err_r, std::abs(rdata[quokka::StarParticleRadiusIdx] / r_ref - 1.0));
-		max_err_L = std::max(max_err_L, std::abs(rdata[quokka::StarParticleLumIdx] / L_ref - 1.0));
+		max_err_r = std::max(max_err_r, std::abs(r / r_ref - 1.0));
+		max_err_L = std::max(max_err_L, std::abs(L / L_ref - 1.0));
 		max_err_n = std::max(max_err_n, std::abs(rdata[n_poly_idx] - n_ref));
 		max_err_mdeut = std::max(max_err_mdeut, std::abs(rdata[mdeut_idx] - mdeut_ref) / m_ref);
 	}
