@@ -702,8 +702,128 @@ The \\(n = 3\\) column is used only to interpolate for \\(2.5 < n < 3\\); at \\(
 
 Orion2007 predates the published appendix and differs from it in four places: the shell-burning test is \\(L\_D \le 0.18\\,L\_{\rm ZAMS}\\) (the appendix writes \\(L\_D/L\_{\rm ms} > 0.33\\), which would start shell burning at once); \\(L\_\star\\) contains \\(L\_{\rm acc}\\) inside the Hayashi maximum, in Eqs. (9)–(10) and in \\(L\\) (the appendix uses \\(\max(L\_{\rm ms}, L\_H)\\)); Eq. (2) has the factor \\(8\times10^{-5}\\); and \\(\psi\_I\\), \\(\psi\_D\\) are 17 and 100 eV per \\(m\_u\\) instead of 2.5 and \\(15\\,L\_\odot\\) per \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) (8% and 6% larger). In addition, \\(\beta\_c\\) uses the \\(T\_c\\) of Eq. (4), not \\(T\_D\\).
 
+### Deuterium-burning model (Orion2)
+
+`Orion2StellarModel` (`src/particles/deuterium_stellar_model.hpp`) reproduces the protostellar model of the later ORION2 code (`StarParticleData.cpp`), the version described by Offner et al. (2009, Appendix B). It shares with [Orion2007](#deuterium-burning-model-orion2007) the phases and their numbering, the polytrope relations of Eqs. (3)–(4) with Table A, the ZAMS fits of Eq. (7) with Table C, the constants \\(\mu\\), \\(m\_H\\), \\(f\_k\\), \\(f\_{\rm acc}\\), \\(T\_H\\), \\(T\_D\\), \\(\psi\_D\\), the shell-burning radius factor 2.1, and the form of the radius equation, Eq. (10). Everything that differs is listed here; Quokka results agree with ORION2 to \\(3\times10^{-8}\\) (see [Validation tests](#validation-tests)).
+
+#### State and parameters
+
+The model has a third extra real, `netlum` (\\(L\_{\rm net} \le 0\\)), the negative luminosity carried to the next step (zero at formation). The ORION2 phase names are `Uninitialized`, `None`, `VariableCoreDeuterium`, `SteadyCoreDeuterium`, `ShellDeuterium` and `ZAMS`, in the order of `burn_state` 0–5 of Orion2007; Quokka uses the Orion2007 names.
+
+| Parameter | Orion2007 | Orion2 |
+|---|---|---|
+| minimum mass \\(M\_{\rm min}\\) | \\(0.01\\,M\_\odot\\) | \\(0.04\\,M\_\odot\\) |
+| shell-burning threshold \\(f\_{\rm rad}\\) | 0.18 | 0.33 |
+| \\(\psi\_I\\) | 17 eV per \\(m\_u\\) | 16.8 eV per \\(m\_u\\), i.e. \\(16.8\\,{\rm eV}\\,N\_A\\) per gram |
+| finite-difference mass step | \\(\delta m = 10^{-3} m\\) | \\(\Delta m = 0.01\\,m\\) |
+| sub-steps | \\(\epsilon = 0.01\\), at most \\(10^4\\) | Eq. (O5) |
+| radius set when \\(r < 0\\) | none | \\(0.2\\,R\_\odot\\) |
+
+#### Initial radius and polytropic index
+
+With \\(\dot m\\) in \\(M\_\odot\\,{\rm yr}^{-1}\\), Eqs. (1)–(2) become (no factor \\(8\times10^{-5}\\), and a floor of \\(2\\,R\_\odot\\))
+
+<script type="math/tex; mode=display">
+r_{\rm init} = R_\odot \max\left[2.5\left(10^5\,\dot m\right)^{0.2},\ 2\right], \qquad n_{\rm init} = 5 - \frac{3}{1.475 + 0.07\log_{10}\dot m}, \quad\text{clamped to } [1.5, 3]; \qquad n_{\rm init} = 1.5 \text{ if } \dot m \le 0. \tag{O1}
+</script>
+
+#### Central temperature and \\(\beta\\)
+
+\\(T\_c\\) solves Eq. (4) on \\([0, 2\max(T\_{\rm gas}, T\_{\rm rad})]\\). ORION2 bisects to a relative tolerance of \\(10^{-7}\\); Quokka uses TOMS 748 to \\(10^{-12}\\). The mean gas-pressure fraction depends only on \\(m\\) and \\(n\\); there is no Eddington quartic for \\(n = 3\\). With \\(\ell = \log\_{10}(m/M\_\odot)\\) and \\(B\_{ij}\\) the entries of Table D (row \\(i\\) at \\(\ell = 0.1\\,i\\), \\(i = 0, \ldots, 25\\); column \\(j\\) at \\(n = 1.5 + 0.1\\,j\\), \\(j = 0, \ldots, 15\\)):
+
+- column: \\(j = \lfloor (n - 1.5)/0.1 \rfloor\\) clamped to \\([0, 14]\\) and \\(w\_n = (n - 1.5)/0.1 - j\\), except \\(j = 0\\), \\(w\_n = 0\\) for \\(n = 1.5\\) and \\(j = 14\\), \\(w\_n = 1\\) for \\(n = 3\\);
+- \\(\ell \le 0\\): \\(\beta = 1\\);
+- \\(0 < \ell < 2.6\\): row \\(i = \lfloor \ell/0.1 \rfloor\\) clamped to \\([0, 24]\\), \\(w\_m = \min(\ell/0.1 - i, 1)\\), and
+
+<script type="math/tex; mode=display">
+\beta = B_{i,j}(1-w_m)(1-w_n) + B_{i+1,j}\,w_m(1-w_n) + B_{i,j+1}(1-w_m)\,w_n + B_{i+1,j+1}\,w_m w_n; \tag{O2}
+</script>
+
+- \\(\ell \ge 2.6\\): \\(\beta = \left[(1-w\_n)B\_{25,j} + w\_n B\_{25,j+1}\right]\left(10^{\ell - 2.6}\right)^{-1/2}\\).
+
+Two bugs of ORION2 are fixed in Eq. (O2). (a) ORION2 computes the row as `floor((logm-logm0 / dlogm))` \\(= \lfloor \ell \rfloor\\), so for \\(1 < m/M\_\odot < 10\\) it extrapolates from rows 0 and 1 with \\(w\_m\\) up to 10; Quokka uses \\(\lfloor \ell/0.1 \rfloor\\) and clamps \\(i\\) and \\(w\_m\\) so that row \\(i+1\\) exists for \\(2.5 \le \ell < 2.6\\). (b) For \\(n = 3\\) in the interior ORION2 uses \\(j = 15\\), \\(w\_n = 1\\), which reads column 16, outside the table; Quokka uses \\(j = 14\\), \\(w\_n = 1\\), as ORION2 does for \\(\ell \ge 2.6\\). For \\(n = 3\\), as in Orion2007, \\(d\log(\beta/\beta\_c)/d\log m = 0\\); otherwise both derivatives are one-sided differences at fixed \\(r\\) and \\(n\\) with \\(\Delta m = 0.01\\,m\\):
+
+<script type="math/tex; mode=display">
+\frac{d\log\beta}{d\log m} = \frac{m}{\beta(m)}\,\frac{\beta(m+\Delta m) - \beta(m)}{\Delta m}, \qquad \frac{d\log(\beta/\beta_c)}{d\log m} = \frac{m}{(\beta/\beta_c)(m)}\,\frac{(\beta/\beta_c)(m+\Delta m) - (\beta/\beta_c)(m)}{\Delta m}. \tag{O3}
+</script>
+
+#### Luminosities
+
+The protostellar luminosity contains no accretion term, and the accretion and disk luminosities are net of the energy \\(\psi\_I\\) needed to dissociate and ionize the gas, so they are negative while \\(G m/r < \psi\_I\\) (\\(f\_k G m/r < \psi\_I\\) for \\(L\_{\rm acc}\\)):
+
+<script type="math/tex; mode=display">
+L_\star = \begin{cases} L_{\rm ZAMS} & \text{if } T_{\rm eff} = \left(\dfrac{L_{\rm ZAMS}}{4\pi r^2\sigma_{\rm SB}}\right)^{1/4} > T_H \\ 4\pi r^2\sigma_{\rm SB}T_H^4 & \text{otherwise} \end{cases}, \qquad L_{\rm acc} = f_{\rm acc}\left(f_k\frac{G m}{r} - \psi_I\right)\dot m, \qquad L_{\rm disk} = (1-f_k)\left(\frac{G m}{r} - \psi_I\right)\dot m. \tag{O4}
+</script>
+
+\\(L\_I = \dot m\\,\psi\_I\\), and \\(L\_D\\) is that of the Orion2007 phase table, with \\(L\_\star\\), \\(\beta\\) and the derivative of Eqs. (O2)–(O4) in Eq. (9). The radius rate is Eq. (10) with the same substitutions (ORION2 writes its first term as \\(\frac{2\dot m r}{m}\left[\frac{f\_k}{a\_g\beta} + 1 - \frac{1}{a\_g\beta}\right] + \frac{d\log\beta}{d\log m}\frac{\dot m r}{m}\\), which is the same).
+
+#### Update algorithm
+
+Each coarse step calls `evolve` once with \\(\Delta t\\), the mass \\(m\\) (already including the accreted mass) and \\(\dot m\\). The whole step uses the final \\(m\\).
+
+1. Set all `lum` groups to 0. If the phase is `PreCollapse`: set \\(m\_d = m\\); if \\(m < M\_{\rm min}\\) or \\(\dot m \le 0\\), set \\(L\_{\rm net} = 0\\) and return; otherwise set \\(r = r\_{\rm init}\\), \\(n = n\_{\rm init}\\) (Eq. O1) and the phase to `NoBurning`, and integrate the whole \\(\Delta t\\). In any other phase, \\(m\_d \leftarrow m\_d + \dot m\Delta t\\).
+2. Radius, except in `MainSequence`. Evaluate \\(\dot r\\) (Eq. 10) and the time scales
+
+   <script type="math/tex; mode=display">
+   t_r = \frac{1}{100}\left|\frac{r}{\dot r}\right|, \qquad t_m = \frac{1}{100}\left|\frac{m}{\dot m}\right|, \qquad N = \begin{cases} \lceil \Delta t/t_r \rceil & \text{if } t_r < \Delta t \\ \lceil \Delta t/t_m \rceil & \text{else if } t_m < \Delta t \\ 1 & \text{otherwise.} \end{cases} \tag{O5}
+   </script>
+
+   Take \\(N\\) forward-Euler steps \\(r \leftarrow r + h\\,\dot r\\) with \\(h = \Delta t/N\\), re-evaluating \\(\dot r\\) with the current \\(r\\) at fixed \\(m\\), \\(\dot m\\), \\(n\\) and phase. Then, if \\(r < 0\\), set \\(r = 0.2\\,R\_\odot\\).
+3. Phase update, once per step with \\(\Delta t\\), \\(m\\) and the new \\(r\\):
+   - `NoBurning`: \\(n = n\_{\rm init}(\dot m)\\). If \\(T\_c > T\_D\\), go to `CoreDeuteriumFixedTc` and set \\(n = 1.5\\).
+   - `CoreDeuteriumFixedTc`: \\(m\_d \leftarrow m\_d - L\_D\Delta t/\psi\_D\\). If \\(m\_d \le \dot m\Delta t\\), go to `CoreDeuteriumVariableTc` and set \\(m\_d = 0\\).
+   - `CoreDeuteriumVariableTc`: \\(m\_d = 0\\). If \\(\dot m\\,\psi\_D \le 0.33\\,L\_{\rm ZAMS}\\), go to `ShellDeuterium`, set \\(n = 3\\) and \\(r \leftarrow 2.1\\,r\\).
+   - `ShellDeuterium`: \\(m\_d = 0\\). If \\(r \le R\_{\rm ZAMS}\\), go to `MainSequence` and set \\(r = R\_{\rm ZAMS}\\).
+   - `MainSequence`: \\(m\_d = 0\\); \\(r\\) is kept (it stays at \\(R\_{\rm ZAMS}\\) of the mass at which the phase started).
+4. Luminosity (ORION2 `luminosity(netlum)` and the rule of `StarParticleList`): \\(L = L\_\star + L\_{\rm acc} + L\_{\rm disk} + L\_{\rm net}\\) (Eq. O4, \\(L\_{\rm net} \le 0\\)). If \\(L < 0\\), set \\(L\_{\rm net} = L\\) and store 0 in `lum_0`; otherwise set \\(L\_{\rm net} = 0\\) and store \\(L\\). The other groups are zero.
+
+Not ported from ORION2: the averaging of \\(\dot m\\) over the last 32 steps (`NHIST`; Quokka uses the current \\(\dot m\\), as ORION2 does without `NHIST`), the limit of the luminosity increase to 25% per step (`l_hist`), winds, mergers and the stellar angular momentum.
+
+At constant \\(\dot m\\), the phases start at these masses (in \\(M\_\odot\\); Orion2 to the step of \\(10^{-4}\\,M\_\odot\\), Orion2007 between two rows of its reference tracks):
+
+| \\(\dot m\\) (\\(M\_\odot\\,{\rm yr}^{-1}\\)) | model | `NoBurning` | `CoreDeuteriumFixedTc` | `CoreDeuteriumVariableTc` | `ShellDeuterium` | `MainSequence` |
+|---|---|---|---|---|---|---|
+| \\(10^{-5}\\) | Orion2007 | 0.01 | 0.13–0.14 | 0.47–0.48 | 3.07–3.08 | 6.93–6.94 |
+| \\(10^{-5}\\) | Orion2 | 0.04 | 2.3327 | 3.1151 | 3.1152 | 7.3470 |
+| \\(10^{-4}\\) | Orion2007 | 0.01 | 0.18–0.20 | 0.70–0.72 | 5.76–5.78 | 14.90–14.92 |
+| \\(10^{-4}\\) | Orion2 | 0.04 | 5.0245 | 6.1627 | 6.1628 | 15.9528 |
+
+In Orion2 the radius grows before deuterium ignition (to about \\(15\\,R\_\odot\\) at \\(2.3\\,M\_\odot\\) for \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\)), because \\(n\_{\rm init}\\) is larger (2.33 instead of 1.5) and \\(L\_\star\\) has no accretion term, so ignition comes much later than in Orion2007.
+
+**Table D.** Mean gas-pressure fraction \\(\beta\\) of a polytrope; rows \\(\ell = \log\_{10}(m/M\_\odot)\\), columns \\(n\\).
+
+| \\(\log\_{10}(m/M\_\odot)\\) | 1.5 | 1.6 | 1.7 | 1.8 | 1.9 | 2.0 | 2.1 | 2.2 | 2.3 | 2.4 | 2.5 | 2.6 | 2.7 | 2.8 | 2.9 | 3.0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0.0 | 0.999492 | 0.999504 | 0.999515 | 0.999525 | 0.999534 | 0.999541 | 0.999548 | 0.999553 | 0.999558 | 0.999562 | 0.999566 | 0.999569 | 0.999571 | 0.999572 | 0.999573 | 0.999573 |
+| 0.1 | 0.999196 | 0.999215 | 0.999233 | 0.999248 | 0.999262 | 0.999274 | 0.999284 | 0.999293 | 0.999301 | 0.999307 | 0.999313 | 0.999317 | 0.99932 | 0.999323 | 0.999324 | 0.999324 |
+| 0.2 | 0.998728 | 0.998759 | 0.998787 | 0.998811 | 0.998832 | 0.998851 | 0.998867 | 0.998881 | 0.998894 | 0.998904 | 0.998912 | 0.998919 | 0.998924 | 0.998928 | 0.99893 | 0.998931 |
+| 0.3 | 0.997991 | 0.99804 | 0.998083 | 0.998121 | 0.998155 | 0.998184 | 0.99821 | 0.998232 | 0.998251 | 0.998267 | 0.998281 | 0.998291 | 0.9983 | 0.998305 | 0.998309 | 0.99831 |
+| 0.4 | 0.996834 | 0.99691 | 0.996978 | 0.997037 | 0.997089 | 0.997135 | 0.997176 | 0.99721 | 0.99724 | 0.997265 | 0.997286 | 0.997303 | 0.997316 | 0.997325 | 0.99733 | 0.997332 |
+| 0.5 | 0.995025 | 0.995143 | 0.995248 | 0.99534 | 0.995421 | 0.995493 | 0.995555 | 0.995609 | 0.995655 | 0.995694 | 0.995726 | 0.995752 | 0.995772 | 0.995786 | 0.995795 | 0.995797 |
+| 0.6 | 0.992221 | 0.992402 | 0.992562 | 0.992703 | 0.992827 | 0.992936 | 0.993032 | 0.993114 | 0.993185 | 0.993245 | 0.993294 | 0.993334 | 0.993365 | 0.993386 | 0.993399 | 0.993403 |
+| 0.7 | 0.987924 | 0.988195 | 0.988435 | 0.988647 | 0.988833 | 0.988998 | 0.989141 | 0.989265 | 0.989372 | 0.989462 | 0.989536 | 0.989596 | 0.989642 | 0.989674 | 0.989693 | 0.9897 |
+| 0.8 | 0.981449 | 0.981844 | 0.982193 | 0.982503 | 0.982776 | 0.983017 | 0.983227 | 0.983409 | 0.983565 | 0.983697 | 0.983806 | 0.983894 | 0.983961 | 0.984008 | 0.984036 | 0.984045 |
+| 0.9 | 0.971919 | 0.972472 | 0.972964 | 0.973399 | 0.973785 | 0.974124 | 0.97442 | 0.974677 | 0.974897 | 0.975084 | 0.975237 | 0.975361 | 0.975455 | 0.975521 | 0.97556 | 0.975573 |
+| 1.0 | 0.95832 | 0.959059 | 0.959716 | 0.9603 | 0.960817 | 0.961271 | 0.961669 | 0.962014 | 0.962309 | 0.962559 | 0.962764 | 0.962929 | 0.963054 | 0.963142 | 0.963194 | 0.963211 |
+| 1.1 | 0.939649 | 0.940579 | 0.941407 | 0.942143 | 0.942794 | 0.943367 | 0.943868 | 0.944301 | 0.944673 | 0.944985 | 0.945242 | 0.945448 | 0.945603 | 0.945712 | 0.945776 | 0.945797 |
+| 1.2 | 0.91513 | 0.916223 | 0.917197 | 0.918062 | 0.918826 | 0.919497 | 0.920083 | 0.920588 | 0.92102 | 0.921382 | 0.92168 | 0.921915 | 0.922094 | 0.922217 | 0.92229 | 0.922313 |
+| 1.3 | 0.884431 | 0.885628 | 0.886692 | 0.887634 | 0.888465 | 0.889192 | 0.889824 | 0.890367 | 0.890829 | 0.891214 | 0.891528 | 0.891776 | 0.891962 | 0.892091 | 0.892165 | 0.892189 |
+| 1.4 | 0.847787 | 0.849009 | 0.85009 | 0.851042 | 0.851877 | 0.852605 | 0.853233 | 0.85377 | 0.854223 | 0.854598 | 0.854902 | 0.85514 | 0.855317 | 0.855439 | 0.855508 | 0.855531 |
+| 1.5 | 0.805975 | 0.80714 | 0.808165 | 0.809062 | 0.809842 | 0.810516 | 0.811094 | 0.811583 | 0.811993 | 0.812329 | 0.812598 | 0.812808 | 0.812962 | 0.813066 | 0.813126 | 0.813145 |
+| 1.6 | 0.76016 | 0.761206 | 0.762117 | 0.762907 | 0.763588 | 0.76417 | 0.764664 | 0.765078 | 0.765421 | 0.765699 | 0.76592 | 0.766089 | 0.766212 | 0.766295 | 0.766341 | 0.766356 |
+| 1.7 | 0.711692 | 0.71258 | 0.713344 | 0.713999 | 0.714557 | 0.715029 | 0.715424 | 0.71575 | 0.716017 | 0.71623 | 0.716397 | 0.716523 | 0.716614 | 0.716673 | 0.716706 | 0.716716 |
+| 1.8 | 0.661917 | 0.662632 | 0.66324 | 0.663753 | 0.664184 | 0.664542 | 0.664838 | 0.665078 | 0.665271 | 0.665422 | 0.665538 | 0.665623 | 0.665683 | 0.665722 | 0.665742 | 0.665748 |
+| 1.9 | 0.612041 | 0.612589 | 0.613047 | 0.613427 | 0.61374 | 0.613995 | 0.614201 | 0.614364 | 0.614491 | 0.614589 | 0.614661 | 0.614712 | 0.614746 | 0.614766 | 0.614776 | 0.614779 |
+| 2.0 | 0.563063 | 0.563461 | 0.563787 | 0.564051 | 0.564262 | 0.564429 | 0.56456 | 0.564659 | 0.564733 | 0.564786 | 0.564822 | 0.564846 | 0.564859 | 0.564866 | 0.564868 | 0.564868 |
+| 2.1 | 0.51575 | 0.516022 | 0.516238 | 0.516406 | 0.516535 | 0.516632 | 0.516702 | 0.516751 | 0.516782 | 0.516801 | 0.51681 | 0.516813 | 0.51681 | 0.516806 | 0.516802 | 0.516801 |
+| 2.2 | 0.470653 | 0.470824 | 0.470952 | 0.471044 | 0.471109 | 0.471151 | 0.471175 | 0.471186 | 0.471186 | 0.47118 | 0.471169 | 0.471156 | 0.471142 | 0.471131 | 0.471122 | 0.471119 |
+| 2.3 | 0.428134 | 0.428225 | 0.428286 | 0.428321 | 0.428337 | 0.428339 | 0.428329 | 0.428312 | 0.42829 | 0.428265 | 0.42824 | 0.428216 | 0.428195 | 0.428178 | 0.428167 | 0.428163 |
+| 2.4 | 0.388399 | 0.388431 | 0.38844 | 0.388434 | 0.388415 | 0.388387 | 0.388354 | 0.388317 | 0.38828 | 0.388243 | 0.388208 | 0.388177 | 0.388151 | 0.388131 | 0.388118 | 0.388114 |
+| 2.5 | 0.351535 | 0.351522 | 0.351496 | 0.35146 | 0.351416 | 0.351369 | 0.351319 | 0.35127 | 0.351222 | 0.351178 | 0.351137 | 0.351102 | 0.351073 | 0.351051 | 0.351037 | 0.351033 |
+
+
 ### Validation tests
 
 `ParticleStarEvolution` places one Star particle in a uniform medium and lets it accrete via the grid Bondi accretion module (small-mass regime, \\(\dot{M}\approx\\) const). It asserts, each step, that the particle's stored radius and luminosity match the closed-form laws of the toy model within ~2% (the tolerance absorbing the one-timestep lag between accretion and the stellar update), and reports the mean accretion rate against the analytic Bondi value.
 
-`ParticleStar` tests `Orion2007StellarModel`. It first evolves the model alone at constant \\(\dot{m} = 10^{-5}\\) and \\(10^{-4}\\,M\_\odot\\,{\rm yr}^{-1}\\), with the steps of the Orion2007 driver, and compares radius, luminosity, \\(n\\), \\(m\_d\\) and phase with reference tracks computed by the Orion2007 code (stored in `src/problems/ParticleStar/`; radius and luminosity agree within 0.75%). It then runs a \\(32^3\\) MHD simulation with self-gravity in which one Jeans-unstable cell forms a Star particle, and checks mass conservation in the formation step (to \\(10^{-14}\\)) and during accretion (to \\(10^{-12}\\)), and that the model has started and gives \\(1.5 \le n \le 3\\) and a positive luminosity.
+`ParticleStar` tests `Orion2007StellarModel` and `Orion2StellarModel`. It first evolves `Orion2007StellarModel` alone at constant \\(\dot{m} = 10^{-5}\\) and \\(10^{-4}\\,M\_\odot\\,{\rm yr}^{-1}\\), with the steps of the Orion2007 driver, and compares radius, luminosity, \\(n\\), \\(m\_d\\) and phase with reference tracks computed by the Orion2007 code (stored in `src/problems/ParticleStar/`; radius and luminosity agree within 0.75%). It then evolves `Orion2StellarModel` with the same steps and compares the same quantities and \\(L\_{\rm net}\\) with tracks computed by the ORION2 code (with the two `beta()` fixes); there the phases must agree in every row, and radius, luminosity and \\(m\_d/m\\) agree to \\(3\times10^{-8}\\) (tolerance \\(10^{-6}\\)), the difference left by ORION2's bisection tolerance for \\(T\_c\\). It then runs a \\(32^3\\) MHD simulation with self-gravity in which one Jeans-unstable cell forms a Star particle, and checks mass conservation in the formation step (to \\(10^{-14}\\)) and during accretion (to \\(10^{-12}\\)), and that the model has started and gives \\(1.5 \le n \le 3\\) and a positive luminosity.
