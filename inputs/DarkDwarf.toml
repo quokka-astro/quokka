@@ -1,0 +1,57 @@
+
+# Initial-condition test
+max_timesteps = 0
+plotfile_interval = 1000
+
+
+quokka.bc = ["foextrap", "foextrap", "foextrap"]
+
+# Gravity + AMR
+do_subcycle = 0
+do_reflux = 1
+regrid_interval = -1
+
+[amr]
+n_cell = [128, 128, 128]
+max_level = 8
+max_grid_size = 128
+
+blocking_factor_x = 32
+blocking_factor_y = 32
+blocking_factor_z = 16
+
+n_error_buf = 2
+grid_eff = 0.75
+
+[geometry]
+# 1 kpc = 3.085677581*10^21 cm
+prob_lo = [-4.93708413e23, -4.93708413e23, -4.93708413e23]
+prob_hi = [ 4.93708413e23,  4.93708413e23,  4.93708413e23]
+is_periodic = [0, 0, 0]
+
+[dark_dwarf]
+# Gas surface density
+Sigma0_Msun_pc2 = 21.8
+Rd_kpc = 0.785
+alpha = 2.0
+beta = 0.5
+cs_kms = 8.0
+
+# GALIC halo parameters
+M200_Msun = 1.0e9
+concentration = 16.8
+H0_kms_Mpc = 70.0
+MD = 0.0032
+
+# particle file
+particle_file = "./GALIC_particles.txt"
+
+# Cylindrical AMR refinement
+refine_Rcyl_kpc = 10
+refine_Hcyl_kpc = 4.5
+refine_Rcyl_inner_kpc = 0.0
+
+refine_Rcyl_shrink_per_level_kpc = 1.0
+refine_Hcyl_shrink_per_level_kpc = 0.5
+
+cylinder_max_level = 6
