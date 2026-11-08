@@ -1,0 +1,37 @@
+name: 💬 PR Dashboard Commands
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-dashboard-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  command:
+    if: |
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.type != 'Bot' &&
+      contains(github.event.comment.body, '/')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+        with:
+          sparse-checkout: .github/pr_dashboard
+          persist-credentials: false
+
+      - name: Run the command
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PYTHONPATH: .github/pr_dashboard/src
+        run: python3 -m pr_dashboard.run_dashboard run-command --repo "$REPO" --event-path "$GITHUB_EVENT_PATH"
