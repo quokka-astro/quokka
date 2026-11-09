@@ -39,6 +39,7 @@ template <> struct Physics_Traits<SedovProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear/bulk default to 0; no-op unless set
+	static constexpr bool has_strang_split_sources = false;			    // no addStrangSplitSources specialization
 };
 
 // declare global variables

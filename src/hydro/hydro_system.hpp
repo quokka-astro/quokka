@@ -263,6 +263,14 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 				     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::MultiFab const &primVar_mf,
 				     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, double dt, int nvars, amrex::iMultiFab &redoFlag_mf, bool useRedoFlag);
 
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void
+	UpdateStageFusedCell(amrex::Array4<const amrex::Real> const &x1Flux, amrex::Array4<const amrex::Real> const &x2Flux,
+			     amrex::Array4<const amrex::Real> const &x3Flux, amrex::Array4<const amrex::Real> const &vel_x,
+			     amrex::Array4<const amrex::Real> const &vel_y, amrex::Array4<const amrex::Real> const &vel_z,
+			     amrex::Array4<const amrex::Real> const &consVarOld, amrex::Array4<const amrex::Real> const &primVar,
+			     amrex::Array4<amrex::Real> const &consVarNew, amrex::Array4<int> const &redoFlag, int i, int j, int k,
+			     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, double dt, int nvars, bool useRedoFlag);
+
 	// hydro-k01: PPM reconstruction with the shock flattening (FlattenShocks) applied in registers before the single store
 	template <FluxDir DIR>
 	static void ReconstructStatesPPMFlattened(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
@@ -1390,6 +1398,61 @@ void HydroSystem<problem_t>::ReconstructStatesFlattened(amrex::MultiFab const &q
 }
 
 template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void HydroSystem<problem_t>::UpdateStageFusedCell(
+    amrex::Array4<const amrex::Real> const &x1Flux, amrex::Array4<const amrex::Real> const &x2Flux, amrex::Array4<const amrex::Real> const &x3Flux,
+    amrex::Array4<const amrex::Real> const &vel_x, amrex::Array4<const amrex::Real> const &vel_y, amrex::Array4<const amrex::Real> const &vel_z,
+    amrex::Array4<const amrex::Real> const &consVarOld, amrex::Array4<const amrex::Real> const &primVar, amrex::Array4<amrex::Real> const &consVarNew,
+    amrex::Array4<int> const &redoFlag, const int i, const int j, const int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, const double dt,
+    const int nvars, const bool useRedoFlag)
+{
+	amrex::ignore_unused(x2Flux, x3Flux, vel_y, vel_z);
+
+	// P dV source term for the internal energy equation (as AddInternalEnergyPdV)
+	const amrex::Real Pgas = primVar(i, j, k, primPgas_index);
+	amrex::Real div_v = NAN;
+	if (!useRedoFlag || redoFlag(i, j, k) == quokka::redoFlag::none) {
+		div_v = AMREX_D_TERM((vel_x(i + 1, j, k) - vel_x(i, j, k)) / dx[0], +(vel_y(i, j + 1, k) - vel_y(i, j, k)) / dx[1],
+				     +(vel_z(i, j, k + 1) - vel_z(i, j, k)) / dx[2]);
+	} else {
+		div_v = 0.5 * (AMREX_D_TERM((ComputeVelocityX1(consVarOld, i + 1, j, k) - ComputeVelocityX1(consVarOld, i - 1, j, k)) / dx[0],
+					    +(ComputeVelocityX2(consVarOld, i, j + 1, k) - ComputeVelocityX2(consVarOld, i, j - 1, k)) / dx[1],
+					    +(ComputeVelocityX3(consVarOld, i, j, k + 1) - ComputeVelocityX3(consVarOld, i, j, k - 1)) / dx[2]));
+	}
+
+	// All loads first, then the stores: the Array4 pointers are not restrict-qualified, so interleaving them would
+	// serialise each component's loads behind the previous component's store. Same arithmetic per component.
+	AMREX_ASSERT(nvars <= nvar_);
+	amrex::Real uNew[nvar_];
+	for (int n = 0; n < nvar_; ++n) {
+		if (n >= nvars) {
+			break;
+		}
+		// flux divergence (as ComputeRhsFromFluxes)
+		amrex::Real rhs =
+		    AMREX_D_TERM((1.0 / dx[0]) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)), +(1.0 / dx[1]) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
+				 +(1.0 / dx[2]) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n)));
+		if (n == internalEnergy_index) {
+			rhs += -Pgas * div_v;
+		}
+		// forward-Euler predict (as PredictStep)
+		uNew[n] = consVarOld(i, j, k, n) + dt * rhs;
+	}
+	for (int n = 0; n < nvar_; ++n) {
+		if (n >= nvars) {
+			break;
+		}
+		consVarNew(i, j, k, n) = uNew[n];
+	}
+
+	// check if state is valid -- flag for re-do if not
+	if (!isStateValid(consVarNew, i, j, k)) {
+		redoFlag(i, j, k) = quokka::redoFlag::redo;
+	} else {
+		redoFlag(i, j, k) = quokka::redoFlag::none;
+	}
+}
+
+template <typename problem_t>
 void HydroSystem<problem_t>::UpdateStageFused(amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf,
 					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
 					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::MultiFab const &primVar_mf,
@@ -1398,70 +1461,37 @@ void HydroSystem<problem_t>::UpdateStageFused(amrex::MultiFab const &consVarOld_
 {
 	// ComputeRhsFromFluxes + AddInternalEnergyPdV + PredictStep in one kernel, with the same per-cell arithmetic.
 	// If useRedoFlag is false, every cell is treated as redoFlag::none for the P dV term (as after redoFlag.setVal(none)).
+	// One launch per box with the Array4s passed by value (slightly faster than looking them up per thread).
 	const BL_PROFILE("HydroSystem::UpdateStageFused()");
 	AMREX_ALWAYS_ASSERT(primVar_mf.nComp() > primPgas_index);
 
-	auto const x1Flux = fluxArray[0].const_arrays();
-	auto const vel_x = faceVelArray[0].const_arrays();
+	{
+		for (amrex::MFIter mfi(consVarNew_mf, amrex::MFItInfo().DisableDeviceSync()); mfi.isValid(); ++mfi) {
+			const amrex::Box &vbx = mfi.validbox();
+			auto const x1Flux = fluxArray[0].const_array(mfi);
+			auto const vel_x = faceVelArray[0].const_array(mfi);
+			amrex::Array4<const amrex::Real> x2Flux{};
+			amrex::Array4<const amrex::Real> vel_y{};
+			amrex::Array4<const amrex::Real> x3Flux{};
+			amrex::Array4<const amrex::Real> vel_z{};
 #if (AMREX_SPACEDIM >= 2)
-	auto const x2Flux = fluxArray[1].const_arrays();
-	auto const vel_y = faceVelArray[1].const_arrays();
+			x2Flux = fluxArray[1].const_array(mfi);
+			vel_y = faceVelArray[1].const_array(mfi);
 #endif
 #if (AMREX_SPACEDIM == 3)
-	auto const x3Flux = fluxArray[2].const_arrays();
-	auto const vel_z = faceVelArray[2].const_arrays();
+			x3Flux = fluxArray[2].const_array(mfi);
+			vel_z = faceVelArray[2].const_array(mfi);
 #endif
-	auto const &consVarOld = consVarOld_mf.const_arrays();
-	auto const &primVar = primVar_mf.const_arrays();
-	auto consVarNew = consVarNew_mf.arrays();
-	auto redoFlag = redoFlag_mf.arrays();
-
-	amrex::ParallelFor(consVarNew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// P dV source term for the internal energy equation (as AddInternalEnergyPdV)
-		const amrex::Real Pgas = primVar[bx](i, j, k, primPgas_index);
-		amrex::Real div_v = NAN;
-		if (!useRedoFlag || redoFlag[bx](i, j, k) == quokka::redoFlag::none) {
-			div_v = AMREX_D_TERM((vel_x[bx](i + 1, j, k) - vel_x[bx](i, j, k)) / dx[0], +(vel_y[bx](i, j + 1, k) - vel_y[bx](i, j, k)) / dx[1],
-					     +(vel_z[bx](i, j, k + 1) - vel_z[bx](i, j, k)) / dx[2]);
-		} else {
-			div_v =
-			    0.5 * (AMREX_D_TERM((ComputeVelocityX1(consVarOld[bx], i + 1, j, k) - ComputeVelocityX1(consVarOld[bx], i - 1, j, k)) / dx[0],
-						+(ComputeVelocityX2(consVarOld[bx], i, j + 1, k) - ComputeVelocityX2(consVarOld[bx], i, j - 1, k)) / dx[1],
-						+(ComputeVelocityX3(consVarOld[bx], i, j, k + 1) - ComputeVelocityX3(consVarOld[bx], i, j, k - 1)) / dx[2]));
+			auto const consVarOld = consVarOld_mf.const_array(mfi);
+			auto const primVar = primVar_mf.const_array(mfi);
+			auto const consVarNew = consVarNew_mf.array(mfi);
+			auto const redoFlag = redoFlag_mf.array(mfi);
+			amrex::ParallelFor(vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				UpdateStageFusedCell(x1Flux, x2Flux, x3Flux, vel_x, vel_y, vel_z, consVarOld, primVar, consVarNew, redoFlag, i, j, k, dx, dt,
+						     nvars, useRedoFlag);
+			});
 		}
-
-		// All loads first, then the stores: the Array4 pointers are not restrict-qualified, so interleaving them would
-		// serialise each component's loads behind the previous component's store. Same arithmetic per component.
-		AMREX_ASSERT(nvars <= nvar_);
-		amrex::Real uNew[nvar_];
-		for (int n = 0; n < nvar_; ++n) {
-			if (n >= nvars) {
-				break;
-			}
-			// flux divergence (as ComputeRhsFromFluxes)
-			amrex::Real rhs = AMREX_D_TERM((1.0 / dx[0]) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n)),
-						       +(1.0 / dx[1]) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n)),
-						       +(1.0 / dx[2]) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n)));
-			if (n == internalEnergy_index) {
-				rhs += -Pgas * div_v;
-			}
-			// forward-Euler predict (as PredictStep)
-			uNew[n] = consVarOld[bx](i, j, k, n) + dt * rhs;
-		}
-		for (int n = 0; n < nvar_; ++n) {
-			if (n >= nvars) {
-				break;
-			}
-			consVarNew[bx](i, j, k, n) = uNew[n];
-		}
-
-		// check if state is valid -- flag for re-do if not
-		if (!isStateValid(consVarNew[bx], i, j, k)) {
-			redoFlag[bx](i, j, k) = quokka::redoFlag::redo;
-		} else {
-			redoFlag[bx](i, j, k) = quokka::redoFlag::none;
-		}
-	});
+	}
 }
 
 // to ensure that physical quantities are within reasonable
