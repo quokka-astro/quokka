@@ -449,11 +449,19 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 			constexpr amrex::Real fac_min = Layout::traits::h211b_fac_min;
 			constexpr amrex::Real fac_max = Layout::traits::h211b_fac_max;
 			const amrex::Real err = error_norm<Layout>(rstate);
+			// An accepted final step needs no new step size: hnew below then only enters the step-size underflow check at the
+			// top of the loop, which no factor in [fac_min, fac_max] can make fire when this condition holds. The controller
+			// (three pow calls) is then skipped and the smallest factor used.
+			const bool final_step_accepted = last && err <= 1.0_rt && valid_update &&
+							 0.1_rt * (fac_min * std::abs(h)) > std::abs(x + h) * std::numeric_limits<amrex::Real>::epsilon();
 			const amrex::Real controller_fac =
-			    amrex::Clamp(std::pow(1.0_rt / amrex::max(err, err_min), 1.0_rt / (Layout::traits::h211b_b * Layout::traits::h211b_k)) *
-					     std::pow(1.0_rt / amrex::max(errold, err_min), 1.0_rt / (Layout::traits::h211b_b * Layout::traits::h211b_k)) *
-					     std::pow(facold, -1.0_rt / Layout::traits::h211b_b),
-					 fac_min, fac_max);
+			    final_step_accepted
+				? fac_min
+				: amrex::Clamp(
+				      std::pow(1.0_rt / amrex::max(err, err_min), 1.0_rt / (Layout::traits::h211b_b * Layout::traits::h211b_k)) *
+					  std::pow(1.0_rt / amrex::max(errold, err_min), 1.0_rt / (Layout::traits::h211b_b * Layout::traits::h211b_k)) *
+					  std::pow(facold, -1.0_rt / Layout::traits::h211b_b),
+				      fac_min, fac_max);
 			facold = controller_fac;
 			errold = err;
 
