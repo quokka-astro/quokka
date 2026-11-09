@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testParticleSF.cpp
 /// \brief Defines a test problem for stochastic star formation.
 ///

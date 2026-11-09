@@ -1,0 +1,21 @@
+source_commit 4521ecfd652269983f5ae52deaf4a2fcc0998cde
+source_parent 6858fae3899926a360ba8f8ff9b6c52f88c36e1a
+source_subject Add chemistry reproducibility CI
+microphysics 66450c08895857ff555eba7bf14f73c9afc7b66e
+amrex 1de18774af5d8a368fa2a398f048e205a2c9f84f
+generated 2026-10-24T16:18:41Z
+runner_image ubuntu24 20261012.334.1
+cpu INTEL(R) XEON(R) PLATINUM 8573C, avx512f yes
+github_run https://github.com/quokka-astro/quokka/actions/runs/40110268818
+steps 10
+OneZonePhotoionization GENERATED exit_status=0 seconds=3
+OneZonePhotoionizationWithEnergy GENERATED exit_status=0 seconds=1
+PrimordialChem GENERATED exit_status=0 seconds=1
+PopIII GENERATED exit_status=0 seconds=2
+DTypeFront1D GENERATED exit_status=1 seconds=9
+StromgrenSphere GENERATED exit_status=1 seconds=1
+StromgrenSphereTempIndependentRecombination GENERATED exit_status=0 seconds=0
+StromgrenSphereRSLA GENERATED exit_status=0 seconds=1
+DTypeFront_JAFF GENERATED exit_status=0 seconds=2
+DTypeFrontRadPres GENERATED exit_status=1 seconds=2
+DTypeFront3D GENERATED exit_status=0 seconds=22

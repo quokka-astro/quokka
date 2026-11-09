@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef ARRAYVIEW_3D_HPP_
 #define ARRAYVIEW_3D_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file ArrayView.hpp
 /// \brief A container for an array of Reals with template magic to permute indices
 

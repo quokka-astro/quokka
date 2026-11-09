@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testGravRadParticle3D.cpp
 /// \brief Defines a 3D test problem for radiating particles with gravity.
 ///
