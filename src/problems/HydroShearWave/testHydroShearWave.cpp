@@ -1,7 +1,6 @@
-//==============================================================================
-// Copyright 2026 Neco Kriel.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testHydroShearWave.cpp
 /// \brief A single-mode transverse shear flow, decaying under physical shear viscosity.
 ///
