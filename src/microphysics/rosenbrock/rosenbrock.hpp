@@ -8,6 +8,7 @@
 
 #include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
+#include "AMReX_ConstexprFor.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
@@ -374,17 +375,24 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 
 			solve<Layout>(rstate, rstate.k[0]);
 
+			// The stage loops are unrolled at compile time so that every stage vector rstate.k[istage - 1] is indexed by a
+			// constant: one run-time index into rstate would keep the whole RosenbrockState in scratch memory on the GPU.
 			bool valid_stage_state = true;
-			for (int istage = 2; istage <= Tableau::stages; ++istage) {
+			amrex::constexpr_for<2, Tableau::stages + 1>([&](auto is) {
+				constexpr int istage = decltype(is)::value;
+				if (!valid_stage_state) {
+					return;
+				}
 				for (int n = 1; n <= int_neqs; ++n) {
 					rstate.ynew(n) = rstate.y(n);
 					rstate.k[istage - 1](n) = 0.0_rt;
 
-					for (int jstage = 1; jstage < istage; ++jstage) {
+					amrex::constexpr_for<1, istage>([&](auto js) {
+						constexpr int jstage = decltype(js)::value;
 						const amrex::Real akj = rstate.k[jstage - 1](n);
 						rstate.ynew(n) += Tableau::a(istage, jstage) * akj;
 						rstate.k[istage - 1](n) += (Tableau::c(istage, jstage) / h) * akj;
-					}
+					});
 				}
 
 				if (!valid_integrator_state<Layout>(rstate.ynew)) {
@@ -393,7 +401,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 					n_reject += 1;
 					last = false;
 					valid_stage_state = false;
-					break;
+					return;
 				}
 
 				rhs_at<Layout>(x + Tableau::ct(istage) * h, state, rstate, rstate.ynew, rhs_tmp);
@@ -403,7 +411,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 					rstate.k[istage - 1](n) += rhs_tmp(n);
 				}
 				solve<Layout>(rstate, rstate.k[istage - 1]);
-			}
+			});
 
 			if (!valid_stage_state) {
 				continue;
@@ -413,11 +421,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 				amrex::Real y_update = 0.0_rt;
 				amrex::Real err = 0.0_rt;
 
-				for (int istage = 1; istage <= Tableau::stages; ++istage) {
+				amrex::constexpr_for<1, Tableau::stages + 1>([&](auto is) {
+					constexpr int istage = decltype(is)::value;
 					const amrex::Real aki = rstate.k[istage - 1](n);
 					y_update += Tableau::b(istage) * aki;
 					err += Tableau::e(istage) * aki;
-				}
+				});
 
 				rstate.ynew(n) = rstate.y(n) + y_update;
 				rstate.work(n) = err;
