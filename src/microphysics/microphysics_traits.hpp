@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef MICROPHYSICS_TRAITS_HPP_
 #define MICROPHYSICS_TRAITS_HPP_
 /// \file microphysics_traits.hpp

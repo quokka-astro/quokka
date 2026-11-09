@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef MICROPHYSICS_ARRAY_UTILS_HPP_
 #define MICROPHYSICS_ARRAY_UTILS_HPP_
 /// \file array_utils.hpp

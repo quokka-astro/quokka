@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef MICROPHYSICS_BURNER_HPP_
 #define MICROPHYSICS_BURNER_HPP_
 /// \file burner.hpp

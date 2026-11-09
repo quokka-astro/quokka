@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef STROMGREN_SPHERE_HPP_
 #define STROMGREN_SPHERE_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file StromgrenSphere.hpp
 /// \brief Problem code for the static Stromgren sphere tests.
 ///

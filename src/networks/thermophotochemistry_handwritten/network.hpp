@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef NETWORKS_THERMOPHOTOCHEMISTRY_HANDWRITTEN_NETWORK_HPP_
 #define NETWORKS_THERMOPHOTOCHEMISTRY_HANDWRITTEN_NETWORK_HPP_
 /// \file network.hpp

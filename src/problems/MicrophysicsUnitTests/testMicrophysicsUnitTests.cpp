@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testMicrophysicsUnitTests.cpp
 /// \brief Unit tests of the microphysics integrators' building blocks: the dense LU solver (math/linear_algebra.hpp)
 /// on their matrix type, and the Rosenbrock tableaus (host and device). Transitional: it will be removed at the end

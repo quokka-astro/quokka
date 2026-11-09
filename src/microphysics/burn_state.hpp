@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef MICROPHYSICS_BURN_STATE_HPP_
 #define MICROPHYSICS_BURN_STATE_HPP_
 /// \file burn_state.hpp

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file network.cpp
 /// \brief Definitions and reader of the runtime parameters of the thermophotochemistry_handwritten network.
 

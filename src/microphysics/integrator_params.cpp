@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file integrator_params.cpp
 /// \brief Definitions and reader of the integrator runtime parameters declared in integrator_params.hpp.
 

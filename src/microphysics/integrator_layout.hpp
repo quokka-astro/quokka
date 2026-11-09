@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef MICROPHYSICS_INTEGRATOR_LAYOUT_HPP_
 #define MICROPHYSICS_INTEGRATOR_LAYOUT_HPP_
 /// \file integrator_layout.hpp

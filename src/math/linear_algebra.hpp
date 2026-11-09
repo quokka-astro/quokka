@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef LINEAR_ALGEBRA_HPP_
 #define LINEAR_ALGEBRA_HPP_
 /// \file linear_algebra.hpp

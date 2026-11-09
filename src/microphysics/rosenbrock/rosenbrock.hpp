@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef MICROPHYSICS_ROSENBROCK_HPP_
 #define MICROPHYSICS_ROSENBROCK_HPP_
 /// \file rosenbrock.hpp
