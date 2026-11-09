@@ -22,9 +22,9 @@ def make_priority_label_text(
 
 
 LOW_PRIORITY_LABEL_TEXT = make_priority_label_text(value="low")
-MEDIUM_PRIORITY_LABEL_TEXT = make_priority_label_text(value="medium")
+NORMAL_PRIORITY_LABEL_TEXT = make_priority_label_text(value="normal")
 DEFAULT_PRIORITY_LABEL_TEXT = make_priority_label_text(
-    value="medium",
+    value="normal",
     is_default=True,
 )
 HIGH_PRIORITY_LABEL_TEXT = make_priority_label_text(value="high")
@@ -85,11 +85,11 @@ class TestLoadLabels_Categories(unittest.TestCase):
         self.assertFalse(CONFIGURED_LABELS.scope_labels.check_has_prefix("size/XS"))
         self.assertTrue(CONFIGURED_LABELS.priority_labels.check_has_prefix("priority/urgent"))
 
-    def test_default_priority_is_medium(
+    def test_default_priority_is_normal(
         self,
     ):
         default_label = CONFIGURED_LABELS.priority_labels.default_label
-        self.assertEqual(default_label.label_name, "priority/medium")
+        self.assertEqual(default_label.label_name, "priority/normal")
         self.assertTrue(default_label.is_default)
 
     def test_priority_label_lookup(
@@ -103,7 +103,7 @@ class TestLoadLabels_Categories(unittest.TestCase):
         self,
     ):
         configured_labels = load_config_text(make_config_text())
-        self.assertEqual(configured_labels.priority_labels.default_label.label_name, "priority/medium")
+        self.assertEqual(configured_labels.priority_labels.default_label.label_name, "priority/normal")
         self.assertFalse(configured_labels.priority_labels.labels[0].is_default)
 
 
@@ -129,7 +129,7 @@ class TestLoadLabels_Errors(unittest.TestCase):
         self,
     ):
         config_text = make_config_text(
-            priority_label_text=LOW_PRIORITY_LABEL_TEXT + MEDIUM_PRIORITY_LABEL_TEXT +
+            priority_label_text=LOW_PRIORITY_LABEL_TEXT + NORMAL_PRIORITY_LABEL_TEXT +
             HIGH_PRIORITY_LABEL_TEXT,
         )
         with self.assertRaisesRegex(ValueError, "got 0"):

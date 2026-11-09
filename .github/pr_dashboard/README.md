@@ -65,7 +65,7 @@ Decisions I made along the way, and why.
 
 ### Labels
 
-- **The tools only manage the `scope/`, `size/` and `priority/` labels,** rather than every label on a PR. Labels without these prefixes are left alone. `scope/` and `size/` labels edited by hand are replaced when the labels are recalculated, and `priority/medium` is only added when a PR has no `priority/` label.
+- **The tools only manage the `scope/`, `size/` and `priority/` labels,** rather than every label on a PR. Labels without these prefixes are left alone. `scope/` and `size/` labels edited by hand are replaced when the labels are recalculated, and `priority/normal` is only added when a PR has no `priority/` label.
 - **A file with no matching scope gives the PR the `scope/not_mapped` label,** rather than a fallback scope. The label shows where `labels.toml` is missing a pattern.
 
 ### Commands

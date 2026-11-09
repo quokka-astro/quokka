@@ -154,7 +154,7 @@ class TestPrLabels_Changes(unittest.TestCase):
             edited_file_paths=("src/io/plotfile.cpp", ),
             num_lines_changed=40,
         )
-        self.assertEqual(label_changes.label_names_to_add, ("priority/medium", "scope/IO", "size/M"))
+        self.assertEqual(label_changes.label_names_to_add, ("priority/normal", "scope/IO", "size/M"))
         self.assertEqual(label_changes.label_names_to_remove, ())
 
     def test_stale_scope_and_size_are_replaced_and_others_kept(
@@ -200,7 +200,7 @@ class TestPrLabels_UpdatePlan(unittest.TestCase):
             pull_request=pull_request,
         )
         expected_update_plan = pr_context.UpdatePlan(
-            label_names_to_add=("priority/medium", "scope/IO", "size/M"),
+            label_names_to_add=("priority/normal", "scope/IO", "size/M"),
             label_names_to_remove=("scope/radiation", ),
         )
         self.assertEqual(update_plan_from_pr, expected_update_plan)

@@ -264,7 +264,7 @@ color = "0E8A16"
 description = "Review when there is time"
 
 [[priority.label]]
-value = "medium"
+value = "normal"
 color = "FBCA04"
 description = "Review at the normal pace"
 default = true
