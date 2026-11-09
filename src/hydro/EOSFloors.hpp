@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef EOS_FLOORS_HPP_
 #define EOS_FLOORS_HPP_
 /// \file EOSFloors.hpp

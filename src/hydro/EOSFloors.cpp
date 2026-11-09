@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file EOSFloors.cpp
 /// \brief Definitions of the EOS bounds declared in EOSFloors.hpp.
 
