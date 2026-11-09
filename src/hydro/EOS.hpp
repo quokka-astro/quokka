@@ -29,6 +29,18 @@
 namespace quokka
 {
 
+// EOS quantities at given (rho, P) used together by the Riemann solvers: the adiabatic sound speed, the internal
+// energy density, and the derivatives returned by ComputeOtherDerivatives (same order and meaning)
+struct EOS_RPState {
+	amrex::Real cs = NAN;	  // ComputeSoundSpeed(rho, P)
+	amrex::Real eint = NAN;	  // ComputeEintFromPres(rho, P)
+	amrex::Real dedr = NAN;	  // deint_dRho
+	amrex::Real dedp = NAN;	  // deint_dP
+	amrex::Real drdp = NAN;	  // dRho_dP
+	amrex::Real dpdr_s = NAN; // dP_dRho_s
+	amrex::Real G = NAN;	  // fundamental derivative
+};
+
 // forward declarations of EOS backends
 template <typename problem_t> struct EOSIdeal;
 #if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
@@ -167,6 +179,33 @@ template <typename problem_t> struct EOSIdeal {
 			G = estate.G;
 		}
 		return std::make_tuple(deint_dRho, deint_dP, dRho_dP, dP_dRho_s, G);
+	}
+
+	// ComputeSoundSpeed + ComputeEintFromPres + ComputeOtherDerivatives at (rho, P) from one EOS evaluation
+	// (identical results: all three evaluate eos(eos_input_rp) on the same state)
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeRPState(const amrex::Real rho, const amrex::Real P, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
+	    -> EOS_RPState
+	{
+		EOS_RPState r{};
+		amrex::ignore_unused(massScalars);
+		if constexpr (gamma_ == 1.0) {
+			r.cs = ComputeSoundSpeed(rho, P, massScalars);
+		} else {
+			chem_eos_t estate;
+			estate.rho = rho;
+			estate.p = P;
+			estate.mu = mean_molecular_weight_ / C::m_u;
+			eos(eos_input_rp, estate);
+			r.cs = estate.cs;
+			r.eint = estate.e * rho;
+			r.dedr = estate.dedr;
+			r.dedp = 1.0 / estate.dpde;
+			r.drdp = 1.0 / (estate.dpdr * C::k_B / boltzmann_constant_);
+			r.dpdr_s = estate.cs * estate.cs;
+			r.G = estate.G;
+		}
+		return r;
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
@@ -595,6 +634,29 @@ template <typename problem_t> class EOS
 	    -> amrex::Real
 	{
 		return backend_t::ComputeEintTempDerivative(rho, Tgas, massScalars);
+	}
+
+	// sound speed, internal energy density and ComputeOtherDerivatives at (rho, P); one EOS evaluation for the ideal-gas
+	// backends (EOSIdeal, and EOSTabulated, which delegates these to EOSIdeal), otherwise the three separate calls
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeRPState(amrex::Real rho, amrex::Real P, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> EOS_RPState
+	{
+		if constexpr (std::is_same_v<backend_t, EOSIdeal<problem_t>> || std::is_same_v<backend_t, EOSTabulated<problem_t>>) {
+			return EOSIdeal<problem_t>::ComputeRPState(rho, P, massScalars);
+		} else {
+			EOS_RPState r{};
+			r.cs = backend_t::ComputeSoundSpeed(rho, P, massScalars);
+			r.eint = backend_t::ComputeEintFromPres(rho, P, massScalars);
+			if constexpr (gamma_ != 1.0) {
+				auto [dedr, dedp, drdp, dpdr_s, G] = backend_t::ComputeOtherDerivatives(rho, P, massScalars);
+				r.dedr = dedr;
+				r.dedp = dedp;
+				r.drdp = drdp;
+				r.dpdr_s = dpdr_s;
+				r.G = G;
+			}
+			return r;
+		}
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
