@@ -719,6 +719,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("rk_integrator_order", integratorOrder_);
 		hpp.query("reconstruction_order", reconstructionOrder_);
 		hpp.query("fusion_level", hydroFusionLevel_);
+		hpp.query("jchunk_update", quokka::HydroLaunchOrder::jchunkUpdate);
+		hpp.query("jchunk_chi", quokka::HydroLaunchOrder::jchunkChi);
+		{
+			std::vector<int> jchunkFace;
+			if (hpp.queryarr("jchunk_face", jchunkFace) != 0) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(jchunkFace.size() == 3, "hydro.jchunk_face needs 3 values (x, y, z face kernels)");
+				for (int d = 0; d < 3; ++d) {
+					quokka::HydroLaunchOrder::jchunkFace[d] = jchunkFace[d];
+				}
+			}
+		}
 		hpp.query("skip_redundant_fixup", skipRedundantFixup_);
 		hpp.query("plm_limiter", plmLimiter_);
 		hpp.query("use_dual_energy", useDualEnergy_);

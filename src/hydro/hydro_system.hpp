@@ -34,6 +34,7 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayView.hpp"
+#include "util/ParallelForJChunked.hpp"
 #include "util/valarray.hpp"
 
 // Microphysics headers
@@ -1328,7 +1329,7 @@ void HydroSystem<problem_t>::ComputeFlatteningChiCell(amrex::MultiFab const &pri
 	auto chiCell_out = chiCell_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
-	amrex::ParallelFor(chiCell_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	quokka::ParallelForJChunked(chiCell_mf, ng, quokka::HydroLaunchOrder::jchunkChi, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		amrex::Array4<const amrex::Real> const &q = primVar_in[bx];
 		auto KS = [&](int ii, int jj, int kk) { return FlatteningKS(q, ii, jj, kk); };
 		const amrex::Real KS_c = KS(i, j, k);
@@ -1461,37 +1462,30 @@ void HydroSystem<problem_t>::UpdateStageFused(amrex::MultiFab const &consVarOld_
 {
 	// ComputeRhsFromFluxes + AddInternalEnergyPdV + PredictStep in one kernel, with the same per-cell arithmetic.
 	// If useRedoFlag is false, every cell is treated as redoFlag::none for the P dV term (as after redoFlag.setVal(none)).
-	// One launch per box with the Array4s passed by value (slightly faster than looking them up per thread).
+	// The thread order is cache-blocked when hydro.jchunk_update > 0 (see ParallelForJChunked).
 	const BL_PROFILE("HydroSystem::UpdateStageFused()");
 	AMREX_ALWAYS_ASSERT(primVar_mf.nComp() > primPgas_index);
 
-	{
-		for (amrex::MFIter mfi(consVarNew_mf, amrex::MFItInfo().DisableDeviceSync()); mfi.isValid(); ++mfi) {
-			const amrex::Box &vbx = mfi.validbox();
-			auto const x1Flux = fluxArray[0].const_array(mfi);
-			auto const vel_x = faceVelArray[0].const_array(mfi);
-			amrex::Array4<const amrex::Real> x2Flux{};
-			amrex::Array4<const amrex::Real> vel_y{};
-			amrex::Array4<const amrex::Real> x3Flux{};
-			amrex::Array4<const amrex::Real> vel_z{};
+	auto const x1Flux = fluxArray[0].const_arrays();
+	auto const vel_x = faceVelArray[0].const_arrays();
 #if (AMREX_SPACEDIM >= 2)
-			x2Flux = fluxArray[1].const_array(mfi);
-			vel_y = faceVelArray[1].const_array(mfi);
+	auto const x2Flux = fluxArray[1].const_arrays();
+	auto const vel_y = faceVelArray[1].const_arrays();
 #endif
 #if (AMREX_SPACEDIM == 3)
-			x3Flux = fluxArray[2].const_array(mfi);
-			vel_z = faceVelArray[2].const_array(mfi);
+	auto const x3Flux = fluxArray[2].const_arrays();
+	auto const vel_z = faceVelArray[2].const_arrays();
 #endif
-			auto const consVarOld = consVarOld_mf.const_array(mfi);
-			auto const primVar = primVar_mf.const_array(mfi);
-			auto const consVarNew = consVarNew_mf.array(mfi);
-			auto const redoFlag = redoFlag_mf.array(mfi);
-			amrex::ParallelFor(vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				UpdateStageFusedCell(x1Flux, x2Flux, x3Flux, vel_x, vel_y, vel_z, consVarOld, primVar, consVarNew, redoFlag, i, j, k, dx, dt,
-						     nvars, useRedoFlag);
-			});
-		}
-	}
+	auto const consVarOld = consVarOld_mf.const_arrays();
+	auto const primVar = primVar_mf.const_arrays();
+	auto const consVarNew = consVarNew_mf.arrays();
+	auto const redoFlag = redoFlag_mf.arrays();
+	quokka::ParallelForJChunked(
+	    consVarNew_mf, amrex::IntVect(0), quokka::HydroLaunchOrder::jchunkUpdate, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		    UpdateStageFusedCell(x1Flux[bx], AMREX_D_PICK(x1Flux[bx], x2Flux[bx], x2Flux[bx]), AMREX_D_PICK(x1Flux[bx], x1Flux[bx], x3Flux[bx]),
+					 vel_x[bx], AMREX_D_PICK(vel_x[bx], vel_y[bx], vel_y[bx]), AMREX_D_PICK(vel_x[bx], vel_x[bx], vel_z[bx]),
+					 consVarOld[bx], primVar[bx], consVarNew[bx], redoFlag[bx], i, j, k, dx, dt, nvars, useRedoFlag);
+	    });
 }
 
 // to ensure that physical quantities are within reasonable
@@ -1896,7 +1890,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			DustSystem<problem_t>::template ComputeDustFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k);
 		}
 	};
-	amrex::ParallelFor(x1Flux_mf, ng, faceKernel);
+	quokka::ParallelForJChunked(x1Flux_mf, ng, quokka::HydroLaunchOrder::jchunkFace[static_cast<int>(DIR)], faceKernel);
 }
 
 template <typename problem_t>
