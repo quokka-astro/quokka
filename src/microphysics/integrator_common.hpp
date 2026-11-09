@@ -172,30 +172,32 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 	update_thermodynamics<Layout>(state, int_state);
 
 	// Only do the burn if the incoming temperature is within the temperature
-	// bounds. Otherwise set the RHS to zero and return.
+	// bounds. Otherwise set the RHS to zero.
 
-	if (state.T <= EOSData::mintemp || state.T >= Layout::traits::max_temp) {
+	const bool in_bounds = !(state.T <= EOSData::mintemp || state.T >= Layout::traits::max_temp);
 
-		for (int n = 1; n <= int_neqs; ++n) {
-			ydot(n) = 0.0_rt;
+	if (in_bounds) {
+		state.time = time;
+
+		// at this point, the (burn_t) state is synchronized with the integrator
+		// and is thermodynamically consistent.
+
+		// Call the specific network routine to get the RHS.
+
+		actual_rhs(state, ydot);
+
+		// Allow energy integration to be disabled.
+
+		if constexpr (!Layout::traits::integrate_energy) {
+			ydot(Layout::energy_row) = 0.0_rt;
 		}
-
-		return;
 	}
 
-	state.time = time;
-
-	// at this point, the (burn_t) state is synchronized with the integrator
-	// and is thermodynamically consistent.
-
-	// Call the specific network routine to get the RHS.
-
-	actual_rhs(state, ydot);
-
-	// Allow energy integration to be disabled.
-
-	if constexpr (!Layout::traits::integrate_energy) {
-		ydot(Layout::energy_row) = 0.0_rt;
+	// The zeroing is a select after the branch, not stores inside an else branch: the compiler would merge such stores
+	// with the network's last store into one store with a run-time index, which keeps the whole integrator state, ydot
+	// included, in scratch memory on the GPU.
+	for (int n = 1; n <= int_neqs; ++n) {
+		ydot(n) = in_bounds ? ydot(n) : 0.0_rt;
 	}
 }
 
