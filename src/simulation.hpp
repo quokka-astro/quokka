@@ -298,10 +298,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void setCustomGhostCells() {}
 
 	virtual void computeMaxSignalLocal(int level) = 0;
-
-	// If the derived class already knows the global maximum signal speed of state_new on this level (e.g. from its
-	// post-update CFL check), it may return it here (and true) so computeTimestepAtLevel can skip recomputing it.
-	virtual auto takeCachedMaxSignalSpeed(int /*level*/, amrex::Real & /*max_signal*/) -> bool { return false; }
 	virtual void printCellProperties(int lev, amrex::IntVect const &index) = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
 	virtual void preCalculateInitialConditions() = 0;
@@ -1277,16 +1273,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	using dtloc_t = amrex::ValLocPair<amrex::Real, amrex::IntVect>;
 
 	// compute hydro timestep on level 'lev'
-	amrex::Real domain_signal_max = 0.0;
-	amrex::IntVect domain_signal_maxloc(-1);
-	const bool reusedSignal =
-	    takeCachedMaxSignalSpeed(lev, domain_signal_max) && !verbose && !(signalSpeedAbort_ > 0.0 && domain_signal_max > signalSpeedAbort_);
-	if (!reusedSignal) {
-		// (also recomputed when the location is needed for diagnostics)
-		computeMaxSignalLocal(lev);
-		domain_signal_max = max_signal_speed_[lev].norminf();
-		domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
-	}
+	computeMaxSignalLocal(lev);
+	const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
+	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
 	if (signalSpeedAbort_ > 0.0 && domain_signal_max > signalSpeedAbort_) {
 		const std::string abort_msg =
 		    std::format("[FATAL] Maximum signal speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}",

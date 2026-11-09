@@ -226,14 +226,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int lowLevelDebuggingOutput_ = 0; // 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;	  // 1 == forward Euler; 2 == RK2-SSP (default)
-	int skipRedundantFixup_ = 1;
-	int reuseCflSignalSpeed_ = 0;		  // hydro.reuse_cfl_signal_speed: opt-in; the next timestep reuses the post-update CFL check's
-						  // max signal speed. Only valid if nothing modifies the state between the hydro update and the next
-						  // timestep computation (no gravity, particles, radiation, MHD, or user hooks that change the state).
-	amrex::Vector<amrex::Real> cflMaxSignal_; // global max signal speed of state_new from the last CFL check, per level
-	amrex::Vector<int> cflMaxSignalValid_;	  // hydro.skip_redundant_fixup: skip the post-Strang fixup when no operator-split source ran
-	int hydroFusionLevel_ = 3;		  // hydro.fusion_level; see effectiveHydroFusionLevel()
-	int reconstructionOrder_ = 3;		  // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM (extrema-preserving)
+	int skipRedundantFixup_ = 1;	  // hydro.skip_redundant_fixup: skip the post-Strang fixup when no operator-split source ran
+	int hydroFusionLevel_ = 3;	  // hydro.fusion_level; see effectiveHydroFusionLevel()
+	int reconstructionOrder_ = 3;	  // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM (extrema-preserving)
 	SlopeLimiter plmLimiter_ = SlopeLimiter::sweby;
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM
 	int emfReconstructionOrder_ = 5;       // 1 == donor cell; 2 == PLM; 3 == PPM; 5 == xPPM (extrema-preserving, default)
@@ -333,7 +328,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void CheckHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc,
 			      std::source_location const &location = std::source_location::current());
 	void computeMaxSignalLocal(int level) override;
-	auto takeCachedMaxSignalSpeed(int level, amrex::Real &max_signal) -> bool override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
@@ -726,7 +720,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("reconstruction_order", reconstructionOrder_);
 		hpp.query("fusion_level", hydroFusionLevel_);
 		hpp.query("skip_redundant_fixup", skipRedundantFixup_);
-		hpp.query("reuse_cfl_signal_speed", reuseCflSignalSpeed_);
 		hpp.query("plm_limiter", plmLimiter_);
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
@@ -997,24 +990,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfR
 	amrex::Real dtrad_tmp = radiationCflNumber_ * (dx_min / c_hat);
 	int const nsubSteps = std::ceil(dt_lev_hydro / dtrad_tmp);
 	return nsubSteps;
-}
-
-template <typename problem_t> auto QuokkaSimulation<problem_t>::takeCachedMaxSignalSpeed(int const level, amrex::Real &max_signal) -> bool
-{
-	// the CFL check's maximum equals computeMaxSignalLocal's (both use ComputeCellSignalSpeed) for pure (M)HD-free hydro without
-	// radiation, on a single level, if the state has not been modified since
-	if constexpr (!Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled ||
-		      Physics_Traits<problem_t>::is_mhd_enabled) {
-		amrex::ignore_unused(level, max_signal);
-		return false;
-	} else {
-		if (reuseCflSignalSpeed_ == 0 || finestLevel() != 0 || level >= static_cast<int>(cflMaxSignalValid_.size()) || cflMaxSignalValid_[level] == 0) {
-			return false;
-		}
-		cflMaxSignalValid_[level] = 0; // use once
-		max_signal = cflMaxSignal_[level];
-		return true;
-	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignalLocal(int const level)
@@ -2491,14 +2466,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::isCflViolated(in
 	// compute max signal speed
 	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev], state_new_fc_[lev]);
 	amrex::ParallelDescriptor::ReduceRealMax(max_signal);
-	if (reuseCflSignalSpeed_ != 0) {
-		if (static_cast<int>(cflMaxSignal_.size()) <= lev) {
-			cflMaxSignal_.resize(lev + 1, 0.0);
-			cflMaxSignalValid_.resize(lev + 1, 0);
-		}
-		cflMaxSignal_[lev] = max_signal;
-		cflMaxSignalValid_[lev] = 1;
-	}
 
 	// compute dt_cfl
 	auto dx = geom[lev].CellSizeArray();
