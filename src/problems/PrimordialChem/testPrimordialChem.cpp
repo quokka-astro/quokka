@@ -53,6 +53,7 @@ template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 
 template <> struct Microphysics_Traits<PrimordialChemTest> : DefaultMicrophysicsTraits {
 	static constexpr bool chemistry = true; // built with CHEMISTRY
+	static constexpr bool numerical_jacobian_fallback = true;
 };
 
 template <> struct SimulationData<PrimordialChemTest> {

@@ -52,6 +52,7 @@ template <> struct Physics_Traits<PopIII> : DefaultPhysicsTraits {
 
 template <> struct Microphysics_Traits<PopIII> : DefaultMicrophysicsTraits {
 	static constexpr bool chemistry = true; // built with CHEMISTRY
+	static constexpr bool numerical_jacobian_fallback = true;
 };
 
 template <> struct SimulationData<PopIII> {
