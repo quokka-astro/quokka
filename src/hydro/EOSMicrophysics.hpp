@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef EOS_MICROPHYSICS_HPP_ // NOLINT
 #define EOS_MICROPHYSICS_HPP_
 /// \file EOSMicrophysics.hpp

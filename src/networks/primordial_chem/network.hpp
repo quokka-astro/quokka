@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef NETWORKS_PRIMORDIAL_CHEM_NETWORK_HPP_
 #define NETWORKS_PRIMORDIAL_CHEM_NETWORK_HPP_
 /// \file network.hpp
