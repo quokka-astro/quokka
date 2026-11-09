@@ -1814,14 +1814,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				regRight[n] = FlattenedEdges<DIR, FUSED_ORDER, limiter>(q, n, i, j, k, chi_plus).first;
 			}
 		}
-		auto const x1LeftState = [&]() {
+		auto x1LeftState = [&]() { // non-const: DustSystem::ComputeDustFluxes takes it by non-const reference
 			if constexpr (FUSED_ORDER != 0) {
 				return quokka::RegisterStateView{regLeft};
 			} else {
 				return quokka::Array4View<const amrex::Real, DIR>(x1LeftState_in[bx]);
 			}
 		}();
-		auto const x1RightState = [&]() {
+		auto x1RightState = [&]() {
 			if constexpr (FUSED_ORDER != 0) {
 				return quokka::RegisterStateView{regRight};
 			} else {
