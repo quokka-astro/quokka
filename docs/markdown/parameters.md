@@ -68,6 +68,15 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | hydro.artificial_viscosity_coefficient | Float         | `0.0`          | This is the linear artificial viscosity coefficient used in the artificial viscosity term added to the flux. This is the same parameter as defined in the original PPM paper.  |
 | hydro.small_x                          | Float         | `1.0e-30`      | Floor of the mass fractions: a negative mass scalar is reset to `small_x` times the density. Read only by problems with mass scalars and no network (`Microphysics_Traits<problem_t>::Network` is `None`); a problem with a network uses `network.small_x` instead. Setting it for any other problem aborts the run. |
 
+## Equation of state
+
+These parameters are read in `quokka::eos_floors::ReadParameters()` in `src/hydro/EOSFloors.cpp`, called by `QuokkaSimulation<problem_t>::initialize()`.
+
+| Parameter Name | Type  | Default    | Description                                                                 |
+|----------------|-------|------------|-----------------------------------------------------------------------------|
+| eos.min_temp   | Float | `1.0e-10`  | Floor of the temperature the equation of state is given.                    |
+| eos.min_dens   | Float | `1.0e-100` | Floor of the density the equation of state is given.                        |
+
 ## Radiation
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
@@ -100,8 +109,8 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 | Parameter Name                       | Type          | Default                                        | Description                                                                                                                                                                                                           |
 |--------------------------------------|---------------|------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| cooling.enabled                      | Boolean (0/1) | `1` (Enabled)                                  | Only takes effect when the problem sets `EOSBackend = EOSTabulated<P>` (i.e. `quokka::EOS<P>::is_tabulated`). If set to 0, disables the cooling integrator (`applyCooling`) while the tabulated EOS still uses the table to compute temperature — useful for testing. Has no effect otherwise: for non-tabulated EOS backends, the cooling integrator never runs regardless of this value. |
-| cooling.read_tables_even_if_disabled | Boolean (0/1) | `0` (Disabled)                                 | If set to 1, reads the cooling tables even if the problem does not use the `EOSTabulated` backend. Not needed for problems that set `EOSBackend = EOSTabulated<P>`. |
+| cooling.enabled                      | Boolean (0/1) | `1` (Enabled)                                  | Only takes effect when the problem sets `EOS = EOSTabulated<P>` (i.e. `quokka::EOS<P>::is_tabulated`). If set to 0, disables the cooling integrator (`applyCooling`) while the tabulated EOS still uses the table to compute temperature — useful for testing. Has no effect otherwise: for non-tabulated EOSs, the cooling integrator never runs regardless of this value. |
+| cooling.read_tables_even_if_disabled | Boolean (0/1) | `0` (Disabled)                                 | If set to 1, reads the cooling tables even if the problem does not use the `EOSTabulated` EOS. Not needed for problems that set `EOS = EOSTabulated<P>`. |
 | cooling.hdf5_data_file               | String        | **Required** if `EOSTabulated` backend is used | The path to the cooling tables in HDF5 format. We recommend using `extern/cooling/CloudyData_UVB=HM2012_resampled.h5` for ISM at solar metallicity.                                                                   |
 
 ## Chemistry
@@ -125,12 +134,12 @@ Whether a problem compiles chemistry or photochemistry at all is set by fields o
 | Trait | Default | Description |
 |---|---|---|
 | `Network` | `quokka::networks::None` | The species network, a type from `src/networks/<network>/network.hpp`, e.g. `quokka::networks::PhotoionizationHCaseB` or `quokka::networks::Thermophotochemistry`. It supplies the species, the chemical and thermal bands, and the network's runtime parameters (prefix `network`), which `QuokkaSimulation` reads at start-up. |
-| `chemistry` | `false` | Compile the chemistry source term. Also makes `EOSMicrophysics` the default EOS backend. |
-| `photochemistry` | `false` | Compile photochemistry in the radiation substeps. Also makes `EOSMicrophysics` the default EOS backend. |
+| `chemistry` | `false` | Compile the chemistry source term. |
+| `photochemistry` | `false` | Compile photochemistry in the radiation substeps. |
 | `dust_chemical_band_absorption` | `false` | Dust absorbs chemical-band photons (`Q_dust`): the network carries the absorbed energy, which heats the dust. Requires `ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model = true`. |
 | `integrate_rad_flux` | `true` | With photochemistry, integrate the photon flux equations in the network. With `false`, the flux is determined algebraically. |
 
-A problem with chemistry or photochemistry also needs, in its `CMakeLists.txt`: the network's `network.cpp` among the executable's sources; `quokka_add_eos(<target> <backend> <network>)` (from `extern/eos/quokka_eos.cmake`), which builds it against the EOS backend (`photoionization` or `primordial_chem`) and the network's species table; and the network's directory on the include path, for its `actual_rhs.H`. Its problem file includes `radiation/photochemistry.hpp` or `chemistry/Chemistry.hpp`, which define the burn. The burn and the EOS check that `Network` has as many species as the species table it is built with. Problems without chemistry use the `gamma_law` backend.
+A problem with chemistry or photochemistry names its network only in its problem file: it includes the network's `network.hpp`, which holds the network's constants, right-hand side and Jacobian, sets `Microphysics_Traits<P>::Network`, and includes `radiation/photochemistry.hpp` or `chemistry/Chemistry.hpp`, which define the burn. Its `CMakeLists.txt` is that of any other problem: the networks' runtime parameters (each `src/networks/<network>/network.cpp`) are in the `quokka_networks` library, which every target links. The problem's EOS, for the hydro and the burn, is the one its network names (`Network::EOSType`), `EOSMultigamma`, which reads the network's species masses and adiabatic indices.
 
 ## Integrator (Rosenbrock)
 

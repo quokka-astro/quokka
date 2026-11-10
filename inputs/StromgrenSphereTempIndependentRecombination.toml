@@ -20,6 +20,9 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
+eos.min_temp = 1e-2
+eos.min_dens = 1e-60
+
 stromgen.tend = 1.2e10
 stromgen.n_e_init = 1.0e-30
 stromgen.n_HI_init = 1670

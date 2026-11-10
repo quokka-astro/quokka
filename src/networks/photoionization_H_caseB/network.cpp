@@ -6,21 +6,21 @@
 
 #include "AMReX_ParmParse.H"
 
-namespace quokka::networks
+// $$JAFF SUB label
+namespace quokka::networks::photoionization_H_caseB
 {
+// $$JAFF END
 
-namespace jaff_network
-{
 using amrex::literals::operator""_rt;
 
 AMREX_GPU_MANAGED amrex::Real small_x = 1.0e-30_rt; // NOLINT
-} // namespace jaff_network
 
-void JaffNetwork::ReadParameters()
+void Network::ReadParameters()
 {
-	namespace params = jaff_network;
 	const amrex::ParmParse pp("network");
-	pp.query("small_x", params::small_x);
+	pp.query("small_x", small_x);
 }
 
-} // namespace quokka::networks
+// $$JAFF SUB label
+} // namespace quokka::networks::photoionization_H_caseB
+// $$JAFF END

@@ -1303,7 +1303,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	if (enableElectronConduction_ == 1) {
 		if (conductionType_ == "constant") {
-			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+			double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS<problem_t>::gamma_ - 1.0));
 			double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
 			conduction_dt.value = conductionCFL * dx_min * dx_min / diffusion_coefficient;
 			conduction_dt.index = domain_signal_maxloc;

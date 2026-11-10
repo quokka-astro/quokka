@@ -7,9 +7,8 @@
 
 #include "AMReX_Gpu.H"
 #include "AMReX_GpuContainers.H"
-#include "eos.H"
-#include "extern_parameters.H"
 
+#include "hydro/EOSFloors.hpp"
 #include "math/ODEIntegrate.hpp"
 #include "math/bracketing_root_finding.hpp"
 #include "math/root_finding.hpp"
@@ -75,11 +74,8 @@ namespace
 
 auto TestODEIntegration() -> int
 {
-	// initialize EOS
-	eos_rp::ReadParameters();
-	Real small_temp = 1e-10;
-	Real small_dens = 1e-100;
-	eos_init(small_temp, small_dens);
+	// initialize the EOS floors (this test does not construct a QuokkaSimulation, which would)
+	quokka::eos_floors::ReadParameters();
 
 	// set up initial conditions
 	const Real Eint0 = quokka::EOS<ODETest>::ComputeEintFromTgas(rho0, Tgas0);

@@ -58,7 +58,7 @@ template <> struct Particle_Traits<SNProblem> : DefaultParticleTraits {
 template <> struct quokka::EOS_Traits<SNProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
-	using EOSBackend = quokka::EOSTabulated<SNProblem>;
+	using EOS = quokka::EOSTabulated<SNProblem>;
 };
 
 template <> struct HydroSystem_Traits<SNProblem> {

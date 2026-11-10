@@ -26,10 +26,6 @@
 #include <limits>
 #include <string>
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
 namespace stromgren_sphere
 {
 
@@ -65,8 +61,6 @@ template <typename problem_t> struct RadTraits {
 };
 
 struct Data {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -181,13 +175,8 @@ template <typename problem_t> void PreCalculateInitialConditions(QuokkaSimulatio
 {
 	auto &userData = sim.userData_;
 
-	// initialize microphysics routines
-	eos_rp::ReadParameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
-	userData.small_temp = 1e-2;
-	userData.small_dens = 1e-60;
 	userData.temperature = 1.0e4;
 	userData.tend = 1000.0_rt;
 	userData.n_e_init = 0.0e0_rt;
@@ -195,8 +184,6 @@ template <typename problem_t> void PreCalculateInitialConditions(QuokkaSimulatio
 	userData.n_HII_init = 0.0e0_rt;
 	userData.Q = 1.0e49_rt;
 	userData.recombination_switch = 0;
-	pp.query("small_temp", userData.small_temp);
-	pp.query("small_dens", userData.small_dens);
 	pp.query("temperature", userData.temperature);
 	pp.query("tend", userData.tend);
 	pp.query("n_e_init", userData.n_e_init);
@@ -206,8 +193,6 @@ template <typename problem_t> void PreCalculateInitialConditions(QuokkaSimulatio
 
 	amrex::ParmParse const pp2("network");
 	pp2.query("recombination_switch", userData.recombination_switch);
-
-	eos_init(userData.small_temp, userData.small_dens);
 
 	userData.r_analytical_last_t = 0.0_rt;
 	userData.r_analytical_last_R = 0.0_rt;
@@ -236,12 +221,12 @@ template <typename problem_t> void SetInitialConditionsOnGrid(QuokkaSimulation<p
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+		rhotot += state.xn[n] * Network::SpeciesMass()[n];
 	}
 	state.rho = rhotot;
 
 	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	quokka::EOS<problem_t>::Solve(quokka::EOS<problem_t>::Input::RhoT, state);
 	const auto Egas0 = state.e * rhotot;
 
 	// loop over the grid and set the initial condition
@@ -260,7 +245,7 @@ template <typename problem_t> void SetInitialConditionsOnGrid(QuokkaSimulation<p
 		state_cc(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) = 0.0_rt;
 		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) =
-			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			    state.xn[nn] * Network::SpeciesMass()[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
@@ -292,10 +277,10 @@ template <typename problem_t> void ComputeAfterTimestep(QuokkaSimulation<problem
 		auto *hist_ptr = d_hist.data();
 
 		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const amrex::Real n_HI =
-			    state(i, j, k, HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::H)) / spmasses[Network::Species::H];
-			const amrex::Real n_HII =
-			    state(i, j, k, HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::H_p)) / spmasses[Network::Species::H_p];
+			const amrex::Real n_HI = state(i, j, k, HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::H)) /
+						 Network::SpeciesMass()[Network::Species::H];
+			const amrex::Real n_HII = state(i, j, k, HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::H_p)) /
+						  Network::SpeciesMass()[Network::Species::H_p];
 			const amrex::Real denom = n_HI + n_HII;
 			if (denom <= 0.0_rt) {
 				return;
@@ -469,15 +454,15 @@ template <typename problem_t> auto ProblemMain() -> int
 		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 		const amrex::Real quanta = RadSystem<problem_t>::GetChemBandQuanta(0);
 		const amrex::Real n_photon_sum0 = sim.state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) / quanta;
-		const amrex::Real n_e_sum0 =
-		    sim.state_new_cc_[0].sum(HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::e)) / spmasses[Network::Species::e];
+		const amrex::Real n_e_sum0 = sim.state_new_cc_[0].sum(HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::e)) /
+					     Network::SpeciesMass()[Network::Species::e];
 
 		sim.evolve();
 
 		const amrex::Real error_tol = 1e-6;
 		const amrex::Real n_photon_sum = sim.state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) / quanta;
-		const amrex::Real n_e_sum =
-		    sim.state_new_cc_[0].sum(HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::e)) / spmasses[Network::Species::e];
+		const amrex::Real n_e_sum = sim.state_new_cc_[0].sum(HydroSystem<problem_t>::scalar0_index + static_cast<int>(Network::Species::e)) /
+					    Network::SpeciesMass()[Network::Species::e];
 		amrex::Print() << "Final total number of photons: " << n_photon_sum << '\n';
 		amrex::Print() << "Final total number of electrons: " << n_e_sum << '\n';
 		const amrex::Real n_photon_added = sim.userData_.Q * sim.userData_.tend / 8.0_rt;

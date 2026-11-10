@@ -48,7 +48,7 @@ What `--help` does not cover:
 
 ## Key Dependencies
 - **AMReX**: Underlying AMR framework (external submodule)
-- **EOS**: Microphysics' equation of state, vendored in `extern/eos`
+- **EOS**: Quokka's own (`src/hydro/EOS.hpp`); a problem with a chemistry network gets the EOS its network names
 - **fmt, yaml-cpp**: Formatting and configuration parsing
 - **HDF5**: I/O backend
 - **OpenPMD-api**: Optional for large-scale output

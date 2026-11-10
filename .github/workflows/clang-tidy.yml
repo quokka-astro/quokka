@@ -31,19 +31,11 @@ jobs:
       with:
         config_file: src/.clang-tidy
         # clang-tidy lints each changed header on its own, with the compile command of a nearby source file, so a header
-        # that only compiles inside a particular problem's build fails. Skipped:
-        # - Chemistry.hpp, EOSMicrophysics.hpp and photochemistry.hpp include the EOS backend's actual_eos_data.H, which
-        #   only the chemistry problems' include paths find, until the EOS is ported
-        # The jaff-generated network is skipped too: fixes belong in jaff's template, not in the generated files. So are
-        # the vendored copies in extern/: fixes belong upstream.
+        # that only compiles inside a particular problem's build fails. The vendored copies in extern/ are skipped: fixes
+        # belong upstream. So is the primordial_chem network, whose right-hand side and Jacobian are generated (pynucastro).
         exclude: "extern/turbulence/*,\
           extern/gcem/*,\
-          extern/eos/EOS/*,\
-          extern/eos/interfaces/*,\
-          src/chemistry/Chemistry.hpp,\
-          src/hydro/EOSMicrophysics.hpp,\
-          src/networks/photoionization_H_caseB/*,\
-          src/radiation/photochemistry.hpp"
+          src/networks/primordial_chem/network.hpp"
         build_dir: build
         apt_packages: libopenmpi-dev,libhdf5-mpi-dev,python3-dev,python3-numpy,python3-matplotlib
         install_commands: >
