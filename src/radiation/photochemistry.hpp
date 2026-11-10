@@ -175,6 +175,12 @@ inline auto MakeSolverSettings(IntegratorParams const &ip) -> rosenbrock::Settin
 		s.min_value[n] = -ip.atol_rad_num;
 	}
 	s.max_steps = ip.ode_max_steps;
+	s.n_in_error_norm = 0;
+	for (int n = 0; n < network::NumEqs; ++n) {
+		if (s.in_error_norm[n]) {
+			s.n_in_error_norm += 1;
+		}
+	}
 	return s;
 }
 

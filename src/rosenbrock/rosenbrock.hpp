@@ -26,7 +26,8 @@ enum class Status : int { Success = 0, TooManySteps, StepSizeUnderflow, Singular
 template <int N> struct Settings {
 	Vector<N> atol;				///< absolute tolerance; must be > 0 for every component in the error norm
 	Vector<N> rtol;				///< relative tolerance; must be > 10 eps for every component in the error norm
-	amrex::GpuArray<bool, N> in_error_norm; ///< false: left out of the sum of the RMS error norm (the sum is still divided by N)
+	amrex::GpuArray<bool, N> in_error_norm; ///< false: left out of the RMS error norm, and out of the count it is divided by
+	int n_in_error_norm;			///< how many entries of in_error_norm are true; set by the caller
 	Vector<N> min_value;			///< a stage or step with y(n) < min_value(n) is rejected; -inf for no limit
 	Vector<N> change_floor; ///< where |y_old| and |y_new| both exceed this, a step that changes |y| by more than 4x is rejected; +inf for none
 	int max_steps;		///< maximum number of steps
@@ -252,7 +253,10 @@ template <int N, typename System> AMREX_GPU_HOST_DEVICE auto integrate(System &s
 			}
 
 			const bool valid_update = detail::change_valid<N>(settings, y, ynew);
-			const amrex::Real errnorm = std::sqrt(err_sum / static_cast<amrex::Real>(N));
+			// Divided by the number of error-controlled entries, not by N. Dividing by N made the norm depend on
+			// how many equations the system happens to carry, so adding or removing a passive one -- the chemical
+			// band's flux factor, say -- silently changed the step control. (PR 2432 makes the same correction.)
+			const amrex::Real errnorm = std::sqrt(err_sum / static_cast<amrex::Real>(settings.n_in_error_norm));
 			// An accepted final step needs no new step size: hnew below then only enters the step-size underflow check at the
 			// top of the loop, which no factor in [h211b_fac_min, h211b_fac_max] can make fire when this condition holds. The
 			// controller (three pow calls) is then skipped and the smallest factor used.
