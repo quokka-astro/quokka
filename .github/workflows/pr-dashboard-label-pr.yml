@@ -1,4 +1,5 @@
-name: 🏷️ PR Dashboard Labels
+# Sets the scope, size and default priority labels when a PR is opened, reopened or marked ready for review.
+name: "PR Dashboard: Label PR"
 
 on:
   pull_request_target:
@@ -19,7 +20,7 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - name: Checkout the base branch
+      - name: Checkout the default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
         with:
           sparse-checkout: .github/pr_dashboard

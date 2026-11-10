@@ -1,4 +1,5 @@
-name: 💬 PR Dashboard Commands
+# Runs a command posted in a PR comment, or replies explaining why it was not run.
+name: "PR Dashboard: Run Command"
 
 on:
   issue_comment:
@@ -13,6 +14,7 @@ concurrency:
 
 jobs:
   command:
+    # Only PR comments from people that might contain a command.
     if: |
       github.event.issue.pull_request != null &&
       github.event.comment.user.type != 'Bot' &&

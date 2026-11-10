@@ -24,10 +24,10 @@ Deciding and writing are kept apart, so every decision can be tested offline and
 
 | Workflow | Runs when | Action |
 |---|---|---|
-| `pr-dashboard-labels.yml` | A PR is opened, reopened or marked ready for review | `label-pr`: sets the scope and size labels, and the default priority |
-| `pr-dashboard-commands.yml` | A comment containing `/` is posted on a PR | `run-command`: runs a command, or explains why it was not run |
-| `pr-dashboard-repo-labels.yml` | `labels.toml` changes on `development`, or someone starts it from the Actions tab | `update-repo-labels`: creates and updates the labels on GitHub |
-| `pr-dashboard-tests.yml` | A PR changes these tools or their workflows | Runs the offline tests |
+| `pr-dashboard-label-pr.yml` | A PR is opened, reopened or marked ready for review | `label-pr`: sets the scope and size labels, and the default priority |
+| `pr-dashboard-run-command.yml` | A comment containing `/` is posted on a PR | `run-command`: runs a command, or explains why it was not run |
+| `pr-dashboard-update-label-definitions.yml` | `labels.toml` changes on `development`, or someone starts it from the Actions tab | `update-label-definitions`: creates and updates the label names, colours and descriptions on GitHub |
+| `pr-dashboard-tests.yml` | Any PR is opened or updated | Runs the offline tests |
 
 ## Changing the Labels
 
@@ -56,7 +56,7 @@ The actions can be run from a local checkout with a `gh` login. `--dry-run` prin
 
 ```bash
 PYTHONPATH=.github/pr_dashboard/src python3 -m pr_dashboard.run_dashboard label-pr --repo quokka-astro/quokka --pr <number> --dry-run
-PYTHONPATH=.github/pr_dashboard/src python3 -m pr_dashboard.run_dashboard update-repo-labels --repo quokka-astro/quokka --dry-run
+PYTHONPATH=.github/pr_dashboard/src python3 -m pr_dashboard.run_dashboard update-label-definitions --repo quokka-astro/quokka --dry-run
 ```
 
 ## Design Decisions

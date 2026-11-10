@@ -121,7 +121,7 @@ def get_label_update_action(
         return LabelUpdateActions.UPDATE
 
 
-def update_repo_labels(
+def update_label_definitions(
     *,
     repo: str,
     dry_run: bool,
@@ -153,7 +153,7 @@ def update_repo_labels(
                 description=label.description,
             )
         else:
-            raise ValueError(f"`update_repo_labels` has no branch for action `{update_action}`.")
+            raise ValueError(f"`update_label_definitions` has no branch for action `{update_action}`.")
 
 
 ##
@@ -198,16 +198,16 @@ def add_run_command_parser(
     )
 
 
-def add_update_repo_labels_parser(
+def add_update_label_definitions_parser(
     action_parsers: argparse._SubParsersAction,
 ) -> None:
-    update_repo_labels_parser = action_parsers.add_parser("update-repo-labels")
-    update_repo_labels_parser.add_argument(
+    update_label_definitions_parser = action_parsers.add_parser("update-label-definitions")
+    update_label_definitions_parser.add_argument(
         "--repo",
         type=str,
         required=True,
     )
-    update_repo_labels_parser.add_argument(
+    update_label_definitions_parser.add_argument(
         "--dry-run",
         action="store_true",
         default=False,
@@ -227,7 +227,7 @@ def main() -> None:
     )
     add_label_pr_parser(action_parsers)
     add_run_command_parser(action_parsers)
-    add_update_repo_labels_parser(action_parsers)
+    add_update_label_definitions_parser(action_parsers)
     parsed_args = parser.parse_args()
     if parsed_args.action == "label-pr":
         label_pr(
@@ -240,8 +240,8 @@ def main() -> None:
             repo=parsed_args.repo,
             event_path=parsed_args.event_path,
         )
-    elif parsed_args.action == "update-repo-labels":
-        update_repo_labels(
+    elif parsed_args.action == "update-label-definitions":
+        update_label_definitions(
             repo=parsed_args.repo,
             dry_run=parsed_args.dry_run,
         )
