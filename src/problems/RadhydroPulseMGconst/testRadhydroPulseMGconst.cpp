@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadhydroPulseMGconst.cpp
 /// \brief Defines a test problem for multigroup radiation in the diffusion regime with advection by gas, running
 /// with PPL_opacity_fixed_slope_spectrum opacity model.

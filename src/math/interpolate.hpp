@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef INTERPOLATE_H_ // NOLINT
 #define INTERPOLATE_H_
 

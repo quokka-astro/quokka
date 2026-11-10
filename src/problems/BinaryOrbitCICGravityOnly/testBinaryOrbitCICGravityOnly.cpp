@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testBinaryOrbitCICGravityOnly.cpp
 /// \brief Defines a test problem for a binary orbit with only self-gravity enabled.
 ///

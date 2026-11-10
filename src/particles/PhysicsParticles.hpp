@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef PHYSICS_PARTICLES_HPP_
 #define PHYSICS_PARTICLES_HPP_
 
