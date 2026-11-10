@@ -15,7 +15,7 @@ jobs:
 
   docs-toctree:
     name: Validate mdBook summary and build
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-amd64
     needs: check_changes
     if: needs.check_changes.outputs.has_docs_changes == 'true' || needs.check_changes.outputs.has_specific_workflow_changes == 'true' || needs.check_changes.outputs.has_scripts_changes == 'true'
     steps:
