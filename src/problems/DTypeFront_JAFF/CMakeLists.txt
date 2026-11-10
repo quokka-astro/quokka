@@ -10,6 +10,13 @@ if(AMReX_SPACEDIM EQUAL 3)
   # this will add #define PHOTOCHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
 
+  # Drop the per-band flux-attenuation factor from the solver vector and recover it from the ratio of the final to the
+  # initial photon number density. Exactly equivalent (see SKIP_PHOTOCHEMFLUX in the network), one equation fewer.
+  option(DTypeFront_JAFF_SKIP_FLUX "Recover the chem-band flux factor algebraically instead of integrating it" ON)
+  if(DTypeFront_JAFF_SKIP_FLUX)
+    target_compile_definitions(${JOB_NAME} PUBLIC SKIP_PHOTOCHEMFLUX)
+  endif()
+
   # Waves per execution unit requested of the photochemistry kernel on HIP (0 = leave the launch to the compiler).
   # See detail::PhotochemParallelFor in src/radiation/photochemistry.hpp.
   set(PHOTOCHEM_HIP_WAVES_PER_EU "2" CACHE STRING "Minimum waves per EU for the photochemistry kernel on HIP (0 = uncapped)")

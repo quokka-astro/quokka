@@ -42,9 +42,16 @@
 #include "photochemistry/PhotochemState.hpp"
 #include "rosenbrock/dense_lu.hpp"
 
-#ifdef SKIP_PHOTOCHEMFLUX
-#error "JAFF networks carry a flux factor per band; SKIP_PHOTOCHEMFLUX is not supported"
-#endif
+// SKIP_PHOTOCHEMFLUX drops the per-band flux-attenuation factor from the solver vector.
+//
+// It is redundant. Within a band the attenuation factor and the photon number density obey the same linear ODE --
+//     d(rflux)/dt   = -sigma c_hat n_H rflux
+//     d(photden)/dt = -sigma c_hat n_H photden
+// -- and the solver starts rflux at 1, so rflux(t) = photden(t) / photden(0) for all t, in the discretised solution
+// as well as the exact one (the two components enter the stage vectors identically). Neither the error norm nor the
+// validity limits look at rflux, so dropping it cannot change the step sequence either. The driver recovers the
+// factor as the ratio of the final to the initial photon number density -- see SKIP_PHOTOCHEMFLUX in
+// src/radiation/photochemistry.hpp -- and the solver carries one equation fewer.
 
 #ifdef AMREX_USE_HIP
 #define QUOKKA_NETWORK_CONSTEXPR constexpr
@@ -70,7 +77,11 @@ enum NetworkSpecies {
 // $$JAFF SUB nbands
 constexpr int NumChemBands = 1;
 // $$JAFF END
-constexpr int NumChemRadVarsPerGroup = 2;
+#ifdef SKIP_PHOTOCHEMFLUX
+constexpr int NumChemRadVarsPerGroup = 1; ///< photon number density only; the flux factor is recovered from its ratio
+#else
+constexpr int NumChemRadVarsPerGroup = 2; ///< photon number density, then the flux-attenuation factor
+#endif
 constexpr int NumChemRadEqs = NumChemBands * NumChemRadVarsPerGroup;
 constexpr int NumThermalBands = 0;
 
@@ -253,7 +264,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_rhs(State const &state, Ra
 		   2.0000000000000001e-26 * state.xn[0]) /
 		  (1.6737729999999998e-24 * state.xn[0] + 1.6728620616289998e-24 * state.xn[1] + 9.1093837099999994e-28 * state.xn[2]);
 	ydot[4] = -cse0;
+#ifndef SKIP_PHOTOCHEMFLUX
 	ydot[5] = -3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[NumChemRadVarsPerGroup * 0 + 1];
+#endif
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_jac(State const &state, Rates const &r, NetworkParams const &p, rosenbrock::Matrix<NumEqs> &J)
@@ -336,8 +349,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_jac(State const &state, Ra
 	J(3, 4) = cse35 * cse36 * state.xn[0];
 	J(4, 0) = -cse18;
 	J(4, 4) = cse29;
+#ifndef SKIP_PHOTOCHEMFLUX
 	J(5, 0) = -cse17 * state.rn[NumChemRadVarsPerGroup * 0 + 1];
 	J(5, 5) = cse29;
+#endif
 }
 
 } // namespace network
