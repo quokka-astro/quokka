@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef DIAGPLOTFILE_H
 #define DIAGPLOTFILE_H
 

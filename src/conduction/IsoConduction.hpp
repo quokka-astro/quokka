@@ -1,13 +1,10 @@
-#ifndef ISO_CONDUCTION_HPP_ // NOLINT
-#define ISO_CONDUCTION_HPP_
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
 
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
-/// \file IsoConduction.hpp
-/// \brief Explicit flux-limited isotropic thermal conduction update.
+#ifndef ELECTRON_CONDUCTION_HPP_ // NOLINT
+#define ELECTRON_CONDUCTION_HPP_
+/// \file ElectronConduction.hpp
+/// \brief Explicit flux-limited electron thermal conduction update.
 
 #include <array>
 #include <cmath>
