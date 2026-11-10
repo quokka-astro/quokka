@@ -1,0 +1,8 @@
+add_executable(SphericalAreaTest testSphericalArea.cpp)
+target_link_libraries(SphericalAreaTest PRIVATE AMReX::amrex)
+target_include_directories(SphericalAreaTest PRIVATE ..)
+target_compile_features(SphericalAreaTest PRIVATE cxx_std_20)
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  setup_target_for_cuda_compilation(SphericalAreaTest)
+endif()
+add_test(NAME SphericalAreaTest COMMAND SphericalAreaTest)
