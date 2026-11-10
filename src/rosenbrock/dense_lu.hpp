@@ -213,9 +213,24 @@ template <int N> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void lu_solve_unrolled
 
 /// Factors a = L U in place (gaussian elimination with partial pivoting).
 /// \return 0 on success, or k + 1 if the pivot U(k, k) is zero (the matrix is singular).
+// Which device form to use. The unrolled one was chosen on a V100, where keeping the matrix in registers is the win.
+// On gfx90a the kernel is occupancy-bound instead, and the unrolled form's O(N^3) selects (it compares against the
+// pivot row rather than indexing with it) cost more than the dynamic indexing they avoid -- measured 3% faster with
+// the loops for the 6-equation photochemistry system. So: unrolled on CUDA, loops on HIP, either forced by defining
+// ROSENBROCK_LU_UNROLLED or ROSENBROCK_LU_LOOPS.
+#if defined(ROSENBROCK_LU_LOOPS)
+#define ROSENBROCK_LU_USE_UNROLLED 0
+#elif defined(ROSENBROCK_LU_UNROLLED)
+#define ROSENBROCK_LU_USE_UNROLLED 1
+#elif defined(__HIP_DEVICE_COMPILE__)
+#define ROSENBROCK_LU_USE_UNROLLED 0
+#else
+#define ROSENBROCK_LU_USE_UNROLLED 1
+#endif
+
 template <int N> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto lu_factor(Matrix<N> &a, Pivots<N> &pivot) -> int
 {
-#if AMREX_DEVICE_COMPILE
+#if AMREX_DEVICE_COMPILE && ROSENBROCK_LU_USE_UNROLLED
 	return detail::lu_factor_unrolled<N>(a, pivot);
 #else
 	return detail::lu_factor_loops<N>(a, pivot);
@@ -225,7 +240,7 @@ template <int N> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto lu_factor(Matrix<
 /// Solves a x = b, with a as returned by lu_factor; b is overwritten by x.
 template <int N> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void lu_solve(Matrix<N> const &a, Pivots<N> const &pivot, Vector<N> &b)
 {
-#if AMREX_DEVICE_COMPILE
+#if AMREX_DEVICE_COMPILE && ROSENBROCK_LU_USE_UNROLLED
 	detail::lu_solve_unrolled<N>(a, pivot, b);
 #else
 	detail::lu_solve_loops<N>(a, pivot, b);

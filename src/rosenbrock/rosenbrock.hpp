@@ -34,9 +34,10 @@ template <int N> struct Settings {
 
 struct Result {
 	Status status;
-	int n_step;
+	int n_step;   ///< step attempts that reached the error test
 	int n_rhs;
 	int n_jac;
+	int n_accept; ///< attempts that were accepted; n_step - n_accept is the work spent on rejected steps
 };
 
 namespace detail
@@ -52,20 +53,6 @@ constexpr amrex::Real timestep_safety_factor = 1.0e-4;
 constexpr amrex::Real increase_change_factor = 4.0;
 constexpr amrex::Real decrease_change_factor = 0.25;
 constexpr int max_singular = 5;
-
-template <int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto error_norm(Settings<N> const &s, Vector<N> const &y, Vector<N> const &ynew, Vector<N> const &err) -> amrex::Real
-{
-	amrex::Real sum = 0.0;
-	for (int n = 0; n < N; ++n) {
-		if (s.in_error_norm[n]) {
-			const amrex::Real sk = s.atol[n] + s.rtol[n] * amrex::max(std::abs(y[n]), std::abs(ynew[n]));
-			const amrex::Real term = err[n] / sk;
-			sum += term * term;
-		}
-	}
-	return std::sqrt(sum / static_cast<amrex::Real>(N));
-}
 
 template <int N> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_state(Settings<N> const &s, Vector<N> const &y) -> bool
 {
@@ -114,7 +101,7 @@ template <int N, typename System> AMREX_GPU_HOST_DEVICE auto integrate(System &s
 	using T = ros2s_tableau;
 	constexpr amrex::Real eps = std::numeric_limits<amrex::Real>::epsilon();
 
-	Result res{.status = Status::Success, .n_step = 0, .n_rhs = 0, .n_jac = 0};
+	Result res{.status = Status::Success, .n_step = 0, .n_rhs = 0, .n_jac = 0, .n_accept = 0};
 	if (dt == 0.0) {
 		return res;
 	}
@@ -145,9 +132,6 @@ template <int N, typename System> AMREX_GPU_HOST_DEVICE auto integrate(System &s
 	Pivots<N> pivot{};
 	amrex::GpuArray<Vector<N>, T::stages> k{};
 	Vector<N> ynew{};
-	Vector<N> ystage{};
-	Vector<N> rhs_tmp{};
-	Vector<N> err{};
 
 	while (true) {
 		if (res.n_step > settings.max_steps) {
@@ -209,13 +193,11 @@ template <int N, typename System> AMREX_GPU_HOST_DEVICE auto integrate(System &s
 			for (int istage = 2; istage <= T::stages; ++istage) {
 				Vector<N> &ki = k[istage - 1];
 				for (int n = 0; n < N; ++n) {
-					ynew[n] = y[n];
-					ki[n] = 0.0;
+					amrex::Real yn = y[n];
 					for (int jstage = 1; jstage < istage; ++jstage) {
-						const amrex::Real akj = k[jstage - 1][n];
-						ynew[n] += T::a(istage, jstage) * akj;
-						ki[n] += (T::c(istage, jstage) / h) * akj;
+						yn += T::a(istage, jstage) * k[jstage - 1][n];
 					}
+					ynew[n] = yn;
 				}
 				if (!detail::valid_state<N>(settings, ynew)) {
 					h *= 0.25;
@@ -225,11 +207,16 @@ template <int N, typename System> AMREX_GPU_HOST_DEVICE auto integrate(System &s
 					valid_stage_state = false;
 					break;
 				}
-				ystage = ynew; // rhs may clean its argument; the stage state itself is not changed
-				sys.rhs(x + T::ct(istage) * h, ystage, rhs_tmp);
+				// rhs writes the stage derivative straight into ki, and may clean ynew in place; the next stage
+				// rebuilds ynew from y and the stage vectors, so that cleaning does not carry over.
+				sys.rhs(x + T::ct(istage) * h, ynew, ki);
 				res.n_rhs += 1;
 				for (int n = 0; n < N; ++n) {
-					ki[n] += rhs_tmp[n];
+					amrex::Real c_sum = 0.0;
+					for (int jstage = 1; jstage < istage; ++jstage) {
+						c_sum += (T::c(istage, jstage) / h) * k[jstage - 1][n];
+					}
+					ki[n] = c_sum + ki[n];
 				}
 				lu_solve<N>(jac, pivot, ki);
 			}
@@ -237,6 +224,7 @@ template <int N, typename System> AMREX_GPU_HOST_DEVICE auto integrate(System &s
 				continue;
 			}
 
+			amrex::Real err_sum = 0.0;
 			for (int n = 0; n < N; ++n) {
 				amrex::Real y_update = 0.0;
 				amrex::Real e = 0.0;
@@ -244,8 +232,14 @@ template <int N, typename System> AMREX_GPU_HOST_DEVICE auto integrate(System &s
 					y_update += T::b(istage) * k[istage - 1][n];
 					e += T::e(istage) * k[istage - 1][n];
 				}
-				ynew[n] = y[n] + y_update;
-				err[n] = e;
+				const amrex::Real yn = y[n] + y_update;
+				ynew[n] = yn;
+				// the RMS error norm, accumulated here so the embedded error never needs a vector of its own
+				if (settings.in_error_norm[n]) {
+					const amrex::Real sk = settings.atol[n] + settings.rtol[n] * amrex::max(std::abs(y[n]), std::abs(yn));
+					const amrex::Real term = e / sk;
+					err_sum += term * term;
+				}
 			}
 			res.n_step += 1;
 
@@ -258,25 +252,29 @@ template <int N, typename System> AMREX_GPU_HOST_DEVICE auto integrate(System &s
 			}
 
 			const bool valid_update = detail::change_valid<N>(settings, y, ynew);
-			const amrex::Real errnorm = detail::error_norm<N>(settings, y, ynew, err);
+			const amrex::Real errnorm = std::sqrt(err_sum / static_cast<amrex::Real>(N));
 			// An accepted final step needs no new step size: hnew below then only enters the step-size underflow check at the
 			// top of the loop, which no factor in [h211b_fac_min, h211b_fac_max] can make fire when this condition holds. The
 			// controller (three pow calls) is then skipped and the smallest factor used.
 			const bool final_step_accepted =
 			    last && errnorm <= 1.0 && valid_update && 0.1 * (detail::h211b_fac_min * std::abs(h)) > std::abs(x + h) * eps;
+			// The controller's three double-precision pow calls collapse to one pow and two square roots:
+			// both errors are positive, so pow(1/e1, p) pow(1/e2, p) is pow(1/(e1 e2), p), and facold, which is
+			// always in [h211b_fac_min, h211b_fac_max], raised to -1/b with b = 4 is 1 / sqrt(sqrt(facold)).
+			static_assert(detail::h211b_b == 4.0, "facold^(-1/b) is evaluated as two square roots, which assumes b == 4");
 			const amrex::Real exponent = 1.0 / (detail::h211b_b * detail::h211b_k);
-			const amrex::Real controller_fac = final_step_accepted
-							       ? detail::h211b_fac_min
-							       : std::fmin(std::fmax(std::pow(1.0 / std::fmax(errnorm, detail::err_min), exponent) *
-											 std::pow(1.0 / std::fmax(errold, detail::err_min), exponent) *
-											 std::pow(facold, -1.0 / detail::h211b_b),
-										     detail::h211b_fac_min),
-									   detail::h211b_fac_max);
+			const amrex::Real err_product = std::fmax(errnorm, detail::err_min) * std::fmax(errold, detail::err_min);
+			const amrex::Real controller_fac =
+			    final_step_accepted
+				? detail::h211b_fac_min
+				: std::fmin(std::fmax(std::pow(1.0 / err_product, exponent) / std::sqrt(std::sqrt(facold)), detail::h211b_fac_min),
+					    detail::h211b_fac_max);
 			facold = controller_fac;
 			errold = errnorm;
 			amrex::Real hnew = h * controller_fac;
 
 			if (errnorm <= 1.0 && valid_update) {
+				res.n_accept += 1;
 				y = ynew;
 				x += h;
 				if (std::abs(hnew) > hmax) {

@@ -10,6 +10,31 @@ if(AMReX_SPACEDIM EQUAL 3)
   # this will add #define PHOTOCHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
 
+  # Waves per execution unit requested of the photochemistry kernel on HIP (0 = leave the launch to the compiler).
+  # See detail::PhotochemParallelFor in src/radiation/photochemistry.hpp.
+  set(PHOTOCHEM_HIP_WAVES_PER_EU "2" CACHE STRING "Minimum waves per EU for the photochemistry kernel on HIP (0 = uncapped)")
+  target_compile_definitions(${JOB_NAME} PRIVATE PHOTOCHEM_HIP_WAVES_PER_EU=${PHOTOCHEM_HIP_WAVES_PER_EU})
+  set(PHOTOCHEM_HIP_BLOCK_THREADS "256" CACHE STRING "Threads per block for the photochemistry kernel on HIP")
+  target_compile_definitions(${JOB_NAME} PRIVATE PHOTOCHEM_HIP_BLOCK_THREADS=${PHOTOCHEM_HIP_BLOCK_THREADS})
+
+  # Evaluate the network's rate fits with the single-precision hardware exp and log (see rate_exp in network.hpp).
+  option(PHOTOCHEM_FAST_RATES "Evaluate the photochemistry rate fits in single precision" OFF)
+  if(PHOTOCHEM_FAST_RATES)
+    target_compile_definitions(${JOB_NAME} PRIVATE PHOTOCHEM_FAST_RATES)
+  endif()
+
+  # Diagnostic: print solver step / rhs / Jacobian counts per cell. Adds atomics to the kernel, so timings taken with
+  # it on are not comparable; it is for understanding where the solve spends its steps.
+  option(ROSENBROCK_LU_LOOPS "Use the looped dense LU in device code instead of the unrolled one" OFF)
+  if(ROSENBROCK_LU_LOOPS)
+    target_compile_definitions(${JOB_NAME} PRIVATE ROSENBROCK_LU_LOOPS)
+  endif()
+
+  option(PHOTOCHEM_STATS "Report photochemistry solver step counts" OFF)
+  if(PHOTOCHEM_STATS)
+    target_compile_definitions(${JOB_NAME} PRIVATE PHOTOCHEM_STATS)
+  endif()
+
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")

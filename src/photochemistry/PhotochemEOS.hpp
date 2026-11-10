@@ -57,6 +57,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto EnergyFromTemperature(const amrex:
 	return s * C::k_B * T / rho_sp;
 }
 
+/// temperature [K] and de/dT [erg g^-1 K^-1] together, from one pass over the composition.
+///
+/// Equivalent to calling TemperatureFromEnergy and dEnergy_dT in turn (the same arithmetic in the same order, so the
+/// same results), but it forms the two composition sums once instead of twice. The solve calls this on every right-hand
+/// side evaluation, so the saved pass is worth having.
+template <int NSpec, typename Array>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void TemperatureAndHeatCapacityFromEnergy(const amrex::Real e, amrex::GpuArray<amrex::Real, NSpec> const &n,
+										   Array const &mass, Array const &gamma, amrex::Real &T, amrex::Real &dedT)
+{
+	amrex::Real s = NAN;
+	amrex::Real rho_sp = NAN;
+	detail::HeatCapacitySums<NSpec, Array>(n, mass, gamma, s, rho_sp);
+	T = e * rho_sp / (s * C::k_B);
+	dedT = s * C::k_B / rho_sp;
+}
+
 /// de/dT at constant composition [erg g^-1 K^-1]
 template <int NSpec, typename Array>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto dEnergy_dT(amrex::GpuArray<amrex::Real, NSpec> const &n, Array const &mass, Array const &gamma) -> amrex::Real

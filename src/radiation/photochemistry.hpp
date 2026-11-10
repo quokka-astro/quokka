@@ -94,8 +94,7 @@ struct PhotochemSystem {
 #ifdef DUST_CHEMICAL_BAND_ABSORPTION
 		state.e_dust_absorbed = y[i_dust];
 #endif
-		state.T = TemperatureFromEnergy<NumSpec>(state.e, state.xn, spmasses, gammas);
-		state.dedT = dEnergy_dT<NumSpec>(state.xn, spmasses, gammas);
+		TemperatureAndHeatCapacityFromEnergy<NumSpec>(state.e, state.xn, spmasses, gammas, state.T, state.dedT);
 	}
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto in_temperature_bounds() const -> bool
@@ -113,12 +112,20 @@ struct PhotochemSystem {
 			}
 			return;
 		}
+#ifdef NETWORK_HAS_RATES
+		network::Rates rates{};
+		network::compute_rates(state, rates);
+		network::network_rhs(state, rates, params, ydot);
+#else
 		network::network_rhs(state, params, ydot);
+#endif
 	}
 
+	/// The integrator calls jac immediately after rhs at the same y (see rosenbrock::integrate), so `state` already
+	/// holds the unpacked, cleaned y and its temperature: unpacking again here would repeat the EOS call for nothing.
 	AMREX_GPU_HOST_DEVICE void jac(Real /*t*/, rosenbrock::Vector<network::NumEqs> const &y, rosenbrock::Matrix<network::NumEqs> &J)
 	{
-		unpack(y);
+		amrex::ignore_unused(y);
 		if (!in_temperature_bounds()) {
 			for (int j = 0; j < network::NumEqs; ++j) {
 				for (int i = 0; i < network::NumEqs; ++i) {
@@ -127,7 +134,13 @@ struct PhotochemSystem {
 			}
 			return;
 		}
+#ifdef NETWORK_HAS_RATES
+		network::Rates rates{};
+		network::compute_rates(state, rates);
+		network::network_jac(state, rates, params, J);
+#else
 		network::network_jac(state, params, J);
+#endif
 	}
 };
 
@@ -174,11 +187,46 @@ constexpr bool photochem_capped_launch = (network::NumEqs <= 5);
 constexpr int photochem_block_threads = 128;
 constexpr int photochem_min_blocks = 3;
 
+// Launch tuning for HIP (gfx90a / MI250X). The solver keeps its matrix and stage vectors in registers, so the kernel is
+// register-bound: a gfx90a SIMD has 512 VGPRs, and the number of waves it can keep resident is 512 / VGPRs-per-wave.
+// Left alone the compiler optimises for one wave and spends registers freely, which leaves the memory and transcendental
+// latencies of the network with nothing to overlap. __launch_bounds__'s second argument is, on AMD, the minimum waves
+// per execution unit, so it asks the compiler to fit within 512 / n VGPRs. Set PHOTOCHEM_HIP_WAVES_PER_EU to 0 to leave
+// the launch untouched (the compiler's own choice), or to n > 0 to request n waves per EU.
+#ifndef PHOTOCHEM_HIP_WAVES_PER_EU
+#define PHOTOCHEM_HIP_WAVES_PER_EU 2
+#endif
+#ifndef PHOTOCHEM_HIP_BLOCK_THREADS
+#define PHOTOCHEM_HIP_BLOCK_THREADS 256
+#endif
+constexpr int photochem_hip_waves_per_eu = PHOTOCHEM_HIP_WAVES_PER_EU;
+constexpr int photochem_hip_block_threads = PHOTOCHEM_HIP_BLOCK_THREADS;
+
 /// amrex::ParallelFor over a box; on CUDA with photochem_capped_launch, the same kernel body is launched with launch
 /// bounds that cap the registers per thread.
 template <typename F> void PhotochemParallelFor(amrex::Box const &box, F const &f)
 {
-#ifdef AMREX_USE_CUDA
+#if defined(AMREX_USE_HIP)
+	if constexpr (photochem_hip_waves_per_eu > 0) {
+		if (box.isEmpty()) {
+			return;
+		}
+		constexpr int MT = photochem_hip_block_threads;
+		const amrex::BoxIndexerND<AMREX_SPACEDIM> indexer(box);
+		for (auto const &ec : amrex::Gpu::makeNExecutionConfigs<MT>(box)) {
+			const auto start_idx = static_cast<std::uint64_t>(ec.start_idx);
+			amrex::launch_global<MT, photochem_hip_waves_per_eu><<<ec.nblocks, MT, 0, amrex::Gpu::gpuStream()>>>([=] AMREX_GPU_DEVICE() noexcept {
+				const auto icell = static_cast<std::uint64_t>(MT) * blockIdx.x + threadIdx.x + start_idx;
+				if (icell < indexer.numPts()) {
+					amrex::detail::call_f_intvect_handler(f, indexer.intVect(icell), amrex::Gpu::Handler{});
+				}
+			});
+		}
+		AMREX_GPU_ERROR_CHECK();
+	} else {
+		amrex::ParallelFor(box, f);
+	}
+#elif defined(AMREX_USE_CUDA)
 	if constexpr (photochem_capped_launch) {
 		if (box.isEmpty()) {
 			return;
@@ -217,6 +265,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 	amrex::Gpu::Buffer<int> d_num_failed({0});
 	auto *p_num_failed = d_num_failed.data();
+
+#ifdef PHOTOCHEM_STATS
+	// Diagnostic only: solver step, right-hand side and Jacobian counts summed over the cells of this call, to show
+	// whether the kernel's cost sits in the cost of a step or in the number of steps. Off unless PHOTOCHEM_STATS.
+	amrex::Gpu::Buffer<unsigned long long> d_stats({0, 0, 0, 0, 0, 0});
+	auto *p_stats = d_stats.data();
+#endif
 
 	int num_failed = 0;
 
@@ -380,6 +435,14 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 					burn_failed = 1;
 				}
 			}
+#ifdef PHOTOCHEM_STATS
+			amrex::Gpu::Atomic::Add(&p_stats[0], static_cast<unsigned long long>(result.n_step));
+			amrex::Gpu::Atomic::Add(&p_stats[1], static_cast<unsigned long long>(result.n_rhs));
+			amrex::Gpu::Atomic::Add(&p_stats[2], static_cast<unsigned long long>(result.n_jac));
+			amrex::Gpu::Atomic::Add(&p_stats[3], 1ULL);
+			amrex::Gpu::Atomic::Add(&p_stats[4], static_cast<unsigned long long>(result.n_step <= 1 ? 1 : 0));
+			amrex::Gpu::Atomic::Add(&p_stats[5], static_cast<unsigned long long>(result.n_accept));
+#endif
 			sys.unpack(y);
 
 			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
@@ -517,6 +580,24 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
 #endif
 	}
+
+#ifdef PHOTOCHEM_STATS
+	{
+		unsigned long long const *h = d_stats.copyToHost();
+		static unsigned long long tot[6] = {0, 0, 0, 0, 0, 0};
+		static unsigned long long ncalls = 0;
+		for (int n = 0; n < 6; ++n) {
+			tot[n] += h[n];
+		}
+		++ncalls;
+		if (ncalls % 500 == 0) {
+			const auto cells = static_cast<double>(tot[3]);
+			amrex::Print() << "[photochem stats] calls=" << ncalls << " cells=" << tot[3] << " steps/cell=" << tot[0] / cells
+				       << " rhs/cell=" << tot[1] / cells << " jac/cell=" << tot[2] / cells
+				       << " accepted/cell=" << tot[5] / cells << " frac(n_step<=1)=" << tot[4] / cells << '\n';
+		}
+	}
+#endif
 
 	num_failed = *(d_num_failed.copyToHost());
 

@@ -122,47 +122,141 @@ struct NetworkParams {
 	}
 };
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_rhs(State const &state, NetworkParams const &p, rosenbrock::Vector<NumEqs> &ydot)
+// ---------------------------------------------------------------------------------------------------------------
+// Hand-optimised evaluation of the rate factors below (Rates / compute_rates, and the bodies of network_rhs and
+// network_jac that use them). The chemistry is unchanged -- same fits, same coefficients, same expressions -- only
+// the way the temperature-dependent factors are evaluated differs:
+//
+//   * Every rate here is a function of T alone, so they are formed once per call into a Rates block instead of being
+//     recomputed in each caller. The Jacobian's cse list repeated sqrt(T), exp(-157896.76/T), exp(-92/T),
+//     exp(-118400/(T+1000)) and the whole piecewise cooling fit that the right-hand side had just evaluated.
+//   * A piecewise power-law branch a*T^b and its derivative a*b*T^(b-1) are evaluated from ONE exp(b*log T): the
+//     generated form spent a separate std::pow on each, and std::pow itself is a log and an exp plus special-case
+//     handling. T^-1.7 likewise comes from the T^-0.7 recombination coefficient divided by T, and T^-1.5 from
+//     (1/sqrt(T)) / T.
+//
+// This is where nearly all of the kernel's time went, so it is worth folding back into JAFF's quokka template
+// rather than carrying as a local edit.
+// ---------------------------------------------------------------------------------------------------------------
+
+/// the network provides Rates / compute_rates, so the solver uses the four-argument network_rhs and network_jac
+#define NETWORK_HAS_RATES 1
+
+/// \brief exp and log for the rate fits.
+///
+/// With PHOTOCHEM_FAST_RATES these use the single-precision hardware exp and log of the GPU instead of the
+/// double-precision software ones, which on gfx90a is the difference between one instruction and a few dozen. The rate
+/// coefficients below are empirical fits whose own uncertainty is far larger than the ~1e-7 relative error this
+/// introduces, and they enter the solve only through the right-hand side and the Jacobian, never through the state
+/// itself. It is opt-in all the same, because it does perturb the integration: measure before turning it on.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rate_exp(Real x) -> Real
+{
+#if defined(PHOTOCHEM_FAST_RATES) && defined(__HIP_DEVICE_COMPILE__)
+	return static_cast<Real>(__expf(static_cast<float>(x)));
+#else
+	return std::exp(x);
+#endif
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rate_log(Real x) -> Real
+{
+#if defined(PHOTOCHEM_FAST_RATES) && defined(__HIP_DEVICE_COMPILE__)
+	return static_cast<Real>(__logf(static_cast<float>(x)));
+#else
+	return std::log(x);
+#endif
+}
+
+/// Temperature-dependent factors of this network, formed once per right-hand side or Jacobian evaluation.
+struct Rates {
+	Real sqrtT{};	  ///< sqrt(T)
+	Real inv_sqrtT{}; ///< 1 / sqrt(T)
+	Real invT{};	  ///< 1 / T
+	Real exp_coll{};  ///< exp(-157896.75724967025 / T), the collisional-ionisation Boltzmann factor
+	Real alpha_rec{}; ///< 1.6594178159829075e-10 T^-0.7, the case-B recombination coefficient
+	Real cool_pl{};	  ///< the piecewise power-law term of the H+ e- cooling fit
+	Real dcool_pl{};  ///< d(cool_pl) / dT
+	Real cool_hi{};	  ///< 8.4219589e-26 T^0.11 at T >= 100 K, zero below
+	Real dcool_hi{};  ///< d(cool_hi) / dT
+	Real exp_92{};	  ///< exp(-92 / T)
+	Real exp_H2{};	  ///< exp(-118400 / (T + 1000))
+};
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void compute_rates(State const &state, Rates &r)
+{
+	const Real T = state.T;
+	r.invT = 1.0 / T;
+	r.sqrtT = std::sqrt(T);
+	r.inv_sqrtT = 1.0 / r.sqrtT;
+	const Real logT = rate_log(T);
+	// -157896.75724967025 / T is below -745.2 for T <= 211 K, where exp underflows to exactly zero in double. Most
+	// of the neutral gas sits there, so the exp is skipped rather than evaluated to a zero that is already known.
+	r.exp_coll = (T > 211.0) ? rate_exp(-157896.75724967025 * r.invT) : 0.0;
+	r.alpha_rec = 1.6594178159829075e-10 * rate_exp(-0.69999999999999996 * logT);
+	r.exp_92 = rate_exp(-92.0 * r.invT);
+	r.exp_H2 = rate_exp(-118400.0 / (T + 1000.0));
+
+	// the piecewise power-law fit a T^b; one exp yields the branch value and its derivative a b T^(b - 1)
+	Real a = 3.47e-29;
+	Real b = 1.915;
+	if (T >= 100.0) {
+		if (T < 630.957344480193) {
+			a = 2.34e-26;
+			b = 0.5;
+		} else if (T < 3981.0717055349733) {
+			a = 1.11e-24;
+			b = -0.099000000000000005;
+		} else if (T < 10000.0) {
+			a = 1.08e-32;
+			b = 2.1269999999999998;
+		} else if (T < 31622.776601683792) {
+			a = 2.6700000000000001e-30;
+			b = 1.5289999999999999;
+		} else if (T < 100000.0) {
+			a = 1.7399999999999998e-24;
+			b = 0.23699999999999999;
+		} else if (T < 1000000.0) {
+			a = 1.1e-21;
+			b = -0.32300000000000001;
+		} else {
+			a = 7.4900000000000001e-21;
+			b = -0.46200000000000002;
+		}
+	}
+	const Real Tb = rate_exp(b * logT);
+	r.cool_pl = a * Tb;
+	r.dcool_pl = a * b * Tb * r.invT;
+
+	if (T < 100.0) {
+		r.cool_hi = 0.0;
+		r.dcool_hi = 0.0;
+	} else {
+		const Real T011 = rate_exp(0.10999999999999999 * logT);
+		r.cool_hi = 8.4219589e-26 * T011;
+		r.dcool_hi = 8.4219589e-26 * 0.10999999999999999 * T011 * r.invT;
+	}
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_rhs(State const &state, Rates const &r, NetworkParams const &p, rosenbrock::Vector<NumEqs> &ydot)
 {
 	amrex::ignore_unused(p);
-	// $$JAFF REPEAT idx, rhs, cse IN rhses { USE quokka }
 	const amrex::Real cse0 = 3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[NumChemRadVarsPerGroup * 0];
-	const amrex::Real cse1 = std::sqrt(state.T);
-	const amrex::Real cse2 = 1.0 / state.T;
-	const amrex::Real cse3 = cse1 * std::exp(-157896.75724967025 * cse2) * state.xn[0] * state.xn[2];
-	const amrex::Real cse4 = cse0 + 5.84e-11 * cse3 - 1.6594178159829075e-10 * std::pow(state.T, -0.69999999999999996) * state.xn[1] * state.xn[2];
-	const amrex::Real cse5 = state.T < 100.0;
+	const amrex::Real cse3 = r.sqrtT * r.exp_coll * state.xn[0] * state.xn[2];
+	const amrex::Real cse4 = cse0 + 5.84e-11 * cse3 - r.alpha_rec * state.xn[1] * state.xn[2];
 	const amrex::Real cse6 = state.xn[1] * state.xn[2];
 	ydot[0] = -cse4;
 	ydot[1] = cse4;
 	ydot[2] = cse4;
-	ydot[3] =
-	    (2.5316840555840673e-29 * state.c_hat * state.xn[0] * state.rn[NumChemRadVarsPerGroup * 0] - 1.27251276978816e-21 * cse3 -
-	     cse6 * (1.8551e-27 * cse1 +
-		     ((cse5) ? (3.47e-29 * std::pow(state.T, 1.915))
-			     : ((state.T < 630.957344480193)
-				    ? (2.34e-26 * std::sqrt(state.T))
-				    : ((state.T < 3981.0717055349733)
-					   ? (1.11e-24 * std::pow(state.T, -0.099000000000000005))
-					   : ((state.T < 10000.0)
-						  ? (1.08e-32 * std::pow(state.T, 2.1269999999999998))
-						  : ((state.T < 31622.776601683792)
-							 ? (2.6700000000000001e-30 * std::pow(state.T, 1.5289999999999999))
-							 : ((state.T < 100000.0) ? (1.7399999999999998e-24 * std::pow(state.T, 0.23699999999999999))
-										 : ((state.T < 1000000.0) ? (1.1e-21 * std::pow(state.T, -0.32300000000000001))
-													  : (7.4900000000000001e-21 *
-													     std::pow(state.T, -0.46200000000000002)))))))))) -
-	     cse6 * ((cse5) ? (0.0) : (8.4219589e-26 * std::pow(state.T, 0.10999999999999999))) -
-	     (2.8000000000000002e-28 * cse1 * std::exp(-92.0 * cse2) + 2.0000000000000002e-19 * std::exp(-118400.0 / (state.T + 1000.0))) *
-		 std::pow(state.xn[0], 2) +
-	     2.0000000000000001e-26 * state.xn[0]) /
-	    (1.6737729999999998e-24 * state.xn[0] + 1.6728620616289998e-24 * state.xn[1] + 9.1093837099999994e-28 * state.xn[2]);
+	ydot[3] = (2.5316840555840673e-29 * state.c_hat * state.xn[0] * state.rn[NumChemRadVarsPerGroup * 0] - 1.27251276978816e-21 * cse3 -
+		   cse6 * (1.8551e-27 * r.sqrtT + r.cool_pl) - cse6 * r.cool_hi -
+		   (2.8000000000000002e-28 * r.sqrtT * r.exp_92 + 2.0000000000000002e-19 * r.exp_H2) * state.xn[0] * state.xn[0] +
+		   2.0000000000000001e-26 * state.xn[0]) /
+		  (1.6737729999999998e-24 * state.xn[0] + 1.6728620616289998e-24 * state.xn[1] + 9.1093837099999994e-28 * state.xn[2]);
 	ydot[4] = -cse0;
 	ydot[5] = -3.2385396673401957e-18 * state.c_hat * state.xn[0] * state.rn[NumChemRadVarsPerGroup * 0 + 1];
-	// $$JAFF END
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_jac(State const &state, NetworkParams const &p, rosenbrock::Matrix<NumEqs> &J)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_jac(State const &state, Rates const &r, NetworkParams const &p, rosenbrock::Matrix<NumEqs> &J)
 {
 	amrex::ignore_unused(p);
 	for (int j = 0; j < NumEqs; ++j) {
@@ -170,33 +264,28 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_jac(State const &state, Ne
 			J(i, j) = 0.0;
 		}
 	}
-	// $$JAFF REPEAT idx, expr, cse IN jacobian { USE quokka }
 	const amrex::Real cse0 = 1.6737729999999998e-24 * state.xn[0] + 1.6728620616289998e-24 * state.xn[1] + 9.1093837099999994e-28 * state.xn[2];
-	const amrex::Real cse1 = 2.0709734999998963e-16 * state.T / cse0;
+	const amrex::Real inv_cse0 = 1.0 / cse0;
+	const amrex::Real cse1 = 2.0709734999998963e-16 * state.T * inv_cse0;
 	const amrex::Real cse2 = 1.380649e-16 * state.xn[0] + 1.380649e-16 * state.xn[1] + 1.380649e-16 * state.xn[2];
-	const amrex::Real cse3 = cse2 * state.T / std::pow(cse0, 2);
+	const amrex::Real cse3 = cse2 * state.T * inv_cse0 * inv_cse0;
 	const amrex::Real cse4 = cse1 - 2.5106594999998743e-24 * cse3;
 	const amrex::Real cse5 = state.xn[1] * state.xn[2];
-	const amrex::Real cse6 = std::pow(state.T, -3.0 / 2.0);
-	const amrex::Real cse7 = 1.0 / state.T;
-	const amrex::Real cse8 = std::exp(-157896.75724967025 * cse7);
-	const amrex::Real cse9 = cse8 * state.xn[0] * state.xn[2];
-	const amrex::Real cse10 = cse6 * cse9;
-	const amrex::Real cse11 = std::sqrt(state.T);
-	const amrex::Real cse12 = 1.0 / cse11;
-	const amrex::Real cse13 = cse12 * cse9;
-	const amrex::Real cse14 = 9.2211706233807419e-6 * cse10 + 2.92e-11 * cse13 + 1.1615924711880352e-10 * cse5 * std::pow(state.T, -1.7);
+	const amrex::Real cse9 = r.exp_coll * state.xn[0] * state.xn[2];
+	const amrex::Real cse10 = r.inv_sqrtT * r.invT * cse9; // T^(-3/2) cse9
+	const amrex::Real cse13 = r.inv_sqrtT * cse9;
+	// 1.1615924711880352e-10 T^-1.7 is 0.7 alpha_rec / T
+	const amrex::Real cse14 = 9.2211706233807419e-6 * cse10 + 2.92e-11 * cse13 + 0.69999999999999996 * r.alpha_rec * r.invT * cse5;
 	const amrex::Real cse15 = 0.66666666666670005 * cse0 / cse2;
 	const amrex::Real cse16 = -cse14 * cse15;
 	const amrex::Real cse17 = 3.2385396673401957e-18 * state.c_hat;
 	const amrex::Real cse18 = cse17 * state.rn[NumChemRadVarsPerGroup * 0];
-	const amrex::Real cse19 = cse11 * cse8;
+	const amrex::Real cse19 = r.sqrtT * r.exp_coll;
 	const amrex::Real cse20 = 5.84e-11 * cse19;
 	const amrex::Real cse21 = cse18 + cse20 * state.xn[2];
-	const amrex::Real cse22 = 1.6594178159829075e-10 * std::pow(state.T, -0.69999999999999996);
-	const amrex::Real cse23 = cse22 * state.xn[2];
+	const amrex::Real cse23 = r.alpha_rec * state.xn[2];
 	const amrex::Real cse24 = cse1 - 2.5092930924433742e-24 * cse3;
-	const amrex::Real cse25 = cse22 * state.xn[1];
+	const amrex::Real cse25 = r.alpha_rec * state.xn[1];
 	const amrex::Real cse26 = cse20 * state.xn[0];
 	const amrex::Real cse27 = cse1 - 1.3664075564999315e-27 * cse3;
 	const amrex::Real cse28 = cse17 * state.xn[0];
@@ -205,56 +294,25 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_jac(State const &state, Ne
 	const amrex::Real cse31 = cse21 - cse30 * cse4;
 	const amrex::Real cse32 = -cse23 - cse24 * cse30;
 	const amrex::Real cse33 = -cse25 + cse26 - cse27 * cse30;
-	const amrex::Real cse34 = 1.6737729999999998e-24 * state.xn[0] + 1.6728620616289998e-24 * state.xn[1] + 9.1093837099999994e-28 * state.xn[2];
-	const amrex::Real cse35 = 1.0 / cse34;
+	const amrex::Real cse35 = inv_cse0;
 	const amrex::Real cse36 = 2.5316840555840673e-29 * state.c_hat;
 	const amrex::Real cse37 = 1.27251276978816e-21 * cse19;
 	const amrex::Real cse38 = cse37 * state.xn[2];
 	const amrex::Real cse39 = state.T + 1000.0;
-	const amrex::Real cse40 = std::exp(-118400.0 / cse39);
-	const amrex::Real cse41 = std::exp(-92.0 * cse7);
-	const amrex::Real cse42 = 2.8000000000000002e-28 * cse11 * cse41 + 2.0000000000000002e-19 * cse40;
-	const amrex::Real cse43 = state.T < 100.0;
-	const amrex::Real cse44 = ((cse43) ? (0.0) : (8.4219589e-26 * std::pow(state.T, 0.10999999999999999)));
-	const amrex::Real cse45 = cse44 * state.xn[2];
-	const amrex::Real cse46 = std::pow(state.xn[0], 2);
-	const amrex::Real cse47 = std::sqrt(state.T);
-	const amrex::Real cse48 = state.T < 630.957344480193;
-	const amrex::Real cse49 = state.T < 3981.0717055349733;
-	const amrex::Real cse50 = state.T < 10000.0;
-	const amrex::Real cse51 = state.T < 31622.776601683792;
-	const amrex::Real cse52 = state.T < 100000.0;
-	const amrex::Real cse53 = state.T < 1000000.0;
-	const amrex::Real cse54 =
-	    1.8551e-27 * cse11 +
-	    ((cse43)
-		 ? (3.47e-29 * std::pow(state.T, 1.915))
-		 : ((cse48) ? (2.34e-26 * cse47)
-			    : ((cse49) ? (1.11e-24 * std::pow(state.T, -0.099000000000000005))
-				       : ((cse50) ? (1.08e-32 * std::pow(state.T, 2.1269999999999998))
-						  : ((cse51) ? (2.6700000000000001e-30 * std::pow(state.T, 1.5289999999999999))
-							     : ((cse52) ? (1.7399999999999998e-24 * std::pow(state.T, 0.23699999999999999))
-									: ((cse53) ? (1.1e-21 * std::pow(state.T, -0.32300000000000001))
-										   : (7.4900000000000001e-21 * std::pow(state.T, -0.46200000000000002)))))))));
+	const amrex::Real cse42 = 2.8000000000000002e-28 * r.sqrtT * r.exp_92 + 2.0000000000000002e-19 * r.exp_H2;
+	const amrex::Real cse45 = r.cool_hi * state.xn[2];
+	const amrex::Real cse46 = state.xn[0] * state.xn[0];
+	const amrex::Real cse54 = 1.8551e-27 * r.sqrtT + r.cool_pl;
 	const amrex::Real cse55 = cse54 * state.xn[2];
 	const amrex::Real cse56 = (2.5316840555840673e-29 * state.c_hat * state.rn[NumChemRadVarsPerGroup * 0] * state.xn[0] - cse38 * state.xn[0] -
-				   cse42 * cse46 - cse45 * state.xn[1] - cse55 * state.xn[1] + 2.0000000000000001e-26 * state.xn[0]) /
-				  std::pow(cse34, 2);
+				   cse42 * cse46 - cse45 * state.xn[1] - cse55 * state.xn[1] + 2.0000000000000001e-26 * state.xn[0]) *
+				  inv_cse0 * inv_cse0;
 	const amrex::Real cse57 =
 	    cse15 * cse35 *
 	    (-2.0092563990834663e-16 * cse10 - 6.3625638489408001e-22 * cse13 -
-	     cse46 * (1.4000000000000001e-28 * cse12 * cse41 + 2.5760000000000003e-26 * cse41 * cse6 + 2.3680000000000003e-14 * cse40 / std::pow(cse39, 2)) -
-	     cse5 *
-		 (9.2755000000000002e-28 * cse12 +
-		  ((cse43) ? (6.6450500000000003e-29 * std::pow(state.T, 0.91500000000000004))
-			   : ((cse48) ? (1.17e-26 / cse47)
-				      : ((cse49) ? (-1.0989000000000001e-25 * std::pow(state.T, -1.099))
-						 : ((cse50) ? (2.2971599999999999e-32 * std::pow(state.T, 1.1269999999999998))
-							    : ((cse51) ? (4.0824300000000001e-30 * std::pow(state.T, 0.52899999999999991))
-								       : ((cse52) ? (4.1237999999999993e-25 * std::pow(state.T, -0.76300000000000001))
-										  : ((cse53) ? (-3.5530000000000001e-22 * std::pow(state.T, -1.323))
-											     : (-3.4603799999999999e-21 * std::pow(state.T, -1.462)))))))))) -
-	     cse5 * ((cse43) ? (0) : (9.2641547899999994e-27 * std::pow(state.T, -0.89000000000000001))));
+	     cse46 * (1.4000000000000001e-28 * r.inv_sqrtT * r.exp_92 + 2.5760000000000003e-26 * r.exp_92 * r.inv_sqrtT * r.invT +
+		      2.3680000000000003e-14 * r.exp_H2 / (cse39 * cse39)) -
+	     cse5 * (9.2755000000000002e-28 * r.inv_sqrtT + r.dcool_pl) - cse5 * r.dcool_hi);
 	J(0, 0) = -cse16 * cse4 - cse21;
 	J(0, 1) = -cse16 * cse24 + cse23;
 	J(0, 2) = -cse16 * cse27 + cse25 - cse26;
@@ -273,14 +331,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_jac(State const &state, Ne
 	J(3, 0) = cse35 * (cse36 * state.rn[NumChemRadVarsPerGroup * 0] - cse38 - 2 * cse42 * state.xn[0] + 2.0000000000000001e-26) - cse4 * cse57 -
 		  1.6737729999999998e-24 * cse56;
 	J(3, 1) = -cse24 * cse57 + cse35 * (-cse45 - cse55) - 1.6728620616289998e-24 * cse56;
-	J(3, 2) = -cse27 * cse57 + cse35 * (-cse37 * state.xn[0] - cse44 * state.xn[1] - cse54 * state.xn[1]) - 9.1093837099999994e-28 * cse56;
+	J(3, 2) = -cse27 * cse57 + cse35 * (-cse37 * state.xn[0] - r.cool_hi * state.xn[1] - cse54 * state.xn[1]) - 9.1093837099999994e-28 * cse56;
 	J(3, 3) = cse57;
 	J(3, 4) = cse35 * cse36 * state.xn[0];
 	J(4, 0) = -cse18;
 	J(4, 4) = cse29;
 	J(5, 0) = -cse17 * state.rn[NumChemRadVarsPerGroup * 0 + 1];
 	J(5, 5) = cse29;
-	// $$JAFF END
 }
 
 } // namespace network
