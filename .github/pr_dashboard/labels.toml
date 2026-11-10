@@ -1,0 +1,275 @@
+## the labels used by the PR dashboard; labels not listed here are left alone
+## each category sets a prefix, and each label's name on GitHub is the prefix plus its value
+## scope/ and size/ labels are set by the tool; edits by hand are replaced
+
+##
+## === SCOPE LABELS
+##
+
+## set from the changed files: a PR gets every scope with a matching path
+## a pattern's `*` also matches `/`, so `src/hydro/*` covers every file below `src/hydro/`
+
+[scope]
+prefix = "scope/"
+
+## --- unmapped files
+## a changed file that matches no scope gives the PR this label, to show that its path
+## needs adding to a scope below
+[scope.not_mapped_label]
+value = "not_mapped"
+color = "B60205"
+description = "A changed file has no scope yet; a maintainer needs to add it to labels.toml"
+
+## --- physics
+## each module's src/ folder, its problems in src/problems/, and their files in inputs/
+
+[[scope.label]]
+value = "hydro"
+color = "4ADD08"
+description = "Hydrodynamics"
+path_patterns = [
+    "src/hydro/*",
+    "src/turbulence/*",
+    "src/problems/Hydro*",
+    "src/problems/Nscbc*",
+    "inputs/Hydro*",
+    "inputs/Nscbc*",
+]
+
+[[scope.label]]
+value = "MHD"
+color = "66735C"
+description = "Magnetohydrodynamics"
+path_patterns = [
+    "src/hydro/mhd_system*",
+    "src/hydro/HLLD*",
+    "src/hydro/LLF_mhd*",
+    "src/problems/MHD*",
+    "src/problems/IsothermalMHD*",
+    "src/problems/OrszagTang*",
+    "src/problems/FieldLoop*",
+    "src/problems/CurrentSheet*",
+    "inputs/MHD*",
+    "inputs/IsothermalMHD*",
+    "inputs/OrszagTang*",
+    "inputs/FieldLoop*",
+    "inputs/CurrentSheet*",
+    "inputs/alfven_wave*",
+]
+
+[[scope.label]]
+value = "radiation"
+color = "CAD629"
+description = "Radiation transport"
+path_patterns = [
+    "src/radiation/*",
+    "src/problems/Rad*",
+    "src/problems/Stromgren*",
+    "inputs/Rad*",
+    "inputs/Stromgren*",
+]
+
+[[scope.label]]
+value = "particles"
+color = "277120"
+description = "Particles"
+path_patterns = [
+    "src/particles/*",
+    "src/problems/Particle*",
+    "src/problems/BinaryOrbit*",
+    "src/problems/GravRadParticle*",
+    "src/problems/InitialStellarParticles*",
+    "inputs/Particle*",
+    "inputs/BinaryOrbit*",
+    "inputs/GravRadParticle*",
+]
+
+[[scope.label]]
+value = "chemistry"
+color = "C5DEF5"
+description = "Chemistry and chemical networks"
+path_patterns = [
+    "src/chemistry/*",
+    "src/networks/*",
+    "src/microphysics/*",
+    "src/problems/PrimordialChem*",
+    "src/problems/PopIII*",
+    "inputs/PrimordialChem*",
+    "inputs/PopIII*",
+]
+
+[[scope.label]]
+value = "cooling"
+color = "BFD4F2"
+description = "Radiative cooling"
+path_patterns = ["src/cooling/*", "src/problems/ResampledCooling*", "inputs/ResampledCooling*"]
+
+[[scope.label]]
+value = "dust"
+color = "D4C5F9"
+description = "Dust"
+path_patterns = [
+    "src/dust/*",
+    "src/problems/Dust*",
+    "src/problems/RadDust*",
+    "src/problems/RadMarshakDust*",
+    "inputs/Dust*",
+    "inputs/RadDust*",
+    "inputs/RadMarshakDust*",
+]
+
+[[scope.label]]
+value = "conduction"
+color = "F9D0C4"
+description = "Thermal conduction"
+path_patterns = ["src/conduction/*", "src/problems/ThermalConduction*", "inputs/ThermalConduction*"]
+
+## --- framework
+
+[[scope.label]]
+value = "IO"
+color = "1D76DB"
+description = "Input and output"
+path_patterns = ["src/io/*"]
+
+[[scope.label]]
+value = "core"
+color = "5319E7"
+description = "The shared driver, math and utilities"
+path_patterns = [
+    "src/QuokkaSimulation*",
+    "src/simulation*",
+    "src/hyperbolic_system*",
+    "src/physics_info*",
+    "src/physics_numVars*",
+    "src/math/*",
+    "src/util/*",
+    "src/main*",
+    "src/grid*",
+    "src/SimulationData*",
+    "src/Factory*",
+    "src/linear_advection/*",
+]
+
+## --- build, tests and tooling
+
+[[scope.label]]
+value = "build"
+color = "C2E0C6"
+description = "The build system and third-party libraries"
+path_patterns = [
+    "CMakeLists.txt",
+    "src/CMakeLists.txt",
+    "*.cmake",
+    ".gitmodules",
+    ".gitignore",
+    "extern/amrex*",
+    "extern/AMReX-Hydro*",
+    "extern/Microphysics*",
+    "extern/openPMD-api*",
+]
+
+[[scope.label]]
+value = "tests"
+color = "FEF2C0"
+description = "Test problems, inputs, reference data and the regression suite"
+path_patterns = ["src/problems/*", "inputs/*", "extern/*", "regression/*", "tests/*"]
+
+[[scope.label]]
+value = "tools"
+color = "E99695"
+description = "Helper scripts and files for AI agents"
+path_patterns = ["scripts/*", ".agents/*", ".claude/*", "AGENTS.md", "CLAUDE.md", "context7.json"]
+
+[[scope.label]]
+value = "CI"
+color = "BFDADC"
+description = "Continuous integration and code checkers"
+path_patterns = [
+    ".github/*",
+    ".ci/*",
+    ".devcontainer/*",
+    ".dockerignore",
+    ".pre-commit-config.yaml",
+    ".codespellrc",
+    ".codespell-ignore-words",
+    ".sonarcloud.properties",
+    "run-codeql.sh",
+    "src/.clang-format",
+    "src/.clang-tidy",
+    "src/CPPLINT.cfg",
+]
+
+## --- documentation
+
+[[scope.label]]
+value = "documentation"
+color = "0075CA"
+description = "Documentation"
+path_patterns = ["docs/*", "*.md", "paper/*", "CITATION.cff", "LICENSE", ".mailmap"]
+
+##
+## === SIZE LABELS
+##
+
+## set from the lines changed (additions plus deletions): a PR gets the largest
+## `min_num_lines` it reaches
+
+[size]
+prefix = "size/"
+
+[[size.label]]
+value = "XS"
+color = "00FF00"
+description = "This PR changes 0 to 9 lines"
+min_num_lines = 0
+
+[[size.label]]
+value = "S"
+color = "77B800"
+description = "This PR changes 10 to 29 lines"
+min_num_lines = 10
+
+[[size.label]]
+value = "M"
+color = "EBB800"
+description = "This PR changes 30 to 99 lines"
+min_num_lines = 30
+
+[[size.label]]
+value = "L"
+color = "EB9500"
+description = "This PR changes 100 to 499 lines"
+min_num_lines = 100
+
+[[size.label]]
+value = "XL"
+color = "FF823F"
+description = "This PR changes 500 or more lines"
+min_num_lines = 500
+
+##
+## === PRIORITY LABELS
+##
+
+## set by people with /set-priority, using the value, e.g. `/set-priority high`
+## the one marked `default = true` is given to a PR that has no priority label
+
+[priority]
+prefix = "priority/"
+
+[[priority.label]]
+value = "low"
+color = "0E8A16"
+description = "Review when there is time"
+
+[[priority.label]]
+value = "normal"
+color = "FBCA04"
+description = "Review at the normal pace"
+default = true
+
+[[priority.label]]
+value = "high"
+color = "D93F0B"
+description = "Review soon"

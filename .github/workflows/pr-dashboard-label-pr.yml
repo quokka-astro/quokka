@@ -1,0 +1,35 @@
+# Sets the scope, size and default priority labels when a PR is opened, reopened or marked ready for review.
+name: "PR Dashboard: Label PR"
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-dashboard-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+        with:
+          sparse-checkout: .github/pr_dashboard
+          persist-credentials: false
+
+      - name: Set the scope, size and default priority labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PYTHONPATH: .github/pr_dashboard/src
+        run: python3 -m pr_dashboard.run_dashboard label-pr --repo "$REPO" --pr "$PR_NUMBER"
