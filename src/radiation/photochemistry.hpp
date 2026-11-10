@@ -14,11 +14,25 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 
+namespace quokka::photochemistry
+{
+template <typename problem_t>
+auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, amrex::Real dt,
+			   amrex::Real max_density_allowed, amrex::Real min_density_allowed, amrex::MultiFab &dustHeatingSource,
+			   amrex::MultiFab &radEnergySource) -> bool;
+} // namespace quokka::photochemistry
+
+// The definition is compiled only in builds with photochemistry, because it uses names that only those builds have: spmasses
+// and eos() from Microphysics' photoionization EOS, and the constants of the generated network_properties.H that the
+// transitional checks below compare against. Callers use Microphysics_Traits<problem_t>::photochemistry. This guard goes
+// when the EOS is in Quokka and the generated constants are gone.
 #ifdef PHOTOCHEMISTRY
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "microphysics/burn_state.hpp"
+#include "microphysics/burner.hpp"
+#include "microphysics/integrator_layout.hpp"
 #include "network_properties.H"
 #include "physics_numVars.hpp"
 
@@ -33,8 +47,6 @@ namespace quokka::photochemistry
 // conservation. Conserving the ionizing photon budget is the more important property for correct
 // ionization-front propagation, so it is the default.
 static constexpr bool debit_work_term_from_radiation = false;
-
-AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
@@ -57,21 +69,36 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	const int firstChemFyIndex = firstChemFxIndex + 1;
 	const int firstChemFzIndex = firstChemFyIndex + 1;
 
-	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
-		      "NumThermalBands (set for this network in NetworkRegistry.cmake) must equal RadSystem<problem_t>::nGroupsThermal_ "
-		      "(nGroups_ - NChemBands) when ISM_Traits::thermal_band_photochemistry is true.");
-#ifndef DUST_CHEMICAL_BAND_ABSORPTION
-	static_assert(!RadSystem<problem_t>::dust_chemical_band_absorption_,
-		      "ISM_Traits::dust_chemical_band_absorption is true but DUST_CHEMICAL_BAND_ABSORPTION is not defined: "
-		      "the network does not compute e_dust_absorbed, so Q_dust would always be zero.");
-#endif
+	using Network = typename Microphysics_Traits<problem_t>::Network;
+	using Layout = quokka::microphysics::IntegratorLayout<problem_t, quokka::microphysics::BurnState<problem_t>>;
+
+	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || Network::NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
+		      "Network::NumThermalBands must equal RadSystem<problem_t>::nGroupsThermal_ (nGroups_ - NChemBands) when "
+		      "ISM_Traits::thermal_band_photochemistry is true.");
+	static_assert(Microphysics_Traits<problem_t>::integrate_rad_flux == (MicrophysicsNumChemRadVarsPerGroup == 2),
+		      "Microphysics_Traits::integrate_rad_flux must be false exactly when the problem is built with SKIP_PHOTOCHEMFLUX.");
+
+	// Transitional, until Microphysics' generated network_properties.H goes: the problem's network type must agree with the
+	// constants generated for its network.
+	static_assert(Network::NumSpec == NumSpec);
+	static_assert(Network::NumChemBands == NumChemBands);
+	static_assert([] {
+		for (int nn = 0; nn <= NumChemBands; ++nn) {
+			if (Network::ChemBands().arr[nn] != ChemBandsHeader().arr[nn]) {
+				return false;
+			}
+		}
+		return true;
+	}());
+	static_assert(Network::ChemBandsPowerLawIndex == ChemBandsPowerLawIndex_);
+	static_assert(Network::NumThermalBands == NumThermalBands);
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.
 
-	amrex::GpuArray<Real, NumChemBands> chemBandQuanta{};
-	amrex::GpuArray<Real, NumChemBands> invChemBandQuanta{};
-	for (int nn = 0; nn < NumChemBands; ++nn) {
+	amrex::GpuArray<Real, Network::NumChemBands> chemBandQuanta{};
+	amrex::GpuArray<Real, Network::NumChemBands> invChemBandQuanta{};
+	for (int nn = 0; nn < Network::NumChemBands; ++nn) {
 		chemBandQuanta[nn] = RadSystem<problem_t>::GetChemBandQuanta(nn);
 		invChemBandQuanta[nn] = 1.0_rt / chemBandQuanta[nn];
 	}
@@ -128,7 +155,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, Emag);
 
-			amrex::ignore_unused(radBoundaries, radEnergySource_arr);
+			amrex::ignore_unused(radBoundaries, radEnergySource_arr, dustHeatingSource_arr);
 			if constexpr (RadSystem<problem_t>::nGroupsThermal_ == 0) {
 				// With no thermal groups the thermal IMEX stages are skipped, so check the chem-band opacities here.
 				const auto massScalars = RadSystem<problem_t>::ComputeMassScalars(state, i, j, k);
@@ -136,49 +163,44 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				RadSystem<problem_t>::AssertChemBandOpacitiesAreZero(radBoundaries, rho, Tgas);
 			}
 
-			burn_t photochemstate;
+			quokka::microphysics::BurnState<problem_t> photochemstate;
 			photochemstate.success = true;
 			int burn_failed = 0;
 			photochemstate.c_hat = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
-			for (int nn = 0; nn < NumSpec; ++nn) {
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
 			}
-#ifdef SKIP_PHOTOCHEMFLUX
-			amrex::GpuArray<Real, NumChemBands> n_gamma_initial{};
-#endif
-			for (int nn = 0; nn < NumChemBands; ++nn) {
+			// without integrate_rad_flux, the flux attenuation is derived from the change in n_gamma
+			[[maybe_unused]] amrex::GpuArray<Real, Network::NumChemBands> n_gamma_initial{};
+			for (int nn = 0; nn < Network::NumChemBands; ++nn) {
 				const Real n_gamma = state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) * invChemBandQuanta[nn];
-				photochemstate.rn[0 + MicrophysicsNumChemRadVarsPerGroup * nn] = n_gamma;
-#ifdef SKIP_PHOTOCHEMFLUX
-				n_gamma_initial[nn] = n_gamma;
-#else
-				photochemstate.rn[1 + MicrophysicsNumChemRadVarsPerGroup * nn] = 1.0_rt;
-#endif
+				photochemstate.rn[0 + Layout::vars_per_group * nn] = n_gamma;
+				if constexpr (Microphysics_Traits<problem_t>::integrate_rad_flux) {
+					photochemstate.rn[1 + Layout::vars_per_group * nn] = 1.0_rt;
+				} else {
+					n_gamma_initial[nn] = n_gamma;
+				}
 			}
-			amrex::GpuArray<Real, amrex::max(NumThermalBands, 1)> re_thermal_initial{};
+			// not amrex::max, which takes references: an odr-use of Network::NumThermalBands that nvcc rejects
+			amrex::GpuArray<Real, (Network::NumThermalBands > 1 ? Network::NumThermalBands : 1)> re_thermal_initial{};
 			if constexpr (RadSystem<problem_t>::thermal_band_photochemistry_) {
-				for (int nn = 0; nn < NumThermalBands; ++nn) {
+				for (int nn = 0; nn < Network::NumThermalBands; ++nn) {
 					re_thermal_initial[nn] = state(i, j, k, RadSystem<problem_t>::radEnergy_index + RadSystem<problem_t>::numRadVars_ * nn);
 					photochemstate.re_thermal[nn] = re_thermal_initial[nn];
 				}
 			}
 			photochemstate.rho = rho;
 			photochemstate.e = Eint / rho;
-#ifdef DUST_CHEMICAL_BAND_ABSORPTION
-			// burn_t declares these only under the macro, and photochemstate is a non-dependent type,
-			// so its members are looked up even inside a discarded if constexpr branch. The guard has
-			// to be a preprocessor one.
-			photochemstate.dust_kappa = network_rp::dust_kappa;
-			photochemstate.e_dust_absorbed = 0.0_rt;
-#endif
+			if constexpr (Microphysics_Traits<problem_t>::dust_chemical_band_absorption) {
+				photochemstate.dust_kappa = Microphysics_Traits<problem_t>::Network::DustKappa();
+				photochemstate.e_dust_absorbed = 0.0_rt;
+			}
 
 			// call the EOS to set the temperature
 			eos(eos_input_re, photochemstate);
 
 			// do the actual integration
-			// do it in .cpp so that it is not built at compile time for all tests
-			// which would otherwise slow down compilation due to the large RHS file
-			photochem_burner(photochemstate, dt);
+			quokka::microphysics::Burn<problem_t>(photochemstate, dt);
 
 			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
 				amrex::Abort("Burner returned NAN");
@@ -196,16 +218,16 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			for (double &nn : photochemstate.xn) {
 				nn = amrex::max(nn, small_x);
 			}
-			for (int nn = 0; nn < NumChemBands; nn += 1) {
+			for (int nn = 0; nn < Network::NumChemBands; nn += 1) {
 				// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
-				photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup] =
-				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup], small_x);
+				photochemstate.rn[static_cast<std::size_t>(nn) * Layout::vars_per_group] =
+				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * Layout::vars_per_group], small_x);
 			}
 
 			// get the updated specific eint
 			eos(eos_input_re, photochemstate);
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
 			}
 			// Update the chem-band photon number density, attenuate the flux by the burn's rn[1] factor or algebraically using the photon number
@@ -219,23 +241,24 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			Real dMomY = 0.0_rt;
 			Real dMomZ = 0.0_rt;
 			// per-band momentum-kick magnitudes, used only to split the optional work-term energy debit across bands
-			[[maybe_unused]] amrex::GpuArray<Real, NumChemBands> dMomMag{};
+			[[maybe_unused]] amrex::GpuArray<Real, Network::NumChemBands> dMomMag{};
 			[[maybe_unused]] Real dMomMagSum = 0.0_rt;
-			for (int nn = 0; nn < NumChemBands; ++nn) {
+			for (int nn = 0; nn < Network::NumChemBands; ++nn) {
 				const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
-				const Real n_gamma_final = photochemstate.rn[0 + MicrophysicsNumChemRadVarsPerGroup * nn];
+				const Real n_gamma_final = photochemstate.rn[0 + Layout::vars_per_group * nn];
 				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) = n_gamma_final * chemBandQuanta[nn];
 				const Real FxOld = state(i, j, k, fxIdx);
 				const Real FyOld = state(i, j, k, fyIdx);
 				const Real FzOld = state(i, j, k, fzIdx);
-#ifdef SKIP_PHOTOCHEMFLUX
-				// flux is not carried in photochemstate; derive the attenuation factor from the change in n_gamma
-				const Real flux_factor = (n_gamma_initial[nn] > 0.0_rt) ? (n_gamma_final / n_gamma_initial[nn]) : 0.0_rt;
-#else
-				const Real flux_factor = photochemstate.rn[1 + MicrophysicsNumChemRadVarsPerGroup * nn];
-#endif
+				Real flux_factor{};
+				if constexpr (Microphysics_Traits<problem_t>::integrate_rad_flux) {
+					flux_factor = photochemstate.rn[1 + Layout::vars_per_group * nn];
+				} else {
+					// flux is not carried in photochemstate; derive the attenuation factor from the change in n_gamma
+					flux_factor = (n_gamma_initial[nn] > 0.0_rt) ? (n_gamma_final / n_gamma_initial[nn]) : 0.0_rt;
+				}
 				// dp = (F_before - F_after) / c^2 = (1 - flux_factor) * F_before / c^2
 				const Real dpx = (1.0_rt - flux_factor) * FxOld * inv_c2;
 				const Real dpy = (1.0_rt - flux_factor) * FyOld * inv_c2;
@@ -254,17 +277,14 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 			if constexpr (RadSystem<problem_t>::thermal_band_photochemistry_) {
 				// Flux of thermal band is unchanged after burn since we assume isotropic emission.
-				for (int nn = 0; nn < NumThermalBands; ++nn) {
+				for (int nn = 0; nn < Network::NumThermalBands; ++nn) {
 					radEnergySource_arr(i, j, k, nn) += (photochemstate.re_thermal[nn] - re_thermal_initial[nn]) / dt;
 				}
 			}
 
-#ifdef DUST_CHEMICAL_BAND_ABSORPTION
-			static_assert(RadSystem<problem_t>::dust_chemical_band_absorption_,
-				      "DUST_CHEMICAL_BAND_ABSORPTION is defined but ISM_Traits::dust_chemical_band_absorption is false: "
-				      "the dust-absorbed photon energy would be silently dropped.");
-			dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / dt;
-#endif
+			if constexpr (Microphysics_Traits<problem_t>::dust_chemical_band_absorption) {
+				dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / dt;
+			}
 
 			// Quokka uses rho*eint
 			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
@@ -299,7 +319,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 								    (xmom * xmom + ymom * ymom + zmom * zmom)) /
 								   (2.0_rt * rho);
 						const Real E_debit = (C::c_light / photochemstate.c_hat) * dEkin;
-						for (int nn = 0; nn < NumChemBands; ++nn) {
+						for (int nn = 0; nn < Network::NumChemBands; ++nn) {
 							const int eIdx = firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 							const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 							const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;

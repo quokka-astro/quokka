@@ -21,6 +21,7 @@
 
 #include "cooling/EOSTabulatedRegistry.hpp"
 #include "eos.H"
+#include "microphysics/microphysics_traits.hpp"
 
 #ifdef CHEMISTRY
 #include "actual_eos_data.H"
@@ -31,9 +32,7 @@ namespace quokka
 
 // forward declarations of EOS backends
 template <typename problem_t> struct EOSIdeal;
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 template <typename problem_t> struct EOSMicrophysics;
-#endif
 template <typename problem_t> struct EOSTabulated;
 
 // Single source of truth for the default EOS backend selection, forward-declared here
@@ -247,7 +246,8 @@ template <typename problem_t> struct EOSIdeal {
 };
 
 // ==================== EOSMicrophysics backend ====================
-// Only compiled when CHEMISTRY or PHOTOCHEMISTRY is defined.
+// The default backend of the problems with chemistry or photochemistry (see DefaultEOSBackend). It is compiled only in
+// those builds, because it uses spmasses from Microphysics' chemistry EOS. This guard goes when the EOS is in Quokka.
 
 #if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 template <typename problem_t> struct EOSMicrophysics {
@@ -531,11 +531,7 @@ template <typename problem_t> struct EOSTabulated {
 // Both EOS_Traits (primary template) and EOSBackendHelper (SFINAE fallback) use this
 // so the default-backend policy lives in exactly one place.
 template <typename T> struct DefaultEOSBackend {
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-	using type = EOSMicrophysics<T>;
-#else
-	using type = EOSIdeal<T>;
-#endif
+	using type = std::conditional_t<Microphysics_Traits<T>::chemistry || Microphysics_Traits<T>::photochemistry, EOSMicrophysics<T>, EOSIdeal<T>>;
 };
 
 // ==================== EOS backend selection ====================

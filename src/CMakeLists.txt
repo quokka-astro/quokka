@@ -160,6 +160,7 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagParticleTxt.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/microphysics/integrator_params.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
                         "${openPMDSources}")
 

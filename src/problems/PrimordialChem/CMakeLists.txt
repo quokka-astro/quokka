@@ -16,7 +16,7 @@ set(JOB_NAME PrimordialChem)
 
 add_executable(
   ${JOB_NAME} testPrimordialChem.cpp "${QuokkaSourcesNoEOS}"
-              ../../chemistry/Chemistry.cpp ${primordial_chem_sources})
+              ${primordial_chem_sources})
 
 # this will add #define CHEMISTRY
 target_compile_definitions(${JOB_NAME} PUBLIC CHEMISTRY)

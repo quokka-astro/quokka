@@ -24,8 +24,9 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-JAFF_REPO="https://github.com/jaff-chemistry/jaff.git"
-JAFF_COMMIT="2b2e426e469357ae00376ff2a284443411dcdf1a"
+# A fork of jaff with the quokka template, until jaff itself has it
+JAFF_REPO="https://github.com/James471/jaff.git"
+JAFF_COMMIT="d8ec12ee5788058fe26ade445c8856138b5d0163"
 # Pin sympy version so that jaffgen's output is reproducible
 SYMPY_VERSION="1.14.0"
 
@@ -60,15 +61,22 @@ echo "==> Installing jaff from ${JAFF_DIR}"
 echo "==> Pinning sympy==${SYMPY_VERSION}"
 "${TMPDIR}/venv/bin/pip" install --quiet "sympy==${SYMPY_VERSION}"
 
+# Microphysics' build still reads these, until Quokka stops building the network with it
+JAFF_TEMPLATES="${JAFF_DIR}/src/jaff/templates"
+MICROPHYSICS_FILES="${JAFF_TEMPLATES}/generator/microphysics/_parameters"
+MICROPHYSICS_FILES+=",${JAFF_TEMPLATES}/generator/microphysics/actual_network_data.cpp"
+MICROPHYSICS_FILES+=",${JAFF_TEMPLATES}/preprocessor/microphysics/actual_network.H"
+
 echo "==> Running jaffgen, output to ${OUTDIR}"
 "${TMPDIR}/venv/bin/jaffgen" \
 	--config "${CONFIG_DIR}/jaffgen.toml" \
 	--network "${CONFIG_DIR}/photoionization_H_caseB.jet" \
-	--template microphysics \
+	--template quokka \
+	--files "${MICROPHYSICS_FILES}" \
 	--lang cxx \
 	--outdir "${OUTDIR}"
 
 echo "==> Running clang-format on generated files"
-clang-format -i "${OUTDIR}"/*.H "${OUTDIR}"/*.cpp
+clang-format -i "${OUTDIR}"/*.H "${OUTDIR}"/*.hpp "${OUTDIR}"/*.cpp
 
 echo "==> Done"

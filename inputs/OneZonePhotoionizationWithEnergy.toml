@@ -21,11 +21,6 @@ do_subcycle = 0
 suppress_output = 0
 
 photochemistry.enabled = 1
-integrator.use_number_densities = 1
-integrator.do_species_clip = 0
-integrator.jacobian = 1
-integrator.renormalize_abundances = 0
-integrator.subtract_internal_energy = 0
 
 photoionization.n_e_init = 1e-10
 photoionization.n_HI_init = 1e2
@@ -45,8 +40,6 @@ integrator.radiation_failure_tolerance   = 0.05     # cm^-3; N_gamma guard, must
 integrator.rtol_spec     = 5e-8
 integrator.rtol_rad_num  = 5e-8
 integrator.rtol_enuc     = 5e-8
-
-integrator.rosenbrock_tableau = 3
 
 network.energy_switch = 1
 network.KI_heating_switch = 0
