@@ -1,7 +1,6 @@
-//==============================================================================
-// Copyright 2025 Ben Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testFieldLoop.cpp
 /// \brief
 ///   This problem is based on the test described here:

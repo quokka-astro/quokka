@@ -1,7 +1,6 @@
-//==============================================================================
-// Copyright 2022 Neco Kriel and Ben Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testCurrentSheet.cpp
 /// \brief Defines a test problem to test magnetic reconnection in a current sheet.
 ///   This problem is based on the description here:
