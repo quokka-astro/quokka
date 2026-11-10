@@ -12,6 +12,7 @@
 #include "AMReX_Reduce.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/photoionization_H_caseB_handwritten/network.hpp"
 #include "physics_info.hpp"
@@ -22,10 +23,8 @@
 #include <limits>
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 struct DTypeFrontVC {};
 
@@ -57,7 +56,7 @@ template <> struct quokka::EOS_Traits<DTypeFrontVC> {
 template <> struct Microphysics_Traits<DTypeFrontVC> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::PhotoionizationHCaseB;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+	static constexpr bool photochemistry = true;
 };
 
 using Network = Microphysics_Traits<DTypeFrontVC>::Network;
@@ -97,7 +96,7 @@ void RadSystem<DTypeFrontVC>::AddRadSource(array_t &radEnergy, array_t & /*reduc
 
 template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 {
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	amrex::ParmParse const pp("photoionization_momentum");
 	userData_.small_temp = 1.0e-2;
@@ -114,7 +113,6 @@ template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 	pp.query("n_HII_init", userData_.n_HII_init);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontVC>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -132,7 +130,7 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::microphysics::BurnState<DTypeFrontVC> state;
 	std::array<Real, Network::NumSpec> numdens = {-1.0};
 	numdens[Network::Species::e] = userData_.n_e_init;
 	numdens[Network::Species::H] = userData_.n_HI_init;
@@ -256,8 +254,9 @@ auto problem_main() -> int
 	std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const fc_ptrs{};
 	amrex::MultiFab dustHeatingSource;
 	amrex::MultiFab radEnergySource; // untouched: this problem has no thermal-band photochemistry
-	static_cast<void>(quokka::photochemistry::computePhotoChemistry<DTypeFrontVC>(
-	    sim.state_new_cc_[0], fc_ptrs, burn_dt, std::numeric_limits<amrex::Real>::max(), 0.0_rt, dustHeatingSource, radEnergySource));
+	static_cast<void>(quokka::photochemistry::computePhotoChemistry<DTypeFrontVC>(sim.state_new_cc_[0], fc_ptrs, burn_dt,
+										      std::numeric_limits<amrex::Real>::max(), 0.0_rt, dustHeatingSource,
+										      radEnergySource, sim.integratorParams_));
 
 	const MomentumCheck check = compute_momentum_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray(), initial_flux_x);
 	const EnergyCheck energy_after = compute_energy_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray());

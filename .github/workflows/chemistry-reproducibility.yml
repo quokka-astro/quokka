@@ -1,6 +1,6 @@
 name: 🧪 ChemistryReproducibility
 
-# Runs every CHEMISTRY and PHOTOCHEMISTRY test problem for 10 timesteps and checks
+# Runs every chemistry and photochemistry test problem for 10 timesteps and checks
 # that the plotfiles are bitwise identical to the references in
 # extern/chemistry_reproducibility/ (see the README there).
 #
