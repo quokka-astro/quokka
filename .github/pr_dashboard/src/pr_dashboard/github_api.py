@@ -128,7 +128,7 @@ def get_user(
             endpoint=f"repos/{repo}/collaborators/{_quote(user_name)}/permission",
         )
         role_in_repo = pr_context.RoleInRepo(permission_data["role_name"])
-    except (subprocess.CalledProcessError, ValueError):
+    except (RuntimeError, ValueError, KeyError):
         role_in_repo = pr_context.RoleInRepo.READ
     return pr_context.User(
         user_name=user_name,
