@@ -20,10 +20,10 @@
 #include <iomanip>
 
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "util/BC.hpp"
+#include "util/fundamental_constants.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"

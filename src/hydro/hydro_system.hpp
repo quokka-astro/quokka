@@ -36,8 +36,10 @@
 #include "util/ArrayView.hpp"
 #include "util/valarray.hpp"
 
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 // Microphysics headers
 #include "extern_parameters.H"
+#endif
 
 // this struct is specialized by the user application code
 //
@@ -59,6 +61,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 {
       public:
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	static constexpr amrex::Real small_x_ = 1.0e-30; // mass-scalar floor (fraction of rho); chemistry builds use network_rp::small_x
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
 	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_ +
 				     (Physics_Traits<problem_t>::nDustGroups * Physics_NumVars::numDustVarsPerGroup) *
@@ -1075,7 +1078,11 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real sp_sum = 0.0;
 			for (int idx = 0; idx < nmscalars_; ++idx) {
 				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 					state[bx](i, j, k, scalar0_index + idx) = network_rp::small_x * rho_new;
+#else
+					state[bx](i, j, k, scalar0_index + idx) = small_x_ * rho_new;
+#endif
 				}
 				// get sum to renormalize
 				sp_sum += state[bx](i, j, k, scalar0_index + idx);

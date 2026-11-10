@@ -3,6 +3,8 @@ if(AMReX_SPACEDIM EQUAL 3)
   setup_target_for_microphysics_compilation(${microphysics_network_name}
                                             "${CMAKE_CURRENT_BINARY_DIR}/"
                                             INTEGRATOR "Rosenbrock")
+  # Microphysics headers are not on the global include path; this target uses its network's directories
+  include_directories(BEFORE ${${microphysics_network_name}_dirs} "${CMAKE_CURRENT_BINARY_DIR}/")
 
   set(JOB_NAME DTypeFront_JAFF)
 
