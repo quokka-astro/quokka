@@ -18,6 +18,12 @@
 namespace quokka::microphysics
 {
 
+/// The number of column densities the network reads from the burn state: Network::NumColumns, or 0 for a network
+/// that reads none.
+template <typename Network> constexpr int NumColumns = 0;
+template <typename Network> requires requires { Network::NumColumns; }
+constexpr int NumColumns<Network> = Network::NumColumns;
+
 namespace detail
 {
 /// The members for the chemical and thermal bands, present only with Microphysics_Traits::photochemistry.
@@ -42,9 +48,18 @@ template <typename problem_t> struct DustChemicalBandAbsorptionState<problem_t, 
 	amrex::Real dust_kappa{};      ///< dust opacity to chemical-band photons
 	amrex::Real e_dust_absorbed{}; ///< energy density [erg cm^-3] of the chemical-band photons absorbed by dust during the burn
 };
+
+/// The column densities the network reads, present only if it reads any. They extend the members above.
+template <typename problem_t, int num_columns = NumColumns<typename Microphysics_Traits<problem_t>::Network>>
+struct ColumnDensityState : DustChemicalBandAbsorptionState<problem_t> {
+	/// column density [cm^-2] of each species the network names, indexed by Network::Column; constant during a burn
+	amrex::GpuArray<amrex::Real, num_columns> ncol{};
+};
+
+template <typename problem_t> struct ColumnDensityState<problem_t, 0> : DustChemicalBandAbsorptionState<problem_t> {};
 } // namespace detail
 
-template <typename problem_t> struct BurnState : detail::DustChemicalBandAbsorptionState<problem_t> {
+template <typename problem_t> struct BurnState : detail::ColumnDensityState<problem_t> {
 	using problem_type = problem_t;
 	using traits = Microphysics_Traits<problem_t>;
 	using Network = typename traits::Network;

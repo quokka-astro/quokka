@@ -66,9 +66,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgesl_loops(const Matrix &a, const
 		}
 	}
 
-	// now solve u * x = y
+	// now solve u * x = y (dgefa stored the reciprocal of each pivot on the diagonal)
 	for (int k = num_eqs - 1; k >= 0; --k) {
-		b[k] = b[k] / a(k, k);
+		b[k] = b[k] * a(k, k);
 		const amrex::Real t = -b[k];
 		AMREX_UNROLL_LOOP(QUOKKA_NET_LOOP_UNROLL_LEN)
 		for (int j = 0; j < k; ++j) {
@@ -126,8 +126,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_loops(Matrix &a, amrex::GpuA
 					}
 				}
 
-				// compute multipliers
+				// compute multipliers, and store the reciprocal of the pivot for dgesl
 				t = -1.0e0_rt / a(k, k);
+				a(k, k) = -t;
 				AMREX_UNROLL_LOOP(QUOKKA_NET_LOOP_UNROLL_LEN)
 				for (int j = k + 1; j < num_eqs; ++j) {
 					a(j, k) *= t;
@@ -162,6 +163,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_loops(Matrix &a, amrex::GpuA
 
 	if (a(nm1, nm1) == 0.0e0_rt) {
 		info = num_eqs;
+	} else {
+		a(nm1, nm1) = 1.0e0_rt / a(nm1, nm1);
 	}
 }
 
@@ -193,10 +196,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgesl_unrolled(const Matrix &a, co
 		});
 	});
 
-	// now solve u * x = y
+	// now solve u * x = y (dgefa stored the reciprocal of each pivot on the diagonal)
 	amrex::constexpr_for<0, num_eqs>([&](auto kr) {
 		constexpr int k = num_eqs - 1 - decltype(kr)::value;
-		b[k] = b[k] / a(k, k);
+		b[k] = b[k] * a(k, k);
 		const amrex::Real t = -b[k];
 		amrex::constexpr_for<0, k>([&](auto jc) {
 			constexpr int j = decltype(jc)::value;
@@ -247,8 +250,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled(Matrix &a, amrex::G
 			a(k, k) = akk;
 		}
 
-		// compute multipliers
+		// compute multipliers, and store the reciprocal of the pivot for dgesl
 		const amrex::Real t = -1.0e0_rt / a(k, k);
+		a(k, k) = -t;
 		amrex::constexpr_for<k + 1, num_eqs>([&](auto jc) {
 			constexpr int j = decltype(jc)::value;
 			a(j, k) *= t;
@@ -281,6 +285,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled(Matrix &a, amrex::G
 
 	if (a(nm1, nm1) == 0.0e0_rt) {
 		info = num_eqs;
+	} else {
+		a(nm1, nm1) = 1.0e0_rt / a(nm1, nm1);
 	}
 }
 
@@ -301,8 +307,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgesl(const Matrix &a, const amrex
 
 /// Factors a = L U by Gaussian elimination, overwriting a with the factors. With allow_pivot it pivots on the largest
 /// entry of each column and records the row swaps in pivot; without it, pivot is not written. info is 0 when every
-/// pivot is nonzero, and otherwise one more than the index of the last zero pivot, in which case dgesl would divide by
-/// zero.
+/// pivot is nonzero, and otherwise one more than the index of the last zero pivot, in which case dgesl must not be
+/// called. Unlike LINPACK, the diagonal of the factored matrix holds the reciprocals of the pivots, so that dgesl
+/// multiplies instead of dividing (each pivot's reciprocal is computed here anyway, for the multipliers).
 template <int num_eqs, bool allow_pivot, typename Matrix>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa(Matrix &a, amrex::GpuArray<std::int16_t, num_eqs> &pivot, int &info)
 {

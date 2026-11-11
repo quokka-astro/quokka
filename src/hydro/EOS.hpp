@@ -356,6 +356,17 @@ template <typename problem_t> struct EOSMultigamma : EOSBase {
 	/// Which of T, e and p is given with rho and the species.
 	enum class Input : std::uint8_t { RhoT, RhoE, RhoP };
 
+	/// f_i / 2 = 1 / (gamma_i - 1) of each species, its degrees of freedom over 2, so that Solve() multiplies by it
+	/// instead of dividing by gamma_i - 1.
+	static constexpr auto SpeciesFiOver2() -> amrex::GpuArray<amrex::Real, Network::NumSpec>
+	{
+		amrex::GpuArray<amrex::Real, Network::NumSpec> f{};
+		for (int n = 0; n < Network::NumSpec; ++n) {
+			f.arr[n] = 1.0 / (Network::SpeciesGamma().arr[n] - 1.0);
+		}
+		return f;
+	}
+
 	/// A gas state with every quantity Solve() sets: the hydro uses it, and so can a problem that needs a pressure.
 	struct GasState {
 		amrex::Real rho{};
@@ -405,7 +416,7 @@ template <typename problem_t> struct EOSMultigamma : EOSBase {
 
 		constexpr amrex::Real protonmass = C::m_p;
 		constexpr auto spmasses = Network::SpeciesMass();
-		constexpr auto gammas = Network::SpeciesGamma();
+		constexpr auto fi_over_2 = SpeciesFiOver2();
 
 		amrex::Real sum_Abarinv = 0.0;
 		amrex::Real sum_ni_fi_over_2 = 0.0;
@@ -413,7 +424,7 @@ template <typename problem_t> struct EOSMultigamma : EOSBase {
 
 		for (int n = 0; n < Network::NumSpec; ++n) {
 			rhotot += state.xn[n] * spmasses[n];
-			sum_ni_fi_over_2 += state.xn[n] / (gammas[n] - 1.0);
+			sum_ni_fi_over_2 += state.xn[n] * fi_over_2[n];
 			sum_Abarinv += state.xn[n];
 		}
 

@@ -50,6 +50,14 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 	int num_failed = 0;
 
+#ifdef QUOKKA_BURN_STATS
+	// GOW experiment: per-call burn statistics (burns, sum n_step, sum n_rhs, sum n_jac) and the largest n_step
+	amrex::Gpu::Buffer<amrex::Real> d_stats({0.0_rt, 0.0_rt, 0.0_rt, 0.0_rt});
+	auto *p_stats = d_stats.data();
+	amrex::Gpu::Buffer<int> d_max_step({0});
+	auto *p_max_step = d_max_step.data();
+#endif
+
 	const int firstChemIndex = RadSystem<problem_t>::radEnergy_index +
 				   RadSystem<problem_t>::numRadVars_ * (RadSystem<problem_t>::nGroups_ - RadSystem_NChemBands<problem_t>::value);
 	const int firstChemFxIndex = firstChemIndex + 1;
@@ -63,6 +71,11 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || Network::NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
 		      "Network::NumThermalBands must equal RadSystem<problem_t>::nGroupsThermal_ (nGroups_ - NChemBands) when "
 		      "ISM_Traits::thermal_band_photochemistry is true.");
+	constexpr bool has_columns = quokka::microphysics::NumColumns<Network> > 0;
+	static_assert(
+	    !has_columns || requires(quokka::microphysics::BurnState<problem_t> & s) { Microphysics_Traits<problem_t>::ColumnDensities(s); },
+	    "The network reads column densities: Microphysics_Traits must define ColumnDensities(BurnState &), which sets "
+	    "state.ncol from the cell's state before each burn.");
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.
@@ -107,7 +120,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 #endif
 		}
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		// Blocks of one wave (64 threads): the cells of a block take very different numbers of integrator steps, and on
+		// AMD GPUs a block's registers are freed for the next block only when its slowest wave has finished.
+		amrex::ParallelFor<64>(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, RadSystem<problem_t>::gasDensity_index);
 			// dont do photochemistry in cells with densities below the minimum density specified
 			if (rho < min_density_allowed) {
@@ -170,6 +185,11 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			// call the EOS to set the temperature
 			GasEOS::Solve(GasEOS::Input::RhoE, photochemstate);
 
+			// the column densities, held constant during the burn
+			if constexpr (quokka::microphysics::NumColumns<Network> > 0) {
+				Microphysics_Traits<problem_t>::ColumnDensities(photochemstate);
+			}
+
 			// do the actual integration
 			quokka::microphysics::Burn<problem_t>(photochemstate, dt, integrator_params);
 
@@ -179,11 +199,56 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 			if (!photochemstate.success) {
 				burn_failed = 1;
+				// GOW experiment diagnostic: the GPU build prints nothing about a failed burn
+				int n_min = 0;
+				for (int nn = 1; nn < Network::NumSpec; ++nn) {
+					if (photochemstate.xn[nn] < photochemstate.xn[n_min]) {
+						n_min = nn;
+					}
+				}
+				AMREX_DEVICE_PRINTF("BURN FAILED cell (%d %d %d) istate %d n_step %d T %g rho %g min xn[%d] = %g rn0 %g rn2 %g\n", i, j, k,
+						    static_cast<int>(photochemstate.error_code), photochemstate.n_step, photochemstate.T, rho, n_min,
+						    photochemstate.xn[n_min], photochemstate.rn[0], photochemstate.rn[System::vars_per_group]);
+#ifdef QUOKKA_BURN_STATS
+				// the full state of the failed burn (a burn that fails on its first Jacobian leaves the state unchanged), and
+				// the non-finite entries of the analytic Jacobian there
+				AMREX_DEVICE_PRINTF("  cell (%d %d %d) n_rhs %d n_jac %d T %.17g rho %.17g e %.17g c_hat %.17g\n", i, j, k,
+						    photochemstate.n_rhs, photochemstate.n_jac, photochemstate.T, photochemstate.rho, photochemstate.e,
+						    photochemstate.c_hat);
+				for (int nn = 0; nn < Network::NumSpec; ++nn) {
+					AMREX_DEVICE_PRINTF("  cell (%d %d %d) xn[%d] = %.17g\n", i, j, k, nn, photochemstate.xn[nn]);
+				}
+				for (int nn = 0; nn < System::num_chem_rad_eqs; ++nn) {
+					AMREX_DEVICE_PRINTF("  cell (%d %d %d) rn[%d] = %.17g\n", i, j, k, nn, photochemstate.rn[nn]);
+				}
+				if constexpr (has_columns) {
+					for (int nn = 0; nn < quokka::microphysics::NumColumns<Network>; ++nn) {
+						AMREX_DEVICE_PRINTF("  cell (%d %d %d) ncol[%d] = %.17g\n", i, j, k, nn, photochemstate.ncol[nn]);
+					}
+				}
+				amrex::Array2D<Real, 0, System::neqs - 1, 0, System::neqs - 1> jac_failed{};
+				Network::actual_jac(photochemstate, jac_failed);
+				for (int jj = 0; jj < System::neqs; ++jj) {
+					for (int ii = 0; ii < System::neqs; ++ii) {
+						const Real value = jac_failed(ii, jj);
+						if (std::isnan(value) || std::isinf(value)) {
+							AMREX_DEVICE_PRINTF("  cell (%d %d %d) jac(%d,%d) = %g\n", i, j, k, ii, jj, value);
+						}
+					}
+				}
+#endif
 			}
 
 			if (burn_failed) {
 				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
 			}
+#ifdef QUOKKA_BURN_STATS
+			amrex::Gpu::Atomic::Add(p_stats, 1.0_rt);
+			amrex::Gpu::Atomic::Add(p_stats + 1, static_cast<Real>(photochemstate.n_step));
+			amrex::Gpu::Atomic::Add(p_stats + 2, static_cast<Real>(photochemstate.n_rhs));
+			amrex::Gpu::Atomic::Add(p_stats + 3, static_cast<Real>(photochemstate.n_jac));
+			amrex::Gpu::Atomic::Max(p_max_step, photochemstate.n_step);
+#endif
 
 			// Ensure positivity
 			for (double &nn : photochemstate.xn) {
@@ -315,6 +380,18 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	}
 
 	num_failed = *(d_num_failed.copyToHost());
+
+#ifdef QUOKKA_BURN_STATS
+	{
+		const amrex::Real *h_stats = d_stats.copyToHost();
+		const int h_max_step = *(d_max_step.copyToHost());
+		static int call = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+		++call;
+		const amrex::Real burns = amrex::max(h_stats[0], 1.0_rt);
+		amrex::AllPrint() << "BURN STATS call " << call << " burns " << h_stats[0] << " mean n_step " << h_stats[1] / burns << " max n_step "
+				  << h_max_step << " mean n_rhs " << h_stats[2] / burns << " mean n_jac " << h_stats[3] / burns << '\n';
+	}
+#endif
 
 	photochem_burn_success = num_failed == 0;
 	amrex::ParallelDescriptor::ReduceIntMin(photochem_burn_success);

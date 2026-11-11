@@ -137,10 +137,13 @@ link_libraries(${HDF5_LIBRARIES})
 link_libraries(yaml-cpp::yaml-cpp)
 link_libraries(turbulence::turbulence)
 
-# Every network's runtime parameters (src/networks/<network>/network.cpp), in one library that every target links. A
-# problem picks its network in its problem file; the linker takes only that network's object file.
-file(GLOB quokka_network_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/networks/*/network.cpp)
+# Every network's runtime parameters (src/networks/<network>/network.cpp) and other sources, such as the readers of
+# its tables, in one library that every target links. A problem picks its network in its problem file; the linker
+# takes only that network's object files.
+file(GLOB quokka_network_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/networks/*/*.cpp)
 add_library(quokka_networks STATIC ${quokka_network_sources})
+# the default location of the networks' table files
+target_compile_definitions(quokka_networks PRIVATE QUOKKA_NETWORKS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/networks")
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   setup_target_for_cuda_compilation(quokka_networks)
 endif()

@@ -201,6 +201,44 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs(const amrex::Real time, BurnT 
 	}
 }
 
+/// Whether the network can evaluate its right-hand side and Jacobian together (Network::actual_rhs_and_jac).
+template <typename System, typename BurnT, typename MatrixType>
+constexpr bool network_has_rhs_and_jac = requires(BurnT & state, amrex::GpuArray<amrex::Real, System::neqs> &ydot, MatrixType &pd)
+{
+	System::traits::Network::actual_rhs_and_jac(state, ydot, pd);
+};
+
+/// The right-hand side and the analytic Jacobian at the same state, as rhs() followed by jac() would give them, from
+/// one network call (Network::actual_rhs_and_jac) that evaluates the rate coefficients once.
+template <typename System, typename BurnT, typename IntegratorT, typename MatrixType>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_and_jac(const amrex::Real time, BurnT &state, IntegratorT &int_state,
+							  amrex::GpuArray<amrex::Real, System::neqs> &ydot, MatrixType &pd, const IntegratorParams &params)
+{
+	constexpr int int_neqs = System::neqs;
+
+	clean_state<System>(int_state, params);
+	update_thermodynamics<System>(state, int_state);
+
+	const bool in_bounds = !(state.T <= quokka::eos_floors::min_temp || state.T >= System::traits::max_temp);
+
+	pd = MatrixType{};
+	if (in_bounds) {
+		state.time = time;
+		System::traits::Network::actual_rhs_and_jac(state, ydot, pd);
+		if constexpr (!System::traits::integrate_energy) {
+			ydot[System::energy_row] = 0.0_rt;
+			for (int j = 0; j < int_neqs; ++j) {
+				pd(System::energy_row, j) = 0.0_rt;
+			}
+		}
+	}
+
+	// a select after the branch, as in rhs()
+	for (int n = 0; n < int_neqs; ++n) {
+		ydot[n] = in_bounds ? ydot[n] : 0.0_rt;
+	}
+}
+
 /// The analytic Jacobian of the integrated system. The matrix is zeroed before the network fills it, so a network only
 /// has to write its nonzero entries.
 template <typename System, typename BurnT, typename IntegratorT, typename MatrixType>
@@ -275,11 +313,8 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amr
 	int_state.t = 0.0_rt;
 	int_state.tout = dt;
 
-	// We assume that (rho, T) coming in are valid, do an EOS call
-	// to fill the rest of the thermodynamic variables.
-
-	using GasEOS = quokka::EOS<typename BurnT::problem_type>;
-	GasEOS::Solve(GasEOS::Input::RhoT, state);
+	// The burn state comes in completed by the EOS (its caller solved it from rho and e), so no EOS call is needed here:
+	// solving it again from (rho, T) would only recompute e from T.
 
 	if constexpr (System::q_dust) {
 		state.e_dust_absorbed = 0.0_rt;

@@ -31,7 +31,10 @@ struct DefaultMicrophysicsTraits {
 	static constexpr bool burn_retry = false;
 	/// Enable chemistry
 	static constexpr bool chemistry = false;
-	/// Enable photochemistry.
+	/// Enable photochemistry. If the network reads column densities (Network::NumColumns > 0), the problem's traits
+	/// must also define `template <typename BurnT> AMREX_GPU_HOST_DEVICE static void ColumnDensities(BurnT &state)`,
+	/// which sets state.ncol from the cell's state; the photochemistry burn calls it once per cell, after the EOS has
+	/// set state.T, and the columns stay constant during the burn.
 	static constexpr bool photochemistry = false;
 	/// Dust absorption in chemical bands.
 	static constexpr bool dust_chemical_band_absorption = false;

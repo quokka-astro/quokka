@@ -19,7 +19,8 @@ using amrex::literals::operator""_rt;
 /// When checking the integration time to see if we're done, be careful with roundoff issues.
 constexpr amrex::Real timestep_safety_factor = 1.0e-4_rt;
 
-template <int int_neqs, int stages> struct RosenbrockState {
+/// num_active is the size of the block of the integrator matrix that is factored (ODESystem::num_active).
+template <int int_neqs, int stages, int num_active = int_neqs> struct RosenbrockState {
 	amrex::Real t;	  // the starting time
 	amrex::Real tout; // the stopping time
 	amrex::Real dt;	  // next internal timestep
@@ -45,7 +46,7 @@ template <int int_neqs, int stages> struct RosenbrockState {
 	amrex::GpuArray<amrex::Real, int_neqs> work;
 
 	amrex::Array2D<amrex::Real, 0, int_neqs - 1, 0, int_neqs - 1> jac; // stored column by column
-	amrex::GpuArray<std::int16_t, int_neqs> pivot;
+	amrex::GpuArray<std::int16_t, num_active> pivot;		   // the row swaps of the factored active block
 };
 
 } // namespace quokka::microphysics

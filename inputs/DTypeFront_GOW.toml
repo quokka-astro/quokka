@@ -1,0 +1,79 @@
+# *****************************************************************
+# DTypeFront_GOW: a source of far-UV photons in a uniform atomic cloud, with the GOW network. A timing problem: 100
+# steps at 128^3 on one level, without plotfiles. The gas, network and integrator settings are those of XRByte's
+# turbulent chemistry box (branch turb-chem-box of XRByte/quokka, inputs/Turbulence.toml).
+# *****************************************************************
+
+# *****************************************************************
+# Problem size and geometry (as DTypeFront3D)
+# *****************************************************************
+geometry.prob_lo     =  [-4.9371e19, -4.9371e19, -4.9371e19]
+geometry.prob_hi     =  [ 4.9371e19,  4.9371e19,  4.9371e19]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [128, 128, 128]
+amr.max_level       = 0
+amr.max_grid_size   = 128
+amr.blocking_factor = 32
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+temperature_floor = 10.0  # XRByte's small_temp
+density_floor = 1.0e-30
+
+stop_time = 3.15576e13
+max_timesteps = 100
+
+plotfile_interval = -1
+checkpoint_interval = -1
+
+photochemistry.enabled = 1
+
+eos.min_temp = 1e-2
+eos.min_dens = 1e-60
+
+# *****************************************************************
+# The cloud and the source
+# *****************************************************************
+gow.n_H = 30.0           # H-nucleus number density [cm^-3]
+gow.temperature = 100.0  # initial gas temperature [K]
+# photon emission rate [s^-1] of the source in 6-11.2 eV and in 11.2-13.6 eV; without dust, ~10 Draine at 3e19 cm
+gow.Q_band0 = 2.0e49
+gow.Q_band1 = 1.0e49
+
+# *****************************************************************
+# Network (GOW) runtime parameters
+# *****************************************************************
+network.small_x = 1.0e-60
+network.crate = 2.0e-16             # cosmic-ray ionization rate [s^-1]
+network.d2g = 0.01                  # dust-to-gas mass ratio (solar: 0.01)
+network.Zd = 1.0                    # dust abundance relative to solar, in the dust absorption of the bands
+# The velocity gradient [s^-1] of the local CO escape, and the velocity dispersion [cm/s] of the H2 self-shielding, as
+# hard-coded in XRByte's GOW networks. With the local columns, ncol_H > 0, so the CO cooling uses the columns, not gradv.
+network.gradv = 9.0e-14
+network.vdisp = 2.1213203435596424e5  # 3 km/s / sqrt(2)
+
+# *****************************************************************
+# Integrator tolerances, as XRByte's: rtol 1e-3, atol_spec ~1e-9 n_H so that CO and C are resolved
+# *****************************************************************
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+integrator.rtol_spec     = 1e-3
+integrator.rtol_rad_num  = 1e-3
+integrator.rtol_enuc     = 1e-3
+
+integrator.atol_spec                     = 2.0e-9   # cm^-3
+integrator.atol_enuc                     = 1.0e-6   # erg/g
+integrator.atol_rad_num                  = 1.0e-6   # cm^-3; XRByte's box has no transported bands
+integrator.species_failure_tolerance     = 2.0e-9   # cm^-3; = atol_spec
+integrator.radiation_failure_tolerance   = 1.0e-3   # cm^-3

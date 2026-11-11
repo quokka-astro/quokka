@@ -17,6 +17,8 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
+#include "gcem.hpp"
+
 #include "math/linear_algebra.hpp"
 #include "microphysics/integrator_common.hpp"
 #include "microphysics/integrator_errors.hpp"
@@ -85,20 +87,37 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto species_change_valid(const Rosenbr
 	constexpr amrex::Real increase_change_factor = 4.0_rt;
 	constexpr amrex::Real decrease_change_factor = 0.25_rt;
 
+	// accumulated without short-circuit evaluation, so that the test is a few compares and no branches on the GPU
+	bool valid = true;
 	for (int i = 0; i < System::num_spec; ++i) {
-		if (std::abs(rstate.y[i]) > params.X_reject_buffer * rstate.atol_spec && std::abs(rstate.ynew[i]) > params.X_reject_buffer * rstate.atol_spec &&
-		    (std::abs(rstate.ynew[i]) > increase_change_factor * std::abs(rstate.y[i]) ||
-		     std::abs(rstate.ynew[i]) < decrease_change_factor * std::abs(rstate.y[i]))) {
-			return false;
-		}
+		const amrex::Real y_old = std::abs(rstate.y[i]);
+		const amrex::Real y_new = std::abs(rstate.ynew[i]);
+		const bool above_buffer = (y_old > params.X_reject_buffer * rstate.atol_spec) & (y_new > params.X_reject_buffer * rstate.atol_spec);
+		const bool changed_too_much = (y_new > increase_change_factor * y_old) | (y_new < decrease_change_factor * y_old);
+		valid &= !(above_buffer & changed_too_much);
 	}
 
-	return true;
+	return valid;
 }
 
 template <typename System, typename MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto matrix_is_finite(const MatrixType &matrix) -> bool
 {
 	constexpr int int_neqs = System::neqs;
+
+	// A NaN or an infinity in any entry makes the sum of all entries non-finite, so one check of the sum settles the
+	// usual case. Only a non-finite sum needs the entries checked one by one (the sum of finite entries can overflow).
+	// The columns are summed separately first, so that the sum is not one long dependent chain.
+	amrex::Real sum = 0.0_rt;
+	for (int j = 0; j < int_neqs; ++j) {
+		amrex::Real column_sum = 0.0_rt;
+		for (int i = 0; i < int_neqs; ++i) {
+			column_sum += matrix(i, j);
+		}
+		sum += column_sum;
+	}
+	if (std::isfinite(sum)) {
+		return true;
+	}
 
 	for (int j = 0; j < int_neqs; ++j) {
 		for (int i = 0; i < int_neqs; ++i) {
@@ -118,29 +137,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex
 {
 	constexpr int int_neqs = System::neqs;
 
+	// accumulated without short-circuit evaluation, so that the test is a few compares and no branches on the GPU
+	bool valid = true;
 	for (int n = 0; n < int_neqs; ++n) {
-		const amrex::Real yn = y[n];
-		if (std::isnan(yn) || std::isinf(yn)) {
-			return false;
-		}
+		valid &= std::isfinite(y[n]);
 	}
 
 	for (int n = 0; n < int_neqs; ++n) {
 		switch (System::role(n)) {
 			case VarRole::Species:
-				if (y[n] < -params.atol_spec) {
-					return false;
-				}
+				valid &= !(y[n] < -params.atol_spec);
 				break;
 			case VarRole::Energy:
-				if (y[n] <= 0.0_rt) {
-					return false;
-				}
+				valid &= !(y[n] <= 0.0_rt);
 				break;
 			case VarRole::ChemPhotonNumber:
-				if (y[n] < -params.atol_rad_num) {
-					return false;
-				}
+				valid &= !(y[n] < -params.atol_rad_num);
 				break;
 			case VarRole::ChemPhotonFlux:
 			case VarRole::ThermalBandEnergy:
@@ -149,7 +161,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto valid_integrator_state(const amrex
 		}
 	}
 
-	return true;
+	return valid;
 }
 
 /// The finite-difference Jacobian, from int_neqs evaluations of the right-hand side around rstate.y. Expects the
@@ -216,15 +228,27 @@ template <typename System, typename BurnT, typename RosenbrockT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, RosenbrockT &rstate, const amrex::Real time, const IntegratorParams &params)
     -> bool
 {
-	rhs<System>(time, state, rstate, rstate.k[0], params);
-	rstate.n_rhs += 1;
-
-	if constexpr (System::traits::analytic_jacobian) {
-		jac<System>(state, rstate, rstate.jac);
+	// a network that evaluates both at once reuses its rate coefficients between them
+	constexpr bool combined = System::traits::analytic_jacobian && network_has_rhs_and_jac<System, BurnT, decltype(rstate.jac)>;
+	if constexpr (combined) {
+		rhs_and_jac<System>(time, state, rstate, rstate.k[0], rstate.jac, params);
+		rstate.n_rhs += 1;
 		rstate.n_jac += 1;
 
 		if (matrix_is_finite<System>(rstate.jac)) {
 			return true;
+		}
+	} else {
+		rhs<System>(time, state, rstate, rstate.k[0], params);
+		rstate.n_rhs += 1;
+
+		if constexpr (System::traits::analytic_jacobian) {
+			jac<System>(state, rstate, rstate.jac);
+			rstate.n_jac += 1;
+
+			if (matrix_is_finite<System>(rstate.jac)) {
+				return true;
+			}
 		}
 	}
 
@@ -257,9 +281,34 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_at(const amrex::Real time, Bur
 	}
 }
 
+/// The active block of the integrator matrix, in the form dgefa and dgesl take: entry (i, j) of the block is entry
+/// (ActiveEntries()[i], ActiveEntries()[j]) of the full matrix. The indices are compile-time constants where the solver
+/// is unrolled, so the block is addressed as directly as the full matrix.
+template <typename System, typename MatrixType> struct ActiveBlock {
+	static constexpr amrex::GpuArray<int, System::num_active> entries = System::ActiveEntries();
+	MatrixType &matrix;
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(const int i, const int j) const -> amrex::Real &
+	{
+		return matrix(entries.arr[i], entries.arr[j]);
+	}
+};
+
+/// Forms the integrator matrix M = fac I - J in rstate.jac and factors its active block (ODESystem::num_active): the
+/// passive entries have zero columns in J off the diagonal, so M = [[A, 0], [C, D]] with D diagonal, and only A needs
+/// an LU factorization. The passive diagonal is stored as its reciprocal, like the pivots of A. Returns 0, or a nonzero
+/// code when A has a zero pivot or D a zero entry, in which case solve() must not be called.
 template <typename System, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto decompose(RosenbrockT &rstate, const amrex::Real fac) -> int
 {
 	constexpr int int_neqs = System::neqs;
+
+#ifdef AMREX_DEBUG
+	for (int p = 0; p < System::num_passive; ++p) {
+		const int col = System::PassiveEntries().arr[p];
+		for (int i = 0; i < int_neqs; ++i) {
+			AMREX_ASSERT_WITH_MESSAGE(i == col || rstate.jac(i, col) == 0.0_rt, "a passive entry of y has a nonzero off-diagonal Jacobian column");
+		}
+	}
+#endif
 
 	for (int j = 0; j < int_neqs; ++j) {
 		for (int i = 0; i < int_neqs; ++i) {
@@ -269,20 +318,56 @@ template <typename System, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 	}
 
 	int ierr_linpack = 0;
-	quokka::math::dgefa<int_neqs, System::traits::linalg_do_pivoting>(rstate.jac, rstate.pivot, ierr_linpack);
+	ActiveBlock<System, decltype(rstate.jac)> block{rstate.jac};
+	quokka::math::dgefa<System::num_active, System::traits::linalg_do_pivoting>(block, rstate.pivot, ierr_linpack);
+
+	amrex::constexpr_for<0, System::num_passive>([&](auto pc) {
+		constexpr int p = System::PassiveEntries().arr[decltype(pc)::value];
+		if (rstate.jac(p, p) == 0.0_rt) {
+			ierr_linpack = (ierr_linpack != 0) ? ierr_linpack : p + 1;
+		} else {
+			rstate.jac(p, p) = 1.0_rt / rstate.jac(p, p);
+		}
+	});
 
 	return ierr_linpack;
 }
 
+/// Solves M x = b in place for the matrix decompose() factored: the active block by dgesl, then each passive entry p
+/// from its row, x_p = (b_p - sum_a M(p, a) x_a) / M(p, p).
 template <typename System, typename RosenbrockT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void solve(RosenbrockT &rstate, amrex::GpuArray<amrex::Real, System::neqs> &b)
 {
-	quokka::math::dgesl<System::neqs, System::traits::linalg_do_pivoting>(rstate.jac, rstate.pivot, b);
+	constexpr int num_active = System::num_active;
+
+	// the active entries of b, gathered and scattered with compile-time indices so that b stays in registers on the GPU
+	amrex::GpuArray<amrex::Real, num_active> b_active{};
+	amrex::constexpr_for<0, num_active>([&](auto ac) {
+		constexpr int a = decltype(ac)::value;
+		b_active[a] = b[System::ActiveEntries().arr[a]];
+	});
+	const ActiveBlock<System, decltype(rstate.jac)> block{rstate.jac};
+	quokka::math::dgesl<num_active, System::traits::linalg_do_pivoting>(block, rstate.pivot, b_active);
+	amrex::constexpr_for<0, num_active>([&](auto ac) {
+		constexpr int a = decltype(ac)::value;
+		b[System::ActiveEntries().arr[a]] = b_active[a];
+	});
+
+	amrex::constexpr_for<0, System::num_passive>([&](auto pc) {
+		constexpr int p = System::PassiveEntries().arr[decltype(pc)::value];
+		amrex::Real x = b[p];
+		amrex::constexpr_for<0, num_active>([&](auto ac) {
+			constexpr int n = System::ActiveEntries().arr[decltype(ac)::value];
+			x -= rstate.jac(p, n) * b[n];
+		});
+		b[p] = x * rstate.jac(p, p);
+	});
 }
 
 template <typename problem_t, typename Tableau, typename BurnT>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state, RosenbrockState<ODESystem<problem_t, BurnT>::neqs, Tableau::stages> &rstate,
-								    const IntegratorParams &params) -> int
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+rosenbrock_integrator(BurnT &state, RosenbrockState<ODESystem<problem_t, BurnT>::neqs, Tableau::stages, ODESystem<problem_t, BurnT>::num_active> &rstate,
+		      const IntegratorParams &params) -> int
 {
 	using System = ODESystem<problem_t, BurnT>;
 	constexpr int int_neqs = System::neqs;
@@ -317,8 +402,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 	bool last = false;
 	int nsing = 0;
 	int n_reject = 0;
-	amrex::Real facold = 1.0_rt;
-	amrex::Real errold = 1.0_rt;
+	// The H211b controller below works with the logs of the previous factor and error (both start at 1), so it costs
+	// one log and one exp per step instead of three pow calls.
+	amrex::Real log_facold = 0.0_rt;
+	amrex::Real log_errold = 0.0_rt;
 	amrex::Real hopt = h;
 	amrex::Real x = rstate.t;
 	amrex::GpuArray<amrex::Real, int_neqs> rhs_tmp{};
@@ -367,7 +454,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 				return IERR_DT_UNDERFLOW;
 			}
 
-			const amrex::Real fac = 1.0_rt / (h * Tableau::gamma);
+			const amrex::Real inv_h = 1.0_rt / h;
+			constexpr amrex::Real inv_gamma = 1.0_rt / Tableau::gamma;
+			const amrex::Real fac = inv_h * inv_gamma;
 			if (!evaluate_jacobian<System>(state, rstate, x, params)) {
 				rstate.t = x;
 				rstate.dt = h;
@@ -406,7 +495,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 						constexpr int jstage = decltype(js)::value;
 						const amrex::Real akj = rstate.k[jstage - 1][n];
 						rstate.ynew[n] += Tableau::a(istage, jstage) * akj;
-						rstate.k[istage - 1][n] += (Tableau::c(istage, jstage) / h) * akj;
+						rstate.k[istage - 1][n] += (Tableau::c(istage, jstage) * inv_h) * akj;
 					});
 				}
 
@@ -466,19 +555,23 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rosenbrock_integrator(BurnT &state
 			const amrex::Real err = error_norm<System>(rstate);
 			// An accepted final step needs no new step size: hnew below then only enters the step-size underflow check at the
 			// top of the loop, which no factor in [fac_min, fac_max] can make fire when this condition holds. The controller
-			// (three pow calls) is then skipped and the smallest factor used.
+			// is then skipped and the smallest factor used.
 			const bool final_step_accepted = last && err <= 1.0_rt && valid_update &&
 							 0.1_rt * (fac_min * std::abs(h)) > std::abs(x + h) * std::numeric_limits<amrex::Real>::epsilon();
-			const amrex::Real controller_fac =
-			    final_step_accepted
-				? fac_min
-				: amrex::Clamp(
-				      std::pow(1.0_rt / amrex::max(err, err_min), 1.0_rt / (System::traits::h211b_b * System::traits::h211b_k)) *
-					  std::pow(1.0_rt / amrex::max(errold, err_min), 1.0_rt / (System::traits::h211b_b * System::traits::h211b_k)) *
-					  std::pow(facold, -1.0_rt / System::traits::h211b_b),
-				      fac_min, fac_max);
-			facold = controller_fac;
-			errold = err;
+			// H211b: fac = clamp((1 / err)^(1 / (b k)) (1 / errold)^(1 / (b k)) facold^(-1 / b), fac_min, fac_max), with err
+			// and errold floored at err_min. In logs the clamp is a clamp of the exponent, so log(facold) needs no log call.
+			constexpr amrex::Real inv_bk = 1.0_rt / (System::traits::h211b_b * System::traits::h211b_k);
+			constexpr amrex::Real inv_b = 1.0_rt / System::traits::h211b_b;
+			constexpr amrex::Real log_fac_min = gcem::log(fac_min);
+			constexpr amrex::Real log_fac_max = gcem::log(fac_max);
+			amrex::Real controller_fac = fac_min;
+			if (!final_step_accepted) {
+				const amrex::Real log_err = std::log(amrex::max(err, err_min));
+				const amrex::Real log_fac = amrex::Clamp(-(log_err + log_errold) * inv_bk - log_facold * inv_b, log_fac_min, log_fac_max);
+				controller_fac = std::exp(log_fac);
+				log_facold = log_fac;
+				log_errold = log_err;
+			}
 
 			amrex::Real hnew = h * controller_fac;
 
@@ -532,7 +625,7 @@ template <typename Tableau> struct Rosenbrock {
 		using System = ODESystem<problem_t, BurnT>;
 		constexpr int int_neqs = System::neqs;
 
-		auto rosenbrock_state = integrator_setup<System, RosenbrockState<int_neqs, Tableau::stages>>(state, dt, params);
+		auto rosenbrock_state = integrator_setup<System, RosenbrockState<int_neqs, Tableau::stages, System::num_active>>(state, dt, params);
 		const auto state_save = integrator_backup<System>(state);
 
 		const int istate = rosenbrock::rosenbrock_integrator<problem_t, Tableau>(state, rosenbrock_state, params);

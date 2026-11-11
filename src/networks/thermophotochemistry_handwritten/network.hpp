@@ -8,7 +8,10 @@
 /// Jacobian.
 
 #include <cmath>
+#include <limits>
 #include <string_view>
+
+#include "gcem.hpp"
 
 #include "AMReX_Array.H"
 #include "AMReX_Extension.H"
@@ -83,6 +86,12 @@ struct Thermophotochemistry {
 	actual_rhs(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot);
 	/// The Jacobian of actual_rhs (thermophotochemistry::actual_jac, below).
 	template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE static void actual_jac(const BurnT &state, MatrixType &jac);
+	/// Both at once, from one evaluation of the rate coefficients. The integrator uses it where it needs both at the
+	/// same state.
+	template <typename BurnT, class MatrixType>
+	AMREX_GPU_HOST_DEVICE static void
+	actual_rhs_and_jac(const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot,
+			   MatrixType &jac);
 };
 
 /// The right-hand side, the Jacobian and their rate coefficients, in the namespace of the network's parameters.
@@ -111,58 +120,31 @@ constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) -> Real { return 3.2385396673401957e-18_rt; }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Real
+/// The mean photon energy [erg] of the ionizing band, from its edges and its power-law index. Both are compile-time
+/// constants of the network, so this is evaluated once, at compile time (gcem provides the constexpr log and pow).
+constexpr auto ionizing_band_photon_energy() -> amrex::Real
 {
-	auto const ev_bounds = quokka::networks::Thermophotochemistry::ChemBands();
-	const amrex::Real ev_low = ev_bounds[0];
-	const amrex::Real ev_high = ev_bounds[1];
-	const amrex::Real alpha = quokka::networks::Thermophotochemistry::ChemBandsPowerLawIndex;
+	constexpr amrex::Real ev_low = quokka::networks::Thermophotochemistry::ChemBands().arr[0];
+	constexpr amrex::Real ev_high = quokka::networks::Thermophotochemistry::ChemBands().arr[1];
+	constexpr amrex::Real alpha = quokka::networks::Thermophotochemistry::ChemBandsPowerLawIndex;
+	constexpr bool open_topped = (ev_high == std::numeric_limits<amrex::Real>::infinity());
+	static_assert(!open_topped || alpha < 0.0, "an open-topped chemistry band only has a finite average photon energy for power_law_index < 0");
 
-	amrex::Real ev_avg = NAN;
-	if (std::isinf(ev_high)) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(alpha < 0.0, "get_ionizing_band_photon_energy: an open-topped chemistry band only has a "
-							      "finite average photon energy for power_law_index < 0");
-		ev_avg = ev_low * (1.0 - 1.0 / alpha);
-	} else if (alpha == 0.0) {
-		ev_avg = ev_low * ev_high * std::log(ev_high / ev_low) / (ev_high - ev_low);
-	} else if (alpha == 1.0) {
-		ev_avg = (ev_high - ev_low) / std::log(ev_high / ev_low);
+	if constexpr (open_topped) {
+		return ev_low * (1.0 - 1.0 / alpha) * C::ev2erg;
+	} else if constexpr (alpha == 0.0) {
+		return ev_low * ev_high * gcem::log(ev_high / ev_low) / (ev_high - ev_low) * C::ev2erg;
+	} else if constexpr (alpha == 1.0) {
+		return (ev_high - ev_low) / gcem::log(ev_high / ev_low) * C::ev2erg;
 	} else {
-		ev_avg = ((alpha - 1.0) / alpha) * (std::pow(ev_high, alpha) - std::pow(ev_low, alpha)) /
-			 (std::pow(ev_high, alpha - 1.0) - std::pow(ev_low, alpha - 1.0));
+		return ((alpha - 1.0) / alpha) * (gcem::pow(ev_high, alpha) - gcem::pow(ev_low, alpha)) /
+		       (gcem::pow(ev_high, alpha - 1.0) - gcem::pow(ev_low, alpha - 1.0)) * C::ev2erg;
 	}
-
-	return ev_avg * C::ev2erg;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) -> Real
-{
-	const amrex::Real coeff = 2.63e-13_rt;
-	if (thermophotochemistry::recombination_temperature_dependent == 0) {
-		return coeff;
-	}
-	return coeff * std::pow(T / 1.0e4, -0.69999999999999996);
-}
+constexpr amrex::Real IonizingBandPhotonEnergy = ionizing_band_photon_energy();
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) -> Real
-{
-	if (thermophotochemistry::recombination_temperature_dependent == 0) {
-		return 0.0_rt;
-	}
-	return -2.63e-13 * 0.7 * std::pow(T / 1.0e4, -1.69999999999999996) / 1.0e4;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_collisional_ionization_coefficient(Real T) -> Real
-{
-	// Krumholz et al. 2007
-	return 5.84e-11 * std::sqrt(T) * std::exp(-2.18e-11_rt / (C::k_B * T));
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dCollisional_ionization_coefficient_dT(Real T) -> Real
-{
-	return 5.84e-11 * 0.5 / std::sqrt(T) * std::exp(-2.18e-11_rt / (C::k_B * T)) +
-	       5.84e-11 * std::sqrt(T) * std::exp(-2.18e-11_rt / (C::k_B * T)) * 2.18e-11_rt / (C::k_B * T * T);
-}
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_ionizing_band_photon_energy() -> Real { return IonizingBandPhotonEnergy; }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionization_heating_coefficient(Real T) -> Real
 {
@@ -172,93 +154,96 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionization_heating_coefficient(Real 
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_KI_heating_coefficient(Real T) -> Real { return 2.0e-26; }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_KI_cooling_coefficient(Real T) -> Real
+/// The temperature-dependent rate coefficients and their temperature derivatives. A coefficient whose process is
+/// switched off is zero, and so is its derivative.
+struct Rates {
+	amrex::Real alpha_rec = 0.0_rt; ///< case-B recombination [cm^3 s^-1]
+	amrex::Real d_alpha_rec_dT = 0.0_rt;
+	amrex::Real sigma_coll = 0.0_rt; ///< collisional ionization [cm^3 s^-1] (Krumholz et al. 2007)
+	amrex::Real d_sigma_coll_dT = 0.0_rt;
+	amrex::Real Lambda_KI = 0.0_rt; ///< KI cooling (Vazquez-Semadeni et al. 2007)
+	amrex::Real d_Lambda_KI_dT = 0.0_rt;
+	amrex::Real Lambda_rec = 0.0_rt; ///< recombination cooling (Krumholz et al. 2007)
+	amrex::Real d_Lambda_rec_dT = 0.0_rt;
+	amrex::Real Lambda_ff = 0.0_rt; ///< ion free-free cooling (Frazer and Heitsch 2019)
+	amrex::Real d_Lambda_ff_dT = 0.0_rt;
+};
+
+/// One piece c T^a of a piecewise power-law fit.
+struct PowerLaw {
+	amrex::Real c;
+	amrex::Real a;
+};
+
+/// The piece of the Frazer and Heitsch (2019) cle_term fit that holds at temperature T. The thresholds are 10^2, 10^2.8,
+/// 10^3.6, 10^4, 10^4.5, 10^5 and 10^6.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cle_fit(const Real T) -> PowerLaw
 {
-	// Fix KI cooling function based on Vazquez-Semadeni et al. (2007).
-	return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * std::sqrt(T) * std::exp(-92.0 / T));
+	// selected from the top down with conditional moves, not a chain of branches
+	PowerLaw fit{7.49e-21, -0.462};
+	fit = (T < 1.0e6) ? PowerLaw{1.10e-21, -0.323} : fit;
+	fit = (T < 1.0e5) ? PowerLaw{1.74e-24, 0.237} : fit;
+	fit = (T < 31622.776601683792) ? PowerLaw{2.67e-30, 1.529} : fit;
+	fit = (T < 1.0e4) ? PowerLaw{1.08e-32, 2.127} : fit;
+	fit = (T < 3981.0717055349733) ? PowerLaw{1.11e-24, -0.099} : fit;
+	fit = (T < 630.957344480193) ? PowerLaw{2.34e-26, 0.500} : fit;
+	fit = (T < 1.0e2) ? PowerLaw{3.47e-29, 1.915} : fit;
+	return fit;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dKI_cooling_coefficient_dT(Real T) -> Real
+/// All the rate coefficients at temperature T, from one log, one sqrt and one exp per term: each power T^a is
+/// exp(a log T), and each derivative reuses its coefficient (d(c T^a)/dT = a c T^a / T).
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rates(const Real T) -> Rates
 {
-	return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) * 118400.0 / ((T + 1.0e3) * (T + 1.0e3)) +
-			  1.4e-2 * (0.5 / std::sqrt(T) * std::exp(-92.0 / T) + std::sqrt(T) * std::exp(-92.0 / T) * 92.0 / (T * T)));
-}
+	Rates r{};
+	const amrex::Real logT = std::log(T);
+	const amrex::Real sqrtT = std::sqrt(T);
+	const amrex::Real invT = 1.0_rt / T;
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_cooling_coefficient(Real T) -> Real
-{
-	// Krumholz et al. 2007
-	if (T < 100.0_rt) {
-		return 0.0_rt;
+	if (thermophotochemistry::recombination_switch != 0) {
+		constexpr amrex::Real coeff = 2.63e-13_rt;
+		if (thermophotochemistry::recombination_temperature_dependent == 0) {
+			r.alpha_rec = coeff;
+		} else {
+			constexpr amrex::Real log_1e4 = 9.210340371976184; // log(1e4)
+			r.alpha_rec = coeff * std::exp(-0.7_rt * (logT - log_1e4));
+			r.d_alpha_rec_dT = -0.7_rt * r.alpha_rec * invT;
+		}
 	}
-	return 6.1e-10 * C::k_B * T * std::pow(T, -0.89);
-}
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_cooling_coefficient_dT(Real T) -> Real
-{
-	if (T < 100.0_rt) {
-		return 0.0_rt;
+	if (thermophotochemistry::collisional_ionization_switch != 0) {
+		constexpr amrex::Real E_ion_over_k = 2.18e-11_rt / C::k_B;
+		r.sigma_coll = 5.84e-11 * sqrtT * std::exp(-E_ion_over_k * invT);
+		r.d_sigma_coll_dT = r.sigma_coll * (0.5_rt * invT + E_ion_over_k * invT * invT);
 	}
-	return 6.1e-10 * C::k_B * (std::pow(T, -0.89) + T * (-0.89) * std::pow(T, -1.89));
-}
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_cle_term(Real T) -> Real
-{
-	// Frazer and Heitsch 2019
-	amrex::Real cle_term = 0.0_rt;
-	if (T < 1.0e2) {
-		cle_term = 3.47e-29 * std::pow(T, 1.915);
-	} else if (T < std::pow(10.0, 2.8)) {
-		cle_term = 2.34e-26 * std::pow(T, 0.500);
-	} else if (T < std::pow(10.0, 3.6)) {
-		cle_term = 1.11e-24 * std::pow(T, -0.099);
-	} else if (T < 1.0e4) {
-		cle_term = 1.08e-32 * std::pow(T, 2.127);
-	} else if (T < std::pow(10.0, 4.5)) {
-		cle_term = 2.67e-30 * std::pow(T, 1.529);
-	} else if (T < 1.0e5) {
-		cle_term = 1.74e-24 * std::pow(T, 0.237);
-	} else if (T < 1.0e6) {
-		cle_term = 1.10e-21 * std::pow(T, -0.323);
-	} else {
-		cle_term = 7.49e-21 * std::pow(T, -0.462);
+	if (thermophotochemistry::energy_switch != 0) {
+		if (thermophotochemistry::KI_cooling_switch != 0) {
+			const amrex::Real inv_T1 = 1.0_rt / (T + 1.0e3);
+			const amrex::Real a = 1.0e7 * std::exp(-118400.0 * inv_T1);
+			const amrex::Real b = 1.4e-2 * sqrtT * std::exp(-92.0 * invT);
+			r.Lambda_KI = 2.0e-26 * (a + b);
+			r.d_Lambda_KI_dT = 2.0e-26 * (a * 118400.0 * inv_T1 * inv_T1 + b * (0.5_rt * invT + 92.0 * invT * invT));
+		}
+		if ((thermophotochemistry::recombination_cooling_switch != 0) && (T >= 100.0_rt)) {
+			// 6.1e-10 k_B T T^-0.89 = 6.1e-10 k_B T^0.11
+			r.Lambda_rec = 6.1e-10 * C::k_B * std::exp(0.11_rt * logT);
+			r.d_Lambda_rec_dT = 0.11_rt * r.Lambda_rec * invT;
+		}
+		if (thermophotochemistry::ion_ff_cooling_switch != 0) {
+			const PowerLaw fit = cle_fit(T);
+			const amrex::Real cle_term = fit.c * std::exp(fit.a * logT);
+			r.Lambda_ff = 1.3 * 1.427e-27 * sqrtT + cle_term;
+			r.d_Lambda_ff_dT = 1.3 * 1.427e-27 * 0.5 * (sqrtT * invT) + fit.a * cle_term * invT;
+		}
 	}
-	return cle_term;
+	return r;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ion_ff_cooling_coefficient(Real T) -> Real
-{
-	amrex::Real cle_term = get_cle_term(T);
-	return 1.3 * 1.427e-27 * std::sqrt(T) + cle_term; // Frazer and Heitsch 2019
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) -> Real
-{
-	amrex::Real d_cle_term_dT = 0.0_rt;
-	amrex::Real alpha = 0.0_rt;
-	if (T < 1.0e2) {
-		alpha = 1.915;
-	} else if (T < std::pow(10.0, 2.8)) {
-		alpha = 0.500;
-	} else if (T < std::pow(10.0, 3.6)) {
-		alpha = -0.099;
-	} else if (T < 1.0e4) {
-		alpha = 2.127;
-	} else if (T < std::pow(10.0, 4.5)) {
-		alpha = 1.529;
-	} else if (T < 1.0e5) {
-		alpha = 0.237;
-	} else if (T < 1.0e6) {
-		alpha = -0.323;
-	} else {
-		alpha = -0.462;
-	}
-	d_cle_term_dT = alpha * get_cle_term(T) / T;
-	return 1.3 * 1.427e-27 * 0.5 / std::sqrt(T) + d_cle_term_dT;
-}
-
+/// The right-hand side at the burn state, given the rate coefficients at its temperature.
 template <typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-actual_rhs(const BurnT &state, amrex::GpuArray<Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot)
+rhs_with_rates(const BurnT &state, const Rates &rates, amrex::GpuArray<Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
 	using System = quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>;
 	constexpr int net_ienuc = System::energy_row;
@@ -270,43 +255,40 @@ actual_rhs(const BurnT &state, amrex::GpuArray<Real, quokka::microphysics::ODESy
 
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
-	const amrex::Real sigma_coll = (thermophotochemistry::collisional_ionization_switch != 0) ? get_collisional_ionization_coefficient(state.T) : 0.0_rt;
+	const amrex::Real sigma_coll = rates.sigma_coll;
 
 	const amrex::Real n_e = state.xn[e_idx];
 	const amrex::Real n_HI = state.xn[H_idx];
 	const amrex::Real n_HII = state.xn[Hp_idx];
 	const amrex::Real n_gamma = amrex::max(state.rn[0], 0.0_rt);
 
+	// a mixed cell has mixed_cell_lb < x_HII < mixed_cell_ub, tested without forming x_HII = n_HII / n_H_total
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
-	const amrex::Real xHII = (n_H_total > 0.0_rt) ? (n_HII / n_H_total) : 0.0_rt;
-	if ((thermophotochemistry::allow_mixed_cell_cooling == 0) && (xHII > thermophotochemistry::mixed_cell_lb) &&
-	    (xHII < thermophotochemistry::mixed_cell_ub)) {
+	if ((thermophotochemistry::allow_mixed_cell_cooling == 0) && (n_H_total > 0.0_rt) && (n_HII > thermophotochemistry::mixed_cell_lb * n_H_total) &&
+	    (n_HII < thermophotochemistry::mixed_cell_ub * n_H_total)) {
 		molecular_process_switch = 0;
 	}
 
 	const amrex::Real photoionization_term = chat_sigma_photo * n_HI * n_gamma;
 	const amrex::Real collisional_ionization_term = (thermophotochemistry::collisional_ionization_switch != 0) ? n_e * n_HI * sigma_coll : 0.0_rt;
-	const amrex::Real recombination_term =
-	    (thermophotochemistry::recombination_switch != 0) ? get_recombination_coefficient(state.T) * n_e * n_HII : 0.0_rt;
+	const amrex::Real recombination_term = (thermophotochemistry::recombination_switch != 0) ? rates.alpha_rec * n_e * n_HII : 0.0_rt;
 
 	ydot[ie] = photoionization_term + collisional_ionization_term - recombination_term;
 	ydot[iH] = -ydot[ie];
 	ydot[iHp] = ydot[ie];
 	ydot[net_ienuc] = 0.0_rt;
-	const amrex::Real recombination_cooling_rate = (thermophotochemistry::energy_switch != 0 && thermophotochemistry::recombination_cooling_switch != 0)
-							   ? get_recombination_cooling_coefficient(state.T) * n_e * n_HII
-							   : 0.0_rt;
-	const amrex::Real ion_ff_cooling_rate = (thermophotochemistry::energy_switch != 0 && thermophotochemistry::ion_ff_cooling_switch != 0)
-						    ? get_ion_ff_cooling_coefficient(state.T) * n_e * n_HII
-						    : 0.0_rt;
+	const amrex::Real recombination_cooling_rate =
+	    (thermophotochemistry::energy_switch != 0 && thermophotochemistry::recombination_cooling_switch != 0) ? rates.Lambda_rec * n_e * n_HII : 0.0_rt;
+	const amrex::Real ion_ff_cooling_rate =
+	    (thermophotochemistry::energy_switch != 0 && thermophotochemistry::ion_ff_cooling_switch != 0) ? rates.Lambda_ff * n_e * n_HII : 0.0_rt;
 	const amrex::Real KI_heating_rate =
 	    (thermophotochemistry::energy_switch != 0 && molecular_process_switch != 0 && thermophotochemistry::KI_heating_switch != 0)
 		? get_KI_heating_coefficient(state.T) * n_HI
 		: 0.0_rt;
 	const amrex::Real KI_cooling_rate =
 	    (thermophotochemistry::energy_switch != 0 && molecular_process_switch != 0 && thermophotochemistry::KI_cooling_switch != 0)
-		? get_KI_cooling_coefficient(state.T) * n_HI * n_HI
+		? rates.Lambda_KI * n_HI * n_HI
 		: 0.0_rt;
 	const amrex::Real collisional_ionization_cooling_rate =
 	    (thermophotochemistry::energy_switch != 0 && thermophotochemistry::collisional_ionization_switch != 0) ? RydbergEnergy * collisional_ionization_term
@@ -343,7 +325,9 @@ actual_rhs(const BurnT &state, amrex::GpuArray<Real, quokka::microphysics::ODESy
 	ydot[i_optical] = recombination_cooling_rate + recombination_binding_energy_rate;
 }
 
-template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const BurnT &state, MatrixType &jac)
+/// The Jacobian at the burn state, given the rate coefficients at its temperature.
+template <typename BurnT, class MatrixType>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac_with_rates(const BurnT &state, const Rates &rates, MatrixType &jac)
 {
 	using System = quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>;
 	constexpr int net_ienuc = System::energy_row;
@@ -355,40 +339,22 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 
 	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
 	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
-	amrex::Real sigma_coll = 0.0_rt;
-	amrex::Real d_sigma_coll_dT = 0.0_rt;
-	if (thermophotochemistry::collisional_ionization_switch != 0) {
-		sigma_coll = get_collisional_ionization_coefficient(state.T);
-		d_sigma_coll_dT = dCollisional_ionization_coefficient_dT(state.T);
-	}
-	amrex::Real alpha_rec = 0.0_rt;
-	amrex::Real d_alpha_rec_dT = 0.0_rt;
-	if (thermophotochemistry::recombination_switch != 0) {
-		alpha_rec = get_recombination_coefficient(state.T);
-		d_alpha_rec_dT = dRecombination_coefficient_dT(state.T);
-	}
+	const amrex::Real sigma_coll = rates.sigma_coll;
+	const amrex::Real d_sigma_coll_dT = rates.d_sigma_coll_dT;
+	const amrex::Real alpha_rec = rates.alpha_rec;
+	const amrex::Real d_alpha_rec_dT = rates.d_alpha_rec_dT;
 
 	const amrex::Real Gamma_photo = ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::photoheating_switch != 0))
 					    ? get_ionization_heating_coefficient(state.T)
 					    : 0.0_rt;
 	const amrex::Real Gamma_KI =
 	    ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::KI_heating_switch != 0)) ? get_KI_heating_coefficient(state.T) : 0.0_rt;
-	const amrex::Real Lambda_KI =
-	    ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::KI_cooling_switch != 0)) ? get_KI_cooling_coefficient(state.T) : 0.0_rt;
-	const amrex::Real d_Lambda_KI_dT =
-	    ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::KI_cooling_switch != 0)) ? dKI_cooling_coefficient_dT(state.T) : 0.0_rt;
-	const amrex::Real Lambda_rec = ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::recombination_cooling_switch != 0))
-					   ? get_recombination_cooling_coefficient(state.T)
-					   : 0.0_rt;
-	const amrex::Real d_Lambda_rec_dT = ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::recombination_cooling_switch != 0))
-						? dRecombination_cooling_coefficient_dT(state.T)
-						: 0.0_rt;
-	const amrex::Real Lambda_ff = ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::ion_ff_cooling_switch != 0))
-					  ? get_ion_ff_cooling_coefficient(state.T)
-					  : 0.0_rt;
-	const amrex::Real d_Lambda_ff_dT = ((thermophotochemistry::energy_switch != 0) && (thermophotochemistry::ion_ff_cooling_switch != 0))
-					       ? d_ion_ff_cooling_coefficient_dT(state.T)
-					       : 0.0_rt;
+	const amrex::Real Lambda_KI = rates.Lambda_KI;
+	const amrex::Real d_Lambda_KI_dT = rates.d_Lambda_KI_dT;
+	const amrex::Real Lambda_rec = rates.Lambda_rec;
+	const amrex::Real d_Lambda_rec_dT = rates.d_Lambda_rec_dT;
+	const amrex::Real Lambda_ff = rates.Lambda_ff;
+	const amrex::Real d_Lambda_ff_dT = rates.d_Lambda_ff_dT;
 
 	const amrex::Real n_e = state.xn[e_idx];
 	const amrex::Real n_HI = state.xn[H_idx];
@@ -396,11 +362,11 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	const amrex::Real n_gamma = amrex::max(state.rn[0], 0.0_rt);
 	const amrex::Real n_gamma_active = (state.rn[0] >= 0.0_rt) ? 1.0_rt : 0.0_rt;
 
+	// a mixed cell has mixed_cell_lb < x_HII < mixed_cell_ub, tested without forming x_HII = n_HII / n_H_total
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
-	const amrex::Real xHII = (n_H_total > 0.0_rt) ? (n_HII / n_H_total) : 0.0_rt;
-	if ((thermophotochemistry::allow_mixed_cell_cooling == 0) && (xHII > thermophotochemistry::mixed_cell_lb) &&
-	    (xHII < thermophotochemistry::mixed_cell_ub)) {
+	if ((thermophotochemistry::allow_mixed_cell_cooling == 0) && (n_H_total > 0.0_rt) && (n_HII > thermophotochemistry::mixed_cell_lb * n_H_total) &&
+	    (n_HII < thermophotochemistry::mixed_cell_ub * n_H_total)) {
 		molecular_process_switch = 0;
 	}
 
@@ -411,6 +377,7 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	const amrex::Real d_ion_ff_cooling_dT = thermophotochemistry::ion_ff_cooling_switch * (d_Lambda_ff_dT * n_e * n_HII);
 
 	const amrex::Real dTde = 1 / state.dedT;
+	const amrex::Real inv_rho = 1 / state.rho;
 
 	amrex::Real chat_dust_kappa_rho = 0.0_rt;
 	if constexpr (BurnT::traits::dust_chemical_band_absorption) {
@@ -440,23 +407,22 @@ template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 	jac(net_ienuc, ie) =
 	    thermophotochemistry::energy_switch *
 	    (-thermophotochemistry::recombination_cooling_switch * Lambda_rec * n_HII - thermophotochemistry::ion_ff_cooling_switch * Lambda_ff * n_HII -
-	     RydbergEnergy * thermophotochemistry::collisional_ionization_switch * n_HI * sigma_coll) /
-	    state.rho;
+	     RydbergEnergy * thermophotochemistry::collisional_ionization_switch * n_HI * sigma_coll) *
+	    inv_rho;
 	jac(net_ienuc, iH) = thermophotochemistry::energy_switch *
 			     (thermophotochemistry::photoheating_switch * Gamma_photo * chat_sigma_photo * n_gamma +
 			      molecular_process_switch * thermophotochemistry::KI_heating_switch * Gamma_KI -
 			      2.0_rt * molecular_process_switch * thermophotochemistry::KI_cooling_switch * Lambda_KI * n_HI -
-			      RydbergEnergy * thermophotochemistry::collisional_ionization_switch * n_e * sigma_coll) /
-			     state.rho;
+			      RydbergEnergy * thermophotochemistry::collisional_ionization_switch * n_e * sigma_coll) *
+			     inv_rho;
 	jac(net_ienuc, iHp) =
 	    thermophotochemistry::energy_switch *
-	    (-thermophotochemistry::recombination_cooling_switch * Lambda_rec * n_e - thermophotochemistry::ion_ff_cooling_switch * Lambda_ff * n_e) /
-	    state.rho;
+	    (-thermophotochemistry::recombination_cooling_switch * Lambda_rec * n_e - thermophotochemistry::ion_ff_cooling_switch * Lambda_ff * n_e) * inv_rho;
 	jac(net_ienuc, net_ienuc) = thermophotochemistry::energy_switch *
 				    (-d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT - RydbergEnergy * d_collisional_ionization_term_dT) *
-				    dTde / state.rho;
+				    dTde * inv_rho;
 	jac(net_ienuc, i_ngamma) = thermophotochemistry::energy_switch * (thermophotochemistry::photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) *
-				   n_gamma_active / state.rho;
+				   n_gamma_active * inv_rho;
 
 	jac(i_ngamma, ie) = 0.0_rt;
 	jac(i_ngamma, iH) = -chat_sigma_photo * n_gamma;
@@ -503,12 +469,21 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
 Thermophotochemistry::actual_rhs(const BurnT &state,
 				 amrex::GpuArray<amrex::Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot)
 {
-	thermophotochemistry::actual_rhs(state, ydot);
+	thermophotochemistry::rhs_with_rates(state, thermophotochemistry::compute_rates(state.T), ydot);
 }
 
 template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void Thermophotochemistry::actual_jac(const BurnT &state, MatrixType &jac)
 {
-	thermophotochemistry::actual_jac(state, jac);
+	thermophotochemistry::jac_with_rates(state, thermophotochemistry::compute_rates(state.T), jac);
+}
+
+template <typename BurnT, class MatrixType>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void Thermophotochemistry::actual_rhs_and_jac(
+    const BurnT &state, amrex::GpuArray<amrex::Real, quokka::microphysics::ODESystem<typename BurnT::problem_type, BurnT>::neqs> &ydot, MatrixType &jac)
+{
+	const thermophotochemistry::Rates rates = thermophotochemistry::compute_rates(state.T);
+	thermophotochemistry::rhs_with_rates(state, rates, ydot);
+	thermophotochemistry::jac_with_rates(state, rates, jac);
 }
 
 } // namespace quokka::networks

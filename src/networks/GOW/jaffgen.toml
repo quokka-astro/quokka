@@ -1,0 +1,39 @@
+# jaffgen configuration of the GOW network: jaff's GOW++ network (Gong, Ostriker & Wolfire 2017, with the
+# photoelectric field chi_pe taken from the transported bands) for Quokka's two FUV bands.
+
+[network]
+# the C++ namespace of the generated network; jaff's default, the file stem GOW++, is not an identifier
+label = "GOW"
+
+[network.radiation]
+# two FUV bands: 6-11.2 eV and 11.2-13.6 eV (H2 Lyman-Werner and C photoionization)
+bands = [6.0, 11.2, 13.6]
+# index alpha of the photon-number spectrum n(E) ~ E^(alpha-2) in a band; jaff reads it
+profile_index = 0
+mode = "nph"
+rsl = "c_hat"
+# reference field of chi_pe
+background_field = "draine"
+
+# the dust module, which supplies chi_pe and the dust absorption of the bands
+[network.dust]
+# attenuate the photon density by the dust extinction, not the absorption alone
+u_reduction = "extinction"
+
+[network.eos]
+type = "multi_gamma"
+default_gamma = 1.6666666666666667
+gamma_map = { H2 = 1.4, "H2+" = 1.4 }
+
+# Line shielding. The column densities ncol_<species> are set per cell by the problem before each burn.
+[network.reactions."C._PHOTON__C+.e-".shielding]
+type = "leiden"
+shielded_by = ["self", "H2"]
+
+[network.reactions."CO._PHOTON__C.O".shielding]
+type = "leiden"
+shielded_by = ["self", "H2"]
+
+[network.reactions."H2._PHOTON__H.H".shielding]
+type = "db1996"
+min_ncol = 1.0e-35

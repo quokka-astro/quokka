@@ -31,6 +31,7 @@ auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density
 {
 	using Network = typename Microphysics_Traits<problem_t>::Network;
 	using GasEOS = quokka::EOS<problem_t>;
+	static_assert(quokka::microphysics::NumColumns<Network> == 0, "the chemistry burn does not set column densities; use photochemistry");
 
 	// Start off by assuming a successful burn.
 	int burn_success = 1;

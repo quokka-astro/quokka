@@ -97,6 +97,39 @@ template <typename problem_t, typename BurnT> struct ODESystem {
 		return count;
 	}
 
+	/// The entries the Jacobian couples are the ones that count toward the error: the species, the energy and the photon
+	/// numbers. The others (photon fluxes, thermal bands, dust) are passive: no rate depends on them, so their columns of
+	/// the Jacobian are zero off the diagonal, and a solve with the integrator matrix needs only the active block (see
+	/// rosenbrock::decompose and rosenbrock::solve).
+	static constexpr int num_active = NumErrorEntries();
+	static constexpr int num_passive = neqs - num_active;
+
+	/// The entries of y that are active, in order.
+	static constexpr auto ActiveEntries() -> amrex::GpuArray<int, num_active>
+	{
+		amrex::GpuArray<int, num_active> entries{};
+		int count = 0;
+		for (int n = 0; n < neqs; ++n) {
+			if (counts_toward_error(role(n))) {
+				entries.arr[count++] = n;
+			}
+		}
+		return entries;
+	}
+
+	/// The entries of y that are passive, in order (one unused entry when there is none, since an array cannot be empty).
+	static constexpr auto PassiveEntries() -> amrex::GpuArray<int, (num_passive > 0 ? num_passive : 1)>
+	{
+		amrex::GpuArray<int, (num_passive > 0 ? num_passive : 1)> entries{};
+		int count = 0;
+		for (int n = 0; n < neqs; ++n) {
+			if (!counts_toward_error(role(n))) {
+				entries.arr[count++] = n;
+			}
+		}
+		return entries;
+	}
+
 	static_assert(photochemistry == requires { &BurnT::rn; }, "The burn state must have rn exactly when Microphysics_Traits::photochemistry is true");
 	static_assert(
 	    q_dust == requires { &BurnT::e_dust_absorbed; },
