@@ -9,10 +9,10 @@
 ///
 /// In device code every loop is unrolled at compile time (amrex::constexpr_for), and the pivot row is selected by
 /// comparing it with each candidate row instead of indexing with it. All matrix and vector indices are then compile-time
-/// constants, so the compiler can keep the matrix and the right-hand side in registers instead of local memory (a
-/// matrix too large for the registers has its pivot rows interchanged by index, see dgefa_unrolled). On the host, where
-/// that form is not faster, the loops index with the pivot row as in dgefa/dgesl. All forms do the same arithmetic in
-/// the same order, so they give identical results.
+/// constants, so the compiler can keep the matrix and the right-hand side in registers instead of local memory. A
+/// matrix too large for the registers is factored column by column instead, each column passing through the registers
+/// once (dgefa_unrolled_columns). On the host, where neither form is faster, the loops index with the pivot row as in
+/// dgefa/dgesl. All forms do the same arithmetic in the same order, so they give identical results.
 
 #include <cmath>
 #include <cstdint>
@@ -216,12 +216,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled(Matrix &a, amrex::G
 	info = 0;
 	constexpr int nm1 = num_eqs - 1;
 
-	// A matrix of more than 128 entries cannot be in registers (256 VGPRs hold 128 doubles) and is in local memory
-	// whatever its indices are. Its pivot row is then interchanged by indexing with it, 2 (n - k) loads and stores per
-	// step, instead of a select and a store on each of the (n - k)^2 entries of the trailing matrix: with 23 equations
-	// those selects were 29 % of the photochemistry kernel's samples on an MI250X.
-	constexpr bool swap_by_index = num_eqs * num_eqs > 128;
-
 	amrex::constexpr_for<0, nm1>([&](auto kc) {
 		constexpr int k = decltype(kc)::value;
 
@@ -250,14 +244,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled(Matrix &a, amrex::G
 
 		if constexpr (allow_pivot) {
 			// interchange a(l, k) and a(k, k)
-			if constexpr (swap_by_index) {
-				a(l, k) = a(k, k);
-			} else {
-				amrex::constexpr_for<k + 1, num_eqs>([&](auto ic) {
-					constexpr int i = decltype(ic)::value;
-					a(i, k) = (i == l) ? a(k, k) : a(i, k);
-				});
-			}
+			amrex::constexpr_for<k + 1, num_eqs>([&](auto ic) {
+				constexpr int i = decltype(ic)::value;
+				a(i, k) = (i == l) ? a(k, k) : a(i, k);
+			});
 			a(k, k) = akk;
 		}
 
@@ -273,14 +263,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled(Matrix &a, amrex::G
 		amrex::constexpr_for<k + 1, num_eqs>([&](auto jc) {
 			constexpr int j = decltype(jc)::value;
 			amrex::Real alj = a(k, j);
-			if constexpr (allow_pivot && swap_by_index) {
+			if constexpr (allow_pivot) {
 				// alj = a(l, j); then interchange a(l, j) and a(k, j)
-				const amrex::Real akj = alj;
-				alj = a(l, j);
-				a(l, j) = akj;
-				a(k, j) = alj;
-			} else if constexpr (allow_pivot) {
-				// the same with selects, the matrix staying in registers
 				amrex::constexpr_for<k + 1, num_eqs>([&](auto ic) {
 					constexpr int i = decltype(ic)::value;
 					const bool swap = (i == l);
@@ -307,6 +291,142 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled(Matrix &a, amrex::G
 	}
 }
 
+/// A matrix of more than 128 entries cannot be in registers (256 VGPRs hold 128 doubles) and is in local memory
+/// whatever its indices are; dgefa_unrolled_columns and dgesl_unrolled_columns are used for it in device code.
+template <int num_eqs> constexpr bool in_local_memory = num_eqs * num_eqs > 128;
+
+/// dgefa unrolled at compile time for a matrix in local memory (see in_local_memory). The elimination goes column by
+/// column: each column is loaded into registers once, updated with the multipliers of the columns before it and stored
+/// once, so the matrix is read about n^3/6 times and written n^2 times, against n^3/3 reads and writes of the trailing
+/// matrix in dgefa_unrolled (and as many selects for its row interchanges, 29 % of the photochemistry kernel's samples
+/// with 23 equations on an MI250X). The pivot rows are interchanged by indexing with the pivot row, 2 n loads and
+/// stores per step, throughout the row, multipliers included (LAPACK's convention, not LINPACK's), so dgesl must be
+/// dgesl_unrolled_columns. The arithmetic is the same as dgefa_unrolled's in the same order, so the factors have the
+/// same values; only after a zero pivot (info != 0, factors unusable) do they differ, as that step is not skipped here.
+template <int num_eqs, bool allow_pivot, typename Matrix>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled_columns(Matrix &a, amrex::GpuArray<std::int16_t, num_eqs> &pivot, int &info)
+{
+	info = 0;
+
+	amrex::constexpr_for<0, num_eqs>([&](auto jc) {
+		constexpr int j = decltype(jc)::value;
+
+		// column j, with the row interchanges of the steps before it already applied to it
+		amrex::GpuArray<amrex::Real, num_eqs> col{};
+		amrex::constexpr_for<0, num_eqs>([&](auto ic) {
+			constexpr int i = decltype(ic)::value;
+			col[i] = a(i, j);
+		});
+
+		// the eliminations of the steps before it: step k adds a(k, j) times the multipliers of column k to the rows below k
+		amrex::constexpr_for<0, j>([&](auto kc) {
+			constexpr int k = decltype(kc)::value;
+			const amrex::Real akj = col[k];
+			amrex::constexpr_for<k + 1, num_eqs>([&](auto ic) {
+				constexpr int i = decltype(ic)::value;
+				col[i] += akj * a(i, k);
+			});
+		});
+
+		// find l = pivot index, and the pivot akk = a(l, j)
+		int l = j; // changed only with allow_pivot, NOLINT(misc-const-correctness)
+		amrex::Real akk = col[j];
+		if constexpr (allow_pivot) {
+			amrex::Real dmax = std::abs(col[j]);
+			amrex::constexpr_for<j + 1, num_eqs>([&](auto ic) {
+				constexpr int i = decltype(ic)::value;
+				const amrex::Real ai = std::abs(col[i]);
+				if (ai > dmax) {
+					l = i;
+					dmax = ai;
+					akk = col[i];
+				}
+			});
+			pivot[j] = static_cast<std::int16_t>(l);
+
+			// interchange rows l and j: in the column by selects, in the rest of the matrix by index
+			amrex::constexpr_for<j + 1, num_eqs>([&](auto ic) {
+				constexpr int i = decltype(ic)::value;
+				col[i] = (i == l) ? col[j] : col[i];
+			});
+			col[j] = akk;
+			amrex::constexpr_for<0, num_eqs>([&](auto cc) {
+				constexpr int c = decltype(cc)::value;
+				if constexpr (c != j) {
+					const amrex::Real t = a(j, c);
+					a(j, c) = a(l, c);
+					a(l, c) = t;
+				}
+			});
+		}
+
+		// zero pivot implies this column already triangularized
+		if (akk == 0.0e0_rt) {
+			info = j + 1;
+		} else {
+			// compute multipliers, and store the reciprocal of the pivot for dgesl
+			const amrex::Real t = -1.0e0_rt / akk;
+			col[j] = -t;
+			amrex::constexpr_for<j + 1, num_eqs>([&](auto ic) {
+				constexpr int i = decltype(ic)::value;
+				col[i] *= t;
+			});
+		}
+
+		amrex::constexpr_for<0, num_eqs>([&](auto ic) {
+			constexpr int i = decltype(ic)::value;
+			a(i, j) = col[i];
+		});
+	});
+}
+
+/// dgesl for the factors of dgefa_unrolled_columns: their rows are interchanged throughout, so b is permuted the same
+/// way first, then substituted. The same operations as dgesl_unrolled in the same order, so the same solution.
+template <int num_eqs, bool allow_pivot, typename Matrix>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgesl_unrolled_columns(const Matrix &a, const amrex::GpuArray<std::int16_t, num_eqs> &pivot,
+								     amrex::GpuArray<amrex::Real, num_eqs> &b)
+{
+	constexpr int nm1 = num_eqs - 1;
+
+	if constexpr (allow_pivot) {
+		amrex::constexpr_for<0, nm1>([&](auto kc) {
+			constexpr int k = decltype(kc)::value;
+			const int l = pivot[k];
+			const amrex::Real bk = b[k];
+			amrex::Real bl = bk;
+			// bl = b[l]; then interchange b[l] and b[k]
+			amrex::constexpr_for<k + 1, num_eqs>([&](auto ic) {
+				constexpr int i = decltype(ic)::value;
+				const bool swap = (i == l);
+				bl = swap ? b[i] : bl;
+				b[i] = swap ? bk : b[i];
+			});
+			b[k] = bl;
+		});
+	}
+
+	// solve l * y = b
+	amrex::constexpr_for<0, nm1>([&](auto kc) {
+		constexpr int k = decltype(kc)::value;
+		const amrex::Real t = b[k];
+		amrex::constexpr_for<k + 1, num_eqs>([&](auto jc) {
+			constexpr int j = decltype(jc)::value;
+			b[j] += t * a(j, k);
+		});
+	});
+
+	// now solve u * x = y (the diagonal holds the reciprocal of each pivot)
+	amrex::constexpr_for<0, num_eqs>([&](auto kr) {
+		constexpr int k = num_eqs - 1 - decltype(kr)::value;
+		b[k] = b[k] * a(k, k);
+		const amrex::Real t = -b[k];
+		amrex::constexpr_for<0, k>([&](auto jc) {
+			constexpr int j = decltype(jc)::value;
+			b[j] += t * a(j, k);
+		});
+	});
+}
+
 } // namespace detail
 
 /// Solves a x = b and overwrites b with x, where a and pivot hold the factors from dgefa<num_eqs, allow_pivot>.
@@ -316,7 +436,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgesl(const Matrix &a, const amrex
 						    amrex::GpuArray<amrex::Real, num_eqs> &b)
 {
 #if AMREX_DEVICE_COMPILE
-	detail::dgesl_unrolled<num_eqs, allow_pivot>(a, pivot, b);
+	if constexpr (detail::in_local_memory<num_eqs>) {
+		detail::dgesl_unrolled_columns<num_eqs, allow_pivot>(a, pivot, b);
+	} else {
+		detail::dgesl_unrolled<num_eqs, allow_pivot>(a, pivot, b);
+	}
 #else
 	detail::dgesl_loops<num_eqs, allow_pivot>(a, pivot, b);
 #endif
@@ -331,7 +455,11 @@ template <int num_eqs, bool allow_pivot, typename Matrix>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa(Matrix &a, amrex::GpuArray<std::int16_t, num_eqs> &pivot, int &info)
 {
 #if AMREX_DEVICE_COMPILE
-	detail::dgefa_unrolled<num_eqs, allow_pivot>(a, pivot, info);
+	if constexpr (detail::in_local_memory<num_eqs>) {
+		detail::dgefa_unrolled_columns<num_eqs, allow_pivot>(a, pivot, info);
+	} else {
+		detail::dgefa_unrolled<num_eqs, allow_pivot>(a, pivot, info);
+	}
 #else
 	detail::dgefa_loops<num_eqs, allow_pivot>(a, pivot, info);
 #endif
