@@ -229,7 +229,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, Ro
     -> bool
 {
 	// a network that evaluates both at once reuses its rate coefficients between them
-	constexpr bool combined = System::traits::analytic_jacobian && network_has_rhs_and_jac<System, BurnT, decltype(rstate.jac)>;
+	constexpr bool combined =
+	    System::traits::analytic_jacobian && System::traits::shared_rhs_and_jac && network_has_rhs_and_jac<System, BurnT, decltype(rstate.jac)>;
 	if constexpr (combined) {
 		rhs_and_jac<System>(time, state, rstate, rstate.k[0], rstate.jac, params);
 		rstate.n_rhs += 1;

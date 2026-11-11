@@ -46,6 +46,9 @@ struct DefaultMicrophysicsTraits {
 	/// With analytic_jacobian, replace an analytic Jacobian that has a non-finite entry by finite differences. With
 	/// false, the finite-difference Jacobian is not compiled and such a burn fails with IERR_JACOBIAN_NOT_FINITE.
 	static constexpr bool numerical_jacobian_fallback = false;
+	/// With analytic_jacobian, evaluate the right-hand side and the Jacobian of each step together by the network's
+	/// actual_rhs_and_jac when it has one (the rate coefficients are computed once), else by actual_rhs and actual_jac.
+	static constexpr bool shared_rhs_and_jac = true;
 	/// LU decomposition with partial pivoting.
 	static constexpr bool linalg_do_pivoting = true;
 	/// Call the EOS in the right-hand side to get T from e.

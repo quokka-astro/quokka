@@ -62,6 +62,11 @@ template <> struct Microphysics_Traits<DTypeFront_GOW> : DefaultMicrophysicsTrai
 #ifdef QUOKKA_GOW_NO_PIVOT
 	static constexpr bool linalg_do_pivoting = false;
 #endif
+	// The network's shared evaluation of the right-hand side and the Jacobian (DTypeFront_GOW_SHARED_RHS_JAC=OFF uses
+	// actual_rhs and actual_jac instead, for the timing experiments).
+#ifdef QUOKKA_GOW_NO_SHARED_RHS_JAC
+	static constexpr bool shared_rhs_and_jac = false;
+#endif
 
 	/// Local shielding columns N_X = n_X L, with L the Jeans length of the cell's gas at min(T, T_shield_cap), and the
 	/// H-nucleus column N_H = n_H L, which sets the cloud depth of the CO cooling.
