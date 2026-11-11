@@ -25,7 +25,7 @@ jobs:
       workflow_file: '.github/workflows/cmake-macos.yml'
 
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
     env:
