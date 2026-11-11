@@ -301,7 +301,10 @@ template <typename System> struct StateBackup {
 template <typename System, typename IntegratorT, typename BurnT>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto integrator_setup(BurnT &state, const amrex::Real dt, const IntegratorParams &params) -> IntegratorT
 {
-	IntegratorT int_state{};
+	// Not value-initialized: every field is written before it is read (the tolerances and times here, the counters and
+	// the step by the integrator, y by burn_to_integrator, the stage vectors, the Jacobian and its pivots in each step),
+	// and zeroing the whole state, Jacobian included, was 3.5 % of the photochemistry kernel's samples on an MI250X.
+	IntegratorT int_state; // NOLINT(cppcoreguidelines-pro-type-member-init,hicpp-member-init)
 
 	// Set the tolerances.
 
