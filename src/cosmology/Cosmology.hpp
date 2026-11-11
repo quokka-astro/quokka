@@ -133,7 +133,7 @@ struct FriedmannRhsFunctor {
 	FriedmannRhsFunctor rhs(cosmo);
 	quokka::valarray<amrex::Real, 1> y = {a_old};
 	quokka::valarray<amrex::Real, 1> abstol = {1.0e-12 * a_old}; // absolute tolerance
-	const Real rtol = 1.0e-8;				     // relative tolerance
+	const amrex::Real rtol = 1.0e-8;			     // relative tolerance
 
 	int steps_taken = 0; // counter of the substeps to cover the integration dt
 	rk_adaptive_integrate(rhs, 0, y, dt, rtol, abstol, steps_taken);
