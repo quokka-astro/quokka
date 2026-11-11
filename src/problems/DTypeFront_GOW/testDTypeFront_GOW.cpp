@@ -370,6 +370,15 @@ auto probe_jacobian() -> int
 	state.c_hat = c_hat;
 	quokka::EOS<DTypeFront_GOW>::Solve(quokka::EOS<DTypeFront_GOW>::Input::RhoT, state);
 	Microphysics_Traits<DTypeFront_GOW>::ColumnDensities(state);
+	// the column densities of a burn are those of the state the burn started from, not of the composition probed:
+	// gow.probe_ncol overrides the ones computed from probe_xn (the NumColumns values a failed-burn dump prints)
+	std::vector<double> ncol;
+	if (pp.queryarr("probe_ncol", ncol)) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ncol.size() == Network::NumColumns, "gow.probe_ncol needs NumColumns entries");
+		for (int n = 0; n < Network::NumColumns; ++n) {
+			state.ncol[n] = ncol[n];
+		}
+	}
 
 	amrex::Print() << "probe: T " << state.T << " rho " << state.rho << " e " << state.e << " c_hat " << state.c_hat << '\n';
 	for (int n = 0; n < Network::NumColumns; ++n) {
