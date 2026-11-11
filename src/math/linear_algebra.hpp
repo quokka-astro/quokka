@@ -344,20 +344,24 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled_columns(Matrix &a, 
 			});
 			pivot[j] = static_cast<std::int16_t>(l);
 
-			// interchange rows l and j: in the column by selects, in the rest of the matrix by index
-			amrex::constexpr_for<j + 1, num_eqs>([&](auto ic) {
-				constexpr int i = decltype(ic)::value;
-				col[i] = (i == l) ? col[j] : col[i];
-			});
-			col[j] = akk;
-			amrex::constexpr_for<0, num_eqs>([&](auto cc) {
-				constexpr int c = decltype(cc)::value;
-				if constexpr (c != j) {
-					const amrex::Real t = a(j, c);
-					a(j, c) = a(l, c);
-					a(l, c) = t;
-				}
-			});
+			// interchange rows l and j: in the column by selects, in the rest of the matrix by index. The branch skips
+			// the 2 n loads and stores when the pivot is on the diagonal already (the usual case of an integrator
+			// matrix, dominated by its diagonal at a small step); a lane that needs them only waits for the others.
+			if (l != j) {
+				amrex::constexpr_for<j + 1, num_eqs>([&](auto ic) {
+					constexpr int i = decltype(ic)::value;
+					col[i] = (i == l) ? col[j] : col[i];
+				});
+				col[j] = akk;
+				amrex::constexpr_for<0, num_eqs>([&](auto cc) {
+					constexpr int c = decltype(cc)::value;
+					if constexpr (c != j) {
+						const amrex::Real t = a(j, c);
+						a(j, c) = a(l, c);
+						a(l, c) = t;
+					}
+				});
+			}
 		}
 
 		// zero pivot implies this column already triangularized
