@@ -115,31 +115,91 @@ def rewrite_function(body):
     out.append(body[pos:])
     text = "".join(out)
     # hoist the logs: lnT after the static_asserts (the first statement of the function), ln_<cse> after the temporary
-    if "lnT" in text:
+    if "lnT" in text and "const amrex::Real lnT =" not in text:
         m = re.search(r"^(\t+)const amrex::Real cse", text, re.M)
         indent = m.group(1)
         text = text[: m.start()] + f"{indent}const amrex::Real lnT = std::log(state.T);\n" + text[m.start() :]
     for base, name in hoisted.items():
-        if base == "state.T" or name not in text:
+        if base == "state.T" or name not in text or f"const amrex::Real {name} =" in text:
             continue
         m = re.search(r"^(\t+)const amrex::Real " + base + r" = [^;]*;\n", text, re.M)
         text = text[: m.end()] + f"{m.group(1)}const amrex::Real {name} = std::log({base});\n" + text[m.end() :]
     return text, len(calls), kept
 
 
-def main(path):
+def statements(text):
+    """The function text split into statements (each with the comment lines before it), on the semicolons."""
+    out = []
+    pos = 0
+    while True:
+        i = text.find(";", pos)
+        if i < 0:
+            out.append(text[pos:])
+            return out
+        out.append(text[pos : i + 1])
+        pos = i + 1
+
+
+def drop_flux(text, nspec, nbands):
+    """The function text without the photon-flux rows: their ydot and Jacobian entries go, the photon-density rows
+    and columns are renumbered to be consecutive, state.rn[2 * i] becomes state.rn[i], temporaries nothing reads any
+    more are removed, and the static_assert on integrate_rad_flux is inverted."""
+    first = nspec + 1
+    flux_rows = {first + 2 * i + 1 for i in range(nbands)}
+    renumber = {first + 2 * i: first + i for i in range(nbands)}
+
+    def row(m):
+        return int(m.group(1))
+
+    kept = []
+    for st in statements(text):
+        m = re.search(r"\bydot\[(\d+)\] =", st) or re.search(r"\bjac\((\d+), (\d+)\) =", st)
+        if m and (row(m) in flux_rows or (m.lastindex == 2 and int(m.group(2)) in flux_rows)):
+            continue
+        kept.append(st)
+    text = "".join(kept)
+    text = re.sub(r"\bydot\[(\d+)\]", lambda m: f"ydot[{renumber.get(int(m.group(1)), int(m.group(1)))}]", text)
+    text = re.sub(
+        r"\bjac\((\d+), (\d+)\)",
+        lambda m: f"jac({renumber.get(int(m.group(1)), int(m.group(1)))}, {renumber.get(int(m.group(2)), int(m.group(2)))})",
+        text,
+    )
+    text = re.sub(r"state\.rn\[2 \* (\d+)\]", r"state.rn[\1]", text)
+    text = text.replace(
+        'static_assert(BurnT::traits::integrate_rad_flux, "a jaff network needs Microphysics_Traits::integrate_rad_flux");',
+        'static_assert(!BurnT::traits::integrate_rad_flux, "this network has no photon-flux rows (postprocess_network.py --no-flux)");',
+    )
+    # dead temporaries: a definition whose name is used nowhere else
+    while True:
+        sts = statements(text)
+        names = [re.search(r"const amrex::Real (\w+) =", st) for st in sts]
+        uses = Counter(re.findall(r"\b(cse\d+|ln\w+)\b", text))
+        dead = {i for i, m in enumerate(names) if m and uses[m.group(1)] == 1}
+        if not dead:
+            break
+        text = "".join(st for i, st in enumerate(sts) if i not in dead)
+    assert "state.rn[2 * " not in text and not re.search(r"\bydot\[(2[2-9]|[3-9]\d)\]", text)
+    return text
+
+
+def main(path, no_flux):
     src = open(path).read()
+    nspec = int(re.search(r"static constexpr int NumSpec = (\d+);", src).group(1))
+    nbands = int(re.search(r"static constexpr int NumChemBands = (\d+);", src).group(1))
     starts = sorted(src.find(f) for f in FUNCTIONS)
     assert all(s >= 0 for s in starts), "a network function is missing"
     ends = starts[1:] + [src.rfind("\n};")]
     pieces = [src[: starts[0]]]
     for s, e in zip(starts, ends):
         text, n, kept = rewrite_function(src[s:e])
+        if no_flux:
+            text = drop_flux(text, nspec, nbands)
         pieces.append(text)
-        print(f"{src[s:s + 40].split('(')[0]}: {n} pow calls, {kept} kept")
+        print(f"{src[s:s + 40].split('(')[0]}: {n} pow calls, {kept} kept" + (", flux rows dropped" if no_flux else ""))
     pieces.append(src[ends[-1] :])
     open(path, "w").write("".join(pieces))
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "src/networks/GOW/network.hpp")
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    main(args[0] if args else "src/networks/GOW/network.hpp", "--no-flux" in sys.argv)
