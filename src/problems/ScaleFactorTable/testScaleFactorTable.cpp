@@ -34,7 +34,7 @@ auto MaxRelDiff(CosmologyParams const &cosmo, amrex::Real const a_init, amrex::R
 		int const n_query) -> amrex::Real
 {
 	ScaleFactorTable coarse; // h spacing
-	ScaleFactorTable fine; // 0.5 * h spacing
+	ScaleFactorTable fine;	 // 0.5 * h spacing
 	coarse.Build(cosmo, a_init, a_max, h);
 	fine.Build(cosmo, a_init, a_max, 0.5 * h);
 
@@ -70,7 +70,7 @@ auto TimeEdS(amrex::Real const a, amrex::Real const a_init, amrex::Real const H0
 /// Exact EdS scale factor: (a_init^{3/2} + 3/2 H0 t)^{2/3}.
 auto ScaleFactorEdS(amrex::Real const t, amrex::Real const a_init, amrex::Real const H0) -> amrex::Real
 {
-    return std::pow(std::pow(a_init, 1.5) + 1.5 * H0 * t, 2.0 / 3.0);
+	return std::pow(std::pow(a_init, 1.5) + 1.5 * H0 * t, 2.0 / 3.0);
 }
 
 /// Max relative error of the table at fractional position s of each ln a interval (s = 0: nodes, s = 0.5: midpoints).
@@ -102,8 +102,8 @@ struct PathErrors {
 };
 
 /// Old approach: a advanced with evolveScaleFactor, two Strang half steps per step with H dt = H_dt; the table is queried at the same times.
-auto MaxRelErrorRK(CosmologyParams const &cosmo, ScaleFactorTable const &table, amrex::Real const a_init, amrex::Real const a_max,
-		   amrex::Real const H_dt) -> PathErrors
+auto MaxRelErrorRK(CosmologyParams const &cosmo, ScaleFactorTable const &table, amrex::Real const a_init, amrex::Real const a_max, amrex::Real const H_dt)
+    -> PathErrors
 {
 	amrex::Real a = a_init;
 	amrex::Real t = 0.0;
@@ -128,8 +128,8 @@ auto problem_main() -> int
 	const amrex::Real a_init = 0.01;
 	const amrex::Real a_max = 1.0;
 	const int n_conv = 9; // h = 0.2 / 2^k for k from 0 to 8
-	const amrex::Real eps = std::numeric_limits<amrex::Real>::epsilon(); 
-	constexpr amrex::Real floor_factor = 10.0; 
+	const amrex::Real eps = std::numeric_limits<amrex::Real>::epsilon();
+	constexpr amrex::Real floor_factor = 10.0;
 	int status = 0;
 	ScaleFactorTable table;
 
@@ -144,11 +144,11 @@ auto problem_main() -> int
 
 	for (int k = 0; k < n_conv; ++k) {
 		h[k] = std::ldexp(0.2, -k); // h = 0.2 / 2^k
-		const int n_int =  NumIntervals(a_init, a_max, h[k]);
+		const int n_int = NumIntervals(a_init, a_max, h[k]);
 		table.Build(cosmo, a_init, a_max, h[k]);
 		err_node[k] = MaxRelError(table, a_init, a_max, h[k], cosmo.H0, 0.0);
 		err_mid[k] = MaxRelError(table, a_init, a_max, h[k], cosmo.H0, 0.5);
-		
+
 		std::string ord_node = "-";
 		std::string ord_mid = "-";
 
@@ -156,7 +156,7 @@ auto problem_main() -> int
 			ord_node = std::format("{:.2f}", std::log2(err_node[k - 1] / err_node[k]));
 		}
 
-		if (k > 0 && err_mid[k] > 0.0 && err_mid[k - 1 ] > 0.0) {
+		if (k > 0 && err_mid[k] > 0.0 && err_mid[k - 1] > 0.0) {
 			const amrex::Real order = std::log2(err_mid[k - 1] / err_mid[k]);
 			ord_mid = std::format("{:.2f}", order);
 			if (err_mid[k] > floor_factor * n_int * eps) { // order is meaningful in truncation-dominated regime.
@@ -164,9 +164,8 @@ auto problem_main() -> int
 					status = 1;
 					ord_mid += "!";
 				}
-
 			}
-		}	
+		}
 		amrex::Print() << std::format("{:>10.4e} {:>6} {:>11.3e} {:>11.3e} {:>9} {:>9} {:>13.4e} {:>10.3e}\n", h[k], n_int, err_node[k], err_mid[k],
 					      ord_node, ord_mid, err_mid[k] / std::pow(h[k], 4), n_int * eps);
 	}
@@ -188,7 +187,7 @@ auto problem_main() -> int
 	}
 
 	// 3. realistic LCDM (default parameters): self-convergence, no exact solution needed
-	const CosmologyParams planck; // defaults of CosmologyParams
+	const CosmologyParams planck;		     // defaults of CosmologyParams
 	const amrex::Real t_query = 0.9 / planck.H0; // flat LCDM: H0 t(a=1) is about 0.955 for Omega_m = 0.31
 	constexpr int n_query = 100000;
 	amrex::Print() << "\nLCDM (default parameters): self-convergence D(h) = max |a_h - a_{h/2}| / a\n";
@@ -208,7 +207,7 @@ auto problem_main() -> int
 		}
 		amrex::Print() << std::format("{:>10.4e} {:>11.3e} {:>9} {:>10.3e}\n", h[k], diff[k], ord, floor_k);
 	}
-	
+
 	// 4. old adaptive RK12 vs table at the same times; two step histories show the path dependence of RK
 	for (amrex::Real const H_dt : {0.01, 0.003}) {
 		const PathErrors err = MaxRelErrorRK(cosmo, table, a_init, a_max, H_dt);
