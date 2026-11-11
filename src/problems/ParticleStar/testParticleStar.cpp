@@ -1,13 +1,14 @@
 /// \file testParticleStar.cpp
 /// \brief Test problem for Star particles with the deuterium-burning protostellar model: formation from a
 /// Jeans-unstable cell, accretion with mass conservation, and the stellar evolution checked against reference
-/// tracks from the Orion2007 protostellar model (see README.md in this directory).
+/// tracks from the Orion2007 and Orion2 protostellar models (see README.md in this directory).
 ///
 
 #include <array>
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <limits>
 #include <numeric>
 #include <sstream>
 #include <string>
@@ -114,9 +115,28 @@ template <> void QuokkaSimulation<ParticleStar>::setInitialConditionsOnGridFaceV
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<ParticleStar>::mhdFirstIndex) = B_val; });
 }
 
-// Evolve the stellar model on the host with the constant-accretion-rate steps of an Orion2007 reference run
-// (m0 = 1e-3 M_sun, dm = 1e-4 M_sun per step) and compare with the stored reference track.
-auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per_yr) -> int
+// Tolerances of a reference-track comparison
+struct TrackTolerances {
+	double rL;		// relative error of r, L (and netlum)
+	double n;		// absolute error of n
+	double mdeut;		// error of mdeut relative to m
+	int max_state_mismatch; // rows allowed to be one phase apart
+};
+
+// |a/b - 1|; for b = 0, zero if a = 0 too and infinite otherwise
+auto relativeError(double a, double b) -> double
+{
+	if (b == 0.0) {
+		return (a == 0.0) ? 0.0 : std::numeric_limits<double>::infinity();
+	}
+	return std::abs(a / b - 1.0);
+}
+
+// Evolve the stellar model on the host with the constant-accretion-rate steps of a reference run (m0 = 1e-3 M_sun,
+// dm = 1e-4 M_sun per step) and compare with the stored reference track. The rows are `step m r n mdeut state L`,
+// followed by `netlum` for models that store it. Rows before the model starts (state 0) are compared only in
+// state, mdeut and L, since the reference code sets r and n there to values the Quokka models do not store.
+template <typename Model> auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per_yr, TrackTolerances const &tol) -> int
 {
 	std::ifstream input(filename);
 	if (!input) {
@@ -124,11 +144,12 @@ auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per
 		return 1;
 	}
 
+	constexpr bool has_netlum = Model::nExtraReal > 2;
 	const double dm = 1.0e-4 * C::M_solar;
 	const double mdot = mdot_Msun_per_yr * C::M_solar / quokka::yr_in_s;
 	const double dt = dm / mdot;
-	std::array<amrex::Real, quokka::StarParticleFixedComps + n_groups + StellarModel::nExtraReal> rdata{};
-	std::array<int, StellarModel::nExtraInt> idata{};
+	std::array<amrex::Real, quokka::StarParticleFixedComps + n_groups + Model::nExtraReal> rdata{};
+	std::array<int, Model::nExtraInt> idata{};
 	rdata[quokka::StarParticleMassIdx] = 1.0e-3 * C::M_solar;
 	rdata[quokka::StarParticleMdotIdx] = mdot;
 
@@ -139,6 +160,7 @@ auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per
 	double max_err_L = 0.0;
 	double max_err_n = 0.0;
 	double max_err_mdeut = 0.0;
+	double max_err_netlum = 0.0; // NOLINT(misc-const-correctness): only updated for models with netlum
 	int64_t step = 0;
 	std::string line;
 	while (std::getline(input, line)) {
@@ -153,20 +175,35 @@ auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per
 		double mdeut_ref = NAN;
 		int state_ref = -1;
 		double L_ref = NAN;
-		if (!(row >> ref_step >> m_ref >> r_ref >> n_ref >> mdeut_ref >> state_ref >> L_ref)) {
+		double netlum_ref = NAN; // NOLINT(misc-const-correctness): only read for models with netlum
+		const bool parsed = static_cast<bool>(row >> ref_step >> m_ref >> r_ref >> n_ref >> mdeut_ref >> state_ref >> L_ref) && [&row, &netlum_ref] {
+			if constexpr (has_netlum) {
+				return static_cast<bool>(row >> netlum_ref);
+			} else {
+				return true;
+			}
+		}();
+		if (!parsed) {
 			amrex::Print() << "FAIL: cannot parse reference row in " << filename << ": " << line << "\n";
 			return 1;
 		}
 		for (; step < ref_step; ++step) {
 			rdata[quokka::StarParticleMassIdx] += dm;
-			StellarModel::evolve(rdata.data(), idata.data(), n_groups, dt);
+			Model::evolve(rdata.data(), idata.data(), n_groups, dt);
 		}
 		++n_rows;
 
 		// std::max ignores NaN, so check the model output before comparing
 		const amrex::Real r = rdata[quokka::StarParticleRadiusIdx];
 		const amrex::Real L = rdata[quokka::StarParticleLumIdx];
-		if (!std::isfinite(r) || !std::isfinite(L) || !std::isfinite(rdata[n_poly_idx]) || !std::isfinite(rdata[mdeut_idx])) {
+		const bool finite = std::isfinite(r) && std::isfinite(L) && std::isfinite(rdata[n_poly_idx]) && std::isfinite(rdata[mdeut_idx]) && [&rdata] {
+			if constexpr (has_netlum) {
+				return std::isfinite(rdata[n_poly_idx + 1]);
+			} else {
+				return true;
+			}
+		}();
+		if (!finite) {
 			amrex::Print() << "FAIL: non-finite stellar state at step " << ref_step << " of " << filename << "\n";
 			return 1;
 		}
@@ -177,20 +214,26 @@ auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per
 			phase_jump = phase_jump || (std::abs(idata[0] - state_ref) > 1);
 			continue;
 		}
-		max_err_r = std::max(max_err_r, std::abs(r / r_ref - 1.0));
-		max_err_L = std::max(max_err_L, std::abs(L / L_ref - 1.0));
-		max_err_n = std::max(max_err_n, std::abs(rdata[n_poly_idx] - n_ref));
+		max_err_L = std::max(max_err_L, relativeError(L, L_ref));
 		max_err_mdeut = std::max(max_err_mdeut, std::abs(rdata[mdeut_idx] - mdeut_ref) / m_ref);
+		if constexpr (has_netlum) {
+			max_err_netlum = std::max(max_err_netlum, relativeError(rdata[n_poly_idx + 1], netlum_ref));
+		}
+		if (state_ref != 0) {
+			max_err_r = std::max(max_err_r, std::abs(r / r_ref - 1.0));
+			max_err_n = std::max(max_err_n, std::abs(rdata[n_poly_idx] - n_ref));
+		}
 	}
 
-	// Relative tolerance for r and L: Quokka sub-cycles the radius update, so it differs from the reference
-	// (itself ~0.3% from its converged solution) by up to ~1.5% just after the model starts at 0.01 M_sun.
-	const double tol_rL = 2.0e-2;
-	const bool passed = (n_rows > 0) && (n_state_mismatch <= 4) && !phase_jump && (max_err_r < tol_rL) && (max_err_L < tol_rL) && (max_err_n < 1.0e-10) &&
-			    (max_err_mdeut < 1.0e-2);
+	const bool passed = (n_rows > 0) && (n_state_mismatch <= tol.max_state_mismatch) && !phase_jump && (max_err_r < tol.rL) && (max_err_L < tol.rL) &&
+			    (max_err_netlum < tol.rL) && (max_err_n < tol.n) && (max_err_mdeut < tol.mdeut);
 	amrex::Print() << "Reference track " << filename << ": " << n_rows << " rows, " << n_state_mismatch
 		       << " rows one phase apart, max |r/r_ref - 1| = " << max_err_r << ", max |L/L_ref - 1| = " << max_err_L
-		       << ", max |n - n_ref| = " << max_err_n << ", max |mdeut - mdeut_ref| / m = " << max_err_mdeut << (passed ? "  PASS" : "  FAIL") << "\n";
+		       << ", max |n - n_ref| = " << max_err_n << ", max |mdeut - mdeut_ref| / m = " << max_err_mdeut;
+	if constexpr (has_netlum) {
+		amrex::Print() << ", max |netlum/netlum_ref - 1| = " << max_err_netlum;
+	}
+	amrex::Print() << (passed ? "  PASS" : "  FAIL") << "\n";
 	return passed ? 0 : 1;
 }
 
@@ -198,9 +241,17 @@ auto problem_main() -> int
 {
 	int status = 0;
 
-	// Stellar evolution against the Orion2007 reference model
-	status += compareWithReferenceTrack("../src/problems/ParticleStar/orion2007_track_mdot1e-5.dat", 1.0e-5);
-	status += compareWithReferenceTrack("../src/problems/ParticleStar/orion2007_track_mdot1e-4.dat", 1.0e-4);
+	// Stellar evolution against the Orion2007 reference model. Relative tolerance for r and L: Quokka sub-cycles the
+	// radius update, so it differs from the reference (itself ~0.3% from its converged solution) by up to ~1.5% just
+	// after the model starts at 0.01 M_sun.
+	const TrackTolerances tol_orion2007{.rL = 2.0e-2, .n = 1.0e-10, .mdeut = 1.0e-2, .max_state_mismatch = 4};
+	status += compareWithReferenceTrack<quokka::Orion2007StellarModel>("../src/problems/ParticleStar/orion2007_track_mdot1e-5.dat", 1.0e-5, tol_orion2007);
+	status += compareWithReferenceTrack<quokka::Orion2007StellarModel>("../src/problems/ParticleStar/orion2007_track_mdot1e-4.dat", 1.0e-4, tol_orion2007);
+
+	// Stellar evolution against the Orion2 reference model: same algorithm, so only the root solver for T_c differs
+	const TrackTolerances tol_orion2{.rL = 1.0e-6, .n = 1.0e-10, .mdeut = 1.0e-6, .max_state_mismatch = 0};
+	status += compareWithReferenceTrack<quokka::Orion2StellarModel>("../src/problems/ParticleStar/orion2_track_mdot1e-5.dat", 1.0e-5, tol_orion2);
+	status += compareWithReferenceTrack<quokka::Orion2StellarModel>("../src/problems/ParticleStar/orion2_track_mdot1e-4.dat", 1.0e-4, tol_orion2);
 
 	QuokkaSimulation<ParticleStar> sim;
 
