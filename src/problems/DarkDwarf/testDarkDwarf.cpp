@@ -554,6 +554,28 @@ template <> void QuokkaSimulation<DarkDwarf>::refineGrid(int lev, amrex::TagBoxA
 		});
 	}
 
+	// Jeans refinement
+	auto const &state = state_new_cc_[lev].const_arrays();
+	auto tag = tags.arrays();
+
+	amrex::Real const dx = geom[lev].CellSizeArray()[0];
+
+	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::Real const rho = state[bx](i, j, k, HydroSystem<DarkDwarf>::density_index);
+
+		if (rho <= 0.0) {
+			return;
+		}
+
+		amrex::Real const P = HydroSystem<DarkDwarf>::ComputePressure(state[bx], i, j, k);
+		amrex::Real const cs = quokka::EOS<DarkDwarf>::ComputeSoundSpeed(rho, P);
+		amrex::Real const rhoJeans = quokka::ParticleUtils::computeJeansDensity(cs, dx);
+
+		if (rho > rhoJeans) {
+			tag[bx](i, j, k) = amrex::TagBox::SET;
+		}
+	});
+
 	amrex::Gpu::streamSynchronize();
 }
 
