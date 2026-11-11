@@ -236,6 +236,23 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 						}
 					}
 				}
+				// the same from the shared evaluation (the integrator uses it when Microphysics_Traits::shared_rhs_and_jac)
+				amrex::GpuArray<Real, System::neqs> ydot_failed{};
+				amrex::Array2D<Real, 0, System::neqs - 1, 0, System::neqs - 1> jac_shared{};
+				Network::actual_rhs_and_jac(photochemstate, ydot_failed, jac_shared);
+				for (int nn = 0; nn < System::neqs; ++nn) {
+					if (std::isnan(ydot_failed[nn]) || std::isinf(ydot_failed[nn])) {
+						AMREX_DEVICE_PRINTF("  cell (%d %d %d) shared rhs[%d] = %g\n", i, j, k, nn, ydot_failed[nn]);
+					}
+				}
+				for (int jj = 0; jj < System::neqs; ++jj) {
+					for (int ii = 0; ii < System::neqs; ++ii) {
+						const Real value = jac_shared(ii, jj);
+						if (std::isnan(value) || std::isinf(value)) {
+							AMREX_DEVICE_PRINTF("  cell (%d %d %d) shared jac(%d,%d) = %g\n", i, j, k, ii, jj, value);
+						}
+					}
+				}
 #endif
 			}
 
