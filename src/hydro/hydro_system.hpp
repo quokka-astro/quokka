@@ -193,7 +193,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	// FUSED_ORDER == 2 (PLM) or 3 (PPM) (fusion level >= 2): reconstruct the flattened interface states of each face in registers
 	// from primVar_mf and *chiCell_mf; x1LeftState_mf / x1RightState_mf are not read.
 	// If accumulate is true (fusion level >= 3), the outputs are averaged in place: out = accumWeightOld * out + accumWeightNew * new.
-	template <RiemannSolver RIEMANN, FluxDir DIR, int FUSED_ORDER = 0, SlopeLimiter limiter = SlopeLimiter::minmod>
+	// VISC: -1 = choose at run time (ViscosityModel::constant with zero shear and bulk viscosity launches the VISC = 0
+	// instantiation, whose kernels leave out the viscous-flux code and its registers; same results), 0 / 1 = without / with.
+	template <RiemannSolver RIEMANN, FluxDir DIR, int FUSED_ORDER = 0, SlopeLimiter limiter = SlopeLimiter::minmod, int VISC = -1>
 	static void
 	ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf,
 		      amrex::MultiFab const &leftState_bfield_mf, amrex::MultiFab const &rightState_bfield_mf, amrex::MultiFab const &primVar_mf,
@@ -207,7 +209,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	};
 
 	// Riemann flux and face velocity at one face from its interface states (the per-face body of ComputeFluxes)
-	template <RiemannSolver RIEMANN, FluxDir DIR, typename StateViewL, typename StateViewR>
+	template <RiemannSolver RIEMANN, FluxDir DIR, bool WITH_VISC = true, typename StateViewL, typename StateViewR>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
 	RiemannFaceFlux(StateViewL const &x1LeftState, StateViewR const &x1RightState, quokka::Array4View<const amrex::Real, DIR> const &x1LeftState_bfield,
 			quokka::Array4View<const amrex::Real, DIR> const &x1RightState_bfield, amrex::Array4<const amrex::Real> const &x1ConsVar_fc_ref,
@@ -1329,7 +1331,40 @@ void HydroSystem<problem_t>::ComputeFlatteningChiCell(amrex::MultiFab const &pri
 	auto chiCell_out = chiCell_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
-	quokka::ParallelForJChunked(chiCell_mf, ng, quokka::HydroLaunchOrder::jchunkChi, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	if (quokka::HydroLaunchOrder::chiTwoPass != 0) {
+		// pass 1: the AMREX_SPACEDIM directional coefficients of every cell (one K_S per cell), one ghost cell farther out
+		amrex::MultiFab chiDir_mf(chiCell_mf.boxArray(), chiCell_mf.DistributionMap(), AMREX_SPACEDIM, nghost + 1);
+		auto chiDir_out = chiDir_mf.arrays();
+		amrex::IntVect ng1{AMREX_D_DECL(nghost + 1, nghost + 1, nghost + 1)};
+		quokka::ParallelForJChunked<QUOKKA_CUDA_CHI_MINB>(chiDir_mf, ng1, quokka::HydroLaunchOrder::jchunkChi,
+								  [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Array4<const amrex::Real> const &q = primVar_in[bx];
+			const amrex::Real KS_c = FlatteningKS(q, i, j, k);
+			chiDir_out[bx](i, j, k, 0) = FlatteningChi<FluxDir::X1>(q, i, j, k, KS_c);
+#if AMREX_SPACEDIM >= 2
+			chiDir_out[bx](i, j, k, 1) = FlatteningChi<FluxDir::X2>(q, i, j, k, KS_c);
+#endif
+#if AMREX_SPACEDIM == 3
+			chiDir_out[bx](i, j, k, 2) = FlatteningChi<FluxDir::X3>(q, i, j, k, KS_c);
+#endif
+		});
+		// pass 2: the same min, in the same order, as the one-pass kernel below
+		auto const &chiDir_in = chiDir_mf.const_arrays();
+		quokka::ParallelForJChunked(chiCell_mf, ng, quokka::HydroLaunchOrder::jchunkChi, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Array4<const amrex::Real> const &c = chiDir_in[bx];
+			amrex::Real chi = std::min({c(i - 1, j, k, 0), c(i, j, k, 0), c(i + 1, j, k, 0)});
+#if AMREX_SPACEDIM >= 2
+			chi = std::min({chi, c(i, j - 1, k, 1), c(i, j, k, 1), c(i, j + 1, k, 1)});
+#endif
+#if AMREX_SPACEDIM == 3
+			chi = std::min({chi, c(i, j, k - 1, 2), c(i, j, k, 2), c(i, j, k + 1, 2)});
+#endif
+			chiCell_out[bx](i, j, k) = chi;
+		});
+		return;
+	}
+
+	quokka::ParallelForJChunked<QUOKKA_CUDA_CHI_MINB>(chiCell_mf, ng, quokka::HydroLaunchOrder::jchunkChi, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		amrex::Array4<const amrex::Real> const &q = primVar_in[bx];
 		auto KS = [&](int ii, int jj, int kk) { return FlatteningKS(q, ii, jj, kk); };
 		const amrex::Real KS_c = KS(i, j, k);
@@ -1480,7 +1515,7 @@ void HydroSystem<problem_t>::UpdateStageFused(amrex::MultiFab const &consVarOld_
 	auto const primVar = primVar_mf.const_arrays();
 	auto const consVarNew = consVarNew_mf.arrays();
 	auto const redoFlag = redoFlag_mf.arrays();
-	quokka::ParallelForJChunked(
+	quokka::ParallelForJChunked<QUOKKA_CUDA_UPDATE_MINB>(
 	    consVarNew_mf, amrex::IntVect(0), quokka::HydroLaunchOrder::jchunkUpdate, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		    UpdateStageFusedCell(x1Flux[bx], AMREX_D_PICK(x1Flux[bx], x2Flux[bx], x2Flux[bx]), AMREX_D_PICK(x1Flux[bx], x1Flux[bx], x3Flux[bx]),
 					 vel_x[bx], AMREX_D_PICK(vel_x[bx], vel_y[bx], vel_y[bx]), AMREX_D_PICK(vel_x[bx], vel_x[bx], vel_z[bx]),
@@ -1749,7 +1784,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeViscosity(int /*i*/, int /*j*/, 
 }
 
 template <typename problem_t>
-template <RiemannSolver RIEMANN, FluxDir DIR, int FUSED_ORDER, SlopeLimiter limiter>
+template <RiemannSolver RIEMANN, FluxDir DIR, int FUSED_ORDER, SlopeLimiter limiter, int VISC>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &x1LeftState_bfield_mf,
 					   amrex::MultiFab const &x1RightState_bfield_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc,
@@ -1758,6 +1793,23 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 					   amrex::MultiFab const *chiCell_mf, const bool accumulate, const amrex::Real accumWeightOld,
 					   const amrex::Real accumWeightNew)
 {
+	if constexpr (VISC < 0) {
+		// constant viscosity that is zero at run time: launch the kernels without the viscous-flux code (they would skip it anyway)
+		bool noViscosity = false;
+		if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::constant) {
+			noViscosity = (shearViscosity == 0.0) && (bulkViscosity == 0.0);
+		}
+		if (noViscosity) {
+			ComputeFluxes<RIEMANN, DIR, FUSED_ORDER, limiter, 0>(x1Flux_mf, x1FaceVel_mf, x1LeftState_mf, x1RightState_mf, x1LeftState_bfield_mf,
+									    x1RightState_bfield_mf, primVar_mf, K_visc, dx, shearViscosity, bulkViscosity, x1FSpds_mf,
+									    x1ConsVar_fc_mf, nghost_vel, chiCell_mf, accumulate, accumWeightOld, accumWeightNew);
+		} else {
+			ComputeFluxes<RIEMANN, DIR, FUSED_ORDER, limiter, 1>(x1Flux_mf, x1FaceVel_mf, x1LeftState_mf, x1RightState_mf, x1LeftState_bfield_mf,
+									    x1RightState_bfield_mf, primVar_mf, K_visc, dx, shearViscosity, bulkViscosity, x1FSpds_mf,
+									    x1ConsVar_fc_mf, nghost_vel, chiCell_mf, accumulate, accumWeightOld, accumWeightNew);
+		}
+		return;
+	} else {
 	static_assert(FUSED_ORDER == 0 || FUSED_ORDER == 2 || FUSED_ORDER == 3, "FUSED_ORDER must be 0, 2 (PLM) or 3 (PPM)");
 	static_assert(FUSED_ORDER == 0 || (!Physics_Traits<problem_t>::is_mhd_enabled && !Physics_Traits<problem_t>::is_dust_enabled),
 		      "fused reconstruction is only implemented for pure hydro without dust");
@@ -1864,7 +1916,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in[bx]);
 
 		// Riemann flux and face velocity (pure function of the interface states and the primitive stencil)
-		auto const [F, faceVelNew] = RiemannFaceFlux<RIEMANN, DIR>(x1LeftState, x1RightState, x1LeftState_bfield, x1RightState_bfield, x1ConsVar_fc_ref,
+		auto const [F, faceVelNew] = RiemannFaceFlux<RIEMANN, DIR, (VISC != 0)>(x1LeftState, x1RightState, x1LeftState_bfield, x1RightState_bfield, x1ConsVar_fc_ref,
 									   x1FSpds_ref, q, i, j, k, K_visc, dx, shearViscosity, bulkViscosity);
 		if (accumulate) {
 			const double v_old = accumWeightOld * x1FaceVel(i, j, k);
@@ -1890,11 +1942,90 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			DustSystem<problem_t>::template ComputeDustFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k);
 		}
 	};
-	quokka::ParallelForJChunked(x1Flux_mf, ng, quokka::HydroLaunchOrder::jchunkFace[static_cast<int>(DIR)], faceKernel);
+	// FUSED_ORDER == 0 (unfused) keeps the AMReX launch
+	if constexpr (FUSED_ORDER != 0) {
+#if AMREX_SPACEDIM == 3
+		const int ncol = quokka::HydroLaunchOrder::faceColumn[static_cast<int>(DIR)];
+		if (ncol > 1) {
+			// column launch: one thread computes up to ncol consecutive faces along DIR, reconstructing each cell once and
+			// carrying its flattened upper-edge state to the next face (faceKernel computes every cell's edges twice).
+			// Same per-face arithmetic as faceKernel, so the results are bitwise identical.
+			auto const columnKernel = [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int nrun) {
+				[[maybe_unused]] std::remove_cv_t<std::remove_reference_t<decltype(x1ConsVar_fc_in[bx])>> x1ConsVar_fc_ref{};
+				[[maybe_unused]] std::remove_cv_t<std::remove_reference_t<decltype(x1FSpds_in[bx])>> x1FSpds_ref{};
+				[[maybe_unused]] auto const dx_captured = dx;
+				[[maybe_unused]] amrex::Real const shearViscosity_captured = shearViscosity;
+				[[maybe_unused]] amrex::Real const bulkViscosity_captured = bulkViscosity;
+				[[maybe_unused]] auto const x1LeftState_captured = x1LeftState_in;
+				[[maybe_unused]] auto const x1RightState_captured = x1RightState_in;
+				[[maybe_unused]] auto const x1LeftState_bfield_captured = x1LeftState_bfield_in;
+				[[maybe_unused]] auto const x1RightState_bfield_captured = x1RightState_bfield_in;
+
+				quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
+				quokka::Array4View<const amrex::Real, DIR> chiCell(chiCell_in[bx]);
+				quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in[bx]);
+				quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in[bx]);
+				[[maybe_unused]] amrex::Array4<const amrex::Real> const x1LeftState_bfield_ref{};
+				[[maybe_unused]] amrex::Array4<const amrex::Real> const x1RightState_bfield_ref{};
+				[[maybe_unused]] quokka::Array4View<const amrex::Real, DIR> x1LeftState_bfield(x1LeftState_bfield_ref);
+				[[maybe_unused]] quokka::Array4View<const amrex::Real, DIR> x1RightState_bfield(x1RightState_bfield_ref);
+				auto [i0, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+				double regLeft[nvar_];
+				double regRight[nvar_];
+				double regNext[nvar_];
+				{
+					const amrex::Real chi_minus = chiCell(i0 - 1, j, k);
+					for (int n = 0; n < nvar_; ++n) {
+						regLeft[n] = FlattenedEdges<DIR, FUSED_ORDER, limiter>(q, n, i0 - 1, j, k, chi_minus).second;
+					}
+				}
+				for (int m = 0; m < nrun; ++m) {
+					const int i = i0 + m;
+					const amrex::Real chi_plus = chiCell(i, j, k);
+					for (int n = 0; n < nvar_; ++n) {
+						const std::pair<double, double> e = FlattenedEdges<DIR, FUSED_ORDER, limiter>(q, n, i, j, k, chi_plus);
+						regRight[n] = e.first;
+						regNext[n] = e.second;
+					}
+					auto x1LeftState = quokka::RegisterStateView{regLeft};
+					auto x1RightState = quokka::RegisterStateView{regRight};
+					auto const [F, faceVelNew] =
+					    RiemannFaceFlux<RIEMANN, DIR, (VISC != 0)>(x1LeftState, x1RightState, x1LeftState_bfield, x1RightState_bfield, x1ConsVar_fc_ref,
+									  x1FSpds_ref, q, i, j, k, K_visc, dx, shearViscosity, bulkViscosity);
+					if (accumulate) {
+						const double v_old = accumWeightOld * x1FaceVel(i, j, k);
+						x1FaceVel(i, j, k) = v_old + accumWeightNew * faceVelNew;
+					} else {
+						x1FaceVel(i, j, k) = faceVelNew;
+					}
+					for (int nc = 0; nc < nHydroScalars_; ++nc) {
+						if (accumulate) {
+							const double F_old = accumWeightOld * x1Flux(i, j, k, nc);
+							x1Flux(i, j, k, nc) = F_old + accumWeightNew * F[nc];
+						} else {
+							x1Flux(i, j, k, nc) = F[nc];
+						}
+					}
+					for (int n = 0; n < nvar_; ++n) {
+						regLeft[n] = regNext[n];
+					}
+				}
+			};
+			quokka::ParallelForColumns<QUOKKA_CUDA_FACE_MINB>(x1Flux_mf, ng, static_cast<int>(DIR), ncol,
+									    quokka::HydroLaunchOrder::jchunkFace[static_cast<int>(DIR)], columnKernel);
+			return;
+		}
+#endif
+		quokka::ParallelForJChunked<QUOKKA_CUDA_FACE_MINB>(x1Flux_mf, ng, quokka::HydroLaunchOrder::jchunkFace[static_cast<int>(DIR)], faceKernel);
+	} else {
+		quokka::ParallelForJChunked(x1Flux_mf, ng, quokka::HydroLaunchOrder::jchunkFace[static_cast<int>(DIR)], faceKernel);
+	}
+	} // VISC >= 0
 }
 
 template <typename problem_t>
-template <RiemannSolver RIEMANN, FluxDir DIR, typename StateViewL, typename StateViewR>
+template <RiemannSolver RIEMANN, FluxDir DIR, bool WITH_VISC, typename StateViewL, typename StateViewR>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::RiemannFaceFlux(
     StateViewL const &x1LeftState, StateViewR const &x1RightState, quokka::Array4View<const amrex::Real, DIR> const &x1LeftState_bfield,
     quokka::Array4View<const amrex::Real, DIR> const &x1RightState_bfield, amrex::Array4<const amrex::Real> const &x1ConsVar_fc_ref,
@@ -2164,7 +2295,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::RiemannFaceFlux
 	F_canonical = F_canonical + viscosity * (U_L - U_R);
 
 	// physical shear/bulk viscosity, added the same way as the artificial viscosity above
-	if constexpr (AMREX_SPACEDIM == 3 && Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
+	if constexpr (WITH_VISC && AMREX_SPACEDIM == 3 && Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
 		amrex::Real localShearViscosity = shearViscosity;
 		amrex::Real localBulkViscosity = bulkViscosity;
 		if constexpr (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) {

@@ -721,6 +721,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("fusion_level", hydroFusionLevel_);
 		hpp.query("jchunk_update", quokka::HydroLaunchOrder::jchunkUpdate);
 		hpp.query("jchunk_chi", quokka::HydroLaunchOrder::jchunkChi);
+		hpp.query("chi_two_pass", quokka::HydroLaunchOrder::chiTwoPass);
+		{
+			std::vector<int> faceColumn;
+			if (hpp.queryarr("face_column", faceColumn) != 0) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(faceColumn.size() == 3, "hydro.face_column needs 3 values (x, y, z face kernels)");
+				for (int d = 0; d < 3; ++d) {
+					quokka::HydroLaunchOrder::faceColumn[d] = faceColumn[d];
+				}
+			}
+		}
 		{
 			std::vector<int> jchunkFace;
 			if (hpp.queryarr("jchunk_face", jchunkFace) != 0) {
@@ -2551,7 +2561,14 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	if (!burn_success_first) {
 		return burn_success_first;
 	}
-	ApplyHydroStateFixup(state_old_cc_tmp, state_old_fc_tmp, lev);
+	// hydro.skip_redundant_fixup = 2 (opt-in): on a single-level run, state_old is the previous step's state_new, which
+	// already got the fixup at the end of that step; if the first Strang half-step ran no operator, the fixup here
+	// changes nothing that the previous one did not (the first step, istep == 0, always applies it).
+	const bool preFixupIsRedundant = (skipRedundantFixup_ >= 2) && (finestLevel() == 0) && (istep[lev] > 0) &&
+					 Physics_Traits<problem_t>::is_hydro_enabled && !strangSplitSourcesActive(time);
+	if (!preFixupIsRedundant) {
+		ApplyHydroStateFixup(state_old_cc_tmp, state_old_fc_tmp, lev);
+	}
 
 	// temporaries for this level update (hydro-02); freed when this function returns
 	HydroScratch scratch;
