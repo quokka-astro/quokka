@@ -15,6 +15,7 @@
 
 #include <array>
 #include <cmath>
+#include <iomanip>
 #include <string>
 #include <vector>
 
@@ -345,8 +346,15 @@ auto probe_jacobian() -> int
 	BurnT state;
 	pp.get("probe_T", state.T);
 	pp.get("probe_rho", state.rho);
+	// the composition: gow.probe_xn, else the problem's initial composition at gow.n_H
 	std::vector<double> xn;
-	pp.getarr("probe_xn", xn);
+	if (!pp.queryarr("probe_xn", xn)) {
+		double n_H = 30.0;
+		pp.query("n_H", n_H);
+		for (const double x : initial_abundances()) {
+			xn.push_back(x * n_H);
+		}
+	}
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(xn.size() == Network::NumSpec, "gow.probe_xn needs NumSpec entries");
 	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = xn[n];
@@ -368,11 +376,16 @@ auto probe_jacobian() -> int
 		amrex::Print() << "probe: ncol[" << n << "] = " << state.ncol[n] << '\n';
 	}
 
+	// with gow.probe_dump = 1 every entry is printed (to compare two builds of the network), else the non-finite ones
+	int dump = 0;
+	pp.query("probe_dump", dump);
+	const auto shown = [dump](const amrex::Real value) { return dump != 0 || !std::isfinite(value); };
+
 	amrex::GpuArray<amrex::Real, System::neqs> ydot{};
 	Network::actual_rhs(state, ydot);
 	for (int n = 0; n < System::neqs; ++n) {
-		if (!std::isfinite(ydot[n])) {
-			amrex::Print() << "probe: rhs[" << n << "] = " << ydot[n] << '\n';
+		if (shown(ydot[n])) {
+			amrex::Print() << "probe: rhs[" << n << "] = " << std::setprecision(17) << ydot[n] << '\n';
 		}
 	}
 
@@ -381,13 +394,30 @@ auto probe_jacobian() -> int
 	int n_bad = 0;
 	for (int j = 0; j < System::neqs; ++j) {
 		for (int i = 0; i < System::neqs; ++i) {
-			if (!std::isfinite(jac(i, j))) {
-				amrex::Print() << "probe: jac(" << i << "," << j << ") = " << jac(i, j) << '\n';
-				++n_bad;
+			if (shown(jac(i, j))) {
+				amrex::Print() << "probe: jac(" << i << "," << j << ") = " << std::setprecision(17) << jac(i, j) << '\n';
+				n_bad += std::isfinite(jac(i, j)) ? 0 : 1;
 			}
 		}
 	}
 	amrex::Print() << "probe: " << n_bad << " non-finite Jacobian entries\n";
+
+	// the same from the shared evaluation
+	amrex::GpuArray<amrex::Real, System::neqs> ydot2{};
+	amrex::Array2D<amrex::Real, 0, System::neqs - 1, 0, System::neqs - 1> jac2{};
+	Network::actual_rhs_and_jac(state, ydot2, jac2);
+	for (int n = 0; n < System::neqs; ++n) {
+		if (shown(ydot2[n])) {
+			amrex::Print() << "probe: shared rhs[" << n << "] = " << std::setprecision(17) << ydot2[n] << '\n';
+		}
+	}
+	for (int j = 0; j < System::neqs; ++j) {
+		for (int i = 0; i < System::neqs; ++i) {
+			if (shown(jac2(i, j))) {
+				amrex::Print() << "probe: shared jac(" << i << "," << j << ") = " << std::setprecision(17) << jac2(i, j) << '\n';
+			}
+		}
+	}
 	return 0;
 }
 } // namespace

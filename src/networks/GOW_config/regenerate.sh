@@ -63,6 +63,9 @@ echo "==> Writing the lookup tables"
 	--gow-hdf5 "${JAFF_DIR}/networks/GOW++/GOW++.hdf5" \
 	--outdir "${OUTDIR}"
 
+echo "==> Rewriting the power functions (postprocess_network.py)"
+"${TMPDIR}/venv/bin/python" -I "${CONFIG_DIR}/postprocess_network.py" "${OUTDIR}/network.hpp"
+
 echo "==> Running clang-format on generated files"
 clang-format -i "${OUTDIR}"/network.hpp "${OUTDIR}"/network.cpp
 
