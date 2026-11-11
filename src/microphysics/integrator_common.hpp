@@ -208,6 +208,10 @@ constexpr bool network_has_rhs_and_jac = requires(BurnT & state, amrex::GpuArray
 	System::traits::Network::actual_rhs_and_jac(state, ydot, pd);
 };
 
+/// Whether the network writes every entry of the Jacobian (Network::jacobian_writes_all_entries), so that the matrix
+/// need not be zeroed before actual_jac or actual_rhs_and_jac.
+template <typename Network> constexpr bool network_jacobian_complete = requires { requires Network::jacobian_writes_all_entries; };
+
 /// The right-hand side and the analytic Jacobian at the same state, as rhs() followed by jac() would give them, from
 /// one network call (Network::actual_rhs_and_jac) that evaluates the rate coefficients once.
 template <typename System, typename BurnT, typename IntegratorT, typename MatrixType>
@@ -215,13 +219,16 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_and_jac(const amrex::Real time
 							  amrex::GpuArray<amrex::Real, System::neqs> &ydot, MatrixType &pd, const IntegratorParams &params)
 {
 	constexpr int int_neqs = System::neqs;
+	constexpr bool complete = network_jacobian_complete<typename System::traits::Network>;
 
 	clean_state<System>(int_state, params);
 	update_thermodynamics<System>(state, int_state);
 
 	const bool in_bounds = !(state.T <= quokka::eos_floors::min_temp || state.T >= System::traits::max_temp);
 
-	pd = MatrixType{};
+	if constexpr (!complete) {
+		pd = MatrixType{};
+	}
 	if (in_bounds) {
 		state.time = time;
 		System::traits::Network::actual_rhs_and_jac(state, ydot, pd);
@@ -231,6 +238,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rhs_and_jac(const amrex::Real time
 				pd(System::energy_row, j) = 0.0_rt;
 			}
 		}
+	} else if constexpr (complete) {
+		pd = MatrixType{};
 	}
 
 	// a select after the branch, as in rhs()
@@ -258,7 +267,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void jac(BurnT &state, IntegratorT &int
 
 	integrator_to_burn<System>(int_state, state);
 
-	pd = MatrixType{};
+	if constexpr (!network_jacobian_complete<typename System::traits::Network>) {
+		pd = MatrixType{};
+	}
 
 	System::traits::Network::actual_jac(state, pd);
 

@@ -182,18 +182,39 @@ def drop_flux(text, nspec, nbands):
     return text
 
 
+def complete_jacobian(text, neqs):
+    """The function text with a zero store for every Jacobian entry it does not write, before its first entry, so
+    that the integrator need not zero the matrix before the call (Network::jacobian_writes_all_entries)."""
+    written = {(int(i), int(j)) for i, j in re.findall(r"\bjac\((\d+), (\d+)\) =", text)}
+    if not written or "// structural zeros" in text:
+        return text
+    m = re.search(r"^(\t+)jac\(\d+, \d+\) =", text, re.M)
+    indent = m.group(1)
+    zeros = [f"{indent}jac({i}, {j}) = 0.0;\n" for j in range(neqs) for i in range(neqs) if (i, j) not in written]
+    return text[: m.start()] + f"{indent}// structural zeros ({len(zeros)} of {neqs * neqs} entries)\n" + "".join(zeros) + text[m.start() :]
+
+
 def main(path, no_flux):
     src = open(path).read()
     nspec = int(re.search(r"static constexpr int NumSpec = (\d+);", src).group(1))
     nbands = int(re.search(r"static constexpr int NumChemBands = (\d+);", src).group(1))
+    neqs = nspec + 1 + (1 if no_flux else 2) * nbands
     starts = sorted(src.find(f) for f in FUNCTIONS)
     assert all(s >= 0 for s in starts), "a network function is missing"
     ends = starts[1:] + [src.rfind("\n};")]
     pieces = [src[: starts[0]]]
+    if "jacobian_writes_all_entries" not in pieces[0]:
+        pieces[0] = pieces[0].replace(
+            f"static constexpr int NumChemBands = {nbands};",
+            f"static constexpr int NumChemBands = {nbands};\n"
+            "\t/// actual_jac and actual_rhs_and_jac write every entry of the matrix (postprocess_network.py)\n"
+            "\tstatic constexpr bool jacobian_writes_all_entries = true;",
+        )
     for s, e in zip(starts, ends):
         text, n, kept = rewrite_function(src[s:e])
         if no_flux:
             text = drop_flux(text, nspec, nbands)
+        text = complete_jacobian(text, neqs)
         pieces.append(text)
         print(f"{src[s:s + 40].split('(')[0]}: {n} pow calls, {kept} kept" + (", flux rows dropped" if no_flux else ""))
     pieces.append(src[ends[-1] :])

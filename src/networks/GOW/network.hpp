@@ -124,6 +124,8 @@ struct Network {
 
 	// $$JAFF SUB nbands
 	static constexpr int NumChemBands = 2;
+	/// actual_jac and actual_rhs_and_jac write every entry of the matrix (postprocess_network.py)
+	static constexpr bool jacobian_writes_all_entries = true;
 	// $$JAFF END
 	/// edges of the chemical bands [eV]
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static constexpr auto ChemBands() -> amrex::GpuArray<double, NumChemBands + 1>
@@ -211,7 +213,7 @@ struct Network {
 		const amrex::Real cse33 = cse31 * cse32;
 		const amrex::Real cse34 = state.T > 700.0;
 		const amrex::Real cse35 =
-		    ((cse34) ? (std::exp(2.302585092994046 * (cse32 * std::log(5.9959999999999997e-30 * std::pow(state.T, 4.1881000000000004) *
+		    ((cse34) ? (std::exp(2.302585092994046 * (cse32 * std::log(5.9959999999999997e-30 * std::exp((4.1881000000000004) * lnT) *
 									       std::pow(6.7610000000000002e-6 * state.T + 1, -5.6881000000000004) *
 									       std::exp(-54657.400000000001 * cse18)) +
 							      cse33 * std::log(1.3000000000000001e-9 * std::exp(-53300 * cse18)))))
@@ -2339,6 +2341,102 @@ struct Network {
 		const amrex::Real cse1347 = 1.6856051574414119e-21 * cse1346;
 		const amrex::Real cse1348 = -cse1347;
 		const amrex::Real cse1349 = 3.3712103148828238e-21 * cse1346;
+		// structural zeros (95 of 529 entries)
+		jac(19, 2) = 0.0;
+		jac(20, 2) = 0.0;
+		jac(21, 2) = 0.0;
+		jac(22, 2) = 0.0;
+		jac(19, 5) = 0.0;
+		jac(20, 5) = 0.0;
+		jac(21, 5) = 0.0;
+		jac(22, 5) = 0.0;
+		jac(19, 6) = 0.0;
+		jac(20, 6) = 0.0;
+		jac(21, 6) = 0.0;
+		jac(22, 6) = 0.0;
+		jac(19, 7) = 0.0;
+		jac(20, 7) = 0.0;
+		jac(19, 8) = 0.0;
+		jac(20, 8) = 0.0;
+		jac(21, 8) = 0.0;
+		jac(22, 8) = 0.0;
+		jac(19, 9) = 0.0;
+		jac(20, 9) = 0.0;
+		jac(19, 11) = 0.0;
+		jac(20, 11) = 0.0;
+		jac(21, 11) = 0.0;
+		jac(22, 11) = 0.0;
+		jac(19, 13) = 0.0;
+		jac(20, 13) = 0.0;
+		jac(21, 13) = 0.0;
+		jac(22, 13) = 0.0;
+		jac(19, 17) = 0.0;
+		jac(20, 17) = 0.0;
+		jac(21, 17) = 0.0;
+		jac(22, 17) = 0.0;
+		jac(19, 18) = 0.0;
+		jac(20, 18) = 0.0;
+		jac(21, 18) = 0.0;
+		jac(22, 18) = 0.0;
+		jac(4, 19) = 0.0;
+		jac(9, 19) = 0.0;
+		jac(10, 19) = 0.0;
+		jac(16, 19) = 0.0;
+		jac(17, 19) = 0.0;
+		jac(20, 19) = 0.0;
+		jac(21, 19) = 0.0;
+		jac(22, 19) = 0.0;
+		jac(0, 20) = 0.0;
+		jac(1, 20) = 0.0;
+		jac(2, 20) = 0.0;
+		jac(3, 20) = 0.0;
+		jac(4, 20) = 0.0;
+		jac(5, 20) = 0.0;
+		jac(6, 20) = 0.0;
+		jac(7, 20) = 0.0;
+		jac(8, 20) = 0.0;
+		jac(9, 20) = 0.0;
+		jac(10, 20) = 0.0;
+		jac(11, 20) = 0.0;
+		jac(12, 20) = 0.0;
+		jac(13, 20) = 0.0;
+		jac(14, 20) = 0.0;
+		jac(15, 20) = 0.0;
+		jac(16, 20) = 0.0;
+		jac(17, 20) = 0.0;
+		jac(18, 20) = 0.0;
+		jac(19, 20) = 0.0;
+		jac(21, 20) = 0.0;
+		jac(22, 20) = 0.0;
+		jac(4, 21) = 0.0;
+		jac(10, 21) = 0.0;
+		jac(16, 21) = 0.0;
+		jac(17, 21) = 0.0;
+		jac(19, 21) = 0.0;
+		jac(20, 21) = 0.0;
+		jac(22, 21) = 0.0;
+		jac(0, 22) = 0.0;
+		jac(1, 22) = 0.0;
+		jac(2, 22) = 0.0;
+		jac(3, 22) = 0.0;
+		jac(4, 22) = 0.0;
+		jac(5, 22) = 0.0;
+		jac(6, 22) = 0.0;
+		jac(7, 22) = 0.0;
+		jac(8, 22) = 0.0;
+		jac(9, 22) = 0.0;
+		jac(10, 22) = 0.0;
+		jac(11, 22) = 0.0;
+		jac(12, 22) = 0.0;
+		jac(13, 22) = 0.0;
+		jac(14, 22) = 0.0;
+		jac(15, 22) = 0.0;
+		jac(16, 22) = 0.0;
+		jac(17, 22) = 0.0;
+		jac(18, 22) = 0.0;
+		jac(19, 22) = 0.0;
+		jac(20, 22) = 0.0;
+		jac(21, 22) = 0.0;
 		jac(0, 0) =
 		    2 * cse10 * cse167 - cse151 - cse153 + 2 * cse154 * state.xn[3] - cse168 * cse20 - cse169 + 2 * cse171 * state.xn[0] * state.xn[3] - cse188;
 		jac(0, 1) = cse191 + cse203;
@@ -4642,6 +4740,102 @@ struct Network {
 			   cse665 * state.rn[2 * 1 + 1] - cse666 * cse667 - cse666 * cse668;
 		// $$JAFF END
 		// $$JAFF REPEAT idx, expr IN rhs_jacobian_entries { USE quokka }
+		// structural zeros (95 of 529 entries)
+		jac(19, 2) = 0.0;
+		jac(20, 2) = 0.0;
+		jac(21, 2) = 0.0;
+		jac(22, 2) = 0.0;
+		jac(19, 5) = 0.0;
+		jac(20, 5) = 0.0;
+		jac(21, 5) = 0.0;
+		jac(22, 5) = 0.0;
+		jac(19, 6) = 0.0;
+		jac(20, 6) = 0.0;
+		jac(21, 6) = 0.0;
+		jac(22, 6) = 0.0;
+		jac(19, 7) = 0.0;
+		jac(20, 7) = 0.0;
+		jac(19, 8) = 0.0;
+		jac(20, 8) = 0.0;
+		jac(21, 8) = 0.0;
+		jac(22, 8) = 0.0;
+		jac(19, 9) = 0.0;
+		jac(20, 9) = 0.0;
+		jac(19, 11) = 0.0;
+		jac(20, 11) = 0.0;
+		jac(21, 11) = 0.0;
+		jac(22, 11) = 0.0;
+		jac(19, 13) = 0.0;
+		jac(20, 13) = 0.0;
+		jac(21, 13) = 0.0;
+		jac(22, 13) = 0.0;
+		jac(19, 17) = 0.0;
+		jac(20, 17) = 0.0;
+		jac(21, 17) = 0.0;
+		jac(22, 17) = 0.0;
+		jac(19, 18) = 0.0;
+		jac(20, 18) = 0.0;
+		jac(21, 18) = 0.0;
+		jac(22, 18) = 0.0;
+		jac(4, 19) = 0.0;
+		jac(9, 19) = 0.0;
+		jac(10, 19) = 0.0;
+		jac(16, 19) = 0.0;
+		jac(17, 19) = 0.0;
+		jac(20, 19) = 0.0;
+		jac(21, 19) = 0.0;
+		jac(22, 19) = 0.0;
+		jac(0, 20) = 0.0;
+		jac(1, 20) = 0.0;
+		jac(2, 20) = 0.0;
+		jac(3, 20) = 0.0;
+		jac(4, 20) = 0.0;
+		jac(5, 20) = 0.0;
+		jac(6, 20) = 0.0;
+		jac(7, 20) = 0.0;
+		jac(8, 20) = 0.0;
+		jac(9, 20) = 0.0;
+		jac(10, 20) = 0.0;
+		jac(11, 20) = 0.0;
+		jac(12, 20) = 0.0;
+		jac(13, 20) = 0.0;
+		jac(14, 20) = 0.0;
+		jac(15, 20) = 0.0;
+		jac(16, 20) = 0.0;
+		jac(17, 20) = 0.0;
+		jac(18, 20) = 0.0;
+		jac(19, 20) = 0.0;
+		jac(21, 20) = 0.0;
+		jac(22, 20) = 0.0;
+		jac(4, 21) = 0.0;
+		jac(10, 21) = 0.0;
+		jac(16, 21) = 0.0;
+		jac(17, 21) = 0.0;
+		jac(19, 21) = 0.0;
+		jac(20, 21) = 0.0;
+		jac(22, 21) = 0.0;
+		jac(0, 22) = 0.0;
+		jac(1, 22) = 0.0;
+		jac(2, 22) = 0.0;
+		jac(3, 22) = 0.0;
+		jac(4, 22) = 0.0;
+		jac(5, 22) = 0.0;
+		jac(6, 22) = 0.0;
+		jac(7, 22) = 0.0;
+		jac(8, 22) = 0.0;
+		jac(9, 22) = 0.0;
+		jac(10, 22) = 0.0;
+		jac(11, 22) = 0.0;
+		jac(12, 22) = 0.0;
+		jac(13, 22) = 0.0;
+		jac(14, 22) = 0.0;
+		jac(15, 22) = 0.0;
+		jac(16, 22) = 0.0;
+		jac(17, 22) = 0.0;
+		jac(18, 22) = 0.0;
+		jac(19, 22) = 0.0;
+		jac(20, 22) = 0.0;
+		jac(21, 22) = 0.0;
 		jac(0, 0) =
 		    -cse102 * cse67 - cse103 - cse135 + 2 * cse59 * cse746 - cse733 + 2 * cse748 * state.xn[0] * state.xn[3] - cse756 + 2 * cse97 * state.xn[3];
 		jac(0, 1) = cse758 + cse770;

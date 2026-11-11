@@ -66,15 +66,17 @@ template <typename System, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 {
 	constexpr int int_neqs = System::neqs;
 
+	// unrolled, so that each entry's role and tolerances are compile-time constants
 	amrex::Real err = 0.0_rt;
-	for (int n = 0; n < int_neqs; ++n) {
-		if (counts_toward_error(System::role(n))) {
+	amrex::constexpr_for<0, int_neqs>([&](auto nc) {
+		constexpr int n = decltype(nc)::value;
+		if constexpr (counts_toward_error(System::role(n))) {
 			const amrex::Real sk =
 			    atol_for<System>(rstate, n) + rtol_for<System>(rstate, n) * amrex::max(std::abs(rstate.y[n]), std::abs(rstate.ynew[n]));
 			const amrex::Real term = rstate.work[n] / sk;
 			err += term * term;
 		}
-	}
+	});
 	// the root mean square over the entries that count toward the error, so that the entries outside error control do
 	// not lower the norm (https://github.com/quokka-astro/quokka/pull/2295#discussion_r4051762482)
 	constexpr int num_error_entries = System::NumErrorEntries();
@@ -183,12 +185,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(BurnT &state, R
 
 	// error weights, only for the entries that count toward the step error (the others have no tolerances)
 	amrex::Real fac = 0.0_rt;
-	for (int i = 0; i < int_neqs; ++i) {
-		if (counts_toward_error(System::role(i))) {
+	amrex::constexpr_for<0, int_neqs>([&](auto ic) {
+		constexpr int i = decltype(ic)::value;
+		if constexpr (counts_toward_error(System::role(i))) {
 			ewt[i] = 1.0_rt / (rtol_for<System>(rstate, i) * std::abs(rstate.y[i]) + atol_for<System>(rstate, i));
 			fac += (rstate.k[0][i] * ewt[i]) * (rstate.k[0][i] * ewt[i]);
 		}
-	}
+	});
 	fac = std::sqrt(fac / static_cast<amrex::Real>(int_neqs));
 
 	amrex::Real R0 = 1000.0_rt * std::abs(rstate.dt) * UROUND * static_cast<amrex::Real>(int_neqs) * fac;
@@ -235,10 +238,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, Ro
 		rhs_and_jac<System>(time, state, rstate, rstate.k[0], rstate.jac, params);
 		rstate.n_rhs += 1;
 		rstate.n_jac += 1;
-
-		if (matrix_is_finite<System>(rstate.jac)) {
-			return true;
-		}
 	} else {
 		rhs<System>(time, state, rstate, rstate.k[0], params);
 		rstate.n_rhs += 1;
@@ -246,18 +245,21 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto evaluate_jacobian(BurnT &state, Ro
 		if constexpr (System::traits::analytic_jacobian) {
 			jac<System>(state, rstate, rstate.jac);
 			rstate.n_jac += 1;
-
-			if (matrix_is_finite<System>(rstate.jac)) {
-				return true;
-			}
 		}
 	}
 
-	if constexpr (!System::traits::analytic_jacobian || System::traits::numerical_jacobian_fallback) {
+	if constexpr (!System::traits::analytic_jacobian) {
 		numerical_jacobian<System>(state, rstate, time, params);
 		return true;
+	} else if constexpr (System::traits::numerical_jacobian_fallback) {
+		if (!matrix_is_finite<System>(rstate.jac)) {
+			numerical_jacobian<System>(state, rstate, time, params);
+		}
+		return true;
 	} else {
-		return false;
+		// without the fallback the matrix is not checked here: decompose() sums its entries in the pass that forms the
+		// integrator matrix (one pass over the matrix instead of two) and reports a non-finite sum
+		return true;
 	}
 }
 
@@ -311,11 +313,21 @@ template <typename System, typename RosenbrockT> AMREX_GPU_HOST_DEVICE AMREX_FOR
 	}
 #endif
 
+	// The same pass sums the entries: a NaN or an infinity anywhere makes the sum non-finite (a sum of finite entries
+	// can overflow, but then the factorization is hopeless too). The columns are summed separately, so that the sum is
+	// not one long dependent chain.
+	amrex::Real sum = 0.0_rt;
 	for (int j = 0; j < int_neqs; ++j) {
+		amrex::Real column_sum = 0.0_rt;
 		for (int i = 0; i < int_neqs; ++i) {
+			column_sum += rstate.jac(i, j);
 			rstate.jac(i, j) = -rstate.jac(i, j);
 		}
+		sum += column_sum;
 		rstate.jac(j, j) += fac;
+	}
+	if (!std::isfinite(sum)) {
+		return -1;
 	}
 
 	int ierr_linpack = 0;
@@ -464,6 +476,12 @@ rosenbrock_integrator(BurnT &state, RosenbrockState<ODESystem<problem_t, BurnT>:
 				return IERR_JACOBIAN_NOT_FINITE;
 			}
 			const int ierr_linpack = decompose<System>(rstate, fac);
+			if (ierr_linpack < 0) {
+				// a non-finite Jacobian entry (checked by evaluate_jacobian only with the finite-difference fallback)
+				rstate.t = x;
+				rstate.dt = h;
+				return IERR_JACOBIAN_NOT_FINITE;
+			}
 
 			if (ierr_linpack != 0) {
 				nsing += 1;
