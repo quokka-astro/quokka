@@ -63,12 +63,14 @@ class ScaleFactorTable
 		adot_.reserve(n_intervals + 1);
 
 		amrex::Real t = 0.0;
+		amrex::Real x_prev = x_init; // left end of the next interval: shared with the previous right end, so the sum telescopes
 		for (int i = 0; i <= n_intervals; ++i) {
 			const amrex::Real x = x_init + i * dlna;
 			const amrex::Real a = (i == 0) ? a_init : std::exp(x); // exact a_init at t = 0
 			if (i > 0) {
-				t += TimeBetweenLnA(x - dlna, x, cosmo);
+				t += TimeBetweenLnA(x_prev, x, cosmo);
 			}
+			x_prev = x;
 			const amrex::Real adot = a * cosmo.H0 * HubbleFactor(a, cosmo); // da/dt = a H(a)
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(adot > 0.0, "ScaleFactorTable: H(a) must stay positive (no recollapse).");
 			t_.push_back(t);
