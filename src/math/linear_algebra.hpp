@@ -9,9 +9,10 @@
 ///
 /// In device code every loop is unrolled at compile time (amrex::constexpr_for), and the pivot row is selected by
 /// comparing it with each candidate row instead of indexing with it. All matrix and vector indices are then compile-time
-/// constants, so the compiler can keep the matrix and the right-hand side in registers instead of local memory. On the
-/// host, where that form is not faster, the loops index with the pivot row as in dgefa/dgesl. Both forms do the same
-/// arithmetic in the same order, so they give identical results.
+/// constants, so the compiler can keep the matrix and the right-hand side in registers instead of local memory (a
+/// matrix too large for the registers has its pivot rows interchanged by index, see dgefa_unrolled). On the host, where
+/// that form is not faster, the loops index with the pivot row as in dgefa/dgesl. All forms do the same arithmetic in
+/// the same order, so they give identical results.
 
 #include <cmath>
 #include <cstdint>
@@ -215,6 +216,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled(Matrix &a, amrex::G
 	info = 0;
 	constexpr int nm1 = num_eqs - 1;
 
+	// A matrix of more than 128 entries cannot be in registers (256 VGPRs hold 128 doubles) and is in local memory
+	// whatever its indices are. Its pivot row is then interchanged by indexing with it, 2 (n - k) loads and stores per
+	// step, instead of a select and a store on each of the (n - k)^2 entries of the trailing matrix: with 23 equations
+	// those selects were 29 % of the photochemistry kernel's samples on an MI250X.
+	constexpr bool swap_by_index = num_eqs * num_eqs > 128;
+
 	amrex::constexpr_for<0, nm1>([&](auto kc) {
 		constexpr int k = decltype(kc)::value;
 
@@ -243,10 +250,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled(Matrix &a, amrex::G
 
 		if constexpr (allow_pivot) {
 			// interchange a(l, k) and a(k, k)
-			amrex::constexpr_for<k + 1, num_eqs>([&](auto ic) {
-				constexpr int i = decltype(ic)::value;
-				a(i, k) = (i == l) ? a(k, k) : a(i, k);
-			});
+			if constexpr (swap_by_index) {
+				a(l, k) = a(k, k);
+			} else {
+				amrex::constexpr_for<k + 1, num_eqs>([&](auto ic) {
+					constexpr int i = decltype(ic)::value;
+					a(i, k) = (i == l) ? a(k, k) : a(i, k);
+				});
+			}
 			a(k, k) = akk;
 		}
 
@@ -262,8 +273,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa_unrolled(Matrix &a, amrex::G
 		amrex::constexpr_for<k + 1, num_eqs>([&](auto jc) {
 			constexpr int j = decltype(jc)::value;
 			amrex::Real alj = a(k, j);
-			if constexpr (allow_pivot) {
+			if constexpr (allow_pivot && swap_by_index) {
 				// alj = a(l, j); then interchange a(l, j) and a(k, j)
+				const amrex::Real akj = alj;
+				alj = a(l, j);
+				a(l, j) = akj;
+				a(k, j) = alj;
+			} else if constexpr (allow_pivot) {
+				// the same with selects, the matrix staying in registers
 				amrex::constexpr_for<k + 1, num_eqs>([&](auto ic) {
 					constexpr int i = decltype(ic)::value;
 					const bool swap = (i == l);
