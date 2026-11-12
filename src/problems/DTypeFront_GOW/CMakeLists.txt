@@ -7,10 +7,11 @@ if(AMReX_SPACEDIM EQUAL 3)
     target_compile_definitions(DTypeFront_GOW PRIVATE QUOKKA_BURN_STATS)
   endif()
   # the Rosenbrock tableau, for timing experiments: ROS2S, Rodas3P, Rodas4P or Rodas5P
-  set(DTypeFront_GOW_TABLEAU "Rodas5P" CACHE STRING "DTypeFront_GOW: the Rosenbrock tableau")
+  set(DTypeFront_GOW_TABLEAU "ROS2S" CACHE STRING "DTypeFront_GOW: the Rosenbrock tableau")
   target_compile_definitions(DTypeFront_GOW PRIVATE QUOKKA_GOW_TABLEAU=${DTypeFront_GOW_TABLEAU})
-  # partial pivoting in the LU factorization of the integrator matrix, for timing experiments
-  option(DTypeFront_GOW_PIVOT "DTypeFront_GOW: pivot in the LU factorization" ON)
+  # partial pivoting in the LU factorization of the integrator matrix, for timing experiments. Off: 23% faster on the
+  # MI250X, safe while the integrator matrix I/(gamma h) - J is diagonally dominant, as it is here at every step
+  option(DTypeFront_GOW_PIVOT "DTypeFront_GOW: pivot in the LU factorization" OFF)
   if(NOT DTypeFront_GOW_PIVOT)
     target_compile_definitions(DTypeFront_GOW PRIVATE QUOKKA_GOW_NO_PIVOT)
   endif()

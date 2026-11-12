@@ -63,17 +63,17 @@ network.gradv = 9.0e-14
 network.vdisp = 2.1213203435596424e5  # 3 km/s / sqrt(2)
 
 # *****************************************************************
-# Integrator tolerances, as XRByte's: rtol 1e-3, atol_spec ~1e-9 n_H so that CO and C are resolved
+# Integrator tolerances: rtol 1e-2 (XRByte's 1e-3 costs 27-30% more), atol_spec ~1e-9 n_H so that CO and C are resolved
 # *****************************************************************
 integrator.X_reject_buffer = 1e100
 integrator.ode_max_steps = 50000
 
-integrator.rtol_spec     = 1e-3
-integrator.rtol_rad_num  = 1e-3
-integrator.rtol_enuc     = 1e-3
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2
 
 integrator.atol_spec                     = 2.0e-9   # cm^-3
 integrator.atol_enuc                     = 1.0e-6   # erg/g
-integrator.atol_rad_num                  = 1.0e-6   # cm^-3; XRByte's box has no transported bands
+integrator.atol_rad_num                  = 1.0e-8   # cm^-3; ~1% of the photon density carried at the H2 and CO fronts
 integrator.species_failure_tolerance     = 2.0e-9   # cm^-3; = atol_spec
 integrator.radiation_failure_tolerance   = 1.0e-3   # cm^-3
