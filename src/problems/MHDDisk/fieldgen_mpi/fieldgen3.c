@@ -18,6 +18,7 @@ typedef struct {
 
 int ngrid, ngridft;
 long seed;
+long startseed; /* this rank's seed before any ran2 call, so the field can be regenerated */
 int nproc, myrank;
 /* FFTW3-MPI reports sizes as ptrdiff_t (needed for >2^31-element
    transforms); locsize/alloc_local are in units of complex numbers
@@ -62,39 +63,54 @@ void readSeedPar()
 	} else {
 		MPI_Recv(&seed, 1, MPI_LONG, 0, myrank, MPI_COMM_WORLD, &status);
 	}
+	startseed = seed;
 	seed *= -1;
 	ran2(&seed);
 }
 
-void writeSeedPar()
+/* Gather one seed per rank into fname, one per line, in rank order (the
+   format readSeedPar expects). */
+void writeSeedFile(const char *fname, long myseed)
 {
 	FILE *fp;
-	int i, j = 0;
+	int i;
 	long procseed;
 	MPI_Status status;
-	char name[200];
 
 	if (myrank == 0) {
-		fp = fopen("seed.txt", "w");
+		fp = fopen(fname, "w");
 		if (fp == NULL) {
-			fprintf(stderr, "cannot open seed.txt for writing\n");
+			fprintf(stderr, "cannot open %s for writing\n", fname);
 			/* Other ranks are about to MPI_Send to rank 0 in the loop below;
 			   a plain exit() here would leave them blocked forever, so abort
 			   the whole job instead. */
 			MPI_Abort(MPI_COMM_WORLD, 1);
 		}
-		fprintf(fp, "%ld\n", seed);
+		fprintf(fp, "%ld\n", myseed);
 	}
 	for (i = 1; i < nproc; i++) {
 		if (myrank == 0) {
 			MPI_Recv(&procseed, 1, MPI_LONG, i, i, MPI_COMM_WORLD, &status);
 			fprintf(fp, "%ld\n", procseed);
 		} else if (myrank == i) {
-			MPI_Send(&seed, 1, MPI_LONG, 0, i, MPI_COMM_WORLD);
+			MPI_Send(&myseed, 1, MPI_LONG, 0, i, MPI_COMM_WORLD);
 		}
 	}
 	if (myrank == 0)
 		fclose(fp);
+}
+
+void writeSeedPar(const char *outname)
+{
+	char name[256];
+
+	/* The seeds this field was generated from: copy this file to seed.txt
+	   and rerun with the same number of MPI ranks to reproduce it. */
+	snprintf(name, sizeof(name), "%s.seeds", outname);
+	writeSeedFile(name, startseed);
+
+	/* The advanced generator state, so the next run draws a new field. */
+	writeSeedFile("seed.txt", seed);
 }
 
 void gridftGen(cplx_t *grid, float kmin, float kmax, float kidx)
@@ -461,7 +477,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Save seed and end */
-	writeSeedPar();
+	writeSeedPar(outname);
 	fftw_destroy_plan(plan);
 	fftw_mpi_cleanup();
 	MPI_Finalize();

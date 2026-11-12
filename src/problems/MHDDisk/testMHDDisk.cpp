@@ -14,6 +14,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -94,6 +95,7 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real Sigma0;
 	int subtract_disk_gravity = 0;
 	int vertical_equilibrium_solve = 1; // 1: solved vertical equilibrium + modified-profile disk pull; 0: legacy sech^2 x halo + Freeman
+	amrex::Real seed_field_disk_taper_decades = 0.0; // > 0: confine the seed field to the disk, see seedFieldDiskEnvelope
 	int rotation_on_cylinders = 0; // 1: disk rotates at the midplane v_phi(R) at every z, with the gas pull subtracted at the midplane
 	amrex::Real eq_Rmax{};		     // [cm] outer radius of the equilibrium tables (domain corner)
 	amrex::Gpu::DeviceVector<amrex::Real> eq_lnrho_device;	     // ln(rho) [eq_table_nR][eq_table_nz], see equilibriumDensity
@@ -145,6 +147,8 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Gpu::DeviceVector<amrex::Real> turb_vy_device;
 	amrex::Gpu::DeviceVector<amrex::Real> turb_vz_device;
 	amrex::Real turb_rescale_factor{};
+	amrex::Real turb_box = 0.0; // [cm] side of the periodic turbulence tile; 0 = stretch the cube over the whole domain
+	amrex::Vector<amrex::Real> turb_level_boost; // per-level factor offsetting the subcell-averaging loss (1 = off)
 
 	int turb_nx{};
 	int turb_ny{};
@@ -156,6 +160,8 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real refine_shrink_Rcyl{};
 	amrex::Real refine_shrink_Hcyl{};
 	amrex::Real refine_Rcyl_inner{};
+	std::vector<amrex::Real> refine_Rcyl_per_level; // optional: tag radius for each level, overrides refine_Rcyl and its shrink
+	std::vector<amrex::Real> refine_Hcyl_per_level; // optional: tag half-height for each level, overrides refine_Hcyl and its shrink
 };
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto vcircAnalytic(double R, double z, double vc, double Rc) -> double
@@ -280,6 +286,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityPull(double R, doubl
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto haloPotentialRise(double R, double z, double vc, double Rc) -> double
 {
 	return 0.5 * vc * vc * std::log1p((z / q_flatten) * (z / q_flatten) / (R * R + Rc * Rc));
+}
+
+// Envelope that confines the seed field to the disk (mhd_galaxy.seed_field_disk_taper_decades > 0): A_phi is multiplied
+// by a smoothstep in log10(rho_disc / rho_transition) that is 0 at the disk/CGM boundary and 1 once the initial disk
+// density is `decades` decades above it. Masking A (not B) keeps B = curl A divergence-free. Without it, the seed field
+// fills the CGM, where rho ~ 3.5e-32 gives Alfven speeds ~2e4 km/s that set the timestep.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto seedFieldDiskEnvelope(double rho_disc, double decades) -> double
+{
+	if (decades <= 0.0) {
+		return 1.0;
+	}
+	if (rho_disc <= rho_transition) {
+		return 0.0;
+	}
+	const double s = std::min(std::log10(rho_disc / rho_transition) / decades, 1.0);
+	return s * s * (3.0 - 2.0 * s);
 }
 
 // Density of the solved vertical equilibrium: ln(rho) bilinear in (R, |z| / zmax(R)) from the table built by
@@ -463,19 +485,37 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sample_bicubic(const amrex::Real *
 }
 
 AMREX_GPU_HOST_DEVICE
-inline auto interpolate_turbulence(const amrex::Real *table, int nx, int ny, int nz, amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
+inline auto interpolate_turbulence(const amrex::Real *table, int nx, int ny, int nz, amrex::Real x, amrex::Real y, amrex::Real z, bool periodic = false)
+    -> amrex::Real
 {
-	x = amrex::max(0.0, amrex::min(x, static_cast<amrex::Real>(nx - 1)));
-	y = amrex::max(0.0, amrex::min(y, static_cast<amrex::Real>(ny - 1)));
-	z = amrex::max(0.0, amrex::min(z, static_cast<amrex::Real>(nz - 1)));
-
-	const int i0 = static_cast<int>(x);
-	const int j0 = static_cast<int>(y);
-	const int k0 = static_cast<int>(z);
-
-	const int i1 = amrex::min(i0 + 1, nx - 1);
-	const int j1 = amrex::min(j0 + 1, ny - 1);
-	const int k1 = amrex::min(k0 + 1, nz - 1);
+	int i0 = 0;
+	int j0 = 0;
+	int k0 = 0;
+	int i1 = 0;
+	int j1 = 0;
+	int k1 = 0;
+	if (periodic) {
+		// tile the (FFT-periodic) cube: wrap coordinates into [0, n) and neighbours across the seam
+		x -= nx * std::floor(x / nx);
+		y -= ny * std::floor(y / ny);
+		z -= nz * std::floor(z / nz);
+		i0 = amrex::min(static_cast<int>(x), nx - 1);
+		j0 = amrex::min(static_cast<int>(y), ny - 1);
+		k0 = amrex::min(static_cast<int>(z), nz - 1);
+		i1 = (i0 + 1) % nx;
+		j1 = (j0 + 1) % ny;
+		k1 = (k0 + 1) % nz;
+	} else {
+		x = amrex::max(0.0, amrex::min(x, static_cast<amrex::Real>(nx - 1)));
+		y = amrex::max(0.0, amrex::min(y, static_cast<amrex::Real>(ny - 1)));
+		z = amrex::max(0.0, amrex::min(z, static_cast<amrex::Real>(nz - 1)));
+		i0 = static_cast<int>(x);
+		j0 = static_cast<int>(y);
+		k0 = static_cast<int>(z);
+		i1 = amrex::min(i0 + 1, nx - 1);
+		j1 = amrex::min(j0 + 1, ny - 1);
+		k1 = amrex::min(k0 + 1, nz - 1);
+	}
 
 	const amrex::Real fx = x - i0;
 	const amrex::Real fy = y - j0;
@@ -566,6 +606,51 @@ inline auto load_bin_to_device(const std::string &path, std::size_t n_expect) ->
 
 	amrex::Print() << "Loaded " << path << " (" << n_expect << " elements)\n";
 	return dev;
+}
+
+// Factor by which averaging the turbulent velocity over subsample^3 points per cell (as
+// setInitialConditionsOnGrid does) weakens it, for cells of size dx_cell:
+// rms(point values) / rms(cell averages), measured on an n_cells^3 lattice of cells.
+// turb_d is the spacing of the turbulence cube in physical units.
+inline auto turbulenceAveragingLoss(const amrex::Real *turb_vx, const amrex::Real *turb_vy, const amrex::Real *turb_vz, int turb_n, bool periodic,
+				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &turb_d, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx_cell,
+				    int subsample) -> amrex::Real
+{
+	constexpr int n_cells = 32;
+	const amrex::Box sample_box(amrex::IntVect(0), amrex::IntVect(n_cells - 1));
+	const amrex::Real inv_nsub = 1.0 / static_cast<amrex::Real>(subsample * subsample * subsample);
+
+	amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum> reduce_op;
+	amrex::ReduceData<amrex::Real, amrex::Real> reduce_data(reduce_op);
+	using ReduceTuple = typename decltype(reduce_data)::Type;
+	reduce_op.eval(sample_box, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept -> ReduceTuple {
+		    amrex::Real point_sq = 0.0;
+		    amrex::Real mean_x = 0.0;
+		    amrex::Real mean_y = 0.0;
+		    amrex::Real mean_z = 0.0;
+		    for (int a = 0; a < subsample; ++a) {
+			    for (int b = 0; b < subsample; ++b) {
+				    for (int c = 0; c < subsample; ++c) {
+					    // same subcell-centre positions as sampleSubcell, in units of the cube spacing
+					    const amrex::Real tx = (subsample * i + a + 0.5) * (dx_cell[0] / subsample) / turb_d[0];
+					    const amrex::Real ty = (subsample * j + b + 0.5) * (dx_cell[1] / subsample) / turb_d[1];
+					    const amrex::Real tz = (subsample * k + c + 0.5) * (dx_cell[2] / subsample) / turb_d[2];
+					    const amrex::Real vx = interpolate_turbulence(turb_vx, turb_n, turb_n, turb_n, tx, ty, tz, periodic);
+					    const amrex::Real vy = interpolate_turbulence(turb_vy, turb_n, turb_n, turb_n, tx, ty, tz, periodic);
+					    const amrex::Real vz = interpolate_turbulence(turb_vz, turb_n, turb_n, turb_n, tx, ty, tz, periodic);
+					    point_sq += (vx * vx + vy * vy + vz * vz) * inv_nsub;
+					    mean_x += vx * inv_nsub;
+					    mean_y += vy * inv_nsub;
+					    mean_z += vz * inv_nsub;
+				    }
+			    }
+		    }
+		    return {point_sq, mean_x * mean_x + mean_y * mean_y + mean_z * mean_z};
+	    });
+	const ReduceTuple sums = reduce_data.value();
+	const amrex::Real point_ms = amrex::get<0>(sums);
+	const amrex::Real avg_ms = amrex::get<1>(sums);
+	return (avg_ms > 0.0) ? std::sqrt(point_ms / avg_ms) : 1.0;
 }
 
 inline auto load_turb_seeds(const std::string &path) -> amrex::Vector<long long>
@@ -673,6 +758,16 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.get("refine_Rcyl_shrink_per_level_kpc", userData_.refine_shrink_Rcyl); userData_.refine_shrink_Rcyl *= 1.0e3 * C::parsec;
 	pp.get("refine_Hcyl_shrink_per_level_kpc", userData_.refine_shrink_Hcyl); userData_.refine_shrink_Hcyl *= 1.0e3 * C::parsec;
 	pp.get("refine_Rcyl_inner_kpc",            userData_.refine_Rcyl_inner);  userData_.refine_Rcyl_inner  *= 1.0e3 * C::parsec;
+	for (auto [name, list] : {std::pair{"refine_Rcyl_per_level_kpc", &userData_.refine_Rcyl_per_level},
+				  std::pair{"refine_Hcyl_per_level_kpc", &userData_.refine_Hcyl_per_level}}) {
+		pp.queryarr(name, *list);
+		for (auto &L : *list) {
+			L *= 1.0e3 * C::parsec;
+		}
+		if (!list->empty() && static_cast<int>(list->size()) < max_level) {
+			amrex::Abort(std::string("mhd_galaxy.") + name + " needs one value per level that tags (amr.max_level = " + std::to_string(max_level) + ")");
+		}
+	}
 	// clang-format on
 
 	constexpr double gamma = quokka::EOS_Traits<MHDGalaxy>::gamma;
@@ -721,6 +816,11 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	}
 	amrex::Print() << "Equilibrium sound speed cs_eq = " << userData_.cs_eq / 1.0e5 << " km/s (thermal cs_disk = " << userData_.cs_disk / 1.0e5
 		       << " km/s, magnetic pressure " << (magnetic_pressure_balance != 0 ? "included" : "not included") << ")\n";
+	pp.query("seed_field_disk_taper_decades", userData_.seed_field_disk_taper_decades);
+	if (userData_.seed_field_disk_taper_decades > 0.0) {
+		amrex::Print() << "Seed field confined to the disk: A_phi tapered from 0 at rho = " << rho_transition << " to full strength at rho = "
+			       << rho_transition * std::pow(10.0, userData_.seed_field_disk_taper_decades) << " g/cm^3\n";
+	}
 
 	const double Rc = userData_.Rc;
 	const double Rd = userData_.Rd;
@@ -957,15 +1057,51 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		amrex::Print() << "\n";
 	}
 
-	const double turb_rescale = turb_target_Mach * cs_disk;
+	amrex::Real turb_mach = turb_target_Mach;
+	pp.query("turb_mach", turb_mach); // 0 disables the initial turbulent velocity (e.g. for equilibrium tests)
+	pp.query("turb_box_kpc", userData_.turb_box); // > 0: tile the cube periodically with this side length
+	userData_.turb_box *= 1.0e3 * C::parsec;
+	const double turb_rescale = turb_mach * cs_disk;
 	userData_.turb_rescale_factor = turb_rescale;
+
+	// Optionally undo the weakening of the turbulence by subcell averaging, separately per level
+	// (it depends on the cell size), so each level starts at the requested Mach number.
+	int turb_rescale_to_grid = 0;
+	pp.query("turb_rescale_to_grid", turb_rescale_to_grid);
+	userData_.turb_level_boost.assign(max_level + 1, 1.0);
+	// Cap on the boost: where the cells average away most of the tile's power, the boost would only amplify grid-scale noise.
+	amrex::Real turb_max_boost = std::numeric_limits<amrex::Real>::max();
+	pp.query("turb_max_boost", turb_max_boost);
+	if (turb_rescale_to_grid != 0) {
+		const bool periodic = (userData_.turb_box > 0.0);
+		const int n = userData_.turb_nx;
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> turb_d{};
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			const amrex::Real L = periodic ? userData_.turb_box : geom[0].ProbHiArray()[idim] - geom[0].ProbLoArray()[idim];
+			turb_d[idim] = L / static_cast<amrex::Real>(periodic ? n : n - 1);
+		}
+		for (int lev = 0; lev <= max_level; ++lev) {
+			const amrex::Real boost =
+			    turbulenceAveragingLoss(userData_.turb_vx_device.data(), userData_.turb_vy_device.data(), userData_.turb_vz_device.data(), n, periodic,
+						    turb_d, geom[lev].CellSizeArray(), initial_condition_subsamples);
+			userData_.turb_level_boost[lev] = std::min(boost, turb_max_boost);
+			amrex::Print() << "Turbulence boost on level " << lev << " (dx = " << geom[lev].CellSize(0) / C::parsec
+				       << " pc): x" << userData_.turb_level_boost[lev] << " to offset subcell averaging";
+			if (boost > turb_max_boost) {
+				amrex::Print() << " (capped by turb_max_boost; full offset would be x" << boost << ")";
+			}
+			amrex::Print() << "\n";
+		}
+	}
 
 	amrex::Print() << "Turbulence loaded from binary files:\n"
 		       << " vx = " << turb_vx_file << "\n"
 		       << " vy = " << turb_vy_file << "\n"
 		       << " vz = " << turb_vz_file << "\n"
 		       << " cube size = " << userData_.turb_nx << " x " << userData_.turb_ny << " x " << userData_.turb_nz << "\n"
-		       << "Velocity scale = " << turb_rescale / 1.0e5 << " km/s\n";
+		       << "Velocity scale = " << turb_rescale / 1.0e5 << " km/s\n"
+		       << "Turbulence tile = " << (userData_.turb_box > 0.0 ? std::to_string(userData_.turb_box / (1.0e3 * C::parsec)) + " kpc (periodic)" : "whole domain")
+		       << "\n";
 
 	amrex::Print() << "MHDGalaxy init complete\n"
 		       << "Mc=" << userData_.Mc << " Q=" << userData_.Q_mean << " Sigma0=" << userData_.Sigma0
@@ -1001,6 +1137,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 
 	const double B0_scale = userData_.seed_B0_HL;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(B0_scale > 0.0, "Beta-derived seed field strength must be positive.");
+	const double seed_taper_decades = userData_.seed_field_disk_taper_decades;
 
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const auto prob_lo = grid_elem.prob_lo_;
@@ -1022,19 +1159,31 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	const amrex::Real *turb_vy = userData_.turb_vy_device.data();
 	const amrex::Real *turb_vz = userData_.turb_vz_device.data();
 
-	const double turb_rescale = userData_.turb_rescale_factor;
+	// grid_elem doesn't carry its level, so identify it by cell size
+	int ic_lev = 0;
+	for (int lev = 0; lev <= max_level; ++lev) {
+		if (std::abs(geom[lev].CellSize(0) - dxvec[0]) < 1.0e-6 * dxvec[0]) {
+			ic_lev = lev;
+		}
+	}
+	const double turb_rescale = userData_.turb_rescale_factor * userData_.turb_level_boost[ic_lev];
 
 	const double turb_xmin = geom[0].ProbLoArray()[0];
 	const double turb_ymin = geom[0].ProbLoArray()[1];
 	const double turb_zmin = geom[0].ProbLoArray()[2];
 
-	const double turb_Lx = geom[0].ProbHiArray()[0] - geom[0].ProbLoArray()[0];
-	const double turb_Ly = geom[0].ProbHiArray()[1] - geom[0].ProbLoArray()[1];
-	const double turb_Lz = geom[0].ProbHiArray()[2] - geom[0].ProbLoArray()[2];
+	// turb_box > 0: the cube is a periodic tile of side turb_box repeated over the domain, so its
+	// wavenumbers are in units of 2 pi / turb_box. Otherwise it is stretched over the whole domain.
+	const double turb_box = userData_.turb_box;
+	const bool turb_periodic = (turb_box > 0.0);
 
-	const double turb_dx = turb_Lx / static_cast<double>(turb_nx - 1);
-	const double turb_dy = turb_Ly / static_cast<double>(turb_ny - 1);
-	const double turb_dz = turb_Lz / static_cast<double>(turb_nz - 1);
+	const double turb_Lx = turb_periodic ? turb_box : geom[0].ProbHiArray()[0] - geom[0].ProbLoArray()[0];
+	const double turb_Ly = turb_periodic ? turb_box : geom[0].ProbHiArray()[1] - geom[0].ProbLoArray()[1];
+	const double turb_Lz = turb_periodic ? turb_box : geom[0].ProbHiArray()[2] - geom[0].ProbLoArray()[2];
+
+	const double turb_dx = turb_Lx / static_cast<double>(turb_periodic ? turb_nx : turb_nx - 1);
+	const double turb_dy = turb_Ly / static_cast<double>(turb_periodic ? turb_ny : turb_ny - 1);
+	const double turb_dz = turb_Lz / static_cast<double>(turb_periodic ? turb_nz : turb_nz - 1);
 
 	// Cylindrical Potential Table Pointers & Parameters for GPU Lambdas
 	const amrex::Real *aphi_ptr = userData_.Aphi_device.data();
@@ -1052,6 +1201,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	const auto prob_lo_dom = geom[0].ProbLoArray();
 	const auto prob_hi_dom = geom[0].ProbHiArray();
 	constexpr double boundary_tol = 1.0e-6; // relative tolerance, scaled by dx below
+	const auto dx0 = geom[0].CellSizeArray(); // level-independent taper, as in setInitialConditionsOnGridFaceVars
 
 	// physical potential with hard boundary guard and smooth tapering, sampled directly in the node lambdas
 	// to ensure consistency with the interpolated values used for curl calculation.
@@ -1060,13 +1210,22 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
 		return aphi_nd * B0_scale;
 	};
+	// initial disk density, as in sampleSubcell below, for the seed-field envelope
+	auto seed_envelope = [=] AMREX_GPU_DEVICE(double R_e, double z_e) -> double {
+		if (seed_taper_decades <= 0.0 || R_e >= Rcutoff) {
+			return (seed_taper_decades <= 0.0) ? 1.0 : 0.0;
+		}
+		const double rho_disc = eq_solve ? equilibriumDensity(eq_lnrho, eq_zmax, eq_table_nR, eq_table_nz, eq_Rmax, R_e, z_e)
+						 : diskDensityAnalytic(R_e, z_e, Rc, Rd, Sigma0, vc, cs_eq);
+		return seedFieldDiskEnvelope(rho_disc, seed_taper_decades);
+	};
 	auto get_Ax = [=] AMREX_GPU_DEVICE(double x_e, double y_e, double z_e) -> double {
 		const double R_e = std::sqrt(x_e * x_e + y_e * y_e);
 		// Force zero within 2.0*dx to prevent 1/R amplification of interpolation noise near the axis.
 		if (R_e < axis_dead_zone) {
 			return 0.0;
 		}
-		const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx, dy, dz);
+		const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx0[0], dx0[1], dx0[2]) * seed_envelope(R_e, z_e);
 		const double Aphi = get_Aphi_physical(x_e, y_e, z_e);
 		return -Aphi * (y_e / R_e) * taper;
 	};
@@ -1077,7 +1236,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		if (R_e < axis_dead_zone) {
 			return 0.0;
 		}
-		const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx, dy, dz);
+		const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx0[0], dx0[1], dx0[2]) * seed_envelope(R_e, z_e);
 		const double Aphi = get_Aphi_physical(x_e, y_e, z_e);
 		return Aphi * (x_e / R_e) * taper;
 	};
@@ -1119,9 +1278,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 			const double ty = (y - turb_ymin) / turb_dy;
 			const double tz = (z - turb_zmin) / turb_dz;
 
-			dvx_pert = interpolate_turbulence(turb_vx, turb_nx, turb_ny, turb_nz, tx, ty, tz) * turb_rescale;
-			dvy_pert = interpolate_turbulence(turb_vy, turb_nx, turb_ny, turb_nz, tx, ty, tz) * turb_rescale;
-			dvz_pert = interpolate_turbulence(turb_vz, turb_nx, turb_ny, turb_nz, tx, ty, tz) * turb_rescale;
+			dvx_pert = interpolate_turbulence(turb_vx, turb_nx, turb_ny, turb_nz, tx, ty, tz, turb_periodic) * turb_rescale;
+			dvy_pert = interpolate_turbulence(turb_vy, turb_nx, turb_ny, turb_nz, tx, ty, tz, turb_periodic) * turb_rescale;
+			dvz_pert = interpolate_turbulence(turb_vz, turb_nx, turb_ny, turb_nz, tx, ty, tz, turb_periodic) * turb_rescale;
 		}
 		vx += dvx_pert;
 		vy += dvy_pert;
@@ -1217,8 +1376,37 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 	const quokka::direction dir = grid_elem.dir_;
 	const auto dx = grid_elem.dx_;
 	const auto prob_lo = grid_elem.prob_lo_;
+	// The taper must not depend on the level, or coarse and fine levels see a different A near the outer edge.
+	const auto dx0 = geom[0].CellSizeArray();
+	// Edge integrals of A use the trapezoid rule over the finest-level nodes on each edge, so every level samples A at
+	// the same points: the flux through a coarse face then equals the sum over the fine faces it covers to round-off,
+	// and no div B (or spurious B_phi from the projection) appears at coarse/fine boundaries.
+	const auto dx_fine = geom[max_level].CellSizeArray();
+	const int nsub_x = static_cast<int>(std::lround(dx[0] / dx_fine[0]));
+	const int nsub_y = static_cast<int>(std::lround(dx[1] / dx_fine[1]));
 
 	const double B0_scale = userData_.seed_B0_HL;
+
+	// initial disk density, for the seed-field envelope (seedFieldDiskEnvelope); same as setInitialConditionsOnGrid
+	const double seed_taper_decades = userData_.seed_field_disk_taper_decades;
+	const bool eq_solve = (userData_.vertical_equilibrium_solve != 0);
+	const amrex::Real *eq_lnrho = userData_.eq_lnrho_device.data();
+	const amrex::Real *eq_zmax = userData_.eq_zmax_device.data();
+	const double eq_Rmax = userData_.eq_Rmax;
+	const double Rc = userData_.Rc;
+	const double Rd = userData_.Rd;
+	const double Rcutoff = userData_.Rcutoff;
+	const double Sigma0 = userData_.Sigma0;
+	const double vc = userData_.vc;
+	const double cs_eq = userData_.cs_eq;
+	auto seed_envelope = [=] AMREX_GPU_DEVICE(double R_n, double z_n) -> double {
+		if (seed_taper_decades <= 0.0 || R_n >= Rcutoff) {
+			return (seed_taper_decades <= 0.0) ? 1.0 : 0.0;
+		}
+		const double rho_disc = eq_solve ? equilibriumDensity(eq_lnrho, eq_zmax, eq_table_nR, eq_table_nz, eq_Rmax, R_n, z_n)
+						 : diskDensityAnalytic(R_n, z_n, Rc, Rd, Sigma0, vc, cs_eq);
+		return seedFieldDiskEnvelope(rho_disc, seed_taper_decades);
+	};
 
 	// Cylindrical Potential Table Pointers & Parameters
 	const amrex::Real *aphi_ptr = userData_.Aphi_device.data();
@@ -1249,7 +1437,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 		if (R < axis_dead_zone) {
 			return 0.0;
 		}
-		const double taper = get_taper_factor(x_n, y_n, z_n, Rmax_table, Lz_table, dx[0], dx[1], dx[2]);
+		const double taper = get_taper_factor(x_n, y_n, z_n, Rmax_table, Lz_table, dx0[0], dx0[1], dx0[2]) * seed_envelope(R, z_n);
 		const double Aphi = get_Aphi_physical(x_n, y_n, z_n);
 		return -Aphi * (y_n / R) * taper;
 	};
@@ -1260,9 +1448,28 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 		if (R < axis_dead_zone) {
 			return 0.0;
 		}
-		const double taper = get_taper_factor(x_n, y_n, z_n, Rmax_table, Lz_table, dx[0], dx[1], dx[2]);
+		const double taper = get_taper_factor(x_n, y_n, z_n, Rmax_table, Lz_table, dx0[0], dx0[1], dx0[2]) * seed_envelope(R, z_n);
 		const double Aphi = get_Aphi_physical(x_n, y_n, z_n);
 		return Aphi * (x_n / R) * taper;
+	};
+
+	// Mean of A_y along the y-edge [y0, y0 + dy] at (x, z), and of A_x along the x-edge [x0, x0 + dx] at (y, z):
+	// composite trapezoid over the finest-level nodes on the edge (on the finest level, just the two end nodes)
+	auto edge_mean_Ay = [=] AMREX_GPU_DEVICE(double x_n, double y0, double z_n) -> double {
+		const double h = dx[1] / nsub_y;
+		double sum = 0.5 * (get_Ay_node(x_n, y0, z_n) + get_Ay_node(x_n, y0 + dx[1], z_n));
+		for (int s = 1; s < nsub_y; ++s) {
+			sum += get_Ay_node(x_n, y0 + s * h, z_n);
+		}
+		return sum / nsub_y;
+	};
+	auto edge_mean_Ax = [=] AMREX_GPU_DEVICE(double x0, double y_n, double z_n) -> double {
+		const double h = dx[0] / nsub_x;
+		double sum = 0.5 * (get_Ax_node(x0, y_n, z_n) + get_Ax_node(x0 + dx[0], y_n, z_n));
+		for (int s = 1; s < nsub_x; ++s) {
+			sum += get_Ax_node(x0 + s * h, y_n, z_n);
+		}
+		return sum / nsub_x;
 	};
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -1270,23 +1477,13 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 
 		if (dir == quokka::direction::x) {
 			// Bx lives at x-faces: index (i) represents the x-node plane.
-			// Python samples Ay_node at the x-node, averages over y, and differentiates over z.
+			// Stokes on the face (A_z = 0): Bx = -(mean A_y on the top y-edge - mean A_y on the bottom y-edge) / dz.
 			const double xf = prob_lo[0] + i * dx[0];
 			const double yj = prob_lo[1] + j * dx[1];
-			const double yjp = prob_lo[1] + (j + 1) * dx[1];
 			const double zk = prob_lo[2] + k * dx[2];
 			const double zkp = prob_lo[2] + (k + 1) * dx[2];
 
-			const double Ay_j_kp = get_Ay_node(xf, yj, zkp);
-			const double Ay_jp_kp = get_Ay_node(xf, yjp, zkp);
-			const double Ay_j_k = get_Ay_node(xf, yj, zk);
-			const double Ay_jp_k = get_Ay_node(xf, yjp, zk);
-
-			const double Ay_xface_kp = 0.5 * (Ay_j_kp + Ay_jp_kp);
-			const double Ay_xface_k = 0.5 * (Ay_j_k + Ay_jp_k);
-
-			// Bx = -dAy/dz
-			B_face = -(Ay_xface_kp - Ay_xface_k) / dx[2];
+			B_face = -(edge_mean_Ay(xf, yj, zkp) - edge_mean_Ay(xf, yj, zk)) / dx[2];
 
 			// Hard-zero enforcement at the true x-domain boundary (normal component
 			// on x-faces), independent of seed-table taper calibration.
@@ -1296,23 +1493,13 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 
 		} else if (dir == quokka::direction::y) {
 			// By lives at y-faces: index (j) represents the y-node plane.
-			// Python samples Ax_node at the y-node, averages over x, and differentiates over z.
+			// Stokes on the face (A_z = 0): By = (mean A_x on the top x-edge - mean A_x on the bottom x-edge) / dz.
 			const double xi = prob_lo[0] + i * dx[0];
-			const double xip = prob_lo[0] + (i + 1) * dx[0];
 			const double yf = prob_lo[1] + j * dx[1];
 			const double zk = prob_lo[2] + k * dx[2];
 			const double zkp = prob_lo[2] + (k + 1) * dx[2];
 
-			const double Ax_i_kp = get_Ax_node(xi, yf, zkp);
-			const double Ax_ip_kp = get_Ax_node(xip, yf, zkp);
-			const double Ax_i_k = get_Ax_node(xi, yf, zk);
-			const double Ax_ip_k = get_Ax_node(xip, yf, zk);
-
-			const double Ax_yface_kp = 0.5 * (Ax_i_kp + Ax_ip_kp);
-			const double Ax_yface_k = 0.5 * (Ax_i_k + Ax_ip_k);
-
-			// By = dAx/dz
-			B_face = (Ax_yface_kp - Ax_yface_k) / dx[2];
+			B_face = (edge_mean_Ax(xi, yf, zkp) - edge_mean_Ax(xi, yf, zk)) / dx[2];
 
 			// Hard-zero enforcement at the true y-domain boundary (normal component
 			// on y-faces), independent of seed-table taper calibration.
@@ -1322,34 +1509,14 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 
 		} else {
 			// Bz lives at z-faces: index (k) represents the z-node plane.
-			// Bz = dAy/dx - dAx/dy using the exact node-level cross-averages.
+			// Stokes on the face: Bz = d(mean A_y)/dx - d(mean A_x)/dy over the four edges.
 			const double xi = prob_lo[0] + i * dx[0];
 			const double xip = prob_lo[0] + (i + 1) * dx[0];
 			const double yj = prob_lo[1] + j * dx[1];
 			const double yjp = prob_lo[1] + (j + 1) * dx[1];
 			const double zf = prob_lo[2] + k * dx[2];
 
-			// dAy/dx term: difference over x, then average over y
-			const double Ay_ip_j = get_Ay_node(xip, yj, zf);
-			const double Ay_i_j = get_Ay_node(xi, yj, zf);
-			const double Ay_ip_jp = get_Ay_node(xip, yjp, zf);
-			const double Ay_i_jp = get_Ay_node(xi, yjp, zf);
-
-			const double dAy_dx_j = (Ay_ip_j - Ay_i_j) / dx[0];
-			const double dAy_dx_jp = (Ay_ip_jp - Ay_i_jp) / dx[0];
-			const double dAy_dx_cc = 0.5 * (dAy_dx_j + dAy_dx_jp);
-
-			// dAx/dy term: difference over y, then average over x
-			const double Ax_i_jp = get_Ax_node(xi, yjp, zf);
-			const double Ax_i_j = get_Ax_node(xi, yj, zf);
-			const double Ax_ip_jp = get_Ax_node(xip, yjp, zf);
-			const double Ax_ip_j = get_Ax_node(xip, yj, zf);
-
-			const double dAx_dy_i = (Ax_i_jp - Ax_i_j) / dx[1];
-			const double dAx_dy_ip = (Ax_ip_jp - Ax_ip_j) / dx[1];
-			const double dAx_dy_cc = 0.5 * (dAx_dy_i + dAx_dy_ip);
-
-			B_face = dAy_dx_cc - dAx_dy_cc;
+			B_face = (edge_mean_Ay(xip, yj, zf) - edge_mean_Ay(xi, yj, zf)) / dx[0] - (edge_mean_Ax(xi, yjp, zf) - edge_mean_Ax(xi, yj, zf)) / dx[1];
 
 			// Hard-zero enforcement at the true z-domain boundary (normal component
 			// on z-faces), independent of seed-table taper calibration.
@@ -1464,8 +1631,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(const int lev, amrex::T
 	// Shrink the refinement cylinder at each successive level, floored at 30% of the
 	// base size, so finer levels progressively focus on the disk core instead of all
 	// sharing the same footprint out to refine_Rcyl/refine_Hcyl.
-	const amrex::Real Rcyl_lev = amrex::max(refine_Rcyl - userData_.refine_shrink_Rcyl * lev, 0.3 * refine_Rcyl, Rcyl_inner);
-	const amrex::Real Hcyl_lev = amrex::max(refine_Hcyl - userData_.refine_shrink_Hcyl * lev, 0.3 * refine_Hcyl);
+	// Explicit per-level lists (refine_Rcyl/Hcyl_per_level_kpc) replace the linear shrink.
+	const amrex::Real Rcyl_lev = userData_.refine_Rcyl_per_level.empty()
+					 ? amrex::max(refine_Rcyl - userData_.refine_shrink_Rcyl * lev, 0.3 * refine_Rcyl, Rcyl_inner)
+					 : amrex::max(userData_.refine_Rcyl_per_level[lev], Rcyl_inner);
+	const amrex::Real Hcyl_lev = userData_.refine_Hcyl_per_level.empty() ? amrex::max(refine_Hcyl - userData_.refine_shrink_Hcyl * lev, 0.3 * refine_Hcyl)
+									     : userData_.refine_Hcyl_per_level[lev];
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const amrex::Real x0 = prob_lo[0] + i * dx[0];
@@ -1485,11 +1656,11 @@ template <> void QuokkaSimulation<MHDGalaxy>::refineGrid(const int lev, amrex::T
 
 		constexpr int subsamples = refine_grid_subsamples;
 		for (int a = 0; a < subsamples; ++a) {
-			const amrex::Real x = std::lerp(x0, x1, a / (subsamples - 1));
+			const amrex::Real x = std::lerp(x0, x1, static_cast<amrex::Real>(a) / (subsamples - 1));
 			for (int b = 0; b < subsamples; ++b) {
-				const amrex::Real y = std::lerp(y0, y1, b / (subsamples - 1));
+				const amrex::Real y = std::lerp(y0, y1, static_cast<amrex::Real>(b) / (subsamples - 1));
 				for (int c = 0; c < subsamples; ++c) {
-					const amrex::Real z = std::lerp(z0, z1, c / (subsamples - 1));
+					const amrex::Real z = std::lerp(z0, z1, static_cast<amrex::Real>(c) / (subsamples - 1));
 					tagIfInRegion(x, y, z);
 				}
 			}
