@@ -107,6 +107,7 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real star_formation_efficiency;
 	amrex::Real sn_cluster_momentum_exponent;
 	amrex::Real sn_mass_per_event_msun;
+	amrex::Real sn_start_time = 0.0; // [s] no SN feedback before this simulation time
 	amrex::Long sn_trigger_count_cumulative = 0; // cumulative no. of cells that crossed the Jeans trigger
 						     // (secondary diagnostic only; not checkpoint-persistent)
 
@@ -437,6 +438,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.get("star_formation_efficiency", userData_.star_formation_efficiency);
 	pp.get("sn_mass_per_event_msun", userData_.sn_mass_per_event_msun);
 	pp.get("sn_cluster_momentum_exponent", userData_.sn_cluster_momentum_exponent);
+	constexpr amrex::Real seconds_per_myr = 3.15576e13;
+	pp.query("sn_start_time_myr", userData_.sn_start_time); userData_.sn_start_time *= seconds_per_myr;
 	pp.get("refine_Rcyl_kpc",                  userData_.refine_Rcyl);        userData_.refine_Rcyl        *= 1.0e3 * C::parsec;
 	pp.get("refine_Hcyl_kpc",                  userData_.refine_Hcyl);        userData_.refine_Hcyl        *= 1.0e3 * C::parsec;
 	pp.get("refine_Rcyl_shrink_per_level_kpc", userData_.refine_shrink_Rcyl); userData_.refine_shrink_Rcyl *= 1.0e3 * C::parsec;
@@ -642,7 +645,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		       << "Mc=" << userData_.Mc << " Q=" << userData_.Q_mean << " Sigma0=" << userData_.Sigma0
 		       << " Seed=" << (userData_.seed_str.empty() ? std::string("<not found>") : userData_.seed_str)
 		       << "\nsn_mass_per_event_msun=" << userData_.sn_mass_per_event_msun
-		       << " sn_cluster_momentum_exponent=" << userData_.sn_cluster_momentum_exponent << "\n"
+		       << " sn_cluster_momentum_exponent=" << userData_.sn_cluster_momentum_exponent
+		       << " sn_start_time_myr=" << userData_.sn_start_time / 3.15576e13 << "\n"
 		       << "M_solar=" << C::M_solar << "\n";
 }
 
@@ -1121,6 +1125,10 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 	if (!(userData_.sn_jeans_J > 0.0)) {
 		return;
 	}
+	// delay feedback so the initial disk can settle before cells are tested against the Jeans trigger
+	if (tNew_[0] < userData_.sn_start_time) {
+		return;
+	}
 
 	constexpr double MSUN = C::M_solar;
 	constexpr double KM_S = 1.0e5;
@@ -1172,9 +1180,14 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 		amrex::iMultiFab::Copy(mask, mask_valid, 0, 0, 1, 0);
 		mask.FillBoundary(geom[lev].periodicity());
 
-		// delta components: 0=dpx, 1=dpy, 2=dpz. Pure momentum injection -- no
-		// density change, no separately-tracked energy delta.
-		amrex::MultiFab delta(state.boxArray(), state.DistributionMap(), 3, kernel_ghost);
+		// delta components: 0-2 = summed recentering (rho_nb * vCOM - p_nb) over the kernels touching the
+		// cell, 3-5 = summed radial kicks, 6 = number of kernels touching the cell. Pass 2 applies
+		// recentering / count + kicks, so a cell in n overlapping kernels is recentered once (onto the
+		// mean of their vCOM) rather than n times: summing n recenterings computed from the same old
+		// state gives p -> (1 - n) p + ..., which reverses (n = 2) or amplifies (n >= 3) the momentum
+		// every step. Pure momentum injection -- no density change, no separately-tracked energy delta.
+		constexpr int n_delta_comp = 7;
+		amrex::MultiFab delta(state.boxArray(), state.DistributionMap(), n_delta_comp, kernel_ghost);
 		delta.setVal(0.0);
 
 		// --- Pass 1: gather kernel sums + deposit momentum (direct, unlimited) ---
@@ -1347,15 +1360,16 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 								pradz = dp * ez;
 							}
 
-							// New momentum = rho_nb * vCOM + radial kick, expressed as a delta
-							// relative to the cell's current momentum.
-							const double dpx = rho_nb * vCOMx - px_nb + pradx;
-							const double dpy = rho_nb * vCOMy - py_nb + prady;
-							const double dpz = rho_nb * vCOMz - pz_nb + pradz;
-
-							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 0), dpx);
-							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 1), dpy);
-							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 2), dpz);
+							// New momentum = rho_nb * vCOM + radial kick. The recentering delta and the
+							// kick are accumulated separately, with a kernel count, so that pass 2 can
+							// apply the recentering once per cell however many kernels overlap it.
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 0), rho_nb * vCOMx - px_nb);
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 1), rho_nb * vCOMy - py_nb);
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 2), rho_nb * vCOMz - pz_nb);
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 3), pradx);
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 4), prady);
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 5), pradz);
+							amrex::Gpu::Atomic::Add(&d(ii, jj, kk, 6), 1.0);
 						}
 					}
 				}
@@ -1397,12 +1411,14 @@ template <> void QuokkaSimulation<MHDGalaxy>::computeAfterTimestep()
 			auto const &d = delta.const_array(mfi);
 
 			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				const double dpx = d(i, j, k, 0);
-				const double dpy = d(i, j, k, 1);
-				const double dpz = d(i, j, k, 2);
-				if (dpx == 0.0 && dpy == 0.0 && dpz == 0.0) {
+				const double n_kernels = d(i, j, k, 6);
+				if (n_kernels <= 0.0) {
 					return;
 				}
+				// recenter once onto the mean vCOM of the overlapping kernels, then add every kick
+				const double dpx = d(i, j, k, 0) / n_kernels + d(i, j, k, 3);
+				const double dpy = d(i, j, k, 1) / n_kernels + d(i, j, k, 4);
+				const double dpz = d(i, j, k, 2) / n_kernels + d(i, j, k, 5);
 
 				const double rho = s(i, j, k, HydroSystem<MHDGalaxy>::density_index);
 				const double px_old = s(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index);
