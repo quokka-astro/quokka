@@ -10,6 +10,7 @@
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArrayBase.H"
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -45,6 +46,13 @@ constexpr double r_K_factor = 2.0;		// physical kernel radius, in units of dx (p
 constexpr int omega_subsamples = 4;		// n_sub per dimension for boundary-cell overlap quadrature
 constexpr int initial_condition_subsamples = 4; // per dimension samples. 4 means 4³ samples
 constexpr int refine_grid_subsamples = 4;	// per dimension samples. 4 means 4³ samples
+
+constexpr int eq_table_nR = 512;		  // radii in the vertical-equilibrium table, R = 0 .. domain corner
+constexpr int eq_table_nz = 512;		  // heights per radius, |z| = 0 .. zmax(R)
+constexpr double eq_zmax_scale_heights = 30.0; // zmax(R) in units of the smaller of the self-gravity and halo scale heights
+constexpr int eq_rk4_substeps = 2;		  // RK4 steps per table interval
+constexpr int eq_bisection_steps = 40;		  // bisection on ln(rho_mid); the bracket is < 2 e-folds wide
+constexpr int eq_pull_terms = 12;		  // terms of the exponential-sum disk pull, |c_n| < 1e-12 after 12
 } // namespace
 
 struct MHDGalaxy {};
@@ -84,10 +92,25 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real Mc = NAN; // one will be set
 	amrex::Real vc = NAN; // the other will be calculated
 	amrex::Real Sigma0;
+	int subtract_disk_gravity = 0;
+	int vertical_equilibrium_solve = 1; // 1: solved vertical equilibrium + modified-profile disk pull; 0: legacy sech^2 x halo + Freeman
+	int rotation_on_cylinders = 0; // 1: disk rotates at the midplane v_phi(R) at every z, with the gas pull subtracted at the midplane
+	amrex::Real eq_Rmax{};		     // [cm] outer radius of the equilibrium tables (domain corner)
+	amrex::Gpu::DeviceVector<amrex::Real> eq_lnrho_device;	     // ln(rho) [eq_table_nR][eq_table_nz], see equilibriumDensity
+	amrex::Gpu::DeviceVector<amrex::Real> eq_zmax_device;	     // [cm] table height per radius
+	amrex::Gpu::DeviceVector<amrex::Real> eq_dlnrho_mid_dR_device; // [1/cm] d ln(rho_mid) / dR per radius
+	// measured gas self-gravity g_R(R, |z|) from measure_gas_pull.py (mhd_galaxy.gas_pull_file), see gasPullTable
+	amrex::Gpu::DeviceVector<amrex::Real> gas_pull_device;
+	int gas_pull_nR = 0;
+	int gas_pull_nz = 0;
+	amrex::Real gas_pull_Rmax{};
+	amrex::Real gas_pull_z0{};
+	amrex::Real gas_pull_smax{};
 	amrex::Real rho_cgm;
 	amrex::Real rho_mid;
 	amrex::Real T_disk = NAN;  // one will be set
 	amrex::Real cs_disk = NAN; // the other will be calculated
+	amrex::Real cs_eq = NAN;   // effective sound speed for the initial equilibrium: cs_disk, or with magnetic pressure folded in
 	amrex::Real T_cgm = NAN;   // for both disk
 	amrex::Real cs_cgm = NAN;  // and for cgm
 
@@ -175,6 +198,208 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto diskDensityAnalytic(double R, doub
 	const double halo_factor = pow(1.0 + (z * z) / (q_flatten * q_flatten * denom), -(vc / cs) * (vc / cs) / 2.0);
 
 	return Sigma * disk_factor * halo_factor;
+}
+
+// Modified Bessel functions I0, I1, K0, K1 for x > 0 (Abramowitz & Stegun 9.8.1-9.8.8, ~1e-7),
+// usable in device code, unlike std::cyl_bessel_i/k.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto besselI0(double x) -> double
+{
+	if (x < 3.75) {
+		const double t = (x / 3.75) * (x / 3.75);
+		return 1.0 + t * (3.5156229 + t * (3.0899424 + t * (1.2067492 + t * (0.2659732 + t * (0.360768e-1 + t * 0.45813e-2)))));
+	}
+	const double t = 3.75 / x;
+	return (std::exp(x) / std::sqrt(x)) *
+	       (0.39894228 + t * (0.1328592e-1 + t * (0.225319e-2 + t * (-0.157565e-2 + t * (0.916281e-2 + t * (-0.2057706e-1 +
+		t * (0.2635537e-1 + t * (-0.1647633e-1 + t * 0.392377e-2))))))));
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto besselI1(double x) -> double
+{
+	if (x < 3.75) {
+		const double t = (x / 3.75) * (x / 3.75);
+		return x * (0.5 + t * (0.87890594 + t * (0.51498869 + t * (0.15084934 + t * (0.2658733e-1 + t * (0.301532e-2 + t * 0.32411e-3))))));
+	}
+	const double t = 3.75 / x;
+	const double tail = 0.2282967e-1 + t * (-0.2895312e-1 + t * (0.1787654e-1 - t * 0.420059e-2));
+	return (std::exp(x) / std::sqrt(x)) * (0.39894228 + t * (-0.3988024e-1 + t * (-0.362018e-2 + t * (0.163801e-2 + t * (-0.1031555e-1 + t * tail)))));
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto besselK0(double x) -> double
+{
+	if (x <= 2.0) {
+		const double t = x * x / 4.0;
+		return (-std::log(x / 2.0) * besselI0(x)) +
+		       (-0.57721566 + t * (0.42278420 + t * (0.23069756 + t * (0.3488590e-1 + t * (0.262698e-2 + t * (0.10750e-3 + t * 0.74e-5))))));
+	}
+	const double t = 2.0 / x;
+	return (std::exp(-x) / std::sqrt(x)) *
+	       (1.25331414 + t * (-0.7832358e-1 + t * (0.2189568e-1 + t * (-0.1062446e-1 + t * (0.587872e-2 + t * (-0.251540e-2 + t * 0.53208e-3))))));
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto besselK1(double x) -> double
+{
+	if (x <= 2.0) {
+		const double t = x * x / 4.0;
+		return (std::log(x / 2.0) * besselI1(x)) +
+		       (1.0 / x) * (1.0 + t * (0.15443144 + t * (-0.67278579 + t * (-0.18156897 + t * (-0.1919402e-1 + t * (-0.110404e-2 + t * (-0.4686e-4)))))));
+	}
+	const double t = 2.0 / x;
+	return (std::exp(-x) / std::sqrt(x)) *
+	       (1.25331414 + t * (0.23498619 + t * (-0.3655620e-1 + t * (0.1504268e-1 + t * (-0.780353e-2 + t * (0.325614e-2 + t * (-0.68245e-3)))))));
+}
+
+// Inward midplane pull V_g^2/R of a thin exponential (Freeman) disk, Wang et al. (2010) eq. 29:
+// V_g^2 = 4 pi G Sigma0 Rd y^2 [I0K0 - I1K1], y = R/(2 Rd)  =>  V_g^2/R = pi G Sigma0 (R/Rd) [I0K0 - I1K1].
+// This is the disk term Arora et al. subtract from phi_dm (eq. A.5; their eq. A.2 prints V_g^2 as "phi_g").
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto freemanDiskPull(double R, double Sigma0, double Rd) -> double
+{
+	const double y = R / (2.0 * Rd);
+	if (y < 1.0e-8) {
+		return 0.0;
+	}
+	return M_PI * C::Gconst * Sigma0 * (R / Rd) * (besselI0(y) * besselK0(y) - besselI1(y) * besselK1(y));
+}
+
+// Inward midplane pull of a thin disk with the modified profile of surfaceDensityProfile. Expanding
+// exp(-beta e^{-alpha x}) = sum_n (-beta)^n / n! e^{-alpha n x} writes Sigma as a sum of exponential disks,
+// Sigma = Sigma0 sum_n c_n e^{-(1 + alpha n) R / Rd} with c_n = (-beta)^n / n!, so the pull is the same sum of
+// Freeman terms. Exact for the thin disk up to the truncation at eq_pull_terms.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto surfaceDensityPull(double R, double Sigma0, double Rd) -> double
+{
+	double pull = 0.0;
+	double c_n = 1.0;
+	for (int n = 0; n < eq_pull_terms; ++n) {
+		pull += freemanDiskPull(R, Sigma0 * c_n, Rd / (1.0 + alpha_profile * n));
+		c_n *= -beta_profile / static_cast<double>(n + 1);
+	}
+	return pull;
+}
+
+// psi(R, z) - psi(R, 0) for the flattened log potential psi = vc^2 / 2 ln(R^2 + Rc^2 + z^2 / q^2) of vcircAnalytic
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto haloPotentialRise(double R, double z, double vc, double Rc) -> double
+{
+	return 0.5 * vc * vc * std::log1p((z / q_flatten) * (z / q_flatten) / (R * R + Rc * Rc));
+}
+
+// Density of the solved vertical equilibrium: ln(rho) bilinear in (R, |z| / zmax(R)) from the table built by
+// solveVerticalEquilibrium, row-major [nR][nz]. Clamped at the table edges, where the density is negligible
+// (|z| = zmax is eq_zmax_scale_heights scale heights up; R = Rmax is the domain corner).
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto equilibriumDensity(const amrex::Real *lnrho, const amrex::Real *zmax, int nR, int nz, double Rmax, double R,
+								  double z) -> double
+{
+	const double fR = std::min(R / Rmax, 1.0) * (nR - 1);
+	const int i0 = std::min(static_cast<int>(fR), nR - 2);
+	const double tR = fR - i0;
+	auto row = [=](int i) -> double {
+		const double fz = std::min(std::abs(z) / zmax[i], 1.0) * (nz - 1);
+		const int j0 = std::min(static_cast<int>(fz), nz - 2);
+		const double tz = fz - j0;
+		return ((1.0 - tz) * lnrho[(i * nz) + j0]) + (tz * lnrho[(i * nz) + j0 + 1]);
+	};
+	return std::exp(((1.0 - tR) * row(i0)) + (tR * row(i0 + 1)));
+}
+
+// Linear interpolation in R of a radial table on nR points over [0, Rmax], clamped at Rmax
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpRadial(const amrex::Real *table, int nR, double Rmax, double R) -> double
+{
+	const double fR = std::min(R / Rmax, 1.0) * (nR - 1);
+	const int i0 = std::min(static_cast<int>(fR), nR - 2);
+	const double tR = fR - i0;
+	return ((1.0 - tR) * table[i0]) + (tR * table[i0 + 1]);
+}
+
+// Measured gas self-gravity g_R(R, |z|) (< 0 inward), bilinear in (R, asinh(|z| / z0)) on the table written by
+// measure_gas_pull.py: nodes R_i = i Rmax / (nR - 1), |z|_j = z0 sinh(j smax / (nz - 1)), row-major [nR][nz], clamped.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto gasPullTable(const amrex::Real *table, int nR, int nz, double Rmax, double z0, double smax, double R,
+							    double z) -> double
+{
+	const double fR = std::min(R / Rmax, 1.0) * (nR - 1);
+	const int i0 = std::min(static_cast<int>(fR), nR - 2);
+	const double tR = fR - i0;
+	const double fz = std::min(std::asinh(std::abs(z) / z0) / smax, 1.0) * (nz - 1);
+	const int j0 = std::min(static_cast<int>(fz), nz - 2);
+	const double tz = fz - j0;
+	auto at = [=](int i, int j) { return table[(i * nz) + j]; };
+	return ((1.0 - tR) * (((1.0 - tz) * at(i0, j0)) + (tz * at(i0, j0 + 1)))) + (tR * (((1.0 - tz) * at(i0 + 1, j0)) + (tz * at(i0 + 1, j0 + 1))));
+}
+
+// Read the table written by measure_gas_pull.py (two comment lines, "nR nz Rmax_cm z0_cm smax", nR * nz values)
+inline void loadGasPullTable(const std::string &path, SimulationData<MHDGalaxy> &ud)
+{
+	std::ifstream f(path);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f.is_open(), ("Cannot open gas_pull_file " + path).c_str());
+	std::string line;
+	while (f.peek() == '#' && std::getline(f, line)) {
+	}
+	f >> ud.gas_pull_nR >> ud.gas_pull_nz >> ud.gas_pull_Rmax >> ud.gas_pull_z0 >> ud.gas_pull_smax;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f && ud.gas_pull_nR >= 2 && ud.gas_pull_nz >= 2, ("Bad header in gas_pull_file " + path).c_str());
+	std::vector<amrex::Real> host(static_cast<std::size_t>(ud.gas_pull_nR) * ud.gas_pull_nz);
+	for (auto &v : host) {
+		f >> v;
+	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<bool>(f), ("gas_pull_file " + path + " has fewer values than nR * nz").c_str());
+	ud.gas_pull_device.resize(host.size());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, host.begin(), host.end(), ud.gas_pull_device.begin());
+	amrex::Gpu::synchronize();
+}
+
+// Isothermal vertical hydrostatic equilibrium at radius R (the vertical part of Wang et al. 2010), in the halo
+// potential plus the gas's own gravity in the slab approximation:
+//   cs^2 d ln(rho) / dz = -d psi / dz - d Phi_gas / dz,   d Phi_gas / dz = 4 pi G M(z),   M(z) = int_0^z rho dz'
+// so ln(rho) = ln(rho_mid) - [psi(R, z) - psi(R, 0) + Phi_gas(z)] / cs^2. rho_mid is found by bisection so that the
+// column 2 M(zmax) equals Sigma. Fills ln_rho on nz points over [0, zmax] and returns zmax.
+inline auto solveVerticalEquilibrium(double R, double Sigma, double vc, double Rc, double cs, int nz, std::vector<double> &ln_rho) -> double
+{
+	const double cs2 = cs * cs;
+	const double fourPiG = 4.0 * M_PI * C::Gconst;
+	const double H_sg = cs2 / (M_PI * C::Gconst * Sigma);			// sech^2 scale height, self-gravity only
+	const double h_halo = q_flatten * std::sqrt((R * R) + (Rc * Rc)) * cs / vc; // Gaussian width, halo only
+	const double zmax = eq_zmax_scale_heights * std::min(H_sg, h_halo);
+	const double h = zmax / (nz - 1) / eq_rk4_substeps;
+
+	// RK4 on (Phi_gas, M) from the midplane; returns the column and optionally stores ln(rho)
+	auto column = [&](double ln_rho_mid, bool store) -> double {
+		auto rho_at = [&](double z, double phi) { return std::exp(ln_rho_mid - ((haloPotentialRise(R, z, vc, Rc) + phi) / cs2)); };
+		double phi = 0.0;
+		double M = 0.0;
+		double z = 0.0;
+		if (store) {
+			ln_rho[0] = ln_rho_mid;
+		}
+		for (int j = 1; j < nz; ++j) {
+			for (int s = 0; s < eq_rk4_substeps; ++s) {
+				const double k1p = fourPiG * M;
+				const double k1m = rho_at(z, phi);
+				const double k2p = fourPiG * (M + (0.5 * h * k1m));
+				const double k2m = rho_at(z + (0.5 * h), phi + (0.5 * h * k1p));
+				const double k3p = fourPiG * (M + (0.5 * h * k2m));
+				const double k3m = rho_at(z + (0.5 * h), phi + (0.5 * h * k2p));
+				const double k4p = fourPiG * (M + (h * k3m));
+				const double k4m = rho_at(z + h, phi + (h * k3p));
+				phi += h / 6.0 * (k1p + (2.0 * k2p) + (2.0 * k3p) + k4p);
+				M += h / 6.0 * (k1m + (2.0 * k2m) + (2.0 * k3m) + k4m);
+				z += h;
+			}
+			if (store) {
+				ln_rho[j] = ln_rho_mid - ((haloPotentialRise(R, z, vc, Rc) + phi) / cs2);
+			}
+		}
+		return 2.0 * M;
+	};
+
+	// Each force alone gives a lower midplane density than both together, and their sum an upper bound
+	const double rho_sg = M_PI * C::Gconst * Sigma * Sigma / (2.0 * cs2);
+	const double rho_halo = Sigma / (std::sqrt(2.0 * M_PI) * h_halo);
+	double lo = std::log(0.5 * std::max(rho_sg, rho_halo));
+	double hi = std::log(2.0 * (rho_sg + rho_halo));
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(column(lo, false) < Sigma && column(hi, false) > Sigma, "vertical equilibrium: rho_mid bracket failed");
+	for (int it = 0; it < eq_bisection_steps; ++it) {
+		const double mid = 0.5 * (lo + hi);
+		(column(mid, false) < Sigma ? lo : hi) = mid;
+	}
+	column(0.5 * (lo + hi), true);
+	return zmax;
 }
 
 // 1D and 2D Interpolation Operators for Cylindrical A_phi Evaluation
@@ -433,6 +658,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	pp.query("T_disk", userData_.T_disk);
 	pp.query("T_cgm", userData_.T_cgm);
 	pp.get("Q_mean", userData_.Q_mean);
+	pp.query("subtract_disk_gravity", userData_.subtract_disk_gravity);
+	pp.query("vertical_equilibrium_solve", userData_.vertical_equilibrium_solve);
+	pp.query("rotation_on_cylinders", userData_.rotation_on_cylinders);
 	pp.get("sn_jeans_J", userData_.sn_jeans_J);
 	pp.get("sn_momentum", userData_.sn_momentum);
 	pp.get("star_formation_efficiency", userData_.star_formation_efficiency);
@@ -479,6 +707,21 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	}
 	const double vc = userData_.vc;
 
+	// Magnetic pressure in the initial equilibrium (cf. Arora et al.): approximate the Lorentz force by the
+	// gradient of a magnetic pressure at uniform plasma beta, P_mag = P_th / beta, with the same beta
+	// definition as the seed normalisation below, beta = (rho cs^2 / gamma) / (B^2 / 2). Then the total
+	// pressure is rho cs_eq^2 with cs_eq^2 = cs^2 (1 + 1 / (gamma beta)), which replaces cs^2 in the vertical
+	// structure and the radial pressure term. Tension is neglected. Note the random A_phi seed is not
+	// B ~ sqrt(rho), so this matches its actual magnetic pressure only on average.
+	int magnetic_pressure_balance = 0;
+	pp.query("magnetic_pressure_balance", magnetic_pressure_balance);
+	userData_.cs_eq = userData_.cs_disk;
+	if (magnetic_pressure_balance != 0) {
+		userData_.cs_eq = userData_.cs_disk * std::sqrt(1.0 + 1.0 / (gamma * target_beta_seed));
+	}
+	amrex::Print() << "Equilibrium sound speed cs_eq = " << userData_.cs_eq / 1.0e5 << " km/s (thermal cs_disk = " << userData_.cs_disk / 1.0e5
+		       << " km/s, magnetic pressure " << (magnetic_pressure_balance != 0 ? "included" : "not included") << ")\n";
+
 	const double Rc = userData_.Rc;
 	const double Rd = userData_.Rd;
 	const double Rmax = userData_.Rmax;
@@ -497,6 +740,87 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
 	userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm); // rho_cgm such that equal pressure at boundary (~3.54e-32)
 	userData_.rho_cgm = std::max(userData_.rho_cgm, dustDensityFloor_);	      // cgm density is at least the density floor
+
+	// Vertical equilibrium table: solve each column so that it holds exactly Sigma(R), in the same forces the run
+	// applies (full halo g_z plus live self-gravity), out to the domain corner. Every rank builds the same table.
+	std::vector<double> ln_rho_mid(eq_table_nR, 0.0);
+	if (userData_.vertical_equilibrium_solve != 0) {
+		const auto lo = geom[0].ProbLoArray();
+		const auto hi = geom[0].ProbHiArray();
+		const double Rx = std::max(std::abs(lo[0]), std::abs(hi[0]));
+		const double Ry = std::max(std::abs(lo[1]), std::abs(hi[1]));
+		userData_.eq_Rmax = std::sqrt((Rx * Rx) + (Ry * Ry));
+		const double eq_Rmax = userData_.eq_Rmax;
+		const double dR = eq_Rmax / (eq_table_nR - 1);
+
+		std::vector<amrex::Real> lnrho_host(static_cast<std::size_t>(eq_table_nR) * eq_table_nz);
+		std::vector<amrex::Real> zmax_host(eq_table_nR);
+		std::vector<amrex::Real> dlnrho_host(eq_table_nR);
+		std::vector<double> ln_rho_col(eq_table_nz);
+		for (int i = 0; i < eq_table_nR; ++i) {
+			const double R = i * dR;
+			const double Sigma = surfaceDensityProfile(R, Rc, Rd, userData_.Sigma0);
+			zmax_host[i] = solveVerticalEquilibrium(R, Sigma, vc, Rc, userData_.cs_eq, eq_table_nz, ln_rho_col);
+			std::copy(ln_rho_col.begin(), ln_rho_col.end(), lnrho_host.begin() + static_cast<std::ptrdiff_t>(i) * eq_table_nz);
+			ln_rho_mid[i] = ln_rho_col[0];
+		}
+		// d ln(rho_mid) / dR: zero on the axis by symmetry, central differences inside, one-sided at the edge
+		dlnrho_host[0] = 0.0;
+		for (int i = 1; i < eq_table_nR - 1; ++i) {
+			dlnrho_host[i] = (ln_rho_mid[i + 1] - ln_rho_mid[i - 1]) / (2.0 * dR);
+		}
+		dlnrho_host[eq_table_nR - 1] = (ln_rho_mid[eq_table_nR - 1] - ln_rho_mid[eq_table_nR - 2]) / dR;
+
+		userData_.eq_lnrho_device.resize(lnrho_host.size());
+		userData_.eq_zmax_device.resize(zmax_host.size());
+		userData_.eq_dlnrho_mid_dR_device.resize(dlnrho_host.size());
+		amrex::Gpu::copy(amrex::Gpu::hostToDevice, lnrho_host.begin(), lnrho_host.end(), userData_.eq_lnrho_device.begin());
+		amrex::Gpu::copy(amrex::Gpu::hostToDevice, zmax_host.begin(), zmax_host.end(), userData_.eq_zmax_device.begin());
+		amrex::Gpu::copy(amrex::Gpu::hostToDevice, dlnrho_host.begin(), dlnrho_host.end(), userData_.eq_dlnrho_mid_dR_device.begin());
+		amrex::Gpu::synchronize();
+
+		amrex::Print() << "Vertical equilibrium solved on " << eq_table_nR << " x " << eq_table_nz << " (R < " << eq_Rmax / (1.0e3 * C::parsec)
+			       << " kpc), columns normalised to Sigma(R):\n";
+		for (const double R_kpc : {1.0, 2.0, 4.0, 8.0}) {
+			const double R = R_kpc * 1.0e3 * C::parsec;
+			const int i = static_cast<int>(std::lround(R / dR));
+			const double zmax = zmax_host[i];
+			const double dz = zmax / (eq_table_nz - 1);
+			double col = 0.0;
+			double z2 = 0.0;
+			for (int j = 0; j < eq_table_nz; ++j) {
+				const double w = (j == 0 || j == eq_table_nz - 1) ? 0.5 : 1.0;
+				const double rho = std::exp(lnrho_host[(static_cast<std::size_t>(i) * eq_table_nz) + j]);
+				col += w * rho * dz;
+				z2 += w * rho * (j * dz) * (j * dz) * dz;
+			}
+			amrex::Print() << "  R = " << R_kpc << " kpc: rho_mid = " << std::exp(ln_rho_mid[i]) << " g/cm^3, z_rms = " << std::sqrt(z2 / col) / C::parsec
+				       << " pc, column / Sigma = " << 2.0 * col / surfaceDensityProfile(i * dR, Rc, Rd, userData_.Sigma0) << "\n";
+		}
+	} else {
+		amrex::Print() << "Vertical profile: legacy sech^2 x halo factor (vertical_equilibrium_solve = 0), columns not normalised to Sigma(R)\n";
+	}
+
+	// Optional measured gas pull (measure_gas_pull.py): replaces the analytic disk pull in addStrangSplitSources
+	std::string gas_pull_file;
+	pp.query("gas_pull_file", gas_pull_file);
+	if (!gas_pull_file.empty()) {
+		loadGasPullTable(gas_pull_file, userData_);
+		amrex::Print() << "Gas self-gravity pull: measured table " << gas_pull_file << " (" << userData_.gas_pull_nR << " x " << userData_.gas_pull_nz
+			       << ", R < " << userData_.gas_pull_Rmax / (1.0e3 * C::parsec) << " kpc)\n";
+		std::vector<amrex::Real> host(userData_.gas_pull_device.size());
+		amrex::Gpu::copy(amrex::Gpu::deviceToHost, userData_.gas_pull_device.begin(), userData_.gas_pull_device.end(), host.begin());
+		for (const double R_kpc : {2.0, 4.0, 8.0}) {
+			const double R = R_kpc * 1.0e3 * C::parsec;
+			const double measured = -gasPullTable(host.data(), userData_.gas_pull_nR, userData_.gas_pull_nz, userData_.gas_pull_Rmax,
+							      userData_.gas_pull_z0, userData_.gas_pull_smax, R, 0.0);
+			amrex::Print() << "  midplane pull at R = " << R_kpc << " kpc: measured / analytic thin disk = "
+				       << measured / surfaceDensityPull(R, userData_.Sigma0, Rd) << "\n";
+		}
+	} else if (userData_.subtract_disk_gravity != 0) {
+		amrex::Print() << "Gas self-gravity pull: analytic thin disk ("
+			       << (userData_.vertical_equilibrium_solve != 0 ? "modified profile Sigma(R)" : "Freeman exponential, Sigma0") << ")\n";
+	}
 
 	//-------//
 	// A_phi // - Load 2D Cylindrical A_phi Potential Table
@@ -586,7 +910,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	// => B0_scale = B_rms * Rmax
 	{
 		const double Sigma_Rd = surfaceDensityProfile(Rd, Rc, Rd, userData_.Sigma0);
-		const double rho_mid = (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * cs_disk * cs_disk);
+		const double rho_mid = userData_.vertical_equilibrium_solve != 0
+					   ? std::exp(interpRadial(ln_rho_mid.data(), eq_table_nR, userData_.eq_Rmax, Rd))
+					   : (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * userData_.cs_eq * userData_.cs_eq);
 		userData_.rho_mid = rho_mid;
 		const double B_rms_HL = cs_disk * std::sqrt(2.0 * rho_mid / (gamma * target_beta_seed));
 		userData_.seed_B0_HL = B_rms_HL * userData_.seed_Rmax;
@@ -657,14 +983,21 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const double vc = userData_.vc;
+	const bool rotation_on_cylinders = (userData_.rotation_on_cylinders != 0);
 	const double Rc = userData_.Rc;
 	const double Rd = userData_.Rd;
 	const double Rcutoff = userData_.Rcutoff;
 	const double Sigma0 = userData_.Sigma0;
 	const double cs_disk = userData_.cs_disk;
+	const double cs_eq = userData_.cs_eq;
 	const double cs_cgm = userData_.cs_cgm;
 	const double rho_cgm = userData_.rho_cgm;
 	constexpr double gamma = quokka::EOS_Traits<MHDGalaxy>::gamma;
+
+	const bool eq_solve = (userData_.vertical_equilibrium_solve != 0);
+	const amrex::Real *eq_lnrho = userData_.eq_lnrho_device.data();
+	const amrex::Real *eq_zmax = userData_.eq_zmax_device.data();
+	const double eq_Rmax = userData_.eq_Rmax;
 
 	const double B0_scale = userData_.seed_B0_HL;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(B0_scale > 0.0, "Beta-derived seed field strength must be positive.");
@@ -756,12 +1089,18 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double z = prob_lo[2] + (k + 0.5) * dz;
 		const double R = std::sqrt(x * x + y * y + 1e-200);
 
-		const double rho_disc_raw = R < Rcutoff ? diskDensityAnalytic(R, z, Rc, Rd, Sigma0, vc, cs_disk) : 0.0;
+		double rho_disc_raw = 0.0;
+		if (R < Rcutoff) {
+			rho_disc_raw = eq_solve ? equilibriumDensity(eq_lnrho, eq_zmax, eq_table_nR, eq_table_nz, eq_Rmax, R, z)
+						: diskDensityAnalytic(R, z, Rc, Rd, Sigma0, vc, cs_eq);
+		}
 		const bool in_disk = (rho_disc_raw > rho_transition);
 		const double rho = in_disk ? amrex::max(rho_disc_raw, rho_transition * 1e-6) : rho_cgm;
 		const double cs = in_disk ? cs_disk : cs_cgm;
 
-		const double vrot = vcircAnalytic(R, 0.0, vc, Rc);
+		// An isothermal (barotropic) disk in vertical hydrostatic equilibrium rotates on cylinders: the drop of the halo's
+		// radial pull above the plane is offset by the radial pressure gradient at fixed z (Wang et al. 2010, sec. 2)
+		const double vrot = vcircAnalytic(R, rotation_on_cylinders ? 0.0 : z, vc, Rc);
 		double vx = 0.0;
 		double vy = 0.0;
 		double vz = 0.0;
@@ -1037,7 +1376,22 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const double vc = userData_.vc;
+	const bool rotation_on_cylinders = (userData_.rotation_on_cylinders != 0);
 	const double Rc = userData_.Rc;
+	const bool subtract_disk_gravity = (userData_.subtract_disk_gravity != 0);
+	const double Sigma0 = userData_.Sigma0;
+	const double Rd = userData_.Rd;
+	const double cs_eq = userData_.cs_eq;
+	const bool eq_solve = (userData_.vertical_equilibrium_solve != 0);
+	const amrex::Real *eq_dlnrho_mid_dR = userData_.eq_dlnrho_mid_dR_device.data();
+	const double eq_Rmax = userData_.eq_Rmax;
+	const bool use_pull_table = (userData_.gas_pull_nR > 0);
+	const amrex::Real *pull_table = userData_.gas_pull_device.data();
+	const int pull_nR = userData_.gas_pull_nR;
+	const int pull_nz = userData_.gas_pull_nz;
+	const double pull_Rmax = userData_.gas_pull_Rmax;
+	const double pull_z0 = userData_.gas_pull_z0;
+	const double pull_smax = userData_.gas_pull_smax;
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
@@ -1054,11 +1408,35 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 			const double pz = state(i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index);
 			const double Ekin_old = 0.5 * (px * px + py * py + pz * pz) / rho;
 
+			// -grad(psi), the flattened log potential (Arora et al. eq. A.3)
 			const double v = vcircAnalytic(R, z, vc, Rc);
-			const double g_R = -v * v / R;
+			const double g_R_halo = -v * v / R;
+			// phi_dm = psi - Phi_disk + cs^2 R/Rd (eq. A.5): add back the disk's own pull (outward) and the
+			// pressure-gradient term (inward); the live self-gravity supplies the disk's pull once
+			double g_R = g_R_halo;
+			if (subtract_disk_gravity) {
+				// add back (outward) the gas's own pull, which the live self-gravity supplies: measured from a
+				// t = 0 snapshot at this (R, |z|) if a table is given, else the thin-disk pull at the midplane --
+				// of the gas actually set up (columns hold Sigma(R)) or, legacy, of a Sigma0 exponential
+				double disk_pull = 0.0;
+				// (rotation_on_cylinders: the midplane pull at every z, so halo + live gravity + pressure balance v_phi(R, 0))
+				if (use_pull_table) {
+					disk_pull = -gasPullTable(pull_table, pull_nR, pull_nz, pull_Rmax, pull_z0, pull_smax, R, rotation_on_cylinders ? 0.0 : z);
+				} else if (eq_solve) {
+					disk_pull = surfaceDensityPull(R, Sigma0, Rd);
+				} else {
+					disk_pull = freemanDiskPull(R, Sigma0, Rd);
+				}
+				// remove the pressure support: cs^2 d ln(rho_mid)/dR (< 0, inward) of the solved profile, or an
+				// exponential's -cs^2/Rd
+				const double pressure_term =
+				    eq_solve ? cs_eq * cs_eq * interpRadial(eq_dlnrho_mid_dR, eq_table_nR, eq_Rmax, R) : -cs_eq * cs_eq / Rd;
+				g_R += disk_pull + pressure_term;
+			}
 			const double gx = g_R * x / R;
 			const double gy = g_R * y / R;
-			const double gz = g_R * z / R / (q_flatten * q_flatten);
+			const double gz = g_R_halo * z / R / (q_flatten * q_flatten); // vertical force unchanged
+
 
 			const double px_new = px + dt_lev * rho * gx;
 			const double py_new = py + dt_lev * rho * gy;
@@ -1619,6 +1997,94 @@ void QuokkaSimulation<MHDGalaxy>::ComputeDerivedVar(int lev, std::string const &
 template <> auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics() -> std::map<std::string, amrex::Real>
 {
 	std::map<std::string, amrex::Real> stats;
+
+	// One-time check of the measured gas-pull table (mhd_galaxy.gas_pull_file) against this run's own gravity.
+	// The first statistics call comes right after the initial Poisson solve, so phi is the live gas potential of
+	// the initial disk. A table measured from a different setup (disk, cs, vc, grid, refinement) fails here.
+	static bool gas_pull_checked = false;
+	if (!gas_pull_checked && userData_.gas_pull_nR > 0) {
+		gas_pull_checked = true;
+		if (tNew_[0] > 0.0) {
+			amrex::Print() << "Gas pull table check skipped: restart at t > 0, the disk has evolved since the table's snapshot\n";
+		} else {
+			const amrex::Real *pull_table = userData_.gas_pull_device.data();
+			const int pull_nR = userData_.gas_pull_nR;
+			const int pull_nz = userData_.gas_pull_nz;
+			const double pull_Rmax = userData_.gas_pull_Rmax;
+			const double pull_z0 = userData_.gas_pull_z0;
+			const double pull_smax = userData_.gas_pull_smax;
+			const double Sigma0 = userData_.Sigma0;
+			const double Rd = userData_.Rd;
+			const amrex::Real R_lo = 0.5 * 1.0e3 * C::parsec;
+			const amrex::Real R_hi = 12.0 * 1.0e3 * C::parsec;
+			// mass-weighted: sum m (g_tab - g)^2, sum m g^2, sum m (g_tab - g), sum m |g|, and the same first two for
+			// the analytic midplane pull, for reference
+			std::array<amrex::Real, 6> sums{};
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				const auto prob_lo = geom[lev].ProbLoArray();
+				const auto dx = geom[lev].CellSizeArray();
+				const amrex::Real vol = dx[0] * dx[1] * dx[2];
+				const int ng = phi[lev].nGrow();
+				amrex::iMultiFab mask(state_new_cc_[lev].boxArray(), state_new_cc_[lev].DistributionMap(), 1, 0);
+				if (lev < finest_level) {
+					mask = amrex::makeFineMask(state_new_cc_[lev].boxArray(), state_new_cc_[lev].DistributionMap(),
+								   state_new_cc_[lev + 1].boxArray(), refRatio(lev), 1, 0);
+				} else {
+					mask.setVal(1);
+				}
+				auto const &mask_arrs = mask.const_arrays();
+				auto const &state_arrs = state_new_cc_[lev].const_arrays();
+				auto const &phi_arrs = phi[lev].const_arrays();
+				auto r = amrex::ParReduce(
+				    amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
+						    amrex::ReduceOpSum>{},
+				    amrex::TypeList<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real>{}, state_new_cc_[lev],
+				    amrex::IntVect(0), 1,
+				    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int /*n*/) noexcept
+				    -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+					    auto const &p = phi_arrs[bx];
+					    // central differences only where both neighbours are valid cells of this box (no ghost cells needed)
+					    const bool interior = i - 1 >= p.begin[0] + ng && i + 1 < p.end[0] - ng && j - 1 >= p.begin[1] + ng &&
+								  j + 1 < p.end[1] - ng && k - 1 >= p.begin[2] + ng && k + 1 < p.end[2] - ng;
+					    const amrex::Real rho = state_arrs[bx](i, j, k, HydroSystem<MHDGalaxy>::density_index);
+					    const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+					    const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+					    const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
+					    const amrex::Real R = std::sqrt(x * x + y * y);
+					    if (mask_arrs[bx](i, j, k) == 0 || !interior || rho <= rho_transition || R < R_lo || R > R_hi) {
+						    return {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+					    }
+					    const amrex::Real gx = -0.5 * (p(i + 1, j, k) - p(i - 1, j, k)) / dx[0];
+					    const amrex::Real gy = -0.5 * (p(i, j + 1, k) - p(i, j - 1, k)) / dx[1];
+					    const amrex::Real g = (x * gx + y * gy) / R; // live g_R, < 0 inward
+					    const amrex::Real d = gasPullTable(pull_table, pull_nR, pull_nz, pull_Rmax, pull_z0, pull_smax, R, z) - g;
+					    const amrex::Real d_ana = -surfaceDensityPull(R, Sigma0, Rd) - g;
+					    const amrex::Real m = rho * vol;
+					    return {m * d * d, m * g * g, m * d, m * std::abs(g), m * d_ana * d_ana, 0.0};
+				    });
+				sums[0] += amrex::get<0>(r);
+				sums[1] += amrex::get<1>(r);
+				sums[2] += amrex::get<2>(r);
+				sums[3] += amrex::get<3>(r);
+				sums[4] += amrex::get<4>(r);
+			}
+			amrex::ParallelAllReduce::Sum(sums.data(), static_cast<int>(sums.size()), amrex::ParallelContext::CommunicatorSub());
+			const amrex::Real rms = (sums[1] > 0.0) ? std::sqrt(sums[0] / sums[1]) : 0.0;
+			const amrex::Real bias = (sums[3] > 0.0) ? sums[2] / sums[3] : 0.0;
+			const amrex::Real rms_ana = (sums[1] > 0.0) ? std::sqrt(sums[4] / sums[1]) : 0.0;
+			amrex::Real tolerance = 0.03;
+			amrex::ParmParse const pp("mhd_galaxy");
+			pp.query("gas_pull_tolerance", tolerance);
+			amrex::Print() << "Gas pull table check against the live gravity (disk gas, 0.5 < R < 12 kpc, mass-weighted): rms error = " << 100.0 * rms
+				       << "%, bias = " << 100.0 * bias << "% (analytic midplane pull would be " << 100.0 * rms_ana << "% rms); tolerance "
+				       << 100.0 * tolerance << "%\n";
+			if (rms > tolerance) {
+				amrex::Abort("gas_pull_file does not match this run's gravity (rms error above mhd_galaxy.gas_pull_tolerance): it was measured "
+					     "from a different setup. Regenerate it with measure_gas_pull.py from a t = 0 snapshot of this setup, or unset "
+					     "mhd_galaxy.gas_pull_file to use the analytic pull.");
+			}
+		}
+	}
 	const amrex::Real R_min = 2.0 * 1.0e3 * C::parsec;
 	const amrex::Real R_max = 8.0 * 1.0e3 * C::parsec;
 	const amrex::Real z_max = 0.5 * 1.0e3 * C::parsec;
@@ -1789,6 +2255,73 @@ template <> auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics() -> std::map<st
 	stats["divB_rms_normalized"] = (divB_sums[2] > 0.0) ? std::sqrt(divB_sums[1] / divB_sums[2]) : static_cast<amrex::Real>(0.0);
 	stats["sn_count_cumulative"] = static_cast<amrex::Real>(sn_count_cumulative_);
 	stats["sn_trigger_count_cumulative"] = static_cast<amrex::Real>(userData_.sn_trigger_count_cumulative);
+
+	// --- Equilibrium diagnostics: mass-weighted kinematics and shape of the disk gas in
+	//     R_eq_min <= R <= R_max. A disk in rotational + hydrostatic balance keeps vR, vz ~ 0
+	//     and z_rms, R_mean fixed; drifts in these measure the gravity/rotation imbalance. ---
+	const amrex::Real R_eq_min = 1.0 * 1.0e3 * C::parsec; // excludes the axis, where 1/R terms are noisy
+	std::array<amrex::Real, 7> eq_sums{}; // M, M vR, M vR^2, M vz^2, M vphi, M z^2, M R
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		const auto prob_lo = geom[lev].ProbLoArray();
+		const auto dx = geom[lev].CellSizeArray();
+		const amrex::Real vol = dx[0] * dx[1] * dx[2];
+
+		amrex::iMultiFab mask(state_new_cc_[lev].boxArray(), state_new_cc_[lev].DistributionMap(), 1, 0);
+		if (lev < finest_level) {
+			mask = amrex::makeFineMask(state_new_cc_[lev].boxArray(), state_new_cc_[lev].DistributionMap(), state_new_cc_[lev + 1].boxArray(),
+						   refRatio(lev), 1, 0);
+		} else {
+			mask.setVal(1);
+		}
+		auto const &mask_arrs = mask.const_arrays();
+		auto const &state_arrs = state_new_cc_[lev].const_arrays();
+
+		auto level_result =
+		    amrex::ParReduce(amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
+						     amrex::ReduceOpSum, amrex::ReduceOpSum>{},
+				     amrex::TypeList<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real>{},
+				     state_new_cc_[lev], amrex::IntVect(0), 1,
+				     [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int /*n*/) noexcept
+					 -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+					     if (mask_arrs[bx](i, j, k) == 0) {
+						     return {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+					     }
+					     const amrex::Real rho = state_arrs[bx](i, j, k, HydroSystem<MHDGalaxy>::density_index);
+					     const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+					     const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+					     const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
+					     const amrex::Real R = std::sqrt(x * x + y * y);
+					     if (rho <= rho_transition || R < R_eq_min || R > R_max) {
+						     return {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+					     }
+					     const amrex::Real vx = state_arrs[bx](i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index) / rho;
+					     const amrex::Real vy = state_arrs[bx](i, j, k, HydroSystem<MHDGalaxy>::x2Momentum_index) / rho;
+					     const amrex::Real vz = state_arrs[bx](i, j, k, HydroSystem<MHDGalaxy>::x3Momentum_index) / rho;
+					     const amrex::Real vR = (vx * x + vy * y) / R;
+					     const amrex::Real vphi = (-vx * y + vy * x) / R;
+					     const amrex::Real m = rho * vol;
+					     return {m, m * vR, m * vR * vR, m * vz * vz, m * vphi, m * z * z, m * R};
+				     });
+		eq_sums[0] += amrex::get<0>(level_result);
+		eq_sums[1] += amrex::get<1>(level_result);
+		eq_sums[2] += amrex::get<2>(level_result);
+		eq_sums[3] += amrex::get<3>(level_result);
+		eq_sums[4] += amrex::get<4>(level_result);
+		eq_sums[5] += amrex::get<5>(level_result);
+		eq_sums[6] += amrex::get<6>(level_result);
+	}
+	amrex::ParallelAllReduce::Sum(eq_sums.data(), static_cast<int>(eq_sums.size()), amrex::ParallelContext::CommunicatorSub());
+
+	const amrex::Real eq_mass = eq_sums[0];
+	const amrex::Real eq_inv_mass = (eq_mass > 0.0) ? 1.0 / eq_mass : 0.0;
+	constexpr amrex::Real km_s = 1.0e5;
+	stats["eq_disk_mass"] = eq_mass / C::M_solar;					  // Msun
+	stats["eq_vR_mean"] = eq_sums[1] * eq_inv_mass / km_s;				  // km/s, net inflow (<0) / outflow (>0)
+	stats["eq_vR_rms"] = std::sqrt(eq_sums[2] * eq_inv_mass) / km_s;		  // km/s
+	stats["eq_vz_rms"] = std::sqrt(eq_sums[3] * eq_inv_mass) / km_s;		  // km/s
+	stats["eq_vphi_mean"] = eq_sums[4] * eq_inv_mass / km_s;			  // km/s
+	stats["eq_z_rms"] = std::sqrt(eq_sums[5] * eq_inv_mass) / C::parsec;		  // pc, vertical thickness
+	stats["eq_R_mean"] = eq_sums[6] * eq_inv_mass / (1.0e3 * C::parsec);		  // kpc, radial redistribution
 	return stats;
 }
 
