@@ -1,0 +1,75 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+# Box is [-10 kpc, 10 kpc] x [-10 kpc, 10 kpc] x [-10 kpc, 10 kpc]
+geometry.prob_lo     = [-3.0856775814913674e22, -3.0856775814913674e22, -3.0856775814913674e22]
+geometry.prob_hi     = [3.0856775814913674e22, 3.0856775814913674e22, 3.0856775814913674e22]
+geometry.is_periodic = [0, 0, 0]
+amr.v = 2
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [256, 256, 256]
+amr.blocking_factor_x = 128
+amr.blocking_factor_y = 128
+amr.blocking_factor_z = 16
+amr.max_grid_size   = 256
+amr.max_level       = 3
+amr.n_error_buf     = 2
+amr.grid_eff        = 0.75
+regrid_interval     = -1
+do_reflux           = 1
+do_subcycle         = 0
+plotfile_prefix = "tests/plt/hddisk_Q1_plt"
+checkpoint_prefix = "tests/chk/hddisk_Q1_chk"
+statistics_prefix = "tests/hddiskstats_Q1.txt"
+statistics_interval = 1
+density_floor = 1.0e-32
+# *****************************************************************
+# Time integration
+# *****************************************************************
+cfl                 = 0.3
+max_timesteps       = 1e10
+stop_time           = 2.9652e15   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s
+# *****************************************************************
+# Output
+# *****************************************************************
+checkpoint_interval = 16000
+plotfile_interval   = 8000
+derived_vars        = ["gpot", "pressure", "radius_sph", "radial_velocity", "circular_velocity", "mach"]
+# *****************************************************************
+# Physics
+# *****************************************************************
+poisson_supercycle_interval = 5
+# *****************************************************************
+# Problem parameters (Table 1, Q1_M29)
+# *****************************************************************
+hd_galaxy.Q_mean    = 0.96
+hd_galaxy.Mc        = 28.6
+hd_galaxy.sn_jeans_J              = 4.0
+hd_galaxy.sn_remnant_fraction     = 0.5
+hd_galaxy.sn_momentum             = 3.0e3
+
+hd_galaxy.turb_vx_file = "tests/input/vx_1.bin"
+hd_galaxy.turb_vy_file = "tests/input/vy_1.bin"
+hd_galaxy.turb_vz_file = "tests/input/vz_1.bin"
+
+quokka.diagnostics = ["proj_z", "proj_x", "proj_y"]
+
+quokka.proj_z.type = "ProjectionPlot"
+quokka.proj_z.file = "tests/projz_plt"
+quokka.proj_z.int = 800
+quokka.proj_z.normal = 2
+quokka.proj_z.field_names = ["gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "radial_velocity", "circular_velocity"]
+
+quokka.proj_x.type = "ProjectionPlot"
+quokka.proj_x.file = "tests/projx_plt"
+quokka.proj_x.int = 800
+quokka.proj_x.normal = 0
+quokka.proj_x.field_names = ["gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "radial_velocity", "circular_velocity"]
+
+quokka.proj_y.type = "ProjectionPlot"
+quokka.proj_y.file = "tests/projy_plt"
+quokka.proj_y.int = 800
+quokka.proj_y.normal = 1
+quokka.proj_y.field_names = ["gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "radial_velocity", "circular_velocity"]
