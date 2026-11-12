@@ -48,12 +48,12 @@ constexpr int omega_subsamples = 4;		// n_sub per dimension for boundary-cell ov
 constexpr int initial_condition_subsamples = 4; // per dimension samples. 4 means 4³ samples
 constexpr int refine_grid_subsamples = 4;	// per dimension samples. 4 means 4³ samples
 
-constexpr int eq_table_nR = 512;		  // radii in the vertical-equilibrium table, R = 0 .. domain corner
-constexpr int eq_table_nz = 512;		  // heights per radius, |z| = 0 .. zmax(R)
+constexpr int eq_table_nR = 512;	       // radii in the vertical-equilibrium table, R = 0 .. domain corner
+constexpr int eq_table_nz = 512;	       // heights per radius, |z| = 0 .. zmax(R)
 constexpr double eq_zmax_scale_heights = 30.0; // zmax(R) in units of the smaller of the self-gravity and halo scale heights
-constexpr int eq_rk4_substeps = 2;		  // RK4 steps per table interval
-constexpr int eq_bisection_steps = 40;		  // bisection on ln(rho_mid); the bracket is < 2 e-folds wide
-constexpr int eq_pull_terms = 12;		  // terms of the exponential-sum disk pull, |c_n| < 1e-12 after 12
+constexpr int eq_rk4_substeps = 2;	       // RK4 steps per table interval
+constexpr int eq_bisection_steps = 40;	       // bisection on ln(rho_mid); the bracket is < 2 e-folds wide
+constexpr int eq_pull_terms = 12;	       // terms of the exponential-sum disk pull, |c_n| < 1e-12 after 12
 } // namespace
 
 struct MHDGalaxy {};
@@ -94,12 +94,12 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real vc = NAN; // the other will be calculated
 	amrex::Real Sigma0;
 	int subtract_disk_gravity = 0;
-	int vertical_equilibrium_solve = 1; // 1: solved vertical equilibrium + modified-profile disk pull; 0: legacy sech^2 x halo + Freeman
+	int vertical_equilibrium_solve = 1;		 // 1: solved vertical equilibrium + modified-profile disk pull; 0: legacy sech^2 x halo + Freeman
 	amrex::Real seed_field_disk_taper_decades = 0.0; // > 0: confine the seed field to the disk, see seedFieldDiskEnvelope
-	int rotation_on_cylinders = 0; // 1: disk rotates at the midplane v_phi(R) at every z, with the gas pull subtracted at the midplane
-	amrex::Real eq_Rmax{};		     // [cm] outer radius of the equilibrium tables (domain corner)
-	amrex::Gpu::DeviceVector<amrex::Real> eq_lnrho_device;	     // ln(rho) [eq_table_nR][eq_table_nz], see equilibriumDensity
-	amrex::Gpu::DeviceVector<amrex::Real> eq_zmax_device;	     // [cm] table height per radius
+	int rotation_on_cylinders = 0;			 // 1: disk rotates at the midplane v_phi(R) at every z, with the gas pull subtracted at the midplane
+	amrex::Real eq_Rmax{};				 // [cm] outer radius of the equilibrium tables (domain corner)
+	amrex::Gpu::DeviceVector<amrex::Real> eq_lnrho_device;	       // ln(rho) [eq_table_nR][eq_table_nz], see equilibriumDensity
+	amrex::Gpu::DeviceVector<amrex::Real> eq_zmax_device;	       // [cm] table height per radius
 	amrex::Gpu::DeviceVector<amrex::Real> eq_dlnrho_mid_dR_device; // [1/cm] d ln(rho_mid) / dR per radius
 	// measured gas self-gravity g_R(R, |z|) from measure_gas_pull.py (mhd_galaxy.gas_pull_file), see gasPullTable
 	amrex::Gpu::DeviceVector<amrex::Real> gas_pull_device;
@@ -132,7 +132,7 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real star_formation_efficiency;
 	amrex::Real sn_cluster_momentum_exponent;
 	amrex::Real sn_mass_per_event_msun;
-	amrex::Real sn_start_time = 0.0; // [s] no SN feedback before this simulation time
+	amrex::Real sn_start_time = 0.0;	     // [s] no SN feedback before this simulation time
 	amrex::Long sn_trigger_count_cumulative = 0; // cumulative no. of cells that crossed the Jeans trigger
 						     // (secondary diagnostic only; not checkpoint-persistent)
 
@@ -147,7 +147,7 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Gpu::DeviceVector<amrex::Real> turb_vy_device;
 	amrex::Gpu::DeviceVector<amrex::Real> turb_vz_device;
 	amrex::Real turb_rescale_factor{};
-	amrex::Real turb_box = 0.0; // [cm] side of the periodic turbulence tile; 0 = stretch the cube over the whole domain
+	amrex::Real turb_box = 0.0;		     // [cm] side of the periodic turbulence tile; 0 = stretch the cube over the whole domain
 	amrex::Vector<amrex::Real> turb_level_boost; // per-level factor offsetting the subcell-averaging loss (1 = off)
 
 	int turb_nx{};
@@ -216,8 +216,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto besselI0(double x) -> double
 	}
 	const double t = 3.75 / x;
 	return (std::exp(x) / std::sqrt(x)) *
-	       (0.39894228 + t * (0.1328592e-1 + t * (0.225319e-2 + t * (-0.157565e-2 + t * (0.916281e-2 + t * (-0.2057706e-1 +
-		t * (0.2635537e-1 + t * (-0.1647633e-1 + t * 0.392377e-2))))))));
+	       (0.39894228 +
+		t * (0.1328592e-1 +
+		     t * (0.225319e-2 +
+			  t * (-0.157565e-2 + t * (0.916281e-2 + t * (-0.2057706e-1 + t * (0.2635537e-1 + t * (-0.1647633e-1 + t * 0.392377e-2))))))));
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto besselI1(double x) -> double
@@ -248,7 +250,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto besselK1(double x) -> double
 	if (x <= 2.0) {
 		const double t = x * x / 4.0;
 		return (std::log(x / 2.0) * besselI1(x)) +
-		       (1.0 / x) * (1.0 + t * (0.15443144 + t * (-0.67278579 + t * (-0.18156897 + t * (-0.1919402e-1 + t * (-0.110404e-2 + t * (-0.4686e-4)))))));
+		       (1.0 / x) *
+			   (1.0 + t * (0.15443144 + t * (-0.67278579 + t * (-0.18156897 + t * (-0.1919402e-1 + t * (-0.110404e-2 + t * (-0.4686e-4)))))));
 	}
 	const double t = 2.0 / x;
 	return (std::exp(-x) / std::sqrt(x)) *
@@ -308,7 +311,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto seedFieldDiskEnvelope(double rho_d
 // solveVerticalEquilibrium, row-major [nR][nz]. Clamped at the table edges, where the density is negligible
 // (|z| = zmax is eq_zmax_scale_heights scale heights up; R = Rmax is the domain corner).
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto equilibriumDensity(const amrex::Real *lnrho, const amrex::Real *zmax, int nR, int nz, double Rmax, double R,
-								  double z) -> double
+								 double z) -> double
 {
 	const double fR = std::min(R / Rmax, 1.0) * (nR - 1);
 	const int i0 = std::min(static_cast<int>(fR), nR - 2);
@@ -333,8 +336,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpRadial(const amrex::Real *ta
 
 // Measured gas self-gravity g_R(R, |z|) (< 0 inward), bilinear in (R, asinh(|z| / z0)) on the table written by
 // measure_gas_pull.py: nodes R_i = i Rmax / (nR - 1), |z|_j = z0 sinh(j smax / (nz - 1)), row-major [nR][nz], clamped.
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto gasPullTable(const amrex::Real *table, int nR, int nz, double Rmax, double z0, double smax, double R,
-							    double z) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto gasPullTable(const amrex::Real *table, int nR, int nz, double Rmax, double z0, double smax, double R, double z)
+    -> double
 {
 	const double fR = std::min(R / Rmax, 1.0) * (nR - 1);
 	const int i0 = std::min(static_cast<int>(fR), nR - 2);
@@ -375,7 +378,7 @@ inline auto solveVerticalEquilibrium(double R, double Sigma, double vc, double R
 {
 	const double cs2 = cs * cs;
 	const double fourPiG = 4.0 * M_PI * C::Gconst;
-	const double H_sg = cs2 / (M_PI * C::Gconst * Sigma);			// sech^2 scale height, self-gravity only
+	const double H_sg = cs2 / (M_PI * C::Gconst * Sigma);			    // sech^2 scale height, self-gravity only
 	const double h_halo = q_flatten * std::sqrt((R * R) + (Rc * Rc)) * cs / vc; // Gaussian width, halo only
 	const double zmax = eq_zmax_scale_heights * std::min(H_sg, h_halo);
 	const double h = zmax / (nz - 1) / eq_rk4_substeps;
@@ -624,29 +627,29 @@ inline auto turbulenceAveragingLoss(const amrex::Real *turb_vx, const amrex::Rea
 	amrex::ReduceData<amrex::Real, amrex::Real> reduce_data(reduce_op);
 	using ReduceTuple = typename decltype(reduce_data)::Type;
 	reduce_op.eval(sample_box, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept -> ReduceTuple {
-		    amrex::Real point_sq = 0.0;
-		    amrex::Real mean_x = 0.0;
-		    amrex::Real mean_y = 0.0;
-		    amrex::Real mean_z = 0.0;
-		    for (int a = 0; a < subsample; ++a) {
-			    for (int b = 0; b < subsample; ++b) {
-				    for (int c = 0; c < subsample; ++c) {
-					    // same subcell-centre positions as sampleSubcell, in units of the cube spacing
-					    const amrex::Real tx = (subsample * i + a + 0.5) * (dx_cell[0] / subsample) / turb_d[0];
-					    const amrex::Real ty = (subsample * j + b + 0.5) * (dx_cell[1] / subsample) / turb_d[1];
-					    const amrex::Real tz = (subsample * k + c + 0.5) * (dx_cell[2] / subsample) / turb_d[2];
-					    const amrex::Real vx = interpolate_turbulence(turb_vx, turb_n, turb_n, turb_n, tx, ty, tz, periodic);
-					    const amrex::Real vy = interpolate_turbulence(turb_vy, turb_n, turb_n, turb_n, tx, ty, tz, periodic);
-					    const amrex::Real vz = interpolate_turbulence(turb_vz, turb_n, turb_n, turb_n, tx, ty, tz, periodic);
-					    point_sq += (vx * vx + vy * vy + vz * vz) * inv_nsub;
-					    mean_x += vx * inv_nsub;
-					    mean_y += vy * inv_nsub;
-					    mean_z += vz * inv_nsub;
-				    }
-			    }
-		    }
-		    return {point_sq, mean_x * mean_x + mean_y * mean_y + mean_z * mean_z};
-	    });
+		amrex::Real point_sq = 0.0;
+		amrex::Real mean_x = 0.0;
+		amrex::Real mean_y = 0.0;
+		amrex::Real mean_z = 0.0;
+		for (int a = 0; a < subsample; ++a) {
+			for (int b = 0; b < subsample; ++b) {
+				for (int c = 0; c < subsample; ++c) {
+					// same subcell-centre positions as sampleSubcell, in units of the cube spacing
+					const amrex::Real tx = (subsample * i + a + 0.5) * (dx_cell[0] / subsample) / turb_d[0];
+					const amrex::Real ty = (subsample * j + b + 0.5) * (dx_cell[1] / subsample) / turb_d[1];
+					const amrex::Real tz = (subsample * k + c + 0.5) * (dx_cell[2] / subsample) / turb_d[2];
+					const amrex::Real vx = interpolate_turbulence(turb_vx, turb_n, turb_n, turb_n, tx, ty, tz, periodic);
+					const amrex::Real vy = interpolate_turbulence(turb_vy, turb_n, turb_n, turb_n, tx, ty, tz, periodic);
+					const amrex::Real vz = interpolate_turbulence(turb_vz, turb_n, turb_n, turb_n, tx, ty, tz, periodic);
+					point_sq += (vx * vx + vy * vy + vz * vz) * inv_nsub;
+					mean_x += vx * inv_nsub;
+					mean_y += vy * inv_nsub;
+					mean_z += vz * inv_nsub;
+				}
+			}
+		}
+		return {point_sq, mean_x * mean_x + mean_y * mean_y + mean_z * mean_z};
+	});
 	const ReduceTuple sums = reduce_data.value();
 	const amrex::Real point_ms = amrex::get<0>(sums);
 	const amrex::Real avg_ms = amrex::get<1>(sums);
@@ -818,8 +821,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		       << " km/s, magnetic pressure " << (magnetic_pressure_balance != 0 ? "included" : "not included") << ")\n";
 	pp.query("seed_field_disk_taper_decades", userData_.seed_field_disk_taper_decades);
 	if (userData_.seed_field_disk_taper_decades > 0.0) {
-		amrex::Print() << "Seed field confined to the disk: A_phi tapered from 0 at rho = " << rho_transition << " to full strength at rho = "
-			       << rho_transition * std::pow(10.0, userData_.seed_field_disk_taper_decades) << " g/cm^3\n";
+		amrex::Print() << "Seed field confined to the disk: A_phi tapered from 0 at rho = " << rho_transition
+			       << " to full strength at rho = " << rho_transition * std::pow(10.0, userData_.seed_field_disk_taper_decades) << " g/cm^3\n";
 	}
 
 	const double Rc = userData_.Rc;
@@ -894,7 +897,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 				col += w * rho * dz;
 				z2 += w * rho * (j * dz) * (j * dz) * dz;
 			}
-			amrex::Print() << "  R = " << R_kpc << " kpc: rho_mid = " << std::exp(ln_rho_mid[i]) << " g/cm^3, z_rms = " << std::sqrt(z2 / col) / C::parsec
+			amrex::Print() << "  R = " << R_kpc << " kpc: rho_mid = " << std::exp(ln_rho_mid[i])
+				       << " g/cm^3, z_rms = " << std::sqrt(z2 / col) / C::parsec
 				       << " pc, column / Sigma = " << 2.0 * col / surfaceDensityProfile(i * dR, Rc, Rd, userData_.Sigma0) << "\n";
 		}
 	} else {
@@ -914,8 +918,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			const double R = R_kpc * 1.0e3 * C::parsec;
 			const double measured = -gasPullTable(host.data(), userData_.gas_pull_nR, userData_.gas_pull_nz, userData_.gas_pull_Rmax,
 							      userData_.gas_pull_z0, userData_.gas_pull_smax, R, 0.0);
-			amrex::Print() << "  midplane pull at R = " << R_kpc << " kpc: measured / analytic thin disk = "
-				       << measured / surfaceDensityPull(R, userData_.Sigma0, Rd) << "\n";
+			amrex::Print() << "  midplane pull at R = " << R_kpc
+				       << " kpc: measured / analytic thin disk = " << measured / surfaceDensityPull(R, userData_.Sigma0, Rd) << "\n";
 		}
 	} else if (userData_.subtract_disk_gravity != 0) {
 		amrex::Print() << "Gas self-gravity pull: analytic thin disk ("
@@ -1058,7 +1062,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	}
 
 	amrex::Real turb_mach = turb_target_Mach;
-	pp.query("turb_mach", turb_mach); // 0 disables the initial turbulent velocity (e.g. for equilibrium tests)
+	pp.query("turb_mach", turb_mach);	      // 0 disables the initial turbulent velocity (e.g. for equilibrium tests)
 	pp.query("turb_box_kpc", userData_.turb_box); // > 0: tile the cube periodically with this side length
 	userData_.turb_box *= 1.0e3 * C::parsec;
 	const double turb_rescale = turb_mach * cs_disk;
@@ -1082,11 +1086,11 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		}
 		for (int lev = 0; lev <= max_level; ++lev) {
 			const amrex::Real boost =
-			    turbulenceAveragingLoss(userData_.turb_vx_device.data(), userData_.turb_vy_device.data(), userData_.turb_vz_device.data(), n, periodic,
-						    turb_d, geom[lev].CellSizeArray(), initial_condition_subsamples);
+			    turbulenceAveragingLoss(userData_.turb_vx_device.data(), userData_.turb_vy_device.data(), userData_.turb_vz_device.data(), n,
+						    periodic, turb_d, geom[lev].CellSizeArray(), initial_condition_subsamples);
 			userData_.turb_level_boost[lev] = std::min(boost, turb_max_boost);
-			amrex::Print() << "Turbulence boost on level " << lev << " (dx = " << geom[lev].CellSize(0) / C::parsec
-				       << " pc): x" << userData_.turb_level_boost[lev] << " to offset subcell averaging";
+			amrex::Print() << "Turbulence boost on level " << lev << " (dx = " << geom[lev].CellSize(0) / C::parsec << " pc): x"
+				       << userData_.turb_level_boost[lev] << " to offset subcell averaging";
 			if (boost > turb_max_boost) {
 				amrex::Print() << " (capped by turb_max_boost; full offset would be x" << boost << ")";
 			}
@@ -1100,8 +1104,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 		       << " vz = " << turb_vz_file << "\n"
 		       << " cube size = " << userData_.turb_nx << " x " << userData_.turb_ny << " x " << userData_.turb_nz << "\n"
 		       << "Velocity scale = " << turb_rescale / 1.0e5 << " km/s\n"
-		       << "Turbulence tile = " << (userData_.turb_box > 0.0 ? std::to_string(userData_.turb_box / (1.0e3 * C::parsec)) + " kpc (periodic)" : "whole domain")
-		       << "\n";
+		       << "Turbulence tile = "
+		       << (userData_.turb_box > 0.0 ? std::to_string(userData_.turb_box / (1.0e3 * C::parsec)) + " kpc (periodic)" : "whole domain") << "\n";
 
 	amrex::Print() << "MHDGalaxy init complete\n"
 		       << "Mc=" << userData_.Mc << " Q=" << userData_.Q_mean << " Sigma0=" << userData_.Sigma0
@@ -1200,7 +1204,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	// (the table's taper calibration) are matched to the actual domain size.
 	const auto prob_lo_dom = geom[0].ProbLoArray();
 	const auto prob_hi_dom = geom[0].ProbHiArray();
-	constexpr double boundary_tol = 1.0e-6; // relative tolerance, scaled by dx below
+	constexpr double boundary_tol = 1.0e-6;	  // relative tolerance, scaled by dx below
 	const auto dx0 = geom[0].CellSizeArray(); // level-independent taper, as in setInitialConditionsOnGridFaceVars
 
 	// physical potential with hard boundary guard and smooth tapering, sampled directly in the node lambdas
@@ -1516,7 +1520,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
 			const double yjp = prob_lo[1] + (j + 1) * dx[1];
 			const double zf = prob_lo[2] + k * dx[2];
 
-			B_face = (edge_mean_Ay(xip, yj, zf) - edge_mean_Ay(xi, yj, zf)) / dx[0] - (edge_mean_Ax(xi, yjp, zf) - edge_mean_Ax(xi, yj, zf)) / dx[1];
+			B_face =
+			    (edge_mean_Ay(xip, yj, zf) - edge_mean_Ay(xi, yj, zf)) / dx[0] - (edge_mean_Ax(xi, yjp, zf) - edge_mean_Ax(xi, yj, zf)) / dx[1];
 
 			// Hard-zero enforcement at the true z-domain boundary (normal component
 			// on z-faces), independent of seed-table taper calibration.
@@ -1588,7 +1593,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 				double disk_pull = 0.0;
 				// (rotation_on_cylinders: the midplane pull at every z, so halo + live gravity + pressure balance v_phi(R, 0))
 				if (use_pull_table) {
-					disk_pull = -gasPullTable(pull_table, pull_nR, pull_nz, pull_Rmax, pull_z0, pull_smax, R, rotation_on_cylinders ? 0.0 : z);
+					disk_pull =
+					    -gasPullTable(pull_table, pull_nR, pull_nz, pull_Rmax, pull_z0, pull_smax, R, rotation_on_cylinders ? 0.0 : z);
 				} else if (eq_solve) {
 					disk_pull = surfaceDensityPull(R, Sigma0, Rd);
 				} else {
@@ -1603,7 +1609,6 @@ template <> void QuokkaSimulation<MHDGalaxy>::addStrangSplitSources(amrex::Multi
 			const double gx = g_R * x / R;
 			const double gy = g_R * y / R;
 			const double gz = g_R_halo * z / R / (q_flatten * q_flatten); // vertical force unchanged
-
 
 			const double px_new = px + dt_lev * rho * gx;
 			const double py_new = py + dt_lev * rho * gy;
@@ -2212,7 +2217,7 @@ template <> auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics() -> std::map<st
 				    amrex::TypeList<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real>{}, state_new_cc_[lev],
 				    amrex::IntVect(0), 1,
 				    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int /*n*/) noexcept
-				    -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+					-> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
 					    auto const &p = phi_arrs[bx];
 					    // central differences only where both neighbours are valid cells of this box (no ghost cells needed)
 					    const bool interior = i - 1 >= p.begin[0] + ng && i + 1 < p.end[0] - ng && j - 1 >= p.begin[1] + ng &&
@@ -2246,9 +2251,9 @@ template <> auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics() -> std::map<st
 			amrex::Real tolerance = 0.03;
 			amrex::ParmParse const pp("mhd_galaxy");
 			pp.query("gas_pull_tolerance", tolerance);
-			amrex::Print() << "Gas pull table check against the live gravity (disk gas, 0.5 < R < 12 kpc, mass-weighted): rms error = " << 100.0 * rms
-				       << "%, bias = " << 100.0 * bias << "% (analytic midplane pull would be " << 100.0 * rms_ana << "% rms); tolerance "
-				       << 100.0 * tolerance << "%\n";
+			amrex::Print() << "Gas pull table check against the live gravity (disk gas, 0.5 < R < 12 kpc, mass-weighted): rms error = "
+				       << 100.0 * rms << "%, bias = " << 100.0 * bias << "% (analytic midplane pull would be " << 100.0 * rms_ana
+				       << "% rms); tolerance " << 100.0 * tolerance << "%\n";
 			if (rms > tolerance) {
 				amrex::Abort("gas_pull_file does not match this run's gravity (rms error above mhd_galaxy.gas_pull_tolerance): it was measured "
 					     "from a different setup. Regenerate it with measure_gas_pull.py from a t = 0 snapshot of this setup, or unset "
@@ -2431,7 +2436,7 @@ template <> auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics() -> std::map<st
 	//     R_eq_min <= R <= R_max. A disk in rotational + hydrostatic balance keeps vR, vz ~ 0
 	//     and z_rms, R_mean fixed; drifts in these measure the gravity/rotation imbalance. ---
 	const amrex::Real R_eq_min = 1.0 * 1.0e3 * C::parsec; // excludes the axis, where 1/R terms are noisy
-	std::array<amrex::Real, 7> eq_sums{}; // M, M vR, M vR^2, M vz^2, M vphi, M z^2, M R
+	std::array<amrex::Real, 7> eq_sums{};		      // M, M vR, M vR^2, M vz^2, M vphi, M z^2, M R
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		const auto prob_lo = geom[lev].ProbLoArray();
 		const auto dx = geom[lev].CellSizeArray();
@@ -2486,13 +2491,13 @@ template <> auto QuokkaSimulation<MHDGalaxy>::ComputeStatistics() -> std::map<st
 	const amrex::Real eq_mass = eq_sums[0];
 	const amrex::Real eq_inv_mass = (eq_mass > 0.0) ? 1.0 / eq_mass : 0.0;
 	constexpr amrex::Real km_s = 1.0e5;
-	stats["eq_disk_mass"] = eq_mass / C::M_solar;					  // Msun
-	stats["eq_vR_mean"] = eq_sums[1] * eq_inv_mass / km_s;				  // km/s, net inflow (<0) / outflow (>0)
-	stats["eq_vR_rms"] = std::sqrt(eq_sums[2] * eq_inv_mass) / km_s;		  // km/s
-	stats["eq_vz_rms"] = std::sqrt(eq_sums[3] * eq_inv_mass) / km_s;		  // km/s
-	stats["eq_vphi_mean"] = eq_sums[4] * eq_inv_mass / km_s;			  // km/s
-	stats["eq_z_rms"] = std::sqrt(eq_sums[5] * eq_inv_mass) / C::parsec;		  // pc, vertical thickness
-	stats["eq_R_mean"] = eq_sums[6] * eq_inv_mass / (1.0e3 * C::parsec);		  // kpc, radial redistribution
+	stats["eq_disk_mass"] = eq_mass / C::M_solar;			     // Msun
+	stats["eq_vR_mean"] = eq_sums[1] * eq_inv_mass / km_s;		     // km/s, net inflow (<0) / outflow (>0)
+	stats["eq_vR_rms"] = std::sqrt(eq_sums[2] * eq_inv_mass) / km_s;     // km/s
+	stats["eq_vz_rms"] = std::sqrt(eq_sums[3] * eq_inv_mass) / km_s;     // km/s
+	stats["eq_vphi_mean"] = eq_sums[4] * eq_inv_mass / km_s;	     // km/s
+	stats["eq_z_rms"] = std::sqrt(eq_sums[5] * eq_inv_mass) / C::parsec; // pc, vertical thickness
+	stats["eq_R_mean"] = eq_sums[6] * eq_inv_mass / (1.0e3 * C::parsec); // kpc, radial redistribution
 	return stats;
 }
 
