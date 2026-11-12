@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef SPHERICAL_GEOMETRY_HPP_
 #define SPHERICAL_GEOMETRY_HPP_
 

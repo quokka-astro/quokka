@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef PARTICLE_ACCRETION_HPP_
 #define PARTICLE_ACCRETION_HPP_
 
