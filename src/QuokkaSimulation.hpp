@@ -363,7 +363,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 			       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const override;
 	void ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const override;
-	[[nodiscard]] auto ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp,
+	[[nodiscard]] auto ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 						    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const -> bool override;
 
 	// compute projected vars
@@ -1370,9 +1370,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFl
 }
 
 template <typename problem_t>
-auto QuokkaSimulation<problem_t>::ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp,
+auto QuokkaSimulation<problem_t>::ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 							   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const -> bool
 {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
+		if (dname == "gas_pressure") {
+			HydroSystem<problem_t>::ComputeGasPressure(mf, ncomp, state_cc, state_fc);
+			return true;
+		}
+	} else {
+		amrex::ignore_unused(state_cc);
+	}
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int wcomp = 0; wcomp < AMREX_SPACEDIM; ++wcomp) {
 			if (dname == quokka::face_dir_str[wcomp] + "-CurrentDensity") {
