@@ -16,7 +16,7 @@ prefix = "scope/"
 ## a changed file that matches no scope gives the PR this label, to show that its path
 ## needs adding to a scope below
 [scope.not_mapped_label]
-value = "not_mapped"
+value = "not-mapped"
 color = "B60205"
 description = "A changed file has no scope yet; a maintainer needs to add it to labels.toml"
 
@@ -135,7 +135,7 @@ path_patterns = ["src/io/*"]
 [[scope.label]]
 value = "core"
 color = "5319E7"
-description = "The shared driver, math and utilities"
+description = "Shared driver, math and utilities"
 path_patterns = [
     "src/QuokkaSimulation*",
     "src/simulation*",
@@ -156,7 +156,7 @@ path_patterns = [
 [[scope.label]]
 value = "build"
 color = "C2E0C6"
-description = "The build system and third-party libraries"
+description = "Build system and third-party libraries"
 path_patterns = [
     "CMakeLists.txt",
     "src/CMakeLists.txt",

@@ -75,7 +75,7 @@ class TestLoadLabels_Categories(unittest.TestCase):
         hydro_label = CONFIGURED_LABELS.scope_labels.labels[0]
         self.assertEqual(hydro_label.value, "hydro")
         self.assertEqual(hydro_label.label_name, "scope/hydro")
-        self.assertEqual(CONFIGURED_LABELS.scope_labels.not_mapped_label.label_name, "scope/not_mapped")
+        self.assertEqual(CONFIGURED_LABELS.scope_labels.not_mapped_label.label_name, "scope/not-mapped")
         self.assertEqual(CONFIGURED_LABELS.size_labels.labels[0].label_name, "size/XS")
 
     def test_categories_check_their_prefix(
