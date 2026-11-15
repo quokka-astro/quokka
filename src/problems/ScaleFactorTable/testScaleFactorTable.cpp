@@ -160,6 +160,7 @@ auto problem_main() -> int
 	const amrex::Real a_max = 1.0;
 	const int n_conv = 9; // h = 0.2 / 2^k for k from 0 to 8
 	const amrex::Real eps = std::numeric_limits<amrex::Real>::epsilon();
+	amrex::Print() << std::format("machine epsilon (amrex::Real) = {:.16e}\n", eps);
 	constexpr amrex::Real floor_factor = 10.0;
 	int status = 0;
 	ScaleFactorTable table;
