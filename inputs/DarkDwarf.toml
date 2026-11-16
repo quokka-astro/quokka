@@ -1,16 +1,25 @@
+density_floor = 1.0e-32
+temperature_floor = 100.0
 
 # Initial-condition test
-max_timesteps = 0
-plotfile_interval = 1000
+max_timesteps = 1000000
+stop_time = 3.15576e15
 
+plottime_interval = 3.15576e14
+checkpointtime_interval = 3.15576e15
+
+plotfile_interval = -1
+checkpoint_interval = -1
 
 quokka.bc = ["foextrap", "foextrap", "foextrap"]
 
 # Gravity + AMR
 do_subcycle = 0
 do_reflux = 1
-regrid_interval = -1
+regrid_interval = 2
 
+# SF efficiency
+particles.eps_ff = 0.0
 [amr]
 n_cell = [128, 128, 128]
 max_level = 8
@@ -28,6 +37,10 @@ grid_eff = 0.75
 prob_lo = [-4.93708413e23, -4.93708413e23, -4.93708413e23]
 prob_hi = [ 4.93708413e23,  4.93708413e23,  4.93708413e23]
 is_periodic = [0, 0, 0]
+
+[cooling]
+enabled = 1
+hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_shielded_resampled.h5" # path to hdf5 file
 
 [dark_dwarf]
 # Gas surface density
