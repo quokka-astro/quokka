@@ -228,7 +228,7 @@ auto problem_main() -> int
 	const CosmologyParams planck;		     // defaults of CosmologyParams
 	const amrex::Real t_query = 0.9 / planck.H0; // flat LCDM: H0 t(a=1) is about 0.955 for Omega_m = 0.31, so stop at 0.9H0, before the table edge
 	constexpr int n_query = 100000;
-	amrex::Print() << "\nLCDM (default parameters): self-convergence D(h) = max |a_h - a_{h/2}| / a\n";
+	amrex::Print() << "\nLCDM (default parameters): self-convergence D(h) = max |a_h - a_{h/2}| / a_{h/2}\n";
 	amrex::Print() << std::format("{:>10} {:>11} {:>9} {:>10}\n", "h", "D(h)", "order", "N(h/2) eps");
 	std::array<amrex::Real, n_conv> diff{};
 	for (int k = 0; k < n_conv; ++k) {
