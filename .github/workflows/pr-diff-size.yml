@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   diff-size:
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-amd64
     env:
       MAX_DIFF_LINES: 5000
 
