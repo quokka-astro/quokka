@@ -184,16 +184,17 @@ struct DarkDwarf {};
 template <> struct quokka::EOS_Traits<DarkDwarf> {
 	static constexpr double gamma = 5.0 / 3.0;
 	static constexpr double mean_molecular_weight = C::m_u;
+	using EOSBackend = quokka::EOSTabulated<DarkDwarf>;
 };
 
 template <> struct Physics_Traits<DarkDwarf> : DefaultPhysicsTraits {
-	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
 };
 
 template <> struct Particle_Traits<DarkDwarf> : DefaultParticleTraits {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::StochasticStellarPop;
 };
 
 template <> struct SimulationData<DarkDwarf> {
