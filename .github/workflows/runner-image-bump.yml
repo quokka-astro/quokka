@@ -1,7 +1,7 @@
 name: 🆙 Runner image bump
 
-# Requires the repository variable RUNNER_BUMP_APP_ID and the secret RUNNER_BUMP_APP_PRIVATE_KEY
-# for a GitHub App with contents and pull-requests write access.
+# Requires the variable QUOKKA_ASTRO_APP_ID and the secret QUOKKA_ASTRO_APP_PRIVATE_KEY
+# for the quokka-astro GitHub App, with contents and pull-requests write access on this repository.
 
 on:
   schedule:
@@ -68,8 +68,10 @@ jobs:
       if: steps.bump.outputs.changed == 'true'
       uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
       with:
-        app-id: ${{ vars.RUNNER_BUMP_APP_ID }}
-        private-key: ${{ secrets.RUNNER_BUMP_APP_PRIVATE_KEY }}
+        app-id: ${{ vars.QUOKKA_ASTRO_APP_ID }}
+        private-key: ${{ secrets.QUOKKA_ASTRO_APP_PRIVATE_KEY }}
+        permission-contents: write
+        permission-pull-requests: write
 
     - name: Open pull request
       if: steps.bump.outputs.changed == 'true'
