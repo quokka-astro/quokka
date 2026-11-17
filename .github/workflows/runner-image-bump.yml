@@ -52,7 +52,7 @@ jobs:
         UBUNTU_VERSION: ${{ needs.detect-ubuntu.outputs.version }}
         MACOS_VERSION: ${{ needs.detect-macos.outputs.version }}
       run: |
-        python3 scripts/python/bump_runner_images.py \
+        python3 .github/scripts/bump_runner_images.py \
           --ubuntu-version "${UBUNTU_VERSION}" \
           --macos-version "${MACOS_VERSION}" \
           | tee "${RUNNER_TEMP}/changes.txt"
