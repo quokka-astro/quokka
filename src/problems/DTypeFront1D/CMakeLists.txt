@@ -16,10 +16,11 @@ if(AMReX_SPACEDIM EQUAL 1 OR AMReX_SPACEDIM EQUAL 3)
 
   add_executable(
     ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
-                ../../radiation/photochemistry.cpp ${${microphysics_network_name}_sources})
+                ${${microphysics_network_name}_sources}
+                ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
 
   # this will add #define PHOTOCHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX THERMAL_DUST_PHOTOCHEMISTRY DUST_CHEMICAL_BAND_ABSORPTION)
+  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX DUST_CHEMICAL_BAND_ABSORPTION)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})

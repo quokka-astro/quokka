@@ -29,6 +29,7 @@
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
+#include "microphysics/microphysics_traits.hpp"
 #include "radiation/radiation_system.hpp"
 
 #include "actual_eos_data.H"
@@ -46,6 +47,11 @@ template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = NumSpec;		     // number of chemical species
 	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
+};
+
+template <> struct Microphysics_Traits<PrimordialChemTest> : DefaultMicrophysicsTraits {
+	static constexpr bool chemistry = true; // built with CHEMISTRY
+	static constexpr bool numerical_jacobian_fallback = true;
 };
 
 template <> struct SimulationData<PrimordialChemTest> {

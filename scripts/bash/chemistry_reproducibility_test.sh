@@ -56,7 +56,7 @@ CASES=(
 	"PopIII:PopIII:PopIII:PopIII.toml:${SMALL_GRID}"
 	"DTypeFront1D:DTypeFront1D:DTypeFront1D:DTypeFront1D.toml:"
 	"StromgrenSphere:StromgrenSphere:StromgrenSphere:StromgrenSphere.toml:"
-	"StromgrenSphereTempIndependentRecombination:StromgrenSphere:StromgrenSphere:StromgrenSphereTempIndependentRecombination.toml:"
+	"StromgrenSphereTempIndependentRecombination:StromgrenSphere:StromgrenSphereTempIndependentRecombination:StromgrenSphereTempIndependentRecombination.toml:"
 	"StromgrenSphereRSLA:StromgrenSphereRSLA:StromgrenSphereRSLA:StromgrenSphereRSLA.toml:"
 	"DTypeFront_JAFF:DTypeFront_JAFF:DTypeFront_JAFF:DTypeFront_JAFF.toml:${SMALL_GRID}"
 	"DTypeFrontRadPres:DTypeFront_JAFF:DTypeFront_JAFF:DTypeFrontRadPres.toml:${SMALL_GRID}"

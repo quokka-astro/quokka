@@ -55,6 +55,10 @@ option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(ENABLE_HWASAN "Enable HWAddressSanitizer" OFF)
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
+set(QUOKKA_NET_LOOP_UNROLL_LEN 1 CACHE STRING "Unroll length of the microphysics linear algebra loops (1 = no unrolling)")
+if(NOT QUOKKA_NET_LOOP_UNROLL_LEN MATCHES "^[1-9][0-9]*$")
+  message(FATAL_ERROR "QUOKKA_NET_LOOP_UNROLL_LEN must be a positive integer, got '${QUOKKA_NET_LOOP_UNROLL_LEN}'")
+endif()
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
@@ -197,8 +201,8 @@ add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/turbulence/plugins/AMReX ${Quok
 #they do not carry forward from Microphysics
 #We use Strang operator-spliting while integrating the network
 #NAUX_NET defines the number of auxiliary variables
-#NET_LOOP_UNROLL_LEN is the unroll length used in Microphysics linpack/ArrayUtilities;
-#match Microphysics' CMake default of 1.
-add_definitions(-DNAUX_NET -DSTRANG -DNET_LOOP_UNROLL_LEN=1)
+#QUOKKA_NET_LOOP_UNROLL_LEN is the unroll length of the linear algebra loops in
+#src/math/linear_algebra.hpp and src/microphysics/array_utils.hpp
+add_definitions(-DNAUX_NET -DSTRANG -DNET_LOOP_UNROLL_LEN=${QUOKKA_NET_LOOP_UNROLL_LEN} -DQUOKKA_NET_LOOP_UNROLL_LEN=${QUOKKA_NET_LOOP_UNROLL_LEN})
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/Microphysics ${QuokkaCode_BINARY_DIR}/Microphysics)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)
