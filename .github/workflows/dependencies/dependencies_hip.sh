@@ -27,7 +27,7 @@ wget https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg -O - | \
 rocm_distribution="ubuntu${VERSION_ID//./}"
 rocm_repository="https://repo.amd.com/rocm/packages-multi-arch/${rocm_distribution}"
 if ! curl --fail --silent --head "${rocm_repository}/dists/stable/Release" > /dev/null; then
-  echo "AMD has not published a ROCm repository for Ubuntu ${VERSION_ID} (${rocm_distribution}) yet" >&2
+  echo "error: AMD has not published a ROCm repository for Ubuntu ${VERSION_ID} (${rocm_distribution}); keep this job on the previous Ubuntu release until it does" >&2
   exit 1
 fi
 
