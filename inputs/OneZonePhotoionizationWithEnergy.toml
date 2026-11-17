@@ -22,6 +22,9 @@ suppress_output = 0
 
 photochemistry.enabled = 1
 
+eos.min_temp = 1e-2
+eos.min_dens = 1e-60
+
 photoionization.n_e_init = 1e-10
 photoionization.n_HI_init = 1e2
 photoionization.n_HII_init = 1e-10

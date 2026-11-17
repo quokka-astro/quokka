@@ -22,10 +22,6 @@
 #include <cmath>
 #include <limits>
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
 struct DTypeFrontVC {};
 
 namespace
@@ -77,8 +73,6 @@ template <> struct RadSystem_Traits<DTypeFrontVC> {
 };
 
 template <> struct SimulationData<DTypeFrontVC> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -96,23 +90,15 @@ void RadSystem<DTypeFrontVC>::AddRadSource(array_t &radEnergy, array_t & /*reduc
 
 template <> void QuokkaSimulation<DTypeFrontVC>::preCalculateInitialConditions()
 {
-	eos_rp::ReadParameters();
-
 	amrex::ParmParse const pp("photoionization_momentum");
-	userData_.small_temp = 1.0e-2;
-	userData_.small_dens = 1.0e-60;
 	userData_.temperature = 1.0e3;
 	userData_.n_e_init = 1.0e-10;
 	userData_.n_HI_init = 1.0e2;
 	userData_.n_HII_init = 1.0e-10;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("n_e_init", userData_.n_e_init);
 	pp.query("n_HI_init", userData_.n_HI_init);
 	pp.query("n_HII_init", userData_.n_HII_init);
-
-	eos_init(userData_.small_temp, userData_.small_dens);
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFrontVC>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -140,10 +126,10 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n];
+		rhotot += state.xn[n] * Network::SpeciesMass()[n];
 	}
 	state.rho = rhotot;
-	eos(eos_input_rt, state);
+	quokka::EOS<DTypeFrontVC>::Solve(quokka::EOS<DTypeFrontVC>::Input::RhoT, state);
 	const auto Egas0 = state.e * rhotot;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -160,7 +146,7 @@ template <> void QuokkaSimulation<DTypeFrontVC>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFrontVC>::x3GasMomentum_index) = 0.0_rt;
 		for (int nn = 0; nn < Network::NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<DTypeFrontVC>::scalar0_index + nn) = state.xn[nn] * spmasses[nn];
+			state_cc(i, j, k, HydroSystem<DTypeFrontVC>::scalar0_index + nn) = state.xn[nn] * Network::SpeciesMass()[nn];
 		}
 	});
 }

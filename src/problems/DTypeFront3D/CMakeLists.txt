@@ -1,19 +1,8 @@
 # The problem is a spherical H II region around a central point source, so it is meaningful only in 3D.
 if(AMReX_SPACEDIM EQUAL 3)
-  set(microphysics_network_name "thermophotochemistry_handwritten")
-
   set(JOB_NAME DTypeFront3D)
 
-  add_executable(
-    ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
-                ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
-  quokka_add_eos(${JOB_NAME} photoionization ${microphysics_network_name})
-  # the network's actual_rhs.H
-  target_include_directories(${JOB_NAME} BEFORE PRIVATE ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name})
-
-  if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(${JOB_NAME})
-  endif(AMReX_GPU_BACKEND MATCHES "CUDA")
+  quokka_add_problem(JOB_NAME ${JOB_NAME} ADD_TEST OFF)
 
   # Too expensive for the CPU-only GitHub Actions CI, so it is registered only in GPU builds.
   # plotfile_interval=-1 on the command line, because evolve() re-reads the inputs file and would undo a change made in code.

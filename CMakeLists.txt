@@ -186,6 +186,6 @@ add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DI
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/turbulence/plugins/AMReX ${QuokkaCode_BINARY_DIR}/turbulence)
 
 #QUOKKA_NET_LOOP_UNROLL_LEN is the unroll length of the linear algebra loops in
-#src/math/linear_algebra.hpp and src/microphysics/array_utils.hpp
+#src/math/linear_algebra.hpp
 add_definitions(-DQUOKKA_NET_LOOP_UNROLL_LEN=${QUOKKA_NET_LOOP_UNROLL_LEN})
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)

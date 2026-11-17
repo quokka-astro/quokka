@@ -29,20 +29,20 @@
 @function chemRate2(tgas)
     A = 5.84e-11
     x = A * sqrt(tgas) * exp(-2.18e-11 / (kB * tgas))
-    return x
+    @return x
 
 # Reaction 0: H -> H+ + e- (photoionization)
 # Fixed photoheating energy per ionization event.
 @function deltaE0()
     x = (Eavg0 - 13.6) * eV
-    return x
+    @return x
 
 # Reaction 2: H + e- -> H+ + e- + e- (collisional ionization)
 # Each collisional ionization removes one Rydberg (13.6 eV) from the gas
 # thermal energy.
 @function deltaE2()
     x = -13.6 * eV
-    return x
+    @return x
 
 # Standalone (non-reaction-tied) heating/cooling. These do not scale with any
 # reaction's own rate coefficient, so they live here rather than in a deltaE
@@ -77,4 +77,4 @@
 
     cooling_ff = (1.3 * 1.427e-27 * sqrt(tgas) + cle_term) * n_e * n_Hj
 
-    return heating_KI - cooling_KI - cooling_recombination - cooling_ff
+    @return heating_KI - cooling_KI - cooling_recombination - cooling_ff

@@ -33,6 +33,9 @@ plotfile_prefix = "DType1D"
 # Source geometry. beamed = 1 gives each half of the source slab a flux source of -c * E on the left and
 # +c * E on the right, so both wings are injected fully beamed outward; the outward-momentum budget in the
 # test is a conservation law only in that case.
+eos.min_temp = 1e-2
+eos.min_dens = 1e-60
+
 photoionize.beamed = 1
 photoionize.source_cells = 1
 photoionize.flux = 1.0e13

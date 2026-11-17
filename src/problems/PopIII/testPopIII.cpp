@@ -29,10 +29,6 @@
 #include "radiation/radiation_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
 using amrex::Real;
 
 struct PopIII {};
@@ -71,8 +67,6 @@ template <> struct SimulationData<PopIII> {
 	amrex::Real numdens_init{};
 	amrex::Real omega_sphere{};
 
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real primary_species_1{};
 	amrex::Real primary_species_2{};
@@ -93,17 +87,8 @@ template <> struct SimulationData<PopIII> {
 template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 {
 
-	// initialize microphysics routines
-	eos_rp::ReadParameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("primordial_chem");
-	userData_.small_temp = 1e1;
-	pp.query("small_temp", userData_.small_temp);
-
-	userData_.small_dens = 1e-60;
-	pp.query("small_dens", userData_.small_dens);
-
 	userData_.temperature = 1e1;
 	pp.query("temperature", userData_.temperature);
 
@@ -136,8 +121,6 @@ template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 	pp.query("primary_species_12", userData_.primary_species_12);
 	pp.query("primary_species_13", userData_.primary_species_13);
 	pp.query("primary_species_14", userData_.primary_species_14);
-
-	eos_init(userData_.small_temp, userData_.small_dens);
 
 	static bool isSamplingDone = false;
 	if (!isSamplingDone) {
@@ -261,26 +244,26 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
-		eos_t state;
+		quokka::EOS<PopIII>::GasState state;
 		amrex::Real rhotot = 0.0;
 
 		for (int n = 0; n < Network::NumSpec; ++n) {
 			state.xn[n] = numdens[n] * numdens_init;
-			rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+			rhotot += state.xn[n] * Network::SpeciesMass()[n];
 		}
 
 		// normalize -- just in case
 		std::array<Real, Network::NumSpec> mfracs = {-1.0};
 		Real msum = 0.0;
 		for (int n = 0; n < Network::NumSpec; ++n) {
-			mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
+			mfracs[n] = state.xn[n] * Network::SpeciesMass()[n] / rhotot;
 			msum += mfracs[n];
 		}
 
 		for (int n = 0; n < Network::NumSpec; ++n) {
 			mfracs[n] /= msum;
 			// use the normalized mass fractions to obtain the corresponding number densities
-			state.xn[n] = mfracs[n] * rhotot / spmasses[n];
+			state.xn[n] = mfracs[n] * rhotot / Network::SpeciesMass()[n];
 		}
 
 		// amrex::Print() << "cell " << i << j << k << " " << rhotot << " " << numdens_init << " " << numdens[0] << std::endl;
@@ -294,7 +277,7 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 		// calculate eos params for the core
 		state.rho = rhotot;
 		state.T = core_temp;
-		eos(eos_input_rt, state);
+		quokka::EOS<PopIII>::Solve(quokka::EOS<PopIII>::Input::RhoT, state);
 
 		if (r <= R_sphere) {
 			// add rotation to vx and vy
@@ -305,7 +288,7 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 			// re-calculate eos params outside the core, using pressure equilibrium (so, pressure within the core = pressure outside)
 			state.rho = 0.01 * rhotot;
 			state.p = state.p;
-			eos(eos_input_rp, state);
+			quokka::EOS<PopIII>::Solve(quokka::EOS<PopIII>::Input::RhoP, state);
 		}
 
 		// call the EOS to set initial internal energy e

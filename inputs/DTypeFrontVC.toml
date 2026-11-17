@@ -20,6 +20,9 @@ stop_time = 0.0
 max_timesteps = 0
 plotfile_interval = -1
 
+eos.min_temp = 1e-2
+eos.min_dens = 1e-60
+
 photoionization_momentum.n_e_init = 1.0e-10
 photoionization_momentum.n_HI_init = 1.0e2
 photoionization_momentum.n_HII_init = 1.0e-10

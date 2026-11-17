@@ -61,7 +61,7 @@ template <> struct HydroSystem_Traits<TheProblem> {
 template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = mu;
-	using EOSBackend = quokka::EOSTabulated<TheProblem>;
+	using EOS = quokka::EOSTabulated<TheProblem>;
 };
 
 template <> struct Physics_Traits<TheProblem> : DefaultPhysicsTraits {

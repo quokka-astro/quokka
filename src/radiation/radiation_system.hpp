@@ -356,7 +356,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
+	static constexpr double gamma_ = ::quokka::EOS<problem_t>::gamma_;
 
 	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {

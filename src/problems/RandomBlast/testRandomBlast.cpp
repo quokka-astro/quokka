@@ -37,7 +37,7 @@ template <> struct quokka::EOS_Traits<RandomBlast> {
 	// so ICs differ from the ideal-gas inverse by the table-vs-fixed-mu ratio.
 	// This is intentional — the table EOS is needed for consistent cooling.
 	// Temperatures below the table minimum are silently clamped to eint_min.
-	using EOSBackend = quokka::EOSTabulated<RandomBlast>;
+	using EOS = quokka::EOSTabulated<RandomBlast>;
 };
 
 template <> struct Particle_Traits<RandomBlast> : DefaultParticleTraits {

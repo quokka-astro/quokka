@@ -129,13 +129,6 @@ include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/extern/gcem/include)
 
-# The vendored EOS (extern/eos). Problems without chemistry use its gamma_law backend with the general_null species
-# table, set here for the whole directory; problems with chemistry call quokka_add_eos() for theirs.
-include(${CMAKE_SOURCE_DIR}/extern/eos/quokka_eos.cmake)
-quokka_eos_include_dirs(quokka_default_eos_dirs gamma_law general_null)
-include_directories(${quokka_default_eos_dirs})
-quokka_eos_sources(quokka_default_eos_sources gamma_law)
-
 if(TARGET amrex_hydro_api)
   link_libraries(amrex_hydro_api)
 endif()
@@ -144,9 +137,18 @@ link_libraries(${HDF5_LIBRARIES})
 link_libraries(yaml-cpp::yaml-cpp)
 link_libraries(turbulence::turbulence)
 
+# Every network's runtime parameters (src/networks/<network>/network.cpp), in one library that every target links. A
+# problem picks its network in its problem file; the linker takes only that network's object file.
+file(GLOB quokka_network_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/networks/*/network.cpp)
+add_library(quokka_networks STATIC ${quokka_network_sources})
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  setup_target_for_cuda_compilation(quokka_networks)
+endif()
+link_libraries(quokka_networks)
+
 include(CTest)
 
-set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
+set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagBase.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DerivedFieldBase.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DerivedParticleDeposition.cpp"
@@ -156,15 +158,14 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagParticleTxt.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/hydro/EOSFloors.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/microphysics/integrator_params.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
                         "${openPMDSources}")
 
 if(AMReX_SPACEDIM EQUAL 3)
-  list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")
-  list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
+  list(APPEND QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")
+  list(APPEND QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
 endif()
-
-set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${quokka_default_eos_sources}")
 
 add_subdirectory(problems)

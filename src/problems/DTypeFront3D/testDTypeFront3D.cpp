@@ -34,10 +34,6 @@
 #include <string>
 #include <vector>
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
 struct DTypeFront3D {};
 
 constexpr double c_hat = C::c_light / 1000.0;
@@ -96,8 +92,6 @@ template <> struct ISM_Traits<DTypeFront3D> {
 };
 
 template <> struct SimulationData<DTypeFront3D> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -152,9 +146,9 @@ AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto neutral_fraction(amrex::Array4<const amrex::Real> const &state, int i, int j, int k) -> amrex::Real
 {
 	const amrex::Real n_HI =
-	    state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + static_cast<int>(Network::Species::H)) / spmasses[Network::Species::H];
+	    state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + static_cast<int>(Network::Species::H)) / Network::SpeciesMass()[Network::Species::H];
 	const amrex::Real n_HII =
-	    state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + static_cast<int>(Network::Species::H_p)) / spmasses[Network::Species::H_p];
+	    state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + static_cast<int>(Network::Species::H_p)) / Network::SpeciesMass()[Network::Species::H_p];
 	const amrex::Real denom = n_HI + n_HII;
 	return (denom > 0.0_rt) ? (n_HI / denom) : 0.0_rt;
 }
@@ -166,10 +160,10 @@ auto compute_effective_radius(QuokkaSimulation<DTypeFront3D> &sim) -> amrex::Rea
 	const amrex::Real total_ionized_volume = sim.computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
 				 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
-		    const amrex::Real n_HI =
-			state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + static_cast<int>(Network::Species::H)) / spmasses[Network::Species::H];
-		    const amrex::Real n_HII =
-			state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + static_cast<int>(Network::Species::H_p)) / spmasses[Network::Species::H_p];
+		    const amrex::Real n_HI = state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + static_cast<int>(Network::Species::H)) /
+					     Network::SpeciesMass()[Network::Species::H];
+		    const amrex::Real n_HII = state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + static_cast<int>(Network::Species::H_p)) /
+					      Network::SpeciesMass()[Network::Species::H_p];
 		    const amrex::Real denom = n_HI + n_HII;
 		    if (denom <= 0.0_rt) {
 			    return 0.0_rt;
@@ -652,13 +646,8 @@ void RadSystem<DTypeFront3D>::AddRadSource(array_t &radEnergy, array_t &reducedF
 
 template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	eos_rp::ReadParameters();
-
 	// parmparse species, temperature, and source photon rates
 	amrex::ParmParse const pp("photoionize");
-	userData_.small_temp = 1e-2;
-	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e2;
 	userData_.n_e_init = 1.0e-10_rt;
 	userData_.n_HI_init = 1.0e2_rt;
@@ -668,8 +657,6 @@ template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 	userData_.flux_ir = 0.0_rt;
 	pp.query("kappa_ir", kappa_ir);
 	pp.query("kappa_optical", kappa_optical);
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("n_e_init", userData_.n_e_init);
 	pp.query("n_HI_init", userData_.n_HI_init);
@@ -690,14 +677,13 @@ template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 	{
 		const amrex::Real R_s = stromgren_radius(userData_.flux_ion, userData_.n_HI_init, userData_.T_ionized);
 		const amrex::Real c_s = ionized_sound_speed(userData_.T_ionized);
-		const amrex::Real R_d = dusty_stromgren_radius(R_s, ionizing_dust_kappa() * userData_.n_HI_init * spmasses[Network::Species::H]);
+		const amrex::Real R_d = dusty_stromgren_radius(R_s, ionizing_dust_kappa() * userData_.n_HI_init * Network::SpeciesMass()[Network::Species::H]);
 		userData_.r_ode_last_t_ = 0.0_rt;
 		userData_.r_ode_last_R_ = R_d;
 		userData_.r_ode_last_v_ = c_s;
 		amrex::Print() << "Stromgren radius R_s = " << R_s << " cm (with dust: " << R_d << " cm), ionized sound speed c_s = " << c_s << " cm/s\n";
 	}
 
-	eos_init(userData_.small_temp, userData_.small_dens);
 	// Called once per level built at t = 0. Reopening an open stream fails and silently drops every later write.
 	// A restart appends to the file the original run wrote.
 	if (amrex::ParallelDescriptor::IOProcessor() && !userData_.output_file_.is_open()) {
@@ -739,11 +725,11 @@ template <> void QuokkaSimulation<DTypeFront3D>::setInitialConditionsOnGrid(quok
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n];
+		rhotot += state.xn[n] * Network::SpeciesMass()[n];
 	}
 	state.rho = rhotot;
 
-	eos(eos_input_rt, state);
+	quokka::EOS<DTypeFront3D>::Solve(quokka::EOS<DTypeFront3D>::Input::RhoT, state);
 	const auto Egas0 = state.e * rhotot;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -761,7 +747,7 @@ template <> void QuokkaSimulation<DTypeFront3D>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, RadSystem<DTypeFront3D>::x3GasMomentum_index) = 0.0_rt;
 		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + nn) =
-			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			    state.xn[nn] * Network::SpeciesMass()[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
@@ -827,7 +813,7 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 	amrex::Real r_ode = std::numeric_limits<amrex::Real>::quiet_NaN();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const amrex::Real n_0 = userData_.n_HI_init;
-		const amrex::Real rho_0 = n_0 * spmasses[Network::Species::H];
+		const amrex::Real rho_0 = n_0 * Network::SpeciesMass()[Network::Species::H];
 		const amrex::Real T_i = userData_.T_ionized;
 		const amrex::Real R_s = stromgren_radius(userData_.flux_ion, n_0, T_i);
 		const amrex::Real c_s = ionized_sound_speed(T_i);
@@ -931,10 +917,10 @@ auto problem_main() -> int
 				const amrex::Real rho = state(i, j, k, HydroSystem<DTypeFront3D>::density_index);
 				const amrex::Real Eint = state(i, j, k, RadSystem<DTypeFront3D>::gasInternalEnergy_index);
 				const amrex::Real n_HI_cell = state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + static_cast<int>(Network::Species::H)) /
-							      spmasses[Network::Species::H];
+							      Network::SpeciesMass()[Network::Species::H];
 				const amrex::Real n_HII_cell =
 				    state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + static_cast<int>(Network::Species::H_p)) /
-				    spmasses[Network::Species::H_p];
+				    Network::SpeciesMass()[Network::Species::H_p];
 				const amrex::Real denom = n_HI_cell + n_HII_cell;
 				if (denom <= 0.0_rt) {
 					return;
@@ -944,12 +930,12 @@ auto problem_main() -> int
 
 				quokka::microphysics::BurnState<DTypeFront3D> bstate;
 				for (int nn = 0; nn < Network::NumSpec; ++nn) {
-					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + nn) / spmasses[nn];
+					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + nn) / Network::SpeciesMass()[nn];
 				}
 				bstate.rho = rho;
 				bstate.e = Eint / rho;
 				bstate.T = 1.0e4; // initial guess
-				eos(eos_input_re, bstate);
+				quokka::EOS<DTypeFront3D>::Solve(quokka::EOS<DTypeFront3D>::Input::RhoE, bstate);
 				const double T_cell = bstate.T;
 
 				if (x_HII > 0.90_rt) {

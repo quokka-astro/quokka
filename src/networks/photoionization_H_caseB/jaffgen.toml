@@ -4,3 +4,7 @@ bands = [13.6, 26.0]
 profile_index = 0
 energy_density = false
 rsl = "c_hat"
+
+[network.eos]
+type = "ideal"
+gamma = 1.6666666666666667

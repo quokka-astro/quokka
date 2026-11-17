@@ -230,10 +230,9 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeReciprocalStoppingTime
 			continue;
 		}
 		// compute stopping time t_s with/without supersonic correction
-		amrex::Real const t_s_sub = std::sqrt(M_PI * ::quokka::EOS_Traits<problem_t>::gamma) * dust_grain_radius[g] * dust_grain_density[g] /
+		amrex::Real const t_s_sub = std::sqrt(M_PI * ::quokka::EOS<problem_t>::gamma_) * dust_grain_radius[g] * dust_grain_density[g] /
 					    (2.0 * std::numbers::sqrt2 * rho_g * cs);
-		amrex::Real const correction = 1.0 + static_cast<int>(enable_supersonic_correction) *
-							 (9.0 * M_PI * ::quokka::EOS_Traits<problem_t>::gamma / 128.0) *
+		amrex::Real const correction = 1.0 + static_cast<int>(enable_supersonic_correction) * (9.0 * M_PI * ::quokka::EOS<problem_t>::gamma_ / 128.0) *
 							 (rel_vel_mag[g] * rel_vel_mag[g] / (cs * cs));
 		amrex::Real const t_s_fin = t_s_sub / std::sqrt(correction);
 
