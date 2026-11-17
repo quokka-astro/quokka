@@ -1,4 +1,4 @@
-name: 🆙 Runner image bump
+name: "Runner OS Update"
 
 # Requires the variable QUOKKA_ASTRO_APP_ID and the secret QUOKKA_ASTRO_APP_PRIVATE_KEY
 # for the quokka-astro GitHub App, with contents and pull-requests write access on this repository.
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: runner-image-bump
+  group: runner-os-update
   cancel-in-progress: false
 
 permissions:
@@ -47,12 +47,12 @@ jobs:
         persist-credentials: false
 
     - name: Rewrite runner labels
-      id: bump
+      id: update
       env:
         UBUNTU_VERSION: ${{ needs.detect-ubuntu.outputs.version }}
         MACOS_VERSION: ${{ needs.detect-macos.outputs.version }}
       run: |
-        python3 .github/scripts/bump_runner_images.py \
+        python3 .github/runner-os-update/runner_os_update.py \
           --ubuntu-version "${UBUNTU_VERSION}" \
           --macos-version "${MACOS_VERSION}" \
           | tee "${RUNNER_TEMP}/changes.txt"
@@ -61,11 +61,11 @@ jobs:
         else
           echo "changed=true" >> "$GITHUB_OUTPUT"
         fi
-        echo "branch=ci/runner-images-ubuntu-${UBUNTU_VERSION}-macos-${MACOS_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "branch=ci/runner-os-ubuntu-${UBUNTU_VERSION}-macos-${MACOS_VERSION}" >> "$GITHUB_OUTPUT"
 
     - name: Create app token
       id: app-token
-      if: steps.bump.outputs.changed == 'true'
+      if: steps.update.outputs.changed == 'true'
       uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
       with:
         app-id: ${{ vars.QUOKKA_ASTRO_APP_ID }}
@@ -74,11 +74,11 @@ jobs:
         permission-pull-requests: write
 
     - name: Open pull request
-      if: steps.bump.outputs.changed == 'true'
+      if: steps.update.outputs.changed == 'true'
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
         APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-        BRANCH: ${{ steps.bump.outputs.branch }}
+        BRANCH: ${{ steps.update.outputs.branch }}
         UBUNTU_VERSION: ${{ needs.detect-ubuntu.outputs.version }}
         MACOS_VERSION: ${{ needs.detect-macos.outputs.version }}
       run: |
@@ -90,21 +90,21 @@ jobs:
         git config user.name "${APP_SLUG}[bot]"
         git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
         git switch -c "${BRANCH}"
-        git commit -am "Update CI runner images to ubuntu-${UBUNTU_VERSION} and macos-${MACOS_VERSION}"
+        git commit -am "Update CI runner OS to ubuntu-${UBUNTU_VERSION} and macos-${MACOS_VERSION}"
         git push "${remote_url}" "${BRANCH}"
         {
           echo "### Description"
           echo
-          echo "The runner image behind \`ubuntu-latest\` is now ${UBUNTU_VERSION} and behind \`macos-latest\` is ${MACOS_VERSION}. This PR raises the pinned \`runs-on\` labels to match:"
+          echo "\`ubuntu-latest\` now runs Ubuntu ${UBUNTU_VERSION} and \`macos-latest\` runs macOS ${MACOS_VERSION}. This PR raises the pinned \`runs-on\` labels to match:"
           echo
           echo '```'
           cat "${RUNNER_TEMP}/changes.txt"
           echo '```'
           echo
-          echo "CI on this PR is the first run on the new images. Push any fixes it needs to this branch; merge once green."
+          echo "CI on this PR is the first run on the new OS versions. Push any fixes it needs to this branch; merge once green."
         } > "${RUNNER_TEMP}/body.md"
         gh pr create \
           --base development \
           --head "${BRANCH}" \
-          --title "Update CI runner images: ubuntu-${UBUNTU_VERSION} and macos-${MACOS_VERSION}" \
+          --title "Update CI runner OS: ubuntu-${UBUNTU_VERSION} and macos-${MACOS_VERSION}" \
           --body-file "${RUNNER_TEMP}/body.md"
