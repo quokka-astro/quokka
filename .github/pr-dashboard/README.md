@@ -45,7 +45,7 @@ After the change merges into `development`, the label workflow creates any new l
 From the repository root:
 
 ```bash
-PYTHONPATH=.github/pr_dashboard/src python3 -m unittest discover --start-directory .github/pr_dashboard/tests --pattern "test_*.py"
+PYTHONPATH=.github/pr-dashboard/src python3 -m unittest discover --start-directory .github/pr-dashboard/tests --pattern "test_*.py"
 ```
 
 One test checks that every file in the repository matches a scope, so adding a folder without a pattern for it fails the tests here first.
@@ -55,8 +55,8 @@ One test checks that every file in the repository matches a scope, so adding a f
 The actions can be run from a local checkout with a `gh` login. `--dry-run` prints the plan without writing anything:
 
 ```bash
-PYTHONPATH=.github/pr_dashboard/src python3 -m pr_dashboard.run_dashboard label-pr --repo quokka-astro/quokka --pr <number> --dry-run
-PYTHONPATH=.github/pr_dashboard/src python3 -m pr_dashboard.run_dashboard update-label-definitions --repo quokka-astro/quokka --dry-run
+PYTHONPATH=.github/pr-dashboard/src python3 -m pr_dashboard.run_dashboard label-pr --repo quokka-astro/quokka --pr <number> --dry-run
+PYTHONPATH=.github/pr-dashboard/src python3 -m pr_dashboard.run_dashboard update-label-definitions --repo quokka-astro/quokka --dry-run
 ```
 
 ## Design Decisions

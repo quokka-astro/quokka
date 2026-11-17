@@ -18,5 +18,5 @@ jobs:
 
       - name: Run the offline tests
         env:
-          PYTHONPATH: .github/pr_dashboard/src
-        run: python3 -m unittest discover --start-directory .github/pr_dashboard/tests --pattern "test_*.py"
+          PYTHONPATH: .github/pr-dashboard/src
+        run: python3 -m unittest discover --start-directory .github/pr-dashboard/tests --pattern "test_*.py"
