@@ -22,26 +22,16 @@ sudo mkdir --parents --mode=0755 /etc/apt/keyrings
 wget https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg -O - | \
     gpg --dearmor | sudo tee /etc/apt/keyrings/amdrocm.gpg > /dev/null
 
-# Detect the Ubuntu release and choose the matching ROCm 7.14 repository.
-if [ -r /etc/os-release ]; then
-  . /etc/os-release
+# AMD names each ROCm repository after the Ubuntu release, e.g. ubuntu2404 for 24.04.
+. /etc/os-release
+rocm_distribution="ubuntu${VERSION_ID//./}"
+rocm_repository="https://repo.amd.com/rocm/packages-multi-arch/${rocm_distribution}"
+if ! curl --fail --silent --head "${rocm_repository}/dists/stable/Release" > /dev/null; then
+  echo "AMD has not published a ROCm repository for Ubuntu ${VERSION_ID} (${rocm_distribution}) yet" >&2
+  exit 1
 fi
 
-detected_codename="${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}"
-case "${detected_codename}" in
-  jammy)
-    rocm_distribution="ubuntu2204"
-    ;;
-  noble)
-    rocm_distribution="ubuntu2404"
-    ;;
-  *)
-    echo "Unsupported Ubuntu codename for ROCm 7.14: ${detected_codename}" >&2
-    exit 1
-    ;;
-esac
-
-echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/amdrocm.gpg] https://repo.amd.com/rocm/packages-multi-arch/${rocm_distribution} stable main" \
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/amdrocm.gpg] ${rocm_repository} stable main" \
   | sudo tee /etc/apt/sources.list.d/rocm.list
 
 echo 'export ROCM_PATH=/opt/rocm/core-7.14' | sudo tee /etc/profile.d/rocm.sh
