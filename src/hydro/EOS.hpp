@@ -39,20 +39,14 @@ template <typename problem_t> struct EOSMicrophysics;
 #endif
 template <typename problem_t> struct EOSTabulated;
 
-// Single source of truth for the default EOS backend selection, forward-declared here
-// so EOS_Traits can reference it. Fully defined after EOSMicrophysics below.
-template <typename problem_t> struct DefaultEOSBackend;
-
-// Primary EOS_Traits template. Provides default values for ideal gamma-law EOS
-// and selects the compile-time EOS backend. Full specializations need only define
-// the trait values they override; EOSBackend defaults via SFINAE if omitted.
+// Primary EOS_Traits template. Provides default values for ideal gamma-law EOS.
+// A specialization may also define `using EOSBackend = ...` to select a non-default
+// backend (see EOSBackendHelper below).
 //
 template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5. / 3.;     // default value
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	static constexpr double mean_molecular_weight = NAN;
-
-	using EOSBackend = typename DefaultEOSBackend<problem_t>::type;
 };
 
 // ==================== EOSIdeal backend ====================
@@ -197,8 +191,8 @@ template <typename problem_t> struct EOSIdeal {
 		if constexpr (gamma_ != 1.0) {
 			const GammaLawState s = GammaLawFromRhoP(rho, P);
 			deint_dRho = 0.0;
-			deint_dP = 1.0 / ((s.p / s.T) / (s.e / s.T));
-			dRho_dP = 1.0 / ((s.p / s.rho) * C::k_B / boltzmann_constant_);
+			deint_dP = s.e / s.p;
+			dRho_dP = (s.rho / s.p) * boltzmann_constant_ / C::k_B;
 			dP_dRho_s = gamma_ * s.p / s.rho;
 			G = 0.5 * (1.0 + gamma_);
 		}
@@ -551,26 +545,18 @@ template <typename problem_t> struct EOSTabulated {
 	}
 };
 
-// DefaultEOSBackend — definition (forward-declared near EOS_Traits above).
-// Both EOS_Traits (primary template) and EOSBackendHelper (SFINAE fallback) use this
-// so the default-backend policy lives in exactly one place.
-template <typename T> struct DefaultEOSBackend {
+// ==================== EOS backend selection ====================
+// If EOS_Traits<problem_t> defines EOSBackend, use it; otherwise use the default backend.
+// Most problems fully specialize EOS_Traits without EOSBackend, so the default must come from here.
+
+namespace detail
+{
+template <typename T, typename = void> struct EOSBackendHelper {
 #if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	using type = EOSMicrophysics<T>;
 #else
 	using type = EOSIdeal<T>;
 #endif
-};
-
-// ==================== EOS backend selection ====================
-// If EOS_Traits<problem_t> defines EOSBackend, use it; otherwise fall back to
-// DefaultEOSBackend. This preserves backward compatibility with existing full
-// specializations that predate the EOSBackend mechanism.
-
-namespace detail
-{
-template <typename T, typename = void> struct EOSBackendHelper {
-	using type = typename DefaultEOSBackend<T>::type;
 };
 
 template <typename T> struct EOSBackendHelper<T, std::void_t<typename EOS_Traits<T>::EOSBackend>> {
@@ -584,11 +570,11 @@ template <typename T> struct EOSBackendHelper<T, std::void_t<typename EOS_Traits
 
 template <typename problem_t> class EOS
 {
-	using backend_t = typename detail::EOSBackendHelper<problem_t>::type;
+	using EOSBackend = typename detail::EOSBackendHelper<problem_t>::type;
 
       public:
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-	static constexpr bool is_tabulated = backend_t::is_tabulated;
+	static constexpr bool is_tabulated = EOSBackend::is_tabulated;
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
 	static constexpr amrex::Real boltzmann_constant_ = EOSIdeal<problem_t>::boltzmann_constant_;
@@ -597,59 +583,59 @@ template <typename problem_t> class EOS
 	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		return backend_t::ComputeTgasFromEint(rho, Eint, massScalars);
+		return EOSBackend::ComputeTgasFromEint(rho, Eint, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		return backend_t::ComputeEintFromTgas(rho, Tgas, massScalars);
+		return EOSBackend::ComputeEintFromTgas(rho, Tgas, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		return backend_t::ComputeEintFromPres(rho, Pressure, massScalars);
+		return EOSBackend::ComputeEintFromPres(rho, Pressure, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		return backend_t::ComputeEintTempDerivative(rho, Tgas, massScalars);
+		return EOSBackend::ComputeEintTempDerivative(rho, Tgas, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeOtherDerivatives(amrex::Real rho, amrex::Real P, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	{
-		return backend_t::ComputeOtherDerivatives(rho, P, massScalars);
+		return EOSBackend::ComputeOtherDerivatives(rho, P, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputePressure(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
 	{
-		return backend_t::ComputePressure(rho, Eint, massScalars);
+		return EOSBackend::ComputePressure(rho, Eint, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		return backend_t::ComputeSoundSpeed(rho, Pressure, massScalars);
+		return EOSBackend::ComputeSoundSpeed(rho, Pressure, massScalars);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Real rho, amrex::Real Pressure) -> amrex::Real
 	{
-		return backend_t::ComputeIsothermalSoundSpeed(rho, Pressure);
+		return EOSBackend::ComputeIsothermalSoundSpeed(rho, Pressure);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEntropyFromRhoEint(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		return backend_t::ComputeEntropyFromRhoEint(rho, Eint, massScalars);
+		return EOSBackend::ComputeEntropyFromRhoEint(rho, Eint, massScalars);
 	}
 
 	// Compute gas internal energy from gas total energy (Eint + Ekin, NOT including B field).
