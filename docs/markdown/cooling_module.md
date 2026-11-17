@@ -32,7 +32,7 @@ Applies optically-thin radiative cooling as a Strang-split source term, and comp
 
 ### EOSMicrophysics
 
-Delegates the EOS to the [Microphysics](https://github.com/AMReX-Astro/Microphysics) submodule, so that temperature is consistent with the evolving chemical species tracked by the reaction network (`chemstate.xn`). Cooling and heating are handled by the network itself rather than by a table, and are advanced by the chemistry burner (`quokka::chemistry::computeChemistry`) rather than by the cooling integrator.
+Delegates the EOS to the copy of [Microphysics](https://github.com/AMReX-Astro/Microphysics)' equation of state in `extern/eos`, so that temperature is consistent with the evolving chemical species tracked by the reaction network (`chemstate.xn`). Cooling and heating are handled by the network itself rather than by a table, and are advanced by the chemistry burner (`quokka::chemistry::computeChemistry`) rather than by the cooling integrator.
 
 This is the backend for every problem with chemistry or photochemistry (`Microphysics_Traits<P>::chemistry` or `photochemistry`), which covers both primordial chemistry problems (`PrimordialChem`, `PopIII`) and photoionization problems (`DTypeFront_JAFF`, `DTypeFrontVC`, `StromgrenSphere`, `StromgrenSphereRSLA`, `OneZonePhotoionization`) — including hydro-enabled ones. None of these set `EOSBackend` explicitly; they receive `EOSMicrophysics` through `DefaultEOSBackend` by virtue of these traits. See the chemistry module and [Photoionization](photoionization.md) for details.
 

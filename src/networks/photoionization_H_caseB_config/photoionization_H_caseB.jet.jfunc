@@ -5,7 +5,7 @@
 # bands = [Eband_lo, Eband_hi] by hand -- jaff does not expose
 # [network.radiation] settings as .jfunc symbols, so there is no mechanism,
 # automated or otherwise, tying these two values to that file. This is NOT
-# fixable from this repo: jaffgen would need to inject bands/power_law_index
+# fixable from this repo: jaffgen would need to inject bands/profile_index
 # from the parsed TOML into the .jfunc namespace (or cross-check them
 # post-parse) before this can be made self-consistent. Until then, if
 # jaffgen.toml's bands change, these two lines must be updated by hand, and
@@ -13,15 +13,15 @@
 @var Eband_lo = 13.6
 @var Eband_hi = 26.0
 
-# Mean photon energy for a power_law_index = 0 band (jaffgen.toml's current
+# Mean photon energy for a profile_index = 0 band (jaffgen.toml's current
 # value). Deriving this from Eband_lo/Eband_hi only removes the arithmetic
 # duplication -- it does NOT close the gap above, since Eband_lo/Eband_hi are
 # themselves the hand-copied, unchecked values. This formula is also only
-# valid for power_law_index = 0 -- it must be re-derived by hand (see
+# valid for profile_index = 0 -- it must be re-derived by hand (see
 # GetChemBandQuanta() in src/radiation/radiation_system.hpp) if
-# jaffgen.toml's power_law_index ever changes from 0. power_law_index is
-# likewise never exposed to jaff, so that too can only be kept in sync by
-# hand.
+# jaffgen.toml's profile_index ever changes from 0. profile_index is
+# likewise not exposed as a .jfunc symbol, so that too can only be kept in
+# sync by hand.
 @var Eavg0 = Eband_lo * Eband_hi * log(Eband_hi / Eband_lo) / (Eband_hi - Eband_lo)
 
 # Reaction 2: H + e- -> H+ + e- + e- (collisional ionization)

@@ -69,4 +69,4 @@ integrator.atol_spec                     = 1.0e-3   # cm^-3
 integrator.atol_enuc                     = 1.24e8   # erg/g; c_v * 1 K temperature accuracy
 integrator.atol_rad_num                  = 1.0e-6   # cm^-3
 integrator.species_failure_tolerance     = 1.0e-3   # cm^-3; = atol_spec
-integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at the front
+integrator.radiation_failure_tolerance   = 0.5      # cm^-3;

@@ -2,9 +2,5 @@
 bands = [13.6, 26.0]
 # index alpha of the photon-number spectrum n(E) ~ E^(alpha-2) in a band; jaff reads it
 profile_index = 0
-# The same index for Microphysics' build (write_jaff_network_vars.py), which jaff ignores.
-# Temporary: it goes once Quokka stops building the network with Microphysics. Keep it
-# equal to profile_index until then; a static_assert in photochemistry.hpp checks this.
-power_law_index = 0
 energy_density = false
 rsl = "c_hat"

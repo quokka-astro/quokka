@@ -1,28 +1,16 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  set(microphysics_network_name "photoionization_H_caseB_handwritten") # this will override
-                                                  # network_name to
-                                                  # photoionization for this
-                                                  # directory only
+  set(microphysics_network_name "photoionization_H_caseB_handwritten")
 
   set(JOB_NAME StromgrenSphere)
-
-  # NSPEC/SPECIES_ENUM/SPEC_NAMES/AION/ZION/CHEM_BANDS/... come from the
-  # 'photoionization' entry in src/networks/NetworkRegistry.cmake, and
-  # network_properties.H is generated from them inside
-  # setup_target_for_microphysics_compilation() below.
-  setup_target_for_microphysics_compilation(${microphysics_network_name}
-                                            "${CMAKE_CURRENT_BINARY_DIR}/"
-                                            INTEGRATOR "Rosenbrock")
 
   # two executables built from StromgrenSphere.hpp, each with its own test and input
   foreach(target ${JOB_NAME} ${JOB_NAME}TempIndependentRecombination)
     add_executable(
       ${target} test${target}.cpp "${QuokkaSourcesNoEOS}"
-                ${${microphysics_network_name}_sources}
                 ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name}/network.cpp)
-
-    # this will add #define PHOTOCHEMISTRY
-    target_compile_definitions(${target} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX)
+    quokka_add_eos(${target} photoionization ${microphysics_network_name})
+    # the network's actual_rhs.H
+    target_include_directories(${target} BEFORE PRIVATE ${CMAKE_SOURCE_DIR}/src/networks/${microphysics_network_name})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
       setup_target_for_cuda_compilation(${target})

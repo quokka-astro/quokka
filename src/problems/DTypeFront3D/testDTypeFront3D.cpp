@@ -15,9 +15,11 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/thermophotochemistry_handwritten/network.hpp"
 #include "physics_info.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_dust_system.hpp"
 #include "radiation/radiation_system.hpp"
 #ifdef HAVE_PYTHON
@@ -33,10 +35,8 @@
 #include <vector>
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 struct DTypeFront3D {};
 
@@ -60,9 +60,9 @@ template <> struct quokka::EOS_Traits<DTypeFront3D> {
 template <> struct Microphysics_Traits<DTypeFront3D> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::Thermophotochemistry;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true;		    // built with PHOTOCHEMISTRY
-	static constexpr bool dust_chemical_band_absorption = true; // built with DUST_CHEMICAL_BAND_ABSORPTION
-	static constexpr bool integrate_rad_flux = false;	    // built with SKIP_PHOTOCHEMFLUX
+	static constexpr bool photochemistry = true;
+	static constexpr bool dust_chemical_band_absorption = true;
+	static constexpr bool integrate_rad_flux = false;
 };
 
 using Network = Microphysics_Traits<DTypeFront3D>::Network;
@@ -653,7 +653,7 @@ void RadSystem<DTypeFront3D>::AddRadSource(array_t &radEnergy, array_t &reducedF
 template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species, temperature, and source photon rates
 	amrex::ParmParse const pp("photoionize");
@@ -698,7 +698,6 @@ template <> void QuokkaSimulation<DTypeFront3D>::preCalculateInitialConditions()
 	}
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	// Called once per level built at t = 0. Reopening an open stream fails and silently drops every later write.
 	// A restart appends to the file the original run wrote.
 	if (amrex::ParallelDescriptor::IOProcessor() && !userData_.output_file_.is_open()) {
@@ -730,7 +729,7 @@ template <> void QuokkaSimulation<DTypeFront3D>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::microphysics::BurnState<DTypeFront3D> state;
 	std::array<Real, Network::NumSpec> numdens = {-1.0};
 	numdens[Network::Species::e] = userData_.n_e_init;
 	numdens[Network::Species::H] = userData_.n_HI_init;
@@ -943,7 +942,7 @@ auto problem_main() -> int
 				const amrex::Real x_HII = n_HII_cell / denom;
 				const amrex::Real x_HI = n_HI_cell / denom;
 
-				burn_t bstate;
+				quokka::microphysics::BurnState<DTypeFront3D> bstate;
 				for (int nn = 0; nn < Network::NumSpec; ++nn) {
 					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront3D>::scalar0_index + nn) / spmasses[nn];
 				}

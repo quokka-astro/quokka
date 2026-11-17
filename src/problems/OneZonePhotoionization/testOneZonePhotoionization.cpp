@@ -8,8 +8,10 @@
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "microphysics/burn_state.hpp"
 #include "microphysics/microphysics_traits.hpp"
 #include "networks/photoionization_H_caseB_handwritten/network.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include <fstream>
@@ -26,10 +28,8 @@
 #endif
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "network.H"
 
 struct PhotoionizationStreamingProblem {};
 
@@ -45,7 +45,7 @@ template <> struct quokka::EOS_Traits<PhotoionizationStreamingProblem> {
 template <> struct Microphysics_Traits<PhotoionizationStreamingProblem> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::PhotoionizationHCaseB;
 	using Integrator = quokka::microphysics::Rosenbrock<quokka::microphysics::ROS2S>;
-	static constexpr bool photochemistry = true; // built with PHOTOCHEMISTRY
+	static constexpr bool photochemistry = true;
 };
 
 using Network = Microphysics_Traits<PhotoionizationStreamingProblem>::Network;
@@ -88,7 +88,7 @@ template <> struct SimulationData<PhotoionizationStreamingProblem> {
 template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
-	init_extern_parameters();
+	eos_rp::ReadParameters();
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("photoionization");
@@ -110,9 +110,8 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	pp.query("n_photon", userData_.n_photon);
 
 	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 
-	burn_t state;
+	quokka::microphysics::BurnState<PhotoionizationStreamingProblem> state;
 	state.T = userData_.temperature;
 	Real rhotot = 0.0_rt;
 	state.xn[Network::Species::e] = userData_.n_e_init;
@@ -154,7 +153,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
+	quokka::microphysics::BurnState<PhotoionizationStreamingProblem> state;
 	std::array<Real, Network::NumSpec> numdens = {-1.0};
 	numdens[Network::Species::e] = userData_.n_e_init;
 	numdens[Network::Species::H] = userData_.n_HI_init;

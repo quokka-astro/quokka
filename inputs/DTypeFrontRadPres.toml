@@ -38,18 +38,18 @@ plotfile_prefix = "DTypeRadPres"
 
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 
-# VODE absolute tolerances. NOTE: these were tuned for the original DTypeFront_JAFF at n_H = 139.9
-# cm^-3. This problem runs at n_H = 1e4 cm^-3 (~70x denser), so several atol values that are
+# Integrator absolute tolerances. NOTE: these were tuned with VODE for the original DTypeFront_JAFF
+# at n_H = 139.9 cm^-3. This problem runs at n_H = 1e4 cm^-3 (~70x denser), so several atol values that are
 # expressed as absolute number densities (atol_spec, atol_rad_num, species/radiation failure
-# tolerances) may need to be rescaled up by a similar factor. Start here and adjust if VODE
-# spends excessive steps or the step-rejection loop triggers at the ionization front.
+# tolerances) may need to be rescaled up by a similar factor. Start here and adjust if the integrator
+# spends excessive steps or burns fail at the ionization front.
 #
 # atol_spec = 1e-5 * n_H = physical negligibility floor -> 1e-5 * 1e4 = 0.1 cm^-3.
 integrator.atol_spec                     = 1.0e-1   # cm^-3; 1e-5 x n_H (n_H = 1e4)
 integrator.atol_enuc                     = 1.24e8   # erg/g; c_v x 1 K temperature accuracy
 integrator.atol_rad_num                  = 1.0e-1     # cm^-3;
 integrator.species_failure_tolerance     = 1.0e-1   # cm^-3; = atol_spec
-integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at ionization front
+integrator.radiation_failure_tolerance   = 0.5      # cm^-3;
 
 integrator.rtol_spec     = 1e-2
 integrator.rtol_rad_num  = 1e-2

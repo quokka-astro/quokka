@@ -227,7 +227,6 @@ if [ "$MODE" = generate ]; then
 		echo "source_commit $(git -C "$ROOT" rev-parse HEAD)"
 		echo "source_parent $(git -C "$ROOT" rev-parse HEAD^ 2>/dev/null || echo none)"
 		echo "source_subject $(git -C "$ROOT" log -1 --format=%s)"
-		echo "microphysics $(git -C "$ROOT" rev-parse HEAD:extern/Microphysics)"
 		echo "amrex $(git -C "$ROOT" rev-parse HEAD:extern/amrex)"
 		echo "generated $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 		echo "runner_image ${ImageOS:-unknown} ${ImageVersion:-unknown}"

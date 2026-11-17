@@ -138,7 +138,7 @@ Internal links use relative paths from the markdown source:
 [Known Issues and Errata](known_issues.md)
 ```
 
-Section anchors are auto-generated from headings (lowercase, hyphenated): `[VODE tolerances](photoionization.md#vode-tolerances)`.
+Section anchors are auto-generated from headings (lowercase, hyphenated): `[Running on GPUs](installation.md#running-on-gpus)`.
 
 ## Images
 
