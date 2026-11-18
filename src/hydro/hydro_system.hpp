@@ -618,7 +618,7 @@ void HydroSystem<problem_t>::ComputeGasPressure(amrex::MultiFab &cc_mf_out, int 
 						amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_mf_cVars)
 {
 	for (amrex::MFIter mfi(cc_mf_out); mfi.isValid(); ++mfi) {
-		const amrex::Box &box_cc = mfi.validbox();
+		const amrex::Box box_cc = mfi.growntilebox(cc_mf_out.nGrowVect());
 		const auto &cc_a4_out = cc_mf_out.array(mfi);
 		const auto &cc_a4_cVars = cc_mf_cVars.const_array(mfi);
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fc_a4_cVars{};
