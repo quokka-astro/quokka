@@ -7,6 +7,7 @@
 
 #include "hydro/hydro_system.hpp"
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <vector>
 
@@ -58,17 +59,93 @@ constexpr Real ur = -5.0;
 constexpr Real pr = 0.6;
 int ishock_g = 0; // NOLINT; set from the computed shock index in setInitialConditionsOnGrid; host-only, never dereferenced on device
 
+// post-shock state, and the x2 component of the magnetic field on either side of the shock; set from
+// problem.inverse_plasma_beta in problem_main(), where the default of zero keeps the states above
+// with no magnetic field
+AMREX_GPU_MANAGED Real post_shock_density = dl;	       // NOLINT
+AMREX_GPU_MANAGED Real post_shock_velocity = ul;       // NOLINT
+AMREX_GPU_MANAGED Real post_shock_pressure = pl;       // NOLINT
+AMREX_GPU_MANAGED Real post_shock_magnetic_field = 0.; // NOLINT
+AMREX_GPU_MANAGED Real pre_shock_magnetic_field = 0.;  // NOLINT
+
+// for a pre-shock plasma beta of 1 / inverse_plasma_beta, solve the jump conditions of a
+// perpendicular shock (magnetic field along x2) that moves at the same speed as the shock with no magnetic field
+void setShockStates(Real const inverse_plasma_beta)
+{
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(inverse_plasma_beta >= 0., "problem.inverse_plasma_beta must be non-negative");
+	if (inverse_plasma_beta == 0.) {
+		return;
+	}
+	constexpr Real gamma = quokka::EOS_Traits<MHDQuirk>::gamma;
+	constexpr Real shock_speed = (dl * ul - dr * ur) / (dl - dr);
+	constexpr Real pre_shock_frame_velocity = shock_speed - ur;
+	constexpr Real mass_flux = dr * pre_shock_frame_velocity;
+	Real const b_pre = std::sqrt(2. * pr * inverse_plasma_beta);
+	auto const compute_post_shock_pressure = [=](Real const compression) {
+		return pr + 0.5 * b_pre * b_pre * (1. - compression * compression) + mass_flux * pre_shock_frame_velocity * (1. - 1. / compression);
+	};
+	auto const compute_energy_flux_jump = [=](Real const compression) {
+		Real const post_shock_frame_velocity = pre_shock_frame_velocity / compression;
+		Real const pre_shock_flux = mass_flux * (0.5 * pre_shock_frame_velocity * pre_shock_frame_velocity + gamma / (gamma - 1.) * pr / dr) +
+					    pre_shock_frame_velocity * b_pre * b_pre;
+		Real const post_shock_flux = mass_flux * (0.5 * post_shock_frame_velocity * post_shock_frame_velocity +
+							  gamma / (gamma - 1.) * compute_post_shock_pressure(compression) / (compression * dr)) +
+					     post_shock_frame_velocity * compression * compression * b_pre * b_pre;
+		return pre_shock_flux - post_shock_flux;
+	};
+	// bisect on the compression ratio, which is bounded above by the strong-shock limit
+	Real compression_lo = 1. + 1.e-6;
+	Real compression_hi = (gamma + 1.) / (gamma - 1.) - 1.e-9;
+	for (int iter = 0; iter < 200; ++iter) {
+		Real const compression_mid = 0.5 * (compression_lo + compression_hi);
+		if (compute_energy_flux_jump(compression_lo) * compute_energy_flux_jump(compression_mid) <= 0.) {
+			compression_hi = compression_mid;
+		} else {
+			compression_lo = compression_mid;
+		}
+	}
+	Real const compression = 0.5 * (compression_lo + compression_hi);
+	post_shock_density = compression * dr;
+	post_shock_velocity = shock_speed - pre_shock_frame_velocity / compression;
+	post_shock_pressure = compute_post_shock_pressure(compression);
+	post_shock_magnetic_field = compression * b_pre;
+	pre_shock_magnetic_field = b_pre;
+}
+
+// index of the last cell centre to the left of the initial shock position
+auto computeShockIndex(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) -> int
+{
+	Real const xshock = 0.4;
+	int ishock = 0;
+	for (ishock = 0; (prob_lo[0] + dx[0] * (ishock + static_cast<Real>(0.5))) < xshock; ++ishock) {
+	}
+	return ishock - 1;
+}
+
 template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
+	int const ishock = computeShockIndex(grid_elem.dx_, grid_elem.prob_lo_);
+	// only the x2 component of the magnetic field is non-zero, and it varies with x0 alone, so it is
+	// divergence-free
+	bool const is_x2_face = (grid_elem.dir_ == quokka::direction::z);
+	Real const b_post = post_shock_magnetic_field;
+	Real const b_pre = pre_shock_magnetic_field;
 
 	const int ncomp_fc = Physics_Indices<MHDQuirk>::nvarPerDim_fc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_fc; ++n) {
-			state_fc(i, j, k, n) = 0; // fill all b-field quantities with zeros
+			state_fc(i, j, k, n) = 0;
+		}
+		if (is_x2_face) {
+			if (i <= ishock) {
+				state_fc(i, j, k, Physics_Indices<MHDQuirk>::mhdFirstIndex) = b_post;
+			} else {
+				state_fc(i, j, k, Physics_Indices<MHDQuirk>::mhdFirstIndex) = b_pre;
+			}
 		}
 	});
 }
@@ -81,17 +158,18 @@ template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGrid(quokka::
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	Real const xshock = 0.4;
-	int ishock = 0;
-	for (ishock = 0; (prob_lo[0] + dx[0] * (ishock + static_cast<Real>(0.5))) < xshock; ++ishock) {
-	}
-	ishock--;
+	int const ishock = computeShockIndex(dx, prob_lo);
 	ishock_g = ishock;
 	amrex::Print() << "ishock = " << ishock << "\n";
 
-	Real const dd = dl - 0.135;
-	Real const ud = ul + 0.219;
-	Real const pd = pl - 1.31;
+	Real const rho_post = post_shock_density;
+	Real const vx_post = post_shock_velocity;
+	Real const P_post = post_shock_pressure;
+	Real const emag_post = 0.5 * post_shock_magnetic_field * post_shock_magnetic_field;
+	Real const emag_pre = 0.5 * pre_shock_magnetic_field * pre_shock_magnetic_field;
+	Real const dd = rho_post - 0.135;
+	Real const ud = vx_post + 0.219;
+	Real const pd = P_post - 1.31;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		double vx = NAN;
@@ -99,15 +177,18 @@ template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGrid(quokka::
 		double const vz = 0.;
 		double rho = NAN;
 		double P = NAN;
+		double emag = NAN;
 
 		if (i <= ishock) {
-			rho = dl;
-			vx = ul;
-			P = pl;
+			rho = rho_post;
+			vx = vx_post;
+			P = P_post;
+			emag = emag_post;
 		} else {
 			rho = dr;
 			vx = ur;
 			P = pr;
+			emag = emag_pre;
 		}
 
 		if ((i == ishock) && (j % 2 == 0)) {
@@ -128,7 +209,7 @@ template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGrid(quokka::
 		state_cc(i, j, k, HydroSystem<MHDQuirk>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<MHDQuirk>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<MHDQuirk>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<MHDQuirk>::energy_index) = quokka::EOS<MHDQuirk>::ComputeEintFromPres(rho, P) + 0.5 * rho * v_sq;
+		state_cc(i, j, k, HydroSystem<MHDQuirk>::energy_index) = quokka::EOS<MHDQuirk>::ComputeEintFromPres(rho, P) + 0.5 * rho * v_sq + emag;
 		state_cc(i, j, k, HydroSystem<MHDQuirk>::internalEnergy_index) = quokka::EOS<MHDQuirk>::ComputeEintFromPres(rho, P);
 	});
 }
@@ -239,16 +320,19 @@ AMRSimulation<MHDQuirk>::setCustomBoundaryConditions(const amrex::IntVect &iv, a
 
 	// Left state
 	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
-	low_bdr_cells[RadSystem<MHDQuirk>::gasEnergy_index] = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
-	low_bdr_cells[RadSystem<MHDQuirk>::gasInternalEnergy_index] = pl / (gamma - 1.);
-	low_bdr_cells[RadSystem<MHDQuirk>::gasDensity_index] = dl;
-	low_bdr_cells[RadSystem<MHDQuirk>::x1GasMomentum_index] = dl * ul;
+	low_bdr_cells[RadSystem<MHDQuirk>::gasEnergy_index] = post_shock_pressure / (gamma - 1.) +
+							      0.5 * post_shock_density * post_shock_velocity * post_shock_velocity +
+							      0.5 * post_shock_magnetic_field * post_shock_magnetic_field;
+	low_bdr_cells[RadSystem<MHDQuirk>::gasInternalEnergy_index] = post_shock_pressure / (gamma - 1.);
+	low_bdr_cells[RadSystem<MHDQuirk>::gasDensity_index] = post_shock_density;
+	low_bdr_cells[RadSystem<MHDQuirk>::x1GasMomentum_index] = post_shock_density * post_shock_velocity;
 	low_bdr_cells[RadSystem<MHDQuirk>::x2GasMomentum_index] = 0.;
 	low_bdr_cells[RadSystem<MHDQuirk>::x3GasMomentum_index] = 0.;
 
 	// Right state
 	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
-	high_bdr_cells[RadSystem<MHDQuirk>::gasEnergy_index] = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
+	high_bdr_cells[RadSystem<MHDQuirk>::gasEnergy_index] =
+	    pr / (gamma - 1.) + 0.5 * dr * ur * ur + 0.5 * pre_shock_magnetic_field * pre_shock_magnetic_field;
 	high_bdr_cells[RadSystem<MHDQuirk>::gasInternalEnergy_index] = pr / (gamma - 1.);
 	high_bdr_cells[RadSystem<MHDQuirk>::gasDensity_index] = dr;
 	high_bdr_cells[RadSystem<MHDQuirk>::x1GasMomentum_index] = dr * ur;
@@ -258,6 +342,20 @@ AMRSimulation<MHDQuirk>::setCustomBoundaryConditions(const amrex::IntVect &iv, a
 	// Apply boundary conditions
 	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
 	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
+}
+
+template <>
+template <quokka::direction dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<MHDQuirk>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, int /*dcomp*/,
+							    int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+							    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+{
+	// {x0-face, x1-face, x2-face} values of the magnetic field on each side of the domain
+	amrex::GpuArray<amrex::Real, 3> const low_bdr_values = {0., 0., post_shock_magnetic_field};
+	amrex::GpuArray<amrex::Real, 3> const high_bdr_values = {0., 0., pre_shock_magnetic_field};
+	setConstantDirichletBCFaceVarLo<0, dir, 3>(iv, consVar_fc, geom, low_bdr_values);
+	setConstantDirichletBCFaceVarHi<0, dir, 3>(iv, consVar_fc, geom, high_bdr_values);
 }
 
 auto problem_main() -> int
@@ -270,11 +368,20 @@ auto problem_main() -> int
 	const int nvars_fc = Physics_Indices<MHDQuirk>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		// x: Dirichlet (the magnetic field can differ on either side of the shock); y, z: periodic
+		BCs_fc[icomp].setLo(0, amrex::BCType::ext_dir);
+		BCs_fc[icomp].setHi(0, amrex::BCType::ext_dir);
+		for (int idim = 1; idim < AMREX_SPACEDIM; ++idim) {
 			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
 			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
 		}
 	}
+
+	// pre-shock inverse plasma beta; the default of zero sets no magnetic field
+	Real inverse_plasma_beta = 0.;
+	amrex::ParmParse const pp("problem");
+	pp.query("inverse_plasma_beta", inverse_plasma_beta);
+	setShockStates(inverse_plasma_beta);
 
 	// Problem initialization
 	QuokkaSimulation<MHDQuirk> sim(BCs_cc, BCs_fc);
