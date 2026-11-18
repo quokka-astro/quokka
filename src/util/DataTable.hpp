@@ -1235,8 +1235,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						if (output_transform_bcast == TransformType::fast_log || output_transform_bcast == TransformType::log) {
 							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 							    value >= 0.0,
-							    std::format("log output transform requires non-negative values, got {} at output {} index {}", value,
-									out_idx, i));
+							    std::format("log output transform requires non-negative values, got {} at output {} index {}",
+									value, out_idx, i));
 							value = log_(value);
 						}
 						flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i})] = value;
@@ -1278,9 +1278,10 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 								if (output_transform_bcast == TransformType::fast_log ||
 								    output_transform_bcast == TransformType::log) {
 									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-									    value >= 0.0, std::format("log output transform requires non-negative values, got {} at "
-												     "output {} index ({}, {}, {})",
-												     value, out_idx, i1, i2, i3));
+									    value >= 0.0,
+									    std::format("log output transform requires non-negative values, got {} at "
+											"output {} index ({}, {}, {})",
+											value, out_idx, i1, i2, i3));
 									value = log_(value);
 								}
 								flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2, i3})] = value;
