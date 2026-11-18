@@ -17,7 +17,7 @@ prefix = "scope/"
 ## needs adding to a scope below
 [scope.not_mapped_label]
 value = "undefined"
-color = "B60205"
+color = "D73A4A"
 description = "A changed file has no scope yet; a maintainer needs to add it to labels.toml"
 
 ## --- physics
@@ -25,7 +25,7 @@ description = "A changed file has no scope yet; a maintainer needs to add it to 
 
 [[scope.label]]
 value = "hydro"
-color = "4ADD08"
+color = "16A085"
 description = "Hydrodynamics"
 path_patterns = [
     "src/hydro/*",
@@ -38,7 +38,7 @@ path_patterns = [
 
 [[scope.label]]
 value = "MHD"
-color = "66735C"
+color = "16A085"
 description = "Magnetohydrodynamics"
 path_patterns = [
     "src/hydro/mhd_system*",
@@ -59,7 +59,7 @@ path_patterns = [
 
 [[scope.label]]
 value = "radiation"
-color = "CAD629"
+color = "16A085"
 description = "Radiation transport"
 path_patterns = [
     "src/radiation/*",
@@ -71,7 +71,7 @@ path_patterns = [
 
 [[scope.label]]
 value = "particles"
-color = "277120"
+color = "16A085"
 description = "Particles"
 path_patterns = [
     "src/particles/*",
@@ -86,7 +86,7 @@ path_patterns = [
 
 [[scope.label]]
 value = "chemistry"
-color = "C5DEF5"
+color = "16A085"
 description = "Chemistry and chemical networks"
 path_patterns = [
     "src/chemistry/*",
@@ -100,13 +100,13 @@ path_patterns = [
 
 [[scope.label]]
 value = "cooling"
-color = "BFD4F2"
+color = "16A085"
 description = "Radiative cooling"
 path_patterns = ["src/cooling/*", "src/problems/ResampledCooling*", "inputs/ResampledCooling*"]
 
 [[scope.label]]
 value = "dust"
-color = "D4C5F9"
+color = "16A085"
 description = "Dust"
 path_patterns = [
     "src/dust/*",
@@ -120,7 +120,7 @@ path_patterns = [
 
 [[scope.label]]
 value = "conduction"
-color = "F9D0C4"
+color = "16A085"
 description = "Thermal conduction"
 path_patterns = ["src/conduction/*", "src/problems/ThermalConduction*", "inputs/ThermalConduction*"]
 
@@ -128,13 +128,13 @@ path_patterns = ["src/conduction/*", "src/problems/ThermalConduction*", "inputs/
 
 [[scope.label]]
 value = "IO"
-color = "1D76DB"
+color = "16A085"
 description = "Input and output"
 path_patterns = ["src/io/*"]
 
 [[scope.label]]
 value = "core"
-color = "5319E7"
+color = "16A085"
 description = "Shared driver, math and utilities"
 path_patterns = [
     "src/QuokkaSimulation*",
@@ -155,7 +155,7 @@ path_patterns = [
 
 [[scope.label]]
 value = "build"
-color = "C2E0C6"
+color = "16A085"
 description = "Build system and third-party libraries"
 path_patterns = [
     "CMakeLists.txt",
@@ -171,19 +171,19 @@ path_patterns = [
 
 [[scope.label]]
 value = "tests"
-color = "FEF2C0"
+color = "16A085"
 description = "Test problems, inputs, reference data and the regression suite"
 path_patterns = ["src/problems/*", "inputs/*", "extern/*", "regression/*", "tests/*"]
 
 [[scope.label]]
 value = "tools"
-color = "E99695"
+color = "16A085"
 description = "Helper scripts and files for AI agents"
 path_patterns = ["scripts/*", ".agents/*", ".claude/*", "AGENTS.md", "CLAUDE.md", "context7.json"]
 
 [[scope.label]]
 value = "CI"
-color = "BFDADC"
+color = "16A085"
 description = "Continuous integration and code checkers"
 path_patterns = [
     ".github/*",
@@ -204,7 +204,7 @@ path_patterns = [
 
 [[scope.label]]
 value = "documentation"
-color = "0075CA"
+color = "16A085"
 description = "Documentation"
 path_patterns = ["docs/*", "*.md", "paper/*", "CITATION.cff", "LICENSE", ".mailmap"]
 
@@ -220,31 +220,31 @@ prefix = "size/"
 
 [[size.label]]
 value = "XS"
-color = "00FF00"
+color = "EAEEF2"
 description = "This PR changes 0 to 9 lines"
 min_num_lines = 0
 
 [[size.label]]
 value = "S"
-color = "77B800"
+color = "D0D7DE"
 description = "This PR changes 10 to 29 lines"
 min_num_lines = 10
 
 [[size.label]]
 value = "M"
-color = "EBB800"
+color = "AFB8C1"
 description = "This PR changes 30 to 99 lines"
 min_num_lines = 30
 
 [[size.label]]
 value = "L"
-color = "EB9500"
+color = "6E7781"
 description = "This PR changes 100 to 499 lines"
 min_num_lines = 100
 
 [[size.label]]
 value = "XL"
-color = "FF823F"
+color = "D73A4A"
 description = "This PR changes 500 or more lines"
 min_num_lines = 500
 
@@ -260,16 +260,16 @@ prefix = "priority/"
 
 [[priority.label]]
 value = "low"
-color = "0E8A16"
+color = "FDDCB5"
 description = "Review when there is time"
 
 [[priority.label]]
 value = "normal"
-color = "FBCA04"
+color = "F9A65A"
 description = "Review at the normal pace"
 default = true
 
 [[priority.label]]
 value = "high"
-color = "D93F0B"
+color = "E36209"
 description = "Review soon"
