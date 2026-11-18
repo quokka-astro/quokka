@@ -36,9 +36,9 @@
 
 struct OrionRestart {}; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double T_gas = 10.0;	 // K; isothermal gas temperature
-constexpr double mu_gas = 2.33; // mean molecular weight of molecular gas
-constexpr double kappa0 = 0.1;	 // cm^2 g^-1; constant grey opacity
+constexpr double T_gas = 10.0;		// K; isothermal gas temperature
+constexpr double mu_gas = 2.33;		// mean molecular weight of molecular gas
+constexpr double kappa0 = 0.1;		// cm^2 g^-1; constant grey opacity
 constexpr double rho_default = 1.0e-20; // g cm^-3; uniform density used only when starting without a checkpoint
 
 template <> struct quokka::EOS_Traits<OrionRestart> {
@@ -164,16 +164,17 @@ auto computeCompositeDiagnostics(QuokkaSimulation<OrionRestart> &sim) -> Composi
 
 		auto const &s = state.const_arrays();
 		auto const &w = weight.const_arrays();
-		auto sums = amrex::ParReduce(amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum>{},
-					     amrex::TypeList<double, double, double, double, double>{}, state, amrex::IntVect(0),
-					     [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::GpuTuple<double, double, double, double, double> {
-						     const double wt = static_cast<double>(w[bx](i, j, k));
-						     const double rho = s[bx](i, j, k, rho_idx);
-						     const double mx = s[bx](i, j, k, mx_idx);
-						     const double my = s[bx](i, j, k, my_idx);
-						     const double mz = s[bx](i, j, k, mz_idx);
-						     return {wt * rho, wt * mx, wt * my, wt * mz, wt * (mx * mx + my * my + mz * mz) / rho};
-					     });
+		auto sums =
+		    amrex::ParReduce(amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum>{},
+				     amrex::TypeList<double, double, double, double, double>{}, state, amrex::IntVect(0),
+				     [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> amrex::GpuTuple<double, double, double, double, double> {
+					     const double wt = static_cast<double>(w[bx](i, j, k));
+					     const double rho = s[bx](i, j, k, rho_idx);
+					     const double mx = s[bx](i, j, k, mx_idx);
+					     const double my = s[bx](i, j, k, my_idx);
+					     const double mz = s[bx](i, j, k, mz_idx);
+					     return {wt * rho, wt * mx, wt * my, wt * mz, wt * (mx * mx + my * my + mz * mz) / rho};
+				     });
 		mass += vol * amrex::get<0>(sums);
 		px += vol * amrex::get<1>(sums);
 		py += vol * amrex::get<2>(sums);
@@ -234,8 +235,8 @@ auto problem_main() -> int
 
 	QuokkaSimulation<OrionRestart> sim(BCs_cc, BCs_fc);
 
-	double rtol = 1.0e-10;	   // tolerance for reproducing the converter's targets
-	double divb_tol = 1.0e-10; // tolerance on dx |div B| / max|B|
+	double rtol = 1.0e-10;	    // tolerance for reproducing the converter's targets
+	double divb_tol = 1.0e-10;  // tolerance on dx |div B| / max|B|
 	double mass_rtol = 1.0e-10; // tolerance on composite mass conservation during evolve
 	const amrex::ParmParse pp("orion");
 	pp.query("rtol", rtol);
@@ -254,7 +255,8 @@ auto problem_main() -> int
 		const auto prob_lo = sim.Geom(0).ProbLoArray();
 		const auto prob_hi = sim.Geom(0).ProbHiArray();
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			success &= checkClose(std::format("box length [{}]", idim), prob_hi[idim] - prob_lo[idim], meta["orion2_target_length"].as<double>(), rtol);
+			success &=
+			    checkClose(std::format("box length [{}]", idim), prob_hi[idim] - prob_lo[idim], meta["orion2_target_length"].as<double>(), rtol);
 		}
 		success &= checkClose("composite mean density", diag0.mean_density, meta["orion2_target_mean_density"].as<double>(), rtol);
 		success &= checkClose("composite mass-weighted vdisp", diag0.vdisp, meta["orion2_target_vdisp"].as<double>(), rtol);
