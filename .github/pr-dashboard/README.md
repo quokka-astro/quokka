@@ -36,7 +36,7 @@ Edit `labels.toml`. Each category sets a prefix, and each label holds only its v
 - Scope labels list `path_patterns`. A PR gets every scope with a pattern matching one of its changed files, and `*` also matches `/`.
 - Size labels list `min_num_lines`. A PR gets the largest one its line count reaches.
 - One priority label is marked `default = true`, and is given to a PR with no priority.
-- A changed file that matches no scope gives the PR the not-mapped label, so a missing pattern shows up on the PR.
+- A changed file that matches no scope gives the PR the `scope/undefined` label, so a missing pattern shows up on the PR.
 
 After the change merges into `development`, the label workflow creates any new labels and updates colours and descriptions. A PR that is already open keeps its old labels until it is labelled again, for example with `/recompute-labels`.
 
@@ -66,7 +66,7 @@ Decisions I made along the way, and why.
 ### Labels
 
 - **The tools only manage the `scope/`, `size/` and `priority/` labels,** rather than every label on a PR. Labels without these prefixes are left alone. `scope/` and `size/` labels edited by hand are replaced when the labels are recalculated, and `priority/normal` is only added when a PR has no `priority/` label.
-- **A file with no matching scope gives the PR the `scope/not-mapped` label,** rather than a fallback scope. The label shows where `labels.toml` is missing a pattern.
+- **A file with no matching scope gives the PR the `scope/undefined` label,** rather than a fallback scope. The label shows where `labels.toml` is missing a pattern.
 
 ### Commands
 

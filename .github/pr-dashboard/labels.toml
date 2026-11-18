@@ -16,7 +16,7 @@ prefix = "scope/"
 ## a changed file that matches no scope gives the PR this label, to show that its path
 ## needs adding to a scope below
 [scope.not_mapped_label]
-value = "not-mapped"
+value = "undefined"
 color = "B60205"
 description = "A changed file has no scope yet; a maintainer needs to add it to labels.toml"
 

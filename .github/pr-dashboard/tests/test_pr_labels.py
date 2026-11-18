@@ -69,7 +69,7 @@ class TestPrLabels_Scope(unittest.TestCase):
     ):
         edited_file_paths = ("src/newmodule/thing.hpp", "src/hydro/HLLC.hpp")
         scope_label_names = get_scope_label_names(edited_file_paths)
-        self.assertEqual(scope_label_names, {"scope/not-mapped", "scope/hydro"})
+        self.assertEqual(scope_label_names, {"scope/undefined", "scope/hydro"})
 
     def test_build_files_and_libraries(
         self,
