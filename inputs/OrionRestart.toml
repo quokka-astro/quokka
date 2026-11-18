@@ -1,0 +1,53 @@
+# Restart from an ORION2 driven-turbulence checkpoint converted to Quokka format by
+#   scripts/python/orion2_to_quokka_checkpoint.py <orion2.hdf5> chk_orion --length 1.3886e19 --mean-density 4e-21 --vdisp 2e5
+# The converter prints the geometry/AMR settings below for the snapshot it converted; they must match.
+
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.3886e19, 1.3886e19, 1.3886e19]  # = --length (4.5 pc)
+geometry.is_periodic = [1, 1, 1]
+
+restartfile = "chk_orion"  # converted checkpoint directory
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 0  # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement (must match the ORION2 hierarchy)
+# *****************************************************************
+amr.n_cell = [512, 512, 512]
+amr.max_level = 6
+amr.ref_ratio = 2
+amr.blocking_factor = 8  # ORION2 fine boxes are multiples of 8 cells
+amr.max_grid_size = 32
+amr.n_error_buf = 3
+amr.grid_eff = 0.7
+
+orion.jeans_number = 0.125  # refine where dx > jeans_number * thermal Jeans length
+
+# *****************************************************************
+# Timestepping
+# *****************************************************************
+cfl = 0.3
+density_floor = 1.0e-30  # g cm^-3; far below any ORION2 density, so it never adds mass
+max_timesteps = 2  # short restart test
+stop_time = 1.0e20  # s; the restart time is the rescaled ORION2 time, so keep this far beyond it
+do_reflux = 1
+do_subcycle = 1
+
+# *****************************************************************
+# Output
+# *****************************************************************
+plotfile_interval = -1
+checkpoint_interval = -1
+
+# *****************************************************************
+# Checks performed by the OrionRestart problem
+# *****************************************************************
+orion.rtol = 1.0e-10  # composite mean density and vdisp vs the converter's targets
+orion.divb_tol = 1.0e-10  # dx |div B| / max|B| on every level
+orion.mass_rtol = 1.0e-10  # composite mass conservation over the run
