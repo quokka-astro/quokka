@@ -39,6 +39,7 @@ template <> struct Physics_Traits<SedovProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::constant; // shear/bulk default to 0; no-op unless set
+	static constexpr bool has_strang_split_sources = false;			    // no addStrangSplitSources specialization
 };
 
 // declare global variables
@@ -218,8 +219,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<SedovProblem> sim(BCs_cc);
-
-	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 
 	// initialize
 	sim.setInitialConditions();
