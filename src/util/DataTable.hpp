@@ -1211,11 +1211,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				x_maxs[dim] = coord_bounds[dim].second;
 			}
 
+			// A zero value (e.g. the luminosity of a dead star) maps to the log of the smallest normal number. This stays finite
+			// under interpolation and transforms back to ~1e-308.
 			auto log_ = [output_transform_bcast](amrex::Real x) {
+				const amrex::Real x_pos = std::max(x, std::numeric_limits<amrex::Real>::min());
 				if (output_transform_bcast == TransformType::fast_log) {
-					return FastMath::inverse_pow2(x);
+					return FastMath::inverse_pow2(x_pos);
 				}
-				return std::log(x);
+				return std::log(x_pos);
 			};
 
 			flat_data.resize(flatDataSize(sizes));
@@ -1231,8 +1234,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						}
 						if (output_transform_bcast == TransformType::fast_log || output_transform_bcast == TransformType::log) {
 							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-							    value > 0.0,
-							    std::format("log output transform requires positive values, got {} at output {} index {}", value,
+							    value >= 0.0,
+							    std::format("log output transform requires non-negative values, got {} at output {} index {}", value,
 									out_idx, i));
 							value = log_(value);
 						}
@@ -1251,9 +1254,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 							}
 							if (output_transform_bcast == TransformType::fast_log || output_transform_bcast == TransformType::log) {
 								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-								    value > 0.0,
+								    value >= 0.0,
 								    std::format(
-									"log output transform requires positive values, got {} at output {} index ({}, {})",
+									"log output transform requires non-negative values, got {} at output {} index ({}, {})",
 									value, out_idx, i1, i2));
 								value = log_(value);
 							}
@@ -1275,7 +1278,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 								if (output_transform_bcast == TransformType::fast_log ||
 								    output_transform_bcast == TransformType::log) {
 									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-									    value > 0.0, std::format("log output transform requires positive values, got {} at "
+									    value >= 0.0, std::format("log output transform requires non-negative values, got {} at "
 												     "output {} index ({}, {}, {})",
 												     value, out_idx, i1, i2, i3));
 									value = log_(value);
@@ -1300,8 +1303,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 									if (output_transform_bcast == TransformType::fast_log ||
 									    output_transform_bcast == TransformType::log) {
 										AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-										    value > 0.0,
-										    std::format("log output transform requires positive values, got "
+										    value >= 0.0,
+										    std::format("log output transform requires non-negative values, got "
 												"{} at output {} index ({}, {}, {}, {})",
 												value, out_idx, i1, i2, i3, i4));
 										value = log_(value);

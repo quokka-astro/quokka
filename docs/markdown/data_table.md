@@ -47,6 +47,8 @@ spacing[0], spacing[1], ...   # linear / log / fast_log
 <data rows>
 ```
 
+With a `log` or `fast_log` output transform, the data values must be non-negative. A zero value (for example, the luminosity of a dead star) is read as the smallest normal number, `std::numeric_limits<amrex::Real>::min()`, so it stays finite during interpolation and comes back as about `2e-308`.
+
 ### From an HDF5 file (recommended)
 
 ```cpp
