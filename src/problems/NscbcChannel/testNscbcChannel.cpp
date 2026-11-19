@@ -57,15 +57,15 @@ template <> struct Physics_Traits<Channel> : DefaultPhysicsTraits {
 };
 
 // global variables needed for Dirichlet boundary condition and initial conditions
-Real rho0 = NAN;										// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-Real u0 = NAN;											// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-Real s0 = NAN;											// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real Tgas0 = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real P_outflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real u_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real v_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real w_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::GpuArray<Real, Physics_Traits<Channel>::numPassiveScalars> s_inflow{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real rho0 = NAN;							      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real u0 = NAN;								      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real s0 = NAN;								      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real Tgas0 = NAN;						      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real P_outflow = NAN;						      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real u_inflow = NAN;						      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real v_inflow = NAN;						      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real w_inflow = NAN;						      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::GpuArray<Real, Physics_Traits<Channel>::numPassiveScalars> s_inflow{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -93,24 +93,25 @@ template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::g
 	});
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-											     int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-											     const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-											     int /*orig_comp*/)
+template <> void AMRSimulation<Channel>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
-	auto [i, j, k] = iv.dim3();
-	amrex::Box const &box = geom.Domain();
-	const auto &domain_lo = box.loVect3d();
-	const auto &domain_hi = box.hiVect3d();
-	const int ilo = domain_lo[0];
-	const int ihi = domain_hi[0];
+	// Boundary parameters are captured by value, so they do not need to be GPU-managed globals.
+	const amrex::GeometryData geom = bc.GeomData();
+	const Real T_in = ::Tgas0;
+	const Real u_in = ::u_inflow;
+	const Real v_in = ::v_inflow;
+	const Real w_in = ::w_inflow;
+	const amrex::GpuArray<Real, Physics_Traits<Channel>::numPassiveScalars> s_in = ::s_inflow;
+	const Real P_out = ::P_outflow;
 
-	if (i < ilo) {
-		NSCBC::setInflowX1Lower<Channel>(iv, consVar, geom, ::Tgas0, ::u_inflow, ::v_inflow, ::w_inflow, ::s_inflow);
-	} else if (i > ihi) {
-		NSCBC::setOutflowBoundary<Channel, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_outflow);
-	}
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
+		if (tag.side[0] == -1) {
+			NSCBC::setInflowX1Lower<Channel>(iv, tag.fab, geom, T_in, u_in, v_in, w_in, s_in);
+		} else if (tag.side[0] == 1) {
+			NSCBC::setOutflowBoundary<Channel, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, tag.fab, geom, P_out);
+		}
+	});
 }
 
 auto problem_main() -> int

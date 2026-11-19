@@ -70,6 +70,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Utility.H"
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
+#include "boundary_fill.hpp"
 #include "util/BC.hpp"
 #include "util/time_units.hpp"
 #include "util/volume_integral.hpp"
@@ -422,6 +423,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	AMREX_GPU_DEVICE static void setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
 									int numcomp, amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr,
 									int bcomp, int orig_comp); // template specialized by problem generator
+
+	/// Fill the physical-boundary ghost cells of cell-centred data. Problems may specialize this and call
+	/// bc.ForEachGhostCell() with a device lambda. The default calls setCustomBoundaryConditions() on each ghost cell.
+	void FillCustomBoundaryConditions(quokka::BoundaryFill const &bc);
+
+	/// Fill the physical-boundary ghost cells of face-centred data (face direction: bc.FaceDirection()).
+	/// The default calls setCustomBoundaryConditionsFaceVar<dir>() on each ghost cell.
+	void FillCustomBoundaryConditionsFaceVar(quokka::BoundaryFill const &bc);
 
 	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension.
 	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
@@ -2169,7 +2178,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
 			phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 		}
-		amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+		using PhiBCFunct = quokka::TagPhysBCFunct<quokka::PerCellBCHook<setFunctorParticleAccel>>;
+		const quokka::PerCellBCHook<setFunctorParticleAccel> boundaryFunctor{setFunctorParticleAccel{}};
 
 		if (lev == 0) {
 			// Step 1: copy valid cells from phi[lev] (0 ghost cells).
@@ -2187,7 +2197,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			//         PhysBCFunct skips all FABs that lie entirely inside a "grown domain"
 			//         expanded in periodic dimensions — only FABs touching the non-periodic
 			//         faces are processed (see setFunctorParticleAccel for full details).
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+			PhiBCFunct phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
 			phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
 		} else {
 			// Fine level: FillPatchTwoLevels handles all three ghost cell sources:
@@ -2198,8 +2208,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			//   2. Fine-level interior and periodic ghost cells: filled by FillBoundary.
 			//   3. Fine-level non-periodic physical boundaries: phiBdryFunct calls
 			//      setFunctorParticleAccel (phi = 0), same as the lev==0 case.
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
+			PhiBCFunct phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+			PhiBCFunct phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
 
 			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
 						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
@@ -2784,6 +2794,34 @@ template <typename problem_t> struct setBoundaryFunctorFaceVar {
 		}
 	}
 };
+
+// Host-side hook that dispatches a boundary fill to the problem's FillCustomBoundaryConditions[FaceVar]
+template <typename problem_t> struct ProblemBoundaryHook {
+	AMRSimulation<problem_t> *sim = nullptr;
+	void operator()(quokka::BoundaryFill const &bc) const
+	{
+		if (bc.IsCellCentered()) {
+			sim->FillCustomBoundaryConditions(bc);
+		} else {
+			sim->FillCustomBoundaryConditionsFaceVar(bc);
+		}
+	}
+};
+
+// Physical-boundary functor for problem state (drop-in for amrex::PhysBCFunct<amrex::GpuBndryFuncFab<...>>)
+template <typename problem_t> using ProblemPhysBCFunct = quokka::TagPhysBCFunct<ProblemBoundaryHook<problem_t>>;
+
+template <typename problem_t> void AMRSimulation<problem_t>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
+{
+	// default: the legacy per-cell function
+	quokka::FillWithPerCellFunctor(bc, setBoundaryFunctor<problem_t>{});
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::FillCustomBoundaryConditionsFaceVar(quokka::BoundaryFill const &bc)
+{
+	// default: the legacy per-cell function
+	quokka::FillWithPerCellFunctor(bc, setBoundaryFunctorFaceVar<problem_t>{static_cast<quokka::direction>(bc.FaceDirection())});
+}
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
@@ -3553,18 +3591,13 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		if (!geom[lev].isAllPeriodic()) {
 			if (cen == quokka::centering::cc) {
 				// create cell-centered boundary functor
-				amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor =
-				    amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>{setBoundaryFunctor<problem_t>{}};
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
-																  boundaryFunctor);
+				ProblemPhysBCFunct<problem_t> physicalBoundaryFunctor(geom[lev], BCs, ProblemBoundaryHook<problem_t>{this});
 				// fill physical boundaries
 				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
 			} else if (cen == quokka::centering::fc) {
 				// create face-centered boundary functor using the passed direction
-				amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor =
-				    amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>{setBoundaryFunctorFaceVar<problem_t>{dir}};
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
-																	 boundaryFunctor);
+				// (the face direction is taken from the index type of 'state')
+				ProblemPhysBCFunct<problem_t> physicalBoundaryFunctor(geom[lev], BCs, ProblemBoundaryHook<problem_t>{this});
 				// fill physical boundaries
 				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
 			}
@@ -3603,11 +3636,11 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 
 	// create functor to fill ghost zones at domain boundaries
 	// (note that domain boundaries may be present at any refinement level)
-	amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor_cc(setBoundaryFunctor<problem_t>{});
-	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor_cc(geom[lev], BCs, boundaryFunctor_cc);
-
-	amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor_fc(setBoundaryFunctorFaceVar<problem_t>{dir});
-	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> finePhysicalBoundaryFunctor_fc(geom[lev], BCs, boundaryFunctor_fc);
+	// (cell- vs. face-centring and the face direction are taken from the index type of the data being filled)
+	amrex::ignore_unused(dir);
+	const ProblemBoundaryHook<problem_t> boundaryHook{this};
+	ProblemPhysBCFunct<problem_t> finePhysicalBoundaryFunctor_cc(geom[lev], BCs, boundaryHook);
+	ProblemPhysBCFunct<problem_t> finePhysicalBoundaryFunctor_fc(geom[lev], BCs, boundaryHook);
 
 	if (lev == 0) { // NOTE: used by RemakeLevel
 		// copies interior zones, fills ghost zones
@@ -3617,10 +3650,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 			amrex::FillPatchSingleLevel(mf, time, fineData, fineTime, 0, icomp, ncomp, geom[lev], finePhysicalBoundaryFunctor_fc, 0);
 		}
 	} else {
-		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor_cc(geom[lev - 1], BCs,
-															   boundaryFunctor_cc);
-		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> coarsePhysicalBoundaryFunctor_fc(geom[lev - 1], BCs,
-																  boundaryFunctor_fc);
+		ProblemPhysBCFunct<problem_t> coarsePhysicalBoundaryFunctor_cc(geom[lev - 1], BCs, boundaryHook);
+		ProblemPhysBCFunct<problem_t> coarsePhysicalBoundaryFunctor_fc(geom[lev - 1], BCs, boundaryHook);
 
 		// copies interior zones, fills ghost zones with space-time interpolated
 		// data
@@ -3671,9 +3702,8 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 		amrex::Abort("FillCoarsePatch: how did this happen?");
 	}
 
-	amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});
-	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
-	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
+	ProblemPhysBCFunct<problem_t> finePhysicalBoundaryFunctor(geom[lev], BCs, ProblemBoundaryHook<problem_t>{this});
+	ProblemPhysBCFunct<problem_t> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, ProblemBoundaryHook<problem_t>{this});
 
 	if (cen == quokka::centering::cc) {
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
@@ -3712,15 +3742,14 @@ void AMRSimulation<problem_t>::FillCoarsePatchFaceArray(int lev, amrex::Real tim
 		cmf_ptrs[idim] = cmf_array[idim][0];
 	}
 
-	using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
-	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> finePhysicalBoundaryFunctor;
-	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarsePhysicalBoundaryFunctor;
+	amrex::Array<ProblemPhysBCFunct<problem_t>, AMREX_SPACEDIM> finePhysicalBoundaryFunctor;
+	amrex::Array<ProblemPhysBCFunct<problem_t>, AMREX_SPACEDIM> coarsePhysicalBoundaryFunctor;
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		const auto dir = static_cast<quokka::direction>(idim);
-		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
-		finePhysicalBoundaryFunctor[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev], BCs_array[idim], boundaryFunctor);
-		coarsePhysicalBoundaryFunctor[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev - 1], BCs_array[idim], boundaryFunctor);
+		// (the face direction is taken from the index type of the data being filled)
+		const ProblemBoundaryHook<problem_t> boundaryHook{this};
+		finePhysicalBoundaryFunctor[idim] = ProblemPhysBCFunct<problem_t>(geom[lev], BCs_array[idim], boundaryHook);
+		coarsePhysicalBoundaryFunctor[idim] = ProblemPhysBCFunct<problem_t>(geom[lev - 1], BCs_array[idim], boundaryHook);
 	}
 
 	amrex::InterpFromCoarseLevel(mf_array, time, cmf_ptrs, 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
@@ -3761,15 +3790,14 @@ void AMRSimulation<problem_t>::FillPatchFaceArray(int lev, amrex::Real time, amr
 		fmf.push_back(level_mfs);
 	}
 
-	using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
-	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> finePhysicalBoundaryFunctor;
-	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarsePhysicalBoundaryFunctor;
+	amrex::Array<ProblemPhysBCFunct<problem_t>, AMREX_SPACEDIM> finePhysicalBoundaryFunctor;
+	amrex::Array<ProblemPhysBCFunct<problem_t>, AMREX_SPACEDIM> coarsePhysicalBoundaryFunctor;
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		const auto dir = static_cast<quokka::direction>(idim);
-		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
-		finePhysicalBoundaryFunctor[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev], BCs_array[idim], boundaryFunctor);
-		coarsePhysicalBoundaryFunctor[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev - 1], BCs_array[idim], boundaryFunctor);
+		// (the face direction is taken from the index type of the data being filled)
+		const ProblemBoundaryHook<problem_t> boundaryHook{this};
+		finePhysicalBoundaryFunctor[idim] = ProblemPhysBCFunct<problem_t>(geom[lev], BCs_array[idim], boundaryHook);
+		coarsePhysicalBoundaryFunctor[idim] = ProblemPhysBCFunct<problem_t>(geom[lev - 1], BCs_array[idim], boundaryHook);
 	}
 
 	amrex::FillPatchTwoLevels(mf_array, time, cmf, ctime, fmf, ftime, 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
@@ -5196,10 +5224,8 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 	} else {
 		// if refining, InterpFromCoarseLevel
 		amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
-		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>;
-		BndryFunc boundaryFunctor(setBoundaryFunctor<problem_t>{});
-		amrex::PhysBCFunct<BndryFunc> fineBdryFunct(fine_geom, bcs, boundaryFunctor);
-		amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, bcs, boundaryFunctor);
+		ProblemPhysBCFunct<problem_t> fineBdryFunct(fine_geom, bcs, ProblemBoundaryHook<problem_t>{this});
+		ProblemPhysBCFunct<problem_t> coarseBdryFunct(coarse_geom, bcs, ProblemBoundaryHook<problem_t>{this});
 		// CRITICALLY IMPORTANT: the refined multifabs are NOT properly nested
 		//   with respect to the multifabs in the checkpoints! this means we can
 		//   only do piecewise **constant** refinement.
@@ -5234,7 +5260,7 @@ void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const
 
 		// Restart refinement strategy: build level 0 with old levels 0/1 (same domain, finer spacing),
 		// then fill higher levels from new coarse + old fine via FillPatchTwoLevels when available.
-		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+		using BndryFunc = ProblemPhysBCFunct<problem_t>;
 		const int ncomp = restart_fc[0][0].nComp();
 		amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -5244,19 +5270,19 @@ void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const
 			}
 		}
 		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> new_ptrs;
-		amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarse_bc;
-		amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> fine_bc;
+		amrex::Array<BndryFunc, AMREX_SPACEDIM> coarse_bc;
+		amrex::Array<BndryFunc, AMREX_SPACEDIM> fine_bc;
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			new_ptrs[idim] = &state_new_fc_[lev][idim];
-			const auto dir = static_cast<quokka::direction>(idim);
-			BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
+			// (the face direction is taken from the index type of the data being filled)
+			const ProblemBoundaryHook<problem_t> boundaryHook{this};
 			if (lev == 0) {
-				coarse_bc[idim] = amrex::PhysBCFunct<BndryFunc>(restart_geom[0], BCs_array[idim], boundaryFunctor);
+				coarse_bc[idim] = BndryFunc(restart_geom[0], BCs_array[idim], boundaryHook);
 			} else {
-				coarse_bc[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev - 1], BCs_array[idim], boundaryFunctor);
+				coarse_bc[idim] = BndryFunc(geom[lev - 1], BCs_array[idim], boundaryHook);
 			}
-			fine_bc[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev], BCs_array[idim], boundaryFunctor);
+			fine_bc[idim] = BndryFunc(geom[lev], BCs_array[idim], boundaryHook);
 		}
 
 		if (lev == 0) {
