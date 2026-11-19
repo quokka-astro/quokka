@@ -608,6 +608,26 @@ template <typename problem_t> void AMRSimulation<problem_t>::initializeSimulatio
 			simulationMetadata_["constants"]["a_rad"] = RadSystem<problem_t>::radiation_constant_;
 		}
 	}
+
+	// equation of state; gamma is only written when the pressure follows from the internal energy alone
+	using eos_backend_t = typename quokka::detail::EOSBackendHelper<problem_t>::type;
+	if constexpr (std::is_same_v<eos_backend_t, quokka::EOSIdeal<problem_t>>) {
+		simulationMetadata_["eos"]["backend"] = "ideal";
+		simulationMetadata_["eos"]["gamma"] = quokka::EOS_Traits<problem_t>::gamma;
+		if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
+			simulationMetadata_["eos"]["cs_isothermal"] = quokka::EOS_Traits<problem_t>::cs_isothermal;
+		}
+	} else if constexpr (std::is_same_v<eos_backend_t, quokka::EOSTabulated<problem_t>>) {
+		simulationMetadata_["eos"]["backend"] = "tabulated";
+	}
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
+	else if constexpr (std::is_same_v<eos_backend_t, quokka::EOSMicrophysics<problem_t>>) {
+		simulationMetadata_["eos"]["backend"] = "microphysics";
+	}
+#endif
+	else {
+		static_assert(!std::is_same_v<eos_backend_t, eos_backend_t>, "add the EOS metadata for this EOS backend");
+	}
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::getScalarVariableNames() -> std::vector<std::string>
