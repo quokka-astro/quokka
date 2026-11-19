@@ -442,7 +442,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	/// Helper function to set diode boundary conditions on the lower boundary of a specific dimension.
 	/// Diode BC: allows outflow (using first-order extrapolation), prevents inflow (using reflection with flipped normal momentum).
-	/// If radiation is enabled, radiation variables are copied from the nearest interior cell, with an inward normal flux set to zero.
+	/// If radiation is enabled, the same rule is applied to each group's radiation flux: an outward flux is extrapolated, an inward flux is reflected.
 	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
 	/// @param iv The cell index
 	/// @param consVar The array to fill
@@ -452,7 +452,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	/// Helper function to set diode boundary conditions on the upper boundary of a specific dimension.
 	/// Diode BC: allows outflow (using first-order extrapolation), prevents inflow (using reflection with flipped normal momentum).
-	/// If radiation is enabled, radiation variables are copied from the nearest interior cell, with an inward normal flux set to zero.
+	/// If radiation is enabled, the same rule is applied to each group's radiation flux: an outward flux is extrapolated, an inward flux is reflected.
 	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
 	/// @param iv The cell index
 	/// @param consVar The array to fill
@@ -2786,6 +2786,20 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
 		}
 
+		// Mirror cell for reflection: reflect around lower boundary face
+		// cellIdx = lo[dir]-1 mirrors lo[dir], cellIdx = lo[dir]-2 mirrors lo[dir]+1, etc.
+		int const cellIdx_mirror = 2 * lo[dir] - 1 - cellIdx;
+		int i_mirror = i;
+		int j_mirror = j;
+		int k_mirror = k;
+		if constexpr (dir == 0) {
+			i_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 1) {
+			j_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 2) {
+			k_mirror = cellIdx_mirror;
+		}
+
 		// Diode BC: at lower boundary, outward normal points in -dir direction
 		// Outflow: mom_normal < 0 (gas moving away from domain) → first-order extrapolation
 		// Inflow: mom_normal > 0 (gas moving into domain) → reflection with flipped momentum
@@ -2810,20 +2824,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 			}
 		} else {
 			// Inflow: use reflection from mirror cell with flipped normal momentum
-			// Mirror cell: reflect around lower boundary face
-			// cellIdx = lo[dir]-1 mirrors lo[dir], cellIdx = lo[dir]-2 mirrors lo[dir]+1, etc.
-			int const cellIdx_mirror = 2 * lo[dir] - 1 - cellIdx;
-			int i_mirror = i;
-			int j_mirror = j;
-			int k_mirror = k;
-			if constexpr (dir == 0) {
-				i_mirror = cellIdx_mirror;
-			} else if constexpr (dir == 1) {
-				j_mirror = cellIdx_mirror;
-			} else if constexpr (dir == 2) {
-				k_mirror = cellIdx_mirror;
-			}
-
 			// Read values from mirror cell
 			const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
 			const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
@@ -2856,19 +2856,26 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 			}
 		}
 
-		// Radiation: zero-gradient copy from the nearest interior cell, for both gas outflow and inflow,
-		// since radiation propagates independently of the gas velocity. A normal flux pointing into the
-		// domain (+dir direction) is set to zero so that the boundary does not act as a radiation source.
+		// Radiation: the same diode rule as for the gas, applied to each group's radiation flux, since radiation
+		// propagates independently of the gas velocity. An outward normal flux (-dir direction) is extrapolated
+		// from the nearest interior cell. An inward normal flux is reflected from the mirror cell with the normal
+		// flux flipped, so that the flux at the boundary face vanishes and no radiation enters the domain.
 		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 			constexpr int radFirst = Physics_Indices<problem_t>::radFirstIndex;
 			constexpr int nRadVars = Physics_NumVars::numRadVarsPerGroup;
 			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				const int normalFluxComp = radFirst + nRadVars * g + 1 + dir;
+				const bool outflow = consVar(i_interior, j_interior, k_interior, normalFluxComp) < 0.0;
+				const int i_src = outflow ? i_interior : i_mirror;
+				const int j_src = outflow ? j_interior : j_mirror;
+				const int k_src = outflow ? k_interior : k_mirror;
 				for (int n = 0; n < nRadVars; ++n) {
 					const int comp = radFirst + nRadVars * g + n;
-					consVar(i, j, k, comp) = consVar(i_interior, j_interior, k_interior, comp);
+					consVar(i, j, k, comp) = consVar(i_src, j_src, k_src, comp);
 				}
-				const int normalFluxComp = radFirst + nRadVars * g + 1 + dir;
-				consVar(i, j, k, normalFluxComp) = std::min(consVar(i, j, k, normalFluxComp), 0.0);
+				if (!outflow) {
+					consVar(i, j, k, normalFluxComp) = -consVar(i, j, k, normalFluxComp);
+				}
 			}
 		}
 	}
@@ -2923,6 +2930,20 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
 		}
 
+		// Mirror cell for reflection: reflect around upper boundary face
+		// cellIdx = hi[dir]+1 mirrors hi[dir], cellIdx = hi[dir]+2 mirrors hi[dir]-1, etc.
+		int const cellIdx_mirror = 2 * hi[dir] + 1 - cellIdx;
+		int i_mirror = i;
+		int j_mirror = j;
+		int k_mirror = k;
+		if constexpr (dir == 0) {
+			i_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 1) {
+			j_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 2) {
+			k_mirror = cellIdx_mirror;
+		}
+
 		// Diode BC: at upper boundary, outward normal points in +dir direction
 		// Outflow: mom_normal > 0 (gas moving away from domain) → first-order extrapolation
 		// Inflow: mom_normal < 0 (gas moving into domain) → reflection with flipped momentum
@@ -2947,20 +2968,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			}
 		} else {
 			// Inflow: use reflection from mirror cell with flipped normal momentum
-			// Mirror cell: reflect around upper boundary face
-			// cellIdx = hi[dir]+1 mirrors hi[dir], cellIdx = hi[dir]+2 mirrors hi[dir]-1, etc.
-			int const cellIdx_mirror = 2 * hi[dir] + 1 - cellIdx;
-			int i_mirror = i;
-			int j_mirror = j;
-			int k_mirror = k;
-			if constexpr (dir == 0) {
-				i_mirror = cellIdx_mirror;
-			} else if constexpr (dir == 1) {
-				j_mirror = cellIdx_mirror;
-			} else if constexpr (dir == 2) {
-				k_mirror = cellIdx_mirror;
-			}
-
 			// Read values from mirror cell
 			const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
 			const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
@@ -2993,19 +3000,26 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			}
 		}
 
-		// Radiation: zero-gradient copy from the nearest interior cell, for both gas outflow and inflow,
-		// since radiation propagates independently of the gas velocity. A normal flux pointing into the
-		// domain (-dir direction) is set to zero so that the boundary does not act as a radiation source.
+		// Radiation: the same diode rule as for the gas, applied to each group's radiation flux, since radiation
+		// propagates independently of the gas velocity. An outward normal flux (+dir direction) is extrapolated
+		// from the nearest interior cell. An inward normal flux is reflected from the mirror cell with the normal
+		// flux flipped, so that the flux at the boundary face vanishes and no radiation enters the domain.
 		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 			constexpr int radFirst = Physics_Indices<problem_t>::radFirstIndex;
 			constexpr int nRadVars = Physics_NumVars::numRadVarsPerGroup;
 			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				const int normalFluxComp = radFirst + nRadVars * g + 1 + dir;
+				const bool outflow = consVar(i_interior, j_interior, k_interior, normalFluxComp) > 0.0;
+				const int i_src = outflow ? i_interior : i_mirror;
+				const int j_src = outflow ? j_interior : j_mirror;
+				const int k_src = outflow ? k_interior : k_mirror;
 				for (int n = 0; n < nRadVars; ++n) {
 					const int comp = radFirst + nRadVars * g + n;
-					consVar(i, j, k, comp) = consVar(i_interior, j_interior, k_interior, comp);
+					consVar(i, j, k, comp) = consVar(i_src, j_src, k_src, comp);
 				}
-				const int normalFluxComp = radFirst + nRadVars * g + 1 + dir;
-				consVar(i, j, k, normalFluxComp) = std::max(consVar(i, j, k, normalFluxComp), 0.0);
+				if (!outflow) {
+					consVar(i, j, k, normalFluxComp) = -consVar(i, j, k, normalFluxComp);
+				}
 			}
 		}
 	}
