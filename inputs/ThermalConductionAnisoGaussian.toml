@@ -1,0 +1,45 @@
+# *****************************************************************
+# Problem size and geometry
+# (BCs are set in problem_main(): foextrap cell-centred, reflect_even/odd face-centred)
+# *****************************************************************
+geometry.prob_lo = [-1.5428e18, -1.5428e18, -1.5428e18]
+geometry.prob_hi = [1.5428e18, 1.5428e18, 1.5428e18]
+geometry.is_periodic = [0, 0, 0]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1      # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [128, 128, 8]
+amr.max_level = 0     # number of levels = max_level + 1
+amr.blocking_factor = 8   # grid size must be divisible by this
+
+do_reflux = 1
+do_subcycle = 0
+
+plotfile_interval = 100
+# (cfl and stop_time are overridden in problem_main())
+cfl = 0.3
+
+derived_vars = ["temperature"]
+cooling.enabled = 0
+
+# *****************************************************************
+# Anisotropic conduction
+# (model/geometry are set via Physics_Traits: constant + anisotropic)
+# kappaPar is the value max_time in problem_main() is computed for (2 D_par t = 0.71 sigma^2);
+# kappaPerp = 0.3 kappaPar so the y-spreading is large enough to measure.
+# saturation_factor is large so the flux is never saturated (the analytic solution assumes no saturation).
+# *****************************************************************
+conduction.enabled = 1
+conduction.flux_limiter_phi = 1
+conduction.saturation_factor = 1.2e20
+conduction.conduction_cfl = 0.1
+conduction.kappaPar = 0.6113916490935586e12
+conduction.kappaPerp = 0.1834174947280676e12
+conduction.aniso_flux_limiter = "mc"
+suppress_output = 0
