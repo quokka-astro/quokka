@@ -87,11 +87,7 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 	});
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<ShocktubeProblem>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
@@ -134,8 +130,10 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	high_bdr_cells[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = Eint_R;
 
 	// Apply boundary conditions using helper functions (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setConstantDirichletBCLo<0>(i, j, k, tag, low_bdr_cells);
+		setConstantDirichletBCHi<0>(i, j, k, tag, high_bdr_cells);
+	});
 }
 
 template <>

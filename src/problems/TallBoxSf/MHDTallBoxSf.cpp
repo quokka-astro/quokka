@@ -308,14 +308,13 @@ template <> void QuokkaSimulation<MHDTallBoxSf>::addStrangSplitSources(amrex::Mu
 }
 
 // MHD diode (outflow, no-inflow) in z: cell-centred ext_dir with setDiodeBC, face-centred ghost field filled by applyMHDDiodeBC
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDTallBoxSf>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-							 int /*orig_comp*/)
+template <> void AMRSimulation<MHDTallBoxSf>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
-	setDiodeBCLo<2>(iv, consVar, geom);
-	setDiodeBCHi<2>(iv, consVar, geom);
+
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setDiodeBCLo<2>(i, j, k, tag);
+		setDiodeBCHi<2>(i, j, k, tag);
+	});
 }
 
 template <> auto AMRSimulation<MHDTallBoxSf>::isMHDDiodeBoundary(int dir, int /*side*/) -> bool { return dir == 2; }

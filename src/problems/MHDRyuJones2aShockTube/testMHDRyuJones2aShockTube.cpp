@@ -142,11 +142,7 @@ template <> void QuokkaSimulation<MHDRyuJones2aShockTube>::setInitialConditionsO
 	});
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDRyuJones2aShockTube>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-								   int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-								   const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<MHDRyuJones2aShockTube>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<MHDRyuJones2aShockTube>::nvarTotal_cc;
@@ -179,23 +175,23 @@ AMRSimulation<MHDRyuJones2aShockTube>::setCustomBoundaryConditions(const amrex::
 	high_bdr_cells[RadSystem<MHDRyuJones2aShockTube>::x3GasMomentum_index] = vz_R * rho_R;
 
 	// Apply boundary conditions using helper functions (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setConstantDirichletBCLo<0>(i, j, k, tag, low_bdr_cells);
+		setConstantDirichletBCHi<0>(i, j, k, tag, high_bdr_cells);
+	});
 }
 
-template <>
-template <quokka::direction dir>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDRyuJones2aShockTube>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, int /*dcomp*/,
-									  int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-									  const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<MHDRyuJones2aShockTube>::FillCustomBoundaryConditionsFaceVar(quokka::BoundaryFill const &bc)
 {
 	// Prepare boundary values for each face direction: {x-face, y-face, z-face}
 	const amrex::GpuArray<amrex::Real, 3> low_bdr_values = {Bx, By_L, Bz};
 	const amrex::GpuArray<amrex::Real, 3> high_bdr_values = {Bx, By_R, Bz};
 
-	setConstantDirichletBCFaceVarLo<0, dir, 3>(iv, consVar_fc, geom, low_bdr_values);
-	setConstantDirichletBCFaceVarHi<0, dir, 3>(iv, consVar_fc, geom, high_bdr_values);
+	const quokka::direction face_dir = bc.FaceDirection();
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setConstantDirichletBCFaceVarLo<0>(i, j, k, tag, face_dir, low_bdr_values);
+		setConstantDirichletBCFaceVarHi<0>(i, j, k, tag, face_dir, high_bdr_values);
+	});
 }
 
 auto problem_main() -> int

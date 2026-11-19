@@ -37,8 +37,7 @@ constexpr double beam_lo = 0.1;
 constexpr double beam_hi = 0.2;
 constexpr double beam_width = beam_hi - beam_lo;
 constexpr double beam_S = c / beam_width; // erg s^-1 cm^-3
-// managed so that setCustomBoundaryConditions can read it on the device
-AMREX_GPU_MANAGED int use_flux_source = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables); set in problem_main()
+int use_flux_source = 0;		  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables); set in problem_main()
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -125,11 +124,7 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 	});
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<StreamingProblem>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<StreamingProblem>::nvarTotal_cc;
@@ -175,8 +170,10 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	}
 
 	// Apply boundary conditions using helper functions (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setConstantDirichletBCLo<0>(i, j, k, tag, low_bdr_cells);
+		setConstantDirichletBCHi<0>(i, j, k, tag, high_bdr_cells);
+	});
 }
 
 auto problem_main() -> int

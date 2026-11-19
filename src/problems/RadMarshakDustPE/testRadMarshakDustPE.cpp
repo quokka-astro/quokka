@@ -133,11 +133,7 @@ template <> void QuokkaSimulation<MarshakProblem>::setInitialConditionsOnGrid(qu
 	});
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MarshakProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							   amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-							   int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<MarshakProblem>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<MarshakProblem>::nvarTotal_cc;
@@ -169,7 +165,8 @@ AMRSimulation<MarshakProblem>::setCustomBoundaryConditions(const amrex::IntVect 
 	low_bdr_cells[RadSystem<MarshakProblem>::x3GasMomentum_index] = 0.;
 
 	// Apply boundary condition using helper function (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	bc.ForEachGhostCell(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) { setConstantDirichletBCLo<0>(i, j, k, tag, low_bdr_cells); });
 }
 
 auto problem_main() -> int

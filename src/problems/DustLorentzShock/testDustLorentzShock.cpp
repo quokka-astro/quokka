@@ -105,7 +105,7 @@ struct ShockPhysicsTraits {
 	static constexpr ViscosityModel viscosity_model = ViscosityModel::none;
 };
 
-AMREX_GPU_DEVICE auto computeGasEnergy(double rho, double vx, double bz) -> double
+AMREX_GPU_HOST_DEVICE auto computeGasEnergy(double rho, double vx, double bz) -> double
 {
 	const double kinetic = 0.5 * rho * vx * vx;
 	const double magnetic = 0.5 * bz * bz;
@@ -199,20 +199,21 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto makeShockInflowFaceStat
 	return {0.0, 0.0, ShockCaseParams<problem_t>::bz_inflow};
 }
 
-template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setShockBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-								    amrex::GeometryData const &geom)
+template <typename problem_t> void fillShockBoundaryConditions(quokka::BoundaryFill const &bc)
 {
 	const auto low_bdr_cells = makeShockInflowCellState<problem_t>();
-	AMRSimulation<problem_t>::template setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		AMRSimulation<problem_t>::template setConstantDirichletBCLo<0>(i, j, k, tag, low_bdr_cells);
+	});
 }
 
-template <typename problem_t, quokka::direction dir>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setShockFaceBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc,
-									amrex::GeometryData const &geom)
+template <typename problem_t> void fillShockFaceBoundaryConditions(quokka::BoundaryFill const &bc)
 {
 	const auto low_bdr_values = makeShockInflowFaceState<problem_t>();
-	AMRSimulation<problem_t>::template setConstantDirichletBCFaceVarLo<0, dir, 3>(iv, consVar_fc, geom, low_bdr_values);
+	const quokka::direction face_dir = bc.FaceDirection();
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		AMRSimulation<problem_t>::template setConstantDirichletBCFaceVarLo<0>(i, j, k, tag, face_dir, low_bdr_values);
+	});
 }
 
 void setShockHiOutflow(amrex::Vector<amrex::BCRec> &bcs)
@@ -444,22 +445,14 @@ template <> void QuokkaSimulation<DustLorentzShockEps001OmegaTs0>::setInitialCon
 	setShockFaceVars<DustLorentzShockEps001OmegaTs0>(grid_elem);
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<DustLorentzShockEps001OmegaTs0>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-									   int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-									   const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<DustLorentzShockEps001OmegaTs0>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
-	setShockBoundaryConditions<DustLorentzShockEps001OmegaTs0>(iv, consVar, geom);
+	fillShockBoundaryConditions<DustLorentzShockEps001OmegaTs0>(bc);
 }
 
-template <>
-template <quokka::direction dir>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockEps001OmegaTs0>::setCustomBoundaryConditionsFaceVar(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<DustLorentzShockEps001OmegaTs0>::FillCustomBoundaryConditionsFaceVar(quokka::BoundaryFill const &bc)
 {
-	setShockFaceBoundaryConditions<DustLorentzShockEps001OmegaTs0, dir>(iv, dest, geom);
+	fillShockFaceBoundaryConditions<DustLorentzShockEps001OmegaTs0>(bc);
 }
 
 template <>
@@ -486,22 +479,14 @@ template <> void QuokkaSimulation<DustLorentzShockEps001OmegaTs20>::setInitialCo
 	setShockFaceVars<DustLorentzShockEps001OmegaTs20>(grid_elem);
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<DustLorentzShockEps001OmegaTs20>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-									    int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-									    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<DustLorentzShockEps001OmegaTs20>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
-	setShockBoundaryConditions<DustLorentzShockEps001OmegaTs20>(iv, consVar, geom);
+	fillShockBoundaryConditions<DustLorentzShockEps001OmegaTs20>(bc);
 }
 
-template <>
-template <quokka::direction dir>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockEps001OmegaTs20>::setCustomBoundaryConditionsFaceVar(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<DustLorentzShockEps001OmegaTs20>::FillCustomBoundaryConditionsFaceVar(quokka::BoundaryFill const &bc)
 {
-	setShockFaceBoundaryConditions<DustLorentzShockEps001OmegaTs20, dir>(iv, dest, geom);
+	fillShockFaceBoundaryConditions<DustLorentzShockEps001OmegaTs20>(bc);
 }
 
 template <>
@@ -528,22 +513,14 @@ template <> void QuokkaSimulation<DustLorentzShockEps010OmegaTs20>::setInitialCo
 	setShockFaceVars<DustLorentzShockEps010OmegaTs20>(grid_elem);
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<DustLorentzShockEps010OmegaTs20>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-									    int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-									    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<DustLorentzShockEps010OmegaTs20>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
-	setShockBoundaryConditions<DustLorentzShockEps010OmegaTs20>(iv, consVar, geom);
+	fillShockBoundaryConditions<DustLorentzShockEps010OmegaTs20>(bc);
 }
 
-template <>
-template <quokka::direction dir>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockEps010OmegaTs20>::setCustomBoundaryConditionsFaceVar(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<DustLorentzShockEps010OmegaTs20>::FillCustomBoundaryConditionsFaceVar(quokka::BoundaryFill const &bc)
 {
-	setShockFaceBoundaryConditions<DustLorentzShockEps010OmegaTs20, dir>(iv, dest, geom);
+	fillShockFaceBoundaryConditions<DustLorentzShockEps010OmegaTs20>(bc);
 }
 
 auto problem_main() -> int

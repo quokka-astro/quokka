@@ -112,33 +112,27 @@ template <> void QuokkaSimulation<Vortex>::setInitialConditionsOnGrid(quokka::gr
 	});
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Vortex>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-											    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-											    const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-											    int /*orig_comp*/)
+// NSCBC outflow on both boundaries normal to direction DIR
+template <FluxDir DIR> void fillOutflowBoundaries(quokka::BoundaryFill const &bc, Real P_outflow)
 {
-	auto [i, j, k] = iv.dim3();
-	amrex::Box const &box = geom.Domain();
-	const auto &domain_lo = box.loVect3d();
-	const auto &domain_hi = box.hiVect3d();
+	constexpr int dim = static_cast<int>(DIR);
+	const amrex::GeometryData geom = bc.GeomData();
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
+		if (tag.side[dim] == -1) {
+			NSCBC::setOutflowBoundary<Vortex, DIR, NSCBC::BoundarySide::Lower>(iv, tag.fab, geom, P_outflow);
+		} else if (tag.side[dim] == 1) {
+			NSCBC::setOutflowBoundary<Vortex, DIR, NSCBC::BoundarySide::Upper>(iv, tag.fab, geom, P_outflow);
+		}
+	});
+}
 
+template <> void AMRSimulation<Vortex>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
+{
 	if constexpr (outflow_boundary_along_x_axis) {
-		const int ilo = domain_lo[0];
-		const int ihi = domain_hi[0];
-		if (i < ilo) {
-			NSCBC::setOutflowBoundary<Vortex, FluxDir::X1, NSCBC::BoundarySide::Lower>(iv, consVar, geom, ::P_ref);
-		} else if (i > ihi) {
-			NSCBC::setOutflowBoundary<Vortex, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P_ref);
-		}
+		fillOutflowBoundaries<FluxDir::X1>(bc, ::P_ref);
 	} else { // outflow boundary is along the y-axis
-		const int jlo = domain_lo[1];
-		const int jhi = domain_hi[1];
-		if (j < jlo) {
-			NSCBC::setOutflowBoundary<Vortex, FluxDir::X2, NSCBC::BoundarySide::Lower>(iv, consVar, geom, ::P_ref);
-		} else if (j > jhi) {
-			NSCBC::setOutflowBoundary<Vortex, FluxDir::X2, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P_ref);
-		}
+		fillOutflowBoundaries<FluxDir::X2>(bc, ::P_ref);
 	}
 }
 

@@ -136,65 +136,62 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 	});
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-												const Real time, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-												int /*orig_comp*/)
+template <> void AMRSimulation<ShockCloud>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
-	auto [i, j, k] = iv.toArray();
-
-	amrex::Box const &box = geom.Domain();
-	const auto &domain_lo = box.loVect3d();
-	const auto &domain_hi = box.hiVect3d();
-	const int ilo = domain_lo[0];
-	const int ihi = domain_hi[0];
-
+	const amrex::GeometryData geom = bc.GeomData();
+	const Real time = bc.Time();
 	const Real delta_vx = ::delta_vx;
 	const Real rho_wind = ::rho_wind;
 	const Real v_wind = ::v_wind;
 	const Real P_wind = ::P_wind;
+	const Real P0 = ::P0;
+	const Real shock_crossing_time = ::shock_crossing_time;
 
-	if (i < ilo) {
-		// x1 lower boundary
-		Real const rho = rho_wind;
-		Real const vx = v_wind - delta_vx;
-		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromPres(rho, P_wind);
-		Real const T_wind = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
-		amrex::GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
+		amrex::Array4<Real> const &consVar = tag.fab;
 
-		if (time < 0.1 * ::shock_crossing_time) {
-			// Shock boundary condition [all primitive variables specified]
-			Real const xmom = rho_wind * vx;
-			Real const ymom = 0;
-			Real const zmom = 0;
-			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-			Real const Egas = quokka::EOS<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
-			consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-			consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-			consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-			consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-			consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-			consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
-			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
-			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
-			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
-		} else {
-			// Subsonic inflow boundary condition [all *except one* primitive variable specified]
-			NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T_wind, vx, 0, 0, scalars);
+		if (tag.side[0] == -1) {
+			// x1 lower boundary
+			Real const rho = rho_wind;
+			Real const vx = v_wind - delta_vx;
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromPres(rho, P_wind);
+			Real const T_wind = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
+			amrex::GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
+
+			if (time < 0.1 * shock_crossing_time) {
+				// Shock boundary condition [all primitive variables specified]
+				Real const xmom = rho_wind * vx;
+				Real const ymom = 0;
+				Real const zmom = 0;
+				static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+				Real const Egas = quokka::EOS<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
+				consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+				consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+				consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+				consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+				consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+				consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
+				consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
+				consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
+				consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
+			} else {
+				// Subsonic inflow boundary condition [all *except one* primitive variable specified]
+				NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T_wind, vx, 0, 0, scalars);
+			}
+		} else if (tag.side[0] == 1) {
+			// x1 upper boundary -- NSCBC subsonic outflow
+			// (For this boundary condition, we must specify the pressure at the boundary.)
+
+			if (time < 1.1 * shock_crossing_time) {
+				// before the shock hits the boundary, set the boundary pressure to the background pressure P0.
+				NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P0);
+			} else {
+				// shock has passed, so we set the boundary pressure to the wind pressure P_wind.
+				NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind);
+			}
 		}
-	} else if (i > ihi) {
-		// x1 upper boundary -- NSCBC subsonic outflow
-		// (For this boundary condition, we must specify the pressure at the boundary.)
-
-		if (time < 1.1 * ::shock_crossing_time) {
-			// before the shock hits the boundary, set the boundary pressure to the background pressure P0.
-			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
-		} else {
-			// shock has passed, so we set the boundary pressure to the wind pressure P_wind.
-			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind);
-		}
-	}
+	});
 }
 
 template <> void QuokkaSimulation<ShockCloud>::computeAfterTimestep()

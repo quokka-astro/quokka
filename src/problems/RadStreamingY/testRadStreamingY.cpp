@@ -82,11 +82,7 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 	});
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<StreamingProblem>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<StreamingProblem>::nvarTotal_cc;
@@ -126,8 +122,10 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	}
 
 	// Apply boundary conditions using helper functions
-	setConstantDirichletBCLo<1>(iv, consVar, geom, lo_values);
-	setConstantDirichletBCHi<1>(iv, consVar, geom, hi_values);
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setConstantDirichletBCLo<1>(i, j, k, tag, lo_values);
+		setConstantDirichletBCHi<1>(i, j, k, tag, hi_values);
+	});
 }
 
 auto problem_main() -> int

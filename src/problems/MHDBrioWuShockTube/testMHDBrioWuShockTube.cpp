@@ -130,11 +130,7 @@ template <> void QuokkaSimulation<MHDBrioWuShockTube>::setInitialConditionsOnGri
 	});
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDBrioWuShockTube>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							       int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-							       const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<MHDBrioWuShockTube>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<MHDBrioWuShockTube>::nvarTotal_cc;
@@ -170,16 +166,13 @@ AMRSimulation<MHDBrioWuShockTube>::setCustomBoundaryConditions(const amrex::IntV
 	high_bdr_cells[RadSystem<MHDBrioWuShockTube>::x3GasMomentum_index] = 0.;
 
 	// Apply boundary conditions using helper functions (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setConstantDirichletBCLo<0>(i, j, k, tag, low_bdr_cells);
+		setConstantDirichletBCHi<0>(i, j, k, tag, high_bdr_cells);
+	});
 }
 
-template <>
-template <quokka::direction dir>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDBrioWuShockTube>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, int /*dcomp*/,
-								      int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-								      const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<MHDBrioWuShockTube>::FillCustomBoundaryConditionsFaceVar(quokka::BoundaryFill const &bc)
 {
 	// Prepare boundary values for each face direction: {x-face, y-face, z-face}
 	// For low boundary (left side)
@@ -190,8 +183,11 @@ AMRSimulation<MHDBrioWuShockTube>::setCustomBoundaryConditionsFaceVar(const amre
 
 	// Apply boundary conditions using helper functions (boundary_dim 0 = x-axis)
 	// The helper functions will internally select the appropriate value based on face_dir
-	setConstantDirichletBCFaceVarLo<0, dir, 3>(iv, consVar_fc, geom, low_bdr_values);
-	setConstantDirichletBCFaceVarHi<0, dir, 3>(iv, consVar_fc, geom, high_bdr_values);
+	const quokka::direction face_dir = bc.FaceDirection();
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setConstantDirichletBCFaceVarLo<0>(i, j, k, tag, face_dir, low_bdr_values);
+		setConstantDirichletBCFaceVarHi<0>(i, j, k, tag, face_dir, high_bdr_values);
+	});
 }
 
 template <> void QuokkaSimulation<MHDBrioWuShockTube>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
