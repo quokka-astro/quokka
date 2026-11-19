@@ -273,7 +273,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 // Specialization for Star particles: dispatches to the modular stellar-evolution framework.
 // Stellar models own their internal tables, so no gpu_tables plumbing is needed.
 // Inherits updateParticleProperties from the base class (which calls applyUpdate).
-// TODO: the stellar model is updated once per coarse step (dt_[0]). This is adequate while all levels share the coarse
+// TODO(cch): the stellar model is updated once per coarse step (dt_[0]). This is adequate while all levels share the coarse
 // step; with subcycled gravity, update Star particles on the fine time step of their level instead, since a coarse
 // step can be much longer than the time over which the accretion rate changes.
 template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> : ParticlePropertyUpdateBase<ParticleType::Star> {
