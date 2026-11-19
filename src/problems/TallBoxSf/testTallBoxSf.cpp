@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testTallBoxSf.cpp
 /// \brief Defines a problem for a galactic patch (tall box) with self-consistent star formation and SN feedback.
 ///

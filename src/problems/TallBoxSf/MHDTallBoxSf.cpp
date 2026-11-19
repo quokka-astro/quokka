@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file MHDTallBoxSf.cpp
 /// \brief MHD version of TallBoxSf: a galactic patch (tall box) with self-consistent star formation and SN feedback, a horizontal magnetic field,
 /// and the MHD diode (outflow, no-inflow) boundary condition on the vertical (z) boundaries.

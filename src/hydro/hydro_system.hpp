@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef HYDRO_SYSTEM_HPP_ // NOLINT
 #define HYDRO_SYSTEM_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file hydro_system.hpp
 /// \brief Defines a class for solving the Euler equations.
 ///
@@ -1065,10 +1063,10 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 				if (nscalars_ > 0) {
 					for (int n = 0; n < nscalars_; ++n) {
-						if (rho_new == 0.0) {
+						if (rho <= 0.0) {
 							state[bx](i, j, k, scalar0_index + n) = 0.0;
 						} else {
-							state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
+							state[bx](i, j, k, scalar0_index + n) *= rho_new / rho;
 						}
 					}
 				}

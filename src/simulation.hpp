@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef SIMULATION_HPP_ // NOLINT
 #define SIMULATION_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file simulation.cpp
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation.
@@ -344,6 +342,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 				       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const = 0;
 	virtual void ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const;
+	// compute a derived variable that the physics modules provide for every problem; returns false if `dname` is not one of them
+	[[nodiscard]] virtual auto ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp,
+							    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const -> bool;
 
 	// compute statistics
 	virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
@@ -4265,6 +4266,10 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 				comp++;
 				continue;
 			}
+			if (ComputeBuiltinDerivedVar(lev, varname, plotMF, comp, src_fc)) {
+				comp++;
+				continue;
+			}
 			ComputeDerivedVar(lev, varname, plotMF, comp, src_cc, src_fc);
 			comp++;
 			continue;
@@ -4275,6 +4280,13 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 	}
 
 	return plotMF;
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::ComputeBuiltinDerivedVar(int /*lev*/, std::string const & /*dname*/, amrex::MultiFab & /*mf*/, int /*ncomp*/,
+							amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const -> bool
+{
+	return false;
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const

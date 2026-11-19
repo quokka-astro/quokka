@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadhydroPulse.cpp
 /// \brief Defines a test problem for radiation in the static diffusion regime with advection by gas.
 ///
