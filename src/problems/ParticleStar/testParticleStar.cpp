@@ -221,9 +221,8 @@ auto problem_main() -> int
 	};
 	auto total_mass = [&](auto const &real_data) {
 		// particle data are on the I/O rank only (empty elsewhere), so share the star mass with all ranks
-		double m_stars = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &particle) {
-			return sum + particle[AMREX_SPACEDIM + quokka::StarParticleMassIdx];
-		});
+		double m_stars = std::accumulate(real_data.begin(), real_data.end(), 0.0,
+						 [](double sum, const auto &particle) { return sum + particle[AMREX_SPACEDIM + quokka::StarParticleMassIdx]; });
 		amrex::ParallelDescriptor::ReduceRealSum(m_stars);
 		return sim.state_new_cc_[0].sum(HydroSystem<ParticleStar>::density_index) * vol + m_stars;
 	};
