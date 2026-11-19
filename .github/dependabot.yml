@@ -19,13 +19,3 @@ updates:
     directory: /.github/workflows/dependencies
     schedule:
       interval: daily
-
-  - package-ecosystem: pip
-    directory: /docs/docs
-    schedule:
-      interval: daily
-
-  - package-ecosystem: pip
-    directory: /docs
-    schedule:
-      interval: daily
