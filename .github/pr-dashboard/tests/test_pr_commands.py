@@ -35,6 +35,9 @@ def make_pull_request(
     label_names: tuple[str, ...] = (),
     edited_file_paths: tuple[str, ...] = ("src/hydro/hydro_system.cpp", ),
     num_lines_changed: int = 12,
+    is_draft: bool = False,
+    checks: tuple[pr_context.Check, ...] = (),
+    unresolved_thread_urls: tuple[str, ...] = (),
 ) -> pr_context.PullRequest:
     return pr_context.PullRequest(
         pr_number=1,
@@ -43,6 +46,9 @@ def make_pull_request(
         label_names=label_names,
         num_lines_changed=num_lines_changed,
         edited_file_paths=edited_file_paths,
+        is_draft=is_draft,
+        checks=checks,
+        unresolved_thread_urls=unresolved_thread_urls,
     )
 
 
@@ -552,6 +558,121 @@ class TestPrCommands_RecomputeLabels(unittest.TestCase):
     ):
         update_plan_from_comment = run_command(text="/recompute-labels all")
         self.assertEqual(update_plan_from_comment, pr_context.UpdatePlan(reply="Use `/recompute-labels`."))
+
+
+PASSED_CHECK = pr_context.Check(
+    name="build",
+    state=pr_context.CheckState.PASSED,
+)
+SKIPPED_CHECK = pr_context.Check(
+    name="docs",
+    state=pr_context.CheckState.SKIPPED,
+)
+PENDING_CHECK = pr_context.Check(
+    name="tests",
+    state=pr_context.CheckState.PENDING,
+)
+FAILED_CHECK = pr_context.Check(
+    name="clang-tidy",
+    state=pr_context.CheckState.FAILED,
+)
+THREAD_URL = "https://github.com/quokka-astro/quokka/pull/1#discussion_r1"
+
+
+class TestPrCommands_RequestReview(unittest.TestCase):
+
+    def test_ready_pr_with_no_reviewer_is_left_for_the_team(
+        self,
+    ):
+        pull_request = make_pull_request(checks=(PASSED_CHECK, SKIPPED_CHECK))
+        update_plan_from_comment = run_command(
+            text="/request-review",
+            pull_request=pull_request,
+            user_name="pr-author",
+            role_in_repo=pr_context.RoleInRepo.READ,
+        )
+        self.assertEqual(update_plan_from_comment, pr_context.UpdatePlan(react=True))
+
+    def test_ready_pr_goes_back_to_the_accepted_reviewer(
+        self,
+    ):
+        pull_request = make_pull_request(
+            assignee_user_names=("reviewer", ),
+            checks=(PASSED_CHECK, ),
+        )
+        update_plan_from_comment = run_command(
+            text="/request-review",
+            pull_request=pull_request,
+            user_name="pr-author",
+        )
+        expected_update_plan = pr_context.UpdatePlan(
+            reviewer_user_names_to_request=("reviewer", ),
+            react=True,
+        )
+        self.assertEqual(update_plan_from_comment, expected_update_plan)
+
+    def test_draft_is_refused(
+        self,
+    ):
+        pull_request = make_pull_request(is_draft=True)
+        update_plan_from_comment = run_command(
+            text="/request-review",
+            pull_request=pull_request,
+        )
+        self.assertTrue(update_plan_from_comment.reply.startswith("This PR is a draft."))
+
+    def test_failed_check_is_named(
+        self,
+    ):
+        pull_request = make_pull_request(checks=(PASSED_CHECK, FAILED_CHECK, PENDING_CHECK))
+        update_plan_from_comment = run_command(
+            text="/request-review",
+            pull_request=pull_request,
+        )
+        expected_reply = "These checks failed: `clang-tidy`. Fix them before requesting a review."
+        self.assertEqual(update_plan_from_comment, pr_context.UpdatePlan(reply=expected_reply))
+
+    def test_pending_check_is_named(
+        self,
+    ):
+        pull_request = make_pull_request(checks=(PASSED_CHECK, PENDING_CHECK))
+        update_plan_from_comment = run_command(
+            text="/request-review",
+            pull_request=pull_request,
+        )
+        expected_reply = "These checks are still running: `tests`. Wait for them to pass."
+        self.assertEqual(update_plan_from_comment, pr_context.UpdatePlan(reply=expected_reply))
+
+    def test_unresolved_thread_is_linked(
+        self,
+    ):
+        pull_request = make_pull_request(
+            checks=(PASSED_CHECK, ),
+            unresolved_thread_urls=(THREAD_URL, ),
+        )
+        update_plan_from_comment = run_command(
+            text="/request-review",
+            pull_request=pull_request,
+        )
+        self.assertIn(THREAD_URL, update_plan_from_comment.reply)
+        self.assertEqual(update_plan_from_comment.reviewer_user_names_to_request, ())
+
+    def test_outsider_is_refused(
+        self,
+    ):
+        update_plan_from_comment = run_command(
+            text="/request-review",
+            user_name="someone-else",
+            role_in_repo=pr_context.RoleInRepo.READ,
+        )
+        expected_reply = "Only the PR author and maintainers can use `/request-review`."
+        self.assertEqual(update_plan_from_comment, pr_context.UpdatePlan(reply=expected_reply))
+
+    def test_unexpected_argument(
+        self,
+    ):
+        update_plan_from_comment = run_command(text="/request-review @reviewer")
+        self.assertEqual(update_plan_from_comment, pr_context.UpdatePlan(reply="Use `/request-review`."))
 
 
 class TestPrCommands_Help(unittest.TestCase):

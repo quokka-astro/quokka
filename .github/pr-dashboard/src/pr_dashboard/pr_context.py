@@ -16,6 +16,19 @@ class Milestone:
     title: str
 
 
+class CheckState(enum.StrEnum):
+    PASSED = "passed"
+    SKIPPED = "skipped"
+    PENDING = "pending"
+    FAILED = "failed"
+
+
+@dataclasses.dataclass(frozen=True)
+class Check:
+    name: str
+    state: CheckState
+
+
 @dataclasses.dataclass(frozen=True)
 class PullRequest:
     pr_number: int
@@ -24,6 +37,9 @@ class PullRequest:
     label_names: tuple[str, ...]
     num_lines_changed: int
     edited_file_paths: tuple[str, ...]
+    is_draft: bool
+    checks: tuple[Check, ...]
+    unresolved_thread_urls: tuple[str, ...]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -50,6 +66,7 @@ class UpdatePlan:
     label_names_to_remove: tuple[str, ...] = ()
     assignee_user_names_to_add: tuple[str, ...] = ()
     assignee_user_names_to_remove: tuple[str, ...] = ()
+    reviewer_user_names_to_request: tuple[str, ...] = ()
     milestone_change: MilestoneChange | None = None
     milestone_title_to_create: str | None = None
     reply: str | None = None

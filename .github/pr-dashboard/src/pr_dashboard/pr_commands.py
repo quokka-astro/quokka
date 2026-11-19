@@ -75,6 +75,12 @@ class Commands(enum.Enum):
         description="set or remove this PR's milestone",
         allowed_users="the PR author, or maintainers",
     )
+    REQUEST_REVIEW = Command(
+        text="/request-review",
+        argument_hint="",
+        description="ask for this PR to be reviewed, once it is ready: not a draft, checks passed, threads resolved",
+        allowed_users="the PR author, or maintainers",
+    )
     RECOMPUTE_LABELS = Command(
         text="/recompute-labels",
         argument_hint="",
@@ -432,6 +438,48 @@ def _set_milestone(
         )
 
 
+def _format_check_names(
+    checks: list[pr_context.Check],
+) -> str:
+    return ", ".join(f"`{_check.name}`" for _check in checks)
+
+
+## the request goes to whoever accepted the review, who keeps it until they release it; with
+## nobody assigned it is left for the team, and someone takes it with /accept-review
+def _request_review(
+    *,
+    pull_request: pr_context.PullRequest,
+    argument: str,
+) -> pr_context.UpdatePlan:
+    failed_checks = [_check for _check in pull_request.checks if _check.state == pr_context.CheckState.FAILED]
+    pending_checks = [_check for _check in pull_request.checks if _check.state == pr_context.CheckState.PENDING]
+    if argument != "":
+        # the command received an argument even though it does not take one
+        return _plan_command_usage_reply(Commands.REQUEST_REVIEW)
+    elif pull_request.is_draft:
+        return pr_context.UpdatePlan(
+            reply=f"This PR is a draft. Mark it ready for review, then use `{Commands.REQUEST_REVIEW.text}` again.",
+        )
+    elif len(failed_checks) > 0:
+        return pr_context.UpdatePlan(
+            reply=f"These checks failed: {_format_check_names(failed_checks)}. Fix them before requesting a review.",
+        )
+    elif len(pending_checks) > 0:
+        return pr_context.UpdatePlan(
+            reply=f"These checks are still running: {_format_check_names(pending_checks)}. Wait for them to pass.",
+        )
+    elif len(pull_request.unresolved_thread_urls) > 0:
+        thread_lines = "\n".join(f"- {_thread_url}" for _thread_url in pull_request.unresolved_thread_urls)
+        return pr_context.UpdatePlan(
+            reply=f"Resolve each review thread once you have addressed it, then request the review again:\n{thread_lines}",
+        )
+    else:
+        return pr_context.UpdatePlan(
+            reviewer_user_names_to_request=pull_request.assignee_user_names,
+            react=True,
+        )
+
+
 def _recompute_labels(
     *,
     configured_labels: pr_labels.ConfiguredLabels,
@@ -504,6 +552,11 @@ def plan_update_from_comment(
     elif command == Commands.SET_MILESTONE:
         return _set_milestone(
             open_milestones=open_milestones,
+            argument=argument,
+        )
+    elif command == Commands.REQUEST_REVIEW:
+        return _request_review(
+            pull_request=pull_request,
             argument=argument,
         )
     elif command == Commands.RECOMPUTE_LABELS:
