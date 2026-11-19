@@ -70,7 +70,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto betaTable() -> amrex::GpuArray<amr
 		0.73706,  0.738596, 0.738966, 0.721954, 0.725429, 0.726874, 0.727216, 0.710993, 0.714311, 0.715671, 0.715987};
 }
 
-// Initial polytropic index from the accretion rate, clamped to [1.5, 3]
+/// Initial polytropic index from the accretion rate, clamped to [1.5, 3]
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto nInit(amrex::Real mdot) -> amrex::Real
 {
 	if (mdot <= 0.0) {
@@ -80,16 +80,16 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto nInit(amrex::Real mdot) -> amrex::
 	return std::min(std::max(5.0 - 3.0 / aG_init, 1.5), 3.0);
 }
 
-// Initial radius from the accretion rate
+/// Initial radius from the accretion rate
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto radInit(amrex::Real mdot) -> amrex::Real
 {
 	return 2.5 * C::R_solar * std::pow(mdot * yr_in_s / C::M_solar * 1.0e5, 0.2);
 }
 
-// Gravitational energy coefficient of a polytrope, E_grav = -aG G m^2 / r
+/// Gravitational energy coefficient of a polytrope, E_grav = -aG G m^2 / r
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto aG(amrex::Real n) -> amrex::Real { return 3.0 / (5.0 - n); }
 
-// Linear interpolation of a Lane-Emden factor table in n
+/// Linear interpolation of a Lane-Emden factor table in n
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto polytropeFactor(amrex::GpuArray<amrex::Real, n_poly_table> const &table, amrex::Real n) -> amrex::Real
 {
 	const int itab = std::min(std::max(static_cast<int>(std::floor((n - 1.5) / 0.1)), 0), n_poly_table - 2);
@@ -107,7 +107,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto pressureCentral(amrex::Real m, amr
 	return polytropeFactor(pressureFactorTable(), n) * C::Gconst * m * m / (r * r * r * r);
 }
 
-// Central temperature from P_c = rho_c k_B T_c / (mu m_H) + a T_c^4 / 3
+/// Central temperature from P_c = rho_c k_B T_c / (mu m_H) + a T_c^4 / 3
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto temperatureCentral(amrex::Real m, amrex::Real r, amrex::Real n) -> amrex::Real
 {
 	const amrex::Real rho_c = rhoCentral(m, r, n);
@@ -120,14 +120,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto temperatureCentral(amrex::Real m, 
 	return 0.5 * (T_lo + T_hi);
 }
 
-// Ratio of gas pressure to total pressure at the centre
+/// Ratio of gas pressure to total pressure at the centre
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto betaCentral(amrex::Real m, amrex::Real r, amrex::Real n) -> amrex::Real
 {
 	return rhoCentral(m, r, n) * C::k_B * temperatureCentral(m, r, n) / (mu * m_H * pressureCentral(m, r, n));
 }
 
-// Mean ratio of gas pressure to total pressure: Eddington quartic for n = 3, otherwise table lookup
-// (beta = 1 below 5 M_sun; masses above 50 M_sun use the last table row)
+/// Mean ratio of gas pressure to total pressure: Eddington quartic for n = 3, otherwise table lookup
+/// (beta = 1 below 5 M_sun; masses above 50 M_sun use the last table row)
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto beta(amrex::Real m, amrex::Real r, amrex::Real n) -> amrex::Real
 {
 	if (n == 3.0) {
@@ -155,13 +155,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto beta(amrex::Real m, amrex::Real r,
 	       b(midx + 1, nidx + 1) * mwgt * nwgt;
 }
 
-// d log(beta) / d log(m) at fixed r and n
+/// d log(beta) / d log(m) at fixed r and n
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto dlogBeta_dlogM(amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real beta1) -> amrex::Real
 {
 	return (beta(m * (1.0 + dlogm), r, n) / beta1 - 1.0) / dlogm;
 }
 
-// d log(beta / beta_c) / d log(m) at fixed r and n (zero for n = 3, where beta = beta_c)
+/// d log(beta / beta_c) / d log(m) at fixed r and n (zero for n = 3, where beta = beta_c)
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto dlogBetaOverBetac_dlogM(amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real beta1) -> amrex::Real
 {
 	if (n == 3.0) {
@@ -173,7 +173,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto dlogBetaOverBetac_dlogM(amrex::Rea
 	return (ratio2 / ratio1 - 1.0) / dlogm;
 }
 
-// Zero-age main-sequence luminosity, Tout et al. (1996), solar metallicity
+/// Zero-age main-sequence luminosity, Tout et al. (1996), solar metallicity
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosityZAMS(amrex::Real m) -> amrex::Real
 {
 	const amrex::Real x = m / C::M_solar;
@@ -183,7 +183,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosityZAMS(amrex::Real m) -> a
 	return num / den * L_solar;
 }
 
-// Zero-age main-sequence radius, Tout et al. (1996), solar metallicity
+/// Zero-age main-sequence radius, Tout et al. (1996), solar metallicity
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto radiusZAMS(amrex::Real m) -> amrex::Real
 {
 	const amrex::Real x = m / C::M_solar;
@@ -194,19 +194,19 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto radiusZAMS(amrex::Real m) -> amrex
 	return num / den * C::R_solar;
 }
 
-// Luminosity radiated at the accretion shock
+/// Luminosity radiated at the accretion shock
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosityAcc(amrex::Real m, amrex::Real r, amrex::Real mdot) -> amrex::Real
 {
 	return f_acc * f_k * C::Gconst * m * mdot / r;
 }
 
-// Luminosity radiated by the inner disk
+/// Luminosity radiated by the inner disk
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosityDisk(amrex::Real m, amrex::Real r, amrex::Real mdot) -> amrex::Real
 {
 	return (1.0 - f_k) * C::Gconst * m * mdot / r;
 }
 
-// Luminosity of the protostar without the disk: L_ZAMS + L_acc, but no less than the Hayashi-track luminosity
+/// Luminosity of the protostar without the disk: L_ZAMS + L_acc, but no less than the Hayashi-track luminosity
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosityStar(amrex::Real m, amrex::Real r, amrex::Real mdot) -> amrex::Real
 {
 	const amrex::Real l_star = luminosityZAMS(m) + luminosityAcc(m, r, mdot);
@@ -237,7 +237,7 @@ struct Orion2007StellarModel {
 	static constexpr int max_substeps = 10000;
 	static constexpr int max_limiter_iterations = 10;
 
-	// Deuterium-burning luminosity
+	/// Deuterium-burning luminosity
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto luminosityDeut(BurnState state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot)
 	    -> amrex::Real
 	{
@@ -259,7 +259,7 @@ struct Orion2007StellarModel {
 		amrex::Real scale; // largest single term of dr/dt; limits the sub-step
 	};
 
-	// dr/dt from the discretized Nakano et al. (2000) Eq. 5.8
+	/// dr/dt from the discretized Nakano et al. (2000) Eq. 5.8
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto radiusRate(BurnState state, amrex::Real m, amrex::Real r, amrex::Real n, amrex::Real mdot)
 	    -> RadiusRate
 	{
@@ -275,11 +275,11 @@ struct Orion2007StellarModel {
 			.scale = std::max(std::abs(accretion_term), lum_coef * (l_star + l_ion + std::abs(l_deut)))};
 	}
 
-	// Stellar-evolution step over dt, using the mass and accretion rate set by the accretion module.
-	//   rdata:    [in/out] particle real components; the extras start at StarParticleFixedComps + n_groups
-	//   idata:    [in/out] particle integer components
-	//   n_groups: [in]     number of radiation groups (= number of lum slots)
-	//   dt:       [in]     timestep
+	/// Stellar-evolution step over dt, using the mass and accretion rate set by the accretion module.
+	///   rdata:    [in/out] particle real components; the extras start at StarParticleFixedComps + n_groups
+	///   idata:    [in/out] particle integer components
+	///   n_groups: [in]     number of radiation groups (= number of lum slots)
+	///   dt:       [in]     timestep
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void evolve(amrex::Real *rdata, int *idata, int n_groups, amrex::Real dt)
 	{
 		// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic)
