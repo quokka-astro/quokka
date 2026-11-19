@@ -144,14 +144,25 @@ def parse_command(
     )
 
 
+def _remove_quoted_text(
+    comment_text: str,
+) -> str:
+    text_without_code_blocks = re.sub(r"```.*?```", "", comment_text, flags=re.DOTALL)
+    text_without_code = re.sub(r"`[^`\n]*`", "", text_without_code_blocks)
+    text_without_quotes = re.sub(r"^\s*>.*$", "", text_without_code, flags=re.MULTILINE)
+    return text_without_quotes
+
+
+## commands in code or in a quote are being referred to, not run, so they get no placement reply
 def extract_mentioned_commands(
     comment_text: str,
 ) -> tuple[Commands, ...]:
     commands_by_text = {_command.text: _command for _command in Commands}
     command_text_options = "|".join(re.escape(_command_text) for _command_text in commands_by_text)
     command_pattern = re.compile(rf"(?<![\w/-])({command_text_options})(?![\w-])")
+    unquoted_text = _remove_quoted_text(comment_text)
     mentioned_commands = []
-    for mentioned_text in command_pattern.findall(comment_text):
+    for mentioned_text in command_pattern.findall(unquoted_text):
         mentioned_command = commands_by_text[mentioned_text]
         if mentioned_command not in mentioned_commands:
             mentioned_commands.append(mentioned_command)

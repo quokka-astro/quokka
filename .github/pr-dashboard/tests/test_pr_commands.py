@@ -166,6 +166,29 @@ class TestPrCommands_Placement(unittest.TestCase):
     ):
         self.assertIsNone(run_command(text="Looks good, thanks!"))
 
+    def test_command_in_inline_code_gets_nothing(
+        self,
+    ):
+        self.assertIsNone(run_command(text="Run `/accept-review` when you are ready."))
+
+    def test_command_in_a_code_block_gets_nothing(
+        self,
+    ):
+        self.assertIsNone(run_command(text="For example:\n```\n/set-priority high\n```"))
+
+    def test_command_in_a_quote_gets_nothing(
+        self,
+    ):
+        self.assertIsNone(run_command(text="> /help\nThat lists the commands."))
+
+    def test_quoted_command_does_not_hide_a_bare_one(
+        self,
+    ):
+        update_plan_from_comment = run_command(text="> /help\nThen /release-review")
+        self.assertTrue(
+            update_plan_from_comment.reply.startswith("Commands only run when they start a comment."),
+        )
+
 
 class TestPrCommands_AcceptReview(unittest.TestCase):
 

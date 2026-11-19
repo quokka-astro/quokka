@@ -43,7 +43,7 @@ After the change merges into `development`, the label workflow creates any new l
 
 ## Running the Tests
 
-From the repository root:
+The tools need Python 3.11 or newer and `gh` 2.48 or newer. From the repository root:
 
 ```bash
 PYTHONPATH=.github/pr-dashboard/src python3 -m unittest discover --start-directory .github/pr-dashboard/tests --pattern "test_*.py"

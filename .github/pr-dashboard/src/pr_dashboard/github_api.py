@@ -1,6 +1,7 @@
 import http
 import json
 import subprocess
+import sys
 import urllib.parse
 
 from pr_dashboard import pr_context
@@ -128,7 +129,8 @@ def get_user(
             endpoint=f"repos/{repo}/collaborators/{_quote(user_name)}/permission",
         )
         role_in_repo = pr_context.RoleInRepo(permission_data["role_name"])
-    except (RuntimeError, ValueError, KeyError):
+    except (RuntimeError, ValueError, KeyError) as error:
+        print(f"Could not read the permission of `{user_name}`, so treating them as read-only: {error!r}", file=sys.stderr)
         role_in_repo = pr_context.RoleInRepo.READ
     return pr_context.User(
         user_name=user_name,
