@@ -58,6 +58,8 @@ constexpr Real dr = 1.0;
 constexpr Real ur = -5.0;
 constexpr Real pr = 0.6;
 int ishock_g = 0; // NOLINT; set from the computed shock index in setInitialConditionsOnGrid; host-only, never dereferenced on device
+// the post-shock pressure is lowered by this amount in the shock cell of every even row
+constexpr Real shock_cell_pressure_perturbation = 1.31;
 
 // post-shock state, and the x2 component of the magnetic field on either side of the shock; set from
 // problem.inverse_plasma_beta in problem_main(), where the default of zero keeps the states above
@@ -110,6 +112,10 @@ void setShockStates(Real const inverse_plasma_beta)
 	post_shock_pressure = compute_post_shock_pressure(compression);
 	post_shock_magnetic_field = compression * b_pre;
 	pre_shock_magnetic_field = b_pre;
+	if (post_shock_pressure <= shock_cell_pressure_perturbation) {
+		amrex::Abort("problem.inverse_plasma_beta is too large: the post-shock pressure no longer exceeds the pressure perturbation in the shock "
+			     "cell. Use a value below 16.");
+	}
 }
 
 // index of the last cell centre to the left of the initial shock position
@@ -169,7 +175,7 @@ template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGrid(quokka::
 	Real const emag_pre = 0.5 * pre_shock_magnetic_field * pre_shock_magnetic_field;
 	Real const dd = rho_post - 0.135;
 	Real const ud = vx_post + 0.219;
-	Real const pd = P_post - 1.31;
+	Real const pd = P_post - shock_cell_pressure_perturbation;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		double vx = NAN;
