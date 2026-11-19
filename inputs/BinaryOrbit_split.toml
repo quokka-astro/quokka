@@ -36,3 +36,5 @@ problem.do_split_particles = true
 problem.split_factor = 8
 
 particles.verbose = 1
+
+density_floor = 1e-28  # g cm^-3

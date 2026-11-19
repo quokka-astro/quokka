@@ -62,3 +62,5 @@ quokka.part.file = "part_plt"  # Output file prefix (must end in "plt")
 #quokka.part.int = 18
 quokka.part.time_int = "1.0*Myr" # Output cadence. 1 Myr, expected outputs are: 8 12 17
 quokka.part.particles = "Sink_particles"
+
+density_floor = 1e-34  # g cm^-3

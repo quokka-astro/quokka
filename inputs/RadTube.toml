@@ -24,3 +24,5 @@ suppress_output = 1
 plotfile_interval = 10000000
 
 radiation.iteration_tolerance = 1.0e-13
+
+density_floor = 1e-6  # g cm^-3

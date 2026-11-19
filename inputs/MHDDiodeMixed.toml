@@ -1,0 +1,34 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [-1.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 0.25]
+# x: MHD diode (set in problem_main); y, z: periodic
+quokka.bc = ["ext_dir", "periodic", "periodic"]
+
+diode.flow = "mixed"
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 0  # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [64, 32, 8]
+amr.max_level = 0  # number of levels = max_level + 1
+amr.max_grid_size = 32
+amr.blocking_factor = 8
+
+do_reflux = 0
+do_subcycle = 0
+
+plotfile_interval = -1
+checkpoint_interval = -1
+cfl = 0.3
+stop_time = 0.3
+max_timesteps = 5000
+
+hydro.rk_integrator_order = 2
+hydro.reconstruction_order = 3

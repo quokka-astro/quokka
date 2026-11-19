@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadMarshakDustPE.cpp
 /// \brief Defines a test Marshak wave problem with weak coupling between dust and gas.
 ///
@@ -76,6 +74,8 @@ template <> struct ISM_Traits<MarshakProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = dust_on;
 	static constexpr double gas_dust_coupling_threshold = gas_dust_coupling_threshold_;
 	static constexpr bool enable_photoelectric_heating = PE_on;
+	static constexpr bool thermal_band_photochemistry = false;   // no photochemistry network in this problem
+	static constexpr bool dust_chemical_band_absorption = false; // no chemical bands in this problem
 };
 
 template <>

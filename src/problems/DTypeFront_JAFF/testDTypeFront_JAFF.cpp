@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDTypeFront_JAFF.cpp
 /// \brief Defines a test problem for a D Type front that uses a JAFF generated network.
 ///
@@ -227,7 +225,6 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 	return 0.5 * (T_lo + T_hi);
 }
 
-#ifdef DTYPEFRONT_USE_ROSENBROCK
 auto rosenbrock_tableau_name(int tableau) -> char const *
 {
 	switch (tableau) {
@@ -243,16 +240,11 @@ auto rosenbrock_tableau_name(int tableau) -> char const *
 			return "unknown";
 	}
 }
-#endif
 
 void print_microphysics_integrator()
 {
-#ifdef DTYPEFRONT_USE_ROSENBROCK
 	amrex::Print() << "DTypeFront_JAFF microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
 		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
-#else
-	amrex::Print() << "DTypeFront_JAFF microphysics integrator: VODE\n";
-#endif
 }
 
 } // namespace

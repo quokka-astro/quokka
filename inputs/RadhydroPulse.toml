@@ -27,3 +27,5 @@ amr.max_grid_size_z = 8
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 1
+
+density_floor = 1e-8  # g cm^-3

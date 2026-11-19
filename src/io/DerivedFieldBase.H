@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef DERIVED_FIELD_BASE_H_
 #define DERIVED_FIELD_BASE_H_
 

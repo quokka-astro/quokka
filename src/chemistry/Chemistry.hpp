@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef CHEMISTRY_HPP_ // NOLINT
 #define CHEMISTRY_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file Chemistry.hpp
 /// \brief Defines methods for integrating primordial chemical network using Microphysics
 ///
@@ -146,7 +144,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 	amrex::ParallelDescriptor::ReduceIntMin(burn_success);
 
 	if (!burn_success) {
-		// amrex::Abort("Burn failed in VODE. Aborting.");
+		// amrex::Abort("Burn failed in the integrator. Aborting.");
 		amrex::Print() << "\t>> WARNING: Unsuccessful burn. Retrying hydro step."
 			       << "\n";
 	}

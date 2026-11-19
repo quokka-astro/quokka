@@ -76,3 +76,5 @@ integrator.atol_spec = 1.0e-4
 # these params help debug the code
 #amrex.throw_exception = 1
 #amrex.signal_handling = 0
+
+density_floor = 1e-30  # g cm^-3

@@ -1,7 +1,6 @@
-//==============================================================================
-// Copyright 2025 Ben Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testFieldLoop.cpp
 /// \brief
 ///   This problem is based on the test described here:
@@ -165,9 +164,9 @@ template <> void QuokkaSimulation<FieldLoop>::refineGrid(int lev, amrex::TagBoxA
 				}
 			});
 		} else if (refine_based_on == RefineOn::MagneticEnergy) {
-			// refine on magnetic energy density
+			// refine where |B| is at least half the loop's interior field strength A
 			constexpr int idx = Physics_Indices<FieldLoop>::mhdFirstIndex;
-			amrex::Real const threshold = 0.5 * A * A;
+			amrex::Real const threshold = 0.5 * (0.5 * A) * (0.5 * A);
 			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real bx = 0.5 * (Bx_fc(i, j, k, idx) + Bx_fc(i + 1, j, k, idx));
 				const amrex::Real by = 0.5 * (By_fc(i, j, k, idx) + By_fc(i, j + 1, k, idx));

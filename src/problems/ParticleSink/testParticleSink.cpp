@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testParticleSink.cpp
 /// \brief Defines a test problem for sink particles accretion.
 ///
@@ -92,6 +95,11 @@ template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 				p.rdata(quokka::SinkParticleVxIdx) += boost_velocity[0];
 				p.rdata(quokka::SinkParticleVyIdx) += boost_velocity[1];
 				p.rdata(quokka::SinkParticleVzIdx) += boost_velocity[2];
+				// Initialise to zero to avoid NaN
+				p.rdata(quokka::SinkParticleMdotIdx) = 0.0;
+				p.rdata(quokka::SinkParticleLxIdx) = 0.0;
+				p.rdata(quokka::SinkParticleLyIdx) = 0.0;
+				p.rdata(quokka::SinkParticleLzIdx) = 0.0;
 			});
 		}
 	}

@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testStromgrenSphere.cpp
 /// \brief Defines a test problem for the static Stromgren sphere with no temperature dependence.
 ///
@@ -516,7 +514,12 @@ auto problem_main() -> int
 				const amrex::Real analytical_radius = sim.userData_.r_analytical_vec_[i];
 				const amrex::Real upper_bound = analytical_radius + error_tol;
 				const amrex::Real lower_bound = analytical_radius - error_tol;
-				if (((r84_numerical > upper_bound) || (r16_numerical < lower_bound)) && (analytical_radius > r_trunc)) {
+				if (analytical_radius <= r_trunc) {
+					continue;
+				}
+				// inside the window a NaN radius (e.g. no front cells) is a failure, not a pass
+				const bool has_nan = std::isnan(r16_numerical) || std::isnan(r50_numerical) || std::isnan(r84_numerical);
+				if (has_nan || r84_numerical > upper_bound || r16_numerical < lower_bound) {
 					amrex::Print() << "Test failed at t = " << sim.userData_.t_vec_[i] << "\n";
 					amrex::Print() << "Analytical radius: " << analytical_radius << '\n';
 					amrex::Print() << "Numerical r16: " << r16_numerical << '\n';

@@ -56,3 +56,5 @@ sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
 sfh_time_interval = 4e10
 
 problem.validate_initial_imf_stats = false
+
+density_floor = 1e-29  # g cm^-3
