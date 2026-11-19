@@ -468,15 +468,13 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 
 // Implement User-defined diode BC
 // Diode BC: allows outflow, prevents inflow by reflecting the z-momentum
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-												const Real /*time*/, const amrex::BCRec * /*bcr*/,
-												int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<TheProblem>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
 	// Apply diode boundary conditions in z-direction (direction 2)
-	setDiodeBCLo<2>(iv, consVar, geom);
-	setDiodeBCHi<2>(iv, consVar, geom);
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setDiodeBCLo<2>(i, j, k, tag);
+		setDiodeBCHi<2>(i, j, k, tag);
+	});
 }
 
 auto problem_main() -> int

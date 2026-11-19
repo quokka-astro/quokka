@@ -33,32 +33,31 @@ template <> struct Physics_Traits<HydrostaticAtmosphereProblem> : DefaultPhysics
 
 constexpr amrex::Real kTgasInit = 1.0;
 constexpr amrex::Real kRhoInitFactor = 5.0e-3;
-AMREX_GPU_MANAGED amrex::Real g_base_density_floor = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real g_scale_height = NAN;	  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real g_base_density_floor = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+amrex::Real g_scale_height = NAN;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<HydrostaticAtmosphereProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-									 int numcomp, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-									 const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<HydrostaticAtmosphereProblem>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
-	auto [i, j, k] = iv.dim3();
+	const auto dx = bc.CellSize();
+	const auto prob_lo = bc.ProbLo();
+	const int numcomp = bc.NumComp();
+	const amrex::Real base_density_floor = g_base_density_floor;
+	const amrex::Real scale_height = g_scale_height;
 
-	amrex::Real const *dx = geom.CellSize();
-	amrex::Real const *prob_lo = geom.ProbLo();
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+		amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
+		amrex::Real const rho_init = kRhoInitFactor * rho_atm;
+		amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
 
-	amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-	amrex::Real const rho_atm = g_base_density_floor * std::exp(-x / g_scale_height);
-	amrex::Real const rho_init = kRhoInitFactor * rho_atm;
-	amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
+		for (int n = 0; n < numcomp; ++n) {
+			tag.fab(i, j, k, n) = 0.;
+		}
 
-	for (int n = 0; n < numcomp; ++n) {
-		consVar(i, j, k, n) = 0.;
-	}
-
-	consVar(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index) = rho_init;
-	consVar(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::energy_index) = Eint_init;
-	consVar(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::internalEnergy_index) = Eint_init;
+		tag.fab(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index) = rho_init;
+		tag.fab(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::energy_index) = Eint_init;
+		tag.fab(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::internalEnergy_index) = Eint_init;
+	});
 }
 
 template <> void QuokkaSimulation<HydrostaticAtmosphereProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

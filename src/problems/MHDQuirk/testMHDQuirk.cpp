@@ -227,11 +227,7 @@ template <> void QuokkaSimulation<MHDQuirk>::computeAfterEvolve(amrex::Vector<am
 	}
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDQuirk>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-						     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-						     int /*orig_comp*/)
+template <> void AMRSimulation<MHDQuirk>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
 	// Number of variables
 	constexpr int nvar = Physics_Indices<MHDQuirk>::nvarTotal_cc;
@@ -256,8 +252,10 @@ AMRSimulation<MHDQuirk>::setCustomBoundaryConditions(const amrex::IntVect &iv, a
 	high_bdr_cells[RadSystem<MHDQuirk>::x3GasMomentum_index] = 0.;
 
 	// Apply boundary conditions
-	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setConstantDirichletBCLo<0>(i, j, k, tag, low_bdr_cells);
+		setConstantDirichletBCHi<0>(i, j, k, tag, high_bdr_cells);
+	});
 }
 
 auto problem_main() -> int

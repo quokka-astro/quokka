@@ -98,64 +98,61 @@ quokka::EOS<SuOlsonProblemCgs>::ComputeEintTempDerivative(const double /*rho*/, 
 	return alpha_SuOlson * std::pow(Tgas, 3);
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							      int /*numcomp*/, amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/,
-							      const amrex::BCRec *bcr, int /*bcomp*/, int /*orig_comp*/)
+template <> void AMRSimulation<SuOlsonProblemCgs>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
-	if ((bcr->lo(0) != quokka::BCType::ext_dir) && (bcr->hi(0) != quokka::BCType::ext_dir)) {
+	if ((bc.HostBCRec(0).lo(0) != quokka::BCType::ext_dir) && (bc.HostBCRec(0).hi(0) != quokka::BCType::ext_dir)) {
 		return;
 	}
 
-	// set boundary condition for cell 'iv'
-	auto const [i, j, k] = iv.dim3();
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		const int ilo = tag.domain.smallEnd(0);
 
-	if (i < 0) {
-		// Marshak boundary condition
-		const double T_H = T_hohlraum;
-		const double E_inc = radiation_constant_cgs_ * std::pow(T_H, 4);
-		const double c = c_light_cgs_;
-		// const double F_inc = c * E_inc / 4.0; // incident flux
+		if (tag.side[0] == -1) {
+			// Marshak boundary condition
+			const double T_H = T_hohlraum;
+			const double E_inc = radiation_constant_cgs_ * std::pow(T_H, 4);
+			const double c = c_light_cgs_;
+			// const double F_inc = c * E_inc / 4.0; // incident flux
 
-		const double E_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
-		const double F_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
+			const double E_0 = tag.fab(ilo, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
+			const double F_0 = tag.fab(ilo, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
 
-		// const double E_1 = consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
-		// const double F_1 = consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
+			// const double E_1 = tag.fab(1, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
+			// const double F_1 = tag.fab(1, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
 
-		// use PPM stencil at interface to solve for F_rad in the ghost zones
-		// const double F_bdry = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 * F_0) +
-		//		      (1. / 12.) * (c * E_1 + 2.0 * F_1);
+			// use PPM stencil at interface to solve for F_rad in the ghost zones
+			// const double F_bdry = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 * F_0) +
+			//		      (1. / 12.) * (c * E_1 + 2.0 * F_1);
 
-		// use value at interface to solve for F_rad in the ghost zones
-		const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
+			// use value at interface to solve for F_rad in the ghost zones
+			const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
 
-		AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
+			AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
 
-		// x1 left side boundary (Marshak)
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = E_inc;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = F_bdry;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0.;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0.;
-	} else {
-		// right-side boundary -- constant
-		const double Erad = a_rad * std::pow(T_initial, 4);
+			// x1 left side boundary (Marshak)
+			tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = E_inc;
+			tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = F_bdry;
+			tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0.;
+			tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0.;
+		} else {
+			// right-side boundary -- constant
+			const double Erad = a_rad * std::pow(T_initial, 4);
 
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
-	}
+			tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
+			tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = 0;
+			tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0;
+			tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
+		}
 
-	// gas boundary conditions are the same on both sides
-	const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
+		// gas boundary conditions are the same on both sides
+		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
+		tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
+		tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
+		tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
+		tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
+		tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
+		tag.fab(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
+	});
 }
 
 template <> void QuokkaSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

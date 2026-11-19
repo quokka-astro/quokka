@@ -37,7 +37,7 @@ At a minimum, implement `setInitialConditionsOnGrid` for your problem’s simula
 
 Additional hooks are available when you need them:
 
-* Override `setCustomBoundaryConditions` if you require non-periodic inflow/outflow values, as shown by the shock tube problem described in [`src/problems/HydroShocktube/test_hydro_shocktube.cpp`](https://github.com/quokka-astro/quokka/blob/development/src/problems/HydroShocktube/test_hydro_shocktube.cpp#L102-L152).
+* Specialise `FillCustomBoundaryConditions` if you require non-periodic inflow/outflow values (see [Boundary conditions](#boundary-conditions) below), as shown by the shock tube problem in [`src/problems/HydroShocktube/testHydroShocktube.cpp`](https://github.com/quokka-astro/quokka/blob/development/src/problems/HydroShocktube/testHydroShocktube.cpp).
 * Provide a `refineGrid` specialisation to tag cells for AMR refinement. The shock tube driver flags zones based on the density gradient magnitude—see [`src/problems/HydroShocktube/test_hydro_shocktube.cpp`](https://github.com/quokka-astro/quokka/blob/development/src/problems/HydroShocktube/test_hydro_shocktube.cpp#L154-L177).
 * Implement `computeReferenceSolution` when you want the regression harness to compare against an analytic or tabulated solution. The advection example computes an exact profile for error checking and optional plotting in [`src/problems/Advection/test_advection.cpp`](https://github.com/quokka-astro/quokka/blob/development/src/problems/Advection/test_advection.cpp#L70-L122).
 
@@ -45,11 +45,32 @@ Many other virtual hooks (for particles, diagnostics, derived variables, etc.) a
 
 ### Boundary conditions
 
-Boundaries of type `ext_dir` in `quokka.bc` are filled by the problem's `setCustomBoundaryConditions` (cell-centred) and `setCustomBoundaryConditionsFaceVar` (face-centred) specialisations.
+Boundaries of type `ext_dir` in `quokka.bc` are filled by the problem's `FillCustomBoundaryConditions` (cell-centred) and `FillCustomBoundaryConditionsFaceVar` (face-centred) specialisations. These are ordinary host functions. Each receives a `quokka::BoundaryFill` and calls `bc.ForEachGhostCell()` once with a device lambda, which is called on every physical-boundary ghost cell:
+
+```cpp
+template <> void AMRSimulation<ShocktubeProblem>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
+{
+	// compute the boundary states on the host
+	amrex::GpuArray<amrex::Real, Physics_Indices<ShocktubeProblem>::nvarTotal_cc> low_bdr_cells{};
+	low_bdr_cells[HydroSystem<ShocktubeProblem>::density_index] = rho_L;
+	// ...
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setConstantDirichletBCLo<0>(i, j, k, tag, low_bdr_cells);
+		setConstantDirichletBCHi<0>(i, j, k, tag, high_bdr_cells);
+	});
+}
+```
+
+- `tag.fab` is the array being filled, and `tag.side[d]` is `-1` or `+1` if the cell lies beyond the lower or upper domain boundary in direction `d` (and `0` otherwise). `tag.domain` is the level's cell-centred index domain.
+- Runtime parameters are captured by value, so they do not need to be `AMREX_GPU_MANAGED` globals. `bc` also provides the time (`bc.Time()`), the geometry (`bc.ProbLo()`, `bc.CellSize()`, `bc.GeomData()`), the component range, the boundary types (`bc.HostBCRec(n)`), and, for face-centred data, the face direction (`bc.FaceDirection()`).
+- The AMReX built-in fill (`foextrap`, `reflect_even`, ...) has already been applied to each cell when the lambda is called.
+- Cells beyond one domain face are filled first, then edges, then corners, so the lambda may read valid cells and the ghost cells of earlier phases. It must not read other ghost cells of the same phase.
+
+The helpers `setConstantDirichletBCLo/Hi`, `setConstantDirichletBCFaceVarLo/Hi`, and `setDiodeBCLo/Hi` cover the common cases.
 
 #### Diode (outflow, no-inflow)
 
-The diode lets gas leave the domain and stops it from entering. For hydro, call `setDiodeBCLo<dir>` / `setDiodeBCHi<dir>` in `setCustomBoundaryConditions`. For MHD, additionally set the face-centred boundary to `foextrap` (a placeholder) and specialise `AMRSimulation<problem_t>::isMHDDiodeBoundary(dir, side)` to return `true`; `applyMHDDiodeBC` then fills the ghost magnetic field after the regular ghost fills. `src/problems/MHDDiode` is an example.
+The diode lets gas leave the domain and stops it from entering. For hydro, call `setDiodeBCLo<dir>` / `setDiodeBCHi<dir>` inside `bc.ForEachGhostCell()` in `FillCustomBoundaryConditions`. For MHD, additionally set the face-centred boundary to `foextrap` (a placeholder) and specialise `AMRSimulation<problem_t>::isMHDDiodeBoundary(dir, side)` to return `true`; `applyMHDDiodeBC` then fills the ghost magnetic field after the regular ghost fills. `src/problems/MHDDiode` is an example.
 
 We take the lower \\(x\\) boundary as the example: \\(x\\) is the normal direction and \\(y\\), \\(z\\) are transverse; the other boundaries follow by symmetry. Cell \\(0\\) is the first valid cell, ghost cell \\(-m\\) has left face \\(-m\\), and face \\(0\\) is the boundary face. Each column (fixed \\(j\\), \\(k\\)) is outflow if \\(\rho v\_x < 0\\) in its first valid cell and inflow otherwise.
 

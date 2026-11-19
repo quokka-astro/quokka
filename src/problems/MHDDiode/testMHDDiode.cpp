@@ -120,14 +120,13 @@ template <> void QuokkaSimulation<MHDDiode>::setInitialConditionsOnGridFaceVars(
 	});
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDDiode>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-						     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-						     int /*orig_comp*/)
+template <> void AMRSimulation<MHDDiode>::FillCustomBoundaryConditions(quokka::BoundaryFill const &bc)
 {
-	setDiodeBCLo<0>(iv, consVar, geom);
-	setDiodeBCHi<0>(iv, consVar, geom);
+
+	bc.ForEachGhostCell([=] AMREX_GPU_DEVICE(int i, int j, int k, quokka::BoundaryTag const &tag) {
+		setDiodeBCLo<0>(i, j, k, tag);
+		setDiodeBCHi<0>(i, j, k, tag);
+	});
 }
 
 template <> auto AMRSimulation<MHDDiode>::isMHDDiodeBoundary(int dir, int /*side*/) -> bool { return dir == 0; }
