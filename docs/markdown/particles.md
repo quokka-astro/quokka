@@ -504,7 +504,7 @@ Real components: `mass`, `vx`, `vy`, `vz`, `birth_time`, `death_time` (\\(-1\\) 
 
 ### Choosing a model
 
-The model is selected via `Particle_Traits<problem_t>::stellar_model`, which defaults to `ToyStellarModel` through `DefaultParticleTraits`. A problem can override it by adding `using stellar_model = MyModel;` to its `Particle_Traits` specialization. A model is a struct of GPU device functions; the dispatcher `StellarUpdate::updateStellarProperties` passes the particle's real and integer data to `Model::evolve`, which stores `radius` and `lum` once per coarse step. The update runs before the accretion step of the same coarse step, so it uses the mass and accretion rate from the previous step's accretion.
+The model is selected via `Particle_Traits<problem_t>::stellar_model`, which defaults to `ToyStellarModel` through `DefaultParticleTraits`. A problem can override it by adding `using stellar_model = MyModel;` to its `Particle_Traits` specialization. A model is a struct of GPU device functions; the dispatcher `StellarUpdate::updateStellarProperties` passes the particle's real and integer data to `Model::evolve`, which stores `radius` and `lum` once per coarse step. The update runs before the accretion step of the same coarse step, so it uses the mass and accretion rate from the previous step's accretion. Updating once per coarse step is adequate only while all AMR levels advance with the coarse time step, as now (gravity is not subcycled). With subcycled time steps the model should be updated on the fine time step of the particle's level instead, since a coarse step can be much longer than the time over which the accretion rate changes.
 
 ### Formation
 
@@ -633,7 +633,7 @@ Using the individual terms matters: while the star contracts, \\(A\\) and \\(B\\
 
 #### Update algorithm
 
-Each coarse step calls `evolve` once with the step \\(\Delta t\\), the current mass \\(m\\) (already including the accreted mass) and \\(\dot m\\):
+Each coarse step calls `evolve` once (see the note on fine time steps under [Choosing a model](#choosing-a-model)) with the step \\(\Delta t\\), the current mass \\(m\\) (already including the accreted mass) and \\(\dot m\\):
 
 1. Set all `lum` groups to 0 and \\(t\_{\rm left} = \Delta t\\).
 2. If the phase is `PreCollapse`: return if \\(m < M\_{\rm min}\\) or \\(\dot m \le 0\\). Otherwise set \\(r = r\_{\rm init}\\), \\(n = n\_{\rm init}\\) (Eqs. 1–2), the phase to `NoBurning`, and \\(t\_{\rm left} = \min(\Delta t, (m - M\_{\rm min})/\dot m)\\): the model starts when the mass passed \\(M\_{\rm min}\\).
@@ -648,7 +648,7 @@ Each coarse step calls `evolve` once with the step \\(\Delta t\\), the current m
       - `MainSequence`: \\(m\_d = 0\\), \\(r = R\_{\rm ZAMS}\\).
 4. Store \\(L = L\_\star + L\_{\rm disk}\\) (Eq. 8) at the final \\(m\\) and \\(r\\).
 
-When \\(\epsilon r/S \geq \Delta t\\) there is one sub-step with \\(m\_s = m\\), and step 3 is the same as Orion2007's `updateState` with \\(\Delta m = \dot m\Delta t\\). This is the case for steps small compared with the contraction time, as in Orion2007. Without sub-steps, explicit steps of \\(\Delta m = 0.01\\,M\_\odot\\) at \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) already give radii off by 20%; with them the error is at most 5.2% for every step from \\(\Delta m = 10^{-4}\\) to \\(1\\,M\_\odot\\) at both accretion rates. The model update runs before the accretion step of the same coarse step, so it lags the accretion by one step.
+When \\(\epsilon r/S \geq \Delta t\\) with \\(S\\) evaluated both at the start mass and at \\(m\_s = m\\), there is one sub-step, and step 3 is the same as Orion2007's `updateState` with \\(\Delta m = \dot m\Delta t\\). This is the case for steps small compared with the contraction time, as in Orion2007. Without sub-steps, explicit steps of \\(\Delta m = 0.01\\,M\_\odot\\) at \\(10^{-5}\\,M\_\odot\\,{\rm yr}^{-1}\\) already give radii off by 20%; with them the error is at most 5.2% for every step from \\(\Delta m = 10^{-4}\\) to \\(1\\,M\_\odot\\) at both accretion rates. The model update runs before the accretion step of the same coarse step, so it lags the accretion by one step.
 
 #### Tables
 

@@ -115,7 +115,7 @@ template <> void QuokkaSimulation<ParticleStar>::setInitialConditionsOnGridFaceV
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<ParticleStar>::mhdFirstIndex) = B_val; });
 }
 
-// Tolerances of a reference-track comparison
+/// Tolerances of a reference-track comparison
 struct TrackTolerances {
 	double rL;		// relative error of r, L (and netlum)
 	double n;		// absolute error of n
@@ -123,7 +123,7 @@ struct TrackTolerances {
 	int max_state_mismatch; // rows allowed to be one phase apart
 };
 
-// |a/b - 1|; for b = 0, zero if a = 0 too and infinite otherwise
+/// |a/b - 1|; for b = 0, zero if a = 0 too and infinite otherwise
 auto relativeError(double a, double b) -> double
 {
 	if (b == 0.0) {
@@ -132,10 +132,10 @@ auto relativeError(double a, double b) -> double
 	return std::abs(a / b - 1.0);
 }
 
-// Evolve the stellar model on the host with the constant-accretion-rate steps of a reference run (m0 = 1e-3 M_sun,
-// dm = 1e-4 M_sun per step) and compare with the stored reference track. The rows are `step m r n mdeut state L`,
-// followed by `netlum` for models that store it. Rows before the model starts (state 0) are compared only in
-// state, mdeut and L, since the reference code sets r and n there to values the Quokka models do not store.
+/// Evolve the stellar model on the host with the constant-accretion-rate steps of a reference run (m0 = 1e-3 M_sun,
+/// dm = 1e-4 M_sun per step) and compare with the stored reference track. The rows are `step m r n mdeut state L`,
+/// followed by `netlum` for models that store it. Rows before the model starts (state 0) are compared only in
+/// state, mdeut and L, since the reference code sets r and n there to values the Quokka models do not store.
 template <typename Model> auto compareWithReferenceTrack(std::string const &filename, double mdot_Msun_per_yr, TrackTolerances const &tol) -> int
 {
 	std::ifstream input(filename);
@@ -271,9 +271,10 @@ auto problem_main() -> int
 		return std::make_pair(real_data, int_data);
 	};
 	auto total_mass = [&](auto const &real_data) {
-		const double m_stars = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &particle) {
-			return sum + particle[AMREX_SPACEDIM + quokka::StarParticleMassIdx];
-		});
+		// particle data are on the I/O rank only (empty elsewhere), so share the star mass with all ranks
+		double m_stars = std::accumulate(real_data.begin(), real_data.end(), 0.0,
+						 [](double sum, const auto &particle) { return sum + particle[AMREX_SPACEDIM + quokka::StarParticleMassIdx]; });
+		amrex::ParallelDescriptor::ReduceRealSum(m_stars);
 		return sim.state_new_cc_[0].sum(HydroSystem<ParticleStar>::density_index) * vol + m_stars;
 	};
 
@@ -281,8 +282,11 @@ auto problem_main() -> int
 	sim.maxTimesteps_ = 1;
 	sim.evolve();
 	const auto [real_data_step1, int_data_step1] = star_data();
-	if (real_data_step1.size() != 1) {
-		amrex::Print() << "FAIL: expected 1 Star particle after the formation step, got " << real_data_step1.size() << "\n";
+	// the particle count is known on the I/O rank only; broadcast it so all ranks take the same path
+	int n_stars = static_cast<int>(real_data_step1.size());
+	amrex::ParallelDescriptor::Bcast(&n_stars, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+	if (n_stars != 1) {
+		amrex::Print() << "FAIL: expected 1 Star particle after the formation step, got " << n_stars << "\n";
 		return 1;
 	}
 	const double rel_err_step1 = std::abs(total_mass(real_data_step1) / m_tot_init - 1.0);
@@ -339,6 +343,8 @@ auto problem_main() -> int
 		}
 	}
 
+	// the stellar-property checks ran on the I/O rank only
+	amrex::ParallelDescriptor::ReduceIntMax(status);
 	if (status == 0) {
 		amrex::Print() << "All ParticleStar checks passed\n";
 	}

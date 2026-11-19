@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// Test particle deposition utilities for per-species particle deposition.
 
 #include <cmath>

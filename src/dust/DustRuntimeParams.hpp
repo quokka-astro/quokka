@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef DUST_RUNTIME_PARAMS_HPP_
 #define DUST_RUNTIME_PARAMS_HPP_
 
