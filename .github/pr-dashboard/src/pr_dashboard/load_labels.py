@@ -27,6 +27,7 @@ def _load_scope_labels(
         prefix=prefix,
         labels=labels,
         not_mapped_label=not_mapped_label,
+        unlabelled_path_patterns=tuple(scope_data["unlabelled_path_patterns"]),
     )
 
 

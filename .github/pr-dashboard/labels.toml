@@ -12,6 +12,11 @@
 [scope]
 prefix = "scope/"
 
+## --- unlabelled files
+## every file in the repository needs a scope below or a pattern here; files matching a pattern
+## here deliberately have no scope, so they give the PR no scope label and do not count as unmapped
+unlabelled_path_patterns = []
+
 ## --- unmapped files
 ## a changed file that matches no scope gives the PR this label, to show that its path
 ## needs adding to a scope below

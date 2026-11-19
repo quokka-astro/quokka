@@ -37,7 +37,7 @@ def make_config_text(
     priority_label_text: str = VALID_PRIORITY_LABELS_TEXT,
 ) -> str:
     return (
-        '[scope]\nprefix = "scope/"\n'
+        '[scope]\nprefix = "scope/"\nunlabelled_path_patterns = []\n'
         '[scope.not_mapped_label]\nvalue = "not_mapped"\ncolor = "B60205"\ndescription = "Not mapped"\n'
         f"{scope_label_text}"
         '[size]\nprefix = "size/"\n'

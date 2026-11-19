@@ -1,3 +1,4 @@
+import dataclasses
 import pathlib
 import subprocess
 import unittest
@@ -71,6 +72,23 @@ class TestPrLabels_Scope(unittest.TestCase):
         scope_label_names = get_scope_label_names(edited_file_paths)
         self.assertEqual(scope_label_names, {"scope/undefined", "scope/hydro"})
 
+    def test_unlabelled_file_gets_no_scope(
+        self,
+    ):
+        scope_labels = dataclasses.replace(
+            CONFIGURED_LABELS.scope_labels,
+            unlabelled_path_patterns=("src/newmodule/*", ),
+        )
+        configured_labels = dataclasses.replace(
+            CONFIGURED_LABELS,
+            scope_labels=scope_labels,
+        )
+        scope_label_names = pr_labels._compute_scope_label_names(
+            configured_labels=configured_labels,
+            edited_file_paths=("src/newmodule/thing.hpp", "src/hydro/HLLC.hpp"),
+        )
+        self.assertEqual(scope_label_names, {"scope/hydro"})
+
     def test_build_files_and_libraries(
         self,
     ):
@@ -97,6 +115,8 @@ class TestPrLabels_Scope(unittest.TestCase):
         scope_label_names = get_scope_label_names(edited_file_paths)
         self.assertEqual(scope_label_names, {"scope/CI", "scope/documentation"})
 
+    ## keeps the whole codebase accounted for, so the scope labels always show what a PR changes;
+    ## a new path needs a scope, or a pattern in `unlabelled_path_patterns` to leave it out on purpose
     def test_every_repository_file_has_a_scope(
         self,
     ):
@@ -114,7 +134,11 @@ class TestPrLabels_Scope(unittest.TestCase):
             _file_path for _file_path in repository_file_paths
             if not_mapped_label_name in get_scope_label_names((_file_path, ))
         ]
-        self.assertEqual(not_mapped_paths, [], "Add these paths to a scope in labels.toml")
+        self.assertEqual(
+            not_mapped_paths,
+            [],
+            "Add these paths to a scope, or to unlabelled_path_patterns, in .github/pr-dashboard/labels.toml",
+        )
 
 
 class TestPrLabels_Size(unittest.TestCase):

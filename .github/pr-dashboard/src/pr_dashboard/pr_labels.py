@@ -62,6 +62,7 @@ class LabelCategory:
 class ScopeLabels(LabelCategory):
     labels: tuple[ScopeLabel, ...]
     not_mapped_label: NotMappedLabel
+    unlabelled_path_patterns: tuple[str, ...]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -134,10 +135,14 @@ def _compute_scope_label_names(
                 patterns=_scope_label.path_patterns,
             )
         }
-        if len(matched_label_names) == 0:
-            scope_label_names.add(configured_labels.scope_labels.not_mapped_label.label_name)
-        else:
+        path_is_unlabelled = _path_matches_any(
+            file_path=file_path,
+            patterns=configured_labels.scope_labels.unlabelled_path_patterns,
+        )
+        if len(matched_label_names) > 0:
             scope_label_names.update(matched_label_names)
+        elif not path_is_unlabelled:
+            scope_label_names.add(configured_labels.scope_labels.not_mapped_label.label_name)
     return scope_label_names
 
 

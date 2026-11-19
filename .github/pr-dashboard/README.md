@@ -37,6 +37,7 @@ Edit `labels.toml`. Each category sets a prefix, and each label holds only its v
 - Size labels list `min_num_lines`. A PR gets the largest one its line count reaches.
 - One priority label is marked `default = true`, and is given to a PR with no priority.
 - A changed file that matches no scope gives the PR the `scope/undefined` label, so a missing pattern shows up on the PR.
+- A file that should have no scope goes in `unlabelled_path_patterns`. It gives the PR no scope label, and does not count as unmapped.
 
 After the change merges into `development`, the label workflow creates any new labels and updates colours and descriptions. A PR that is already open keeps its old labels until it is labelled again, for example with `/recompute-labels`.
 
@@ -48,7 +49,7 @@ From the repository root:
 PYTHONPATH=.github/pr-dashboard/src python3 -m unittest discover --start-directory .github/pr-dashboard/tests --pattern "test_*.py"
 ```
 
-One test checks that every file in the repository matches a scope, so adding a folder without a pattern for it fails the tests here first.
+One test checks that every file in the repository has a scope or is listed in `unlabelled_path_patterns`. This keeps the whole codebase accounted for, so the scope labels always show what a PR changes. A PR that adds a folder without a pattern for it fails this test until the folder is given a scope or left out on purpose.
 
 ## Debugging a PR
 
