@@ -343,7 +343,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 				       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const = 0;
 	virtual void ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const;
 	// compute a derived variable that the physics modules provide for every problem; returns false if `dname` is not one of them
-	[[nodiscard]] virtual auto ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp,
+	[[nodiscard]] virtual auto ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 							    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const -> bool;
 
 	// compute statistics
@@ -4314,7 +4314,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 				comp++;
 				continue;
 			}
-			if (ComputeBuiltinDerivedVar(lev, varname, plotMF, comp, src_fc)) {
+			if (ComputeBuiltinDerivedVar(lev, varname, plotMF, comp, src_cc, src_fc)) {
 				comp++;
 				continue;
 			}
@@ -4332,6 +4332,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 
 template <typename problem_t>
 auto AMRSimulation<problem_t>::ComputeBuiltinDerivedVar(int /*lev*/, std::string const & /*dname*/, amrex::MultiFab & /*mf*/, int /*ncomp*/,
+							amrex::MultiFab const & /*state_cc*/,
 							amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const -> bool
 {
 	return false;
