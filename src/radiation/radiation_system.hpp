@@ -460,6 +460,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(!(dust_absorption_only_ && ::quokka::EOS_Traits<problem_t>::gamma == 1.0), // NOLINT
 		      "dust_absorption_only is not implemented for an isothermal EOS (gamma == 1).");
 
+	static_assert(!(dust_absorption_only_ && opacity_model_ != OpacityModel::piecewise_constant_opacity), // NOLINT
+		      "dust_absorption_only requires OpacityModel::piecewise_constant_opacity.");
+
 	// Assertion: pe_heating_efficiency is the dimensionless efficiency factor epsilon of the standard
 	// interstellar expression, a fraction between 0 and 1 (about 0.05 for cold molecular gas).
 	static_assert(

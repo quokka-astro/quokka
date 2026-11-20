@@ -193,7 +193,7 @@ Each implicit stage solves, cell by cell, a system of \\(4 + 4 N\_g\\) equations
 
 The description above is that of the **thermal** groups, which are the only ones genuinely coupled to the gas. Their part of the inner Jacobian is sparse — each group couples to the gas but not directly to any other group — so [@He_2024b] invert it by Gauss-Jordan elimination in \\(O(N\_g)\\) operations rather than \\(O(N\_g^3)\\). Outside the dynamic diffusion limit the outer loop almost always converges in one pass. The gas energy is recovered from the converged exchange terms rather than solved for independently, so energy is conserved only to the accuracy set by `radiation.iteration_tolerance`. Convergence tolerances are set by `radiation.iteration_tolerance` and `radiation.iteration_tolerance_rel`; the choice of per-group unknown and the round-off floor on the residual are discussed in [Radiation Integrator](radiation_integrator.md).
 
-**Under `dust_absorption_only` there is no coupled iteration at all.** Because these bands do not emit, their exchange term does not depend on the gas temperature; and because their absorbed energy is not given to the gas, the gas energy does not depend on theirs. Nothing couples, so the Newton-Raphson solve is skipped outright and each group is updated in closed form, \\(E\_g \to (E\_g + S\_g + W\_g) / (1 + \hat{c} \\, \rho \kappa\_{0E,g} \\, \Delta t)\\), where \\(W\_g\\) is the work term. Under `PPL_opacity_full_spectrum` the group-mean opacity \\(\kappa\_{0E,g}\\) depends on the spectral slope of \\(E\_g\\) itself, so the update is repeated with \\(\kappa\_{0E,g}\\) re-evaluated from the new \\(E\_g\\), for the same number of passes (`max_iter_to_update_alpha_E`) over which the thermal solve updates that slope. The outer iteration remains and is the only iteration left: it converges \\(W\_g\\), which is the one quantity these bands deliver to the gas, and is how radiation pressure keeps doing work on it even though no heat is exchanged.
+**Under `dust_absorption_only` there is no coupled iteration at all.** Because these bands do not emit, their exchange term does not depend on the gas temperature; and because their absorbed energy is not given to the gas, the gas energy does not depend on theirs. Nothing couples, so the Newton-Raphson solve is skipped outright and each group is updated in closed form, \\(E\_g \to (E\_g + S\_g + W\_g) / (1 + \hat{c} \\, \rho \kappa\_{0E,g} \\, \Delta t)\\), where \\(W\_g\\) is the work term. The outer iteration remains and is the only iteration left: it converges \\(W\_g\\), which is the one quantity these bands deliver to the gas, and is how radiation pressure keeps doing work on it even though no heat is exchanged.
 
 ## Multigroup opacity models
 
@@ -360,7 +360,7 @@ template <> struct RadSystem_Traits<MyProblem> {
 };
 ```
 
-The flag defaults to `false`, requires `nGroups > 1`, and cannot be combined with `ISM_Traits::enable_dust_gas_thermal_coupling_model` or `ISM_Traits::enable_photoelectric_heating` — each of those assumes a thermal exchange this mode deliberately removes, so the combination is rejected at compile time. Chemical bands are declared separately with `ChemBands()`, which returns their boundaries because the photochemistry network needs them; see [Photoionization](photoionization.md).
+The flag defaults to `false`, requires `nGroups > 1` and `piecewise_constant_opacity`, and cannot be combined with `ISM_Traits::enable_dust_gas_thermal_coupling_model` or `ISM_Traits::enable_photoelectric_heating` — each of those assumes a thermal exchange this mode deliberately removes, so the combination is rejected at compile time. Chemical bands are declared separately with `ChemBands()`, which returns their boundaries because the photochemistry network needs them; see [Photoionization](photoionization.md).
 
 `pe_heating_efficiency` defaults to all zeros, in which case no photoelectric heating is applied; see [Photoelectric heating](#photoelectric-heating). Each entry must lie in \\([0, 1]\\), and a non-zero entry requires both `dust_absorption_only` and cgs units; all three are checked at compile time.
 
@@ -393,7 +393,6 @@ The following test problems exercise the solver across the streaming, static dif
 - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md) — the \\(v/c\\) terms in the dynamic diffusion limit.
 - [1D H II region and dust reprocessing test](tests/DTypeFront1D.md) — multigroup radiation with dust.
 - `RadDustAbsorption` — dust-absorption-only bands: beam attenuation, radiation force, and photoelectric heating of an interstellar slab against the analytic profile.
-- `RadDustAbsorptionPPL` — the same problem under a piecewise power-law opacity model.
 
 ## References
 
