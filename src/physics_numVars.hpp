@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef PHYSICS_NUMVARS_HPP_ // NOLINT
 #define PHYSICS_NUMVARS_HPP_
 
