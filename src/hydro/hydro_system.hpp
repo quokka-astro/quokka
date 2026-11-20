@@ -127,6 +127,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
+	static void ComputeGasPressure(amrex::MultiFab &cc_mf_out, int out_comp, amrex::MultiFab const &cc_mf_cVars,
+				       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_mf_cVars);
+
 	AMREX_GPU_DEVICE static auto ComputeInternalEnergy(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
 	    -> amrex::Real;
@@ -611,6 +614,26 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 		P = ::quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
 	}
 	return P;
+}
+
+template <typename problem_t>
+void HydroSystem<problem_t>::ComputeGasPressure(amrex::MultiFab &cc_mf_out, int out_comp, amrex::MultiFab const &cc_mf_cVars,
+						amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_mf_cVars)
+{
+	for (amrex::MFIter mfi(cc_mf_out); mfi.isValid(); ++mfi) {
+		const amrex::Box box_cc = mfi.growntilebox(cc_mf_out.nGrowVect());
+		const auto &cc_a4_out = cc_mf_out.array(mfi);
+		const auto &cc_a4_cVars = cc_mf_cVars.const_array(mfi);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fc_a4_cVars{};
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int wcomp = 0; wcomp < AMREX_SPACEDIM; ++wcomp) {
+				fc_a4_cVars[wcomp] = fc_mf_cVars[wcomp].const_array(mfi);
+			}
+		}
+		amrex::ParallelFor(box_cc, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			cc_a4_out(i, j, k, out_comp) = ComputePressure(cc_a4_cVars, i, j, k, &fc_a4_cVars);
+		});
+	}
 }
 
 template <typename problem_t>

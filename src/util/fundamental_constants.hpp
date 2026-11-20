@@ -32,6 +32,9 @@ constexpr amrex::Real k_B = 1.3806490000000002e-16; // erg/K
 // Planck's constant
 constexpr amrex::Real hplanck = 6.62607015e-27; // erg s
 
+// Avogadro's number
+constexpr amrex::Real n_A = 6.02214076e+23; // mol^-1
+
 // convert eV to erg
 constexpr amrex::Real ev2erg = 1.602176634e-12;
 
