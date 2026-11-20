@@ -27,6 +27,8 @@
 #ifndef TURBULENCE_GENERATOR_H
 #define TURBULENCE_GENERATOR_H
 
+#include "AmplitudeController.h"
+
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
@@ -100,6 +102,11 @@ protected:
                      // for sparse sampling
   double
       ampl_factor[3]; // scale amplitude by this factor (default: 1.0, 1.0, 1.0)
+  std::string ampl_auto_adjust_method = "legacy";
+  double ampl_proportional_gain = 60.0;
+  double ampl_max_amplitude = 20.0;
+  double reference_amplitude = 1.0;
+  double reference_ampl_factor[3] = {1.0, 1.0, 1.0};
   int ampl_auto_adjust; // switch (0,1) to turn off/on automatic amplitude
                         // adjustment
   std::string evolfile;
@@ -139,6 +146,11 @@ protected:
   // ******************************************************
 public:
   void set_verbose(const int verbose) { this->verbose = verbose; };
+
+  bool uses_proportional_control() const {
+    return ampl_auto_adjust == 1 && ampl_auto_adjust_method == "proportional";
+  }
+
   // ******************************************************
   // get functions
   // ******************************************************
@@ -292,6 +304,8 @@ public:
   // ******************************************************
 public:
   virtual int init_driving(std::string parameter_file, const double time) {
+    // The legacy file-based interface has no proportional-control options.
+    ampl_auto_adjust_method = "legacy";
     // ******************************************************
     // Initialise the turbulence generator and all relevant internal data
     // structures by reading from 'parameter_file'. This is used for driving
@@ -410,6 +424,21 @@ public:
         parse_param<double>(read_from_map(params, "sol_weight"), "sol_weight");
     ampl_auto_adjust = parse_param<int>(
         read_from_map(params, "ampl_auto_adjust"), "ampl_auto_adjust");
+    auto optional = [&params](const std::string &key,
+                              const std::string &fallback) {
+      const auto it = params.find(key);
+      return (it == params.end() || it->second.empty()) ? fallback : it->second;
+    };
+    ampl_auto_adjust_method = optional("ampl_auto_adjust_method", "legacy");
+    ampl_proportional_gain = parse_param<double>(
+        optional("ampl_proportional_gain", "60"), "ampl_proportional_gain");
+    ampl_max_amplitude = parse_param<double>(
+        optional("ampl_max_amplitude", "20"), "ampl_max_amplitude");
+    if (ampl_auto_adjust_method != "legacy" &&
+        ampl_auto_adjust_method != "proportional") {
+      throw std::invalid_argument(
+          "ampl_auto_adjust_method must be legacy or proportional");
+    }
     spect_form =
         parse_param<int>(read_from_map(params, "spect_form"), "spect_form");
     random_seed =
@@ -430,6 +459,26 @@ public:
 protected:
   int finalise_init_driving(const double &k_driv, const double &k_min,
                             const double &k_max, const double &time) {
+    if (uses_proportional_control() && time > 0.0) {
+      throw std::invalid_argument(
+          "proportional turbulence control requires a fresh simulation; "
+          "restart state is not checkpointed");
+    }
+    if (uses_proportional_control()) {
+      (void)NameSpaceTurbGen::ProportionalAmplitude(
+          0.0, 1.0, ampl_proportional_gain, ampl_max_amplitude);
+      if (!(std::isfinite(velocity) && velocity > 0.0)) {
+        throw std::invalid_argument("proportional turbulence control requires "
+                                    "a finite positive target_vdisp");
+      }
+      for (int d = 0; d < ncmp; ++d) {
+        if (!(std::isfinite(ampl_factor[d]) && ampl_factor[d] > 0.0)) {
+          throw std::invalid_argument(
+              "proportional turbulence control requires finite positive "
+              "ampl_factor components");
+        }
+      }
+    }
     // define derived physical quantities
     kmin = (k_min - DBL_EPSILON) * 2 * M_PI /
            L[X]; // Minimum driving wavenumber <~  k_min * 2pi / Lx
@@ -467,6 +516,26 @@ protected:
     // just above).
     for (int d = 0; d < ncmp; d++)
       ampl_factor[d] = pow(ampl_factor[d], 1.5);
+    if (uses_proportional_control()) {
+      if (ampl_max_amplitude > DBL_MAX / std::sqrt(ncmp)) {
+        throw std::invalid_argument(
+            "ampl_max_amplitude is too large for finite component amplitudes");
+      }
+      reference_amplitude = 0.0;
+      for (int d = 0; d < ncmp; ++d) {
+        if (!(std::isfinite(ampl_factor[d]) && ampl_factor[d] > 0.0)) {
+          throw std::invalid_argument(
+              "proportional turbulence control requires finite positive "
+              "ampl_factor components");
+        }
+        reference_amplitude =
+            std::hypot(reference_amplitude, ampl_factor[d] / std::sqrt(ncmp));
+      }
+      for (int d = 0; d < ncmp; ++d) {
+        reference_ampl_factor[d] = ampl_factor[d] / reference_amplitude;
+      }
+    }
+
     if (verbose)
       TurbGen_printf("========================================================="
                      "======================\n");
@@ -549,7 +618,33 @@ public:
     }
     // check to see if we do automatic adjustment of the driving amplitude to
     // reach user-defined target turbulent velocity dispersion
-    if ((ampl_auto_adjust == 1) && (v_turb[X] > 0)) {
+    const bool no_measurement = std::all_of(
+        v_turb, v_turb + ncmp, [](double value) { return value == -1.0; });
+    if (uses_proportional_control() && !no_measurement) {
+      double dispersion = 0.0;
+      for (int d = 0; d < ncmp; ++d) {
+        if (!(std::isfinite(v_turb[d]) && v_turb[d] >= 0.0)) {
+          throw std::invalid_argument(
+              "proportional turbulence control requires finite nonnegative "
+              "dispersions");
+        }
+        dispersion = std::hypot(dispersion, v_turb[d]);
+      }
+      // One scalar amplitude preserves the relative component amplitudes.
+      // The reference is fixed: this is positional P control, not an
+      // accumulated (integral) adjustment. In particular, zero dispersion is
+      // nonsingular.
+      const double normalized =
+          (velocity < 1.0 && dispersion > DBL_MAX * velocity)
+              ? DBL_MAX
+              : dispersion / velocity;
+      const double amplitude = NameSpaceTurbGen::ProportionalAmplitude(
+          normalized, reference_amplitude, ampl_proportional_gain,
+          ampl_max_amplitude);
+      for (int d = 0; d < ncmp; ++d) {
+        ampl_factor[d] = reference_ampl_factor[d] * amplitude;
+      }
+    } else if ((ampl_auto_adjust == 1) && (v_turb[X] > 0)) {
       double v_turb_for_ampl_adjust[3];
       // copy v_turb into v_turb_for_ampl_adjust (default, if we do not use
       // time_averaging)
@@ -1088,7 +1183,7 @@ private:
       TurbGen_printf(FuncSig(__func__) + "entering.\n");
 
     int ikmin[3], ikmax[3], ik[3], tot_nmodes_full_sampling;
-    double k[3], ka, kc, amplitude, parab_prefact;
+    double k[3], ka, kc, amplitude = 0.0, parab_prefact;
 
     // applies in case of power law (spect_form == 2)
     int iang, nang;
