@@ -142,4 +142,4 @@ derived_vars = ["x-CurrentDensity", "y-CurrentDensity", "z-CurrentDensity"]
 
 Each component is computed on the cell edges it is aligned with, from differences of the face-centred magnetic field, and then averaged over the four edges bounding each cell. This mirrors how the face-centred magnetic field is averaged onto cell centres for output. As for all derived fields, coarse cells covered by a finer level hold the average of the fine values.
 
-These fields need ghost cells of the face-centred magnetic field. Plotfiles and in-situ diagnostics provide them, but openPMD output does not, so requesting these fields with openPMD output aborts the run at the first plotfile write.
+These fields need ghost cells of the face-centred magnetic field, which plotfiles and in-situ diagnostics provide.
