@@ -5,9 +5,9 @@
 #define PARTICLE_UTILS_HPP_
 
 #include "AMReX_MultiFab.H"
-#include "fundamental_constants.H"
 #include "math/FastMath.hpp"
 #include "particles/particle_types.hpp"
+#include "util/fundamental_constants.hpp"
 
 namespace quokka::ParticleUtils
 {

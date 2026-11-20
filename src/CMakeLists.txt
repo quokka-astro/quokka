@@ -132,13 +132,9 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 # setup_target_for_microphysics_compilation() call, here and in
 # src/problems/*/CMakeLists.txt.
 include(${CMAKE_SOURCE_DIR}/src/networks/NetworkRegistry.cmake)
-
-# default network_name (for Microphysics EOS) for all tests:
-set(microphysics_network_name "gamma_law")
-# default output_dir (for Microphysics EOS) for all tests:
-set(microphysics_output_dir "${CMAKE_CURRENT_BINARY_DIR}/")
-setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_CURRENT_BINARY_DIR}/")
-include_directories(${${microphysics_network_name}_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
+# Only chemistry and photochemistry problems use Microphysics; each sets up its own network and include directories.
+# gcem (header-only constexpr math, used across Quokka) is not Microphysics code, but its copy lives in the Microphysics submodule.
+include_directories(${CMAKE_SOURCE_DIR}/extern/Microphysics/util/gcem/include)
 
 if(TARGET amrex_hydro_api)
   link_libraries(amrex_hydro_api)
@@ -168,6 +164,6 @@ if(AMReX_SPACEDIM EQUAL 3)
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
 endif()
 
-set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
+set (QuokkaObjSources "${QuokkaSourcesNoEOS}")
 
 add_subdirectory(problems)

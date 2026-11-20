@@ -20,11 +20,11 @@
 #include "AMReX_SPACE.H"
 
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/deuterium_stellar_model.hpp"
 #include "particles/particle_types.hpp"
 #include "util/BC.hpp"
+#include "util/fundamental_constants.hpp"
 
 struct ParticleStar {};
 

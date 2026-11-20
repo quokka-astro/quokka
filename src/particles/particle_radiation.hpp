@@ -5,9 +5,9 @@
 #define PARTICLE_RADIATION_HPP_
 
 #include "AMReX_Extension.H"
-#include "fundamental_constants.H"
 #include "particle_types.hpp"
 #include "util/DataTable.hpp"
+#include "util/fundamental_constants.hpp"
 
 namespace quokka
 {

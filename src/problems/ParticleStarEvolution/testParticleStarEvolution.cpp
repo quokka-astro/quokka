@@ -14,10 +14,10 @@
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
-#include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "util/BC.hpp"
+#include "util/fundamental_constants.hpp"
 
 #include <cmath>
 #include <numeric>
