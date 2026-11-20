@@ -278,8 +278,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 	auto EradVec_guess = Erad0Vec;
 	for (int n = 0; n < n_passes; ++n) {
 		if (n > 0) {
-			const auto opacity_from_guess = ComputeModelDependentKappaEAndKappaP(
-			    T_gas, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n, opacity_terms.alpha_E, opacity_terms.alpha_P);
+			const auto opacity_from_guess = ComputeModelDependentKappaEAndKappaP(T_gas, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC,
+											     EradVec_guess, n, opacity_terms.alpha_E, opacity_terms.alpha_P);
 			opacity_terms.alpha_E = opacity_from_guess.alpha_E;
 			opacity_terms.kappaE = opacity_from_guess.kappaE;
 		}
