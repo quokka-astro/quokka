@@ -455,6 +455,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		      "dust_absorption_only uses RadSystem_Traits::pe_heating_efficiency for photoelectric heating, so it cannot be combined with the "
 		      "thermal-band model ISM_Traits::enable_photoelectric_heating.");
 
+	// Assertion: the dust-absorption update lives in the non-isothermal branch of AddSourceTermsMultiGroup; the
+	// isothermal branch (gamma == 1) updates only kappaF and would leave the band energies unset.
+	static_assert(!(dust_absorption_only_ && ::quokka::EOS_Traits<problem_t>::gamma == 1.0), // NOLINT
+		      "dust_absorption_only is not implemented for an isothermal EOS (gamma == 1).");
+
 	// Assertion: pe_heating_efficiency is the dimensionless efficiency factor epsilon of the standard
 	// interstellar expression, a fraction between 0 and 1 (about 0.05 for cold molecular gas).
 	static_assert(

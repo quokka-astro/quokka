@@ -177,8 +177,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/
 
 // Solve the energy exchange for dust-absorption-only bands. These bands emit nothing and give none of
 // the absorbed energy to the gas, so nothing here depends on the gas temperature: the opacity is a
-// function of (rho, T) alone and the radiation equation of each group is linear in its own E_g. The
-// Newton-Raphson iteration of SolveGasRadiationEnergyExchange therefore has nothing to solve, and each
+// function of (rho, T) alone and the radiation equation of each group is linear in its own E_g (except
+// under PPL_opacity_full_spectrum, where kappa_E also depends on the spectral slope of E_g; see the
+// fixed-point loop below). The Newton-Raphson iteration of SolveGasRadiationEnergyExchange therefore has nothing to solve, and each
 // group reduces to a backward-Euler absorption sink,
 //
 //     E_g <- (E_g^0 + S_g + W_g) / (1 + chat * rho * kappa_{E,g} * dt) ,
@@ -269,12 +270,28 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 	// number inside device code. Copy it to a local first, as UpdateFlux does with radBoundaries_.
 	const amrex::GpuArray<double, nGroups_> pe_efficiency = pe_heating_efficiency_;
 
+	// Under PPL_opacity_full_spectrum kappa_E is weighted by the spectral slope alpha_E of E_g itself, so the
+	// update below is not linear in E_g. Re-evaluate alpha_E from the absorbed spectrum and repeat, the same
+	// fixed point that SolveGasRadiationEnergyExchange iterates for its first max_iter_to_update_alpha_E passes.
+	// The other opacity models do not depend on E_g and take a single pass.
+	constexpr int n_passes = (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) ? max_iter_to_update_alpha_E : 1;
 	auto EradVec_guess = Erad0Vec;
+	for (int n = 0; n < n_passes; ++n) {
+		if (n > 0) {
+			const auto opacity_from_guess = ComputeModelDependentKappaEAndKappaP(
+			    T_gas, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n, opacity_terms.alpha_E, opacity_terms.alpha_P);
+			opacity_terms.alpha_E = opacity_from_guess.alpha_E;
+			opacity_terms.kappaE = opacity_from_guess.kappaE;
+		}
+		for (int g = 0; g < nGroups_; ++g) {
+			const double tau = dt * rho * opacity_terms.kappaE[g] * chat;
+			EradVec_guess[g] = (Erad0Vec[g] + Src[g] + work_local[g]) / (1.0 + tau);
+		}
+	}
+
 	double PE_heating = 0.0;
-	for (int g = 0; g < nGroups_; ++g) {
-		const double tau = dt * rho * opacity_terms.kappaE[g] * chat;
-		EradVec_guess[g] = (Erad0Vec[g] + Src[g] + work_local[g]) / (1.0 + tau);
-		if constexpr (enable_dust_pe_heating_) {
+	if constexpr (enable_dust_pe_heating_) {
+		for (int g = 0; g < nGroups_; ++g) {
 			PE_heating += pe_efficiency[g] * pe_heating_rate_coeff_ * H_num_den * EradVec_guess[g] * dt;
 		}
 	}
