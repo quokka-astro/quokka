@@ -1,0 +1,8 @@
+! Hydrogen photoionization network (D-type front test problem), matching
+! src/networks/photoionization/actual_rhs.H in quokka-jaff:
+!   - photoionization:        cross-section/rate from jaff's radiation bands
+!   - recombination:          temperature-dependent (T/1e4)**(-0.7) case B fit
+!   - collisional ionization: Arrhenius-form rate, custom chemRate below
+H  -> H+ + E                   []         PHOTO, 13.60
+H+ + E -> H                    []         2.63e-13*(Tgas/1e4)**(-0.7)
+H + E -> H+ + E + E             []         chemRate2(tgas)

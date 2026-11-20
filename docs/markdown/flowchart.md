@@ -35,23 +35,25 @@ partition "AMRSimulation::evolve() — main time loop" {
       :Swap state_old ↔ state_new;
       :CheckHydroStates //(before update)//;
 
-      if (is_hydro_enabled?) then (yes)
-        :**advanceHydroAtLevelWithRetries()**;
-        note right
-          On failure: halve dt and retry
-        end note
-        repeat
-          :addStrangSplitSourcesWithBuiltin(dt/2)\n• Cooling (resampled table, if enabled)\n• Chemistry / nuclear burn (if enabled)\n• Turbulence driving (if enabled && t < t_stop)\n• Dust drag (if enabled)\n• addStrangSplitSources() //[user hook]//;
+      :**advanceHydroAtLevelWithRetries()**;
+      note right
+        On failure: halve dt and retry
+        (CFL violation is only checked
+        when is_hydro_enabled)
+      end note
+      repeat
+        :addStrangSplitSourcesWithBuiltin(dt/2)\n• Cooling (resampled table, if enabled)\n• Chemistry / nuclear burn (if enabled)\n• Turbulence driving (if enabled && t < t_stop)\n• Dust drag (if enabled)\n• addStrangSplitSources() //[user hook]//;
+        if (is_hydro_enabled?) then (yes)
           :fillBoundaryConditions();
           :**RK2-SSP Stage 1** — forward Euler flux update → state_inter;
           :fillBoundaryConditions();
           :**RK2-SSP Stage 2** — corrector:\n½(state_old + state_inter + dt·F(state_inter)) → state_new;
-          :addStrangSplitSourcesWithBuiltin(dt/2) //(same sub-steps as above)//;
-        repeat while (advance failed?) is (yes)
-        -> no;
-      else (no)
-        :Copy hydro vars old→new;
-      endif
+        else (no)
+          :Copy state old→new //(no advection)//;
+        endif
+        :addStrangSplitSourcesWithBuiltin(dt/2) //(same sub-steps as above)//;
+      repeat while (advance failed?) is (yes)
+      -> no;
 
       :CheckHydroStates //(after hydro)//;
 

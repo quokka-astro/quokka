@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2026 Neco Kriel.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testIsothermalMHDShockTube.cpp
 /// \brief Isothermal-EOS analogue of the Brio & Wu MHD shock tube; regresses the divide-by-zero
 /// in the HLLD and LLF_MHD solvers' total-energy formula when gamma == 1 (issue #2225).

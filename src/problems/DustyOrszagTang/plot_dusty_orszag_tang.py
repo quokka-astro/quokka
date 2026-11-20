@@ -198,7 +198,7 @@ def make_fig6(data_dir: Path, output_dir: Path) -> Path:
     trim_shared_edge_ticks(axes[1, 0], axis="y", drop_last=True)
     cbar = fig.colorbar(mesh, cax=cax)
     cbar.set_label(r"$\rho_g$")
-    output_path = output_dir / "dusty_orszag_tang_fig6_analog.pdf"
+    output_path = output_dir / "dusty_orszag_tang_gas_density_dust_overdensity.pdf"
     fig.savefig(output_path)
     plt.close(fig)
     return output_path
@@ -214,7 +214,7 @@ def make_fig7(data_dir: Path, output_dir: Path) -> Path:
         mask = y <= 0.3 + 1.0e-12
         y = y[mask]
         rho_g = np.array([row["rho_g"] for row in rows])[mask]
-        rho_d_scaled = np.array([row["rho_d_scaled"] for row in rows])[mask]
+        rho_d = np.array([row["rho_d"] for row in rows])[mask]
         v_gy = np.array([row["v_gy"] for row in rows])[mask]
         v_dy = np.array([row["v_dy"] for row in rows])[mask]
 
@@ -222,7 +222,7 @@ def make_fig7(data_dir: Path, output_dir: Path) -> Path:
         axes[0, col].plot(y, v_gy, color="red", label="gas")
         axes[0, col].set_title(CASE_LABELS[case_tag])
 
-        axes[1, col].plot(y, rho_d_scaled, color="black", label="dust")
+        axes[1, col].plot(y, rho_d, color="black", label="dust")
         axes[1, col].plot(y, rho_g, color="red", label="gas")
 
     axes[0, 0].set_ylabel(r"$v_y$")
@@ -243,7 +243,7 @@ def make_fig7(data_dir: Path, output_dir: Path) -> Path:
     for ax in axes[:, 1]:
         ax.tick_params(labelleft=False)
 
-    output_path = output_dir / "dusty_orszag_tang_fig7_analog.pdf"
+    output_path = output_dir / "dusty_orszag_tang_gas_dust_velocity_density_profiles.pdf"
     fig.savefig(output_path)
     plt.close(fig)
     return output_path

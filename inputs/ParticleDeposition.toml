@@ -28,3 +28,5 @@ derived_vars = "particle.CIC.mass_density"
 quokka.particle_deposition.type = "DerivedParticleDeposition"
 quokka.particle_deposition.particle_types = "CIC"
 quokka.particle_deposition.deposit_fields = "mass"
+
+density_floor = 1e-9  # g cm^-3

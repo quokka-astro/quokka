@@ -28,7 +28,7 @@ jobs:
       workflow_file: '.github/workflows/docs.yml'
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: check_changes
     if: needs.check_changes.outputs.has_docs_changes == 'true' || needs.check_changes.outputs.has_api_docs_changes == 'true' || needs.check_changes.outputs.has_specific_workflow_changes == 'true'
     steps:
@@ -70,7 +70,7 @@ jobs:
           INPUT_PATH: ./docs/site
 
       - name: Upload artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: 'github-pages'
           path: ${{ runner.temp }}/artifact.tar
@@ -81,7 +81,7 @@ jobs:
     environment:
       name: github-pages
       url: quokka-astro.github.io
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build, check_changes]
     steps:
       - name: Deploy to GitHub Pages

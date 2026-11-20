@@ -1,5 +1,6 @@
-//==============================================================================
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file planck_integral.hpp
 /// \brief Some functions for quickly integrating the Planck function.
 ///
@@ -262,33 +263,94 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	return y;
 }
 
-// Compute x * d/dx of integrate_planck_from_0_to_x(x), i.e. (15 / pi^4) * x^4 / (exp(x) - 1). This is the boundary term that appears when the normalized
-// Planck integral is differentiated with respect to temperature at fixed group edges, since x = h nu / (k T) is proportional to 1 / T.
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto planck_integral_edge_term(const Real x) -> Real
+// Above X_TAIL the table is replaced by an exact series for the upper tail of the Planck integral, for two reasons:
+//   1. A group lying entirely in the Wien tail has an energy fraction Q(x_lo) - Q(x_hi) with Q = 1 - P << 1. Formed from the
+//      table as P(x_hi) - P(x_lo), both operands are ~1, so the fraction carries an absolute round-off of ~epsilon -- a relative
+//      error of epsilon / Q, which makes the group emission a staircase in T. (The table's 15 stored digits also cannot resolve
+//      Q below ~1e-15 at all.)
+//   2. Linear interpolation in log x gives the emission the slope of the bin's chord, while the analytic temperature derivative
+//      (ComputeThermalRadiationTempDerivativeMultiGroup) uses the exact kernel. In the tail these differ by up to ~10%, so the
+//      Newton Jacobian is inconsistent with the residual it differentiates and the iteration overshoots on every step.
+// X_TAIL sits on a table node, the one nearest x = 5 (0-based node 739, x = 10^(LOG_X_MIN + 739 (LOG_X_MAX - LOG_X_MIN) /
+// (INTERP_SIZE - 1))), where the table equals the exact P to its stored precision, so the emission stays continuous across the
+// switch.
+static constexpr Real X_TAIL = 4.996877453854884;
+// Upper bound on the number of series terms. Above X_TAIL the terms fall off at least as fast as e^(-5 k), so the series
+// reaches double precision by k = 8; the cap only guards the loop.
+static constexpr int TAIL_SERIES_MAX_TERMS = 20;
+
+// Upper tail of the Planck integral, (15/pi^4) \int_x^inf s^3 / (e^s - 1) ds. Expanding 1/(e^s - 1) = sum_k e^(-k s) and
+// integrating each term exactly gives
+//     Q(x) = (15/pi^4) sum_{k>=1} e^(-k x) (x^3/k + 3 x^2/k^2 + 6 x/k^3 + 6/k^4),
+// whose terms fall off like e^(-k x): 8 terms at x = 5, 2 at x = 20 for double precision. Only meant for x >= X_TAIL.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_x_to_inf_series(const Real x) -> Real
+{
+	AMREX_ASSERT(!std::isnan(x));
+	AMREX_ASSERT(x >= 0.);
+
+	const Real e = std::exp(-x);
+	if (e == 0.0) {
+		// Q has underflowed. Return before forming x^3, which overflows for very large x and gives 0 * inf at x = inf (T = 0).
+		return 0.0;
+	}
+	const Real x2 = x * x;
+	const Real x3 = x2 * x;
+	Real ek = e;
+	Real q = 0.0;
+	for (int k = 1; k <= TAIL_SERIES_MAX_TERMS; ++k) {
+		const Real kf = static_cast<Real>(k);
+		const Real term = ek * (x3 / kf + 3.0 * x2 / (kf * kf) + 6.0 * x / (kf * kf * kf) + 6.0 / (kf * kf * kf * kf));
+		q += term;
+		if (term <= 1.0e-17 * q) { // also stops at once when e^(-x) underflows to 0
+			break;
+		}
+		ek *= e;
+	}
+	return q / gInf;
+}
+
+// Both the lower and upper normalized Planck integrals at x, {P, Q} with P + Q = 1, each computed from whichever representation
+// holds it without cancellation. Below X_TAIL this is the table's P (identical to integrate_planck_from_0_to_x); above it, the
+// tail series' Q.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_below_and_above_x(const Real x) -> amrex::GpuArray<Real, 2>
+{
+	if (x >= X_TAIL) {
+		const Real q = integrate_planck_from_x_to_inf_series(x);
+		return {1.0 - q, q};
+	}
+	const Real p = integrate_planck_from_0_to_x(x);
+	return {p, 1.0 - p};
+}
+
+/// Cumulative temperature derivative of the Planck spectrum and its complement at x, {D, U} with D + U = 4.
+///
+/// D(x) = (15/pi^4) \int_0^x s^4 e^s / (e^s - 1)^2 ds = 4 P(x) - (15/pi^4) x^4 / (e^x - 1), obtained by integrating the exact
+/// kernel by parts, and U(x) = 4 - D(x) = 4 Q(x) + (15/pi^4) x^4 / (e^x - 1). A group [x_lo, x_hi] then has
+/// d/dT (a T^4 f_g) = a T^3 [D(x_hi) - D(x_lo)] = a T^3 [U(x_lo) - U(x_hi)]. As in integrate_planck_below_and_above_x, P and Q come
+/// from the table below X_TAIL and from the exact tail series above it, so this is the derivative of the emission actually computed.
+/// D(0) = 0 and D(inf) = 4, so a set of groups that spans the whole spectrum recovers d(a T^4)/dT.
+/// \param x h nu / (k T), with x >= 0; x = inf is allowed (T = 0 or an infinite group edge)
+/// \return {D(x), U(x)}
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_derivative_below_and_above_x(const Real x) -> amrex::GpuArray<Real, 2>
 {
 	AMREX_ASSERT(!std::isnan(x));
 	AMREX_ASSERT(x >= 0.);
 
 	if (x <= 0.) {
-		return 0.;
+		return {0.0, 4.0};
 	}
-	if (x > 100.) {
-		// exp(-100) < 1e-43, so this term is negligible. This branch also covers x = infinity.
-		return 0.;
+	if (x >= X_TAIL) {
+		// x^4 / (e^x - 1) written with e^(-x) so that cold matter (x up to ~1e9 or inf) never forms e^x, which overflows
+		// past x ~ 710. Once e^(-x) underflows to 0 the kernel is 0; testing it first also avoids 0 * inf at x = inf.
+		const Real e = std::exp(-x);
+		const Real kernel = (e > 0.0) ? (x * x * x * x * e / (1.0 - e)) / gInf : 0.0;
+		const Real q = integrate_planck_from_x_to_inf_series(x);
+		return {4. * (1.0 - q) - kernel, 4. * q + kernel};
 	}
-	if (x < 1.0e-10) {
-		// Taylor series: x^4 / (exp(x) - 1) = x^3 - x^4 / 2 + ...
-		return x * x * x / gInf;
-	}
-	return x * x * x * x / (std::exp(x) - 1.0) / gInf;
-}
-
-// Cumulative form of the temperature derivative of the Planck spectrum, D(x) = (15 / pi^4) \int_0^x s^4 e^s / (e^s - 1)^2 ds, obtained by integrating the
-// exact kernel by parts. The emission of a group [nu_L, nu_R] then has d/dT (a T^4 f_g) = a T^3 [D(x_R) - D(x_L)], and D(infinity) = 4 recovers
-// d(a T^4)/dT for a set of groups that spans the whole spectrum.
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_derivative_from_0_to_x(const Real x) -> Real
-{
-	return 4. * integrate_planck_from_0_to_x(x) - planck_integral_edge_term(x);
+	// for small x, x^4 / (e^x - 1) = x^3 - x^4 / 2 + ...; the leading term avoids 0 / 0 as x -> 0
+	const Real kernel = (x < 1.0e-10) ? (x * x * x) / gInf : (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
+	const Real d = 4. * integrate_planck_from_0_to_x(x) - kernel;
+	return {d, 4.0 - d};
 }
 
 #endif // PLANCKINTEGRAL_HPP_

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef DUST_RUNTIME_PARAMS_HPP_
 #define DUST_RUNTIME_PARAMS_HPP_
 
@@ -15,6 +18,7 @@ enum class ResolvedRkScheme { TP2025, GL4, Midpoint };
 struct CoefficientIterationConfig {
 	bool enabled = false;
 	amrex::Real alphaRelativeTolerance = 1.0e-6;
+	amrex::Real chargeAbsoluteTolerance = 1.0e-12;
 	amrex::Real chargeRelativeTolerance = 1.0e-6;
 	int maxIterations = 20;
 };

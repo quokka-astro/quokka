@@ -28,8 +28,8 @@ max_timesteps = 200000
 stop_time = 55.0
 cfl = 0.25
 
-mhd.emf_averaging_scheme = "Balsara2025"
-mhd.emf_compute_scheme = "Balsara2025"
+mhd.emf_averaging_scheme = "Balsara2025b"
+mhd.emf_compute_scheme = "Balsara2025a"
 
 dust.enable_coefficient_iteration = 1
 dust.print_iteration_counts = 0
@@ -40,6 +40,6 @@ dust.grain_density = 1.0
 [problem]
 write_csv = 1
 history_dt_over_ts0 = 0.1
-stage_times_over_ts0 = [5.5, 8.0, 17.0]
+stage_times_over_ts0 = [5.7, 8.0, 17.0]
 noise_amplitude = 1.0e-6
-noise_seed = 20250305
+noise_seed = 20260804

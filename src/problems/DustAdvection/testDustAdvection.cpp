@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustAdvection.cpp
 /// \brief Defines a test problem for dust transport with drag force
 ///
