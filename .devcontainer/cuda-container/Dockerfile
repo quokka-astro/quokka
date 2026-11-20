@@ -34,19 +34,6 @@ RUN apt-get clean && apt-get update -y && \
     apt-get install -y --no-install-recommends cmake && \
     rm -rf /var/lib/apt/lists/*
 
-# Install blosc2 (needed for ADIOS2)
-RUN pip3 install blosc2 --break-system-packages
-
-# Install ADIOS2 (needed for OpenPMD)
-RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
-    wget -q https://github.com/ornladios/ADIOS2/archive/refs/tags/v2.10.1.tar.gz && \
-    tar xzf v2.10.1.tar.gz && \
-    mkdir adios2-build && cd adios2-build && \
-    cmake ../ADIOS2-2.10.1 -DADIOS2_USE_Blosc2=ON -DADIOS2_USE_Fortran=OFF && \
-    make -j$(nproc) && make install && \
-    cd / && \
-    rm -rf /tmp/build-adios2
-
 # Install Viskores (volume rendering and isosurfaces)
 # NOTE: to build this, you need a Docker VM with a LARGE amount of RAM (at least 15 GB RAM, 4 GB swap)
 

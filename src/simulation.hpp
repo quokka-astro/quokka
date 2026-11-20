@@ -108,10 +108,6 @@ namespace filesystem = experimental::filesystem;
 #include "io/io_utils.hpp"
 #include "physics_info.hpp"
 
-#ifdef QUOKKA_USE_OPENPMD
-#include "io/openPMD.hpp"
-#endif
-
 // Quokka version string to be stored in metadata. This is used in post-processing tools like YT to do version checks.
 static constexpr auto QUOKKA_VERSION = "25.03";
 
@@ -899,12 +895,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 				  "128 (or greater) when running on GPUs, and 64 (or "
 				  "greater) when running on CPUs.\n";
 	}
-
-#ifdef QUOKKA_USE_OPENPMD
-	// warning about particles and OpenPMD outputs
-	amrex::Print() << "\n[Warning] [I/O] OpenPMD outputs currently do NOT include particles!"
-		       << " Support for outputting particles for openPMD is not yet implemented.\n";
-#endif
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
@@ -4826,11 +4816,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	}
 
 	// now construct output and submit to async write queue
-#ifdef QUOKKA_USE_OPENPMD
-	int included_ghosts = 0;
-#else
-	int included_ghosts = std::min(nghost_cc_, nghost_fc_);
-#endif
+	int const included_ghosts = std::min(nghost_cc_, nghost_fc_);
 	amrex::Vector<amrex::MultiFab> mf_cc = PlotFileMF_cc(included_ghosts);
 	amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc); // NOLINT(misc-const-correctness)
 
@@ -4843,11 +4829,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	particleRegister_.writeSFHToMetadata(simulationMetadata_, sn_count_cumulative_);
 #endif // AMREX_SPACEDIM == 3
 
-#ifdef QUOKKA_USE_OPENPMD
-	// TODO(bwibking): write particles using openPMD
-	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, Geom(), plot_file, tNew_[0], istep[0]);
-	WriteMetadataFile(plotfilename + ".yaml");
-#else
 	// sets the maximum number of binary files per MultiFab
 	quokka::ScopedVisMFNOutFiles scoped_nfiles(plot_nfiles);
 
@@ -4884,7 +4865,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	particleRegister_.redistribute(0, 0);
 	particleRegister_.writePlotFile(plotfilename);
 #endif // AMREX_SPACEDIM == 3
-#endif // QUOKKA_USE_OPENPMD
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(std::string const &MetadataFileName) const

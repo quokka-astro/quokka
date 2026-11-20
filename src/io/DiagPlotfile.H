@@ -17,10 +17,6 @@
 #include "particles/PhysicsParticles.hpp"
 #include <fstream>
 
-#ifdef QUOKKA_USE_OPENPMD
-#include "io/openPMD.hpp"
-#endif
-
 // Forward declaration
 namespace quokka
 {
@@ -74,11 +70,7 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
 
 	// Prepare cell-centered data
-#ifdef QUOKKA_USE_OPENPMD
-	int const included_ghosts = 0;
-#else
 	int const included_ghosts = std::min(sim->nghost_cc_, sim->nghost_fc_);
-#endif
 	amrex::Vector<amrex::MultiFab> mf_cc = sim->PlotFileMF_cc(included_ghosts);
 	amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc);
 	auto const varnames = sim->GetPlotfileVarNames();
@@ -125,13 +117,6 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 		mf_cc_out_ptr = amrex::GetVecOfConstPtrs(mf_cc_filtered);
 	}
 
-#ifdef QUOKKA_USE_OPENPMD
-	// Write using OpenPMD format
-	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, geoms, m_diagfile, a_time, sim->istep[0]);
-
-	// Write metadata file (outside the plotfile directory for OpenPMD)
-	WriteMetadataFile(plotfilename + ".yaml", sim->simulationMetadata_);
-#else
 	// Set the number of output files if specified
 	quokka::ScopedVisMFNOutFiles scoped_nfiles(m_nfiles);
 
@@ -177,7 +162,6 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 		sim->particleRegister_.writePlotFileFiltered(plotfilename, m_particleTypes);
 	}
 #endif // AMREX_SPACEDIM == 3
-#endif
 }
 
 // Helper function implementation
