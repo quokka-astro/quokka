@@ -114,6 +114,10 @@ fi
 echo "Will process the following files with clang-tidy:"
 files_select=()
 for file in $files; do
+    # Skip vendored and submodule code under extern/
+    if [[ "$file" == extern/* ]]; then
+        continue
+    fi
     # Only process C++ source and header files
     if [[ "$file" == *.cpp || "$file" == *.hpp ]]; then
         echo "$file"
