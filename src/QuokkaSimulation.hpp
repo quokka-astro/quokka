@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef RADIATION_SIMULATION_HPP_ // NOLINT
 #define RADIATION_SIMULATION_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file QuokkaSimulation.hpp
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
@@ -367,6 +365,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 			       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const override;
 	void ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const override;
+	[[nodiscard]] auto ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+						    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const -> bool override;
 
 	// compute projected vars
 
@@ -1369,6 +1369,34 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFl
 		}
 	}
 	amrex::Gpu::streamSynchronize();
+}
+
+template <typename problem_t>
+auto QuokkaSimulation<problem_t>::ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+							   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const -> bool
+{
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
+		if (dname == "gas_pressure") {
+			HydroSystem<problem_t>::ComputeGasPressure(mf, ncomp, state_cc, state_fc);
+			return true;
+		}
+	} else {
+		amrex::ignore_unused(state_cc);
+	}
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		for (int wcomp = 0; wcomp < AMREX_SPACEDIM; ++wcomp) {
+			if (dname == quokka::face_dir_str[wcomp] + "-CurrentDensity") {
+				// the face-centred magnetic field has freshly filled ghost cells only when the output itself carries ghost cells
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    mf.nGrow() >= 1, "CurrentDensity output needs output written with ghost cells; it is not supported with openPMD output.");
+				MHDSystem<problem_t>::ComputeCellCentredCurrentDensity(mf, ncomp, wcomp, state_fc, geom[lev].CellSizeArray());
+				return true;
+			}
+		}
+	} else {
+		amrex::ignore_unused(lev, dname, mf, ncomp, state_fc);
+	}
+	return false;
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>

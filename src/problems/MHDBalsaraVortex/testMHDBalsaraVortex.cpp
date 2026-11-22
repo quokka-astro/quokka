@@ -1,7 +1,6 @@
-//==============================================================================
-// Copyright 2025 Neco Kriel.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testMHDBalsaraVortex.cpp
 /// \brief advecting MHD Balsara vortex.
 ///

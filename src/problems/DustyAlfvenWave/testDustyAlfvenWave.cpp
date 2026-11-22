@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustyAlfvenWave.cpp
 /// \brief Circularly polarized dusty Alfven wave test inspired by Moseley et al. (2023).
 
