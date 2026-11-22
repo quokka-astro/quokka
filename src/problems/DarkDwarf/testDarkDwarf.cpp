@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <limits>
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -36,6 +38,95 @@ amrex::Real hernquistVertical(amrex::Real R, amrex::Real z, amrex::Real Mhalo, a
 	}
 
 	return C::Gconst * Mhalo * z / (r * (r + a) * (r + a));
+}
+
+struct GasGravityPoint {
+	amrex::Real radius;
+	amrex::Real height;
+	amrex::Real weight; // (rho_disk - rho_bg) * radius * dR * dz
+};
+
+amrex::Real ellipticKFromComplement(amrex::Real kComplement)
+{
+	amrex::Real a = 1.0;
+	amrex::Real b = kComplement;
+	AMREX_ALWAYS_ASSERT(b > 0.0 && b <= 1.0);
+	constexpr amrex::Real tolerance = 8.0 * std::numeric_limits<amrex::Real>::epsilon();
+	for (int iter = 0; iter < 32; ++iter) {
+		amrex::Real const nextA = 0.5 * (a + b);
+		amrex::Real const nextB = std::sqrt(a * b);
+		a = nextA;
+		b = nextB;
+		if (std::abs(a - b) <= tolerance * a) {
+			return 0.5 * M_PI / a;
+		}
+	}
+	amrex::Abort("Gas IC elliptic integral did not converge.");
+	return 0.0;
+}
+
+amrex::Vector<amrex::Real> gasMidplanePotential(amrex::Vector<amrex::Real> const &rhoTable, int nR, int nZ, amrex::Real Rmax, amrex::Real Zmax,
+						amrex::Real rhoCut, amrex::Real rhoBackground)
+{
+	AMREX_ALWAYS_ASSERT(nR >= 3 && nZ >= 2);
+	AMREX_ALWAYS_ASSERT(Rmax > 0.0 && Zmax > 0.0);
+	AMREX_ALWAYS_ASSERT(rhoTable.size() == static_cast<std::size_t>(nR) * static_cast<std::size_t>(nZ));
+
+	amrex::Real const dR = Rmax / static_cast<amrex::Real>(nR - 1);
+	amrex::Real const dz = Zmax / static_cast<amrex::Real>(nZ - 1);
+	amrex::Real const offset = 0.5 / std::sqrt(3.0);
+	std::array<amrex::Real, 2> const nodes{0.5 - offset, 0.5 + offset};
+	amrex::Vector<GasGravityPoint> points;
+
+	for (int ir = 0; ir < nR - 1; ++ir) {
+		for (int iz = 0; iz < nZ - 1; ++iz) {
+			amrex::Real const rho00 = rhoTable[ir * nZ + iz];
+			amrex::Real const rho10 = rhoTable[(ir + 1) * nZ + iz];
+			amrex::Real const rho01 = rhoTable[ir * nZ + iz + 1];
+			amrex::Real const rho11 = rhoTable[(ir + 1) * nZ + iz + 1];
+			if (std::max({rho00, rho10, rho01, rho11}) < rhoCut) {
+				continue;
+			}
+			for (amrex::Real const wr : nodes) {
+				amrex::Real const radius = (static_cast<amrex::Real>(ir) + wr) * dR;
+				for (amrex::Real const wz : nodes) {
+					amrex::Real const rho =
+					    (1.0 - wr) * (1.0 - wz) * rho00 + wr * (1.0 - wz) * rho10 + (1.0 - wr) * wz * rho01 + wr * wz * rho11;
+					if (rho < rhoCut || rho <= rhoBackground) {
+						continue;
+					}
+					amrex::Real const height = (static_cast<amrex::Real>(iz) + wz) * dz;
+					amrex::Real const weight = (rho - rhoBackground) * radius * (0.25 * dR * dz);
+					points.push_back({radius, height, weight});
+				}
+			}
+		}
+	}
+
+	amrex::Vector<amrex::Real> potential(nR, 0.0);
+	for (int ir = 0; ir < nR; ++ir) {
+		amrex::Real const R = static_cast<amrex::Real>(ir) * dR;
+		amrex::Real sum = 0.0;
+		for (auto const &point : points) {
+			amrex::Real const distance = std::hypot(R + point.radius, point.height);
+			amrex::Real const kComplement = std::hypot(R - point.radius, point.height) / distance;
+			sum += point.weight * ellipticKFromComplement(kComplement) / distance;
+		}
+		potential[ir] = -8.0 * C::Gconst * sum;
+	}
+	return potential;
+}
+
+amrex::Vector<amrex::Real> gasRadialGravity(amrex::Vector<amrex::Real> const &potential, amrex::Real dR)
+{
+	int const nR = static_cast<int>(potential.size());
+	AMREX_ALWAYS_ASSERT(nR >= 3 && dR > 0.0);
+	amrex::Vector<amrex::Real> gravity(nR, 0.0);
+	for (int ir = 1; ir < nR - 1; ++ir) {
+		gravity[ir] = (potential[ir + 1] - potential[ir - 1]) / (2.0 * dR);
+	}
+	gravity[nR - 1] = (3.0 * potential[nR - 1] - 4.0 * potential[nR - 2] + potential[nR - 3]) / (2.0 * dR);
+	return gravity;
 }
 
 // Vertical ODE
@@ -273,10 +364,6 @@ template <> void QuokkaSimulation<DarkDwarf>::preCalculateInitialConditions()
 
 	amrex::Real const a = R200 / concentration * std::sqrt(2.0 * fc);
 
-	// amrex::Print() << "M200 = " << M200_Msun << " Msun\n"
-	//	       << "R200 = " << R200 / (1.0e3 * C::parsec) << " kpc\n"
-	//	       << "rs = " << rs / (1.0e3 * C::parsec) << " kpc\n";
-
 	data.cs = cs;
 
 	int const nRTable = data.nRTable;
@@ -318,10 +405,18 @@ template <> void QuokkaSimulation<DarkDwarf>::preCalculateInitialConditions()
 			rhoTableHost[ir * nZTable + iz] = std::exp(s.lnRho);
 		}
 	}
+
+	// cutoff
+	amrex::Real const rho_max = *std::max_element(rhoTableHost.begin(), rhoTableHost.end());
+	data.rho_cut = rho_max * 1.0e-3;
+	data.rho_bg = rho_max * 1.0e-6;
+
 	// vphi table
 	amrex::Vector<amrex::Real> vphiTableHost(nRTable, 0.0);
 
 	amrex::Real const dR = RTableMax / (nRTable - 1);
+	auto const phiGas = gasMidplanePotential(rhoTableHost, nRTable, nZTable, RTableMax, ZTableMax, data.rho_cut, data.rho_bg);
+	auto const gGasRadial = gasRadialGravity(phiGas, dR);
 
 	for (int ir = 1; ir < nRTable - 1; ++ir) {
 		amrex::Real const R = ir * dR;
@@ -333,15 +428,10 @@ template <> void QuokkaSimulation<DarkDwarf>::preCalculateInitialConditions()
 
 		amrex::Real const gR = C::Gconst * Mhalo / ((R + a) * (R + a));
 
-		amrex::Real const vphi2 = R * (gR + cs * cs * dlnrho_dR);
+		amrex::Real const vphi2 = R * (gR + gGasRadial[ir] + cs * cs * dlnrho_dR);
 
 		vphiTableHost[ir] = std::sqrt(std::max(0.0, vphi2));
 	}
-
-	// cutoff
-	amrex::Real const rho_max = *std::max_element(rhoTableHost.begin(), rhoTableHost.end());
-	data.rho_cut = rho_max * 1.0e-3;
-	data.rho_bg = rho_max * 1.0e-6;
 
 	vphiTableHost[nRTable - 1] = vphiTableHost[nRTable - 2];
 	// copy rhoTable to Device
