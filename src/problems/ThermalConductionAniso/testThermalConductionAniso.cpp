@@ -74,6 +74,27 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeMagneticVectorPotential_z(amrex:
 	return -B0 * std::min(rad, 1.0);
 }
 
+/// \brief Bx on the x-face whose lower corner is (x1_L, x2_L), from the discrete curl of the vector potential.
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ringBxFace(amrex::Real x1_L, amrex::Real x2_L, amrex::Real dy) -> amrex::Real
+{
+	return (computeMagneticVectorPotential_z(x1_L, x2_L + dy) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dy;
+}
+
+/// \brief By on the y-face whose lower corner is (x1_L, x2_L), from the discrete curl of the vector potential.
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ringByFace(amrex::Real x1_L, amrex::Real x2_L, amrex::Real dx) -> amrex::Real
+{
+	return -(computeMagneticVectorPotential_z(x1_L + dx, x2_L) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dx;
+}
+
+/// \brief Magnetic energy density of the cell whose lower corner is (x1_L, x2_L), from the average of its face fields
+///        (the same cell-centred B that HydroSystem::ComputeMagneticEnergy uses; Bz = 0).
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ringCellMagneticEnergy(amrex::Real x1_L, amrex::Real x2_L, amrex::Real dx, amrex::Real dy) -> amrex::Real
+{
+	const amrex::Real bx = 0.5 * (ringBxFace(x1_L, x2_L, dy) + ringBxFace(x1_L + dx, x2_L, dy));
+	const amrex::Real by = 0.5 * (ringByFace(x1_L, x2_L, dx) + ringByFace(x1_L, x2_L + dy, dx));
+	return 0.5 * (bx * bx + by * by);
+}
+
 template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -103,13 +124,14 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 			}
 		}
 		const amrex::Real Eint = quokka::EOS<ThermalConductionAnisoProblem>::ComputeEintFromTgas(rho, temp);
+		const amrex::Real Emag = ringCellMagneticEnergy(prob_lo[0] + i * dx[0], prob_lo[1] + j * dx[1], dx[0], dx[1]);
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
 
 		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint + Emag;
 		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::internalEnergy_index) = Eint;
 	});
 }
@@ -134,9 +156,9 @@ void fillRingBField(amrex::Array4<double> const &state_fc, amrex::Box const &ind
 
 		amrex::Real bval = 0.0;
 		if (dir == quokka::direction::x) {
-			bval = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1]) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dx[1];
+			bval = ringBxFace(x1_L, x2_L, dx[1]);
 		} else if (dir == quokka::direction::y) {
-			bval = -(computeMagneticVectorPotential_z(x1_L + dx[0], x2_L) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dx[0];
+			bval = ringByFace(x1_L, x2_L, dx[0]);
 		}
 		// dir == z: Bz = 0 (psi is independent of z), already zero-filled above
 		state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = bval;
@@ -208,9 +230,9 @@ void QuokkaSimulation<ThermalConductionAnisoProblem>::computeReferenceSolution(a
 				stateExact(i, j, k, n) = 0.;
 			}
 			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::density_index) = rho_bg;
-			// energy_index should also include the (spatially varying) magnetic energy, which is not added here, so only
-			// the gasInternalEnergy error is meaningful for this test.
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint;
+			// conduction does not evolve B, so the magnetic energy is that of the initial field
+			const amrex::Real Emag = ringCellMagneticEnergy(prob_lo[0] + i * dx[0], prob_lo[1] + j * dx[1], dx[0], dx[1]);
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint + Emag;
 			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::internalEnergy_index) = Eint;
 		});
 	}
@@ -296,7 +318,7 @@ auto problem_main() -> int
 				      domain.length(1), sim.tNew_[0], eint_abs_err, eint_rel_err);
 
 	// pass if the relative L1 error is at or below the tolerance (a NaN error fails the comparison)
-	constexpr double rel_err_tol = 1.69684956e-03; // measured 1.523328e-03 at 64x64x8, t = 20 (tolerance is 1.08x an earlier 1.571157e-03)
+	constexpr double rel_err_tol = 1.64519424e-03; // 1.08x the measured 1.523328e-03 at 64x64x8, t = 20
 	amrex::Print() << std::format("relative error tolerance = {:.6e}\n", rel_err_tol);
 	bool const passed = (eint_rel_err <= rel_err_tol);
 

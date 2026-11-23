@@ -20,7 +20,6 @@ amr.blocking_factor = 8   # grid size must be divisible by this
 do_reflux = 1
 do_subcycle = 0
 
-plotfile_interval = 100
 # (cfl and stop_time are overridden in problem_main())
 cfl = 0.3
 
