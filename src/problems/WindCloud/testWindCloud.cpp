@@ -6,11 +6,8 @@
 /// \file testWindCloud.cpp
 /// \brief Defines a wind-cloud problem with radiative cooling.
 ///
-#include <string>
-
 #include "AMReX.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
 #include "QuokkaSimulation.hpp"
@@ -20,12 +17,10 @@
 
 using amrex::Real;
 
-constexpr double seconds_in_year = 3.1536e7;
-
 const double Twind = 3.e6;
 const double Tcloud  = 1.e4;
 const double rho_cloud = 0.006 * C::m_p; // g/cm^3
-AMREX_GPU_MANAGED double Mach = 4.0; // Mach number of the wind; overridden via ParmParse in problem_main()
+const double Mach = 4.0; // Mach number of the wind
 const double R0 = 545 * C::parsec; // radius of the cloud
 AMREX_GPU_MANAGED Real v_wind = NAN; // wind speed (z direction), set in problem_main()
 
@@ -104,28 +99,6 @@ template <> void QuokkaSimulation<WindCloudProblem>::refineGrid(int lev, amrex::
 }
 
 
-template <>
-void QuokkaSimulation<WindCloudProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
-								   amrex::MultiFab const &state_cc,
-								   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
-{
-	// compute derived variables and save in 'mf'
-	if (dname == "temperature") {
-		const int ncomp = ncomp_in;
-		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &output = mf.array(iter);
-			auto const &state = state_cc.const_array(iter);
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				Real const rho = state(i, j, k, HydroSystem<WindCloudProblem>::density_index);
-				// subtracts kinetic energy from the total energy
-				Real const Eint = HydroSystem<WindCloudProblem>::ComputeInternalEnergy(state, i, j, k);
-				output(i, j, k, ncomp) = quokka::EOS<WindCloudProblem>::ComputeTgasFromEint(rho, Eint);
-			});
-		}
-	}
-}
-
 // Implement User-defined diode BC
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
@@ -151,10 +124,6 @@ AMRSimulation<WindCloudProblem>::setCustomBoundaryConditions(const amrex::IntVec
 
 auto problem_main() -> int
 {
-	// read problem-specific parameters
-	amrex::ParmParse const pp("windcloud");
-	pp.query("mach", ::Mach);
-
 	// boundary conditions
 	constexpr int ncomp_cc = Physics_Indices<WindCloudProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -179,15 +148,7 @@ auto problem_main() -> int
 	const Real rho_wind = rho_cloud * Tcloud / Twind; // g/cm^3
 	const Real P_wind = rho_wind * Twind * C::k_B / C::m_u;
 	const Real cs_wind = quokka::EOS<WindCloudProblem>::ComputeSoundSpeed(rho_wind, P_wind);
-	::v_wind = ::Mach * cs_wind;
-	amrex::Print() << "rho_wind = " << rho_wind << " g/cm^3" << std::endl;
-	amrex::Print() << "v_wind = " << (::v_wind / 1.0e5) << " km/s" << std::endl;
-
-	// estimate cloud-crushing time: t_cc = sqrt(chi) * R_cloud / v_wind, chi = rho_cloud / rho_wind
-	const Real chi = rho_cloud / rho_wind;
-	const Real cloud_crushing_time = std::sqrt(chi) * R0 / ::v_wind;
-	amrex::Print() << "t_cc = " << (cloud_crushing_time / (1.0e6 * seconds_in_year)) << " Myr" << std::endl;
-	sim.simulationMetadata_["t_cc"] = cloud_crushing_time; // saved for analysis scripts
+	::v_wind = Mach * cs_wind;
 
 	// initialize
 	sim.setInitialConditions();
