@@ -282,7 +282,7 @@ auto TestEOSIdeal() -> int
 	constexpr Real T = 8000.;
 	constexpr Real Eint = rho * C::k_B * T / ((gamma - 1.0) * mbar);
 	constexpr Real P = (gamma - 1.0) * Eint;
-	constexpr Real Tfloor = 1.0e-10; // Microphysics eos() resets e <= 0 (and T <= 0) to this temperature
+	constexpr Real Tfloor = 1.0e-10; // Microphysics eos() resets e < 1e-200 to this temperature and raises any lower T to it
 	constexpr Real rho_floor = 1.0e-100;
 	constexpr Real reltol = 1.0e-14;
 
@@ -336,7 +336,7 @@ auto TestEOSIdeal() -> int
 
 	// device: the floors must hold in device code too
 	amrex::Gpu::DeviceVector<Real> T_d(2);
-	Real *T_ptr = T_d.data();
+	Real *const T_ptr = T_d.data();
 	amrex::ParallelFor(2, [=] AMREX_GPU_DEVICE(int n) noexcept { T_ptr[n] = EOS::ComputeTgasFromEint(rho, (n == 0) ? Eint : 0.0); });
 	std::array<Real, 2> T_h{};
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, T_d.begin(), T_d.end(), T_h.begin());
