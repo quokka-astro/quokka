@@ -1,24 +1,18 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef FUNDAMENTAL_CONSTANTS_HPP_
 #define FUNDAMENTAL_CONSTANTS_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file fundamental_constants.hpp
-/// \brief Physical constants in CGS units.
+/// \brief Physical constants in CGS units, used as namespace C.
 ///
-/// The values are copied from Microphysics's constants/fundamental_constants.H, so results do not depend on which header defines them.
-/// Chemistry and photochemistry builds still use Microphysics, whose headers define namespace C themselves, so there this header
-/// includes Microphysics's header instead of defining the constants again.
-
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-#include "fundamental_constants.H"
-#else
+/// The values are those of Microphysics's constants/fundamental_constants.H. Chemistry and photochemistry builds still use
+/// Microphysics, whose headers define namespace C themselves; there this header includes Microphysics's header and checks at
+/// compile time that its values equal the ones below, so every build uses the same constants.
 
 #include "AMReX_REAL.H"
 
-namespace C
+namespace quokka::constants
 {
 // speed of light in vacuum
 constexpr amrex::Real c_light = 29979245800.0; // cm/s
@@ -61,8 +55,27 @@ constexpr amrex::Real M_solar = 1.9884e33; // g
 
 // solar radius
 constexpr amrex::Real R_solar = 6.957e10; // cm
-} // namespace C
+} // namespace quokka::constants
 
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
+#include "fundamental_constants.H"
+
+static_assert(C::c_light == quokka::constants::c_light);
+static_assert(C::Gconst == quokka::constants::Gconst);
+static_assert(C::k_B == quokka::constants::k_B);
+static_assert(C::hplanck == quokka::constants::hplanck);
+static_assert(C::n_A == quokka::constants::n_A);
+static_assert(C::ev2erg == quokka::constants::ev2erg);
+static_assert(C::m_p == quokka::constants::m_p);
+static_assert(C::m_e == quokka::constants::m_e);
+static_assert(C::m_u == quokka::constants::m_u);
+static_assert(C::sigma_SB == quokka::constants::sigma_SB);
+static_assert(C::a_rad == quokka::constants::a_rad);
+static_assert(C::parsec == quokka::constants::parsec);
+static_assert(C::M_solar == quokka::constants::M_solar);
+static_assert(C::R_solar == quokka::constants::R_solar);
+#else
+namespace C = quokka::constants;
 #endif // CHEMISTRY || PHOTOCHEMISTRY
 
 #endif // FUNDAMENTAL_CONSTANTS_HPP_

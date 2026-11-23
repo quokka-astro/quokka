@@ -66,6 +66,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | hydro.use_dual_energy                  | Boolean (0/1) | `1` (Enabled)  | If set to 1, the code evolves an auxiliary internal energy variable in order to correctly evolve high-mach flows. This should only be disabled (0) for debugging.              |
 | hydro.abort_on_fofc_failure            | Boolean (0/1) | `1` (Enabled)  | If set to 1, the code aborts when first-order flux correction fails to yield a physical state (positive density and pressure). This should only be disabled (0) for debugging. |
 | hydro.artificial_viscosity_coefficient | Float         | `0.0`          | This is the linear artificial viscosity coefficient used in the artificial viscosity term added to the flux. This is the same parameter as defined in the original PPM paper.  |
+| network.small_x                        | Float         | `1e-30`        | Mass-scalar floor: a negative mass scalar is reset to this fraction of the density. It is the same key as the Microphysics runtime parameter, which chemistry builds also read. |
 
 ## Radiation
 

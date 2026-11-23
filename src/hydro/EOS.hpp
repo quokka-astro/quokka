@@ -70,7 +70,7 @@ struct EOSBase {
 };
 
 // ==================== EOSIdeal backend ====================
-// gamma-law ideal gas (the current #else path). Always available.
+// gamma-law ideal gas. Always available; the default backend outside CHEMISTRY/PHOTOCHEMISTRY builds.
 
 template <typename problem_t> struct EOSIdeal : EOSBase {
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
@@ -98,11 +98,11 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 	};
 
 	/// Input floors of the Microphysics eos() wrapper, as set by eos_init(small_temp = 1e-10, small_dens = 1e-100).
-	static constexpr amrex::Real eos_min_temp_ = 1.0e-10;
-	static constexpr amrex::Real eos_min_dens_ = 1.0e-100;
-	static constexpr amrex::Real eos_min_e_ = 1.0e-200;
-	static constexpr amrex::Real eos_min_p_ = 1.0e-200;
-	static constexpr amrex::Real eos_max_ = 1.0e200;
+	static constexpr amrex::Real eosMinTemp_ = 1.0e-10;
+	static constexpr amrex::Real eosMinDens_ = 1.0e-100;
+	static constexpr amrex::Real eosMinE_ = 1.0e-200;
+	static constexpr amrex::Real eosMinP_ = 1.0e-200;
+	static constexpr amrex::Real eosMax_ = 1.0e200;
 
 	/// \brief Gamma-law state from rho and T, without input resets.
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto GammaLawFromValidRhoT(amrex::Real rho, amrex::Real T) -> GammaLawState
@@ -124,7 +124,7 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 	/// \brief Gamma-law state from rho and T, with both clamped to the input floors.
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto GammaLawFromRhoT(amrex::Real rho, amrex::Real T) -> GammaLawState
 	{
-		return GammaLawFromValidRhoT(ClampToRange(rho, eos_min_dens_, eos_max_), ClampToRange(T, eos_min_temp_, eos_max_));
+		return GammaLawFromValidRhoT(ClampToRange(rho, eosMinDens_, eosMax_), ClampToRange(T, eosMinTemp_, eosMax_));
 	}
 
 	/// \brief Gamma-law state from rho and specific internal energy e.
@@ -133,20 +133,20 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 	/// (its input state had T = 0, which it raised to the floor).
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto GammaLawFromRhoE(amrex::Real rho, amrex::Real e) -> GammaLawState
 	{
-		if (e < eos_min_e_ || e > eos_max_) {
+		if (e < eosMinE_ || e > eosMax_) {
 			return GammaLawFromRhoT(rho, 0.0);
 		}
 		const amrex::Real T = e * mean_molecular_weight_ * (gamma_ - 1.0) / C::k_B;
-		return GammaLawFromValidRhoT(ClampToRange(rho, eos_min_dens_, eos_max_), T);
+		return GammaLawFromValidRhoT(ClampToRange(rho, eosMinDens_, eosMax_), T);
 	}
 
 	/// \brief Gamma-law state from rho and pressure p; an out-of-range p is treated like an out-of-range e in GammaLawFromRhoE().
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto GammaLawFromRhoP(amrex::Real rho, amrex::Real p) -> GammaLawState
 	{
-		if (p < eos_min_p_ || p > eos_max_) {
+		if (p < eosMinP_ || p > eosMax_) {
 			return GammaLawFromRhoT(rho, 0.0);
 		}
-		const amrex::Real rho_clamped = ClampToRange(rho, eos_min_dens_, eos_max_);
+		const amrex::Real rho_clamped = ClampToRange(rho, eosMinDens_, eosMax_);
 		const amrex::Real T = p * mean_molecular_weight_ / (C::k_B * rho_clamped);
 		return GammaLawFromValidRhoT(rho_clamped, T);
 	}
