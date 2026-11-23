@@ -7,11 +7,13 @@
 #include <cstdlib>
 #include <format>
 #include <limits>
+#include <cstddef>
 #include <string>
 
 #include "AMReX.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
+#include "AMReX_Vector.H"
 
 #include "cosmology/Cosmology.hpp"
 #include "cosmology/ScaleFactorTable.hpp"
@@ -120,36 +122,33 @@ auto MaxRelError(ScaleFactorTable const &table, amrex::Real const a_init, amrex:
 	return err;
 }
 
-/// Max relative errors at the same times: old RK path and table for a; table and old midpoint rule for dtau.
-struct PathErrors {
-	amrex::Real rk;
-	amrex::Real table;
-	amrex::Real dtau_table;
-	amrex::Real dtau_old;
+/// a after every step along one step sequence (index n at x = n * dlna_step): legacy RK and table at the same times.
+struct Path {
+	amrex::Vector<amrex::Real> a_rk;  ///< evolveScaleFactor, two Strang half steps per step (legacy)
+	amrex::Vector<amrex::Real> a_tab; ///< table.ScaleFactorAt
 };
 
-/// Old approach: a advanced with evolveScaleFactor, two Strang half steps per step with H dt = H_dt; the table is queried at the same times.
-auto MaxRelErrorRK(CosmologyParams const &cosmo, ScaleFactorTable const &table, amrex::Real const a_init, amrex::Real const a_max, amrex::Real const H_dt)
-    -> PathErrors
+/// Steps uniform in ln a (dlna_step ~ H dt) at exact EdS times: the time grid is an input, shared bitwise by nested paths.
+auto RunPath(CosmologyParams const &cosmo, ScaleFactorTable const &table, amrex::Real const a_init, int const n_steps, amrex::Real const dlna_step)
+    -> Path
 {
-	amrex::Real a = a_init;
-	amrex::Real t = 0.0;
-	PathErrors err{.rk = 0.0, .table = 0.0, .dtau_table = 0.0, .dtau_old = 0.0};
+	Path path;
+	path.a_rk.reserve(n_steps + 1);
+	path.a_tab.reserve(n_steps + 1);
+	path.a_rk.push_back(a_init);
 
-	while (a * (1.0 + H_dt) < a_max) { // margin for the ALWAYS_ASSERT of the table
-		const amrex::Real dt = H_dt / (cosmo.H0 * quokka::cosmology::HubbleFactor(a, cosmo));
-		const amrex::Real a_half = evolveScaleFactor(a, 0.5 * dt, cosmo); // old transport used dtau = dt / a(t + dt/2)
-		const amrex::Real dtau_exact =
-		    TauEdS(ScaleFactorEdS(t + dt, a_init, cosmo.H0), a_init, cosmo.H0) - TauEdS(ScaleFactorEdS(t, a_init, cosmo.H0), a_init, cosmo.H0);
-		err.dtau_table = std::max(err.dtau_table, std::abs(table.Dtau(t, dt) - dtau_exact) / dtau_exact);
-		err.dtau_old = std::max(err.dtau_old, std::abs(dt / a_half - dtau_exact) / dtau_exact);
-		a = evolveScaleFactor(a_half, 0.5 * dt, cosmo);
-		t += dt;
-		const amrex::Real a_exact = ScaleFactorEdS(t, a_init, cosmo.H0);
-		err.rk = std::max(err.rk, std::abs(a - a_exact) / a_exact);
-		err.table = std::max(err.table, std::abs(table.ScaleFactorAt(t) - a_exact) / a_exact);
+	path.a_tab.push_back(a_init);
+
+	amrex::Real a = a_init;
+	for (int n = 0; n < n_steps; ++n) {
+		const amrex::Real t0 = TimeEdS(a_init * std::exp(n * dlna_step), a_init, cosmo.H0); // n * dlna_step exact for dlna_step = 2^-m
+		const amrex::Real t1 = TimeEdS(a_init * std::exp((n + 1) * dlna_step), a_init, cosmo.H0);
+		const amrex::Real dt = t1 - t0;
+		a = evolveScaleFactor(evolveScaleFactor(a, 0.5 * dt, cosmo), 0.5 * dt, cosmo);
+		path.a_rk.push_back(a);
+		path.a_tab.push_back(table.ScaleFactorAt(t1)); // query at t1, not t0 + dt: same bits on both paths
 	}
-	return err;
+	return path;
 }
 } // namespace
 
@@ -241,12 +240,30 @@ auto problem_main() -> int
 		amrex::Print() << std::format("{:>10.4e} {:>11.3e} {:>9} {:>10.3e}\n", h[k], diff[k], ord, floor_k);
 	}
 
-	// 4. old adaptive RK12 vs table at the same times; two step histories show the path dependence of RK
-	for (amrex::Real const H_dt : {0.01, 0.003}) {
-		const PathErrors err = MaxRelErrorRK(cosmo, table, a_init, a_max, H_dt);
-		amrex::Print() << std::format(
-		    "H dt = {:.3f}: old RK max err = {:.3e}, table max err = {:.3e} (same times); dtau rel err: table {:.3e}, old midpoint {:.3e}\n", H_dt,
-		    err.rk, err.table, err.dtau_table, err.dtau_old);
+	// 4. history dependence: coarse (dlna) and fine (dlna/2, a ratio-2 subcycled level) paths compared at the same times
+	const amrex::Real dlna_step = std::ldexp(1.0, -7); // 2^-7 ~ H dt = 0.008
+	constexpr amrex::Real x_span = 4.0;	  // ln(a_end / a_init): a_end = 0.546 < a_max
+	const int n_coarse = static_cast<int>(x_span / dlna_step);
+	const Path coarse = RunPath(cosmo, table, a_init, n_coarse, dlna_step);
+	const Path fine = RunPath(cosmo, table, a_init, 2 * n_coarse, 0.5 * dlna_step);
+
+	amrex::Print() << "History dependence: coarse (dlna = 2^-7) vs fine (dlna/2) path at the same times, x = ln(a / a_init)\n";
+	amrex::Print() << std::format("{:>6} {:>11} {:>11} {:>11} {:>11} {:>11}\n", "x", "rk_coarse", "rk_fine", "rk_diff", "tab_err", "tab_diff");
+	amrex::Real tab_diff_max = 0.0;
+	const auto n_print = static_cast<std::size_t>(0.5 / dlna_step); // one row every 0.5 in x
+	for (std::size_t n = 1; n < coarse.a_rk.size(); ++n) {
+		const amrex::Real tab_diff = std::abs(coarse.a_tab[n] - fine.a_tab[2 * n]);
+		tab_diff_max = std::max(tab_diff_max, tab_diff);
+		if (n % n_print == 0) {
+			const amrex::Real a_exact = a_init * std::exp(n * dlna_step);
+			amrex::Print() << std::format("{:>6.2f} {:>11.3e} {:>11.3e} {:>11.3e} {:>11.3e} {:>11.3e}\n", n * dlna_step,
+						      std::abs(coarse.a_rk[n] - a_exact) / a_exact, std::abs(fine.a_rk[2 * n] - a_exact) / a_exact,
+						      std::abs(coarse.a_rk[n] - fine.a_rk[2 * n]) / a_exact, std::abs(coarse.a_tab[n] - a_exact) / a_exact, tab_diff);
+		}
+	}
+	amrex::Print() << std::format("table: max |a_coarse - a_fine| over all {} shared times = {:.3e} (must be exactly 0)\n", n_coarse, tab_diff_max);
+	if (tab_diff_max != 0.0) { // a is a function of t only
+		status = 1;
 	}
 
 	amrex::Print() << (status == 0 ? "ScaleFactorTable Test: PASSED\n" : "ScaleFactorTable Test: FAILED\n");
