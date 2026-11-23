@@ -118,9 +118,9 @@ void QuokkaSimulation<ThermalConductionAnisoProblem>::computeReferenceSolution(a
 	const amrex::Real t = tNew_[0];
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 	// x is along B (kappa_par), y is across it (kappa_perp)
-	const amrex::Real n = rho / quokka::EOS_Traits<ThermalConductionAnisoProblem>::mean_molecular_weight;
-	const amrex::Real D_par = conductivityParams_.kappa0_par * (quokka::EOS_Traits<ThermalConductionAnisoProblem>::gamma - 1.0) / (n * C::k_B);
-	const amrex::Real D_perp = conductivityParams_.kappa0_perp * (quokka::EOS_Traits<ThermalConductionAnisoProblem>::gamma - 1.0) / (n * C::k_B);
+	const amrex::Real n_dens = rho / quokka::EOS_Traits<ThermalConductionAnisoProblem>::mean_molecular_weight;
+	const amrex::Real D_par = conductivityParams_.kappa0_par * (quokka::EOS_Traits<ThermalConductionAnisoProblem>::gamma - 1.0) / (n_dens * C::k_B);
+	const amrex::Real D_perp = conductivityParams_.kappa0_perp * (quokka::EOS_Traits<ThermalConductionAnisoProblem>::gamma - 1.0) / (n_dens * C::k_B);
 	const amrex::Real sigma2_x = sigma * sigma + 2.0 * D_par * t;
 	const amrex::Real sigma2_y = sigma * sigma + 2.0 * D_perp * t;
 	const amrex::Real Emag = 0.5 * Bx0 * Bx0;
