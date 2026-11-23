@@ -30,7 +30,6 @@ This is a [Kelvin-Helmholtz instability simulated with Quokka](https://vimeo.com
 * HDF5 1.10+ (serial version)
 * CUDA 12.0+ (optional, for NVIDIA GPUs)
 * ROCm 6.3+ (optional, for AMD GPUs)
-* ADIOS2 2.9+ with GPU-aware support (optional, for writing terabyte-sized or larger outputs)
 
 ## Problems?
 If you run into problems, please start a [Discussion](https://github.com/quokka-astro/quokka/discussions) for technical support. If you discover a bug, please let us know by opening an [Issue](https://github.com/quokka-astro/quokka/issues). You can also join our [Zulip community](https://quokka-astro.zulipchat.com/join/3sahu2rgvkengbkzwkpndc5h/).

@@ -1385,8 +1385,7 @@ auto QuokkaSimulation<problem_t>::ComputeBuiltinDerivedVar(int lev, std::string 
 		for (int wcomp = 0; wcomp < AMREX_SPACEDIM; ++wcomp) {
 			if (dname == quokka::face_dir_str[wcomp] + "-CurrentDensity") {
 				// the face-centred magnetic field has freshly filled ghost cells only when the output itself carries ghost cells
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    mf.nGrow() >= 1, "CurrentDensity output needs output written with ghost cells; it is not supported with openPMD output.");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mf.nGrow() >= 1, "CurrentDensity output needs output written with ghost cells.");
 				MHDSystem<problem_t>::ComputeCellCentredCurrentDensity(mf, ncomp, wcomp, state_fc, geom[lev].CellSizeArray());
 				return true;
 			}
