@@ -46,7 +46,7 @@ Internally, both solvers obtain \\(\kappa\\) through `quokka::conduction::Evalua
 
 ## Problem-defined conductivity
 
-With `ConductionModel::problem_defined`, specialize `computeConductivity` in the problem file. It returns \\(\{\kappa\_\parallel, \kappa\_\perp\}\\); in the isotropic geometry only the first component is used.
+With `ConductionModel::problem_defined`, specialize `computeConductivity` in the problem file. It returns \\(\\{\kappa\_\parallel, \kappa\_\perp\\}\\); in the isotropic geometry only the first component is used. This path is currently tested by `ThermalConductionSpitzerGaussian`.
 
 ```cpp
 template <>
