@@ -26,7 +26,6 @@ stromgen.n_HI_init = 1.0e-3
 stromgen.n_HII_init = 1.0e-30
 stromgen.Q = 5e48
 
-photochemistry.enabled = 1
 integrator.X_reject_buffer = 1e100
 
 plotfile_interval = 500

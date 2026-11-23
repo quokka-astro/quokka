@@ -165,8 +165,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 1; // only takes effect when quokka::EOS<problem_t>::is_tabulated; lets tests disable the cooling integrator while still
 				// using the tabulated EOS to compute temperature
-	int enableChemistry_ = 0;
-	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
 	int removeMeanFlow_ = 0;
 	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
@@ -687,10 +685,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	}
 
 #ifdef PHOTOCHEMISTRY
-	// set photochemistry runtime parameters
+	// set photochemistry runtime parameters. A photochemistry build always runs it.
 	{
 		amrex::ParmParse const hpp("photochemistry");
-		hpp.query("enabled", enablePhotoChemistry_);
 		hpp.query("max_density_allowed", max_density_allowed);
 		hpp.query("min_density_allowed", min_density_allowed); // don't do photochemistry in cells with densities below the minimum density specified
 	}
@@ -712,8 +709,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			// Resampled cooling and photoionization chemistry both model H thermochemistry
 			// (heating, recombination cooling, collisional ionization cooling). Enabling both
 			// simultaneously double-counts these terms. See docs/markdown/photoionization.md §4.1.
-			if ((enablePhotoChemistry_ == 1) && (enableCooling_ == 1)) {
-				amrex::Abort("photochemistry.enabled = 1 and cooling.enabled = 1 cannot be used together with the EOSTabulated EOS backend. "
+			if (enableCooling_ == 1) {
+				amrex::Abort("cooling.enabled = 1 cannot be used with photochemistry and the EOSTabulated EOS backend. "
 					     "Photoionization handles its own H thermochemistry; the resampled cooling table "
 					     "would double-count those terms. See docs/markdown/photoionization.md.");
 			}
@@ -831,10 +828,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	}
 
 #ifdef CHEMISTRY
-	// set chemistry runtime parameters
+	// set chemistry runtime parameters. A chemistry build always runs it.
 	{
 		amrex::ParmParse const hpp("chemistry");
-		hpp.query("enabled", enableChemistry_);
 		hpp.query("max_density_allowed", max_density_allowed); // chemistry is not accurate for densities > 3e-6
 		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
 	}
@@ -1236,10 +1232,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	bool burn_success = true; // NOLINT
 	auto const applyChemistry = [&]() {
 #ifdef CHEMISTRY
-		if (enableChemistry_ == 1) {
-			// compute chemistry
-			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
-		}
+		burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
 #endif
 	};
 
@@ -3292,7 +3285,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
 	constexpr int nGroupsThermal = RadSystem<problem_t>::nGroupsThermal_;
 #ifdef PHOTOCHEMISTRY
-	const bool chemBandsFirst = (nGroupsThermal < nGroups) && (enablePhotoChemistry_ == 1);
+	const bool chemBandsFirst = (nGroupsThermal < nGroups);
 #else
 	const bool chemBandsFirst = false;
 #endif
@@ -3360,7 +3353,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		}
 
 #ifdef PHOTOCHEMISTRY
-		if (enablePhotoChemistry_ == 1) {
+		{
 			if (chemBandsFirst) {
 				// === Step 1: RK2-SSP on chemical bands (transport + emission) ===
 

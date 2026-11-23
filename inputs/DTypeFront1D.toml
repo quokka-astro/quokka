@@ -44,7 +44,6 @@ density_floor = 1e-32  # g cm^-3
 # Photochemistry Properties
 # *****************************************************************
 
-photochemistry.enabled = 1
 network.energy_switch = 1
 network.recombination_temperature_dependent = 1
 network.allow_mixed_cell_cooling = 0

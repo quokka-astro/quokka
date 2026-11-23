@@ -22,7 +22,6 @@ amr.max_grid_size = 8
 do_reflux = 0
 do_subcycle = 0
 
-chemistry.enabled = 1
 chemistry.max_density_allowed = 3e-6
 
 primordial_chem.temperature = 1e2

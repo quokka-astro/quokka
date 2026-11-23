@@ -29,7 +29,6 @@ stromgen.n_HII_init = 1.0e-10
 stromgen.Q = 1.56e51
 stromgen.temperature = 37.11
 
-photochemistry.enabled = 1
 integrator.X_reject_buffer = 1e100
 integrator.ode_max_steps = 50000
 

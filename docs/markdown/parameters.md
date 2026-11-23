@@ -105,11 +105,10 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 ## Chemistry
 
-These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
+These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`. A problem with chemistry (`Microphysics_Traits<problem_t>::chemistry`) always runs it, as a Strang-split source term.
 
 | Parameter Name                | Type          | Default                 | Description                                                                                                                                     |
 |-------------------------------|---------------|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| chemistry.enabled             | Boolean (0/1) | `0` (Disabled)          | If set to 1, turns on chemistry as a Strang-split source term.                                                                                  |
 | chemistry.max_density_allowed | Float         | `1.0e300`               | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold.  |
 | chemistry.min_density_allowed | Float         | Smallest positive Value | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
 

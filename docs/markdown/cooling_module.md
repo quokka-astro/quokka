@@ -177,7 +177,7 @@ template <> struct quokka::EOS_Traits<MyProblem> {
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 ```
 
-Quokka reads the table at startup and calls `quokka::ResampledCooling::computeCooling()` as a Strang-split operator each timestep. Cooling requires a non-isothermal EOS; it aborts if `gamma = 1`. It also cannot be combined with photoionization (`photochemistry.enabled = 1`), which models the same hydrogen thermochemistry — see [Photoionization](photoionization.md).
+Quokka reads the table at startup and calls `quokka::ResampledCooling::computeCooling()` as a Strang-split operator each timestep. Cooling requires a non-isothermal EOS; it aborts if `gamma = 1`. It also cannot be combined with photoionization (`Microphysics_Traits<P>::photochemistry`), which models the same hydrogen thermochemistry — see [Photoionization](photoionization.md).
 
 ### 3. Choose how photoelectric heating is treated
 

@@ -269,8 +269,9 @@ overshoot without manual inflation.
 
 ### 4.1 Incompatibility with resampled cooling
 
-Setting both `photochemistry.enabled = 1` and `cooling.enabled = 1` in the same
-input file is a **fatal error** — Quokka will abort at startup.
+Setting `cooling.enabled = 1` in a problem with photochemistry is a **fatal error**:
+Quokka will abort at startup. A problem has photochemistry when its
+`Microphysics_Traits<P>::photochemistry` is true, and then it always runs it.
 
 The resampled Cloudy cooling table (`cooling.cooling_table_type = "resampled"`)
 encodes the full H/He thermochemistry for an optically thin gas in a UV background,
@@ -285,6 +286,5 @@ the M1 radiation field and the hydrogen chemistry network (§ 1). Enabling both
 simultaneously would double-count every one of these rates, producing physically
 incorrect temperatures and ionization fractions.
 
-**Correct setup:** use `photochemistry.enabled = 1` and leave `cooling.enabled = 0`
-(the default). The photoionization chemistry network handles all heating and cooling
+**Correct setup:** set `cooling.enabled = 0` (it defaults to 1, and matters only with the `EOSTabulated` backend). The photoionization chemistry network handles all heating and cooling
 internally.
