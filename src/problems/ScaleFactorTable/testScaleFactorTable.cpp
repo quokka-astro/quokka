@@ -4,10 +4,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <format>
 #include <limits>
-#include <cstddef>
 #include <string>
 
 #include "AMReX.H"
@@ -129,8 +129,7 @@ struct Path {
 };
 
 /// Steps uniform in ln a (dlna_step ~ H dt) at exact EdS times: the time grid is an input, shared bitwise by nested paths.
-auto RunPath(CosmologyParams const &cosmo, ScaleFactorTable const &table, amrex::Real const a_init, int const n_steps, amrex::Real const dlna_step)
-    -> Path
+auto RunPath(CosmologyParams const &cosmo, ScaleFactorTable const &table, amrex::Real const a_init, int const n_steps, amrex::Real const dlna_step) -> Path
 {
 	Path path;
 	path.a_rk.reserve(n_steps + 1);
@@ -173,7 +172,8 @@ auto problem_main() -> int
 
 	amrex::Print() << "EdS (Omega_m = 1), a in [0.01, 1]: error vs exact a(t) and tau(t)\n";
 	amrex::Print() << std::format("{:>10} {:>6} {:>11} {:>11} {:>9} {:>9} {:>13} {:>10} {:>11} {:>9} {:>13} {:>11} {:>9}\n", "h", "N", "err(s=0)",
-				      "err(s=0.5)", "ord(s=0)", "ord(s=.5)", "err(s=.5)/h^4", "N eps", "tau(s=.5)", "ord(tau)", "tau/h^4", "tau(s=0)", "ord(t,s=0)");
+				      "err(s=0.5)", "ord(s=0)", "ord(s=.5)", "err(s=.5)/h^4", "N eps", "tau(s=.5)", "ord(tau)", "tau/h^4", "tau(s=0)",
+				      "ord(t,s=0)");
 
 	for (int k = 0; k < n_conv; ++k) {
 		h[k] = std::ldexp(0.2, -k); // h = 0.2 / 2^k
@@ -197,9 +197,9 @@ auto problem_main() -> int
 			ord_tau_node = CheckOrder(err_tau_node[k - 1], err_tau_node[k], std::numeric_limits<amrex::Real>::max(), status); // printed only
 			ord_tau = CheckOrder(err_tau[k - 1], err_tau[k], floor_k, status);
 		}
-		amrex::Print() << std::format("{:>10.4e} {:>6} {:>11.3e} {:>11.3e} {:>9} {:>9} {:>13.4e} {:>10.3e} {:>11.3e} {:>9} {:>13.4e} {:>11.3e} {:>9}\n", h[k],
-					      n_int, err_node[k], err_mid[k], ord_node, ord_mid, err_mid[k] / std::pow(h[k], 4), n_int * eps, err_tau[k], ord_tau,
-					      err_tau[k] / std::pow(h[k], 4), err_tau_node[k], ord_tau_node);
+		amrex::Print() << std::format("{:>10.4e} {:>6} {:>11.3e} {:>11.3e} {:>9} {:>9} {:>13.4e} {:>10.3e} {:>11.3e} {:>9} {:>13.4e} {:>11.3e} {:>9}\n",
+					      h[k], n_int, err_node[k], err_mid[k], ord_node, ord_mid, err_mid[k] / std::pow(h[k], 4), n_int * eps, err_tau[k],
+					      ord_tau, err_tau[k] / std::pow(h[k], 4), err_tau_node[k], ord_tau_node);
 	}
 
 	// 2. production spacing: interpolation (9e-15) and roundoff
@@ -242,7 +242,7 @@ auto problem_main() -> int
 
 	// 4. history dependence: coarse (dlna) and fine (dlna/2, a ratio-2 subcycled level) paths compared at the same times
 	const amrex::Real dlna_step = std::ldexp(1.0, -7); // 2^-7 ~ H dt = 0.008
-	constexpr amrex::Real x_span = 4.0;	  // ln(a_end / a_init): a_end = 0.546 < a_max
+	constexpr amrex::Real x_span = 4.0;		   // ln(a_end / a_init): a_end = 0.546 < a_max
 	const int n_coarse = static_cast<int>(x_span / dlna_step);
 	const Path coarse = RunPath(cosmo, table, a_init, n_coarse, dlna_step);
 	const Path fine = RunPath(cosmo, table, a_init, 2 * n_coarse, 0.5 * dlna_step);
@@ -258,7 +258,8 @@ auto problem_main() -> int
 			const amrex::Real a_exact = a_init * std::exp(n * dlna_step);
 			amrex::Print() << std::format("{:>6.2f} {:>11.3e} {:>11.3e} {:>11.3e} {:>11.3e} {:>11.3e}\n", n * dlna_step,
 						      std::abs(coarse.a_rk[n] - a_exact) / a_exact, std::abs(fine.a_rk[2 * n] - a_exact) / a_exact,
-						      std::abs(coarse.a_rk[n] - fine.a_rk[2 * n]) / a_exact, std::abs(coarse.a_tab[n] - a_exact) / a_exact, tab_diff);
+						      std::abs(coarse.a_rk[n] - fine.a_rk[2 * n]) / a_exact, std::abs(coarse.a_tab[n] - a_exact) / a_exact,
+						      tab_diff);
 		}
 	}
 	amrex::Print() << std::format("table: max |a_coarse - a_fine| over all {} shared times = {:.3e} (must be exactly 0)\n", n_coarse, tab_diff_max);
