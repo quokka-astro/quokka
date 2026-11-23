@@ -13,7 +13,7 @@ These guidelines are for you as the author of a pull request (PR). They walk thr
 
 1. **Open your PR as a draft** while you work on it.
     - **Done for you:** your PR is given scope, size and priority labels, and the automated checks run on every push.
-2. **Get your PR ready for a reviewer.** Complete the PR description and make sure the checks pass. If your change affects code that runs on GPUs, start the GPU tests by commenting `/azp run quick` and `/azp run rocm-quick` for changes to test problems, or `/azp run` for changes to shared code. Your PR starts at `priority/normal`. If it is more or less urgent than that, say so with `/set-priority <low|high>`.
+2. **Get your PR ready for a reviewer.** Complete the PR description and make sure the checks pass. If your change affects code that runs on GPUs, start the GPU tests by commenting `/azp run quick` and `/azp run rocm-quick` for changes to test problems, or `/azp run` for changes to shared code. Your PR starts at `priority/normal`. If it is more or less urgent than that, say so with `/set-priority <low|high>`. Add a `change/<value>` label to say why you made this change, and any other labels that apply.
 3. **Mark your PR ready for review** with the **Ready for review** button.
     - **Done for you:** the code owners are asked for a review, and your labels are updated.
 4. **Wait for a reviewer to respond.** There is nothing for you to do at this step.
@@ -45,13 +45,13 @@ Each label is written as `<category>/<value>`, and hovering over a label on GitH
 
 These labels are set when your PR is opened, reopened or marked ready for review. They are not updated on every push, since a PR can take many commits before it settles. Comment `/recompute-labels` when you want them updated.
 
-### Optional Labels
+### Labels for You to Add
 
-These labels are yours to add. They are a way to tell your reviewer and the maintainers something extra about your PR. If you do not have permission to add labels, ask your reviewer.
+These labels tell your reviewer and the maintainers what cannot be worked out automatically. Add every one that applies to your PR, starting with `change/`. If you do not have permission to add labels, ask your reviewer.
 
 | Category | What it tells them |
 |---|---|
-| `change/<value>` | What kind of change your PR makes |
+| `change/<value>` | Why you made this change: `feature`, `fix`, `performance`, `refactor` or `maintenance` |
 | `problem/<value>` | What kind of problem your PR addresses |
 | `status/<value>` | Something that affects whether your PR can merge |
 | `platform/<value>` | A platform your PR affects |
