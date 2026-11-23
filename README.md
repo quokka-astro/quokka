@@ -1,12 +1,9 @@
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=BenWibking_TwoMomentRad&metric=alert_status&token=5049c56ffe08dcc83afd5ca4c8e0d951a2836652)](https://sonarcloud.io/dashboard?id=BenWibking_TwoMomentRad)
-[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=BenWibking_TwoMomentRad&metric=bugs&token=5049c56ffe08dcc83afd5ca4c8e0d951a2836652)](https://sonarcloud.io/dashboard?id=BenWibking_TwoMomentRad)
-[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=BenWibking_TwoMomentRad&metric=ncloc&token=5049c56ffe08dcc83afd5ca4c8e0d951a2836652)](https://sonarcloud.io/dashboard?id=BenWibking_TwoMomentRad)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/9489/badge)](https://www.bestpractices.dev/projects/9489)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/quokka-astro/quokka/badge)](https://scorecard.dev/viewer/?uri=github.com/quokka-astro/quokka)
 [![Cite](https://img.shields.io/badge/Cite-Quokka-blue)](https://www.tomwagg.com/software-citation-station/?auto-select=Quokka)
 [![AMReX](https://amrex-codes.github.io/badges/powered%20by-AMReX-red.svg)](https://amrex-codes.github.io)
 [![yt-project](https://img.shields.io/static/v1?label="works%20with"&message="yt"&color="blueviolet")](https://yt-project.org)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/quokka-astro/quokka)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/quokka-astro/quokka)
 [![Join Zulip Community](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://quokka-astro.zulipchat.com/join/3sahu2rgvkengbkzwkpndc5h/)
 
 # QUOKKA
