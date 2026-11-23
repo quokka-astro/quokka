@@ -1,9 +1,7 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
-/// \file testThermalConductionAniso.cpp
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
+/// \file testThermalConductionAnisoGaussian.cpp
 /// \brief Defines a test problem for anisotropic thermal conduction.
 ///
 #include "AMReX.H"
@@ -32,18 +30,18 @@ constexpr double Efloor = 2.505e-11;	     // equivalent to T = 2.e6 K
 const double rho0 = 0.1;		     // 1/cm^3
 constexpr double sigma = 2.410685615625e+17; // width of the initial Gaussian, in cm (amr2-branch value)
 constexpr double Bx0 = 1.e-6;		     // uniform field along x, in Quokka's code units (E_mag = B^2 / 2, i.e. B_Gauss / sqrt(4 pi))
-struct ThermalConductionAnisoProblem {};
+struct ThermalConductionAnisoGaussianProblem {};
 
-template <> struct quokka::EOS_Traits<ThermalConductionAnisoProblem> {
+template <> struct quokka::EOS_Traits<ThermalConductionAnisoGaussianProblem> {
 	static constexpr double gamma = 2.0;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct HydroSystem_Traits<ThermalConductionAnisoProblem> {
+template <> struct HydroSystem_Traits<ThermalConductionAnisoGaussianProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<ThermalConductionAnisoProblem> : DefaultPhysicsTraits {
+template <> struct Physics_Traits<ThermalConductionAnisoGaussianProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr bool is_mhd_enabled = true;
@@ -60,7 +58,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto gaussianCellAverage(amrex::Real xlow, a
 	return (sigma * std::sqrt(M_PI / 2.0)) * (erf_high - erf_low) / (xhigh - xlow);
 }
 
-template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<ThermalConductionAnisoGaussianProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
@@ -85,42 +83,44 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
 
-		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint + Emag;
-		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::internalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoGaussianProblem>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoGaussianProblem>::energy_index) = Eint + Emag;
+		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoGaussianProblem>::internalEnergy_index) = Eint;
 	});
 }
 
-template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<ThermalConductionAnisoGaussianProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarPerDim_fc;
+	const int ncomp_fc = Physics_Indices<ThermalConductionAnisoGaussianProblem>::nvarPerDim_fc;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_fc; ++n) {
 			state_fc(i, j, k, n) = 0.0; // fill unused quantities with zeros
 		}
 		if (dir == quokka::direction::x) {
-			state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = Bx0;
+			state_fc(i, j, k, MHDSystem<ThermalConductionAnisoGaussianProblem>::bfield_index) = Bx0;
 
 		} else if (dir == quokka::direction::y) {
-			state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = 0.0;
+			state_fc(i, j, k, MHDSystem<ThermalConductionAnisoGaussianProblem>::bfield_index) = 0.0;
 		}
 	});
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionAnisoProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-									       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+void QuokkaSimulation<ThermalConductionAnisoGaussianProblem>::computeReferenceSolution(amrex::MultiFab &ref,
+										       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+										       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const amrex::Real t = tNew_[0];
 	const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 	// x is along B (kappa_par), y is across it (kappa_perp)
-	const amrex::Real n_dens = rho / quokka::EOS_Traits<ThermalConductionAnisoProblem>::mean_molecular_weight;
-	const amrex::Real D_par = conductivityParams_.kappa0_par * (quokka::EOS_Traits<ThermalConductionAnisoProblem>::gamma - 1.0) / (n_dens * C::k_B);
-	const amrex::Real D_perp = conductivityParams_.kappa0_perp * (quokka::EOS_Traits<ThermalConductionAnisoProblem>::gamma - 1.0) / (n_dens * C::k_B);
+	const amrex::Real n_dens = rho / quokka::EOS_Traits<ThermalConductionAnisoGaussianProblem>::mean_molecular_weight;
+	const amrex::Real D_par = conductivityParams_.kappa0_par * (quokka::EOS_Traits<ThermalConductionAnisoGaussianProblem>::gamma - 1.0) / (n_dens * C::k_B);
+	const amrex::Real D_perp =
+	    conductivityParams_.kappa0_perp * (quokka::EOS_Traits<ThermalConductionAnisoGaussianProblem>::gamma - 1.0) / (n_dens * C::k_B);
 	const amrex::Real sigma2_x = sigma * sigma + 2.0 * D_par * t;
 	const amrex::Real sigma2_y = sigma * sigma + 2.0 * D_perp * t;
 	const amrex::Real Emag = 0.5 * Bx0 * Bx0;
@@ -141,26 +141,27 @@ void QuokkaSimulation<ThermalConductionAnisoProblem>::computeReferenceSolution(a
 				stateExact(i, j, k, n) = 0.;
 			}
 
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::density_index) = rho;
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint_exact + Emag;
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::internalEnergy_index) = Eint_exact;
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::x1Momentum_index) = 0.0;
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::x2Momentum_index) = 0.;
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::x3Momentum_index) = 0.;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoGaussianProblem>::density_index) = rho;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoGaussianProblem>::energy_index) = Eint_exact + Emag;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoGaussianProblem>::internalEnergy_index) = Eint_exact;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoGaussianProblem>::x1Momentum_index) = 0.0;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoGaussianProblem>::x2Momentum_index) = 0.;
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoGaussianProblem>::x3Momentum_index) = 0.;
 		});
 	}
 	amrex::Gpu::streamSynchronize();
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionAnisoProblem>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-										  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-										  quokka::direction const dir)
+void QuokkaSimulation<ThermalConductionAnisoGaussianProblem>::computeReferenceSolution_fc(amrex::MultiFab &ref,
+											  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+											  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+											  quokka::direction const dir)
 {
 	amrex::ignore_unused(dx, prob_lo);
 	// conduction does not evolve B, so the exact solution is the initial uniform field B = (Bx0, 0, 0)
 	const amrex::Real B_exact = (dir == quokka::direction::x) ? Bx0 : 0.0;
-	const int ncomp_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarPerDim_fc;
+	const int ncomp_fc = Physics_Indices<ThermalConductionAnisoGaussianProblem>::nvarPerDim_fc;
 
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -170,7 +171,7 @@ void QuokkaSimulation<ThermalConductionAnisoProblem>::computeReferenceSolution_f
 			for (int n = 0; n < ncomp_fc; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
-			stateExact(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = B_exact;
+			stateExact(i, j, k, MHDSystem<ThermalConductionAnisoGaussianProblem>::bfield_index) = B_exact;
 		});
 	}
 	amrex::Gpu::streamSynchronize();
@@ -184,7 +185,7 @@ auto runConductionTest() -> double
 	// Domain (geometry.*), resolution (amr.n_cell) and refinement (amr.max_level) are read from the input file.
 
 	// Setup boundary conditions
-	constexpr int ncomp_cc = Physics_Indices<ThermalConductionAnisoProblem>::nvarTotal_cc;
+	constexpr int ncomp_cc = Physics_Indices<ThermalConductionAnisoGaussianProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
@@ -196,7 +197,7 @@ auto runConductionTest() -> double
 	// The field is uniform, B = (Bx0, 0, 0), so the ghost faces must copy it. reflect_odd on the tangential components
 	// (a conducting wall) would set Bx -> -Bx in the y/z ghost cells, zeroing the corner-averaged bhat on those walls
 	// and suppressing parallel conduction in the boundary planes.
-	const int nvars_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarTotal_fc;
+	const int nvars_fc = Physics_Indices<ThermalConductionAnisoGaussianProblem>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -206,7 +207,7 @@ auto runConductionTest() -> double
 	}
 
 	// Problem initialization
-	QuokkaSimulation<ThermalConductionAnisoProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<ThermalConductionAnisoGaussianProblem> sim(BCs_cc, BCs_fc);
 
 	sim.cflNumber_ = 0.3;
 	sim.stopTime_ = max_time;
@@ -228,9 +229,9 @@ auto runConductionTest() -> double
 }
 
 template <>
-void QuokkaSimulation<ThermalConductionAnisoProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-									amrex::MultiFab const &state_cc,
-									amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+void QuokkaSimulation<ThermalConductionAnisoGaussianProblem>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf,
+										const int ncomp_cc_in, amrex::MultiFab const &state_cc,
+										amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
@@ -241,9 +242,9 @@ void QuokkaSimulation<ThermalConductionAnisoProblem>::ComputeDerivedVar(int /*le
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
 			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				Real const rho = state(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::density_index);
-				Real const Eint = HydroSystem<ThermalConductionAnisoProblem>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
-				Real const Tgas = quokka::EOS<ThermalConductionAnisoProblem>::ComputeTgasFromEint(rho, Eint);
+				Real const rho = state(i, j, k, HydroSystem<ThermalConductionAnisoGaussianProblem>::density_index);
+				Real const Eint = HydroSystem<ThermalConductionAnisoGaussianProblem>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
+				Real const Tgas = quokka::EOS<ThermalConductionAnisoGaussianProblem>::ComputeTgasFromEint(rho, Eint);
 				output(i, j, k, ncomp) = Tgas;
 			});
 		}

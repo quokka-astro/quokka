@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testThermalConductionAnisoPattle.cpp
 /// \brief Defines a test problem for anisotropic Spitzer thermal conduction (kappa = kappa0*T^2.5) with a Pattle IC.
 ///
@@ -329,7 +327,7 @@ auto problem_main() -> int
 {
 	amrex::Vector<int> const resolutions = {32, 64, 128};
 	amrex::Vector<double> errors;
-	for (int nx : resolutions) {
+	for (int const nx : resolutions) {
 		double const error = runConductionTest(nx);
 		errors.push_back(error);
 		amrex::Print() << std::format("nx = {:4d}  error norm = {:.6e}\n", nx, error);

@@ -1,11 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef CONDUCTION_HELPERS_HPP_ // NOLINT
 #define CONDUCTION_HELPERS_HPP_
-
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file ConductionHelpers.hpp
 /// \brief Kernels shared by IsoConduction and AnisoConduction: gathering the face-centered state for
 ///        MHD, building the cell-centered (rho, T, mass scalars) primVar, and applying the heat flux
@@ -26,6 +23,7 @@ namespace quokka::conduction
 /// \brief Per-direction MultiArray4s of the face-centered state, capturable by value in a GPU lambda.
 using FaceStateArrays = amrex::GpuArray<amrex::MultiArray4<const amrex::Real>, AMREX_SPACEDIM>;
 
+/// \brief Collect the const MultiArray4 of each direction's face-centered MultiFab into a FaceStateArrays.
 inline auto MakeFaceStateArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) -> FaceStateArrays
 {
 	FaceStateArrays arrs{};

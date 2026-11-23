@@ -1,11 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef CONDUCTIVITY_HPP_ // NOLINT
 #define CONDUCTIVITY_HPP_
-
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file conductivity.hpp
 /// \brief Thermal conductivity models, selected by Physics_Traits<problem_t>::conduction_model and
 ///        Physics_Traits<problem_t>::conduction_geometry.

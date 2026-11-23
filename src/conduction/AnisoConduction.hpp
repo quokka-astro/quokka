@@ -1,11 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef ANISO_CONDUCTION_HPP_ // NOLINT
 #define ANISO_CONDUCTION_HPP_
-
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file AnisoConduction.hpp
 /// \brief Explicit anisotropic thermal conduction update, following the symmetric flux-limiting
 ///        scheme of Sharma & Hammett (2007). Each face's flux is split into a normal ("diagonal",
@@ -48,6 +45,7 @@ namespace quokka::conduction
 /// central: default) are implemented.
 AMREX_ENUM(AnisoFluxLimiterType, minmod, mc); // NOLINT
 
+/// \brief Runtime parameters for the explicit anisotropic conduction update (read from the conduction.* inputs).
 struct AnisoConductionParams {
 	ConductivityParams conductivity{}; // prefactors for ConductionModel::constant/spitzer (see conductivity.hpp)
 	amrex::Real l2_alpha = 2.0;	   // bias factor for the L2 limiter (Sharma & Hammett 2007 Eq. 21) applied to the normal (q_xx-type) term
@@ -57,6 +55,7 @@ struct AnisoConductionParams {
 	AnisoFluxLimiterType flux_limiter_type = AnisoFluxLimiterType::mc; // transverse-gradient limiter (conduction.aniso_flux_limiter)
 };
 
+/// \brief Index of the cell on the low side of the DIR-face (i,j,k), i.e. (i,j,k) shifted by -1 along DIR.
 template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto FaceMinusOne(int i, int j, int k) -> amrex::IntVect
 {
 	amrex::ignore_unused(i, j, k);
@@ -206,6 +205,13 @@ void ComputeAnisotropicFlux(amrex::MultiFab &heat_flux_fc, amrex::MultiFab const
 template <typename problem_t> class AnisoConduction
 {
       public:
+	/// \brief Advance the gas energy by one explicit anisotropic conduction step of size dt.
+	/// \param state cell-centered conserved state (updated in place)
+	/// \param state_fc face-centered state (magnetic field), used for the field direction
+	/// \param geom geometry of this level
+	/// \param dt timestep
+	/// \param params conduction parameters
+	/// \param heat_flux face-centered heat flux applied in this step (defined and filled here; used for refluxing)
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
 				    amrex::Real dt, AnisoConductionParams const &params, std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{

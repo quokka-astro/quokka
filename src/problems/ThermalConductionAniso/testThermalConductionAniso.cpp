@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testThermalConductionAniso.cpp
 /// \brief Defines a test problem for anisotropic conduction
 /// Problem NAME: Hot wedge
@@ -23,8 +21,9 @@ struct ThermalConductionAnisoProblem {};
 
 template <> struct quokka::EOS_Traits<ThermalConductionAnisoProblem> {
 	static constexpr double gamma = 2.0;
-	// C::m_u here gives a dimensionless mu = mean_molecular_weight / C::m_u = 1 in the EOS call,
-	// independent of the (dimensionless) unit_system -- not a CGS mass in grams.
+	// mean_molecular_weight is the mean mass per particle (not the dimensionless mu), so 1.0 gives a
+	// number density n = rho / mean_molecular_weight = rho in this problem's units. Do not replace
+	// it with C::m_u: that changes the heat capacity, and hence the diffusivity, by a factor 1/m_u.
 	static constexpr double mean_molecular_weight = 1.0;
 };
 
@@ -56,11 +55,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeMagneticVectorPotential_z(amrex:
 	// Regularization radius for the field-direction singularity at r=0 -- must be << 0.5
 	// (inner edge of the hot ring) and only needs to span a few cells at any resolution tested.
 	constexpr amrex::Real r_core = 0.1;
-	// Overall field amplitude. Conduction only depends on the unit vector bhat, but this initial
-	// field is not in magnetohydrostatic equilibrium (uniform gas pressure, |B| jumping 1 -> 0 at
-	// r=1, tension at the r_core kink), so an O(1) B drives spurious flows/compression that heat
-	// the centre. Scaling psi down (forces ~ B0^2) makes the field effectively passive while
-	// leaving bhat unchanged.
+	// Overall field amplitude. Conduction only depends on the unit vector bhat, and hydro is disabled
+	// in this test (is_hydro_enabled = false), so the field is static. The field is not in
+	// magnetohydrostatic equilibrium (uniform gas pressure, |B| jumping 1 -> 0 at r=1, tension at the
+	// r_core kink), so with hydro enabled an O(1) B would drive spurious flows/compression that heat
+	// the centre. Scaling psi down (forces ~ B0^2) keeps the field effectively passive in that case
+	// while leaving bhat unchanged.
 	constexpr amrex::Real B0 = 1.0e-3;
 	const amrex::Real rad = std::sqrt(x1 * x1 + x2 * x2);
 	if (rad < r_core) {
@@ -82,7 +82,7 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	// true: wedge density = rho_bg * T_bg / T_wedge, so P = rho*T is uniform (no initial pressure jump).
-	// false: uniform density, so the hot wedge starts overpressured and drives a flow.
+	// false: uniform density, so the hot wedge starts overpressured (no flow results while hydro is disabled).
 	constexpr bool isobaric_wedge = false;
 
 	// loop over the grid and set the initial condition
