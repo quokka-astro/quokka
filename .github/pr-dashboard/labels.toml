@@ -23,7 +23,7 @@ unlabelled_path_patterns = []
 [scope.not_mapped_label]
 value = "undefined"
 color = "D73A4A"
-description = "A changed file has no scope yet; a maintainer needs to add it to labels.toml"
+description = "A changed file has no scope yet; add its path to labels.toml"
 
 ## --- physics
 ## each module's src/ folder, its problems in src/problems/, and their files in inputs/
