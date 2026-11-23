@@ -1,28 +1,21 @@
 # Author Guidelines
 
-These guidelines are for you as the author of a pull request (PR). They walk through what happens from your first draft to the merge: which steps are yours, which are done for you, and what you get back at each stage. Following them means your PR reaches a reviewer ready to be reviewed, you can always see who has it and by when, and you know what is needed for it to merge. For how to set up a branch and build the code, see the [Contributing Guide](contributing.md). For the policy that PRs are held to, see the [Maintainers Guide](maintainer_guidelines.md).
-
-> **Tip: The comment section is the command line of your PR**
->
-> Writing `/help` as a comment on any PR lists every command. A change made with a command shows in the conversation who made it and when, so anyone reading your PR can follow how it got to where it is.
->
+These guidelines are for you as the author of a pull request (PR), and set out what to do from your first draft to the merge. For how to set up a branch and build the code, see the [Contributing Guide](contributing.md). For the policy that PRs are held to, see the [Maintainers Guide](maintainer_guidelines.md).
 
 ---
 
 ## From Draft to Merge
 
 1. **Open your PR as a draft** while you work on it.
-    - **Done for you:** your PR is given scope, size and priority labels, and the automated checks run on every push.
-2. **Get your PR ready for a reviewer.** Complete the PR description and make sure the checks pass. If your change affects code that runs on GPUs, start the GPU tests by commenting `/azp run quick` and `/azp run rocm-quick` for changes to test problems, or `/azp run` for changes to shared code. Your PR starts at `priority/normal`. If it is more or less urgent than that, say so with `/set-priority <low|high>`. Add a `change/<value>` label to say why you made this change, and any other labels that apply.
-3. **Mark your PR ready for review** with the **Ready for review** button.
-    - **Done for you:** the code owners are asked for a review, and your labels are updated.
-4. **Wait for a reviewer to respond.** There is nothing for you to do at this step.
-    - **Done for you:** a reviewer takes on your PR by commenting `/accept-review <YYYY-MM-DD>`, with the date they will review it by. They are assigned to your PR, so you can see who has it.
-5. **Respond to the review.** Your reviewer leaves their feedback as review threads. Answer each thread, make any changes, and resolve the thread once you have addressed it. If you decide against a suggestion, say why before you resolve it.
-6. **Ask for another look** once every thread is resolved. Comment `/recompute-labels` so that your labels match what the PR now changes, then click **Re-request review** beside your reviewer's name.
-    - **Done for you:** your reviewer is notified, and stays assigned to your PR. Repeat steps 5 and 6 until they approve it.
-7. **Merge your approved PR** by clicking **Merge when ready**. This is your responsibility, since you know when your PR is finished. If you do not have write access, your reviewer does this for you.
-    - **Done for you:** the merge queue tests your PR against the latest `development`, then merges it.
+2. **Get your PR ready for a reviewer:**
+    - Complete the PR description, and make sure the checks pass.
+    - If your change affects code that runs on GPUs, comment `/azp run quick` and `/azp run rocm-quick` for changes to test problems, or `/azp run` for changes to shared code.
+    - Add a `change/<value>` label to say why you made this change, and any other labels that apply.
+    - If your PR is more or less urgent than `priority/normal`, say so with `/set-priority <low|high>`.
+3. **Mark your PR ready for review.**
+4. **Respond to the review.** Answer each thread, make any changes, and resolve the thread once you have addressed it. If you decide against a suggestion, say why before you resolve it.
+5. **Ask for another look** once every thread is resolved. Comment `/recompute-labels`, then click **Re-request review** beside your reviewer's name. Repeat steps 4 and 5 until your PR is approved.
+6. **Merge your approved PR** by clicking **Merge when ready**. This is your responsibility, since you know when your PR is finished. If you do not have write access, your reviewer does this for you.
 
 > **Note: A push removes an approval**
 >
@@ -61,28 +54,7 @@ These labels tell your reviewer and the maintainers what cannot be worked out au
 
 ## Commands
 
-### Commands You Can Use
-
-| Command | What it does |
-|---|---|
-| `/help` | Lists the commands |
-| `/recompute-labels` | Updates the scope and size labels to match your PR |
-| `/set-priority <low\|normal\|high>` | Sets how soon your PR should be reviewed |
-| `/set-milestone <title\|none>` | Adds your PR to a milestone, or removes it |
-
-### Commands You Will See Reviewers Use
-
-| Command | What it does |
-|---|---|
-| `/accept-review <YYYY-MM-DD>` | Takes on the review of a PR, with the date it will be reviewed by |
-| `/release-review` | Gives the review back, so that another reviewer can accept it |
-| `/create-milestone <title>` | Creates a new milestone that PRs can be added to |
-
-### How Commands Respond
-
-1. **Start your comment with the command.** A command only runs at the start of a comment. A command in a quote or in code is treated as a mention and does not run.
-2. **Write the command exactly.** A misspelt command is ignored, since other tools on Quokka also use `/` commands. A command with a missing or invalid argument gets a reply showing how to use it.
-3. **Look for the reaction.** A thumbs-up on your comment means the command ran. If it did not run, a reply says why.
+Comment `/help` on any PR to list the commands. A command only runs at the start of a comment. A thumbs-up on your comment means it ran; if it did not run, a reply says why.
 
 ---
 
