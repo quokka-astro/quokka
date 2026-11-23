@@ -133,8 +133,8 @@ template <> void QuokkaSimulation<WindCloudProblem>::setInitialConditionsOnGrid(
 		state_cc(i, j, k, HydroSystem<WindCloudProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<WindCloudProblem>::energy_index) = Eint + 0.5 * (rho * vz * vz) + Emag;
 		state_cc(i, j, k, HydroSystem<WindCloudProblem>::internalEnergy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) = rho * cloudTracer; // 1/vol
-		state_cc(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) = rho * windTracer; // 1/vol
+		// state_cc(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) = rho * cloudTracer; // 1/vol
+		// state_cc(i, j, k, HydroSystem<WindCloudProblem>::scalar0_index + 1) = rho * windTracer; // 1/vol
 	});
 }
 
@@ -172,14 +172,18 @@ template <> void QuokkaSimulation<WindCloudProblem>::refineGrid(int lev, amrex::
 	
 	const amrex::Real C_lo = 0.1;   // lowest cloud fraction counted as tail
 	const amrex::Real C_hi = 0.9;      // above this = core, don't tag
-	
+	const amrex::Real rho_wind = rho_cloud * Tcloud / Twind; // g/cm^3
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 	    amrex::Real const rho = state[bx](i, j, k, HydroSystem<WindCloudProblem>::density_index);
 	    amrex::Real const C = state[bx](i, j, k, HydroSystem<WindCloudProblem>::scalar0_index) / rho;
 	
-	    if (C > C_lo && C < C_hi) {
-	        tag[bx](i, j, k) = amrex::TagBox::SET;
-	    }
+	    // if (C > C_lo && C < C_hi) {
+	    //     tag[bx](i, j, k) = amrex::TagBox::SET;
+	    // }
+
+		if(rho > 0.01 * rho_cloud){
+			tag[bx](i, j, k) = amrex::TagBox::SET;
+		}
 	});
 
 	// Static refinement: tag all cells with |x| < 2 kpc
