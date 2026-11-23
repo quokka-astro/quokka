@@ -751,50 +751,56 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!conduction_enabled || conduction_model != ConductionModel::none,
 						 "conduction.enabled = 1, but this problem's Physics_Traits::conduction_model is `none`.");
 
-		// Conductivity prefactors (erg cm^-1 s^-1 K^-1; erg cm^-1 s^-1 K^-3.5 for spitzer) are only read for the
-		// built-in models, and only under the keys matching conduction_geometry.
-		const bool isotropic_key_present = hpp.contains("conductivity_prefactor");
-		const bool anisotropic_key_present = hpp.contains("kappaPar") || hpp.contains("kappaPerp");
-		if constexpr (conduction_model == ConductionModel::constant || conduction_model == ConductionModel::spitzer) {
-			if constexpr (is_anisotropic) {
+		// Everything below is only read and checked when conduction is on: with conduction.enabled = 0, leftover
+		// conduction.* keys in an input file are ignored rather than aborting a run that does not use conduction.
+		if (conduction_enabled) {
+			// Conductivity prefactors (erg cm^-1 s^-1 K^-1; erg cm^-1 s^-1 K^-3.5 for spitzer) are only read for the
+			// built-in models, and only under the keys matching conduction_geometry.
+			const bool isotropic_key_present = hpp.contains("conductivity_prefactor");
+			const bool anisotropic_key_present = hpp.contains("kappaPar") || hpp.contains("kappaPerp");
+			if constexpr (conduction_model == ConductionModel::constant || conduction_model == ConductionModel::spitzer) {
+				if constexpr (is_anisotropic) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    !isotropic_key_present,
+					    "conduction.conductivity_prefactor is set, but this problem's Physics_Traits::conduction_geometry "
+					    "is `anisotropic`; use conduction.kappaPar / conduction.kappaPerp instead.");
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(hpp.contains("kappaPar"),
+									 "conduction.kappaPar must be set for anisotropic conduction.");
+					hpp.query("kappaPar", conductivityParams_.kappa0_par);
+					hpp.query("kappaPerp", conductivityParams_.kappa0_perp);
+					// AnisoConduction limits the (kappa_par - kappa_perp) b_n^2 normal term with the biased L2 limiter,
+					// which is only monotone for a non-negative coefficient.
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductivityParams_.kappa0_perp <= conductivityParams_.kappa0_par,
+									 "conduction.kappaPerp must be <= conduction.kappaPar for anisotropic conduction.");
+				} else {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    !anisotropic_key_present,
+					    "conduction.kappaPar or conduction.kappaPerp is set, but this problem's "
+					    "Physics_Traits::conduction_geometry is `isotropic`; use conduction.conductivity_prefactor instead.");
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(isotropic_key_present,
+									 "conduction.conductivity_prefactor must be set for isotropic conduction.");
+					hpp.query("conductivity_prefactor", conductivityParams_.kappa0_par);
+					conductivityParams_.kappa0_perp = conductivityParams_.kappa0_par;
+				}
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductivityParams_.kappa0_par >= 0.0 && conductivityParams_.kappa0_perp >= 0.0,
+								 "Conductivity prefactors must be >= 0.");
+			} else {
+				// ConductionModel::problem_defined (`none` with conduction enabled is rejected above)
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    !isotropic_key_present, "conduction.conductivity_prefactor is set, but this problem's Physics_Traits::conduction_geometry "
-							    "is `anisotropic`; use conduction.kappaPar / conduction.kappaPerp instead.");
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!conduction_enabled || hpp.contains("kappaPar"),
-								 "conduction.kappaPar must be set for anisotropic conduction.");
-				hpp.query("kappaPar", conductivityParams_.kappa0_par);
-				hpp.query("kappaPerp", conductivityParams_.kappa0_perp);
-				// AnisoConduction limits the (kappa_par - kappa_perp) b_n^2 normal term with the biased L2 limiter,
-				// which is only monotone for a non-negative coefficient.
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductivityParams_.kappa0_perp <= conductivityParams_.kappa0_par,
-								 "conduction.kappaPerp must be <= conduction.kappaPar for anisotropic conduction.");
+				    !isotropic_key_present && !anisotropic_key_present,
+				    "conduction.conductivity_prefactor, conduction.kappaPar or conduction.kappaPerp is set, but this "
+				    "problem's Physics_Traits::conduction_model is `problem_defined`; the conductivity comes from "
+				    "computeConductivity instead.");
+			}
+
+			// limiter for the transverse (cross) terms of the anisotropic flux (default: mc)
+			if constexpr (is_anisotropic) {
+				hpp.query("aniso_flux_limiter", anisoFluxLimiterType_);
 			} else {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    !anisotropic_key_present,
-				    "conduction.kappaPar or conduction.kappaPerp is set, but this problem's "
-				    "Physics_Traits::conduction_geometry is `isotropic`; use conduction.conductivity_prefactor instead.");
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!conduction_enabled || isotropic_key_present,
-								 "conduction.conductivity_prefactor must be set for isotropic conduction.");
-				hpp.query("conductivity_prefactor", conductivityParams_.kappa0_par);
-				conductivityParams_.kappa0_perp = conductivityParams_.kappa0_par;
+				    !hpp.contains("aniso_flux_limiter"),
+				    "conduction.aniso_flux_limiter is set, but this problem's Physics_Traits::conduction_geometry is `isotropic`.");
 			}
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductivityParams_.kappa0_par >= 0.0 && conductivityParams_.kappa0_perp >= 0.0,
-							 "Conductivity prefactors must be >= 0.");
-		} else {
-			// ConductionModel::none or ConductionModel::problem_defined
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!isotropic_key_present && !anisotropic_key_present,
-							 "conduction.conductivity_prefactor, conduction.kappaPar or conduction.kappaPerp is set, but this "
-							 "problem's Physics_Traits::conduction_model is not `constant` or `spitzer`; with `problem_defined`, "
-							 "the conductivity comes from computeConductivity instead.");
-		}
-
-		// limiter for the transverse (cross) terms of the anisotropic flux (default: mc)
-		if constexpr (is_anisotropic) {
-			hpp.query("aniso_flux_limiter", anisoFluxLimiterType_);
-		} else {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    !hpp.contains("aniso_flux_limiter"),
-			    "conduction.aniso_flux_limiter is set, but this problem's Physics_Traits::conduction_geometry is `isotropic`.");
 		}
 	}
 
