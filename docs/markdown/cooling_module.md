@@ -199,7 +199,7 @@ An external `heating_rate_external` expression is independent of this choice and
 
 ### 4. Access thermodynamic quantities in callbacks
 
-Prefer `quokka::EOS<problem_t>`, which forwards to the selected backend and therefore works for any problem:
+Prefer `quokka::EOS<problem_t>`, which is the selected backend and therefore works for any problem:
 
 ```cpp
 const Real T = quokka::EOS<MyProblem>::ComputeTgasFromEint(rho, Eint);
