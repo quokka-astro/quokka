@@ -9,7 +9,7 @@ These guidelines are for you as the author of a pull request (PR), and set out w
 1. **Open your PR as a draft** while you work on it.
 2. **Get your PR ready for a reviewer:**
     - Complete the PR description, and make sure the checks pass.
-    - If your change affects code that runs on GPUs, comment `/azp run quick` and `/azp run rocm-quick` for changes to test problems, or `/azp run` for changes to shared code.
+    - If your change affects code that runs on GPUs, comment `/azp run quick` and `/azp run rocm-quick` for changes to test problems, or `/azp run` for changes to shared code. If you do not have write access, ask a maintainer to run them.
     - Add a `change/<value>` label to say why you made this change, and any other labels that apply.
     - If your PR is more or less urgent than `priority/normal`, say so with `/set-priority <low|high>`.
 3. **Mark your PR ready for review.**
