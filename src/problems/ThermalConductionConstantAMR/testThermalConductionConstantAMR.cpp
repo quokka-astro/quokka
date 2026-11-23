@@ -17,7 +17,7 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
-/* Identical to ThermalConductionConstant problem but now we are checking for AMR.
+/* Testing constant-conductivity thermal conduction with AMR.
 Lref has been chosen to be an integer of the box size to remove dependence on box size.
 */
 

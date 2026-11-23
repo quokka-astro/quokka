@@ -59,7 +59,7 @@ template <> struct Physics_Traits<ThermalConductionSpitzerGaussianProblem> : Def
 // Identical to ConductionModel::spitzer with conduction.conductivity_prefactor = kappa0, so this reproduces the
 // built-in Spitzer result exactly.
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeConductivity<ThermalConductionSpitzerGaussianProblem>(amrex::Real /*rho*/, amrex::Real Tgas)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto computeConductivity<ThermalConductionSpitzerGaussianProblem>(amrex::Real /*rho*/, amrex::Real Tgas)
     -> quokka::valarray<amrex::Real, 2>
 {
 	return {kappa0 * std::pow(Tgas, 2.5), 0.0};

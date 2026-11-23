@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: © The Quokka Authors
 // SPDX-License-Identifier: MIT
 
-#ifndef ELECTRON_CONDUCTION_HPP_ // NOLINT
-#define ELECTRON_CONDUCTION_HPP_
-/// \file ElectronConduction.hpp
+#ifndef ISO_CONDUCTION_HPP_ // NOLINT
+#define ISO_CONDUCTION_HPP_
+/// \file IsoConduction.hpp
 /// \brief Explicit flux-limited electron thermal conduction update.
 
 #include <array>

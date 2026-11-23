@@ -735,6 +735,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const hpp("conduction");
 		hpp.query("enabled", enableConduction_);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableConduction_ == 0 || enableConduction_ == 1, "conduction.enabled must be 0 or 1.");
 		hpp.query("conduction_cfl", conductionCFL);
 		hpp.query("flux_limiter_phi", conductionFluxLimiterPhi_);
 		hpp.query("saturation_factor", conductionSaturationFactor_);
