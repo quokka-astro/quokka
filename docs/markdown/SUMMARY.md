@@ -48,6 +48,7 @@
 - [Developer onboarding](developer_onboarding.md)
 - [Developing a new problem generator](developing_problem_generators.md)
 - [Contributing Guide](contributing.md)
+- [Author Guidelines](author_guidelines.md)
 - [Flowchart](flowchart.md)
 - [Hydro Integrator](hydro_integrator.md)
 - [Radiation Integrator](radiation_integrator.md)
