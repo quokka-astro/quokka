@@ -260,8 +260,9 @@ auto problem_main() -> int
 	// Setup boundary conditions
 	auto BCs_cc = quokka::BC<ThermalConductionAnisoProblem>(quokka::BCType::reflecting);
 	const int nvars_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarTotal_fc;
-	// face-centred B: first-order extrapolation into the ghost faces. reflect_odd on the tangential components
-	// flips the sign of the ring field where it runs along a wall, which cancels it in the corner-averaged bhat.
+	// face-centred B: first-order extrapolation (foextrap) into the ghost faces for every component. reflect_odd is
+	// not used on the tangential components: it would flip the sign of the ring field where it runs along a wall,
+	// which cancels it in the corner-averaged bhat.
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -295,7 +296,7 @@ auto problem_main() -> int
 				      domain.length(1), sim.tNew_[0], eint_abs_err, eint_rel_err);
 
 	// pass if the relative L1 error is at or below the tolerance (a NaN error fails the comparison)
-	constexpr double rel_err_tol = 1.69684956e-03; // measured 1.571157e-03 at 64x64x8, t = 20, includes 8% error
+	constexpr double rel_err_tol = 1.69684956e-03; // measured 1.523328e-03 at 64x64x8, t = 20 (tolerance is 1.08x an earlier 1.571157e-03)
 	amrex::Print() << std::format("relative error tolerance = {:.6e}\n", rel_err_tol);
 	bool const passed = (eint_rel_err <= rel_err_tol);
 

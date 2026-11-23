@@ -50,7 +50,7 @@ With `ConductionModel::problem_defined`, specialize `computeConductivity` in the
 
 ```cpp
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeConductivity<MyProblem>(amrex::Real rho, amrex::Real Tgas)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto computeConductivity<MyProblem>(amrex::Real rho, amrex::Real Tgas)
     -> quokka::valarray<amrex::Real, 2>
 {
     return {kappa0 * std::pow(Tgas, 2.5), 0.0};
