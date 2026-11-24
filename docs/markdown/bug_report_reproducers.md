@@ -49,14 +49,14 @@ Run the helper script from your Quokka checkout:
   --data path/to/table.dat
 ```
 
-By default it creates `tests/quokka-reproducer-<short-description>/`; `tests/` is ignored by Git. The patch is generated relative to the merge-base with `origin/development`, so it includes committed branch changes, uncommitted edits to tracked files, and edits inside submodules. The merge-base commit is recorded in `README.md`, `patches/README.md`, and `run.sh`. Untracked files, including those inside submodules, are copied to `patches/untracked-files/`. `--input` and `--data` paths are relative to the current directory. When exactly one input file is given, `run.sh` defaults to that deck and to a problem with the same name.
+By default it creates `tests/quokka-reproducer-<short-description>/`; `tests/` is ignored by Git. The patch is generated relative to the merge-base with `origin/development`, so it includes committed branch changes, uncommitted edits to tracked files, and edits inside submodules. The merge-base commit is recorded in `README.md`, `patches/README.md`, and `run.sh`. Untracked files, including those inside submodules, are copied to `patches/untracked-files/`; the script lists them with their sizes, so check that list for large or private files, and pass `--no-untracked` to skip them. `--input` and `--data` paths are relative to the current directory. When exactly one input file is given, `run.sh` defaults to that deck and to a problem with the same name.
 
 Then:
 
 1. Fill in `README.md` and paste the failing output into `output/failure.log`.
 2. Edit the settings at the top of `run.sh` (`PRESET`, `PROBLEM`, `INPUT`, `MPI_RANKS`).
 3. Run `bash run.sh` to check that the reproducer fails in the same way.
-4. Create the tarball with the `tar` command that the helper script prints. It excludes the `quokka-src/` worktree and the plotfiles, checkpoints, and backtraces written by `run.sh`.
+4. Create the tarball with the `tar` command that the helper script prints. It excludes the `quokka-src/` worktree created by `run.sh`, which also holds the run's output.
 
 > **Warning**
 >
@@ -68,9 +68,9 @@ Then:
 
 1. creates a separate Git worktree in `quokka-src/` at the recorded patch base commit,
 2. runs `git submodule update --init --recursive` in that worktree, using the URLs from that commit's `.gitmodules`, so submodules match that commit (the first run clones them from the network),
-3. applies `patches/quokka.patch` and copies `patches/untracked-files/`.
+3. applies `patches/quokka.patch`, copies `patches/untracked-files/`, and links `quokka-src/tests/data` to the reproducer's `data/` directory.
 
-It then configures (only if `quokka-src/build/<preset>` does not exist yet), builds the problem with the [`quokka` developer script](contributing.md#the-quokka-developer-script), and runs the executable from the reproducer directory, so input decks can refer to `data/...` paths.
+It then configures (unless an earlier configure finished), builds the problem with the [`quokka` developer script](contributing.md#the-quokka-developer-script), and runs the executable from `quokka-src/tests/`, like `quokka run`. The `../extern/...` and `../inputs/...` paths in standard input decks therefore work, and files in the reproducer's `data/` directory can be referred to as `data/...`.
 
 Later runs skip the setup and reuse the existing build directory, so a developer can edit files in `quokka-src/` and re-run `bash run.sh` while debugging. To start over, delete `quokka-src/` (`rm -rf quokka-src`); the next run creates it again.
 
