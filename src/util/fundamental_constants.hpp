@@ -8,13 +8,7 @@
 /// \file fundamental_constants.hpp
 /// \brief Physical constants in CGS units.
 ///
-/// The values are copied from Microphysics's constants/fundamental_constants.H, so results do not depend on which header defines them.
-/// Chemistry and photochemistry builds still use Microphysics, whose headers define namespace C themselves, so there this header
-/// includes Microphysics's header instead of defining the constants again.
-
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-#include "fundamental_constants.H"
-#else
+/// The values are copied from Microphysics's constants/fundamental_constants.H.
 
 #include "AMReX_REAL.H"
 
@@ -62,7 +56,5 @@ constexpr amrex::Real M_solar = 1.9884e33; // g
 // solar radius
 constexpr amrex::Real R_solar = 6.957e10; // cm
 } // namespace C
-
-#endif // CHEMISTRY || PHOTOCHEMISTRY
 
 #endif // FUNDAMENTAL_CONSTANTS_HPP_
