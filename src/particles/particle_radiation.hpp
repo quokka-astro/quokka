@@ -18,6 +18,7 @@ constexpr amrex::Real seconds_per_year = 3.15576e+07;
 // Nout should match nGroups in the problem
 template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp> struct LuminosityGpuConstTables {
 	quokka::DataTableGpuConst<2, Nout, oob_policy> luminosity; // 2D table: (age, mass) -> luminosity per group
+	amrex::Real min_mass_Msun = 0.0;			   // lowest tabulated mass; stars below it get zero luminosity
 };
 
 // Host-side luminosity table storage
@@ -28,7 +29,7 @@ template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::cl
 
 	[[nodiscard]] auto const_tables() const -> LuminosityGpuConstTables<Nout, oob_policy>
 	{
-		LuminosityGpuConstTables<Nout, oob_policy> tables{luminosity.const_tables()};
+		LuminosityGpuConstTables<Nout, oob_policy> tables{luminosity.const_tables(), luminosity.coord_xlo()[1]};
 		return tables;
 	}
 
@@ -79,6 +80,19 @@ class LuminosityUpdate
 		const amrex::Real mass = p.rdata(mass_idx);
 
 		const amrex::Real mass_in_solar_masses = mass / C::M_solar;
+
+		// Stars below the lowest tabulated mass get zero luminosity rather than the clamped luminosity of
+		// the lowest tabulated star, which would overestimate it badly since L rises steeply with mass
+		// there. This matches slug, which also assigns zero luminosity to stars below its lowest track.
+		if (mass_in_solar_masses < g_device_luminosity_tables<Nout, oob_policy>.min_mass_Msun) {
+			if (lum_idx + nGroups <= ParticleType::NReal) {
+				for (int g = 0; g < nGroups; ++g) {
+					p.rdata(lum_idx + g) = 0.0;
+				}
+			}
+			return;
+		}
+
 		amrex::Real age_in_years = age_in_seconds / seconds_per_year;
 		age_in_years = std::max(age_in_years, 1.0e-30); // age = 0 is allowed
 		// Table coordinates: (age, mass) as specified in CSV input_names
