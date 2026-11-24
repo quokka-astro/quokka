@@ -39,8 +39,10 @@ using amrex::literals::operator""_rt;
 // The matrix a is any type whose a(i, j), for i, j = 0, ..., num_eqs - 1, returns a reference to an amrex::Real, such
 // as amrex::Array2D<amrex::Real, 0, num_eqs - 1, 0, num_eqs - 1>.
 
-/// Factors a = L U by Gaussian elimination, overwriting a with the factors. With allow_pivot it pivots on the largest
-/// entry of each column and records the row interchanges in pivot; without it, pivot is not written. info is
+/// Factors a = L U by Gaussian elimination, overwriting a with the factors. Unlike LINPACK, the diagonal of the factored
+/// matrix holds the reciprocals of the pivots, so that dgesl multiplies instead of dividing (each pivot's reciprocal is
+/// computed here anyway, for the multipliers). With allow_pivot it pivots on the largest entry of each column and records
+/// the row interchanges in pivot; without it, pivot is not written. info is
 ///  - 0 when the factors can be used: every entry of a is finite and every pivot is nonzero;
 ///  - -1 when an entry of a is not finite (NaN or infinite); a is then not factored;
 ///  - otherwise one more than the index of a zero pivot, in which case dgesl would divide by zero.
@@ -101,12 +103,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa(Matrix &a, amrex::GpuArray<s
 			a(k, k) = akk;
 		}
 
-		// compute multipliers
+		// compute multipliers, and store the reciprocal of the pivot for dgesl
 		const amrex::Real t = -1.0e0_rt / a(k, k);
 		amrex::constexpr_for<k + 1, num_eqs>([&](auto jc) {
 			constexpr int j = decltype(jc)::value;
 			a(j, k) *= t;
 		});
+		a(k, k) = -t;
 
 		// row elimination with column indexing
 		amrex::constexpr_for<k + 1, num_eqs>([&](auto jc) {
@@ -135,6 +138,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa(Matrix &a, amrex::GpuArray<s
 
 	if (a(num_eqs - 1, num_eqs - 1) == 0.0e0_rt) {
 		info = num_eqs;
+	} else {
+		a(num_eqs - 1, num_eqs - 1) = 1.0e0_rt / a(num_eqs - 1, num_eqs - 1);
 	}
 }
 
@@ -165,10 +170,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgesl(const Matrix &a, const amrex
 		});
 	});
 
-	// now solve u * x = y
+	// now solve u * x = y (dgefa stored the reciprocal of each pivot on the diagonal)
 	amrex::constexpr_for<0, num_eqs>([&](auto kb) {
 		constexpr int k = num_eqs - 1 - decltype(kb)::value;
-		b[k] = b[k] / a(k, k);
+		b[k] *= a(k, k);
 		const amrex::Real t = -b[k];
 		amrex::constexpr_for<0, k>([&](auto jc) {
 			constexpr int j = decltype(jc)::value;
