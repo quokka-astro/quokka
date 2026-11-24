@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDTypeFrontHe.cpp
 /// \brief Defines a test problem for a D Type front with an H + He network.
 ///
@@ -14,9 +12,11 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
+#include "microphysics/microphysics_traits.hpp"
 #include "physics_info.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fundamental_constants.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -25,13 +25,18 @@
 #include <math/quadrature.hpp>
 #include <string>
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
+#include "microphysics/burn_state.hpp"
+#include "networks/helium/network.hpp"
 
 struct DTypeFrontHe {};
+
+template <> struct Microphysics_Traits<DTypeFrontHe> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::Helium;
+	static constexpr bool photochemistry = true;
+};
+
+using Network = Microphysics_Traits<DTypeFrontHe>::Network;
+using amrex::literals::operator""_rt;
 
 constexpr double c_hat = C::c_light / 1000;
 
@@ -43,12 +48,12 @@ template <> struct quokka::EOS_Traits<DTypeFrontHe> {
 template <> struct Physics_Traits<DTypeFrontHe> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
+	static constexpr int numMassScalars = Network::NumSpec;	     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 	// the helium network defines 3 chemistry bands (H-ionizing, H+He-ionizing, H+He+He+-ionizing);
-	// there are no separate thermal bands in this problem, so nGroups == NUM_CHEM_BANDS.
-	static constexpr int nGroups = NumChemBands;
+	// there are no separate thermal bands in this problem, so nGroups == NumChemBands.
+	static constexpr int nGroups = Network::NumChemBands;
 };
 
 template <> struct RadSystem_Traits<DTypeFrontHe> {
@@ -71,15 +76,13 @@ template <> struct RadSystem_Traits<DTypeFrontHe> {
 	static constexpr double energy_unit = C::ev2erg;
 	// All 3 groups are chemistry bands (no separate thermal groups), so radBoundaries is exactly the
 	// helium network's chemistry band edges (H-, H+He-, H+He+He+-ionizing), and nGroupsThermal_ == 0.
-	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFrontHe>::nGroups + 1> radBoundaries = ChemBandsHeader();
+	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFrontHe>::nGroups + 1> radBoundaries = Network::ChemBands();
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	static constexpr auto ChemBands() { return ChemBandsHeader(); }
-	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
+	static constexpr auto ChemBands() { return Network::ChemBands(); }
+	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex(); }
 };
 
 template <> struct SimulationData<DTypeFrontHe> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -116,16 +119,14 @@ auto compute_effective_radii(amrex::MultiFab const &state_mf, amrex::GpuArray<am
 
 	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data,
 		       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
-			       const amrex::Real n_HI =
-				   state[box_no](i, j, k, HydroSystem<DTypeFrontHe>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
-			       const amrex::Real n_HII =
-				   state[box_no](i, j, k, HydroSystem<DTypeFrontHe>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
-			       const amrex::Real n_HeI =
-				   state[box_no](i, j, k, HydroSystem<DTypeFrontHe>::scalar0_index + static_cast<int>(Species::He)) / spmasses[Species::He];
-			       const amrex::Real n_HeII =
-				   state[box_no](i, j, k, HydroSystem<DTypeFrontHe>::scalar0_index + static_cast<int>(Species::He_p)) / spmasses[Species::He_p];
-			       const amrex::Real n_HeIII = state[box_no](i, j, k, HydroSystem<DTypeFrontHe>::scalar0_index + static_cast<int>(Species::He_2p)) /
-							   spmasses[Species::He_2p];
+			       auto const n = [&](int s) {
+				       return state[box_no](i, j, k, HydroSystem<DTypeFrontHe>::scalar0_index + s) / Network::SpeciesMass()[s];
+			       };
+			       const amrex::Real n_HI = n(Network::H);
+			       const amrex::Real n_HII = n(Network::H_p);
+			       const amrex::Real n_HeI = n(Network::He);
+			       const amrex::Real n_HeII = n(Network::He_p);
+			       const amrex::Real n_HeIII = n(Network::He_p_p);
 
 			       const amrex::Real denom_H = n_HI + n_HII;
 			       const amrex::Real x_HII = (denom_H > 0.0_rt) ? (n_HII / denom_H) : 0.0_rt;
@@ -152,26 +153,9 @@ auto compute_effective_radii(amrex::MultiFab const &state_mf, amrex::GpuArray<am
 	return {volume_to_radius(volume_HII), volume_to_radius(volume_HeI), volume_to_radius(volume_HeII), volume_to_radius(volume_HeIII)};
 }
 
-auto rosenbrock_tableau_name(int tableau) -> char const *
-{
-	switch (tableau) {
-		case 0:
-			return "Rodas5P";
-		case 1:
-			return "Rodas4P";
-		case 2:
-			return "Rodas3P";
-		case 3:
-			return "ROS2S";
-		default:
-			return "unknown";
-	}
-}
-
 void print_microphysics_integrator()
 {
-	amrex::Print() << "DTypeFrontHe microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
-		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
+	amrex::Print() << "DTypeFrontHe microphysics integrator: Rosenbrock (Rosenbrock tableau " << Microphysics_Traits<DTypeFrontHe>::Tableau::name << ")\n";
 }
 
 } // namespace
@@ -203,6 +187,7 @@ void RadSystem<DTypeFrontHe>::AddRadSource(array_t &radEnergy, array_t & /*reduc
 	// Q * band_photon_fraction[g]. radEnergy is an energy-density source (erg cm^-3 s^-1), so each
 	// band's photon rate must be converted to an energy rate via that band's mean photon energy
 	// (GetChemBandQuanta), not deposited directly as a photon-number source.
+	constexpr int NumChemBands = Network::NumChemBands;
 	static_assert(NumChemBands == 3);
 	constexpr amrex::GpuArray<amrex::Real, NumChemBands> band_photon_fraction = {0.6_rt, 0.35_rt, 0.05_rt};
 	amrex::GpuArray<amrex::Real, NumChemBands> L_star{};
@@ -257,13 +242,8 @@ void RadSystem<DTypeFrontHe>::AddRadSource(array_t &radEnergy, array_t & /*reduc
 
 template <> void QuokkaSimulation<DTypeFrontHe>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
-	userData_.small_temp = 1e-2;
-	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e4;
 	userData_.n_e_init = 0.0e0_rt;
 	userData_.n_HI_init = 1.0e2_rt;
@@ -272,8 +252,6 @@ template <> void QuokkaSimulation<DTypeFrontHe>::preCalculateInitialConditions()
 	userData_.n_HeII_init = 0.0e0_rt;
 	userData_.n_HeIII_init = 0.0e0_rt;
 	userData_.Q = 1.0e49_rt;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("n_e_init", userData_.n_e_init);
 	pp.query("n_HI_init", userData_.n_HI_init);
@@ -283,8 +261,6 @@ template <> void QuokkaSimulation<DTypeFrontHe>::preCalculateInitialConditions()
 	pp.query("n_HeIII_init", userData_.n_HeIII_init);
 	pp.query("Q", userData_.Q);
 
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::string const filename = "dtype_front_radii.csv";
 		userData_.output_file_.open(filename);
@@ -314,26 +290,26 @@ template <> void QuokkaSimulation<DTypeFrontHe>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
-	std::array<Real, NumSpec> numdens = {-1.0};
-	numdens[Species::e] = userData_.n_e_init;
-	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::H_p] = userData_.n_HII_init;
-	numdens[Species::He] = userData_.n_HeI_init;
-	numdens[Species::He_p] = userData_.n_HeII_init;
-	numdens[Species::He_2p] = userData_.n_HeIII_init;
+	quokka::microphysics::BurnState<Network::NumSpec> state;
+	std::array<Real, Network::NumSpec> numdens = {-1.0};
+	numdens[Network::e] = userData_.n_e_init;
+	numdens[Network::H] = userData_.n_HI_init;
+	numdens[Network::H_p] = userData_.n_HII_init;
+	numdens[Network::He] = userData_.n_HeI_init;
+	numdens[Network::He_p] = userData_.n_HeII_init;
+	numdens[Network::He_p_p] = userData_.n_HeIII_init;
 
 	state.T = userData_.temperature;
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+		rhotot += state.xn[n] * Network::SpeciesMass()[n];
 	}
 	state.rho = rhotot;
 
 	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	state.e = quokka::EOSMultigamma<DTypeFrontHe>::EnergyFromTemperature(state.T, state.xn);
 	const auto Egas0 = state.e * rhotot;
 
 	// loop over the grid and set the initial condition
@@ -350,9 +326,9 @@ template <> void QuokkaSimulation<DTypeFrontHe>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, RadSystem<DTypeFrontHe>::x1GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFrontHe>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<DTypeFrontHe>::x3GasMomentum_index) = 0.0_rt;
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<DTypeFrontHe>::scalar0_index + nn) =
-			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			    state.xn[nn] * Network::SpeciesMass()[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
