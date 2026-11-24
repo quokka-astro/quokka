@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -49,9 +50,9 @@ def write_text(path: Path, content: str, *, executable: bool = False) -> None:
         path.chmod(0o755)
 
 
-def copy_files(files: list[Path], destination: Path, worktree: Path) -> None:
+def copy_files(files: list[Path], destination: Path) -> None:
     for source in files:
-        source_path = source if source.is_absolute() else worktree / source
+        source_path = source.resolve()
         if not source_path.exists():
             raise FileNotFoundError(f"{source_path} does not exist")
         if source_path.is_dir():
@@ -68,6 +69,7 @@ def copy_untracked_files(paths: list[str], destination: Path, worktree: Path) ->
     for path in paths:
         source = worktree / path
         if not source.is_file():
+            print(f"warning: skipping untracked path that is not a regular file: {path}", file=sys.stderr)
             continue
         target = destination / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -77,20 +79,23 @@ def copy_untracked_files(paths: list[str], destination: Path, worktree: Path) ->
 REPRODUCER_PREFIX = "quokka-reproducer-"
 
 
-def get_untracked_files(worktree: Path, output_dir: Path) -> list[str]:
-    """Return untracked, non-ignored files, skipping earlier reproducers and the output directory."""
-    output = git_output(worktree, ["ls-files", "--others", "--exclude-standard"])
-    files = []
-    for line in output.splitlines():
-        if not line.strip():
-            continue
-        path = Path(line)
-        if any(part.startswith(REPRODUCER_PREFIX) for part in path.parts):
-            continue
-        if (worktree / path).resolve().is_relative_to(output_dir):
-            continue
-        files.append(line)
-    return files
+def list_untracked(directory: Path) -> list[str]:
+    """Return untracked, non-ignored files in one repository, NUL-separated to preserve unusual names."""
+    output = run_git(directory, ["ls-files", "-z", "--others", "--exclude-standard"]).stdout
+    return [name for name in output.split("\0") if name]
+
+
+def get_untracked_files(worktree: Path) -> list[str]:
+    """Return untracked files in the worktree and all submodules, skipping earlier reproducers.
+
+    Paths are relative to the worktree. `git ls-files --others` does not recurse into
+    submodules, so each submodule is listed separately.
+    """
+    files = list_untracked(worktree)
+    submodules = run_git(worktree, ["submodule", "foreach", "--recursive", "--quiet", 'printf "%s\\0" "$displaypath"']).stdout
+    for submodule in (name for name in submodules.split("\0") if name):
+        files.extend(f"{submodule}/{name}" for name in list_untracked(worktree / submodule))
+    return [path for path in files if not any(part.startswith(REPRODUCER_PREFIX) for part in Path(path).parts)]
 
 
 def find_base_commit(worktree: Path, base_ref: str) -> str:
@@ -100,7 +105,12 @@ def find_base_commit(worktree: Path, base_ref: str) -> str:
         raise RuntimeError(
             f"base ref {base_ref!r} was not found; fetch the official Quokka remote or pass --base-ref"
         ) from exc
-    return git_output(worktree, ["merge-base", "HEAD", base_ref])
+    try:
+        return git_output(worktree, ["merge-base", "HEAD", base_ref])
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"HEAD and {base_ref!r} have no common ancestor in this clone; if it is shallow, run 'git fetch --unshallow'"
+        ) from exc
 
 
 def build_readme(
@@ -185,7 +195,7 @@ The executable runs from this directory, so input decks can refer to `data/...`.
 """
 
 
-def build_run_script(base_ref: str, base_commit: str) -> str:
+def build_run_script(base_ref: str, base_commit: str, input_name: str, problem: str) -> str:
     return f"""#!/usr/bin/env bash
 set -euo pipefail
 
@@ -197,8 +207,8 @@ PATCH_BASE_COMMIT="{base_commit}"
 
 # Edit these values before uploading the reproducer.
 PRESET="${{PRESET:-3d}}"
-PROBLEM="${{PROBLEM:-MyProblem}}"
-INPUT="${{INPUT:-${{SCRIPT_DIR}}/input/MyProblem.toml}}"
+PROBLEM="${{PROBLEM:-{problem}}}"
+INPUT="${{INPUT:-${{SCRIPT_DIR}}/input/{input_name}}}"
 MPI_RANKS="${{MPI_RANKS:-1}}"
 
 # Quokka clone that provides the git objects. By default, this is the checkout
@@ -224,11 +234,12 @@ if [[ ! -f "${{SETUP_MARKER}}" ]]; then
     exit 1
   fi
 
-  # Remove a worktree left behind by an interrupted setup.
+  # Remove a worktree left behind by an interrupted setup, and drop the registration of
+  # a quokka-src/ directory that was deleted with rm -rf.
   if [[ -e "${{SRC_DIR}}" ]]; then
     git -C "${{QUOKKA_ROOT}}" worktree remove --force "${{SRC_DIR}}" 2>/dev/null || rm -rf "${{SRC_DIR}}"
-    git -C "${{QUOKKA_ROOT}}" worktree prune
   fi
+  git -C "${{QUOKKA_ROOT}}" worktree prune
 
   git -C "${{QUOKKA_ROOT}}" worktree add --detach "${{SRC_DIR}}" "${{PATCH_BASE_COMMIT}}"
   # Clone submodules from the URLs in the base commit's .gitmodules, not from URLs that
@@ -275,12 +286,14 @@ def create_reproducer(args: argparse.Namespace) -> Path:
         if not args.force:
             raise FileExistsError(f"{repro_dir} already exists; pass --force to overwrite it")
         shutil.rmtree(repro_dir)
+        # Drop the registration of a quokka-src/ worktree that run.sh may have created.
+        run_git(worktree, ["worktree", "prune"])
 
     branch = git_output(worktree, ["branch", "--show-current"]) or "(detached HEAD)"
     commit = git_output(worktree, ["rev-parse", "HEAD"])
     base_commit = find_base_commit(worktree, args.base_ref)
-    status = git_output(worktree, ["status", "--short"])
-    untracked = get_untracked_files(worktree, output_root)
+    status = git_output(worktree, ["-c", "core.quotePath=false", "status", "--short"])
+    untracked = get_untracked_files(worktree)
 
     input_dir = repro_dir / "input"
     data_dir = repro_dir / "data"
@@ -303,13 +316,19 @@ def create_reproducer(args: argparse.Namespace) -> Path:
     copy_untracked_files(untracked, untracked_files_dir, worktree)
 
     write_text(repro_dir / "README.md", build_readme(slug, worktree, branch, commit, args.base_ref, base_commit, status, untracked))
-    write_text(repro_dir / "run.sh", build_run_script(args.base_ref, base_commit), executable=True)
+    # Default run.sh to the input deck when exactly one input file is given.
+    input_files = [path for path in args.input if path.resolve().is_file()]
+    if len(args.input) == 1 and input_files:
+        input_name, problem = input_files[0].name, input_files[0].stem
+    else:
+        input_name, problem = "MyProblem.toml", "MyProblem"
+    write_text(repro_dir / "run.sh", build_run_script(args.base_ref, base_commit, input_name, problem), executable=True)
     write_text(input_dir / "README.md", "Put the complete Quokka input deck here, including every required parameter.\n")
     write_text(data_dir / "README.md", "Put required data tables and auxiliary input files here.\n")
     write_text(output_dir / "failure.log", "Paste the full failing terminal output here.\n")
 
-    copy_files(args.input, input_dir, worktree)
-    copy_files(args.data, data_dir, worktree)
+    copy_files(args.input, input_dir)
+    copy_files(args.data, data_dir)
 
     return repro_dir
 
@@ -339,14 +358,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         type=Path,
         action="append",
         default=[],
-        help="Input file or directory to copy into input/; may be passed multiple times",
+        help="Input file or directory (relative to the current directory) to copy into input/; may be passed multiple times",
     )
     parser.add_argument(
         "--data",
         type=Path,
         action="append",
         default=[],
-        help="Data file or directory to copy into data/; may be passed multiple times",
+        help="Data file or directory (relative to the current directory) to copy into data/; may be passed multiple times",
     )
     parser.add_argument(
         "--base-ref",
@@ -365,6 +384,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
         repro_dir = create_reproducer(args)
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() or f"exit status {exc.returncode}"
+        print(f"error: {shlex.join(exc.cmd)} failed: {detail}", file=sys.stderr)
+        return 1
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -372,7 +395,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"created {repro_dir}")
     print("edit README.md, run.sh, input/, data/, and output/ before uploading")
     tarball = repro_dir.parent / f"{repro_dir.name}.tar.gz"
-    print(f"after reviewing the contents: tar -C {repro_dir.parent} --exclude quokka-src -czf {tarball} {repro_dir.name}/")
+    # Leave out the worktree and run outputs that run.sh writes at the top of the reproducer.
+    patterns = ("quokka-src", "plt*", "chk*", "Backtrace.*")
+    excludes = " ".join(f"--exclude {shlex.quote(f'{repro_dir.name}/{pattern}')}" for pattern in patterns)
+    tar_cmd = f"tar -C {shlex.quote(str(repro_dir.parent))} {excludes} -czf {shlex.quote(str(tarball))} {shlex.quote(repro_dir.name + '/')}"
+    print(f"after reviewing the contents: {tar_cmd}")
     return 0
 
 

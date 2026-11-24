@@ -49,14 +49,14 @@ Run the helper script from your Quokka checkout:
   --data path/to/table.dat
 ```
 
-By default it creates `tests/quokka-reproducer-<short-description>/`; `tests/` is ignored by Git. The patch is generated relative to the merge-base with `origin/development`, so it includes committed branch changes, uncommitted edits to tracked files, and edits inside submodules. The merge-base commit is recorded in `README.md`, `patches/README.md`, and `run.sh`. Untracked files are copied to `patches/untracked-files/`.
+By default it creates `tests/quokka-reproducer-<short-description>/`; `tests/` is ignored by Git. The patch is generated relative to the merge-base with `origin/development`, so it includes committed branch changes, uncommitted edits to tracked files, and edits inside submodules. The merge-base commit is recorded in `README.md`, `patches/README.md`, and `run.sh`. Untracked files, including those inside submodules, are copied to `patches/untracked-files/`. `--input` and `--data` paths are relative to the current directory. When exactly one input file is given, `run.sh` defaults to that deck and to a problem with the same name.
 
 Then:
 
 1. Fill in `README.md` and paste the failing output into `output/failure.log`.
 2. Edit the settings at the top of `run.sh` (`PRESET`, `PROBLEM`, `INPUT`, `MPI_RANKS`).
 3. Run `bash run.sh` to check that the reproducer fails in the same way.
-4. Create the tarball with the `tar` command that the helper script prints. It excludes the `quokka-src/` worktree created by `run.sh`.
+4. Create the tarball with the `tar` command that the helper script prints. It excludes the `quokka-src/` worktree and the plotfiles, checkpoints, and backtraces written by `run.sh`.
 
 > **Warning**
 >
@@ -72,7 +72,7 @@ Then:
 
 It then configures (only if `quokka-src/build/<preset>` does not exist yet), builds the problem with the [`quokka` developer script](contributing.md#the-quokka-developer-script), and runs the executable from the reproducer directory, so input decks can refer to `data/...` paths.
 
-Later runs skip the setup and reuse the existing build directory, so a developer can edit files in `quokka-src/` and re-run `bash run.sh` while debugging. Delete `quokka-src/` with `git worktree remove --force quokka-src` to start over.
+Later runs skip the setup and reuse the existing build directory, so a developer can edit files in `quokka-src/` and re-run `bash run.sh` while debugging. To start over, delete `quokka-src/` (`rm -rf quokka-src`); the next run creates it again.
 
 If the reproducer is unpacked outside a Quokka checkout, set `QUOKKA_ROOT=/path/to/quokka`. The base commit must be present in that clone; run `git fetch origin` if `run.sh` reports that it is missing.
 
