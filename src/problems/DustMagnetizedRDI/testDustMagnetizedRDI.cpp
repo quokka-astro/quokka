@@ -11,8 +11,6 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "dust/DustRuntimeParams.hpp"
-
-using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -24,6 +22,8 @@ using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 #include <numbers>
 #include <string>
 #include <vector>
+
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
 
 struct DustMagnetizedRDI {};
 

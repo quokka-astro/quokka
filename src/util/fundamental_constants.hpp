@@ -1,18 +1,16 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef FUNDAMENTAL_CONSTANTS_HPP_
 #define FUNDAMENTAL_CONSTANTS_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file fundamental_constants.hpp
-/// \brief Physical constants in CGS units.
+/// \brief Physical constants in CGS units, used as namespace C.
 ///
 /// The values are copied from Microphysics's constants/fundamental_constants.H.
 
 #include "AMReX_REAL.H"
 
-namespace C
+namespace quokka::constants
 {
 // speed of light in vacuum
 constexpr amrex::Real c_light = 29979245800.0; // cm/s
@@ -55,6 +53,8 @@ constexpr amrex::Real M_solar = 1.9884e33; // g
 
 // solar radius
 constexpr amrex::Real R_solar = 6.957e10; // cm
-} // namespace C
+} // namespace quokka::constants
+
+namespace C = quokka::constants;
 
 #endif // FUNDAMENTAL_CONSTANTS_HPP_

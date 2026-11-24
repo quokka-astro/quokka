@@ -175,6 +175,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 1; // only takes effect when quokka::EOS<problem_t>::is_tabulated; lets tests disable the cooling integrator while still
 				// using the tabulated EOS to compute temperature
+	amrex::Real massScalarFloor_ =
+	    1.0e-30; // network.small_x: a negative mass scalar is reset to this fraction of the density; a problem with a network uses its default
 	int enableTurbulence_ = 0;
 	int removeMeanFlow_ = 0;
 	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
@@ -651,6 +653,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 							 "Physics_Traits::viscosity_model is not `constant`; with `problem_defined`, "
 							 "viscosity comes from computeViscosity instead.");
 		}
+	}
+
+	// mass-scalar floor (network.small_x); a problem with a network takes the network's value, whose default it sets (1e-100 for
+	// primordial_chem), so the hydro floor matches the burner
+	if constexpr (Microphysics_Traits<problem_t>::chemistry || Microphysics_Traits<problem_t>::photochemistry) {
+		massScalarFloor_ = Microphysics_Traits<problem_t>::Network::Parameters().small_x;
+	} else {
+		amrex::ParmParse const npp("network");
+		npp.query("small_x", massScalarFloor_);
 	}
 
 	// set MHD runtime parameters
@@ -2109,10 +2120,12 @@ void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, massScalarFloor_, state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	} else {
 		auto const density_floor_func = QuokkaDensityFloorFunctor<problem_t>{};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, massScalarFloor_, state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	}
 
 	if (useDualEnergy_ == 1) {

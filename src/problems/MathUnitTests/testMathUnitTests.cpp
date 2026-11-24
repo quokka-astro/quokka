@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 /// \file testMathUnitTests.cpp
-/// \brief Unit tests of the math utilities: ODE integration and bracketing root finding (host and device).
+/// \brief Unit tests of the math utilities (ODE integration and bracketing root finding) and of the gamma-law EOS, on host and device.
 ///
 
 #include "AMReX_Gpu.H"
@@ -292,7 +292,7 @@ auto TestEOSIdeal() -> int
 	constexpr Real reltol = 1.0e-14;
 
 	int status = 0;
-	auto check = [&status](const char *name, Real value, Real expected) {
+	const auto check = [&status](const char *name, Real value, Real expected) {
 		const Real err = std::abs(value - expected) / std::abs(expected);
 		const bool ok = err <= reltol;
 		std::cout << std::format("{:<36}{:>24.16e}{:>24.16e}{:>12.2e}{}\n", name, value, expected, err, ok ? "" : "  FAIL");
@@ -327,11 +327,12 @@ auto TestEOSIdeal() -> int
 
 	// NaN rho or T is raised to the floor, as Microphysics's eos() did (max(floor, NaN) = floor).
 	// Comparisons with NaN may raise FE_INVALID, so suspend the FP-exception traps the test suite can enable.
+	// The volatile reads and writes keep the NaN operations between feholdexcept and fesetenv.
 	std::fenv_t fenv{};
 	std::feholdexcept(&fenv);
-	const Real nan = std::numeric_limits<Real>::quiet_NaN();
-	const Real Eint_nanT = EOS::ComputeEintFromTgas(rho, nan);
-	const Real cs_nanrho = EOS::ComputeSoundSpeed(nan, P);
+	const volatile Real nan = std::numeric_limits<Real>::quiet_NaN();
+	const volatile Real Eint_nanT = EOS::ComputeEintFromTgas(rho, nan);
+	const volatile Real cs_nanrho = EOS::ComputeSoundSpeed(nan, P);
 	std::fesetenv(&fenv);
 	check("Eint(rho, NaN)", Eint_nanT, rho * C::k_B * Tfloor / ((gamma - 1.0) * mbar));
 	check("cs(NaN, P)", cs_nanrho, std::sqrt(gamma * P / rho_floor));
