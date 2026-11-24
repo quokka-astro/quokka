@@ -48,9 +48,9 @@ template <typename problem_t> struct EOS_Traits {
 	static constexpr double mean_molecular_weight = NAN;
 };
 
-// Relations shared by all EOS backends.
+/// \brief Relations shared by all EOS backends.
 struct EOSBase {
-	// Compute gas internal energy from gas total energy (Eint + Ekin, NOT including B field).
+	/// \brief Compute gas internal energy from gas total energy (Eint + Ekin, NOT including B field).
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double rho, double mx, double my, double mz, double Etot, double magnetic_energy)
 	    -> double
 	{
@@ -60,7 +60,7 @@ struct EOSBase {
 		return Eint;
 	}
 
-	// Compute gas total energy (Eint + Ekin, NOT including B field) from gas internal energy.
+	/// \brief Compute gas total energy (Eint + Ekin, NOT including B field) from gas internal energy.
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double rho, double mx, double my, double mz, double Eint, double magnetic_energy)
 	    -> double
 	{
@@ -591,8 +591,9 @@ template <typename T> struct EOSBackendHelper<T, std::void_t<typename EOS_Traits
 } // namespace detail
 
 // ==================== EOS (public name) ====================
-// The problem's EOS backend struct itself. A problem that explicitly specializes a method of
-// quokka::EOS<P> (e.g. ComputeTgasFromEint) specializes that method of its backend.
+/// \brief The problem's EOS backend struct itself (EOSIdeal, EOSMicrophysics or EOSTabulated).
+///
+/// A problem that explicitly specializes a method of quokka::EOS<P> (e.g. ComputeTgasFromEint) specializes that method of its backend.
 
 template <typename problem_t> using EOS = typename detail::EOSBackendHelper<problem_t>::type;
 

@@ -165,7 +165,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 1; // only takes effect when quokka::EOS<problem_t>::is_tabulated; lets tests disable the cooling integrator while still
 				// using the tabulated EOS to compute temperature
-	amrex::Real massScalarFloor_ = 1.0e-30; // network.small_x: a negative mass scalar is reset to this fraction of the density
+	amrex::Real massScalarFloor_ = 1.0e-30; // network.small_x: a negative mass scalar is reset to this fraction of the density; chemistry builds use the network default
 	int enableChemistry_ = 0;
 	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
@@ -279,6 +279,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
 		// initialize Microphysics params
 		init_extern_parameters();
+		// use the network's small_x (1e-100 for primordial_chem), so the hydro floor matches the chemistry burner
+		massScalarFloor_ = network_rp::small_x;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!integrator_rp::subtract_internal_energy,
 						 "integrator.subtract_internal_energy must be 0: Quokka reads total energy from burn_t::e, not the delta");
 		// initialize Microphysics EOS
