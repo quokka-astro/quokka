@@ -4,7 +4,7 @@
 #ifndef CHEMISTRY_HPP_ // NOLINT
 #define CHEMISTRY_HPP_
 /// \file Chemistry.hpp
-/// \brief Defines methods for integrating primordial chemical network using Microphysics
+/// \brief The chemistry burn: integrates the problem's reaction network (Microphysics_Traits::Network) in every cell
 ///
 
 #include <array>
@@ -15,19 +15,21 @@
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 
-#ifdef CHEMISTRY
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
+#include "hydro/EOS.hpp"
+#include "microphysics/burn_state.hpp"
+#include "microphysics/burner.hpp"
+#include "microphysics/integrator_params.hpp"
+#include "microphysics/microphysics_traits.hpp"
 
 namespace quokka::chemistry
 {
-
-AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
+using amrex::literals::operator""_rt;
 
 template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed) -> bool
 {
+
+	static_assert(Microphysics_Traits<problem_t>::chemistry, "computeChemistry needs Microphysics_Traits::chemistry");
+	using Network = typename Microphysics_Traits<problem_t>::Network;
 
 	// Start off by assuming a successful burn.
 	int burn_success = 1;
@@ -36,6 +38,11 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 	auto *p_num_failed = d_num_failed.data();
 
 	int num_failed = 0;
+
+	// the integrator's and the network's runtime parameters; the device lambda below captures these locals by value
+	const quokka::microphysics::IntegratorParams integrator_params = quokka::microphysics::IntegratorParams::Parameters();
+	const typename Network::Params network_params = Network::Parameters();
+	const Real small_x = network_params.small_x;
 
 	const BL_PROFILE("Chemistry::computeChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -51,23 +58,21 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, 0.0);
 
-			std::array<Real, NumSpec> chem = {-1.0};
-			std::array<Real, NumSpec> inmfracs = {-1.0};
+			std::array<Real, Network::NumSpec> chem = {-1.0};
+			std::array<Real, Network::NumSpec> inmfracs = {-1.0};
 			Real insum = 0.0_rt;
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				chem[nn] = state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) /
 					   rho; // state has partial densities, so divide by rho to get mass fractions
 			}
 
-			// do chemistry using microphysics
-
-			burn_t chemstate;
+			quokka::microphysics::BurnState<Network::NumSpec> chemstate;
 			chemstate.success = true;
 			int burn_failed = 0;
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				inmfracs[nn] = chem[nn] * rho / spmasses[nn];
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
+				inmfracs[nn] = chem[nn] * rho / Network::SpeciesMass()[nn];
 				chemstate.xn[nn] = inmfracs[nn];
 			}
 
@@ -81,18 +86,15 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 				amrex::Abort("Density exceeded max_density_allowed!");
 			}
 
-			// input density and eint in burn state
-			// Microphysics needs specific eint
+			// input density and specific eint in burn state
 			chemstate.rho = rho;
 			chemstate.e = Eint / rho;
 
-			// call the EOS to set initial internal energy e
-			eos(eos_input_re, chemstate);
+			// the temperature from the specific internal energy
+			chemstate.T = quokka::EOS<problem_t>::TemperatureFromEnergy(chemstate.e, chemstate.xn);
 
 			// do the actual integration
-			// do it in .cpp so that it is not built at compile time for all tests
-			// which would otherwise slow down compilation due to the large RHS file
-			chemburner(chemstate, dt);
+			quokka::microphysics::Burn<problem_t>(chemstate, dt, integrator_params, network_params);
 
 			if (std::isnan(chemstate.xn[0]) || std::isnan(chemstate.rho)) {
 				amrex::Abort("Burner returned NAN");
@@ -107,20 +109,20 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			}
 
 			// ensure positivity and normalize
-			for (int nn = 0; nn < NumSpec; ++nn) {
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
-				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
+				inmfracs[nn] = Network::SpeciesMass()[nn] * chemstate.xn[nn] / chemstate.rho;
 				insum += inmfracs[nn];
 			}
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				inmfracs[nn] /= insum;
 				// update the number densities with conserved mass fractions
-				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
+				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / Network::SpeciesMass()[nn];
 			}
 
-			// get the updated specific eint
-			eos(eos_input_rt, chemstate);
+			// the specific internal energy of the renormalized composition at the burn's final temperature
+			chemstate.e = quokka::EOS<problem_t>::EnergyFromTemperature(chemstate.T, chemstate.xn);
 
 			// get dEint
 			// Quokka uses rho*eint
@@ -128,7 +130,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
 			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
+			for (int nn = 0; nn < Network::NumSpec; ++nn) {
 				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn] * rho; // scale by rho to return partial densities
 			}
 		});
@@ -153,5 +155,4 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 }
 
 } // namespace quokka::chemistry
-#endif
 #endif // CHEMISTRY_HPP_
