@@ -22,6 +22,7 @@
 #endif
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <limits>
 #include <map>
 #include <math/quadrature.hpp>
@@ -34,13 +35,15 @@ struct DTypeFront_JAFF {};
 
 template <> struct Microphysics_Traits<DTypeFront_JAFF> : DefaultMicrophysicsTraits {
 	using Network = quokka::networks::PhotoionizationHCaseB;
+	// The tableau is the CMake cache variable DTypeFront_JAFF_TABLEAU (default ROS2S).
+	using Tableau = quokka::math::rosenbrock::DTYPEFRONT_JAFF_TABLEAU;
 	static constexpr bool photochemistry = true;
 };
 
 using Network = Microphysics_Traits<DTypeFront_JAFF>::Network;
 using amrex::literals::operator""_rt;
 
-constexpr double c_hat = C::c_light / 1000.0;
+constexpr double c_hat = C::c_light / static_cast<double>(C_HAT_DIVISOR);
 
 template <> struct quokka::EOS_Traits<DTypeFront_JAFF> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -52,7 +55,11 @@ template <> struct Physics_Traits<DTypeFront_JAFF> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = Network::NumSpec;	     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+#ifdef DTYPEFRONT_JAFF_NO_RADIATION
+	static constexpr bool is_radiation_enabled = false;
+#else
 	static constexpr bool is_radiation_enabled = true;
+#endif
 };
 
 template <> struct RadSystem_Traits<DTypeFront_JAFF> {
@@ -327,6 +334,7 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::preCalculateInitialCondition
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::string const filename = "dtype_front_radii.csv";
 		userData_.output_file_.open(filename);
+		userData_.output_file_ << std::setprecision(17);
 		userData_.output_file_ << "time,r_effective,r_analytical\n";
 	}
 }
@@ -367,12 +375,14 @@ template <> void QuokkaSimulation<DTypeFront_JAFF>::setInitialConditionsOnGrid(q
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+#ifndef DTYPEFRONT_JAFF_NO_RADIATION
 		for (int g = 0; g < Physics_Traits<DTypeFront_JAFF>::nGroups; ++g) {
 			state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = 1.e-99_rt;
 			state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 		}
+#endif
 		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::gasEnergy_index) = Egas0;
 		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::gasDensity_index) = rhotot;
 		state_cc(i, j, k, RadSystem<DTypeFront_JAFF>::gasInternalEnergy_index) = Egas0;
@@ -454,6 +464,7 @@ auto problem_main() -> int
 
 	sim.evolve();
 
+#ifndef DTYPEFRONT_JAFF_NO_RADIATION
 	// Check 1: effective radius vs analytical radius at end of simulation.
 	{
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
@@ -604,6 +615,7 @@ auto problem_main() -> int
 		compute_median_and_check(cavity_temps, T_ion_eq, "cavity");
 		compute_median_and_check(neutral_temps, T_neu_eq, "neutral");
 	}
+#endif
 
 #ifdef HAVE_PYTHON
 	if (amrex::ParallelDescriptor::IOProcessor()) {

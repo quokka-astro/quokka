@@ -2,7 +2,7 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  [0.0, 0.0, 0.0]
-geometry.prob_hi     =  [1.596e19, 1.596e19, 1.596e19]
+geometry.prob_hi     =  [5.799036750e18, 5.799036750e18, 5.799036750e18] # = 5 r_s
 quokka.bc = ["reflecting", "reflecting", "reflecting"]
 
 # *****************************************************************
@@ -21,7 +21,7 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-stop_time = 1.93e13 # = 20 t_s
+stop_time = 5.107737479e12 # = 5 t_s (T_eq = 7808 K, r_s = 1.15981e18 cm, t_s = 1.02155e12 s)
 
 stromgen.n_e_init = 1.0e-10
 stromgen.n_HI_init = 139.9

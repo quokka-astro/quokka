@@ -1,5 +1,25 @@
 if(AMReX_SPACEDIM EQUAL 3)
   set(JOB_NAME DTypeFront_JAFF)
   quokka_add_problem(JOB_NAME ${JOB_NAME})
+
+  # The Rosenbrock tableau of the problem's burn (Microphysics_Traits<DTypeFront_JAFF>::Tableau)
+  set(DTypeFront_JAFF_TABLEAU "ROS2S" CACHE STRING "Rosenbrock tableau of DTypeFront_JAFF: ROS2S, Rodas3P, Rodas4P or Rodas5P")
+  set_property(CACHE DTypeFront_JAFF_TABLEAU PROPERTY STRINGS ROS2S Rodas3P Rodas4P Rodas5P)
+  if(NOT DTypeFront_JAFF_TABLEAU MATCHES "^(ROS2S|Rodas3P|Rodas4P|Rodas5P)$")
+    message(FATAL_ERROR "DTypeFront_JAFF_TABLEAU must be ROS2S, Rodas3P, Rodas4P or Rodas5P, got '${DTypeFront_JAFF_TABLEAU}'")
+  endif()
+
+  set(DTypeFront_JAFF_C_HAT_DIVISOR 1000 CACHE STRING "DTypeFront_JAFF reduced speed of light: c_hat = c / divisor")
+  option(DTypeFront_JAFF_NO_RADIATION "DTypeFront_JAFF without radiation transport (and so without photochemistry)" OFF)
+  set(DTypeFront_JAFF_EXTRA_DEFINES "" CACHE STRING "Extra compile definitions for DTypeFront_JAFF")
+
+  target_compile_definitions(${JOB_NAME} PRIVATE DTYPEFRONT_JAFF_TABLEAU=${DTypeFront_JAFF_TABLEAU} C_HAT_DIVISOR=${DTypeFront_JAFF_C_HAT_DIVISOR})
+  if(DTypeFront_JAFF_NO_RADIATION)
+    target_compile_definitions(${JOB_NAME} PRIVATE DTYPEFRONT_JAFF_NO_RADIATION)
+  endif()
+  if(DTypeFront_JAFF_EXTRA_DEFINES)
+    target_compile_definitions(${JOB_NAME} PRIVATE ${DTypeFront_JAFF_EXTRA_DEFINES})
+  endif()
+
   add_test(NAME ${JOB_NAME}RadPres COMMAND ${JOB_NAME} ../inputs/DTypeFrontRadPres.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

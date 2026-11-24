@@ -1,0 +1,46 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  [0.0, 0.0, 0.0] 
+geometry.prob_hi     =  [1.45e22, 1.45e22, 1.45e22]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [16, 16, 16]
+amr.max_level       = 0     # number of levels = max_level + 1
+#max_timesteps = 10
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+# R_c = sqrt(Q / (16 pi n c)) = 1.63e21 cm, t_c = R_c / c = 5.43e10 s. t_end = 50 t_c, when the front is at
+# R = 7.96 R_c = 1.30e22 cm = 0.89 L (5 mean free paths inside the box), moving at c/17 with 16% of the photons in flight
+stromgen.tend = 2.72e12
+stromgen.n_e_init = 1.0e-30
+stromgen.n_HI_init = 1.0e-3
+stromgen.n_HII_init = 1.0e-30
+stromgen.Q = 4e51
+
+photochemistry.enabled = 1
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.rosenbrock_tableau = 3
+
+plotfile_interval = 10
+plotfile_prefix = "StrmPhotonCons"
+
+network.recombination_switch = 0
+network.recombination_temperature_dependent = 0
+network.energy_switch = 0
+network.collisional_ionization_switch = 0

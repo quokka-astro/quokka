@@ -1,0 +1,13 @@
+[network.radiation]
+# Three bands bordered by the H/He ionization energies (RAMSES-RT eq. 44):
+#   band 0 ]13.6, 24.59]  ionizes H
+#   band 1 ]24.59, 54.42] ionizes H, He
+#   band 2 ]54.42, 61.0]  ionizes H, He, He+
+# The top band is capped at a finite 61.0 eV. With power_law_index = 0 the
+# band-average photon energy of an unbounded top band diverges with the cutoff,
+# so the cap is a physical input, not a formality; it also matches the finite
+# upper edge used by the photoionization_H_caseB network.
+bands = [13.6, 24.59, 54.42, 61.0]
+power_law_index = 0
+energy_density = false
+rsl = "c_hat"
