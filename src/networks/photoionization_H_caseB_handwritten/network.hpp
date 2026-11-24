@@ -100,12 +100,9 @@ struct PhotoionizationHCaseBHandwritten {
 		return params;
 	}
 
-	static constexpr int e_idx = e;
-	static constexpr int H_idx = H;
-	static constexpr int Hp_idx = H_p;
-	static constexpr int ie = e_idx;
-	static constexpr int iH = H_idx;
-	static constexpr int iHp = Hp_idx;
+	static constexpr int ie = e;
+	static constexpr int iH = H;
+	static constexpr int iHp = H_p;
 	static constexpr int ienuc = NumSpec;
 	static constexpr int i_ngamma = ienuc + 1;
 	static constexpr int i_ngamma_flux = ienuc + 2;
@@ -277,9 +274,9 @@ struct PhotoionizationHCaseBHandwritten {
 		const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
 		const amrex::Real sigma_coll = (collisional_ionization_switch != 0) ? get_collisional_ionization_coefficient(state.T) : 0.0_rt;
 
-		const amrex::Real n_e = state.xn[e_idx];
-		const amrex::Real n_HI = state.xn[H_idx];
-		const amrex::Real n_HII = state.xn[Hp_idx];
+		const amrex::Real n_e = state.xn[ie];
+		const amrex::Real n_HI = state.xn[iH];
+		const amrex::Real n_HII = state.xn[iHp];
 		const amrex::Real n_gamma =
 		    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
 
@@ -368,9 +365,9 @@ struct PhotoionizationHCaseBHandwritten {
 		const amrex::Real Lambda_ff = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? get_ion_ff_cooling_coefficient(state.T) : 0.0_rt;
 		const amrex::Real d_Lambda_ff_dT = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? d_ion_ff_cooling_coefficient_dT(state.T) : 0.0_rt;
 
-		const amrex::Real n_e = state.xn[e_idx];
-		const amrex::Real n_HI = state.xn[H_idx];
-		const amrex::Real n_HII = state.xn[Hp_idx];
+		const amrex::Real n_e = state.xn[ie];
+		const amrex::Real n_HI = state.xn[iH];
+		const amrex::Real n_HII = state.xn[iHp];
 		const amrex::Real n_gamma =
 		    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
 		// Gate for column-5 Jacobian entries: when rn[0] < 0 the clamp makes the RHS
