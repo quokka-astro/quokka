@@ -21,9 +21,18 @@ namespace quokka::Riemann
 //  Minoshima & Miyoshi, "A low-dissipation HLLD approximate Riemann solver
 //  	for a very wide range of Mach numbers," JCP (2021).]
 //
+// If rpL / rpR are given, they must hold EOS::ComputeRPState of (sL.rho, sL.P) and (sR.rho, sR.P); their derivatives are used
+// instead of calling EOS::ComputeOtherDerivatives again (identical values).
+//
+// QUOKKA_HLLC_RECIPROCAL (default 1): divide the flux vectors by a scalar as one reciprocal and a multiply per component
+// (differs from the per-component division only by round-off).
+#ifndef QUOKKA_HLLC_RECIPROCAL
+#define QUOKKA_HLLC_RECIPROCAL 1
+#endif
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
-					      const double gamma, const double du, const double dw) -> quokka::valarray<double, fluxdim>
+					      const double gamma, const double du, const double dw, ::quokka::EOS_RPState const *rpL = nullptr,
+					      ::quokka::EOS_RPState const *rpR = nullptr) -> quokka::valarray<double, fluxdim>
 {
 	// compute Roe averages
 
@@ -34,8 +43,19 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	const double v_tilde = (wl * sL.v + wr * sR.v) * norm;
 	const double w_tilde = (wl * sL.w + wr * sR.w) * norm;
 	const double vsq_tilde = u_tilde * u_tilde + v_tilde * v_tilde + w_tilde * w_tilde;
+#if QUOKKA_HLLC_RECIPROCAL
+	const double rhoinv_L = 1.0 / sL.rho;
+	const double rhoinv_R = 1.0 / sR.rho;
+	const double H_L = (sL.E + sL.P) * rhoinv_L; // sL specific enthalpy
+	const double H_R = (sR.E + sR.P) * rhoinv_R; // sR specific enthalpy
+	const double eint_L = sL.Eint * rhoinv_L;    // sL specific internal energy
+	const double eint_R = sR.Eint * rhoinv_R;    // sR specific internal energy
+#else
 	const double H_L = (sL.E + sL.P) / sL.rho; // sL specific enthalpy
 	const double H_R = (sR.E + sR.P) / sR.rho; // sR specific enthalpy
+	const double eint_L = sL.Eint / sL.rho;	   // sL specific internal energy
+	const double eint_R = sR.Eint / sR.rho;	   // sR specific internal energy
+#endif
 	const double H_tilde = (wl * H_L + wr * H_R) * norm;
 	double cs_tilde = NAN;
 
@@ -47,15 +67,43 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	double S_R = NAN;
 	if (gamma != 1.0) {
 
-		auto [dedr_L, dedp_L, drdp_L, dpdr_s_L, G_L] = ::quokka::EOS<problem_t>::ComputeOtherDerivatives(sL.rho, sL.P, sL.massScalar);
-		auto [dedr_R, dedp_R, drdp_R, dpdr_s_R, G_R] = ::quokka::EOS<problem_t>::ComputeOtherDerivatives(sR.rho, sR.P, sR.massScalar);
+		double dedr_L = NAN;
+		double dedp_L = NAN;
+		double drdp_L = NAN;
+		double G_L = NAN;
+		double dedr_R = NAN;
+		double dedp_R = NAN;
+		double drdp_R = NAN;
+		double G_R = NAN;
+		if ((rpL != nullptr) && (rpR != nullptr)) {
+			dedr_L = rpL->dedr;
+			dedp_L = rpL->dedp;
+			drdp_L = rpL->drdp;
+			G_L = rpL->G;
+			dedr_R = rpR->dedr;
+			dedp_R = rpR->dedp;
+			drdp_R = rpR->drdp;
+			G_R = rpR->G;
+		} else {
+			auto [dedr_L_, dedp_L_, drdp_L_, dpdr_s_L_, G_L_] = ::quokka::EOS<problem_t>::ComputeOtherDerivatives(sL.rho, sL.P, sL.massScalar);
+			auto [dedr_R_, dedp_R_, drdp_R_, dpdr_s_R_, G_R_] = ::quokka::EOS<problem_t>::ComputeOtherDerivatives(sR.rho, sR.P, sR.massScalar);
+			amrex::ignore_unused(dpdr_s_L_, dpdr_s_R_);
+			dedr_L = dedr_L_;
+			dedp_L = dedp_L_;
+			drdp_L = drdp_L_;
+			G_L = G_L_;
+			dedr_R = dedr_R_;
+			dedp_R = dedp_R_;
+			drdp_R = drdp_R_;
+			G_R = G_R_;
+		}
 
 		// equation A.5a of Kershaw+1998
 		// need specific internal energy here
-		const double C_tilde_rho = 0.5 * ((sL.Eint / sL.rho) + (sR.Eint / sR.rho) + sL.rho * dedr_L + sR.rho * dedr_R);
+		const double C_tilde_rho = 0.5 * (eint_L + eint_R + sL.rho * dedr_L + sR.rho * dedr_R);
 
 		// equation A.5b of Kershaw+1998
-		const double C_tilde_P = 0.5 * ((sL.Eint / sL.rho) * drdp_L + (sR.Eint / sR.rho) * drdp_R + sL.rho * dedp_L + sR.rho * dedp_R);
+		const double C_tilde_P = 0.5 * (eint_L * drdp_L + eint_R * drdp_R + sL.rho * dedp_L + sR.rho * dedp_R);
 
 		// avoid NAN cs_tilde
 		const double cs_exp = H_tilde - 0.5 * vsq_tilde - C_tilde_rho;
@@ -135,8 +183,13 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	const quokka::valarray<double, fluxdim> F_L = sL.u * U_L + sL.P * D_L;
 	const quokka::valarray<double, fluxdim> F_R = sR.u * U_R + sR.P * D_R;
 
+#if QUOKKA_HLLC_RECIPROCAL
+	const quokka::valarray<double, fluxdim> F_starL = (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) * (1.0 / (S_L - S_star));
+	const quokka::valarray<double, fluxdim> F_starR = (S_star * (S_R * U_R - F_R) + S_R * P_LR * D_star) * (1.0 / (S_R - S_star));
+#else
 	const quokka::valarray<double, fluxdim> F_starL = (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) / (S_L - S_star);
 	const quokka::valarray<double, fluxdim> F_starR = (S_star * (S_R * U_R - F_R) + S_R * P_LR * D_star) / (S_R - S_star);
+#endif
 
 	// open the Riemann fan
 	quokka::valarray<double, fluxdim> F{};
@@ -157,7 +210,11 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	// internal energy and passive scalars, using the same face weight.
 	// No pressure-jump threshold switches off this correction.
 	if ((theta < 1.0) && (S_L < 0.0) && (S_R > 0.0)) {
+#if QUOKKA_HLLC_RECIPROCAL
+		const quokka::valarray<double, fluxdim> F_HLL = (S_R * F_L - S_L * F_R + S_L * S_R * (U_R - U_L)) * (1.0 / (S_R - S_L));
+#else
 		const quokka::valarray<double, fluxdim> F_HLL = (S_R * F_L - S_L * F_R + S_L * S_R * (U_R - U_L)) / (S_R - S_L);
+#endif
 		F = theta * F + (1.0 - theta) * F_HLL;
 	}
 
