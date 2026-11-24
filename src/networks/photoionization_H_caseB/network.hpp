@@ -74,7 +74,8 @@ struct PhotoionizationHCaseB {
 	// NOLINTBEGIN
 
 	/// The right-hand side, 0-based, on a PhotochemBurnState.
-	template <typename BurnT, typename Vector> AMREX_GPU_HOST_DEVICE AMREX_INLINE static void rhs(const BurnT &state, const Params & /*p*/, Vector &ydot)
+	template <typename BurnT, typename Vector>
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void rhs(const BurnT &state, const Params & /*p*/, Vector &ydot)
 	{
 		// $JAFF REPEAT idx, rhs, cse IN rhses $[REPLACE radeden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE
 		// rflux\[\s*(\d+)\s*\] state.rn[2*\1+1] REPLACE nden\[\s*(\d+)\s*\] state.xn[\1] REPLACE tgas state.T REPLACE c_hat state.c_hat  RADIATION
@@ -122,7 +123,7 @@ struct PhotoionizationHCaseB {
 
 	/// The Jacobian of rhs, 0-based. The caller zeroes jac first, so only the nonzero entries are written.
 	template <typename BurnT, class MatrixType>
-	AMREX_GPU_HOST_DEVICE AMREX_INLINE static void jac(const BurnT &state, const Params & /*p*/, MatrixType &jac)
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void jac(const BurnT &state, const Params & /*p*/, MatrixType &jac)
 	{
 
 		// $JAFF REPEAT idx, expr, cse IN jacobian $[REPLACE radeden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE

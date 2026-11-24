@@ -6033,7 +6033,7 @@ struct PrimordialChem {
 	}
 
 	/// The right-hand side, 0-based, on a BurnState.
-	template <typename BurnT, typename Vector> AMREX_GPU_HOST_DEVICE AMREX_INLINE static void rhs(const BurnT &state, const Params &p, Vector &ydot)
+	template <typename BurnT, typename Vector> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void rhs(const BurnT &state, const Params &p, Vector &ydot)
 	{
 		const amrex::Real z = p.redshift;
 		const amrex::GpuArray<amrex::Real, NumSpec> &X = state.xn;
@@ -6048,7 +6048,8 @@ struct PrimordialChem {
 	}
 
 	/// The Jacobian of rhs, 0-based. It writes every entry.
-	template <typename BurnT, class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_INLINE static void jac(const BurnT &state, const Params &p, MatrixType &jac)
+	template <typename BurnT, class MatrixType>
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void jac(const BurnT &state, const Params &p, MatrixType &jac)
 	{
 		const amrex::Real z = p.redshift;
 		const amrex::GpuArray<amrex::Real, NumSpec> &X = state.xn;
