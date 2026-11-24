@@ -1179,6 +1179,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 										     luminosityTables_.luminosity.output_unit(i)));
 				}
 
+				// Stars below the lowest tabulated mass are assigned zero luminosity (see LuminosityUpdate)
+				const amrex::Real table_min_mass = luminosityTables_.luminosity.coord_xlo()[1];
+				amrex::Real min_mass_individual_stars = quokka::min_mass_individual_stars;
+				ppp.query("min_mass_individual_stars", min_mass_individual_stars);
+				if (min_mass_individual_stars < table_min_mass) {
+					amrex::Print()
+					    << std::format("[WARNING] particles.min_mass_individual_stars = {} Msun is below the lowest mass in the "
+							   "luminosity table ({} Msun). Stars with masses below {} Msun will be assigned zero luminosity.\n",
+							   min_mass_individual_stars, table_min_mass, table_min_mass);
+				}
+
 				// Set global pointer for access from particle update functions
 				quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
 			}
