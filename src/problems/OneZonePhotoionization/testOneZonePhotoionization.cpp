@@ -59,7 +59,7 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBandsPowerLawIndex() -> double { return Network::ChemBandsPowerLawIndex; }
+	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex(); }
 	static constexpr auto ChemBands() -> amrex::GpuArray<double, Network::NumChemBands + 1> { return Network::ChemBands(); }
 };
 

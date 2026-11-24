@@ -72,7 +72,7 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{1.0e-6, 0.413567, Network::ChemBands().arr[0],
 													  Network::ChemBands().arr[1]};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex; }
+	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex(); }
 	static constexpr auto ChemBands() { return Network::ChemBands(); }
 };
 

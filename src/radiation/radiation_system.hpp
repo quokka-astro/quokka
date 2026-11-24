@@ -971,7 +971,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::G
 	amrex::Real const ev_low = ev_bounds[group_index];
 	amrex::Real const ev_high = ev_bounds[group_index + 1];
 
-	amrex::Real const alpha = RadSystem_Traits<problem_t>::ChemBandsPowerLawIndex();
+	amrex::Real const alpha = RadSystem_Traits<problem_t>::ChemBandsPowerLawIndex()[group_index];
 
 	amrex::Real ev_avg = NAN;
 	if (std::isinf(ev_high)) {

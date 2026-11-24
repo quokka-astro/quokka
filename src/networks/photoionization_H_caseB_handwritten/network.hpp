@@ -46,8 +46,8 @@ struct PhotoionizationHCaseBHandwritten {
 	/// one ionizing band, 13.6-26 eV, with a flat photon-number spectrum
 	static constexpr int NumChemBands = 1;
 	static constexpr int NumThermalBands = 0;
-	/// the photon-number spectrum index alpha of the chemical bands, n(E) ~ E^(alpha-2)
-	static constexpr double ChemBandsPowerLawIndex = 0.0;
+	/// the photon-number spectrum index alpha of each chemical band, n(E) ~ E^(alpha-2)
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static constexpr auto ChemBandsPowerLawIndex() -> amrex::GpuArray<double, NumChemBands> { return {{0.0}}; }
 	/// the chemical band edges [eV]
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static constexpr auto ChemBands() -> amrex::GpuArray<double, NumChemBands + 1> { return {{13.6, 26.0}}; }
 
@@ -116,7 +116,7 @@ struct PhotoionizationHCaseBHandwritten {
 		auto const ev_bounds = ChemBands();
 		const amrex::Real ev_low = ev_bounds[0];
 		const amrex::Real ev_high = ev_bounds[1];
-		const amrex::Real alpha = ChemBandsPowerLawIndex;
+		const amrex::Real alpha = ChemBandsPowerLawIndex()[0];
 
 		amrex::Real ev_avg = NAN;
 		if (std::isinf(ev_high)) {
