@@ -50,7 +50,21 @@ jobs:
       run: .github/workflows/dependencies/dependencies_ccache.sh
 
     - name: Install Clang 20.x
-      run: sudo mkdir -m 0755 -p /etc/apt/keyrings/ && curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg.key && sudo echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null && sudo apt-get clean && sudo apt-get update -y && sudo apt-get install -y --no-install-recommends clang-20 llvm-20 libomp-20-dev libclang-rt-20-dev clangd-20 lld-20
+      run: |
+        . /etc/os-release
+        llvm_repository="https://apt.llvm.org/${VERSION_CODENAME}"
+        llvm_suite="llvm-toolchain-${VERSION_CODENAME}-20"
+        if ! curl --fail --silent --head "${llvm_repository}/dists/${llvm_suite}/Release" > /dev/null; then
+          available_versions=$(curl --silent "${llvm_repository}/dists/" | grep -oE "llvm-toolchain-${VERSION_CODENAME}-[0-9]+" | sort -uV | sed 's/.*-//' | tr '\n' ' ')
+          echo "::error::apt.llvm.org has no LLVM 20 for Ubuntu ${VERSION_ID} (${VERSION_CODENAME}); available versions: ${available_versions}"
+          exit 1
+        fi
+        sudo mkdir -m 0755 -p /etc/apt/keyrings/
+        curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg.key
+        echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg.key] ${llvm_repository}/ ${llvm_suite} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+        sudo apt-get clean
+        sudo apt-get update -y
+        sudo apt-get install -y --no-install-recommends clang-20 llvm-20 libomp-20-dev libclang-rt-20-dev clangd-20 lld-20
 
     - name: Set Up Cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

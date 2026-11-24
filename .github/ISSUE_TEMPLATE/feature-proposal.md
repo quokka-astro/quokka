@@ -2,7 +2,7 @@
 name: Feature proposal
 about: Proposal a new feature for the code
 title: ''
-labels: enhancement
+labels: change/feature
 assignees: ''
 
 ---

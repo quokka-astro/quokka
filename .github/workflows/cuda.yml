@@ -40,7 +40,7 @@ jobs:
 
     - name: Dependencies
       run: |
-        extern/amrex/.github/workflows/dependencies/dependencies_nvcc.sh 13.0
+        .github/workflows/dependencies/dependencies_cuda.sh 13.0
         sudo apt-get update && sudo apt-get install libhdf5-mpi-dev
 
     - name: Python Dependencies

@@ -58,7 +58,6 @@ jobs:
               - 'extern/gcem/**'
               - 'extern/fmt/**'
               - 'extern/grackle_data_files/**'
-              - 'extern/openPMD-api/**'
               - 'extern/yaml-cpp/**'
               - 'extern/turbulence/**'
               - 'inputs/**'
