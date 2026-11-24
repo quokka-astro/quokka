@@ -3,6 +3,9 @@
 # jaffgen.toml/photoionization_H_caseB.jet. By default, clones jaff at the
 # pinned commit into a temp dir and runs jaffgen there. Pass --jaff-path to
 # use an existing local jaff checkout instead, bypassing the clone.
+#
+# TODO(james471): stale until the JAFF PR. This still asks jaff for its Microphysics template, whose files Quokka no
+# longer builds; network.hpp is hand-converted from that output. Switch to a jaff template that writes network.hpp.
 set -euo pipefail
 
 usage() {
