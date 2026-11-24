@@ -605,7 +605,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"created {repro_dir}")
-    print("edit README.md, run.sh, input/, data/, and output/ before uploading")
+    print(f"next: cd {shlex.quote(str(repro_dir))}, then edit README.md, run.sh, input/, data/, and output/ and run bash run.sh")
     tarball = repro_dir.parent / f"{repro_dir.name}.tar.gz"
     # Leave out the worktree that run.sh creates; the run writes its outputs inside it.
     excludes = f"--exclude {shlex.quote(f'{repro_dir.name}/quokka-src')}"

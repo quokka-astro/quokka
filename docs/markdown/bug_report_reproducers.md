@@ -53,7 +53,7 @@ By default it creates `tests/quokka-reproducer-<short-description>/`; `tests/` i
 
 The base commit must exist in the official repository, because maintainers fetch it from there. If you work from a fork, add the official repository as a remote (for example `upstream`), fetch it, and pass `--base-ref upstream/development`. The script warns when the base commit is not on the official `development` branch.
 
-Then:
+Then change into the new directory (`cd tests/quokka-reproducer-<short-description>`) and:
 
 1. Fill in `README.md` and paste the failing output into `output/failure.log`.
 2. Edit the settings at the top of `run.sh` (`PRESET`, `PROBLEM`, `INPUT`, `MPI_RANKS`).
