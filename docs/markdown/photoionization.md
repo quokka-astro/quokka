@@ -268,6 +268,27 @@ Negative species number densities are handled in two places:
 Set `integrator.species_failure_tolerance` at least equal to `atol_spec` (the species
 negligibility floor).
 
+### 3.8 Burn failures
+
+A burn fails when the integrator stops with an error, or when it finishes but the final
+state fails the checks of § 3.5 and § 3.7. The integrator's status is one of
+
+| Status                 | Meaning                                                                    |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `Success`              | The burn reached the end of the timestep                                   |
+| `DtUnderflow`          | The step size fell below the roundoff of the time                          |
+| `TooManySteps`         | The burn took more than `integrator.ode_max_steps` steps                   |
+| `LUDecompositionError` | The matrix of a step is singular                                           |
+| `JacobianNotFinite`    | The analytic Jacobian has a non-finite entry, and the problem's `Microphysics_Traits` does not set `numerical_jacobian_fallback` |
+
+In CPU builds, a failed burn prints a report for its cell: the status (with `Success`, a
+note that a check on the final state failed), the cell indices `(i, j, k)`, the
+simulation time, the timestep, the starting temperature, species and, with
+photochemistry, photon numbers and thermal-band energies, followed by the state at the
+end of the burn. GPU builds print no report. A failed photochemistry burn then aborts the
+run; a failed chemistry burn makes Quokka retry the hydro update with more, smaller
+substeps.
+
 ## 4. Compatibility
 
 ### 4.1 Incompatibility with resampled cooling
