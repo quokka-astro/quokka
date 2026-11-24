@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
@@ -17,19 +20,11 @@
 #include <string>
 #include <vector>
 
-struct TurbulentBox {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct TurbulentBox {}; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct Physics_Traits<TurbulentBox> {
+template <> struct Physics_Traits<TurbulentBox> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr bool is_self_gravity_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 1;
-	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr amrex::Real gravitational_constant = 1.0;
@@ -102,7 +97,7 @@ template <> void QuokkaSimulation<TurbulentBox>::refineGrid(int lev, amrex::TagB
 
 template <> void QuokkaSimulation<TurbulentBox>::computeAfterTimestep()
 {
-	auto disp = quokka::turbulence::calculate_dispersion<TurbulentBox>(state_new_cc_[0]);
+	const auto disp = quokka::turbulence::calculate_dispersion<TurbulentBox>(state_new_cc_[0]).dispersion;
 	const amrex::Real disp3d = std::sqrt(disp[0] * disp[0] + disp[1] * disp[1] + disp[2] * disp[2]);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {

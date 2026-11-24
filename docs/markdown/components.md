@@ -25,7 +25,7 @@ Defined in `src/physics_info.hpp`. User-specialized per problem to enable/disabl
 
 | Field                                                                           | Meaning                                                                             |
 | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `is_hydro_enabled`                                                              | Enable hydrodynamics                                                                |
+| `is_hydro_enabled`                                                              | Advect the gas with the hydro solver. When `false`, the gas state is still allocated and Strang-split sources still act on it, but it is not advected (see below) |
 | `is_radiation_enabled`                                                          | Enable radiation transport                                                          |
 | `is_dust_enabled`                                                               | Enable dust dynamics                                                                |
 | `is_mhd_enabled`                                                                | Enable MHD (face-centred magnetic fields)                                           |
@@ -48,15 +48,16 @@ Here, `Dust` refers to the dedicated dust dynamics module enabled with `Physics_
 
 This matrix covers hydro, MHD, radiation, cooling, chemistry, particles, and the dedicated dust module. It does not include self-gravity.
 
-| Module | Hydro | MHD | Radiation | Cooling | Chemistry | Particles | Dust |
-| ------ |:-----:|:---:|:---------:|:-------:|:---------:|:---------:|:----:|
-| Hydro | - | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MHD | - | - | ❌ | ✅ | ⚠️ | ✅ | ⚠️ |
-| Radiation | - | - | - | ⚠️ | | ✅ | |
-| Cooling | - | - | - | - | ⚠️ | ✅ | |
-| Chemistry | - | - | - | - | - | | |
-| Particles | - | - | - | - | - | - | |
-| Dust | - | - | - | - | - | - | - |
+| Module | Hydro | MHD | Radiation | Cooling | Photoionization | Chemistry | Particles | Dust |
+| ------ |:-----:|:---:|:---------:|:-------:|:---------------:|:---------:|:---------:|:----:|
+| Hydro | - | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| MHD | - | - | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ |
+| Radiation | - | - | - | ⚠️ | ✅ | | ✅ | |
+| Cooling | - | - | - | - | ❌ | ⚠️ | ✅ | |
+| Photoionization | - | - | - | - | - | | ⚠️ | |
+| Chemistry | - | - | - | - | - | - | | |
+| Particles | - | - | - | - | - | - | - | |
+| Dust | - | - | - | - | - | - | - | - |
 
 Notes:
 
@@ -64,14 +65,18 @@ Notes:
 - `Hydro + radiation` is tested by the radiation-hydrodynamics problems such as `RadhydroPulse*`, `RadhydroShock*`, `RadhydroShell`, `RadTube`, and `RadhydroBB`.
 - `Hydro + cooling` is tested by `ResampledCoolingTest`, `ShockCloud`, `RandomBlast`, and `SN`.
 - `Hydro + chemistry` is tested by `PrimordialChem` and `PopIII`.
-- `MHD + radiation` is explicitly disabled in `src/QuokkaSimulation.hpp` with `static_assert(!(is_mhd_enabled && is_radiation_enabled), "MHD + Radiation is not supported yet.")`.
+- `MHD + radiation` is tested by `RadhydroPulseMGconst` (Problem 3: `MGproblemMHD`, a multigroup advecting radiation pulse with a constant background magnetic field). The combination is 3D-only because MHD requires `AMREX_SPACEDIM == 3`.
 - `MHD + cooling` is exercised by the `SN` problem with `is_mhd_enabled = true` and `cooling.enabled = 1`.
+- `Hydro + photoionization` is tested by `DTypeFront_JAFF` and `DTypeFront_1D`.
+- `Radiation + photoionization` is tested by `DTypeFront_JAFF` and `StromgrenSphere` — photoionization requires `is_radiation_enabled = true`.
+- `Cooling + photoionization` is explicitly forbidden: both modules compute H thermochemistry (photoheating, recombination cooling, collisional ionization cooling), so enabling both simultaneously double-counts those rates. Quokka aborts at startup if `cooling.enabled = 1` and `photochemistry.enabled = 1` are set together. See `docs/markdown/photoionization.md §4.1`.
 - `Hydro + particles` is exercised by problems such as `BinaryOrbitCIC`, `ParticleSink*`, `ParticleSF`, `ParticleRadiation`, `RandomBlast`, and `SN`.
 - `MHD + particles` is exercised by `DiskGalaxy`, `ParticleAccretion`, `ParticleCreation`, `ParticleSink`, and `ParticleSinkFormation`.
 - `Radiation + particles` is exercised by `ParticleRadiation` and `GravRadParticle3D`.
 - `Cooling + particles` is exercised by `ParticleSF`, `TallBoxSf`, `RandomBlast`, and `DiskGalaxy` through their input files.
 - `Hydro + dust` is exercised by the dust dynamics problems `DustAdvection*`, `DustDamping*`, `DustSoundwave`, and `DustyShock`.
 - `MHD + dust` is exercised by charged-dust and dust-MHD problems including `DustDampedGyromotion`, `DustDampingMHDZeroB`, `DustHallPedersenDrift`, `DustLorentzShock`, `DustMagnetizedRDI`, `DustyAlfvenWave`, and `DustyOrszagTang`.
+- `is_hydro_enabled = false` switches off advection only. The gas state is always allocated, and each step still applies the first Strang-split half-step (cooling, chemistry, turbulence driving, dust drag, conduction and `addStrangSplitSources()`), copies the state old→new in place of the RK2 update, and applies the second Strang-split half-step. Hydro floors, self-gravity (both the gas density in the Poisson source and the gravitational kick on the gas) and radiation coupling act on the gas as usual. The hydro CFL condition and tracer-particle advection are skipped, so if no other enabled module (radiation, particles) constrains the timestep, `constant_dt` or `max_dt` must be set in the input file; otherwise Quokka aborts with `No enabled physics module constrains the timestep!`.
 
 
 ## Cell-centred state vector layout
@@ -85,7 +90,6 @@ Defined in `src/physics_info.hpp`. Computes starting indices and total component
 
 | Constant            | Definition                                                             | Meaning                                                                      |
 | ------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `nvarTotal_cc_adv`  | 1                                                                      | Number of cc variables for a pure advection problem (no hydro, no radiation) |
 | `nvarTotal_cc`      | (see below)                                                            | Total number of cell-centred components in the state vector                  |
 | `hydroFirstIndex`   | 0                                                                      | Starting index of hydro variables                                            |
 | `pscalarFirstIndex` | `numHydroVars` (= 6)                                                   | Starting index of passive scalars                                            |
@@ -98,8 +102,9 @@ Defined in `src/physics_info.hpp`. Computes starting indices and total component
 
 **`nvarTotal_cc` calculation:**
 
-- If neither hydro nor radiation is enabled: `nvarTotal_cc = nvarTotal_cc_adv` (= 1, for pure advection).
-- Otherwise: `nvarTotal_cc = numHydroVars + numPassiveScalars + numDustVarsPerGroup * nDustGroups * is_dust_enabled + numRadVarsPerGroup * nGroups * is_radiation_enabled`.
+`nvarTotal_cc = numHydroVars + numPassiveScalars + numDustVarsPerGroup * nDustGroups * is_dust_enabled + numRadVarsPerGroup * nGroups * is_radiation_enabled`.
+
+The hydro variables are always allocated, independent of `is_hydro_enabled` (which only controls advection), so passive scalars and dust always have a gas state to live in.
 
 ## Cell-centred component map
 

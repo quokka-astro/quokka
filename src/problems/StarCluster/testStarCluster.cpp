@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testStarCluster.cpp
 /// \brief Defines a test problem for pressureless spherical collapse of a star cluster.
 ///
@@ -33,8 +31,7 @@
 
 using amrex::Real;
 
-struct StarCluster {
-};
+struct StarCluster {};
 
 template <> struct quokka::EOS_Traits<StarCluster> {
 	static constexpr double gamma = 1.0;
@@ -46,18 +43,11 @@ template <> struct HydroSystem_Traits<StarCluster> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<StarCluster> {
+template <> struct Physics_Traits<StarCluster> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr amrex::Real gravitational_constant = 1.0;

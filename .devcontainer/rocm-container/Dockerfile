@@ -65,19 +65,6 @@ ENV AMREX_AMD_ARCH=gfx90a
 ENV CC=amdclang
 ENV CXX=amdclang++
 
-# Install blosc2 (needed for ADIOS2)
-RUN pip3 install blosc2
-
-# Install ADIOS2 (needed for OpenPMD)
-RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
-    wget -q https://github.com/ornladios/ADIOS2/archive/refs/tags/v2.11.0.tar.gz && \
-    tar xzf v2.11.0.tar.gz && \
-    mkdir adios2-build && cd adios2-build && \
-    cmake ../ADIOS2-2.11.0 -DADIOS2_USE_Blosc2=ON -DADIOS2_USE_Fortran=OFF && \
-    make -j$(nproc) && make install && \
-    cd / && \
-    rm -rf /tmp/build-adios2
-
 # add packages needed for full C++20 support
 RUN zypper --non-interactive install gcc13 gcc13-c++ libstdc++6-devel-gcc13 && zypper clean --all
 

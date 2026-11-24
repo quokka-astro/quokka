@@ -1,0 +1,23 @@
+# Runs the offline tests of the runner OS update on PRs that change it.
+name: "Runner OS Update: Tests"
+
+on:
+  pull_request:
+    paths:
+      - '.github/runner-os-update/**'
+      - '.github/workflows/runner-os-update-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout the PR branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Run the offline tests
+        run: python3 -m unittest discover --start-directory .github/runner-os-update --pattern "test_*.py"

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef PHOTOELECTRIC_HEATING_HPP_
 #define PHOTOELECTRIC_HEATING_HPP_
 
@@ -32,6 +35,12 @@ template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp> class PeH
 	[[nodiscard]] auto const_tables() const -> PeHeatingGpuConstTables<oob_policy>
 	{
 		PeHeatingGpuConstTables<oob_policy> tables{pe_heating.const_tables()};
+		return tables;
+	}
+
+	[[nodiscard]] auto const_tables_host() const -> PeHeatingGpuConstTables<oob_policy>
+	{
+		PeHeatingGpuConstTables<oob_policy> tables{pe_heating.const_tables_host()};
 		return tables;
 	}
 

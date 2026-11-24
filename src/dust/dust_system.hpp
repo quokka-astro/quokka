@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef DUST_SYSTEM_HPP_ // NOLINT
 #define DUST_SYSTEM_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file dust_system.hpp
 /// \brief Defines a class for solving the dust Euler equations.
 ///
@@ -13,7 +11,7 @@
 #include "dust/DustState.hpp"
 #include "dust/dustRiemannSolver.hpp"
 #include "physics_info.hpp"
-#include "util/ArrayView_3d.hpp"
+#include "util/ArrayView.hpp"
 
 template <typename problem_t> class DustSystem
 {

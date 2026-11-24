@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustDampingIteration.cpp
 /// \brief Defines a test problem for dust iterative stopping time
 ///
@@ -16,11 +19,9 @@ constexpr double rho_dust1 = 1.0;
 constexpr double rho_dust2 = 1.0;
 constexpr double P_INITIAL = 1.0;
 
-struct DustDampingWithCorrection {
-};
+struct DustDampingWithCorrection {};
 
-struct DustDampingWithoutCorrection {
-};
+struct DustDampingWithoutCorrection {};
 
 template <> struct SimulationData<DustDampingWithCorrection> {
 	std::vector<double> t_vec_;
@@ -69,16 +70,10 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_density = {1.0, 1
 static constexpr bool enable_supersonic_correction_with = true;
 static constexpr bool enable_supersonic_correction_without = false;
 
-template <> struct Physics_Traits<DustDampingWithCorrection> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<DustDampingWithCorrection> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = true;
 	static constexpr int nDustGroups = 2; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;
@@ -86,16 +81,10 @@ template <> struct Physics_Traits<DustDampingWithCorrection> {
 	static constexpr double radiation_constant = 1.0;
 };
 
-template <> struct Physics_Traits<DustDampingWithoutCorrection> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<DustDampingWithoutCorrection> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = true;
 	static constexpr int nDustGroups = 2; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;
@@ -104,22 +93,19 @@ template <> struct Physics_Traits<DustDampingWithoutCorrection> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
-												 amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-												 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
-												 double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithCorrection>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density, enable_supersonic_correction_with);
+	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, g_dust_grain_radius,
+						 g_dust_grain_density, enable_supersonic_correction_with);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithoutCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
-												    amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-												    amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
-												    double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithoutCorrection>::ComputeReciprocalStoppingTime(DustCoefficientState const &state)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density,
-						 enable_supersonic_correction_without);
+	return ComputeReciprocalStoppingTimeKwok(state.rhoGas, state.rhoDust, state.relativeVelocityMagnitude, state.soundSpeed, g_dust_grain_radius,
+						 g_dust_grain_density, enable_supersonic_correction_without);
 }
 
 template <> void QuokkaSimulation<DustDampingWithCorrection>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -275,7 +261,7 @@ auto run_reference_simulation() -> SimulationData<DustDampingWithCorrection>
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 1000000.0; // large CFL number to avoid CFL violation
 	sim.constantDt_ = 0.00005;  // fixed small timestep for reference solution
-	sim.enableIterDustStoptime_ = 0;
+	sim.dustCoefficientIteration_.enabled = false;
 	sim.print_dust_counter_ = false;
 
 	sim.setInitialConditions();
@@ -318,7 +304,7 @@ auto run_iterative_with_correction() -> SimulationData<DustDampingWithCorrection
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 0.3;
 	sim.constantDt_ = -1.0;
-	sim.enableIterDustStoptime_ = 1;
+	sim.dustCoefficientIteration_.enabled = true;
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
@@ -360,7 +346,7 @@ auto run_iterative_without_correction() -> SimulationData<DustDampingWithoutCorr
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 0.3;
 	sim.constantDt_ = -1.0;
-	sim.enableIterDustStoptime_ = 1;
+	sim.dustCoefficientIteration_.enabled = true;
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();

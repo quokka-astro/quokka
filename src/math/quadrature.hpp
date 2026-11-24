@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef QUADRATURE_HPP_
 #define QUADRATURE_HPP_
 

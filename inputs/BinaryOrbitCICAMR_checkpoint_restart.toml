@@ -35,3 +35,5 @@ plotfile_interval = -1
 derived_vars = "gpot"
 max_timesteps = 23
 restartfile = "chk0000003"
+
+density_floor = 1e-28  # g cm^-3

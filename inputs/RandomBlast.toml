@@ -34,11 +34,11 @@ max_timesteps = 1000
 dt_initial = 3.154e10  # 1000 yr
 stop_time = 3.154e13  # 1e6 yr
 
-cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 problem.boost_velocity = [0.0, 0.0, 0.0]
 
 tiny_profiler.enabled = 0
+
+density_floor = 1e-35  # g cm^-3

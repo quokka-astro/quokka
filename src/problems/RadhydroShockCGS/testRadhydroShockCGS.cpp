@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadhydroShockCGS.cpp
 /// \brief Defines a test problem for a radiative shock.
 ///
@@ -26,8 +24,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct ShockProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct ShockProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
 // parameters taken from Section 9.5 of Skinner et al. (2019)
 // [The Astrophysical Journal Supplement Series, 241:7 (27pp), 2019 March]
@@ -75,18 +72,11 @@ template <> struct quokka::EOS_Traits<ShockProblem> {
 	static constexpr double gamma = gamma_gas;
 };
 
-template <> struct Physics_Traits<ShockProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<ShockProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
 	// A custom unit system is used here to replicate the CGS units, for testing units conversion
 	static constexpr UnitSystem unit_system = UnitSystem::CUSTOM;
 	static constexpr double unit_length = 1.0;	// cm

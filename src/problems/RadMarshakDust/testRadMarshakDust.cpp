@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadMarshakDust.cpp
 /// \brief Defines a test Marshak wave problem with weak coupling between dust and gas.
 ///
@@ -19,8 +17,7 @@
 #include "util/valarray.hpp"
 #include <format>
 
-struct MarshakProblem {
-};
+struct MarshakProblem {};
 
 AMREX_GPU_MANAGED double kappa1 = 1.0e10; // dust opacity at IR. NOLINT
 AMREX_GPU_MANAGED double kappa2 = 1.0;	  // dust opacity at FUV. NOLINT
@@ -52,17 +49,11 @@ template <> struct quokka::EOS_Traits<MarshakProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<MarshakProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<MarshakProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = n_group_; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
@@ -85,6 +76,8 @@ template <> struct ISM_Traits<MarshakProblem> {
 	static constexpr bool enable_photoelectric_heating = false;
 	// 1.0e-5 is the minimum value allowed for this test; smaller values will result in negative T_d.
 	static constexpr double gas_dust_coupling_threshold = 1.0e-4;
+	static constexpr bool thermal_band_photochemistry = false;   // no photochemistry network in this problem
+	static constexpr bool dust_chemical_band_absorption = false; // no chemical bands in this problem
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real

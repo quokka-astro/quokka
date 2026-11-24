@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef ADVECTION_SIMULATION_HPP_ // NOLINT
 #define ADVECTION_SIMULATION_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file AdvectionSimulation.hpp
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for linear advection.
@@ -99,6 +97,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
 	void createInitialSinkParticles() override;
+	void createInitialStarParticles() override;
 	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
@@ -222,6 +221,12 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 {
 	// Optional implementation
 	// note: an implementation is only effective if Sink particles are used
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialStarParticles()
+{
+	// Optional implementation
+	// note: an implementation is only effective if Star particles are used
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialTestParticles()

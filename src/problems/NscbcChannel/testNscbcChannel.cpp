@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testNscbcChannel.cpp
 /// \brief Implements a subsonic channel flow problem with Navier-Stokes
 ///        Characteristic Boundary Conditions (NSCBC).
@@ -46,25 +44,16 @@
 
 using amrex::Real;
 
-struct Channel {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct Channel {}; // dummy type to allow compile-type polymorphism via template specialization
 
 template <> struct quokka::EOS_Traits<Channel> {
 	static constexpr double gamma = 1.1;
 	static constexpr double mean_molecular_weight = 28.96 * C::m_u; // air
 };
 
-template <> struct Physics_Traits<Channel> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<Channel> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr int nGroups = 1;     // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 // global variables needed for Dirichlet boundary condition and initial conditions
@@ -89,7 +78,8 @@ template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::g
 	Real const ymom = 0;
 	Real const zmom = 0;
 	Real const Eint = quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
-	Real const Egas = RadSystem<Channel>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+	static_assert(!Physics_Traits<Channel>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+	Real const Egas = quokka::EOS<Channel>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 	Real const scalar = s0;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {

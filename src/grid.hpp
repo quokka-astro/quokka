@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef GRID_HPP_ // NOLINT
 #define GRID_HPP_
 

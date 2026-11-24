@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testAdvection.cpp
 /// \brief Defines a test problem for linear advection.
 ///
@@ -27,22 +25,26 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct SawtoothProblem {
-};
+struct SawtoothProblem {};
 
-template <> struct Physics_Traits<SawtoothProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<SawtoothProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1;			     // number of dust groups
-	static constexpr int nGroups = 1;			     // number of radiation groups, need to set despite radiation is not enabled.
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+};
+
+// This problem uses the linear-advection solver, which advects a single scalar, so the cell-centred state
+// holds one component instead of the hydro state that Physics_Indices allocates for QuokkaSimulation problems.
+template <> struct Physics_Indices<SawtoothProblem> {
+	static constexpr int nvarTotal_cc = 1;
+	// cell-centered
+	static constexpr int hydroFirstIndex = 0;
+	static constexpr int pscalarFirstIndex = Physics_NumVars::numHydroVars;
+	static constexpr int dustFirstIndex = pscalarFirstIndex;
+	static constexpr int radFirstIndex = dustFirstIndex;
+	// face-centered
+	static constexpr int nvarPerDim_fc = 0;
+	static constexpr int nvarTotal_fc = 0;
+	static constexpr int mhdFirstIndex = 0;
 };
 
 AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,

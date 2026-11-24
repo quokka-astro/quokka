@@ -14,33 +14,38 @@ from grackle_tables import (
 
 
 def load_resampled_cooling_tables(filename):
-    """Load the resampled cooling tables from HDF5 file.
-    
+    """Load the resampled cooling tables from HDF5 file (tab1 group format).
+
     Args:
         filename: path to resampled cooling table HDF5 file
-        
+
     Returns:
         dict containing grid data and cooling rates
     """
     with h5py.File(filename, 'r') as f:
-        data = {
-            'rho': f['grids/rho'][:],
-            'eint': f['grids/eint'][:],
-            'fast_log_rho': f['grids/fast_log_rho'][:],
-            'fast_log_eint': f['grids/fast_log_eint'][:],
-            'cooling_rates': f['data/cooling_rates'][:],
-            'temperatures': f['data/temperatures'][:],
-            'sound_speeds': f['data/sound_speeds'][:],
-            'pressures': f['data/pressures'][:],
-            'entropies': f['data/entropies'][:]
-        }
-        
-        # Load metadata
-        metadata = {}
-        for key in f['metadata'].attrs.keys():
-            metadata[key] = f['metadata'].attrs[key]
-        data['metadata'] = metadata
-        
+        tab1 = f['tab1']
+        rho_grid  = tab1['grids/rho'][:]
+        eint_grid = tab1['grids/eint'][:]
+        all_data  = tab1['data'][:]  # shape [5, n_rho, n_eint]
+        metadata  = {k: tab1.attrs[k] for k in tab1.attrs}
+        # Compatibility aliases: xlo/xhi[0]=rho, xlo/xhi[1]=eint
+        metadata['rho_min']  = float(metadata['xlo'][0])
+        metadata['rho_max']  = float(metadata['xhi'][0])
+        metadata['eint_min'] = float(metadata['xlo'][1])
+        metadata['eint_max'] = float(metadata['xhi'][1])
+
+    data = {
+        'rho':  rho_grid,
+        'eint': eint_grid,
+        'fast_log_rho':  fast_log2(rho_grid),
+        'fast_log_eint': fast_log2(eint_grid),
+        'cooling_rates': all_data[0],
+        'temperatures':  all_data[1],
+        'sound_speeds':  all_data[2],
+        'pressures':     all_data[3],
+        'entropies':     all_data[4],
+        'metadata':      metadata,
+    }
     return data
 
 

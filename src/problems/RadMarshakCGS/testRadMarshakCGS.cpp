@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadMarshakCGS.cpp
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
@@ -27,8 +25,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct SuOlsonProblemCgs {
-}; // dummy type to allow compile-type polymorphism via template specialization
+struct SuOlsonProblemCgs {}; // dummy type to allow compile-type polymorphism via template specialization
 
 // Su & Olson (1997) parameters
 constexpr double eps_SuOlson = 1.0;	  // dimensionless
@@ -51,19 +48,10 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr int beta_order = 1;
 };
 
-template <> struct Physics_Traits<SuOlsonProblemCgs> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<SuOlsonProblemCgs> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real

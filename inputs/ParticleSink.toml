@@ -32,3 +32,5 @@ particles.sink_particle_use_uniform_kernel = true
 
 tiny_profiler.enabled = 0
 suppress_output = 1
+
+density_floor = 1e-34  # g cm^-3

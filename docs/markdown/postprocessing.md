@@ -2,18 +2,13 @@
 
 There are several ways to post-process the output of Quokka simulations. AMReX PlotfileTools, yt, and VisIt all allow you to analyze the outputs after they are written to disk.
 
-## Amrvis-container
+## AMReXplorer
 
-[Amrvis-container](https://github.com/AMReX-Codes/Amrvis-container) bundles Amrvis in a Docker/Apptainer image with a browser-based X11 frontend. To browse Quokka plotfiles locally (Docker required), run from the Amrvis-container repo:
+[AMReXplorer](https://github.com/AMReX-Codes/amrexplorer) is a Qt 6 desktop application for interactively exploring 2D and 3D AMReX plotfiles. Follow the [installation instructions](https://github.com/AMReX-Codes/amrexplorer/blob/main/INSTALL.md), then open a Quokka plotfile from the command line:
 
-    ./launch_amrvis_browser.sh /path/to/plotfiles
+    amrexplorer /path/to/plotfile
 
-The target directory is bind-mounted to `/home/vscode/data` in the container. The launcher prints a one-time password; open `http://localhost:8080`, paste the password, and use the `xterm` window to start `amrvis2d` or `amrvis3d` on your `plt*` directories.
-
-> **Tip**
->
-> On SLURM clusters with Apptainer, pull the image once with `apptainer pull amrvis-container.sif docker://ghcr.io/amrex-codes/amrvis-container:main`, then use `./launch_amrvis_browser_hpc.sh /path/to/plotfiles` on a compute node and follow the printed SSH tunnel instructions.
->
+AMReXplorer supports AMR level selection, value probing, line plots, grid and contour overlays, plotfile-sequence animation, and image or video export. See the [AMReXplorer User Guide](https://github.com/AMReX-Codes/amrexplorer/blob/main/docs/user-guide.md) for the complete workflow and controls.
 
 ## AMReX PlotfileTools
 
@@ -70,4 +65,3 @@ Then select ``plotfiles.visit`` in VisIt's Open dialog box.
 > **Warning**
 >
 > There are rendering bugs with unscaled box dimensions. Slices generally work. However, do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.
-

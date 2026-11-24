@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef CHEMISTRY_HPP_ // NOLINT
 #define CHEMISTRY_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file Chemistry.hpp
 /// \brief Defines methods for integrating primordial chemical network using Microphysics
 ///
@@ -50,7 +48,8 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 			const Real zmom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 			const Real Ener = state(i, j, k, HydroSystem<problem_t>::energy_index);
-			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener);
+			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, 0.0);
 
 			std::array<Real, NumSpec> chem = {-1.0};
 			std::array<Real, NumSpec> inmfracs = {-1.0};
@@ -120,25 +119,6 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
 			}
 
-			// update the number density of electrons due to charge conservation
-			// TODO(psharda): generalize this to other chem networks
-			chemstate.xn[0] = -chemstate.xn[3] - chemstate.xn[7] + chemstate.xn[1] + chemstate.xn[12] + chemstate.xn[6] + chemstate.xn[4] +
-					  chemstate.xn[9] + 2.0 * chemstate.xn[11];
-
-			// reconserve mass fractions post charge conservation
-			insum = 0;
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
-				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
-				insum += inmfracs[nn];
-			}
-
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				inmfracs[nn] /= insum;
-				// update the number densities with conserved mass fractions
-				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
-			}
-
 			// get the updated specific eint
 			eos(eos_input_rt, chemstate);
 
@@ -164,7 +144,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 	amrex::ParallelDescriptor::ReduceIntMin(burn_success);
 
 	if (!burn_success) {
-		// amrex::Abort("Burn failed in VODE. Aborting.");
+		// amrex::Abort("Burn failed in the integrator. Aborting.");
 		amrex::Print() << "\t>> WARNING: Unsuccessful burn. Retrying hydro step."
 			       << "\n";
 	}

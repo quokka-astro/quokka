@@ -10,3 +10,20 @@ add_test(
   NAME ${JOB_NAME}
   COMMAND ${JOB_NAME} ${QuokkaTestParams}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+
+add_test(
+  NAME HydroWave
+  COMMAND ${JOB_NAME} ../inputs/HydroWave.toml ${QuokkaTestParams}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+
+add_test(
+  NAME HydroWaveFc
+  COMMAND ${JOB_NAME} ../inputs/HydroWaveFc.toml ${QuokkaTestParams}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+
+if(AMReX_SPACEDIM EQUAL 3)
+  add_test(
+    NAME HydroWaveViscous
+    COMMAND ${JOB_NAME} ../inputs/HydroWaveViscous.toml ${QuokkaTestParams}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+endif()

@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testRadForce.cpp
 /// \brief Defines a test problem for radiation force terms.
 ///
@@ -33,8 +31,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct TubeProblem {
-};
+struct TubeProblem {};
 
 constexpr amrex::Real kappa0 = 5.0;  // cm^2 g^-1
 constexpr double mu = 2.33 * C::m_u; // g
@@ -56,20 +53,12 @@ template <> struct quokka::EOS_Traits<TubeProblem> {
 	static constexpr double cs_isothermal = a0; // only used when gamma = 1
 };
 
-template <> struct Physics_Traits<TubeProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<TubeProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
 	// number of radiation groups
-	static constexpr int nGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct RadSystem_Traits<TubeProblem> {
@@ -159,6 +148,8 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 
 	// Apply boundary condition using helper function (direction 0 = x-axis)
 	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	// Outflow at the upper x boundary; the diode BC reduces to foextrap here and exercises its radiation part
+	setDiodeBCHi<0>(iv, consVar, geom);
 }
 
 auto problem_main() -> int
@@ -176,7 +167,7 @@ auto problem_main() -> int
 	for (int n = 0; n < nvars; ++n) {
 		// for x-axis:
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
+		BCs_cc[n].setHi(0, amrex::BCType::ext_dir); // diode
 		// for y-, z- axes:
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			// periodic

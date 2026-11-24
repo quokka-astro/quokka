@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef NSCBC_OUTFLOW_HPP_ // NOLINT
 #define NSCBC_OUTFLOW_HPP_
-//==============================================================================
-// Quokka -- two-moment radiation hydrodynamics on GPUs for astrophysics
-// Copyright 2023 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file NSCBC_outflow.hpp
 /// \brief Implements the Navier-Stokes Characteristic Boundary Condition for
 /// subsonic outflows. (This also works trivially for _super_sonic outflows.)
@@ -61,7 +59,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	const amrex::Real dw_dz = dQ_dz_data[3];
 	const amrex::Real dP_dz = dQ_dz_data[4];
 
-	const amrex::Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
+	const amrex::Real c = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
 	const amrex::Real M = amrex::Clamp(std::sqrt(u * u + v * v + w * w) / c, 0., 1.);
 	const amrex::Real beta = M;
 	const amrex::Real K = 0.25 * c * (1 - M * M) / L_x; // must be non-zero for well-posedness
