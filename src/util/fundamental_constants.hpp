@@ -75,7 +75,7 @@ static_assert(C::parsec == quokka::constants::parsec);
 static_assert(C::M_solar == quokka::constants::M_solar);
 static_assert(C::R_solar == quokka::constants::R_solar);
 #else
-namespace C = quokka::constants;
+namespace C = quokka::constants; // NOLINT(misc-unused-alias-decls): used by the files that include this header
 #endif // CHEMISTRY || PHOTOCHEMISTRY
 
 #endif // FUNDAMENTAL_CONSTANTS_HPP_
