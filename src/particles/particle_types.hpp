@@ -11,7 +11,7 @@
 #include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
 #include "AMReX_Vector.H"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 #include "particles/chabrier_imf.hpp"
 #include "particles/particle_chemical_yield.hpp"
 #include "particles/stellar_models.hpp"
