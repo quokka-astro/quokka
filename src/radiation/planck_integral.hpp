@@ -1,5 +1,6 @@
-//==============================================================================
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file planck_integral.hpp
 /// \brief Some functions for quickly integrating the Planck function.
 ///

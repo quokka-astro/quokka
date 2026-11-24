@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"

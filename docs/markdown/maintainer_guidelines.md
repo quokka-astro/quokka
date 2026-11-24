@@ -125,7 +125,6 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
     - `warnings`: Ubuntu build with `-DWARNINGS_AS_ERRORS=ON`; fails on any new compiler warning.
     - `MHD-WaveTests` and `MHD-WaveTests-ASAN`: GCC Release and ASAN builds that rebuild only MHD-labelled targets and execute the MHD-focused `canary` subsets.
     - `hip`: ROCm/clang toolchain compile of the full codebase (GitHub Actions build-only sanity check).
-    - `OpenPMD`: builds with `QUOKKA_OPENPMD=ON` and runs the 3D blast problem under MPI to exercise ADIOS2/openPMD output.
     - Static analysis & lint: `clang-tidy-review` (with follow-up comment job) and `codespell`.
     - Docs & metadata: `docs` (mdBook build), `mdBook validation`, `dependency-review`, `codeql`, and `scorecard`.
     - **Azure Pipelines (self-hosted GPUs):** manual `/azp run` trigger by a maintainer launches CUDA and HIP runtime tests on secured NVIDIA/AMD runners; required for accelerator-sensitive changes.

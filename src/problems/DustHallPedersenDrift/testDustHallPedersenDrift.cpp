@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testDustHallPedersenDrift.cpp
 /// \brief Stiff-limit Hall/Pedersen drift test for coupled gas-dust dynamics with Lorentz force.
 ///
