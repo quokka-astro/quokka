@@ -153,6 +153,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 			PhotochemState photochemstate;
 			photochemstate.success = true;
+			photochemstate.i = i;
+			photochemstate.j = j;
+			photochemstate.k = k;
 			int burn_failed = 0;
 			photochemstate.c_hat = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
 			for (int nn = 0; nn < Network::NumSpec; ++nn) {

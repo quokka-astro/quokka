@@ -69,6 +69,9 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 
 			quokka::microphysics::BurnState<Network::NumSpec> chemstate;
 			chemstate.success = true;
+			chemstate.i = i;
+			chemstate.j = j;
+			chemstate.k = k;
 			int burn_failed = 0;
 
 			for (int nn = 0; nn < Network::NumSpec; ++nn) {
