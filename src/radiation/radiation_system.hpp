@@ -688,7 +688,10 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission, and their fractions are NOT
 		// renormalized.
 		for (int g = 0; g < nGroupsThermal_; ++g) {
-			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
+			// the inf sentinel edge (numeric_limits<double>::max()) is taken as x = infinity, as multiplying it would overflow when
+			// energy_unit_over_kT > 1
+			const amrex::Real x =
+			    (boundaries[g + 1] < inf) ? boundaries[g + 1] * energy_unit_over_kT : std::numeric_limits<amrex::Real>::infinity();
 			const bool in_tail = x >= X_TAIL;
 			const auto pq = integrate_planck_below_and_above_x(x);
 			// A group whose lower edge is in the Wien tail (see X_TAIL in planck_integral.hpp) takes its fraction as a difference
@@ -779,7 +782,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 		amrex::Real u_prev = du_lo[1];
 		bool prev_in_tail = x_lo >= X_TAIL;
 		for (int g = 0; g < nGroupsThermal_; ++g) {
-			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
+			// the inf sentinel edge is taken as x = infinity; see ComputePlanckEnergyFractions
+			const amrex::Real x =
+			    (boundaries[g + 1] < inf) ? boundaries[g + 1] * energy_unit_over_kT : std::numeric_limits<amrex::Real>::infinity();
 			const bool in_tail = x >= X_TAIL;
 			const auto du = integrate_planck_derivative_below_and_above_x(x);
 			d_fourpiboverc_d_t[g] = a_T3 * (prev_in_tail ? u_prev - du[1] : du[0] - d_prev);
