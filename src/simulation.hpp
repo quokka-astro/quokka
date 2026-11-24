@@ -1190,9 +1190,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				amrex::Real min_mass_individual_stars = quokka::min_mass_individual_stars;
 				ppp.query("min_mass_individual_stars", min_mass_individual_stars);
 				if (min_mass_individual_stars < table_min_mass) {
-					amrex::Print() << std::format("[WARNING] particles.min_mass_individual_stars = {} Msun is below the lowest mass in the "
-								      "luminosity table ({} Msun). Stars with masses below {} Msun will be assigned zero luminosity.\n",
-								      min_mass_individual_stars, table_min_mass, table_min_mass);
+					amrex::Print()
+					    << std::format("[WARNING] particles.min_mass_individual_stars = {} Msun is below the lowest mass in the "
+							   "luminosity table ({} Msun). Stars with masses below {} Msun will be assigned zero luminosity.\n",
+							   min_mass_individual_stars, table_min_mass, table_min_mass);
 				}
 
 				// Set global pointer for access from particle update functions
