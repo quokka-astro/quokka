@@ -11,25 +11,6 @@ if(Python_FOUND)
     link_libraries(${Python_LIBRARIES})
 endif()
 
-if(QUOKKA_OPENPMD)
-  message(STATUS "Building Quokka with OpenPMD support")
-  add_compile_definitions(QUOKKA_USE_OPENPMD)
-  set(openPMD_USE_ADIOS2 ON CACHE BOOL "") # ADIOS2 is required
-  set(openPMD_USE_HDF5 OFF CACHE BOOL "")
-  set(openPMD_USE_PYTHON OFF CACHE BOOL "")
-  set(openPMD_BUILD_TESTING OFF CACHE BOOL "")
-  set(openPMD_BUILD_EXAMPLES OFF CACHE BOOL "")
-  set(openPMD_BUILD_CLI_TOOLS OFF CACHE BOOL "")
-  set(openPMD_INSTALL OFF CACHE BOOL "")
-  add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/openPMD-api ${QuokkaCode_BINARY_DIR}/openPMD-api)
-  include_directories(${OpenPMD_INCLUDE_DIRS_RET})
-  link_libraries(openPMD::openPMD)
-  set(openPMDSources "${CMAKE_CURRENT_SOURCE_DIR}/io/openPMD.cpp")
-  message(STATUS "WARNING: OpenPMD plotfiles are ENABLED. Face-centered variables will only be available as cell-centered averages in plotfiles!")
-else()
-  set(openPMDSources "")
-endif()
-
 # HDF5 (use library list instead of imported target to avoid NOTFOUND device-link deps)
 find_package(HDF5 REQUIRED COMPONENTS C)
 if(HDF5_LIBRARIES MATCHES "NOTFOUND")
@@ -156,8 +137,7 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagParticleTxt.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
-                        "${openPMDSources}")
+                        "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp")
 
 if(AMReX_SPACEDIM EQUAL 3)
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")

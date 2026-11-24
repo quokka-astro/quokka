@@ -207,7 +207,7 @@ gh issue view NNNN
 
 Derive a `<slug>` from the title. Inspect the affected source files and check git log for related commits and PRs. If the root cause is clear from code and history, that is enough; otherwise build `origin/development` as `dev-<slug>` per `references/building.md` and reproduce.
 
-For audit issues — labels `code-audit` / `codex` — verify each claimed finding against the **current** code, and state per finding: still valid, or invalid and why.
+For audit issues — labels `agent/audit` / `agent/codex` — verify each claimed finding against the **current** code, and state per finding: still valid, or invalid and why.
 
 Same two files. Report to `<review-dir>/issueNNNN-<slug>/issueNNNN-<slug>.md`: root cause, fix location(s), latent concerns, and whether the issue is resolved or still open. Then `issueNNNN-<slug>-COMMENT.md`, under all the comment rules above:
 

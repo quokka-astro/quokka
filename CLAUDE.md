@@ -35,7 +35,7 @@ What `--help` does not cover:
 - **Physics modules**: Located in `src/hydro/`, `src/radiation/`, `src/cooling/`, `src/chemistry/`
 - **Hyperbolic systems**: `HyperbolicSystem` template handles conservation laws and slope limiters
 - **Problem definitions**: Each problem in `src/problems/` has `.cpp` files and CMake target
-- **I/O and diagnostics**: `src/io/` contains output handling (plotfiles, checkpoints, openPMD)
+- **I/O and diagnostics**: `src/io/` contains output handling (plotfiles, checkpoints)
 - **Math utilities**: `src/math/` has interpolation, quadrature, root finding, ODE integration
 - **Particles**: `src/particles/` handles stellar particles with accretion, creation, destruction
 
@@ -51,7 +51,6 @@ What `--help` does not cover:
 - **Microphysics**: Nuclear reaction networks (external submodule)
 - **fmt, yaml-cpp**: Formatting and configuration parsing
 - **HDF5**: I/O backend
-- **OpenPMD-api**: Optional for large-scale output
 - **Python**: Optional for analysis tools
 
 ## Code Style Guidelines
