@@ -377,6 +377,7 @@ struct StiffLinearSystem {
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto rtol(int /*n*/) const -> Real { return 1.0e-8; }
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto atol(int /*n*/) const -> Real { return 1.0e-14; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto passive_floor() const -> Real { return 1.0e-30; } // every entry counts
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto valid_state(const amrex::GpuArray<Real, neqs> &y) const -> bool
 	{
