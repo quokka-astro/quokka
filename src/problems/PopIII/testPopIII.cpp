@@ -23,17 +23,26 @@
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
+#include "microphysics/microphysics_traits.hpp"
+#include "networks/primordial_chem/network.hpp"
 #include "radiation/radiation_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
 
-#include "actual_eos_data.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
+#include "chemistry/Chemistry.hpp"
+#include "microphysics/burn_state.hpp"
 
 using amrex::Real;
 
 struct PopIII {};
+
+template <> struct Microphysics_Traits<PopIII> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PrimordialChem;
+	static constexpr bool chemistry = true;
+	using Tableau = quokka::math::rosenbrock::Rodas5P;
+};
+
+using Network = Microphysics_Traits<PopIII>::Network;
+using amrex::literals::operator""_rt;
 
 template <> struct HydroSystem_Traits<PopIII> {
 	static constexpr bool reconstruct_eint = true;
@@ -43,7 +52,7 @@ template <> struct Physics_Traits<PopIII> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
-	static constexpr int numMassScalars = NumSpec;		     // number of chemical species
+	static constexpr int numMassScalars = Network::NumSpec;	     // number of chemical species
 	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
 };
 
@@ -61,8 +70,6 @@ template <> struct SimulationData<PopIII> {
 	amrex::Real numdens_init{};
 	amrex::Real omega_sphere{};
 
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real primary_species_1{};
 	amrex::Real primary_species_2{};
@@ -83,17 +90,8 @@ template <> struct SimulationData<PopIII> {
 template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 {
 
-	// initialize microphysics routines
-	init_extern_parameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("primordial_chem");
-	userData_.small_temp = 1e1;
-	pp.query("small_temp", userData_.small_temp);
-
-	userData_.small_dens = 1e-60;
-	pp.query("small_dens", userData_.small_dens);
-
 	userData_.temperature = 1e1;
 	pp.query("temperature", userData_.temperature);
 
@@ -126,9 +124,6 @@ template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 	pp.query("primary_species_12", userData_.primary_species_12);
 	pp.query("primary_species_13", userData_.primary_species_13);
 	pp.query("primary_species_14", userData_.primary_species_14);
-
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 
 	static bool isSamplingDone = false;
 	if (!isSamplingDone) {
@@ -176,9 +171,9 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	std::array<Real, NumSpec> numdens = {-1.0};
+	std::array<Real, Network::NumSpec> numdens = {-1.0};
 
-	for (int n = 1; n <= NumSpec; ++n) {
+	for (int n = 1; n <= Network::NumSpec; ++n) {
 		switch (n) {
 
 			case 1:
@@ -252,26 +247,26 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
-		eos_t state;
+		quokka::microphysics::BurnState<Network::NumSpec> state;
 		amrex::Real rhotot = 0.0;
 
-		for (int n = 0; n < NumSpec; ++n) {
+		for (int n = 0; n < Network::NumSpec; ++n) {
 			state.xn[n] = numdens[n] * numdens_init;
-			rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+			rhotot += state.xn[n] * Network::SpeciesMass()[n];
 		}
 
 		// normalize -- just in case
-		std::array<Real, NumSpec> mfracs = {-1.0};
+		std::array<Real, Network::NumSpec> mfracs = {-1.0};
 		Real msum = 0.0;
-		for (int n = 0; n < NumSpec; ++n) {
-			mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
+		for (int n = 0; n < Network::NumSpec; ++n) {
+			mfracs[n] = state.xn[n] * Network::SpeciesMass()[n] / rhotot;
 			msum += mfracs[n];
 		}
 
-		for (int n = 0; n < NumSpec; ++n) {
+		for (int n = 0; n < Network::NumSpec; ++n) {
 			mfracs[n] /= msum;
 			// use the normalized mass fractions to obtain the corresponding number densities
-			state.xn[n] = mfracs[n] * rhotot / spmasses[n];
+			state.xn[n] = mfracs[n] * rhotot / Network::SpeciesMass()[n];
 		}
 
 		// amrex::Print() << "cell " << i << j << k << " " << rhotot << " " << numdens_init << " " << numdens[0] << std::endl;
@@ -283,9 +278,8 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 		double const vz = renorm_amp * dvz(i, j, k);
 
 		// calculate eos params for the core
-		state.rho = rhotot;
-		state.T = core_temp;
-		eos(eos_input_rt, state);
+		using EOS = quokka::EOSMultigamma<PopIII>;
+		auto eos_state = EOS::FromRhoT(rhotot, core_temp, state.xn);
 
 		if (r <= R_sphere) {
 			// add rotation to vx and vy
@@ -294,10 +288,10 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 
 		} else {
 			// re-calculate eos params outside the core, using pressure equilibrium (so, pressure within the core = pressure outside)
-			state.rho = 0.01 * rhotot;
-			state.p = state.p;
-			eos(eos_input_rp, state);
+			eos_state = EOS::FromRhoP(0.01 * rhotot, EOS::PressureOf(eos_state), state.xn);
 		}
+		state.rho = eos_state.rho;
+		state.e = eos_state.e;
 
 		// call the EOS to set initial internal energy e
 		amrex::Real const e = state.rho * state.e;
@@ -314,7 +308,7 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 		Real const Egas = quokka::EOS<PopIII>::ComputeEgasFromEint(state.rho, state.rho * vx, state.rho * vy, state.rho * vz, e, 0.0);
 		state_cc(i, j, k, HydroSystem<PopIII>::energy_index) = Egas;
 
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<PopIII>::scalar0_index + nn) = mfracs[nn] * state.rho; // we use partial densities and not mass fractions
 		}
 	});

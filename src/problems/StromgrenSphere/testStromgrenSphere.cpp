@@ -11,22 +11,29 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
 #include "physics_info.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fundamental_constants.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <string>
 
-#include "actual_eos_data.H"
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#include "network.H"
+#include "microphysics/burn_state.hpp"
+#include "microphysics/microphysics_traits.hpp"
+#include "networks/photoionization_H_caseB_handwritten/network.hpp"
 
 struct StromgrenSphere {};
+
+template <> struct Microphysics_Traits<StromgrenSphere> : DefaultMicrophysicsTraits {
+	using Network = quokka::networks::PhotoionizationHCaseBHandwrittenNoFlux;
+	static constexpr bool photochemistry = true;
+};
+
+using Network = Microphysics_Traits<StromgrenSphere>::Network;
+using amrex::literals::operator""_rt;
 
 constexpr double c_hat = C::c_light / 1.0;
 constexpr double sigma_star_coeff = 1.5 / 16.0;
@@ -40,7 +47,7 @@ template <> struct quokka::EOS_Traits<StromgrenSphere> {
 template <> struct Physics_Traits<StromgrenSphere> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
+	static constexpr int numMassScalars = Network::NumSpec;	     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
@@ -54,8 +61,8 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
-	static constexpr auto ChemBands() { return ChemBandsHeader(); }
+	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex; }
+	static constexpr auto ChemBands() { return Network::ChemBands(); }
 };
 
 template <>
@@ -159,8 +166,6 @@ auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B,
 } // namespace
 
 template <> struct SimulationData<StromgrenSphere> {
-	amrex::Real small_temp{};
-	amrex::Real small_dens{};
 	amrex::Real temperature{};
 	amrex::Real n_e_init{};
 	amrex::Real n_HI_init{};
@@ -180,13 +185,8 @@ template <> struct SimulationData<StromgrenSphere> {
 
 template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialConditions()
 {
-	// initialize microphysics routines
-	init_extern_parameters();
-
 	// parmparse species and temperature
 	amrex::ParmParse const pp("stromgen");
-	userData_.small_temp = 1e-2;
-	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e4;
 	userData_.tend = 1000.0_rt;
 	userData_.n_e_init = 0.0e0_rt;
@@ -194,8 +194,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	userData_.n_HII_init = 0.0e0_rt;
 	userData_.Q = 1.0e49_rt;
 	userData_.recombination_switch = 0;
-	pp.query("small_temp", userData_.small_temp);
-	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
 	pp.query("tend", userData_.tend);
 	pp.query("n_e_init", userData_.n_e_init);
@@ -205,9 +203,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 
 	amrex::ParmParse const pp2("network");
 	pp2.query("recombination_switch", userData_.recombination_switch);
-
-	eos_init(userData_.small_temp, userData_.small_dens);
-	network_init();
 
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
@@ -233,23 +228,23 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
-	std::array<Real, NumSpec> numdens = {-1.0};
-	numdens[Species::e] = userData_.n_e_init;
-	numdens[Species::H] = userData_.n_HI_init;
-	numdens[Species::H_p] = userData_.n_HII_init;
+	quokka::microphysics::BurnState<Network::NumSpec> state;
+	std::array<Real, Network::NumSpec> numdens = {-1.0};
+	numdens[Network::e] = userData_.n_e_init;
+	numdens[Network::H] = userData_.n_HI_init;
+	numdens[Network::H_p] = userData_.n_HII_init;
 
 	state.T = userData_.temperature;
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
-	for (int n = 0; n < NumSpec; ++n) {
+	for (int n = 0; n < Network::NumSpec; ++n) {
 		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+		rhotot += state.xn[n] * Network::SpeciesMass()[n];
 	}
 	state.rho = rhotot;
 
 	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
+	state.e = quokka::EOSMultigamma<StromgrenSphere>::EnergyFromTemperature(state.T, state.xn);
 	const auto Egas0 = state.e * rhotot;
 
 	// loop over the grid and set the initial condition
@@ -266,9 +261,9 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, RadSystem<StromgrenSphere>::x1GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<StromgrenSphere>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<StromgrenSphere>::x3GasMomentum_index) = 0.0_rt;
-		for (int nn = 0; nn < NumSpec; ++nn) {
+		for (int nn = 0; nn < Network::NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + nn) =
-			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			    state.xn[nn] * Network::SpeciesMass()[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
@@ -299,9 +294,9 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 
 		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const amrex::Real n_HI =
-			    state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H)) / spmasses[Species::H];
+			    state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Network::H)) / Network::SpeciesMass()[Network::H];
 			const amrex::Real n_HII =
-			    state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::H_p)) / spmasses[Species::H_p];
+			    state(i, j, k, HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Network::H_p)) / Network::SpeciesMass()[Network::H_p];
 			const amrex::Real denom = n_HI + n_HII;
 			if (denom <= 0.0_rt) {
 				return;
@@ -474,14 +469,14 @@ auto problem_main() -> int
 		const amrex::Real quanta = RadSystem<StromgrenSphere>::GetChemBandQuanta(0);
 		const amrex::Real n_photon_sum0 = sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
 		const amrex::Real n_e_sum0 =
-		    sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::e)) / spmasses[Species::e];
+		    sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Network::e)) / Network::SpeciesMass()[Network::e];
 
 		sim.evolve();
 
 		const amrex::Real error_tol = 1e-6;
 		const amrex::Real n_photon_sum = sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
 		const amrex::Real n_e_sum =
-		    sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Species::e)) / spmasses[Species::e];
+		    sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + static_cast<int>(Network::e)) / Network::SpeciesMass()[Network::e];
 		amrex::Print() << "Final total number of photons: " << n_photon_sum << '\n';
 		amrex::Print() << "Final total number of electrons: " << n_e_sum << '\n';
 		const amrex::Real n_photon_added = sim.userData_.Q * sim.userData_.tend / 8.0_rt;
