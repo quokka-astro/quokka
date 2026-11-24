@@ -74,9 +74,23 @@ def copy_untracked_files(paths: list[str], destination: Path, worktree: Path) ->
         shutil.copy2(source, target)
 
 
-def get_untracked_files(worktree: Path) -> list[str]:
+REPRODUCER_PREFIX = "quokka-reproducer-"
+
+
+def get_untracked_files(worktree: Path, output_dir: Path) -> list[str]:
+    """Return untracked, non-ignored files, skipping earlier reproducers and the output directory."""
     output = git_output(worktree, ["ls-files", "--others", "--exclude-standard"])
-    return [line for line in output.splitlines() if line.strip()]
+    files = []
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        path = Path(line)
+        if any(part.startswith(REPRODUCER_PREFIX) for part in path.parts):
+            continue
+        if (worktree / path).resolve().is_relative_to(output_dir):
+            continue
+        files.append(line)
+    return files
 
 
 def find_base_commit(worktree: Path, base_ref: str) -> str:
@@ -151,9 +165,13 @@ bash run.sh
 - `run.sh`: edit this to configure, build, and run the failing case.
 - `input/`: complete input deck(s).
 - `data/`: required tables and auxiliary input files.
-- `patches/quokka.patch`: code modifications from `git diff {base_commit} --binary`.
+- `patches/quokka.patch`: code modifications from `git diff --submodule=diff --binary {base_commit}`.
 - `output/failure.log`: full output from the failing run.
-- `output/expected.txt`: short expected-result note.
+
+`run.sh` creates a separate Quokka worktree in `quokka-src/` at the patch base commit,
+syncs its submodules, applies the patch, and copies the untracked files. This happens
+only on the first run, so later runs keep any edits made in `quokka-src/`.
+The executable runs from this directory, so input decks can refer to `data/...`.
 
 ## Worktree status at creation time
 
@@ -178,41 +196,79 @@ PATCH_BASE_REF="{base_ref}"
 PATCH_BASE_COMMIT="{base_commit}"
 
 # Edit these values before uploading the reproducer.
-QUOKKA_ROOT="${{QUOKKA_ROOT:-${{SCRIPT_DIR}}/../quokka}}"
 PRESET="${{PRESET:-3d}}"
 PROBLEM="${{PROBLEM:-MyProblem}}"
 INPUT="${{INPUT:-${{SCRIPT_DIR}}/input/MyProblem.toml}}"
 MPI_RANKS="${{MPI_RANKS:-1}}"
 
-cd "${{QUOKKA_ROOT}}"
+# Quokka clone that provides the git objects. By default, this is the checkout
+# that contains this directory (unpack the reproducer in its tests/ directory).
+QUOKKA_ROOT="${{QUOKKA_ROOT:-$(git -C "${{SCRIPT_DIR}}" rev-parse --show-toplevel 2>/dev/null || true)}}"
+if [[ -z "${{QUOKKA_ROOT}}" ]]; then
+  echo "error: unpack this reproducer inside a Quokka checkout (e.g. its tests/ directory) or set QUOKKA_ROOT" >&2
+  exit 1
+fi
+
+# The reproducer builds in its own worktree, so the checkout in QUOKKA_ROOT is not modified.
+SRC_DIR="${{SCRIPT_DIR}}/quokka-src"
+SETUP_MARKER="${{SRC_DIR}}/.reproducer-setup-done"
 
 echo "Patch base ref: ${{PATCH_BASE_REF}}"
 echo "Patch base commit: ${{PATCH_BASE_COMMIT}}"
-echo "Current Quokka commit: $(git rev-parse HEAD)"
+echo "Quokka clone: ${{QUOKKA_ROOT}}"
+echo "Reproducer worktree: ${{SRC_DIR}}"
 
-# Apply local code changes if this reproducer includes any.
-# The patch was generated relative to the base commit recorded in README.md.
-if [[ -s "${{SCRIPT_DIR}}/patches/quokka.patch" ]]; then
-  git apply --check "${{SCRIPT_DIR}}/patches/quokka.patch"
-  git apply "${{SCRIPT_DIR}}/patches/quokka.patch"
+if [[ ! -f "${{SETUP_MARKER}}" ]]; then
+  if ! git -C "${{QUOKKA_ROOT}}" cat-file -e "${{PATCH_BASE_COMMIT}}^{{commit}}" 2>/dev/null; then
+    echo "error: commit ${{PATCH_BASE_COMMIT}} is not in ${{QUOKKA_ROOT}}; run 'git fetch origin' there first" >&2
+    exit 1
+  fi
+
+  # Remove a worktree left behind by an interrupted setup.
+  if [[ -e "${{SRC_DIR}}" ]]; then
+    git -C "${{QUOKKA_ROOT}}" worktree remove --force "${{SRC_DIR}}" 2>/dev/null || rm -rf "${{SRC_DIR}}"
+    git -C "${{QUOKKA_ROOT}}" worktree prune
+  fi
+
+  git -C "${{QUOKKA_ROOT}}" worktree add --detach "${{SRC_DIR}}" "${{PATCH_BASE_COMMIT}}"
+  # Clone submodules from the URLs in the base commit's .gitmodules, not from URLs that
+  # the local clone's .git/config may override (that config is shared by all worktrees).
+  url_overrides=()
+  while read -r key url; do
+    name="${{key#submodule.}}"
+    url_overrides+=(-c "submodule.${{name%.url}}.url=${{url}}")
+  done < <(git -C "${{SRC_DIR}}" config -f .gitmodules --get-regexp '^submodule\\..*\\.url$' || true)
+  git -C "${{SRC_DIR}}" ${{url_overrides[@]+"${{url_overrides[@]}}"}} submodule update --init --recursive
+
+  # Apply local code changes (including edits inside submodules) if this reproducer includes any.
+  if [[ -s "${{SCRIPT_DIR}}/patches/quokka.patch" ]]; then
+    git -C "${{SRC_DIR}}" apply --check "${{SCRIPT_DIR}}/patches/quokka.patch"
+    git -C "${{SRC_DIR}}" apply "${{SCRIPT_DIR}}/patches/quokka.patch"
+  fi
+
+  # Restore untracked files that cannot be represented by git diff.
+  if [[ -d "${{SCRIPT_DIR}}/patches/untracked-files" ]]; then
+    cp -R "${{SCRIPT_DIR}}/patches/untracked-files/." "${{SRC_DIR}}/"
+  fi
+
+  touch "${{SETUP_MARKER}}"
 fi
 
-# Restore untracked files that cannot be represented by git diff.
-if [[ -d "${{SCRIPT_DIR}}/patches/untracked-files" ]]; then
-  cp -R "${{SCRIPT_DIR}}/patches/untracked-files/." .
+if [[ ! -d "${{SRC_DIR}}/build/${{PRESET}}" ]]; then
+  "${{SRC_DIR}}/scripts/bash/quokka" config --root "${{SRC_DIR}}" -d "${{PRESET}}"
 fi
+"${{SRC_DIR}}/scripts/bash/quokka" build --root "${{SRC_DIR}}" -d "${{PRESET}}" "${{PROBLEM}}"
 
-./scripts/bash/quokka config -d "${{PRESET}}"
-./scripts/bash/quokka build -d "${{PRESET}}" "${{PROBLEM}}"
-
-mpirun -np "${{MPI_RANKS}}" "./build/${{PRESET}}/src/problems/${{PROBLEM}}/${{PROBLEM}}" "${{INPUT}}"
+cd "${{SCRIPT_DIR}}"
+mpirun -np "${{MPI_RANKS}}" "${{SRC_DIR}}/build/${{PRESET}}/src/problems/${{PROBLEM}}/${{PROBLEM}}" "${{INPUT}}"
 """
 
 
 def create_reproducer(args: argparse.Namespace) -> Path:
     worktree = ensure_quokka_worktree(args.worktree)
     slug = sanitize_slug(args.description)
-    repro_dir = args.output_dir.resolve() / f"quokka-reproducer-{slug}"
+    output_root = (args.output_dir if args.output_dir is not None else worktree / "tests").resolve()
+    repro_dir = output_root / f"{REPRODUCER_PREFIX}{slug}"
     untracked_files_dir = repro_dir / "patches" / "untracked-files"
 
     if repro_dir.exists():
@@ -224,7 +280,7 @@ def create_reproducer(args: argparse.Namespace) -> Path:
     commit = git_output(worktree, ["rev-parse", "HEAD"])
     base_commit = find_base_commit(worktree, args.base_ref)
     status = git_output(worktree, ["status", "--short"])
-    untracked = get_untracked_files(worktree)
+    untracked = get_untracked_files(worktree, output_root)
 
     input_dir = repro_dir / "input"
     data_dir = repro_dir / "data"
@@ -233,11 +289,13 @@ def create_reproducer(args: argparse.Namespace) -> Path:
     for directory in (input_dir, data_dir, patches_dir, output_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
-    diff = run_git(worktree, ["diff", base_commit, "--binary"]).stdout
+    # --submodule=diff records edits inside submodules as ordinary file diffs; the default
+    # format only records "Subproject commit ...-dirty", which loses the edits.
+    diff = run_git(worktree, ["diff", "--submodule=diff", "--binary", base_commit]).stdout
     write_text(patches_dir / "quokka.patch", diff)
     write_text(
         patches_dir / "README.md",
-        f"quokka.patch was generated with: git diff {base_commit} --binary\n"
+        f"quokka.patch was generated with: git diff --submodule=diff --binary {base_commit}\n"
         f"Base ref used to find that commit: {args.base_ref}\n"
         f"Base commit is the merge-base of HEAD and {args.base_ref}: {base_commit}\n"
         "Place additional patch notes here if the diff needs explanation.\n",
@@ -249,7 +307,6 @@ def create_reproducer(args: argparse.Namespace) -> Path:
     write_text(input_dir / "README.md", "Put the complete Quokka input deck here, including every required parameter.\n")
     write_text(data_dir / "README.md", "Put required data tables and auxiliary input files here.\n")
     write_text(output_dir / "failure.log", "Paste the full failing terminal output here.\n")
-    write_text(output_dir / "expected.txt", "Describe the expected result here.\n")
 
     copy_files(args.input, input_dir, worktree)
     copy_files(args.data, data_dir, worktree)
@@ -274,8 +331,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("."),
-        help="Directory where the reproducer directory is created (default: current directory)",
+        default=None,
+        help="Directory where the reproducer directory is created (default: tests/ in the worktree, which is gitignored)",
     )
     parser.add_argument(
         "--input",
@@ -314,7 +371,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"created {repro_dir}")
     print("edit README.md, run.sh, input/, data/, and output/ before uploading")
-    print(f"after reviewing the contents: tar -czf {repro_dir.name}.tar.gz {repro_dir.name}/")
+    tarball = repro_dir.parent / f"{repro_dir.name}.tar.gz"
+    print(f"after reviewing the contents: tar -C {repro_dir.parent} --exclude quokka-src -czf {tarball} {repro_dir.name}/")
     return 0
 
 
