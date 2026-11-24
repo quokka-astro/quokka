@@ -24,7 +24,7 @@ Deciding and writing are kept apart, so every decision can be tested offline and
 
 | Workflow | Runs when | Action |
 |---|---|---|
-| `pr-dashboard-label-pr.yml` | A PR is opened, reopened or marked ready for review | `label-pr`: sets the scope and size labels, and the default priority |
+| `pr-dashboard-label-pr.yml` | A PR is opened, reopened or marked ready for review | `label-pr`: sets the scope and size labels |
 | `pr-dashboard-run-command.yml` | A comment containing `/` is posted on a PR | `run-command`: runs a command, or explains why it was not run |
 | `pr-dashboard-update-label-definitions.yml` | `labels.toml` changes on `development`, or someone starts it from the Actions tab | `update-label-definitions`: creates and updates the label names, colours and descriptions on GitHub |
 | `pr-dashboard-tests.yml` | Any PR is opened or updated | Runs the offline tests |
@@ -35,7 +35,7 @@ Edit `labels.toml`. Each category sets a prefix, and each label holds only its v
 
 - Scope labels list `path_patterns`. A PR gets every scope with a pattern matching one of its changed files, and `*` also matches `/`.
 - Size labels list `min_num_lines`. A PR gets the largest one its line count reaches.
-- One priority label is marked `default = true`, and is given to a PR with no priority.
+- The priority `default_value` has no label: a PR with no priority label has that priority, and `/set-priority <default_value>` removes the priority label.
 - A changed file that matches no scope gives the PR the `scope/undefined` label, so a missing pattern shows up on the PR.
 - A file that should have no scope goes in `unlabelled_path_patterns`. It gives the PR no scope label, and does not count as unmapped.
 
@@ -66,7 +66,8 @@ Decisions I made along the way, and why.
 
 ### Labels
 
-- **The tools only manage the `scope/`, `size/` and `priority/` labels,** rather than every label on a PR. Labels without these prefixes are left alone. `scope/` and `size/` labels edited by hand are replaced when the labels are recalculated, and `priority/normal` is only added when a PR has no `priority/` label.
+- **The tools only manage the `scope/`, `size/` and `priority/` labels,** rather than every label on a PR. Labels without these prefixes are left alone. `scope/` and `size/` labels edited by hand are replaced when the labels are recalculated, and `priority/` labels are only changed with `/set-priority`.
+- **Normal priority has no label,** rather than a `priority/normal` label on almost every PR. A priority label only appears when a PR is more or less urgent than usual.
 - **A file with no matching scope gives the PR the `scope/undefined` label,** rather than a fallback scope. The label shows where `labels.toml` is missing a pattern.
 
 ### Commands

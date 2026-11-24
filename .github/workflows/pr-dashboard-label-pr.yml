@@ -1,4 +1,4 @@
-# Sets the scope, size and default priority labels when a PR is opened, reopened or marked ready for review.
+# Sets the scope and size labels when a PR is opened, reopened or marked ready for review.
 name: "PR Dashboard: Label PR"
 
 on:
@@ -26,7 +26,7 @@ jobs:
           sparse-checkout: .github/pr-dashboard
           persist-credentials: false
 
-      - name: Set the scope, size and default priority labels
+      - name: Set the scope and size labels
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
