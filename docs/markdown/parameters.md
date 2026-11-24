@@ -117,7 +117,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 These parameters control the Rosenbrock integrator of the chemistry and photochemistry burns (`src/microphysics/burner.hpp`, on the generic solver in `src/math/rosenbrock/`). They are read from the `integrator` prefix by `quokka::microphysics::IntegratorParams::Read()`, once per run. See also `docs/markdown/photoionization.md`.
 
-The integrator's switches are compile-time fields of `Microphysics_Traits<problem_t>` (`src/microphysics/microphysics_traits.hpp`), the Rosenbrock method (`Tableau`, ROS2S by default), `analytic_jacobian`, `numerical_jacobian_fallback`, `pivoting`, `call_eos_in_rhs`, `integrate_energy`, `do_species_clip`, `renormalize_abundances`, `max_temp` and `ode_max_dt`.
+The integrator's switches are compile-time fields of `Microphysics_Traits<problem_t>` (`src/microphysics/microphysics_traits.hpp`), the Rosenbrock method (`Tableau`, ROS2S by default), `analytic_jacobian`, `numerical_jacobian_fallback`, `pivoting`, `call_eos_in_rhs`, `integrate_energy`, `max_temp` and `ode_max_dt`.
 
 ### Tolerance parameters
 
