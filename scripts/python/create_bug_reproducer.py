@@ -107,7 +107,8 @@ def get_untracked_files(worktree: Path) -> list[str]:
     submodules = split_paths(git_bytes(worktree, ["submodule", "foreach", "--recursive", "--quiet", 'printf "%s\\0" "$displaypath"']))
     for submodule in submodules:
         files.extend(f"{submodule}/{name}" for name in list_untracked(worktree / submodule))
-    return [path for path in files if not any(part.startswith(REPRODUCER_PREFIX) for part in Path(path).parts)]
+    # lstrip(".") also matches the hidden staging directories used while a reproducer is built.
+    return [path for path in files if not any(part.lstrip(".").startswith(REPRODUCER_PREFIX) for part in Path(path).parts)]
 
 
 LARGE_UNTRACKED_BYTES = 10 * 1024 * 1024
@@ -141,6 +142,35 @@ def find_base_commit(worktree: Path, base_ref: str) -> str:
         ) from exc
 
 
+UPSTREAM_REPO = "quokka-astro/quokka"
+
+
+def check_base_is_upstream(worktree: Path, base_commit: str) -> None:
+    """Warn when the base commit is not on the official development branch.
+
+    The maintainer's clone must contain the base commit; a commit that exists only in a fork cannot be fetched.
+    """
+    remotes = git_output(worktree, ["remote"]).split()
+    upstream = [r for r in remotes if UPSTREAM_REPO in run_git(worktree, ["remote", "get-url", r], check=False).stdout]
+    for remote in upstream:
+        ref = f"{remote}/development"
+        if run_git(worktree, ["rev-parse", "--verify", "--quiet", ref], check=False).returncode != 0:
+            continue
+        if run_git(worktree, ["merge-base", "--is-ancestor", base_commit, ref], check=False).returncode == 0:
+            return
+        print(
+            f"warning: base commit {base_commit} is not on {ref}; if you work from a fork, "
+            f"run 'git fetch {remote}' and pass --base-ref {ref}",
+            file=sys.stderr,
+        )
+        return
+    print(
+        f"warning: no remote for {UPSTREAM_REPO} with a development branch was found, so the base commit "
+        f"{base_commit} could not be checked; it must exist upstream for maintainers to use the reproducer",
+        file=sys.stderr,
+    )
+
+
 def build_readme(
     slug: str,
     branch: str,
@@ -149,8 +179,14 @@ def build_readme(
     base_commit: str,
     status: str,
     untracked: list[str],
+    no_untracked: bool,
 ) -> str:
-    untracked_text = "\n".join(f"- `{path}`" for path in untracked) if untracked else "- None detected."
+    if no_untracked:
+        untracked_text = "- Skipped (`--no-untracked`); untracked files were not checked or copied."
+    elif untracked:
+        untracked_text = "\n".join(f"- `{path}`" for path in untracked)
+    else:
+        untracked_text = "- None detected."
     status_text = status if status else "Clean worktree."
     return f"""# Quokka bug reproducer: {slug}
 
@@ -241,6 +277,13 @@ PRESET="${{PRESET:-3d}}"
 PROBLEM="${{PROBLEM:-${{DEFAULT_PROBLEM}}}}"
 INPUT="${{INPUT:-${{SCRIPT_DIR}}/input/${{DEFAULT_INPUT}}}}"
 MPI_RANKS="${{MPI_RANKS:-1}}"
+# Optional environment file for quokka --source, e.g. QUOKKA_SOURCE=default for ~/.config/quokka/quokka.rc.
+QUOKKA_SOURCE="${{QUOKKA_SOURCE:-}}"
+
+# The executable runs from another directory, so make a relative INPUT override absolute.
+if [[ "${{INPUT}}" != /* ]]; then
+  INPUT="${{PWD}}/${{INPUT}}"
+fi
 
 # Quokka clone that provides the git objects. By default, this is the checkout
 # that contains this directory (unpack the reproducer in its tests/ directory).
@@ -285,8 +328,9 @@ if [[ ! -f "${{SETUP_MARKER}}" ]]; then
 
   # Apply local code changes (including edits inside submodules) if this reproducer includes any.
   if [[ -s "${{SCRIPT_DIR}}/patches/quokka.patch" ]]; then
-    git -C "${{SRC_DIR}}" apply --check "${{SCRIPT_DIR}}/patches/quokka.patch"
-    git -C "${{SRC_DIR}}" apply "${{SCRIPT_DIR}}/patches/quokka.patch"
+    # --whitespace=nowarn keeps a local apply.whitespace=error setting from rejecting the patch.
+    git -C "${{SRC_DIR}}" apply --whitespace=nowarn --check "${{SCRIPT_DIR}}/patches/quokka.patch"
+    git -C "${{SRC_DIR}}" apply --whitespace=nowarn "${{SCRIPT_DIR}}/patches/quokka.patch"
   fi
 
   # Restore untracked files that cannot be represented by git diff.
@@ -301,6 +345,11 @@ if [[ ! -f "${{SETUP_MARKER}}" ]]; then
   touch "${{SETUP_MARKER}}"
 fi
 
+source_args=()
+if [[ -n "${{QUOKKA_SOURCE}}" ]]; then
+  source_args=(--source "${{QUOKKA_SOURCE}}")
+fi
+
 # Configure unless a previous configure finished; quokka config creates the build
 # directory before running cmake, so a failed configure leaves it without build.ninja.
 if [[ ! -f "${{BUILD_DIR}}/build.ninja" ]]; then
@@ -308,9 +357,9 @@ if [[ ! -f "${{BUILD_DIR}}/build.ninja" ]]; then
   if [[ -d "${{BUILD_DIR}}" ]]; then
     config_args=(--delete)
   fi
-  "${{SRC_DIR}}/scripts/bash/quokka" config --root "${{SRC_DIR}}" -d "${{PRESET}}" ${{config_args[@]+"${{config_args[@]}}"}}
+  "${{SRC_DIR}}/scripts/bash/quokka" config --root "${{SRC_DIR}}" -d "${{PRESET}}" ${{source_args[@]+"${{source_args[@]}}"}} ${{config_args[@]+"${{config_args[@]}}"}}
 fi
-"${{SRC_DIR}}/scripts/bash/quokka" build --root "${{SRC_DIR}}" -d "${{PRESET}}" "${{PROBLEM}}"
+"${{SRC_DIR}}/scripts/bash/quokka" build --root "${{SRC_DIR}}" -d "${{PRESET}}" ${{source_args[@]+"${{source_args[@]}}"}} "${{PROBLEM}}"
 
 # Run from tests/, like quokka run, so the relative paths in standard input decks resolve.
 cd "${{SRC_DIR}}/tests"
@@ -319,14 +368,15 @@ mpirun -np "${{MPI_RANKS}}" "${{BUILD_DIR}}/src/problems/${{PROBLEM}}/${{PROBLEM
 
 
 # Diff options that keep the patch in the format git apply expects, whatever the user's git config.
-DIFF_ARGS = ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--submodule=diff", "--binary"]
+DIFF_ARGS = ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--submodule=diff", "--ignore-submodules=none", "--binary"]
 
 
 def populate_reproducer(repro_dir: Path, args: argparse.Namespace, worktree: Path, slug: str) -> None:
     branch = git_output(worktree, ["branch", "--show-current"]) or "(detached HEAD)"
     commit = git_output(worktree, ["rev-parse", "HEAD"])
     base_commit = find_base_commit(worktree, args.base_ref)
-    status = git_output(worktree, ["-c", "core.quotePath=false", "status", "--short"])
+    check_base_is_upstream(worktree, base_commit)
+    status = git_output(worktree, ["-c", "core.quotePath=false", "status", "--short", "--ignore-submodules=none"])
     untracked = [] if args.no_untracked else get_untracked_files(worktree)
     report_untracked(untracked, worktree)
 
@@ -339,7 +389,16 @@ def populate_reproducer(repro_dir: Path, args: argparse.Namespace, worktree: Pat
 
     # --submodule=diff records edits inside submodules as ordinary file diffs; the default
     # format only records "Subproject commit ...-dirty", which loses the edits.
-    (patches_dir / "quokka.patch").write_bytes(git_bytes(worktree, [*DIFF_ARGS, base_commit]))
+    patch = git_bytes(worktree, [*DIFF_ARGS, base_commit])
+    # Without the old submodule commit, git prints only this header instead of the submodule's changes.
+    missing = [line for line in patch.splitlines() if line.startswith(b"Submodule ") and b"(commits not present)" in line]
+    if missing:
+        names = ", ".join(os.fsdecode(line.split()[1]) for line in missing)
+        raise RuntimeError(
+            f"cannot diff submodule(s) {names} because the base commit's version is missing from the local clone; "
+            "fetch the full history there (e.g. 'git -C <submodule> fetch --unshallow') and retry"
+        )
+    (patches_dir / "quokka.patch").write_bytes(patch)
     write_text(
         patches_dir / "README.md",
         f"quokka.patch was generated with: git {' '.join(DIFF_ARGS)} {base_commit}\n"
@@ -349,19 +408,31 @@ def populate_reproducer(repro_dir: Path, args: argparse.Namespace, worktree: Pat
     )
     copy_untracked_files(untracked, patches_dir / "untracked-files", worktree)
 
-    write_text(repro_dir / "README.md", build_readme(slug, branch, commit, args.base_ref, base_commit, status, untracked))
-    # Default run.sh to the input deck when exactly one input file is given.
+    write_text(
+        repro_dir / "README.md", build_readme(slug, branch, commit, args.base_ref, base_commit, status, untracked, args.no_untracked)
+    )
+    # Default run.sh to the input deck when exactly one input file is given, and to the problem
+    # with the same name when one exists (many decks are not named after their problem).
+    input_name, problem = "MyProblem.toml", "MyProblem"
     if len(args.input) == 1 and args.input[0].is_file():
-        input_name, problem = args.input[0].absolute().name, args.input[0].absolute().stem
-    else:
-        input_name, problem = "MyProblem.toml", "MyProblem"
+        input_name = args.input[0].absolute().name
+        stem = args.input[0].absolute().stem
+        if (worktree / "src" / "problems" / stem).is_dir():
+            problem = stem
+        else:
+            print(f"warning: no problem named {stem!r} in src/problems; set PROBLEM in run.sh", file=sys.stderr)
     write_text(repro_dir / "run.sh", build_run_script(args.base_ref, base_commit, input_name, problem), executable=True)
-    write_text(input_dir / "README.md", "Put the complete Quokka input deck here, including every required parameter.\n")
-    write_text(data_dir / "README.md", "Put required data tables and auxiliary input files here.\n")
     write_text(output_dir / "failure.log", "Paste the full failing terminal output here.\n")
 
     copy_files(args.input, input_dir)
     copy_files(args.data, data_dir)
+    # Write placeholders last, so they never overwrite a user file with the same name.
+    for directory, text in (
+        (input_dir, "Put the complete Quokka input deck here, including every required parameter.\n"),
+        (data_dir, "Put required data tables and auxiliary input files here.\n"),
+    ):
+        if not (directory / "README.md").exists():
+            write_text(directory / "README.md", text)
 
 
 def create_reproducer(args: argparse.Namespace) -> Path:
@@ -380,15 +451,14 @@ def create_reproducer(args: argparse.Namespace) -> Path:
     try:
         staging.chmod(0o755)
         populate_reproducer(staging, args, worktree, slug)
-    except BaseException:
-        shutil.rmtree(staging, ignore_errors=True)
-        raise
-
-    if repro_dir.exists():
-        shutil.rmtree(repro_dir)
-        # Drop the registration of a quokka-src/ worktree that run.sh may have created.
-        run_git(worktree, ["worktree", "prune"])
-    staging.rename(repro_dir)
+        if repro_dir.exists():
+            shutil.rmtree(repro_dir)
+            # Drop the registration of a quokka-src/ worktree that run.sh may have created.
+            run_git(worktree, ["worktree", "prune"])
+        staging.rename(repro_dir)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
     return repro_dir
 
 

@@ -49,7 +49,9 @@ Run the helper script from your Quokka checkout:
   --data path/to/table.dat
 ```
 
-By default it creates `tests/quokka-reproducer-<short-description>/`; `tests/` is ignored by Git. The patch is generated relative to the merge-base with `origin/development`, so it includes committed branch changes, uncommitted edits to tracked files, and edits inside submodules. The merge-base commit is recorded in `README.md`, `patches/README.md`, and `run.sh`. Untracked files, including those inside submodules, are copied to `patches/untracked-files/`; the script lists them with their sizes, so check that list for large or private files, and pass `--no-untracked` to skip them. `--input` and `--data` paths are relative to the current directory. When exactly one input file is given, `run.sh` defaults to that deck and to a problem with the same name.
+By default it creates `tests/quokka-reproducer-<short-description>/`; `tests/` is ignored by Git. The patch is generated relative to the merge-base with `origin/development`, so it includes committed branch changes, uncommitted edits to tracked files, and edits inside submodules. The merge-base commit is recorded in `README.md`, `patches/README.md`, and `run.sh`. Untracked files, including those inside submodules, are copied to `patches/untracked-files/`; the script lists them with their sizes, so check that list for large or private files, and pass `--no-untracked` to skip them. `--input` and `--data` paths are relative to the current directory. When exactly one input file is given, `run.sh` defaults to that deck, and to a problem with the same name if one exists.
+
+The base commit must exist in the official repository, because maintainers fetch it from there. If you work from a fork, add the official repository as a remote (for example `upstream`), fetch it, and pass `--base-ref upstream/development`. The script warns when the base commit is not on the official `development` branch.
 
 Then:
 
@@ -82,6 +84,7 @@ The generated script does not need to be general. Edit it so that another develo
 
 - add GPU options to the `quokka config` line, such as `-DAMReX_GPU_BACKEND=CUDA -DAMReX_CUDA_ARCH=8.0`;
 - export environment variables such as `CUDA_LAUNCH_BLOCKING=1`;
+- set `QUOKKA_SOURCE=default` (or a file path) to load the environment file described in the [Contributing Guide](contributing.md#the-quokka-developer-script), such as module loads in `~/.config/quokka/quokka.rc`;
 - replace `mpirun` with your scheduler's launcher, such as `srun -n 2 --gpus-per-task=1`;
 - append runtime overrides such as `max_timesteps=20` to the run command.
 
