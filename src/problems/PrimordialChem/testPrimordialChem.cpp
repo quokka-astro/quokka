@@ -11,6 +11,7 @@
 #include <array>
 #include <format>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "AMReX_BC_TYPES.H"
@@ -58,20 +59,8 @@ template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 
 template <> struct SimulationData<PrimordialChemTest> {
 	amrex::Real temperature;
-	amrex::Real primary_species_1;
-	amrex::Real primary_species_2;
-	amrex::Real primary_species_3;
-	amrex::Real primary_species_4;
-	amrex::Real primary_species_5;
-	amrex::Real primary_species_6;
-	amrex::Real primary_species_7;
-	amrex::Real primary_species_8;
-	amrex::Real primary_species_9;
-	amrex::Real primary_species_10;
-	amrex::Real primary_species_11;
-	amrex::Real primary_species_12;
-	amrex::Real primary_species_13;
-	amrex::Real primary_species_14;
+	/// the initial number density of each species [cm^-3] (primordial_chem.primary_species_<n + 1>)
+	std::array<amrex::Real, Network::NumSpec> primary_species{};
 };
 
 template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialConditions()
@@ -81,35 +70,12 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 	userData_.temperature = 1e1;
 	pp.query("temperature", userData_.temperature);
 
-	userData_.primary_species_1 = 1.0e0_rt;
-	userData_.primary_species_2 = 0.0e0_rt;
-	userData_.primary_species_3 = 0.0e0_rt;
-	userData_.primary_species_4 = 0.0e0_rt;
-	userData_.primary_species_5 = 0.0e0_rt;
-	userData_.primary_species_6 = 0.0e0_rt;
-	userData_.primary_species_7 = 0.0e0_rt;
-	userData_.primary_species_8 = 0.0e0_rt;
-	userData_.primary_species_9 = 0.0e0_rt;
-	userData_.primary_species_10 = 0.0e0_rt;
-	userData_.primary_species_11 = 0.0e0_rt;
-	userData_.primary_species_12 = 0.0e0_rt;
-	userData_.primary_species_13 = 0.0e0_rt;
-	userData_.primary_species_14 = 0.0e0_rt;
-
-	pp.query("primary_species_1", userData_.primary_species_1);
-	pp.query("primary_species_2", userData_.primary_species_2);
-	pp.query("primary_species_3", userData_.primary_species_3);
-	pp.query("primary_species_4", userData_.primary_species_4);
-	pp.query("primary_species_5", userData_.primary_species_5);
-	pp.query("primary_species_6", userData_.primary_species_6);
-	pp.query("primary_species_7", userData_.primary_species_7);
-	pp.query("primary_species_8", userData_.primary_species_8);
-	pp.query("primary_species_9", userData_.primary_species_9);
-	pp.query("primary_species_10", userData_.primary_species_10);
-	pp.query("primary_species_11", userData_.primary_species_11);
-	pp.query("primary_species_12", userData_.primary_species_12);
-	pp.query("primary_species_13", userData_.primary_species_13);
-	pp.query("primary_species_14", userData_.primary_species_14);
+	// defaults: all electrons (species 0), as before the port; the input keys number the species from 1
+	userData_.primary_species.fill(0.0_rt);
+	userData_.primary_species[Network::E] = 1.0_rt;
+	for (int n = 0; n < Network::NumSpec; ++n) {
+		pp.query(("primary_species_" + std::to_string(n + 1)).c_str(), userData_.primary_species[n]);
+	}
 }
 
 template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -120,59 +86,7 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 
 	quokka::microphysics::BurnState<Network::NumSpec> state;
 
-	std::array<Real, Network::NumSpec> numdens = {-1.0};
-
-	for (int n = 1; n <= Network::NumSpec; ++n) {
-		switch (n) {
-
-			case 1:
-				numdens[n - 1] = userData_.primary_species_1;
-				break;
-			case 2:
-				numdens[n - 1] = userData_.primary_species_2;
-				break;
-			case 3:
-				numdens[n - 1] = userData_.primary_species_3;
-				break;
-			case 4:
-				numdens[n - 1] = userData_.primary_species_4;
-				break;
-			case 5:
-				numdens[n - 1] = userData_.primary_species_5;
-				break;
-			case 6:
-				numdens[n - 1] = userData_.primary_species_6;
-				break;
-			case 7:
-				numdens[n - 1] = userData_.primary_species_7;
-				break;
-			case 8:
-				numdens[n - 1] = userData_.primary_species_8;
-				break;
-			case 9:
-				numdens[n - 1] = userData_.primary_species_9;
-				break;
-			case 10:
-				numdens[n - 1] = userData_.primary_species_10;
-				break;
-			case 11:
-				numdens[n - 1] = userData_.primary_species_11;
-				break;
-			case 12:
-				numdens[n - 1] = userData_.primary_species_12;
-				break;
-			case 13:
-				numdens[n - 1] = userData_.primary_species_13;
-				break;
-			case 14:
-				numdens[n - 1] = userData_.primary_species_14;
-				break;
-
-			default:
-				amrex::Abort("Cannot initialize number density for chem specie");
-				break;
-		}
-	}
+	const std::array<Real, Network::NumSpec> numdens = userData_.primary_species;
 
 	state.T = userData_.temperature;
 

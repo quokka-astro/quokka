@@ -408,6 +408,12 @@ template <bool analytic, bool fallback> struct JacobianTestOptions : quokka::mat
 	static constexpr bool numerical_jacobian_fallback = fallback;
 };
 
+/// The integrator status in the output of RunRosenbrock.
+auto StatusOf(const std::array<Real, 4> &out) -> quokka::math::rosenbrock::IntegratorStatus
+{
+	return static_cast<quokka::math::rosenbrock::IntegratorStatus>(static_cast<int>(out[2]));
+}
+
 /// Integrates System from t = 0 to 1 on the device with y = (1, 0) at t = 0. Returns the solution, the status and the
 /// number of steps.
 template <typename Tableau, typename Options, typename System> auto RunRosenbrock() -> std::array<Real, 4>
@@ -423,10 +429,10 @@ template <typename Tableau, typename Options, typename System> auto RunRosenbroc
 		rstate.tout = 1.0;
 		rstate.y[0] = 1.0;
 		rstate.y[1] = 0.0;
-		const int status = rb::integrate<Tableau, Options>(sys, rstate, 100000);
+		const rb::IntegratorStatus status = rb::integrate<Tableau, Options>(sys, rstate, 100000);
 		out[0] = rstate.y[0];
 		out[1] = rstate.y[1];
-		out[2] = status;
+		out[2] = static_cast<Real>(status);
 		out[3] = rstate.n_step;
 	});
 	std::array<Real, nout> out_h{};
@@ -450,9 +456,9 @@ template <typename Tableau, bool pivot> auto TestRosenbrockTableau() -> int
 	const auto out = RunRosenbrock<Tableau, RosenbrockTestOptions<pivot>, StiffLinearSystem>();
 	const Real err = StiffLinearSystemError(out);
 	constexpr Real reltol = 1.0e-6;
-	const bool ok = static_cast<int>(out[2]) == rb::IERR_SUCCESS && err < reltol;
+	const bool ok = StatusOf(out) == rb::IntegratorStatus::Success && err < reltol;
 	std::cout << std::format("Rosenbrock {:8} pivoting {:3}: status {}, {} steps, relative error {:.3e} {}\n", Tableau::name, pivot ? "on" : "off",
-				 static_cast<int>(out[2]), static_cast<int>(out[3]), err, ok ? "" : "FAILED");
+				 rb::StatusName(StatusOf(out)), static_cast<int>(out[3]), err, ok ? "" : "FAILED");
 	return ok ? 0 : 1;
 }
 
@@ -465,21 +471,21 @@ auto TestJacobianOptions() -> int
 	int status = 0;
 
 	const auto no_fallback = RunRosenbrock<rb::Rodas4P, JacobianTestOptions<true, false>, NaNJacobianSystem>();
-	const bool ok_no_fallback = static_cast<int>(no_fallback[2]) == rb::IERR_JACOBIAN_NOT_FINITE;
-	std::cout << std::format("Rosenbrock NaN Jacobian, no fallback: status {} {}\n", static_cast<int>(no_fallback[2]), ok_no_fallback ? "" : "FAILED");
+	const bool ok_no_fallback = StatusOf(no_fallback) == rb::IntegratorStatus::JacobianNotFinite;
+	std::cout << std::format("Rosenbrock NaN Jacobian, no fallback: status {} {}\n", rb::StatusName(StatusOf(no_fallback)), ok_no_fallback ? "" : "FAILED");
 	status += ok_no_fallback ? 0 : 1;
 
 	const auto fallback = RunRosenbrock<rb::Rodas4P, JacobianTestOptions<true, true>, NaNJacobianSystem>();
 	const Real err_fallback = StiffLinearSystemError(fallback);
-	const bool ok_fallback = static_cast<int>(fallback[2]) == rb::IERR_SUCCESS && err_fallback < reltol;
-	std::cout << std::format("Rosenbrock NaN Jacobian, fallback: status {}, {} steps, relative error {:.3e} {}\n", static_cast<int>(fallback[2]),
+	const bool ok_fallback = StatusOf(fallback) == rb::IntegratorStatus::Success && err_fallback < reltol;
+	std::cout << std::format("Rosenbrock NaN Jacobian, fallback: status {}, {} steps, relative error {:.3e} {}\n", rb::StatusName(StatusOf(fallback)),
 				 static_cast<int>(fallback[3]), err_fallback, ok_fallback ? "" : "FAILED");
 	status += ok_fallback ? 0 : 1;
 
 	const auto numerical = RunRosenbrock<rb::Rodas4P, JacobianTestOptions<false, false>, StiffLinearSystem>();
 	const Real err_numerical = StiffLinearSystemError(numerical);
-	const bool ok_numerical = static_cast<int>(numerical[2]) == rb::IERR_SUCCESS && err_numerical < reltol;
-	std::cout << std::format("Rosenbrock numerical Jacobian: status {}, {} steps, relative error {:.3e} {}\n", static_cast<int>(numerical[2]),
+	const bool ok_numerical = StatusOf(numerical) == rb::IntegratorStatus::Success && err_numerical < reltol;
+	std::cout << std::format("Rosenbrock numerical Jacobian: status {}, {} steps, relative error {:.3e} {}\n", rb::StatusName(StatusOf(numerical)),
 				 static_cast<int>(numerical[3]), err_numerical, ok_numerical ? "" : "FAILED");
 	status += ok_numerical ? 0 : 1;
 
