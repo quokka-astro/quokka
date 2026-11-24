@@ -64,37 +64,59 @@ def write_text(path: Path, content: str, *, executable: bool = False) -> None:
 
 
 def copy_files(files: list[Path], destination: Path) -> None:
+    """Copy files into destination; a directory's contents are copied directly into destination.
+
+    Raises an error if two sources would write the same target, instead of silently overwriting one.
+    """
+    planned: dict[Path, Path] = {}
     for source in files:
         # absolute() keeps the given name for symlinks; run.sh refers to the copy by that name.
         source_path = source.absolute()
         if not source_path.exists():
             raise FileNotFoundError(f"{source_path} does not exist")
-        target = destination / source_path.name
         if source_path.is_dir():
-            shutil.copytree(source_path, target, dirs_exist_ok=True)
+            entries = [(f, f.relative_to(source_path)) for f in sorted(source_path.rglob("*")) if f.is_file()]
         else:
-            shutil.copy2(source_path, target)
+            entries = [(source_path, Path(source_path.name))]
+        for file, relative in entries:
+            if relative in planned:
+                raise FileExistsError(f"{file} and {planned[relative]} would both be copied to {destination.name}/{relative}")
+            planned[relative] = file
+    for relative, file in planned.items():
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(file, target)
 
 
 def copy_untracked_files(paths: list[str], destination: Path, worktree: Path) -> None:
-    if not paths:
-        return
     for path in paths:
-        source = worktree / path
-        if not source.is_file():
-            print(f"warning: skipping untracked path that is not a regular file: {path}", file=sys.stderr)
-            continue
         target = destination / path
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
+        shutil.copy2(worktree / path, target)
 
 
 REPRODUCER_PREFIX = "quokka-reproducer-"
 
 
-def list_untracked(directory: Path) -> list[str]:
-    """Return untracked, non-ignored files in one repository, NUL-separated to preserve unusual names."""
-    return split_paths(git_bytes(directory, ["ls-files", "-z", "--others", "--exclude-standard"]))
+def list_untracked(directory: Path, *, ignored: bool = False) -> list[str]:
+    """Return untracked files in one repository, NUL-separated to preserve unusual names.
+
+    With ignored=True, return the untracked files that .gitignore excludes instead (ignored
+    directories are listed once, not file by file).
+    """
+    args = ["ls-files", "-z", "--others", "--exclude-standard"]
+    if ignored:
+        args += ["--ignored", "--directory"]
+    return split_paths(git_bytes(directory, args))
+
+
+def list_submodules(worktree: Path) -> list[str]:
+    return split_paths(git_bytes(worktree, ["submodule", "foreach", "--recursive", "--quiet", 'printf "%s\\0" "$displaypath"']))
+
+
+def is_reproducer_path(path: str) -> bool:
+    # lstrip(".") also matches the hidden staging directories used while a reproducer is built.
+    return any(part.lstrip(".").startswith(REPRODUCER_PREFIX) for part in Path(path).parts)
 
 
 def get_untracked_files(worktree: Path) -> list[str]:
@@ -104,11 +126,55 @@ def get_untracked_files(worktree: Path) -> list[str]:
     submodules, so each submodule is listed separately.
     """
     files = list_untracked(worktree)
-    submodules = split_paths(git_bytes(worktree, ["submodule", "foreach", "--recursive", "--quiet", 'printf "%s\\0" "$displaypath"']))
-    for submodule in submodules:
+    for submodule in list_submodules(worktree):
         files.extend(f"{submodule}/{name}" for name in list_untracked(worktree / submodule))
-    # lstrip(".") also matches the hidden staging directories used while a reproducer is built.
-    return [path for path in files if not any(part.lstrip(".").startswith(REPRODUCER_PREFIX) for part in Path(path).parts)]
+    regular = []
+    for path in files:
+        if is_reproducer_path(path):
+            continue
+        # Nested git repositories and broken symlinks cannot be copied as files.
+        if not (worktree / path).is_file():
+            print(f"warning: skipping untracked path that is not a regular file: {path}", file=sys.stderr)
+            continue
+        regular.append(path)
+    return regular
+
+
+# Ignored paths that are build or run products, editor backups, or tool caches rather than inputs a reproducer might need.
+IGNORED_NOISE_PARTS = {"build", "tests", "__pycache__"}
+MAX_IGNORED_LISTED = 20
+
+
+def is_ignored_noise(path: str) -> bool:
+    parts = Path(path).parts
+    name = parts[-1]
+    return (
+        any(part.startswith(".") or part in IGNORED_NOISE_PARTS for part in parts)
+        or parts[0].startswith("build")
+        or path.startswith("docs/site/")
+        or name.endswith("~")
+        or name.startswith("Backtrace.")
+    )
+
+
+def warn_ignored_files(worktree: Path) -> None:
+    """Warn about gitignored untracked files (e.g. new *.hdf5 or *.csv tables), which are not copied."""
+    paths = list_untracked(worktree, ignored=True)
+    for submodule in list_submodules(worktree):
+        paths.extend(f"{submodule}/{name}" for name in list_untracked(worktree / submodule, ignored=True))
+    listed: list[str] = []
+    for path in sorted(p for p in paths if not is_reproducer_path(p) and not is_ignored_noise(p)):
+        # Ignored directories are listed with a trailing "/"; skip entries inside one already listed.
+        if not any(path.startswith(parent) for parent in listed if parent.endswith("/")):
+            listed.append(path)
+    paths = listed
+    if not paths:
+        return
+    print(f"note: {len(paths)} gitignored untracked path(s) are not copied; pass any the run needs with --data:", file=sys.stderr)
+    for path in paths[:MAX_IGNORED_LISTED]:
+        print(f"  {path}", file=sys.stderr)
+    if len(paths) > MAX_IGNORED_LISTED:
+        print(f"  ... and {len(paths) - MAX_IGNORED_LISTED} more", file=sys.stderr)
 
 
 LARGE_UNTRACKED_BYTES = 10 * 1024 * 1024
@@ -379,6 +445,7 @@ def populate_reproducer(repro_dir: Path, args: argparse.Namespace, worktree: Pat
     status = git_output(worktree, ["-c", "core.quotePath=false", "status", "--short", "--ignore-submodules=none"])
     untracked = [] if args.no_untracked else get_untracked_files(worktree)
     report_untracked(untracked, worktree)
+    warn_ignored_files(worktree)
 
     input_dir = repro_dir / "input"
     data_dir = repro_dir / "data"
@@ -396,7 +463,17 @@ def populate_reproducer(repro_dir: Path, args: argparse.Namespace, worktree: Pat
         names = ", ".join(os.fsdecode(line.split()[1]) for line in missing)
         raise RuntimeError(
             f"cannot diff submodule(s) {names} because the base commit's version is missing from the local clone; "
-            "fetch the full history there (e.g. 'git -C <submodule> fetch --unshallow') and retry"
+            "run 'git -C <submodule> fetch' (or 'git -C <submodule> fetch --unshallow' if it is a shallow clone) and retry"
+        )
+    # --binary does not reach submodule diffs, so binary changes inside submodules come out as
+    # "Binary files ... differ" lines, which git apply rejects.
+    binary = [line for line in patch.splitlines() if line.startswith(b"Binary files ") and line.endswith(b" differ")]
+    if binary:
+        listed = "\n".join(f"  {os.fsdecode(line)}" for line in binary)
+        raise RuntimeError(
+            "the patch cannot carry binary changes inside submodules:\n"
+            f"{listed}\n"
+            "pass the changed binary files with --data, or commit them in the submodule and record the new submodule commit"
         )
     (patches_dir / "quokka.patch").write_bytes(patch)
     write_text(
@@ -487,14 +564,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         type=Path,
         action="append",
         default=[],
-        help="Input file or directory (relative to the current directory) to copy into input/; may be passed multiple times",
+        help="Input file, or directory whose contents are copied, into input/ (relative to the current directory); may be passed multiple times",
     )
     parser.add_argument(
         "--data",
         type=Path,
         action="append",
         default=[],
-        help="Data file or directory (relative to the current directory) to copy into data/; may be passed multiple times",
+        help="Data file, or directory whose contents are copied, into data/ (relative to the current directory); may be passed multiple times",
     )
     parser.add_argument(
         "--base-ref",

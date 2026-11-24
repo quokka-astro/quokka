@@ -49,7 +49,7 @@ Run the helper script from your Quokka checkout:
   --data path/to/table.dat
 ```
 
-By default it creates `tests/quokka-reproducer-<short-description>/`; `tests/` is ignored by Git. The patch is generated relative to the merge-base with `origin/development`, so it includes committed branch changes, uncommitted edits to tracked files, and edits inside submodules. The merge-base commit is recorded in `README.md`, `patches/README.md`, and `run.sh`. Untracked files, including those inside submodules, are copied to `patches/untracked-files/`; the script lists them with their sizes, so check that list for large or private files, and pass `--no-untracked` to skip them. `--input` and `--data` paths are relative to the current directory. When exactly one input file is given, `run.sh` defaults to that deck, and to a problem with the same name if one exists.
+By default it creates `tests/quokka-reproducer-<short-description>/`; `tests/` is ignored by Git. The patch is generated relative to the merge-base with `origin/development`, so it includes committed branch changes, uncommitted edits to tracked files, and edits inside submodules. The merge-base commit is recorded in `README.md`, `patches/README.md`, and `run.sh`. Untracked files, including those inside submodules, are copied to `patches/untracked-files/`; the script lists them with their sizes, so check that list for large or private files, and pass `--no-untracked` to skip them. Files matched by `.gitignore` (such as new `*.hdf5` or `*.csv` tables) are not copied; the script lists them, and any the run needs must be passed with `--data`. `--input` and `--data` paths are relative to the current directory; for a directory, its contents are copied directly into `input/` or `data/`. When exactly one input file is given, `run.sh` defaults to that deck, and to a problem with the same name if one exists.
 
 The base commit must exist in the official repository, because maintainers fetch it from there. If you work from a fork, add the official repository as a remote (for example `upstream`), fetch it, and pass `--base-ref upstream/development`. The script warns when the base commit is not on the official `development` branch.
 
@@ -66,7 +66,7 @@ Then:
 
 ### What `run.sh` does
 
-`run.sh` does not modify the checkout it is unpacked in. On its first run, it:
+`run.sh` does not modify the files of the checkout it is unpacked in, but it registers a Git worktree in that checkout's `.git` directory, where the worktree's submodule clones are also stored. On its first run, it:
 
 1. creates a separate Git worktree in `quokka-src/` at the recorded patch base commit,
 2. runs `git submodule update --init --recursive` in that worktree, using the URLs from that commit's `.gitmodules`, so submodules match that commit (the first run clones them from the network),
@@ -74,7 +74,7 @@ Then:
 
 It then configures (unless an earlier configure finished), builds the problem with the [`quokka` developer script](contributing.md#the-quokka-developer-script), and runs the executable from `quokka-src/tests/`, like `quokka run`. The `../extern/...` and `../inputs/...` paths in standard input decks therefore work, and files in the reproducer's `data/` directory can be referred to as `data/...`.
 
-Later runs skip the setup and reuse the existing build directory, so a developer can edit files in `quokka-src/` and re-run `bash run.sh` while debugging. To start over, delete `quokka-src/` (`rm -rf quokka-src`); the next run creates it again.
+Later runs skip the setup and reuse the existing build directory, so a developer can edit files in `quokka-src/` and re-run `bash run.sh` while debugging. To start over, delete `quokka-src/` (`rm -rf quokka-src`); the next run creates it again. After deleting a reproducer directory, run `git worktree prune` in the checkout to free the space used by its worktree and submodule clones.
 
 If the reproducer is unpacked outside a Quokka checkout, set `QUOKKA_ROOT=/path/to/quokka`. The base commit must be present in that clone; run `git fetch origin` if `run.sh` reports that it is missing.
 
