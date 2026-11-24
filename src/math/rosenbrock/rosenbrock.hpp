@@ -43,6 +43,13 @@ enum IntegratorError : std::int8_t { // NOLINT(cppcoreguidelines-use-enum-class)
 /// When checking the integration time to see if we're done, be careful with roundoff issues.
 constexpr amrex::Real timestep_safety_factor = 1.0e-4_rt;
 
+/// The H211b step-size controller (Microphysics' defaults).
+constexpr amrex::Real h211b_b = 4.0_rt;
+constexpr amrex::Real h211b_k = 2.5_rt;
+constexpr amrex::Real h211b_fac_min = 0.2_rt;
+constexpr amrex::Real h211b_fac_max = 6.0_rt;
+constexpr amrex::Real h211b_reduction_fac = 0.5_rt;
+
 /// Compile-time settings of the integrator. A caller passes its own struct with the same members.
 struct DefaultOptions {
 	static constexpr bool analytic_jacobian = true;
@@ -53,12 +60,6 @@ struct DefaultOptions {
 	static constexpr bool pivoting = true;
 	/// The largest internal timestep.
 	static constexpr amrex::Real max_dt = 1.e30;
-	/// The H211b step-size controller.
-	static constexpr amrex::Real h211b_b = 4.0;
-	static constexpr amrex::Real h211b_k = 2.5;
-	static constexpr amrex::Real h211b_fac_min = 0.2;
-	static constexpr amrex::Real h211b_fac_max = 6.0;
-	static constexpr amrex::Real h211b_reduction_fac = 0.5;
 };
 
 /// The state of the integrator for a system of neqs equations.
@@ -451,22 +452,21 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate(System &sys, State<Syste
 
 			const bool valid_update = sys.valid_update(rstate.y, rstate.ynew);
 			constexpr amrex::Real err_min = 1.e-10_rt;
-			// make copies of the options to avoid compiler error "undefined in device code" (amrex::Clamp takes references)
-			constexpr amrex::Real fac_min = Options::h211b_fac_min;
-			constexpr amrex::Real fac_max = Options::h211b_fac_max;
+			// local copies to avoid compiler error "undefined in device code" (amrex::Clamp takes references)
+			constexpr amrex::Real fac_min = h211b_fac_min;
+			constexpr amrex::Real fac_max = h211b_fac_max;
 			const amrex::Real err = detail::error_norm(sys, rstate);
 			// An accepted final step needs no new step size: hnew below then only enters the step-size underflow check at the
 			// top of the loop, which no factor in [fac_min, fac_max] can make fire when this condition holds. The controller
 			// (three pow calls) is then skipped and the smallest factor used.
 			const bool final_step_accepted = last && err <= 1.0_rt && valid_update &&
 							 0.1_rt * (fac_min * std::abs(h)) > std::abs(x + h) * std::numeric_limits<amrex::Real>::epsilon();
-			const amrex::Real controller_fac =
-			    final_step_accepted
-				? fac_min
-				: amrex::Clamp(std::pow(1.0_rt / amrex::max(err, err_min), 1.0_rt / (Options::h211b_b * Options::h211b_k)) *
-						   std::pow(1.0_rt / amrex::max(errold, err_min), 1.0_rt / (Options::h211b_b * Options::h211b_k)) *
-						   std::pow(facold, -1.0_rt / Options::h211b_b),
-					       fac_min, fac_max);
+			const amrex::Real controller_fac = final_step_accepted
+							       ? fac_min
+							       : amrex::Clamp(std::pow(1.0_rt / amrex::max(err, err_min), 1.0_rt / (h211b_b * h211b_k)) *
+										  std::pow(1.0_rt / amrex::max(errold, err_min), 1.0_rt / (h211b_b * h211b_k)) *
+										  std::pow(facold, -1.0_rt / h211b_b),
+									      fac_min, fac_max);
 			facold = controller_fac;
 			errold = err;
 
@@ -500,10 +500,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate(System &sys, State<Syste
 			n_reject += 1;
 			last = false;
 			if (n_reject >= 2) {
-				hnew *= Options::h211b_reduction_fac;
+				hnew *= h211b_reduction_fac;
 			}
 			if (valid_update) {
-				h = posneg * amrex::min(std::abs(hnew), Options::h211b_reduction_fac * std::abs(h));
+				h = posneg * amrex::min(std::abs(hnew), h211b_reduction_fac * std::abs(h));
 			} else {
 				h *= 0.25_rt;
 			}
