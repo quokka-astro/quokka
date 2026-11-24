@@ -165,7 +165,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 1; // only takes effect when quokka::EOS<problem_t>::is_tabulated; lets tests disable the cooling integrator while still
 				// using the tabulated EOS to compute temperature
-	amrex::Real massScalarFloor_ = 1.0e-30; // network.small_x: a negative mass scalar is reset to this fraction of the density; chemistry builds use the network default
+	amrex::Real massScalarFloor_ =
+	    1.0e-30; // network.small_x: a negative mass scalar is reset to this fraction of the density; chemistry builds use the network default
 	int enableChemistry_ = 0;
 	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
