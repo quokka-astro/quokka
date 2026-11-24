@@ -55,6 +55,6 @@ constexpr amrex::Real M_solar = 1.9884e33; // g
 constexpr amrex::Real R_solar = 6.957e10; // cm
 } // namespace quokka::constants
 
-namespace C = quokka::constants;
+namespace C = quokka::constants; // NOLINT(misc-unused-alias-decls): a short name for the files that include this one
 
 #endif // FUNDAMENTAL_CONSTANTS_HPP_

@@ -117,7 +117,7 @@ struct ThermophotochemistryHandwritten {
 
 	static constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
 
-	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto get_photoionization_coefficient(Real T) -> Real { return 2.1596876715103067e-18_rt; }
+	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto get_photoionization_coefficient(Real /*T*/) -> Real { return 2.1596876715103067e-18_rt; }
 
 	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto get_ionizing_band_photon_energy() -> Real
 	{
@@ -178,7 +178,7 @@ struct ThermophotochemistryHandwritten {
 		return amrex::max(get_ionizing_band_photon_energy() - RydbergEnergy, 0.0_rt);
 	}
 
-	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto get_KI_heating_coefficient(Real T) -> Real { return 2.0e-26; }
+	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto get_KI_heating_coefficient(Real /*T*/) -> Real { return 2.0e-26; }
 
 	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto get_KI_cooling_coefficient(Real T) -> Real
 	{
@@ -235,7 +235,7 @@ struct ThermophotochemistryHandwritten {
 
 	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto get_ion_ff_cooling_coefficient(Real T) -> Real
 	{
-		amrex::Real cle_term = get_cle_term(T);
+		const amrex::Real cle_term = get_cle_term(T);
 		return 1.3 * 1.427e-27 * std::sqrt(T) + cle_term; // Frazer and Heitsch 2019
 	}
 

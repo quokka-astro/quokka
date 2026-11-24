@@ -88,7 +88,7 @@ template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 	userData_.primary_species.fill(0.0_rt);
 	userData_.primary_species[Network::E] = 1.0_rt;
 	for (int n = 0; n < Network::NumSpec; ++n) {
-		pp.query(("primary_species_" + std::to_string(n + 1)).c_str(), userData_.primary_species[n]);
+		pp.query(("primary_species_" + std::to_string(n + 1)), userData_.primary_species[n]);
 	}
 
 	static bool isSamplingDone = false;

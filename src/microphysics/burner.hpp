@@ -138,9 +138,10 @@ template <typename problem_t, typename BurnT> struct BurnSystem {
 
 	static constexpr int neqs = IndexMap::neqs;
 
-	BurnT &state;
-	const IntegratorParams &params;
-	const typename traits::Network::Params &network_params;
+	// The system is a view of one burn, built and used inside Burn, so it holds references.
+	BurnT &state;						// NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+	const IntegratorParams &params;				// NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+	const typename traits::Network::Params &network_params; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 
 	/// Every entry counts toward the step error except, with photochemistry, the radiation entries other than the
 	/// photon numbers.

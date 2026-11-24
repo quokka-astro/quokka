@@ -361,7 +361,7 @@ struct StiffLinearSystem {
 
 	AMREX_GPU_HOST_DEVICE static constexpr auto counts_toward_error(int /*n*/) -> bool { return true; }
 
-	AMREX_GPU_HOST_DEVICE void rhs(Real /*t*/, amrex::GpuArray<Real, neqs> &y, amrex::GpuArray<Real, neqs> &ydot) const
+	AMREX_GPU_HOST_DEVICE static void rhs(Real /*t*/, amrex::GpuArray<Real, neqs> &y, amrex::GpuArray<Real, neqs> &ydot)
 	{
 		ydot[0] = -y[0];
 		ydot[1] = L * (y[0] - y[1]);
@@ -375,16 +375,16 @@ struct StiffLinearSystem {
 		J(1, 1) = -L;
 	}
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto rtol(int /*n*/) const -> Real { return 1.0e-8; }
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto atol(int /*n*/) const -> Real { return 1.0e-14; }
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto passive_floor() const -> Real { return 1.0e-30; } // every entry counts
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto rtol(int /*n*/) -> Real { return 1.0e-8; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto atol(int /*n*/) -> Real { return 1.0e-14; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto passive_floor() -> Real { return 1.0e-30; } // every entry counts
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto valid_state(const amrex::GpuArray<Real, neqs> &y) const -> bool
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto valid_state(const amrex::GpuArray<Real, neqs> &y) -> bool
 	{
 		return std::isfinite(y[0]) && std::isfinite(y[1]);
 	}
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto valid_update(const amrex::GpuArray<Real, neqs> & /*y*/, const amrex::GpuArray<Real, neqs> & /*ynew*/) const
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto valid_update(const amrex::GpuArray<Real, neqs> & /*y*/, const amrex::GpuArray<Real, neqs> & /*ynew*/)
 	    -> bool
 	{
 		return true;
