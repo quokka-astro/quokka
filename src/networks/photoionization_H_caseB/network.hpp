@@ -67,9 +67,6 @@ struct PhotoionizationHCaseB {
 		// $$JAFF END
 	}
 	/// adiabatic index of each species, 5/3 (a monatomic ideal gas) for every species
-	// TODO: take the adiabatic indices from the network's [network.eos] (its gamma, or gamma_map with
-	// multi_gamma), which jaff uses for E(T) and so for the Jacobian's energy column. With any other
-	// EOS, Quokka's temperature and that column disagree.
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static constexpr auto SpeciesGamma() -> amrex::GpuArray<amrex::Real, NumSpec>
 	{
 		return {{
