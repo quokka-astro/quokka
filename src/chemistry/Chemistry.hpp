@@ -30,6 +30,9 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 
 	static_assert(Microphysics_Traits<problem_t>::chemistry, "computeChemistry needs Microphysics_Traits::chemistry");
 	using Network = typename Microphysics_Traits<problem_t>::Network;
+	using ChemState = quokka::microphysics::BurnState<Network::NumSpec>;
+	// the burn's EOS (quokka::EOS<problem_t>); naming it through BurnSystem checks it is one a burn can use
+	using BurnEOS = typename quokka::microphysics::BurnSystem<problem_t, ChemState>::EOS;
 
 	// Start off by assuming a successful burn.
 	int burn_success = 1;
@@ -67,7 +70,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 					   rho; // state has partial densities, so divide by rho to get mass fractions
 			}
 
-			quokka::microphysics::BurnState<Network::NumSpec> chemstate;
+			ChemState chemstate;
 			chemstate.success = true;
 			chemstate.i = i;
 			chemstate.j = j;
@@ -94,7 +97,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			chemstate.e = Eint / rho;
 
 			// the temperature from the specific internal energy
-			chemstate.T = quokka::EOS<problem_t>::TemperatureFromEnergy(chemstate.e, chemstate.xn);
+			chemstate.T = BurnEOS::TemperatureFromEnergy(chemstate.e, chemstate.xn);
 
 			// do the actual integration
 			quokka::microphysics::Burn<problem_t>(chemstate, dt, integrator_params, network_params);
@@ -125,7 +128,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			}
 
 			// the specific internal energy of the renormalized composition at the burn's final temperature
-			chemstate.e = quokka::EOS<problem_t>::EnergyFromTemperature(chemstate.T, chemstate.xn);
+			chemstate.e = BurnEOS::EnergyFromTemperature(chemstate.T, chemstate.xn);
 
 			// get dEint
 			// Quokka uses rho*eint

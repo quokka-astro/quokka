@@ -51,6 +51,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	    std::conditional_t<RadSystem<problem_t>::dust_chemical_band_absorption_,
 			       quokka::microphysics::DustyPhotochemBurnState<Network::NumSpec, Network::NumChemBands, vars_per_group, Network::NumThermalBands>,
 			       quokka::microphysics::PhotochemBurnState<Network::NumSpec, Network::NumChemBands, vars_per_group, Network::NumThermalBands>>;
+	// the burn's EOS (quokka::EOS<problem_t>); naming it through BurnSystem checks it is one a burn can use
+	using BurnEOS = typename quokka::microphysics::BurnSystem<problem_t, PhotochemState>::EOS;
 
 	// Start off by assuming a successful burn.
 	int photochem_burn_success = 1;
@@ -187,7 +189,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			}
 
 			// the temperature from the specific internal energy
-			photochemstate.T = quokka::EOS<problem_t>::TemperatureFromEnergy(photochemstate.e, photochemstate.xn);
+			photochemstate.T = BurnEOS::TemperatureFromEnergy(photochemstate.e, photochemstate.xn);
 
 			// do the actual integration
 			quokka::microphysics::Burn<problem_t>(photochemstate, dt, integrator_params, network_params);
