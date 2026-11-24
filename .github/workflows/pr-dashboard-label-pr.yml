@@ -1,9 +1,9 @@
-# Sets the scope and size labels when a PR is opened, reopened or marked ready for review.
+# Sets the scope and size labels when a PR is opened, reopened or marked ready for review, and on every push once it is out of draft.
 name: "PR Dashboard: Label PR"
 
 on:
   pull_request_target:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize]
 
 permissions:
   contents: read
@@ -14,6 +14,8 @@ concurrency:
 
 jobs:
   label:
+    # Pushes to a draft are skipped, since marking it ready for review labels it.
+    if: github.event.action != 'synchronize' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     permissions:
       contents: read

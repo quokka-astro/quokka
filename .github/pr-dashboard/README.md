@@ -24,7 +24,7 @@ Deciding and writing are kept apart, so every decision can be tested offline and
 
 | Workflow | Runs when | Action |
 |---|---|---|
-| `pr-dashboard-label-pr.yml` | A PR is opened, reopened or marked ready for review | `label-pr`: sets the scope and size labels |
+| `pr-dashboard-label-pr.yml` | A PR is opened, reopened or marked ready for review, or pushed to while out of draft | `label-pr`: sets the scope and size labels |
 | `pr-dashboard-run-command.yml` | A comment containing `/` is posted on a PR | `run-command`: runs a command, or explains why it was not run |
 | `pr-dashboard-update-label-definitions.yml` | `labels.toml` changes on `development`, or someone starts it from the Actions tab | `update-label-definitions`: creates and updates the label names, colours and descriptions on GitHub |
 | `pr-dashboard-tests.yml` | Any PR is opened or updated | Runs the offline tests |
@@ -39,7 +39,7 @@ Edit `labels.toml`. Each category sets a prefix, and each label holds only its v
 - A changed file that matches no scope gives the PR the `scope/undefined` label, so a missing pattern shows up on the PR.
 - A file that should have no scope goes in `unlabelled_path_patterns`. It gives the PR no scope label, and does not count as unmapped.
 
-After the change merges into `development`, the label workflow creates any new labels and updates colours and descriptions. A PR that is already open keeps its old labels until it is labelled again, for example with `/recompute-labels`.
+After the change merges into `development`, the label workflow creates any new labels and updates colours and descriptions. A PR that is already open keeps its old labels until it is labelled again, on its next push or with `/recompute-labels`.
 
 ## Running the Tests
 
