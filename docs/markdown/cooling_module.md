@@ -8,7 +8,7 @@ Radiative cooling in Quokka is selected at compile time by the `EOSBackend` memb
 |---------|---------|------------------|
 | `quokka::EOSIdeal<P>` | none | ideal gas law with constant \\(\mu\\) |
 | `quokka::EOSTabulated<P>` | tabulated (Grackle-derived) | resampled table lookup |
-| `quokka::EOSMicrophysics<P>` | Microphysics reaction network | Microphysics EOS |
+| `quokka::EOSMultigamma<P>` | reaction network | multi-gamma ideal gas of the network's species |
 
 A problem selects its backend in its `EOS_Traits` specialization:
 
@@ -20,7 +20,7 @@ template <> struct quokka::EOS_Traits<MyProblem> {
 };
 ```
 
-If `EOSBackend` is omitted, the default is `EOSMicrophysics<P>` when the target is compiled with `CHEMISTRY` or `PHOTOCHEMISTRY` defined, and `EOSIdeal<P>` otherwise.
+If `EOSBackend` is omitted, the default is `EOSMultigamma<P>` when `Microphysics_Traits<P>` turns on `chemistry` or `photochemistry`, and `EOSIdeal<P>` otherwise.
 
 ### EOSIdeal
 
@@ -30,11 +30,11 @@ The gamma-law ideal gas EOS, and the default for most problems. Temperature foll
 
 Applies optically-thin radiative cooling as a Strang-split source term, and computes temperature by interpolating a pre-computed table of \\(T(\rho, e\_{\rm int})\\). This is the backend used by the ISM and galaxy problems (`ShockCloud`, `TallBoxSf`, `DiskGalaxy`, `RandomBlast`, `SN`, `ParticleSF`). It is described in detail below.
 
-### EOSMicrophysics
+### EOSMultigamma
 
-Delegates the EOS to the [Microphysics](https://github.com/AMReX-Astro/Microphysics) submodule, so that temperature is consistent with the evolving chemical species tracked by the reaction network (`chemstate.xn`). Cooling and heating are handled by the network itself rather than by a table, and are advanced by the chemistry burner (`quokka::chemistry::computeChemistry`) rather than by the cooling integrator.
+A mixture of ideal gases, one per species of the problem's reaction network (`Microphysics_Traits<P>::Network`), each with its own particle mass and adiabatic index (`Network::SpeciesMass()`, `Network::SpeciesGamma()`). With number densities \\(n\_i\\), the specific internal energy is \\(e = k\_B T \sum\_i n\_i / (\gamma\_i - 1) / \sum\_i n\_i m\_i\\), so the temperature is consistent with the evolving species. Cooling and heating are handled by the network itself rather than by a table, and are advanced by the chemistry and photochemistry burners rather than by the cooling integrator.
 
-This is the backend for every target compiled with `CHEMISTRY` or `PHOTOCHEMISTRY`, which covers both primordial chemistry problems (`PrimordialChem`, `PopIII`) and photoionization problems (`DTypeFront_JAFF`, `DTypeFrontVC`, `StromgrenSphere`, `StromgrenSphereRSLA`, `OneZonePhotoionization`) — including hydro-enabled ones. None of these set `EOSBackend` explicitly; they receive `EOSMicrophysics` as the default backend for their compile definition. See the chemistry module and [Photoionization](photoionization.md) for details.
+This is the default backend of every problem with chemistry or photochemistry, which covers both primordial chemistry problems (`PrimordialChem`, `PopIII`) and photoionization problems (`DTypeFront_JAFF`, `DTypeFrontVC`, `StromgrenSphere`, `StromgrenSphereRSLA`, `OneZonePhotoionization`) — including hydro-enabled ones. None of these set `EOSBackend` explicitly. See the chemistry module and [Photoionization](photoionization.md) for details.
 
 ## The EOSTabulated cooling model
 
@@ -159,7 +159,7 @@ heating_rate_external = "max(min(1.0, 2.0 - time / (32 * Myr)), 0.0024) * 2e-26"
 
 ## Using cooling in a problem
 
-Tabulated cooling is the only cooling module currently supported: a problem gets radiative cooling by selecting the `EOSTabulated` backend, and `cooling.cooling_table_type` accepts only `"resampled"`. (`EOSMicrophysics` evolves its own thermochemistry through the reaction network, but that is the chemistry burner rather than this cooling operator.) The rest of this section covers setting up and using the tabulated backend.
+Tabulated cooling is the only cooling module currently supported: a problem gets radiative cooling by selecting the `EOSTabulated` backend, and `cooling.cooling_table_type` accepts only `"resampled"`. (A problem with `EOSMultigamma` evolves its own thermochemistry through the reaction network, but that is the chemistry burner rather than this cooling operator.) The rest of this section covers setting up and using the tabulated backend.
 
 ### 1. Select the tabulated backend
 
