@@ -95,6 +95,7 @@ color = "16A085"
 description = "Chemistry and chemical networks"
 path_patterns = [
     "src/chemistry/*",
+    "src/photochemistry/*",
     "src/networks/*",
     "src/microphysics/*",
     "src/problems/PrimordialChem*",
@@ -148,6 +149,9 @@ path_patterns = [
     "src/physics_info*",
     "src/physics_numVars*",
     "src/math/*",
+    "src/rosenbrock/*",
+    "src/gravity/*",
+    "src/boundary_fill*",
     "src/util/*",
     "src/main*",
     "src/grid*",
@@ -184,7 +188,7 @@ path_patterns = ["src/problems/*", "inputs/*", "extern/*", "regression/*", "test
 value = "tools"
 color = "16A085"
 description = "Helper scripts and files for AI agents"
-path_patterns = ["scripts/*", ".agents/*", ".claude/*", "AGENTS.md", "CLAUDE.md", "context7.json"]
+path_patterns = ["scripts/*", "tools/*", ".agents/*", ".claude/*", "AGENTS.md", "CLAUDE.md", "context7.json"]
 
 [[scope.label]]
 value = "CI"
