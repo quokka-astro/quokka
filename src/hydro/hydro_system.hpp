@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef HYDRO_SYSTEM_HPP_ // NOLINT
 #define HYDRO_SYSTEM_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file hydro_system.hpp
 /// \brief Defines a class for solving the Euler equations.
 ///
@@ -38,11 +36,6 @@
 #include "util/ArrayView.hpp"
 #include "util/valarray.hpp"
 
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-// Microphysics headers
-#include "extern_parameters.H"
-#endif
-
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct HydroSystem_Traits {
@@ -63,7 +56,6 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 {
       public:
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-	static constexpr amrex::Real small_x_ = 1.0e-30; // mass-scalar floor (fraction of rho); chemistry builds use network_rp::small_x
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
 	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_ +
 				     (Physics_Traits<problem_t>::nDustGroups * Physics_NumVars::numDustVarsPerGroup) *
@@ -129,6 +121,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
+	static void ComputeGasPressure(amrex::MultiFab &cc_mf_out, int out_comp, amrex::MultiFab const &cc_mf_cVars,
+				       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_mf_cVars);
+
 	AMREX_GPU_DEVICE static auto ComputeInternalEnergy(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
 	    -> amrex::Real;
@@ -173,8 +168,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
 	template <typename DensityFloorFunc>
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf,
-				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, amrex::Real massScalarFloor,
+				  amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
 				  DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
@@ -616,6 +611,26 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 }
 
 template <typename problem_t>
+void HydroSystem<problem_t>::ComputeGasPressure(amrex::MultiFab &cc_mf_out, int out_comp, amrex::MultiFab const &cc_mf_cVars,
+						amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_mf_cVars)
+{
+	for (amrex::MFIter mfi(cc_mf_out); mfi.isValid(); ++mfi) {
+		const amrex::Box box_cc = mfi.growntilebox(cc_mf_out.nGrowVect());
+		const auto &cc_a4_out = cc_mf_out.array(mfi);
+		const auto &cc_a4_cVars = cc_mf_cVars.const_array(mfi);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fc_a4_cVars{};
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int wcomp = 0; wcomp < AMREX_SPACEDIM; ++wcomp) {
+				fc_a4_cVars[wcomp] = fc_mf_cVars[wcomp].const_array(mfi);
+			}
+		}
+		amrex::ParallelFor(box_cc, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			cc_a4_out(i, j, k, out_comp) = ComputePressure(cc_a4_cVars, i, j, k, &fc_a4_cVars);
+		});
+	}
+}
+
+template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
 HydroSystem<problem_t>::ComputeInternalEnergy(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 					      std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
@@ -1024,8 +1039,9 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 template <typename problem_t>
 template <typename DensityFloorFunc>
 void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const dustDensityFloor, amrex::Real const tempFloor,
-					   amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf,
-					   amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
+					   amrex::Real const massScalarFloor, amrex::MultiFab &state_mf,
+					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
+					   DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
 	auto const &state_fc_x0 = state_fc_mf[0].const_arrays();
@@ -1065,10 +1081,10 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 				if (nscalars_ > 0) {
 					for (int n = 0; n < nscalars_; ++n) {
-						if (rho_new == 0.0) {
+						if (rho <= 0.0) {
 							state[bx](i, j, k, scalar0_index + n) = 0.0;
 						} else {
-							state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
+							state[bx](i, j, k, scalar0_index + n) *= rho_new / rho;
 						}
 					}
 				}
@@ -1080,11 +1096,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real sp_sum = 0.0;
 			for (int idx = 0; idx < nmscalars_; ++idx) {
 				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-					state[bx](i, j, k, scalar0_index + idx) = network_rp::small_x * rho_new;
-#else
-					state[bx](i, j, k, scalar0_index + idx) = small_x_ * rho_new;
-#endif
+					state[bx](i, j, k, scalar0_index + idx) = massScalarFloor * rho_new;
 				}
 				// get sum to renormalize
 				sp_sum += state[bx](i, j, k, scalar0_index + idx);

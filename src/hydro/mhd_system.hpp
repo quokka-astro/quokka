@@ -1,9 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef MHD_SYSTEM_HPP_ // NOLINT
 #define MHD_SYSTEM_HPP_
-
-//==============================================================================
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file mhd_system.hpp
 /// \brief A class for solving the resistive MHD induction equation, including Ohmic heating for non-isothermal plasmas.
 ///
@@ -119,6 +118,22 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					    std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bs_icomp_jeside,
 					    amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0, amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1,
 					    amrex::Real dx_wcomp0, amrex::Real dx_wcomp1, amrex::Real resistivity);
+
+	// current density
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto computeEdgeCurrentDensity(amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0,
+										  amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1, int i, int j, int k,
+										  std::array<int, 3> const &delta_wcomp0,
+										  std::array<int, 3> const &delta_wcomp1, amrex::Real dx_wcomp0,
+										  amrex::Real dx_wcomp1) -> amrex::Real;
+
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto computeCellCentredCurrentDensity(std::array<amrex::Array4<const amrex::Real>, 3> const &fcw_a4_b_wcomp,
+											 int i, int j, int k, int wcomp2,
+											 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx_wcomp)
+	    -> amrex::Real;
+
+	static void ComputeCellCentredCurrentDensity(amrex::MultiFab &cc_mf_out, int out_comp, int wcomp2,
+						     amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
+						     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp);
 
 	// resistive corrections
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto computeResistiveEMF(amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0,
@@ -1132,14 +1147,74 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 	}
 }
 
+// current density on the wcomp2-aligned edge at the lo corner of cell (i, j, k), where wcomp0 = (wcomp2 + 1) % 3 and
+// wcomp1 = (wcomp2 + 2) % 3
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+MHDSystem<problem_t>::computeEdgeCurrentDensity(amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0, amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1,
+						int i, int j, int k, std::array<int, 3> const &delta_wcomp0, std::array<int, 3> const &delta_wcomp1,
+						amrex::Real dx_wcomp0, amrex::Real dx_wcomp1) -> amrex::Real
+{
+	return (fc_a4_b_wcomp1(i, j, k) - fc_a4_b_wcomp1(i - delta_wcomp0[0], j - delta_wcomp0[1], k - delta_wcomp0[2])) / dx_wcomp0 -
+	       (fc_a4_b_wcomp0(i, j, k) - fc_a4_b_wcomp0(i - delta_wcomp1[0], j - delta_wcomp1[1], k - delta_wcomp1[2])) / dx_wcomp1;
+}
+
+// average of the four wcomp2-aligned edge current densities bounding cell (i, j, k)
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+MHDSystem<problem_t>::computeCellCentredCurrentDensity(std::array<amrex::Array4<const amrex::Real>, 3> const &fcw_a4_b_wcomp, int i, int j, int k, int wcomp2,
+						       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx_wcomp) -> amrex::Real
+{
+	const int wcomp0 = (wcomp2 + 1) % 3;
+	const int wcomp1 = (wcomp2 + 2) % 3;
+	// indexing: delta_wcomp{0/1}[3: spatial dimension]
+	std::array<int, 3> delta_wcomp0 = {0, 0, 0};
+	std::array<int, 3> delta_wcomp1 = {0, 0, 0};
+	delta_wcomp0[wcomp0] = 1;
+	delta_wcomp1[wcomp1] = 1;
+	const auto &fc_a4_b_wcomp0 = fcw_a4_b_wcomp[wcomp0];
+	const auto &fc_a4_b_wcomp1 = fcw_a4_b_wcomp[wcomp1];
+	const amrex::Real ec_j_wcomp2_mm =
+	    computeEdgeCurrentDensity(fc_a4_b_wcomp0, fc_a4_b_wcomp1, i, j, k, delta_wcomp0, delta_wcomp1, dx_wcomp[wcomp0], dx_wcomp[wcomp1]);
+	const amrex::Real ec_j_wcomp2_pm = computeEdgeCurrentDensity(fc_a4_b_wcomp0, fc_a4_b_wcomp1, i + delta_wcomp0[0], j + delta_wcomp0[1],
+								     k + delta_wcomp0[2], delta_wcomp0, delta_wcomp1, dx_wcomp[wcomp0], dx_wcomp[wcomp1]);
+	const amrex::Real ec_j_wcomp2_mp = computeEdgeCurrentDensity(fc_a4_b_wcomp0, fc_a4_b_wcomp1, i + delta_wcomp1[0], j + delta_wcomp1[1],
+								     k + delta_wcomp1[2], delta_wcomp0, delta_wcomp1, dx_wcomp[wcomp0], dx_wcomp[wcomp1]);
+	const amrex::Real ec_j_wcomp2_pp =
+	    computeEdgeCurrentDensity(fc_a4_b_wcomp0, fc_a4_b_wcomp1, i + delta_wcomp0[0] + delta_wcomp1[0], j + delta_wcomp0[1] + delta_wcomp1[1],
+				      k + delta_wcomp0[2] + delta_wcomp1[2], delta_wcomp0, delta_wcomp1, dx_wcomp[wcomp0], dx_wcomp[wcomp1]);
+	return 0.25 * ((ec_j_wcomp2_mm + ec_j_wcomp2_pp) + (ec_j_wcomp2_pm + ec_j_wcomp2_mp));
+}
+
+template <typename problem_t>
+void MHDSystem<problem_t>::ComputeCellCentredCurrentDensity(amrex::MultiFab &cc_mf_out, int out_comp, int wcomp2,
+							    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp)
+{
+	for (int wcomp = 0; wcomp < AMREX_SPACEDIM; ++wcomp) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(fcw_mf_cVars_wcomp[wcomp].nGrow() >= 1,
+						 "cell-centred current density needs at least one filled ghost layer of the face-centred magnetic field.");
+	}
+	for (amrex::MFIter mfi(cc_mf_out); mfi.isValid(); ++mfi) {
+		const amrex::Box &box_cc = mfi.validbox();
+		const auto &cc_a4_out = cc_mf_out.array(mfi);
+		// indexing: fcw_a4_b_wcomp[3: face-normal direction = magnetic field component]
+		const std::array<amrex::Array4<const amrex::Real>, 3> fcw_a4_b_wcomp = {fcw_mf_cVars_wcomp[0][mfi].const_array(bfield_index),
+											fcw_mf_cVars_wcomp[1][mfi].const_array(bfield_index),
+											fcw_mf_cVars_wcomp[2][mfi].const_array(bfield_index)};
+		amrex::ParallelFor(box_cc, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			cc_a4_out(i, j, k, out_comp) = computeCellCentredCurrentDensity(fcw_a4_b_wcomp, i, j, k, wcomp2, dx_wcomp);
+		});
+	}
+}
+
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
 MHDSystem<problem_t>::computeResistiveEMF(amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0, amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1, int i,
 					  int j, int k, std::array<int, 3> const &delta_wcomp0, std::array<int, 3> const &delta_wcomp1, amrex::Real dx_wcomp0,
 					  amrex::Real dx_wcomp1, amrex::Real resistivity) -> amrex::Real
 {
-	const amrex::Real ec_j = (fc_a4_b_wcomp1(i, j, k) - fc_a4_b_wcomp1(i - delta_wcomp0[0], j - delta_wcomp0[1], k - delta_wcomp0[2])) / dx_wcomp0 -
-				 (fc_a4_b_wcomp0(i, j, k) - fc_a4_b_wcomp0(i - delta_wcomp1[0], j - delta_wcomp1[1], k - delta_wcomp1[2])) / dx_wcomp1;
+	const amrex::Real ec_j = computeEdgeCurrentDensity(fc_a4_b_wcomp0, fc_a4_b_wcomp1, i, j, k, delta_wcomp0, delta_wcomp1, dx_wcomp0, dx_wcomp1);
 	return resistivity * ec_j;
 }
 

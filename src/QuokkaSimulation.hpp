@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef RADIATION_SIMULATION_HPP_ // NOLINT
 #define RADIATION_SIMULATION_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file QuokkaSimulation.hpp
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
@@ -68,7 +66,8 @@ namespace filesystem = experimental::filesystem;
 
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
-#include "conduction/ElectronConduction.hpp"
+#include "conduction/AnisoConduction.hpp"
+#include "conduction/IsoConduction.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
@@ -146,10 +145,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::sfh_interval_;
 	using AMRSimulation<problem_t>::sfh_time_interval_;
 
-	using AMRSimulation<problem_t>::enableElectronConduction_;
-	using AMRSimulation<problem_t>::electronConductionKappa0_;
+	using AMRSimulation<problem_t>::enableConduction_;
+	using AMRSimulation<problem_t>::conductivityParams_;
 	using AMRSimulation<problem_t>::conductionCFL;
-	using AMRSimulation<problem_t>::conductionType_;
 
 #if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
@@ -167,6 +165,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 1; // only takes effect when quokka::EOS<problem_t>::is_tabulated; lets tests disable the cooling integrator while still
 				// using the tabulated EOS to compute temperature
+	amrex::Real massScalarFloor_ =
+	    1.0e-30; // network.small_x: a negative mass scalar is reset to this fraction of the density; chemistry builds use the network default
 	int enableChemistry_ = 0;
 	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
@@ -180,8 +180,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
 
-	amrex::Real electronConductionFluxLimiterPhi_ = 1.0;
-	amrex::Real electronConductionSaturationFactor_ = 5.0;
+	amrex::Real conductionFluxLimiterPhi_ = 1.0;
+	amrex::Real conductionSaturationFactor_ = 5.0;
+	quokka::conduction::AnisoFluxLimiterType anisoFluxLimiterType_ = quokka::conduction::AnisoFluxLimiterType::mc; // default: MC
 
 	std::map<std::string, std::string> turbParams_;
 
@@ -280,6 +281,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
 		// initialize Microphysics params
 		init_extern_parameters();
+		// use the network's small_x (1e-100 for primordial_chem), so the hydro floor matches the chemistry burner
+		massScalarFloor_ = network_rp::small_x;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!integrator_rp::subtract_internal_energy,
 						 "integrator.subtract_internal_energy must be 0: Quokka reads total energy from burn_t::e, not the delta");
 		// initialize Microphysics EOS
@@ -298,11 +301,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				    "Physical resistivity requires use_dual_energy = 0: Ohmic heating is not yet added to the auxiliary energy equation.");
 			}
 		}
-		if (enableElectronConduction_) {
+		if (enableConduction_) {
 			// TODO (av): add support for subcycling with conduction
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0, "AMR subcycling is not supported with conduction. Set do_subcycle = 0.");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!HydroSystem<problem_t>::is_eos_isothermal(),
-							 "Electron conduction has no effect with an isothermal EOS (gamma = 1).");
+							 "Conduction has no effect with an isothermal EOS (gamma = 1).");
 		}
 		if constexpr (Physics_Traits<problem_t>::viscosity_model != ViscosityModel::none) {
 			const bool viscosity_active = (Physics_Traits<problem_t>::viscosity_model == ViscosityModel::problem_defined) ||
@@ -367,6 +370,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 			       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const override;
 	void ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const override;
+	[[nodiscard]] auto ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+						    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const -> bool override;
 
 	// compute projected vars
 
@@ -658,6 +663,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 	}
 
+	// mass-scalar floor; the same key as Microphysics's network.small_x, which chemistry builds also read
+	{
+		amrex::ParmParse const npp("network");
+		npp.query("small_x", massScalarFloor_);
+	}
+
 	// set MHD runtime parameters
 	{
 		amrex::ParmParse const hpp("mhd");
@@ -734,17 +745,76 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 	}
 
-	// set electron thermal conduction runtime parameters
+	// set thermal conduction runtime parameters
 	{
 		amrex::ParmParse const hpp("conduction");
-		hpp.query("enabled", enableElectronConduction_);
-		hpp.query("conductivity_prefactor", electronConductionKappa0_);
+		hpp.query("enabled", enableConduction_);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(enableConduction_ == 0 || enableConduction_ == 1, "conduction.enabled must be 0 or 1.");
 		hpp.query("conduction_cfl", conductionCFL);
-		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
-		hpp.query("saturation_factor", electronConductionSaturationFactor_);
-		hpp.query("conduction_type", conductionType_);
-		if (conductionType_ != "constant" && conductionType_ != "spitzer") {
-			amrex::Abort("Invalid conduction.conduction_type! Must be 'constant' or 'spitzer'.");
+		hpp.query("flux_limiter_phi", conductionFluxLimiterPhi_);
+		hpp.query("saturation_factor", conductionSaturationFactor_);
+
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!hpp.contains("conduction_type"),
+						 "conduction.conduction_type has been removed; set Physics_Traits::conduction_model and "
+						 "Physics_Traits::conduction_geometry in the problem file instead.");
+
+		constexpr ConductionModel conduction_model = Physics_Traits<problem_t>::conduction_model;
+		constexpr bool is_anisotropic = (Physics_Traits<problem_t>::conduction_geometry == ConductionGeometry::anisotropic);
+		static_assert(!is_anisotropic || Physics_Traits<problem_t>::is_mhd_enabled, "ConductionGeometry::anisotropic requires is_mhd_enabled = true.");
+		const bool conduction_enabled = (enableConduction_ != 0);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!conduction_enabled || conduction_model != ConductionModel::none,
+						 "conduction.enabled = 1, but this problem's Physics_Traits::conduction_model is `none`.");
+
+		// Everything below is only read and checked when conduction is on: with conduction.enabled = 0, leftover
+		// conduction.* keys in an input file are ignored rather than aborting a run that does not use conduction.
+		if (conduction_enabled) {
+			// Conductivity prefactors (erg cm^-1 s^-1 K^-1; erg cm^-1 s^-1 K^-3.5 for spitzer) are only read for the
+			// built-in models, and only under the keys matching conduction_geometry.
+			const bool isotropic_key_present = hpp.contains("conductivity_prefactor");
+			const bool anisotropic_key_present = hpp.contains("kappaPar") || hpp.contains("kappaPerp");
+			if constexpr (conduction_model == ConductionModel::constant || conduction_model == ConductionModel::spitzer) {
+				if constexpr (is_anisotropic) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    !isotropic_key_present,
+					    "conduction.conductivity_prefactor is set, but this problem's Physics_Traits::conduction_geometry "
+					    "is `anisotropic`; use conduction.kappaPar / conduction.kappaPerp instead.");
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(hpp.contains("kappaPar"),
+									 "conduction.kappaPar must be set for anisotropic conduction.");
+					hpp.query("kappaPar", conductivityParams_.kappa0_par);
+					hpp.query("kappaPerp", conductivityParams_.kappa0_perp);
+					// AnisoConduction limits the (kappa_par - kappa_perp) b_n^2 normal term with the biased L2 limiter,
+					// which is only monotone for a non-negative coefficient.
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductivityParams_.kappa0_perp <= conductivityParams_.kappa0_par,
+									 "conduction.kappaPerp must be <= conduction.kappaPar for anisotropic conduction.");
+				} else {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    !anisotropic_key_present,
+					    "conduction.kappaPar or conduction.kappaPerp is set, but this problem's "
+					    "Physics_Traits::conduction_geometry is `isotropic`; use conduction.conductivity_prefactor instead.");
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(isotropic_key_present,
+									 "conduction.conductivity_prefactor must be set for isotropic conduction.");
+					hpp.query("conductivity_prefactor", conductivityParams_.kappa0_par);
+					conductivityParams_.kappa0_perp = conductivityParams_.kappa0_par;
+				}
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(conductivityParams_.kappa0_par >= 0.0 && conductivityParams_.kappa0_perp >= 0.0,
+								 "Conductivity prefactors must be >= 0.");
+			} else {
+				// ConductionModel::problem_defined (`none` with conduction enabled is rejected above)
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    !isotropic_key_present && !anisotropic_key_present,
+				    "conduction.conductivity_prefactor, conduction.kappaPar or conduction.kappaPerp is set, but this "
+				    "problem's Physics_Traits::conduction_model is `problem_defined`; the conductivity comes from "
+				    "computeConductivity instead.");
+			}
+
+			// limiter for the transverse (cross) terms of the anisotropic flux (default: mc)
+			if constexpr (is_anisotropic) {
+				hpp.query("aniso_flux_limiter", anisoFluxLimiterType_);
+			} else {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    !hpp.contains("aniso_flux_limiter"),
+				    "conduction.aniso_flux_limiter is set, but this problem's Physics_Traits::conduction_geometry is `isotropic`.");
+			}
 		}
 	}
 
@@ -1252,9 +1322,9 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	};
 
 	auto const applyConduction = [&]() {
-		if (enableElectronConduction_ == 1) {
+		if (enableConduction_ == 1) {
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
-			// NOTE: heat_flux is defined (with 1 component) inside ElectronConduction::ComputeExplicit,
+			// NOTE: heat_flux is defined (with 1 component) inside IsoConduction::ComputeExplicit,
 			// so it only needs to be declared here.
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
 
@@ -1266,21 +1336,29 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 				}
 				AMRSimulation<problem_t>::applyMHDDiodeBC(state, state_fc, lev);
 			}
-			// Match the hydro solver's own reconstruction ghost width (QuokkaSimulation::computeHydroFluxes)
-			// so the (rho, T) reconstruction used for the conduction flux has the same stencil robustness
-			// as the hydro reconstruction it mirrors.
-			const int conduction_nghost_Riemann =
-			    MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emfComputingScheme_, emfAveragingScheme_, do_tracers != 0);
-			const int conduction_reconstructGhost = conduction_nghost_Riemann + 1;
-			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
-											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
-											     .saturation_factor = electronConductionSaturationFactor_,
+			if constexpr (Physics_Traits<problem_t>::conduction_geometry == ConductionGeometry::anisotropic) {
+				const quokka::conduction::AnisoConductionParams aniso_params{.conductivity = conductivityParams_,
+											     .flux_limiter_phi = conductionFluxLimiterPhi_,
+											     .saturation_factor = conductionSaturationFactor_,
 											     .min_temperature = tempFloor_,
-											     .spitzer_scaling = (conductionType_ == "spitzer"),
-											     .reconstruction_order = reconstructionOrder_,
-											     .plm_limiter = plmLimiter_,
-											     .ng_reconstruct = conduction_reconstructGhost};
-			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
+											     .flux_limiter_type = anisoFluxLimiterType_};
+				quokka::conduction::AnisoConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, aniso_params, heat_flux);
+			} else {
+				// Match the hydro solver's own reconstruction ghost width (QuokkaSimulation::computeHydroFluxes)
+				// so the (rho, T) reconstruction used for the conduction flux has the same stencil robustness
+				// as the hydro reconstruction it mirrors.
+				const int conduction_nghost_Riemann = MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emfComputingScheme_,
+											       emfAveragingScheme_, do_tracers != 0);
+				const int conduction_reconstructGhost = conduction_nghost_Riemann + 1;
+				const quokka::conduction::IsoConductionParams conduction_params{.conductivity = conductivityParams_,
+												.flux_limiter_phi = conductionFluxLimiterPhi_,
+												.saturation_factor = conductionSaturationFactor_,
+												.min_temperature = tempFloor_,
+												.reconstruction_order = reconstructionOrder_,
+												.plm_limiter = plmLimiter_,
+												.ng_reconstruct = conduction_reconstructGhost};
+				quokka::conduction::IsoConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, heat_flux);
+			}
 			if ((do_reflux != 0) && (recal_fluxes != nullptr)) {
 				// heat_flux has a single component, so accumulate it into the energy components of the
 				// multi-component reflux array (which the caller defines, zeroes and hands to the flux
@@ -1369,6 +1447,33 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFl
 		}
 	}
 	amrex::Gpu::streamSynchronize();
+}
+
+template <typename problem_t>
+auto QuokkaSimulation<problem_t>::ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+							   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const -> bool
+{
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
+		if (dname == "gas_pressure") {
+			HydroSystem<problem_t>::ComputeGasPressure(mf, ncomp, state_cc, state_fc);
+			return true;
+		}
+	} else {
+		amrex::ignore_unused(state_cc);
+	}
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		for (int wcomp = 0; wcomp < AMREX_SPACEDIM; ++wcomp) {
+			if (dname == quokka::face_dir_str[wcomp] + "-CurrentDensity") {
+				// the face-centred magnetic field has freshly filled ghost cells only when the output itself carries ghost cells
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mf.nGrow() >= 1, "CurrentDensity output needs output written with ghost cells.");
+				MHDSystem<problem_t>::ComputeCellCentredCurrentDensity(mf, ncomp, wcomp, state_fc, geom[lev].CellSizeArray());
+				return true;
+			}
+		}
+	} else {
+		amrex::ignore_unused(lev, dname, mf, ncomp, state_fc);
+	}
+	return false;
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
@@ -2097,10 +2202,12 @@ void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, massScalarFloor_, state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	} else {
 		auto const density_floor_func = QuokkaDensityFloorFunctor<problem_t>{};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, massScalarFloor_, state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	}
 
 	if (useDualEnergy_ == 1) {
@@ -2409,7 +2516,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 	std::optional<std::array<amrex::MultiFab, AMREX_SPACEDIM>> recal_fluxes;
 
-	if (enableElectronConduction_ == 1) {
+	if (enableConduction_ == 1) {
 		// Construct the array of MultiFabs using emplace
 		recal_fluxes.emplace();
 		for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
@@ -2774,7 +2881,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	bool const final_success = (cfl_ok && burn_success_second);
 
 	if (do_reflux == 1 && final_success) {
-		if (enableElectronConduction_ == 1) {
+		if (enableConduction_ == 1) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				amrex::MultiFab::Saxpy(flux_rk2[idim], 1.0, (*recal_fluxes)[idim], HydroSystem<problem_t>::energy_index,
 						       HydroSystem<problem_t>::energy_index, 1, 0);

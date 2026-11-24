@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testHydroShocktubeCMA.cpp
 /// \brief Defines a test problem for a shock tube with passive scalars using consistent multi-fluid advection (CMA).
 /// Implementing shock tube proglem from Plewa and Muller 1999, A&A 342, 179

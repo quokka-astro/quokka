@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef RADIATION_SYSTEM_HPP_ // NOLINT
 #define RADIATION_SYSTEM_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file radiation_system.hpp
 /// \brief Defines a class for solving the (1d) radiation moment equations.
 ///
@@ -665,42 +663,42 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
 };
 
-// Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
-// This function enforces that the total fraction is 1.0, no matter what are the group boundaries
+// Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature.
+// The fraction of group g is P(x_{g+1}) - P(x_g), where P is the Planck integral from 0 to x normalized to unity and x = energy_unit * nu / (k T).
+// The group boundaries need not span the whole spectrum: blackbody emission below boundaries[0], above boundaries[nGroupsThermal_], or inside a chemical
+// band is simply dropped rather than folded into the nearest group, so the fractions sum to <= 1.
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
 	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
+		// a single group always spans the whole spectrum; see radBoundaries_
 		radEnergyFractions[0] = 1.0;
 		return radEnergyFractions;
 	} else {
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		// (P, Q) = lower/upper normalized Planck integrals at the group's lower edge; the first group's lower edge is taken as x = 0.
-		amrex::Real p_prev = 0.0;
-		amrex::Real q_prev = 1.0;
-		bool prev_in_tail = false;
-		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission. When
-		// chemical bands are present the thermal fractions are NOT renormalized: the blackbody radiation
-		// above the first chemical-band boundary is simply dropped, so the fractions sum to < 1.
+		// (P, Q) = lower/upper normalized Planck integrals at the group's lower edge, starting from boundaries[0]. A zero lower
+		// edge is taken as x = 0 exactly, so that T = 0 (energy_unit_over_kT = inf) does not form 0 * inf.
+		amrex::Real const x_lo = (boundaries[0] > 0.0) ? boundaries[0] * energy_unit_over_kT : 0.0;
+		auto const pq_lo = integrate_planck_below_and_above_x(x_lo);
+		amrex::Real p_prev = pq_lo[0];
+		amrex::Real q_prev = pq_lo[1];
+		bool prev_in_tail = x_lo >= X_TAIL;
+		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission, and their fractions are NOT
+		// renormalized.
 		for (int g = 0; g < nGroupsThermal_; ++g) {
-			// no chemical bands: the last group carries all remaining blackbody, total fraction = 1.0
-			amrex::Real p = 1.0;
-			amrex::Real q = 0.0;
-			bool in_tail = true;
-			if (g < nGroups_ - 1) {
-				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-				in_tail = x >= X_TAIL;
-				const auto pq = integrate_planck_below_and_above_x(x);
-				p = pq[0];
-				q = pq[1];
-			}
+			// the inf sentinel edge (numeric_limits<double>::max()) is taken as x = infinity, as multiplying it would overflow when
+			// energy_unit_over_kT > 1
+			const amrex::Real x =
+			    (boundaries[g + 1] < inf) ? boundaries[g + 1] * energy_unit_over_kT : std::numeric_limits<amrex::Real>::infinity();
+			const bool in_tail = x >= X_TAIL;
+			const auto pq = integrate_planck_below_and_above_x(x);
 			// A group whose lower edge is in the Wien tail (see X_TAIL in planck_integral.hpp) takes its fraction as a difference
 			// of upper integrals, Q(x_lo) - Q(x_hi), rather than of lower integrals that are both ~1.
-			radEnergyFractions[g] = prev_in_tail ? q_prev - q : p - p_prev;
-			p_prev = p;
-			q_prev = q;
+			radEnergyFractions[g] = prev_in_tail ? q_prev - pq[1] : pq[0] - p_prev;
+			p_prev = pq[0];
+			q_prev = pq[1];
 			prev_in_tail = in_tail;
 		}
 		// chemical bands (g >= nGroupsThermal_) emit no blackbody radiation; left at 0.
@@ -776,35 +774,22 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 		// ComputePlanckEnergyFractions. There Q comes from the exact tail series (see X_TAIL in planck_integral.hpp), so this is
 		// the derivative of the emission actually computed, not of the true Planck function that the table only approximates.
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		amrex::Real d_prev = 0.0;
-		amrex::Real u_prev = 4.0;
-		bool prev_in_tail = false;
-		// Only the thermal groups emit; the chemical bands are left at 0, as in ComputePlanckEnergyFractions.
+		// As in ComputePlanckEnergyFractions, only the thermal groups emit, the group boundaries need not span the
+		// whole spectrum, and no renormalization is applied; the chemical bands are left at 0.
+		amrex::Real const x_lo = (boundaries[0] > 0.0) ? boundaries[0] * energy_unit_over_kT : 0.0;
+		auto const du_lo = integrate_planck_derivative_below_and_above_x(x_lo);
+		amrex::Real d_prev = du_lo[0];
+		amrex::Real u_prev = du_lo[1];
+		bool prev_in_tail = x_lo >= X_TAIL;
 		for (int g = 0; g < nGroupsThermal_; ++g) {
-			// no chemical bands: the last group carries all remaining blackbody, so D = D(inf) = 4
-			amrex::Real d = 4.0;
-			amrex::Real u = 0.0;
-			bool in_tail = true;
-			if (g < nGroups_ - 1) {
-				const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-				if (x >= X_TAIL) {
-					// x^4 / (e^x - 1) written with e^(-x) so that cold matter (x up to ~1e9 or inf) never forms e^x, which overflows
-					// past x ~ 710. Once e^(-x) underflows to 0 the kernel is 0; testing it first also avoids 0 * inf at x = inf.
-					const amrex::Real e = std::exp(-x);
-					const amrex::Real kernel = (e > 0.0) ? (x * x * x * x * e / (1.0 - e)) / gInf : 0.0;
-					const amrex::Real q = integrate_planck_from_x_to_inf_series(x);
-					d = 4. * (1.0 - q) - kernel;
-					u = 4. * q + kernel;
-				} else {
-					in_tail = false;
-					const amrex::Real kernel = (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
-					d = 4. * integrate_planck_from_0_to_x(x) - kernel;
-					u = 4.0 - d;
-				}
-			}
-			d_fourpiboverc_d_t[g] = a_T3 * (prev_in_tail ? u_prev - u : d - d_prev);
-			d_prev = d;
-			u_prev = u;
+			// the inf sentinel edge is taken as x = infinity; see ComputePlanckEnergyFractions
+			const amrex::Real x =
+			    (boundaries[g + 1] < inf) ? boundaries[g + 1] * energy_unit_over_kT : std::numeric_limits<amrex::Real>::infinity();
+			const bool in_tail = x >= X_TAIL;
+			const auto du = integrate_planck_derivative_below_and_above_x(x);
+			d_fourpiboverc_d_t[g] = a_T3 * (prev_in_tail ? u_prev - du[1] : du[0] - d_prev);
+			d_prev = du[0];
+			u_prev = du[1];
 			prev_in_tail = in_tail;
 		}
 

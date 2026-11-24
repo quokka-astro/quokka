@@ -1,10 +1,8 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testMathUnitTests.cpp
-/// \brief Unit tests of the math utilities: ODE integration and bracketing root finding (host and device).
+/// \brief Unit tests of the math utilities (ODE integration and bracketing root finding) and of the gamma-law EOS, on host and device.
 ///
 
 #include "AMReX_Gpu.H"
@@ -284,12 +282,12 @@ auto TestEOSIdeal() -> int
 	constexpr Real T = 8000.;
 	constexpr Real Eint = rho * C::k_B * T / ((gamma - 1.0) * mbar);
 	constexpr Real P = (gamma - 1.0) * Eint;
-	constexpr Real Tfloor = 1.0e-10; // Microphysics eos() resets e <= 0 (and T <= 0) to this temperature
+	constexpr Real Tfloor = 1.0e-10; // Microphysics eos() resets e < 1e-200 to this temperature and raises any lower T to it
 	constexpr Real rho_floor = 1.0e-100;
 	constexpr Real reltol = 1.0e-14;
 
 	int status = 0;
-	auto check = [&status](const char *name, Real value, Real expected) {
+	const auto check = [&status](const char *name, Real value, Real expected) {
 		const Real err = std::abs(value - expected) / std::abs(expected);
 		const bool ok = err <= reltol;
 		std::cout << std::format("{:<36}{:>24.16e}{:>24.16e}{:>12.2e}{}\n", name, value, expected, err, ok ? "" : "  FAIL");
@@ -324,11 +322,12 @@ auto TestEOSIdeal() -> int
 
 	// NaN rho or T is raised to the floor, as Microphysics's eos() did (max(floor, NaN) = floor).
 	// Comparisons with NaN may raise FE_INVALID, so suspend the FP-exception traps the test suite can enable.
+	// The volatile reads and writes keep the NaN operations between feholdexcept and fesetenv.
 	std::fenv_t fenv{};
 	std::feholdexcept(&fenv);
-	const Real nan = std::numeric_limits<Real>::quiet_NaN();
-	const Real Eint_nanT = EOS::ComputeEintFromTgas(rho, nan);
-	const Real cs_nanrho = EOS::ComputeSoundSpeed(nan, P);
+	const volatile Real nan = std::numeric_limits<Real>::quiet_NaN();
+	const volatile Real Eint_nanT = EOS::ComputeEintFromTgas(rho, nan);
+	const volatile Real cs_nanrho = EOS::ComputeSoundSpeed(nan, P);
 	std::fesetenv(&fenv);
 	check("Eint(rho, NaN)", Eint_nanT, rho * C::k_B * Tfloor / ((gamma - 1.0) * mbar));
 	check("cs(NaN, P)", cs_nanrho, std::sqrt(gamma * P / rho_floor));
@@ -338,7 +337,7 @@ auto TestEOSIdeal() -> int
 
 	// device: the floors must hold in device code too
 	amrex::Gpu::DeviceVector<Real> T_d(2);
-	Real *T_ptr = T_d.data();
+	Real *const T_ptr = T_d.data();
 	amrex::ParallelFor(2, [=] AMREX_GPU_DEVICE(int n) noexcept { T_ptr[n] = EOS::ComputeTgasFromEint(rho, (n == 0) ? Eint : 0.0); });
 	std::array<Real, 2> T_h{};
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, T_d.begin(), T_d.end(), T_h.begin());

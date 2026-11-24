@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef PARTICLE_TYPES_HPP_
 #define PARTICLE_TYPES_HPP_
 
@@ -8,9 +11,11 @@
 #include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
 #include "AMReX_Vector.H"
+#include "particles/chabrier_imf.hpp"
 #include "particles/particle_chemical_yield.hpp"
 #include "particles/stellar_models.hpp"
 #include "physics_info.hpp"
+#include "util/fundamental_constants.hpp"
 #include "util/time_units.hpp"
 
 #include <cstddef>
@@ -389,7 +394,6 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 template <typename problem_t>
 constexpr int StarParticleRealComps = StarParticleFixedComps + Physics_Traits<problem_t>::nGroups + Particle_Traits<problem_t>::stellar_model::nExtraReal;
 template <typename problem_t> constexpr int StarParticleIntComps = Particle_Traits<problem_t>::stellar_model::nExtraInt;
-template <typename problem_t> constexpr int StarParticleIntegerComps = StarParticleIntComps<problem_t>;
 
 template <typename problem_t> using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
 template <typename problem_t> using StarParticleIterator = amrex::ParIter<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
@@ -473,7 +477,10 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 		// Include chemistry-history particle components added for tracked passive scalars.
 		return names;
 	} else if constexpr (particleType == ParticleType::Star) {
-		return expandEnumNames<StarParticleDataIdx, StarParticleRealComps<problem_t>, true>();
+		using Model = typename Particle_Traits<problem_t>::stellar_model;
+		auto names = expandEnumNames<StarParticleDataIdx, StarParticleFixedComps + Physics_Traits<problem_t>::nGroups, true>();
+		names.insert(names.end(), Model::extraRealNames.begin(), Model::extraRealNames.end());
+		return names;
 	} else if constexpr (particleType == ParticleType::Sink) {
 		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Test) {
@@ -495,8 +502,9 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 								     // No integer components
 	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
 								     // No integer components
-	} else if constexpr (particleType == ParticleType::Star) {   // NOLINT
-		return expandEnumNames<StarParticleIntIdx, StarParticleIntegerComps<problem_t>, true>();
+	} else if constexpr (particleType == ParticleType::Star) {
+		using Model = typename Particle_Traits<problem_t>::stellar_model;
+		names.insert(names.end(), Model::extraIntNames.begin(), Model::extraIntNames.end());
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
@@ -549,8 +557,11 @@ inline auto get_units_data() -> const auto &
 	       {"vy", {0, 1, -1, 0}},
 	       {"vz", {0, 1, -1, 0}},
 	       {"birth_time", {0, 0, 1, 0}},
+	       {"death_time", {0, 0, 1, 0}},
 	       {"mdot", {1, 0, -1, 0}},
 	       {"radius", {0, 1, 0, 0}},
+	       {"mdeut", {1, 0, 0, 0}},
+	       {"n", {0, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Sink,
 	     {{{"mass", {1, 0, 0, 0}},
@@ -625,6 +636,18 @@ inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
 
 // Maximum mass for LowMassComposite particles. Default is set to max(), so no splitting is performed.
 inline amrex::Real low_mass_composite_max_mass = std::numeric_limits<amrex::Real>::max(); // NOLINT
+
+// Minimum initial mass [Msun] above which stars are sampled individually from the IMF. Stars below this
+// mass are lumped into the LowMassComposite particle, which does not explode and does not radiate.
+// Lowering it resolves more of the stellar population at the cost of more particles.
+inline amrex::Real min_mass_individual_stars = 9.0; // NOLINT
+
+// Derived from min_mass_individual_stars by integrating the Chabrier IMF. Both are recomputed in
+// particleParmParse() whenever the threshold changes; they are never independent inputs.
+//   imf_mass_fraction_individual: fraction of a stellar population's mass in individually sampled stars
+//   imf_mean_mass_individual:     mean mass of one such star [g], which sets how many of them to draw
+inline amrex::Real imf_mass_fraction_individual = quokka::ChabrierIMF::massFractionAbove(min_mass_individual_stars);	  // NOLINT
+inline amrex::Real imf_mean_mass_individual = quokka::ChabrierIMF::meanMassAbove(min_mass_individual_stars) * C::M_solar; // NOLINT
 
 inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
 
@@ -712,6 +735,14 @@ template <typename problem_t> inline void particleParmParse()
 
 	// Low-mass composite particle mass cap (split into multiple particles if exceeded)
 	pp.query("low_mass_composite_max_mass", low_mass_composite_max_mass);
+
+	// Threshold above which stars are sampled individually. The two IMF-derived quantities must be
+	// recomputed together with it: pairing a mass fraction from one threshold with a mean mass from
+	// another silently rescales the number of massive stars formed.
+	pp.query("min_mass_individual_stars", min_mass_individual_stars);
+	quokka::ChabrierIMF::validateAgainstReferenceValues();
+	imf_mass_fraction_individual = quokka::ChabrierIMF::massFractionAbove(min_mass_individual_stars);
+	imf_mean_mass_individual = quokka::ChabrierIMF::meanMassAbove(min_mass_individual_stars) * C::M_solar;
 
 	// Roundoff factor for particles
 	pp.query("reproducibility_roundoff_redundancy", reproducibility_roundoff_redundancy);

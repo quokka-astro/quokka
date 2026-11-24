@@ -33,7 +33,7 @@ Write an ADR whenever a change has broad impact, is hard to reverse, or triggers
 
 ### Proactive ADR (not tied to a PR)
 
-1. Open an issue labeled `type:ADR-proposal` outlining Problem, Goals/Non-goals, Affected modules, and Risks.
+1. Open an issue labeled `status/proposal` outlining Problem, Goals/Non-goals, Affected modules, and Risks.
 2. Draft the ADR in `docs/adrs/ADR-xxxx-title.md`; include a short rollout roadmap (milestones, owners).
 3. Set roles: **Driver** (author), **Reviewers** (numerics + GPU/AMReX), **Consulted** (downstream users if affected).
 4. Add prototypes or microbenchmarks when helpful (CPU + CUDA/HIP).

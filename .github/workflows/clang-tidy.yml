@@ -16,7 +16,7 @@ jobs:
       workflow_file: '.github/workflows/clang-tidy.yml'
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true' || needs.check_changes.outputs.has_scripts_changes == 'true'
 
@@ -36,7 +36,7 @@ jobs:
         install_commands: >
           git config --global --add safe.directory "$GITHUB_WORKSPACE" &&
           git config --global --add safe.directory "$GITHUB_WORKSPACE/extern/amrex"
-        cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON -DQUOKKA_OPENPMD=ON -DopenPMD_USE_ADIOS2=OFF -DAMReX_SPACEDIM=3
+        cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON -DAMReX_SPACEDIM=3
         split_workflow: true
 
     # Uploads an artefact containing clang_fixes.json

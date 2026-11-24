@@ -1,7 +1,6 @@
-//==============================================================================
-// Copyright 2022 Neco Kriel.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testMHDFCQuantities.cpp
 /// \brief Defines a test problem to make sure face-centred quantities are created correctly.
 ///
@@ -186,7 +185,7 @@ void checkEnforceLimitsPreservesMagneticEnergy()
 	// Enforce temperature floor:
 	// this should raise the temperature from temp_cold to temp_floor,
 	// while leaving the magnetic energy unchanged
-	HydroSystem<MHDFCQuantities>::EnforceLimits(0.0, 0.0, temp_floor, state_cc, state_fc, geom,
+	HydroSystem<MHDFCQuantities>::EnforceLimits(0.0, 0.0, temp_floor, 1.0e-30, state_cc, state_fc, geom,
 						    [] AMREX_GPU_DEVICE(amrex::Real /*x*/, amrex::Real /*y*/, amrex::Real /*z*/,
 									amrex::Real base_density_floor) noexcept -> amrex::Real { return base_density_floor; });
 	amrex::Gpu::streamSynchronizeAll();
