@@ -26,19 +26,32 @@ namespace quokka::math::rosenbrock
 
 using amrex::literals::operator""_rt;
 
-/// Return codes of integrate(), with the values of Microphysics' integration/integrator_data.H (the gaps are its codes
-/// for other integrators; IERR_JACOBIAN_NOT_FINITE is ours), so that a failed burn prints the same code as before the
-/// port.
-// TODO(james471): once Microphysics is removed, number these consecutively and make this an enum class (dropping the
-// NOLINT).
-enum IntegratorError : std::int8_t { // NOLINT(cppcoreguidelines-use-enum-class)
-	IERR_SUCCESS = 1,
-	IERR_DT_UNDERFLOW = -2,
-	IERR_TOO_MANY_STEPS = -4,
-	IERR_TOO_MUCH_ACCURACY_REQUESTED = -5,
-	IERR_LU_DECOMPOSITION_ERROR = -7,
-	IERR_JACOBIAN_NOT_FINITE = -9
+/// The outcome of integrate().
+enum class IntegratorStatus : std::int8_t {
+	Success = 0,
+	DtUnderflow,	      ///< the step size fell below the roundoff of the time
+	TooManySteps,	      ///< more than max_steps steps
+	LUDecompositionError, ///< the matrix of a step is singular
+	JacobianNotFinite     ///< the analytic Jacobian has a non-finite entry, without numerical_jacobian_fallback
 };
+
+/// The name of a status, for failure output.
+AMREX_GPU_HOST_DEVICE constexpr auto StatusName(const IntegratorStatus status) -> const char *
+{
+	switch (status) {
+		case IntegratorStatus::Success:
+			return "Success";
+		case IntegratorStatus::DtUnderflow:
+			return "dt Underflow";
+		case IntegratorStatus::TooManySteps:
+			return "Too Many Steps";
+		case IntegratorStatus::LUDecompositionError:
+			return "LU Decomposition Error";
+		case IntegratorStatus::JacobianNotFinite:
+			return "JacobianNotFinite";
+	}
+	return "unknown";
+}
 
 /// When checking the integration time to see if we're done, be careful with roundoff issues.
 constexpr amrex::Real timestep_safety_factor = 1.0e-4_rt;
@@ -54,7 +67,7 @@ constexpr amrex::Real h211b_reduction_fac = 0.5_rt;
 struct DefaultOptions {
 	static constexpr bool analytic_jacobian = true;
 	/// With analytic_jacobian, replace an analytic Jacobian that has a non-finite entry by finite differences. With
-	/// false, such a step fails with IERR_JACOBIAN_NOT_FINITE.
+	/// false, such a step fails with IntegratorStatus::JacobianNotFinite.
 	static constexpr bool numerical_jacobian_fallback = false;
 	/// LU decomposition with partial pivoting.
 	static constexpr bool pivoting = true;
@@ -84,20 +97,16 @@ template <int neqs, int stages> struct State {
 namespace detail
 {
 
-/// The divisor of the root mean square in error_norm. This accounts for passive variables that do not enter the norm.
+/// The divisor of the root mean square in error_norm
 template <typename System> constexpr auto ErrorNormDivisor() -> int
 {
-	if constexpr (requires { System::error_norm_divisor; }) {
-		return System::error_norm_divisor;
-	} else {
-		int count = 0;
-		for (int n = 0; n < System::neqs; ++n) {
-			if (System::counts_toward_error(n)) {
-				++count;
-			}
+	int count = 0;
+	for (int n = 0; n < System::neqs; ++n) {
+		if (System::counts_toward_error(n)) {
+			++count;
 		}
-		return count;
 	}
+	return count;
 }
 
 template <typename System, typename StateT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto error_norm(const System &sys, const StateT &rstate) -> amrex::Real
@@ -106,9 +115,12 @@ template <typename System, typename StateT> AMREX_GPU_HOST_DEVICE AMREX_FORCE_IN
 
 	amrex::Real err = 0.0_rt;
 	for (int n = 0; n < int_neqs; ++n) {
-		const amrex::Real sk = sys.atol(n) + sys.rtol(n) * amrex::max(std::abs(rstate.y[n]), std::abs(rstate.ynew[n]));
-		const amrex::Real term = System::counts_toward_error(n) ? rstate.work[n] / sk : 0.0_rt;
-		err += term * term;
+		// only the entries that count toward the error have tolerances
+		if (System::counts_toward_error(n)) {
+			const amrex::Real sk = sys.atol(n) + sys.rtol(n) * amrex::max(std::abs(rstate.y[n]), std::abs(rstate.ynew[n]));
+			const amrex::Real term = rstate.work[n] / sk;
+			err += term * term;
+		}
 	}
 	return std::sqrt(err / static_cast<amrex::Real>(ErrorNormDivisor<System>()));
 }
@@ -160,10 +172,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(System &sys, St
 		ybase[i] = rstate.y[i];
 	}
 
+	// error weights, only for the entries that count toward the error
 	amrex::Real fac = 0.0_rt;
 	for (int i = 0; i < int_neqs; ++i) {
-		ewt[i] = 1.0_rt / (sys.rtol(i) * std::abs(rstate.y[i]) + sys.atol(i));
-		fac += (rstate.k[0][i] * ewt[i]) * (rstate.k[0][i] * ewt[i]);
+		if (System::counts_toward_error(i)) {
+			ewt[i] = 1.0_rt / (sys.rtol(i) * std::abs(rstate.y[i]) + sys.atol(i));
+			fac += (rstate.k[0][i] * ewt[i]) * (rstate.k[0][i] * ewt[i]);
+		}
 	}
 	fac = std::sqrt(fac / static_cast<amrex::Real>(int_neqs));
 
@@ -174,7 +189,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(System &sys, St
 
 	for (int j = 0; j < int_neqs; ++j) {
 		const amrex::Real yj = ybase[j];
-		const amrex::Real R = amrex::max(std::sqrt(UROUND) * std::abs(yj), R0 / ewt[j]);
+		// an entry without tolerances gets the relative step, with |y| floored at the system's passive_floor() so that a
+		// zero entry still moves
+		const amrex::Real R = System::counts_toward_error(j) ? amrex::max(std::sqrt(UROUND) * std::abs(yj), R0 / ewt[j])
+								     : std::sqrt(UROUND) * amrex::max(std::abs(yj), sys.passive_floor());
 		for (int n = 0; n < int_neqs; ++n) {
 			rstate.y[n] = ybase[n];
 		}
@@ -271,22 +289,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void solve(StateT &rstate, amrex::GpuAr
 
 /// Integrates the System from rstate.t to rstate.tout, starting from rstate.y, with the Rosenbrock method Tableau
 /// (tableaus.hpp). On return rstate.y holds the solution at rstate.t, which is rstate.tout on success, and rstate.n_step,
-/// n_rhs and n_jac count the work. Returns IERR_SUCCESS or a negative IntegratorError.
-/// Port only: a System may define `static constexpr int error_norm_divisor` to divide the error norm's sum of squares by
-/// another count than the number of entries that count toward the error (Microphysics divides by neqs).
+/// n_rhs and n_jac count the work.
 template <typename Tableau, typename Options = DefaultOptions, typename System>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate(System &sys, State<System::neqs, Tableau::stages> &rstate, const int max_steps) -> int
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate(System &sys, State<System::neqs, Tableau::stages> &rstate, const int max_steps) -> IntegratorStatus
 {
 	constexpr int int_neqs = System::neqs;
 
 	if (rstate.tout == rstate.t) {
-		return IERR_SUCCESS;
-	}
-
-	for (int n = 0; n < int_neqs; ++n) {
-		if (sys.atol(n) <= 0.0_rt || sys.rtol(n) <= 10.0_rt * std::numeric_limits<amrex::Real>::epsilon()) {
-			return IERR_TOO_MUCH_ACCURACY_REQUESTED;
-		}
+		return IntegratorStatus::Success;
 	}
 
 	rstate.n_rhs = 0;
@@ -325,19 +335,19 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate(System &sys, State<Syste
 		if (rstate.n_step > max_steps) {
 			rstate.t = x;
 			rstate.dt = h;
-			return IERR_TOO_MANY_STEPS;
+			return IntegratorStatus::TooManySteps;
 		}
 
 		if (0.1_rt * std::abs(h) <= std::abs(x) * std::numeric_limits<amrex::Real>::epsilon()) {
 			rstate.t = x;
 			rstate.dt = h;
-			return IERR_DT_UNDERFLOW;
+			return IntegratorStatus::DtUnderflow;
 		}
 
 		if (last) {
 			rstate.t = x;
 			rstate.dt = hopt;
-			return IERR_SUCCESS;
+			return IntegratorStatus::Success;
 		}
 
 		hopt = h;
@@ -356,7 +366,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate(System &sys, State<Syste
 			if (0.1_rt * std::abs(h) <= std::abs(x) * std::numeric_limits<amrex::Real>::epsilon() || std::abs(h * Tableau::gamma) <= min_h_gamma) {
 				rstate.t = x;
 				rstate.dt = h;
-				return IERR_DT_UNDERFLOW;
+				return IntegratorStatus::DtUnderflow;
 			}
 
 			const amrex::Real fac = 1.0_rt / (h * Tableau::gamma);
@@ -366,14 +376,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate(System &sys, State<Syste
 			if (ierr_linpack < 0) {
 				rstate.t = x;
 				rstate.dt = h;
-				return IERR_JACOBIAN_NOT_FINITE;
+				return IntegratorStatus::JacobianNotFinite;
 			}
 			if (ierr_linpack != 0) {
 				nsing += 1;
 				if (nsing >= 5) {
 					rstate.t = x;
 					rstate.dt = h;
-					return IERR_LU_DECOMPOSITION_ERROR;
+					return IntegratorStatus::LUDecompositionError;
 				}
 				h *= 0.5_rt;
 				reject = true;
