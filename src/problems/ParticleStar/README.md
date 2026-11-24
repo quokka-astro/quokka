@@ -55,7 +55,7 @@ int main(int argc, char **argv)
 
 ## Orion2
 
-`orion2_track_mdot1e-5.dat` (to $10\,M_\odot$, one row every 100 steps) and `orion2_track_mdot1e-4.dat` (to $20\,M_\odot$, one row every 200 steps) are tracks from the protostellar model of the ORION2 code (`Src/Star_Particles/StarParticleData.cpp` of the ORION2 release), run with the same steps as the Orion2007 tracks. `testParticleStar.cpp` evolves `quokka::Orion2StellarModel` with these steps and compares the radius, luminosity, polytropic index, deuterium mass, evolutionary phase and carried-over negative luminosity `netlum` with them.
+`orion2_track_mdot1e-5.dat` (to $10\,M_\odot$, one row every 100 steps) and `orion2_track_mdot1e-4.dat` (to $20\,M_\odot$, one row every 200 steps) are tracks from the protostellar model of the ORION2 code (`Src/Star_Particles/StarParticleData.cpp` of the ORION2 release), run with the same steps as the Orion2007 tracks. `testParticleStar.cpp` evolves `quokka::Orion2StellarModel` with these steps and compares the radius, luminosity, polytropic index, deuterium mass, evolutionary phase and carried-over negative luminosity `netlum` with them. ORION2 stores `netlum` as a luminosity, Quokka as an energy (the luminosity times the step), so the test compares the Quokka `netlum` with the reference `netlum` times `dt`.
 
 `StarParticleData.cpp` and `StarParticleData.H` were compiled outside ORION2/Chombo with these changes:
 
@@ -150,4 +150,4 @@ int main(int argc, char **argv)
 }
 ```
 
-The only algorithmic difference between `Orion2StellarModel` and this code is the root solver for the central temperature: ORION2 bisects to a relative tolerance of $10^{-7}$, Quokka uses TOMS 748 to $10^{-12}$. The radius, luminosity and deuterium mass agree to $3\times10^{-8}$, and this difference disappears when the bisection tolerance is reduced to $10^{-15}$.
+Apart from the unit of `netlum`, which gives the same luminosity at the constant step of these tracks, the only algorithmic difference between `Orion2StellarModel` and this code is the root solver for the central temperature: ORION2 bisects to a relative tolerance of $10^{-7}$, Quokka uses TOMS 748 to $10^{-12}$. The radius, luminosity and deuterium mass agree to $3\times10^{-8}$, and this difference disappears when the bisection tolerance is reduced to $10^{-15}$.

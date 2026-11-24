@@ -217,7 +217,8 @@ template <typename Model> auto compareWithReferenceTrack(std::string const &file
 		max_err_L = std::max(max_err_L, relativeError(L, L_ref));
 		max_err_mdeut = std::max(max_err_mdeut, std::abs(rdata[mdeut_idx] - mdeut_ref) / m_ref);
 		if constexpr (has_netlum) {
-			max_err_netlum = std::max(max_err_netlum, relativeError(rdata[n_poly_idx + 1], netlum_ref));
+			// the reference carries the deficit as a luminosity, the model as an energy
+			max_err_netlum = std::max(max_err_netlum, relativeError(rdata[n_poly_idx + 1], netlum_ref * dt));
 		}
 		if (state_ref != 0) {
 			max_err_r = std::max(max_err_r, std::abs(r / r_ref - 1.0));
@@ -231,7 +232,7 @@ template <typename Model> auto compareWithReferenceTrack(std::string const &file
 		       << " rows one phase apart, max |r/r_ref - 1| = " << max_err_r << ", max |L/L_ref - 1| = " << max_err_L
 		       << ", max |n - n_ref| = " << max_err_n << ", max |mdeut - mdeut_ref| / m = " << max_err_mdeut;
 	if constexpr (has_netlum) {
-		amrex::Print() << ", max |netlum/netlum_ref - 1| = " << max_err_netlum;
+		amrex::Print() << ", max |netlum/(netlum_ref dt) - 1| = " << max_err_netlum;
 	}
 	amrex::Print() << (passed ? "  PASS" : "  FAIL") << "\n";
 	return passed ? 0 : 1;

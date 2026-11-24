@@ -560,8 +560,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosityDisk(amrex::Real m, amre
 
 /// Orion2 deuterium-burning protostellar model: a port of StarParticleData of the ORION2 code (the model of Offner et
 /// al. 2009, Appendix B), with two bugs of its beta() fixed (see Orion2Physics::beta). Per-particle state: mdeut, n
-/// and netlum (extra reals; netlum is the negative luminosity carried to the next step) and burn_state (extra int,
-/// numbered as in Orion2007StellarModel). A zero-initialized particle starts in PreCollapse with zero luminosity.
+/// and netlum (extra reals; netlum is the energy deficit, in erg, carried to the next step; ORION2 carries it as a
+/// luminosity, which changes the deficit when the step length changes) and burn_state (extra int, numbered as in
+/// Orion2007StellarModel). A zero-initialized particle starts in PreCollapse with zero luminosity.
 struct Orion2StellarModel {
 	static constexpr int nExtraReal = 3; // mdeut, n, netlum
 	static constexpr int nExtraInt = 1;  // burn_state
@@ -691,14 +692,14 @@ struct Orion2StellarModel {
 		}
 		idata[0] = static_cast<int>(state);
 
-		// Luminosity, including a negative luminosity carried over from the previous step; a negative total is
-		// carried to the next step and zero is stored
+		// Luminosity, including the energy deficit carried over from the previous step, spread over this step; a
+		// negative total is carried to the next step as an energy and zero is stored
 		amrex::Real L = Orion2Physics::luminosityStar(m, r) + Orion2Physics::luminosityAcc(m, r, mdot) + Orion2Physics::luminosityDisk(m, r, mdot);
 		if (netlum < 0.0) {
-			L += netlum;
+			L += netlum / dt;
 		}
 		if (L < 0.0) {
-			netlum = L;
+			netlum = L * dt;
 			L = 0.0;
 		} else {
 			netlum = 0.0;
