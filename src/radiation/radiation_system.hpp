@@ -23,6 +23,7 @@
 #include "hydro/EOS.hpp"
 #include "hyperbolic_system.hpp"
 #include "math/math_impl.hpp"
+#include "microphysics/microphysics_traits.hpp"
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
 #include "util/fundamental_constants.hpp"
@@ -355,10 +356,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(RadSystem_NChemBands<problem_t>::value >= 0 && RadSystem_NChemBands<problem_t>::value <= nGroups_,
 		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
 
-#ifdef PHOTOCHEMISTRY
-	static_assert(RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
-		      "ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg when PHOTOCHEMISTRY is enabled.");
-#endif
+	static_assert(!Microphysics_Traits<problem_t>::photochemistry || RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
+		      "ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg with photochemistry.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -380,9 +379,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static auto GetThermalBandQuanta(int group_index) -> amrex::Real;
 
-#ifdef PHOTOCHEMISTRY
 	AMREX_GPU_HOST_DEVICE static auto GetChemBandQuanta(int group_index) -> amrex::Real;
-#endif
 
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange);
 	// The transport kernels below act only on the radiation groups [groupBegin, groupEnd); the components of
@@ -968,7 +965,6 @@ template <typename problem_t> auto RadSystem<problem_t>::GetThermalBandQuanta(in
 	return 0.5 * (radBoundaries_[group_index] + radBoundaries_[group_index + 1]) * C::ev2erg;
 }
 
-#ifdef PHOTOCHEMISTRY
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
 {
 	auto const ev_bounds = RadSystem_Traits<problem_t>::ChemBands();
@@ -993,7 +989,6 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::G
 
 	return ev_avg * C::ev2erg;
 }
-#endif
 
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const & /*cons*/, array_t &maxSignal, amrex::Box const &indexRange)
