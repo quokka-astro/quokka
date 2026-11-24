@@ -70,7 +70,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void dgefa(Matrix &a, amrex::GpuArray<s
 		constexpr int k = decltype(kc)::value;
 
 		// find l = pivot index, and the pivot akk = a(l, k)
-		int l = k; // changed only with allow_pivot, NOLINT(misc-const-correctness)
+		[[maybe_unused]] int l = k; // used and changed only with allow_pivot, NOLINT(misc-const-correctness)
 		amrex::Real akk = a(k, k);
 		if constexpr (allow_pivot) {
 			amrex::Real dmax = std::abs(a(k, k));
