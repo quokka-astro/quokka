@@ -5,7 +5,8 @@
 #define MICROPHYSICS_INTEGRATOR_PARAMS_HPP_
 /// \file integrator_params.hpp
 /// \brief Runtime parameters of the burn integrator, read from the `integrator` prefix. Ported from Microphysics'
-/// integration/_parameters and integration/Rosenbrock/_parameters, with the same names and defaults.
+/// integration/_parameters and integration/Rosenbrock/_parameters, with the same names. The default tolerances are looser
+/// than Microphysics' (rtol 1e-2 instead of 1e-10).
 
 #include <limits>
 #include <string>

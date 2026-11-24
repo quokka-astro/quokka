@@ -161,7 +161,7 @@ template <typename System, typename MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORC
 template <typename System, typename StateT>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void numerical_jacobian(System &sys, StateT &rstate, const amrex::Real time)
 {
-	// TODO (james471)): This code and its branch for passive variables is not tested.
+	// TODO(james471): This code and its branch for passive variables is not tested.
 	constexpr int int_neqs = System::neqs;
 	constexpr amrex::Real UROUND = std::numeric_limits<amrex::Real>::epsilon();
 	amrex::GpuArray<amrex::Real, int_neqs> ewt{};
