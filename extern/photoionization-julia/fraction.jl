@@ -17,7 +17,7 @@ const k_B = 1.3806490000000002e-16
 const n_A = 6.02214129e23
 const h   = 6.62606957e-27
 const R   = k_B * n_A
-const σ_v = 3.2467944898988799e-18
+const σ_v = 3.2385396673401957e-18
 const E_ion = 7.8173631192954724e-12
 
 struct State
@@ -133,3 +133,7 @@ rho_values = [get_ρ(State(sol[i][1:3], sol[i][4:5], [γ_e, γ_HI, γ_HII], [m_e
 
 results = DataFrame(time=sol.t, n_e=sol[1, :], n_HI=sol[2, :], n_HII=sol[3, :], n_gamma=sol[4, :], Egas=sol[6, :] .* rho_values, gas_temp=T_values)
 CSV.write(save_path, results)
+
+# To regenrate the data, run the following commands in the terminal:
+# julia fraction.jl 5e3 1e-10 1e2 1e-10 5/3 5/3 5/3 1e3 1 10000 50 1e-14 1e-14 ./with_energy.csv
+# julia fraction.jl 5e3 1e-10 1e2 1e-10 5/3 5/3 5/3 1e3 0 10000 50 1e-14 1e-14 ./no_energy.csv

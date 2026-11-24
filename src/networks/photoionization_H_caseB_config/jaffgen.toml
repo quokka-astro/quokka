@@ -1,3 +1,7 @@
+[network]
+# the network's type name in Quokka (quokka::networks::PhotoionizationHCaseB)
+label = "PhotoionizationHCaseB"
+
 [network.radiation]
 bands = [13.6, 26.0]
 profile_index = 0

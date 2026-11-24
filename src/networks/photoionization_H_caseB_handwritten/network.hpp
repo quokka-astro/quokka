@@ -109,7 +109,7 @@ struct PhotoionizationHCaseBHandwritten {
 
 	static constexpr amrex::Real RydbergEnergy = 13.6_rt * C::ev2erg;
 
-	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto get_photoionization_coefficient(Real /*T*/) -> Real { return 3.2467944898988799e-18_rt; }
+	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto get_photoionization_coefficient(Real /*T*/) -> Real { return 3.2385396673401957e-18_rt; }
 
 	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto get_ionizing_band_photon_energy() -> Real
 	{
