@@ -5,25 +5,15 @@
 /// \brief Defines a test problem for line cooling and cosmic-ray heating in a uniform medium.
 ///
 
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
 #include "radiation/radiation_dust_system.hpp"
-#include "util/BC.hpp"
+#include "util/OneZoneHarness.hpp"
 #include <cmath>
-#include <format>
-#include <fstream>
+#include <vector>
 
-#include "AMReX_Array.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "physics_info.hpp"
-#include "util/fextract.hpp"
-
-static constexpr bool export_csv = true;
 
 struct CoolingProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
@@ -46,11 +36,7 @@ constexpr double erad_floor = a_rad * 1e-20;
 
 const double max_time = 10.0;
 
-template <> struct SimulationData<CoolingProblem> {
-	std::vector<double> t_vec_;
-	std::vector<double> Tgas_vec_;
-	std::vector<double> Erad_vec_;
-};
+template <> struct SimulationData<CoolingProblem> : quokka::onezone::Recorder {};
 
 template <> struct quokka::EOS_Traits<CoolingProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -145,46 +131,18 @@ RadSystem<CoolingProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<
 
 template <> void QuokkaSimulation<CoolingProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	// extract variables required from the geom object
-	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const amrex::Array4<double> &state_cc = grid_elem.array_;
-
 	const double Egas = quokka::EOS<CoolingProblem>::ComputeEintFromTgas(rho0, T0);
 
-	// loop over the grid and set the initial condition
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, RadSystem<CoolingProblem>::radEnergy_index) = erad_floor;
-		state_cc(i, j, k, RadSystem<CoolingProblem>::x1RadFlux_index) = 0.;
-		state_cc(i, j, k, RadSystem<CoolingProblem>::x2RadFlux_index) = 0.;
-		state_cc(i, j, k, RadSystem<CoolingProblem>::x3RadFlux_index) = 0.;
-		state_cc(i, j, k, RadSystem<CoolingProblem>::gasEnergy_index) = Egas + 0.5 * rho0 * v0 * v0;
-		state_cc(i, j, k, RadSystem<CoolingProblem>::gasDensity_index) = rho0;
-		state_cc(i, j, k, RadSystem<CoolingProblem>::gasInternalEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<CoolingProblem>::x1GasMomentum_index) = v0 * rho0;
-		state_cc(i, j, k, RadSystem<CoolingProblem>::x2GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<CoolingProblem>::x3GasMomentum_index) = 0.;
-	});
+	quokka::onezone::Cell<CoolingProblem> cell{};
+	cell[RadSystem<CoolingProblem>::radEnergy_index] = erad_floor;
+	cell[RadSystem<CoolingProblem>::gasEnergy_index] = Egas + 0.5 * rho0 * v0 * v0;
+	cell[RadSystem<CoolingProblem>::gasDensity_index] = rho0;
+	cell[RadSystem<CoolingProblem>::gasInternalEnergy_index] = Egas;
+	cell[RadSystem<CoolingProblem>::x1GasMomentum_index] = v0 * rho0;
+	quokka::onezone::FillUniform<CoolingProblem>(grid_elem, cell);
 }
 
-template <> void QuokkaSimulation<CoolingProblem>::computeAfterTimestep()
-{
-	auto values = std::get<1>(fextract(state_new_cc_[0], Geom(0), 0, 0.5)); // NOLINT
-
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		userData_.t_vec_.push_back(tNew_[0]);
-
-		const amrex::Real Etot_i = values.at(RadSystem<CoolingProblem>::gasEnergy_index)[0];
-		const amrex::Real x1GasMom = values.at(RadSystem<CoolingProblem>::x1GasMomentum_index)[0];
-		const amrex::Real x2GasMom = values.at(RadSystem<CoolingProblem>::x2GasMomentum_index)[0];
-		const amrex::Real x3GasMom = values.at(RadSystem<CoolingProblem>::x3GasMomentum_index)[0];
-		const amrex::Real rho = values.at(RadSystem<CoolingProblem>::gasDensity_index)[0];
-		static_assert(!Physics_Traits<CoolingProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		const amrex::Real Egas_i = quokka::EOS<CoolingProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i, 0.0);
-		userData_.Tgas_vec_.push_back(quokka::EOS<CoolingProblem>::ComputeTgasFromEint(rho, Egas_i));
-		const double Erad_i = values.at(RadSystem<CoolingProblem>::radEnergy_index)[0];
-		userData_.Erad_vec_.push_back(Erad_i);
-	}
-}
+template <> void QuokkaSimulation<CoolingProblem>::computeAfterTimestep() { userData_.record(state_new_cc_[0], Geom(0), tNew_[0]); }
 
 auto problem_main() -> int
 {
@@ -211,84 +169,28 @@ auto problem_main() -> int
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
-	// initialize
-	sim.setInitialConditions();
+	sim.userData_.addObservable("Tgas", [](quokka::onezone::CellValues const &cell) {
+		const amrex::Real rho = cell[RadSystem<CoolingProblem>::gasDensity_index];
+		static_assert(!Physics_Traits<CoolingProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		const amrex::Real Eint = quokka::EOS<CoolingProblem>::ComputeEintFromEgas(rho, cell[RadSystem<CoolingProblem>::x1GasMomentum_index],
+											  cell[RadSystem<CoolingProblem>::x2GasMomentum_index],
+											  cell[RadSystem<CoolingProblem>::x3GasMomentum_index],
+											  cell[RadSystem<CoolingProblem>::gasEnergy_index], 0.0);
+		return quokka::EOS<CoolingProblem>::ComputeTgasFromEint(rho, Eint);
+	});
+	sim.userData_.addObservable("Erad", [](quokka::onezone::CellValues const &cell) { return cell[RadSystem<CoolingProblem>::radEnergy_index]; });
 
-	// evolve
-	sim.evolve();
+	// exact solution
+	const auto Egas_exact = [](double t) {
+		return std::exp(-cooling_rate * t) * (cooling_rate * T0 - CR_heating_rate + CR_heating_rate * std::exp(cooling_rate * t)) / cooling_rate;
+	};
+	const auto Tgas_exact = [=](double t) { return Egas_exact(t) / C_V; };
+	const auto Erad_exact = [=](double t) { return -(Egas_exact(t) - C_V * T0 - CR_heating_rate * t) * (chat / c); };
 
-	std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
-	std::vector<double> &Erad = sim.userData_.Erad_vec_;
-	std::vector<double> &t_sim = sim.userData_.t_vec_;
-
-	std::vector<double> Tgas_exact_vec{};
-	std::vector<double> Erad_exact_vec{};
-	for (const auto &t_exact : t_sim) {
-		const double Egas_exact_solution = std::exp(-cooling_rate * t_exact) *
-						   (cooling_rate * T0 - CR_heating_rate + CR_heating_rate * std::exp(cooling_rate * t_exact)) / cooling_rate;
-		const double T_exact_solution = Egas_exact_solution / C_V;
-		Tgas_exact_vec.push_back(T_exact_solution);
-		const double Erad_exact_solution = -(Egas_exact_solution - C_V * T0 - CR_heating_rate * t_exact) * (chat / c);
-		Erad_exact_vec.push_back(Erad_exact_solution);
-	}
-
-#ifdef HAVE_PYTHON
-	// plot temperature
-	matplotlibcpp::clf();
-	std::map<std::string, std::string> args;
-	args["label"] = "T_gas (numerical)";
-	args["linestyle"] = "-";
-	matplotlibcpp::plot(t_sim, Tgas, args);
-	args["label"] = "T_gas (exact)";
-	args["linestyle"] = "--";
-	matplotlibcpp::plot(t_sim, Tgas_exact_vec, args);
-	args["label"] = "E_rad (numerical)";
-	args["linestyle"] = "-";
-	matplotlibcpp::plot(t_sim, Erad, args);
-	args["label"] = "E_rad (exact)";
-	args["linestyle"] = "--";
-	matplotlibcpp::plot(t_sim, Erad_exact_vec, args);
-	matplotlibcpp::xlabel("t (dimensionless)");
-	matplotlibcpp::ylabel("T or Erad (dimensionless)");
-	matplotlibcpp::legend();
-	// matplotlibcpp::ylim(0.0, 2.0);
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./rad_line_cooling_single_group.pdf");
-#endif
-
-	// compute L1 error norm
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for (size_t i = 0; i < t_sim.size(); ++i) {
-		err_norm += std::abs(Tgas[i] - Tgas_exact_vec[i]);
-		err_norm += std::abs(Erad[i] - Erad_exact_vec[i]);
-		sol_norm += std::abs(Tgas_exact_vec[i]) + std::abs(Erad_exact_vec[i]);
-	}
-	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
-
-	if (export_csv) {
-		std::ofstream file;
-		file.open("rad_line_cooling_temp.csv");
-		file << "t,Tgas,Tgas_exact\n";
-		for (size_t i = 0; i < t_sim.size(); ++i) {
-			file << std::scientific << std::setprecision(12) << t_sim[i] << "," << Tgas[i] << "," << Tgas_exact_vec[i] << "\n";
-		}
-		file.close();
-
-		file.open("rad_line_cooling_rad_energy_density.csv");
-		file << "t,Erad,Erad_exact\n";
-		for (size_t i = 0; i < t_sim.size(); ++i) {
-			file << std::scientific << std::setprecision(12) << t_sim[i] << "," << Erad[i] << "," << Erad_exact_vec[i] << "\n";
-		}
-		file.close();
-	}
-
-	// exit
-	int status = 0;
-	const double error_tol = 0.0005;
-	if (rel_error > error_tol) {
-		status = 1;
-	}
-	return status;
+	const std::vector<quokka::onezone::Check> checks = {
+	    {.name = "Tgas and Erad relative L1 error",
+	     .comparisons = {{.observable = "Tgas", .reference = quokka::onezone::AnalyticReference(Tgas_exact)},
+			     {.observable = "Erad", .reference = quokka::onezone::AnalyticReference(Erad_exact)}},
+	     .tolerance = 0.0005}};
+	return quokka::onezone::Run(sim, checks, {}, "rad_line_cooling.csv");
 }
