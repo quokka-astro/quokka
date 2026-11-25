@@ -95,7 +95,7 @@ struct Predicate {
 struct Curve {
 	std::string observable;
 	std::string label; ///< legend entry; the observable's name if empty
-	Reference reference{};
+	Reference reference;
 };
 
 /// A plot of recorded observables as a function of time, saved to `filename` (any format matplotlib supports, chosen by the extension).
