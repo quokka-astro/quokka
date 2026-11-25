@@ -254,9 +254,8 @@ auto problem_main() -> int
 	sim.userData_.addObservable("density", [](quokka::onezone::CellValues const &cell) { return cell[HydroSystem<PrimordialChemTest>::density_index]; });
 	sim.userData_.addObservable("Egas", [](quokka::onezone::CellValues const &cell) { return cell[HydroSystem<PrimordialChemTest>::energy_index]; });
 	for (int n = 0; n < NumSpec; ++n) {
-		sim.userData_.addObservable(std::format("partial_density_{}", n), [n](quokka::onezone::CellValues const &cell) {
-			return cell[HydroSystem<PrimordialChemTest>::scalar0_index + n];
-		});
+		sim.userData_.addObservable(std::format("partial_density_{}", n),
+					    [n](quokka::onezone::CellValues const &cell) { return cell[HydroSystem<PrimordialChemTest>::scalar0_index + n]; });
 	}
 
 	// run simulation

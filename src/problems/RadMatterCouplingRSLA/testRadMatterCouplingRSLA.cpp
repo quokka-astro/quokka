@@ -115,10 +115,9 @@ auto problem_main() -> int
 	sim.userData_.addObservable("Tgas", [](quokka::onezone::CellValues const &cell) {
 		const amrex::Real rho = cell[RadSystem<CouplingProblem>::gasDensity_index];
 		static_assert(!Physics_Traits<CouplingProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		const amrex::Real Eint = quokka::EOS<CouplingProblem>::ComputeEintFromEgas(rho, cell[RadSystem<CouplingProblem>::x1GasMomentum_index],
-											   cell[RadSystem<CouplingProblem>::x2GasMomentum_index],
-											   cell[RadSystem<CouplingProblem>::x3GasMomentum_index],
-											   cell[RadSystem<CouplingProblem>::gasEnergy_index], 0.0);
+		const amrex::Real Eint = quokka::EOS<CouplingProblem>::ComputeEintFromEgas(
+		    rho, cell[RadSystem<CouplingProblem>::x1GasMomentum_index], cell[RadSystem<CouplingProblem>::x2GasMomentum_index],
+		    cell[RadSystem<CouplingProblem>::x3GasMomentum_index], cell[RadSystem<CouplingProblem>::gasEnergy_index], 0.0);
 		return quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Eint);
 	});
 
@@ -129,15 +128,16 @@ auto problem_main() -> int
 		const double c = RadSystem<CouplingProblem>::c_light_;
 		const double T0_4 = std::pow(initial_Tgas, 4);
 		const double E0_rsla = ((c / c_rsla) * Erad0 + Egas0) / (a_rad + (c_rsla / c) * alpha_SuOlson / 4.0);
-		const double T4_rsla = (T0_4 - (c_rsla / c) * E0_rsla) *
-					   std::exp(-(4. / alpha_SuOlson) * (a_rad + (c_rsla / c) * alpha_SuOlson / 4.0) * kappa * rho0 * c * t) +
-				       (c_rsla / c) * E0_rsla;
+		const double T4_rsla =
+		    (T0_4 - (c_rsla / c) * E0_rsla) * std::exp(-(4. / alpha_SuOlson) * (a_rad + (c_rsla / c) * alpha_SuOlson / 4.0) * kappa * rho0 * c * t) +
+		    (c_rsla / c) * E0_rsla;
 		return std::pow(T4_rsla, 1. / 4.);
 	};
 
 	// When using C::a_rad as radiation_constant_cgs_, the relative error goes up to 3e-5, so the tolerance is 5e-5
-	const std::vector<quokka::onezone::Check> checks = {{.name = "Tgas relative L1 error",
-							     .comparisons = {{.observable = "Tgas", .reference = quokka::onezone::AnalyticReference(Tgas_rsla_exact)}},
-							     .tolerance = 5e-5}};
+	const std::vector<quokka::onezone::Check> checks = {
+	    {.name = "Tgas relative L1 error",
+	     .comparisons = {{.observable = "Tgas", .reference = quokka::onezone::AnalyticReference(Tgas_rsla_exact)}},
+	     .tolerance = 5e-5}};
 	return quokka::onezone::Run(sim, checks);
 }

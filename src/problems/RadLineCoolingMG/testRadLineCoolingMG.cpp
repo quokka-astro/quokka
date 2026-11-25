@@ -172,10 +172,9 @@ auto problem_main() -> int
 	sim.userData_.addObservable("Tgas", [](quokka::onezone::CellValues const &cell) {
 		const amrex::Real rho = cell[RadSystem<CoolingProblemMG>::gasDensity_index];
 		static_assert(!Physics_Traits<CoolingProblemMG>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		const amrex::Real Eint = quokka::EOS<CoolingProblemMG>::ComputeEintFromEgas(rho, cell[RadSystem<CoolingProblemMG>::x1GasMomentum_index],
-											    cell[RadSystem<CoolingProblemMG>::x2GasMomentum_index],
-											    cell[RadSystem<CoolingProblemMG>::x3GasMomentum_index],
-											    cell[RadSystem<CoolingProblemMG>::gasEnergy_index], 0.0);
+		const amrex::Real Eint = quokka::EOS<CoolingProblemMG>::ComputeEintFromEgas(
+		    rho, cell[RadSystem<CoolingProblemMG>::x1GasMomentum_index], cell[RadSystem<CoolingProblemMG>::x2GasMomentum_index],
+		    cell[RadSystem<CoolingProblemMG>::x3GasMomentum_index], cell[RadSystem<CoolingProblemMG>::gasEnergy_index], 0.0);
 		return quokka::EOS<CoolingProblemMG>::ComputeTgasFromEint(rho, Eint);
 	});
 	sim.userData_.addObservable("Erad_line", [](quokka::onezone::CellValues const &cell) {
