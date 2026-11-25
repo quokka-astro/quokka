@@ -50,23 +50,23 @@ template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 };
 
 template <> struct SimulationData<PrimordialChemTest> : quokka::onezone::Recorder {
-	amrex::Real small_temp;
-	amrex::Real small_dens;
-	amrex::Real temperature;
-	amrex::Real primary_species_1;
-	amrex::Real primary_species_2;
-	amrex::Real primary_species_3;
-	amrex::Real primary_species_4;
-	amrex::Real primary_species_5;
-	amrex::Real primary_species_6;
-	amrex::Real primary_species_7;
-	amrex::Real primary_species_8;
-	amrex::Real primary_species_9;
-	amrex::Real primary_species_10;
-	amrex::Real primary_species_11;
-	amrex::Real primary_species_12;
-	amrex::Real primary_species_13;
-	amrex::Real primary_species_14;
+	amrex::Real small_temp{};
+	amrex::Real small_dens{};
+	amrex::Real temperature{};
+	amrex::Real primary_species_1{};
+	amrex::Real primary_species_2{};
+	amrex::Real primary_species_3{};
+	amrex::Real primary_species_4{};
+	amrex::Real primary_species_5{};
+	amrex::Real primary_species_6{};
+	amrex::Real primary_species_7{};
+	amrex::Real primary_species_8{};
+	amrex::Real primary_species_9{};
+	amrex::Real primary_species_10{};
+	amrex::Real primary_species_11{};
+	amrex::Real primary_species_12{};
+	amrex::Real primary_species_13{};
+	amrex::Real primary_species_14{};
 };
 
 template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialConditions()

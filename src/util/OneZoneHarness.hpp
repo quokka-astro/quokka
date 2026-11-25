@@ -102,9 +102,10 @@ class Recorder
 	{
 		auto const values = std::get<1>(fextract(state, geom, 0, 0.5));
 		if (amrex::ParallelDescriptor::IOProcessor()) {
-			CellValues cell(values.size());
-			for (size_t n = 0; n < values.size(); ++n) {
-				cell[n] = values[n][0];
+			CellValues cell;
+			cell.reserve(values.size());
+			for (auto const &component : values) {
+				cell.push_back(component[0]);
 			}
 			times_.push_back(time);
 			for (size_t k = 0; k < functions_.size(); ++k) {
@@ -174,7 +175,7 @@ inline auto TableReference(std::string const &filename, int column) -> Reference
 		} catch (const std::exception &) {
 			continue; // header or malformed line
 		}
-		if (static_cast<int>(row.size()) > column) {
+		if (std::cmp_greater(row.size(), column)) {
 			t_ref.push_back(row[0]);
 			y_ref.push_back(row[column]);
 		}
@@ -248,7 +249,7 @@ inline auto Evaluate(Recorder const &recorder, std::vector<Check> const &checks,
 			const bool ok = (err <= check.tolerance); // written so that NaN fails
 			amrex::Print() << std::format("{:<40}error = {:>12.4e}  tolerance = {:>10.2e}{}\n", check.name, err, check.tolerance,
 						      ok ? "" : "  FAIL");
-			status |= static_cast<int>(!ok);
+			status = ok ? status : 1;
 		}
 		if (!csv_file.empty()) {
 			std::ofstream out(csv_file);
@@ -271,7 +272,7 @@ inline auto Evaluate(Recorder const &recorder, std::vector<Check> const &checks,
 		if (io) {
 			amrex::Print() << std::format("{:<40}{}\n", predicate.name, ok ? "passed" : "FAIL");
 		}
-		status |= static_cast<int>(!ok);
+		status = ok ? status : 1;
 	}
 	if (io) {
 		amrex::Print() << (status == 0 ? "One-zone test: all checks passed.\n" : "One-zone test: FAILED.\n");
