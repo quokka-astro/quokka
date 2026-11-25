@@ -37,7 +37,11 @@ template <> struct Microphysics_Traits<DTypeFront_JAFF> : DefaultMicrophysicsTra
 	using Network = quokka::networks::PhotoionizationHCaseB;
 	// The tableau is the CMake cache variable DTypeFront_JAFF_TABLEAU (default ROS2S).
 	using Tableau = quokka::math::rosenbrock::DTYPEFRONT_JAFF_TABLEAU;
+#ifdef DTYPEFRONT_JAFF_NO_PHOTOCHEMISTRY
+	static constexpr bool photochemistry = false;
+#else
 	static constexpr bool photochemistry = true;
+#endif
 };
 
 using Network = Microphysics_Traits<DTypeFront_JAFF>::Network;
