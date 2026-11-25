@@ -122,7 +122,7 @@ What distinguishes the mode is where the absorbed energy goes. The gas energy eq
 c G^0_{g,\,\rm gas} = + c^{-1} \chi_{0F,g} \, v^i F_g^i \, ,
 </script>
 
-and its internal energy is unchanged by the band (apart from the photoelectric and cosmic-ray heating). This work is paid once, as kinetic energy, from the radiation. The radiation moments still lose the full \\(- c G^0\_g\\) above: the photons really are absorbed, they simply do not heat the gas. The difference \\(c G^0\_g - c G^0\_{g,\\,\rm gas} = c \chi\_{0E,g} E\_g - c^{-1} (2 + \alpha\_{\chi\_0, g}) \chi\_{0F,g} \\, v^i F\_g^i\\) is the absorption measured in the comoving frame, and it leaves the simulation. **Total energy is therefore not conserved in this mode.** That is by construction, not an error: the energy has gone into the dust, which radiates it away in the infrared, and neither the dust temperature nor that infrared emission is followed.
+and its internal energy is unchanged by the band (apart from the photoelectric and cosmic-ray heating). The work goes into kinetic energy through the momentum update, and the solver does not pass it through the internal energy. The radiation moments still lose the full \\(- c G^0\_g\\) above: the photons really are absorbed, they simply do not heat the gas. The difference \\(c G^0\_g - c G^0\_{g,\\,\rm gas} = c \chi\_{0E,g} E\_g - c^{-1} (2 + \alpha\_{\chi\_0, g}) \chi\_{0F,g} \\, v^i F\_g^i\\) is the absorption measured in the comoving frame, and it leaves the simulation. **Total energy is therefore not conserved in this mode.** That is by construction, not an error: the energy has gone into the dust, which radiates it away in the infrared, and neither the dust temperature nor that infrared emission is followed.
 
 Two consequences are worth stating plainly.
 
@@ -351,7 +351,7 @@ By default every group is a thermal band. Setting `dust_absorption_only` on `Rad
 template <> struct RadSystem_Traits<MyProblem> {
 	static constexpr double c_hat_over_c = 1.0;
 	static constexpr double energy_unit = C::ev2erg;
-	// two bands: far-ultraviolet and Lyman-Werner
+	// two bands: far-ultraviolet and Lyman-Werner (Physics_Traits<MyProblem>::nGroups = 2)
 	static constexpr amrex::GpuArray<double, 3> radBoundaries = {6.0, 11.2, 13.6};
 	static constexpr bool dust_absorption_only = true;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;

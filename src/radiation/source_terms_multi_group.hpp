@@ -172,8 +172,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/
 //
 //     E_g <- (E_g^0 + S_g + W_g) / (1 + chat * rho * kappa_{E,g} * dt) ,
 //
-// where W_g is the work term. The work term is the only quantity that reaches the gas; it is lagged
-// across the outer iteration of AddSourceTerms, which is the only iteration left in this path. The
+// where W_g is the work term. W_g is lagged across the outer iteration of AddSourceTerms, which is the
+// only iteration left in this path. It enters the radiation equation only; it does not reach the gas
+// internal energy, which changes only through the cosmic-ray and photoelectric heating. The
 // absorbed energy c * kappa_{E,g} * E_g leaves the simulation: it heats the dust, which re-radiates it
 // in the infrared, and neither the dust temperature nor that emission is followed. Total energy is
 // therefore not conserved in this mode, by construction.
@@ -188,7 +189,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 {
 	const double c = c_light_; // make a copy of c_light_ to avoid compiler error "undefined in device code"
 	const double chat = c_hat_;
-	const double cscale = c / chat;
 
 	const double H_num_den = ComputeNumberDensityH(rho, massScalars);
 
@@ -247,7 +247,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 	//
 	// The photoelectric heating is accumulated alongside, as Gamma_PE * dt with
 	// Gamma_PE = sum_g epsilon_g * pe_heating_rate_coeff_ * n_H * E_g. It is a direct physical heating rate
-	// on the gas, so it is added to the gas energy without the cscale factor that converts radiation-side
+	// on the gas, so it is added to the gas energy without the factor c / chat that converts radiation-side
 	// energy to the gas side -- exactly as the cosmic-ray heating below is. Note what it does not depend
 	// on: neither kappa nor chat. The grain physics lives in the empirical coefficient, so a band heats the
 	// gas whether or not it is being absorbed, and that energy is not taken from the radiation.
@@ -279,25 +279,19 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 	}
 	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
 
-	// Egas_guess is the total energy the gas receives from the exchange, kinetic energy included: UpdateFlux
-	// removes the kinetic-energy gain dEkin_work from it afterwards to leave the internal energy. In the
-	// mixed frame the gas receives c G^0 = (comoving-frame absorption, c chi E_0) + (work of the radiation
-	// force, W'), with E_0 = E - 2 v.F / c^2, so c G^0 = c chi E - W' and W' = cscale * work_local. The
-	// thermal solve credits all of c G^0, and UpdateFlux's removal of W' leaves c chi E_0 as heating of the
-	// internal energy.
-	//
-	// Here the dust takes the whole comoving-frame absorption, so the internal energy receives nothing from
-	// it, and the gas total energy receives only the work W'. Crediting -W' instead (what c G^0 minus the
-	// absorbed c chi E would give) double-counts the Doppler part of the absorption: UpdateFlux then removes
-	// W' once more, and a gas moving with the beam cools by 2 W' while a gas moving against it heats. With
-	// the credit +W' the removal returns the internal energy to its old value, up to the cosmic-ray and
-	// photoelectric heating, which are the only things that heat the gas here.
+	// The dust takes the whole comoving-frame absorption, so the gas internal energy receives nothing from the
+	// bands: it changes only through the cosmic-ray and photoelectric heating below. The radiation force
+	// still accelerates the gas, but that work is kinetic energy, paid by the force through the momentum
+	// update in UpdateFlux, and it does not pass through the internal energy at all. UpdateFlux therefore
+	// neither credits it here nor debits it from the internal energy afterwards. (Crediting the lagged work
+	// and debiting the kinetic-energy increment instead leaves the two out of step by dp^2 / (2 rho) -- the
+	// work uses the new velocity, the increment the mean of the old and new -- which heats a gas that the
+	// beam accelerates from rest by as much as the kinetic energy it gains.)
 	//
 	// EradVec_guess does not depend on the gas energy, so this is a closed-form update and not a fixed point:
-	// the photoelectric heating adds no iteration. Egas_guess can be negative transiently, when the gas
-	// decelerates by more kinetic energy than it has internal energy; UpdateFlux restores it.
+	// the photoelectric heating adds no iteration.
 	const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
-	const double Egas_guess = Egas0 + cscale * sum(work_local) + CR_heating + PE_heating;
+	const double Egas_guess = Egas0 + CR_heating + PE_heating;
 
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1); // total number of radiation updates. NOLINT
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], 1); // total number of (here, trivial) iterations. NOLINT
@@ -782,8 +776,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 			// exchange, work term included, so Egas holds no work to give up. Debiting it anyway takes the kinetic
 			// energy from the gas's own heat; in an evacuated, radiation-driven cell that exceeds the heat at every
 			// stage, and the cap then pins fully ionised gas near 1 K. There the radiation pays instead (below).
+			// A dust-absorption band is the other exception: it never credited the work to Egas (see SolveDustAbsorptionBands),
+			// so there is nothing to remove, and the kinetic energy is not taken from the radiation either.
 			work_from_radiation = energy.gas_decoupled;
-			if (!energy.gas_decoupled) {
+			if (!energy.gas_decoupled && !dust_absorption_only_) {
 				const double max_eint_transfer = (1.0 - work_term_min_eint_fraction) * energy.Egas;
 				energy.Egas -= std::min(dEkin_work, max_eint_transfer);
 			}

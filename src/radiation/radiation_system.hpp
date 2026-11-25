@@ -445,6 +445,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	// Assertions: dust_absorption_only turns off thermal emission and the gas-radiation energy exchange
 	// for every thermal group, so it is incompatible with the models that rely on either.
+	// A dust-absorption band does not emit, so nothing but the floor keeps an unilluminated opaque cell away from zero, where
+	// the flux update would divide by it (F / (c E) = 0 / 0).
+	static_assert(!(dust_absorption_only_ && !(Erad_floor_ > 0.0)), // NOLINT
+		      "dust_absorption_only requires a positive RadSystem_Traits::Erad_floor.");
+
 	static_assert(!(dust_absorption_only_ && enable_dust_gas_thermal_coupling_model_), // NOLINT
 		      "dust_absorption_only assumes the dust is thermally decoupled from the gas, so it cannot be combined with "
 		      "ISM_Traits::enable_dust_gas_thermal_coupling_model.");
