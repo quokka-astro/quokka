@@ -580,7 +580,8 @@ static auto RunEquilibriumMode() -> int
 		const int branch = ElectronDensityOf(state).branch;
 		std::cout << "  " << std::setw(11) << std::setprecision(5) << n_H << "  " << std::setw(10) << T << "  " << std::setw(12) << T_ref << "  "
 			  << std::setw(10) << std::setprecision(3) << err << "  " << std::setw(14) << drift << "  " << std::setw(9) << branch << "/"
-			  << static_cast<int>(reference[i][4]) << "  " << std::setw(12) << final_gas.n_Hp[i] / n_H << "/" << reference[i][2] << "  " << std::setprecision(5) << reference[i][5] << '\n';
+			  << static_cast<int>(reference[i][4]) << "  " << std::setw(12) << final_gas.n_Hp[i] / n_H << "/" << reference[i][2] << "  "
+			  << std::setprecision(5) << reference[i][5] << '\n';
 		if (!(err <= temperature_rtol)) {
 			++failures;
 		}
