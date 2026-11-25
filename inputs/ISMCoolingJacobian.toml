@@ -1,0 +1,7 @@
+# *****************************************************************
+# Jacobian and energy-sum check of the ISM photochemistry network
+# thermophotochemistry_ism_handwritten, and the Grackle (nH, T) table
+# (path relative to the tests/ working directory)
+# *****************************************************************
+ism_test.mode = "jacobian"
+ism_cooling.grackle_nT_table = "../extern/cooling/CloudyData_UVB=HM2012_shielded_nT_Z1.h5"
