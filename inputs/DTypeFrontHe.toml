@@ -1,8 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
+# One octant with the source at the lower corner. 3 pc: the H front reaches ~1.5 pc at stop_time (16^3 run).
 geometry.prob_lo     =  [0.0, 0.0, 0.0]
-geometry.prob_hi     =  [1.596e19, 1.596e19, 1.596e19]
+geometry.prob_hi     =  [9.257032744e18, 9.257032744e18, 9.257032744e18] # = 3 pc
 quokka.bc = ["reflecting", "reflecting", "reflecting"]
 
 # *****************************************************************
@@ -21,7 +22,7 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-stop_time = 1.93e13 # = 20 t_s
+stop_time = 5.107737479e12 # = stop_time of DTypeFront_JAFF.toml (5 t_s of the pure-H problem)
 
 # Neutral H + He mix, mass fractions X_H = 2/3, X_He = 1/3 (n_HeI_init = 0.5 * n_HI_init * m_H / m_He).
 stromgen.n_e_init = 1.0e-10
@@ -34,30 +35,22 @@ stromgen.Q = 4e46
 stromgen.temperature = 37.11
 
 integrator.X_reject_buffer = 1e100
-integrator.ode_max_steps = 50000
+integrator.ode_max_steps = 500000
 
-plotfile_interval = 50
+plotfile_interval = 100
 plotfile_prefix = "DTypeHe"
 
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 
-# VODE absolute tolerances -- tuned for DTypeFrontHe (n_H = 139.9 cm^-3, n_He = 17.6 cm^-3).
-# Erad_floor (M1 floor) is C::a_rad * 1e-8 (T~0.01 K) in testDTypeFrontHe.cpp -- see docs/markdown/photoionization.md.
-#
-# atol_rad_num: the performance plateau for this problem is at ~5e-2 cm^-3. Below this value VODE spends
-# extra steps in dark cells; above it the step-rejection loop (N_gamma near -radiation_failure_tolerance)
-# erodes the gain. radiation_failure_tolerance must exceed the maximum BDF predictor-corrector overshoot
-# at the ionization front (~0.05-0.2 cm^-3 for this problem), so 0.5 provides a safe margin.
-#
-# species_failure_tolerance = atol_spec: the 1.5x final-state factor in vode_type.H
-# (vode_final_state_species_failure_tolerance_factor) absorbs BDF interpolation overshoot
-# without manual inflation -- the two values can therefore be set equal.
-integrator.atol_spec                     = 1.4e-3   # cm^-3; 1e-5 x n_H = physical negligibility floor
-integrator.atol_enuc                     = 1.24e8   # erg/g; c_v x 1 K temperature accuracy
-integrator.atol_rad_num                  = 5e-2     # cm^-3; performance plateau for this problem
-integrator.species_failure_tolerance     = 1.4e-3   # cm^-3; = atol_spec (1.5x final-state factor in vode_type.H absorbs BDF overshoot)
-integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at ionization front
-
+# The paper's tolerances (sec:performance:tolerance): rtol = 1e-2, atol_i = rtol * s_i with scales
+# s_spec = 1e-3 cm^-3, s_enuc = 1e8 erg/g, s_rad_num = 0.1 cm^-3; failure tolerances = 5 atol.
 integrator.rtol_spec     = 1e-2
 integrator.rtol_rad_num  = 1e-2
 integrator.rtol_enuc     = 1e-2
+integrator.atol_spec     = 1e-5
+integrator.atol_enuc     = 1e6
+integrator.atol_rad_num  = 1e-3
+integrator.species_failure_tolerance   = 5e-5
+integrator.radiation_failure_tolerance = 5e-3
+
+density_floor = 1e-28  # g cm^-3
