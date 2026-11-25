@@ -118,25 +118,25 @@ auto problem_main() -> int
 			      }});
 	// Check that a position-dependent external heating rate produced a position-dependent temperature
 	if (min_spatial_heating_T_ratio > 0.0) {
-		predicates.push_back({.name = "T(x_last) / T(x_first) > required ratio", .passes = [&sim, min_spatial_heating_T_ratio](quokka::onezone::Recorder const &) {
-					      // the final profile along x (collective, so it must be called on every rank)
-					      auto const final_profile = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
-					      if (!amrex::ParallelDescriptor::IOProcessor()) {
-						      return true;
-					      }
-					      auto const &final_values = std::get<1>(final_profile);
-					      auto const &Etot = final_values.at(HydroSystem<ResampledCoolingTest>::energy_index);
-					      auto const &rho = final_values.at(HydroSystem<ResampledCoolingTest>::density_index);
-					      const size_t i_last = Etot.size() - 1;
-					      const double T_first =
-						  quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[0], Etot[0] - active_magnetic_energy_initial);
-					      const double T_last =
-						  quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[i_last], Etot[i_last] - active_magnetic_energy_initial);
-					      const double T_ratio_x = T_last / T_first;
-					      amrex::Print() << "Spatial heating check: T(x_last)/T(x_first) = " << T_ratio_x << " (required > "
-							     << min_spatial_heating_T_ratio << ")\n";
-					      return T_ratio_x > min_spatial_heating_T_ratio; // written so that a NaN ratio also fails
-				      }});
+		predicates.push_back(
+		    {.name = "T(x_last) / T(x_first) > required ratio", .passes = [&sim, min_spatial_heating_T_ratio](quokka::onezone::Recorder const &) {
+			     // the final profile along x (collective, so it must be called on every rank)
+			     auto const final_profile = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
+			     if (!amrex::ParallelDescriptor::IOProcessor()) {
+				     return true;
+			     }
+			     auto const &final_values = std::get<1>(final_profile);
+			     auto const &Etot = final_values.at(HydroSystem<ResampledCoolingTest>::energy_index);
+			     auto const &rho = final_values.at(HydroSystem<ResampledCoolingTest>::density_index);
+			     const size_t i_last = Etot.size() - 1;
+			     const double T_first = quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[0], Etot[0] - active_magnetic_energy_initial);
+			     const double T_last =
+				 quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho[i_last], Etot[i_last] - active_magnetic_energy_initial);
+			     const double T_ratio_x = T_last / T_first;
+			     amrex::Print() << "Spatial heating check: T(x_last)/T(x_first) = " << T_ratio_x << " (required > " << min_spatial_heating_T_ratio
+					    << ")\n";
+			     return T_ratio_x > min_spatial_heating_T_ratio; // written so that a NaN ratio also fails
+		     }});
 	}
 
 	return quokka::onezone::Run(sim, checks, predicates, output_csv_file);
