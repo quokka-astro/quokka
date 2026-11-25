@@ -376,10 +376,13 @@ static auto CheckGrackleRegistry(const quokka::ISMCooling::GrackleNTGpuConst &ta
 		std::cout << "CheckGrackleRegistry: the table is registered before RegisterGrackleNTTable\n";
 		++failures;
 	}
-	quokka::ISMCooling::RegisterGrackleNTTable(table, table);
+	// the device handles are tagged with a different zmet, to tell them from the host handles
+	quokka::ISMCooling::GrackleNTGpuConst device_table = table;
+	device_table.zmet = zmet + 1.;
+	quokka::ISMCooling::RegisterGrackleNTTable(table, device_table);
 	const auto *registered = quokka::ISMCooling::GetGrackleNTTable();
 	if (registered == nullptr || registered->zmet != zmet || registered->H_mass_fraction != X) {
-		std::cout << "CheckGrackleRegistry: the registered table does not match\n";
+		std::cout << "CheckGrackleRegistry: host code does not get the host handles\n";
 		++failures;
 	} else {
 		const auto direct = quokka::ISMCooling::LookupGrackleNT(1.0, 1.0e4, table);

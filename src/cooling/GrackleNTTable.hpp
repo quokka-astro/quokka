@@ -73,11 +73,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto GetGrackleNTTable() -> GrackleNTGp
 	if (g_grackle_nt_registry == nullptr) {
 		return nullptr;
 	}
-#ifdef AMREX_DEVICE_COMPILE
-	return &g_grackle_nt_registry->device;
-#else
-	return &g_grackle_nt_registry->host;
-#endif
+	AMREX_IF_ON_DEVICE((return &g_grackle_nt_registry->device;))
+	AMREX_IF_ON_HOST((return &g_grackle_nt_registry->host;))
 }
 
 /// Look up Lambda_net and xe_CIE at (nH, T), with their derivatives.
