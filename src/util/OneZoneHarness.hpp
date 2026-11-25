@@ -246,7 +246,8 @@ inline auto Evaluate(Recorder const &recorder, std::vector<Check> const &checks,
 		for (auto const &check : checks) {
 			const double err = detail::CheckError(recorder, check);
 			const bool ok = (err <= check.tolerance); // written so that NaN fails
-			amrex::Print() << std::format("{:<40}error = {:>12.4e}  tolerance = {:>10.2e}{}\n", check.name, err, check.tolerance, ok ? "" : "  FAIL");
+			amrex::Print() << std::format("{:<40}error = {:>12.4e}  tolerance = {:>10.2e}{}\n", check.name, err, check.tolerance,
+						      ok ? "" : "  FAIL");
 			status |= static_cast<int>(!ok);
 		}
 		if (!csv_file.empty()) {

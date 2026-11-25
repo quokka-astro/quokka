@@ -112,10 +112,9 @@ auto problem_main() -> int
 	sim.userData_.addObservable("Tgas", [](quokka::onezone::CellValues const &cell) {
 		const amrex::Real rho = cell[RadSystem<CouplingProblem>::gasDensity_index];
 		static_assert(!Physics_Traits<CouplingProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		const amrex::Real Eint = quokka::EOS<CouplingProblem>::ComputeEintFromEgas(rho, cell[RadSystem<CouplingProblem>::x1GasMomentum_index],
-											   cell[RadSystem<CouplingProblem>::x2GasMomentum_index],
-											   cell[RadSystem<CouplingProblem>::x3GasMomentum_index],
-											   cell[RadSystem<CouplingProblem>::gasEnergy_index], 0.0);
+		const amrex::Real Eint = quokka::EOS<CouplingProblem>::ComputeEintFromEgas(
+		    rho, cell[RadSystem<CouplingProblem>::x1GasMomentum_index], cell[RadSystem<CouplingProblem>::x2GasMomentum_index],
+		    cell[RadSystem<CouplingProblem>::x3GasMomentum_index], cell[RadSystem<CouplingProblem>::gasEnergy_index], 0.0);
 		return quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Eint);
 	});
 
@@ -131,8 +130,9 @@ auto problem_main() -> int
 		return std::pow(T4, 1. / 4.);
 	};
 
-	const std::vector<quokka::onezone::Check> checks = {{.name = "Tgas relative L1 error",
-							     .comparisons = {{.observable = "Tgas", .reference = quokka::onezone::AnalyticReference(Tgas_exact)}},
-							     .tolerance = 2e-5}};
+	const std::vector<quokka::onezone::Check> checks = {
+	    {.name = "Tgas relative L1 error",
+	     .comparisons = {{.observable = "Tgas", .reference = quokka::onezone::AnalyticReference(Tgas_exact)}},
+	     .tolerance = 2e-5}};
 	return quokka::onezone::Run(sim, checks);
 }
