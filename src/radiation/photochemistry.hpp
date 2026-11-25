@@ -263,7 +263,10 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			static_assert(RadSystem<problem_t>::dust_chemical_band_absorption_,
 				      "DUST_CHEMICAL_BAND_ABSORPTION is defined but ISM_Traits::dust_chemical_band_absorption is false: "
 				      "the dust-absorbed photon energy would be silently dropped.");
-			dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / dt;
+			// With no gas-dust thermal coupling model nothing consumes the dust-absorbed energy, and it leaves the simulation.
+			if constexpr (RadSystem<problem_t>::enable_dust_gas_thermal_coupling_model_) {
+				dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / dt;
+			}
 #endif
 
 			// Quokka uses rho*eint
