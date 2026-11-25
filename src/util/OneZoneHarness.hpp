@@ -7,7 +7,8 @@
 /// \brief Test harness for one-zone problems: uniform initial state, evolution with QuokkaSimulation, and comparison with a reference solution.
 ///
 /// A one-zone test supplies three things: the initial cell (FillUniform), the observables recorded after each step (Recorder::addObservable), and the
-/// checks against a reference (Check, Predicate). Run() then initializes, evolves, and evaluates the checks.
+/// checks against a reference (Check, Predicate), and optionally figures of the recorded series against time (Figure). Run() then initializes, evolves,
+/// evaluates the checks, and saves the figures (when built with Python support, otherwise figures are skipped).
 ///
 /// Usage in a problem file:
 ///   - derive SimulationData<problem_t> from quokka::onezone::Recorder;
@@ -23,6 +24,7 @@
 #include <functional>
 #include <iomanip>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -40,6 +42,10 @@
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "util/fextract.hpp"
+
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 
 namespace quokka::onezone
 {
@@ -83,6 +89,25 @@ class Recorder;
 struct Predicate {
 	std::string name;
 	std::function<bool(Recorder const &)> passes;
+};
+
+/// One line of a Figure: a recorded observable and, optionally, its reference (drawn dashed in black).
+struct Curve {
+	std::string observable;
+	std::string label; ///< legend entry; the observable's name if empty
+	Reference reference{};
+};
+
+/// A plot of recorded observables as a function of time, saved to `filename` (any format matplotlib supports, chosen by the extension).
+struct Figure {
+	std::string filename;
+	std::vector<Curve> curves;
+	std::string title;
+	std::string xlabel = "time";
+	std::string ylabel;
+	double time_scale = 1.0; ///< recorded times are divided by this before plotting (for example the number of seconds in a Myr)
+	bool log_x = false;
+	bool log_y = false;
 };
 
 /// Records observables of the centre cell as a function of time.
@@ -214,6 +239,48 @@ inline auto AllFinite() -> Predicate
 
 namespace detail
 {
+inline void Plot(Recorder const &recorder, Figure const &figure)
+{
+#ifdef HAVE_PYTHON
+	std::vector<double> t = recorder.times();
+	std::transform(t.begin(), t.end(), t.begin(), [&](double v) { return v / figure.time_scale; });
+
+	matplotlibcpp::clf();
+	int index = 0;
+	for (auto const &curve : figure.curves) {
+		const std::string label = curve.label.empty() ? curve.observable : curve.label;
+		std::map<std::string, std::string> args;
+		args["label"] = label;
+		args["color"] = "C" + std::to_string(index++);
+		matplotlibcpp::plot(t, recorder.series(curve.observable), args);
+		if (curve.reference) {
+			std::map<std::string, std::string> ref_args;
+			ref_args["label"] = label + " (reference)";
+			ref_args["linestyle"] = "--";
+			ref_args["color"] = "k";
+			matplotlibcpp::plot(t, curve.reference(recorder.times()), ref_args);
+		}
+	}
+	if (figure.log_x) {
+		matplotlibcpp::xscale("log");
+	}
+	if (figure.log_y) {
+		matplotlibcpp::yscale("log");
+	}
+	matplotlibcpp::xlabel(figure.xlabel);
+	matplotlibcpp::ylabel(figure.ylabel);
+	if (!figure.title.empty()) {
+		matplotlibcpp::title(figure.title);
+	}
+	matplotlibcpp::legend();
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save(figure.filename);
+#else
+	(void)recorder;
+	(void)figure;
+#endif
+}
+
 inline auto CheckError(Recorder const &recorder, Check const &check) -> double
 {
 	double err_sum = 0.;
@@ -236,10 +303,10 @@ inline auto CheckError(Recorder const &recorder, Check const &check) -> double
 }
 } // namespace detail
 
-/// Evaluate the checks and predicates on the recorded data, print a report, and write all series to `csv_file` (if not empty).
-/// Returns 0 if everything passed, 1 otherwise.
+/// Evaluate the checks and predicates on the recorded data, print a report, write all series to `csv_file` (if not empty), and save the figures (only
+/// if built with Python support). Returns 0 if everything passed, 1 otherwise.
 inline auto Evaluate(Recorder const &recorder, std::vector<Check> const &checks, std::vector<Predicate> const &predicates = {},
-		     std::string const &csv_file = "") -> int
+		     std::string const &csv_file = "", std::vector<Figure> const &figures = {}) -> int
 {
 	int status = 0;
 	const bool io = amrex::ParallelDescriptor::IOProcessor();
@@ -267,6 +334,11 @@ inline auto Evaluate(Recorder const &recorder, std::vector<Check> const &checks,
 			}
 		}
 	}
+	if (io) {
+		for (auto const &figure : figures) {
+			detail::Plot(recorder, figure);
+		}
+	}
 	for (auto const &predicate : predicates) {
 		const bool ok = predicate.passes(recorder);
 		if (io) {
@@ -282,12 +354,13 @@ inline auto Evaluate(Recorder const &recorder, std::vector<Check> const &checks,
 
 /// Initialize, evolve and check a one-zone simulation. sim.userData_ must derive from Recorder.
 template <typename Simulation>
-auto Run(Simulation &sim, std::vector<Check> const &checks, std::vector<Predicate> const &predicates = {}, std::string const &csv_file = "") -> int
+auto Run(Simulation &sim, std::vector<Check> const &checks, std::vector<Predicate> const &predicates = {}, std::string const &csv_file = "",
+	 std::vector<Figure> const &figures = {}) -> int
 {
 	sim.setInitialConditions();
 	sim.userData_.record(sim.state_new_cc_[0], sim.Geom(0), sim.tNew_[0]);
 	sim.evolve();
-	return Evaluate(sim.userData_, checks, predicates, csv_file);
+	return Evaluate(sim.userData_, checks, predicates, csv_file, figures);
 }
 
 } // namespace quokka::onezone

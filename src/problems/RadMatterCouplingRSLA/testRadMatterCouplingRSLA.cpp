@@ -139,5 +139,12 @@ auto problem_main() -> int
 	    {.name = "Tgas relative L1 error",
 	     .comparisons = {{.observable = "Tgas", .reference = quokka::onezone::AnalyticReference(Tgas_rsla_exact)}},
 	     .tolerance = 5e-5}};
-	return quokka::onezone::Run(sim, checks);
+	const std::vector<quokka::onezone::Figure> figures = {
+	    {.filename = "radcoupling_rsla.pdf",
+	     .curves = {{.observable = "Tgas", .label = "gas temperature", .reference = quokka::onezone::AnalyticReference(Tgas_rsla_exact)}},
+	     .xlabel = "time t (s)",
+	     .ylabel = "temperature T (K)",
+	     .log_x = true,
+	     .log_y = true}};
+	return quokka::onezone::Run(sim, checks, {}, "", figures);
 }

@@ -118,6 +118,10 @@ auto problem_main() -> int
 		return quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Eint);
 	});
 
+	sim.userData_.addObservable("Trad", [](quokka::onezone::CellValues const &cell) {
+		return std::pow(cell[RadSystem<CouplingProblem>::radEnergy_index] / a_rad, 1. / 4.);
+	});
+
 	// Asymptotically-exact solution (Gonzalez et al. 2007)
 	const double initial_Tgas = quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho0, Egas0);
 	const auto kappa = RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas);
@@ -134,5 +138,13 @@ auto problem_main() -> int
 	    {.name = "Tgas relative L1 error",
 	     .comparisons = {{.observable = "Tgas", .reference = quokka::onezone::AnalyticReference(Tgas_exact)}},
 	     .tolerance = 2e-5}};
-	return quokka::onezone::Run(sim, checks);
+	const std::vector<quokka::onezone::Figure> figures = {
+	    {.filename = "radcoupling.pdf",
+	     .curves = {{.observable = "Trad", .label = "radiation temperature"},
+			{.observable = "Tgas", .label = "gas temperature", .reference = quokka::onezone::AnalyticReference(Tgas_exact)}},
+	     .xlabel = "time t (s)",
+	     .ylabel = "temperature T (K)",
+	     .log_x = true,
+	     .log_y = true}};
+	return quokka::onezone::Run(sim, checks, {}, "", figures);
 }

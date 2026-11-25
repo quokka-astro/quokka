@@ -101,7 +101,7 @@ For a test of a uniform cell (cooling, chemistry, radiation-matter coupling) use
 1. Derive `SimulationData<problem_t>` from `quokka::onezone::Recorder`.
 2. In `setInitialConditionsOnGrid`, fill a `quokka::onezone::Cell<problem_t>` and pass it to `quokka::onezone::FillUniform`.
 3. In `computeAfterTimestep`, call `userData_.record(state_new_cc_[0], Geom(0), tNew_[0])`.
-4. In `problem_main`, register observables with `addObservable` (functions of the centre-cell values), build `quokka::onezone::Check` objects against an `AnalyticReference` or a `TableReference` (CSV file), and `return quokka::onezone::Run(sim, checks)`. A `Predicate` expresses a pass/fail condition that is not a comparison, and `AllFinite()` checks that no recorded value is NaN or infinite.
+4. In `problem_main`, register observables with `addObservable` (functions of the centre-cell values), build `quokka::onezone::Check` objects against an `AnalyticReference` or a `TableReference` (CSV file), and `return quokka::onezone::Run(sim, checks)`. A `Predicate` expresses a pass/fail condition that is not a comparison, and `AllFinite()` checks that no recorded value is NaN or infinite. A `quokka::onezone::Figure` names recorded observables (each optionally with a reference, drawn dashed) to plot against time; pass the figures to `Run`, which saves them with matplotlib when Quokka is built with Python support and skips them otherwise.
 
 See `src/problems/RadMatterCoupling/testRadMatterCoupling.cpp` (analytic reference) and `src/problems/OneZonePhotoionization/testOneZonePhotoionization.cpp` (table reference).
 

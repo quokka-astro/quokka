@@ -93,6 +93,10 @@ auto problem_main() -> int
 	double min_spatial_heating_T_ratio = 0.0;
 	pp.query("min_spatial_heating_T_ratio", min_spatial_heating_T_ratio);
 
+	amrex::ParmParse const ppp;
+	bool use_sfh_based_pe_heating = false;
+	ppp.query("use_sfh_based_pe_heating", use_sfh_based_pe_heating);
+
 	QuokkaSimulation<ResampledCoolingTest> sim;
 
 	sim.plotfileInterval_ = -1;
@@ -139,5 +143,18 @@ auto problem_main() -> int
 		     }});
 	}
 
-	return quokka::onezone::Run(sim, checks, predicates, output_csv_file);
+	quokka::onezone::Curve temperature_curve = {.observable = "temperature", .label = "Simulation"};
+	if (!reference_file.empty()) {
+		temperature_curve.reference = quokka::onezone::TableReference(reference_file, 1);
+	}
+	const std::vector<quokka::onezone::Figure> figures = {
+	    {.filename = use_sfh_based_pe_heating ? "cooling_temperature_sfh_base_pe.pdf" : "cooling_temperature.pdf",
+	     .curves = {temperature_curve},
+	     .title = "Isochoric Cooling Test",
+	     .xlabel = "time (Myr)",
+	     .ylabel = "Temperature (K)",
+	     .time_scale = 3.15576e13, // seconds in a Myr
+	     .log_x = true,
+	     .log_y = true}};
+	return quokka::onezone::Run(sim, checks, predicates, output_csv_file, figures);
 }

@@ -194,5 +194,14 @@ auto problem_main() -> int
 	     .comparisons = {{.observable = "Tgas", .reference = quokka::onezone::AnalyticReference(Tgas_exact)},
 			     {.observable = "Erad_line", .reference = quokka::onezone::AnalyticReference(Erad_line_exact)}},
 	     .tolerance = 0.0005}};
-	return quokka::onezone::Run(sim, checks, {}, "rad_line_cooling_MG.csv");
+	const std::vector<quokka::onezone::Figure> figures = {
+	    {.filename = "rad_line_cooling_MG_temperature.pdf",
+	     .curves = {{.observable = "Tgas", .label = "T_gas", .reference = quokka::onezone::AnalyticReference(Tgas_exact)}},
+	     .xlabel = "t (dimensionless)",
+	     .ylabel = "temperature (dimensionless)"},
+	    {.filename = "rad_line_cooling_MG_radiation_energy_density.pdf",
+	     .curves = {{.observable = "Erad_line", .label = "E_rad", .reference = quokka::onezone::AnalyticReference(Erad_line_exact)}},
+	     .xlabel = "t (dimensionless)",
+	     .ylabel = "radiation energy density (dimensionless)"}};
+	return quokka::onezone::Run(sim, checks, {}, "rad_line_cooling_MG.csv", figures);
 }
