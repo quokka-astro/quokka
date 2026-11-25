@@ -570,51 +570,6 @@ auto is_restart() -> bool
 // Half-width, in cells of the level it is deposited on, of the source kernel of AddRadSource.
 constexpr int source_kernel_cells = 2;
 
-// photoionize.refine_source_cells = 0 keeps the cells of the base-level source kernel on the base level.
-auto refine_source_cells() -> bool
-{
-	int refine = 1;
-	amrex::ParmParse const pp("photoionize");
-	pp.query("refine_source_cells", refine);
-	return refine != 0;
-}
-
-// Bounding box of the base-level cells the source kernel deposits into: those whose centre is within source_kernel_cells
-// cells of the source in each direction, as in AddRadSource.
-auto source_box(amrex::Geometry const &geom0) -> amrex::Box
-{
-	const auto prob_lo = geom0.ProbLoArray();
-	const auto prob_hi = geom0.ProbHiArray();
-	const auto dx = geom0.CellSizeArray();
-	amrex::IntVect lo;
-	amrex::IntVect hi;
-	for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-		const amrex::Real x = 0.5_rt * (prob_hi[d] - prob_lo[d]) / dx[d];
-		const int src = static_cast<int>(amrex::Math::floor(x));
-		const amrex::Real frac = x - static_cast<amrex::Real>(src);
-		lo[d] = src + static_cast<int>(std::ceil(-source_kernel_cells - 0.5_rt + frac));
-		hi[d] = src + static_cast<int>(std::floor(source_kernel_cells - 0.5_rt + frac));
-	}
-	return {lo, hi};
-}
-
-// Cells of level lev that no level lev+1 grid may cover, so that no refined grid ever covers a source cell. Level lev+1 grids
-// are made of bfLev(lev) blocks, and level lev+1 must contain the level lev+2 grids grown by nProper() * bfLev(lev + 1) cells of
-// level lev+1. So each level's region is the one below refined, grown by that nesting margin and aligned to its blocks.
-auto unrefined_source_region(QuokkaSimulation<DTypeFront3D> const &sim, int lev) -> amrex::Box
-{
-	amrex::Box region = source_box(sim.Geom(0));
-	for (int l = 0; l <= lev; ++l) {
-		if (l > 0) {
-			region.refine(sim.refRatio(l - 1));
-			region.grow(sim.nProper() * sim.bfLev(l));
-		}
-		region.coarsen(sim.bfLev(l));
-		region.refine(sim.bfLev(l));
-	}
-	return region;
-}
-
 } // namespace
 
 template <>
@@ -800,27 +755,10 @@ template <> void QuokkaSimulation<DTypeFront3D>::setInitialConditionsOnGrid(quok
 	});
 }
 
-template <> void QuokkaSimulation<DTypeFront3D>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int /*ngrow*/)
+template <> void QuokkaSimulation<DTypeFront3D>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// Refine wherever the neutral fraction jumps by more than x_HI_grad_threshold between neighbouring cells.
 	const amrex::Real x_HI_grad_threshold = 0.3;
-
-	// The initial gas is uniformly neutral, so the gradient tags nothing at t = 0 and the R-type phase would run on the base
-	// grid until the first regrid. Refine the sphere the front reaches within the first few coarse steps (2 R_s) from the start.
-	const bool tag_source_region = (time <= 0.0_rt);
-	const amrex::Real r_tag = 2.0_rt * stromgren_radius(userData_.flux_ion, userData_.n_HI_init, userData_.T_ionized);
-	const amrex::Real r_tag2 = r_tag * r_tag;
-	const auto prob_lo = geom[lev].ProbLoArray();
-	const auto prob_hi = geom[lev].ProbHiArray();
-	const auto dx = geom[lev].CellSizeArray();
-
-	// Tags are buffered by n_error_buf cells before they are clustered, so none may lie within that distance of the region.
-	const bool untag_source = !refine_source_cells();
-	// With grid_eff < 1 a cluster may take in untagged blocks, the source's among them.
-	if (untag_source && gridEff() < 1.0_rt) {
-		amrex::Abort("DTypeFront3D: photoionize.refine_source_cells = 0 needs amr.grid_eff = 1");
-	}
-	const amrex::Box no_tags = untag_source ? amrex::grow(unrefined_source_region(*this, lev), nErrorBufVect(lev)) : amrex::Box();
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
@@ -828,19 +766,6 @@ template <> void QuokkaSimulation<DTypeFront3D>::refineGrid(int lev, amrex::TagB
 		const auto tag = tags.array(mfi);
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			if (untag_source && no_tags.contains(amrex::IntVect(AMREX_D_DECL(i, j, k)))) {
-				return;
-			}
-			if (tag_source_region) {
-				const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5_rt) * dx[0] - 0.5_rt * (prob_lo[0] + prob_hi[0]);
-				const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5_rt) * dx[1] - 0.5_rt * (prob_lo[1] + prob_hi[1]);
-				const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5_rt) * dx[2] - 0.5_rt * (prob_lo[2] + prob_hi[2]);
-				if (x * x + y * y + z * z < r_tag2) {
-					tag(i, j, k) = amrex::TagBox::SET;
-					return;
-				}
-			}
-
 			const amrex::Real x0 = neutral_fraction(state, i, j, k);
 
 			const amrex::Real del_x =
@@ -861,16 +786,6 @@ template <> void QuokkaSimulation<DTypeFront3D>::computeAfterTimestep()
 {
 	const int lev = 0;
 	const amrex::Real t = tNew_[lev];
-
-	if (!refine_source_cells()) {
-		amrex::Box src = source_box(geom[0]);
-		for (int l = 1; l <= finest_level; ++l) {
-			src.refine(ref_ratio[l - 1]);
-			if (boxArray(l).intersects(src)) {
-				amrex::Abort("DTypeFront3D: a level " + std::to_string(l) + " grid covers source cells (photoionize.refine_source_cells = 0)");
-			}
-		}
-	}
 
 	// One bin per cell width of the finest level the inputs allow, the same cells Check 2 measures its tolerance in.
 	const int n_bins = geom[maxLevel()].Domain().length(0) / 2;
