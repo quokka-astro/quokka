@@ -1,5 +1,6 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  # DTypeFront_JAFF with the source kernel radius as a runtime parameter (stromgen.kernel_radius, in cells).
+  # DTypeFront_JAFF with runtime source options: kernel radius (stromgen.kernel_radius, in cells) and the reduced flux of the
+  # injected radiation, radially outward (stromgen.radial_flux, 0 to 1).
   # Shares DTypeFront_JAFF's cache variables for the tableau and c_hat.
   set(JOB_NAME DTypeFront_JAFF_Kernel)
   quokka_add_problem(JOB_NAME ${JOB_NAME} ADD_TEST OFF)
