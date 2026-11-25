@@ -30,6 +30,7 @@
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/OneZoneHarness.hpp"
 
 #include "actual_eos_data.H"
 #include "burn_type.H"
@@ -48,7 +49,7 @@ template <> struct Physics_Traits<PrimordialChemTest> : DefaultPhysicsTraits {
 	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
 };
 
-template <> struct SimulationData<PrimordialChemTest> {
+template <> struct SimulationData<PrimordialChemTest> : quokka::onezone::Recorder {
 	amrex::Real small_temp;
 	amrex::Real small_dens;
 	amrex::Real temperature;
@@ -121,9 +122,6 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
-	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const amrex::Array4<double> &state_cc = grid_elem.array_;
-
 	burn_t state;
 
 	std::array<Real, NumSpec> numdens = {-1.0};
@@ -209,32 +207,28 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 	// call the EOS to set initial internal energy e
 	eos(eos_input_rt, state);
 
-	// loop over the grid and set the initial condition
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real const rho = state.rho; // g cm^-3
+	Real const rho = state.rho; // g cm^-3
 
-		Real const xmom = 0;
-		Real const ymom = 0;
-		Real const zmom = 0;
-		// Microphysics calculates specific internal energy so multiply it by rho for Quokka
-		Real const Eint = rho * state.e;
+	Real const xmom = 0;
+	Real const ymom = 0;
+	Real const zmom = 0;
+	// Microphysics calculates specific internal energy so multiply it by rho for Quokka
+	Real const Eint = rho * state.e;
 
-		static_assert(!Physics_Traits<PrimordialChemTest>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		Real const Egas = quokka::EOS<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
+	static_assert(!Physics_Traits<PrimordialChemTest>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+	Real const Egas = quokka::EOS<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::energy_index) = Egas;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::internalEnergy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x1Momentum_index) = xmom;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x2Momentum_index) = ymom;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x3Momentum_index) = zmom;
-
-		for (int nn = 0; nn < NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + nn) =
-			    mfracs[nn] * rho; // we use partial densities and not mass fractions
-		}
-	});
+	quokka::onezone::Cell<PrimordialChemTest> cell{};
+	cell[HydroSystem<PrimordialChemTest>::energy_index] = Egas;
+	cell[HydroSystem<PrimordialChemTest>::internalEnergy_index] = Eint;
+	cell[HydroSystem<PrimordialChemTest>::density_index] = rho;
+	for (int nn = 0; nn < NumSpec; ++nn) {
+		cell[HydroSystem<PrimordialChemTest>::scalar0_index + nn] = mfracs[nn] * rho; // we use partial densities and not mass fractions
+	}
+	quokka::onezone::FillUniform<PrimordialChemTest>(grid_elem, cell);
 }
+
+template <> void QuokkaSimulation<PrimordialChemTest>::computeAfterTimestep() { userData_.record(state_new_cc_[0], Geom(0), tNew_[0]); }
 
 auto problem_main() -> int
 {
@@ -256,13 +250,15 @@ auto problem_main() -> int
 	sim.plotfileInterval_ = 100;
 	sim.checkpointInterval_ = -1;
 
-	// Set initial conditions
-	sim.setInitialConditions();
+	// there is no reference solution: check that the state stays finite
+	sim.userData_.addObservable("density", [](quokka::onezone::CellValues const &cell) { return cell[HydroSystem<PrimordialChemTest>::density_index]; });
+	sim.userData_.addObservable("Egas", [](quokka::onezone::CellValues const &cell) { return cell[HydroSystem<PrimordialChemTest>::energy_index]; });
+	for (int n = 0; n < NumSpec; ++n) {
+		sim.userData_.addObservable(std::format("partial_density_{}", n), [n](quokka::onezone::CellValues const &cell) {
+			return cell[HydroSystem<PrimordialChemTest>::scalar0_index + n];
+		});
+	}
 
 	// run simulation
-	sim.evolve();
-
-	// Cleanup and exit
-	int const status = 0;
-	return status;
+	return quokka::onezone::Run(sim, {}, {quokka::onezone::AllFinite()});
 }
