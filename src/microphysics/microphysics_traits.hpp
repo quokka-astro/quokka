@@ -47,6 +47,11 @@ struct DefaultMicrophysicsTraits {
 
 	/// The largest internal timestep.
 	static constexpr amrex::Real ode_max_dt = 1.e30;
+
+	/// HIP only: launch the photochemistry burn with __launch_bounds__(256, burn_min_waves), so that the compiler limits the
+	/// registers to fit that many waves per SIMD. The best value depends on the network size and the GPU. With 0 the burn
+	/// is launched with amrex::ParallelFor.
+	static constexpr int burn_min_waves = 0;
 };
 
 template <typename problem_t> struct Microphysics_Traits : DefaultMicrophysicsTraits {};

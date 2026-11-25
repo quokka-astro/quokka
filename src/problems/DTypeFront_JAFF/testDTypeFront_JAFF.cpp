@@ -42,6 +42,7 @@ template <> struct Microphysics_Traits<DTypeFront_JAFF> : DefaultMicrophysicsTra
 #else
 	static constexpr bool photochemistry = true;
 #endif
+	static constexpr int burn_min_waves = 2;
 };
 
 using Network = Microphysics_Traits<DTypeFront_JAFF>::Network;
