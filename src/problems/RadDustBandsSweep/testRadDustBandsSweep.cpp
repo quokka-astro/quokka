@@ -8,6 +8,9 @@
 /// any finite input produces a non-finite output, and it reports the cells where the radiation energy or
 /// the internal energy leaves its physical range.
 ///
+/// Defining DUST_SWEEP_ONE_GROUP before including this file builds the same sweep for a single group, which takes its
+/// opacities from the single-group hooks instead (see RadDustBandsSweepSingleGroup).
+///
 /// The radiation traits are those of TallBoxSfFuv (FUV and LW bands, Weingartner & Draine dust opacity,
 /// photoelectric efficiency 0.05, reduced speed of light c/100). The EOS is ideal rather than tabulated:
 /// in this path the gas temperature feeds only the opacity, which does not depend on it.
@@ -31,13 +34,17 @@
 
 struct DustBandsSweep {};
 
+#ifdef DUST_SWEEP_ONE_GROUP
+constexpr int n_groups = 1;
+#else
 constexpr int n_groups = 2;
+#endif
 constexpr double gamma_gas = 5. / 3.;
 constexpr double mu = C::m_p;
 
 constexpr double gas_to_dust_mass_ratio = 1.653e2;
-constexpr amrex::GpuArray<double, n_groups + 1> K_abs_dust = {4.486e4, 8.246e4, 1.310e5}; // cm^2 per g of dust
-constexpr amrex::GpuArray<double, n_groups + 1> kappa_dust = {K_abs_dust.arr[0] / gas_to_dust_mass_ratio, K_abs_dust.arr[1] / gas_to_dust_mass_ratio,
+constexpr amrex::GpuArray<double, 3> K_abs_dust = {4.486e4, 8.246e4, 1.310e5}; // cm^2 per g of dust
+constexpr amrex::GpuArray<double, 3> kappa_dust = {K_abs_dust.arr[0] / gas_to_dust_mass_ratio, K_abs_dust.arr[1] / gas_to_dust_mass_ratio,
 							      K_abs_dust.arr[2] / gas_to_dust_mass_ratio}; // cm^2 per g of gas
 constexpr double Erad_floor = 1.0e-25;
 constexpr double chat_over_c = 1.0e-2;
@@ -58,12 +65,36 @@ template <> struct RadSystem_Traits<DustBandsSweep> {
 	static constexpr double c_hat_over_c = chat_over_c;
 	static constexpr double Erad_floor = ::Erad_floor;
 	static constexpr double energy_unit = C::ev2erg;
-	static constexpr amrex::GpuArray<double, n_groups + 1> radBoundaries = {6.0, 11.2, 13.6}; // eV
 	static constexpr int beta_order = 1;
-	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr bool dust_absorption_only = true;
+#ifdef DUST_SWEEP_ONE_GROUP
+	static constexpr amrex::GpuArray<double, n_groups> pe_heating_efficiency = {0.05};
+#else
+	static constexpr amrex::GpuArray<double, n_groups + 1> radBoundaries = {6.0, 11.2, 13.6}; // eV
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr amrex::GpuArray<double, n_groups> pe_heating_efficiency = {0.05, 0.05};
+#endif
 };
+
+#ifdef DUST_SWEEP_ONE_GROUP
+// A single group takes its opacities from the single-group hooks: the FUV opacity of TallBoxSfFuv.
+constexpr double kappa_one_group = kappa_dust.arr[0];
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustBandsSweep>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+{
+	return kappa_one_group;
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustBandsSweep>::ComputeEnergyMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+{
+	return kappa_one_group;
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustBandsSweep>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+{
+	return kappa_one_group;
+}
+#else
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<DustBandsSweep>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, n_groups + 1> rad_boundaries,
@@ -81,6 +112,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<DustBandsSweep>::DefineOpacityExponentsAndL
 	exponents_and_values[1][n_groups] = kappa[n_groups];
 	return exponents_and_values;
 }
+#endif
 
 // Sweep axes. A negative temperature entry stands for a negative internal energy of the same magnitude,
 // which is what E_tot - E_kin gives in a cell where the hydro update has lost the internal energy.
@@ -99,10 +131,11 @@ constexpr int n_rho = 8;
 constexpr int n_T = 7;
 constexpr int n_v = 5;
 constexpr int n_E = 6;
+constexpr int n_E1 = (n_groups > 1) ? n_E : 1; // the second band's energy axis exists only with a second band
 constexpr int n_f = 4;
 constexpr int n_src = 4;
 constexpr int n_dt = 3;
-constexpr int n_cells_per_dt = n_rho * n_T * n_v * n_vdir * n_E * n_E * n_f * n_src;
+constexpr int n_cells_per_dt = n_rho * n_T * n_v * n_vdir * n_E * n_E1 * n_f * n_src;
 
 struct SweepPoint {
 	double rho;
@@ -130,8 +163,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto DecodeSweepPoint(int idx) -> Sweep
 	idx /= n_src;
 	pt.f = f_list[idx % n_f];
 	idx /= n_f;
-	pt.E1 = E_list[idx % n_E];
-	idx /= n_E;
+	pt.E1 = E_list[idx % n_E1];
+	idx /= n_E1;
 	pt.E0 = E_list[idx % n_E];
 	idx /= n_E;
 	pt.vdir = idx % n_vdir;
@@ -279,8 +312,8 @@ auto problem_main() -> int
 							       m, i, pt.rho, pt.T, pt.v, pt.vdir, pt.E0, pt.E1, pt.f, pt.src,
 							       s(i, j, k, RadSys::gasInternalEnergy_index), s(i, j, k, RadSys::x1GasMomentum_index),
 							       s(i, j, k, RadSys::x2GasMomentum_index), s(i, j, k, RadSys::radEnergy_index),
-							       s(i, j, k, RadSys::radEnergy_index + nrv), s(i, j, k, RadSys::x1RadFlux_index),
-							       s(i, j, k, RadSys::x1RadFlux_index + nrv));
+							       (n_groups > 1) ? s(i, j, k, RadSys::radEnergy_index + nrv) : 0.0, s(i, j, k, RadSys::x1RadFlux_index),
+							       (n_groups > 1) ? s(i, j, k, RadSys::x1RadFlux_index + nrv) : 0.0);
 						}
 					}
 				}
@@ -301,10 +334,11 @@ auto problem_main() -> int
 	amrex::Print() << std::format("total: non-finite = {}, Erad < floor = {}, |F| > cE = {}, Eint <= 0 = {}, Eint cooled by work = {}\n", n_nonfinite_total,
 				      n_erad_nonpositive_total, n_acausal_total, n_eint_nonpositive_total, n_eint_decreased_total);
 
+	bool regression_ok = true;
+#ifndef DUST_SWEEP_ONE_GROUP
 	// Regression case: the cell of sigma13.v2 (TallBoxSfFuv) that turned NaN at step 747454, with the inputs of its stage-2
 	// source step printed by the chong/debug/fuv-nan build. The LW band had decayed to the smallest denormal, so the
 	// implicit absorption rounded it to zero and UpdateFlux divided the flux by it.
-	bool regression_ok = true;
 	{
 		const amrex::Box one(amrex::IntVect(AMREX_D_DECL(0, 0, 0)), amrex::IntVect(AMREX_D_DECL(0, 0, 0)));
 		const amrex::BoxArray ba1(one);
@@ -350,6 +384,7 @@ auto problem_main() -> int
 					      s1.max(RadSys::gasInternalEnergy_index), s1.max(RadSys::radEnergy_index + nrv),
 					      s1.max(RadSys::x3RadFlux_index + nrv), regression_ok ? "ok" : "FAILED");
 	}
+#endif
 
 	// Non-finite output and internal energy lost to the work term fail the test. The other counts are diagnostics: where the outer work-term iteration does
 	// not converge (only at extreme dt and velocity), AddSourceTermsMultiGroup leaves the radiation state as it found
