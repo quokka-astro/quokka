@@ -39,7 +39,7 @@ class SizeLabel(Label):
 
 @dataclasses.dataclass(frozen=True)
 class PriorityLabel(Label):
-    is_default: bool
+    pass
 
 
 ##
@@ -73,7 +73,13 @@ class SizeLabels(LabelCategory):
 @dataclasses.dataclass(frozen=True)
 class PriorityLabels(LabelCategory):
     labels: tuple[PriorityLabel, ...]
-    default_label: PriorityLabel
+    default_value: str
+
+    def check_is_default(
+        self,
+        value: str,
+    ) -> bool:
+        return value.lower() == self.default_value.lower()
 
     def get_label(
         self,
@@ -191,11 +197,6 @@ def _compute_label_changes(
         num_lines_changed=num_lines_changed,
     )
     computed_label_names.add(size_label_name)
-    priority_is_set = any(
-        configured_labels.priority_labels.check_has_prefix(_label_name) for _label_name in current_label_names
-    )
-    if not priority_is_set:
-        computed_label_names.add(configured_labels.priority_labels.default_label.label_name)
     label_names_to_add = sorted(computed_label_names - set(current_label_names))
     label_names_to_remove = sorted(
         _label_name for _label_name in current_label_names if _check_label_is_stale(
