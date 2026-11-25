@@ -334,9 +334,11 @@ auto lambda_ff(double T) -> double { return 1.3 * 1.427e-27 * std::sqrt(T) + get
 
 auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * std::sqrt(T) * std::exp(-92.0 / T)); }
 
+auto recombination_coefficient(amrex::Real T) -> amrex::Real { return Network::get_recombination_coefficient(T, Network::Parameters()); }
+
 auto net_energy_ionized(double T, double n_e, double eps_ion) -> double
 {
-	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
+	const double alpha_B = recombination_coefficient(T);
 	const double epsilon = std::max(eps_ion - 13.6 * C::ev2erg, 0.0);
 	const double photoheating = alpha_B * n_e * n_e * epsilon;
 	const double recombination_cooling = n_e * n_e * lambda_rec(T);
@@ -392,8 +394,6 @@ auto compute_equilibrium_temperature_ionized(double n_e, double eps_ion) -> doub
 	}
 	return 0.5 * (T_lo + T_hi);
 }
-
-auto recombination_coefficient(amrex::Real T_i) -> amrex::Real { return 2.6e-13 * std::pow(T_i / 1.0e4, -0.7); }
 
 auto ionized_sound_speed(amrex::Real T_i) -> amrex::Real { return std::sqrt(C::k_B * T_i / (0.5_rt * C::m_p)); }
 
