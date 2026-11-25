@@ -118,9 +118,8 @@ auto problem_main() -> int
 		return quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Eint);
 	});
 
-	sim.userData_.addObservable("Trad", [](quokka::onezone::CellValues const &cell) {
-		return std::pow(cell[RadSystem<CouplingProblem>::radEnergy_index] / a_rad, 1. / 4.);
-	});
+	sim.userData_.addObservable(
+	    "Trad", [](quokka::onezone::CellValues const &cell) { return std::pow(cell[RadSystem<CouplingProblem>::radEnergy_index] / a_rad, 1. / 4.); });
 
 	// Asymptotically-exact solution (Gonzalez et al. 2007)
 	const double initial_Tgas = quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho0, Egas0);

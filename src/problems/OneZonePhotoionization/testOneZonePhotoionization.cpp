@@ -216,7 +216,8 @@ auto problem_main() -> int
 	const auto reference = [&filename](int column) { return quokka::onezone::TableReference(filename, column); };
 	std::vector<quokka::onezone::Figure> figures = {
 	    {.filename = (energy_switch == 0) ? "photoionization_species_no_energy.pdf" : "photoionization_species_with_energy.pdf",
-	     .curves = {{.observable = "n_HI", .label = "n_HI", .reference = reference(2)}, {.observable = "n_HII", .label = "n_HII", .reference = reference(3)}},
+	     .curves = {{.observable = "n_HI", .label = "n_HI", .reference = reference(2)},
+			{.observable = "n_HII", .label = "n_HII", .reference = reference(3)}},
 	     .xlabel = "time (s)",
 	     .ylabel = "number density (cm^-3)",
 	     .log_y = true}};
