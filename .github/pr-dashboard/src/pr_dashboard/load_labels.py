@@ -50,19 +50,6 @@ def _load_size_labels(
     )
 
 
-def _get_default_priority_label(
-    priority_labels: tuple[pr_labels.PriorityLabel, ...],
-) -> pr_labels.PriorityLabel:
-    default_priority_labels = [
-        _priority_label for _priority_label in priority_labels if _priority_label.is_default
-    ]
-    if len(default_priority_labels) != 1:
-        raise ValueError(
-            f"exactly one priority label must have `default = true`; got {len(default_priority_labels)}.",
-        )
-    return default_priority_labels[0]
-
-
 def _load_priority_labels(
     priority_data: dict,
 ) -> pr_labels.PriorityLabels:
@@ -73,15 +60,19 @@ def _load_priority_labels(
             value=_label_data["value"],
             color=_label_data["color"],
             description=_label_data["description"],
-            is_default=_label_data.get("default", False),
         ) for _label_data in priority_data["label"]
     )
-    default_label = _get_default_priority_label(labels)
-    return pr_labels.PriorityLabels(
+    priority_labels = pr_labels.PriorityLabels(
         prefix=prefix,
         labels=labels,
-        default_label=default_label,
+        default_value=priority_data["default_value"],
     )
+    default_value_is_a_label = (priority_labels.get_label(priority_labels.default_value) is not None)
+    if default_value_is_a_label:
+        raise ValueError(
+            f"the default priority `{priority_labels.default_value}` must not also be a priority label.",
+        )
+    return priority_labels
 
 
 def load_configured_labels(

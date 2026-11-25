@@ -360,17 +360,37 @@ class TestPrCommands_SetPriority(unittest.TestCase):
     def test_replaces_existing_priority(
         self,
     ):
-        pull_request = make_pull_request(label_names=("priority/normal", "scope/hydro"))
+        pull_request = make_pull_request(label_names=("priority/low", "scope/hydro"))
         update_plan_from_comment = run_command(
             text="/set-priority High",
             pull_request=pull_request,
         )
         expected_update_plan = pr_context.UpdatePlan(
             label_names_to_add=("priority/high", ),
-            label_names_to_remove=("priority/normal", ),
+            label_names_to_remove=("priority/low", ),
             react=True,
         )
         self.assertEqual(update_plan_from_comment, expected_update_plan)
+
+    def test_default_priority_removes_the_priority_label(
+        self,
+    ):
+        pull_request = make_pull_request(label_names=("priority/high", "scope/hydro"))
+        update_plan_from_comment = run_command(
+            text="/set-priority Normal",
+            pull_request=pull_request,
+        )
+        expected_update_plan = pr_context.UpdatePlan(
+            label_names_to_remove=("priority/high", ),
+            react=True,
+        )
+        self.assertEqual(update_plan_from_comment, expected_update_plan)
+
+    def test_default_priority_without_a_label_changes_nothing(
+        self,
+    ):
+        update_plan_from_comment = run_command(text="/set-priority normal")
+        self.assertEqual(update_plan_from_comment, pr_context.UpdatePlan(react=True))
 
     def test_same_priority_changes_nothing(
         self,
@@ -388,7 +408,7 @@ class TestPrCommands_SetPriority(unittest.TestCase):
         update_plan_from_comment = run_command(text="/set-priority urgent")
         self.assertEqual(
             update_plan_from_comment,
-            pr_context.UpdatePlan(reply="Use `/set-priority <low|normal|high>`."),
+            pr_context.UpdatePlan(reply="Use `/set-priority <normal|low|high>`."),
         )
 
     def test_author_with_read_access_can_set(
@@ -569,7 +589,7 @@ class TestPrCommands_Help(unittest.TestCase):
     ):
         update_plan_from_comment = run_command(text="/help")
         self.assertIn(
-            "`/set-priority <low|normal|high>`: set this PR's priority",
+            "`/set-priority <normal|low|high>`: set this PR's priority",
             update_plan_from_comment.reply,
         )
         self.assertNotIn("{priority_values}", update_plan_from_comment.reply)
