@@ -25,9 +25,9 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
-#include "util/fextract.hpp"
 #include "cooling/GrackleNTTable.hpp"
 #include "cooling/ISMCooling.hpp"
+#include "util/fextract.hpp"
 
 #include <algorithm>
 #include <array>
@@ -310,10 +310,10 @@ template <> struct SimulationData<ISMCoolingOneZone> {
 	amrex::Real temperature{};
 	amrex::Real n_H{};
 	amrex::Real x_Hp{};
-	bool equilibrium{};	      ///< mode "equilibrium": the cells span n_H_min <= n_H <= n_H_max, log-spaced, instead of being uniform
-	amrex::Real n_H_min{};	      ///< n_H of the first cell [cm^-3] (mode "equilibrium")
-	amrex::Real n_H_max{};	      ///< n_H of the last cell [cm^-3] (mode "equilibrium")
-	std::vector<amrex::Real> time_history_;		   ///< the time of each recorded step [s] (mode "equilibrium")
+	bool equilibrium{};			///< mode "equilibrium": the cells span n_H_min <= n_H <= n_H_max, log-spaced, instead of being uniform
+	amrex::Real n_H_min{};			///< n_H of the first cell [cm^-3] (mode "equilibrium")
+	amrex::Real n_H_max{};			///< n_H of the last cell [cm^-3] (mode "equilibrium")
+	std::vector<amrex::Real> time_history_; ///< the time of each recorded step [s] (mode "equilibrium")
 	std::vector<std::vector<amrex::Real>> T_history_; ///< the temperature of every cell at each recorded step [K] (mode "equilibrium")
 };
 
@@ -364,7 +364,8 @@ template <> void QuokkaSimulation<ISMCoolingOneZone>::setInitialConditionsOnGrid
 	const amrex::Real n_H_min = userData_.n_H_min;
 	const amrex::Real log_n_H_ratio = std::log(userData_.n_H_max / userData_.n_H_min);
 	const int n_cells = geom[0].Domain().length(0);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!equilibrium || (AMREX_SPACEDIM == 1 && n_cells > 1), "ISMCoolingOneZone: mode equilibrium needs a 1D build with n_cell > 1");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!equilibrium || (AMREX_SPACEDIM == 1 && n_cells > 1),
+					 "ISMCoolingOneZone: mode equilibrium needs a 1D build with n_cell > 1");
 	const amrex::Real n_H_base = equilibrium ? 1.0_rt : userData_.n_H;
 
 	burn_t state;
@@ -381,7 +382,8 @@ template <> void QuokkaSimulation<ISMCoolingOneZone>::setInitialConditionsOnGrid
 	const auto Egas0 = state.e * rhotot;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const amrex::Real scale = equilibrium ? n_H_min * std::exp(log_n_H_ratio * static_cast<amrex::Real>(i) / static_cast<amrex::Real>(n_cells - 1)) : 1.0_rt;
+		const amrex::Real scale =
+		    equilibrium ? n_H_min * std::exp(log_n_H_ratio * static_cast<amrex::Real>(i) / static_cast<amrex::Real>(n_cells - 1)) : 1.0_rt;
 		for (int g = 0; g < Physics_Traits<ISMCoolingOneZone>::nGroups; ++g) {
 			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_floor_;
 			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
