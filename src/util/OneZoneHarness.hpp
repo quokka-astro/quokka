@@ -25,6 +25,7 @@
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -107,7 +108,7 @@ struct Figure {
 	std::string ylabel;
 	bool log_x = false;
 	bool log_y = false;
-	std::string title = "";
+	std::optional<std::string> title = std::nullopt;
 	double time_scale = 1.0; ///< recorded times are divided by this before plotting (for example the number of seconds in a Myr)
 };
 
@@ -270,8 +271,8 @@ inline void Plot(Recorder const &recorder, Figure const &figure)
 	}
 	matplotlibcpp::xlabel(figure.xlabel);
 	matplotlibcpp::ylabel(figure.ylabel);
-	if (!figure.title.empty()) {
-		matplotlibcpp::title(figure.title);
+	if (figure.title) {
+		matplotlibcpp::title(*figure.title);
 	}
 	matplotlibcpp::legend();
 	matplotlibcpp::tight_layout();
