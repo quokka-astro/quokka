@@ -5,9 +5,10 @@ The formulas are written once with sympy, and the partial derivatives are taken 
 so this file shares no code (and no hand-derived derivative) with the C++ implementation.
 Run it to regenerate ism_cooling_reference.csv:
 
-    python3 ism_cooling_reference.py [ism_output.csv [grackle_output.csv]]
+    python3 ism_cooling_reference.py [ism_output.csv [grackle_output.csv [equilibrium_output.csv]]]
 
-It also writes grackle_nT_reference.csv: Lambda_net and xe_CIE of CloudyData_UVB=HM2012_shielded_nT_Z1.h5 at off-grid points,
+It also writes ism_equilibrium_reference.csv, the thermal equilibrium T_eq(n_H) of the ISMCoolingOneZone network (see equilibrium_rows),
+and grackle_nT_reference.csv: Lambda_net and xe_CIE of CloudyData_UVB=HM2012_shielded_nT_Z1.h5 at off-grid points,
 by bilinear interpolation in (log nH, log T), with the analytic derivatives of that interpolant (the C++ lookup is checked against them).
 
 Requires numpy, sympy and h5py (e.g. ~/softwares/python-envs/base/bin/python).
@@ -289,6 +290,96 @@ def grackle_rows():
     return out
 
 
+# ---------------------------------------------------------------- one-zone thermal equilibrium (ISMCoolingOneZone, mode "equilibrium")
+# The network of src/networks/thermophotochemistry_ism_handwritten/actual_rhs.H without ionizing photons. The H rates are copied from actual_rhs.H
+# (the same fits and constants), because the network's own H terms are not among the rates above. The steady state does not involve the equation
+# of state: the net energy rate is volumetric and depends on (n_H, T, x_H+) only, so the pure-H EOS of the C++ run only sets how fast T relaxes.
+RYDBERG = 13.6 * EV  # erg
+EQ_T0 = 1.0e3  # initial temperature of the C++ run, which has x_H+ = 1e-3
+EQ_G0, EQ_ZP, EQ_ZETA = 1.0, 1.0, 1.78e-18
+EQ_NH = [10.0 ** (-2.0 + 4.0 * i / 24.0) for i in range(25)]  # 25 log-spaced values in [1e-2, 1e2]
+EQ_T_SCAN = np.exp(np.linspace(np.log(10.0), np.log(1.0e5), 801))
+EQUILIBRIUM_COLUMNS = ["nH", "T_eq", "x_Hp_eq", "ne_max", "branch", "n_roots"]
+
+
+def alpha_rec(Tv):
+    """Case-B recombination coefficient with recombination_temperature_dependent = 1 (actual_rhs.H), and its T derivative."""
+    a = 2.63e-13 * (Tv / 1.0e4) ** -0.7
+    return a, -0.7 * a / Tv
+
+
+def k_coll_ion(Tv):
+    """Collisional ionization coefficient (Krumholz et al. 2007, actual_rhs.H)."""
+    return 5.84e-11 * np.sqrt(Tv) * np.exp(-2.18e-11 / (K_B * Tv))
+
+
+def recombination_cooling_coeff(Tv):
+    """Recombination cooling coefficient (Krumholz et al. 2007, actual_rhs.H): zero below 100 K."""
+    return 0.0 if Tv < 100.0 else 6.1e-10 * K_B * Tv * Tv**-0.89
+
+
+def x_hp_equilibrium(Tv):
+    """d x_H+/dt = 0 with n_e = n_H+ (no photons, no CR ionization in the network): (1 - x) k_ci = alpha x."""
+    k = k_coll_ion(Tv)
+    return k / (k + alpha_rec(Tv)[0])
+
+
+def grackle_xe(tab, nHv, Tv):
+    """xe_CIE of the table at (nH, T), bilinear in (ln nH, ln T), clamped to the table range and to >= 0 as the C++ lookup is."""
+    xlo, xhi = np.log(tab.attrs["xlo"]), np.log(tab.attrs["xhi"])
+    nHc = float(np.exp(min(max(np.log(nHv), xlo[0]), xhi[0] - 1e-9)))
+    Tc = float(np.exp(min(max(np.log(Tv), xlo[1]), xhi[1] - 1e-9)))
+    return max(grackle_bilinear(tab, nHc, Tc)[1][0], 0.0)
+
+
+def net_heating(tab, nHv, Tv, xhp):
+    """Net energy rate [erg cm^-3 s^-1] of the network at (n_H, T, x_H+) with no photons, with n_e^max and its branch."""
+    nHpv, nHIv = xhp * nHv, (1.0 - xhp) * nHv
+    ne = nHpv  # the network electrons
+    # H terms, on the network electrons
+    net = -recombination_cooling_coeff(Tv) * ne * nHpv - 1.3 * 1.427e-27 * np.sqrt(Tv) * ne * nHpv - RYDBERG * ne * nHIv * k_coll_ion(Tv)
+    # ISM terms, on n_e^max; the 1e-30 floor is that of get_ism_energy_terms
+    ab, dab = alpha_rec(Tv)
+    emax = electron_density_max(nHIv, nHpv, Tv, grackle_xe(tab, nHv, Tv), 0.0, 0.0, EQ_ZP, EQ_ZETA, ab, dab)
+    nem, branch = max(emax[0], 1e-30), emax[4]
+    for name, sign in (("Lya", -1), ("Nebular", -1), ("CII", -1), ("OI", -1), ("GrainRecombination", -1), ("PE", 1), ("CR", 1)):
+        net += sign * rate(name, Tv, nem, nHIv, nHpv, EQ_ZP, EQ_G0, EQ_ZETA, 0.0)[0]
+    return net, nem, branch
+
+
+def equilibrium_temperature(tab, nHv):
+    """The equilibrium reached from T0 = 1e3 K, with H+ in equilibrium at each T.
+
+    Returns (T_eq, x_H+, n_e^max, branch, number of roots). The net rate f(T) is scanned on a log grid. The gas heats where f > 0 and cools where
+    f < 0, so from T0 it stops at the first stable root (f goes from + to - with T) on its side of T0.
+    """
+    from scipy.optimize import brentq
+
+    def f_of(Tv):
+        return net_heating(tab, nHv, Tv, x_hp_equilibrium(Tv))[0]
+
+    f = np.array([f_of(Tv) for Tv in EQ_T_SCAN])
+    roots = [i for i in range(len(f) - 1) if f[i] * f[i + 1] < 0.0]
+    stable = [i for i in roots if f[i] > 0.0]
+    i0 = int(np.searchsorted(EQ_T_SCAN, EQ_T0))
+    if f_of(EQ_T0) > 0.0:  # heating: the first stable root above T0
+        i = min(i for i in stable if i >= i0)
+    else:  # cooling: the first stable root below T0
+        i = max(i for i in stable if i < i0)
+    Teq = brentq(f_of, EQ_T_SCAN[i], EQ_T_SCAN[i + 1], xtol=1e-12, rtol=1e-14)
+    xhp = x_hp_equilibrium(Teq)
+    _, nem, branch = net_heating(tab, nHv, Teq, xhp)
+    return Teq, xhp, nem, branch, len(roots)
+
+
+def equilibrium_rows():
+    import h5py
+
+    with h5py.File(GRACKLE_TABLE, "r") as fh:
+        tab = fh["tab1"]
+        return [[nHv, *equilibrium_temperature(tab, nHv)] for nHv in EQ_NH]
+
+
 def main():
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).with_name("ism_cooling_reference.csv")
     grackle_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(__file__).with_name("grackle_nT_reference.csv")
@@ -299,6 +390,14 @@ def main():
         for r in grackle:
             w.writerow([repr(float(v)) for v in r])
     print(f"wrote {len(grackle)} rows to {grackle_path}")
+    equilibrium_path = Path(sys.argv[3]) if len(sys.argv) > 3 else Path(__file__).with_name("ism_equilibrium_reference.csv")
+    with open(equilibrium_path, "w", newline="") as fh:
+        w = csv.writer(fh, lineterminator="\n")
+        w.writerow(EQUILIBRIUM_COLUMNS)
+        equilibrium = equilibrium_rows()
+        for r in equilibrium:
+            w.writerow([repr(float(v)) for v in r[:4]] + [int(r[4]), int(r[5])])
+    print(f"wrote {len(equilibrium)} rows to {equilibrium_path}")
     data = rows()
     branches = {r[-1] for r in data if r[0] == "ElectronDensityMax"}
     assert branches == {0, 1, 2, 3}, f"ElectronDensityMax grid misses branches: {branches}"

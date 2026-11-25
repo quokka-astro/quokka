@@ -23,6 +23,11 @@ endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 add_test(NAME ISMCoolingJacobian COMMAND ${JOB_NAME} ../inputs/ISMCoolingJacobian.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ISMCoolingStartup COMMAND ${JOB_NAME} ../inputs/ISMCoolingStartup.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
+# 1 Gyr of 25 cells at fixed n_H against the Python thermal equilibrium (extern/cooling/ism_equilibrium_reference.csv); 1D only
+if(AMReX_SPACEDIM EQUAL 1)
+  add_test(NAME ISMCoolingEquilibrium COMMAND ${JOB_NAME} ../inputs/ISMCoolingEquilibrium.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+endif()
+
 # the startup of the photochemistry cooling path aborts, naming the parameter, without G0_external, without the table path and with a table of
 # another metallicity; PASS_REGULAR_EXPRESSION makes each pass only for its own abort message
 add_test(NAME ISMCoolingNoG0 COMMAND ${JOB_NAME} ../inputs/ISMCoolingNoG0.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
