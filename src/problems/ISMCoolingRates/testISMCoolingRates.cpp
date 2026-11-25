@@ -295,11 +295,17 @@ static auto CheckGrackleLookup(const quokka::ISMCooling::GrackleNTGpuConst &tabl
 }
 
 /// Equal up to the roundoff of the log/exp round trip of the clamped inputs
-static auto GrackleValuesAreEqual(const quokka::ISMCooling::GrackleNTValues &a, const quokka::ISMCooling::GrackleNTValues &b) -> bool
+static auto GrackleValuesAreEqual(const quokka::ISMCooling::GrackleNTValues &a, const quokka::ISMCooling::GrackleNTValues &b, bool derivatives = true) -> bool
 {
 	constexpr Real rtol = 1.0e-9;
-	return Close(a.Lambda, b.Lambda, rtol) && Close(a.dLambda_dT, b.dLambda_dT, rtol) && Close(a.xe, b.xe, rtol) && Close(a.dxe_dT, b.dxe_dT, rtol) &&
-	       Close(a.dxe_dnH, b.dxe_dnH, rtol);
+	const bool values = Close(a.Lambda, b.Lambda, rtol) && Close(a.xe, b.xe, rtol);
+	return values && (!derivatives || (Close(a.dLambda_dT, b.dLambda_dT, rtol) && Close(a.dxe_dT, b.dxe_dT, rtol) && Close(a.dxe_dnH, b.dxe_dnH, rtol)));
+}
+
+/// The derivatives with respect to a coordinate that lies outside the table range must vanish.
+static auto GrackleDerivativesVanishOutside(const quokka::ISMCooling::GrackleNTValues &v, bool nH_outside, bool T_outside) -> bool
+{
+	return (!T_outside || (v.dLambda_dT == 0. && v.dxe_dT == 0.)) && (!nH_outside || v.dxe_dnH == 0.);
 }
 
 static auto GrackleValuesAreSane(const quokka::ISMCooling::GrackleNTValues &v) -> bool
@@ -320,7 +326,7 @@ static auto CheckGrackleClamp(const quokka::ISMCooling::GrackleNTGpuConst &table
 	const Real T_lo = std::exp(lo[1]);
 	const Real T_hi = std::exp(hi[1]);
 	int failures = 0;
-	// outside the table, the lookup equals the one at the clamped corner
+	// outside the table, Lambda and xe equal the lookup at the clamped corner, and the derivatives vanish
 	const std::array<std::array<Real, 4>, 4> cases = {{
 	    {1.0e-12, 1.0e10, nH_lo, T_hi}, // low density, hot (hot halo gas)
 	    {1.0e8, 1.0, nH_hi, T_lo},	    // high density, cold
@@ -330,7 +336,7 @@ static auto CheckGrackleClamp(const quokka::ISMCooling::GrackleNTGpuConst &table
 	for (const auto &c : cases) {
 		const auto out = LookupGrackleNT(c[0], c[1], table);
 		const auto corner = LookupGrackleNT(c[2], c[3], table);
-		if (!GrackleValuesAreSane(out) || !GrackleValuesAreEqual(out, corner)) {
+		if (!GrackleValuesAreSane(out) || !GrackleValuesAreEqual(out, corner, false) || !GrackleDerivativesVanishOutside(out, true, true)) {
 			std::cout << "  (nH, T) = (" << c[0] << ", " << c[1] << "): Lambda " << out.Lambda << ", dLambda_dT " << out.dLambda_dT << ", xe "
 				  << out.xe << " does not equal the corner (" << corner.Lambda << ", " << corner.dLambda_dT << ", " << corner.xe << ")\n";
 			++failures;
@@ -346,9 +352,10 @@ static auto CheckGrackleClamp(const quokka::ISMCooling::GrackleNTGpuConst &table
 			const Real T = std::exp(lo[1] + fy * (hi[1] - lo[1]));
 			const auto v = LookupGrackleNT(nH, T, table);
 			negative_raw += (v.xe == 0.) ? 1 : 0;
-			if (!GrackleValuesAreSane(v)) {
+			if (!GrackleValuesAreSane(v) || !GrackleDerivativesVanishOutside(v, fx < 0. || fx > 1., fy < 0. || fy > 1.)) {
 				if (failures < max_reports) {
-					std::cout << "  scan point (nH, T) = (" << nH << ", " << T << ") is not finite or has xe < 0\n";
+					std::cout << "  scan point (nH, T) = (" << nH << ", " << T
+						  << ") is not finite, has xe < 0, or has a nonzero derivative outside the table\n";
 				}
 				++failures;
 			}

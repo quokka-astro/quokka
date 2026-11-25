@@ -82,8 +82,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto GetGrackleNTTable() -> GrackleNTGp
 
 /// Look up Lambda_net and xe_CIE at (nH, T), with their derivatives.
 ///
-/// nH [cm^-3] and T [K] are clamped to the table range, so the result is finite for any positive input; the derivatives are those at the clamped
-/// point. The T and nH derivatives are centred differences of the interpolant in ln T and ln nH, with a relative step of 1e-3, one-sided at the edges.
+/// nH [cm^-3] and T [K] are clamped to the table range, so the result is finite for any positive input. Inside the range, the T and nH derivatives
+/// are centred differences of the interpolant in ln T and ln nH, with a relative step of 1e-3, one-sided close to the edges. Outside the range
+/// the clamped value is constant in that coordinate, so its derivative is 0 (dLambda_dT and dxe_dT for T, dxe_dnH for nH).
 /// xe is clamped to >= 0 (the table is slightly negative, down to about -0.008, in the cold dense corner), and its derivatives are 0 where it is clamped.
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto LookupGrackleNT(Real nH, Real T, GrackleNTGpuConst const &t) -> GrackleNTValues
 {
@@ -95,8 +96,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto LookupGrackleNT(Real nH, Real T, G
 	const Real lnnH_hi = tab.coord_max[0];
 	const Real lnT_lo = tab.coord_min[1];
 	const Real lnT_hi = tab.coord_max[1];
-	const Real lnnH = amrex::min(amrex::max(std::log(amrex::max(nH, tiny)), lnnH_lo), lnnH_hi);
-	const Real lnT = amrex::min(amrex::max(std::log(amrex::max(T, tiny)), lnT_lo), lnT_hi);
+	const Real lnnH_in = std::log(amrex::max(nH, tiny));
+	const Real lnT_in = std::log(amrex::max(T, tiny));
+	const bool nH_clamped = (lnnH_in < lnnH_lo) || (lnnH_in > lnnH_hi);
+	const bool T_clamped = (lnT_in < lnT_lo) || (lnT_in > lnT_hi);
+	const Real lnnH = amrex::min(amrex::max(lnnH_in, lnnH_lo), lnnH_hi);
+	const Real lnT = amrex::min(amrex::max(lnT_in, lnT_lo), lnT_hi);
 
 	// the stencil in ln T and ln nH, shortened (one-sided) at the edges
 	const Real lnT_p = amrex::min(lnT + step, lnT_hi);
@@ -117,11 +122,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto LookupGrackleNT(Real nH, Real T, G
 
 	GrackleNTValues v{};
 	v.Lambda = centre[0];
-	v.dLambda_dT = (T_plus[0] - T_minus[0]) * inv_dT;
+	v.dLambda_dT = T_clamped ? 0. : (T_plus[0] - T_minus[0]) * inv_dT;
 	if (centre[1] > 0.) {
 		v.xe = centre[1];
-		v.dxe_dT = (T_plus[1] - T_minus[1]) * inv_dT;
-		v.dxe_dnH = (nH_plus[1] - nH_minus[1]) * inv_dnH;
+		v.dxe_dT = T_clamped ? 0. : (T_plus[1] - T_minus[1]) * inv_dT;
+		v.dxe_dnH = nH_clamped ? 0. : (nH_plus[1] - nH_minus[1]) * inv_dnH;
 	}
 	return v;
 }
