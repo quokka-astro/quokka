@@ -33,3 +33,5 @@ quokka.slice_z.normal = 2
 quokka.slice_z.center = 0.5
 quokka.slice_z.int = 1
 quokka.slice_z.field_names = ["particle.CIC.mass_density"]
+
+density_floor = 1e-9  # g cm^-3

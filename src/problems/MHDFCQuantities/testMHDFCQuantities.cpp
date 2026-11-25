@@ -1,7 +1,6 @@
-//==============================================================================
-// Copyright 2022 Neco Kriel.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testMHDFCQuantities.cpp
 /// \brief Defines a test problem to make sure face-centred quantities are created correctly.
 ///

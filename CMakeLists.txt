@@ -1,4 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
+# Recent HIP device linkers reject duplicate archives under --whole-archive.
+if(POLICY CMP0156)
+  cmake_policy(SET CMP0156 NEW)
+endif()
+if(POLICY CMP0179)
+  cmake_policy(SET CMP0179 NEW)
+endif()
 project(QuokkaCode VERSION 1.0
   DESCRIPTION "Radiation hydrodynamics with structured AMR"
   LANGUAGES CXX C)
@@ -47,7 +54,6 @@ option(DISABLE_FMAD "Disable fused multiply-add instructions on GPU (on/off)" ON
 option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(ENABLE_HWASAN "Enable HWAddressSanitizer" OFF)
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
-option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)

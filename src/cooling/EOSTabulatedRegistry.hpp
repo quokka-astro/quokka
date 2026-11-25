@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef EOS_TABULATED_REGISTRY_HPP_
 #define EOS_TABULATED_REGISTRY_HPP_
 

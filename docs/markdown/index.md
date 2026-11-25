@@ -11,7 +11,7 @@ Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-para
 
 > **Warning: Beta physics modules**
 >
-> The following modules should currently be treated as **beta** because they have not yet been exercised in a published science application with Quokka: MHD, radiation, dust, particles, chemistry, and self-gravity. See [Known Issues and Errata](known_issues.md) for the current status and caveats.
+> The following modules should currently be treated as **beta** because they have not yet been exercised in a published science application with Quokka: MHD, radiation, dust, particles, chemistry, photoionization, and self-gravity. See [Known Issues and Errata](known_issues.md) for the current status and caveats.
 >
 >
 

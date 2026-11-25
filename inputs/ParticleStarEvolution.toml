@@ -25,3 +25,5 @@ problem.t_end_over_t_b = 300.0
 plotfile_interval = -1
 checkpoint_interval = -1
 tiny_profiler.enabled = 0
+
+density_floor = 1e-30  # g cm^-3
