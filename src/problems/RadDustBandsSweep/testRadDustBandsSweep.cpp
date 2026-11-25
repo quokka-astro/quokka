@@ -231,51 +231,47 @@ auto problem_main() -> int
 			const amrex::Box &bx = mfi.validbox();
 			auto const s = state.const_array(mfi);
 			auto const s0 = state_in.const_array(mfi);
-			amrex::ParallelFor(bx,
-					   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-						   const double c = RadSys::c_light_;
-						   bool nonfinite = false;
-						   for (int n = 0; n < nvars; ++n) {
-							   nonfinite = nonfinite || !std::isfinite(s(i, j, k, n));
-						   }
-						   bool erad_nonpositive = false;
-						   bool acausal = false;
-						   for (int g = 0; g < n_groups; ++g) {
-							   const double E = s(i, j, k, RadSys::radEnergy_index + nrv * g);
-							   const double Fx = s(i, j, k, RadSys::x1RadFlux_index + nrv * g);
-							   const double Fy = s(i, j, k, RadSys::x2RadFlux_index + nrv * g);
-							   const double Fz = s(i, j, k, RadSys::x3RadFlux_index + nrv * g);
-							   erad_nonpositive = erad_nonpositive || !(E >= RadSys::Erad_floor_);
-							   acausal = acausal || (std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz) > (1.0 + 1.0e-10) * c * E);
-						   }
-						   const bool eint_nonpositive = (s0(i, j, k, RadSys::gasInternalEnergy_index) > 0.0) &&
-										 !(s(i, j, k, RadSys::gasInternalEnergy_index) > 0.0);
-						   // Only the work term, the cosmic-ray heating and the photoelectric heating reach the gas energy, and the
-						   // work term goes to the kinetic energy, so the internal energy of a cell that starts positive must not fall.
-						   const double eint0 = s0(i, j, k, RadSys::gasInternalEnergy_index);
-						   const bool eint_decreased =
-						       (eint0 > 0.0) && (s(i, j, k, RadSys::gasInternalEnergy_index) < eint0 * (1.0 - 1.0e-10));
-						   int const flags[5] = {static_cast<int>(nonfinite), static_cast<int>(erad_nonpositive),
-									 static_cast<int>(acausal), static_cast<int>(eint_nonpositive),
-									 static_cast<int>(eint_decreased)};
-						   for (int m = 0; m < 5; ++m) {
-							   if (flags[m] != 0) {
-								   const int nth = amrex::Gpu::Atomic::Add(&p_counts[m], 1);
-								   if (nth < 5) {
-									   const SweepPoint pt = DecodeSweepPoint(i);
-									   printf(
-									       "[sweep] flag=%d cell=%d rho=%.3e T=%.3e v=%.3e vdir=%d E0=%.3e E1=%.3e f=%.3f "
-									       "src=%.3e | " // NOLINT
-									       "Eint=%.6e mom=(%.6e,%.6e) E=(%.6e,%.6e) Fx=(%.6e,%.6e)\n",
-									       m, i, pt.rho, pt.T, pt.v, pt.vdir, pt.E0, pt.E1, pt.f, pt.src,
-									       s(i, j, k, RadSys::gasInternalEnergy_index),
-									       s(i, j, k, RadSys::x1GasMomentum_index), s(i, j, k, RadSys::x2GasMomentum_index),
-									       s(i, j, k, RadSys::radEnergy_index), s(i, j, k, RadSys::radEnergy_index + nrv),
-									       s(i, j, k, RadSys::x1RadFlux_index), s(i, j, k, RadSys::x1RadFlux_index + nrv));
-								   }
-							   }
-						   }
-					   });
+			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const double c = RadSys::c_light_;
+				bool nonfinite = false;
+				for (int n = 0; n < nvars; ++n) {
+					nonfinite = nonfinite || !std::isfinite(s(i, j, k, n));
+				}
+				bool erad_nonpositive = false;
+				bool acausal = false;
+				for (int g = 0; g < n_groups; ++g) {
+					const double E = s(i, j, k, RadSys::radEnergy_index + nrv * g);
+					const double Fx = s(i, j, k, RadSys::x1RadFlux_index + nrv * g);
+					const double Fy = s(i, j, k, RadSys::x2RadFlux_index + nrv * g);
+					const double Fz = s(i, j, k, RadSys::x3RadFlux_index + nrv * g);
+					erad_nonpositive = erad_nonpositive || !(E >= RadSys::Erad_floor_);
+					acausal = acausal || (std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz) > (1.0 + 1.0e-10) * c * E);
+				}
+				const bool eint_nonpositive =
+				    (s0(i, j, k, RadSys::gasInternalEnergy_index) > 0.0) && !(s(i, j, k, RadSys::gasInternalEnergy_index) > 0.0);
+				// Only the work term, the cosmic-ray heating and the photoelectric heating reach the gas energy, and the
+				// work term goes to the kinetic energy, so the internal energy of a cell that starts positive must not fall.
+				const double eint0 = s0(i, j, k, RadSys::gasInternalEnergy_index);
+				const bool eint_decreased = (eint0 > 0.0) && (s(i, j, k, RadSys::gasInternalEnergy_index) < eint0 * (1.0 - 1.0e-10));
+				int const flags[5] = {static_cast<int>(nonfinite), static_cast<int>(erad_nonpositive), static_cast<int>(acausal),
+						      static_cast<int>(eint_nonpositive), static_cast<int>(eint_decreased)};
+				for (int m = 0; m < 5; ++m) {
+					if (flags[m] != 0) {
+						const int nth = amrex::Gpu::Atomic::Add(&p_counts[m], 1);
+						if (nth < 5) {
+							const SweepPoint pt = DecodeSweepPoint(i);
+							printf("[sweep] flag=%d cell=%d rho=%.3e T=%.3e v=%.3e vdir=%d E0=%.3e E1=%.3e f=%.3f "
+							       "src=%.3e | " // NOLINT
+							       "Eint=%.6e mom=(%.6e,%.6e) E=(%.6e,%.6e) Fx=(%.6e,%.6e)\n",
+							       m, i, pt.rho, pt.T, pt.v, pt.vdir, pt.E0, pt.E1, pt.f, pt.src,
+							       s(i, j, k, RadSys::gasInternalEnergy_index), s(i, j, k, RadSys::x1GasMomentum_index),
+							       s(i, j, k, RadSys::x2GasMomentum_index), s(i, j, k, RadSys::radEnergy_index),
+							       s(i, j, k, RadSys::radEnergy_index + nrv), s(i, j, k, RadSys::x1RadFlux_index),
+							       s(i, j, k, RadSys::x1RadFlux_index + nrv));
+						}
+					}
+				}
+			});
 		}
 		amrex::Gpu::streamSynchronize();
 		const int *h_counts = counts.copyToHost();
