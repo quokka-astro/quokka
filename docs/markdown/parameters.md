@@ -103,6 +103,21 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | cooling.read_tables_even_if_disabled | Boolean (0/1) | `0` (Disabled)                                 | If set to 1, reads the cooling tables even if the problem does not use the `EOSTabulated` backend. Not needed for problems that set `EOSBackend = EOSTabulated<P>`. |
 | cooling.hdf5_data_file               | String        | **Required** if `EOSTabulated` backend is used | The path to the cooling tables in HDF5 format. We recommend using `extern/cooling/CloudyData_UVB=HM2012_resampled.h5` for ISM at solar metallicity.                                                                   |
 
+## Thermal conduction
+
+These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`. The conductivity model and geometry are compile-time `Physics_Traits` settings; see [Thermal Conduction](conduction_module.md).
+
+| Parameter Name                    | Type          | Default        | Description                                                                                                                                                              |
+|-----------------------------------|---------------|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| conduction.enabled                | Boolean (0/1) | `0` (Disabled) | Enables thermal conduction. Requires `Physics_Traits::conduction_model` other than `none`.                                                                               |
+| conduction.conduction_cfl         | Float         | `0.2`          | CFL number for the explicit conduction timestep, \\(\Delta t = C \Delta x^2 / D\\).                                                                                           |
+| conduction.flux_limiter_phi       | Float         | `1.0`          | \\(\phi\\) in the saturation flux \\(q\_{\rm sat} = f\_{\rm sat} \phi \rho c\_s^3\\).                                                                                       |
+| conduction.saturation_factor      | Float         | `5.0`          | \\(f\_{\rm sat}\\) in the saturation flux (Cowie & McKee 1977).                                                                                                          |
+| conduction.conductivity_prefactor | Float         | **Required** for isotropic `constant`/`spitzer` | \\(\kappa\_0\\) (erg cm\\(^{-1}\\) s\\(^{-1}\\) K\\(^{-1}\\); K\\(^{-7/2}\\) for `spitzer`). Not allowed with the anisotropic geometry or `problem_defined`.      |
+| conduction.kappaPar               | Float         | **Required** for anisotropic `constant`/`spitzer` | Parallel \\(\kappa\_0\\), same units as `conductivity_prefactor`. Not allowed with the isotropic geometry or `problem_defined`.                             |
+| conduction.kappaPerp              | Float         | `0.0`          | Perpendicular \\(\kappa\_0\\), same units as `kappaPar`; must be \\(\le\\) `kappaPar`. Anisotropic geometry only.                                                     |
+| conduction.aniso_flux_limiter     | String        | `mc`           | Limiter for the transverse (cross) terms of the anisotropic flux: `mc` (monotonized central) or `minmod`. Anisotropic geometry only.                                        |
+
 ## Chemistry
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
@@ -194,6 +209,7 @@ These parameters are read in the `particleParmParse()` function in `src/particle
 | particles.rad_table_output_spacing            | Integer       | `0` (fast_log)                                                                                                | Deprecated name for `particles.rad_table_output_transform`.                                                                                                    |
 | particles.rad_table_output_transform          | String        | `fast_log`                                                                                                    | Transform used to interpolate the luminosity table outputs: `linear`, `log`, or `fast_log`. A table containing zeros requires `linear`.                         |
 | particles.split_particles_on_restart_refine   | Boolean (0/1) | `1` (Enabled)                                                                                                 | Whether to split particles when restarting with refinement.                                                                                                    |
+| particles.min_mass_individual_stars           | Float         | `9.0`                                                                                                         | Minimum initial mass in solar masses above which stars are sampled individually from the IMF. Stars below it are lumped into the LowMassComposite particle, which neither explodes nor radiates. Must lie in `[1, 120)`. The IMF mass fraction and mean stellar mass above the threshold are recomputed from the Chabrier IMF whenever this changes. Lowering it is expensive: the number of individual star particles per unit stellar mass goes as \\(f\_\star(m)/\langle m\rangle\_{>m}\\), which is \\(0.0096\ M\_\odot^{-1}\\) at \\(9\ M\_\odot\\) but \\(0.0435\ M\_\odot^{-1}\\) at \\(3\ M\_\odot\\), a factor of 4.5. Stars below the lowest mass of the luminosity table (2.1 \\(M\_\odot\\) for the default grid of `scripts/python/slug_luminosity_table_for_quokka.py`) are assigned zero luminosity, and the code prints a warning at startup if the threshold is below that mass.                                              |
 
 ## Turbulence
 
