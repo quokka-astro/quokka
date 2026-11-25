@@ -23,4 +23,5 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 add_test(NAME ISMCoolingSlabCold COMMAND ${JOB_NAME} ../inputs/ISMCoolingSlabCold.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME ISMCoolingSlabHot COMMAND ${JOB_NAME} ../inputs/ISMCoolingSlabHot.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

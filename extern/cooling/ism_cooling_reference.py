@@ -5,9 +5,10 @@ The formulas are written once with sympy, and the partial derivatives are taken 
 so this file shares no code (and no hand-derived derivative) with the C++ implementation.
 Run it to regenerate ism_cooling_reference.csv:
 
-    python3 ism_cooling_reference.py [ism_output.csv [grackle_output.csv [equilibrium_output.csv]]]
+    python3 ism_cooling_reference.py [ism_output.csv [grackle_output.csv [equilibrium_output.csv [hot_cell_output.csv]]]]
 
 It also writes ism_equilibrium_reference.csv, T(n_H) after 1 Gyr of the ISMCoolingOneZone network, integrated from T = 1e3 K (see equilibrium_rows),
+ism_hot_cell_reference.csv, the internal energy of a hot cell after one hydro step of the hot-cell cooling (see hot_cell_reference),
 and grackle_nT_reference.csv: Lambda_net and xe_CIE of CloudyData_UVB=HM2012_shielded_nT_Z1.h5 at off-grid points,
 by bilinear interpolation in (log nH, log T), with the analytic derivatives of that interpolant (the C++ lookup is checked against them).
 
@@ -329,12 +330,18 @@ def x_hp_equilibrium(Tv):
     return k / (k + alpha_rec(Tv)[0])
 
 
-def grackle_xe(tab, nHv, Tv):
-    """xe_CIE of the table at (nH, T), bilinear in (ln nH, ln T), clamped to the table range and to >= 0 as the C++ lookup is."""
+def grackle_clamped(tab, nHv, Tv):
+    """(Lambda_net, xe_CIE) of the table at (nH, T), bilinear in (ln nH, ln T), clamped to the table range, and xe to >= 0, as the C++ lookup is."""
     xlo, xhi = np.log(tab.attrs["xlo"]), np.log(tab.attrs["xhi"])
     nHc = float(np.exp(min(max(np.log(nHv), xlo[0]), xhi[0] - 1e-9)))
     Tc = float(np.exp(min(max(np.log(Tv), xlo[1]), xhi[1] - 1e-9)))
-    return max(grackle_bilinear(tab, nHc, Tc)[1][0], 0.0)
+    (lam, _, _), (xe, _, _) = grackle_bilinear(tab, nHc, Tc)
+    return lam, max(xe, 0.0)
+
+
+def grackle_xe(tab, nHv, Tv):
+    """xe_CIE of the table at (nH, T), clamped as the C++ lookup is."""
+    return grackle_clamped(tab, nHv, Tv)[1]
 
 
 def net_heating(tab, nHv, Tv, xhp):
@@ -414,6 +421,50 @@ def equilibrium_rows():
         return rows_out
 
 
+# ---------------------------------------------------------------- hot cell (ISMCoolingOneZone, mode "hot_cell")
+# The hot-cell step of src/radiation/photochemistry_hot_gas.hpp: the cell is set fully ionized at fixed internal energy, then
+#     dE/dt = -n_H^2 Lambda_net(n_H, T) + G_PE + G_CR
+# is integrated over one hydro step at fixed density. With the pure-H EOS (e_vol = 3/2 k T (n_e + n_HI + n_H+)) and n_e = n_H+ = n_H, T = E / (3 k n_H)
+# (mu = 0.5). G_PE uses n_e^max with n_HI = 0, n_H+ = n_H; G_CR is zero because n_HI = 0. The initial state and the step must match
+# inputs/ISMCoolingHotCell.toml.
+HOT_NH, HOT_T0, HOT_X0 = 1.0e-2, 1.0e6, 0.5  # initial state of the C++ run (T0 at x_H+ = HOT_X0, before the cell is ionized)
+HOT_DT = 1.0e13  # s, constant_dt of inputs/ISMCoolingHotCell.toml
+HOT_G0, HOT_ZP, HOT_ZETA = 1.0, 1.0, 1.78e-18
+HOT_CELL_COLUMNS = ["nH", "T0", "x_Hp0", "G0", "dt", "Eint0", "Eint_end", "T_end"]
+
+
+def hot_cell_rate(tab, nHv, Tv, G0v, Zpv, zetav):
+    """dE/dt [erg cm^-3 s^-1] of a fully ionized hot cell."""
+    lam, xe = grackle_clamped(tab, nHv, Tv)
+    ab, dab = alpha_rec(Tv)
+    nem = max(electron_density_max(0.0, nHv, Tv, xe, 0.0, 0.0, Zpv, zetav, ab, dab)[0], 1e-30)
+    pe = rate("PE", Tv, nem, 0.0, nHv, Zpv, G0v, zetav, 0.0)[0]
+    cr = rate("CR", Tv, nem, 0.0, nHv, Zpv, G0v, zetav, 0.0)[0]
+    return -nHv * nHv * lam + pe + cr
+
+
+def hot_cell_reference(tab, nHv=HOT_NH, T0=HOT_T0, x0=HOT_X0, dt=HOT_DT, G0v=HOT_G0, Zpv=HOT_ZP, zetav=HOT_ZETA):
+    """Integrate the hot-cell step with solve_ivp (Radau, rtol 1e-10). Returns [nH, T0, x0, G0, dt, E0, E_end, T_end]."""
+    from scipy.integrate import solve_ivp
+
+    E0 = 1.5 * K_B * T0 * nHv * (1.0 + x0)  # the internal energy, kept when the cell is ionized
+
+    def rhs(t, y):
+        return [hot_cell_rate(tab, nHv, y[0] / (3.0 * K_B * nHv), G0v, Zpv, zetav)]
+
+    sol = solve_ivp(rhs, (0.0, dt), [E0], method="Radau", rtol=1e-10, atol=1e-10 * E0)
+    assert sol.success, sol.message
+    E_end = sol.y[0, -1]
+    return [nHv, T0, x0, G0v, dt, E0, E_end, E_end / (3.0 * K_B * nHv)]
+
+
+def hot_cell_rows():
+    import h5py
+
+    with h5py.File(GRACKLE_TABLE, "r") as fh:
+        return [hot_cell_reference(fh["tab1"])]
+
+
 def main():
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).with_name("ism_cooling_reference.csv")
     grackle_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(__file__).with_name("grackle_nT_reference.csv")
@@ -432,6 +483,14 @@ def main():
         for r in equilibrium:
             w.writerow([repr(float(v)) for v in r[:4]] + [int(r[4])] + [repr(float(v)) for v in r[5:7]] + [int(r[7])])
     print(f"wrote {len(equilibrium)} rows to {equilibrium_path}")
+    hot_path = Path(sys.argv[4]) if len(sys.argv) > 4 else Path(__file__).with_name("ism_hot_cell_reference.csv")
+    with open(hot_path, "w", newline="") as fh:
+        w = csv.writer(fh, lineterminator="\n")
+        w.writerow(HOT_CELL_COLUMNS)
+        hot = hot_cell_rows()
+        for r in hot:
+            w.writerow([repr(float(v)) for v in r])
+    print(f"wrote {len(hot)} rows to {hot_path}")
     data = rows()
     branches = {r[-1] for r in data if r[0] == "ElectronDensityMax"}
     assert branches == {0, 1, 2, 3}, f"ElectronDensityMax grid misses branches: {branches}"

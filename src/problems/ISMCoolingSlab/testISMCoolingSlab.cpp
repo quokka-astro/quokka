@@ -2,14 +2,21 @@
 // SPDX-License-Identifier: MIT
 
 /// \file testISMCoolingSlab.cpp
-/// \brief A beam of ionizing photons through a uniform, fully ionized slab of the ISM photochemistry network, with dust absorption of ionizing
+/// \brief A beam of ionizing photons through a uniform slab of the ISM photochemistry network, with dust absorption of ionizing
 /// photons and no gas-dust thermal coupling (ISM_Traits::enable_dust_gas_thermal_coupling_model = false). The absorbed energy leaves the
 /// simulation and the gas only gets the photon momentum. At t = 5 L / c_hat the test checks that
 ///  - the photon density follows N(x) / N(0) = exp(-kappa rho x),
-///  - the gas internal energy is unchanged. With energy_switch = 0 and no thermal groups this verifies that the burn and the absorption add no
-///    energy to the gas; it does not exercise the gate on the dustHeatingSource write in photochemistry.hpp, which only matters with thermal
-///    groups and is verified by reading the code (its only consumer is the thermal-group IMEX step), and
+///  - the gas internal energy is unchanged by the absorption, and
 ///  - the gas momentum equals the integral of rho kappa F / c over the volume and time.
+///
+/// In the cold slab (ISMCoolingSlabCold.toml) the gas is fully ionized and the gas energy and recombination switches are off, so E_int must stay at its
+/// initial value. With no thermal groups this verifies that the burn and the absorption add no energy to the gas; it does not exercise the gate on the
+/// dustHeatingSource write in photochemistry.hpp, which only matters with thermal groups and is verified by reading the code (its only consumer is the
+/// thermal-group IMEX step).
+///
+/// In the hot slab (ISMCoolingSlabHot.toml, slab.compare_without_dust = 1) the gas is at T = 1e6 K, half ionized, with the switches on. Every cell is
+/// hot, so the burn is skipped, H does not absorb, and E_int changes only by the hot-cell cooling: it must equal E_int of a second run with
+/// network.dust_kappa = 0. One cell (slab.dark_cell) starts with no photons; after every step its photon density must be finite and >= small_x.
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
@@ -20,8 +27,11 @@
 #include "fundamental_constants.H"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fextract.hpp"
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <vector>
 
 #include "actual_eos_data.H"
 #include "burn_type.H"
@@ -79,6 +89,9 @@ template <> struct SimulationData<ISMCoolingSlab> {
 	amrex::Real kappa_rho{};       ///< dust_kappa * rho [cm^-1]
 	amrex::Real Eint_init{};       ///< initial gas internal energy density [erg cm^-3]
 	amrex::Real momentum_budget{}; ///< integral of rho kappa F / c over the volume and time, per unit cross-section [g cm s^-1 cm^-2]
+	int dark_cell{-1};	       ///< the cell that starts with no photons (none if -1)
+	amrex::Real dark_N_min{std::numeric_limits<amrex::Real>::max()}; ///< the smallest photon density of dark_cell after a step [cm^-3]
+	bool dark_N_finite{true};					 ///< whether the photon density of dark_cell was finite after every step
 };
 
 template <> void QuokkaSimulation<ISMCoolingSlab>::preCalculateInitialConditions()
@@ -99,6 +112,7 @@ template <> void QuokkaSimulation<ISMCoolingSlab>::preCalculateInitialConditions
 	pp.query("n_H", userData_.n_H);
 	pp.query("n_HI_init", userData_.n_HI_init);
 	pp.query("flux_ion", userData_.flux_ion);
+	pp.query("dark_cell", userData_.dark_cell);
 
 	userData_.eps_ion = RadSystem<ISMCoolingSlab>::GetChemBandQuanta(0);
 
@@ -167,9 +181,10 @@ template <> void QuokkaSimulation<ISMCoolingSlab>::setInitialConditionsOnGrid(qu
 	const auto Egas0 = state.e * rhotot;
 	userData_.Eint_init = Egas0;
 	userData_.kappa_rho = network_rp::dust_kappa * rhotot;
+	const int dark_cell = userData_.dark_cell;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, RadSystem<ISMCoolingSlab>::radEnergy_index) = Erad_floor_;
+		state_cc(i, j, k, RadSystem<ISMCoolingSlab>::radEnergy_index) = (i == dark_cell) ? 0.0_rt : Erad_floor_;
 		state_cc(i, j, k, RadSystem<ISMCoolingSlab>::x1RadFlux_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<ISMCoolingSlab>::x2RadFlux_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<ISMCoolingSlab>::x3RadFlux_index) = 0.0_rt;
@@ -199,9 +214,29 @@ template <> void QuokkaSimulation<ISMCoolingSlab>::computeAfterTimestep()
 			   C::c_light;
 	    });
 	userData_.momentum_budget += dt_[0] * absorbed / transverse_area;
+
+	if (userData_.dark_cell >= 0) {
+		auto [position, values] = fextract(state_new_cc_[0], geom[0], 0, 0.0);
+		const amrex::Real N = values.at(RadSystem<ISMCoolingSlab>::radEnergy_index)[userData_.dark_cell] / userData_.eps_ion;
+		userData_.dark_N_min = std::min(userData_.dark_N_min, N);
+		userData_.dark_N_finite = userData_.dark_N_finite && std::isfinite(N);
+	}
 }
 
-auto problem_main() -> int
+/// The outcome of one run of the slab.
+struct SlabRun {
+	amrex::Real max_profile_error{}; ///< max |N(x) / N(first cell) - exp(-kappa rho x)|
+	amrex::Real momentum_ratio{};	 ///< gas momentum / integral of rho kappa F / c dt
+	amrex::Real kappa_rho_L{};	 ///< optical depth of the slab
+	amrex::Real Eint_init{};	 ///< initial gas internal energy density [erg cm^-3]
+	std::vector<amrex::Real> Eint;	 ///< gas internal energy density of each cell at the end, in cell order [erg cm^-3]
+	int dark_cell{-1};		 ///< the cell that started with no photons (none if -1)
+	amrex::Real dark_N_min{};	 ///< the smallest photon density of dark_cell after a step [cm^-3]
+	bool dark_N_finite{};		 ///< whether the photon density of dark_cell was finite after every step
+};
+
+/// Run the slab to stop_time and measure it.
+static auto RunSlab() -> SlabRun
 {
 	const double CFL_number = 0.3;
 
@@ -214,24 +249,26 @@ auto problem_main() -> int
 
 	sim.evolve();
 
-	int status = 0;
-
 	amrex::MultiFab const &state_mf = sim.state_new_cc_[0];
 	const amrex::Real dx = sim.geom[0].CellSize(0);
 	const amrex::Real x_lo = sim.geom[0].ProbLo(0);
 	const amrex::Real kappa_rho = sim.userData_.kappa_rho;
-	const amrex::Real Eint_init = sim.userData_.Eint_init;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
 	const amrex::Real transverse_area = AMREX_D_TERM(1.0_rt, *(prob_hi[1] - prob_lo[1]), *(prob_hi[2] - prob_lo[2]));
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> cell_size = sim.geom[0].CellSizeArray();
 	const amrex::Real cell_volume = AMREX_D_TERM(cell_size[0], *cell_size[1], *cell_size[2]);
-	amrex::Print() << "optical depth kappa rho L = " << kappa_rho * (sim.geom[0].ProbHi(0) - x_lo) << '\n';
 
-	// E(x) / E(first cell) against exp(-kappa rho (x - x_first)), the gas internal energy and the gas momentum
+	SlabRun run;
+	run.kappa_rho_L = kappa_rho * (sim.geom[0].ProbHi(0) - x_lo);
+	run.Eint_init = sim.userData_.Eint_init;
+	run.dark_cell = sim.userData_.dark_cell;
+	run.dark_N_min = sim.userData_.dark_N_min;
+	run.dark_N_finite = sim.userData_.dark_N_finite;
+
+	// E(x) / E(first cell) against exp(-kappa rho (x - x_first)), and the gas momentum
 	amrex::Real E_first = 0.0;
 	amrex::Real momentum = 0.0;
-	amrex::Real max_Eint_error = 0.0;
 	for (amrex::MFIter mfi(state_mf); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		amrex::FArrayBox host_fab(box, state_mf.nComp(), amrex::The_Pinned_Arena());
@@ -243,15 +280,11 @@ auto problem_main() -> int
 				E_first = std::max(E_first, state(i, j, k, RadSystem<ISMCoolingSlab>::radEnergy_index));
 			}
 			momentum += state(i, j, k, HydroSystem<ISMCoolingSlab>::x1Momentum_index) * cell_volume;
-			max_Eint_error =
-			    std::max(max_Eint_error, std::abs((state(i, j, k, RadSystem<ISMCoolingSlab>::gasInternalEnergy_index) / Eint_init) - 1.0));
 		});
 	}
 	amrex::ParallelDescriptor::ReduceRealMax(E_first);
-	amrex::ParallelDescriptor::ReduceRealMax(max_Eint_error);
 	amrex::ParallelDescriptor::ReduceRealSum(momentum);
 
-	amrex::Real max_profile_error = 0.0;
 	for (amrex::MFIter mfi(state_mf); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		amrex::FArrayBox host_fab(box, state_mf.nComp(), amrex::The_Pinned_Arena());
@@ -261,33 +294,79 @@ auto problem_main() -> int
 		amrex::LoopOnCpu(box, [&](int i, int j, int k) noexcept {
 			const amrex::Real ratio = state(i, j, k, RadSystem<ISMCoolingSlab>::radEnergy_index) / E_first;
 			const amrex::Real expected = std::exp(-kappa_rho * static_cast<amrex::Real>(i) * dx);
-			max_profile_error = std::max(max_profile_error, std::abs(ratio - expected));
+			run.max_profile_error = std::max(run.max_profile_error, std::abs(ratio - expected));
 		});
 	}
-	amrex::ParallelDescriptor::ReduceRealMax(max_profile_error);
+	amrex::ParallelDescriptor::ReduceRealMax(run.max_profile_error);
 
-	const amrex::Real momentum_ratio = (momentum / transverse_area) / sim.userData_.momentum_budget;
+	run.momentum_ratio = (momentum / transverse_area) / sim.userData_.momentum_budget;
+
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.0);
+	const auto &Eint = values.at(RadSystem<ISMCoolingSlab>::gasInternalEnergy_index);
+	run.Eint.assign(Eint.begin(), Eint.end());
+	return run;
+}
+
+auto problem_main() -> int
+{
+	const SlabRun run = RunSlab();
+
+	// the internal energy the gas must have without the absorption: the initial one (cold slab), or that of a run without dust (hot slab)
+	amrex::ParmParse const pp_slab("slab");
+	int compare_without_dust = 0;
+	pp_slab.query("compare_without_dust", compare_without_dust);
+	std::vector<amrex::Real> Eint_expected(run.Eint.size(), run.Eint_init);
+	if (compare_without_dust != 0) {
+		amrex::ParmParse pp_network("network");
+		pp_network.add("dust_kappa", 0.0_rt); // the last definition wins
+		const SlabRun run_without_dust = RunSlab();
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(run_without_dust.kappa_rho_L == 0.0, "ISMCoolingSlab: the run without dust has dust");
+		Eint_expected = run_without_dust.Eint;
+	}
+
+	amrex::Real max_Eint_error = 0.0;
+	amrex::Real max_Eint_change = 0.0;
+	for (size_t i = 0; i < run.Eint.size(); ++i) {
+		max_Eint_error = std::max(max_Eint_error, std::abs(run.Eint[i] / Eint_expected[i] - 1.0));
+		max_Eint_change = std::max(max_Eint_change, std::abs(run.Eint[i] / run.Eint_init - 1.0));
+	}
 
 	const amrex::Real profile_tol = 2.0e-2;
 	const amrex::Real Eint_tol = 1.0e-12;
 	const amrex::Real momentum_lo = 0.95;
 	const amrex::Real momentum_hi = 1.005;
 
-	amrex::Print() << "Max |N(x)/N(0) - exp(-kappa rho x)| = " << max_profile_error << " (tolerance " << profile_tol << ")\n";
-	amrex::Print() << "Max relative change of the gas internal energy = " << max_Eint_error << " (tolerance " << Eint_tol << ")\n";
-	amrex::Print() << "Gas momentum / integral of rho kappa F / c dt = " << momentum_ratio << " (allowed [" << momentum_lo << ", " << momentum_hi << "])\n";
+	int status = 0;
+	amrex::Print() << "optical depth kappa rho L = " << run.kappa_rho_L << '\n';
+	amrex::Print() << "Max |N(x)/N(0) - exp(-kappa rho x)| = " << run.max_profile_error << " (tolerance " << profile_tol << ")\n";
+	amrex::Print() << "Max relative change of the gas internal energy from its initial value = " << max_Eint_change << '\n';
+	amrex::Print() << "Max relative difference of the gas internal energy from "
+		       << (compare_without_dust != 0 ? "the run without dust" : "its initial value") << " = " << max_Eint_error << " (tolerance " << Eint_tol
+		       << ")\n";
+	amrex::Print() << "Gas momentum / integral of rho kappa F / c dt = " << run.momentum_ratio << " (allowed [" << momentum_lo << ", " << momentum_hi
+		       << "])\n";
 
-	if (!(max_profile_error <= profile_tol)) {
+	if (!(run.max_profile_error <= profile_tol)) {
 		amrex::Print() << "Test failed: the photon profile does not follow exp(-kappa rho x).\n";
 		status = 1;
 	}
 	if (!(max_Eint_error <= Eint_tol)) {
-		amrex::Print() << "Test failed: the gas internal energy changed.\n";
+		amrex::Print() << "Test failed: the absorption changed the gas internal energy.\n";
 		status = 1;
 	}
-	if (!(momentum_ratio >= momentum_lo && momentum_ratio <= momentum_hi)) {
+	if (!(run.momentum_ratio >= momentum_lo && run.momentum_ratio <= momentum_hi)) {
 		amrex::Print() << "Test failed: the gas momentum does not match the absorbed photon momentum.\n";
 		status = 1;
+	}
+	if (run.dark_cell >= 0) {
+		// the photon density is stored as an energy density, E = N eps_ion, so allow the roundoff of that product
+		const amrex::Real N_floor = network_rp::small_x * (1.0 - 1.0e-12);
+		amrex::Print() << "Smallest photon density of the cell that started dark = " << run.dark_N_min << " cm^-3 (small_x = " << network_rp::small_x
+			       << "), finite after every step: " << (run.dark_N_finite ? "yes" : "no") << '\n';
+		if (!run.dark_N_finite || !(run.dark_N_min >= N_floor)) {
+			amrex::Print() << "Test failed: the photon density of the dark cell fell below small_x or is not finite.\n";
+			status = 1;
+		}
 	}
 
 	amrex::Print() << "Finished." << '\n';

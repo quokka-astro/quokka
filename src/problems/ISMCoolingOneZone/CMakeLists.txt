@@ -26,6 +26,10 @@ add_test(NAME ISMCoolingStartup COMMAND ${JOB_NAME} ../inputs/ISMCoolingStartup.
 # 1 Gyr of 25 cells at fixed n_H against the Python thermal equilibrium (extern/cooling/ism_equilibrium_reference.csv); 1D only
 if(AMReX_SPACEDIM EQUAL 1)
   add_test(NAME ISMCoolingEquilibrium COMMAND ${JOB_NAME} ../inputs/ISMCoolingEquilibrium.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  # one step of the hot-cell cooling against the Python integration (extern/cooling/ism_hot_cell_reference.csv), with dust-only attenuation
+  add_test(NAME ISMCoolingHotCell COMMAND ${JOB_NAME} ../inputs/ISMCoolingHotCell.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  # a cell cools through T_th = 2e4 K in the hot-cell step and recombines in the burn on the next step
+  add_test(NAME ISMCoolingCrossThreshold COMMAND ${JOB_NAME} ../inputs/ISMCoolingCrossThreshold.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
 
 # the startup of the photochemistry cooling path aborts, naming the parameter, without G0_external, without the table path and with a table of

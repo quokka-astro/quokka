@@ -1,0 +1,69 @@
+# *****************************************************************
+# The hot-cell step of the ISM photochemistry cooling (ISMCoolingOneZone, mode "hot_cell"), 1D only: 8 cells at n_H = 1e-2 cm^-3, T = 1e6 K and
+# x_H+ = 0.5, with G0 = 1, Z' = 1 and hydro off, take one step of 1e13 s. They are hot (T >= 2e4 K), so they are set fully ionized at fixed E_int and
+# cooled with the Grackle table, PE and CR heating. E_int must match extern/cooling/ism_hot_cell_reference.csv (written by
+# extern/cooling/ism_cooling_reference.py; n_H, T, x_H+ and constant_dt must match HOT_NH, HOT_T0, HOT_X0 and HOT_DT there). The uniform
+# chemical-band photons must be attenuated by dust only. Cell 7 is scaled to a density below photochemistry.min_density_allowed and must come out
+# bit-unchanged.
+# *****************************************************************
+ism_test.mode = "hot_cell"
+ism_test.n_H = 1.0e-2
+ism_test.temperature = 1.0e6
+ism_test.x_Hp = 0.5
+ism_test.low_density_cell = 7
+ism_test.low_density_factor = 1.0e-5  # rho = 1.7e-31 g cm^-3 < min_density_allowed
+ism_test.chem_band_energy = 1.0e-20   # erg cm^-3, uniform, so that transport leaves it unchanged
+ism_test.reference_file = "../extern/cooling/ism_hot_cell_reference.csv"  # relative to the tests/ working directory
+
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [1e19, 1e19, 1e19]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+amr.v              = 0
+amr.n_cell          = [8, 8, 8]
+amr.max_level       = 0
+amr.blocking_factor = 8
+amr.max_grid_size   = 8
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+stop_time = 1.0e20  # s
+constant_dt = 1.0e13  # s
+max_timesteps = 1
+plotfile_interval = -1
+plotfile_prefix = "ISMCoolingHotCell"
+
+temperature_floor = 1.0
+density_floor = 1e-32  # g cm^-3
+
+# *****************************************************************
+# Photochemistry Properties
+# *****************************************************************
+photochemistry.enabled = 1
+photochemistry.min_density_allowed = 1.0e-30  # g cm^-3
+network.energy_switch = 1
+network.dust_kappa = 100.0  # cm^2 g^-1: c kappa rho dt = 0.5 in the hot cells
+
+# G0 in Habing units, as a parser expression of x, y, z, time, dt
+G0_external = "1.0"
+ism_cooling.grackle_nT_table = "../extern/cooling/CloudyData_UVB=HM2012_shielded_nT_Z1.h5"
+
+integrator.rosenbrock_tableau = 3
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+integrator.rtol_spec     = 1e-6
+integrator.rtol_rad_num  = 1e-6
+integrator.rtol_enuc     = 1e-6
+
+integrator.atol_spec                     = 1.0e-12  # cm^-3
+integrator.atol_enuc                     = 1.24e8   # erg/g
+integrator.atol_rad_num                  = 1.0e-18  # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3
+integrator.radiation_failure_tolerance   = 0.5

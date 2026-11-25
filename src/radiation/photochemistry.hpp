@@ -10,6 +10,7 @@
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_iMultiFab.H"
 
 #include "cooling/ResampledCooling.hpp"
 #include "physics_info.hpp"
@@ -40,12 +41,15 @@ AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 /// Run the photochemistry burn in every cell of `mf`.
 /// \param G0Rate The FUV field G0 [Habing units] per cell. Only read when PHOTOCHEM_ISM_COOLING is defined, where it is passed to the network as
 /// burn_t::aux[0].
+/// \param hotMask The hot (1) / cold (0) label of each cell (photochemistry_hot_gas.hpp). Only read when PHOTOCHEM_ISM_COOLING is defined, and then
+/// only if not null. Hot cells skip the burn: their chemical bands are attenuated by dust only (with DUST_CHEMICAL_BAND_ABSORPTION, else not at
+/// all), the gas gets the absorbed photon momentum, and the gas internal energy, the species and dustHeatingSource are not changed (SPEC §5.1).
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
 			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource, amrex::MultiFab &radEnergySource,
-			   quokka::ResampledCooling::ExternalHeatingRate const &G0Rate = {}) -> bool
+			   quokka::ResampledCooling::ExternalHeatingRate const &G0Rate = {}, amrex::iMultiFab const *hotMask = nullptr) -> bool
 {
-	amrex::ignore_unused(dustHeatingSource, radEnergySource, G0Rate);
+	amrex::ignore_unused(dustHeatingSource, radEnergySource, G0Rate, hotMask);
 
 	// Start off by assuming a successful burn.
 	int photochem_burn_success = 1;
@@ -101,6 +105,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		if constexpr (RadSystem<problem_t>::thermal_band_photochemistry_) {
 			radEnergySource_arr = radEnergySource.array(iter);
 		}
+#ifdef PHOTOCHEM_ISM_COOLING
+		const bool has_hot_mask = (hotMask != nullptr);
+		amrex::Array4<const int> hotMask_arr{};
+		if (has_hot_mask) {
+			hotMask_arr = hotMask->const_array(iter);
+		}
+#endif
 
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -183,39 +194,58 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			photochemstate.aux[0] = G0Rate(i, j, k);
 #endif
 
-			// do the actual integration
-			// do it in .cpp so that it is not built at compile time for all tests
-			// which would otherwise slow down compilation due to the large RHS file
-			photochem_burner(photochemstate, dt);
+#ifdef PHOTOCHEM_ISM_COOLING
+			// hot cells skip the burn (SPEC 5.1)
+			const bool hot = has_hot_mask && (hotMask_arr(i, j, k) != 0);
+#else
+			constexpr bool hot = false;
+#endif
+			// the attenuation factor of the chemical bands in a hot cell: dust only
+			Real hot_attenuation = 1.0_rt;
+			if (!hot) {
+				// do the actual integration
+				// do it in .cpp so that it is not built at compile time for all tests
+				// which would otherwise slow down compilation due to the large RHS file
+				photochem_burner(photochemstate, dt);
 
-			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
-				amrex::Abort("Burner returned NAN");
+				if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
+					amrex::Abort("Burner returned NAN");
+				}
+
+				if (!photochemstate.success) {
+					burn_failed = 1;
+				}
+
+				if (burn_failed) {
+					amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
+				}
+
+				// Ensure positivity
+				for (double &nn : photochemstate.xn) {
+					nn = amrex::max(nn, small_x);
+				}
+				for (int nn = 0; nn < NumChemBands; nn += 1) {
+					// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
+					photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup] =
+					    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup], small_x);
+				}
+
+				// get the updated specific eint
+				eos(eos_input_re, photochemstate);
+
+				for (int nn = 0; nn < NumSpec; ++nn) {
+					state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
+				}
+			} else {
+#ifdef DUST_CHEMICAL_BAND_ABSORPTION
+				hot_attenuation = std::exp(-photochemstate.c_hat * network_rp::dust_kappa * rho * dt);
+#endif
+				for (int nn = 0; nn < NumChemBands; ++nn) {
+					Real &n_gamma = photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup];
+					n_gamma = amrex::max(hot_attenuation * n_gamma, small_x);
+				}
 			}
 
-			if (!photochemstate.success) {
-				burn_failed = 1;
-			}
-
-			if (burn_failed) {
-				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
-			}
-
-			// Ensure positivity
-			for (double &nn : photochemstate.xn) {
-				nn = amrex::max(nn, small_x);
-			}
-			for (int nn = 0; nn < NumChemBands; nn += 1) {
-				// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
-				photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup] =
-				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumChemRadVarsPerGroup], small_x);
-			}
-
-			// get the updated specific eint
-			eos(eos_input_re, photochemstate);
-
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
-			}
 			// Update the chem-band photon number density, attenuate the flux by the burn's rn[1] factor or algebraically using the photon number
 			// density if SKIP_PHOTOCHEMFLUX is defined, and accumulate the momentum the gas absorbs from the O(v/c) work term: dP = -(F_after -
 			// F_before) / c^2, summed over chem bands. The absorbed photon momentum is tied to the physical photon flux F = c E; the reduced speed
@@ -240,10 +270,11 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				const Real FzOld = state(i, j, k, fzIdx);
 #ifdef SKIP_PHOTOCHEMFLUX
 				// flux is not carried in photochemstate; derive the attenuation factor from the change in n_gamma
-				const Real flux_factor = (n_gamma_initial[nn] > 0.0_rt) ? (n_gamma_final / n_gamma_initial[nn]) : 0.0_rt;
+				const Real burn_flux_factor = (n_gamma_initial[nn] > 0.0_rt) ? (n_gamma_final / n_gamma_initial[nn]) : 0.0_rt;
 #else
-				const Real flux_factor = photochemstate.rn[1 + MicrophysicsNumChemRadVarsPerGroup * nn];
+				const Real burn_flux_factor = photochemstate.rn[1 + MicrophysicsNumChemRadVarsPerGroup * nn];
 #endif
+				const Real flux_factor = hot ? hot_attenuation : burn_flux_factor;
 				// dp = (F_before - F_after) / c^2 = (1 - flux_factor) * F_before / c^2
 				const Real dpx = (1.0_rt - flux_factor) * FxOld * inv_c2;
 				const Real dpy = (1.0_rt - flux_factor) * FyOld * inv_c2;
@@ -272,15 +303,20 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				      "DUST_CHEMICAL_BAND_ABSORPTION is defined but ISM_Traits::dust_chemical_band_absorption is false: "
 				      "the dust-absorbed photon energy would be silently dropped.");
 			// With no gas-dust thermal coupling model nothing consumes the dust-absorbed energy, and it leaves the simulation.
+			// Hot cells always discard it (SPEC 5.1a).
 			if constexpr (RadSystem<problem_t>::enable_dust_gas_thermal_coupling_model_) {
-				dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / dt;
+				if (!hot) {
+					dustHeatingSource_arr(i, j, k) = photochemstate.e_dust_absorbed / dt;
+				}
 			}
 #endif
 
-			// Quokka uses rho*eint
-			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
-			state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) += dEint;
-			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint;
+			// Quokka uses rho*eint. A hot cell's internal energy is set by the hot-cell step, not here.
+			if (!hot) {
+				const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
+				state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) += dEint;
+				state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint;
+			}
 
 			// O(v/c) radiation-pressure work term: apply the absorbed photon momentum (dMom, computed above) to the
 			// gas. This changes the kinetic energy of the updated momentum only; the auxiliary internal energy is

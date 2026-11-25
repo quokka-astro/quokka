@@ -78,6 +78,9 @@ namespace filesystem = experimental::filesystem;
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 #include "radiation/photochemistry.hpp"
+#ifdef PHOTOCHEM_ISM_COOLING
+#include "radiation/photochemistry_hot_gas.hpp"
+#endif
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 #include "turbulence/TurbulentDriving.hpp"
@@ -3358,6 +3361,24 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		dustHeatingSource.setVal(0.0);
 	}
 
+#ifdef PHOTOCHEM_ISM_COOLING
+	// The hot/cold label of each cell, fixed for the whole hydro step. Hot cells are cooled here, once, over the hydro step, and every substep's
+	// photochemistry skips their burn (SPEC 5.1).
+	amrex::iMultiFab hotMask;
+	if (enablePhotoChemistry_ == 1) {
+		std::array<amrex::MultiFab const *, AMREX_SPACEDIM> hot_fc_ptrs{};
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				hot_fc_ptrs[dir] = &state_new_fc_[lev][dir];
+			}
+		}
+		hotMask.define(grids[lev], dmap[lev], 1, 0);
+		quokka::photochemistry::BuildHotMask<problem_t>(state_new_cc_[lev], hot_fc_ptrs, hotMask, min_density_allowed);
+		quokka::photochemistry::ComputeHotGasCooling<problem_t>(state_new_cc_[lev], hot_fc_ptrs, hotMask, dt_lev_hydro,
+									makeG0Rate(lev, time, dt_lev_hydro), tempFloor_);
+	}
+#endif
+
 	// perform subcycle
 	auto const &dx = geom[lev].CellSizeArray();
 	amrex::Real time_subcycle = time;
@@ -3450,10 +3471,10 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 #ifdef PHOTOCHEM_ISM_COOLING
 			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
 										 min_density_allowed, dustHeatingSource, radEnergySource,
-										 makeG0Rate(lev, time_subcycle, dt_radiation));
+										 makeG0Rate(lev, time_subcycle, dt_radiation), &hotMask);
 #else
 			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
-										 min_density_allowed, dustHeatingSource, radEnergySource, {});
+										 min_density_allowed, dustHeatingSource, radEnergySource, {}, nullptr);
 #endif
 		}
 #endif

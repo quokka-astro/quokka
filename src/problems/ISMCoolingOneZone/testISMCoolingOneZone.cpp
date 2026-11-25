@@ -11,6 +11,14 @@
 /// temperatures with the Python integration of the same ODE (extern/cooling/ism_cooling_reference.py, ism_equilibrium_reference.csv), then checks that
 /// they have settled and that the curve has a warm and a cold phase. It is 1D only.
 ///
+/// Mode "hot_cell" takes one step of fixed length of a row of hot cells (n_H = 1e-2, T = 1e6 K, x_H+ = 0.5, G0 = 1) with a uniform chemical-band
+/// photon field. The hot-cell step must ionize them fully and bring E_int to the Python integration of the same ODE (hot_cell_reference in
+/// extern/cooling/ism_cooling_reference.py, ism_hot_cell_reference.csv), and the photons must be attenuated by dust only. One cell has a density below
+/// photochemistry.min_density_allowed and must come out bit-unchanged. It is 1D only.
+///
+/// Mode "cross_threshold" takes two steps of a cell that starts hot (n_H = 1, T = 3e4 K, x_H+ = 0.5). After the first it must be fully ionized and
+/// below T_th = 2e4 K, and after the second the burn must have run, so that H+ has begun to recombine. It is 1D only.
+///
 /// Mode "jacobian" is a host-only unit test:
 ///
 /// For six gas states, chosen so that every branch of n_e^max is active in at least one (asserted), with G0 = 1, it checks that
@@ -306,6 +314,13 @@ template <> struct ISM_Traits<ISMCoolingOneZone> {
 	static constexpr bool dust_chemical_band_absorption = true;
 };
 
+/// The gas of every cell along x, in cell order: number densities and temperature from the pure-H photochemistry EOS, as the burn sees them.
+struct CellGas {
+	std::vector<amrex::Real> n_HI;
+	std::vector<amrex::Real> n_Hp;
+	std::vector<amrex::Real> T;
+};
+
 template <> struct SimulationData<ISMCoolingOneZone> {
 	amrex::Real temperature{};
 	amrex::Real n_H{};
@@ -313,8 +328,12 @@ template <> struct SimulationData<ISMCoolingOneZone> {
 	bool equilibrium{};			///< mode "equilibrium": the cells span n_H_min <= n_H <= n_H_max, log-spaced, instead of being uniform
 	amrex::Real n_H_min{};			///< n_H of the first cell [cm^-3] (mode "equilibrium")
 	amrex::Real n_H_max{};			///< n_H of the last cell [cm^-3] (mode "equilibrium")
-	std::vector<amrex::Real> time_history_; ///< the time of each recorded step [s] (mode "equilibrium")
-	std::vector<std::vector<amrex::Real>> T_history_; ///< the temperature of every cell at each recorded step [K] (mode "equilibrium")
+	bool record_history{};			///< record the gas after every step (modes "equilibrium" and "cross_threshold")
+	std::vector<amrex::Real> time_history_; ///< the time of each recorded step [s]
+	std::vector<CellGas> gas_history_;	///< the gas of every cell at each recorded step
+	int low_density_cell{-1};		///< mode "hot_cell": the cell whose density is scaled by low_density_factor
+	amrex::Real low_density_factor{1.0};
+	amrex::Real chem_band_energy{}; ///< initial energy density of the chemical band [erg cm^-3]
 };
 
 template <> void QuokkaSimulation<ISMCoolingOneZone>::preCalculateInitialConditions()
@@ -331,6 +350,11 @@ template <> void QuokkaSimulation<ISMCoolingOneZone>::preCalculateInitialConditi
 	std::string mode;
 	pp.get("mode", mode);
 	userData_.equilibrium = (mode == "equilibrium");
+	userData_.record_history = (mode == "equilibrium") || (mode == "cross_threshold");
+	userData_.chem_band_energy = Erad_floor_;
+	pp.query("low_density_cell", userData_.low_density_cell);
+	pp.query("low_density_factor", userData_.low_density_factor);
+	pp.query("chem_band_energy", userData_.chem_band_energy);
 	userData_.n_H_min = 1.0e-2_rt;
 	userData_.n_H_max = 1.0e2_rt;
 	pp.query("n_H_min", userData_.n_H_min);
@@ -367,6 +391,9 @@ template <> void QuokkaSimulation<ISMCoolingOneZone>::setInitialConditionsOnGrid
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!equilibrium || (AMREX_SPACEDIM == 1 && n_cells > 1),
 					 "ISMCoolingOneZone: mode equilibrium needs a 1D build with n_cell > 1");
 	const amrex::Real n_H_base = equilibrium ? 1.0_rt : userData_.n_H;
+	const int low_density_cell = userData_.low_density_cell;
+	const amrex::Real low_density_factor = userData_.low_density_factor;
+	const amrex::Real chem_band_energy = userData_.chem_band_energy;
 
 	burn_t state;
 	state.xn[Species::H_p] = userData_.x_Hp * n_H_base;
@@ -382,32 +409,34 @@ template <> void QuokkaSimulation<ISMCoolingOneZone>::setInitialConditionsOnGrid
 	const auto Egas0 = state.e * rhotot;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const amrex::Real scale =
+		amrex::Real scale =
 		    equilibrium ? n_H_min * std::exp(log_n_H_ratio * static_cast<amrex::Real>(i) / static_cast<amrex::Real>(n_cells - 1)) : 1.0_rt;
+		if (i == low_density_cell) {
+			scale *= low_density_factor;
+		}
 		for (int g = 0; g < Physics_Traits<ISMCoolingOneZone>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_floor_;
+			// every group is a chemical band (NumThermalBands = 0)
+			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = chem_band_energy;
 			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 		}
 		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::gasEnergy_index) = scale * Egas0;
-		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::gasDensity_index) = scale * rhotot;
 		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::gasInternalEnergy_index) = scale * Egas0;
 		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x1GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x3GasMomentum_index) = 0.0_rt;
+		// the density is the sum of the mass scalars, in the order HydroSystem::EnforceLimits sums them, so that its renormalization of the
+		// scalars to the density leaves them bit-unchanged (mode "hot_cell" checks that a skipped cell is bit-unchanged)
+		amrex::Real rho = 0.0_rt;
 		for (int nn = 0; nn < NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<ISMCoolingOneZone>::scalar0_index + nn) = scale * state.xn[nn] * spmasses[nn];
+			const amrex::Real rho_species = scale * state.xn[nn] * spmasses[nn];
+			state_cc(i, j, k, HydroSystem<ISMCoolingOneZone>::scalar0_index + nn) = rho_species;
+			rho += rho_species;
 		}
+		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::gasDensity_index) = rho;
 	});
 }
-
-/// The gas of every cell along x, in cell order: number densities and temperature from the pure-H photochemistry EOS, as the burn sees them.
-struct CellGas {
-	std::vector<amrex::Real> n_HI;
-	std::vector<amrex::Real> n_Hp;
-	std::vector<amrex::Real> T;
-};
 
 static auto ReadCellGas(amrex::MultiFab &mf, amrex::Geometry &geom) -> CellGas
 {
@@ -432,14 +461,14 @@ static auto ReadCellGas(amrex::MultiFab &mf, amrex::Geometry &geom) -> CellGas
 	return gas;
 }
 
-/// Mode "equilibrium": record the temperature of every cell after each step, to check that the run has settled.
+/// Modes "equilibrium" and "cross_threshold": record the gas of every cell after each step.
 template <> void QuokkaSimulation<ISMCoolingOneZone>::computeAfterTimestep()
 {
-	if (!userData_.equilibrium) {
+	if (!userData_.record_history) {
 		return;
 	}
 	userData_.time_history_.push_back(tNew_[0]);
-	userData_.T_history_.push_back(ReadCellGas(state_new_cc_[0], geom[0]).T);
+	userData_.gas_history_.push_back(ReadCellGas(state_new_cc_[0], geom[0]));
 }
 
 /// Mode "startup": construct the simulation, so that its startup checks run, set the initial conditions and take the steps of max_timesteps.
@@ -493,9 +522,10 @@ static auto RunJacobianMode() -> int
 	return (failures == 0) ? 0 : 1;
 }
 
-/// The reference of extern/cooling/ism_cooling_reference.py: one row per cell of (n_H, T, x_H+, n_e^max, branch) of the ODE solution
-/// at stop_time, then (T, x_H+, number of roots) of the steady state, which is only printed.
-static auto ReadEquilibriumReference(std::string const &path) -> std::vector<std::array<Real, 8>>
+/// A reference table of extern/cooling/ism_cooling_reference.py: a header line, then rows of 8 numbers. For ism_equilibrium_reference.csv, one row per
+/// cell of (n_H, T, x_H+, n_e^max, branch) of the ODE solution at stop_time, then (T, x_H+, number of roots) of the steady state, which is only printed.
+/// For ism_hot_cell_reference.csv, one row (n_H, T0, x_H+0, G0, dt, E_int0, E_int_end, T_end).
+static auto ReadReference(std::string const &path) -> std::vector<std::array<Real, 8>>
 {
 	std::ifstream file(path);
 	if (!file.is_open()) {
@@ -532,7 +562,7 @@ static auto RunEquilibriumMode() -> int
 	amrex::ParmParse const pp("ism_test");
 	std::string reference_path;
 	pp.get("reference_file", reference_path);
-	const auto reference = ReadEquilibriumReference(reference_path);
+	const auto reference = ReadReference(reference_path);
 
 	sim.setInitialConditions();
 	const CellGas initial = ReadCellGas(sim.state_new_cc_[0], sim.geom[0]);
@@ -572,7 +602,7 @@ static auto RunEquilibriumMode() -> int
 		const Real T = final_gas.T[i];
 		const Real T_ref = reference[i][1];
 		const Real err = std::abs(T - T_ref) / T_ref;
-		const Real drift = std::abs(T - sim.userData_.T_history_[i_late][i]) / T;
+		const Real drift = std::abs(T - sim.userData_.gas_history_[i_late].T[i]) / T;
 		burn_t state{};
 		state.xn[H_idx] = final_gas.n_HI[i];
 		state.xn[Hp_idx] = final_gas.n_Hp[i];
@@ -604,6 +634,143 @@ static auto RunEquilibriumMode() -> int
 	return (failures == 0) ? 0 : 1;
 }
 
+/// Mode "hot_cell": one step of length dt of a row of hot cells, one of them below photochemistry.min_density_allowed. Each hot cell must be fully
+/// ionized, with E_int (and E_gas, hydro being off) matching the Python integration of the hot-cell ODE to eint_rtol, and its photons must be attenuated
+/// by dust only, N -> exp(-c_hat kappa_d rho dt) N. The low-density cell must come out bit-unchanged in every component.
+static auto RunHotCellMode() -> int
+{
+	using Rad = RadSystem<ISMCoolingOneZone>;
+	using Hydro = HydroSystem<ISMCoolingOneZone>;
+	constexpr Real eint_rtol = 1.0e-3;
+	constexpr Real input_rtol = 1.0e-9;
+	constexpr Real roundoff_rtol = 1.0e-12;
+	QuokkaSimulation<ISMCoolingOneZone> sim;
+	amrex::ParmParse const pp("ism_test");
+	std::string reference_path;
+	pp.get("reference_file", reference_path);
+	const auto reference = ReadReference(reference_path);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reference.size() == 1, "ISMCoolingOneZone: the hot-cell reference must have one row");
+	const auto &ref = reference[0];
+	const Real ref_nH = ref[0];
+	const Real ref_T0 = ref[1];
+	const Real ref_x0 = ref[2];
+	const Real ref_dt = ref[4];
+	const Real ref_Eint_end = ref[6];
+
+	sim.setInitialConditions();
+	const int low = sim.userData_.low_density_cell; // read by setInitialConditions
+	const CellGas initial = ReadCellGas(sim.state_new_cc_[0], sim.geom[0]);
+	const auto [position_before, before] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.0);
+	sim.plotfileInterval_ = -1;
+	sim.evolve();
+	const CellGas final_gas = ReadCellGas(sim.state_new_cc_[0], sim.geom[0]);
+	const auto [position_after, after] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.0);
+
+	int failures = 0;
+	if (sim.istep[0] != 1 || !(std::abs(sim.tNew_[0] - ref_dt) <= input_rtol * ref_dt)) {
+		std::cout << "  the run took " << sim.istep[0] << " steps to t = " << sim.tNew_[0] << " s; the reference is one step of " << ref_dt << " s\n";
+		++failures;
+	}
+	const size_t n = initial.T.size();
+	if (low < 0 || static_cast<size_t>(low) >= n) {
+		std::cout << "  ism_test.low_density_cell = " << low << " is not a cell\n";
+		return 1;
+	}
+	const Real kappa = network_rp::dust_kappa;
+	std::cout << "ISMCoolingOneZone hot_cell: one step of " << ref_dt << " s, kappa_d = " << kappa << " cm^2 g^-1\n"
+		  << "  cell   E_int C++        E_int Python     rel. error   x_H+ after   N after / (f N before) - 1\n";
+	for (size_t i = 0; i < n; ++i) {
+		if (static_cast<int>(i) == low) {
+			for (size_t c = 0; c < before.size(); ++c) {
+				if (!(before[c][i] == after[c][i])) { // bit-unchanged
+					std::cout << "  low-density cell " << i << ": component " << c << " changed from " << before[c][i] << " to "
+						  << after[c][i] << '\n';
+					++failures;
+				}
+			}
+			continue;
+		}
+		const Real n_H0 = initial.n_HI[i] + initial.n_Hp[i];
+		if (!(std::abs(n_H0 - ref_nH) <= input_rtol * ref_nH) || !(std::abs(initial.T[i] - ref_T0) <= input_rtol * ref_T0) ||
+		    !(std::abs(initial.n_Hp[i] / n_H0 - ref_x0) <= input_rtol)) {
+			std::cout << "  cell " << i << ": initial n_H = " << n_H0 << ", T = " << initial.T[i] << ", x_H+ = " << initial.n_Hp[i] / n_H0
+				  << " do not match the reference\n";
+			++failures;
+		}
+		const Real rho = after[Rad::gasDensity_index][i];
+		const Real Eint = after[Rad::gasInternalEnergy_index][i];
+		const Real Egas = after[Rad::gasEnergy_index][i];
+		const Real err = std::abs(Eint - ref_Eint_end) / ref_Eint_end;
+		const Real n_Hp = final_gas.n_Hp[i];
+		const Real n_e = after[Hydro::scalar0_index + static_cast<int>(Species::e)][i] / spmasses[Species::e];
+		const Real f = std::exp(-Rad::c_hat_ * kappa * rho * ref_dt);
+		const Real N_before = before[Rad::radEnergy_index][i];
+		const Real N_after = after[Rad::radEnergy_index][i];
+		const Real attenuation_err = N_after / (f * N_before) - 1.0;
+		std::cout << "  " << std::setw(4) << i << "   " << std::setprecision(10) << std::setw(15) << Eint << "  " << std::setw(15) << ref_Eint_end
+			  << "  " << std::setprecision(3) << std::setw(10) << err << "  " << std::setw(10) << n_Hp / (final_gas.n_HI[i] + n_Hp) << "  "
+			  << attenuation_err << '\n';
+		if (!(err <= eint_rtol)) {
+			++failures;
+		}
+		if (!(std::abs(Egas - Eint) <= roundoff_rtol * Eint)) {
+			std::cout << "    E_gas = " << Egas << " differs from E_int with hydro off\n";
+			++failures;
+		}
+		if (!(final_gas.n_HI[i] == 0.0) || !(std::abs(n_e - n_Hp) <= roundoff_rtol * n_Hp) || !(std::abs(n_Hp - n_H0) <= roundoff_rtol * n_H0)) {
+			std::cout << "    not fully ionized: n_HI = " << final_gas.n_HI[i] << ", n_H+ = " << n_Hp << ", n_e = " << n_e << ", n_H0 = " << n_H0
+				  << '\n';
+			++failures;
+		}
+		if (!(std::abs(attenuation_err) <= roundoff_rtol)) {
+			++failures;
+		}
+	}
+	std::cout << (failures == 0 ? "ISMCoolingOneZone hot_cell: PASSED\n" : "ISMCoolingOneZone hot_cell: FAILED\n");
+	return (failures == 0) ? 0 : 1;
+}
+
+/// Mode "cross_threshold": two steps of a cell that starts hot. The first step's hot-cell cooling must leave it fully ionized and below the threshold,
+/// and on the second step it is cold, so the burn runs and H+ recombines: x_H+ must then be below 1 by more than xHp_drop_min.
+static auto RunCrossThresholdMode() -> int
+{
+	constexpr Real xHp_drop_min = 1.0e-6;
+	constexpr Real T_th = 2.0e4; // K, SPEC 5.1
+	QuokkaSimulation<ISMCoolingOneZone> sim;
+	sim.setInitialConditions();
+	const CellGas initial = ReadCellGas(sim.state_new_cc_[0], sim.geom[0]);
+	sim.plotfileInterval_ = -1;
+	sim.evolve();
+	const auto &history = sim.userData_.gas_history_;
+	if (history.size() != 2) {
+		std::cout << "ISMCoolingOneZone cross_threshold: " << history.size() << " steps were recorded, expected 2\n";
+		return 1;
+	}
+	int failures = 0;
+	std::cout << "ISMCoolingOneZone cross_threshold: T_th = " << T_th << " K\n"
+		  << "  cell   T0 [K]   T step 1 [K]   x_H+ step 1   T step 2 [K]   1 - x_H+ step 2\n";
+	for (size_t i = 0; i < initial.T.size(); ++i) {
+		const Real x1 = history[0].n_Hp[i] / (history[0].n_HI[i] + history[0].n_Hp[i]);
+		const Real x2 = history[1].n_Hp[i] / (history[1].n_HI[i] + history[1].n_Hp[i]);
+		std::cout << "  " << std::setw(4) << i << "   " << std::setprecision(6) << initial.T[i] << "   " << history[0].T[i] << "   " << x1 << "   "
+			  << history[1].T[i] << "   " << 1.0 - x2 << '\n';
+		if (!(initial.T[i] >= T_th)) {
+			std::cout << "    the cell does not start hot\n";
+			++failures;
+		}
+		if (!(x1 == 1.0) || !(history[0].T[i] < T_th)) {
+			std::cout << "    after step 1 the cell is not fully ionized below T_th\n";
+			++failures;
+		}
+		if (!(1.0 - x2 > xHp_drop_min)) {
+			std::cout << "    after step 2 H+ has not recombined: the burn did not run\n";
+			++failures;
+		}
+	}
+	std::cout << (failures == 0 ? "ISMCoolingOneZone cross_threshold: PASSED\n" : "ISMCoolingOneZone cross_threshold: FAILED\n");
+	return (failures == 0) ? 0 : 1;
+}
+
 auto problem_main() -> int
 {
 	amrex::ParmParse const pp("ism_test");
@@ -617,6 +784,12 @@ auto problem_main() -> int
 	}
 	if (mode == "equilibrium") {
 		return RunEquilibriumMode();
+	}
+	if (mode == "hot_cell") {
+		return RunHotCellMode();
+	}
+	if (mode == "cross_threshold") {
+		return RunCrossThresholdMode();
 	}
 	std::cout << "ISMCoolingOneZone: unknown ism_test.mode '" << mode << "'\n";
 	return 1;
