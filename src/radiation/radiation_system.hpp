@@ -341,9 +341,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// by dust, and exerts radiation force on the gas, but emits nothing and gives none of the absorbed
 	// energy to the gas. The absorbed energy leaves the simulation -- physically it heats the dust, which
 	// re-radiates it in the infrared, and neither the dust temperature nor that emission is followed, so
-	// total energy is deliberately not conserved. Gas heating (photoelectric, photodissociation) is left
-	// to an external chemistry and cooling module, which needs the radiation field rather than the
-	// absorbed energy. The motivating case is FUV + Lyman-Werner in a galaxy simulation.
+	// total energy is deliberately not conserved. The gas is heated only by the photoelectric heating of
+	// RadSystem_Traits::pe_heating_efficiency, which is computed from the radiation field rather than the
+	// absorbed energy. The motivating case is FUV + Lyman-Werner in a galaxy simulation. A single group
+	// is allowed; it takes its opacities from the single-group hooks.
 	static constexpr bool dust_absorption_only_ = []() constexpr {
 		if constexpr (RadSystem_Has_Dust_Absorption_Only<problem_t>::value) {
 			return RadSystem_Traits<problem_t>::dust_absorption_only;
@@ -444,9 +445,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	// Assertions: dust_absorption_only turns off thermal emission and the gas-radiation energy exchange
 	// for every thermal group, so it is incompatible with the models that rely on either.
-	static_assert(!(dust_absorption_only_ && nGroups_ == 1), // NOLINT
-		      "dust_absorption_only is implemented for multigroup radiation only; it requires nGroups > 1.");
-
 	static_assert(!(dust_absorption_only_ && enable_dust_gas_thermal_coupling_model_), // NOLINT
 		      "dust_absorption_only assumes the dust is thermally decoupled from the gas, so it cannot be combined with "
 		      "ISM_Traits::enable_dust_gas_thermal_coupling_model.");
@@ -460,8 +458,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(!(dust_absorption_only_ && ::quokka::EOS_Traits<problem_t>::gamma == 1.0), // NOLINT
 		      "dust_absorption_only is not implemented for an isothermal EOS (gamma == 1).");
 
-	static_assert(!(dust_absorption_only_ && opacity_model_ != OpacityModel::piecewise_constant_opacity), // NOLINT
-		      "dust_absorption_only requires OpacityModel::piecewise_constant_opacity.");
+	// A single group takes its opacities from the single-group hooks (OpacityModel::single_group), as everywhere else.
+	static_assert(!(dust_absorption_only_ && nGroups_ > 1 && opacity_model_ != OpacityModel::piecewise_constant_opacity), // NOLINT
+		      "dust_absorption_only with nGroups > 1 requires OpacityModel::piecewise_constant_opacity.");
 
 	// Assertion: pe_heating_efficiency is the dimensionless efficiency factor epsilon of the standard
 	// interstellar expression, a fraction between 0 and 1 (about 0.05 for cold molecular gas).
@@ -807,8 +806,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 {
 	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
-		// a single group always spans the whole spectrum; see radBoundaries_
-		radEnergyFractions[0] = 1.0;
+		// a single group always spans the whole spectrum; see radBoundaries_. A dust-absorption band emits nothing.
+		radEnergyFractions[0] = dust_absorption_only_ ? 0.0 : 1.0;
 		return radEnergyFractions;
 	} else {
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
@@ -891,7 +890,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 	quokka::valarray<amrex::Real, nGroups_> d_fourpiboverc_d_t{};
 	const double a_T3 = radiation_constant_ * temperature * temperature * temperature;
 	if constexpr (nGroups_ == 1) {
-		d_fourpiboverc_d_t[0] = 4. * a_T3;
+		d_fourpiboverc_d_t[0] = dust_absorption_only_ ? 0.0 : 4. * a_T3;
 		return d_fourpiboverc_d_t;
 	} else {
 		// The group emission is a T^4 f_g(T), so its temperature derivative is 4 a T^3 f_g + a T^4 df_g/dT.

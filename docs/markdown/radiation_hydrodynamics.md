@@ -89,7 +89,7 @@ Summing either form over all groups recovers the grey four-force of [Matter-radi
 
 ### Radiation band types
 
-Not every group in a multigroup run has to couple to the matter in the same way. Quokka recognises three *band types*, which differ only in which of the terms above are switched on. **Chemical** (ionizing) bands are declared individually and occupy the last groups of the frequency grid. The **dust-absorption** type is at present a property of the whole run rather than of a single band: setting `dust_absorption_only` converts every non-chemical group at once. Thermal and dust-absorption bands cannot yet be mixed in one run; supporting that is future work. The default is all-**thermal**, which is the case every equation so far describes.
+Not every group in a run has to couple to the matter in the same way. Quokka recognises three *band types*, which differ only in which of the terms above are switched on. **Chemical** (ionizing) bands are declared individually and occupy the last groups of the frequency grid. The **dust-absorption** type is at present a property of the whole run rather than of a single band: setting `dust_absorption_only` converts every non-chemical group at once. Thermal and dust-absorption bands cannot yet be mixed in one run; supporting that is future work. The default is all-**thermal**, which is the case every equation so far describes.
 
 | Band type       | Transport | Thermal emission | Absorbed energy heats the gas | Radiation force and work | Photochemistry |
 | --------------- | --------- | ---------------- | ----------------------------- | ------------------------ | -------------- |
@@ -360,11 +360,11 @@ template <> struct RadSystem_Traits<MyProblem> {
 };
 ```
 
-The flag defaults to `false`, requires `nGroups > 1`, `piecewise_constant_opacity`, and a non-isothermal EOS (`gamma != 1`; an isothermal EOS is rejected at compile time), and cannot be combined with `ISM_Traits::enable_dust_gas_thermal_coupling_model` or `ISM_Traits::enable_photoelectric_heating` — each of those assumes a thermal exchange this mode deliberately removes, so the combination is rejected at compile time. Chemical bands are declared separately with `ChemBands()`, which returns their boundaries because the photochemistry network needs them; see [Photoionization](photoionization.md).
+The flag defaults to `false`, requires a non-isothermal EOS (`gamma != 1`; an isothermal EOS is rejected at compile time), requires `piecewise_constant_opacity` when `nGroups > 1`, and cannot be combined with `ISM_Traits::enable_dust_gas_thermal_coupling_model` or `ISM_Traits::enable_photoelectric_heating` — each of those assumes a thermal exchange this mode deliberately removes, so the combination is rejected at compile time. Chemical bands are declared separately with `ChemBands()`, which returns their boundaries because the photochemistry network needs them; see [Photoionization](photoionization.md).
 
 `pe_heating_efficiency` defaults to all zeros, in which case no photoelectric heating is applied; see [Photoelectric heating](#photoelectric-heating). Each entry must lie in \\([0, 1]\\), and a non-zero entry requires both `dust_absorption_only` and cgs units; all three are checked at compile time.
 
-The opacity hook is unchanged: `DefineOpacityExponentsAndLowerValues` supplies \\(\kappa\\) for every group as usual. Return the dust absorption opacity of each band; the solver uses it for the absorption sink, the radiation force, and the work term, and never asks for an emissivity.
+The opacity hook is unchanged: `DefineOpacityExponentsAndLowerValues` supplies \\(\kappa\\) for every group as usual. Return the dust absorption opacity of each band; the solver uses it for the absorption sink, the radiation force, and the work term, and never asks for an emissivity. A single group (`nGroups = 1`) is allowed. It uses the grey opacity hooks instead, as for any single-group run: `ComputeEnergyMeanOpacity` and `ComputeFluxMeanOpacity` supply the dust absorption opacity.
 
 ### Radiation sources
 

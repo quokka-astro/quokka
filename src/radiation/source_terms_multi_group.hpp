@@ -212,8 +212,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 	// because they take it as the weight of the Planck-mean average, which is irrelevant here.
 	const quokka::valarray<double, nGroups_> fourPiBoverC = ComputeThermalRadiationMultiGroup(T_gas, rad_boundaries);
 
-	auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_gas, rho, rad_boundaries, {}, fourPiBoverC, Erad0Vec, 0, {}, {});
-	ComputeModelDependentKappaFAndDeltaTerms(T_gas, rho, rad_boundaries, fourPiBoverC, opacity_terms); // update opacity_terms in place
+	OpacityTerms<problem_t> opacity_terms{};
+	if constexpr (nGroups_ == 1) {
+		// A single group takes its opacities from the single-group hooks, as the transport step does. It emits
+		// nothing, so there is no group coupling and the delta terms stay zero.
+		opacity_terms.kappaE[0] = ComputeEnergyMeanOpacity(rho, T_gas);
+		opacity_terms.kappaP[0] = opacity_terms.kappaE[0]; // never used: nothing emits
+		opacity_terms.kappaF[0] = ComputeFluxMeanOpacity(rho, T_gas);
+		opacity_terms.kappaPoverE[0] = 1.0;
+	} else {
+		opacity_terms = ComputeModelDependentKappaEAndKappaP(T_gas, rho, rad_boundaries, {}, fourPiBoverC, Erad0Vec, 0, {}, {});
+		ComputeModelDependentKappaFAndDeltaTerms(T_gas, rho, rad_boundaries, fourPiBoverC, opacity_terms); // update opacity_terms in place
+	}
 
 	// Compute the work term. On the first outer iteration it is built from the old-state flux; afterwards
 	// the caller passes back the value from the previous outer iteration, which is what that loop
@@ -662,7 +672,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 	const std::array<double, 3> gasMtm0 = {x1GasMom0, x2GasMom0, x3GasMom0};
 
 	auto const fourPiBoverC = ComputeThermalRadiationMultiGroup(energy.T_d, radBoundaries_g);
-	auto const kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g, rho, energy.T_d);
+	// The power-law exponents only enter the piecewise power-law opacity models. A single group has no such hook, and its
+	// opacity is constant across the band, so the exponent is zero.
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
+	if constexpr (nGroups_ > 1) {
+		kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g, rho, energy.T_d);
+	}
 
 	const double chat = c_hat_;
 
@@ -708,7 +723,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 					pressure_term += gasMtm0[z] * Tedd[n][z] * erad;
 				}
 				// Simplification: assuming Eddington tensors are the same for all groups, we have kappaP = kappaE
-				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity || opacity_model_ == OpacityModel::single_group) {
 					pressure_term *= chat * dt * energy.opacity_terms.kappaE[g];
 				} else {
 					pressure_term *= chat * dt * (1.0 + kappa_expo_and_lower_value[0][g]) * energy.opacity_terms.kappaE[g];
@@ -773,7 +788,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 			for (int g = 0; g < nGroups_; ++g) {
 				// compute new work term from the updated radiation flux and velocity
 				// work = v * F * chi
-				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity || opacity_model_ == OpacityModel::single_group) {
 					energy.work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) *
 							 energy.opacity_terms.kappaF[g] * chat / (c_light_ * c_light_) * dt;
 				} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum ||
@@ -1033,7 +1048,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					work_prev[g] = updated_energy.work[g];
 				}
 
-				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, updated_energy.T_d);
+				if constexpr (nGroups_ > 1) {
+					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, updated_energy.T_d);
+				}
 			} else { // constexpr (gamma_ == 1.0)
 				kappa_expo_and_lower_value = DefineThermalCouplingOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, NAN);
 				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
