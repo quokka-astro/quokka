@@ -2,7 +2,8 @@
 # Thermal equilibrium of the ISM photochemistry cooling (ISMCoolingOneZone, mode "equilibrium"), 1D only: 25 cells at fixed n_H, log-spaced from
 # 1e-2 to 1e2 cm^-3, start at T = 1e3 K and x_H+ = 1e-3, with G0 = 1, Z' = 1, the default cosmic-ray rate, no photons and no hydro, evolved for 1 Gyr.
 # The cells do not talk to each other. The test compares T(n_H) at the end with extern/cooling/ism_equilibrium_reference.csv (written by
-# extern/cooling/ism_cooling_reference.py) and checks for a warm phase (n_H <= 1) and a cold phase (10 <= n_H <= 100).
+# extern/cooling/ism_cooling_reference.py, which integrates the same ODE to the same stop_time; stop_time and the initial state must match
+# EQ_T_END, EQ_T0 and EQ_X0 there), checks that T has settled, and checks for a warm phase (n_H <= 1) and a cold phase (10 <= n_H <= 100).
 # *****************************************************************
 ism_test.mode = "equilibrium"
 ism_test.n_H_min = 1.0e-2

@@ -7,7 +7,7 @@ Run it to regenerate ism_cooling_reference.csv:
 
     python3 ism_cooling_reference.py [ism_output.csv [grackle_output.csv [equilibrium_output.csv]]]
 
-It also writes ism_equilibrium_reference.csv, the thermal equilibrium T_eq(n_H) of the ISMCoolingOneZone network (see equilibrium_rows),
+It also writes ism_equilibrium_reference.csv, T(n_H) after 1 Gyr of the ISMCoolingOneZone network, integrated from T = 1e3 K (see equilibrium_rows),
 and grackle_nT_reference.csv: Lambda_net and xe_CIE of CloudyData_UVB=HM2012_shielded_nT_Z1.h5 at off-grid points,
 by bilinear interpolation in (log nH, log T), with the analytic derivatives of that interpolant (the C++ lookup is checked against them).
 
@@ -292,14 +292,19 @@ def grackle_rows():
 
 # ---------------------------------------------------------------- one-zone thermal equilibrium (ISMCoolingOneZone, mode "equilibrium")
 # The network of src/networks/thermophotochemistry_ism_handwritten/actual_rhs.H without ionizing photons. The H rates are copied from actual_rhs.H
-# (the same fits and constants), because the network's own H terms are not among the rates above. The steady state does not involve the equation
-# of state: the net energy rate is volumetric and depends on (n_H, T, x_H+) only, so the pure-H EOS of the C++ run only sets how fast T relaxes.
+# (the same fits and constants), because the network's own H terms are not among the rates above.
+#
+# The reference is the solution of the network ODE for (x_H+, T) from the initial state of the C++ run to its stop_time, integrated with a stiff
+# solver. It is not the steady state: with no photoionization, H+ recombines as x ~ 1/(alpha n t), so it has not reached its equilibrium in
+# cold or dilute gas at 1 Gyr. The steady state is kept (equilibrium_temperature) for information only. The pure-H EOS of the photochemistry
+# network (extern/Microphysics/EOS/photoionization) has e_vol = 3/2 k T (n_e + n_HI + n_H+) = 3/2 k T n_H (1 + x) with n_e = n_H+.
 RYDBERG = 13.6 * EV  # erg
-EQ_T0 = 1.0e3  # initial temperature of the C++ run, which has x_H+ = 1e-3
+EQ_T0, EQ_X0 = 1.0e3, 1.0e-3  # initial state of the C++ run
+EQ_T_END = 3.15576e16  # s, the stop_time of inputs/ISMCoolingEquilibrium.toml (1 Gyr)
 EQ_G0, EQ_ZP, EQ_ZETA = 1.0, 1.0, 1.78e-18
 EQ_NH = [10.0 ** (-2.0 + 4.0 * i / 24.0) for i in range(25)]  # 25 log-spaced values in [1e-2, 1e2]
 EQ_T_SCAN = np.exp(np.linspace(np.log(10.0), np.log(1.0e5), 801))
-EQUILIBRIUM_COLUMNS = ["nH", "T_eq", "x_Hp_eq", "ne_max", "branch", "n_roots"]
+EQUILIBRIUM_COLUMNS = ["nH", "T_end", "x_Hp_end", "ne_max", "branch", "T_steady", "x_Hp_steady", "n_roots"]
 
 
 def alpha_rec(Tv):
@@ -372,12 +377,41 @@ def equilibrium_temperature(tab, nHv):
     return Teq, xhp, nem, branch, len(roots)
 
 
+def integrate_cell(tab, nHv):
+    """Integrate the network ODE of one cell from (T0, x0) to EQ_T_END. Returns (T, x_H+, n_e^max, branch) at the end.
+
+    Unknowns are x = n_H+ / n_H and tau = T (1 + x) = 2 e_vol / (3 k n_H), so that
+        dx/dt   = n_H x [(1 - x) k_ci(T) - alpha(T) x]        (n_e = n_H+; no photons, no CR ionization in the network)
+        dtau/dt = net_heating(n_H, T, x) / (3/2 k n_H).
+    """
+    from scipy.integrate import solve_ivp
+
+    def rhs(t, y):
+        x, tau = max(y[0], 0.0), y[1]
+        Tv = tau / (1.0 + x)
+        dx = nHv * x * ((1.0 - x) * k_coll_ion(Tv) - alpha_rec(Tv)[0] * x)
+        return [dx, net_heating(tab, nHv, Tv, x)[0] / (1.5 * K_B * nHv)]
+
+    sol = solve_ivp(rhs, (0.0, EQ_T_END), [EQ_X0, EQ_T0 * (1.0 + EQ_X0)], method="Radau", rtol=1e-10, atol=[1e-30, 1e-8])
+    assert sol.success, sol.message
+    x, tau = max(sol.y[0, -1], 0.0), sol.y[1, -1]
+    Tv = tau / (1.0 + x)
+    _, nem, branch = net_heating(tab, nHv, Tv, x)
+    return Tv, x, nem, branch
+
+
 def equilibrium_rows():
+    """One row per cell: n_H, the ODE solution at EQ_T_END (T, x_H+, n_e^max, branch), and the steady state (T, x_H+, number of roots)."""
     import h5py
 
     with h5py.File(GRACKLE_TABLE, "r") as fh:
         tab = fh["tab1"]
-        return [[nHv, *equilibrium_temperature(tab, nHv)] for nHv in EQ_NH]
+        rows_out = []
+        for nHv in EQ_NH:
+            Tv, x, nem, branch = integrate_cell(tab, nHv)
+            Teq, xeq, _, _, n_roots = equilibrium_temperature(tab, nHv)
+            rows_out.append([nHv, Tv, x, nem, branch, Teq, xeq, n_roots])
+        return rows_out
 
 
 def main():
@@ -396,7 +430,7 @@ def main():
         w.writerow(EQUILIBRIUM_COLUMNS)
         equilibrium = equilibrium_rows()
         for r in equilibrium:
-            w.writerow([repr(float(v)) for v in r[:4]] + [int(r[4]), int(r[5])])
+            w.writerow([repr(float(v)) for v in r[:4]] + [int(r[4])] + [repr(float(v)) for v in r[5:7]] + [int(r[7])])
     print(f"wrote {len(equilibrium)} rows to {equilibrium_path}")
     data = rows()
     branches = {r[-1] for r in data if r[0] == "ElectronDensityMax"}

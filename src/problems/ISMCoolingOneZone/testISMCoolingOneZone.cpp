@@ -7,9 +7,9 @@
 /// Mode "startup" constructs a QuokkaSimulation with a uniform gas cell and runs one step. It exercises the startup checks of the photochemistry
 /// cooling path (G0_external, ism_cooling.grackle_nT_table and the metallicity of the table), which abort with a message naming the parameter.
 ///
-/// Mode "equilibrium" evolves a row of cells at fixed n_H from 1e-2 to 1e2 cm^-3 to thermal equilibrium (G0 = 1, Z' = 1, no photons, hydro off) and
-/// compares their temperatures with the Python steady state of extern/cooling/ism_cooling_reference.py (ism_equilibrium_reference.csv), then checks that
-/// the curve has a warm and a cold phase. It is 1D only.
+/// Mode "equilibrium" evolves a row of cells at fixed n_H from 1e-2 to 1e2 cm^-3 for 1 Gyr (G0 = 1, Z' = 1, no photons, hydro off) and compares their
+/// temperatures with the Python integration of the same ODE (extern/cooling/ism_cooling_reference.py, ism_equilibrium_reference.csv), then checks that
+/// they have settled and that the curve has a warm and a cold phase. It is 1D only.
 ///
 /// Mode "jacobian" is a host-only unit test:
 ///
@@ -493,20 +493,21 @@ static auto RunJacobianMode() -> int
 	return (failures == 0) ? 0 : 1;
 }
 
-/// The reference of extern/cooling/ism_cooling_reference.py: one row per cell of (n_H, T_eq, x_H+, n_e^max, branch, number of roots).
-static auto ReadEquilibriumReference(std::string const &path) -> std::vector<std::array<Real, 6>>
+/// The reference of extern/cooling/ism_cooling_reference.py: one row per cell of (n_H, T, x_H+, n_e^max, branch) of the ODE solution
+/// at stop_time, then (T, x_H+, number of roots) of the steady state, which is only printed.
+static auto ReadEquilibriumReference(std::string const &path) -> std::vector<std::array<Real, 8>>
 {
 	std::ifstream file(path);
 	if (!file.is_open()) {
 		amrex::Abort("ISMCoolingOneZone: could not open " + path + "; run the test from the <quokka-root>/tests/ folder.");
 	}
-	std::vector<std::array<Real, 6>> rows;
+	std::vector<std::array<Real, 8>> rows;
 	std::string line;
 	std::getline(file, line); // header
 	while (std::getline(file, line)) {
 		std::stringstream ss(line);
 		std::string value;
-		std::array<Real, 6> row{};
+		std::array<Real, 8> row{};
 		for (Real &v : row) {
 			std::getline(ss, value, ',');
 			v = std::stod(value);
@@ -517,7 +518,7 @@ static auto ReadEquilibriumReference(std::string const &path) -> std::vector<std
 }
 
 /// Mode "equilibrium": a row of cells at fixed n_H (log-spaced from n_H_min to n_H_max), with G0 = 1, Z' = 1 and no photons, evolved from T = 1e3 K to
-/// stop_time with hydro off. Their temperatures must match the thermal equilibrium of the network found by the Python reference to temperature_rtol,
+/// stop_time with hydro off. Their temperatures must match the Python integration of the network ODE from the same initial state to temperature_rtol,
 /// must no longer change (the last tenth of the run changes none of them by more than drift_rtol), and the curve must show the two phases.
 static auto RunEquilibriumMode() -> int
 {
@@ -563,7 +564,7 @@ static auto RunEquilibriumMode() -> int
 	}
 
 	std::cout << "ISMCoolingOneZone equilibrium: t = " << t_end << " s\n"
-		  << "  n_H [cm^-3]   T_C++ [K]   T_Python [K]   rel. error   drift(last 10%)   branch C++/Python   x_H+ C++/Python\n";
+		  << "  n_H [cm^-3]   T_C++ [K]   T_Python [K]   rel. error   drift(last 10%)   branch C++/Python   x_H+ C++/Python   T_steady [K]\n";
 	bool has_cold_phase = false;
 	bool has_warm_phase = false;
 	for (size_t i = 0; i < n; ++i) {
@@ -579,7 +580,7 @@ static auto RunEquilibriumMode() -> int
 		const int branch = ElectronDensityOf(state).branch;
 		std::cout << "  " << std::setw(11) << std::setprecision(5) << n_H << "  " << std::setw(10) << T << "  " << std::setw(12) << T_ref << "  "
 			  << std::setw(10) << std::setprecision(3) << err << "  " << std::setw(14) << drift << "  " << std::setw(9) << branch << "/"
-			  << static_cast<int>(reference[i][4]) << "  " << std::setw(12) << final_gas.n_Hp[i] / n_H << "/" << reference[i][2] << '\n';
+			  << static_cast<int>(reference[i][4]) << "  " << std::setw(12) << final_gas.n_Hp[i] / n_H << "/" << reference[i][2] << "  " << std::setprecision(5) << reference[i][5] << '\n';
 		if (!(err <= temperature_rtol)) {
 			++failures;
 		}
