@@ -256,13 +256,16 @@ auto problem_main() -> int
 				// the difference of the total and kinetic energies, so it is only resolved to round-off of their sum.
 				const double eint0 = s0(i, j, k, RadSys::gasInternalEnergy_index);
 				const double eint1 = s(i, j, k, RadSys::gasInternalEnergy_index);
-				const double ke0 = (std::pow(s0(i, j, k, RadSys::x1GasMomentum_index), 2) + std::pow(s0(i, j, k, RadSys::x2GasMomentum_index), 2) +
-						    std::pow(s0(i, j, k, RadSys::x3GasMomentum_index), 2)) /
-						   (2.0 * s0(i, j, k, RadSys::gasDensity_index));
-				const double ke1 = (std::pow(s(i, j, k, RadSys::x1GasMomentum_index), 2) + std::pow(s(i, j, k, RadSys::x2GasMomentum_index), 2) +
-						    std::pow(s(i, j, k, RadSys::x3GasMomentum_index), 2)) /
-						   (2.0 * s(i, j, k, RadSys::gasDensity_index));
-				const bool eint_decreased = (eint0 > 0.0) && ((eint0 - eint1) > 0.1 * std::abs(ke1 - ke0)) && ((eint0 - eint1) > 1.0e-12 * (eint0 + ke0));
+				const double ke0 =
+				    (std::pow(s0(i, j, k, RadSys::x1GasMomentum_index), 2) + std::pow(s0(i, j, k, RadSys::x2GasMomentum_index), 2) +
+				     std::pow(s0(i, j, k, RadSys::x3GasMomentum_index), 2)) /
+				    (2.0 * s0(i, j, k, RadSys::gasDensity_index));
+				const double ke1 =
+				    (std::pow(s(i, j, k, RadSys::x1GasMomentum_index), 2) + std::pow(s(i, j, k, RadSys::x2GasMomentum_index), 2) +
+				     std::pow(s(i, j, k, RadSys::x3GasMomentum_index), 2)) /
+				    (2.0 * s(i, j, k, RadSys::gasDensity_index));
+				const bool eint_decreased =
+				    (eint0 > 0.0) && ((eint0 - eint1) > 0.1 * std::abs(ke1 - ke0)) && ((eint0 - eint1) > 1.0e-12 * (eint0 + ke0));
 				int const flags[5] = {static_cast<int>(nonfinite), static_cast<int>(erad_nonpositive), static_cast<int>(acausal),
 						      static_cast<int>(eint_nonpositive), static_cast<int>(eint_decreased)};
 				for (int m = 0; m < 5; ++m) {
