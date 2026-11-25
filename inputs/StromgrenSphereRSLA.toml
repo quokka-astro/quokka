@@ -29,6 +29,16 @@ stromgen.Q = 5e48
 
 integrator.X_reject_buffer = 1e100
 
+# atol_i = rtol * s_i. s_gamma = 1e-10 cm^-3: at c_hat = c the photon density at the front is alpha_B n_H / (sigma c) = 2.7e-9 cm^-3
+# when photoionization balances recombination, and n_H (dR/dt) / c = 3e-10 cm^-3 at 5 t_rec (larger by c / c_hat for c_hat < c).
+# s_X = 1e-7 cm^-3: residual HI at this density gives an optical depth sigma * s_X * r_S < 0.01 across the ionized region.
+integrator.rtol_spec                   = 1e-2
+integrator.rtol_rad_num                = 1e-2
+integrator.atol_spec                   = 1e-9
+integrator.atol_rad_num                = 1e-12
+integrator.species_failure_tolerance   = 5e-9
+integrator.radiation_failure_tolerance = 5e-12
+
 plotfile_interval = 5000
 plotfile_prefix = "StrmConstRecRSLA"
 

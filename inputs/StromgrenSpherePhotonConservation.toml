@@ -30,6 +30,15 @@ stromgen.Q = 4e51
 
 integrator.X_reject_buffer = 1e100
 
+# atol_i = rtol * s_i. s_gamma = 1e-5 cm^-3: the photon density at the front is n_H * (dR/dt) / c >= n_H / 17 = 6e-5 cm^-3.
+# s_X = 1e-7 cm^-3: residual HI at this density gives an optical depth sigma * s_X * R < 0.01 across the ionized region.
+integrator.rtol_spec                   = 1e-2
+integrator.rtol_rad_num                = 1e-2
+integrator.atol_spec                   = 1e-9
+integrator.atol_rad_num                = 1e-7
+integrator.species_failure_tolerance   = 5e-9
+integrator.radiation_failure_tolerance = 5e-7
+
 plotfile_interval = 10
 plotfile_prefix = "StrmPhotonCons"
 
