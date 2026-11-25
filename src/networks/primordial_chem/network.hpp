@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: © The Quokka Authors
 // SPDX-License-Identifier: MIT
 
-// Last updated July 2024
+// Last updated November 2026
 // Update notes: 1. the original version of this file used std::pow, which we replaced with a combo of std::exp/std::log wherever possible.
 // Update notes: 2. added free-free cooling which was missing from the previous version
+// Update notes: 3. ported from Microphysics into Quokka by James Watt: 0-based indexing, templated on the burn state, and wrapped in a Quokka network
+// type.
 // Author: Piyush Sharda (sharda@strw.leidenuniv.nl)
 
 #ifndef NETWORKS_PRIMORDIAL_CHEM_NETWORK_HPP_
