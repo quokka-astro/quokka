@@ -177,9 +177,9 @@ def extract_mentioned_commands(
 def _get_usage_placeholder_values(
     configured_labels: pr_labels.ConfiguredLabels,
 ) -> dict[str, str]:
-    priority_values = "|".join(
-        _priority_label.value for _priority_label in configured_labels.priority_labels.labels
-    )
+    configured_priority_labels = configured_labels.priority_labels
+    label_values = [_priority_label.value for _priority_label in configured_priority_labels.labels]
+    priority_values = "|".join([configured_priority_labels.default_value] + label_values)
     return {
         "priority_values": priority_values,
     }
@@ -332,6 +332,15 @@ def _set_priority(
     argument: str,
 ) -> pr_context.UpdatePlan:
     configured_priority_labels = configured_labels.priority_labels
+    if configured_priority_labels.check_is_default(argument):
+        label_names_to_remove = tuple(
+            _label_name for _label_name in pull_request.label_names
+            if configured_priority_labels.check_has_prefix(_label_name)
+        )
+        return pr_context.UpdatePlan(
+            label_names_to_remove=label_names_to_remove,
+            react=True,
+        )
     chosen_priority_label = configured_priority_labels.get_label(argument)
     if chosen_priority_label is None:
         usage = _format_usage(

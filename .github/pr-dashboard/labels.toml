@@ -262,21 +262,16 @@ min_num_lines = 500
 ##
 
 ## set by people with /set-priority, using the value, e.g. `/set-priority high`
-## the one marked `default = true` is given to a PR that has no priority label
+## a PR with no priority label has the default priority; `/set-priority <default_value>` removes the label
 
 [priority]
 prefix = "priority/"
+default_value = "normal"
 
 [[priority.label]]
 value = "low"
 color = "FDDCB5"
 description = "Review when there is time"
-
-[[priority.label]]
-value = "normal"
-color = "F9A65A"
-description = "Review at the normal pace"
-default = true
 
 [[priority.label]]
 value = "high"
