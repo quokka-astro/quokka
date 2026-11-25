@@ -34,7 +34,7 @@ Applies optically-thin radiative cooling as a Strang-split source term, and comp
 
 Delegates the EOS to the [Microphysics](https://github.com/AMReX-Astro/Microphysics) submodule, so that temperature is consistent with the evolving chemical species tracked by the reaction network (`chemstate.xn`). Cooling and heating are handled by the network itself rather than by a table, and are advanced by the chemistry burner (`quokka::chemistry::computeChemistry`) rather than by the cooling integrator.
 
-This is the backend for every target compiled with `CHEMISTRY` or `PHOTOCHEMISTRY`, which covers both primordial chemistry problems (`PrimordialChem`, `PopIII`) and photoionization problems (`DTypeFront_JAFF`, `DTypeFrontVC`, `StromgrenSphere`, `StromgrenSphereRSLA`, `OneZonePhotoionization`) — including hydro-enabled ones. None of these set `EOSBackend` explicitly; they receive `EOSMicrophysics` through `DefaultEOSBackend` by virtue of their compile definition. See the chemistry module and [Photoionization](photoionization.md) for details.
+This is the backend for every target compiled with `CHEMISTRY` or `PHOTOCHEMISTRY`, which covers both primordial chemistry problems (`PrimordialChem`, `PopIII`) and photoionization problems (`DTypeFront_JAFF`, `DTypeFrontVC`, `StromgrenSphere`, `StromgrenSphereRSLA`, `OneZonePhotoionization`) — including hydro-enabled ones. None of these set `EOSBackend` explicitly; they receive `EOSMicrophysics` as the default backend for their compile definition. See the chemistry module and [Photoionization](photoionization.md) for details.
 
 ## The EOSTabulated cooling model
 
@@ -199,7 +199,7 @@ An external `heating_rate_external` expression is independent of this choice and
 
 ### 4. Access thermodynamic quantities in callbacks
 
-Prefer `quokka::EOS<problem_t>`, which forwards to the selected backend and therefore works for any problem:
+Prefer `quokka::EOS<problem_t>`, which is the selected backend and therefore works for any problem:
 
 ```cpp
 const Real T = quokka::EOS<MyProblem>::ComputeTgasFromEint(rho, Eint);

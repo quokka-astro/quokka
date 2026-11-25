@@ -71,7 +71,9 @@ namespace filesystem = experimental::filesystem;
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 #include "eos.H"
+#endif
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
 #include "hyperbolic_system.hpp"
@@ -163,6 +165,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 1; // only takes effect when quokka::EOS<problem_t>::is_tabulated; lets tests disable the cooling integrator while still
 				// using the tabulated EOS to compute temperature
+	amrex::Real massScalarFloor_ =
+	    1.0e-30; // network.small_x: a negative mass scalar is reset to this fraction of the density; chemistry builds use the network default
 	int enableChemistry_ = 0;
 	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
@@ -271,19 +275,21 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		defineDefaultPlotfileVariables();
 		// read in runtime parameters
 		readParmParse();
+#if defined(PHOTOCHEMISTRY) || defined(CHEMISTRY)
 		// set gamma
 		amrex::ParmParse eos("eos");
 		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
 		// initialize Microphysics params
 		init_extern_parameters();
-#if defined(PHOTOCHEMISTRY) || defined(CHEMISTRY)
+		// use the network's small_x (1e-100 for primordial_chem), so the hydro floor matches the chemistry burner
+		massScalarFloor_ = network_rp::small_x;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!integrator_rp::subtract_internal_energy,
 						 "integrator.subtract_internal_energy must be 0: Quokka reads total energy from burn_t::e, not the delta");
-#endif
 		// initialize Microphysics EOS
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
 		eos_init(small_temp, small_dens);
+#endif
 		if constexpr (Physics_Traits<problem_t>::resistivity_model != ResistivityModel::none) {
 			const bool resistivity_active =
 			    (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) || (mhdResistivity_ != 0.0);
@@ -655,6 +661,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 							 "Physics_Traits::viscosity_model is not `constant`; with `problem_defined`, "
 							 "viscosity comes from computeViscosity instead.");
 		}
+	}
+
+	// mass-scalar floor; the same key as Microphysics's network.small_x, which chemistry builds also read
+	{
+		amrex::ParmParse const npp("network");
+		npp.query("small_x", massScalarFloor_);
 	}
 
 	// set MHD runtime parameters
@@ -2190,10 +2202,12 @@ void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, massScalarFloor_, state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	} else {
 		auto const density_floor_func = QuokkaDensityFloorFunctor<problem_t>{};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, massScalarFloor_, state_cc, state_fc, geom[lev],
+						      density_floor_func);
 	}
 
 	if (useDualEnergy_ == 1) {

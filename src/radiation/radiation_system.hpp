@@ -20,12 +20,12 @@
 #include "AMReX_REAL.H"
 
 // internal headers
-#include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hyperbolic_system.hpp"
 #include "math/math_impl.hpp"
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
+#include "util/fundamental_constants.hpp"
 #include "util/valarray.hpp"
 
 using Real = amrex::Real;

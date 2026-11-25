@@ -10,7 +10,7 @@
 
 #include "AMReX_ParmParse.H"
 #include "AMReX_Parser.H"
-#include "fundamental_constants.H"
+#include "util/fundamental_constants.hpp"
 
 namespace quokka
 {

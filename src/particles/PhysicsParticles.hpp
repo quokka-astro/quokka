@@ -27,7 +27,6 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 
-#include "fundamental_constants.H"
 #include "particle_IO.hpp"
 #include "particle_accretion.hpp"
 #include "particle_creation.hpp"
@@ -37,6 +36,7 @@
 #include "particle_types.hpp"
 #include "particle_update.hpp"
 #include "physics_info.hpp"
+#include "util/fundamental_constants.hpp"
 
 #include "cooling/PhotoelectricHeating.hpp"
 
@@ -234,7 +234,7 @@ class PhysicsParticleDescriptorBase
 	virtual auto depositSN(amrex::MultiFab & /*state*/, std::array<amrex::MultiFab, AMREX_SPACEDIM> const * /*state_fc*/, int /*lev*/, amrex::Real /*time*/,
 			       amrex::Real /*dt*/) -> std::pair<int, amrex::Real>
 	{
-		return {0, 0.0_rt};
+		return {0, static_cast<amrex::Real>(0.0)};
 	}
 
 	virtual auto depositEarlyFeedback(amrex::MultiFab & /*state*/, std::array<amrex::MultiFab, AMREX_SPACEDIM> const * /*state_fc*/, int /*lev*/,

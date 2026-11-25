@@ -15,9 +15,9 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "fundamental_constants.H"
 #include "math/root_finding.hpp"
 #include "particles/star_particle_indices.H"
+#include "util/fundamental_constants.hpp"
 #include "util/time_units.hpp"
 
 namespace quokka

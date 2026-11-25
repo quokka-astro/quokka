@@ -7,12 +7,12 @@
 #include "AMReX_Print.H"
 
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_chemical_yield.hpp"
 #include "particles/particle_types.hpp"
 #include "problems/InitialStellarParticles.hpp"
 #include "problems/YieldValidation.hpp"
+#include "util/fundamental_constants.hpp"
 
 #include <algorithm>
 #include <format>

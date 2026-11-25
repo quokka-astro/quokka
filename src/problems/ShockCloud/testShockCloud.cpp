@@ -24,7 +24,6 @@
 
 #include "QuokkaSimulation.hpp"
 #include "cooling/ResampledCooling.hpp"
-#include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/NSCBC_inflow.hpp"
 #include "hydro/NSCBC_outflow.hpp"
@@ -33,6 +32,7 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
+#include "util/fundamental_constants.hpp"
 
 using amrex::Real;
 
@@ -807,8 +807,8 @@ auto problem_main() -> int
 	sim.pressureFloor_ = 1.0e-3 * ::P0; // set pressure floor
 
 	// set metadata
-	sim.simulationMetadata_["delta_x"] = 0._rt;
-	sim.simulationMetadata_["delta_vx"] = 0._rt;
+	sim.simulationMetadata_["delta_x"] = static_cast<Real>(0.0);
+	sim.simulationMetadata_["delta_vx"] = static_cast<Real>(0.0);
 	sim.simulationMetadata_["rho_wind"] = rho_wind;
 	sim.simulationMetadata_["v_wind"] = v_wind;
 	sim.simulationMetadata_["P_wind"] = P_wind;

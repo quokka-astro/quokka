@@ -94,7 +94,6 @@ namespace filesystem = experimental::filesystem;
 // internal headers
 #include "conduction/ConductionHelpers.hpp"
 #include "conduction/conductivity.hpp"
-#include "fundamental_constants.H"
 #include "grid.hpp"
 #include "hydro/mhd_system.hpp"
 #include "io/DerivedFieldBase.H"
@@ -103,6 +102,7 @@ namespace filesystem = experimental::filesystem;
 #include "io/DiagPDF.H"
 #include "io/DiagParticleTxt.H"
 #include "io/DiagPlotfile.H"
+#include "util/fundamental_constants.hpp"
 #if AMREX_SPACEDIM == 3
 #include "io/DiagProjectionPlot.H"
 #include "io/projection.hpp"

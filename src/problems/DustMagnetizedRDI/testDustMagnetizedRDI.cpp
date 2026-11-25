@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+using namespace amrex::literals; // NOLINT(google-build-using-namespace)
+
 struct DustMagnetizedRDI {};
 
 namespace
