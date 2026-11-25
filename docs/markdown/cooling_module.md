@@ -78,6 +78,8 @@ Available table files in `extern/cooling/`:
 
 All bundled tables are generated at solar metallicity and redshift zero. To regenerate the four Grackle-based tables, run `extern/cooling/resample_grackle_cooling_tables.sh`; to regenerate `isrf_1000Go_grains_resampled.h5`, run `extern/cooling/resample_cloudy_cooling_tables.py` directly.
 
+The photochemistry network for galaxy simulations uses a different table, `CloudyData_UVB=HM2012_shielded_nT_Z1.h5`, on Grackle's native \\((n\_{\rm H}, T)\\) grid instead of the \\((\rho, e\_{\rm int})\\) grid. It holds the net cooling function \\(\Lambda\_{\rm net}(n\_{\rm H}, T)\\), without photoelectric heating and Compton cooling, and the equilibrium electron fraction \\(x\_{e,\rm CIE}(n\_{\rm H}, T)\\). It is made by `extern/cooling/make_grackle_nT_table.py`, which takes the metallicity (`--zmet`), and it is used for hot gas in [Cooling and heating for galaxy simulations](photoionization.md#5-cooling-and-heating-for-galaxy-simulations).
+
 ### Source Grackle data files
 
 The Grackle-based tables are resampled from the Cloudy data files distributed with [Grackle](https://grackle.readthedocs.io/en/latest/Parameters.html), which are downloaded automatically by `resample_grackle_cooling_tables.py`. These files store heating and cooling rates for primordial and metal species along with UV background photo-heating and photo-ionization rates, valid over \\(-10 < \log\_{10}(n\_H / {\rm cm^{-3}}) < 4\\) and \\(1 < \log\_{10}(T / {\rm K}) < 9\\); Grackle extrapolates outside this range. Quokka uses two of them:
