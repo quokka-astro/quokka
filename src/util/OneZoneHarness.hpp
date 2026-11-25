@@ -71,7 +71,7 @@ enum class Norm {
 /// One recorded series compared with its reference.
 struct Comparison {
 	std::string observable;
-	Reference reference;
+	Reference reference = nullptr;
 };
 
 /// A tolerance on the norm of the differences of one or more comparisons. With several comparisons the sums run over all of them.
@@ -95,19 +95,20 @@ struct Predicate {
 struct Curve {
 	std::string observable;
 	std::string label; ///< legend entry; the observable's name if empty
-	Reference reference;
+	Reference reference = nullptr;
 };
 
 /// A plot of recorded observables as a function of time, saved to `filename` (any format matplotlib supports, chosen by the extension).
+/// With designated initializers, give the fields in this order and without gaps (omit only trailing fields), or the compiler warns.
 struct Figure {
 	std::string filename;
 	std::vector<Curve> curves;
-	std::string title;
 	std::string xlabel = "time";
 	std::string ylabel;
-	double time_scale = 1.0; ///< recorded times are divided by this before plotting (for example the number of seconds in a Myr)
 	bool log_x = false;
 	bool log_y = false;
+	std::string title = "";
+	double time_scale = 1.0; ///< recorded times are divided by this before plotting (for example the number of seconds in a Myr)
 };
 
 /// Records observables of the centre cell as a function of time.

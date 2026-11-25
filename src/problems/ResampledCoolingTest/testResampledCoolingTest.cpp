@@ -150,11 +150,11 @@ auto problem_main() -> int
 	const std::vector<quokka::onezone::Figure> figures = {
 	    {.filename = use_sfh_based_pe_heating ? "cooling_temperature_sfh_base_pe.pdf" : "cooling_temperature.pdf",
 	     .curves = {temperature_curve},
-	     .title = "Isochoric Cooling Test",
 	     .xlabel = "time (Myr)",
 	     .ylabel = "Temperature (K)",
-	     .time_scale = 3.15576e13, // seconds in a Myr
 	     .log_x = true,
-	     .log_y = true}};
+	     .log_y = true,
+	     .title = "Isochoric Cooling Test",
+	     .time_scale = 3.15576e13}}; // seconds in a Myr
 	return quokka::onezone::Run(sim, checks, predicates, output_csv_file, figures);
 }
