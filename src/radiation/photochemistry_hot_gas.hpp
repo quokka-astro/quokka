@@ -178,9 +178,9 @@ void BuildHotMask(amrex::MultiFab const &state, std::array<amrex::MultiFab const
 
 /// The hot-cell step over one hydro step (SPEC §5.1). In each cell with hotMask = 1:
 ///  1. move all H to H+ and set n_e = n_H+, keeping the gas internal energy;
-///  2. integrate dE_int/dt = -n_H^2 Lambda_net(n_H, T) + G_PE + G_CR (each heating term gated by its network switch) over dt_hydro at fixed density with
-///  rk_adaptive_integrate, T coming from the
-///     photochemistry EOS at each evaluation and the Grackle rate applying also below the threshold;
+///  2. integrate dE_int/dt = -n_H^2 Lambda_net(n_H, T) + G_PE + G_CR over dt_hydro at fixed density with rk_adaptive_integrate, T coming from the
+///     photochemistry EOS at each evaluation and the Grackle rate applying also below the threshold. Each heating term is gated by its network
+///     switch. If network.energy_switch is 0, the integration is skipped and E_int is left unchanged;
 ///  3. clamp E_int to the energy at tempFloor (if tempFloor > 0).
 /// The change of E_int is added to the internal and total gas energy. Aborts, printing the cell, if the integration does not finish in
 /// maxStepsODEIntegrate steps: the step runs after hydro, so there is no retry.
@@ -199,6 +199,7 @@ void ComputeHotGasCooling(amrex::MultiFab &state, std::array<amrex::MultiFab con
 	const amrex::Real zetaHI = network_rp::cr_ionization_rate_HI;
 	const bool pe_heating = (network_rp::pe_heating_switch != 0);
 	const bool cr_heating = (network_rp::cr_heating_switch != 0);
+	const bool energy_on = (network_rp::energy_switch != 0);
 
 	for (amrex::MFIter iter(state); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -227,7 +228,10 @@ void ComputeHotGasCooling(amrex::MultiFab &state, std::array<amrex::MultiFab con
 				s(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = xn[nn] * spmasses[nn];
 			}
 
-			// 2. integrate the internal energy over the hydro step
+			// 2. integrate the internal energy over the hydro step (skipped if network.energy_switch = 0)
+			if (!energy_on) {
+				return;
+			}
 			const amrex::Real Eint = detail::CellInternalEnergy<problem_t>(s, i, j, k, cons_fc);
 			const detail::HotGasCoolingRHS rhs{rho, nH, xn, G0Rate(i, j, k), Zp, zetaHI, pe_heating, cr_heating};
 			const amrex::Real Eint_floor = (tempFloor > 0.0) ? rhs.InternalEnergy(tempFloor) : 0.0;

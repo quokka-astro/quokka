@@ -300,6 +300,8 @@ def grackle_rows():
 # cold or dilute gas at 1 Gyr. The steady state is kept (equilibrium_temperature) for information only. The pure-H EOS of the photochemistry
 # network (extern/Microphysics/EOS/photoionization) has e_vol = 3/2 k T (n_e + n_HI + n_H+) = 3/2 k T n_H (1 + x) with n_e = n_H+.
 RYDBERG = 13.6 * EV  # erg
+# EQ_T0, EQ_X0, EQ_T_END, EQ_G0, EQ_ZP and EQ_ZETA must match the toml inputs of the C++ run (inputs/ISMCoolingEquilibrium.toml) and the network
+# `_parameters` defaults (cr_ionization_rate_HI = EQ_ZETA, ism_metallicity = EQ_ZP).
 EQ_T0, EQ_X0 = 1.0e3, 1.0e-3  # initial state of the C++ run
 EQ_T_END = 3.15576e16  # s, the stop_time of inputs/ISMCoolingEquilibrium.toml (1 Gyr)
 EQ_G0, EQ_ZP, EQ_ZETA = 1.0, 1.0, 1.78e-18
@@ -429,6 +431,8 @@ def equilibrium_rows():
 # inputs/ISMCoolingHotCell.toml.
 HOT_NH, HOT_T0, HOT_X0 = 1.0e-2, 1.0e6, 0.5  # initial state of the C++ run (T0 at x_H+ = HOT_X0, before the cell is ionized)
 HOT_DT = 1.0e13  # s, constant_dt of inputs/ISMCoolingHotCell.toml
+# HOT_G0, HOT_ZP and HOT_ZETA must match the network `_parameters` defaults (G0_external is set in the toml; ism_metallicity and cr_ionization_rate_HI
+# are the defaults) and inputs/ISMCoolingHotCell.toml.
 HOT_G0, HOT_ZP, HOT_ZETA = 1.0, 1.0, 1.78e-18
 HOT_CELL_COLUMNS = ["nH", "T0", "x_Hp0", "G0", "dt", "Eint0", "Eint_end", "T_end"]
 
