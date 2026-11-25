@@ -1,7 +1,8 @@
 # *****************************************************************
 # A beam of ionizing photons through a uniform, fully ionized cold-cell slab, with dust absorption of
 # ionizing photons but no gas-dust thermal coupling: the absorbed energy leaves the simulation and the gas
-# gets only the photon momentum. Gas energy and recombination switches are off.
+# gets only the photon momentum. Gas energy and recombination switches are off, so the E_int check verifies that
+# the burn and the absorption add no energy to the gas.
 # *****************************************************************
 geometry.prob_lo     =  [0.0, 0.0, 0.0]
 geometry.prob_hi     =  [1e19, 1e19, 1e19]
@@ -29,7 +30,7 @@ density_floor = 1e-32  # g cm^-3
 slab.n_H = 1.0
 slab.temperature = 1.0e4
 slab.n_HI_init = 1.0e-12     # cm^-3; x_H+ = 1 to 1e-12
-slab.flux_ion = 1.0        # photons cm^-2 s^-1; the gas stays at rest to roundoff, so a leak of absorbed energy into it would show at 1e-9
+slab.flux_ion = 1.0        # photons cm^-2 s^-1; low so that hydro compression by the radiation force changes E_int by less than the 1e-12 check
 
 # *****************************************************************
 # Photochemistry Properties

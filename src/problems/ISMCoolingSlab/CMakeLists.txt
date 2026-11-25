@@ -1,3 +1,5 @@
+# 1D slab test: the beam runs along x through a uniform slab.
+if(AMReX_SPACEDIM EQUAL 1)
 set(microphysics_network_name "thermophotochemistry_ism_handwritten")
 
 set(JOB_NAME ISMCoolingSlab)
@@ -21,3 +23,4 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 add_test(NAME ISMCoolingSlabCold COMMAND ${JOB_NAME} ../inputs/ISMCoolingSlabCold.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+endif()

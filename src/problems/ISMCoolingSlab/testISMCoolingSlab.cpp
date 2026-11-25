@@ -6,7 +6,9 @@
 /// photons and no gas-dust thermal coupling (ISM_Traits::enable_dust_gas_thermal_coupling_model = false). The absorbed energy leaves the
 /// simulation and the gas only gets the photon momentum. At t = 5 L / c_hat the test checks that
 ///  - the photon density follows N(x) / N(0) = exp(-kappa rho x),
-///  - the gas internal energy is unchanged, and
+///  - the gas internal energy is unchanged. With energy_switch = 0 and no thermal groups this verifies that the burn and the absorption add no
+///    energy to the gas; it does not exercise the gate on the dustHeatingSource write in photochemistry.hpp, which only matters with thermal
+///    groups and is verified by reading the code (its only consumer is the thermal-group IMEX step), and
 ///  - the gas momentum equals the integral of rho kappa F / c over the volume and time.
 
 #include "AMReX.H"
@@ -189,7 +191,9 @@ template <> void QuokkaSimulation<ISMCoolingSlab>::computeAfterTimestep()
 {
 	// the momentum the dust absorbs from the beam: integral of kappa rho F / c over the volume and the step, per unit cross-section
 	const amrex::Real kappa = network_rp::dust_kappa;
-	const amrex::Real transverse_area = (geom[0].ProbHi(1) - geom[0].ProbLo(1)) * (geom[0].ProbHi(2) - geom[0].ProbLo(2));
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[0].ProbLoArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[0].ProbHiArray();
+	const amrex::Real transverse_area = AMREX_D_TERM(1.0_rt, *(prob_hi[1] - prob_lo[1]), *(prob_hi[2] - prob_lo[2]));
 	const amrex::Real absorbed = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state,
 				 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const & /*state_fc*/) noexcept -> amrex::Real {
@@ -228,7 +232,11 @@ auto problem_main() -> int
 	const amrex::Real x_lo = sim.geom[0].ProbLo(0);
 	const amrex::Real kappa_rho = sim.userData_.kappa_rho;
 	const amrex::Real Eint_init = sim.userData_.Eint_init;
-	const amrex::Real transverse_area = (sim.geom[0].ProbHi(1) - sim.geom[0].ProbLo(1)) * (sim.geom[0].ProbHi(2) - sim.geom[0].ProbLo(2));
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
+	const amrex::Real transverse_area = AMREX_D_TERM(1.0_rt, *(prob_hi[1] - prob_lo[1]), *(prob_hi[2] - prob_lo[2]));
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> cell_size = sim.geom[0].CellSizeArray();
+	const amrex::Real cell_volume = AMREX_D_TERM(cell_size[0], *cell_size[1], *cell_size[2]);
 	amrex::Print() << "optical depth kappa rho L = " << kappa_rho * (sim.geom[0].ProbHi(0) - x_lo) << '\n';
 
 	// E(x) / E(first cell) against exp(-kappa rho (x - x_first)), the gas internal energy and the gas momentum
@@ -245,7 +253,7 @@ auto problem_main() -> int
 			if (i == 0) {
 				E_first = std::max(E_first, state(i, j, k, RadSystem<ISMCoolingSlab>::radEnergy_index));
 			}
-			momentum += state(i, j, k, HydroSystem<ISMCoolingSlab>::x1Momentum_index) * dx;
+			momentum += state(i, j, k, HydroSystem<ISMCoolingSlab>::x1Momentum_index) * cell_volume;
 			max_Eint_error =
 			    std::max(max_Eint_error, std::abs((state(i, j, k, RadSystem<ISMCoolingSlab>::gasInternalEnergy_index) / Eint_init) - 1.0));
 		});
