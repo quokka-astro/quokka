@@ -258,7 +258,7 @@ AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
 }
 
 template <>
-void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t &reducedFluxSource, const amrex::Box &indexRange,
+void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
@@ -272,10 +272,6 @@ void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t &reduc
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(N >= 1, "stromgen.kernel_radius must be at least one cell");
 	const amrex::Real inv_N = 1.0 / static_cast<amrex::Real>(N);
 	const auto cutoff_r2 = static_cast<amrex::Real>(N * N);
-	// reduced flux f = F / (c E) of the injected radiation, directed radially outward from the source
-	amrex::Real f_radial = 0.0;
-	pp.query("radial_flux", f_radial);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(f_radial >= 0.0 && f_radial <= 1.0, "stromgen.radial_flux must be in [0, 1]");
 
 	const amrex::Real L_star = Q * RadSystem<DTypeFront_JAFF>::GetChemBandQuanta(0);
 	const amrex::Real x0 = 0.0_rt;
@@ -318,12 +314,6 @@ void RadSystem<DTypeFront_JAFF>::AddRadSource(array_t &radEnergy, array_t &reduc
 		const amrex::Real r2 = AMREX_D_TERM(di * di, +dj * dj, +dk * dk);
 		if (r2 <= cutoff_r2) {
 			radEnergy(i, j, k) = L_star * wendland_c2(std::sqrt(r2) * inv_N) * inv_norm * inv_volume;
-			if (r2 > 0.0_rt) {
-				const amrex::Real inv_r = 1.0_rt / std::sqrt(r2);
-				reducedFluxSource(i, j, k, 0) = f_radial * di * inv_r;
-				reducedFluxSource(i, j, k, 1) = f_radial * dj * inv_r;
-				reducedFluxSource(i, j, k, 2) = f_radial * dk * inv_r;
-			}
 		} else {
 			radEnergy(i, j, k) = 0.0_rt;
 		}
