@@ -116,13 +116,13 @@ Setting \\(B\_g = 0\\) removes the emission, momentum-of-emission, and group-cou
 
 The momentum exchange is untouched, so the gas feels the full radiation force: dust and gas remain *dynamically* coupled even though they are not thermally coupled. This is the point of the mode — in a galaxy simulation the radiation pressure on dust is a first-order effect on the dynamics and must not be dropped along with the thermal exchange.
 
-What distinguishes the mode is where the absorbed energy goes. For a thermal band the gas energy equation receives the whole of \\(c G^0\_g\\). For a dust-absorption band it receives only the work part,
+What distinguishes the mode is where the absorbed energy goes. The gas energy equation, which tracks the total energy of the gas including its kinetic energy, receives \\(c G^0\_g\\) from each band. In the comoving frame the gas gains the absorbed energy \\(c \chi\_{0E,g} E\_{0,g}\\), and in the lab frame it gains in addition the work \\(v^i G^i\_g\\) of the radiation force. For a thermal band both reach the gas. For a dust-absorption band the dust takes the whole comoving-frame absorption, so the gas receives only the work of the radiation force,
 
 <script type="math/tex; mode=display">
-c G^0_{g,\,\rm gas} = - c^{-1} (1 + \alpha_{\chi_0, g}) \chi_{0F,g} \, v^i F_g^i \, ,
+c G^0_{g,\,\rm gas} = + c^{-1} \chi_{0F,g} \, v^i F_g^i \, ,
 </script>
 
-while the radiation moments still lose the full \\(- c G^0\_g\\) above: the photons really are absorbed, they simply do not heat the gas. The difference, \\(c \chi\_{0E,g} E\_g\\) per unit volume, leaves the simulation. **Total energy is therefore not conserved in this mode.** That is by construction, not an error: the energy has gone into the dust, which radiates it away in the infrared, and neither the dust temperature nor that infrared emission is followed.
+and its internal energy is unchanged by the band (apart from the photoelectric and cosmic-ray heating). This work is paid once, as kinetic energy, from the radiation. The radiation moments still lose the full \\(- c G^0\_g\\) above: the photons really are absorbed, they simply do not heat the gas. The difference \\(c G^0\_g - c G^0\_{g,\\,\rm gas} = c \chi\_{0E,g} E\_g - c^{-1} (2 + \alpha\_{\chi\_0, g}) \chi\_{0F,g} \\, v^i F\_g^i\\) is the absorption measured in the comoving frame, and it leaves the simulation. **Total energy is therefore not conserved in this mode.** That is by construction, not an error: the energy has gone into the dust, which radiates it away in the infrared, and neither the dust temperature nor that infrared emission is followed.
 
 Two consequences are worth stating plainly.
 

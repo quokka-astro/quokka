@@ -266,14 +266,25 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 	}
 	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
 
-	// The gas receives the work term, the cosmic-ray heating, and the photoelectric heating -- and
-	// nothing else. In particular it does not receive the rest of the absorbed radiation energy, which is
-	// what distinguishes this path from the thermal solve. Note that EradVec_guess does not depend on the
-	// gas energy, so this is a closed-form update and not a fixed point: the photoelectric heating adds
-	// no iteration.
+	// Egas_guess is the total energy the gas receives from the exchange, kinetic energy included: UpdateFlux
+	// removes the kinetic-energy gain dEkin_work from it afterwards to leave the internal energy. In the
+	// mixed frame the gas receives c G^0 = (comoving-frame absorption, c chi E_0) + (work of the radiation
+	// force, W'), with E_0 = E - 2 v.F / c^2, so c G^0 = c chi E - W' and W' = cscale * work_local. The
+	// thermal solve credits all of c G^0, and UpdateFlux's removal of W' leaves c chi E_0 as heating of the
+	// internal energy.
+	//
+	// Here the dust takes the whole comoving-frame absorption, so the internal energy receives nothing from
+	// it, and the gas total energy receives only the work W'. Crediting -W' instead (what c G^0 minus the
+	// absorbed c chi E would give) double-counts the Doppler part of the absorption: UpdateFlux then removes
+	// W' once more, and a gas moving with the beam cools by 2 W' while a gas moving against it heats. With
+	// the credit +W' the removal returns the internal energy to its old value, up to the cosmic-ray and
+	// photoelectric heating, which are the only things that heat the gas here.
+	//
+	// EradVec_guess does not depend on the gas energy, so this is a closed-form update and not a fixed point:
+	// the photoelectric heating adds no iteration. Egas_guess can be negative transiently, when the gas
+	// decelerates by more kinetic energy than it has internal energy; UpdateFlux restores it.
 	const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
-	const double Egas_guess = Egas0 - cscale * sum(work_local) + CR_heating + PE_heating;
-	AMREX_ASSERT(Egas_guess > 0.0);
+	const double Egas_guess = Egas0 + cscale * sum(work_local) + CR_heating + PE_heating;
 
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1); // total number of radiation updates. NOLINT
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], 1); // total number of (here, trivial) iterations. NOLINT

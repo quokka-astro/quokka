@@ -225,7 +225,7 @@ auto problem_main() -> int
 		const int n_outer_failed = iteration_failure_counter.copyToHost()[2];
 
 		// classify the outputs
-		amrex::Gpu::Buffer<int> counts({0, 0, 0, 0, 0}); // non-finite, Erad < floor, |F| > c E, Eint <= 0 (from Eint > 0), Eint decreased
+		amrex::Gpu::Buffer<int> counts({0, 0, 0, 0, 0}); // non-finite, Erad < floor, |F| > c E, Eint <= 0 (from Eint > 0), Eint cooled by work
 		int *p_counts = counts.data();
 		for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 			const amrex::Box &bx = mfi.validbox();
@@ -249,10 +249,20 @@ auto problem_main() -> int
 				}
 				const bool eint_nonpositive =
 				    (s0(i, j, k, RadSys::gasInternalEnergy_index) > 0.0) && !(s(i, j, k, RadSys::gasInternalEnergy_index) > 0.0);
-				// Only the work term, the cosmic-ray heating and the photoelectric heating reach the gas energy, and the
-				// work term goes to the kinetic energy, so the internal energy of a cell that starts positive must not fall.
+				// In the dust-absorption bands nothing heats or cools the gas except the cosmic-ray and photoelectric heating, which
+				// are non-negative, so the radiation force must change only the kinetic energy: the internal energy must not fall
+				// by a fraction of the kinetic energy the gas gained or lost. A scheme that debits the work from the internal
+				// energy in addition cools a gas moving with the beam and heats a gas moving against it. The internal energy is
+				// the difference of the total and kinetic energies, so it is only resolved to round-off of their sum.
 				const double eint0 = s0(i, j, k, RadSys::gasInternalEnergy_index);
-				const bool eint_decreased = (eint0 > 0.0) && (s(i, j, k, RadSys::gasInternalEnergy_index) < eint0 * (1.0 - 1.0e-10));
+				const double eint1 = s(i, j, k, RadSys::gasInternalEnergy_index);
+				const double ke0 = (std::pow(s0(i, j, k, RadSys::x1GasMomentum_index), 2) + std::pow(s0(i, j, k, RadSys::x2GasMomentum_index), 2) +
+						    std::pow(s0(i, j, k, RadSys::x3GasMomentum_index), 2)) /
+						   (2.0 * s0(i, j, k, RadSys::gasDensity_index));
+				const double ke1 = (std::pow(s(i, j, k, RadSys::x1GasMomentum_index), 2) + std::pow(s(i, j, k, RadSys::x2GasMomentum_index), 2) +
+						    std::pow(s(i, j, k, RadSys::x3GasMomentum_index), 2)) /
+						   (2.0 * s(i, j, k, RadSys::gasDensity_index));
+				const bool eint_decreased = (eint0 > 0.0) && ((eint0 - eint1) > 0.1 * std::abs(ke1 - ke0)) && ((eint0 - eint1) > 1.0e-12 * (eint0 + ke0));
 				int const flags[5] = {static_cast<int>(nonfinite), static_cast<int>(erad_nonpositive), static_cast<int>(acausal),
 						      static_cast<int>(eint_nonpositive), static_cast<int>(eint_decreased)};
 				for (int m = 0; m < 5; ++m) {
@@ -276,7 +286,7 @@ auto problem_main() -> int
 		amrex::Gpu::streamSynchronize();
 		const int *h_counts = counts.copyToHost();
 		amrex::Print() << std::format("dt = {:.3e} s: {} cells, non-finite = {}, Erad < floor = {}, |F| > cE = {}, Eint <= 0 = {}, "
-					      "Eint decreased = {}, outer iteration not converged = {}\n",
+					      "Eint cooled by work = {}, outer iteration not converged = {}\n",
 					      dt, n_cells_per_dt, h_counts[0], h_counts[1], h_counts[2], h_counts[3], h_counts[4], n_outer_failed);
 		n_nonfinite_total += h_counts[0];
 		n_erad_nonpositive_total += h_counts[1];
@@ -285,7 +295,7 @@ auto problem_main() -> int
 		n_eint_decreased_total += h_counts[4];
 	}
 
-	amrex::Print() << std::format("total: non-finite = {}, Erad < floor = {}, |F| > cE = {}, Eint <= 0 = {}, Eint decreased = {}\n", n_nonfinite_total,
+	amrex::Print() << std::format("total: non-finite = {}, Erad < floor = {}, |F| > cE = {}, Eint <= 0 = {}, Eint cooled by work = {}\n", n_nonfinite_total,
 				      n_erad_nonpositive_total, n_acausal_total, n_eint_nonpositive_total, n_eint_decreased_total);
 
 	// Regression case: the cell of sigma13.v2 (TallBoxSfFuv) that turned NaN at step 747454, with the inputs of its stage-2
@@ -338,10 +348,10 @@ auto problem_main() -> int
 					      s1.max(RadSys::x3RadFlux_index + nrv), regression_ok ? "ok" : "FAILED");
 	}
 
-	// Only non-finite output fails the test. The other counts are diagnostics: where the outer work-term iteration does
+	// Non-finite output and internal energy lost to the work term fail the test. The other counts are diagnostics: where the outer work-term iteration does
 	// not converge (only at extreme dt and velocity), AddSourceTermsMultiGroup leaves the radiation state as it found
 	// it, so an input below the floor stays below it; the next source step floors it.
-	const int status = (n_nonfinite_total == 0 && regression_ok) ? 0 : 1;
+	const int status = (n_nonfinite_total == 0 && n_eint_decreased_total == 0 && regression_ok) ? 0 : 1;
 	amrex::Print() << (status == 0 ? "RadDustBandsSweep Success\n" : "RadDustBandsSweep FAILED\n");
 	return status;
 }
