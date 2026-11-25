@@ -134,6 +134,10 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) 
 /// with its partial derivatives with respect to T, n_HI and n_H+. The terms that depend on the electron density use
 /// n_e^max (ISMCooling.hpp, ElectronDensityMax), whose dependence on n_HI, n_H+ and T is chained through; the network electron species
 /// does not enter. The derivative field dne of the result is zero.
+///
+/// Two guards keep the rates finite in unphysical states (an empty cell, or a negative number density in a Rosenbrock stage):
+/// n_HI and n_H+ are clamped to >= 0, and the partial with respect to a clamped density is returned as 0; n_e^max is floored at 1e-30 cm^-3,
+/// with its derivatives set to 0 where the floor is active.
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_ism_energy_terms(const burn_t &state) -> quokka::ISMCooling::Rate
 {
 	namespace ISM = quokka::ISMCooling;
@@ -185,6 +189,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_ism_energy_terms(const burn_t 
 	}
 	if (cr_heating_switch != 0) {
 		add(ISM::CRHeating(n_HI, cr_ionization_rate_HI, 0.0_rt), 1.0_rt); // y_He = 0 until the network has helium
+	}
+	// the rates are constant in a density that is clamped
+	if (state.xn[H_idx] < 0.0_rt) {
+		net.dnHI = 0.0_rt;
+	}
+	if (state.xn[Hp_idx] < 0.0_rt) {
+		net.dnHp = 0.0_rt;
 	}
 	return net;
 }

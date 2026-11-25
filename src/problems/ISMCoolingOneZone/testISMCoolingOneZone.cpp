@@ -4,8 +4,10 @@
 /// \file testISMCoolingOneZone.cpp
 /// \brief Host-only unit test of the network thermophotochemistry_ism_handwritten (mode "jacobian").
 ///
-/// For four gas states, with G0 = 1 and n_gamma = 1e-3, it checks that
-///  - every entry of actual_jac matches a centred finite difference of actual_rhs, and
+/// For six gas states, chosen so that every branch of n_e^max is active in at least one (asserted), with G0 = 1, it checks that
+///  - every entry of actual_jac matches a centred finite difference of actual_rhs, with n_gamma = 1e-3 and again with no photons (so that
+///    photoheating does not set the scale of the energy row and the entries of the ISM terms are resolved),
+///  - get_ism_energy_terms matches a centred finite difference of its own value in T, n_HI and n_H+, and
 ///  - the specific energy rate of actual_rhs equals the sum of the rate functions of cooling/ISMCooling.hpp called directly.
 
 #include "AMReX_Array.H"
@@ -46,16 +48,19 @@ struct GasState {
 	Real nH;
 	Real T;
 	Real xHp;
+	int branch; ///< the active branch of n_e^max: 0 network, 1 CIE, 2 C+ floor, 3 CR floor
 };
 
-constexpr std::array<GasState, 4> gas_states = {{
-    {"CNM", 30.0, 60.0, 1.0e-4},
-    {"WNM", 0.5, 8000.0, 0.02},
-    {"HII", 10.0, 9000.0, 0.999},
-    {"partial", 1.0, 1.2e4, 0.5},
+constexpr std::array<GasState, 6> gas_states = {{
+    {"CNM", 30.0, 60.0, 1.0e-4, 2},
+    {"WNM", 0.5, 8000.0, 0.02, 0},
+    {"HII", 10.0, 9000.0, 0.999, 0},
+    {"partial", 1.0, 1.2e4, 0.5, 0},
+    {"CIE", 1.0, 2.0e4, 1.0e-3, 1},
+    {"CR", 1.0, 120.0, 1.0e-5, 3}, // not T = 100 K: the recombination cooling fit switches on there,
 }};
 
-static auto MakeState(const GasState &g) -> burn_t
+static auto MakeState(const GasState &g, bool photons = true) -> burn_t
 {
 	burn_t state;
 	state.xn[e_idx] = g.xHp * g.nH;
@@ -66,8 +71,8 @@ static auto MakeState(const GasState &g) -> burn_t
 	state.c_hat = C::c_light;
 	state.dust_kappa = dust_kappa_test;
 	state.aux[0] = G0_test;
-	state.rn[0] = n_gamma_test;
-	state.rn[1] = n_gamma_flux_test;
+	state.rn[0] = photons ? n_gamma_test : 0.0;
+	state.rn[1] = photons ? n_gamma_flux_test : 0.0;
 	// an ideal monatomic gas of all particles, so that the T column of the Jacobian has a realistic 1/dedT
 	state.dedT = 1.5 * C::k_B * (state.xn[e_idx] + state.xn[Hp_idx] + state.xn[H_idx]) / state.rho;
 	return state;
@@ -102,9 +107,9 @@ static auto Variable(const burn_t &state, int col) -> Real
 	return (col == i_ngamma) ? state.rn[0] : state.rn[1];
 }
 
-static auto CheckJacobian(const GasState &g) -> int
+static auto CheckJacobian(const GasState &g, bool photons) -> int
 {
-	const burn_t state = MakeState(g);
+	const burn_t state = MakeState(g, photons);
 	JacNetArray2D jac;
 	actual_jac(state, jac);
 
@@ -113,6 +118,9 @@ static auto CheckJacobian(const GasState &g) -> int
 		burn_t sp = state;
 		burn_t sm = state;
 		const Real h = fd_step * std::abs(Variable(state, col));
+		if (h == 0.0) {
+			continue; // the photon variables of the pass without photons: no relative step is defined
+		}
 		if (!Perturb(sp, col, h) || !Perturb(sm, col, -h)) {
 			// no state variable behind this column (the dust energy): the analytic column must vanish
 			for (int row = 1; row <= INT_NEQS; ++row) {
@@ -136,11 +144,60 @@ static auto CheckJacobian(const GasState &g) -> int
 			const Real err = std::abs(fd - jac(row, col));
 			if (!(err <= jac_rtol * std::abs(jac(row, col)) + fd_noise_floor * row_scale / std::abs(Variable(state, col)))) {
 				if (failures < max_reports) {
-					std::cout << "  " << g.name << ": jac(" << row << ", " << col << ") = " << jac(row, col) << ", finite difference " << fd
-						  << '\n';
+					std::cout << "  " << g.name << (photons ? "" : " (no photons)") << ": jac(" << row << ", " << col
+						  << ") = " << jac(row, col) << ", finite difference " << fd << '\n';
 				}
 				++failures;
 			}
+		}
+	}
+	return failures;
+}
+
+static auto ElectronDensityOf(const burn_t &state) -> ISM::ElectronDensity
+{
+	const Real T = state.T;
+	const auto nt = ISM::LookupGrackleNT(state.xn[H_idx] + state.xn[Hp_idx], T, *ISM::GetGrackleNTTable());
+	return ISM::ElectronDensityMax(state.xn[H_idx], state.xn[Hp_idx], T, nt.xe, nt.dxe_dT, nt.dxe_dnH, ism_metallicity, cr_ionization_rate_HI,
+				       get_recombination_coefficient(T), dRecombination_coefficient_dT(T));
+}
+
+static auto CheckBranch(const GasState &g) -> int
+{
+	const int branch = ElectronDensityOf(MakeState(g)).branch;
+	if (branch != g.branch) {
+		std::cout << "  " << g.name << ": n_e^max branch " << branch << ", expected " << g.branch << '\n';
+		return 1;
+	}
+	return 0;
+}
+
+/// get_ism_energy_terms against a centred finite difference of its value in T, n_HI and n_H+.
+static auto CheckIsmTerms(const GasState &g) -> int
+{
+	const burn_t state = MakeState(g);
+	const auto an = get_ism_energy_terms(state);
+	const Real T = state.T;
+	const Real nHI = state.xn[H_idx];
+	const Real nHp = state.xn[Hp_idx];
+	// the size of the terms: roundoff floor of the finite differences
+	const Real scale = std::abs(an.dT * T) + std::abs(an.dnHI * nHI) + std::abs(an.dnHp * nHp);
+	int failures = 0;
+	for (int v = 0; v < 3; ++v) {
+		burn_t sp = state;
+		burn_t sm = state;
+		const Real x0 = (v == 0) ? T : ((v == 1) ? nHI : nHp);
+		const Real h = fd_step * x0;
+		Real &xp = (v == 0) ? sp.T : ((v == 1) ? sp.xn[H_idx] : sp.xn[Hp_idx]);
+		Real &xm = (v == 0) ? sm.T : ((v == 1) ? sm.xn[H_idx] : sm.xn[Hp_idx]);
+		xp += h;
+		xm -= h;
+		const Real fd = (get_ism_energy_terms(sp).val - get_ism_energy_terms(sm).val) / (xp - xm);
+		const Real analytic = (v == 0) ? an.dT : ((v == 1) ? an.dnHI : an.dnHp);
+		if (!(std::abs(fd - analytic) <= jac_rtol * std::abs(analytic) + fd_noise_floor * scale / x0)) {
+			std::cout << "  " << g.name << ": get_ism_energy_terms partial " << v << " (T, nHI, nHp): analytic " << analytic
+				  << ", finite difference " << fd << '\n';
+			++failures;
 		}
 	}
 	return failures;
@@ -216,10 +273,13 @@ auto problem_main() -> int
 
 	int failures = 0;
 	for (const GasState &g : gas_states) {
-		const int jac_failures = CheckJacobian(g);
+		const int branch_failures = CheckBranch(g);
+		const int jac_failures = CheckJacobian(g, true) + CheckJacobian(g, false);
+		const int ism_failures = CheckIsmTerms(g);
 		const int sum_failures = CheckEnergySum(g);
-		std::cout << "ISMCoolingOneZone " << g.name << ": " << jac_failures << " Jacobian entries and " << sum_failures << " energy sums failed\n";
-		failures += jac_failures + sum_failures;
+		std::cout << "ISMCoolingOneZone " << g.name << ": " << branch_failures << " branch, " << jac_failures << " Jacobian entries, " << ism_failures
+			  << " ISM-term partials and " << sum_failures << " energy sums failed\n";
+		failures += branch_failures + jac_failures + ism_failures + sum_failures;
 	}
 	std::cout << (failures == 0 ? "ISMCoolingOneZone: PASSED\n" : "ISMCoolingOneZone: FAILED\n");
 	return (failures == 0) ? 0 : 1;
