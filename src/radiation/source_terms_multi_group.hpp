@@ -249,6 +249,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 	for (int g = 0; g < nGroups_; ++g) {
 		const double tau = dt * rho * opacity_terms.kappaE[g] * chat;
 		EradVec_guess[g] = (Erad0Vec[g] + Src[g] + work_local[g]) / (1.0 + tau);
+		// Enforce the radiation energy floor. These bands do not emit, so nothing else keeps an unilluminated opaque
+		// cell above it: each stage divides its energy by (1 + tau), and the transport step only amends states that
+		// are negative or acausal, not ones that are merely below the floor. Left alone, the energy decays through the
+		// denormals to exactly zero, and UpdateFlux then divides the flux by it (F / (c E) = 0 / 0), which NaNs the
+		// flux, the gas momentum and the gas energy. A negative lagged work term can also drive the energy below zero.
+		// The floor is not taken from the gas: the absorbed energy of these bands never reaches the gas either.
+		EradVec_guess[g] = std::max(EradVec_guess[g], Erad_floor_);
 	}
 
 	double PE_heating = 0.0;
