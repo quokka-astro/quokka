@@ -277,9 +277,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto CRHeating(Real nHI, Real zetaHI, R
 
 /// Electron density for the cooling and heating rates (SPEC 5.4): the maximum of the network electrons, the CIE value, the C+ floor,
 /// and the CR floor sqrt(zeta n_H / alphaB). Derivatives are those of the branch that is active; ties go to the lower branch number.
-/// The CIE term takes xeCIE as fixed in n_H and uses the given dxeCIE_dT.
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ElectronDensityMax(Real nHI, Real nHp, Real T, Real xeCIE, Real dxeCIE_dT, Real Zp, Real zetaHI, Real alphaB,
-								 Real dalphaB_dT) -> ElectronDensity
+/// The CIE term is xeCIE(n_H, T) n_H, with the given partials dxeCIE_dT and dxeCIE_dnH of the electron fraction.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ElectronDensityMax(Real nHI, Real nHp, Real T, Real xeCIE, Real dxeCIE_dT, Real dxeCIE_dnH, Real Zp, Real zetaHI,
+								 Real alphaB, Real dalphaB_dT) -> ElectronDensity
 {
 	using detail::x_C_tot;
 	const Real nH = nHI + nHp;
@@ -289,7 +289,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ElectronDensityMax(Real nHI, Real 
 
 	ElectronDensity e{nHp, 0., 0., 1., 0};
 	if (cie > e.ne) {
-		e = {cie, dxeCIE_dT * nH, xeCIE, xeCIE, 1};
+		const Real dnH = xeCIE + nH * dxeCIE_dnH;
+		e = {cie, dxeCIE_dT * nH, dnH, dnH, 1};
 	}
 	if (cplus > e.ne) {
 		e = {cplus, 0., x_C_tot * Zp, x_C_tot * Zp, 2};

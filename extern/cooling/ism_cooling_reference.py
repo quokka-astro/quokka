@@ -5,9 +5,12 @@ The formulas are written once with sympy, and the partial derivatives are taken 
 so this file shares no code (and no hand-derived derivative) with the C++ implementation.
 Run it to regenerate ism_cooling_reference.csv:
 
-    python3 ism_cooling_reference.py [output.csv]
+    python3 ism_cooling_reference.py [ism_output.csv [grackle_output.csv]]
 
-Requires numpy and sympy (e.g. ~/softwares/python-envs/base/bin/python).
+It also writes grackle_nT_reference.csv: Lambda_net and xe_CIE of CloudyData_UVB=HM2012_shielded_nT_Z1.h5 at off-grid points,
+by bilinear interpolation in (log nH, log T), with the analytic derivatives of that interpolant (the C++ lookup is checked against them).
+
+Requires numpy, sympy and h5py (e.g. ~/softwares/python-envs/base/bin/python).
 
 All rates are volumetric (erg cm^-3 s^-1). The independent variables are (T, ne, nHI, nHp), with
 n_H = nHI + nHp. The C II and O I rates are ported from Gong's Athena++ code (src/chemistry/utils/thermo.cpp:
@@ -159,7 +162,7 @@ def alpha_b(Tv):
     return a, -0.76 * a / Tv
 
 
-def electron_density_max(nHIv, nHpv, Tv, xecie, dxecie_dT, Zpv, zetav, alphab, dalphab_dT):
+def electron_density_max(nHIv, nHpv, Tv, xecie, dxecie_dT, dxecie_dnH, Zpv, zetav, alphab, dalphab_dT):
     """Return [ne, dT, dnHI, dnHp, branch]. Ties go to the lower branch number."""
     nHv = nHIv + nHpv
     cr = np.sqrt(zetav * nHv / alphab)
@@ -171,7 +174,7 @@ def electron_density_max(nHIv, nHpv, Tv, xecie, dxecie_dT, Zpv, zetav, alphab, d
     if b == 0:
         d = (0.0, 0.0, 1.0)
     elif b == 1:
-        d = (dxecie_dT * nHv, xecie, xecie)
+        d = (dxecie_dT * nHv, xecie + nHv * dxecie_dnH, xecie + nHv * dxecie_dnH)
     elif b == 2:
         d = (0.0, X_C_TOT * Zpv, X_C_TOT * Zpv)
     else:
@@ -188,7 +191,7 @@ Z_GRID = [0.1, 1.0]
 ZETA_GRID = [1.78e-18, 1e-15]
 YHE_GRID = [0.0, 0.1]
 
-COLUMNS = ["func", "nHI", "nHp", "ne", "T", "G0", "Zp", "zeta", "yHe", "xeCIE", "dxeCIE_dT", "alphaB", "dalphaB_dT", "val", "dT", "dne", "dnHI", "dnHp", "branch"]
+COLUMNS = ["func", "nHI", "nHp", "ne", "T", "G0", "Zp", "zeta", "yHe", "xeCIE", "dxeCIE_dT", "dxeCIE_dnH", "alphaB", "dalphaB_dT", "val", "dT", "dne", "dnHI", "dnHp", "branch"]
 USES = {  # which of (Zp, G0) each function depends on
     "Lya": (False, False),
     "Nebular": (True, False),
@@ -202,7 +205,7 @@ USES = {  # which of (Zp, G0) each function depends on
 def rows():
     out = []
 
-    def add(func, nHIv, nHpv, nev, Tv, G0v=0.0, Zpv=0.0, zetav=0.0, yHev=0.0, extra=(0.0, 0.0, 0.0, 0.0), res=(0, 0, 0, 0, 0), branch=0):
+    def add(func, nHIv, nHpv, nev, Tv, G0v=0.0, Zpv=0.0, zetav=0.0, yHev=0.0, extra=(0.0, 0.0, 0.0, 0.0, 0.0), res=(0, 0, 0, 0, 0), branch=0):
         out.append([func, nHIv, nHpv, nev, Tv, G0v, Zpv, zetav, yHev, *extra, *res, branch])
 
     for nHv in NH_GRID:
@@ -231,16 +234,71 @@ def rows():
                     add("CRHeating", nHIv, nHpv, nHpv, 100.0, 0.0, 1.0, zv, yv, res=r)
             for Tv in T_GRID:
                 xc, dxc = xe_cie(Tv)
+                dxc_dnH = -0.05 * xc / nHv  # arbitrary nonzero value, so that the n_H partial of the CIE branch is exercised
                 ab, dab = alpha_b(Tv)
                 for Zpv in Z_GRID:
                     for zv in ZETA_GRID:
-                        e = electron_density_max(nHIv, nHpv, Tv, xc, dxc, Zpv, zv, ab, dab)
-                        add("ElectronDensityMax", nHIv, nHpv, 0.0, Tv, 0.0, Zpv, zv, 0.0, (xc, dxc, ab, dab), (e[0], e[1], 0.0, e[2], e[3]), e[4])
+                        e = electron_density_max(nHIv, nHpv, Tv, xc, dxc, dxc_dnH, Zpv, zv, ab, dab)
+                        add("ElectronDensityMax", nHIv, nHpv, 0.0, Tv, 0.0, Zpv, zv, 0.0, (xc, dxc, dxc_dnH, ab, dab), (e[0], e[1], 0.0, e[2], e[3]), e[4])
+    return out
+
+
+# ---------------------------------------------------------------- Grackle (nH, T) table lookup
+GRACKLE_TABLE = Path(__file__).with_name("CloudyData_UVB=HM2012_shielded_nT_Z1.h5")
+GRACKLE_COLUMNS = ["nH", "T", "Lambda_net", "xe_CIE", "dLambda_dT", "dxe_dT", "dxe_dnH"]
+# (i, j, fx, fy): the point lies at fractional grid index (i + fx, j + fy) in (log nH, log T). The fractions stay
+# away from 0 and 1, so the centred difference of the C++ lookup (step 1e-3 in ln T or ln nH) stays inside one cell and is exact.
+GRACKLE_POINTS = [(0, 0, 0.3, 0.4), (2, 20, 0.5, 0.5), (5, 45, 0.25, 0.75), (9, 70, 0.6, 0.3), (13, 92, 0.4, 0.6),
+                  (16, 110, 0.7, 0.2), (19, 125, 0.35, 0.55), (22, 140, 0.5, 0.45), (25, 150, 0.65, 0.7), (27, 159, 0.8, 0.8)]
+
+
+def grackle_bilinear(tab, nHv, Tv):
+    """Bilinear interpolation in (log nH, log T) of both outputs; returns value and d/dT, d/dnH (physical) for each."""
+    attrs = tab.attrs
+    xlo, xhi, nx = np.log(attrs["xlo"]), np.log(attrs["xhi"]), attrs["Nx"]
+    data = tab["data"][:]
+    u = (np.log(nHv) - xlo[0]) / (xhi[0] - xlo[0]) * (nx[0] - 1)
+    v = (np.log(Tv) - xlo[1]) / (xhi[1] - xlo[1]) * (nx[1] - 1)
+    i, j = int(np.floor(u)), int(np.floor(v))
+    fx, fy = u - i, v - j
+    out = []
+    for k in range(2):
+        z = data[k]
+        f = (1 - fx) * (1 - fy) * z[i, j] + fx * (1 - fy) * z[i + 1, j] + (1 - fx) * fy * z[i, j + 1] + fx * fy * z[i + 1, j + 1]
+        dfx = (1 - fy) * (z[i + 1, j] - z[i, j]) + fy * (z[i + 1, j + 1] - z[i, j + 1])
+        dfy = (1 - fx) * (z[i, j + 1] - z[i, j]) + fx * (z[i + 1, j + 1] - z[i + 1, j])
+        dlnnH = dfx * (nx[0] - 1) / (xhi[0] - xlo[0])
+        dlnT = dfy * (nx[1] - 1) / (xhi[1] - xlo[1])
+        out.append((f, dlnT / Tv, dlnnH / nHv))
+    return out
+
+
+def grackle_rows():
+    import h5py
+
+    out = []
+    with h5py.File(GRACKLE_TABLE, "r") as fh:
+        tab = fh["tab1"]
+        xlo, xhi, nx = np.log(tab.attrs["xlo"]), np.log(tab.attrs["xhi"]), tab.attrs["Nx"]
+        for i, j, fx, fy in GRACKLE_POINTS:
+            nHv = float(np.exp(xlo[0] + (i + fx) / (nx[0] - 1) * (xhi[0] - xlo[0])))
+            Tv = float(np.exp(xlo[1] + (j + fy) / (nx[1] - 1) * (xhi[1] - xlo[1])))
+            (lam, dlam_dT, _), (xe, dxe_dT, dxe_dnH) = grackle_bilinear(tab, nHv, Tv)
+            assert xe > 0.0, f"reference point ({nHv}, {Tv}) has non-positive xe_CIE"
+            out.append([nHv, Tv, lam, xe, dlam_dT, dxe_dT, dxe_dnH])
     return out
 
 
 def main():
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).with_name("ism_cooling_reference.csv")
+    grackle_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(__file__).with_name("grackle_nT_reference.csv")
+    with open(grackle_path, "w", newline="") as fh:
+        w = csv.writer(fh, lineterminator="\n")
+        w.writerow(GRACKLE_COLUMNS)
+        grackle = grackle_rows()
+        for r in grackle:
+            w.writerow([repr(float(v)) for v in r])
+    print(f"wrote {len(grackle)} rows to {grackle_path}")
     data = rows()
     branches = {r[-1] for r in data if r[0] == "ElectronDensityMax"}
     assert branches == {0, 1, 2, 3}, f"ElectronDensityMax grid misses branches: {branches}"
