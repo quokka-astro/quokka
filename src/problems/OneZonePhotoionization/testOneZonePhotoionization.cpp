@@ -178,9 +178,8 @@ auto problem_main() -> int
 	sim.userData_.addObservable("n_e", [=](CellValues const &cell) { return number_density(cell, Species::e); });
 	sim.userData_.addObservable("n_HI", [=](CellValues const &cell) { return number_density(cell, Species::H); });
 	sim.userData_.addObservable("n_HII", [=](CellValues const &cell) { return number_density(cell, Species::H_p); });
-	sim.userData_.addObservable("n_gamma", [](CellValues const &cell) {
-		return cell[RadSystem<PS>::radEnergy_index] / RadSystem<PS>::GetChemBandQuanta(0);
-	});
+	sim.userData_.addObservable("n_gamma",
+				    [](CellValues const &cell) { return cell[RadSystem<PS>::radEnergy_index] / RadSystem<PS>::GetChemBandQuanta(0); });
 	sim.userData_.addObservable("Egas", [](CellValues const &cell) { return cell[RadSystem<PS>::gasEnergy_index]; });
 	sim.userData_.addObservable("gas_temp", [=](CellValues const &cell) {
 		amrex::GpuArray<amrex::Real, NumSpec> scalars{};
