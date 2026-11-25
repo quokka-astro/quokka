@@ -117,6 +117,9 @@ auto problem_main() -> int
 	std::vector<quokka::onezone::Predicate> predicates;
 	// Check that gas has cooled significantly
 	predicates.push_back({.name = "T_final / T_initial < 0.1", .passes = [](quokka::onezone::Recorder const &recorder) {
+				      if (!amrex::ParallelDescriptor::IOProcessor()) {
+					      return true; // the recorded data are only valid on the I/O rank
+				      }
 				      auto const &T = recorder.series("temperature");
 				      return !T.empty() && (T.back() / T.front() <= 0.1);
 			      }});

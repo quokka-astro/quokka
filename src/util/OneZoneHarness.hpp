@@ -322,6 +322,10 @@ inline auto Evaluate(Recorder const &recorder, std::vector<Check> const &checks,
 		}
 		if (!csv_file.empty()) {
 			std::ofstream out(csv_file);
+			if (!out.is_open()) {
+				amrex::Print() << "ERROR: could not open output file " << csv_file << "\n";
+				status = 1;
+			}
 			out << "time";
 			for (auto const &name : recorder.names()) {
 				out << "," << name;
