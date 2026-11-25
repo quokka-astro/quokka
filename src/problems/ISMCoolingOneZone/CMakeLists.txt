@@ -23,7 +23,11 @@ endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 add_test(NAME ISMCoolingJacobian COMMAND ${JOB_NAME} ../inputs/ISMCoolingJacobian.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ISMCoolingStartup COMMAND ${JOB_NAME} ../inputs/ISMCoolingStartup.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
-# the startup of the photochemistry cooling path aborts, naming the parameter, without G0_external and with a table of another metallicity
+# the startup of the photochemistry cooling path aborts, naming the parameter, without G0_external, without the table path and with a table of
+# another metallicity; PASS_REGULAR_EXPRESSION makes each pass only for its own abort message
 add_test(NAME ISMCoolingNoG0 COMMAND ${JOB_NAME} ../inputs/ISMCoolingNoG0.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME ISMCoolingNoTable COMMAND ${JOB_NAME} ../inputs/ISMCoolingNoTable.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ISMCoolingZMismatch COMMAND ${JOB_NAME} ../inputs/ISMCoolingZMismatch.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-set_tests_properties(ISMCoolingNoG0 ISMCoolingZMismatch PROPERTIES WILL_FAIL TRUE)
+set_tests_properties(ISMCoolingNoG0 PROPERTIES PASS_REGULAR_EXPRESSION "G0_external is not set")
+set_tests_properties(ISMCoolingNoTable PROPERTIES PASS_REGULAR_EXPRESSION "ism_cooling.grackle_nT_table is not set")
+set_tests_properties(ISMCoolingZMismatch PROPERTIES PASS_REGULAR_EXPRESSION "network.ism_metallicity = 0.5 but the table")
