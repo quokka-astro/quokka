@@ -45,7 +45,7 @@ constexpr double mu = C::m_p;
 constexpr double gas_to_dust_mass_ratio = 1.653e2;
 constexpr amrex::GpuArray<double, 3> K_abs_dust = {4.486e4, 8.246e4, 1.310e5}; // cm^2 per g of dust
 constexpr amrex::GpuArray<double, 3> kappa_dust = {K_abs_dust.arr[0] / gas_to_dust_mass_ratio, K_abs_dust.arr[1] / gas_to_dust_mass_ratio,
-							      K_abs_dust.arr[2] / gas_to_dust_mass_ratio}; // cm^2 per g of gas
+						   K_abs_dust.arr[2] / gas_to_dust_mass_ratio}; // cm^2 per g of gas
 constexpr double Erad_floor = 1.0e-25;
 constexpr double chat_over_c = 1.0e-2;
 
@@ -312,7 +312,8 @@ auto problem_main() -> int
 							       m, i, pt.rho, pt.T, pt.v, pt.vdir, pt.E0, pt.E1, pt.f, pt.src,
 							       s(i, j, k, RadSys::gasInternalEnergy_index), s(i, j, k, RadSys::x1GasMomentum_index),
 							       s(i, j, k, RadSys::x2GasMomentum_index), s(i, j, k, RadSys::radEnergy_index),
-							       (n_groups > 1) ? s(i, j, k, RadSys::radEnergy_index + nrv) : 0.0, s(i, j, k, RadSys::x1RadFlux_index),
+							       (n_groups > 1) ? s(i, j, k, RadSys::radEnergy_index + nrv) : 0.0,
+							       s(i, j, k, RadSys::x1RadFlux_index),
 							       (n_groups > 1) ? s(i, j, k, RadSys::x1RadFlux_index + nrv) : 0.0);
 						}
 					}
