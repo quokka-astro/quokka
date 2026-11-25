@@ -97,6 +97,7 @@ struct Curve {
 	std::string observable;
 	std::string label; ///< legend entry; the observable's name if empty
 	Reference reference = nullptr;
+	std::optional<std::string> reference_label = std::nullopt; ///< legend entry of the reference; "<label> (reference)" if not set
 };
 
 /// A plot of recorded observables as a function of time, saved to `filename` (any format matplotlib supports, chosen by the extension).
@@ -119,6 +120,9 @@ class Recorder
 	/// Add a series; call before Run().
 	void addObservable(std::string name, Observable function)
 	{
+		if (std::find(names_.begin(), names_.end(), name) != names_.end()) {
+			amrex::Abort("OneZoneHarness: observable '" + name + "' is already registered");
+		}
 		names_.push_back(std::move(name));
 		functions_.push_back(std::move(function));
 		series_.emplace_back();
@@ -184,6 +188,9 @@ inline auto AnalyticReference(std::function<double(double)> function) -> Referen
 /// skipped. Values are linearly interpolated onto the recorded times, which must lie within the table.
 inline auto TableReference(std::string const &filename, int column) -> Reference
 {
+	if (column < 1) {
+		amrex::Abort("OneZoneHarness: the value column of a reference table must be >= 1 (column 0 is time)");
+	}
 	std::ifstream file(filename);
 	if (!file.is_open()) {
 		amrex::Abort("OneZoneHarness: could not open reference file " + filename + " (run the test from the <quokka-root>/tests folder)");
@@ -257,7 +264,7 @@ inline void Plot(Recorder const &recorder, Figure const &figure)
 		matplotlibcpp::plot(t, recorder.series(curve.observable), args);
 		if (curve.reference) {
 			std::map<std::string, std::string> ref_args;
-			ref_args["label"] = label + " (reference)";
+			ref_args["label"] = curve.reference_label.value_or(label + " (reference)");
 			ref_args["linestyle"] = "--";
 			ref_args["color"] = "k";
 			matplotlibcpp::plot(t, curve.reference(recorder.times()), ref_args);
@@ -322,10 +329,6 @@ inline auto Evaluate(Recorder const &recorder, std::vector<Check> const &checks,
 		}
 		if (!csv_file.empty()) {
 			std::ofstream out(csv_file);
-			if (!out.is_open()) {
-				amrex::Print() << "ERROR: could not open output file " << csv_file << "\n";
-				status = 1;
-			}
 			out << "time";
 			for (auto const &name : recorder.names()) {
 				out << "," << name;
@@ -338,11 +341,11 @@ inline auto Evaluate(Recorder const &recorder, std::vector<Check> const &checks,
 				}
 				out << "\n";
 			}
-		}
-	}
-	if (io) {
-		for (auto const &figure : figures) {
-			detail::Plot(recorder, figure);
+			out.close();
+			if (out.fail()) { // also covers a file that could not be opened
+				amrex::Print() << "ERROR: could not write output file " << csv_file << "\n";
+				status = 1;
+			}
 		}
 	}
 	for (auto const &predicate : predicates) {
@@ -351,6 +354,12 @@ inline auto Evaluate(Recorder const &recorder, std::vector<Check> const &checks,
 			amrex::Print() << std::format("{:<40}{}\n", predicate.name, ok ? "passed" : "FAIL");
 		}
 		status = ok ? status : 1;
+	}
+	// the figures come last, so that a failure to save one cannot hide the results of the checks
+	if (io) {
+		for (auto const &figure : figures) {
+			detail::Plot(recorder, figure);
+		}
 	}
 	if (io) {
 		amrex::Print() << (status == 0 ? "One-zone test: all checks passed.\n" : "One-zone test: FAILED.\n");

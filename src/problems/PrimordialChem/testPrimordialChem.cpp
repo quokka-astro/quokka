@@ -250,14 +250,11 @@ auto problem_main() -> int
 	sim.plotfileInterval_ = 100;
 	sim.checkpointInterval_ = -1;
 
-	// there is no reference solution: check that the state stays finite
-	sim.userData_.addObservable("density", [](quokka::onezone::CellValues const &cell) { return cell[HydroSystem<PrimordialChemTest>::density_index]; });
-	sim.userData_.addObservable("Egas", [](quokka::onezone::CellValues const &cell) { return cell[HydroSystem<PrimordialChemTest>::energy_index]; });
-	for (int n = 0; n < NumSpec; ++n) {
-		sim.userData_.addObservable(std::format("partial_density_{}", n),
-					    [n](quokka::onezone::CellValues const &cell) { return cell[HydroSystem<PrimordialChemTest>::scalar0_index + n]; });
-	}
+	// there is no reference solution: check that every component of every cell stays finite (collective, so it is called on every rank)
+	const quokka::onezone::Predicate finite_state = {.name = "final state finite in all cells", .passes = [&sim](quokka::onezone::Recorder const &) {
+								 return !(sim.state_new_cc_[0].contains_nan() || sim.state_new_cc_[0].contains_inf());
+							 }};
 
 	// run simulation
-	return quokka::onezone::Run(sim, {}, {quokka::onezone::AllFinite()});
+	return quokka::onezone::Run(sim, {}, {finite_state});
 }

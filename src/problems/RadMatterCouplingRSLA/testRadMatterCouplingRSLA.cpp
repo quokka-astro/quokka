@@ -134,6 +134,16 @@ auto problem_main() -> int
 		return std::pow(T4_rsla, 1. / 4.);
 	};
 
+	// Gas temperature with the full speed of light, shown in the figure to display the effect of the reduced speed of light
+	const auto Tgas_full_speed_exact = [=](double t) {
+		const double arad = RadSystem<CouplingProblem>::radiation_constant_;
+		const double c = RadSystem<CouplingProblem>::c_light_;
+		const double E0 = (Erad0 + Egas0) / (arad + alpha_SuOlson / 4.0);
+		const double T0_4 = std::pow(initial_Tgas, 4);
+		const double T4 = (T0_4 - E0) * std::exp(-(4. / alpha_SuOlson) * (arad + alpha_SuOlson / 4.0) * kappa * rho0 * c * t) + E0;
+		return std::pow(T4, 1. / 4.);
+	};
+
 	// When using C::a_rad as radiation_constant_cgs_, the relative error goes up to 3e-5, so the tolerance is 5e-5
 	const std::vector<quokka::onezone::Check> checks = {
 	    {.name = "Tgas relative L1 error",
@@ -141,7 +151,10 @@ auto problem_main() -> int
 	     .tolerance = 5e-5}};
 	const std::vector<quokka::onezone::Figure> figures = {
 	    {.filename = "radcoupling_rsla.pdf",
-	     .curves = {{.observable = "Tgas", .label = "gas temperature", .reference = quokka::onezone::AnalyticReference(Tgas_rsla_exact)}},
+	     .curves = {{.observable = "Tgas",
+			 .label = "simulated gas temperature (RSLA)",
+			 .reference = quokka::onezone::AnalyticReference(Tgas_full_speed_exact),
+			 .reference_label = "exact gas temperature (no RSLA)"}},
 	     .xlabel = "time t (s)",
 	     .ylabel = "temperature T (K)",
 	     .log_x = true,
