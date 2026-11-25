@@ -115,8 +115,8 @@ template <> void QuokkaSimulation<DustAbsorption1GProblem>::setInitialConditions
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<DustAbsorption1GProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-								  int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-								  const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+								    int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+								    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	constexpr int nvar = Physics_Indices<DustAbsorption1GProblem>::nvarTotal_cc;
 
