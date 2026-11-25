@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testThermalConductionAniso.cpp
 /// \brief Defines a test problem for anisotropic conduction
 /// Problem NAME: Hot wedge
@@ -23,8 +21,9 @@ struct ThermalConductionAnisoProblem {};
 
 template <> struct quokka::EOS_Traits<ThermalConductionAnisoProblem> {
 	static constexpr double gamma = 2.0;
-	// C::m_u here gives a dimensionless mu = mean_molecular_weight / C::m_u = 1 in the EOS call,
-	// independent of the (dimensionless) unit_system -- not a CGS mass in grams.
+	// mean_molecular_weight is the mean mass per particle (not the dimensionless mu), so 1.0 gives a
+	// number density n = rho / mean_molecular_weight = rho in this problem's units. Do not replace
+	// it with C::m_u: that changes the heat capacity, and hence the diffusivity, by a factor 1/m_u.
 	static constexpr double mean_molecular_weight = 1.0;
 };
 
@@ -56,11 +55,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeMagneticVectorPotential_z(amrex:
 	// Regularization radius for the field-direction singularity at r=0 -- must be << 0.5
 	// (inner edge of the hot ring) and only needs to span a few cells at any resolution tested.
 	constexpr amrex::Real r_core = 0.1;
-	// Overall field amplitude. Conduction only depends on the unit vector bhat, but this initial
-	// field is not in magnetohydrostatic equilibrium (uniform gas pressure, |B| jumping 1 -> 0 at
-	// r=1, tension at the r_core kink), so an O(1) B drives spurious flows/compression that heat
-	// the centre. Scaling psi down (forces ~ B0^2) makes the field effectively passive while
-	// leaving bhat unchanged.
+	// Overall field amplitude. Conduction only depends on the unit vector bhat, and hydro is disabled
+	// in this test (is_hydro_enabled = false), so the field is static. The field is not in
+	// magnetohydrostatic equilibrium (uniform gas pressure, |B| jumping 1 -> 0 at r=1, tension at the
+	// r_core kink), so with hydro enabled an O(1) B would drive spurious flows/compression that heat
+	// the centre. Scaling psi down (forces ~ B0^2) keeps the field effectively passive in that case
+	// while leaving bhat unchanged.
 	constexpr amrex::Real B0 = 1.0e-3;
 	const amrex::Real rad = std::sqrt(x1 * x1 + x2 * x2);
 	if (rad < r_core) {
@@ -74,6 +74,27 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeMagneticVectorPotential_z(amrex:
 	return -B0 * std::min(rad, 1.0);
 }
 
+/// \brief Bx on the x-face whose lower corner is (x1_L, x2_L), from the discrete curl of the vector potential.
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ringBxFace(amrex::Real x1_L, amrex::Real x2_L, amrex::Real dy) -> amrex::Real
+{
+	return (computeMagneticVectorPotential_z(x1_L, x2_L + dy) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dy;
+}
+
+/// \brief By on the y-face whose lower corner is (x1_L, x2_L), from the discrete curl of the vector potential.
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ringByFace(amrex::Real x1_L, amrex::Real x2_L, amrex::Real dx) -> amrex::Real
+{
+	return -(computeMagneticVectorPotential_z(x1_L + dx, x2_L) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dx;
+}
+
+/// \brief Magnetic energy density of the cell whose lower corner is (x1_L, x2_L), from the average of its face fields
+///        (the same cell-centred B that HydroSystem::ComputeMagneticEnergy uses; Bz = 0).
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ringCellMagneticEnergy(amrex::Real x1_L, amrex::Real x2_L, amrex::Real dx, amrex::Real dy) -> amrex::Real
+{
+	const amrex::Real bx = 0.5 * (ringBxFace(x1_L, x2_L, dy) + ringBxFace(x1_L + dx, x2_L, dy));
+	const amrex::Real by = 0.5 * (ringByFace(x1_L, x2_L, dx) + ringByFace(x1_L, x2_L + dy, dx));
+	return 0.5 * (bx * bx + by * by);
+}
+
 template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -82,7 +103,7 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	// true: wedge density = rho_bg * T_bg / T_wedge, so P = rho*T is uniform (no initial pressure jump).
-	// false: uniform density, so the hot wedge starts overpressured and drives a flow.
+	// false: uniform density, so the hot wedge starts overpressured (no flow results while hydro is disabled).
 	constexpr bool isobaric_wedge = false;
 
 	// loop over the grid and set the initial condition
@@ -103,13 +124,14 @@ template <> void QuokkaSimulation<ThermalConductionAnisoProblem>::setInitialCond
 			}
 		}
 		const amrex::Real Eint = quokka::EOS<ThermalConductionAnisoProblem>::ComputeEintFromTgas(rho, temp);
+		const amrex::Real Emag = ringCellMagneticEnergy(prob_lo[0] + i * dx[0], prob_lo[1] + j * dx[1], dx[0], dx[1]);
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
 
 		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint + Emag;
 		state_cc(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::internalEnergy_index) = Eint;
 	});
 }
@@ -134,9 +156,9 @@ void fillRingBField(amrex::Array4<double> const &state_fc, amrex::Box const &ind
 
 		amrex::Real bval = 0.0;
 		if (dir == quokka::direction::x) {
-			bval = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1]) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dx[1];
+			bval = ringBxFace(x1_L, x2_L, dx[1]);
 		} else if (dir == quokka::direction::y) {
-			bval = -(computeMagneticVectorPotential_z(x1_L + dx[0], x2_L) - computeMagneticVectorPotential_z(x1_L, x2_L)) / dx[0];
+			bval = ringByFace(x1_L, x2_L, dx[0]);
 		}
 		// dir == z: Bz = 0 (psi is independent of z), already zero-filled above
 		state_fc(i, j, k, MHDSystem<ThermalConductionAnisoProblem>::bfield_index) = bval;
@@ -208,9 +230,9 @@ void QuokkaSimulation<ThermalConductionAnisoProblem>::computeReferenceSolution(a
 				stateExact(i, j, k, n) = 0.;
 			}
 			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::density_index) = rho_bg;
-			// energy_index should also include the (spatially varying) magnetic energy, which is not added here, so only
-			// the gasInternalEnergy error is meaningful for this test.
-			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint;
+			// conduction does not evolve B, so the magnetic energy is that of the initial field
+			const amrex::Real Emag = ringCellMagneticEnergy(prob_lo[0] + i * dx[0], prob_lo[1] + j * dx[1], dx[0], dx[1]);
+			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::energy_index) = Eint + Emag;
 			stateExact(i, j, k, HydroSystem<ThermalConductionAnisoProblem>::internalEnergy_index) = Eint;
 		});
 	}
@@ -260,8 +282,9 @@ auto problem_main() -> int
 	// Setup boundary conditions
 	auto BCs_cc = quokka::BC<ThermalConductionAnisoProblem>(quokka::BCType::reflecting);
 	const int nvars_fc = Physics_Indices<ThermalConductionAnisoProblem>::nvarTotal_fc;
-	// face-centred B: first-order extrapolation into the ghost faces. reflect_odd on the tangential components
-	// flips the sign of the ring field where it runs along a wall, which cancels it in the corner-averaged bhat.
+	// face-centred B: first-order extrapolation (foextrap) into the ghost faces for every component. reflect_odd is
+	// not used on the tangential components: it would flip the sign of the ring field where it runs along a wall,
+	// which cancels it in the corner-averaged bhat.
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -295,7 +318,7 @@ auto problem_main() -> int
 				      domain.length(1), sim.tNew_[0], eint_abs_err, eint_rel_err);
 
 	// pass if the relative L1 error is at or below the tolerance (a NaN error fails the comparison)
-	constexpr double rel_err_tol = 1.69684956e-03; // measured 1.571157e-03 at 64x64x8, t = 20, includes 8% error
+	constexpr double rel_err_tol = 1.64519424e-03; // 1.08x the measured 1.523328e-03 at 64x64x8, t = 20
 	amrex::Print() << std::format("relative error tolerance = {:.6e}\n", rel_err_tol);
 	bool const passed = (eint_rel_err <= rel_err_tol);
 

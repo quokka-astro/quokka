@@ -1,5 +1,6 @@
-//==============================================================================
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file planck_integral.hpp
 /// \brief Some functions for quickly integrating the Planck function.
 ///
@@ -319,6 +320,37 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_below_and_above_x
 	}
 	const Real p = integrate_planck_from_0_to_x(x);
 	return {p, 1.0 - p};
+}
+
+/// Cumulative temperature derivative of the Planck spectrum and its complement at x, {D, U} with D + U = 4.
+///
+/// D(x) = (15/pi^4) \int_0^x s^4 e^s / (e^s - 1)^2 ds = 4 P(x) - (15/pi^4) x^4 / (e^x - 1), obtained by integrating the exact
+/// kernel by parts, and U(x) = 4 - D(x) = 4 Q(x) + (15/pi^4) x^4 / (e^x - 1). A group [x_lo, x_hi] then has
+/// d/dT (a T^4 f_g) = a T^3 [D(x_hi) - D(x_lo)] = a T^3 [U(x_lo) - U(x_hi)]. As in integrate_planck_below_and_above_x, P and Q come
+/// from the table below X_TAIL and from the exact tail series above it, so this is the derivative of the emission actually computed.
+/// D(0) = 0 and D(inf) = 4, so a set of groups that spans the whole spectrum recovers d(a T^4)/dT.
+/// \param x h nu / (k T), with x >= 0; x = inf is allowed (T = 0 or an infinite group edge)
+/// \return {D(x), U(x)}
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_derivative_below_and_above_x(const Real x) -> amrex::GpuArray<Real, 2>
+{
+	AMREX_ASSERT(!std::isnan(x));
+	AMREX_ASSERT(x >= 0.);
+
+	if (x <= 0.) {
+		return {0.0, 4.0};
+	}
+	if (x >= X_TAIL) {
+		// x^4 / (e^x - 1) written with e^(-x) so that cold matter (x up to ~1e9 or inf) never forms e^x, which overflows
+		// past x ~ 710. Once e^(-x) underflows to 0 the kernel is 0; testing it first also avoids 0 * inf at x = inf.
+		const Real e = std::exp(-x);
+		const Real kernel = (e > 0.0) ? (x * x * x * x * e / (1.0 - e)) / gInf : 0.0;
+		const Real q = integrate_planck_from_x_to_inf_series(x);
+		return {4. * (1.0 - q) - kernel, 4. * q + kernel};
+	}
+	// for small x, x^4 / (e^x - 1) = x^3 - x^4 / 2 + ...; the leading term avoids 0 / 0 as x -> 0
+	const Real kernel = (x < 1.0e-10) ? (x * x * x) / gInf : (x * x * x * x / (std::exp(x) - 1.0)) / gInf;
+	const Real d = 4. * integrate_planck_from_0_to_x(x) - kernel;
+	return {d, 4.0 - d};
 }
 
 #endif // PLANCKINTEGRAL_HPP_

@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testThermalConductionAnisoPattle.cpp
 /// \brief Defines a test problem for anisotropic Spitzer thermal conduction (kappa = kappa0*T^2.5) with a Pattle IC.
 ///
@@ -27,7 +25,7 @@ with kappa0 = kappaPar.*/
 constexpr double Eint0 = 2.505e-8;   // peak Eint at the reference resolution nx_ref (equivalent to T = 2.e8 K)
 constexpr double Efloor = 2.505e-11; // numerical representability floor outside the front, equivalent to T = 2.e6 K
 const double rho0 = 0.1;	     // 1/cm^3
-constexpr double Lref = 7.714e+17;   // quarter box length, fixes region of refinement
+constexpr double Lref = 7.714e+17;   // quarter box length
 constexpr int nx_ref = 128;	     // resolution at which Eint0 is the deposited peak value (matches inputs/ThermalConductionAnisoPattle.toml)
 constexpr double dx0_ref = 4.0 * Lref / nx_ref;
 constexpr double M0 = (Eint0 - Efloor) * 2.0 * dx0_ref; // Normalization
@@ -123,53 +121,6 @@ template <> void QuokkaSimulation<ThermalConductionAnisoPattleProblem>::setIniti
 		}
 		state_fc(i, j, k, MHDSystem<ThermalConductionAnisoPattleProblem>::bfield_index) = bval;
 	});
-}
-
-template <> void QuokkaSimulation<ThermalConductionAnisoPattleProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
-{
-	// tag cells for testing AMR near the Pattle front
-	const double refine_Lmax = Lref;
-
-	const auto prob_lo = geom[lev].ProbLoArray();
-	const auto dx = geom[lev].CellSizeArray();
-	const auto tag = tags.arrays();
-
-	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
-		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
-		amrex::Real y0 = 0.0;
-		amrex::Real y1 = 1.0;
-		amrex::Real z0 = 0.0;
-		amrex::Real z1 = 1.0;
-
-#if AMREX_SPACEDIM >= 2
-		y0 = prob_lo[1] + (j * dx[1]);
-		y1 = prob_lo[1] + ((j + 1) * dx[1]);
-#endif
-#if AMREX_SPACEDIM == 3
-		z0 = prob_lo[2] + (k * dx[2]);
-		z1 = prob_lo[2] + ((k + 1) * dx[2]);
-#endif
-
-		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
-			bool const in_region = (std::abs(x) < refine_Lmax);
-
-			amrex::ignore_unused(y, z);
-
-			if (in_region) {
-				tag[bx](i, j, k) = amrex::TagBox::SET;
-			}
-		};
-
-		for (auto const &x : {x0, x1}) {
-			for (auto const &y : {y0, y1}) {
-				for (auto const &z : {z0, z1}) {
-					tagIfPointInRegion(x, y, z);
-				}
-			}
-		}
-	});
-	amrex::Gpu::streamSynchronize();
 }
 
 template <>
@@ -329,7 +280,7 @@ auto problem_main() -> int
 {
 	amrex::Vector<int> const resolutions = {32, 64, 128};
 	amrex::Vector<double> errors;
-	for (int nx : resolutions) {
+	for (int const nx : resolutions) {
 		double const error = runConductionTest(nx);
 		errors.push_back(error);
 		amrex::Print() << std::format("nx = {:4d}  error norm = {:.6e}\n", nx, error);

@@ -1,10 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef SIMULATION_HPP_ // NOLINT
 #define SIMULATION_HPP_
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file simulation.cpp
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation.
@@ -112,10 +110,6 @@ namespace filesystem = experimental::filesystem;
 #endif
 #include "io/io_utils.hpp"
 #include "physics_info.hpp"
-
-#ifdef QUOKKA_USE_OPENPMD
-#include "io/openPMD.hpp"
-#endif
 
 // Quokka version string to be stored in metadata. This is used in post-processing tools like YT to do version checks.
 static constexpr auto QUOKKA_VERSION = "25.03";
@@ -349,6 +343,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 				       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const = 0;
 	virtual void ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const;
+	// compute a derived variable that the physics modules provide for every problem; returns false if `dname` is not one of them
+	[[nodiscard]] virtual auto ComputeBuiltinDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+							    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const -> bool;
 
 	// compute statistics
 	virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
@@ -449,6 +446,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	/// Helper function to set diode boundary conditions on the lower boundary of a specific dimension.
 	/// Diode BC: allows outflow (using first-order extrapolation), prevents inflow (using reflection with flipped normal momentum).
+	/// If radiation is enabled, the same rule is applied to each group's radiation flux: an outward flux is extrapolated, an inward flux is reflected.
 	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
 	/// @param iv The cell index
 	/// @param consVar The array to fill
@@ -458,6 +456,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	/// Helper function to set diode boundary conditions on the upper boundary of a specific dimension.
 	/// Diode BC: allows outflow (using first-order extrapolation), prevents inflow (using reflection with flipped normal momentum).
+	/// If radiation is enabled, the same rule is applied to each group's radiation flux: an outward flux is extrapolated, an inward flux is reflected.
 	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
 	/// @param iv The cell index
 	/// @param consVar The array to fill
@@ -901,12 +900,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 				  "128 (or greater) when running on GPUs, and 64 (or "
 				  "greater) when running on CPUs.\n";
 	}
-
-#ifdef QUOKKA_USE_OPENPMD
-	// warning about particles and OpenPMD outputs
-	amrex::Print() << "\n[Warning] [I/O] OpenPMD outputs currently do NOT include particles!"
-		       << " Support for outputting particles for openPMD is not yet implemented.\n";
-#endif
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
@@ -1187,6 +1180,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(luminosityTables_.luminosity.output_unit(i) == "erg/s",
 									 std::format("Luminosity table output unit {} must be 'erg/s', got '{}'", i,
 										     luminosityTables_.luminosity.output_unit(i)));
+				}
+
+				// Stars below the lowest tabulated mass are assigned zero luminosity (see LuminosityUpdate)
+				const amrex::Real table_min_mass = luminosityTables_.luminosity.coord_xlo()[1];
+				amrex::Real min_mass_individual_stars = quokka::min_mass_individual_stars;
+				ppp.query("min_mass_individual_stars", min_mass_individual_stars);
+				if (min_mass_individual_stars < table_min_mass) {
+					amrex::Print()
+					    << std::format("[WARNING] particles.min_mass_individual_stars = {} Msun is below the lowest mass in the "
+							   "luminosity table ({} Msun). Stars with masses below {} Msun will be assigned zero luminosity.\n",
+							   min_mass_individual_stars, table_min_mass, table_min_mass);
 				}
 
 				// Set global pointer for access from particle update functions
@@ -2876,6 +2880,20 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
 		}
 
+		// Mirror cell for reflection: reflect around lower boundary face
+		// cellIdx = lo[dir]-1 mirrors lo[dir], cellIdx = lo[dir]-2 mirrors lo[dir]+1, etc.
+		int const cellIdx_mirror = 2 * lo[dir] - 1 - cellIdx;
+		int i_mirror = i;
+		int j_mirror = j;
+		int k_mirror = k;
+		if constexpr (dir == 0) {
+			i_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 1) {
+			j_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 2) {
+			k_mirror = cellIdx_mirror;
+		}
+
 		// Diode BC: at lower boundary, outward normal points in -dir direction
 		// Outflow: mom_normal < 0 (gas moving away from domain) → first-order extrapolation
 		// Inflow: mom_normal > 0 (gas moving into domain) → reflection with flipped momentum
@@ -2900,20 +2918,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 			}
 		} else {
 			// Inflow: use reflection from mirror cell with flipped normal momentum
-			// Mirror cell: reflect around lower boundary face
-			// cellIdx = lo[dir]-1 mirrors lo[dir], cellIdx = lo[dir]-2 mirrors lo[dir]+1, etc.
-			int const cellIdx_mirror = 2 * lo[dir] - 1 - cellIdx;
-			int i_mirror = i;
-			int j_mirror = j;
-			int k_mirror = k;
-			if constexpr (dir == 0) {
-				i_mirror = cellIdx_mirror;
-			} else if constexpr (dir == 1) {
-				j_mirror = cellIdx_mirror;
-			} else if constexpr (dir == 2) {
-				k_mirror = cellIdx_mirror;
-			}
-
 			// Read values from mirror cell
 			const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
 			const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
@@ -2943,6 +2947,29 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
 				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
 				    consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::scalar0_index + n);
+			}
+		}
+
+		// Radiation: the same diode rule as for the gas, applied to each group's radiation flux, since radiation
+		// propagates independently of the gas velocity. An outward normal flux (-dir direction) is extrapolated
+		// from the nearest interior cell. An inward normal flux is reflected from the mirror cell with the normal
+		// flux flipped, so that the flux at the boundary face vanishes and no radiation enters the domain.
+		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+			constexpr int radFirst = Physics_Indices<problem_t>::radFirstIndex;
+			constexpr int nRadVars = Physics_NumVars::numRadVarsPerGroup;
+			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				const int normalFluxComp = radFirst + nRadVars * g + 1 + dir;
+				const bool outflow = consVar(i_interior, j_interior, k_interior, normalFluxComp) < 0.0;
+				const int i_src = outflow ? i_interior : i_mirror;
+				const int j_src = outflow ? j_interior : j_mirror;
+				const int k_src = outflow ? k_interior : k_mirror;
+				for (int n = 0; n < nRadVars; ++n) {
+					const int comp = radFirst + nRadVars * g + n;
+					consVar(i, j, k, comp) = consVar(i_src, j_src, k_src, comp);
+				}
+				if (!outflow) {
+					consVar(i, j, k, normalFluxComp) = -consVar(i, j, k, normalFluxComp);
+				}
 			}
 		}
 	}
@@ -2997,6 +3024,20 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
 		}
 
+		// Mirror cell for reflection: reflect around upper boundary face
+		// cellIdx = hi[dir]+1 mirrors hi[dir], cellIdx = hi[dir]+2 mirrors hi[dir]-1, etc.
+		int const cellIdx_mirror = 2 * hi[dir] + 1 - cellIdx;
+		int i_mirror = i;
+		int j_mirror = j;
+		int k_mirror = k;
+		if constexpr (dir == 0) {
+			i_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 1) {
+			j_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 2) {
+			k_mirror = cellIdx_mirror;
+		}
+
 		// Diode BC: at upper boundary, outward normal points in +dir direction
 		// Outflow: mom_normal > 0 (gas moving away from domain) → first-order extrapolation
 		// Inflow: mom_normal < 0 (gas moving into domain) → reflection with flipped momentum
@@ -3021,20 +3062,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			}
 		} else {
 			// Inflow: use reflection from mirror cell with flipped normal momentum
-			// Mirror cell: reflect around upper boundary face
-			// cellIdx = hi[dir]+1 mirrors hi[dir], cellIdx = hi[dir]+2 mirrors hi[dir]-1, etc.
-			int const cellIdx_mirror = 2 * hi[dir] + 1 - cellIdx;
-			int i_mirror = i;
-			int j_mirror = j;
-			int k_mirror = k;
-			if constexpr (dir == 0) {
-				i_mirror = cellIdx_mirror;
-			} else if constexpr (dir == 1) {
-				j_mirror = cellIdx_mirror;
-			} else if constexpr (dir == 2) {
-				k_mirror = cellIdx_mirror;
-			}
-
 			// Read values from mirror cell
 			const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
 			const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
@@ -3064,6 +3091,29 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
 				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
 				    consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::scalar0_index + n);
+			}
+		}
+
+		// Radiation: the same diode rule as for the gas, applied to each group's radiation flux, since radiation
+		// propagates independently of the gas velocity. An outward normal flux (+dir direction) is extrapolated
+		// from the nearest interior cell. An inward normal flux is reflected from the mirror cell with the normal
+		// flux flipped, so that the flux at the boundary face vanishes and no radiation enters the domain.
+		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+			constexpr int radFirst = Physics_Indices<problem_t>::radFirstIndex;
+			constexpr int nRadVars = Physics_NumVars::numRadVarsPerGroup;
+			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				const int normalFluxComp = radFirst + nRadVars * g + 1 + dir;
+				const bool outflow = consVar(i_interior, j_interior, k_interior, normalFluxComp) > 0.0;
+				const int i_src = outflow ? i_interior : i_mirror;
+				const int j_src = outflow ? j_interior : j_mirror;
+				const int k_src = outflow ? k_interior : k_mirror;
+				for (int n = 0; n < nRadVars; ++n) {
+					const int comp = radFirst + nRadVars * g + n;
+					consVar(i, j, k, comp) = consVar(i_src, j_src, k_src, comp);
+				}
+				if (!outflow) {
+					consVar(i, j, k, normalFluxComp) = -consVar(i, j, k, normalFluxComp);
+				}
 			}
 		}
 	}
@@ -4215,6 +4265,10 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 				comp++;
 				continue;
 			}
+			if (ComputeBuiltinDerivedVar(lev, varname, plotMF, comp, src_cc, src_fc)) {
+				comp++;
+				continue;
+			}
 			ComputeDerivedVar(lev, varname, plotMF, comp, src_cc, src_fc);
 			comp++;
 			continue;
@@ -4225,6 +4279,14 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 	}
 
 	return plotMF;
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::ComputeBuiltinDerivedVar(int /*lev*/, std::string const & /*dname*/, amrex::MultiFab & /*mf*/, int /*ncomp*/,
+							amrex::MultiFab const & /*state_cc*/,
+							amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const -> bool
+{
+	return false;
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloor(int lev, amrex::MultiFab &mf, int ncomp) const
@@ -4715,11 +4777,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	}
 
 	// now construct output and submit to async write queue
-#ifdef QUOKKA_USE_OPENPMD
-	int included_ghosts = 0;
-#else
-	int included_ghosts = std::min(nghost_cc_, nghost_fc_);
-#endif
+	int const included_ghosts = std::min(nghost_cc_, nghost_fc_);
 	amrex::Vector<amrex::MultiFab> mf_cc = PlotFileMF_cc(included_ghosts);
 	amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc); // NOLINT(misc-const-correctness)
 
@@ -4732,11 +4790,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	particleRegister_.writeSFHToMetadata(simulationMetadata_, sn_count_cumulative_);
 #endif // AMREX_SPACEDIM == 3
 
-#ifdef QUOKKA_USE_OPENPMD
-	// TODO(bwibking): write particles using openPMD
-	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, Geom(), plot_file, tNew_[0], istep[0]);
-	WriteMetadataFile(plotfilename + ".yaml");
-#else
 	// sets the maximum number of binary files per MultiFab
 	quokka::ScopedVisMFNOutFiles scoped_nfiles(plot_nfiles);
 
@@ -4773,7 +4826,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	particleRegister_.redistribute(0, 0);
 	particleRegister_.writePlotFile(plotfilename);
 #endif // AMREX_SPACEDIM == 3
-#endif // QUOKKA_USE_OPENPMD
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(std::string const &MetadataFileName) const

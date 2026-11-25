@@ -1,11 +1,8 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef CONDUCTIVITY_HPP_ // NOLINT
 #define CONDUCTIVITY_HPP_
-
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file conductivity.hpp
 /// \brief Thermal conductivity models, selected by Physics_Traits<problem_t>::conduction_model and
 ///        Physics_Traits<problem_t>::conduction_geometry.
@@ -30,7 +27,7 @@
 ///
 /// Specialize this in the problem file when using ConductionModel::problem_defined, e.g.
 /// \code
-/// template <> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeConductivity<MyProblem>(amrex::Real rho, amrex::Real Tgas)
+/// template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto computeConductivity<MyProblem>(amrex::Real rho, amrex::Real Tgas)
 ///     -> quokka::valarray<amrex::Real, 2>
 /// {
 /// 	return {kappa0 * std::pow(Tgas, 2.5), 0.0};
@@ -43,7 +40,7 @@
 ///         normal flux term with the biased L2 limiter, which relies on (kappa_parallel - kappa_perp) * b_n^2 >= 0.
 ///         This is only checked in debug builds (AMREX_ASSERT in AnisoConduction).
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeConductivity(amrex::Real /*rho*/, amrex::Real /*Tgas*/) -> quokka::valarray<amrex::Real, 2>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto computeConductivity(amrex::Real /*rho*/, amrex::Real /*Tgas*/) -> quokka::valarray<amrex::Real, 2>
 {
 	static_assert(sizeof(problem_t) == 0, "computeConductivity must be specialized in the problem file when using ConductionModel::problem_defined");
 	return {0.0, 0.0};

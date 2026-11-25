@@ -46,11 +46,11 @@ Internally, both solvers obtain \\(\kappa\\) through `quokka::conduction::Evalua
 
 ## Problem-defined conductivity
 
-With `ConductionModel::problem_defined`, specialize `computeConductivity` in the problem file. It returns \\(\{\kappa\_\parallel, \kappa\_\perp\}\\); in the isotropic geometry only the first component is used.
+With `ConductionModel::problem_defined`, specialize `computeConductivity` in the problem file. It returns \\(\\{\kappa\_\parallel, \kappa\_\perp\\}\\); in the isotropic geometry only the first component is used. This path is currently tested by `ThermalConductionSpitzerGaussian`.
 
 ```cpp
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeConductivity<MyProblem>(amrex::Real rho, amrex::Real Tgas)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto computeConductivity<MyProblem>(amrex::Real rho, amrex::Real Tgas)
     -> quokka::valarray<amrex::Real, 2>
 {
     return {kappa0 * std::pow(Tgas, 2.5), 0.0};
@@ -72,12 +72,13 @@ The `constant` and `spitzer` models read their prefactor from the key that match
 
 With the anisotropic geometry, `conduction.aniso_flux_limiter` selects the limiter for the transverse (cross) terms of the flux, `mc` (default) or `minmod`, for any `conduction_model`.
 
-Quokka aborts at startup in these cases:
+With `conduction.enabled = 1`, Quokka aborts at startup in these cases:
 - a prefactor is set that does not match the geometry, or any prefactor is set with `problem_defined`;
 - `conduction.aniso_flux_limiter` is set with the isotropic geometry, or is not `mc` or `minmod`;
 - a prefactor is negative, or `conduction.kappaPerp` is larger than `conduction.kappaPar`;
-- `conduction.enabled = 1` while the problem's `conduction_model` is `none`;
-- the input file still sets the removed `conduction.conduction_type` key.
+- the problem's `conduction_model` is `none`.
+
+With `conduction.enabled = 0`, the prefactor and limiter keys are ignored. Quokka always aborts if `conduction.enabled` is not 0 or 1, or if the input file still sets the removed `conduction.conduction_type` key.
 
 See [Runtime parameters](parameters.md#thermal-conduction) for the full list of `conduction.*` parameters.
 

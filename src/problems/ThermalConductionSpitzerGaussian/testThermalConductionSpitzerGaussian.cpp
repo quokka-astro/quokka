@@ -1,8 +1,6 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 /// \file testThermalConductionSpitzerGaussian.cpp
 /// \brief Defines a test problem for Spitzer thermal conduction (kappa = kappa0*T^2.5) with a Gaussian IC.
 ///        The conductivity is supplied through ConductionModel::problem_defined (computeConductivity below), so this
@@ -61,7 +59,7 @@ template <> struct Physics_Traits<ThermalConductionSpitzerGaussianProblem> : Def
 // Identical to ConductionModel::spitzer with conduction.conductivity_prefactor = kappa0, so this reproduces the
 // built-in Spitzer result exactly.
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeConductivity<ThermalConductionSpitzerGaussianProblem>(amrex::Real /*rho*/, amrex::Real Tgas)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto computeConductivity<ThermalConductionSpitzerGaussianProblem>(amrex::Real /*rho*/, amrex::Real Tgas)
     -> quokka::valarray<amrex::Real, 2>
 {
 	return {kappa0 * std::pow(Tgas, 2.5), 0.0};

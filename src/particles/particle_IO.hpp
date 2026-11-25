@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © The Quokka Authors
+// SPDX-License-Identifier: MIT
+
 #ifndef PARTICLE_IO_HPP_
 #define PARTICLE_IO_HPP_
 
@@ -283,13 +286,8 @@ void writeUnitsFile(ContainerType *container, const std::string &snapshot_name, 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			// Create the full path for the Fields.yaml file
 			std::string filename;
-#ifdef QUOKKA_USE_OPENPMD
-			// For OpenPMD, write the YAML file alongside the OpenPMD file
-			filename = snapshot_name + "_" + name + ".yaml";
-#else
-			// For standard output, write the YAML file in the particle directory
+			// Write the YAML file in the particle directory
 			filename = snapshot_name + "/" + name + "/Fields.yaml";
-#endif
 
 			// Open the file for writing
 			std::ofstream outFile(filename);
