@@ -255,6 +255,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 	// number inside device code. Copy it to a local first, as UpdateFlux does with radBoundaries_.
 	const amrex::GpuArray<double, nGroups_> pe_efficiency = pe_heating_efficiency_;
 
+	// A static constexpr member has no device storage and std::max takes it by reference, so copy it to a local.
+	const double Erad_floor = Erad_floor_;
+
 	auto EradVec_guess = Erad0Vec;
 	for (int g = 0; g < nGroups_; ++g) {
 		const double tau = dt * rho * opacity_terms.kappaE[g] * chat;
@@ -265,7 +268,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveDustAbsorptionBands(double cons
 		// denormals to exactly zero, and UpdateFlux then divides the flux by it (F / (c E) = 0 / 0), which NaNs the
 		// flux, the gas momentum and the gas energy. A negative lagged work term can also drive the energy below zero.
 		// The floor is not taken from the gas: the absorbed energy of these bands never reaches the gas either.
-		EradVec_guess[g] = std::max(EradVec_guess[g], Erad_floor_);
+		EradVec_guess[g] = std::max(EradVec_guess[g], Erad_floor);
 	}
 
 	double PE_heating = 0.0;
@@ -958,8 +961,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		for (int g = 0; g < nGroups_ + 1; ++g) {
 			radBoundaries_g_copy[g] = radBoundaries_g[g];
 		}
-		for (int g = 0; g < nGroups_; ++g) {
-			radBoundaryRatios_copy[g] = radBoundaries_g_copy[g + 1] / radBoundaries_g_copy[g];
+		// The ratios only enter the power-law opacity models. A single group has the boundaries {0, inf}, whose ratio is not defined.
+		if constexpr (nGroups_ > 1) {
+			for (int g = 0; g < nGroups_; ++g) {
+				radBoundaryRatios_copy[g] = radBoundaries_g_copy[g + 1] / radBoundaries_g_copy[g];
+			}
 		}
 
 		// define a list of alpha_quant for the model PPL_opacity_fixed_slope_spectrum
