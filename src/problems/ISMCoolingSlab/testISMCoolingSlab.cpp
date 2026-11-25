@@ -17,13 +17,11 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
-#include "cooling/GrackleNTTable.hpp"
 #include "fundamental_constants.H"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include <algorithm>
 #include <cmath>
-#include <string>
 
 #include "actual_eos_data.H"
 #include "burn_type.H"
@@ -206,15 +204,6 @@ template <> void QuokkaSimulation<ISMCoolingSlab>::computeAfterTimestep()
 auto problem_main() -> int
 {
 	const double CFL_number = 0.3;
-
-	// nothing in the simulation registers the Grackle table yet, so the problem does; the network reads it only when energy_switch != 0
-	amrex::ParmParse const pp_cooling("ism_cooling");
-	std::string table_path;
-	pp_cooling.get("grackle_nT_table", table_path);
-	const auto table_data = quokka::ISMCooling::ReadGrackleNTTable(table_path);
-	const auto table_attrs = quokka::ISMCooling::ReadGrackleNTAttributes(table_path);
-	quokka::ISMCooling::RegisterGrackleNTTable({table_data->const_tables_host(), table_attrs.zmet, table_attrs.H_mass_fraction},
-						   {table_data->const_tables(), table_attrs.zmet, table_attrs.H_mass_fraction});
 
 	QuokkaSimulation<ISMCoolingSlab> sim;
 

@@ -4,4 +4,6 @@
 # (path relative to the tests/ working directory)
 # *****************************************************************
 ism_test.mode = "jacobian"
+# G0 in Habing units of every gas state; the states carry it in burn_t::aux[0]
+G0_external = "1.0"
 ism_cooling.grackle_nT_table = "../extern/cooling/CloudyData_UVB=HM2012_shielded_nT_Z1.h5"

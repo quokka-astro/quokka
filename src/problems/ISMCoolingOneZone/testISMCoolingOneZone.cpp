@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 /// \file testISMCoolingOneZone.cpp
-/// \brief Host-only unit test of the network thermophotochemistry_ism_handwritten (mode "jacobian").
+/// \brief Tests of the network thermophotochemistry_ism_handwritten, selected by ism_test.mode.
+///
+/// Mode "startup" constructs a QuokkaSimulation with a uniform gas cell and runs one step. It exercises the startup checks of the photochemistry
+/// cooling path (G0_external, ism_cooling.grackle_nT_table and the metallicity of the table), which abort with a message naming the parameter.
+///
+/// Mode "jacobian" is a host-only unit test:
 ///
 /// For six gas states, chosen so that every branch of n_e^max is active in at least one (asserted), with G0 = 1, it checks that
 ///  - every entry of actual_jac matches a centred finite difference of actual_rhs, with n_gamma = 1e-3 and again with no photons (so that
@@ -10,10 +15,12 @@
 ///  - get_ism_energy_terms matches a centred finite difference of its own value in T, n_HI and n_H+, and
 ///  - the specific energy rate of actual_rhs equals the sum of the rate functions of cooling/ISMCooling.hpp called directly.
 
+#include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 
+#include "QuokkaSimulation.hpp"
 #include "cooling/GrackleNTTable.hpp"
 #include "cooling/ISMCooling.hpp"
 
@@ -23,8 +30,10 @@
 #include <iostream>
 #include <string>
 
+#include "actual_eos_data.H"
 #include "actual_rhs.H"
 #include "burn_type.H"
+#include "eos.H"
 #include "extern_parameters.H"
 #include "fundamental_constants.H"
 #include "network.H"
@@ -251,22 +260,148 @@ static auto CheckEnergySum(const GasState &g) -> int
 	return 0;
 }
 
-auto problem_main() -> int
+struct ISMCoolingOneZone {};
+
+constexpr double c_hat = C::c_light;
+constexpr double Erad_floor_ = 1.0e-60; // erg cm^-3
+
+template <> struct quokka::EOS_Traits<ISMCoolingOneZone> {
+	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double boltzmann_constant = C::k_B;
+	static constexpr double gamma = 5. / 3.;
+};
+
+template <> struct Physics_Traits<ISMCoolingOneZone> : DefaultPhysicsTraits {
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_radiation_enabled = true;
+	static constexpr int numMassScalars = NumSpec;
+	static constexpr int numPassiveScalars = numMassScalars + 0;
+	static constexpr int nGroups = NumThermalBands + NumChemBands;
+	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+};
+
+template <> struct RadSystem_Traits<ISMCoolingOneZone> {
+	static constexpr double c_hat_over_c = c_hat / C::c_light;
+	static constexpr double Erad_floor = Erad_floor_;
+	static constexpr int beta_order = 0;
+	static constexpr auto ChemBandsPowerLawIndex() { return ChemBandsPowerLawIndex_; }
+	static constexpr auto ChemBands() { return ChemBandsHeader(); }
+};
+
+// The network computes the energy dust absorbs from the chemical band (DUST_CHEMICAL_BAND_ABSORPTION); there is no coupling model, so it is dropped.
+template <> struct ISM_Traits<ISMCoolingOneZone> {
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr bool enable_photoelectric_heating = false;
+	static constexpr bool thermal_band_photochemistry = false;
+	static constexpr bool dust_chemical_band_absorption = true;
+};
+
+template <> struct SimulationData<ISMCoolingOneZone> {
+	amrex::Real temperature{};
+	amrex::Real n_H{};
+	amrex::Real x_Hp{};
+};
+
+template <> void QuokkaSimulation<ISMCoolingOneZone>::preCalculateInitialConditions()
 {
+	init_extern_parameters();
+
 	amrex::ParmParse const pp("ism_test");
-	amrex::ParmParse const pp_cooling("ism_cooling");
-	std::string mode;
-	std::string table_path;
-	pp.get("mode", mode);
-	pp_cooling.get("grackle_nT_table", table_path);
-	if (mode != "jacobian") {
-		std::cout << "ISMCoolingOneZone: unknown ism_test.mode '" << mode << "'\n";
+	userData_.temperature = 8000.0_rt;
+	userData_.n_H = 1.0_rt;
+	userData_.x_Hp = 0.01_rt;
+	pp.query("temperature", userData_.temperature);
+	pp.query("n_H", userData_.n_H);
+	pp.query("x_Hp", userData_.x_Hp);
+
+	amrex::Real small_temp = 1.0e-2_rt;
+	amrex::Real small_dens = 1.0e-60_rt;
+	eos_init(small_temp, small_dens);
+	network_init();
+}
+
+// The chemical bands couple to the gas only through photochemistry, so their opacities are zero.
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ISMCoolingOneZone>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+{
+	return 0.0_rt;
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ISMCoolingOneZone>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+{
+	return 0.0_rt;
+}
+
+template <> void QuokkaSimulation<ISMCoolingOneZone>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	burn_t state;
+	state.xn[Species::H_p] = userData_.x_Hp * userData_.n_H;
+	state.xn[Species::H] = userData_.n_H - state.xn[Species::H_p];
+	state.xn[Species::e] = state.xn[Species::H_p];
+	state.T = userData_.temperature;
+	Real rhotot = 0.0_rt;
+	for (int n = 0; n < NumSpec; ++n) {
+		rhotot += state.xn[n] * spmasses[n];
+	}
+	state.rho = rhotot;
+	eos(eos_input_rt, state);
+	const auto Egas0 = state.e * rhotot;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		for (int g = 0; g < Physics_Traits<ISMCoolingOneZone>::nGroups; ++g) {
+			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_floor_;
+			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
+			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
+			state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
+		}
+		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::gasEnergy_index) = Egas0;
+		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::gasDensity_index) = rhotot;
+		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::gasInternalEnergy_index) = Egas0;
+		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x1GasMomentum_index) = 0.0_rt;
+		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x2GasMomentum_index) = 0.0_rt;
+		state_cc(i, j, k, RadSystem<ISMCoolingOneZone>::x3GasMomentum_index) = 0.0_rt;
+		for (int nn = 0; nn < NumSpec; ++nn) {
+			state_cc(i, j, k, HydroSystem<ISMCoolingOneZone>::scalar0_index + nn) = state.xn[nn] * spmasses[nn];
+		}
+	});
+}
+
+/// Mode "startup": construct the simulation, so that its startup checks run, set the initial conditions and take the steps of max_timesteps.
+static auto RunStartupMode() -> int
+{
+	QuokkaSimulation<ISMCoolingOneZone> sim;
+	if (ISM::GetGrackleNTTable() == nullptr) {
+		std::cout << "ISMCoolingOneZone: the simulation did not register the Grackle table\n";
 		return 1;
 	}
+	sim.setInitialConditions();
+	sim.plotfileInterval_ = -1;
+	sim.evolve();
+	std::cout << "ISMCoolingOneZone startup: PASSED\n";
+	return 0;
+}
+
+/// Mode "jacobian": builds burn_t states directly, so there is no simulation to register the Grackle table and the mode registers it itself.
+static auto RunJacobianMode() -> int
+{
+	amrex::ParmParse const pp_cooling("ism_cooling");
+	std::string table_path;
+	pp_cooling.get("grackle_nT_table", table_path);
 
 	init_extern_parameters();
 
-	// nothing in the simulation registers the table yet, so the test does
+	// G0_external is G0 in Habing units: the one the states carry in aux[0] must be the one the input asks for
+	amrex::ParmParse const pp_top;
+	Real G0_input = 0.0;
+	pp_top.getWithParser("G0_external", G0_input);
+	if (MakeState(gas_states[0]).aux[0] != G0_input) {
+		std::cout << "ISMCoolingOneZone: aux[0] = " << MakeState(gas_states[0]).aux[0] << " but G0_external = " << G0_input << '\n';
+		return 1;
+	}
+
 	const auto data = ISM::ReadGrackleNTTable(table_path);
 	const auto attrs = ISM::ReadGrackleNTAttributes(table_path);
 	ISM::RegisterGrackleNTTable({data->const_tables_host(), attrs.zmet, attrs.H_mass_fraction}, {data->const_tables(), attrs.zmet, attrs.H_mass_fraction});
@@ -283,4 +418,19 @@ auto problem_main() -> int
 	}
 	std::cout << (failures == 0 ? "ISMCoolingOneZone: PASSED\n" : "ISMCoolingOneZone: FAILED\n");
 	return (failures == 0) ? 0 : 1;
+}
+
+auto problem_main() -> int
+{
+	amrex::ParmParse const pp("ism_test");
+	std::string mode;
+	pp.get("mode", mode);
+	if (mode == "jacobian") {
+		return RunJacobianMode();
+	}
+	if (mode == "startup") {
+		return RunStartupMode();
+	}
+	std::cout << "ISMCoolingOneZone: unknown ism_test.mode '" << mode << "'\n";
+	return 1;
 }

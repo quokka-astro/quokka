@@ -11,6 +11,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
 
+#include "cooling/ResampledCooling.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 
@@ -36,12 +37,15 @@ static constexpr bool debit_work_term_from_radiation = false;
 
 AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
+/// Run the photochemistry burn in every cell of `mf`.
+/// \param G0Rate The FUV field G0 [Habing units] per cell. Only read when PHOTOCHEM_ISM_COOLING is defined, where it is passed to the network as
+/// burn_t::aux[0].
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt,
-			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource, amrex::MultiFab &radEnergySource)
-    -> bool
+			   const Real max_density_allowed, const Real min_density_allowed, amrex::MultiFab &dustHeatingSource, amrex::MultiFab &radEnergySource,
+			   quokka::ResampledCooling::ExternalHeatingRate const &G0Rate = {}) -> bool
 {
-	amrex::ignore_unused(dustHeatingSource, radEnergySource);
+	amrex::ignore_unused(dustHeatingSource, radEnergySource, G0Rate);
 
 	// Start off by assuming a successful burn.
 	int photochem_burn_success = 1;
@@ -174,6 +178,10 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 			// call the EOS to set the temperature
 			eos(eos_input_re, photochemstate);
+#ifdef PHOTOCHEM_ISM_COOLING
+			// the FUV field in Habing units, read by the network's photoelectric heating and grain recombination
+			photochemstate.aux[0] = G0Rate(i, j, k);
+#endif
 
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests

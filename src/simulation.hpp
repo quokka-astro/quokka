@@ -250,6 +250,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::string heatingRateExternalExpr_;
 	std::optional<amrex::Parser> heatingRateExternalParser_;
 	std::optional<amrex::ParserExecutor<5>> heatingRateExternalParserExe_;
+#ifdef PHOTOCHEM_ISM_COOLING
+	bool useG0ExternalParser_ = false;
+	std::string G0ExternalExpr_;
+	std::optional<amrex::Parser> G0ExternalParser_;
+	std::optional<amrex::ParserExecutor<5>> G0ExternalParserExe_;
+#endif
 	bool debugDensityFloorPlot_ = false; // default: disabled
 
 	mutable YAML::Node simulationMetadata_;
@@ -1102,6 +1108,44 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		heatingRateExternalParser_.reset();
 		heatingRateExternalParserExe_.reset();
 	}
+
+#ifdef PHOTOCHEM_ISM_COOLING
+	// optional external FUV field G0 in Habing units (variables: x, y, z, time, dt); the photochemistry cooling path requires it
+	G0ExternalExpr_.clear();
+	pp.query("G0_external", G0ExternalExpr_);
+	useG0ExternalParser_ = !G0ExternalExpr_.empty();
+	if (useG0ExternalParser_) {
+		G0ExternalParser_.emplace(G0ExternalExpr_);
+		auto symbols = G0ExternalParser_->symbols();
+		if (!amrex::ParmParse::ParserPrefix.empty()) {
+			amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
+			for (auto const &symbol : symbols) {
+				// `x`, `y`, `z`, `time` and `dt` are runtime parser inputs, not constants from ParmParse.
+				// Available ParmParse constants are: `yr`, `kyr`, `Myr`, `Gyr`.
+				if (symbol == "x" || symbol == "y" || symbol == "z" || symbol == "time" || symbol == "dt") {
+					continue;
+				}
+				amrex::Real value = 0.0;
+				if (parser_pp.query(symbol, value) != 0) {
+					G0ExternalParser_->setConstant(symbol, value);
+				}
+			}
+		} else {
+			amrex::Abort("Internal error: ParserPrefix is empty while parsing `G0_external` unit symbols (`yr`, `kyr`, `Myr`, `Gyr`). "
+				     "This indicates a code regression. Please report this to Quokka maintainers and reference PR #1791. ");
+		}
+		G0ExternalParser_->registerVariables({"x", "y", "z", "time", "dt"});
+		G0ExternalParserExe_ = G0ExternalParser_->compile<5>();
+#ifdef AMREX_USE_GPU
+		if (G0ExternalParserExe_->m_device_executor == nullptr) {
+			amrex::Abort("G0_external: device parser executor is null after compile<5>()");
+		}
+#endif
+	} else {
+		G0ExternalParser_.reset();
+		G0ExternalParserExe_.reset();
+	}
+#endif
 
 	// Optional debug output: spatially varying density floor
 	pp.query("debug_density_floor_plot", debugDensityFloorPlot_);

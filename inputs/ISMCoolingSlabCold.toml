@@ -40,7 +40,8 @@ network.energy_switch = 0
 network.recombination_switch = 0
 network.dust_kappa = 1.79235e5 # cm^2 g^-1: kappa rho L = 3 for n_H = 1, L = 1e19 cm
 
-# the table is registered by the problem; energy_switch = 0 never reads it
+# G0 in Habing units, and the table the simulation registers; energy_switch = 0 never reads them in the network
+G0_external = "1.0"
 ism_cooling.grackle_nT_table = "../extern/cooling/CloudyData_UVB=HM2012_shielded_nT_Z1.h5"
 
 radiation.iteration_tolerance = 1e-10
