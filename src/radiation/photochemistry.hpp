@@ -40,7 +40,7 @@ AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 /// Run the photochemistry burn in every cell of `mf`.
 /// \param G0Rate The FUV field G0 [Habing units] per cell. Only read when PHOTOCHEM_ISM_COOLING is defined, where it is passed to the network as
-/// burn_t::aux[0].
+/// burn_t::aux[0], clamped to >= 0.
 /// \param hotMask The hot (1) / cold (0) label of each cell (photochemistry_hot_gas.hpp). Only read when PHOTOCHEM_ISM_COOLING is defined, and then
 /// only if not null. Hot cells skip the burn: their chemical bands are attenuated by dust only (with DUST_CHEMICAL_BAND_ABSORPTION, else not at
 /// all), the gas gets the absorbed photon momentum, and the gas internal energy, the species and dustHeatingSource are not changed (SPEC §5.1).
@@ -190,8 +190,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			// call the EOS to set the temperature
 			eos(eos_input_re, photochemstate);
 #ifdef PHOTOCHEM_ISM_COOLING
-			// the FUV field in Habing units, read by the network's photoelectric heating and grain recombination
-			photochemstate.aux[0] = G0Rate(i, j, k);
+			// the FUV field in Habing units, read by the network's photoelectric heating and grain recombination; clamped to >= 0
+			photochemstate.aux[0] = amrex::max(G0Rate(i, j, k), 0.0_rt);
 #endif
 
 #ifdef PHOTOCHEM_ISM_COOLING

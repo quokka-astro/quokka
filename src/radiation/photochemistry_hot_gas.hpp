@@ -15,6 +15,7 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <format>
 #include <limits>
 
 #include "AMReX.H"
@@ -22,6 +23,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_MFIter.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_iMultiFab.H"
 
@@ -186,8 +188,9 @@ void BuildHotMask(amrex::MultiFab const &state, std::array<amrex::MultiFab const
 ///     and E_int is left unchanged;
 ///  3. clamp E_int to the energy at tempFloor (if tempFloor > 0).
 /// The change of E_int is added to the internal and total gas energy. Aborts, printing the cell, if the integration does not finish in
-/// maxStepsODEIntegrate steps: the step runs after hydro, so there is no retry.
-/// \param G0Rate The FUV field G0 [Habing units] per cell.
+/// maxStepsODEIntegrate steps: the step runs after hydro, so there is no retry. Prints the number of hot cells and their average and maximum
+/// substeps, if there are hot cells.
+/// \param G0Rate The FUV field G0 [Habing units] per cell, clamped to >= 0.
 template <typename problem_t>
 void ComputeHotGasCooling(amrex::MultiFab &state, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc, amrex::iMultiFab const &hotMask,
 			  amrex::Real dt_hydro, quokka::ResampledCooling::ExternalHeatingRate const &G0Rate, amrex::Real tempFloor)
@@ -207,10 +210,14 @@ void ComputeHotGasCooling(amrex::MultiFab &state, std::array<amrex::MultiFab con
 	const amrex::Real T_table_min = std::exp(quokka::ISMCooling::GetGrackleNTTable()->table.coord_min[1]);
 	const amrex::Real T_cool_min = amrex::max(tempFloor, T_table_min);
 
+	amrex::iMultiFab nsubstepsMF(hotMask.boxArray(), hotMask.DistributionMap(), 1, 0);
+	nsubstepsMF.setVal(0);
+
 	for (amrex::MFIter iter(state); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &s = state.array(iter);
 		auto const &mask = hotMask.const_array(iter);
+		auto const &nsubsteps = nsubstepsMF.array(iter);
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
@@ -239,12 +246,14 @@ void ComputeHotGasCooling(amrex::MultiFab &state, std::array<amrex::MultiFab con
 				return;
 			}
 			const amrex::Real Eint = detail::CellInternalEnergy<problem_t>(s, i, j, k, cons_fc);
-			const detail::HotGasCoolingRHS rhs{rho, nH, xn, G0Rate(i, j, k), Zp, zetaHI, T_cool_min, alphaB_T_dependent, pe_heating, cr_heating};
+			const amrex::Real G0 = amrex::max(G0Rate(i, j, k), 0.0);
+			const detail::HotGasCoolingRHS rhs{rho, nH, xn, G0, Zp, zetaHI, T_cool_min, alphaB_T_dependent, pe_heating, cr_heating};
 			const amrex::Real Eint_floor = (tempFloor > 0.0) ? rhs.InternalEnergy(tempFloor) : 0.0;
 			quokka::valarray<amrex::Real, 1> y = {Eint};
 			quokka::valarray<amrex::Real, 1> const abstol = {reltol_floor * amrex::max(Eint_floor, std::numeric_limits<amrex::Real>::min())};
 			int nsteps = 0;
 			rk_adaptive_integrate(rhs, 0, y, dt_hydro, rtol, abstol, nsteps);
+			nsubsteps(i, j, k) = nsteps;
 			if (nsteps >= maxStepsODEIntegrate) {
 				printf("ComputeHotGasCooling: max substeps exceeded! rho = %.17e, n_H = %.17e, Eint = %.17e, T = %.17e, G0 = %.17e, dt = "
 				       "%.17e\n", // NOLINT
@@ -258,6 +267,12 @@ void ComputeHotGasCooling(amrex::MultiFab &state, std::array<amrex::MultiFab con
 			s(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) += dEint;
 			s(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint;
 		});
+	}
+
+	const amrex::Long nhot = hotMask.sum(0);
+	if (nhot > 0) {
+		const amrex::Real navg = static_cast<amrex::Real>(nsubstepsMF.sum(0)) / static_cast<amrex::Real>(nhot);
+		amrex::Print() << std::format("\thot-gas cooling: {} hot cells, substeps (per hot cell): avg {}, max {}\n", nhot, navg, nsubstepsMF.max(0));
 	}
 }
 
