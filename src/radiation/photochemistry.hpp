@@ -70,7 +70,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || Network::NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
 		      "The network's NumThermalBands must equal RadSystem<problem_t>::nGroupsThermal_ "
-		      "(nGroups_ - NChemBands) when ISM_Traits::thermal_band_photochemistry is true.");
+		      "(nGroups_ - NChemBands) when the network has thermal bands.");
+	static_assert(BandEdgesAreOrdered(Network::ChemBands()) && Network::ChemBands().arr[0] > 0.,
+		      "Network::ChemBands() must be positive and strictly increasing.");
 	static_assert(
 	    !RadSystem<problem_t>::dust_chemical_band_absorption_ || requires { &Network::Params::dust_kappa; },
 	    "ISM_Traits::dust_chemical_band_absorption is true but the network has no dust absorption (no Params::dust_kappa), "

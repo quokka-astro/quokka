@@ -129,7 +129,6 @@ template <typename problem_t> struct ISM_Traits {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool thermal_band_photochemistry = false;
 	static constexpr bool dust_chemical_band_absorption = false;
 };
 
@@ -229,6 +228,30 @@ template <typename problem_t> struct RadSystem_NChemBands<problem_t, true> {
 	static constexpr int value = Microphysics_Traits<problem_t>::Network::NumChemBands;
 };
 
+// The number of thermal radiation bands the problem's network absorbs from and emits into: those of
+// Microphysics_Traits<problem_t>::Network when the problem has photochemistry, and 0 otherwise.
+template <typename problem_t, bool = Microphysics_Traits<problem_t>::photochemistry> struct RadSystem_NNetworkThermalBands {
+	static constexpr int value = 0;
+};
+
+template <typename problem_t> struct RadSystem_NNetworkThermalBands<problem_t, true> {
+	static constexpr int value = Microphysics_Traits<problem_t>::Network::NumThermalBands;
+};
+
+// True if the band edges are non-negative and strictly increasing (a NaN edge fails).
+template <unsigned int N> constexpr auto BandEdgesAreOrdered(amrex::GpuArray<double, N> const &edges) -> bool
+{
+	if (!(edges.arr[0] >= 0.)) {
+		return false;
+	}
+	for (unsigned int i = 0; i + 1 < N; ++i) {
+		if (!(edges.arr[i] < edges.arr[i + 1])) {
+			return false;
+		}
+	}
+	return true;
+}
+
 template <typename problem_t, typename = void> struct RadSystem_EnergyUnit {
 	static constexpr double value = C::ev2erg;
 };
@@ -305,7 +328,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr bool enable_dust_gas_thermal_coupling_model_ = ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
-	static constexpr bool thermal_band_photochemistry_ = ISM_Traits<problem_t>::thermal_band_photochemistry;
+	// The network takes part in the thermal bands exactly when it has some.
+	static constexpr bool thermal_band_photochemistry_ = RadSystem_NNetworkThermalBands<problem_t>::value > 0;
 	static constexpr bool dust_chemical_band_absorption_ = ISM_Traits<problem_t>::dust_chemical_band_absorption;
 	static_assert(!dust_chemical_band_absorption_ || enable_dust_gas_thermal_coupling_model_,
 		      "ISM_Traits::dust_chemical_band_absorption requires ISM_Traits::enable_dust_gas_thermal_coupling_model = true, "
@@ -326,6 +350,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 			return boundaries;
 		}
 	}();
+	static_assert(BandEdgesAreOrdered(radBoundaries_), "RadSystem_Traits::radBoundaries must be non-negative and strictly increasing.");
 
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
 
