@@ -1,9 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-# One octant with the source at the lower corner. 3 pc: the H front reaches ~1.5 pc at stop_time (16^3 run).
+# Source at the centre, 2.5 pc from each wall: at stop_time the H front reaches ~1.6 pc and the warm layer ahead of it ~1.9 pc (256^3 octant run).
 geometry.prob_lo     =  [0.0, 0.0, 0.0]
-geometry.prob_hi     =  [9.257032744e18, 9.257032744e18, 9.257032744e18] # = 3 pc
+geometry.prob_hi     =  [1.5428387907e19, 1.5428387907e19, 1.5428387907e19] # = 5 pc
 quokka.bc = ["reflecting", "reflecting", "reflecting"]
 
 # *****************************************************************
