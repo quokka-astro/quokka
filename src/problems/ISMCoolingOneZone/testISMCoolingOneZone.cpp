@@ -19,6 +19,10 @@
 /// Mode "cross_threshold" takes two steps of a cell that starts hot (n_H = 1, T = 3e4 K, x_H+ = 0.5). After the first it must be fully ionized and
 /// below T_th = 2e4 K, and after the second the burn must have run, so that H+ has begun to recombine. It is 1D only.
 ///
+/// Mode "hot_cell_no_G0" takes one step of a dense hot cell (n_H = 100, T = 1e6 K) with G0 = 0 and a cooling time much shorter than the step. Without
+/// heating, Lambda_net > 0 at every T of the table, so the hot-cell step must stop cooling at max(temperature_floor, table T_min): the step must finish
+/// with a finite T >= temperature_floor. It is 1D only.
+///
 /// Mode "jacobian" is a host-only unit test:
 ///
 /// For six gas states, chosen so that every branch of n_e^max is active in at least one (asserted), with G0 = 1, it checks that
@@ -771,6 +775,31 @@ static auto RunCrossThresholdMode() -> int
 	return (failures == 0) ? 0 : 1;
 }
 
+/// Mode "hot_cell_no_G0": one step of a dense hot cell without heating. The hot-cell step must finish (not abort) with a finite T >= temperature_floor
+/// that is below T_th.
+static auto RunHotCellNoG0Mode() -> int
+{
+	constexpr Real T_th = 2.0e4; // K, SPEC 5.1
+	QuokkaSimulation<ISMCoolingOneZone> sim;
+	sim.setInitialConditions();
+	sim.plotfileInterval_ = -1;
+	sim.evolve();
+	const CellGas final_gas = ReadCellGas(sim.state_new_cc_[0], sim.geom[0]);
+	const Real T_floor = sim.tempFloor_;
+	int failures = 0;
+	std::cout << "ISMCoolingOneZone hot_cell_no_G0: temperature_floor = " << T_floor << " K\n  cell   T after [K]\n";
+	for (size_t i = 0; i < final_gas.T.size(); ++i) {
+		const Real T = final_gas.T[i];
+		std::cout << "  " << std::setw(4) << i << "   " << std::setprecision(10) << T << '\n';
+		if (!std::isfinite(T) || !(T >= T_floor) || !(T < T_th)) {
+			std::cout << "    T is not finite, below temperature_floor, or not cooled below T_th\n";
+			++failures;
+		}
+	}
+	std::cout << (failures == 0 ? "ISMCoolingOneZone hot_cell_no_G0: PASSED\n" : "ISMCoolingOneZone hot_cell_no_G0: FAILED\n");
+	return (failures == 0) ? 0 : 1;
+}
+
 auto problem_main() -> int
 {
 	amrex::ParmParse const pp("ism_test");
@@ -790,6 +819,9 @@ auto problem_main() -> int
 	}
 	if (mode == "cross_threshold") {
 		return RunCrossThresholdMode();
+	}
+	if (mode == "hot_cell_no_G0") {
+		return RunHotCellNoG0Mode();
 	}
 	std::cout << "ISMCoolingOneZone: unknown ism_test.mode '" << mode << "'\n";
 	return 1;

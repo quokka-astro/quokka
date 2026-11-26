@@ -13,6 +13,7 @@
 /// attenuates their chemical bands by dust only.
 
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <limits>
 
@@ -92,7 +93,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto CellNumberDensities(amrex::Array4<
 /// The right-hand side dE/dt = -n_H^2 Lambda_net(n_H, T) + G_PE + G_CR [erg cm^-3 s^-1] of a fully ionized hot cell at fixed density, for
 /// rk_adaptive_integrate. T comes from the photochemistry EOS at each call. The photoelectric heating uses n_e^max with n_HI = 0 and n_H+ = n_H; the
 /// cosmic-ray heating, proportional to n_HI, is zero. Each heating term is off if its network switch (pe_heating_switch, cr_heating_switch) is 0,
-/// as in cold cells.
+/// as in cold cells. At or below T_cool_min the table term can only heat (net cooling is set to zero), so that cooling cannot drive T below
+/// T_cool_min: without a heating source a cell with t_cool << dt would otherwise reach E_int = 0.
 struct HotGasCoolingRHS {
 	amrex::Real rho;			  ///< gas density [g cm^-3]
 	amrex::Real nH;				  ///< hydrogen number density [cm^-3]
@@ -100,6 +102,7 @@ struct HotGasCoolingRHS {
 	amrex::Real G0;				  ///< FUV field [Habing units]
 	amrex::Real Zp;				  ///< metallicity [Z_sun]
 	amrex::Real zetaHI;			  ///< cosmic-ray ionization rate of HI [s^-1]
+	amrex::Real T_cool_min;			  ///< no net cooling at or below this temperature [K]: max(temperature_floor, table T_min)
 	bool alphaB_T_dependent;		  ///< network.recombination_temperature_dependent != 0
 	bool pe_heating;			  ///< network.pe_heating_switch != 0
 	bool cr_heating;			  ///< network.cr_heating_switch != 0
@@ -129,7 +132,8 @@ struct HotGasCoolingRHS {
 		    amrex::max(ISM::ElectronDensityMax(nHI, nH, T, nt.xe, nt.dxe_dT, nt.dxe_dnH, Zp, zetaHI, alphaB.val, alphaB.dT).ne, ISM::ne_floor);
 		const amrex::Real pe = pe_heating ? ISM::PEHeating(nHI, nH, ne, T, G0, Zp).val : 0.0;
 		const amrex::Real cr = cr_heating ? ISM::CRHeating(nHI, zetaHI, yHe).val : 0.0;
-		return -nH * nH * nt.Lambda + pe + cr;
+		const amrex::Real Lambda = (T <= T_cool_min) ? amrex::min(nt.Lambda, 0.0) : nt.Lambda;
+		return -nH * nH * Lambda + pe + cr;
 	}
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(amrex::Real /*t*/, quokka::valarray<amrex::Real, 1> &y,
@@ -177,8 +181,9 @@ void BuildHotMask(amrex::MultiFab const &state, std::array<amrex::MultiFab const
 /// The hot-cell step over one hydro step (SPEC §5.1). In each cell with hotMask = 1:
 ///  1. move all H to H+ and set n_e = n_H+, keeping the gas internal energy;
 ///  2. integrate dE_int/dt = -n_H^2 Lambda_net(n_H, T) + G_PE + G_CR over dt_hydro at fixed density with rk_adaptive_integrate, T coming from the
-///     photochemistry EOS at each evaluation and the Grackle rate applying also below the threshold. Each heating term is gated by its network
-///     switch. If network.energy_switch is 0, the integration is skipped and E_int is left unchanged;
+///     photochemistry EOS at each evaluation and the Grackle rate applying also below the threshold, but with no net cooling at or below
+///     max(tempFloor, table T_min). Each heating term is gated by its network switch. If network.energy_switch is 0, the integration is skipped
+///     and E_int is left unchanged;
 ///  3. clamp E_int to the energy at tempFloor (if tempFloor > 0).
 /// The change of E_int is added to the internal and total gas energy. Aborts, printing the cell, if the integration does not finish in
 /// maxStepsODEIntegrate steps: the step runs after hydro, so there is no retry.
@@ -199,6 +204,8 @@ void ComputeHotGasCooling(amrex::MultiFab &state, std::array<amrex::MultiFab con
 	const bool cr_heating = (network_rp::cr_heating_switch != 0);
 	const bool energy_on = (network_rp::energy_switch != 0);
 	const bool alphaB_T_dependent = (network_rp::recombination_temperature_dependent != 0);
+	const amrex::Real T_table_min = std::exp(quokka::ISMCooling::GetGrackleNTTable()->table.coord_min[1]);
+	const amrex::Real T_cool_min = amrex::max(tempFloor, T_table_min);
 
 	for (amrex::MFIter iter(state); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -232,7 +239,7 @@ void ComputeHotGasCooling(amrex::MultiFab &state, std::array<amrex::MultiFab con
 				return;
 			}
 			const amrex::Real Eint = detail::CellInternalEnergy<problem_t>(s, i, j, k, cons_fc);
-			const detail::HotGasCoolingRHS rhs{rho, nH, xn, G0Rate(i, j, k), Zp, zetaHI, alphaB_T_dependent, pe_heating, cr_heating};
+			const detail::HotGasCoolingRHS rhs{rho, nH, xn, G0Rate(i, j, k), Zp, zetaHI, T_cool_min, alphaB_T_dependent, pe_heating, cr_heating};
 			const amrex::Real Eint_floor = (tempFloor > 0.0) ? rhs.InternalEnergy(tempFloor) : 0.0;
 			quokka::valarray<amrex::Real, 1> y = {Eint};
 			quokka::valarray<amrex::Real, 1> const abstol = {reltol_floor * amrex::max(Eint_floor, std::numeric_limits<amrex::Real>::min())};
