@@ -122,7 +122,7 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = h_planck;
-	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+	static constexpr amrex::GpuArray<double, n_groups_ + 1> thermalRadBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
 	static constexpr OpacityModel opacity_model = opacity_model_;
 };
@@ -217,7 +217,7 @@ template <> void QuokkaSimulation<MGProblem>::setInitialConditionsOnGrid(quokka:
 
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
-	const auto radBoundaries_g = RadSystem_Traits<MGProblem>::radBoundaries;
+	const auto radBoundaries_g = RadSystem<MGProblem>::radBoundaries_;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {

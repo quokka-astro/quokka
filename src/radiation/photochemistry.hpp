@@ -68,15 +68,6 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	const int firstChemFyIndex = firstChemFxIndex + 1;
 	const int firstChemFzIndex = firstChemFyIndex + 1;
 
-	static_assert(!RadSystem<problem_t>::thermal_band_photochemistry_ || Network::NumThermalBands == RadSystem<problem_t>::nGroupsThermal_,
-		      "The network's NumThermalBands must equal RadSystem<problem_t>::nGroupsThermal_ "
-		      "(nGroups_ - NChemBands) when the network has thermal bands.");
-	static_assert(BandEdgesAreOrdered(Network::ChemBands()) && Network::ChemBands().arr[0] > 0.,
-		      "Network::ChemBands() must be positive and strictly increasing.");
-	static_assert(
-	    !RadSystem<problem_t>::chem_band_dust_heating_ || requires { &Network::Params::dust_kappa; },
-	    "Network::ChemBandDustHeating is true but the network has no dust opacity (Params::dust_kappa) to absorb the photons with.");
-
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.
 

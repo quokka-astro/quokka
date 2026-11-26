@@ -11,6 +11,10 @@
 
 #include <array>
 #include <cmath>
+#include <concepts>
+#include <cstddef>
+#include <iterator>
+#include <type_traits>
 
 // library headers
 #include "AMReX.H" // IWYU pragma: keep
@@ -114,11 +118,15 @@ enum class OpacityModel {
 
 // this struct is specialized by the user application code
 //
+// The group edges are not set here: a problem sets the edges of its thermal groups as
+//   static constexpr amrex::GpuArray<double, nGroupsThermal + 1> thermalRadBoundaries{...};
+// (nGroupsThermal = nGroups minus the network's chemical bands), and RadSystem<problem_t>::radBoundaries_ appends the
+// network's chemical band edges to them. A single thermal group in a problem without chemical bands needs no edges: it
+// spans 0 to inf.
 template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double c_hat_over_c = 1.0;
 	static constexpr double Erad_floor = 0.;
 	static constexpr double energy_unit = C::ev2erg;
-	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 };
@@ -269,6 +277,66 @@ template <typename problem_t> struct RadSystem_EnergyUnit<problem_t, std::void_t
 	static constexpr double value = RadSystem_Traits<problem_t>::energy_unit;
 };
 
+// Whether the problem sets the edges of its thermal groups (RadSystem_Traits::thermalRadBoundaries).
+template <typename problem_t> concept RadSystem_Has_Thermal_Boundaries = requires { RadSystem_Traits<problem_t>::thermalRadBoundaries; };
+
+// What every network of a photochemistry problem declares: its chemical bands, its thermal bands (0 if none), and
+// whether it heats the dust with the chemical-band photons the dust absorbs.
+template <typename Network> concept PhotochemistryNetwork = requires
+{
+	{Network::NumChemBands}->std::convertible_to<int>;
+	{Network::ChemBands()}->std::same_as<amrex::GpuArray<double, Network::NumChemBands + 1>>;
+	{Network::ChemBandsPowerLawIndex()}->std::same_as<amrex::GpuArray<double, Network::NumChemBands>>;
+	{Network::NumThermalBands}->std::convertible_to<int>;
+	{Network::ChemBandDustHeating}->std::convertible_to<bool>;
+	{Network::integrate_rad_flux}->std::convertible_to<bool>;
+};
+
+// All compile-time checks of a photochemistry problem
+template <typename problem_t> consteval auto PhotochemistrySanityChecks() -> bool
+{
+	if constexpr (Microphysics_Traits<problem_t>::photochemistry) {
+		using Network = typename Microphysics_Traits<problem_t>::Network;
+		static_assert(Physics_Traits<problem_t>::is_radiation_enabled,
+			      "Microphysics_Traits::photochemistry requires Physics_Traits::is_radiation_enabled = true: photochemistry runs inside the "
+			      "radiation update.");
+		static_assert(PhotochemistryNetwork<Network>, "A photochemistry network must declare NumChemBands, ChemBands(), ChemBandsPowerLawIndex(), "
+							      "NumThermalBands, ChemBandDustHeating and integrate_rad_flux.");
+		if constexpr (PhotochemistryNetwork<Network>) {
+			constexpr auto chem_edges = Network::ChemBands();
+			static_assert(Network::NumChemBands >= 1 && Network::NumThermalBands >= 0,
+				      "A photochemistry network needs at least one chemical band and a non-negative NumThermalBands.");
+			static_assert(BandEdgesAreOrdered(chem_edges) && chem_edges.arr[0] > 0.,
+				      "Network::ChemBands() must be positive and strictly increasing.");
+			// TODO(james471): a photochemistry problem is allowed to have thermal groups only if its network includes them in the y array. This may
+			// be relaxed in a future version, to allow thermal groups that don't get involved in the burn.
+			static_assert(Physics_Traits<problem_t>::nGroups == Network::NumChemBands + Network::NumThermalBands,
+				      "A photochemistry problem's nGroups must equal Network::NumChemBands + Network::NumThermalBands: its thermal groups "
+				      "must be the network's thermal bands.");
+			if constexpr (RadSystem_Has_Thermal_Boundaries<problem_t>) {
+				constexpr auto thermal_edges = RadSystem_Traits<problem_t>::thermalRadBoundaries;
+				static_assert(thermal_edges.arr[std::size(thermal_edges.arr) - 1] == chem_edges.arr[0],
+					      "The thermal groups must end where the chemical bands begin: the last edge of thermalRadBoundaries must "
+					      "equal Network::ChemBands()[0].");
+			}
+			static_assert(RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
+				      "Network::ChemBands() is in eV, so a photochemistry problem's RadSystem_Traits::energy_unit must be C::ev2erg.");
+			if constexpr (Network::ChemBandDustHeating) {
+				static_assert(ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model,
+					      "The network heats the dust with chemical-band photons (Network::ChemBandDustHeating), which needs "
+					      "ISM_Traits::enable_dust_gas_thermal_coupling_model = true, otherwise that energy (Q_dust) is silently dropped.");
+				static_assert(Network::NumThermalBands > 0, "The network heats the dust with chemical-band photons "
+									    "(Network::ChemBandDustHeating), and the dust re-emits that energy into "
+									    "the thermal groups, so the network needs at least one thermal band.");
+				static_assert(
+				    requires { &Network::Params::dust_kappa; }, "Network::ChemBandDustHeating is true but the network has no dust "
+										"opacity (Params::dust_kappa) to absorb the photons with.");
+			}
+		}
+	}
+	return true;
+}
+
 /// Class for the radiation moment equations
 ///
 template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
@@ -341,9 +409,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool thermal_band_photochemistry_ = RadSystem_NNetworkThermalBands<problem_t>::value > 0;
 	// The network heats the dust with the chemical-band photons the dust absorbs exactly when it says so.
 	static constexpr bool chem_band_dust_heating_ = RadSystem_ChemBandDustHeating<problem_t>::value;
-	static_assert(!chem_band_dust_heating_ || enable_dust_gas_thermal_coupling_model_,
-		      "The network heats the dust with chemical-band photons (Network::ChemBandDustHeating), which needs "
-		      "ISM_Traits::enable_dust_gas_thermal_coupling_model = true, otherwise that energy (Q_dust) is silently dropped.");
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	// Chemical (ionizing) bands occupy the LAST NChemBands groups; the leading nGroupsThermal_ groups
@@ -352,18 +417,42 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// and photochemistry. When NChemBands == 0, nGroupsThermal_ == nGroups_ and all chem-specific code
 	// paths are inert.
 	static constexpr int nGroupsThermal_ = nGroups_ - RadSystem_NChemBands<problem_t>::value;
-	static_assert(!chem_band_dust_heating_ || nGroupsThermal_ > 0,
-		      "The network heats the dust with chemical-band photons (Network::ChemBandDustHeating), and the dust re-emits that "
-		      "energy into the thermal groups, so the problem needs at least one thermal group.");
+
+	static_assert(
+	    !requires { RadSystem_Traits<problem_t>::radBoundaries; },
+	    "A problem does not set RadSystem_Traits::radBoundaries: it sets thermalRadBoundaries, the edges of its thermal groups, and "
+	    "RadSystem appends the network's chemical band edges to them.");
+	static_assert(RadSystem_Has_Thermal_Boundaries<problem_t> || nGroupsThermal_ == 0 || (nGroupsThermal_ == 1 && nGroupsThermal_ == nGroups_),
+		      "Set RadSystem_Traits::thermalRadBoundaries: only a single thermal group in a problem without chemical bands defaults to "
+		      "0 to inf.");
+	static_assert(!RadSystem_Has_Thermal_Boundaries<problem_t> || nGroupsThermal_ > 0,
+		      "RadSystem_Traits::thermalRadBoundaries is set, but the problem has no thermal groups.");
+	// The group edges: the thermal groups' edges (RadSystem_Traits::thermalRadBoundaries, or 0 to inf for a single thermal
+	// group without chemical bands), then the network's chemical band edges, whose first edge is the thermal groups' last.
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
-		if constexpr (nGroups_ > 1) {
-			return RadSystem_Traits<problem_t>::radBoundaries;
-		} else {
-			amrex::GpuArray<double, 2> boundaries{0., inf};
-			return boundaries;
+		amrex::GpuArray<double, nGroups_ + 1> edges{};
+		if constexpr (RadSystem_Has_Thermal_Boundaries<problem_t>) {
+			constexpr auto thermal_edges = RadSystem_Traits<problem_t>::thermalRadBoundaries;
+			static_assert(std::is_same_v<std::remove_cv_t<decltype(thermal_edges)>, amrex::GpuArray<double, nGroupsThermal_ + 1>>,
+				      "RadSystem_Traits::thermalRadBoundaries must be an amrex::GpuArray<double, nGroupsThermal + 1>, one edge more than "
+				      "the problem has thermal groups (nGroups minus the network's chemical bands).");
+			for (std::size_t i = 0; i < std::size(thermal_edges.arr) && i < std::size(edges.arr); ++i) {
+				edges.arr[i] = thermal_edges.arr[i];
+			}
+		} else if constexpr (nGroupsThermal_ > 0) {
+			edges.arr[0] = 0.;
+			edges.arr[1] = inf;
 		}
+		if constexpr (RadSystem_NChemBands<problem_t>::value > 0) {
+			constexpr auto chem_edges = Microphysics_Traits<problem_t>::Network::ChemBands();
+			for (int i = 0; i <= RadSystem_NChemBands<problem_t>::value; ++i) {
+				edges.arr[nGroupsThermal_ + i] = chem_edges.arr[i];
+			}
+		}
+		return edges;
 	}();
-	static_assert(BandEdgesAreOrdered(radBoundaries_), "RadSystem_Traits::radBoundaries must be non-negative and strictly increasing.");
+	static_assert(BandEdgesAreOrdered(radBoundaries_), "The group edges (RadSystem_Traits::thermalRadBoundaries, then Network::ChemBands()) must be "
+							   "non-negative and strictly increasing.");
 
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
 
@@ -382,15 +471,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// Assertion: PPL_opacity_full_spectrum requires at least 3 photon groups
 	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum), // NOLINT
 		      "PPL_opacity_full_spectrum requires at least 3 photon groups.");
-
-	// Assertion: chemical (ionizing) bands, when present, occupy the last NChemBands groups; the
-	// leading (nGroups_ - NChemBands) groups are thermal. Mixed thermal+chemical configurations are
-	// therefore valid as long as there are no more chemical bands than groups.
-	static_assert(RadSystem_NChemBands<problem_t>::value >= 0 && RadSystem_NChemBands<problem_t>::value <= nGroups_,
-		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
-
-	static_assert(!Microphysics_Traits<problem_t>::photochemistry || RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
-		      "Network::ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg with photochemistry.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -703,7 +783,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 {
 	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
-		// a single group always spans the whole spectrum; see radBoundaries_
+		// a single group takes all the energy, whatever its edges
 		radEnergyFractions[0] = 1.0;
 		return radEnergyFractions;
 	} else {

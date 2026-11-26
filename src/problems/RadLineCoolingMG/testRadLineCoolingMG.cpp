@@ -80,7 +80,7 @@ template <> struct RadSystem_Traits<CoolingProblemMG> {
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = nu_unit;
-	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+	static constexpr amrex::GpuArray<double, n_groups_ + 1> thermalRadBoundaries = rad_boundaries_;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };

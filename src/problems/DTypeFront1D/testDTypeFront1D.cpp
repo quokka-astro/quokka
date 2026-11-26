@@ -69,8 +69,8 @@ template <> struct RadSystem_Traits<DTypeFront1D> {
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr int beta_order = 1;
 	static constexpr double energy_unit = C::ev2erg;
-	static constexpr amrex::GpuArray<double, Physics_Traits<DTypeFront1D>::nGroups + 1> radBoundaries{1.0e-6, 0.413567, Network::ChemBands().arr[0],
-													  Network::ChemBands().arr[1]};
+	// the thermal groups (IR, optical) end where the network's chemical band begins
+	static constexpr amrex::GpuArray<double, Network::NumThermalBands + 1> thermalRadBoundaries{1.0e-6, 0.413567, Network::ChemBands().arr[0]};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 };
 

@@ -77,7 +77,7 @@ template <> struct RadSystem_Traits<ParticleRadiationSlugProblem> {
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = C::ev2erg; // set boundary unit to eV
 	// Group 0: FUV, 6 eV to 13.6 eV; group 1: Lyman continuum, 13.6 eV to 54.4 eV
-	static constexpr amrex::GpuArray<double, Physics_Traits<ParticleRadiationSlugProblem>::nGroups + 1> radBoundaries{6.0, 13.6, 54.4};
+	static constexpr amrex::GpuArray<double, Physics_Traits<ParticleRadiationSlugProblem>::nGroups + 1> thermalRadBoundaries{6.0, 13.6, 54.4};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 };
 
