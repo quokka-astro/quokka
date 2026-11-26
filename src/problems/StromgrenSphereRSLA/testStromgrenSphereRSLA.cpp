@@ -57,8 +57,6 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemBandsPowerLawIndex() { return Network::ChemBandsPowerLawIndex(); }
-	static constexpr auto ChemBands() { return Network::ChemBands(); }
 };
 namespace
 {

@@ -219,19 +219,14 @@ template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Mode
 template <typename problem_t>
 struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {};
 
-// Use SFINAE to check if ChemBands() is defined in RadSystem_Traits<problem_t> (indicates photoionization group)
-template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {};
-
-template <typename problem_t> struct RadSystem_Has_ChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> : std::true_type {};
-
-// Get NChemBands (number of chemistry frequency bands) from RadSystem_Traits<problem_t>.
-// Returns 0 if ChemBands() is not defined (no photoionization groups).
-template <typename problem_t, typename = void> struct RadSystem_NChemBands {
+// The number of chemical radiation bands: those of the problem's network (Microphysics_Traits<problem_t>::Network)
+// when the problem has photochemistry, and 0 otherwise.
+template <typename problem_t, bool = Microphysics_Traits<problem_t>::photochemistry> struct RadSystem_NChemBands {
 	static constexpr int value = 0;
 };
 
-template <typename problem_t> struct RadSystem_NChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> {
-	static constexpr int value = static_cast<int>(decltype(RadSystem_Traits<problem_t>::ChemBands())::size()) - 1;
+template <typename problem_t> struct RadSystem_NChemBands<problem_t, true> {
+	static constexpr int value = Microphysics_Traits<problem_t>::Network::NumChemBands;
 };
 
 template <typename problem_t, typename = void> struct RadSystem_EnergyUnit {
@@ -357,7 +352,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		      "The number of chemical radiation bands must be between 0 and the number of radiation groups.");
 
 	static_assert(!Microphysics_Traits<problem_t>::photochemistry || RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
-		      "ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg with photochemistry.");
+		      "Network::ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg with photochemistry.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -954,11 +949,13 @@ template <typename problem_t> auto RadSystem<problem_t>::GetThermalBandQuanta(in
 
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
 {
-	auto const ev_bounds = RadSystem_Traits<problem_t>::ChemBands();
+	static_assert(Microphysics_Traits<problem_t>::photochemistry, "GetChemBandQuanta needs a problem with photochemistry, whose network has the bands");
+	using Network = typename Microphysics_Traits<problem_t>::Network;
+	auto const ev_bounds = Network::ChemBands();
 	amrex::Real const ev_low = ev_bounds[group_index];
 	amrex::Real const ev_high = ev_bounds[group_index + 1];
 
-	amrex::Real const alpha = RadSystem_Traits<problem_t>::ChemBandsPowerLawIndex()[group_index];
+	amrex::Real const alpha = Network::ChemBandsPowerLawIndex()[group_index];
 
 	amrex::Real ev_avg = NAN;
 	if (std::isinf(ev_high)) {
