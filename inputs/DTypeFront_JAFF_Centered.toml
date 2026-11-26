@@ -1,0 +1,39 @@
+# DTypeFront_JAFF (inputs/DTypeFront_JAFF.toml) for a whole sphere: the source at the origin in the middle of [-6 r_s, 6 r_s]^3.
+geometry.prob_lo     =  [-6.958844100e18, -6.958844100e18, -6.958844100e18] # = -6 r_s
+geometry.prob_hi     =  [6.958844100e18, 6.958844100e18, 6.958844100e18]    # = 6 r_s
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+amr.v              = 0
+amr.n_cell          = [128, 128, 128]
+amr.max_level       = 0
+amr.blocking_factor = 32
+amr.max_grid_size = 64
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+stop_time = 5.107737479e12 # = 5 t_s (T_eq = 7808 K, r_s = 1.15981e18 cm, t_s = 1.02155e12 s)
+
+stromgen.n_e_init = 1.0e-10
+stromgen.n_HI_init = 139.9
+stromgen.n_HII_init = 1.0e-10
+stromgen.Q = 4e46
+stromgen.temperature = 37.11
+
+plotfile_interval = 10
+plotfile_prefix = "DType"
+max_timesteps = 1000000
+
+# The paper's tolerances (fig_dtype_front.py TOLERANCES)
+integrator.rtol_spec = 1e-2
+integrator.rtol_enuc = 1e-2
+integrator.rtol_rad_num = 1e-2
+integrator.atol_spec = 1e-5
+integrator.atol_enuc = 1e6
+integrator.atol_rad_num = 1e-3
+integrator.species_failure_tolerance = 5e-5
+integrator.radiation_failure_tolerance = 5e-3
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 500000
+
+density_floor = 1e-28  # g cm^-3
