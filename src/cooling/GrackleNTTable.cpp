@@ -9,7 +9,6 @@
 #include "AMReX_Arena.H"
 #include "AMReX_FileSystem.H"
 #include "AMReX_ParallelDescriptor.H"
-#include "AMReX_Utility.H"
 
 #include <H5Apublic.h>
 #include <H5Fpublic.h>

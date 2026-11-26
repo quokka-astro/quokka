@@ -67,7 +67,8 @@ auto ReadGrackleNTAttributes(std::string const &path) -> GrackleNTAttributes;
 /// Register (or re-register) the table handles. Allocates the registry on the first call. The DataTable they refer to must outlive their use.
 void RegisterGrackleNTTable(GrackleNTGpuConst host, GrackleNTGpuConst device);
 
-/// The registered table: the device handles in device code, the host handles in host code. Null if nothing is registered.
+/// The registered table: the device handles in device code, the host handles in host code. Null if nothing was ever registered; empty
+/// handles once the simulation that registered them is destroyed.
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto GetGrackleNTTable() -> GrackleNTGpuConst const *
 {
 	if (g_grackle_nt_registry == nullptr) {

@@ -264,6 +264,20 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	explicit QuokkaSimulation() : AMRSimulation<problem_t>() { initialize(); }
 
+#ifdef PHOTOCHEM_ISM_COOLING
+	/// Re-register empty Grackle (nH, T) table handles, so that no registered handle outlives grackleNTTable_.
+	~QuokkaSimulation() override
+	{
+		if (grackleNTTable_ != nullptr) {
+			quokka::ISMCooling::RegisterGrackleNTTable({}, {});
+		}
+	}
+	QuokkaSimulation(QuokkaSimulation const &) = delete;
+	QuokkaSimulation(QuokkaSimulation &&) = delete;
+	auto operator=(QuokkaSimulation const &) -> QuokkaSimulation & = delete;
+	auto operator=(QuokkaSimulation &&) -> QuokkaSimulation & = delete;
+#endif
+
 	void initialize()
 	{
 		AMRSimulation<problem_t>::initialize();
