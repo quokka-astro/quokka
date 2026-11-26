@@ -620,6 +620,9 @@ inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 // When false, do not homogenize gas velocity, causing an extra energy term whichis the cross product of the inhomogeneity and radial momentum.
 inline bool SN_smooth_gas_velocity = true; // NOLINT
 
+// Earliest absolute simulation time for new Sink formation (code time units).
+inline amrex::Real sink_creation_start_time = 0.0; // NOLINT
+
 // Sink particle accretion
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 // Maximum allowed Alfv\'en speed after sink accretion in cm/s. A negative value disables the limiter.
@@ -711,6 +714,9 @@ template <typename problem_t> inline void particleParmParse()
 	EMEF_p0 = EMEF_p0_kmps * 1.0e5;
 	EMEF_tFB = EMEF_tFB_Myr * quokka::Myr_in_s;
 	EMEF_max_velocity = EMEF_max_velocity_kmps * 1.0e5;
+	pp.queryWithParser("sink_creation_start_time", sink_creation_start_time);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(sink_creation_start_time) && sink_creation_start_time >= 0.0,
+					 "particles.sink_creation_start_time must be finite and non-negative.");
 	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
 	pp.query("sink_max_alfven_speed", sink_max_alfven_speed);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sink_max_alfven_speed != 0.0, "particles.sink_max_alfven_speed must be negative (disabled) or positive (cm/s).");

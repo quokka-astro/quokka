@@ -406,6 +406,11 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 				    int death_time_index = -1, int mass_at_birth_index = -1,
 				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 	{
+		// Gate only creation, using the existing step-start time; accretion and dynamics remain active.
+		if (current_time < sink_creation_start_time) {
+			return;
+		}
+
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Sink>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Sink>::template ParticleCreator>(
