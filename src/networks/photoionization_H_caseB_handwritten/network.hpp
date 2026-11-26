@@ -53,6 +53,8 @@ struct PhotoionizationHCaseBHandwritten {
 
 	/// whether each chemical band also integrates a flux attenuation factor
 	static constexpr bool integrate_rad_flux = true;
+	/// whether dust absorbs chemical-band photons and the network returns the absorbed energy (Q_dust) that heats it
+	static constexpr bool ChemBandDustHeating = false;
 
 	/// The runtime parameters, with Microphysics' names and defaults. Kernels take a copy by value.
 	struct Params {

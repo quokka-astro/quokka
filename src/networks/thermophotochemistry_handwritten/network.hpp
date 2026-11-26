@@ -5,7 +5,7 @@
 #define NETWORKS_THERMOPHOTOCHEMISTRY_HANDWRITTEN_NETWORK_HPP_
 /// \file network.hpp
 /// \brief The hand-written thermophotochemistry network: case B photoionization of hydrogen that also emits into two
-/// thermal bands (IR and optical) and, on a DustyPhotochemBurnState, lets dust absorb the ionizing photons.
+/// thermal bands (IR and optical) and lets dust absorb the ionizing photons, which heats the dust.
 
 #include <cmath>
 
@@ -53,6 +53,9 @@ struct ThermophotochemistryHandwritten {
 
 	/// whether each chemical band also integrates a flux attenuation factor
 	static constexpr bool integrate_rad_flux = true;
+	/// the dust absorbs chemical-band photons (opacity Params::dust_kappa) and the network returns the absorbed energy,
+	/// Q_dust, which heats the dust; the burn then runs on a DustyPhotochemBurnState
+	static constexpr bool ChemBandDustHeating = true;
 
 	/// The runtime parameters, with Microphysics' names and defaults. Kernels take a copy by value.
 	struct Params {
@@ -68,7 +71,7 @@ struct ThermophotochemistryHandwritten {
 		int allow_mixed_cell_cooling = 1;
 		Real mixed_cell_lb = 0.01;
 		Real mixed_cell_ub = 0.99;
-		/// the dust opacity to the ionizing photons, used on a DustyPhotochemBurnState
+		/// the dust opacity to the ionizing photons; 0 turns the dust absorption off
 		Real dust_kappa = 0.0;
 		/// the floor of the species after a burn
 		Real small_x = 1.e-30;

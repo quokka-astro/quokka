@@ -78,8 +78,6 @@ template <> struct ISM_Traits<DTypeFront1D> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool enable_photoelectric_heating = false;
-	// the burn state then carries the dust members, and the network the energy the dust absorbs
-	static constexpr bool dust_chemical_band_absorption = true;
 };
 
 template <> struct SimulationData<DTypeFront1D> {

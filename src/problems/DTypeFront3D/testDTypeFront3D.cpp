@@ -85,8 +85,6 @@ template <> struct ISM_Traits<DTypeFront3D> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool enable_photoelectric_heating = false;
-	// the burn state then carries the dust members, and the network the energy the dust absorbs
-	static constexpr bool dust_chemical_band_absorption = true;
 };
 
 template <> struct SimulationData<DTypeFront3D> {
@@ -401,7 +399,7 @@ auto stromgren_radius(amrex::Real flux_ion, amrex::Real n_0, amrex::Real T_i) ->
 
 auto ionizing_dust_kappa() -> amrex::Real
 {
-	if constexpr (RadSystem<DTypeFront3D>::dust_chemical_band_absorption_) {
+	if constexpr (RadSystem<DTypeFront3D>::chem_band_dust_heating_) {
 		return Network::Parameters().dust_kappa;
 	} else {
 		return 0.0_rt;

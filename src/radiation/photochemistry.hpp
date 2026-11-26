@@ -45,10 +45,10 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	using Network = typename Microphysics_Traits<problem_t>::Network;
 
 	// The burn state: per chemical band the photon number and, if the network integrates the flux, a flux attenuation
-	// factor; with dust absorption of the chemical-band photons, the state that carries the dust members.
+	// factor; when the network heats the dust with chemical-band photons, the state that carries the dust members.
 	constexpr int vars_per_group = Network::integrate_rad_flux ? 2 : 1;
 	using PhotochemState =
-	    std::conditional_t<RadSystem<problem_t>::dust_chemical_band_absorption_,
+	    std::conditional_t<RadSystem<problem_t>::chem_band_dust_heating_,
 			       quokka::microphysics::DustyPhotochemBurnState<Network::NumSpec, Network::NumChemBands, vars_per_group, Network::NumThermalBands>,
 			       quokka::microphysics::PhotochemBurnState<Network::NumSpec, Network::NumChemBands, vars_per_group, Network::NumThermalBands>>;
 	// the burn's EOS (quokka::EOS<problem_t>); naming it through BurnSystem checks it is one a burn can use
@@ -74,9 +74,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	static_assert(BandEdgesAreOrdered(Network::ChemBands()) && Network::ChemBands().arr[0] > 0.,
 		      "Network::ChemBands() must be positive and strictly increasing.");
 	static_assert(
-	    !RadSystem<problem_t>::dust_chemical_band_absorption_ || requires { &Network::Params::dust_kappa; },
-	    "ISM_Traits::dust_chemical_band_absorption is true but the network has no dust absorption (no Params::dust_kappa), "
-	    "so Q_dust would always be zero.");
+	    !RadSystem<problem_t>::chem_band_dust_heating_ || requires { &Network::Params::dust_kappa; },
+	    "Network::ChemBandDustHeating is true but the network has no dust opacity (Params::dust_kappa) to absorb the photons with.");
 
 	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
 	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.
@@ -92,7 +91,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	const amrex::GpuArray<double, RadSystem<problem_t>::nGroups_ + 1> radBoundaries = RadSystem<problem_t>::radBoundaries_;
 
 	// Cells the burn skips (rho < min_density_allowed) must read zero, not the previous substep's deposit.
-	if constexpr (RadSystem<problem_t>::dust_chemical_band_absorption_) {
+	if constexpr (RadSystem<problem_t>::chem_band_dust_heating_) {
 		dustHeatingSource.setVal(0.0);
 	}
 
@@ -107,7 +106,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 		auto const &state = mf.array(iter);
 
 		amrex::Array4<amrex::Real> dustHeatingSource_arr{};
-		if constexpr (RadSystem<problem_t>::dust_chemical_band_absorption_) {
+		if constexpr (RadSystem<problem_t>::chem_band_dust_heating_) {
 			dustHeatingSource_arr = dustHeatingSource.array(iter);
 		}
 		amrex::Array4<amrex::Real> radEnergySource_arr{};

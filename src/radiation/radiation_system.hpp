@@ -129,7 +129,6 @@ template <typename problem_t> struct ISM_Traits {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool dust_chemical_band_absorption = false;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -238,6 +237,16 @@ template <typename problem_t> struct RadSystem_NNetworkThermalBands<problem_t, t
 	static constexpr int value = Microphysics_Traits<problem_t>::Network::NumThermalBands;
 };
 
+// Whether the problem's network heats the dust with the chemical-band photons the dust absorbs (Q_dust):
+// Network::ChemBandDustHeating when the problem has photochemistry, and false otherwise.
+template <typename problem_t, bool = Microphysics_Traits<problem_t>::photochemistry> struct RadSystem_ChemBandDustHeating {
+	static constexpr bool value = false;
+};
+
+template <typename problem_t> struct RadSystem_ChemBandDustHeating<problem_t, true> {
+	static constexpr bool value = Microphysics_Traits<problem_t>::Network::ChemBandDustHeating;
+};
+
 // True if the band edges are non-negative and strictly increasing (a NaN edge fails).
 template <unsigned int N> constexpr auto BandEdgesAreOrdered(amrex::GpuArray<double, N> const &edges) -> bool
 {
@@ -330,10 +339,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 	// The network takes part in the thermal bands exactly when it has some.
 	static constexpr bool thermal_band_photochemistry_ = RadSystem_NNetworkThermalBands<problem_t>::value > 0;
-	static constexpr bool dust_chemical_band_absorption_ = ISM_Traits<problem_t>::dust_chemical_band_absorption;
-	static_assert(!dust_chemical_band_absorption_ || enable_dust_gas_thermal_coupling_model_,
-		      "ISM_Traits::dust_chemical_band_absorption requires ISM_Traits::enable_dust_gas_thermal_coupling_model = true, "
-		      "otherwise the dust-absorbed chemical-band energy (Q_dust) is silently dropped.");
+	// The network heats the dust with the chemical-band photons the dust absorbs exactly when it says so.
+	static constexpr bool chem_band_dust_heating_ = RadSystem_ChemBandDustHeating<problem_t>::value;
+	static_assert(!chem_band_dust_heating_ || enable_dust_gas_thermal_coupling_model_,
+		      "The network heats the dust with chemical-band photons (Network::ChemBandDustHeating), which needs "
+		      "ISM_Traits::enable_dust_gas_thermal_coupling_model = true, otherwise that energy (Q_dust) is silently dropped.");
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	// Chemical (ionizing) bands occupy the LAST NChemBands groups; the leading nGroupsThermal_ groups
@@ -342,6 +352,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// and photochemistry. When NChemBands == 0, nGroupsThermal_ == nGroups_ and all chem-specific code
 	// paths are inert.
 	static constexpr int nGroupsThermal_ = nGroups_ - RadSystem_NChemBands<problem_t>::value;
+	static_assert(!chem_band_dust_heating_ || nGroupsThermal_ > 0,
+		      "The network heats the dust with chemical-band photons (Network::ChemBandDustHeating), and the dust re-emits that "
+		      "energy into the thermal groups, so the problem needs at least one thermal group.");
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
 			return RadSystem_Traits<problem_t>::radBoundaries;
