@@ -6,7 +6,8 @@
 ## === SCOPE LABELS
 ##
 
-## set from the changed files: a PR gets every scope with a matching path
+## set from the changed files: a PR gets every scope with a matching path, then keeps only those
+## on the most relevant `relevance_level` it touches (1 is the most relevant); scopes on the same level all show
 ## a pattern's `*` also matches `/`, so `src/hydro/*` covers every file below `src/hydro/`
 
 [scope]
@@ -18,8 +19,8 @@ prefix = "scope/"
 unlabelled_path_patterns = []
 
 ## --- unmapped files
-## a changed file that matches no scope gives the PR this label, to show that its path
-## needs adding to a scope below
+## a changed file that matches no scope gives the PR this label, whatever the relevance levels,
+## to show that its path needs adding to a scope below
 [scope.not_mapped_label]
 value = "undefined"
 color = "D73A4A"
@@ -32,6 +33,7 @@ description = "A changed file has no scope yet; a maintainer needs to add it to 
 value = "hydro"
 color = "16A085"
 description = "Hydrodynamics"
+relevance_level = 1
 path_patterns = [
     "src/hydro/*",
     "src/turbulence/*",
@@ -45,6 +47,7 @@ path_patterns = [
 value = "MHD"
 color = "16A085"
 description = "Magnetohydrodynamics"
+relevance_level = 1
 path_patterns = [
     "src/hydro/mhd_system*",
     "src/hydro/HLLD*",
@@ -66,6 +69,7 @@ path_patterns = [
 value = "radiation"
 color = "16A085"
 description = "Radiation transport"
+relevance_level = 1
 path_patterns = [
     "src/radiation/*",
     "src/problems/Rad*",
@@ -78,6 +82,7 @@ path_patterns = [
 value = "particles"
 color = "16A085"
 description = "Particles"
+relevance_level = 1
 path_patterns = [
     "src/particles/*",
     "src/problems/Particle*",
@@ -93,6 +98,7 @@ path_patterns = [
 value = "chemistry"
 color = "16A085"
 description = "Chemistry and chemical networks"
+relevance_level = 1
 path_patterns = [
     "src/chemistry/*",
     "src/photochemistry/*",
@@ -108,12 +114,14 @@ path_patterns = [
 value = "cooling"
 color = "16A085"
 description = "Radiative cooling"
+relevance_level = 1
 path_patterns = ["src/cooling/*", "src/problems/ResampledCooling*", "inputs/ResampledCooling*"]
 
 [[scope.label]]
 value = "dust"
 color = "16A085"
 description = "Dust"
+relevance_level = 1
 path_patterns = [
     "src/dust/*",
     "src/problems/Dust*",
@@ -128,6 +136,7 @@ path_patterns = [
 value = "conduction"
 color = "16A085"
 description = "Thermal conduction"
+relevance_level = 1
 path_patterns = ["src/conduction/*", "src/problems/ThermalConduction*", "inputs/ThermalConduction*"]
 
 ## --- framework
@@ -136,12 +145,14 @@ path_patterns = ["src/conduction/*", "src/problems/ThermalConduction*", "inputs/
 value = "IO"
 color = "16A085"
 description = "Input and output"
+relevance_level = 1
 path_patterns = ["src/io/*"]
 
 [[scope.label]]
 value = "core"
 color = "16A085"
 description = "Shared driver, math and utilities"
+relevance_level = 1
 path_patterns = [
     "src/QuokkaSimulation*",
     "src/simulation*",
@@ -166,6 +177,7 @@ path_patterns = [
 value = "build"
 color = "16A085"
 description = "Build system and third-party libraries"
+relevance_level = 1
 path_patterns = [
     "CMakeLists.txt",
     "src/CMakeLists.txt",
@@ -182,18 +194,21 @@ path_patterns = [
 value = "tests"
 color = "16A085"
 description = "Test problems, inputs, reference data and the regression suite"
+relevance_level = 1
 path_patterns = ["src/problems/*", "inputs/*", "extern/*", "regression/*", "tests/*"]
 
 [[scope.label]]
 value = "tools"
 color = "16A085"
 description = "Helper scripts and files for AI agents"
+relevance_level = 1
 path_patterns = ["scripts/*", "tools/*", ".agents/*", ".claude/*", "AGENTS.md", "CLAUDE.md", "context7.json"]
 
 [[scope.label]]
 value = "CI"
 color = "16A085"
 description = "Continuous integration and code checkers"
+relevance_level = 1
 path_patterns = [
     ".github/*",
     ".ci/*",
@@ -215,6 +230,7 @@ path_patterns = [
 value = "documentation"
 color = "16A085"
 description = "Documentation"
+relevance_level = 1
 path_patterns = ["docs/*", "*.md", "paper/*", "CITATION.cff", "LICENSE", ".mailmap"]
 
 ##

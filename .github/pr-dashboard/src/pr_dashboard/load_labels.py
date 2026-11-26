@@ -4,6 +4,18 @@ import tomllib
 from pr_dashboard import pr_labels
 
 
+def _load_relevance_level(
+    label_data: dict,
+) -> int:
+    relevance_level = label_data["relevance_level"]
+    level_is_an_integer = (isinstance(relevance_level, int) and not isinstance(relevance_level, bool))
+    if (not level_is_an_integer) or (relevance_level < 1):
+        raise ValueError(
+            f"the scope label `{label_data['value']}` needs a `relevance_level` that is a whole number from 1.",
+        )
+    return relevance_level
+
+
 def _load_scope_labels(
     scope_data: dict,
 ) -> pr_labels.ScopeLabels:
@@ -15,6 +27,7 @@ def _load_scope_labels(
             color=_label_data["color"],
             description=_label_data["description"],
             path_patterns=tuple(_label_data["path_patterns"]),
+            relevance_level=_load_relevance_level(_label_data),
         ) for _label_data in scope_data["label"]
     )
     not_mapped_label = pr_labels.NotMappedLabel(

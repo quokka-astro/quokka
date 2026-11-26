@@ -10,11 +10,34 @@ from pr_dashboard import pr_labels
 CONFIGURED_LABELS = load_labels.load_configured_labels(pathlib.Path(__file__).parents[1] / "labels.toml")
 
 
+def make_configured_labels_with_levels(
+    relevance_levels: dict[str, int],
+) -> pr_labels.ConfiguredLabels:
+    scope_labels = tuple(
+        dataclasses.replace(
+            _scope_label,
+            relevance_level=relevance_levels.get(_scope_label.value, 1),
+        ) for _scope_label in CONFIGURED_LABELS.scope_labels.labels
+    )
+    configured_scope_labels = dataclasses.replace(
+        CONFIGURED_LABELS.scope_labels,
+        labels=scope_labels,
+    )
+    return dataclasses.replace(
+        CONFIGURED_LABELS,
+        scope_labels=configured_scope_labels,
+    )
+
+
+## every scope on level 1, so the scope tests check which paths map to which scope, whatever the levels in labels.toml
+ALL_SCOPES_SHOWN_LABELS = make_configured_labels_with_levels({})
+
+
 def get_scope_label_names(
     edited_file_paths: tuple[str, ...],
 ) -> set[str]:
     return pr_labels._compute_scope_label_names(
-        configured_labels=CONFIGURED_LABELS,
+        configured_labels=ALL_SCOPES_SHOWN_LABELS,
         edited_file_paths=edited_file_paths,
     )
 
@@ -139,6 +162,83 @@ class TestPrLabels_Scope(unittest.TestCase):
             [],
             "Add these paths to a scope, or to unlabelled_path_patterns, in .github/pr-dashboard/labels.toml",
         )
+
+
+def get_scope_label_names_with_levels(
+    *,
+    relevance_levels: dict[str, int],
+    edited_file_paths: tuple[str, ...],
+) -> set[str]:
+    configured_labels = make_configured_labels_with_levels(relevance_levels)
+    return pr_labels._compute_scope_label_names(
+        configured_labels=configured_labels,
+        edited_file_paths=edited_file_paths,
+    )
+
+
+## physics on level 1, and tests and documentation on level 2
+TWO_RELEVANCE_LEVELS = {"tests": 2, "documentation": 2}
+
+
+class TestPrLabels_RelevanceLevels(unittest.TestCase):
+
+    def test_physics_hides_tests_and_documentation(
+        self,
+    ):
+        scope_label_names = get_scope_label_names_with_levels(
+            relevance_levels=TWO_RELEVANCE_LEVELS,
+            edited_file_paths=("src/hydro/HLLD.hpp", "src/problems/MHDBlast/test_mhd_blast.cpp", "docs/index.md"),
+        )
+        self.assertEqual(scope_label_names, {"scope/hydro", "scope/MHD"})
+
+    def test_tests_alone_still_show(
+        self,
+    ):
+        scope_label_names = get_scope_label_names_with_levels(
+            relevance_levels=TWO_RELEVANCE_LEVELS,
+            edited_file_paths=("src/problems/SN/testSN.cpp", "docs/index.md"),
+        )
+        self.assertEqual(scope_label_names, {"scope/tests", "scope/documentation"})
+
+    def test_level_one_scopes_all_show(
+        self,
+    ):
+        scope_label_names = get_scope_label_names_with_levels(
+            relevance_levels=TWO_RELEVANCE_LEVELS,
+            edited_file_paths=("src/radiation/radiation_system.hpp", "src/particles/particle_types.hpp"),
+        )
+        self.assertEqual(scope_label_names, {"scope/radiation", "scope/particles"})
+
+    def test_unmapped_file_shows_at_any_level(
+        self,
+    ):
+        scope_label_names = get_scope_label_names_with_levels(
+            relevance_levels=TWO_RELEVANCE_LEVELS,
+            edited_file_paths=("src/newmodule/thing.hpp", "src/hydro/HLLC.hpp", "docs/index.md"),
+        )
+        self.assertEqual(scope_label_names, {"scope/undefined", "scope/hydro"})
+
+    def test_only_unmapped_file_gives_only_undefined(
+        self,
+    ):
+        scope_label_names = get_scope_label_names_with_levels(
+            relevance_levels=TWO_RELEVANCE_LEVELS,
+            edited_file_paths=("src/newmodule/thing.hpp", ),
+        )
+        self.assertEqual(scope_label_names, {"scope/undefined"})
+
+    def test_hidden_scope_label_is_removed_from_pr(
+        self,
+    ):
+        configured_labels = make_configured_labels_with_levels(TWO_RELEVANCE_LEVELS)
+        label_changes = pr_labels._compute_label_changes(
+            configured_labels=configured_labels,
+            current_label_names=("scope/MHD", "scope/tests", "size/M"),
+            edited_file_paths=("src/problems/MHDBlast/test_mhd_blast.cpp", ),
+            num_lines_changed=40,
+        )
+        self.assertEqual(label_changes.label_names_to_add, ())
+        self.assertEqual(label_changes.label_names_to_remove, ("scope/tests", ))
 
 
 class TestPrLabels_Size(unittest.TestCase):
