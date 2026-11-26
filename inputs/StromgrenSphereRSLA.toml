@@ -1,7 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  [0.0, 0.0, 0.0] 
+# the source at the centre; the box extends 1.27 r_S (r_S = 1.656e22 cm) from it on each side
+geometry.prob_lo     =  [-2.1e22, -2.1e22, -2.1e22]
 geometry.prob_hi     =  [2.1e22, 2.1e22, 2.1e22]
 quokka.bc = ["reflecting", "reflecting", "reflecting"]
 

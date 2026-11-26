@@ -41,8 +41,7 @@ using Network = Microphysics_Traits<StromgrenSphere>::Network;
 using amrex::literals::operator""_rt;
 
 constexpr double c_hat = C::c_light / static_cast<double>(C_HAT_DIVISOR);
-constexpr double sigma_star_coeff = 1.5 / 16.0;
-constexpr double r_trunc_coeff = 2.5;
+constexpr int kernel_radius_cells = 2; // support radius of the source's Wendland C2 kernel, as in DTypeFront_JAFF
 
 template <> struct quokka::EOS_Traits<StromgrenSphere> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -67,7 +66,7 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 namespace
 {
 
-// Sphere-equivalent radii (8x the octant) of the ionized volume, int (1 - x_HI) dV, and of the region with x_HI < 1/2.
+// Sphere-equivalent radii of the ionized volume, int (1 - x_HI) dV, and of the region with x_HI < 1/2 (the whole sphere is in the domain).
 // The first exceeds the Stromgren radius by the partially ionized front width; the second tracks the front itself.
 auto compute_effective_radii(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> std::pair<amrex::Real, amrex::Real>
 {
@@ -95,7 +94,15 @@ auto compute_effective_radii(amrex::MultiFab const &state_mf, amrex::GpuArray<am
 	amrex::Real half_ionized_volume = amrex::get<1>(hv);
 	amrex::ParallelAllReduce::Sum(total_ionized_volume, amrex::ParallelContext::CommunicatorSub());
 	amrex::ParallelAllReduce::Sum(half_ionized_volume, amrex::ParallelContext::CommunicatorSub());
-	return {std::cbrt((3.0_rt * 8.0_rt * total_ionized_volume) / (4.0_rt * M_PI)), std::cbrt((3.0_rt * 8.0_rt * half_ionized_volume) / (4.0_rt * M_PI))};
+	return {std::cbrt((3.0_rt * total_ionized_volume) / (4.0_rt * M_PI)), std::cbrt((3.0_rt * half_ionized_volume) / (4.0_rt * M_PI))};
+}
+
+AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
+{
+	if (r > 1.0) {
+		return 0.0;
+	}
+	return (21. / (2. * M_PI)) * std::pow((1.0 - r), 4) * (4.0 * r + 1.0);
 }
 
 auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B, amrex::Real n_HI0, amrex::Real c_light, amrex::Real R0, amrex::Real r_s_est)
@@ -146,55 +153,59 @@ template <>
 void RadSystem<StromgrenSphere>::AddRadSource(array_t &radEnergy, array_t & /*reducedFluxSource*/, const amrex::Box &indexRange,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
 	pp.query("Q", Q);
 
-	const amrex::Real sigma_star = sigma_star_coeff * (prob_hi[0] - prob_lo[0]);
-	const amrex::Real r_trunc = r_trunc_coeff * sigma_star;
-	const amrex::Real L_star = Q * RadSystem<StromgrenSphere>::GetChemBandQuanta(0) / 8.0_rt;
+	// Wendland C2 kernel of radius N cells around the source at the origin (the centre of the domain), normalised over its
+	// discrete stencil, as in DTypeFront_JAFF
+	constexpr int N = kernel_radius_cells;
+	constexpr amrex::Real inv_N = 1.0 / static_cast<amrex::Real>(N);
+	constexpr auto cutoff_r2 = static_cast<amrex::Real>(N * N);
+
+	const amrex::Real L_star = Q * RadSystem<StromgrenSphere>::GetChemBandQuanta(0);
 	const amrex::Real x0 = 0.0_rt;
 	const amrex::Real y0 = 0.0_rt;
 	const amrex::Real z0 = 0.0_rt;
-	// the normalisation depends only on the geometry: an O(n^3) host loop per box per call is prohibitive at high resolution
-	static const amrex::Real sum_cached = [&]() {
-		amrex::ParmParse const pp2("amr");
-		int n = 16;
-		pp2.query("n_cell", n);
-		// Neumaier-compensated: a plain sum over ~1e5 cells is off by ~1e-13, which would show up as a photon conservation error
-		amrex::Real s = 0.0_rt;
-		amrex::Real comp = 0.0_rt;
-		for (int i = 0; i < n; ++i) {
-			for (int j = 0; j < n; ++j) {
-				for (int k = 0; k < n; ++k) {
-					amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-					amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
-					amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
-					amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
-					if (r <= r_trunc) {
-						amrex::Real const term = std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) * dx[0] * dx[1] * dx[2] /
-									 (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
-						amrex::Real const t = s + term;
-						comp += (std::abs(s) >= std::abs(term)) ? (s - t) + term : (term - t) + s;
-						s = t;
-					}
+	const amrex::Real volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+	const amrex::Real inv_volume = 1.0 / volume;
+
+	const int src_i = static_cast<int>(amrex::Math::floor((x0 - prob_lo[0]) / dx[0]));
+	const int src_j = static_cast<int>(amrex::Math::floor((y0 - prob_lo[1]) / dx[1]));
+	const int src_k = static_cast<int>(amrex::Math::floor((z0 - prob_lo[2]) / dx[2]));
+	const amrex::Real frac_x = (x0 - prob_lo[0]) / dx[0] - static_cast<amrex::Real>(src_i);
+	const amrex::Real frac_y = (y0 - prob_lo[1]) / dx[1] - static_cast<amrex::Real>(src_j);
+	const amrex::Real frac_z = (z0 - prob_lo[2]) / dx[2] - static_cast<amrex::Real>(src_k);
+
+	constexpr int stencil_width = 2 * N + 1;
+	const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1;
+	const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1;
+	amrex::Real norm_sum = 0.0_rt;
+	for (int kk = 0; kk < nz_loop; ++kk) {
+		const amrex::Real dz = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - N) + 0.5 - frac_z : 0.0;
+		for (int jj = 0; jj < ny_loop; ++jj) {
+			const amrex::Real dy = (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - N) + 0.5 - frac_y : 0.0;
+			for (int ii = 0; ii < stencil_width; ++ii) {
+				const amrex::Real di = static_cast<amrex::Real>(ii - N) + 0.5 - frac_x;
+				const amrex::Real r2 = AMREX_D_TERM(di * di, +dy * dy, +dz * dz);
+				if (r2 <= cutoff_r2) {
+					norm_sum += wendland_c2(std::sqrt(r2) * inv_N);
 				}
 			}
 		}
-		return s + comp;
-	}();
-	const amrex::Real sum = sum_cached; // a local copy, so the device lambda captures it by value
+	}
+
+	const amrex::Real inv_norm = 1.0_rt / norm_sum;
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
-		amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
-		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
-		if (r <= r_trunc) {
-			amrex::Real const w_i = std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) / (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
-			amrex::Real const val = L_star * w_i / sum;
-			radEnergy(i, j, k) = val;
+		const amrex::Real di = static_cast<amrex::Real>(i - src_i) + 0.5 - frac_x;
+		const amrex::Real dj = (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(j - src_j) + 0.5 - frac_y : 0.0;
+		const amrex::Real dk = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(k - src_k) + 0.5 - frac_z : 0.0;
+		const amrex::Real r2 = AMREX_D_TERM(di * di, +dj * dj, +dk * dk);
+		if (r2 <= cutoff_r2) {
+			radEnergy(i, j, k) = L_star * wendland_c2(std::sqrt(r2) * inv_N) * inv_norm * inv_volume;
 		} else {
 			radEnergy(i, j, k) = 0.0_rt;
 		}
@@ -380,14 +391,11 @@ auto problem_main() -> int
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 		const amrex::Real cell_size = dx[0];
 		const amrex::Real bound = std::sqrt(3.0_rt);
-		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
-		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
-		const amrex::Real sigma_star = sigma_star_coeff * (prob_hi[0] - prob_lo[0]);
-		const amrex::Real r_trunc = r_trunc_coeff * sigma_star;
+		const amrex::Real r_kernel = kernel_radius_cells * cell_size;
 
 		for (int i = 0; i < sim.userData_.t_vec_.size(); ++i) {
 			const amrex::Real r_analytical = sim.userData_.r_analytical_vec_[i];
-			if (r_analytical <= r_trunc) {
+			if (r_analytical <= r_kernel) {
 				continue;
 			}
 			const amrex::Real r_effective = sim.userData_.r_effective_vec_[i];
@@ -403,9 +411,9 @@ auto problem_main() -> int
 		}
 
 		if (status == 0) {
-			amrex::Print()
-			    << "Test passed: Effective Stromgren radius matches the analytical radius within one cell diagonal whenever r_analytical > r_trunc."
-			    << '\n';
+			amrex::Print() << "Test passed: Effective Stromgren radius matches the analytical radius within one cell diagonal whenever "
+					  "r_analytical > r_kernel."
+				       << '\n';
 		}
 	}
 
