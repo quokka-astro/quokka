@@ -215,6 +215,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static_assert(IMEX_Aim_22 > 0.0, "IMEX_Aim_22 must be > 0 for the IMEX PD-ARS scheme");
 	static constexpr double IMEX_alpha = IMEX_Aim_32 / IMEX_Aim_22; // = 0.5
 
+	// Photochemistry runs inside the radiation update, so it needs radiation.
+	static_assert(!Microphysics_Traits<problem_t>::photochemistry || Physics_Traits<problem_t>::is_radiation_enabled,
+		      "Microphysics_Traits::photochemistry requires Physics_Traits::is_radiation_enabled = true.");
+
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
 	amrex::Real dust_omega_drag_ = 1.0;
