@@ -1,7 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  [0.0, 0.0, 0.0] 
+# the source at the centre
+geometry.prob_lo     =  [-1.45e22, -1.45e22, -1.45e22]
 geometry.prob_hi     =  [1.45e22, 1.45e22, 1.45e22]
 quokka.bc = ["reflecting", "reflecting", "reflecting"]
 
