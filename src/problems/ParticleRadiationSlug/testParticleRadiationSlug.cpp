@@ -15,12 +15,12 @@
 #include "AMReX_Print.H"
 
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_update.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/DataTable.hpp"
+#include "util/fundamental_constants.hpp"
 
 struct ParticleRadiationSlugProblem {};
 

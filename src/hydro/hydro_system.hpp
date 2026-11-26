@@ -36,9 +36,6 @@
 #include "util/ArrayView.hpp"
 #include "util/valarray.hpp"
 
-// Microphysics headers
-#include "extern_parameters.H"
-
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct HydroSystem_Traits {
@@ -171,8 +168,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
 	template <typename DensityFloorFunc>
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf,
-				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, amrex::Real massScalarFloor,
+				  amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
 				  DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
@@ -1042,8 +1039,9 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 template <typename problem_t>
 template <typename DensityFloorFunc>
 void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const dustDensityFloor, amrex::Real const tempFloor,
-					   amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf,
-					   amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
+					   amrex::Real const massScalarFloor, amrex::MultiFab &state_mf,
+					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
+					   DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
 	auto const &state_fc_x0 = state_fc_mf[0].const_arrays();
@@ -1098,7 +1096,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real sp_sum = 0.0;
 			for (int idx = 0; idx < nmscalars_; ++idx) {
 				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-					state[bx](i, j, k, scalar0_index + idx) = network_rp::small_x * rho_new;
+					state[bx](i, j, k, scalar0_index + idx) = massScalarFloor * rho_new;
 				}
 				// get sum to renormalize
 				sp_sum += state[bx](i, j, k, scalar0_index + idx);

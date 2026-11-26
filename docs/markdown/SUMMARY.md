@@ -18,6 +18,7 @@
 - [Star Formation and Feedback (beta)](particles.md)
 - [Dust Module (beta)](dust_module.md)
 - [Cooling Module](cooling_module.md)
+- [Thermal Conduction](conduction_module.md)
 
 # Simulation Gallery
 
@@ -41,6 +42,7 @@
 - [In-situ analysis](insitu_analysis.md)
 - [Postprocessing](postprocessing.md)
 - [Debugging simulation instability](instability.md)
+- [Writing bug report reproducers](bug_report_reproducers.md)
 - [Runtime calculator](runtime_calculator.md)
 
 # Developer Guide

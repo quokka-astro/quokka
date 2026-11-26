@@ -10,12 +10,12 @@
 #endif
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
+#include "util/fundamental_constants.hpp"
 #include <format>
 #include <fstream>
 #include <vector>

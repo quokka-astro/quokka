@@ -11,25 +11,6 @@ if(Python_FOUND)
     link_libraries(${Python_LIBRARIES})
 endif()
 
-if(QUOKKA_OPENPMD)
-  message(STATUS "Building Quokka with OpenPMD support")
-  add_compile_definitions(QUOKKA_USE_OPENPMD)
-  set(openPMD_USE_ADIOS2 ON CACHE BOOL "") # ADIOS2 is required
-  set(openPMD_USE_HDF5 OFF CACHE BOOL "")
-  set(openPMD_USE_PYTHON OFF CACHE BOOL "")
-  set(openPMD_BUILD_TESTING OFF CACHE BOOL "")
-  set(openPMD_BUILD_EXAMPLES OFF CACHE BOOL "")
-  set(openPMD_BUILD_CLI_TOOLS OFF CACHE BOOL "")
-  set(openPMD_INSTALL OFF CACHE BOOL "")
-  add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/openPMD-api ${QuokkaCode_BINARY_DIR}/openPMD-api)
-  include_directories(${OpenPMD_INCLUDE_DIRS_RET})
-  link_libraries(openPMD::openPMD)
-  set(openPMDSources "${CMAKE_CURRENT_SOURCE_DIR}/io/openPMD.cpp")
-  message(STATUS "WARNING: OpenPMD plotfiles are ENABLED. Face-centered variables will only be available as cell-centered averages in plotfiles!")
-else()
-  set(openPMDSources "")
-endif()
-
 # HDF5 (use library list instead of imported target to avoid NOTFOUND device-link deps)
 find_package(HDF5 REQUIRED COMPONENTS C)
 if(HDF5_LIBRARIES MATCHES "NOTFOUND")
@@ -132,13 +113,10 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 # setup_target_for_microphysics_compilation() call, here and in
 # src/problems/*/CMakeLists.txt.
 include(${CMAKE_SOURCE_DIR}/src/networks/NetworkRegistry.cmake)
-
-# default network_name (for Microphysics EOS) for all tests:
-set(microphysics_network_name "gamma_law")
-# default output_dir (for Microphysics EOS) for all tests:
-set(microphysics_output_dir "${CMAKE_CURRENT_BINARY_DIR}/")
-setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_CURRENT_BINARY_DIR}/")
-include_directories(${${microphysics_network_name}_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
+# Only chemistry and photochemistry problems use Microphysics; each sets up its own network and include directories.
+# gcem: header-only constexpr math library (https://github.com/kthohr/gcem, Apache-2.0), vendored in extern/gcem
+# from upstream tag v1.13.1, commit a20b0fc0206ff7d99a96fe4afdfe8205b01c8220
+include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/extern/gcem/include) # SYSTEM: no compiler or clang-tidy diagnostics from vendored headers
 
 if(TARGET amrex_hydro_api)
   link_libraries(amrex_hydro_api)
@@ -161,14 +139,13 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagParticleTxt.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/GrackleNTTable.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
-                        "${openPMDSources}")
+                        "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp")
 
 if(AMReX_SPACEDIM EQUAL 3)
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
 endif()
 
-set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
+set (QuokkaObjSources "${QuokkaSourcesNoEOS}")
 
 add_subdirectory(problems)
