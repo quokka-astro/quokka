@@ -73,19 +73,12 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionizing_band_photon_energy() -> Rea
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) -> Real
 {
-	const amrex::Real coeff = 2.63e-13_rt;
-	if (recombination_temperature_dependent == 0) {
-		return coeff;
-	}
-	return coeff * std::pow(T / 1.0e4, -0.69999999999999996);
+	return quokka::ISMCooling::CaseBRecombinationCoefficient(T, recombination_temperature_dependent != 0).val;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) -> Real
 {
-	if (recombination_temperature_dependent == 0) {
-		return 0.0_rt;
-	}
-	return -2.63e-13 * 0.7 * std::pow(T / 1.0e4, -1.69999999999999996) / 1.0e4;
+	return quokka::ISMCooling::CaseBRecombinationCoefficient(T, recombination_temperature_dependent != 0).dT;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_collisional_ionization_coefficient(Real T) -> Real
@@ -136,7 +129,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) 
 /// does not enter. The derivative field dne of the result is zero.
 ///
 /// Two guards keep the rates finite in unphysical states (an empty cell, or a negative number density in a Rosenbrock stage):
-/// n_HI and n_H+ are clamped to >= 0, and the partial with respect to a clamped density is returned as 0; n_e^max is floored at 1e-30 cm^-3,
+/// n_HI and n_H+ are clamped to >= 0, and the partial with respect to a clamped density is returned as 0; n_e^max is floored at ne_floor (ISMCooling.hpp),
 /// with its derivatives set to 0 where the floor is active.
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_ism_energy_terms(const burn_t &state) -> quokka::ISMCooling::Rate
 {
@@ -158,9 +151,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_ism_energy_terms(const burn_t 
 	auto ne = ISM::ElectronDensityMax(n_HI, n_Hp, T, nt.xe, nt.dxe_dT, nt.dxe_dnH, Zp, cr_ionization_rate_HI, get_recombination_coefficient(T),
 					  dRecombination_coefficient_dT(T));
 	// keep the rates finite when there is no gas at all
-	constexpr amrex::Real ne_floor = 1.0e-30_rt;
-	if (ne.ne < ne_floor) {
-		ne = {ne_floor, 0.0_rt, 0.0_rt, 0.0_rt, 0};
+	if (ne.ne < ISM::ne_floor) {
+		ne = {ISM::ne_floor, 0.0_rt, 0.0_rt, 0.0_rt, 0};
 	}
 
 	ISM::Rate net{0.0_rt, 0.0_rt, 0.0_rt, 0.0_rt, 0.0_rt};

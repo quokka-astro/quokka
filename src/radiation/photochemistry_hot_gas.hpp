@@ -33,7 +33,6 @@
 #include "radiation/radiation_system.hpp"
 
 #include "actual_eos_data.H"
-#include "actual_rhs.H"
 #include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
@@ -101,6 +100,7 @@ struct HotGasCoolingRHS {
 	amrex::Real G0;				  ///< FUV field [Habing units]
 	amrex::Real Zp;				  ///< metallicity [Z_sun]
 	amrex::Real zetaHI;			  ///< cosmic-ray ionization rate of HI [s^-1]
+	bool alphaB_T_dependent;		  ///< network.recombination_temperature_dependent != 0
 	bool pe_heating;			  ///< network.pe_heating_switch != 0
 	bool cr_heating;			  ///< network.cr_heating_switch != 0
 
@@ -122,13 +122,11 @@ struct HotGasCoolingRHS {
 	{
 		namespace ISM = quokka::ISMCooling;
 		constexpr amrex::Real nHI = 0.0;
-		constexpr amrex::Real yHe = 0.0;	  // SPEC §5.0
-		constexpr amrex::Real ne_floor = 1.0e-30; // that of get_ism_energy_terms
+		constexpr amrex::Real yHe = 0.0; // SPEC §5.0
 		const auto nt = ISM::LookupGrackleNT(nH, T, *ISM::GetGrackleNTTable());
-		const amrex::Real ne = amrex::max(ISM::ElectronDensityMax(nHI, nH, T, nt.xe, nt.dxe_dT, nt.dxe_dnH, Zp, zetaHI,
-									  get_recombination_coefficient(T), dRecombination_coefficient_dT(T))
-						      .ne,
-						  ne_floor);
+		const auto alphaB = ISM::CaseBRecombinationCoefficient(T, alphaB_T_dependent);
+		const amrex::Real ne =
+		    amrex::max(ISM::ElectronDensityMax(nHI, nH, T, nt.xe, nt.dxe_dT, nt.dxe_dnH, Zp, zetaHI, alphaB.val, alphaB.dT).ne, ISM::ne_floor);
 		const amrex::Real pe = pe_heating ? ISM::PEHeating(nHI, nH, ne, T, G0, Zp).val : 0.0;
 		const amrex::Real cr = cr_heating ? ISM::CRHeating(nHI, zetaHI, yHe).val : 0.0;
 		return -nH * nH * nt.Lambda + pe + cr;
@@ -200,6 +198,7 @@ void ComputeHotGasCooling(amrex::MultiFab &state, std::array<amrex::MultiFab con
 	const bool pe_heating = (network_rp::pe_heating_switch != 0);
 	const bool cr_heating = (network_rp::cr_heating_switch != 0);
 	const bool energy_on = (network_rp::energy_switch != 0);
+	const bool alphaB_T_dependent = (network_rp::recombination_temperature_dependent != 0);
 
 	for (amrex::MFIter iter(state); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -233,7 +232,7 @@ void ComputeHotGasCooling(amrex::MultiFab &state, std::array<amrex::MultiFab con
 				return;
 			}
 			const amrex::Real Eint = detail::CellInternalEnergy<problem_t>(s, i, j, k, cons_fc);
-			const detail::HotGasCoolingRHS rhs{rho, nH, xn, G0Rate(i, j, k), Zp, zetaHI, pe_heating, cr_heating};
+			const detail::HotGasCoolingRHS rhs{rho, nH, xn, G0Rate(i, j, k), Zp, zetaHI, alphaB_T_dependent, pe_heating, cr_heating};
 			const amrex::Real Eint_floor = (tempFloor > 0.0) ? rhs.InternalEnergy(tempFloor) : 0.0;
 			quokka::valarray<amrex::Real, 1> y = {Eint};
 			quokka::valarray<amrex::Real, 1> const abstol = {reltol_floor * amrex::max(Eint_floor, std::numeric_limits<amrex::Real>::min())};

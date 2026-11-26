@@ -41,6 +41,25 @@ struct ElectronDensity {
 	int branch; ///< which term set the maximum: 0 network, 1 CIE, 2 C+, 3 CR
 };
 
+/// Floor [cm^-3] on n_e^max, which keeps the rates finite when there is no gas at all.
+constexpr Real ne_floor = 1.0e-30;
+
+/// A coefficient and its derivative with respect to T.
+struct Coefficient {
+	Real val;
+	Real dT; ///< d/dT
+};
+
+/// Case-B recombination coefficient of H [cm^3 s^-1], 2.63e-13 (T/1e4)^-0.7, or the constant 2.63e-13 if temperatureDependent is false.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto CaseBRecombinationCoefficient(Real T, bool temperatureDependent) -> Coefficient
+{
+	constexpr Real coeff = 2.63e-13;
+	if (!temperatureDependent) {
+		return {coeff, 0.};
+	}
+	return {coeff * std::pow(T / 1.0e4, -0.7), -coeff * 0.7 * std::pow(T / 1.0e4, -1.7) / 1.0e4};
+}
+
 namespace detail
 {
 
