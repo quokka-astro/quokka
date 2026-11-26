@@ -297,14 +297,14 @@ It has no H\\(\_2\\) or CO chemistry and no gas–dust thermal coupling.
 The model follows the RIGEL [@Deng2024] and TIGRESS-NCR [@Kim2023] prescriptions, with the rate fits of [@Gong2017], [@Wolfire2003] and [@Weingartner2001].
 
 A problem opts in by using this network and by defining `PHOTOCHEM_ISM_COOLING` at compile time (see `src/problems/ISMCoolingOneZone/CMakeLists.txt`).
-Every new code path is under that definition, so the other photoionization problems are unchanged.
+The new cooling and heating code is under that definition, so the other photoionization problems are unchanged. The dust absorption without the gas–dust coupling model (Sect. 5.5) is selected by the problem's `ISM_Traits` instead.
 All rates below are volumetric, in \\(\mathrm{erg}\ \mathrm{cm}^{-3}\ \mathrm{s}^{-1}\\), with cooling and heating both counted as positive numbers.
 Number densities always come from the species: \\(n\_{\rm H} = n\_{\rm HI} + n\_{\rm H^+}\\), never \\(\rho/m\_{\rm H}\\).
 Helium is not in the network or in the photochemistry equation of state, so the helium-to-hydrogen ratio is set to \\(y\_{\rm He}=0\\) in all rates.
 
 ### 5.1 Two regimes
 
-At the start of each hydro step on each level, every cell gets a temperature from the photochemistry equation of state.
+In each hydro step on each level, after the hydro update and before the radiation substeps, every cell gets a temperature from the photochemistry equation of state.
 A cell is **hot** if \\(T \geq T\_{\rm th} = 2\times10^4\ \mathrm{K}\\) and **cold** otherwise.
 The label is fixed for the whole hydro step, including all radiation substeps.
 Cells with a density below `photochemistry.min_density_allowed` are skipped by the burn and by the hot-cell step, and are never hot.
@@ -346,7 +346,7 @@ k_{12} = 5.31\times10^{-8}\, \frac{T_4^{0.15}}{1 + (T_4/5)^{0.65}}\, e^{-11.84/T
 
 with \\(E\_{21} = 10.2\ \mathrm{eV}\\).
 
-**Nebular lines.** The coefficients are those printed in [@Kim2023]. The value \\(3.86\times10^{-23}\\) in the RIGEL paper is a typo for \\(3.68\times10^{-23}\\).
+**Nebular lines.** The coefficients are those printed in [@Kim2023]. The value \\(3.86\times10^{-23}\\) in the RIGEL paper differs from the \\(3.68\times10^{-23}\\) printed in NCR [@Kim2023]; we use the NCR value.
 
 <script type="math/tex; mode=display">
 \mathcal{L}_{\rm neb} = Z'\, n_e^{\max}\, n_{\rm H^+}\, \frac{3.68\times10^{-23}\, e^{-3.86/T_4}\, f_{\rm neb}(T)}{T_4^{1/2}\left(1 + 0.12\, n_{e,2}^{\,0.38 - 0.12\ln T_4}\right)}, \qquad
@@ -424,14 +424,15 @@ The maximum is needed because in neutral gas the network electron density is far
 In each hot cell, once per hydro step before the radiation substeps:
 
 1. All hydrogen is moved to H\\(^+\\), keeping the number of H nuclei, and \\(n\_e = n\_{\rm H^+}\\). The gas internal energy is not changed.
-2. The internal energy is integrated over the hydro step at fixed density with an adaptive Runge–Kutta method,
+2. The internal energy is integrated over the hydro step at fixed density with an adaptive Runge–Kutta method, using the equation below the list.
+3. The temperature is taken from the photochemistry equation of state at each evaluation, and the table rate keeps applying if the cell cools below \\(T\_{\rm th}\\) within the step. At or below the larger of `temperature_floor` and the lowest table temperature, \\(10\ \mathrm{K}\\), net cooling by the table term is set to zero and only heating remains, so that a cell without a heating source cannot cool to zero internal energy. Because the cell is fully ionized, \\(\mathcal{G}\_{\rm CR} = 0\\). The result is clamped to the energy at `temperature_floor`. If `network.energy_switch = 0`, the integration is skipped and the internal energy is unchanged. The two heating terms follow `network.pe_heating_switch` and `network.cr_heating_switch`.
+4. If the integration needs more than `maxStepsODEIntegrate` steps, the code prints the cell and aborts. There is no retry, because the step runs after the hydro update. Each call prints the number of hot cells and their average and maximum number of substeps.
+
+The equation integrated in step 2 is
 
 <script type="math/tex; mode=display">
 \frac{dE_{\rm int}}{dt} = -n_{\rm H}^2\, \Lambda_{\rm net}(n_{\rm H}, T) + \mathcal{G}_{\rm PE} + \mathcal{G}_{\rm CR}.
 </script>
-
-3. The temperature is taken from the photochemistry equation of state at each evaluation, and the table rate keeps applying if the cell cools below \\(T\_{\rm th}\\) within the step. Because the cell is fully ionized, \\(\mathcal{G}\_{\rm CR} = 0\\). The result is clamped to the energy at `temperature_floor`. If `network.energy_switch = 0`, the integration is skipped and the internal energy is unchanged. The two heating terms follow `network.pe_heating_switch` and `network.cr_heating_switch`.
-4. If the integration needs more than `maxStepsODEIntegrate` steps, the code prints the cell and aborts. There is no retry, because the step runs after the hydro update.
 
 The net cooling function \\(\Lambda\_{\rm net}\\) is the Grackle primordial plus metal cooling minus heating, from the Cloudy table `CloudyData_UVB=HM2012_shielded` at redshift 0, with the metal part scaled by \\(Z'\\), and without PE heating or Compton cooling.
 It is stored on Grackle's native \\((\log n\_{\rm H}, \log T)\\) grid, which covers \\(-10 < \log\_{10}(n\_{\rm H}/\mathrm{cm}^{-3}) < 4\\) and \\(1 < \log\_{10}(T/\mathrm{K}) < 9\\), together with the CIE electron fraction \\(x\_{e,\rm CIE}\\), derived from the tabulated mean molecular weight.
@@ -474,5 +475,5 @@ Any background value must be part of the expression.
 
 ### 5.8 Verification
 
-The tests are in `src/problems/ISMCoolingRates` (all rates and the table lookup against the Python reference `extern/cooling/ism_cooling_reference.py`), `src/problems/ISMCoolingOneZone` (Jacobian, startup checks, thermal equilibrium of 25 cells at \\(10^{-2} \leq n\_{\rm H} \leq 10^2\ \mathrm{cm}^{-3}\\), the hot-cell step, a cell crossing \\(T\_{\rm th}\\)) and `src/problems/ISMCoolingSlab` (dust attenuation of a photon beam in a cold and a hot slab).
+The tests are in `src/problems/ISMCoolingRates` (all rates and the table lookup against the Python reference `extern/cooling/ism_cooling_reference.py`), `src/problems/ISMCoolingOneZone` (Jacobian, startup checks, the temperature of 25 cells at \\(10^{-2} \leq n\_{\rm H} \leq 10^2\ \mathrm{cm}^{-3}\\) after 1 Gyr of evolution against the integrated ODE, the hot-cell step, a cell crossing \\(T\_{\rm th}\\), a dense hot cell without heating) and `src/problems/ISMCoolingSlab` (dust attenuation of a photon beam in a cold and a hot slab).
 At \\(G\_0 = 1\\) and \\(Z' = 1\\), the temperature after 1 Gyr falls from 8200 K to 6600 K for \\(n\_{\rm H} \leq 0.15\ \mathrm{cm}^{-3}\\), drops to about 560 K at \\(n\_{\rm H} = 0.32\ \mathrm{cm}^{-3}\\), and falls from 72 K to 38 K between \\(n\_{\rm H} = 10\\) and \\(100\ \mathrm{cm}^{-3}\\).
