@@ -145,14 +145,14 @@ path_patterns = ["src/conduction/*", "src/problems/ThermalConduction*", "inputs/
 value = "IO"
 color = "16A085"
 description = "Input and output"
-relevance_level = 1
+relevance_level = 2
 path_patterns = ["src/io/*"]
 
 [[scope.label]]
 value = "core"
 color = "16A085"
 description = "Shared driver, math and utilities"
-relevance_level = 1
+relevance_level = 2
 path_patterns = [
     "src/QuokkaSimulation*",
     "src/simulation*",
@@ -177,7 +177,7 @@ path_patterns = [
 value = "build"
 color = "16A085"
 description = "Build system and third-party libraries"
-relevance_level = 1
+relevance_level = 3
 path_patterns = [
     "CMakeLists.txt",
     "src/CMakeLists.txt",
@@ -194,21 +194,21 @@ path_patterns = [
 value = "tests"
 color = "16A085"
 description = "Test problems, inputs, reference data and the regression suite"
-relevance_level = 1
+relevance_level = 4
 path_patterns = ["src/problems/*", "inputs/*", "extern/*", "regression/*", "tests/*"]
 
 [[scope.label]]
 value = "tools"
 color = "16A085"
 description = "Helper scripts and files for AI agents"
-relevance_level = 1
+relevance_level = 3
 path_patterns = ["scripts/*", "tools/*", ".agents/*", ".claude/*", "AGENTS.md", "CLAUDE.md", "context7.json"]
 
 [[scope.label]]
 value = "CI"
 color = "16A085"
 description = "Continuous integration and code checkers"
-relevance_level = 1
+relevance_level = 3
 path_patterns = [
     ".github/*",
     ".ci/*",
@@ -230,7 +230,7 @@ path_patterns = [
 value = "documentation"
 color = "16A085"
 description = "Documentation"
-relevance_level = 1
+relevance_level = 5
 path_patterns = ["docs/*", "*.md", "paper/*", "CITATION.cff", "LICENSE", ".mailmap"]
 
 ##
