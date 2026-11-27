@@ -28,3 +28,8 @@ hydro.reconstruction_order = 2
 cfl = 0.4
 stop_time = 0.4
 max_timesteps = 2000
+
+# *****************************************************************
+# Problem parameters
+# *****************************************************************
+problem.inverse_plasma_beta = 1.0  # pre-shock plasma beta of 1; zero (the default) sets no magnetic field
