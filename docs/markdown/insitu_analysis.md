@@ -55,6 +55,8 @@ quokka.proj_z.field_names = nH
 > **Note**
 >
 > This is based on the *DiagFramePlane* diagnostic from PelePhysics, and the same runtime parameters should apply here without modification. The output format is also the same as that produced by the *Pele* codes.
+
+`DiagFramePlane` requires a 3D simulation. Filters are unsupported: configuring them emits a warning and discards them before collecting fields or preparing the slice.
 >
 
 This outputs 2D slices of the simulation as AMReX plotfiles that can be further examined using, e.g., VisIt or yt.
