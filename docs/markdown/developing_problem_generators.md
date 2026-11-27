@@ -94,6 +94,17 @@ The `problem_main()` function is the entry point that `src/main.cpp` calls after
 
 If your problem needs exact solutions, diagnostics, or error checks, compute them before returning a status code from `problem_main()` so automated tests can detect failures.
 
+### One-zone tests
+
+For a test of a uniform cell (cooling, chemistry, radiation-matter coupling) use the harness in [`src/util/OneZoneHarness.hpp`](https://github.com/quokka-astro/quokka/blob/development/src/util/OneZoneHarness.hpp) instead of writing the recording and error-norm code by hand. The simulation still runs through `QuokkaSimulation` on a small periodic grid. A test supplies four things:
+
+1. Derive `SimulationData<problem_t>` from `quokka::onezone::Recorder`.
+2. In `setInitialConditionsOnGrid`, fill a `quokka::onezone::Cell<problem_t>` and pass it to `quokka::onezone::FillUniform`.
+3. In `computeAfterTimestep`, call `userData_.record(state_new_cc_[0], Geom(0), tNew_[0])`.
+4. In `problem_main`, register observables with `addObservable` (functions of the centre-cell values), build `quokka::onezone::Check` objects against an `AnalyticReference` or a `TableReference` (CSV file), and `return quokka::onezone::Run(sim, checks)`. A `Predicate` expresses a pass/fail condition that is not a comparison, and `AllFinite()` checks that no recorded value is NaN or infinite. A `quokka::onezone::Figure` names recorded observables (each optionally with a reference, drawn dashed) to plot against time; pass the figures to `Run`, which saves them with matplotlib when Quokka is built with Python support and skips them otherwise.
+
+See `src/problems/RadMatterCoupling/testRadMatterCoupling.cpp` (analytic reference) and `src/problems/OneZonePhotoionization/testOneZonePhotoionization.cpp` (table reference).
+
 ## 5. Build and run the problem
 
 1. Regenerate or update your build tree with CMake (for example, `cmake -S . -B build -G Ninja` with the desired options). The compiled problem executables live under `build/src/problems/<ProblemName>/` once the build completes; the installation guide covers the workflow in the [build instructions](installation.md#installation).

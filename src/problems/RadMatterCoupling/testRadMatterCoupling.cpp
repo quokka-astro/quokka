@@ -5,18 +5,9 @@
 /// \brief Defines a test problem for radiation-matter coupling.
 ///
 
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
-#include "math/interpolate.hpp"
-#include "radiation/radiation_system.hpp"
-#include <format>
-#include <vector>
-
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
-#include "util/BC.hpp"
-#include "util/fextract.hpp"
+#include "util/OneZoneHarness.hpp"
 
 struct CouplingProblem {}; // dummy type to allow compile-type polymorphism via template specialization
 
@@ -25,11 +16,7 @@ constexpr double eps_SuOlson = 1.0;
 constexpr double a_rad = C::a_rad; // cgs
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
-template <> struct SimulationData<CouplingProblem> {
-	std::vector<double> t_vec_;
-	std::vector<double> Trad_vec_;
-	std::vector<double> Tgas_vec_;
-};
+template <> struct SimulationData<CouplingProblem> : quokka::onezone::Recorder {};
 
 template <> struct quokka::EOS_Traits<CouplingProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
@@ -97,52 +84,19 @@ constexpr double rho0 = 1.0e-7;	 // g cm^-3
 
 template <> void QuokkaSimulation<CouplingProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const amrex::Array4<double> &state_cc = grid_elem.array_;
-
-	// loop over the grid and set the initial condition
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad0;
-		state_cc(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<CouplingProblem>::gasInternalEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
-		state_cc(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
-	});
+	quokka::onezone::Cell<CouplingProblem> cell{};
+	cell[RadSystem<CouplingProblem>::radEnergy_index] = Erad0;
+	cell[RadSystem<CouplingProblem>::gasEnergy_index] = Egas0;
+	cell[RadSystem<CouplingProblem>::gasInternalEnergy_index] = Egas0;
+	cell[RadSystem<CouplingProblem>::gasDensity_index] = rho0;
+	quokka::onezone::FillUniform<CouplingProblem>(grid_elem, cell);
 }
 
-template <> void QuokkaSimulation<CouplingProblem>::computeAfterTimestep()
-{
-	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
-
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		userData_.t_vec_.push_back(tNew_[0]);
-
-		const amrex::Real Etot_i = values.at(RadSystem<CouplingProblem>::gasEnergy_index)[0];
-		const amrex::Real x1GasMom = values.at(RadSystem<CouplingProblem>::x1GasMomentum_index)[0];
-		const amrex::Real x2GasMom = values.at(RadSystem<CouplingProblem>::x2GasMomentum_index)[0];
-		const amrex::Real x3GasMom = values.at(RadSystem<CouplingProblem>::x3GasMomentum_index)[0];
-		const amrex::Real rho = values.at(RadSystem<CouplingProblem>::gasDensity_index)[0];
-		static_assert(!Physics_Traits<CouplingProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		const amrex::Real Egas_i = quokka::EOS<CouplingProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i, 0.0);
-
-		const amrex::Real Erad_i = values.at(RadSystem<CouplingProblem>::radEnergy_index)[0];
-
-		userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
-		userData_.Tgas_vec_.push_back(quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Egas_i));
-	}
-}
+template <> void QuokkaSimulation<CouplingProblem>::computeAfterTimestep() { userData_.record(state_new_cc_[0], Geom(0), tNew_[0]); }
 
 auto problem_main() -> int
 {
 	// Problem parameters
-
-	// const int nx = 4;
-	// const double Lx = 1e5; // cm
 	const double CFL_number = 1.0;
 	const double max_time = 1.0e-2; // s
 	const int max_timesteps = 1e6;
@@ -155,104 +109,41 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.plotfileInterval_ = -1;
 
-	// initialize
-	sim.setInitialConditions();
+	sim.userData_.addObservable("Tgas", [](quokka::onezone::CellValues const &cell) {
+		const amrex::Real rho = cell[RadSystem<CouplingProblem>::gasDensity_index];
+		static_assert(!Physics_Traits<CouplingProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		const amrex::Real Eint = quokka::EOS<CouplingProblem>::ComputeEintFromEgas(
+		    rho, cell[RadSystem<CouplingProblem>::x1GasMomentum_index], cell[RadSystem<CouplingProblem>::x2GasMomentum_index],
+		    cell[RadSystem<CouplingProblem>::x3GasMomentum_index], cell[RadSystem<CouplingProblem>::gasEnergy_index], 0.0);
+		return quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Eint);
+	});
 
-	// evolve
-	sim.evolve();
+	sim.userData_.addObservable(
+	    "Trad", [](quokka::onezone::CellValues const &cell) { return std::pow(cell[RadSystem<CouplingProblem>::radEnergy_index] / a_rad, 1. / 4.); });
 
-	// copy solution slice to vector
-	int status = 0;
+	// Asymptotically-exact solution (Gonzalez et al. 2007)
+	const double initial_Tgas = quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho0, Egas0);
+	const auto kappa = RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas);
+	const auto Tgas_exact = [=](double t) {
+		const double arad = RadSystem<CouplingProblem>::radiation_constant_;
+		const double c = RadSystem<CouplingProblem>::c_light_;
+		const double E0 = (Erad0 + Egas0) / (arad + alpha_SuOlson / 4.0);
+		const double T0_4 = std::pow(initial_Tgas, 4);
+		const double T4 = (T0_4 - E0) * std::exp(-(4. / alpha_SuOlson) * (arad + alpha_SuOlson / 4.0) * kappa * rho0 * c * t) + E0;
+		return std::pow(T4, 1. / 4.);
+	};
 
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// Solve for asymptotically-exact solution (Gonzalez et al. 2007)
-		const int nmax = static_cast<int>(sim.userData_.t_vec_.size());
-		std::vector<double> t_exact(nmax);
-		std::vector<double> Tgas_exact(nmax);
-		const double initial_Tgas = quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho0, Egas0);
-		const auto kappa = RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas);
-
-		for (int n = 0; n < nmax; ++n) {
-			const double time_t = sim.userData_.t_vec_.at(n);
-			const double arad = RadSystem<CouplingProblem>::radiation_constant_;
-			const double c = RadSystem<CouplingProblem>::c_light_;
-			const double E0 = (Erad0 + Egas0) / (arad + alpha_SuOlson / 4.0);
-			const double T0_4 = std::pow(initial_Tgas, 4);
-
-			const double T4 = (T0_4 - E0) * std::exp(-(4. / alpha_SuOlson) * (arad + alpha_SuOlson / 4.0) * kappa * rho0 * c * time_t) + E0;
-
-			const double T_gas = std::pow(T4, 1. / 4.);
-
-			t_exact.at(n) = (time_t);
-			Tgas_exact.at(n) = (T_gas);
-		}
-
-		// interpolate exact solution onto output timesteps
-		std::vector<double> Tgas_exact_interp(sim.userData_.t_vec_.size());
-		interpolate_arrays(sim.userData_.t_vec_.data(), Tgas_exact_interp.data(), static_cast<int>(sim.userData_.t_vec_.size()), t_exact.data(),
-				   Tgas_exact.data(), static_cast<int>(t_exact.size()));
-
-		// compute L2 error norm
-		double err_norm = 0.;
-		double sol_norm = 0.;
-		for (size_t i = 0; i < sim.userData_.t_vec_.size(); ++i) {
-			err_norm += std::abs(sim.userData_.Tgas_vec_[i] - Tgas_exact_interp[i]);
-			sol_norm += std::abs(Tgas_exact_interp[i]);
-		}
-		const double rel_error = err_norm / sol_norm;
-		const double error_tol = 2e-5;
-		amrex::Print() << "relative L1 error norm = " << rel_error << '\n';
-		if (rel_error > error_tol) {
-			status = 1;
-		}
-
-#ifdef HAVE_PYTHON
-
-		// Plot results
-		std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
-		std::vector<double> &Trad = sim.userData_.Trad_vec_;
-		std::vector<double> const &t = sim.userData_.t_vec_;
-
-		matplotlibcpp::clf();
-		matplotlibcpp::yscale("log");
-		matplotlibcpp::xscale("log");
-		matplotlibcpp::ylim(0.1 * std::min(Tgas.front(), Trad.front()), 10.0 * std::max(Trad.back(), Tgas.back()));
-
-		std::map<std::string, std::string> Trad_args;
-		Trad_args["label"] = "radiation temperature (numerical)";
-		matplotlibcpp::plot(t, Trad, Trad_args);
-
-		std::map<std::string, std::string> Tgas_args;
-		Tgas_args["label"] = "gas temperature (numerical)";
-		matplotlibcpp::plot(t, Tgas, Tgas_args);
-
-		std::map<std::string, std::string> exactsol_args;
-		exactsol_args["label"] = "gas temperature (exact)";
-		exactsol_args["linestyle"] = "--";
-		exactsol_args["color"] = "black";
-		matplotlibcpp::plot(t, Tgas_exact_interp, exactsol_args);
-
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("time t (s)");
-		matplotlibcpp::ylabel("temperature T (K)");
-		// matplotlibcpp::title(
-		//    std::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNew_));
-		matplotlibcpp::save(std::format("./radcoupling.pdf"));
-
-		matplotlibcpp::clf();
-
-		std::vector<double> frac_err(t.size());
-		for (size_t i = 0; i < t.size(); ++i) {
-			frac_err.at(i) = Tgas_exact_interp.at(i) / Tgas.at(i) - 1.0;
-		}
-		matplotlibcpp::plot(t, frac_err);
-		matplotlibcpp::xlabel("time t (s)");
-		matplotlibcpp::ylabel("fractional error in material temperature");
-		matplotlibcpp::save(std::format("./radcoupling_fractional_error.pdf"));
-#endif
-	}
-
-	// Cleanup and exit
-	amrex::Print() << "Finished." << '\n';
-	return status;
+	const std::vector<quokka::onezone::Check> checks = {
+	    {.name = "Tgas relative L1 error",
+	     .comparisons = {{.observable = "Tgas", .reference = quokka::onezone::AnalyticReference(Tgas_exact)}},
+	     .tolerance = 2e-5}};
+	const std::vector<quokka::onezone::Figure> figures = {
+	    {.filename = "radcoupling.pdf",
+	     .curves = {{.observable = "Trad", .label = "radiation temperature"},
+			{.observable = "Tgas", .label = "gas temperature", .reference = quokka::onezone::AnalyticReference(Tgas_exact)}},
+	     .xlabel = "time t (s)",
+	     .ylabel = "temperature T (K)",
+	     .log_x = true,
+	     .log_y = true}};
+	return quokka::onezone::Run(sim, checks, {}, "", figures);
 }
