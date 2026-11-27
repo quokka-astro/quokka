@@ -148,3 +148,5 @@ endif()
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}")
 
 add_subdirectory(problems)
+
+add_subdirectory(hydro/nscbc_sonic_tests)
