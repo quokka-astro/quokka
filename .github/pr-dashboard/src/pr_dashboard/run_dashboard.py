@@ -4,6 +4,7 @@ import enum
 import json
 import pathlib
 
+from pr_dashboard import board_mirror
 from pr_dashboard import github_api
 from pr_dashboard import load_labels
 from pr_dashboard import pr_commands
@@ -104,6 +105,50 @@ def run_command_from_comment(
         comment_id=comment.comment_id,
         update_plan=update_plan_from_comment,
     )
+
+
+def print_board_change(
+    board_change: board_mirror.BoardChange,
+) -> None:
+    change_parts = []
+    if board_change.status_to_set is not None:
+        change_parts.append(f"Status -> {board_change.status_to_set}")
+    if board_change.review_by_date_changes:
+        change_parts.append(f"Review by date -> {board_change.review_by_date_to_set}")
+    print(f"#{board_change.pr_number}: {'; '.join(change_parts)}")
+
+
+def mirror_to_board(
+    *,
+    repo: str,
+    project_number: int,
+    dry_run: bool,
+) -> None:
+    owner = repo.split("/")[0]
+    board = github_api.get_board(
+        owner=owner,
+        project_number=project_number,
+    )
+    activities = github_api.get_open_pull_request_activities(
+        repo=repo,
+        project_number=project_number,
+    )
+    num_changes = 0
+    for activity in activities:
+        if activity.board_item is None:
+            print(f"#{activity.pr_number}: not on the board, so skipped")
+            continue
+        board_change = board_mirror.plan_board_change(activity)
+        if board_change is None:
+            continue
+        print_board_change(board_change)
+        num_changes += 1
+        if not dry_run:
+            github_api.apply_board_change(
+                board=board,
+                board_change=board_change,
+            )
+    print(f"{num_changes} of {len(activities)} open PRs changed on the board")
 
 
 def get_label_update_action(
@@ -214,6 +259,27 @@ def add_update_label_definitions_parser(
     )
 
 
+def add_mirror_to_board_parser(
+    action_parsers: argparse._SubParsersAction,
+) -> None:
+    mirror_to_board_parser = action_parsers.add_parser("mirror-to-board")
+    mirror_to_board_parser.add_argument(
+        "--repo",
+        type=str,
+        required=True,
+    )
+    mirror_to_board_parser.add_argument(
+        "--project-number",
+        type=int,
+        required=True,
+    )
+    mirror_to_board_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+    )
+
+
 ##
 ## === PROGRAM MAIN
 ##
@@ -228,6 +294,7 @@ def main() -> None:
     add_label_pr_parser(action_parsers)
     add_run_command_parser(action_parsers)
     add_update_label_definitions_parser(action_parsers)
+    add_mirror_to_board_parser(action_parsers)
     parsed_args = parser.parse_args()
     if parsed_args.action == "label-pr":
         label_pr(
@@ -243,6 +310,12 @@ def main() -> None:
     elif parsed_args.action == "update-label-definitions":
         update_label_definitions(
             repo=parsed_args.repo,
+            dry_run=parsed_args.dry_run,
+        )
+    elif parsed_args.action == "mirror-to-board":
+        mirror_to_board(
+            repo=parsed_args.repo,
+            project_number=parsed_args.project_number,
             dry_run=parsed_args.dry_run,
         )
     else:
