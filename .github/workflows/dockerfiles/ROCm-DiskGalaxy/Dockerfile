@@ -68,10 +68,11 @@ ENV MPICH_VERSION="${MPICH_VERSION}" \
 COPY . /tmp/quokka-src
 WORKDIR /tmp/quokka-src
 
-# Build Quokka
+# Build the application only; .dockerignore excludes the script-based test sources.
 RUN set -euo pipefail && \
     cmake -S . -B build \
       -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_TESTING=OFF \
       -DAMReX_SPACEDIM="${AMREX_SPACEDIM}" \
       -DAMReX_GPU_BACKEND=HIP \
       -DAMReX_MPI="${AMREX_MPI}" \
