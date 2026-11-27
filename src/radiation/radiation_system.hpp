@@ -120,6 +120,8 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
+	static constexpr bool dust_absorption_only = false;
+	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> pe_heating_efficiency = {};
 };
 
 // this struct is specialized by the user application code
@@ -217,6 +219,18 @@ template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Mode
 
 template <typename problem_t>
 struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {};
+
+// Use SFINAE to check if dust_absorption_only is defined in RadSystem_Traits<problem_t>
+template <typename problem_t, typename = void> struct RadSystem_Has_Dust_Absorption_Only : std::false_type {};
+
+template <typename problem_t>
+struct RadSystem_Has_Dust_Absorption_Only<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::dust_absorption_only)>> : std::true_type {};
+
+// Use SFINAE to check if pe_heating_efficiency is defined in RadSystem_Traits<problem_t>
+template <typename problem_t, typename = void> struct RadSystem_Has_PE_Heating_Efficiency : std::false_type {};
+
+template <typename problem_t>
+struct RadSystem_Has_PE_Heating_Efficiency<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::pe_heating_efficiency)>> : std::true_type {};
 
 // Use SFINAE to check if ChemBands() is defined in RadSystem_Traits<problem_t> (indicates photoionization group)
 template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {};
@@ -322,6 +336,75 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// and photochemistry. When NChemBands == 0, nGroupsThermal_ == nGroups_ and all chem-specific code
 	// paths are inert.
 	static constexpr int nGroupsThermal_ = nGroups_ - RadSystem_NChemBands<problem_t>::value;
+
+	// When true, every thermal group is instead a dust-absorption-only band: it is transported, absorbed
+	// by dust, and exerts radiation force on the gas, but emits nothing and gives none of the absorbed
+	// energy to the gas. The absorbed energy leaves the simulation -- physically it heats the dust, which
+	// re-radiates it in the infrared, and neither the dust temperature nor that emission is followed, so
+	// total energy is deliberately not conserved. The gas is heated only by the photoelectric heating of
+	// RadSystem_Traits::pe_heating_efficiency, which is computed from the radiation field rather than the
+	// absorbed energy. The motivating case is FUV + Lyman-Werner in a galaxy simulation. A single group
+	// is allowed; it takes its opacities from the single-group hooks.
+	static constexpr bool dust_absorption_only_ = []() constexpr {
+		if constexpr (RadSystem_Has_Dust_Absorption_Only<problem_t>::value) {
+			return RadSystem_Traits<problem_t>::dust_absorption_only;
+		} else {
+			return false;
+		}
+	}();
+
+	// Number of groups that emit blackbody radiation. Dust-absorption-only bands and chemical bands do
+	// not, so this is the range over which the Planck emission and its temperature derivative are built.
+	static constexpr int nGroupsEmitting_ = dust_absorption_only_ ? 0 : nGroupsThermal_;
+
+	// Rate coefficient of the photoelectric heating, in cgs units, from Bate & Keto (2015), Eq. 26: the
+	// standard heating rate 1.33e-24 erg s^-1 per hydrogen nucleus per unit Habing field, divided by the
+	// reference interstellar radiation field energy density 5.29e-14 erg cm^-3 that defines that field.
+	// The same two numbers appear in RadSystem<MarshakProblem>::DefinePhotoelectricHeatingE1Derivative.
+	// Units: cm^3 s^-1, so that (coefficient * n_H * E_g) is an energy density per unit time.
+	static constexpr double pe_heating_rate_coeff_ = 1.33e-24 / 5.29e-14;
+
+	// Photoelectric efficiency of each dust-absorption band -- the dimensionless factor epsilon of the
+	// standard interstellar expression, about 0.05 for cold molecular gas. The heating rate is
+	//
+	//     Gamma_PE = sum_g pe_heating_efficiency_[g] * pe_heating_rate_coeff_ * n_H * E_g .
+	//
+	// Note what this does NOT depend on: the dust opacity of the band. Photoelectric heating is the
+	// photoelectric effect on grains, and the grain physics is folded into the empirical coefficient
+	// above rather than taken from kappa. A band with zero opacity therefore still heats the gas if its
+	// efficiency is non-zero. A consequence is that this heating is not bounded by, and is not debited
+	// from, the energy the band absorbs: like the thermal-band photoelectric model, it adds energy to the
+	// gas that the radiation does not lose.
+	//
+	// A zero entry means the band drives no photoelectric heating, which is how non-ultraviolet bands are
+	// labelled. Because the expression is linear in E_g, splitting one band into two and giving both the
+	// same efficiency reproduces the unsplit result exactly.
+	//
+	// This is a compile-time constant, so it cannot depend on the local electron density or grain charge.
+	// It applies to dust-absorption bands only; the thermal-band photoelectric model is the separate
+	// ISM_Traits::enable_photoelectric_heating path, and the two are mutually exclusive.
+	static constexpr amrex::GpuArray<double, nGroups_> pe_heating_efficiency_ = []() constexpr {
+		if constexpr (RadSystem_Has_PE_Heating_Efficiency<problem_t>::value) {
+			return RadSystem_Traits<problem_t>::pe_heating_efficiency;
+		} else {
+			// value-initialization zeroes the aggregate; GpuArray::operator[] is not constexpr, so it
+			// cannot be filled element by element here
+			return amrex::GpuArray<double, nGroups_>{};
+		}
+	}();
+
+	// True when any band has a non-zero photoelectric efficiency. Used to guard against double-counting the
+	// photoelectric heating against an external cooling module.
+	// GpuArray::operator[] is not constexpr, so the compile-time scans below go through the underlying
+	// array member instead.
+	static constexpr bool enable_dust_pe_heating_ = []() constexpr {
+		for (int g = 0; g < nGroups_; ++g) {
+			if (pe_heating_efficiency_.arr[g] > 0.0) {
+				return true;
+			}
+		}
+		return false;
+	}();
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
 			return RadSystem_Traits<problem_t>::radBoundaries;
@@ -359,6 +442,55 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(RadSystem_EnergyUnit<problem_t>::value == C::ev2erg,
 		      "ChemBands() is interpreted as eV by GetChemBandQuanta(); energy_unit must be C::ev2erg when PHOTOCHEMISTRY is enabled.");
 #endif
+
+	// Assertions: dust_absorption_only turns off thermal emission and the gas-radiation energy exchange
+	// for every thermal group, so it is incompatible with the models that rely on either.
+	// A dust-absorption band does not emit, so nothing but the floor keeps an unilluminated opaque cell away from zero, where
+	// the flux update would divide by it (F / (c E) = 0 / 0).
+	static_assert(!(dust_absorption_only_ && !(Erad_floor_ > 0.0)), // NOLINT
+		      "dust_absorption_only requires a positive RadSystem_Traits::Erad_floor.");
+
+	static_assert(!(dust_absorption_only_ && enable_dust_gas_thermal_coupling_model_), // NOLINT
+		      "dust_absorption_only assumes the dust is thermally decoupled from the gas, so it cannot be combined with "
+		      "ISM_Traits::enable_dust_gas_thermal_coupling_model.");
+
+	static_assert(!(dust_absorption_only_ && enable_photoelectric_heating_), // NOLINT
+		      "dust_absorption_only uses RadSystem_Traits::pe_heating_efficiency for photoelectric heating, so it cannot be combined with the "
+		      "thermal-band model ISM_Traits::enable_photoelectric_heating.");
+
+	// Assertion: the dust-absorption update lives in the non-isothermal branch of AddSourceTermsMultiGroup; the
+	// isothermal branch (gamma == 1) updates only kappaF and would leave the band energies unset.
+	static_assert(!(dust_absorption_only_ && ::quokka::EOS_Traits<problem_t>::gamma == 1.0), // NOLINT
+		      "dust_absorption_only is not implemented for an isothermal EOS (gamma == 1).");
+
+	// A single group takes its opacities from the single-group hooks (OpacityModel::single_group), as everywhere else.
+	static_assert(!(dust_absorption_only_ && nGroups_ > 1 && opacity_model_ != OpacityModel::piecewise_constant_opacity), // NOLINT
+		      "dust_absorption_only with nGroups > 1 requires OpacityModel::piecewise_constant_opacity.");
+
+	// Assertion: pe_heating_efficiency is the dimensionless efficiency factor epsilon of the standard
+	// interstellar expression, a fraction between 0 and 1 (about 0.05 for cold molecular gas).
+	static_assert(
+	    []() constexpr {
+		    for (int g = 0; g < nGroups_; ++g) {
+			    if (!((pe_heating_efficiency_.arr[g] >= 0.0) && (pe_heating_efficiency_.arr[g] <= 1.0))) {
+				    return false;
+			    }
+		    }
+		    return true;
+	    }(), // NOLINT
+	    "Each entry of RadSystem_Traits::pe_heating_efficiency must lie between 0 and 1.");
+
+	// Assertion: photoelectric heating from the radiation field is implemented for dust-absorption bands
+	// only. Thermal bands use the ISM_Traits::enable_photoelectric_heating path instead.
+	static_assert(!(enable_dust_pe_heating_ && !dust_absorption_only_), // NOLINT
+		      "RadSystem_Traits::pe_heating_efficiency applies to dust-absorption bands, so it requires dust_absorption_only = true.");
+
+	// Assertion: pe_heating_rate_coeff_ is an empirical constant in cgs units, so the photoelectric
+	// heating is only meaningful for a problem whose units are cgs. Rejecting the other unit systems
+	// outright is better than silently applying a cgs number to dimensionless quantities.
+	static_assert(!(enable_dust_pe_heating_ && (Physics_Traits<problem_t>::unit_system != UnitSystem::CGS)), // NOLINT
+		      "RadSystem_Traits::pe_heating_efficiency uses an empirical rate coefficient in cgs units, so it requires "
+		      "Physics_Traits::unit_system == UnitSystem::CGS.");
 
 	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
@@ -619,6 +751,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 					   double num_den, double dt) -> JacobianResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto
+	SolveDustAbsorptionBands(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
+				 amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+				 quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
+				 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter) -> NewtonIterationResult<problem_t>;
+
+	AMREX_GPU_DEVICE static auto
 	SolveGasRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
 					amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
 					quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
@@ -673,8 +811,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 {
 	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
-		// a single group always spans the whole spectrum; see radBoundaries_
-		radEnergyFractions[0] = 1.0;
+		// a single group always spans the whole spectrum; see radBoundaries_. A dust-absorption band emits nothing.
+		radEnergyFractions[0] = dust_absorption_only_ ? 0.0 : 1.0;
 		return radEnergyFractions;
 	} else {
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
@@ -685,9 +823,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 		amrex::Real p_prev = pq_lo[0];
 		amrex::Real q_prev = pq_lo[1];
 		bool prev_in_tail = x_lo >= X_TAIL;
-		// Only the thermal groups (the leading nGroupsThermal_ groups) receive blackbody emission, and their fractions are NOT
-		// renormalized.
-		for (int g = 0; g < nGroupsThermal_; ++g) {
+		// Only the emitting groups (the leading nGroupsEmitting_ groups) receive blackbody emission, and their fractions are NOT
+		// renormalized. Under dust_absorption_only there are no emitting groups at all and every fraction is left at 0.
+		for (int g = 0; g < nGroupsEmitting_; ++g) {
 			// the inf sentinel edge (numeric_limits<double>::max()) is taken as x = infinity, as multiplying it would overflow when
 			// energy_unit_over_kT > 1
 			const amrex::Real x =
@@ -701,7 +839,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 			q_prev = pq[1];
 			prev_in_tail = in_tail;
 		}
-		// chemical bands (g >= nGroupsThermal_) emit no blackbody radiation; left at 0.
+		// non-emitting bands (g >= nGroupsEmitting_) emit no blackbody radiation; left at 0.
 		AMREX_ASSERT(sum(radEnergyFractions) < 1.0 + 1.0e-10);
 
 		return radEnergyFractions;
@@ -734,8 +872,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 	const double power = radiation_constant_ * std::pow(temperature, 4);
 	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	auto Erad_g = power * radEnergyFractions;
-	// set floor on the thermal groups only; chemical bands emit no blackbody radiation and are left at 0.
-	for (int g = 0; g < nGroupsThermal_; ++g) {
+	// set floor on the emitting groups only; the other bands emit no blackbody radiation and are left at 0.
+	for (int g = 0; g < nGroupsEmitting_; ++g) {
 		if (Erad_g[g] < Erad_floor_) {
 			Erad_g[g] = Erad_floor_;
 		}
@@ -757,7 +895,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 	quokka::valarray<amrex::Real, nGroups_> d_fourpiboverc_d_t{};
 	const double a_T3 = radiation_constant_ * temperature * temperature * temperature;
 	if constexpr (nGroups_ == 1) {
-		d_fourpiboverc_d_t[0] = 4. * a_T3;
+		d_fourpiboverc_d_t[0] = dust_absorption_only_ ? 0.0 : 4. * a_T3;
 		return d_fourpiboverc_d_t;
 	} else {
 		// The group emission is a T^4 f_g(T), so its temperature derivative is 4 a T^3 f_g + a T^4 df_g/dT.
@@ -774,14 +912,14 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 		// ComputePlanckEnergyFractions. There Q comes from the exact tail series (see X_TAIL in planck_integral.hpp), so this is
 		// the derivative of the emission actually computed, not of the true Planck function that the table only approximates.
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		// As in ComputePlanckEnergyFractions, only the thermal groups emit, the group boundaries need not span the
-		// whole spectrum, and no renormalization is applied; the chemical bands are left at 0.
+		// As in ComputePlanckEnergyFractions, only the emitting groups emit, the group boundaries need not span the
+		// whole spectrum, and no renormalization is applied; the other bands are left at 0.
 		amrex::Real const x_lo = (boundaries[0] > 0.0) ? boundaries[0] * energy_unit_over_kT : 0.0;
 		auto const du_lo = integrate_planck_derivative_below_and_above_x(x_lo);
 		amrex::Real d_prev = du_lo[0];
 		amrex::Real u_prev = du_lo[1];
 		bool prev_in_tail = x_lo >= X_TAIL;
-		for (int g = 0; g < nGroupsThermal_; ++g) {
+		for (int g = 0; g < nGroupsEmitting_; ++g) {
 			// the inf sentinel edge is taken as x = infinity; see ComputePlanckEnergyFractions
 			const amrex::Real x =
 			    (boundaries[g + 1] < inf) ? boundaries[g + 1] * energy_unit_over_kT : std::numeric_limits<amrex::Real>::infinity();

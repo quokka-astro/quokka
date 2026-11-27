@@ -873,6 +873,23 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			    sfh_to_pe_heating_table_filename_.empty(),
 			    "use_sfh_based_pe_heating is set to false but sfh_to_pe_heating_table is specified. This indicates a misconfiguration.");
 		}
+
+		// When the dust-absorption bands deposit photoelectric heating themselves
+		// (RadSystem_Traits::pe_heating_efficiency), that heating must not also be supplied by another
+		// route. A Grackle table that already includes photoelectric heating would double-count it, and
+		// use_sfh_based_pe_heating answers the same question a different way -- it infers G_0 from a
+		// global star formation rate, whereas the bands use the attenuated field the solver transports.
+		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+			if constexpr (RadSystem<problem_t>::enable_dust_pe_heating_) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!cooling_table_include_pe,
+								 "RadSystem_Traits::pe_heating_efficiency is non-zero, so the dust-absorption bands "
+								 "deposit photoelectric heating. Please use a Grackle cooling table that does NOT "
+								 "include photoelectric heating.");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!use_sfh_based_pe_heating_,
+								 "RadSystem_Traits::pe_heating_efficiency and use_sfh_based_pe_heating are two ways "
+								 "to compute the same photoelectric heating. Please enable only one of them.");
+			}
+		}
 	}
 
 	// Load PE heating table if specified
@@ -3530,7 +3547,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					}
 
 					// Full gas update (gas_update_factor = 1.0)
-					if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
+					if constexpr (Physics_Traits<problem_t>::nGroups <= 1 && !RadSystem<problem_t>::dust_absorption_only_) {
 						RadSystem<problem_t>::AddSourceTermsSingleGroup(stateTmp1, radEnergySource_arr, radFluxSource_arr, indexRange,
 												dt_stage2_implicit, 1.0, dustGasInteractionCoeff_, rad_tol,
 												rad_tol_rel, tempFloor, p_iteration_counter,
@@ -3628,7 +3645,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				}
 
 				// Full gas update (gas_update_factor = 1.0)
-				if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
+				if constexpr (Physics_Traits<problem_t>::nGroups <= 1 && !RadSystem<problem_t>::dust_absorption_only_) {
 					RadSystem<problem_t>::AddSourceTermsSingleGroup(
 					    stateNew_cc, radEnergySource_arr, radFluxSource_arr, indexRange, dt_stage3_implicit, 1.0, dustGasInteractionCoeff_,
 					    rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
