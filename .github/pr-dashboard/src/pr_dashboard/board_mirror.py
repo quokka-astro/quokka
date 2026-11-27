@@ -121,9 +121,12 @@ def find_review_by_date(
         if (parsed_command is None) or (parsed_command.command != pr_commands.Commands.ACCEPT_REVIEW):
             continue
         try:
-            return datetime.date.fromisoformat(parsed_command.argument)
+            review_by_date = datetime.date.fromisoformat(parsed_command.argument)
         except ValueError:
             continue
+        earliest_review_by_date = comment.created_at.date() - datetime.timedelta(days=1)
+        if review_by_date >= earliest_review_by_date:
+            return review_by_date
     return None
 
 

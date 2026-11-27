@@ -156,6 +156,27 @@ class TestBoardMirror_ReviewByDate(unittest.TestCase):
         )
         self.assertEqual(board_mirror.find_review_by_date(activity), datetime.date(2026, 11, 10))
 
+    def test_date_refused_by_the_command_is_skipped(
+        self,
+    ):
+        activity = make_activity(
+            assignee_user_names=("reviewer", ),
+            posted_comments=(
+                make_comment(user_name="reviewer", text="/accept-review 2026-11-10", num_hours=1),
+                make_comment(user_name="reviewer", text="/accept-review 2020-01-01", num_hours=3),
+            ),
+        )
+        self.assertEqual(board_mirror.find_review_by_date(activity), datetime.date(2026, 11, 10))
+
+    def test_date_one_day_before_the_comment_is_kept(
+        self,
+    ):
+        activity = make_activity(
+            assignee_user_names=("reviewer", ),
+            posted_comments=(make_comment(user_name="reviewer", text="/accept-review 2026-10-31", num_hours=1), ),
+        )
+        self.assertEqual(board_mirror.find_review_by_date(activity), datetime.date(2026, 10, 31))
+
     def test_no_reviewer_gives_no_date(
         self,
     ):
