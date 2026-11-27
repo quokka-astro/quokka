@@ -9,5 +9,6 @@ _Before this pull request can be reviewed, all of these tasks should be complete
 - [ ] I have added a description (see above).
 - [ ] I have added a link to any related issues (if applicable; see above).
 - [ ] I have read the [Contributing Guide](https://github.com/quokka-astro/quokka/blob/development/CONTRIBUTING.md).
+- [ ] I have read the [Author Guidelines](https://quokka-astro.github.io/quokka/author_guidelines.html).
 - [ ] I have added tests for any new physics that this PR adds to the code.
 - [ ] *(For quokka-astro org members)* I have triggered GPU tests for changed problems with `/azp run quick` and `/azp run rocm-quick`, or `/azp run` if this PR changes base modules affecting multiple problems.
