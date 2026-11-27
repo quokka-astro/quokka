@@ -194,10 +194,10 @@ Then specialise `RadSystem_Traits`. A specialisation does not inherit defaults, 
 | `Erad_floor`     | `double`                   | required         | Floor on the *total* radiation energy density, in \\(\mathrm{erg\\,cm^{-3}}\\); each group gets `Erad_floor / nGroups`.                  |
 | `energy_unit`    | `double`                   | `C::ev2erg`      | Unit in which `thermalRadBoundaries` is expressed. Use `C::hplanck` to give group boundaries in Hz, `C::ev2erg` to give them in eV.    |
 | `thermalRadBoundaries`  | `GpuArray<double, nGroupsThermal+1>` | `{0., inf}` (one thermal group, no chemical bands) | Boundaries of the thermal groups, positive and strictly increasing, in units of `energy_unit`. `nGroupsThermal` is `nGroups` minus the photochemistry network's chemical bands (all of `nGroups` without photochemistry). For `nGroupsThermal > 1`, give finite, positive end points (not `0` or `inf`) that span the full range where \\(\nu B\_\nu\\) matters, so that \\(\nu \chi\_0 B\_\nu\\) is negligible at both. With photochemistry, the last edge must equal the network's first chemical band edge, `Network::ChemBands()[0]`. |
-
-A problem never sets `radBoundaries`. `RadSystem<problem_t>::radBoundaries_`, the boundaries of all groups, is `thermalRadBoundaries` followed by the network's chemical band edges `Network::ChemBands()`.
 | `beta_order`     | `int`                      | required         | Highest order of \\(v/c\\) retained in the four-force. `0` drops all velocity terms; `1` is the documented scheme. The single-group solver also accepts `2` and `3`. |
 | `opacity_model`  | `OpacityModel`             | `single_group`   | `single_group` for grey radiation; when `nGroups > 1`, one of the multigroup models — see [Which model to use](#which-model-to-use). |
+
+A problem never sets `radBoundaries`. `RadSystem<problem_t>::radBoundaries_`, the boundaries of all groups, is `thermalRadBoundaries` followed by the network's chemical band edges `Network::ChemBands()`.
 
 ### Grey opacities
 
