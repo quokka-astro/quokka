@@ -40,10 +40,10 @@ The PR Dashboard board (organisation project 4) mirrors the PRs: people act on a
 | It is approved | Approved |
 | A review was requested again after the latest review | Under review: waiting on re-review |
 | Someone other than the author has reviewed it | Under review: author is addressing feedback |
-| A reviewer accepted it with `/accept-review` | Under review: with reviewer |
+| A reviewer is assigned (`/accept-review` assigns you) | Under review: with reviewer |
 | None of the above | Requested reviewers |
 
-The first row that is true wins. Reviews by bots do not count. The review requests GitHub sends to code owners when a PR is marked ready are not counted as asking again; asking again is the re-request button, or `/request-review`. Review by date comes from the reviewer's newest `/accept-review`, and is cleared when nobody has accepted.
+The first row that is true wins. Reviews by bots do not count. Review requests within 60 seconds of the PR being marked ready are GitHub asking its code owners, so they are not counted as asking again; asking again is the re-request button. Review by date comes from the reviewer's newest `/accept-review` with a valid date, and is cleared when nobody is assigned. Only the newest 100 comments of a PR are read, so on a PR with more comments since the `/accept-review`, the date is cleared.
 
 The board's own workflows still add new PRs and set Merged and Closed, since this only looks at open PRs.
 
