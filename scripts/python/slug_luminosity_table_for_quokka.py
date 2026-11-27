@@ -98,7 +98,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--floor",
         type=float,
         default=0.0,
-        help="lower bound applied to every luminosity; use a small positive value for a log output transform",
+        help="lower bound applied to every luminosity",
     )
     parser.add_argument(
         "--slug-path",
