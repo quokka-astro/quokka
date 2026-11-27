@@ -147,4 +147,8 @@ endif()
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}")
 
+if(BUILD_TESTING)
+  add_subdirectory(util/array_tests)
+endif()
+
 add_subdirectory(problems)
