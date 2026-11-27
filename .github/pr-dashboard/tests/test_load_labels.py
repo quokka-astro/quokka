@@ -6,7 +6,18 @@ from pr_dashboard import load_labels
 from pr_dashboard import pr_labels
 
 CONFIGURED_LABELS = load_labels.load_configured_labels(pathlib.Path(__file__).parents[1] / "labels.toml")
-SCOPE_LABEL_TEXT = '[[scope.label]]\nvalue = "hydro"\ncolor = "4ADD08"\ndescription = "Hydro"\npath_patterns = ["src/hydro/*"]\n'
+
+
+def make_scope_label_text(
+    relevance_level_text: str,
+) -> str:
+    return (
+        '[[scope.label]]\nvalue = "hydro"\ncolor = "4ADD08"\ndescription = "Hydro"\npath_patterns = ["src/hydro/*"]\n'
+        f"{relevance_level_text}"
+    )
+
+
+SCOPE_LABEL_TEXT = make_scope_label_text("relevance_level = 1\n")
 
 
 def make_priority_label_text(
@@ -98,6 +109,7 @@ class TestLoadLabels_Categories(unittest.TestCase):
         configured_labels = load_config_text(make_config_text())
         self.assertEqual(configured_labels.priority_labels.default_value, "normal")
         self.assertEqual(len(configured_labels.priority_labels.labels), 2)
+        self.assertEqual(configured_labels.scope_labels.labels[0].relevance_level, 1)
 
 
 class TestLoadLabels_Errors(unittest.TestCase):
@@ -110,6 +122,22 @@ class TestLoadLabels_Errors(unittest.TestCase):
         )
         with self.assertRaises(KeyError):
             load_config_text(config_text)
+
+    def test_scope_label_without_relevance_level_fails(
+        self,
+    ):
+        config_text = make_config_text(scope_label_text=make_scope_label_text(""))
+        with self.assertRaises(KeyError):
+            load_config_text(config_text)
+
+    def test_scope_label_with_invalid_relevance_level_fails(
+        self,
+    ):
+        for relevance_level_text in ("relevance_level = 0\n", "relevance_level = 1.5\n", 'relevance_level = "1"\n'):
+            with self.subTest(relevance_level_text=relevance_level_text):
+                config_text = make_config_text(scope_label_text=make_scope_label_text(relevance_level_text))
+                with self.assertRaisesRegex(ValueError, "needs a `relevance_level`"):
+                    load_config_text(config_text)
 
     def test_category_without_prefix_fails(
         self,

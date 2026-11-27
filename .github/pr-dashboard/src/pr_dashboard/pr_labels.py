@@ -25,6 +25,7 @@ class Label:
 @dataclasses.dataclass(frozen=True)
 class ScopeLabel(Label):
     path_patterns: tuple[str, ...]
+    relevance_level: int
 
 
 @dataclasses.dataclass(frozen=True)
@@ -126,15 +127,29 @@ def _path_matches_any(
     return any(fnmatch.fnmatchcase(file_path, _pattern) for _pattern in patterns)
 
 
+def _keep_most_relevant_scope_labels(
+    matched_scope_labels: set[ScopeLabel],
+) -> set[ScopeLabel]:
+    if len(matched_scope_labels) == 0:
+        return set()
+    most_relevant_level = min(_scope_label.relevance_level for _scope_label in matched_scope_labels)
+    return {
+        _scope_label
+        for _scope_label in matched_scope_labels
+        if _scope_label.relevance_level == most_relevant_level
+    }
+
+
 def _compute_scope_label_names(
     *,
     configured_labels: ConfiguredLabels,
     edited_file_paths: tuple[str, ...],
 ) -> set[str]:
-    scope_label_names = set()
+    matched_scope_labels = set()
+    some_file_is_not_mapped = False
     for file_path in edited_file_paths:
-        matched_label_names = {
-            _scope_label.label_name
+        scope_labels_for_file = {
+            _scope_label
             for _scope_label in configured_labels.scope_labels.labels
             if _path_matches_any(
                 file_path=file_path,
@@ -145,10 +160,14 @@ def _compute_scope_label_names(
             file_path=file_path,
             patterns=configured_labels.scope_labels.unlabelled_path_patterns,
         )
-        if len(matched_label_names) > 0:
-            scope_label_names.update(matched_label_names)
+        if len(scope_labels_for_file) > 0:
+            matched_scope_labels.update(scope_labels_for_file)
         elif not path_is_unlabelled:
-            scope_label_names.add(configured_labels.scope_labels.not_mapped_label.label_name)
+            some_file_is_not_mapped = True
+    most_relevant_scope_labels = _keep_most_relevant_scope_labels(matched_scope_labels)
+    scope_label_names = {_scope_label.label_name for _scope_label in most_relevant_scope_labels}
+    if some_file_is_not_mapped:
+        scope_label_names.add(configured_labels.scope_labels.not_mapped_label.label_name)
     return scope_label_names
 
 

@@ -33,7 +33,8 @@ Deciding and writing are kept apart, so every decision can be tested offline and
 
 Edit `labels.toml`. Each category sets a prefix, and each label holds only its value; the label name on GitHub is the prefix plus the value, for example `scope/` and `hydro`.
 
-- Scope labels list `path_patterns`. A PR gets every scope with a pattern matching one of its changed files, and `*` also matches `/`.
+- Scope labels list `path_patterns`, and `*` also matches `/`. A PR matches every scope with a pattern matching one of its changed files.
+- Scope labels also set a `relevance_level`, where 1 is the most relevant. Of the scopes a PR matches, it only gets those on the most relevant level, so less relevant changes, such as tests that come with a physics change, do not add a label. Scopes on the same level all show, and with every scope on level 1 a PR gets every scope it matches.
 - Size labels list `min_num_lines`. A PR gets the largest one its line count reaches.
 - The priority `default_value` has no label: a PR with no priority label has that priority, and `/set-priority <default_value>` removes the priority label.
 - A changed file that matches no scope gives the PR the `scope/undefined` label, so a missing pattern shows up on the PR.
@@ -68,7 +69,8 @@ Decisions I made along the way, and why.
 
 - **The tools only manage the `scope/`, `size/` and `priority/` labels,** rather than every label on a PR. Labels without these prefixes are left alone. `scope/` and `size/` labels edited by hand are replaced when the labels are recalculated, and `priority/` labels are only changed with `/set-priority`.
 - **Normal priority has no label,** rather than a `priority/normal` label on almost every PR. A priority label only appears when a PR is more or less urgent than usual.
-- **A file with no matching scope gives the PR the `scope/undefined` label,** rather than a fallback scope. The label shows where `labels.toml` is missing a pattern.
+- **A file with no matching scope gives the PR the `scope/undefined` label,** rather than a fallback scope. The label shows where `labels.toml` is missing a pattern. It shows whatever the relevance levels.
+- **Relevance levels decide which matched scopes show,** rather than which files are mapped. Every file still needs a scope, so the test that the whole codebase is mapped still holds, and the levels only reduce how many labels a PR shows. Each scope has a fixed level, so the labels of a PR stay predictable from its changed files.
 
 ### Commands
 
