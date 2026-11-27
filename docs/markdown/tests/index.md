@@ -10,5 +10,6 @@ Listed here are detailed descriptions of some of the test problems. *This list i
 - [Slow-moving shock test](sms.md)
 - [Matter-radiation temperature equilibrium test](energy_exchange.md)
 - [Uniform advecting radiation in diffusive limit](radhydro_uniform_adv.md)
+- [Moving matter-radiation equilibration anomaly](radhydro_equilibration_anomaly.md)
 - [Advecting radiation pulse test](radhydro_pulse.md)
 - [1D dust reprocessing test](DTypeFront1D.md)
