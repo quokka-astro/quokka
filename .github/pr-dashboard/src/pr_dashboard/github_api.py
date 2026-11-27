@@ -1,9 +1,11 @@
+import datetime
 import http
 import json
 import subprocess
 import sys
 import urllib.parse
 
+from pr_dashboard import board_mirror
 from pr_dashboard import pr_context
 
 ##
@@ -89,6 +91,35 @@ def _quote(
     path_part: str,
 ) -> str:
     return urllib.parse.quote(path_part, safe="")
+
+
+def _run_graphql(
+    *,
+    query: str,
+    variables: dict,
+) -> dict:
+    cmd_parts = [
+        "gh",
+        "api",
+        "graphql",
+        "--input",
+        "-",
+    ]
+    request_text = json.dumps({"query": query, "variables": variables})
+    response_text = _run_gh_api(
+        cmd_parts=cmd_parts,
+        input_text=request_text,
+    )
+    response_data = json.loads(response_text)
+    if "errors" in response_data:
+        raise RuntimeError(f"GraphQL request failed: {response_data['errors']}")
+    return response_data["data"]
+
+
+def _parse_github_time(
+    time_text: str,
+) -> datetime.datetime:
+    return datetime.datetime.fromisoformat(time_text)
 
 
 ##
@@ -183,6 +214,178 @@ def get_repo_labels(
     return {_label_data["name"]: _label_data for _label_page in label_pages for _label_data in _label_page}
 
 
+_BOARD_QUERY = """
+query($owner: String!, $project_number: Int!) {
+  organization(login: $owner) {
+    projectV2(number: $project_number) {
+      id
+      status_field: field(name: "Status") {
+        ... on ProjectV2SingleSelectField { id options { id name } }
+      }
+      review_by_field: field(name: "Review by date") {
+        ... on ProjectV2Field { id }
+      }
+    }
+  }
+}
+"""
+
+
+def get_board(
+    *,
+    owner: str,
+    project_number: int,
+) -> board_mirror.Board:
+    response_data = _run_graphql(
+        query=_BOARD_QUERY,
+        variables={"owner": owner, "project_number": project_number},
+    )
+    project_data = response_data["organization"]["projectV2"]
+    status_field_data = project_data["status_field"]
+    review_by_field_data = project_data["review_by_field"]
+    if (status_field_data is None) or (review_by_field_data is None):
+        raise RuntimeError(f"project {project_number} needs a `Status` and a `Review by date` field.")
+    return board_mirror.Board(
+        project_id=project_data["id"],
+        status_field_id=status_field_data["id"],
+        status_option_ids={_option_data["name"]: _option_data["id"] for _option_data in status_field_data["options"]},
+        review_by_field_id=review_by_field_data["id"],
+    )
+
+
+_OPEN_PULL_REQUESTS_QUERY = """
+query($owner: String!, $name: String!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(states: OPEN, first: 25, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number
+        isDraft
+        reviewDecision
+        author { login }
+        assignees(first: 10) { nodes { login } }
+        reviews(last: 50) { nodes { author { __typename login } state submittedAt } }
+        timelineItems(last: 100, itemTypes: [READY_FOR_REVIEW_EVENT, REVIEW_REQUESTED_EVENT]) {
+          nodes {
+            __typename
+            ... on ReadyForReviewEvent { createdAt }
+            ... on ReviewRequestedEvent { createdAt }
+          }
+        }
+        comments(last: 100) { nodes { author { login } body createdAt } }
+        projectItems(first: 10) {
+          nodes {
+            id
+            project { number }
+            status: fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+            review_by: fieldValueByName(name: "Review by date") { ... on ProjectV2ItemFieldDateValue { date } }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+_FEEDBACK_REVIEW_STATES = ("COMMENTED", "CHANGES_REQUESTED", "APPROVED", "DISMISSED")
+
+
+def _get_board_item(
+    *,
+    pr_data: dict,
+    project_number: int,
+) -> board_mirror.BoardItem | None:
+    matching_items = [
+        _item_data for _item_data in pr_data["projectItems"]["nodes"]
+        if _item_data["project"]["number"] == project_number
+    ]
+    if len(matching_items) == 0:
+        return None
+    item_data = matching_items[0]
+    status_data = item_data["status"] or {}
+    review_by_data = item_data["review_by"] or {}
+    review_by_text = review_by_data.get("date")
+    if review_by_text is None:
+        review_by_date = None
+    else:
+        review_by_date = datetime.date.fromisoformat(review_by_text)
+    return board_mirror.BoardItem(
+        item_id=item_data["id"],
+        status_name=status_data.get("name"),
+        review_by_date=review_by_date,
+    )
+
+
+def _get_pull_request_activity(
+    *,
+    pr_data: dict,
+    project_number: int,
+) -> board_mirror.PullRequestActivity:
+    author_user_name = pr_data["author"]["login"]
+    feedback_times = tuple(
+        _parse_github_time(_review_data["submittedAt"]) for _review_data in pr_data["reviews"]["nodes"]
+        if (_review_data["author"] is not None) and (_review_data["author"]["__typename"] == "User")
+        and (_review_data["author"]["login"] != author_user_name) and (_review_data["state"] in _FEEDBACK_REVIEW_STATES)
+    )
+    timeline_items = pr_data["timelineItems"]["nodes"]
+    review_request_times = tuple(
+        _parse_github_time(_item_data["createdAt"]) for _item_data in timeline_items
+        if _item_data["__typename"] == "ReviewRequestedEvent"
+    )
+    ready_for_review_times = tuple(
+        _parse_github_time(_item_data["createdAt"]) for _item_data in timeline_items
+        if _item_data["__typename"] == "ReadyForReviewEvent"
+    )
+    posted_comments = tuple(
+        board_mirror.PostedComment(
+            user_name=_comment_data["author"]["login"],
+            text=_comment_data["body"],
+            created_at=_parse_github_time(_comment_data["createdAt"]),
+        ) for _comment_data in pr_data["comments"]["nodes"]
+        if _comment_data["author"] is not None
+    )
+    board_item = _get_board_item(
+        pr_data=pr_data,
+        project_number=project_number,
+    )
+    return board_mirror.PullRequestActivity(
+        pr_number=pr_data["number"],
+        is_draft=pr_data["isDraft"],
+        is_approved=(pr_data["reviewDecision"] == "APPROVED"),
+        assignee_user_names=tuple(_assignee_data["login"] for _assignee_data in pr_data["assignees"]["nodes"]),
+        feedback_times=feedback_times,
+        review_request_times=review_request_times,
+        ready_for_review_times=ready_for_review_times,
+        posted_comments=posted_comments,
+        board_item=board_item,
+    )
+
+
+def get_open_pull_request_activities(
+    *,
+    repo: str,
+    project_number: int,
+) -> tuple[board_mirror.PullRequestActivity, ...]:
+    owner, name = repo.split("/")
+    activities = []
+    cursor = None
+    while True:
+        response_data = _run_graphql(
+            query=_OPEN_PULL_REQUESTS_QUERY,
+            variables={"owner": owner, "name": name, "cursor": cursor},
+        )
+        pull_requests_data = response_data["repository"]["pullRequests"]
+        for pr_data in pull_requests_data["nodes"]:
+            activity = _get_pull_request_activity(
+                pr_data=pr_data,
+                project_number=project_number,
+            )
+            activities.append(activity)
+        if not pull_requests_data["pageInfo"]["hasNextPage"]:
+            return tuple(activities)
+        cursor = pull_requests_data["pageInfo"]["endCursor"]
+
+
 ##
 ## === WRITES
 ##
@@ -223,6 +426,61 @@ def update_label(
         method=http.HTTPMethod.PATCH,
         fields=label_fields,
     )
+
+
+_SET_SINGLE_SELECT_MUTATION = """
+mutation($project_id: ID!, $item_id: ID!, $field_id: ID!, $option_id: String!) {
+  updateProjectV2ItemFieldValue(
+    input: {projectId: $project_id, itemId: $item_id, fieldId: $field_id, value: {singleSelectOptionId: $option_id}}
+  ) { projectV2Item { id } }
+}
+"""
+
+_SET_DATE_MUTATION = """
+mutation($project_id: ID!, $item_id: ID!, $field_id: ID!, $date: Date!) {
+  updateProjectV2ItemFieldValue(
+    input: {projectId: $project_id, itemId: $item_id, fieldId: $field_id, value: {date: $date}}
+  ) { projectV2Item { id } }
+}
+"""
+
+_CLEAR_FIELD_MUTATION = """
+mutation($project_id: ID!, $item_id: ID!, $field_id: ID!) {
+  clearProjectV2ItemFieldValue(input: {projectId: $project_id, itemId: $item_id, fieldId: $field_id}) {
+    projectV2Item { id }
+  }
+}
+"""
+
+
+def apply_board_change(
+    *,
+    board: board_mirror.Board,
+    board_change: board_mirror.BoardChange,
+) -> None:
+    item_variables = {
+        "project_id": board.project_id,
+        "item_id": board_change.item_id,
+    }
+    if board_change.status_to_set is not None:
+        option_id = board.status_option_ids.get(board_change.status_to_set)
+        if option_id is None:
+            raise RuntimeError(f"the board has no Status option named `{board_change.status_to_set}`.")
+        _run_graphql(
+            query=_SET_SINGLE_SELECT_MUTATION,
+            variables={**item_variables, "field_id": board.status_field_id, "option_id": option_id},
+        )
+    if board_change.review_by_date_changes and (board_change.review_by_date_to_set is None):
+        _run_graphql(
+            query=_CLEAR_FIELD_MUTATION,
+            variables={**item_variables, "field_id": board.review_by_field_id},
+        )
+    elif board_change.review_by_date_changes:
+        date_text = board_change.review_by_date_to_set.isoformat()
+        _run_graphql(
+            query=_SET_DATE_MUTATION,
+            variables={**item_variables, "field_id": board.review_by_field_id, "date": date_text},
+        )
 
 
 def apply_update_plan(

@@ -9,7 +9,7 @@ These tools keep the labels on Quokka PRs in step with what each PR changes, and
 | `labels.toml` | The labels the tools manage, and the rules for giving them to PRs |
 | `src/pr_dashboard/` | The code; see [its README](src/pr_dashboard/README.md) for what each module holds |
 | `tests/` | Offline tests; they never contact GitHub |
-| `../workflows/pr-dashboard-*.yml` | The four GitHub Actions workflows that run the code |
+| `../workflows/pr-dashboard-*.yml` | The five GitHub Actions workflows that run the code |
 
 ## How a Run Works
 
@@ -28,6 +28,24 @@ Deciding and writing are kept apart, so every decision can be tested offline and
 | `pr-dashboard-run-command.yml` | A comment containing `/` is posted on a PR | `run-command`: runs a command, or explains why it was not run |
 | `pr-dashboard-update-label-definitions.yml` | `labels.toml` changes on `development`, or someone starts it from the Actions tab | `update-label-definitions`: creates and updates the label names, colours and descriptions on GitHub |
 | `pr-dashboard-tests.yml` | Any PR is opened or updated | Runs the offline tests |
+| `pr-dashboard-mirror-to-board.yml` | Every 15 minutes, or someone starts it from the Actions tab | `mirror-to-board`: sets each open PR's Status and Review by date on the board |
+
+## The Board
+
+The PR Dashboard board (organisation project 4) mirrors the PRs: people act on a PR, and `mirror-to-board` copies the result to the board. It works out each open PR's Status from scratch on every run, so the board also recovers from edits by hand. It writes with the GitHub App's token, since the repository's own token cannot write to an organisation project.
+
+| What is true of the PR | Status |
+|---|---|
+| It is a draft | Draft |
+| It is approved | Approved |
+| A review was requested again after the latest review | Under review: waiting on re-review |
+| Someone other than the author has reviewed it | Under review: author is addressing feedback |
+| A reviewer accepted it with `/accept-review` | Under review: with reviewer |
+| None of the above | Requested reviewers |
+
+The first row that is true wins. Reviews by bots do not count. The review requests GitHub sends to code owners when a PR is marked ready are not counted as asking again; asking again is the re-request button, or `/request-review`. Review by date comes from the reviewer's newest `/accept-review`, and is cleared when nobody has accepted.
+
+The board's own workflows still add new PRs and set Merged and Closed, since this only looks at open PRs.
 
 ## Changing the Labels
 

@@ -1,0 +1,43 @@
+# Sets each open PR's Status and Review by date on the PR Dashboard board from the facts of the PR.
+name: "PR Dashboard: Mirror to Board"
+
+on:
+  # A schedule rather than PR events: runs triggered from fork PRs get no secrets, so they could not write the board.
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-dashboard-mirror-to-board
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+        with:
+          sparse-checkout: .github/pr-dashboard
+          persist-credentials: false
+
+      - name: Create app token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.QUOKKA_ASTRO_APP_ID }}
+          private-key: ${{ secrets.QUOKKA_ASTRO_APP_PRIVATE_KEY }}
+          permission-pull-requests: read
+          permission-organization-projects: write
+
+      - name: Mirror the open PRs to the board
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          PYTHONPATH: .github/pr-dashboard/src
+        run: python3 -m pr_dashboard.run_dashboard mirror-to-board --repo "$REPO" --project-number 4
