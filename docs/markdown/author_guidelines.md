@@ -32,7 +32,7 @@ Each label is written as `<category>/<value>`, and hovering over a label on GitH
 
 | Category | What it says | How it is set |
 |---|---|---|
-| `scope/<value>` | Which parts of the code your PR changes | From the files you changed |
+| `scope/<value>` | The most relevant parts of the code your PR changes | From the files you changed |
 | `size/<value>` | How many lines your PR changes: `XS` (under 10), `S` (10 to 29), `M` (30 to 99), `L` (100 to 499), `XL` (500 or more) | From the number of lines you changed |
 
 These labels are set when your PR is opened, and updated on every push once it is out of draft.
