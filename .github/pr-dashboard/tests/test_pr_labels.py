@@ -318,6 +318,9 @@ class TestPrLabels_UpdatePlan(unittest.TestCase):
             label_names=("scope/radiation", ),
             num_lines_changed=40,
             edited_file_paths=("src/io/plotfile.cpp", ),
+            is_draft=False,
+            checks=(),
+            unresolved_thread_urls=(),
         )
         update_plan_from_pr = pr_labels.plan_update_from_pr(
             configured_labels=CONFIGURED_LABELS,

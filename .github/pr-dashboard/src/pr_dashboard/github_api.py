@@ -58,6 +58,21 @@ def _read_from_github(
     return json.loads(response_text)
 
 
+def _query_github(
+    *,
+    query: str,
+    variables: dict[str, str | int],
+) -> dict:
+    cmd_parts = ["gh", "api", "graphql", "-f", f"query={query}"]
+    for variable_name, variable_value in variables.items():
+        cmd_parts.extend(["-F", f"{variable_name}={variable_value}"])
+    response_text = _run_gh_api(
+        cmd_parts=cmd_parts,
+        input_text=None,
+    )
+    return json.loads(response_text)["data"]
+
+
 def _write_to_github(
     *,
     endpoint: str,
@@ -96,6 +111,77 @@ def _quote(
 ##
 
 
+## the checks on the latest commit, and the review threads; both read in one query, up to 100 of each
+_REVIEW_STATE_QUERY = """
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              contexts(first: 100) {
+                nodes {
+                  __typename
+                  ... on CheckRun { name status conclusion }
+                  ... on StatusContext { context state }
+                }
+              }
+            }
+          }
+        }
+      }
+      reviewThreads(first: 100) {
+        nodes {
+          isResolved
+          comments(first: 1) { nodes { url } }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+def _get_check_run_state(
+    check_data: dict,
+) -> pr_context.CheckState:
+    if check_data["status"] != "COMPLETED":
+        return pr_context.CheckState.PENDING
+    elif check_data["conclusion"] == "SUCCESS":
+        return pr_context.CheckState.PASSED
+    elif check_data["conclusion"] in ("SKIPPED", "NEUTRAL"):
+        return pr_context.CheckState.SKIPPED
+    else:
+        return pr_context.CheckState.FAILED
+
+
+def _get_status_context_state(
+    status_data: dict,
+) -> pr_context.CheckState:
+    if status_data["state"] == "SUCCESS":
+        return pr_context.CheckState.PASSED
+    elif status_data["state"] in ("PENDING", "EXPECTED"):
+        return pr_context.CheckState.PENDING
+    else:
+        return pr_context.CheckState.FAILED
+
+
+def _get_check(
+    check_data: dict,
+) -> pr_context.Check:
+    if check_data["__typename"] == "CheckRun":
+        return pr_context.Check(
+            name=check_data["name"],
+            state=_get_check_run_state(check_data),
+        )
+    else:
+        return pr_context.Check(
+            name=check_data["context"],
+            state=_get_status_context_state(check_data),
+        )
+
+
 def get_pull_request(
     *,
     repo: str,
@@ -109,6 +195,30 @@ def get_pull_request(
     edited_file_paths = tuple(
         _file_data["filename"] for _file_page in file_pages for _file_data in _file_page
     )
+    repo_owner, repo_name = repo.split("/")
+    review_state_data = _query_github(
+        query=_REVIEW_STATE_QUERY,
+        variables={
+            "owner": repo_owner,
+            "name": repo_name,
+            "number": pr_number,
+        },
+    )
+    pr_review_data = review_state_data["repository"]["pullRequest"]
+    latest_commit_data = pr_review_data["commits"]["nodes"][0]["commit"]
+    if latest_commit_data["statusCheckRollup"] is None:
+        # no checks have reported on the latest commit yet
+        checks = ()
+    else:
+        checks = tuple(
+            _get_check(_check_data)
+            for _check_data in latest_commit_data["statusCheckRollup"]["contexts"]["nodes"]
+        )
+    unresolved_thread_urls = tuple(
+        _thread_data["comments"]["nodes"][0]["url"]
+        for _thread_data in pr_review_data["reviewThreads"]["nodes"]
+        if not _thread_data["isResolved"]
+    )
     return pr_context.PullRequest(
         pr_number=pr_number,
         author_user_name=pr_data["user"]["login"],
@@ -116,6 +226,9 @@ def get_pull_request(
         label_names=tuple(_label_data["name"] for _label_data in pr_data["labels"]),
         num_lines_changed=pr_data["additions"] + pr_data["deletions"],
         edited_file_paths=edited_file_paths,
+        is_draft=pr_data["draft"],
+        checks=checks,
+        unresolved_thread_urls=unresolved_thread_urls,
     )
 
 
@@ -258,6 +371,14 @@ def apply_update_plan(
             endpoint=f"{issue_endpoint}/assignees",
             method=http.HTTPMethod.POST,
             fields=assignee_fields,
+        )
+    if len(update_plan.reviewer_user_names_to_request) > 0:
+        # requesting someone who has reviewed before re-requests them
+        reviewer_fields = {"reviewers": list(update_plan.reviewer_user_names_to_request)}
+        _write_to_github(
+            endpoint=f"repos/{repo}/pulls/{pr_number}/requested_reviewers",
+            method=http.HTTPMethod.POST,
+            fields=reviewer_fields,
         )
     if update_plan.milestone_change is not None:
         milestone_fields = {"milestone": update_plan.milestone_change.milestone_number}

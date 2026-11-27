@@ -78,6 +78,8 @@ Decisions I made along the way, and why.
 - **Every command gets visible feedback,** rather than failing silently. A thumbs-up means it ran; a reply says why it did not. Misspelt commands are ignored, since other tools on Quokka also use `/` commands.
 - **One reviewer holds a review at a time,** rather than everyone asked to review, so it is clear who is responsible. `/accept-review` assigns the commenter, and refuses while someone else holds the review.
 - **The date given to `/accept-review` is read as a local date,** rather than a UTC date, since Quokka is maintained from around the world. A date up to one day in the past is accepted.
+- **`/request-review` only goes through once the PR is ready,** rather than whenever it is asked: not a draft, every check passed or skipped, and every review thread resolved. The author resolves a thread once they have addressed it, so the reviewer gets back a clean PR. The request goes to the reviewer who accepted the review, or to the team if nobody has. It is the same command the first time and every time after.
+- **`/request-review` trusts every check and every thread,** rather than a chosen list. Anything allowed to act on a PR is considered by its author; a flaky or unhelpful check is fixed or removed where it runs, not worked around here.
 
 ### Running the Code
 

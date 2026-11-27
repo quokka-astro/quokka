@@ -24,6 +24,9 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
+      # /request-review reads the check results
+      checks: read
+      statuses: read
     steps:
       - name: Checkout the default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
