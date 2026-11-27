@@ -3,6 +3,10 @@
 # jaffgen.toml/photoionization_H_caseB.jet. By default, clones jaff at the
 # pinned commit into a temp dir and runs jaffgen there. Pass --jaff-path to
 # use an existing local jaff checkout instead, bypassing the clone.
+#
+# It uses jaff's quokka template, which writes network.hpp (and a copy of the template's default jaffgen.toml).
+# TODO(james471): JAFF_COMMIT is the head of jaff's branch james471/quokka-template (jaff-chemistry/jaff#228), which
+# adds the quokka template. Pin it to jaff's main once that PR is merged.
 set -euo pipefail
 
 usage() {
@@ -25,7 +29,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 JAFF_REPO="https://github.com/jaff-chemistry/jaff.git"
-JAFF_COMMIT="2b2e426e469357ae00376ff2a284443411dcdf1a"
+JAFF_COMMIT="0cb23b08c9dcbca905f0aefcaed06b294d973bab"
 # Pin sympy version so that jaffgen's output is reproducible
 SYMPY_VERSION="1.14.0"
 
@@ -64,11 +68,10 @@ echo "==> Running jaffgen, output to ${OUTDIR}"
 "${TMPDIR}/venv/bin/jaffgen" \
 	--config "${CONFIG_DIR}/jaffgen.toml" \
 	--network "${CONFIG_DIR}/photoionization_H_caseB.jet" \
-	--template microphysics \
-	--lang cxx \
+	--template quokka \
 	--outdir "${OUTDIR}"
 
 echo "==> Running clang-format on generated files"
-clang-format -i "${OUTDIR}"/*.H "${OUTDIR}"/*.cpp
+clang-format -i --style="file:${CONFIG_DIR}/../../.clang-format" "${OUTDIR}/network.hpp"
 
 echo "==> Done"

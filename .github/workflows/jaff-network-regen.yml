@@ -21,6 +21,7 @@ on:
       - 'src/networks/photoionization_H_caseB/**'
       - 'src/.clang-format'
       - '.github/workflows/jaff-network-regen.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

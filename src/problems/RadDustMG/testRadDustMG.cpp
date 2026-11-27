@@ -71,7 +71,7 @@ template <> struct RadSystem_Traits<DustProblem> {
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = beta_order_;
 	static constexpr double energy_unit = 1.;
-	static constexpr amrex::GpuArray<double, Physics_Traits<DustProblem>::nGroups + 1> radBoundaries{1.0e-3, 0.1, 1.0, 10.0, 1.0e3};
+	static constexpr amrex::GpuArray<double, Physics_Traits<DustProblem>::nGroups + 1> thermalRadBoundaries{1.0e-3, 0.1, 1.0, 10.0, 1.0e3};
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
 };
@@ -80,8 +80,6 @@ template <> struct ISM_Traits<DustProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool enable_photoelectric_heating = false;
-	static constexpr bool thermal_band_photochemistry = false;   // no photochemistry network in this problem
-	static constexpr bool dust_chemical_band_absorption = false; // no chemical bands in this problem
 };
 
 template <>

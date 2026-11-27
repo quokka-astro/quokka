@@ -720,7 +720,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		auto const &dustHeatingSource_local = dustHeatingSource; // NOLINT
 
 		double Q_dust = 0.0;
-		if constexpr (dust_chemical_band_absorption_) {
+		if constexpr (chem_band_dust_heating_) {
 			Q_dust = dustHeatingSource_local(i, j, k) * dt_local;
 		}
 

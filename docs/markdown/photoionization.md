@@ -106,18 +106,26 @@ The update is decomposed into three sequential operators per timestep, following
 ```
 1. Stellar source step     Particle injection -> radEnergySource
 2. Transport step           Explicit RK stages: advanceRadiation*
-3. Thermochemical step      VODE ODE integration over the coupled
+3. Thermochemical step      Rosenbrock ODE integration over the coupled
                             photoionization network
 ```
 
-### 2.1 Thermochemical Implicit Solve via VODE
+### 2.1 Thermochemical Implicit Solve via a Rosenbrock Integrator
 
 The stiffest part is the coupled, non-linear evolution of the photoionization network
-in each cell. Quokka replaces the analytic cubic-polynomial solve used in ATON (which
-cannot generalize to more complex networks) with a call to **VODE**, a variable-order,
-variable-step stiff ODE integrator.
+in each cell. Quokka uses the **Rosenbrock** integrator,
+a linearly implicit, variable-step stiff ODE integrator with an embedded error estimate
+and an H211b step-size controller. Each problem chooses the Rosenbrock method with the
+`Tableau` field of `Microphysics_Traits<problem_t>` (ROS2S by default; see
+[Runtime parameters](parameters.md)).
 
-Under OTSA, VODE integrates the following system over the implicit timestep \\(\Delta t\\):
+The generic solver is in `src/math/rosenbrock/`. The burner in
+`src/microphysics/burner.hpp` maps the cell state onto the solver. Each network is a
+header, `src/networks/<name>/network.hpp`, that gives the right-hand side and its
+analytic Jacobian. The temperature comes from the multi-gamma equation of state
+`EOSMultigamma` in `src/hydro/EOS.hpp`.
+
+Under OTSA, the integrator solves the following system over the implicit timestep \\(\Delta t\\):
 
 <script type="math/tex; mode=display">
 \begin{aligned}
@@ -146,33 +154,38 @@ directions — they contribute to \\(N\_\gamma\\) but produce no net flux. Flux 
 integrated to track the attenuation of the directional radiation field across the
 timestep.
 
-## 3. VODE Tolerances
+## 3. Integrator Tolerances
 
 ### 3.1 Overview
 
-Quokka uses VODE (via Microphysics) to integrate the chemistry and internal energy
-source terms. The integrator requires absolute tolerances (`atol`) for each solution
-variable. These are hand-tuned for each problem and specified directly in the input
-file (see § 3.2). The `SetAtolFromPhysics` machinery (PR #1980) will derive tolerances
-from physical scales automatically in a future PR.
+The Rosenbrock integrator needs an absolute tolerance (`atol`) and a relative tolerance
+(`rtol`) for each solution variable that enters its error norm: the species number
+densities, the specific internal energy, and the photon number density of each chemical
+band. These are hand-tuned for each problem and set in the input file (see § 3.2).
 
 ### 3.2 Input parameters
 
-| Parameter                               | Description                                                       |
+| Parameter                               | Description (default)                                             |
 | --------------------------------------- | ----------------------------------------------------------------- |
-| `integrator.atol_spec`                  | Absolute tolerance for chemical species (\\(\mathrm{cm}^{-3}\\))                   |
-| `integrator.atol_enuc`                  | Absolute tolerance for gas internal energy (\\(\mathrm{erg}\ \mathrm{g}^{-1}\\))             |
-| `integrator.atol_rad_num`               | Absolute tolerance for photon number density (\\(\mathrm{cm}^{-3}\\))              |
-| `integrator.rtol_spec`                  | Relative tolerance for chemical species                           |
-| `integrator.rtol_enuc`                  | Relative tolerance for gas internal energy                        |
-| `integrator.rtol_rad_num`               | Relative tolerance for photon number density                      |
-| `integrator.species_failure_tolerance`  | VODE internal substep rejection threshold for negative species (\\(\mathrm{cm}^{-3}\\), see § 3.7) |
-| `integrator.radiation_failure_tolerance`| VODE internal substep rejection threshold for negative photon density (\\(\mathrm{cm}^{-3}\\), see § 3.5) |
+| `integrator.atol_spec`                  | Absolute tolerance for chemical species (\\(\mathrm{cm}^{-3}\\); \\(10^{-3}\\)) |
+| `integrator.atol_enuc`                  | Absolute tolerance for gas internal energy (\\(\mathrm{erg}\ \mathrm{g}^{-1}\\); \\(10^{8}\\)) |
+| `integrator.atol_rad_num`               | Absolute tolerance for photon number density (\\(\mathrm{cm}^{-3}\\); \\(10^{-3}\\)) |
+| `integrator.rtol_spec`                  | Relative tolerance for chemical species (\\(10^{-2}\\))           |
+| `integrator.rtol_enuc`                  | Relative tolerance for gas internal energy (\\(10^{-2}\\))        |
+| `integrator.rtol_rad_num`               | Relative tolerance for photon number density (\\(10^{-2}\\))      |
+| `integrator.species_failure_tolerance`  | A burn fails if a species ends below \\(-\\)this (\\(\mathrm{cm}^{-3}\\); \\(10^{-3}\\); see § 3.7) |
+| `integrator.radiation_failure_tolerance`| A burn fails if a photon number density ends below \\(-\\)this (\\(\mathrm{cm}^{-3}\\); \\(10^{-3}\\); see § 3.5) |
+| `integrator.SMALL_X_SAFE`               | Floor of the species and photon number densities in every right-hand-side evaluation (\\(10^{-30}\\)) |
+| `integrator.X_reject_buffer`            | A step that changes a species by more than a factor of 4 is rejected when the species exceeds `X_reject_buffer` \\(\times\\) `atol_spec` (1) |
+| `integrator.ode_max_steps`              | Maximum number of integrator steps per burn (150000)              |
+
+The network's own switches (for example `network.recombination_switch`) are read from
+the `network.*` prefix; each network header lists them in its `Params` struct.
 
 ### 3.3 Why flux is excluded from convergence
 
 The radiation flux \\(F\_\gamma\\) (normalized to 1.0 before the ODE) is integrated alongside the
-other variables, but does not participate in any VODE convergence or error checks.
+other variables, but does not participate in the integrator's error norm or validity checks.
 
 **Why flux is in the ODE.** The flux ODE is \\(dF/dt = -(\hat{c}\sigma)\,n\_{\rm H^0} F\\).
 This is similar to the absorption term in \\(N\_\gamma\\), but \\(N\_\gamma\\) also has an
@@ -185,36 +198,30 @@ must be integrated separately to track the attenuation of the directional radiat
 on \\(n\_{\rm H^0}\\) but flux does *not* appear in any other equation (species, energy, or
 \\(N\_\gamma\\)). Convergence should be driven by the physically consequential quantities, not
 by a diagnostic variable. In dark cells where flux goes to 0, demanding 1% accuracy on a
-near-zero value wastes VODE steps with no physical benefit.
-
-Excluding flux from convergence gave a **3.8× speedup** in photochemistry on CPU and a
-**2.2× speedup** on GPU for the DTypeFront_JAFF test.
+near-zero value wastes integrator steps with no physical benefit.
 
 ### 3.4 Physical constants
 
 | Symbol  | Value                                   | Description                                                      |
 | ------- | --------------------------------------- | ---------------------------------------------------------------- |
-| `a_rad` | \\(7.5657 \times 10^{-15}\ \mathrm{erg}\ \mathrm{cm}^{-3}\ \mathrm{K}^{-4}\\) | Radiation constant (from `fundamental_constants.H`)              |
+| `a_rad` | \\(7.5657 \times 10^{-15}\ \mathrm{erg}\ \mathrm{cm}^{-3}\ \mathrm{K}^{-4}\\) | Radiation constant (from `src/util/fundamental_constants.hpp`)   |
 | `k_B`   | \\(1.380649 \times 10^{-16}\ \mathrm{erg}\ \mathrm{K}^{-1}\\)                 | Boltzmann constant                                               |
 | `m_p`   | \\(1.67262192 \times 10^{-24}\ \mathrm{g}\\)                      | Proton mass                                                      |
 | `c_v`   | \\(\frac{3}{2} k\_B / m\_p \sim 1.24 \times 10^{8}\ \mathrm{erg}\ \mathrm{g}^{-1}\ \mathrm{K}^{-1}\\) | Specific heat of monatomic hydrogen gas                           |
 
 ### 3.5 radiation_failure_tolerance
 
-VODE uses this threshold in two places:
+Negative photon number densities are handled in two places:
 
-1. **Internal substeps:** if the photon number density becomes more negative than
-   `radiation_failure_tolerance`, VODE rejects the substep and retries with a smaller
-   timestep. This is the primary use.
-2. **Final state:** after interpolating to the output time, if the photon number density
-   is more negative than \\(1.5 \times\\) `radiation_failure_tolerance`, the burn is
-   declared failed. The 1.5× factor (via `vode_final_state_radiation_failure_tolerance_factor`
-   in `vode_type.H`) accounts for VODE's non-monotonic interpolation, preventing false
-   failures from interpolation noise.
+1. **Internal steps:** a stage or step whose photon number density is below
+   `-atol_rad_num` is rejected and retried with a smaller step. Inside every
+   right-hand-side evaluation the photon number density is also raised to at least
+   `SMALL_X_SAFE`.
+2. **Final state:** if the photon number density at the end of the burn is below
+   `-radiation_failure_tolerance`, the burn is declared failed and the run aborts.
 
-Set `radiation_failure_tolerance` equal to `atol_rad_num` (the photon negligibility
-floor). The \\(1.5\times\\) final-state factor absorbs BDF interpolation overshoot without
-manual inflation.
+Set `radiation_failure_tolerance` at least equal to `atol_rad_num` (the photon
+negligibility floor).
 
 Physically, the amount of spurious ionization that can be produced by a negative photon
 overshoot is at most `radiation_failure_tolerance` / \\(n\_{\rm H}\\). Whether this
@@ -233,12 +240,12 @@ with the physical ionization equilibrium — override it in the input file.
 
 `Erad_floor` is a compile-time `constexpr` in `RadSystem_Traits<problem_t>` that sets
 the M1 hyperbolic solver floor — it prevents the radiation moment solver from
-encountering zero energy density. It is **independent** of the VODE tolerances.
+encountering zero energy density. It is **independent** of the integrator tolerances.
 
 Define the equivalent floor temperature \\(T\_{\rm floor}\\) by \\(E\_{\rm rad, floor} \equiv a\_{\rm rad} T\_{\rm floor}^4\\).
 The photon number density at the floor is \\(N\_{\gamma,{\rm floor}} = E\_{\rm rad, floor} / E\_{\rm photon}\\).
 
-Dark cells (where \\(E\_{\rm rad} \approx E\_{\rm rad, floor}\\)) converge in one VODE step when
+Dark cells (where \\(E\_{\rm rad} \approx E\_{\rm rad, floor}\\)) converge in one integrator step when
 \\(\texttt{atol\_rad\_num} \gg N\_{\gamma,{\rm floor}}\\). A ratio of \\(\geq 10^4\\) is sufficient:
 
 <script type="math/tex; mode=display">
@@ -250,27 +257,45 @@ For typical `Erad_floor` values corresponding to \\(T\_{\rm floor} = 0.01\\)–\
 
 ### 3.7 species_failure_tolerance
 
-VODE uses this threshold in two places:
+Negative species number densities are handled in two places:
 
-1. **Internal substeps (primary):** if a species number density becomes more negative
-   than `species_failure_tolerance`, VODE rejects the substep and retries with a smaller
-   timestep.
-2. **Final state (secondary):** after interpolating to the output time, if a species is
-   more negative than \\(1.5 \times\\) `species_failure_tolerance`, the burn is declared
-   failed. The 1.5× factor (via `vode_final_state_species_failure_tolerance_factor` in
-   `vode_type.H`) accounts for VODE's non-monotonic interpolation, preventing false
-   failures from interpolation noise.
+1. **Internal steps:** a stage or step with a species below `-atol_spec` is rejected
+   and retried with a smaller step. Inside every right-hand-side evaluation the species
+   are also raised to at least `SMALL_X_SAFE`.
+2. **Final state:** if a species at the end of the burn is below
+   `-species_failure_tolerance`, the burn is declared failed and the run aborts.
 
-Set `integrator.species_failure_tolerance` equal to `atol_spec` (the species
-negligibility floor). The \\(1.5\times\\) final-state factor absorbs BDF interpolation
-overshoot without manual inflation.
+Set `integrator.species_failure_tolerance` at least equal to `atol_spec` (the species
+negligibility floor).
+
+### 3.8 Burn failures
+
+A burn fails when the integrator stops with an error, or when it finishes but the final
+state fails the checks of § 3.5 and § 3.7. The integrator's status is one of
+
+| Status                 | Meaning                                                                    |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `Success`              | The burn reached the end of the timestep                                   |
+| `DtUnderflow`          | The step size fell below the roundoff of the time                          |
+| `TooManySteps`         | The burn took more than `integrator.ode_max_steps` steps                   |
+| `LUDecompositionError` | The matrix of a step is singular                                           |
+| `JacobianNotFinite`    | The analytic Jacobian has a non-finite entry, and the problem's `Microphysics_Traits` does not set `numerical_jacobian_fallback` |
+
+In CPU builds, a failed burn prints a report for its cell: the status (with `Success`, a
+note that a check on the final state failed), the cell indices `(i, j, k)`, the
+simulation time, the timestep, the starting temperature, species and, with
+photochemistry, photon numbers and thermal-band energies, followed by the state at the
+end of the burn. GPU builds print no report. A failed photochemistry burn then aborts the
+run; a failed chemistry burn makes Quokka retry the hydro update with more, smaller
+substeps.
 
 ## 4. Compatibility
 
 ### 4.1 Incompatibility with resampled cooling
 
-Setting both `photochemistry.enabled = 1` and `cooling.enabled = 1` in the same
-input file is a **fatal error** — Quokka will abort at startup.
+Setting `cooling.enabled = 1` in a problem with photochemistry is a **fatal error**:
+Quokka will abort at startup. A problem has photochemistry when its
+`Microphysics_Traits<P>::photochemistry` is true, and then it always runs it.
 
 The resampled Cloudy cooling table (`cooling.cooling_table_type = "resampled"`)
 encodes the full H/He thermochemistry for an optically thin gas in a UV background,
@@ -285,6 +310,5 @@ the M1 radiation field and the hydrogen chemistry network (§ 1). Enabling both
 simultaneously would double-count every one of these rates, producing physically
 incorrect temperatures and ionization fractions.
 
-**Correct setup:** use `photochemistry.enabled = 1` and leave `cooling.enabled = 0`
-(the default). The photoionization chemistry network handles all heating and cooling
+**Correct setup:** set `cooling.enabled = 0` (it defaults to 1, and matters only with the `EOSTabulated` backend). The photoionization chemistry network handles all heating and cooling
 internally.

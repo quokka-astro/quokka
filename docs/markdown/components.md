@@ -69,7 +69,7 @@ Notes:
 - `MHD + cooling` is exercised by the `SN` problem with `is_mhd_enabled = true` and `cooling.enabled = 1`.
 - `Hydro + photoionization` is tested by `DTypeFront_JAFF` and `DTypeFront_1D`.
 - `Radiation + photoionization` is tested by `DTypeFront_JAFF` and `StromgrenSphere` — photoionization requires `is_radiation_enabled = true`.
-- `Cooling + photoionization` is explicitly forbidden: both modules compute H thermochemistry (photoheating, recombination cooling, collisional ionization cooling), so enabling both simultaneously double-counts those rates. Quokka aborts at startup if `cooling.enabled = 1` and `photochemistry.enabled = 1` are set together. See `docs/markdown/photoionization.md §4.1`.
+- `Cooling + photoionization` is explicitly forbidden: both modules compute H thermochemistry (photoheating, recombination cooling, collisional ionization cooling), so enabling both simultaneously double-counts those rates. Quokka aborts at startup if a problem with photochemistry (`Microphysics_Traits<P>::photochemistry`) sets `cooling.enabled = 1`. See `docs/markdown/photoionization.md §4.1`.
 - `Hydro + particles` is exercised by problems such as `BinaryOrbitCIC`, `ParticleSink*`, `ParticleSF`, `ParticleRadiation`, `RandomBlast`, and `SN`.
 - `MHD + particles` is exercised by `DiskGalaxy`, `ParticleAccretion`, `ParticleCreation`, `ParticleSink`, and `ParticleSinkFormation`.
 - `Radiation + particles` is exercised by `ParticleRadiation` and `GravRadParticle3D`.

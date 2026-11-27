@@ -6,9 +6,7 @@
 /// \file fundamental_constants.hpp
 /// \brief Physical constants in CGS units, used as namespace C.
 ///
-/// The values are those of Microphysics's constants/fundamental_constants.H. Chemistry and photochemistry builds still use
-/// Microphysics, whose headers define namespace C themselves; there this header includes Microphysics's header and checks at
-/// compile time that its values equal the ones below, so every build uses the same constants.
+/// The values are copied from Microphysics's constants/fundamental_constants.H.
 
 #include "AMReX_REAL.H"
 
@@ -57,25 +55,6 @@ constexpr amrex::Real M_solar = 1.9884e33; // g
 constexpr amrex::Real R_solar = 6.957e10; // cm
 } // namespace quokka::constants
 
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-#include "fundamental_constants.H"
-
-static_assert(C::c_light == quokka::constants::c_light);
-static_assert(C::Gconst == quokka::constants::Gconst);
-static_assert(C::k_B == quokka::constants::k_B);
-static_assert(C::hplanck == quokka::constants::hplanck);
-static_assert(C::n_A == quokka::constants::n_A);
-static_assert(C::ev2erg == quokka::constants::ev2erg);
-static_assert(C::m_p == quokka::constants::m_p);
-static_assert(C::m_e == quokka::constants::m_e);
-static_assert(C::m_u == quokka::constants::m_u);
-static_assert(C::sigma_SB == quokka::constants::sigma_SB);
-static_assert(C::a_rad == quokka::constants::a_rad);
-static_assert(C::parsec == quokka::constants::parsec);
-static_assert(C::M_solar == quokka::constants::M_solar);
-static_assert(C::R_solar == quokka::constants::R_solar);
-#else
-namespace C = quokka::constants; // NOLINT(misc-unused-alias-decls): used by the files that include this header
-#endif // CHEMISTRY || PHOTOCHEMISTRY
+namespace C = quokka::constants; // NOLINT(misc-unused-alias-decls): a short name for the files that include this one
 
 #endif // FUNDAMENTAL_CONSTANTS_HPP_

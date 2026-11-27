@@ -66,7 +66,7 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = 1.0;
-	static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries = radBoundaries_;
+	static constexpr amrex::GpuArray<double, n_group_ + 1> thermalRadBoundaries = radBoundaries_;
 	static constexpr OpacityModel opacity_model = opacity_model_;
 };
 
@@ -74,8 +74,6 @@ template <> struct ISM_Traits<MarshakProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = dust_on;
 	static constexpr double gas_dust_coupling_threshold = gas_dust_coupling_threshold_;
 	static constexpr bool enable_photoelectric_heating = PE_on;
-	static constexpr bool thermal_band_photochemistry = false;   // no photochemistry network in this problem
-	static constexpr bool dust_chemical_band_absorption = false; // no chemical bands in this problem
 };
 
 template <>

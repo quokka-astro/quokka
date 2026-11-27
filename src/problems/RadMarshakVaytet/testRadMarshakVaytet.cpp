@@ -121,7 +121,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
-	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = group_edges_;
+	static constexpr amrex::GpuArray<double, n_groups_ + 1> thermalRadBoundaries = group_edges_;
 	static constexpr OpacityModel opacity_model = opacity_model_;
 };
 

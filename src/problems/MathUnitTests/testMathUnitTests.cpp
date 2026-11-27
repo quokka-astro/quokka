@@ -10,13 +10,18 @@
 
 #include "math/ODEIntegrate.hpp"
 #include "math/bracketing_root_finding.hpp"
+#include "math/linear_algebra.hpp"
 #include "math/root_finding.hpp"
+#include "math/rosenbrock/rosenbrock.hpp"
+#include "math/rosenbrock/tableaus.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/valarray.hpp"
+#include <algorithm>
 #include <array>
 #include <cfenv>
 #include <cmath>
+#include <cstdint>
 #include <format>
 #include <iostream>
 #include <limits>
@@ -348,6 +353,287 @@ auto TestEOSIdeal() -> int
 	return status;
 }
 
+/// y0' = -y0, y1' = L (y0 - y1), with L = 1e4: stiff, and with an exact solution. The integrator matrix
+/// [[fac + 1, 0], [-L, fac + L]] needs a row swap whenever fac + 1 < L, i.e. on every step longer than about 1/L.
+struct StiffLinearSystem {
+	static constexpr int neqs = 2;
+	static constexpr Real L = 1.0e4;
+
+	AMREX_GPU_HOST_DEVICE static constexpr auto counts_toward_error(int /*n*/) -> bool { return true; }
+
+	AMREX_GPU_HOST_DEVICE static void rhs(Real /*t*/, amrex::GpuArray<Real, neqs> &y, amrex::GpuArray<Real, neqs> &ydot)
+	{
+		ydot[0] = -y[0];
+		ydot[1] = L * (y[0] - y[1]);
+	}
+
+	template <typename Matrix> AMREX_GPU_HOST_DEVICE void jac(Real /*t*/, amrex::GpuArray<Real, neqs> & /*y*/, Matrix &J) const
+	{
+		J(0, 0) = -1.0;
+		J(0, 1) = 0.0;
+		J(1, 0) = L;
+		J(1, 1) = -L;
+	}
+
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto rtol(int /*n*/) -> Real { return 1.0e-8; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto atol(int /*n*/) -> Real { return 1.0e-14; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto passive_floor() -> Real { return 1.0e-30; } // every entry counts
+
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto valid_state(const amrex::GpuArray<Real, neqs> &y) -> bool
+	{
+		return std::isfinite(y[0]) && std::isfinite(y[1]);
+	}
+
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto valid_update(const amrex::GpuArray<Real, neqs> & /*y*/, const amrex::GpuArray<Real, neqs> & /*ynew*/)
+	    -> bool
+	{
+		return true;
+	}
+};
+
+/// StiffLinearSystem with a NaN in its analytic Jacobian, in an entry that is zero.
+struct NaNJacobianSystem : StiffLinearSystem {
+	template <typename Matrix> AMREX_GPU_HOST_DEVICE void jac(Real t, amrex::GpuArray<Real, neqs> &y, Matrix &J) const
+	{
+		StiffLinearSystem::jac(t, y, J);
+		J(0, 1) = std::numeric_limits<Real>::quiet_NaN();
+	}
+};
+
+template <bool pivot> struct RosenbrockTestOptions : quokka::math::rosenbrock::DefaultOptions {
+	static constexpr bool pivoting = pivot;
+};
+
+template <bool analytic, bool fallback> struct JacobianTestOptions : quokka::math::rosenbrock::DefaultOptions {
+	static constexpr bool analytic_jacobian = analytic;
+	static constexpr bool numerical_jacobian_fallback = fallback;
+};
+
+/// The integrator status in the output of RunRosenbrock.
+auto StatusOf(const std::array<Real, 4> &out) -> quokka::math::rosenbrock::IntegratorStatus
+{
+	return static_cast<quokka::math::rosenbrock::IntegratorStatus>(static_cast<int>(out[2]));
+}
+
+/// Integrates System from t = 0 to 1 on the device with y = (1, 0) at t = 0. Returns the solution, the status and the
+/// number of steps.
+template <typename Tableau, typename Options, typename System> auto RunRosenbrock() -> std::array<Real, 4>
+{
+	namespace rb = quokka::math::rosenbrock;
+	constexpr int nout = 4;
+	amrex::Gpu::DeviceVector<Real> out_d(nout);
+	Real *out = out_d.data();
+	amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int /*i*/) noexcept {
+		System sys{};
+		rb::State<System::neqs, Tableau::stages> rstate{};
+		rstate.t = 0.0;
+		rstate.tout = 1.0;
+		rstate.y[0] = 1.0;
+		rstate.y[1] = 0.0;
+		const rb::IntegratorStatus status = rb::integrate<Tableau, Options>(sys, rstate, 100000);
+		out[0] = rstate.y[0];
+		out[1] = rstate.y[1];
+		out[2] = static_cast<Real>(status);
+		out[3] = rstate.n_step;
+	});
+	std::array<Real, nout> out_h{};
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, out_d.begin(), out_d.end(), out_h.begin());
+	return out_h;
+}
+
+/// The largest relative error of a solution of StiffLinearSystem at t = 1.
+auto StiffLinearSystemError(const std::array<Real, 4> &out) -> Real
+{
+	constexpr Real L = StiffLinearSystem::L;
+	const Real y0_exact = std::exp(-1.0);
+	const Real y1_exact = L / (L - 1.0) * (std::exp(-1.0) - std::exp(-L));
+	return std::max(std::abs(out[0] / y0_exact - 1.0), std::abs(out[1] / y1_exact - 1.0));
+}
+
+/// Integrates StiffLinearSystem from t = 0 to 1 on the device and compares with the exact solution.
+template <typename Tableau, bool pivot> auto TestRosenbrockTableau() -> int
+{
+	namespace rb = quokka::math::rosenbrock;
+	const auto out = RunRosenbrock<Tableau, RosenbrockTestOptions<pivot>, StiffLinearSystem>();
+	const Real err = StiffLinearSystemError(out);
+	constexpr Real reltol = 1.0e-6;
+	const bool ok = StatusOf(out) == rb::IntegratorStatus::Success && err < reltol;
+	std::cout << std::format("Rosenbrock {:8} pivoting {:3}: status {}, {} steps, relative error {:.3e} {}\n", Tableau::name, pivot ? "on" : "off",
+				 rb::StatusName(StatusOf(out)), static_cast<int>(out[3]), err, ok ? "" : "FAILED");
+	return ok ? 0 : 1;
+}
+
+/// A non-finite analytic Jacobian must fail the burn without numerical_jacobian_fallback, and be replaced by the
+/// finite-difference Jacobian with it. The finite-difference Jacobian alone must also give an accurate solution.
+auto TestJacobianOptions() -> int
+{
+	namespace rb = quokka::math::rosenbrock;
+	constexpr Real reltol = 1.0e-6;
+	int status = 0;
+
+	const auto no_fallback = RunRosenbrock<rb::Rodas4P, JacobianTestOptions<true, false>, NaNJacobianSystem>();
+	const bool ok_no_fallback = StatusOf(no_fallback) == rb::IntegratorStatus::JacobianNotFinite;
+	std::cout << std::format("Rosenbrock NaN Jacobian, no fallback: status {} {}\n", rb::StatusName(StatusOf(no_fallback)), ok_no_fallback ? "" : "FAILED");
+	status += ok_no_fallback ? 0 : 1;
+
+	const auto fallback = RunRosenbrock<rb::Rodas4P, JacobianTestOptions<true, true>, NaNJacobianSystem>();
+	const Real err_fallback = StiffLinearSystemError(fallback);
+	const bool ok_fallback = StatusOf(fallback) == rb::IntegratorStatus::Success && err_fallback < reltol;
+	std::cout << std::format("Rosenbrock NaN Jacobian, fallback: status {}, {} steps, relative error {:.3e} {}\n", rb::StatusName(StatusOf(fallback)),
+				 static_cast<int>(fallback[3]), err_fallback, ok_fallback ? "" : "FAILED");
+	status += ok_fallback ? 0 : 1;
+
+	const auto numerical = RunRosenbrock<rb::Rodas4P, JacobianTestOptions<false, false>, StiffLinearSystem>();
+	const Real err_numerical = StiffLinearSystemError(numerical);
+	const bool ok_numerical = StatusOf(numerical) == rb::IntegratorStatus::Success && err_numerical < reltol;
+	std::cout << std::format("Rosenbrock numerical Jacobian: status {}, {} steps, relative error {:.3e} {}\n", rb::StatusName(StatusOf(numerical)),
+				 static_cast<int>(numerical[3]), err_numerical, ok_numerical ? "" : "FAILED");
+	status += ok_numerical ? 0 : 1;
+
+	return status;
+}
+
+/// Solves A x = b on the device by dgefa and dgesl, for an n x n matrix with entries over twelve decades and a diagonal
+/// too small to be the pivot, so that most steps interchange rows, and b = A (1, 2, ..., n). The factors are found with
+/// and without pivoting. Returns the backward error of the pivoted solution, max |A x - b| / (max |A| max |x|) (near
+/// machine epsilon for a stable factorization, however ill-conditioned A is), its info, and the info without pivoting.
+template <int n> auto RunLinearAlgebra(const bool zero_first_pivot) -> std::array<Real, 3>
+{
+	constexpr int nout = 3;
+	amrex::Gpu::DeviceVector<Real> out_d(nout);
+	Real *out = out_d.data();
+	amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int /*i*/) noexcept {
+		using Matrix = amrex::Array2D<Real, 0, n - 1, 0, n - 1>;
+		Matrix a{};
+		amrex::GpuArray<Real, n> b{};
+		for (int i = 0; i < n; ++i) {
+			for (int j = 0; j < n; ++j) {
+				// a deterministic spread of signs and magnitudes, 10^-6 to 10^6
+				const int h = (7 * i + 13 * j + 3 * i * j) % 25;
+				a(i, j) = ((i + 2 * j) % 3 == 0 ? -1.0 : 1.0) * std::pow(10.0, 0.5 * (h - 12));
+			}
+		}
+		if (zero_first_pivot) {
+			a(0, 0) = 0.0;
+		}
+		for (int i = 0; i < n; ++i) {
+			b[i] = 0.0;
+			for (int j = 0; j < n; ++j) {
+				b[i] += a(i, j) * static_cast<Real>(j + 1);
+			}
+		}
+
+		Matrix lu = a;
+		amrex::GpuArray<Real, n> x = b;
+		amrex::GpuArray<std::int16_t, n> pivot{};
+		int info = 0;
+		quokka::math::dgefa<n, true>(lu, pivot, info);
+		quokka::math::dgesl<n, true>(lu, pivot, x);
+
+		Real amax = 0.0;
+		Real xmax = 0.0;
+		Real rmax = 0.0;
+		for (int i = 0; i < n; ++i) {
+			Real r = -b[i];
+			for (int j = 0; j < n; ++j) {
+				r += a(i, j) * x[j];
+				amax = amrex::max(amax, std::abs(a(i, j)));
+			}
+			rmax = amrex::max(rmax, std::abs(r));
+			xmax = amrex::max(xmax, std::abs(x[i]));
+		}
+
+		Matrix lu_nopivot = a;
+		int info_nopivot = 0;
+		quokka::math::dgefa<n, false>(lu_nopivot, pivot, info_nopivot);
+
+		out[0] = rmax / (amax * xmax);
+		out[1] = info;
+		out[2] = info_nopivot;
+	});
+	std::array<Real, nout> out_h{};
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, out_d.begin(), out_d.end(), out_h.begin());
+	return out_h;
+}
+
+/// dgefa and dgesl at the sizes of the networks (5-9 equations for the DType networks, 15 for primordial_chem, 23 for
+/// GOW): with pivoting the backward error must be small, also with a zero first pivot; without pivoting, the zero
+/// first pivot must be reported.
+template <int n> auto TestLinearAlgebraSize() -> int
+{
+	constexpr Real tol = 1.0e-13;
+	const auto out = RunLinearAlgebra<n>(false);
+	const auto zero = RunLinearAlgebra<n>(true);
+	const bool ok = out[0] < tol && static_cast<int>(out[1]) == 0 && zero[0] < tol && static_cast<int>(zero[1]) == 0 && static_cast<int>(zero[2]) == 1;
+	std::cout << std::format("LU n = {:2}: backward error {:.3e}; zero first pivot: backward error {:.3e}, info without pivoting {} {}\n", n, out[0],
+				 zero[0], static_cast<int>(zero[2]), ok ? "" : "FAILED");
+	return ok ? 0 : 1;
+}
+
+/// dgefa on a matrix with a NaN and on one with an infinity, each in an entry that the elimination would not otherwise
+/// read last: both must be reported with info = -1, with and without pivoting.
+auto TestLinearAlgebraNonFinite() -> int
+{
+	constexpr int n = 4;
+	constexpr int nout = 4;
+	amrex::Gpu::DeviceVector<int> out_d(nout);
+	int *out = out_d.data();
+	amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int /*i*/) noexcept {
+		using Matrix = amrex::Array2D<Real, 0, n - 1, 0, n - 1>;
+		Matrix a{};
+		for (int i = 0; i < n; ++i) {
+			a(i, i) = 2.0;
+		}
+		amrex::GpuArray<std::int16_t, n> pivot{};
+		Matrix a_nan = a;
+		a_nan(0, n - 1) = std::numeric_limits<Real>::quiet_NaN();
+		Matrix a_inf = a;
+		a_inf(n - 1, 0) = std::numeric_limits<Real>::infinity();
+		Matrix m = a_nan;
+		quokka::math::dgefa<n, true>(m, pivot, out[0]);
+		m = a_nan;
+		quokka::math::dgefa<n, false>(m, pivot, out[1]);
+		m = a_inf;
+		quokka::math::dgefa<n, true>(m, pivot, out[2]);
+		m = a_inf;
+		quokka::math::dgefa<n, false>(m, pivot, out[3]);
+	});
+	std::array<int, nout> out_h{};
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, out_d.begin(), out_d.end(), out_h.begin());
+	const bool ok = out_h[0] == -1 && out_h[1] == -1 && out_h[2] == -1 && out_h[3] == -1;
+	std::cout << std::format("LU non-finite entry: info {} {} (NaN, pivoting on/off), {} {} (infinity, pivoting on/off) {}\n", out_h[0], out_h[1], out_h[2],
+				 out_h[3], ok ? "" : "FAILED");
+	return ok ? 0 : 1;
+}
+
+auto TestLinearAlgebra() -> int
+{
+	int status = 0;
+	status += TestLinearAlgebraSize<3>();
+	status += TestLinearAlgebraSize<8>();
+	status += TestLinearAlgebraSize<15>();
+	status += TestLinearAlgebraSize<23>();
+	status += TestLinearAlgebraNonFinite();
+	return status;
+}
+
+auto TestRosenbrock() -> int
+{
+	namespace rb = quokka::math::rosenbrock;
+	int status = TestLinearAlgebra();
+	status += TestRosenbrockTableau<rb::ROS2S, true>();
+	status += TestRosenbrockTableau<rb::ROS2S, false>();
+	status += TestRosenbrockTableau<rb::Rodas3P, true>();
+	status += TestRosenbrockTableau<rb::Rodas3P, false>();
+	status += TestRosenbrockTableau<rb::Rodas4P, true>();
+	status += TestRosenbrockTableau<rb::Rodas4P, false>();
+	status += TestRosenbrockTableau<rb::Rodas5P, true>();
+	status += TestRosenbrockTableau<rb::Rodas5P, false>();
+	status += TestJacobianOptions();
+	std::cout << (status == 0 ? "Rosenbrock: all tests passed.\n" : "Rosenbrock: FAILED.\n");
+	return status;
+}
+
 } // namespace
 
 auto problem_main() -> int
@@ -355,6 +641,7 @@ auto problem_main() -> int
 	const int ode_status = TestODEIntegration();
 	const int root_status = TestRootFinding();
 	const int eos_status = TestEOSIdeal();
+	const int rosenbrock_status = TestRosenbrock();
 	if (ode_status != 0) {
 		std::cout << "MathUnitTests: ODE integration test FAILED.\n";
 	}
@@ -364,5 +651,8 @@ auto problem_main() -> int
 	if (eos_status != 0) {
 		std::cout << "MathUnitTests: EOS test FAILED.\n";
 	}
-	return ((ode_status != 0) || (root_status != 0) || (eos_status != 0)) ? 1 : 0;
+	if (rosenbrock_status != 0) {
+		std::cout << "MathUnitTests: Rosenbrock test FAILED.\n";
+	}
+	return ((ode_status != 0) || (root_status != 0) || (eos_status != 0) || (rosenbrock_status != 0)) ? 1 : 0;
 }

@@ -66,7 +66,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | hydro.use_dual_energy                  | Boolean (0/1) | `1` (Enabled)  | If set to 1, the code evolves an auxiliary internal energy variable in order to correctly evolve high-mach flows. This should only be disabled (0) for debugging.              |
 | hydro.abort_on_fofc_failure            | Boolean (0/1) | `1` (Enabled)  | If set to 1, the code aborts when first-order flux correction fails to yield a physical state (positive density and pressure). This should only be disabled (0) for debugging. |
 | hydro.artificial_viscosity_coefficient | Float         | `0.0`          | This is the linear artificial viscosity coefficient used in the artificial viscosity term added to the flux. This is the same parameter as defined in the original PPM paper.  |
-| network.small_x                        | Float         | `1e-30`        | Mass-scalar floor: a negative mass scalar is reset to this fraction of the density. Chemistry and photochemistry builds use the Microphysics runtime parameter of the same name, whose default depends on the network (`1e-100` for `primordial_chem`). |
+| network.small_x                        | Float         | `1e-30`        | Mass-scalar floor: a negative mass scalar is reset to this fraction of the density. In a problem with chemistry or photochemistry the network reads it, and its default depends on the network (`1e-100` for `primordial_chem`). |
 
 ## Radiation
 
@@ -121,51 +121,40 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 ## Chemistry
 
-These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
+These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`. A problem with chemistry (`Microphysics_Traits<problem_t>::chemistry`) always runs it, as a Strang-split source term.
 
 | Parameter Name                | Type          | Default                 | Description                                                                                                                                     |
 |-------------------------------|---------------|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| chemistry.enabled             | Boolean (0/1) | `0` (Disabled)          | If set to 1, turns on chemistry as a Strang-split source term.                                                                                  |
 | chemistry.max_density_allowed | Float         | `1.0e300`               | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold.  |
 | chemistry.min_density_allowed | Float         | Smallest positive Value | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
 
-## Integrator (VODE)
+## Integrator (Rosenbrock)
 
-These parameters control the VODE ODE integrator used for chemistry and photochemistry source terms. The generated code reads them via `init_extern_parameters()` from the `integrator` prefix. See also `docs/markdown/photoionization.md`.
+These parameters control the Rosenbrock integrator of the chemistry and photochemistry burns (`src/microphysics/burner.hpp`, on the generic solver in `src/math/rosenbrock/`). They are read from the `integrator` prefix by `quokka::microphysics::IntegratorParams::Read()`, once per run. See also `docs/markdown/photoionization.md`.
 
-VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will cause the integrator to stall. Users must explicitly set the tolerances below.
+The integrator's switches are compile-time fields of `Microphysics_Traits<problem_t>` (`src/microphysics/microphysics_traits.hpp`), the Rosenbrock method (`Tableau`, ROS2S by default), `analytic_jacobian`, `numerical_jacobian_fallback`, `pivoting`, `call_eos_in_rhs`, `integrate_energy`, `max_temp` and `ode_max_dt`.
 
 ### Tolerance parameters
 
 | Parameter Name | Type | Default | Description |
 |---|---|---|---|
-| `integrator.atol_spec` | Float | `1.e-10` | Absolute tolerance for species number densities (cm⁻³). |
-| `integrator.rtol_spec` | Float | `1.e-10` | Relative tolerance for species number densities. |
-| `integrator.atol_enuc` | Float | `1.e-25` | Absolute tolerance for internal energy (erg g⁻¹). |
-| `integrator.rtol_enuc` | Float | `1.e-10` | Relative tolerance for internal energy. |
-| `integrator.atol_rad_num` | Float | `1.e-10` | Absolute tolerance for radiation number density (cm⁻³). |
-| `integrator.rtol_rad_num` | Float | `1.e-10` | Relative tolerance for radiation number density. |
-| `integrator.species_failure_tolerance` | Float | `0.01` | Maximum allowed negative species number density (cm⁻³) at internal VODE nodes. When exceeded, VODE rejects the substep and retries with a smaller timestep. Should equal `atol_spec`. At the final interpolated state, the threshold is relaxed to 1.5× this value to account for VODE's non-monotonic interpolation. |
-| `integrator.radiation_failure_tolerance` | Float | `0.01` | Maximum allowed negative photon number density (cm⁻³) at internal VODE nodes. When exceeded, VODE rejects the substep and retries with a smaller timestep. Should equal `atol_rad_num`. At the final interpolated state, the threshold is relaxed to 1.5× this value. |
+| `integrator.atol_spec` | Float | `1.e-3` | Absolute tolerance for species number densities (cm⁻³). |
+| `integrator.rtol_spec` | Float | `1.e-2` | Relative tolerance for species number densities. |
+| `integrator.atol_enuc` | Float | `1.e+8` | Absolute tolerance for internal energy (erg g⁻¹). |
+| `integrator.rtol_enuc` | Float | `1.e-2` | Relative tolerance for internal energy. |
+| `integrator.atol_rad_num` | Float | `1.e-3` | Absolute tolerance for radiation number density (cm⁻³). |
+| `integrator.rtol_rad_num` | Float | `1.e-2` | Relative tolerance for radiation number density. |
+| `integrator.species_failure_tolerance` | Float | `1e-3` | A burn fails if a species number density ends below minus this value (cm⁻³). |
+| `integrator.radiation_failure_tolerance` | Float | `1e-3` | A burn fails if a chemical-band photon number density ends below minus this value (cm⁻³). |
 
 ### Other integrator parameters
 
 | Parameter Name | Type | Default | Description |
 |---|---|---|---|
-| `integrator.jacobian` | Integer | `1` | Jacobian type: `1` = analytical, `2` = numerical. |
-| `integrator.ode_max_steps` | Integer | `150000` | Maximum number of VODE internal steps per burn call. |
-| `integrator.ode_max_dt` | Float | `1.e30` | Maximum internal timestep for VODE. |
-| `integrator.use_number_densities` | Boolean (0/1) | `1` | If 1, evolve species as number densities instead of mass fractions. Must be `1` for Quokka. |
-| `integrator.subtract_internal_energy` | Boolean (0/1) | `1` | If 1, subtract internal energy before integration. Must be `0` for Quokka. |
-| `integrator.call_eos_in_rhs` | Boolean (0/1) | `1` | If 1, call EOS in the RHS to update temperature from internal energy. Must be `1` for Quokka. |
-| `integrator.integrate_energy` | Boolean (0/1) | `1` | If 1, enable energy integration; if 0, freeze energy. Not recommended for use with number densities. |
-| `integrator.scale_system` | Boolean (0/1) | `0` | If 1, scale the ODE system to be O(1). Does not work with number densities — leave at `0`. |
-| `integrator.use_burn_retry` | Boolean (0/1) | `0` | If 1, retry failed burns with swapped Jacobian or relaxed tolerances. |
-| `integrator.retry_swap_jacobian` | Boolean (0/1) | `1` | If 1, swap Jacobian type (analytic to numerical) on retry. |
-| `integrator.burner_verbose` | Boolean (0/1) | `0` | If 1, print diagnostic output after each burn. |
-| `integrator.SMALL_X_SAFE` | Float | `1.e-30` | Species floor to prevent underflow in the integrator. |
-| `integrator.X_reject_buffer` | Float | `1.0` | Buffer factor for the species change-factor rejection threshold. Only meaningful for mass fractions; has no effect with number densities. Set to `1e100` to disable. |
-| `integrator.do_corrector_validation` | Boolean (0/1) | `1` | If 1, check predicted state validity before calling RHS. |
+| `integrator.ode_max_steps` | Integer | `150000` | Maximum number of internal steps per burn. |
+| `integrator.burner_verbose` | Boolean (0/1) | `0` | If 1, print diagnostic output after each burn (CPU builds only). |
+| `integrator.SMALL_X_SAFE` | Float | `1.e-30` | Floor of the species, the photon number densities and the thermal-band energies before each right-hand side. |
+| `integrator.X_reject_buffer` | Float | `1.0` | A step is rejected if it changes a species above `X_reject_buffer * atol_spec` by more than a factor of 4 either way. Set to `1e100` to disable. |
 
 ## Dust
 

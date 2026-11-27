@@ -44,7 +44,6 @@ density_floor = 1e-32  # g cm^-3
 # Photochemistry Properties
 # *****************************************************************
 
-photochemistry.enabled = 1
 network.energy_switch = 1
 network.recombination_temperature_dependent = 1
 network.allow_mixed_cell_cooling = 0
@@ -72,12 +71,6 @@ radiation.dust_gas_interaction_coeff = 0.0
 # Photochemistry Integrator
 # *****************************************************************
 
-integrator.rosenbrock_tableau = 3
-integrator.use_number_densities = 1
-integrator.do_species_clip = 0
-integrator.jacobian = 1
-integrator.renormalize_abundances = 0
-integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 integrator.ode_max_steps = 50000
 

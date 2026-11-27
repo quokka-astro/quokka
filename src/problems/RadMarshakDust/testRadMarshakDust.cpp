@@ -67,7 +67,7 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = 1.0;
-	static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries = radBoundaries_;
+	static constexpr amrex::GpuArray<double, n_group_ + 1> thermalRadBoundaries = radBoundaries_;
 	static constexpr OpacityModel opacity_model = opacity_model_;
 };
 
@@ -76,8 +76,6 @@ template <> struct ISM_Traits<MarshakProblem> {
 	static constexpr bool enable_photoelectric_heating = false;
 	// 1.0e-5 is the minimum value allowed for this test; smaller values will result in negative T_d.
 	static constexpr double gas_dust_coupling_threshold = 1.0e-4;
-	static constexpr bool thermal_band_photochemistry = false;   // no photochemistry network in this problem
-	static constexpr bool dust_chemical_band_absorption = false; // no chemical bands in this problem
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real

@@ -20,22 +20,14 @@
 #include <AMReX_Print.H>
 
 #include "cooling/EOSTabulatedRegistry.hpp"
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-#include "eos.H"
-#endif
-
-#ifdef CHEMISTRY
-#include "actual_eos_data.H"
-#endif
+#include "microphysics/microphysics_traits.hpp"
 
 namespace quokka
 {
 
 // forward declarations of EOS backends
 template <typename problem_t> struct EOSIdeal;
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-template <typename problem_t> struct EOSMicrophysics;
-#endif
+template <typename problem_t> struct EOSMultigamma;
 template <typename problem_t> struct EOSTabulated;
 
 // Primary EOS_Traits template. Provides default values for ideal gamma-law EOS.
@@ -70,7 +62,7 @@ struct EOSBase {
 };
 
 // ==================== EOSIdeal backend ====================
-// gamma-law ideal gas. Always available; the default backend outside CHEMISTRY/PHOTOCHEMISTRY builds.
+// gamma-law ideal gas. Always available; the default backend of problems without chemistry or photochemistry.
 
 template <typename problem_t> struct EOSIdeal : EOSBase {
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
@@ -290,173 +282,213 @@ template <typename problem_t> struct EOSIdeal : EOSBase {
 	}
 };
 
-// ==================== EOSMicrophysics backend ====================
-// Only compiled when CHEMISTRY or PHOTOCHEMISTRY is defined.
+// ==================== EOSMultigamma backend ====================
+// Multi-gamma ideal gas of the network's species. The default EOS of problems with chemistry or photochemistry.
 
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-template <typename problem_t> struct EOSMicrophysics : EOSBase {
+template <typename problem_t> struct EOSMultigamma : EOSBase {
+	using Network = typename Microphysics_Traits<problem_t>::Network;
+	static constexpr int NumSpec = Network::NumSpec;
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	static_assert(nmscalars_ >= NumSpec, "EOSMultigamma reads one mass scalar per network species: numMassScalars must be at least NumSpec");
 	static constexpr bool is_tabulated = false;
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
 	static constexpr amrex::Real boltzmann_constant_ = EOSIdeal<problem_t>::boltzmann_constant_;
+
+	static constexpr amrex::Real eosMinTemp_ = 1.0e-10;
+	static constexpr amrex::Real eosMinDens_ = 1.0e-100;
+	static constexpr amrex::Real eosMinEP_ = 1.0e-200; // minimum specific energy and pressure
+	static constexpr amrex::Real eosMax_ = 1.0e200;
+
+	using NumberDensities_t = amrex::GpuArray<amrex::Real, NumSpec>;
+
+	/// sum_i n_i / (gamma_i - 1) and rho_sp = sum_i n_i m_i
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void HeatCapacitySums(NumberDensities_t const &n, amrex::Real &sum_n_over_gm1, amrex::Real &rho_sp)
+	{
+		constexpr auto mass = Network::SpeciesMass();
+		constexpr auto gamma = Network::SpeciesGamma();
+		sum_n_over_gm1 = 0.0;
+		rho_sp = 0.0;
+		for (int i = 0; i < NumSpec; ++i) {
+			rho_sp += n[i] * mass[i];
+			sum_n_over_gm1 += n[i] / (gamma[i] - 1.0);
+		}
+	}
+
+	/// temperature [K] from the specific internal energy e [erg g^-1] and the number densities n
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto TemperatureFromEnergy(const amrex::Real e, NumberDensities_t const &n) -> amrex::Real
+	{
+		amrex::Real s = NAN;
+		amrex::Real rho_sp = NAN;
+		HeatCapacitySums(n, s, rho_sp);
+		return e * rho_sp / (s * C::k_B);
+	}
+
+	/// specific internal energy [erg g^-1] from the temperature T [K] and the number densities n
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto EnergyFromTemperature(const amrex::Real T, NumberDensities_t const &n) -> amrex::Real
+	{
+		amrex::Real s = NAN;
+		amrex::Real rho_sp = NAN;
+		HeatCapacitySums(n, s, rho_sp);
+		return s * C::k_B * T / rho_sp;
+	}
+
+	/// de/dT at constant composition [erg g^-1 K^-1]
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto dEnergy_dT(NumberDensities_t const &n) -> amrex::Real
+	{
+		amrex::Real s = NAN;
+		amrex::Real rho_sp = NAN;
+		HeatCapacitySums(n, s, rho_sp);
+		return s * C::k_B / rho_sp;
+	}
+
+	struct State {
+		amrex::Real rho;   // clamped density
+		amrex::Real T;	   // temperature [K]
+		amrex::Real e;	   // specific internal energy
+		amrex::Real dedT;  // de/dT
+		amrex::Real f_avg; // sum_i n_i/(gamma_i - 1) / sum_i n_i: heat capacity per particle in units of k_B
+	};
+
+	/// Clamp x to [lo, hi] as EOSIdeal::ClampToRange does (Microphysics's min(hi, max(lo, x))).
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ClampToRange(amrex::Real x, amrex::Real lo, amrex::Real hi) -> amrex::Real
+	{
+		return amrex::min(hi, amrex::max(lo, x));
+	}
+
+	// Number densities from the mass scalars. Without them, Microphysics used xn = -1 for every species; T(e) depends
+	// only on ratios of the n_i, so equal number densities give the same results.
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	NumberDensities(quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> NumberDensities_t
+	{
+		constexpr auto mass = Network::SpeciesMass();
+		NumberDensities_t n{};
+		for (int i = 0; i < NumSpec; ++i) {
+			n[i] = massScalars ? (*massScalars)[i] / mass[i] : 1.0;
+		}
+		return n;
+	}
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto HeatCapacityPerParticle(NumberDensities_t const &n) -> amrex::Real
+	{
+		constexpr auto gamma = Network::SpeciesGamma();
+		amrex::Real sum_n = 0.0;
+		amrex::Real sum_f = 0.0;
+		for (int i = 0; i < NumSpec; ++i) {
+			sum_n += n[i];
+			sum_f += n[i] / (gamma[i] - 1.0);
+		}
+		return sum_f / sum_n;
+	}
+
+	// (rho, T) input: rho and T are clamped to the floors
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FromRhoT(amrex::Real rho, amrex::Real T, NumberDensities_t const &n) -> State
+	{
+		State s{};
+		s.rho = ClampToRange(rho, eosMinDens_, eosMax_);
+		s.T = ClampToRange(T, eosMinTemp_, eosMax_);
+		s.e = EnergyFromTemperature(s.T, n);
+		s.dedT = dEnergy_dT(n);
+		s.f_avg = HeatCapacityPerParticle(n);
+		return s;
+	}
+
+	// (rho, e) input: an out-of-range e is replaced by the state at the minimum temperature; T itself is not floored
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FromRhoE(amrex::Real rho, amrex::Real e, NumberDensities_t const &n) -> State
+	{
+		if (e < eosMinEP_ || e > eosMax_) {
+			return FromRhoT(rho, 0.0, n);
+		}
+		State s{};
+		s.rho = ClampToRange(rho, eosMinDens_, eosMax_);
+		s.e = e;
+		s.T = TemperatureFromEnergy(e, n);
+		s.dedT = dEnergy_dT(n);
+		s.f_avg = HeatCapacityPerParticle(n);
+		return s;
+	}
+
+	// (rho, p) input: an out-of-range p is replaced by the state at the minimum temperature
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto FromRhoP(amrex::Real rho, amrex::Real p, NumberDensities_t const &n) -> State
+	{
+		if (p < eosMinEP_ || p > eosMax_) {
+			return FromRhoT(rho, 0.0, n);
+		}
+		State s{};
+		s.rho = ClampToRange(rho, eosMinDens_, eosMax_);
+		s.f_avg = HeatCapacityPerParticle(n);
+		s.e = p * s.f_avg / s.rho;
+		s.T = TemperatureFromEnergy(s.e, n);
+		s.dedT = dEnergy_dT(n);
+		return s;
+	}
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto PressureOf(State const &s) -> amrex::Real { return s.rho * s.e / s.f_avg; }
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto SoundSpeedOf(State const &s) -> amrex::Real
+	{
+		return std::sqrt((1.0 + 1.0 / s.f_avg) * PressureOf(s) / s.rho);
+	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		eos_t chemstate;
-		chemstate.rho = rho;
-		chemstate.e = Eint / rho;
-		for (double &ii : chemstate.xn) {
-			ii = -1.0;
-		}
-
-		if (massScalars) {
-			const auto &massArray = *massScalars;
-			for (int nn = 0; nn < nmscalars_; ++nn) {
-				chemstate.xn[nn] = massArray[nn] / spmasses[nn];
-			}
-		}
-
-		eos(eos_input_re, chemstate);
-		return chemstate.T;
+		return FromRhoE(rho, Eint / rho, NumberDensities(massScalars)).T;
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		eos_t chemstate;
-		chemstate.rho = rho;
-		chemstate.T = Tgas;
-		for (double &ii : chemstate.xn) {
-			ii = -1.0;
-		}
-
-		if (massScalars) {
-			const auto &massArray = *massScalars;
-			for (int nn = 0; nn < nmscalars_; ++nn) {
-				chemstate.xn[nn] = massArray[nn] / spmasses[nn];
-			}
-		}
-
-		eos(eos_input_rt, chemstate);
-		return chemstate.e * chemstate.rho;
+		const State s = FromRhoT(rho, Tgas, NumberDensities(massScalars));
+		return s.e * s.rho;
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		eos_t chemstate;
-		chemstate.rho = rho;
-		chemstate.p = Pressure;
-		for (double &ii : chemstate.xn) {
-			ii = -1.0;
-		}
-
-		if (massScalars) {
-			const auto &massArray = *massScalars;
-			for (int nn = 0; nn < nmscalars_; ++nn) {
-				chemstate.xn[nn] = massArray[nn] / spmasses[nn];
-			}
-		}
-
-		eos(eos_input_rp, chemstate);
-		return chemstate.e * chemstate.rho;
+		const State s = FromRhoP(rho, Pressure, NumberDensities(massScalars));
+		return s.e * s.rho;
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real Tgas,
 				  quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
 	{
-		eos_t chemstate;
-		chemstate.rho = rho;
-		chemstate.T = Tgas;
-		for (double &ii : chemstate.xn) {
-			ii = -1.0;
-		}
-
-		if (massScalars) {
-			const auto &massArray = *massScalars;
-			for (int nn = 0; nn < nmscalars_; ++nn) {
-				chemstate.xn[nn] = massArray[nn] / spmasses[nn];
-			}
-		}
-
-		eos(eos_input_rt, chemstate);
-		return chemstate.dedT * chemstate.rho;
+		const State s = FromRhoT(rho, Tgas, NumberDensities(massScalars));
+		return s.dedT * s.rho;
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real P, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	{
-		eos_t chemstate;
-		chemstate.rho = rho;
-		chemstate.p = P;
-		for (double &ii : chemstate.xn) {
-			ii = -1.0;
-		}
-
-		if (massScalars) {
-			const auto &massArray = *massScalars;
-			for (int nn = 0; nn < nmscalars_; ++nn) {
-				chemstate.xn[nn] = massArray[nn] / spmasses[nn];
-			}
-		}
-
-		eos(eos_input_rp, chemstate);
-		const amrex::Real deint_dRho = chemstate.dedr;
-		const amrex::Real deint_dP = 1.0 / chemstate.dpde;
-		amrex::Real dRho_dP = 1.0 / (chemstate.dpdr * C::k_B / boltzmann_constant_);
-		const amrex::Real dP_dRho_s = chemstate.cs * chemstate.cs;
-		const amrex::Real G = chemstate.G;
+		const State s = FromRhoP(rho, P, NumberDensities(massScalars));
+		const amrex::Real p = PressureOf(s);
+		const amrex::Real dpdT = p / s.T;
+		const amrex::Real dpdr = p / s.rho;
+		const amrex::Real deint_dRho = 0.0;
+		const amrex::Real deint_dP = 1.0 / (dpdT / s.dedT);
+		const amrex::Real dRho_dP = 1.0 / (dpdr * C::k_B / boltzmann_constant_);
+		const amrex::Real cs = SoundSpeedOf(s);
+		const amrex::Real dP_dRho_s = cs * cs;
+		const amrex::Real G = 0.5 * (1.0 + (1.0 + 1.0 / s.f_avg));
 		return std::make_tuple(deint_dRho, deint_dP, dRho_dP, dP_dRho_s, G);
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputePressure(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
 	{
-		static_assert(gamma_ != 1.0, "EOSMicrophysics does not support isothermal (gamma=1) problems.");
-		eos_t chemstate;
-		chemstate.rho = rho;
-		chemstate.e = Eint / rho;
-		for (double &ii : chemstate.xn) {
-			ii = -1.0;
-		}
-
-		if (massScalars) {
-			const auto &massArray = *massScalars;
-			for (int nn = 0; nn < nmscalars_; ++nn) {
-				chemstate.xn[nn] = massArray[nn] / spmasses[nn];
-			}
-		}
-
-		eos(eos_input_re, chemstate);
-		return chemstate.p;
+		static_assert(gamma_ != 1.0, "EOSMultigamma does not support isothermal (gamma=1) problems.");
+		return PressureOf(FromRhoE(rho, Eint / rho, NumberDensities(massScalars)));
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
-		static_assert(gamma_ != 1.0, "EOSMicrophysics does not support isothermal (gamma=1) problems.");
-		eos_t chemstate;
-		chemstate.rho = rho;
-		chemstate.p = Pressure;
-		for (double &ii : chemstate.xn) {
-			ii = -1.0;
-		}
-
-		if (massScalars) {
-			const auto &massArray = *massScalars;
-			for (int nn = 0; nn < nmscalars_; ++nn) {
-				chemstate.xn[nn] = massArray[nn] / spmasses[nn];
-			}
-		}
-
-		eos(eos_input_rp, chemstate);
-		return chemstate.cs;
+		static_assert(gamma_ != 1.0, "EOSMultigamma does not support isothermal (gamma=1) problems.");
+		return SoundSpeedOf(FromRhoP(rho, Pressure, NumberDensities(massScalars)));
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Real rho, amrex::Real Pressure) -> amrex::Real
@@ -477,7 +509,6 @@ template <typename problem_t> struct EOSMicrophysics : EOSBase {
 		return 0.0;
 	}
 };
-#endif // CHEMISTRY || PHOTOCHEMISTRY
 
 // ==================== EOSTabulated backend ====================
 // Temperature methods read the resampled table; all other methods delegate to EOSIdeal.
@@ -578,11 +609,7 @@ template <typename problem_t> struct EOSTabulated : EOSBase {
 namespace detail
 {
 template <typename T, typename = void> struct EOSBackendHelper {
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-	using type = EOSMicrophysics<T>;
-#else
-	using type = EOSIdeal<T>;
-#endif
+	using type = std::conditional_t<Microphysics_Traits<T>::chemistry || Microphysics_Traits<T>::photochemistry, EOSMultigamma<T>, EOSIdeal<T>>;
 };
 
 template <typename T> struct EOSBackendHelper<T, std::void_t<typename EOS_Traits<T>::EOSBackend>> {
@@ -591,7 +618,7 @@ template <typename T> struct EOSBackendHelper<T, std::void_t<typename EOS_Traits
 } // namespace detail
 
 // ==================== EOS (public name) ====================
-/// \brief The problem's EOS backend struct itself (EOSIdeal, EOSMicrophysics or EOSTabulated).
+/// \brief The problem's EOS backend struct itself (EOSIdeal, EOSMultigamma or EOSTabulated).
 ///
 /// A problem that explicitly specializes a method of quokka::EOS<P> (e.g. ComputeTgasFromEint) specializes that method of its backend.
 
