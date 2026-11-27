@@ -148,3 +148,4 @@ endif()
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}")
 
 add_subdirectory(problems)
+add_subdirectory(math/ode_tests)
