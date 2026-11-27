@@ -288,3 +288,192 @@ incorrect temperatures and ionization fractions.
 **Correct setup:** use `photochemistry.enabled = 1` and leave `cooling.enabled = 0`
 (the default). The photoionization chemistry network handles all heating and cooling
 internally.
+
+## 5. Cooling and heating for galaxy simulations
+
+The network `thermophotochemistry_ism_handwritten` adds a cooling and heating model for isolated galaxy simulations at a resolution of a few pc, with peak densities of \\(n\_{\rm H}\sim100\ \mathrm{cm}^{-3}\\).
+It covers hot supernova-heated gas, H II regions, and the warm and cold neutral medium.
+It has no H\\(\_2\\) or CO chemistry and no gas–dust thermal coupling.
+The model follows the RIGEL [@Deng2024] and TIGRESS-NCR [@Kim2023] prescriptions, with the rate fits of [@Gong2017], [@Wolfire2003] and [@Weingartner2001].
+
+A problem opts in by using this network and by defining `PHOTOCHEM_ISM_COOLING` at compile time (see `src/problems/ISMCoolingOneZone/CMakeLists.txt`).
+The new cooling and heating code is under that definition, so the other photoionization problems are unchanged. The dust absorption without the gas–dust coupling model (Sect. 5.5) is selected by the problem's `ISM_Traits` instead.
+All rates below are volumetric, in \\(\mathrm{erg}\ \mathrm{cm}^{-3}\ \mathrm{s}^{-1}\\), with cooling and heating both counted as positive numbers.
+Number densities always come from the species: \\(n\_{\rm H} = n\_{\rm HI} + n\_{\rm H^+}\\), never \\(\rho/m\_{\rm H}\\).
+Helium is not in the network or in the photochemistry equation of state, so the helium-to-hydrogen ratio is set to \\(y\_{\rm He}=0\\) in all rates.
+
+### 5.1 Two regimes
+
+In each hydro step on each level, after the hydro update and before the radiation substeps, every cell gets a temperature from the photochemistry equation of state.
+A cell is **hot** if \\(T \geq T\_{\rm th} = 2\times10^4\ \mathrm{K}\\) and **cold** otherwise.
+The label is fixed for the whole hydro step, including all radiation substeps.
+Cells with a density below `photochemistry.min_density_allowed` are skipped by the burn and by the hot-cell step, and are never hot.
+
+- **Cold cells** run the usual photochemistry burn in every radiation substep. The energy equation of the network includes the terms of Sect. 5.2.
+- **Hot cells** skip the burn. The cell is set fully ionized, and its internal energy is integrated over the hydro step with the Grackle cooling table (Sect. 5.4). The ionizing photons that cross the cell are attenuated by dust only.
+
+A cell that cools through \\(T\_{\rm th}\\) during the hot-cell step starts the next step as a cold cell that is fully ionized, and recombines out of equilibrium.
+
+### 5.2 Cold-gas terms
+
+The terms of the network energy equation are listed below.
+All terms that use an electron density use \\(n\_e^{\max}\\) (Sect. 5.3), not the network electron density.
+The H chemistry itself (recombination, collisional ionization) keeps the network electrons, so species are conserved.
+The analytic Jacobian contains the derivative of every term with respect to \\(T\\) and to each species.
+Below, \\(T\_4 = T/10^4\ \mathrm{K}\\), \\(Z' = Z/Z\_\odot\\) is the uniform metallicity, and \\(G\_0\\) is the far-UV field in Habing units.
+
+| Term | Status | Source |
+|------|--------|--------|
+| Photoionization heating | kept | existing network |
+| H recombination cooling | kept | existing network, network \\(n\_e\\) |
+| H collisional ionization cooling | kept | existing network, network \\(n\_e\\) |
+| Free-free cooling, \\(1.3\times1.427\times10^{-27}\sqrt{T}\\,n\_e n\_{\rm H^+}\\) | kept | existing network, network \\(n\_e\\) |
+| Koyama–Inutsuka heating and cooling | removed | replaced by the terms below |
+| Metal cooling in ionized gas (`get_cle_term`) | removed | replaced by nebular lines |
+| Ly\\(\alpha\\) cooling | added | [@Kim2023] Eq. 42 |
+| Nebular metal lines | added | [@Kim2023] Eq. 47 |
+| C II 158 \\(\mu\\)m and O I 63, 146 \\(\mu\\)m cooling | added | [@Deng2024] App. A.4, collision rates of [@Gong2017] |
+| Photoelectric (PE) heating | added | [@Deng2024] App. A.7, after [@Wolfire2003] |
+| Grain-recombination cooling | added | [@Kim2023] Sect. 4.6.3, after [@Weingartner2001] |
+| Cosmic-ray (CR) heating | added | [@Deng2024] App. A.8 |
+
+**Ly\\(\alpha\\).**
+
+<script type="math/tex; mode=display">
+\mathcal{L}_{\rm Ly\alpha} = E_{21}\, n_{\rm HI}\, n_e^{\max}\, k_{12}, \qquad
+k_{12} = 5.31\times10^{-8}\, \frac{T_4^{0.15}}{1 + (T_4/5)^{0.65}}\, e^{-11.84/T_4}\ \mathrm{cm}^3\,\mathrm{s}^{-1},
+</script>
+
+with \\(E\_{21} = 10.2\ \mathrm{eV}\\).
+
+**Nebular lines.** The coefficients are those printed in [@Kim2023]. The value \\(3.86\times10^{-23}\\) in the RIGEL paper differs from the \\(3.68\times10^{-23}\\) printed in NCR [@Kim2023]; we use the NCR value.
+
+<script type="math/tex; mode=display">
+\mathcal{L}_{\rm neb} = Z'\, n_e^{\max}\, n_{\rm H^+}\, \frac{3.68\times10^{-23}\, e^{-3.86/T_4}\, f_{\rm neb}(T)}{T_4^{1/2}\left(1 + 0.12\, n_{e,2}^{\,0.38 - 0.12\ln T_4}\right)}, \qquad
+\log_{10} f_{\rm neb} = \sum_{i=0}^{6} a_i\, (\ln T_4)^i,
+</script>
+
+with \\(n\_{e,2} = n\_e^{\max}/(100\ \mathrm{cm}^{-3})\\) and \\((a\_0,\dots,a\_6) = (0.692, -0.586, 0.816, -0.505, 0.118, 7.66\times10^{-3}, -5.08\times10^{-3})\\).
+
+**C II and O I fine-structure lines.** All carbon is C\\(^+\\), with \\(n\_{\rm C^+} = x\_{\rm C,tot}\\, n\_{\rm H}\\) and \\(x\_{\rm C,tot} = 1.6\times10^{-4} Z'\\).
+Neutral oxygen follows neutral hydrogen, \\(n\_{\rm O} = x\_{\rm O,tot}\\, n\_{\rm HI}\\) with \\(x\_{\rm O,tot} = 3.2\times10^{-4} Z'\\).
+C II is a two-level atom and O I a three-level atom, both with H I and electrons as collision partners and no H\\(\_2\\).
+For C II, with level 1 above level 0,
+
+<script type="math/tex; mode=display">
+\mathcal{L}_{\rm CII} = n_{\rm C^+}\, A_{10}\, E_{10}\, \frac{q_{01}}{q_{01} + q_{10} + A_{10}}, \qquad
+q_{ij} = n_{\rm HI}\, k^{\rm H}_{ij}(T) + n_e^{\max}\, k^{e}_{ij}(T),
+</script>
+
+and \\(q\_{01}\\) follows from \\(q\_{10}\\) by detailed balance.
+The collision-rate fits \\(k\_{ij}\\) are those of [@Gong2017], as implemented in the Athena++ chemistry module.
+
+**PE heating.**
+
+<script type="math/tex; mode=display">
+\mathcal{G}_{\rm PE} = 1.3\times10^{-24}\, \frac{Z_d}{0.01}\, \epsilon\, G_0\, n_{\rm H}, \qquad
+\epsilon = \frac{0.0487}{1 + 0.004\,\psi^{0.73}} + \frac{0.0365\,(\tilde T/10^4)^{0.7}}{1 + 2\times10^{-4}\,\psi}, \qquad
+\psi = \frac{G_0 \sqrt{\tilde T}}{0.5\, n_e^{\max}},
+</script>
+
+with \\(Z\_d = 0.5\\, Z = 0.5 \times 0.0136\\, Z'\\), so \\(Z\_d/0.01 = 0.68\\, Z'\\).
+The temperature in \\(\epsilon\\) and \\(\psi\\) is capped, \\(\tilde T = \min(T, 10^4\ \mathrm{K})\\), the upper limit of the fit.
+Without the cap, the \\(T^{0.7}\\) term makes PE heating exceed cooling in hot, dilute gas.
+
+**Grain-recombination cooling.**
+
+<script type="math/tex; mode=display">
+\mathcal{L}_{\rm gr} = 10^{-28}\, Z'\, n_e^{\max}\, n_{\rm H}\, T^{\,D_0 + D_1/\ln x}\, \exp\!\left[D_2 + (D_3 - D_4 \ln x)\ln x\right], \qquad
+x = \frac{G_0 \sqrt{T}}{n_e^{\max}} + 50,
+</script>
+
+with \\((D\_0,\dots,D\_4) = (0.4535, 2.234, -6.266, 1.442, 0.05089)\\), the coefficients of the Athena++ implementation by the TIGRESS-NCR authors.
+
+**CR heating.**
+
+<script type="math/tex; mode=display">
+\mathcal{G}_{\rm CR} = 1.6022\times10^{-11}\ \mathrm{erg} \times \left(\zeta_{\rm HI}\, n_{\rm HI} + \zeta_{\rm HeI}\, n_{\rm HeI}\right), \qquad
+\zeta_{\rm HeI} = 1.1\,\zeta_{\rm HI}, \quad n_{\rm HeI} = y_{\rm He}\, n_{\rm HI}.
+</script>
+
+The helium term is zero because \\(y\_{\rm He}=0\\).
+
+Each of the new terms has its own switch (Sect. 5.6).
+The network registers no thermal radiation bands, so all the energy these terms remove leaves the simulation.
+
+### 5.3 Electron density for the rates
+
+The cooling and heating rates above use
+
+<script type="math/tex; mode=display">
+n_e^{\max} = \max\!\left( n_{\rm H^+},\ x_{e,\rm CIE}(n_{\rm H}, T)\, n_{\rm H},\ x_{\rm C,tot}\, n_{\rm H},\ \sqrt{\zeta_{\rm HI}\, n_{\rm H} / \alpha_B(T)} \right).
+</script>
+
+The four terms are:
+
+1. the electron density of the network;
+2. the collisional-ionization-equilibrium (CIE) electron fraction from the Grackle table (Sect. 5.4), which includes ionization by the UV background;
+3. the electrons that come from ionized carbon;
+4. a cosmic-ray floor, from CR ionization balanced by case-B recombination with the network's \\(\alpha\_B(T)\\).
+
+The Jacobian uses the derivatives of the term that is largest.
+The maximum is needed because in neutral gas the network electron density is far below the electron density that carbon and the background UV field provide, and the rates would otherwise be too small.
+
+### 5.4 Hot cells
+
+In each hot cell, once per hydro step before the radiation substeps:
+
+1. All hydrogen is moved to H\\(^+\\), keeping the number of H nuclei, and \\(n\_e = n\_{\rm H^+}\\). The gas internal energy is not changed.
+2. The internal energy is integrated over the hydro step at fixed density with an adaptive Runge–Kutta method, using the equation below the list.
+3. The temperature is taken from the photochemistry equation of state at each evaluation, and the table rate keeps applying if the cell cools below \\(T\_{\rm th}\\) within the step. At or below the larger of `temperature_floor` and the lowest table temperature, \\(10\ \mathrm{K}\\), net cooling by the table term is set to zero and only heating remains, so that a cell without a heating source cannot cool to zero internal energy. Because the cell is fully ionized, \\(\mathcal{G}\_{\rm CR} = 0\\). The result is clamped to the energy at `temperature_floor`. If `network.energy_switch = 0`, the integration is skipped and the internal energy is unchanged. The two heating terms follow `network.pe_heating_switch` and `network.cr_heating_switch`.
+4. If the integration needs more than `maxStepsODEIntegrate` steps, the code prints the cell and aborts. There is no retry, because the step runs after the hydro update. Each call prints the number of hot cells and their average and maximum number of substeps.
+
+The equation integrated in step 2 is
+
+<script type="math/tex; mode=display">
+\frac{dE_{\rm int}}{dt} = -n_{\rm H}^2\, \Lambda_{\rm net}(n_{\rm H}, T) + \mathcal{G}_{\rm PE} + \mathcal{G}_{\rm CR}.
+</script>
+
+The net cooling function \\(\Lambda\_{\rm net}\\) is the Grackle primordial plus metal cooling minus heating, from the Cloudy table `CloudyData_UVB=HM2012_shielded` at redshift 0, with the metal part scaled by \\(Z'\\), and without PE heating or Compton cooling.
+It is stored on Grackle's native \\((\log n\_{\rm H}, \log T)\\) grid, which covers \\(-10 < \log\_{10}(n\_{\rm H}/\mathrm{cm}^{-3}) < 4\\) and \\(1 < \log\_{10}(T/\mathrm{K}) < 9\\), together with the CIE electron fraction \\(x\_{e,\rm CIE}\\), derived from the tabulated mean molecular weight.
+Lookups are bilinear in the logarithms and clamp to the table edge, so they are finite for any positive input (the derivatives are zero outside the table).
+The table for \\(Z' = 1\\) is `extern/cooling/CloudyData_UVB=HM2012_shielded_nT_Z1.h5`.
+To make a table for another metallicity, run `extern/cooling/make_grackle_nT_table.py` (see the [cooling module](cooling_module.md)).
+At startup the code aborts if `network.ism_metallicity` differs from the metallicity stored in the table.
+
+In every radiation substep, if `DUST_CHEMICAL_BAND_ABSORPTION` is defined, the chemical-band photons in a hot cell are attenuated by dust only,
+
+<script type="math/tex; mode=display">
+N_\gamma \to N_\gamma\, e^{-\hat{c}\,\kappa_d \rho\, \Delta t}, \qquad \mathbf{F} \to \mathbf{F}\, e^{-\hat{c}\,\kappa_d \rho\, \Delta t},
+</script>
+
+with \\(\kappa\_d\\) = `network.dust_kappa`, and the photon number is kept at or above the floor `small_x`.
+Hot gas is fully ionized, so neutral hydrogen does not absorb.
+The gas receives the momentum of the absorbed photons, as in cold cells.
+
+### 5.5 Dust absorption without gas–dust coupling
+
+Dust absorption of ionizing photons no longer requires the gas–dust thermal coupling model (`enable_dust_gas_thermal_coupling_model`).
+Without that model there are no thermal radiation groups to receive the absorbed energy, so the energy absorbed by dust leaves the simulation, in hot and in cold cells.
+The gas still receives the momentum.
+Total energy is therefore not conserved in this mode: the dust re-radiates the energy in the infrared, which is not followed.
+When the coupling model is on, cold cells still pass the absorbed energy to the thermal groups, as before, and hot cells always discard it.
+
+### 5.6 Parameters
+
+The input parameters are listed in [Runtime parameters](parameters.md#photochemistry-cooling-for-galaxy-simulations).
+Two are required when `PHOTOCHEM_ISM_COOLING` is defined, and the code aborts at startup, naming the parameter, if either is missing: `G0_external` and `ism_cooling.grackle_nT_table`.
+`G0_external` is an AMReX parser expression for \\(G\_0\\) in Habing units, a function of `x`, `y`, `z`, `time` and `dt`, evaluated at the cell centre.
+Any background value must be part of the expression.
+
+### 5.7 Limitations
+
+- The photochemistry equation of state is pure hydrogen, while the Grackle table assumes a hydrogen and helium mixture for its temperature axis and for \\(x\_{e,\rm CIE}\\). The \\(x\_{e,\rm CIE}\\) of fully ionized gas therefore includes helium electrons, and \\(T\\) is slightly inconsistent with the table until helium is added to the network.
+- The metallicity is uniform and must equal the metallicity of the table.
+- Hot, fully ionized cells receive no cosmic-ray heating, because \\(\mathcal{G}\_{\rm CR} \propto n\_{\rm HI}\\).
+- The network has no H\\(\_2\\), CO or C I, and no gas–dust thermal coupling.
+
+### 5.8 Verification
+
+The tests are in `src/problems/ISMCoolingRates` (all rates and the table lookup against the Python reference `extern/cooling/ism_cooling_reference.py`), `src/problems/ISMCoolingOneZone` (Jacobian, startup checks, the temperature of 25 cells at \\(10^{-2} \leq n\_{\rm H} \leq 10^2\ \mathrm{cm}^{-3}\\) after 1 Gyr of evolution against the integrated ODE, the hot-cell step, a cell crossing \\(T\_{\rm th}\\), a dense hot cell without heating) and `src/problems/ISMCoolingSlab` (dust attenuation of a photon beam in a cold and a hot slab).
+At \\(G\_0 = 1\\) and \\(Z' = 1\\), the temperature after 1 Gyr falls from 8200 K to 6600 K for \\(n\_{\rm H} \leq 0.15\ \mathrm{cm}^{-3}\\), drops to about 560 K at \\(n\_{\rm H} = 0.32\ \mathrm{cm}^{-3}\\), and falls from 72 K to 38 K between \\(n\_{\rm H} = 10\\) and \\(100\ \mathrm{cm}^{-3}\\).

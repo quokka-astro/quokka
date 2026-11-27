@@ -19,7 +19,8 @@ set(_pi_hand_written_species_args
   POWER_LAW_INDEX 0 # jaff network.radiation.power_law_index
 )
 
-foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten thermophotochemistry_handwritten)
+foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten thermophotochemistry_handwritten
+                  thermophotochemistry_ism_handwritten)
   set(_pi_is_jaff FALSE)
   set(_pi_species_args "")
   set(_pi_jaff_toml_args "")
@@ -32,6 +33,9 @@ foreach(_pi_name photoionization_H_caseB photoionization_H_caseB_handwritten the
   elseif(_pi_name STREQUAL "thermophotochemistry_handwritten")
     set(_pi_species_args ${_pi_hand_written_species_args})
     set(_pi_num_thermal_bands 2)
+  elseif(_pi_name STREQUAL "thermophotochemistry_ism_handwritten")
+    # no thermal bands: NUM_THERMAL_BANDS stays empty, which the registry treats as 0
+    set(_pi_species_args ${_pi_hand_written_species_args})
   endif()
 
   register_microphysics_network(${_pi_name}

@@ -248,6 +248,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::string heatingRateExternalExpr_;
 	std::optional<amrex::Parser> heatingRateExternalParser_;
 	std::optional<amrex::ParserExecutor<5>> heatingRateExternalParserExe_;
+#ifdef PHOTOCHEM_ISM_COOLING
+	bool useG0ExternalParser_ = false;
+	std::string G0ExternalExpr_;
+	std::optional<amrex::Parser> G0ExternalParser_;
+	std::optional<amrex::ParserExecutor<5>> G0ExternalParserExe_;
+#endif
 	bool debugDensityFloorPlot_ = false; // default: disabled
 
 	mutable YAML::Node simulationMetadata_;
@@ -284,6 +290,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void initialize();
 	void PerformanceHints();
 	void readParameters();
+	/// Compile the parser expression `expr` of the input `name`, with variables x, y, z, time and dt and the ParmParse unit constants (yr, kyr,
+	/// Myr, Gyr). If `expr` is empty, resets `parser` and `exe` and returns false; otherwise returns true.
+	static auto compileSpaceTimeParser(std::string const &name, std::string const &expr, std::optional<amrex::Parser> &parser,
+					   std::optional<amrex::ParserExecutor<5>> &exe) -> bool;
 	void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
 	void setInitialConditions();
 	void setInitialConditionsAtLevel_cc(int level, amrex::Real time);
@@ -899,6 +909,45 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 	}
 }
 
+template <typename problem_t>
+auto AMRSimulation<problem_t>::compileSpaceTimeParser(std::string const &name, std::string const &expr, std::optional<amrex::Parser> &parser,
+						      std::optional<amrex::ParserExecutor<5>> &exe) -> bool
+{
+	if (expr.empty()) {
+		parser.reset();
+		exe.reset();
+		return false;
+	}
+	parser.emplace(expr);
+	auto symbols = parser->symbols();
+	if (!amrex::ParmParse::ParserPrefix.empty()) {
+		amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
+		for (auto const &symbol : symbols) {
+			// `x`, `y`, `z`, `time` and `dt` are runtime parser inputs, not constants from ParmParse.
+			// Available ParmParse constants are: `yr`, `kyr`, `Myr`, `Gyr`.
+			if (symbol == "x" || symbol == "y" || symbol == "z" || symbol == "time" || symbol == "dt") {
+				continue;
+			}
+			amrex::Real value = 0.0;
+			if (parser_pp.query(symbol, value) != 0) {
+				parser->setConstant(symbol, value);
+			}
+		}
+	} else {
+		amrex::Abort("Internal error: ParserPrefix is empty while parsing `" + name +
+			     "` unit symbols (`yr`, `kyr`, `Myr`, `Gyr`). "
+			     "This indicates a code regression. Please report this to Quokka maintainers and reference PR #1791. ");
+	}
+	parser->registerVariables({"x", "y", "z", "time", "dt"});
+	exe = parser->compile<5>();
+#ifdef AMREX_USE_GPU
+	if (exe->m_device_executor == nullptr) {
+		amrex::Abort(name + ": device parser executor is null after compile<5>()");
+	}
+#endif
+	return true;
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 {
 	BL_PROFILE("AMRSimulation::readParameters()"); // NOLINT(misc-const-correctness)
@@ -1062,38 +1111,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// optional external heating rate expression (variables: x, y, z, time, dt)
 	heatingRateExternalExpr_.clear();
 	pp.query("heating_rate_external", heatingRateExternalExpr_);
-	useHeatingRateExternalParser_ = !heatingRateExternalExpr_.empty();
-	if (useHeatingRateExternalParser_) {
-		heatingRateExternalParser_.emplace(heatingRateExternalExpr_);
-		auto symbols = heatingRateExternalParser_->symbols();
-		if (!amrex::ParmParse::ParserPrefix.empty()) {
-			amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
-			for (auto const &symbol : symbols) {
-				// `x`, `y`, `z`, `time` and `dt` are runtime parser inputs, not constants from ParmParse.
-				// Available ParmParse constants are: `yr`, `kyr`, `Myr`, `Gyr`.
-				if (symbol == "x" || symbol == "y" || symbol == "z" || symbol == "time" || symbol == "dt") {
-					continue;
-				}
-				amrex::Real value = 0.0;
-				if (parser_pp.query(symbol, value) != 0) {
-					heatingRateExternalParser_->setConstant(symbol, value);
-				}
-			}
-		} else {
-			amrex::Abort("Internal error: ParserPrefix is empty while parsing `heating_rate_external` unit symbols (`yr`, `kyr`, `Myr`, `Gyr`). "
-				     "This indicates a code regression. Please report this to Quokka maintainers and reference PR #1791. ");
-		}
-		heatingRateExternalParser_->registerVariables({"x", "y", "z", "time", "dt"});
-		heatingRateExternalParserExe_ = heatingRateExternalParser_->compile<5>();
-#ifdef AMREX_USE_GPU
-		if (heatingRateExternalParserExe_->m_device_executor == nullptr) {
-			amrex::Abort("heating_rate_external: device parser executor is null after compile<5>()");
-		}
+	useHeatingRateExternalParser_ =
+	    compileSpaceTimeParser("heating_rate_external", heatingRateExternalExpr_, heatingRateExternalParser_, heatingRateExternalParserExe_);
+
+#ifdef PHOTOCHEM_ISM_COOLING
+	// optional external FUV field G0 in Habing units (variables: x, y, z, time, dt); the photochemistry cooling path requires it
+	G0ExternalExpr_.clear();
+	pp.query("G0_external", G0ExternalExpr_);
+	useG0ExternalParser_ = compileSpaceTimeParser("G0_external", G0ExternalExpr_, G0ExternalParser_, G0ExternalParserExe_);
 #endif
-	} else {
-		heatingRateExternalParser_.reset();
-		heatingRateExternalParserExe_.reset();
-	}
 
 	// Optional debug output: spatially varying density floor
 	pp.query("debug_density_floor_plot", debugDensityFloorPlot_);

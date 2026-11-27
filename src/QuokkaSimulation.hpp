@@ -68,6 +68,7 @@ namespace filesystem = experimental::filesystem;
 #include "chemistry/Chemistry.hpp"
 #include "conduction/AnisoConduction.hpp"
 #include "conduction/IsoConduction.hpp"
+#include "cooling/GrackleNTTable.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
@@ -80,6 +81,9 @@ namespace filesystem = experimental::filesystem;
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 #include "radiation/photochemistry.hpp"
+#ifdef PHOTOCHEM_ISM_COOLING
+#include "radiation/photochemistry_hot_gas.hpp"
+#endif
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 #include "turbulence/TurbulentDriving.hpp"
@@ -177,6 +181,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
 	quokka::ResampledCooling::resampled_tables resampledTables_;
+#ifdef PHOTOCHEM_ISM_COOLING
+	// The Grackle (nH, T) table of the ISM photochemistry network. The handles registered for kernels point into it, so it lives as long as the simulation.
+	std::unique_ptr<quokka::DataTable<2, 2>> grackleNTTable_;
+#endif
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
 
@@ -261,6 +269,20 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	explicit QuokkaSimulation() : AMRSimulation<problem_t>() { initialize(); }
 
+#ifdef PHOTOCHEM_ISM_COOLING
+	/// Re-register empty Grackle (nH, T) table handles, so that no registered handle outlives grackleNTTable_.
+	~QuokkaSimulation() override
+	{
+		if (grackleNTTable_ != nullptr) {
+			quokka::ISMCooling::RegisterGrackleNTTable({}, {});
+		}
+	}
+	QuokkaSimulation(QuokkaSimulation const &) = delete;
+	QuokkaSimulation(QuokkaSimulation &&) = delete;
+	auto operator=(QuokkaSimulation const &) -> QuokkaSimulation & = delete;
+	auto operator=(QuokkaSimulation &&) -> QuokkaSimulation & = delete;
+#endif
+
 	void initialize()
 	{
 		AMRSimulation<problem_t>::initialize();
@@ -281,6 +303,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
 		// initialize Microphysics params
 		init_extern_parameters();
+#ifdef PHOTOCHEM_ISM_COOLING
+		// needs the network parameters (ism_metallicity), which init_extern_parameters sets
+		readISMCoolingParameters();
+#endif
 		// use the network's small_x (1e-100 for primordial_chem), so the hydro floor matches the chemistry burner
 		massScalarFloor_ = network_rp::small_x;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!integrator_rp::subtract_internal_energy,
@@ -434,6 +460,13 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
 	[[nodiscard]] auto makeExternalHeatingRate(int lev, Real current_time, Real dt) const -> quokka::ResampledCooling::ExternalHeatingRate;
+#ifdef PHOTOCHEM_ISM_COOLING
+	/// The FUV field G0 [Habing units] of the `G0_external` parser, to be evaluated per cell. Evaluates to zero if G0_external is not set.
+	[[nodiscard]] auto makeG0Rate(int lev, Real time, Real dt) const -> quokka::ResampledCooling::ExternalHeatingRate;
+	/// Read `ism_cooling.grackle_nT_table` and register it, and check G0_external and the metallicity of the table. Aborts, naming the parameter, if
+	/// G0_external or the table path is not set or if network.ism_metallicity is not the metallicity of the table.
+	void readISMCoolingParameters();
+#endif
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -1272,6 +1305,46 @@ auto QuokkaSimulation<problem_t>::makeExternalHeatingRate(int lev, amrex::Real c
 
 	return {this->heatingRateExternalParserExe_.value(), geom[lev].ProbLoArray(), geom[lev].CellSizeArray(), current_time, dt};
 }
+
+#ifdef PHOTOCHEM_ISM_COOLING
+template <typename problem_t>
+auto QuokkaSimulation<problem_t>::makeG0Rate(int lev, amrex::Real time, amrex::Real dt) const -> quokka::ResampledCooling::ExternalHeatingRate
+{
+	if (!this->useG0ExternalParser_) {
+		return {};
+	}
+
+	return {this->G0ExternalParserExe_.value(), geom[lev].ProbLoArray(), geom[lev].CellSizeArray(), time, dt};
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::readISMCoolingParameters()
+{
+	constexpr amrex::Real metallicity_rtol = 1.0e-12;
+
+	if (!this->useG0ExternalParser_) {
+		amrex::Abort("G0_external is not set. The ISM photochemistry cooling needs the FUV field G0 in Habing units, as an expression of "
+			     "x, y, z, time and dt, e.g. G0_external = \"1.0\".");
+	}
+
+	std::string tablePath;
+	amrex::ParmParse const pp("ism_cooling");
+	pp.query("grackle_nT_table", tablePath);
+	if (tablePath.empty()) {
+		amrex::Abort("ism_cooling.grackle_nT_table is not set. The ISM photochemistry cooling needs the path of the Grackle (nH, T) table.");
+	}
+
+	amrex::Print() << "Reading the Grackle (nH, T) table " << tablePath << "...\n";
+	grackleNTTable_ = quokka::ISMCooling::ReadGrackleNTTable(tablePath);
+	const auto attrs = quokka::ISMCooling::ReadGrackleNTAttributes(tablePath);
+	quokka::ISMCooling::RegisterGrackleNTTable({grackleNTTable_->const_tables_host(), attrs.zmet, attrs.H_mass_fraction},
+						   {grackleNTTable_->const_tables(), attrs.zmet, attrs.H_mass_fraction});
+
+	if (!(std::abs(network_rp::ism_metallicity - attrs.zmet) <= metallicity_rtol * std::abs(attrs.zmet))) {
+		amrex::Abort(std::format("network.ism_metallicity = {} but the table {} is for a metallicity zmet = {} (in units of Z'). They must agree.",
+					 network_rp::ism_metallicity, tablePath, attrs.zmet));
+	}
+}
+#endif
 
 template <typename problem_t>
 template <typename QuokkaSimulation<problem_t>::SourceOrder Order>
@@ -3383,6 +3456,24 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		dustHeatingSource.setVal(0.0);
 	}
 
+#ifdef PHOTOCHEM_ISM_COOLING
+	// The hot/cold label of each cell, fixed for the whole hydro step. Hot cells are cooled here, once, over the hydro step, and every substep's
+	// photochemistry skips their burn (SPEC 5.1).
+	amrex::iMultiFab hotMask;
+	if (enablePhotoChemistry_ == 1) {
+		std::array<amrex::MultiFab const *, AMREX_SPACEDIM> hot_fc_ptrs{};
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				hot_fc_ptrs[dir] = &state_new_fc_[lev][dir];
+			}
+		}
+		hotMask.define(grids[lev], dmap[lev], 1, 0);
+		quokka::photochemistry::BuildHotMask<problem_t>(state_new_cc_[lev], hot_fc_ptrs, hotMask, min_density_allowed);
+		quokka::photochemistry::ComputeHotGasCooling<problem_t>(state_new_cc_[lev], hot_fc_ptrs, hotMask, dt_lev_hydro,
+									makeG0Rate(lev, time, dt_lev_hydro), tempFloor_);
+	}
+#endif
+
 	// perform subcycle
 	auto const &dx = geom[lev].CellSizeArray();
 	amrex::Real time_subcycle = time;
@@ -3472,8 +3563,14 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 #endif
 			}
 			// Also adds the thermal-band chemical emission j_g to radEnergySource, which step 3 consumes.
+#ifdef PHOTOCHEM_ISM_COOLING
 			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
-										 min_density_allowed, dustHeatingSource, radEnergySource);
+										 min_density_allowed, dustHeatingSource, radEnergySource,
+										 makeG0Rate(lev, time_subcycle, dt_radiation), &hotMask);
+#else
+			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, max_density_allowed,
+										 min_density_allowed, dustHeatingSource, radEnergySource, {}, nullptr);
+#endif
 		}
 #endif
 

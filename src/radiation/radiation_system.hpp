@@ -124,6 +124,9 @@ template <typename problem_t> struct RadSystem_Traits {
 
 // this struct is specialized by the user application code
 //
+// dust_chemical_band_absorption: the dust absorbs ionizing (chemical-band) photons. With enable_dust_gas_thermal_coupling_model = true the
+// absorbed energy heats the dust and enters the gas-dust thermal solve (Q_dust). With it false, the absorbed energy leaves the simulation (the
+// dust re-radiates it in the infrared, which is not followed) and the gas only gets the photon momentum.
 template <typename problem_t> struct ISM_Traits {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 	static constexpr bool enable_photoelectric_heating = false;
@@ -311,9 +314,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 	static constexpr bool thermal_band_photochemistry_ = ISM_Traits<problem_t>::thermal_band_photochemistry;
 	static constexpr bool dust_chemical_band_absorption_ = ISM_Traits<problem_t>::dust_chemical_band_absorption;
-	static_assert(!dust_chemical_band_absorption_ || enable_dust_gas_thermal_coupling_model_,
-		      "ISM_Traits::dust_chemical_band_absorption requires ISM_Traits::enable_dust_gas_thermal_coupling_model = true, "
-		      "otherwise the dust-absorbed chemical-band energy (Q_dust) is silently dropped.");
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	// Chemical (ionizing) bands occupy the LAST NChemBands groups; the leading nGroupsThermal_ groups

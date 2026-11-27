@@ -1,0 +1,65 @@
+# *****************************************************************
+# Thermal equilibrium of the ISM photochemistry cooling (ISMCoolingOneZone, mode "equilibrium"), 1D only: 25 cells at fixed n_H, log-spaced from
+# 1e-2 to 1e2 cm^-3, start at T = 1e3 K and x_H+ = 1e-3, with G0 = 1, Z' = 1, the default cosmic-ray rate, no photons and no hydro, evolved for 1 Gyr.
+# The cells do not talk to each other. The test compares T(n_H) at the end with extern/cooling/ism_equilibrium_reference.csv (written by
+# extern/cooling/ism_cooling_reference.py, which integrates the same ODE to the same stop_time; stop_time and the initial state must match
+# EQ_T_END, EQ_T0 and EQ_X0 there), checks that T has settled, and checks for a warm phase (n_H <= 1) and a cold phase (10 <= n_H <= 100).
+# *****************************************************************
+ism_test.mode = "equilibrium"
+ism_test.n_H_min = 1.0e-2
+ism_test.n_H_max = 1.0e2
+ism_test.x_Hp = 1.0e-3
+ism_test.temperature = 1.0e3
+ism_test.reference_file = "../extern/cooling/ism_equilibrium_reference.csv"  # relative to the tests/ working directory
+
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [1e19, 1e19, 1e19]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+amr.v              = 0
+amr.n_cell          = [25, 8, 8]
+amr.max_level       = 0
+amr.blocking_factor = 1
+amr.max_grid_size   = 25
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+# 1 Gyr in steps of 0.1 Myr
+stop_time = 3.15576e16  # s
+constant_dt = 3.15576e12  # s
+max_timesteps = 100000
+plotfile_interval = -1
+plotfile_prefix = "ISMCoolingEquilibrium"
+
+temperature_floor = 1.0
+density_floor = 1e-32  # g cm^-3
+
+# *****************************************************************
+# Photochemistry Properties
+# *****************************************************************
+photochemistry.enabled = 1
+network.energy_switch = 1
+
+# G0 in Habing units, as a parser expression of x, y, z, time, dt
+G0_external = "1.0"
+ism_cooling.grackle_nT_table = "../extern/cooling/CloudyData_UVB=HM2012_shielded_nT_Z1.h5"
+
+integrator.rosenbrock_tableau = 3
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+integrator.rtol_spec     = 1e-6
+integrator.rtol_rad_num  = 1e-6
+integrator.rtol_enuc     = 1e-6
+
+integrator.atol_spec                     = 1.0e-12  # cm^-3
+integrator.atol_enuc                     = 1.0e3    # erg/g
+integrator.atol_rad_num                  = 1.0e-18  # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3
+integrator.radiation_failure_tolerance   = 0.5

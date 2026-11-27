@@ -138,6 +138,7 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagParticleTxt.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/cooling/GrackleNTTable.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp")
 
 if(AMReX_SPACEDIM EQUAL 3)

@@ -1,0 +1,61 @@
+# *****************************************************************
+# A dense hot cell without heating (ISMCoolingOneZone, mode "hot_cell_no_G0"), 1D only: 8 identical cells at n_H = 100 cm^-3, T = 1e6 K and
+# x_H+ = 0.5, with G0 = 0, Z' = 1 and hydro off, take one step of 1e13 s, much longer than the cooling time. With G0 = 0 the table rate has no
+# equilibrium temperature at this density (Lambda_net > 0 down to the table T_min = 10 K), so the hot-cell step must stop cooling at
+# max(temperature_floor, 10 K) and finish, with T >= temperature_floor.
+# *****************************************************************
+ism_test.mode = "hot_cell_no_G0"
+ism_test.n_H = 100.0
+ism_test.temperature = 1.0e6
+ism_test.x_Hp = 0.5
+
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [1e19, 1e19, 1e19]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+amr.v              = 0
+amr.n_cell          = [8, 8, 8]
+amr.max_level       = 0
+amr.blocking_factor = 8
+amr.max_grid_size   = 8
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+stop_time = 1.0e20  # s
+constant_dt = 1.0e13  # s
+max_timesteps = 1
+plotfile_interval = -1
+plotfile_prefix = "ISMCoolingHotCellNoG0"
+
+temperature_floor = 1.0
+density_floor = 1e-32  # g cm^-3
+
+# *****************************************************************
+# Photochemistry Properties
+# *****************************************************************
+photochemistry.enabled = 1
+network.energy_switch = 1
+
+# G0 in Habing units, as a parser expression of x, y, z, time, dt
+G0_external = "0.0"
+ism_cooling.grackle_nT_table = "../extern/cooling/CloudyData_UVB=HM2012_shielded_nT_Z1.h5"
+
+integrator.rosenbrock_tableau = 3
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+integrator.rtol_spec     = 1e-6
+integrator.rtol_rad_num  = 1e-6
+integrator.rtol_enuc     = 1e-6
+
+integrator.atol_spec                     = 1.0e-12  # cm^-3
+integrator.atol_enuc                     = 1.24e8   # erg/g
+integrator.atol_rad_num                  = 1.0e-18  # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3
+integrator.radiation_failure_tolerance   = 0.5

@@ -179,8 +179,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						T_d = T_gas;
 					} else {
 						const quokka::valarray<double, 1> Erad_guess_vec{Erad_guess};
-						// Q_dust defaults to zero here: ISM_Traits::dust_chemical_band_absorption requires a
-						// chemical band, which never coexists with nGroups_ <= 1.
+						// Q_dust defaults to zero here: the dust-absorbed chemical-band energy only feeds the thermal groups,
+						// and a problem with a chemical band and a single group has no thermal group to feed.
 						T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n, 0.0);
 						AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 						if (T_d < 0.0) {

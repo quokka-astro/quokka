@@ -1,0 +1,67 @@
+# *****************************************************************
+# A beam of ionizing photons through a uniform, fully ionized cold-cell slab, with dust absorption of
+# ionizing photons but no gas-dust thermal coupling: the absorbed energy leaves the simulation and the gas
+# gets only the photon momentum. Gas energy and recombination switches are off, so the E_int check verifies that
+# the burn and the absorption add no energy to the gas.
+# *****************************************************************
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [1e19, 1e19, 1e19]
+quokka.bc = ["foextrap", "periodic", "periodic"]
+
+amr.v              = 0
+amr.n_cell          = [256, 8, 8]
+amr.max_level       = 0
+amr.blocking_factor = 8
+amr.max_grid_size   = 256
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+# t = 5 L / c_hat with c_hat = c
+stop_time = 1.67128e9
+max_timesteps = 1000000
+plotfile_interval = -1
+plotfile_prefix = "ISMCoolingSlabCold"
+
+temperature_floor = 1.0
+density_floor = 1e-32  # g cm^-3
+
+# slab and beam
+slab.n_H = 1.0
+slab.temperature = 1.0e4
+slab.n_HI_init = 1.0e-12     # cm^-3; x_H+ = 1 to 1e-12
+slab.flux_ion = 1.0        # photons cm^-2 s^-1; low so that hydro compression by the radiation force changes E_int by less than the 1e-12 check
+
+# *****************************************************************
+# Photochemistry Properties
+# *****************************************************************
+photochemistry.enabled = 1
+network.energy_switch = 0
+network.recombination_switch = 0
+network.dust_kappa = 1.79235e5 # cm^2 g^-1: kappa rho L = 3 for n_H = 1, L = 1e19 cm
+
+# G0 in Habing units, and the table the simulation registers; energy_switch = 0 never reads them in the network
+G0_external = "1.0"
+ism_cooling.grackle_nT_table = "../extern/cooling/CloudyData_UVB=HM2012_shielded_nT_Z1.h5"
+
+radiation.iteration_tolerance = 1e-10
+radiation.dust_gas_interaction_coeff = 0.0
+
+integrator.rosenbrock_tableau = 3
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+integrator.rtol_spec     = 1e-6
+integrator.rtol_rad_num  = 1e-6
+integrator.rtol_enuc     = 1e-6
+
+integrator.atol_spec                     = 1.0e-12  # cm^-3
+integrator.atol_enuc                     = 1.24e8   # erg/g
+integrator.atol_rad_num                  = 1.0e-18  # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3
+integrator.radiation_failure_tolerance   = 0.5

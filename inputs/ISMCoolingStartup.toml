@@ -1,0 +1,59 @@
+# *****************************************************************
+# Startup of the ISM photochemistry cooling path on a uniform cell (ISMCoolingOneZone, mode "startup"): the simulation reads
+# G0_external and the Grackle (nH, T) table, checks the metallicity of the table against network.ism_metallicity, and takes one step.
+# ISMCoolingNoG0.toml and ISMCoolingZMismatch.toml are this file with G0_external removed and with a wrong metallicity,
+# and the tests of the two must abort naming that parameter.
+# *****************************************************************
+ism_test.mode = "startup"
+ism_test.n_H = 1.0
+ism_test.temperature = 8000.0
+ism_test.x_Hp = 0.01
+
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [1e19, 1e19, 1e19]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+amr.v              = 0
+amr.n_cell          = [8, 8, 8]
+amr.max_level       = 0
+amr.blocking_factor = 8
+amr.max_grid_size   = 8
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+max_timesteps = 1
+plotfile_interval = -1
+plotfile_prefix = "ISMCoolingStartup"
+
+temperature_floor = 1.0
+density_floor = 1e-32  # g cm^-3
+
+# *****************************************************************
+# Photochemistry Properties
+# *****************************************************************
+photochemistry.enabled = 1
+network.energy_switch = 1
+
+# G0 in Habing units, as a parser expression of x, y, z, time, dt
+G0_external = "1.0"
+ism_cooling.grackle_nT_table = "../extern/cooling/CloudyData_UVB=HM2012_shielded_nT_Z1.h5"
+
+integrator.rosenbrock_tableau = 3
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+integrator.rtol_spec     = 1e-6
+integrator.rtol_rad_num  = 1e-6
+integrator.rtol_enuc     = 1e-6
+
+integrator.atol_spec                     = 1.0e-12  # cm^-3
+integrator.atol_enuc                     = 1.24e8   # erg/g
+integrator.atol_rad_num                  = 1.0e-18  # cm^-3
+integrator.species_failure_tolerance     = 1.0e-3
+integrator.radiation_failure_tolerance   = 0.5
